@@ -7,6 +7,7 @@ import { createMatch, applyAction } from '../match/match-controller.js';
 import { AIController } from '../ai/ai-controller.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { computeAggregateStats, type AggregateStats } from './stats-collector.js';
+import { isSynergyActive, collectAffixIds } from '../forge/stat-calculator.js';
 
 export interface SimulationConfig {
   matchCount: number;
@@ -172,27 +173,6 @@ function extractMatchSummary(state: MatchState, seed: number, registry: DataRegi
   };
 }
 
-function collectAffixIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
-  for (const item of [loadout.weapon, loadout.armor]) {
-    for (const slot of item.slots) {
-      if (!slot) continue;
-      switch (slot.kind) {
-        case 'single':
-          ids.push(slot.orb.affixId);
-          break;
-        case 'compound':
-          ids.push(slot.orbs[0].affixId);
-          ids.push(slot.orbs[1].affixId);
-          break;
-        case 'upgraded':
-          ids.push(slot.orb.affixId);
-          break;
-      }
-    }
-  }
-  return ids;
-}
 
 function collectCompoundIds(loadout: Loadout): string[] {
   const ids: string[] = [];
@@ -220,19 +200,3 @@ function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): strin
   return active;
 }
 
-function isSynergyActive(requiredAffixes: string[], collectedIds: string[]): boolean {
-  const countMap = new Map<string, number>();
-  for (const id of collectedIds) {
-    countMap.set(id, (countMap.get(id) ?? 0) + 1);
-  }
-
-  const requiredCount = new Map<string, number>();
-  for (const id of requiredAffixes) {
-    requiredCount.set(id, (requiredCount.get(id) ?? 0) + 1);
-  }
-
-  for (const [id, needed] of requiredCount) {
-    if ((countMap.get(id) ?? 0) < needed) return false;
-  }
-  return true;
-}

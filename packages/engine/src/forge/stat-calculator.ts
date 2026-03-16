@@ -135,7 +135,7 @@ function isValidStatKey(stats: DerivedStats, key: string): boolean {
 }
 
 /** Collect all affix IDs present across both items in a loadout. */
-function collectAffixIds(loadout: Loadout): string[] {
+export function collectAffixIds(loadout: Loadout): string[] {
   const ids: string[] = [];
   for (const item of [loadout.weapon, loadout.armor]) {
     for (const slot of item.slots) {
@@ -322,7 +322,7 @@ function applyEquippedSlots(
 }
 
 /** Check if all required affixes are present in the collected affix IDs. */
-function isSynergyActive(requiredAffixes: string[], collectedIds: string[]): boolean {
+export function isSynergyActive(requiredAffixes: string[], collectedIds: string[]): boolean {
   // Count occurrences in collected
   const countMap = new Map<string, number>();
   for (const id of collectedIds) {
