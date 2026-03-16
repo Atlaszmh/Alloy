@@ -175,7 +175,7 @@ export function simulate(
         }
 
         // Roll crit
-        const effectiveCritChance = Math.max(0, attacker.stats.critChance - defender.stats.critAvoidance);
+        const effectiveCritChance = Math.max(0, getBuffedStat(attacker, 'critChance') - getBuffedStat(defender, 'critAvoidance'));
         const isCrit = rng.nextBool(effectiveCritChance);
         if (isCrit) {
           totalDamage *= attacker.stats.critMultiplier;
@@ -243,8 +243,9 @@ export function simulate(
         fireTriggers(triggers[defenderIdx], 'on_taking_damage', defender, attacker, rng, log, tick);
 
         // Apply lifesteal
-        if (attacker.stats.lifestealPercent > 0 && totalDamage > 0) {
-          const healed = totalDamage * attacker.stats.lifestealPercent;
+        const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
+        if (lifesteal > 0 && totalDamage > 0) {
+          const healed = totalDamage * lifesteal;
           if (healed > 0) {
             const oldHP = attacker.currentHP;
             attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + healed);
@@ -370,6 +371,19 @@ function processBuffs(gladiator: GladiatorRuntime): void {
       gladiator.activeBuffs.splice(i, 1);
     }
   }
+}
+
+/**
+ * Get a stat value including any active buff contributions.
+ */
+function getBuffedStat(gladiator: GladiatorRuntime, stat: keyof DerivedStats): number {
+  let value = gladiator.stats[stat] as number;
+  for (const buff of gladiator.activeBuffs) {
+    if (buff.stat === stat) {
+      value += buff.value;
+    }
+  }
+  return value;
 }
 
 /**
