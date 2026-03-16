@@ -16,12 +16,15 @@ export function useDraftSync({ matchId, onOpponentPick, onTimerSync, onPhaseChan
     const channel = supabase.channel(`match:${matchId}`);
 
     channel
+      // TODO: verify payload shape when switching to real Supabase Realtime client
       .on('broadcast', { event: 'draft:pick' }, (payload: any) => {
         onOpponentPick(payload.orbUid, payload.pickOrder);
       })
+      // TODO: verify payload shape when switching to real Supabase Realtime client
       .on('broadcast', { event: 'draft:timer_sync' }, (payload: any) => {
         onTimerSync(payload.timerEnd);
       })
+      // TODO: verify payload shape when switching to real Supabase Realtime client
       .on('broadcast', { event: 'phase:forge' }, (payload: any) => {
         onPhaseChange('forge', payload);
       })
