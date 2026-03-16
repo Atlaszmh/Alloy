@@ -17,6 +17,11 @@ import rawSynergies from './synergies.json';
 import rawBaseItems from './base-items.json';
 import rawBalance from './balance.json';
 
+interface RawBaseItemsJSON {
+  weapons: unknown[];
+  armors: unknown[];
+}
+
 export interface LoadedData {
   affixes: AffixDef[];
   combinations: CompoundAffixDef[];
@@ -29,7 +34,8 @@ export function loadAndValidateData(): LoadedData {
   const affixes = AffixesSchema.parse(rawAffixes) as unknown as AffixDef[];
   const combinations = CombinationsSchema.parse(rawCombinations) as unknown as CompoundAffixDef[];
   const synergies = SynergiesSchema.parse(rawSynergies) as unknown as SynergyDef[];
-  const flatBaseItems = [...(rawBaseItems as any).weapons, ...(rawBaseItems as any).armors];
+  const raw = rawBaseItems as RawBaseItemsJSON;
+  const flatBaseItems = [...raw.weapons, ...raw.armors];
   const baseItems = BaseItemsSchema.parse(flatBaseItems) as unknown as BaseItemDef[];
   const balance = BalanceConfigSchema.parse(rawBalance) as unknown as BalanceConfig;
 
