@@ -84,6 +84,32 @@ describe('Phase Machine', () => {
     }
   });
 
+  describe('adapt phase transitions', () => {
+    it('adapt → duel is a valid transition (same round)', () => {
+      expect(isValidTransition(
+        { kind: 'adapt', round: 2 },
+        { kind: 'duel', round: 2 },
+      )).toBe(true);
+    });
+
+    it('adapt → forge is NOT a valid transition', () => {
+      expect(isValidTransition(
+        { kind: 'adapt', round: 2 },
+        { kind: 'forge', round: 2 },
+      )).toBe(false);
+    });
+
+    it('getNextPhase returns duel for adapt phase', () => {
+      const next = getNextPhase({ kind: 'adapt', round: 2 }, []);
+      expect(next.kind).toBe('duel');
+    });
+
+    it('getNextPhaseQuick returns duel for adapt phase', () => {
+      const next = getNextPhaseQuick({ kind: 'adapt', round: 2 }, []);
+      expect(next.kind).toBe('duel');
+    });
+  });
+
   it('validates transitions correctly', () => {
     expect(isValidTransition(
       { kind: 'draft', round: 1, pickIndex: 0, activePlayer: 0 },
