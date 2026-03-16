@@ -285,6 +285,51 @@ describe('Duel Engine', () => {
     expect(log.result.finalHP[0]).toBeLessThanOrEqual(0);
   });
 
+  // Simultaneous death tiebreaker
+  it('simultaneous death via thorns resolves to a winner', () => {
+    const stats0 = makeStats({
+      maxHP: 50,
+      physicalDamage: 100,
+      attackInterval: 30,
+      thornsDamage: 100,
+    });
+    const stats1 = makeStats({
+      maxHP: 50,
+      physicalDamage: 100,
+      attackInterval: 30,
+      thornsDamage: 100,
+    });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(42);
+
+    const log = simulate([stats0, stats1], loadouts, registry, rng, 1);
+
+    expect([0, 1]).toContain(log.result.winner);
+    const deaths = log.ticks.flatMap(t => t.events.filter(e => e.type === 'death'));
+    expect(deaths.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('simultaneous death always produces a valid winner across many seeds', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const stats0 = makeStats({
+        maxHP: 50,
+        physicalDamage: 200,
+        attackInterval: 30,
+        thornsDamage: 200,
+      });
+      const stats1 = makeStats({
+        maxHP: 50,
+        physicalDamage: 200,
+        attackInterval: 30,
+        thornsDamage: 200,
+      });
+      const loadouts = makeLoadouts();
+      const rng = new SeededRNG(seed);
+      const log = simulate([stats0, stats1], loadouts, registry, rng, 1);
+      expect([0, 1]).toContain(log.result.winner);
+    }
+  });
+
   // Gladiator creation tests
   describe('createGladiator', () => {
     it('initializes HP and barrier from stats', () => {
