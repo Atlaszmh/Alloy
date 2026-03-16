@@ -13,6 +13,7 @@ export interface AdaptStrategy {
     myLoadout: Loadout,
     myStockpile: OrbInstance[],
     fluxRemaining: number,
+    myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[];
@@ -29,6 +30,7 @@ export class Tier1AdaptStrategy implements AdaptStrategy {
     _myLoadout: Loadout,
     _myStockpile: OrbInstance[],
     _fluxRemaining: number,
+    _myPlayerIdx: 0 | 1,
     _registry: DataRegistry,
     _rng: SeededRNG,
   ): ForgeAction[] {
@@ -47,6 +49,7 @@ export class Tier2AdaptStrategy implements AdaptStrategy {
     _myLoadout: Loadout,
     _myStockpile: OrbInstance[],
     _fluxRemaining: number,
+    _myPlayerIdx: 0 | 1,
     _registry: DataRegistry,
     _rng: SeededRNG,
   ): ForgeAction[] {
@@ -100,6 +103,7 @@ export class Tier3AdaptStrategy implements AdaptStrategy {
     myLoadout: Loadout,
     myStockpile: OrbInstance[],
     fluxRemaining: number,
+    myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
   ): ForgeAction[] {
@@ -111,7 +115,6 @@ export class Tier3AdaptStrategy implements AdaptStrategy {
     if (myStockpile.length === 0 || flux < swapCost) return actions;
 
     // Analyze opponent damage
-    const myPlayerIdx = previousDuelLog.result.winner === 0 ? 1 : 0;
     const opponentIdx = (myPlayerIdx === 0 ? 1 : 0) as 0 | 1;
     const damageProfile = extractDamageProfile(previousDuelLog, opponentIdx);
 
@@ -164,6 +167,7 @@ export class Tier4AdaptStrategy implements AdaptStrategy {
     myLoadout: Loadout,
     myStockpile: OrbInstance[],
     fluxRemaining: number,
+    myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
   ): ForgeAction[] {
@@ -175,7 +179,6 @@ export class Tier4AdaptStrategy implements AdaptStrategy {
     if (myStockpile.length === 0 || flux < swapCost) return actions;
 
     // Analyze opponent damage patterns
-    const myPlayerIdx = previousDuelLog.result.winner === 0 ? 1 : 0;
     const opponentIdx = (myPlayerIdx === 0 ? 1 : 0) as 0 | 1;
     const damageProfile = extractDamageProfile(previousDuelLog, opponentIdx);
 
@@ -231,6 +234,7 @@ export class Tier5AdaptStrategy implements AdaptStrategy {
     myLoadout: Loadout,
     myStockpile: OrbInstance[],
     fluxRemaining: number,
+    myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
   ): ForgeAction[] {
@@ -242,7 +246,6 @@ export class Tier5AdaptStrategy implements AdaptStrategy {
     if (myStockpile.length === 0 || flux < swapCost) return actions;
 
     // Analyze opponent damage
-    const myPlayerIdx = previousDuelLog.result.winner === 0 ? 1 : 0;
     const opponentIdx = (myPlayerIdx === 0 ? 1 : 0) as 0 | 1;
     const damageProfile = extractDamageProfile(previousDuelLog, opponentIdx);
 

@@ -175,8 +175,8 @@ describe('AI Adapt Strategies', () => {
     const tier1 = new Tier1AdaptStrategy();
     const tier2 = new Tier2AdaptStrategy();
 
-    expect(tier1.adapt(log, loadout, loadout, [], 4, registry, rng)).toEqual([]);
-    expect(tier2.adapt(log, loadout, loadout, [], 4, registry, rng)).toEqual([]);
+    expect(tier1.adapt(log, loadout, loadout, [], 4, 0, registry, rng)).toEqual([]);
+    expect(tier2.adapt(log, loadout, loadout, [], 4, 0, registry, rng)).toEqual([]);
   });
 });
 
@@ -273,7 +273,35 @@ describe('AIController', () => {
     const ai1 = new AIController(1, registry, new SeededRNG(1000));
     const ai2 = new AIController(2, registry, new SeededRNG(1001));
 
-    expect(ai1.planAdapt(log, loadout, loadout, [], 4)).toEqual([]);
-    expect(ai2.planAdapt(log, loadout, loadout, [], 4)).toEqual([]);
+    expect(ai1.planAdapt(log, loadout, loadout, [], 4, 0)).toEqual([]);
+    expect(ai2.planAdapt(log, loadout, loadout, [], 4, 0)).toEqual([]);
+  });
+});
+
+describe('adapt strategy player identification', () => {
+  it('accepts myPlayerIdx parameter and does not error when AI is the winner', () => {
+    const ai = new AIController(3, registry, new SeededRNG(42).fork('ai'));
+    const emptyLoadout = createEmptyLoadout('sword', 'chainmail');
+
+    const mockDuelLog = {
+      seed: 42,
+      ticks: [],
+      result: {
+        round: 1,
+        winner: 0 as 0 | 1,
+        finalHP: [50, 0] as [number, number],
+        tickCount: 100,
+        duration: 3.33,
+        wasTiebreak: false,
+      },
+    };
+
+    // AI is player 0 (the winner) — should not error
+    const actions = ai.planAdapt(mockDuelLog, emptyLoadout, emptyLoadout, [], 0, 0);
+    expect(actions).toEqual([]);
+
+    // AI is player 1 (the loser) — should not error
+    const actions2 = ai.planAdapt(mockDuelLog, emptyLoadout, emptyLoadout, [], 0, 1);
+    expect(actions2).toEqual([]);
   });
 });

@@ -80,6 +80,7 @@ export class AIController {
     myLoadout: Loadout,
     myStockpile: OrbInstance[],
     fluxRemaining: number,
+    myPlayerIdx: 0 | 1,
   ): ForgeAction[] {
     return this.adaptStrategy.adapt(
       previousLog,
@@ -87,6 +88,7 @@ export class AIController {
       myLoadout,
       myStockpile,
       fluxRemaining,
+      myPlayerIdx,
       this.registry,
       this.rng,
     );

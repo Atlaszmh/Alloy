@@ -120,6 +120,7 @@ function runSingleMatch(
           myLoadout,
           state.players[p].stockpile,
           flux,
+          p,
         );
 
         for (const fa of adaptActions) {

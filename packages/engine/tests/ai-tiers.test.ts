@@ -255,6 +255,7 @@ describe('Tier 3 Adapt Strategy', () => {
       resultState.loadout,
       adaptStockpile,
       4,
+      1,
       registry,
       adaptRng,
     );
