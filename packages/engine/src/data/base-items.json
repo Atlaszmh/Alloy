@@ -1,0 +1,147 @@
+{
+  "weapons": [
+    {
+      "id": "sword",
+      "type": "weapon",
+      "name": "Sword",
+      "inherentBonuses": [
+        { "stat": "critChance", "op": "percent", "value": 0.05 },
+        { "stat": "attackInterval", "op": "percent", "value": -0.05 }
+      ],
+      "unlockLevel": 0
+    },
+    {
+      "id": "axe",
+      "type": "weapon",
+      "name": "Axe",
+      "inherentBonuses": [
+        { "stat": "critMultiplier", "op": "percent", "value": 0.15 },
+        { "stat": "physicalDamage", "op": "flat", "value": 10 }
+      ],
+      "unlockLevel": 5
+    },
+    {
+      "id": "dagger",
+      "type": "weapon",
+      "name": "Dagger",
+      "inherentBonuses": [
+        { "stat": "attackInterval", "op": "percent", "value": -0.12 },
+        { "stat": "critChance", "op": "percent", "value": 0.08 }
+      ],
+      "unlockLevel": 10
+    },
+    {
+      "id": "mace",
+      "type": "weapon",
+      "name": "Mace",
+      "inherentBonuses": [
+        { "stat": "stunChance", "op": "percent", "value": 0.10 },
+        { "stat": "maxHP", "op": "flat", "value": 20 }
+      ],
+      "unlockLevel": 15
+    },
+    {
+      "id": "staff",
+      "type": "weapon",
+      "name": "Staff",
+      "inherentBonuses": [
+        { "stat": "allElementalDamage", "op": "percent", "value": 0.15 },
+        { "stat": "allResistances", "op": "percent", "value": 0.08 }
+      ],
+      "unlockLevel": 20
+    },
+    {
+      "id": "flail",
+      "type": "weapon",
+      "name": "Flail",
+      "inherentBonuses": [
+        { "stat": "lifestealPercent", "op": "percent", "value": 0.10 },
+        { "stat": "thornsDamage", "op": "flat", "value": 8 }
+      ],
+      "unlockLevel": 25
+    },
+    {
+      "id": "scythe",
+      "type": "weapon",
+      "name": "Scythe",
+      "inherentBonuses": [
+        { "stat": "dotMultiplier", "op": "percent", "value": 0.12 },
+        { "stat": "elementalDamage.shadow", "op": "percent", "value": 0.05 }
+      ],
+      "unlockLevel": 30
+    }
+  ],
+  "armors": [
+    {
+      "id": "chainmail",
+      "type": "armor",
+      "name": "Chainmail",
+      "inherentBonuses": [
+        { "stat": "armor", "op": "percent", "value": 0.05 },
+        { "stat": "maxHP", "op": "flat", "value": 20 }
+      ],
+      "unlockLevel": 0
+    },
+    {
+      "id": "plate",
+      "type": "armor",
+      "name": "Plate",
+      "inherentBonuses": [
+        { "stat": "armor", "op": "percent", "value": 0.12 },
+        { "stat": "blockChance", "op": "percent", "value": 0.08 }
+      ],
+      "unlockLevel": 5
+    },
+    {
+      "id": "leather",
+      "type": "armor",
+      "name": "Leather",
+      "inherentBonuses": [
+        { "stat": "dodgeChance", "op": "percent", "value": 0.10 },
+        { "stat": "attackInterval", "op": "percent", "value": -0.05 }
+      ],
+      "unlockLevel": 10
+    },
+    {
+      "id": "robes",
+      "type": "armor",
+      "name": "Robes",
+      "inherentBonuses": [
+        { "stat": "allResistances", "op": "percent", "value": 0.12 },
+        { "stat": "barrierAmount", "op": "percent", "value": 0.10 }
+      ],
+      "unlockLevel": 15
+    },
+    {
+      "id": "hide",
+      "type": "armor",
+      "name": "Hide",
+      "inherentBonuses": [
+        { "stat": "allResistances", "op": "percent", "value": 0.08 },
+        { "stat": "hpRegen", "op": "flat", "value": 0.167 }
+      ],
+      "unlockLevel": 20
+    },
+    {
+      "id": "bone_armor",
+      "type": "armor",
+      "name": "Bone Armor",
+      "inherentBonuses": [
+        { "stat": "thornsDamage", "op": "percent", "value": 0.10 },
+        { "stat": "maxHP", "op": "flat", "value": 15 }
+      ],
+      "unlockLevel": 25
+    },
+    {
+      "id": "void_cloak",
+      "type": "armor",
+      "name": "Void Cloak",
+      "inherentBonuses": [
+        { "stat": "resistances.shadow", "op": "percent", "value": 0.08 },
+        { "stat": "dodgeChance", "op": "percent", "value": 0.05 },
+        { "stat": "critAvoidance", "op": "percent", "value": 0.03 }
+      ],
+      "unlockLevel": 30
+    }
+  ]
+}

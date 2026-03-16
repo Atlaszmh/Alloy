@@ -1,0 +1,926 @@
+[
+  {
+    "id": "flat_physical",
+    "name": "Flat Physical Damage",
+    "category": "offensive",
+    "tags": ["physical", "base"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "physicalDamage", "op": "flat", "value": 15 }],
+        "armorEffect": [{ "stat": "armor", "op": "flat", "value": 15 }],
+        "valueRange": [10, 20]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "physicalDamage", "op": "flat", "value": 23 }],
+        "armorEffect": [{ "stat": "armor", "op": "flat", "value": 23 }],
+        "valueRange": [18, 30]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "physicalDamage", "op": "flat", "value": 33 }],
+        "armorEffect": [{ "stat": "armor", "op": "flat", "value": 33 }],
+        "valueRange": [27, 40]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "physicalDamage", "op": "flat", "value": 43 }],
+        "armorEffect": [{ "stat": "armor", "op": "flat", "value": 43 }],
+        "valueRange": [35, 50]
+      }
+    }
+  },
+  {
+    "id": "fire_damage",
+    "name": "Fire Damage",
+    "category": "offensive",
+    "tags": ["elemental", "fire", "dot"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "elementalDamage.fire", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "resistances.fire", "op": "percent", "value": 0.08 }],
+        "valueRange": [8, 15]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "elementalDamage.fire", "op": "flat", "value": 19 }],
+        "armorEffect": [{ "stat": "resistances.fire", "op": "percent", "value": 0.14 }],
+        "valueRange": [15, 23]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "elementalDamage.fire", "op": "flat", "value": 27 }],
+        "armorEffect": [{ "stat": "resistances.fire", "op": "percent", "value": 0.20 }],
+        "valueRange": [21, 32]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "elementalDamage.fire", "op": "flat", "value": 34 }],
+        "armorEffect": [{ "stat": "resistances.fire", "op": "percent", "value": 0.26 }],
+        "valueRange": [28, 40]
+      }
+    }
+  },
+  {
+    "id": "cold_damage",
+    "name": "Cold Damage",
+    "category": "offensive",
+    "tags": ["elemental", "cold", "control"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "elementalDamage.cold", "op": "flat", "value": 9 }],
+        "armorEffect": [{ "stat": "resistances.cold", "op": "percent", "value": 0.06 }],
+        "valueRange": [6, 12]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "elementalDamage.cold", "op": "flat", "value": 15 }],
+        "armorEffect": [{ "stat": "resistances.cold", "op": "percent", "value": 0.11 }],
+        "valueRange": [11, 20]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "elementalDamage.cold", "op": "flat", "value": 21 }],
+        "armorEffect": [{ "stat": "resistances.cold", "op": "percent", "value": 0.16 }],
+        "valueRange": [17, 27]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "elementalDamage.cold", "op": "flat", "value": 29 }],
+        "armorEffect": [{ "stat": "resistances.cold", "op": "percent", "value": 0.22 }],
+        "valueRange": [22, 35]
+      }
+    }
+  },
+  {
+    "id": "lightning_damage",
+    "name": "Lightning Damage",
+    "category": "offensive",
+    "tags": ["elemental", "lightning"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "elementalDamage.lightning", "op": "flat", "value": 15 }],
+        "armorEffect": [{ "stat": "resistances.lightning", "op": "percent", "value": 0.06 }],
+        "valueRange": [4, 25]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "elementalDamage.lightning", "op": "flat", "value": 24 }],
+        "armorEffect": [{ "stat": "resistances.lightning", "op": "percent", "value": 0.11 }],
+        "valueRange": [8, 35]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "elementalDamage.lightning", "op": "flat", "value": 33 }],
+        "armorEffect": [{ "stat": "resistances.lightning", "op": "percent", "value": 0.16 }],
+        "valueRange": [11, 45]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "elementalDamage.lightning", "op": "flat", "value": 35 }],
+        "armorEffect": [{ "stat": "resistances.lightning", "op": "percent", "value": 0.22 }],
+        "valueRange": [15, 55]
+      }
+    }
+  },
+  {
+    "id": "poison_damage",
+    "name": "Poison Damage",
+    "category": "offensive",
+    "tags": ["dot", "poison"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "dotDamage.poison", "op": "flat", "value": 8 }],
+        "armorEffect": [{ "stat": "resistances.poison", "op": "percent", "value": 0.06 }],
+        "valueRange": [5, 10]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "dotDamage.poison", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "resistances.poison", "op": "percent", "value": 0.11 }],
+        "valueRange": [9, 17]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "dotDamage.poison", "op": "flat", "value": 18 }],
+        "armorEffect": [{ "stat": "resistances.poison", "op": "percent", "value": 0.16 }],
+        "valueRange": [14, 23]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "dotDamage.poison", "op": "flat", "value": 24 }],
+        "armorEffect": [{ "stat": "resistances.poison", "op": "percent", "value": 0.22 }],
+        "valueRange": [18, 30]
+      }
+    }
+  },
+  {
+    "id": "shadow_damage",
+    "name": "Shadow Damage",
+    "category": "offensive",
+    "tags": ["shadow", "percentHP"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "shadowDamage.percentHP", "op": "percent", "value": 0.015 }],
+        "armorEffect": [{ "stat": "resistances.shadow", "op": "percent", "value": 0.06 }],
+        "valueRange": [1, 2]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "shadowDamage.percentHP", "op": "percent", "value": 0.022 }],
+        "armorEffect": [{ "stat": "resistances.shadow", "op": "percent", "value": 0.11 }],
+        "valueRange": [1.7, 3]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "shadowDamage.percentHP", "op": "percent", "value": 0.03 }],
+        "armorEffect": [{ "stat": "resistances.shadow", "op": "percent", "value": 0.16 }],
+        "valueRange": [2.3, 4]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "shadowDamage.percentHP", "op": "percent", "value": 0.04 }],
+        "armorEffect": [{ "stat": "resistances.shadow", "op": "percent", "value": 0.22 }],
+        "valueRange": [3, 5]
+      }
+    }
+  },
+  {
+    "id": "chaos_damage",
+    "name": "Chaos Damage",
+    "category": "offensive",
+    "tags": ["chaos", "penetrating"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "chaosDamage", "op": "flat", "value": 6 }],
+        "armorEffect": [{ "stat": "resistances.chaos", "op": "percent", "value": 0.06 }],
+        "valueRange": [4, 8]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "chaosDamage", "op": "flat", "value": 9 }],
+        "armorEffect": [{ "stat": "resistances.chaos", "op": "percent", "value": 0.10 }],
+        "valueRange": [7, 12]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "chaosDamage", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "resistances.chaos", "op": "percent", "value": 0.14 }],
+        "valueRange": [9, 16]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "chaosDamage", "op": "flat", "value": 16 }],
+        "armorEffect": [{ "stat": "resistances.chaos", "op": "percent", "value": 0.18 }],
+        "valueRange": [12, 20]
+      }
+    }
+  },
+  {
+    "id": "crit_chance",
+    "name": "Critical Strike Chance",
+    "category": "offensive",
+    "tags": ["crit"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "critChance", "op": "percent", "value": 0.075 }],
+        "armorEffect": [{ "stat": "critAvoidance", "op": "percent", "value": 0.075 }],
+        "valueRange": [5, 10]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "critChance", "op": "percent", "value": 0.12 }],
+        "armorEffect": [{ "stat": "critAvoidance", "op": "percent", "value": 0.12 }],
+        "valueRange": [9, 15]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "critChance", "op": "percent", "value": 0.16 }],
+        "armorEffect": [{ "stat": "critAvoidance", "op": "percent", "value": 0.16 }],
+        "valueRange": [14, 20]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "critChance", "op": "percent", "value": 0.215 }],
+        "armorEffect": [{ "stat": "critAvoidance", "op": "percent", "value": 0.215 }],
+        "valueRange": [18, 25]
+      }
+    }
+  },
+  {
+    "id": "crit_damage",
+    "name": "Critical Strike Multiplier",
+    "category": "offensive",
+    "tags": ["crit", "multiplier"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "critDamage", "op": "percent", "value": 0.225 }],
+        "armorEffect": [{ "stat": "reducedCritDamageTaken", "op": "percent", "value": 0.225 }],
+        "valueRange": [15, 30]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "critDamage", "op": "percent", "value": 0.36 }],
+        "armorEffect": [{ "stat": "reducedCritDamageTaken", "op": "percent", "value": 0.36 }],
+        "valueRange": [28, 47]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "critDamage", "op": "percent", "value": 0.50 }],
+        "armorEffect": [{ "stat": "reducedCritDamageTaken", "op": "percent", "value": 0.50 }],
+        "valueRange": [42, 63]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "critDamage", "op": "percent", "value": 0.675 }],
+        "armorEffect": [{ "stat": "reducedCritDamageTaken", "op": "percent", "value": 0.675 }],
+        "valueRange": [55, 80]
+      }
+    }
+  },
+  {
+    "id": "attack_speed",
+    "name": "Attack Speed",
+    "category": "offensive",
+    "tags": ["speed", "utility"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "attackSpeed", "op": "percent", "value": 0.075 }],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.075 }],
+        "valueRange": [5, 10]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "attackSpeed", "op": "percent", "value": 0.12 }],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.12 }],
+        "valueRange": [9, 15]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "attackSpeed", "op": "percent", "value": 0.16 }],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.16 }],
+        "valueRange": [14, 20]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "attackSpeed", "op": "percent", "value": 0.215 }],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.215 }],
+        "valueRange": [18, 25]
+      }
+    }
+  },
+  {
+    "id": "armor_penetration",
+    "name": "Armor Penetration",
+    "category": "offensive",
+    "tags": ["penetration"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "armorPenetration", "op": "percent", "value": 0.065 }],
+        "armorEffect": [{ "stat": "penetrationResistance", "op": "percent", "value": 0.065 }],
+        "valueRange": [5, 8]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "armorPenetration", "op": "percent", "value": 0.09 }],
+        "armorEffect": [{ "stat": "penetrationResistance", "op": "percent", "value": 0.09 }],
+        "valueRange": [8, 13]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "armorPenetration", "op": "percent", "value": 0.13 }],
+        "armorEffect": [{ "stat": "penetrationResistance", "op": "percent", "value": 0.13 }],
+        "valueRange": [12, 17]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "armorPenetration", "op": "percent", "value": 0.185 }],
+        "armorEffect": [{ "stat": "penetrationResistance", "op": "percent", "value": 0.185 }],
+        "valueRange": [15, 22]
+      }
+    }
+  },
+  {
+    "id": "elemental_penetration",
+    "name": "Elemental Penetration",
+    "category": "offensive",
+    "tags": ["penetration", "elemental"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "elementalPenetration", "op": "percent", "value": 0.045 }],
+        "armorEffect": [{ "stat": "resistances.allElemental", "op": "percent", "value": 0.045 }],
+        "valueRange": [3, 6]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "elementalPenetration", "op": "percent", "value": 0.065 }],
+        "armorEffect": [{ "stat": "resistances.allElemental", "op": "percent", "value": 0.065 }],
+        "valueRange": [5, 9]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "elementalPenetration", "op": "percent", "value": 0.09 }],
+        "armorEffect": [{ "stat": "resistances.allElemental", "op": "percent", "value": 0.09 }],
+        "valueRange": [8, 12]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "elementalPenetration", "op": "percent", "value": 0.125 }],
+        "armorEffect": [{ "stat": "resistances.allElemental", "op": "percent", "value": 0.125 }],
+        "valueRange": [10, 15]
+      }
+    }
+  },
+  {
+    "id": "flat_hp",
+    "name": "Flat HP",
+    "category": "defensive",
+    "tags": ["defensive", "base"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "maxHP", "op": "flat", "value": 45 }],
+        "armorEffect": [{ "stat": "maxHP", "op": "flat", "value": 45 }],
+        "valueRange": [30, 60]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "maxHP", "op": "flat", "value": 68 }],
+        "armorEffect": [{ "stat": "maxHP", "op": "flat", "value": 68 }],
+        "valueRange": [53, 93]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "maxHP", "op": "flat", "value": 98 }],
+        "armorEffect": [{ "stat": "maxHP", "op": "flat", "value": 98 }],
+        "valueRange": [77, 127]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "maxHP", "op": "flat", "value": 130 }],
+        "armorEffect": [{ "stat": "maxHP", "op": "flat", "value": 130 }],
+        "valueRange": [100, 160]
+      }
+    }
+  },
+  {
+    "id": "armor_rating",
+    "name": "Armor",
+    "category": "defensive",
+    "tags": ["defensive", "physical"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "physicalDamageReduction", "op": "percent", "value": 0.115 }],
+        "valueRange": [8, 15]
+      },
+      "2": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "physicalDamageReduction", "op": "percent", "value": 0.17 }],
+        "valueRange": [15, 23]
+      },
+      "3": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "physicalDamageReduction", "op": "percent", "value": 0.24 }],
+        "valueRange": [21, 32]
+      },
+      "4": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "physicalDamageReduction", "op": "percent", "value": 0.34 }],
+        "valueRange": [28, 40]
+      }
+    }
+  },
+  {
+    "id": "block_chance",
+    "name": "Block Chance",
+    "category": "defensive",
+    "tags": ["defensive", "block"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "blockBreak", "op": "percent", "value": 0.065 }],
+        "armorEffect": [{ "stat": "blockChance", "op": "percent", "value": 0.065 }],
+        "valueRange": [5, 8]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "blockBreak", "op": "percent", "value": 0.09 }],
+        "armorEffect": [{ "stat": "blockChance", "op": "percent", "value": 0.09 }],
+        "valueRange": [8, 12]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "blockBreak", "op": "percent", "value": 0.12 }],
+        "armorEffect": [{ "stat": "blockChance", "op": "percent", "value": 0.12 }],
+        "valueRange": [12, 16]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "blockBreak", "op": "percent", "value": 0.175 }],
+        "armorEffect": [{ "stat": "blockChance", "op": "percent", "value": 0.175 }],
+        "valueRange": [15, 20]
+      }
+    }
+  },
+  {
+    "id": "dodge_chance",
+    "name": "Dodge Chance",
+    "category": "defensive",
+    "tags": ["defensive", "evasion"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.055 }],
+        "valueRange": [4, 7]
+      },
+      "2": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.08 }],
+        "valueRange": [7, 11]
+      },
+      "3": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.11 }],
+        "valueRange": [9, 14]
+      },
+      "4": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "dodge", "op": "percent", "value": 0.15 }],
+        "valueRange": [12, 18]
+      }
+    }
+  },
+  {
+    "id": "barrier",
+    "name": "Barrier",
+    "category": "defensive",
+    "tags": ["defensive", "barrier"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "barrierOnHit", "op": "flat", "value": 5 }],
+        "armorEffect": [{ "stat": "barrierShield", "op": "flat", "value": 30 }],
+        "valueRange": [20, 40]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "barrierOnHit", "op": "flat", "value": 9 }],
+        "armorEffect": [{ "stat": "barrierShield", "op": "flat", "value": 50 }],
+        "valueRange": [37, 67]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "barrierOnHit", "op": "flat", "value": 13 }],
+        "armorEffect": [{ "stat": "barrierShield", "op": "flat", "value": 73 }],
+        "valueRange": [53, 93]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "barrierOnHit", "op": "flat", "value": 18 }],
+        "armorEffect": [{ "stat": "barrierShield", "op": "flat", "value": 95 }],
+        "valueRange": [70, 120]
+      }
+    }
+  },
+  {
+    "id": "hp_regen",
+    "name": "HP Regeneration",
+    "category": "defensive",
+    "tags": ["sustain"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "hpOnHit", "op": "flat", "value": 2 }],
+        "armorEffect": [{ "stat": "hpRegen", "op": "flat", "value": 5 }],
+        "valueRange": [3, 6]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "hpOnHit", "op": "flat", "value": 4 }],
+        "armorEffect": [{ "stat": "hpRegen", "op": "flat", "value": 8 }],
+        "valueRange": [5, 10]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "hpOnHit", "op": "flat", "value": 6 }],
+        "armorEffect": [{ "stat": "hpRegen", "op": "flat", "value": 12 }],
+        "valueRange": [8, 14]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "hpOnHit", "op": "flat", "value": 9 }],
+        "armorEffect": [{ "stat": "hpRegen", "op": "flat", "value": 14 }],
+        "valueRange": [10, 18]
+      }
+    }
+  },
+  {
+    "id": "damage_reduction",
+    "name": "Damage Reduction",
+    "category": "defensive",
+    "tags": ["defensive", "universal"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "damageReduction", "op": "percent", "value": 0.03 }],
+        "valueRange": [2, 4]
+      },
+      "2": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "damageReduction", "op": "percent", "value": 0.05 }],
+        "valueRange": [4, 7]
+      },
+      "3": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "damageReduction", "op": "percent", "value": 0.07 }],
+        "valueRange": [6, 9]
+      },
+      "4": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "damageReduction", "op": "percent", "value": 0.10 }],
+        "valueRange": [8, 12]
+      }
+    }
+  },
+  {
+    "id": "fortify",
+    "name": "Fortify",
+    "category": "defensive",
+    "tags": ["defensive", "conditional"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "fortify", "op": "percent", "value": 0.055 }],
+        "valueRange": [4, 7]
+      },
+      "2": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "fortify", "op": "percent", "value": 0.08 }],
+        "valueRange": [7, 11]
+      },
+      "3": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "fortify", "op": "percent", "value": 0.11 }],
+        "valueRange": [9, 14]
+      },
+      "4": {
+        "weaponEffect": [],
+        "armorEffect": [{ "stat": "fortify", "op": "percent", "value": 0.15 }],
+        "valueRange": [12, 18]
+      }
+    }
+  },
+  {
+    "id": "lifesteal",
+    "name": "Lifesteal",
+    "category": "sustain",
+    "tags": ["sustain", "leech"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "lifesteal", "op": "percent", "value": 0.045 }],
+        "armorEffect": [{ "stat": "damageTakenHealedOver2s", "op": "percent", "value": 0.045 }],
+        "valueRange": [3, 6]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "lifesteal", "op": "percent", "value": 0.07 }],
+        "armorEffect": [{ "stat": "damageTakenHealedOver2s", "op": "percent", "value": 0.07 }],
+        "valueRange": [5, 9]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "lifesteal", "op": "percent", "value": 0.10 }],
+        "armorEffect": [{ "stat": "damageTakenHealedOver2s", "op": "percent", "value": 0.10 }],
+        "valueRange": [8, 12]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "lifesteal", "op": "percent", "value": 0.125 }],
+        "armorEffect": [{ "stat": "damageTakenHealedOver2s", "op": "percent", "value": 0.125 }],
+        "valueRange": [10, 15]
+      }
+    }
+  },
+  {
+    "id": "thorns",
+    "name": "Thorns",
+    "category": "sustain",
+    "tags": ["reactive", "reflect"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "reflectOnHit", "op": "flat", "value": 9 }],
+        "armorEffect": [{ "stat": "reflectWhenHit", "op": "flat", "value": 9 }],
+        "valueRange": [5, 12]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "reflectOnHit", "op": "flat", "value": 14 }],
+        "armorEffect": [{ "stat": "reflectWhenHit", "op": "flat", "value": 14 }],
+        "valueRange": [10, 20]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "reflectOnHit", "op": "flat", "value": 21 }],
+        "armorEffect": [{ "stat": "reflectWhenHit", "op": "flat", "value": 21 }],
+        "valueRange": [15, 27]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "reflectOnHit", "op": "flat", "value": 28 }],
+        "armorEffect": [{ "stat": "reflectWhenHit", "op": "flat", "value": 28 }],
+        "valueRange": [20, 35]
+      }
+    }
+  },
+  {
+    "id": "life_on_kill",
+    "name": "Life on Kill",
+    "category": "sustain",
+    "tags": ["sustain", "kill"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 12 }],
+        "valueRange": [8, 15]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 18 }],
+        "armorEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 18 }],
+        "valueRange": [14, 25]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 27 }],
+        "armorEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 27 }],
+        "valueRange": [20, 35]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 35 }],
+        "armorEffect": [{ "stat": "lifeOnKill", "op": "flat", "value": 35 }],
+        "valueRange": [25, 45]
+      }
+    }
+  },
+  {
+    "id": "initiative",
+    "name": "Movement/Initiative",
+    "category": "utility",
+    "tags": ["utility", "tempo"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "initiative", "op": "percent", "value": 0.04 }],
+        "armorEffect": [{ "stat": "opponentDelay", "op": "percent", "value": 0.04 }],
+        "valueRange": [3, 5]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "initiative", "op": "percent", "value": 0.065 }],
+        "armorEffect": [{ "stat": "opponentDelay", "op": "percent", "value": 0.065 }],
+        "valueRange": [5, 8]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "initiative", "op": "percent", "value": 0.09 }],
+        "armorEffect": [{ "stat": "opponentDelay", "op": "percent", "value": 0.09 }],
+        "valueRange": [8, 12]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "initiative", "op": "percent", "value": 0.125 }],
+        "armorEffect": [{ "stat": "opponentDelay", "op": "percent", "value": 0.125 }],
+        "valueRange": [10, 15]
+      }
+    }
+  },
+  {
+    "id": "dot_multiplier",
+    "name": "DOT Multiplier",
+    "category": "utility",
+    "tags": ["dot", "multiplier"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "dotDamageMultiplier", "op": "percent", "value": 0.115 }],
+        "armorEffect": [{ "stat": "dotDamageTakenReduction", "op": "percent", "value": 0.115 }],
+        "valueRange": [8, 15]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "dotDamageMultiplier", "op": "percent", "value": 0.175 }],
+        "armorEffect": [{ "stat": "dotDamageTakenReduction", "op": "percent", "value": 0.175 }],
+        "valueRange": [14, 23]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "dotDamageMultiplier", "op": "percent", "value": 0.25 }],
+        "armorEffect": [{ "stat": "dotDamageTakenReduction", "op": "percent", "value": 0.25 }],
+        "valueRange": [20, 32]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "dotDamageMultiplier", "op": "percent", "value": 0.325 }],
+        "armorEffect": [{ "stat": "dotDamageTakenReduction", "op": "percent", "value": 0.325 }],
+        "valueRange": [25, 40]
+      }
+    }
+  },
+  {
+    "id": "stun_chance",
+    "name": "Stun Chance",
+    "category": "utility",
+    "tags": ["control", "stun"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "stunChance", "op": "percent", "value": 0.04 }],
+        "armorEffect": [{ "stat": "stunResistance", "op": "percent", "value": 0.04 }],
+        "valueRange": [3, 5]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "stunChance", "op": "percent", "value": 0.065 }],
+        "armorEffect": [{ "stat": "stunResistance", "op": "percent", "value": 0.065 }],
+        "valueRange": [5, 8]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "stunChance", "op": "percent", "value": 0.09 }],
+        "armorEffect": [{ "stat": "stunResistance", "op": "percent", "value": 0.09 }],
+        "valueRange": [8, 12]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "stunChance", "op": "percent", "value": 0.125 }],
+        "armorEffect": [{ "stat": "stunResistance", "op": "percent", "value": 0.125 }],
+        "valueRange": [10, 15]
+      }
+    }
+  },
+  {
+    "id": "slow_on_hit",
+    "name": "Slow on Hit",
+    "category": "utility",
+    "tags": ["control", "slow"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "slowOnHit", "op": "percent", "value": 0.075 }],
+        "armorEffect": [{ "stat": "slowResistance", "op": "percent", "value": 0.075 }],
+        "valueRange": [5, 10]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "slowOnHit", "op": "percent", "value": 0.115 }],
+        "armorEffect": [{ "stat": "slowResistance", "op": "percent", "value": 0.115 }],
+        "valueRange": [8, 15]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "slowOnHit", "op": "percent", "value": 0.16 }],
+        "armorEffect": [{ "stat": "slowResistance", "op": "percent", "value": 0.16 }],
+        "valueRange": [12, 20]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "slowOnHit", "op": "percent", "value": 0.20 }],
+        "armorEffect": [{ "stat": "slowResistance", "op": "percent", "value": 0.20 }],
+        "valueRange": [15, 25]
+      }
+    }
+  },
+  {
+    "id": "chance_on_hit",
+    "name": "Chance on Hit",
+    "category": "trigger",
+    "tags": ["trigger", "proc"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 3 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 2 }],
+        "valueRange": [3, 5]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 5 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 3 }],
+        "valueRange": [4, 6]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 7 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 5 }],
+        "valueRange": [6, 7]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 10 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 7 }],
+        "valueRange": [6, 8]
+      }
+    }
+  },
+  {
+    "id": "chance_on_taking_damage",
+    "name": "Chance on Taking Damage",
+    "category": "trigger",
+    "tags": ["trigger", "reactive"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 3 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 4 }],
+        "valueRange": [3, 5]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 4 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 6 }],
+        "valueRange": [4, 6]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 6 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "valueRange": [6, 7]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 10 }],
+        "valueRange": [6, 8]
+      }
+    }
+  },
+  {
+    "id": "chance_on_crit",
+    "name": "Chance on Critical Strike",
+    "category": "trigger",
+    "tags": ["trigger", "crit"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 5 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 3 }],
+        "valueRange": [8, 10]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 8 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 5 }],
+        "valueRange": [10, 12]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 7 }],
+        "valueRange": [12, 14]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 15 }],
+        "armorEffect": [{ "stat": "procDamage", "op": "flat", "value": 10 }],
+        "valueRange": [13, 15]
+      }
+    }
+  },
+  {
+    "id": "chance_on_block",
+    "name": "Chance on Block",
+    "category": "trigger",
+    "tags": ["trigger", "block"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 4 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 5 }],
+        "valueRange": [10, 13]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 7 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "valueRange": [13, 16]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 10 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 12 }],
+        "valueRange": [16, 18]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procDamage", "op": "flat", "value": 14 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 16 }],
+        "valueRange": [18, 20]
+      }
+    }
+  },
+  {
+    "id": "chance_on_kill",
+    "name": "Chance on Kill",
+    "category": "trigger",
+    "tags": ["trigger", "kill"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 5 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 5 }],
+        "valueRange": [15, 18]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "valueRange": [18, 20]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 11 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 11 }],
+        "valueRange": [20, 23]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 15 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 15 }],
+        "valueRange": [23, 25]
+      }
+    }
+  },
+  {
+    "id": "chance_on_low_hp",
+    "name": "Chance on Low HP",
+    "category": "trigger",
+    "tags": ["trigger", "conditional"],
+    "tiers": {
+      "1": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 8 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 10 }],
+        "valueRange": [5, 8]
+      },
+      "2": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 12 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 15 }],
+        "valueRange": [8, 12]
+      },
+      "3": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 18 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 22 }],
+        "valueRange": [12, 18]
+      },
+      "4": {
+        "weaponEffect": [{ "stat": "procHeal", "op": "flat", "value": 25 }],
+        "armorEffect": [{ "stat": "procHeal", "op": "flat", "value": 30 }],
+        "valueRange": [15, 25]
+      }
+    }
+  }
+]

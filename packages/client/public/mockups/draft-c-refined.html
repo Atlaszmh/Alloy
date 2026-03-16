@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Alloy — Draft C Refined</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-950: #060608; --surface-900: #0a0a0f; --surface-800: #111118;
+    --surface-700: #1a1a26; --surface-600: #252536; --surface-500: #363650;
+    --surface-400: #4a4a68; --surface-300: #6a6a88; --surface-200: #8a8aa8;
+    --accent-500: #d4a834; --accent-400: #e0bc4a; --accent-300: #ecd06a;
+    --bronze-400: #b89868;
+    --fire: #e8553a; --cold: #3a9be8; --lightning: #d4c040;
+    --poison: #2db369; --shadow: #8b3ae8; --chaos: #e83a8b;
+    --danger: #f87171; --success: #34d399;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--surface-950); color: white;
+    font-family: 'DM Sans', sans-serif; height: 100vh; overflow: hidden;
+    display: flex; justify-content: center; align-items: center;
+  }
+
+  /* ── Iteration nav ── */
+  .iter-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; gap: 2px; padding: 6px 8px;
+    background: rgba(6,6,8,0.95); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .iter-nav button {
+    flex: 1; padding: 8px 4px; border: none; border-radius: 6px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 11px;
+    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    background: var(--surface-700); color: var(--surface-300); transition: all 0.2s;
+  }
+  .iter-nav button.active {
+    background: linear-gradient(180deg, var(--accent-400), var(--accent-500));
+    color: var(--surface-900);
+  }
+
+  .iteration { display: none; width: 100%; height: 100%; padding-top: 44px; }
+  .iteration.active { display: flex; flex-direction: column; align-items: center; }
+
+  /* ── Phone frame (9:16) ── */
+  .phone {
+    aspect-ratio: 9/16; height: calc(100vh - 54px); max-width: 100vw;
+    border-radius: 20px; border: 1.5px solid rgba(255,255,255,0.05);
+    overflow: hidden; position: relative;
+    background: radial-gradient(ellipse at 50% 0%, rgba(30,25,40,0.4) 0%, transparent 60%), var(--surface-900);
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+  }
+
+  /* ── Opponent zone ── */
+  .opp-zone {
+    margin: 8px 10px 0; padding: 8px 10px; border-radius: 12px;
+    border: 1px solid rgba(248,113,113,0.12);
+    background: linear-gradient(180deg, rgba(248,113,113,0.05) 0%, var(--surface-800) 100%);
+  }
+  .zone-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .zone-title {
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .zone-title.opp { color: var(--danger); }
+  .zone-title.you { color: var(--accent-400); }
+  .zone-ct { font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 600; color: var(--surface-300); }
+
+  /* Chip row */
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+  .chip {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 7px 4px 4px; border-radius: 8px;
+    background: var(--surface-700); border: 1px solid var(--surface-500);
+  }
+  .chip.newest { border-color: var(--danger); animation: pop-in 0.4s ease-out; }
+  @keyframes pop-in { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+
+  .chip-ico {
+    width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; border: 1.5px solid; position: relative; overflow: hidden;
+  }
+  .chip-ico::before { content:''; position:absolute; inset:0; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 60%); }
+  .chip-txt { line-height: 1.15; }
+  .chip-name { font-family: 'Rajdhani', sans-serif; font-size: 11px; font-weight: 700; color: white; }
+  .chip-stat { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 600; color: var(--accent-300); }
+
+  /* Element chip icon colors */
+  .el-fire .chip-ico { background: rgba(232,85,58,0.25); border-color: var(--fire); }
+  .el-cold .chip-ico { background: rgba(58,155,232,0.25); border-color: var(--cold); }
+  .el-lightning .chip-ico { background: rgba(212,192,64,0.25); border-color: var(--lightning); }
+  .el-poison .chip-ico { background: rgba(45,179,105,0.25); border-color: var(--poison); }
+  .el-shadow .chip-ico { background: rgba(139,58,232,0.25); border-color: var(--shadow); }
+  .el-physical .chip-ico { background: rgba(192,192,192,0.15); border-color: #8a8a8a; }
+  .el-chaos .chip-ico { background: rgba(232,58,139,0.25); border-color: var(--chaos); }
+
+  /* ── Divider ── */
+  .divider { display: flex; align-items: center; gap: 8px; padding: 4px 14px; }
+  .divider-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--surface-500), transparent); }
+  .divider-text { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; color: var(--surface-400); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+
+  /* ── Pool area ── */
+  .pool {
+    flex: 1; margin: 4px 10px; border-radius: 14px;
+    background: var(--surface-800);
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+    border: 1px solid var(--surface-600);
+    overflow: hidden; position: relative;
+  }
+  .pool-inner {
+    width: 100%; height: 100%; padding: 10px;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    align-content: center; justify-content: center;
+  }
+
+  /* Pool orb */
+  .gem {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    cursor: pointer; transition: transform 0.15s, filter 0.15s;
+    user-select: none; touch-action: none;
+  }
+  .gem:hover { transform: scale(1.1); filter: brightness(1.12); }
+  .gem:active { transform: scale(0.92); }
+  .gem.picked { filter: drop-shadow(0 0 12px var(--glow, var(--accent-400))); }
+
+  .gem-shape {
+    width: var(--gem-size); height: var(--gem-size); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--gem-size) * 0.38); border: 2px solid;
+    position: relative; overflow: hidden;
+  }
+  .gem-shape::before { content:''; position:absolute; inset:0; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18), transparent 55%); }
+
+  .gem-label { font-family: 'Rajdhani', sans-serif; font-weight: 700; color: var(--surface-200); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gem-val { font-family: 'Rajdhani', sans-serif; font-weight: 700; color: var(--accent-300); }
+
+  .el-fire .gem-shape { background: linear-gradient(135deg, rgba(232,85,58,0.35), rgba(232,85,58,0.1)); border-color: var(--fire); --glow: var(--fire); }
+  .el-cold .gem-shape { background: linear-gradient(135deg, rgba(58,155,232,0.35), rgba(58,155,232,0.1)); border-color: var(--cold); --glow: var(--cold); }
+  .el-lightning .gem-shape { background: linear-gradient(135deg, rgba(212,192,64,0.35), rgba(212,192,64,0.1)); border-color: var(--lightning); --glow: var(--lightning); }
+  .el-poison .gem-shape { background: linear-gradient(135deg, rgba(45,179,105,0.35), rgba(45,179,105,0.1)); border-color: var(--poison); --glow: var(--poison); }
+  .el-shadow .gem-shape { background: linear-gradient(135deg, rgba(139,58,232,0.35), rgba(139,58,232,0.1)); border-color: var(--shadow); --glow: var(--shadow); }
+  .el-physical .gem-shape { background: linear-gradient(135deg, rgba(192,192,192,0.25), rgba(120,120,120,0.1)); border-color: #9a9a9a; --glow: #c0c0c0; }
+  .el-chaos .gem-shape { background: linear-gradient(135deg, rgba(232,58,139,0.35), rgba(232,58,139,0.1)); border-color: var(--chaos); --glow: var(--chaos); }
+
+  /* Scatter rotation */
+  .gem:nth-child(odd) { transform: rotate(-1.5deg); }
+  .gem:nth-child(3n) { transform: rotate(2deg); }
+  .gem:nth-child(5n) { transform: rotate(-2.5deg) translateY(-1px); }
+
+  /* ── Status bar ── */
+  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; }
+  .turn-badge {
+    padding: 4px 12px; border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.05em;
+    background: linear-gradient(180deg, var(--accent-400), var(--accent-500));
+    color: var(--surface-900); box-shadow: 0 2px 10px rgba(212,168,52,0.3);
+  }
+  .turn-badge.ai { background: var(--surface-600); color: var(--surface-300); box-shadow: none; }
+  .round-label { font-family: 'Rajdhani', sans-serif; font-size: 12px; font-weight: 600; color: var(--surface-300); }
+  .timer { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .timer-num { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; color: var(--accent-400); }
+  .timer-bar { width: 44px; height: 3px; border-radius: 2px; background: var(--surface-600); }
+  .timer-fill { height: 100%; border-radius: 2px; background: var(--accent-500); }
+
+  .hint { text-align: center; font-size: 10px; color: var(--bronze-400); letter-spacing: 0.04em; padding: 2px 0; }
+
+  /* ── Player zone ── */
+  .you-zone {
+    margin: 4px 10px 8px; padding: 8px 10px; border-radius: 12px;
+    border: 1px solid rgba(212,168,52,0.2);
+    background: linear-gradient(0deg, rgba(212,168,52,0.05) 0%, var(--surface-800) 100%);
+    transition: all 0.25s;
+  }
+  .you-zone.glow {
+    border-color: var(--accent-400);
+    background: linear-gradient(0deg, rgba(212,168,52,0.12) 0%, rgba(212,168,52,0.03) 100%);
+    box-shadow: 0 0 20px rgba(212,168,52,0.12);
+  }
+</style>
+</head>
+<body>
+
+<nav class="iter-nav">
+  <button class="active" onclick="show('v1')">V1: Larger Gems</button>
+  <button onclick="show('v2')">V2: XL Gems + Tags</button>
+  <button onclick="show('v3')">V3: List Hybrid</button>
+</nav>
+
+<!-- ═══════ V1: Larger gems (56px), bigger labels ═══════ -->
+<div id="v1" class="iteration active">
+<div class="phone">
+  <div class="opp-zone">
+    <div class="zone-head"><span class="zone-title opp">Opponent</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-fire newest"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire DMG</div><div class="chip-stat">+23 T2</div></div></div>
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+      <div class="chip el-chaos"><div class="chip-ico">🌀</div><div class="chip-txt"><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+    </div>
+  </div>
+
+  <div class="divider"><div class="divider-line"></div><div class="divider-text">Pool · 16</div><div class="divider-line"></div></div>
+
+  <div class="pool" style="--gem-size: 56px;">
+    <div class="pool-inner">
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:11px;max-width:60px;">Fire</div><div class="gem-val" style="font-size:11px;">+23</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Cold</div><div class="gem-val" style="font-size:11px;">+12</div></div>
+      <div class="gem el-physical picked"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Physical</div><div class="gem-val" style="font-size:11px;">+33</div></div>
+      <div class="gem el-poison"><div class="gem-shape">☠️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Poison</div><div class="gem-val" style="font-size:11px;">+10</div></div>
+      <div class="gem el-shadow"><div class="gem-shape">🌙</div><div class="gem-label" style="font-size:11px;max-width:60px;">Shadow</div><div class="gem-val" style="font-size:11px;">+15%</div></div>
+      <div class="gem el-lightning"><div class="gem-shape">⚡</div><div class="gem-label" style="font-size:11px;max-width:60px;">Crit</div><div class="gem-val" style="font-size:11px;">+5%</div></div>
+      <div class="gem el-physical"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Block</div><div class="gem-val" style="font-size:11px;">+8%</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Regen</div><div class="gem-val" style="font-size:11px;">+0.5</div></div>
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:11px;max-width:60px;">Proc</div><div class="gem-val" style="font-size:11px;">15%</div></div>
+      <div class="gem el-chaos"><div class="gem-shape">🌀</div><div class="gem-label" style="font-size:11px;max-width:60px;">Leech</div><div class="gem-val" style="font-size:11px;">+3%</div></div>
+      <div class="gem el-lightning"><div class="gem-shape">⚡</div><div class="gem-label" style="font-size:11px;max-width:60px;">Atk Spd</div><div class="gem-val" style="font-size:11px;">+10%</div></div>
+      <div class="gem el-poison"><div class="gem-shape">☠️</div><div class="gem-label" style="font-size:11px;max-width:60px;">DOT</div><div class="gem-val" style="font-size:11px;">+15%</div></div>
+      <div class="gem el-physical"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Armor</div><div class="gem-val" style="font-size:11px;">+25</div></div>
+      <div class="gem el-shadow"><div class="gem-shape">🌙</div><div class="gem-label" style="font-size:11px;max-width:60px;">Dodge</div><div class="gem-val" style="font-size:11px;">+4%</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:11px;max-width:60px;">Barrier</div><div class="gem-val" style="font-size:11px;">+20</div></div>
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:11px;max-width:60px;">Thorns</div><div class="gem-val" style="font-size:11px;">+8</div></div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="turn-badge">YOUR PICK</div>
+      <span class="round-label">R1</span>
+    </div>
+    <div class="timer"><div class="timer-num">8s</div><div class="timer-bar" style="width:44px;"><div class="timer-fill" style="width:55%;"></div></div></div>
+  </div>
+  <div class="hint">Drag gems down · tap twice to pick</div>
+
+  <div class="you-zone glow">
+    <div class="zone-head"><span class="zone-title you">↓ Your Orbs</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+33 T3</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ V2: XL gems (64px) with category tag ═══════ -->
+<div id="v2" class="iteration">
+<div class="phone">
+  <div class="opp-zone">
+    <div class="zone-head"><span class="zone-title opp">Opponent</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-fire newest"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire DMG</div><div class="chip-stat">+23 T2</div></div></div>
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+      <div class="chip el-chaos"><div class="chip-ico">🌀</div><div class="chip-txt"><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+    </div>
+  </div>
+
+  <div class="divider"><div class="divider-line"></div><div class="divider-text">Pool · 16</div><div class="divider-line"></div></div>
+
+  <div class="pool" style="--gem-size: 64px;">
+    <div class="pool-inner" style="gap: 4px;">
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:12px;max-width:68px;">Fire DMG</div><div class="gem-val" style="font-size:11px;">+23 · Off</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Cold DMG</div><div class="gem-val" style="font-size:11px;">+12 · Off</div></div>
+      <div class="gem el-physical picked"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Physical</div><div class="gem-val" style="font-size:11px;">+33 · Off</div></div>
+      <div class="gem el-poison"><div class="gem-shape">☠️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Poison</div><div class="gem-val" style="font-size:11px;">+10 · Off</div></div>
+      <div class="gem el-shadow"><div class="gem-shape">🌙</div><div class="gem-label" style="font-size:12px;max-width:68px;">Shadow</div><div class="gem-val" style="font-size:11px;">+15% · Def</div></div>
+      <div class="gem el-lightning"><div class="gem-shape">⚡</div><div class="gem-label" style="font-size:12px;max-width:68px;">Crit</div><div class="gem-val" style="font-size:11px;">+5% · Off</div></div>
+      <div class="gem el-physical"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Block</div><div class="gem-val" style="font-size:11px;">+8% · Def</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Regen</div><div class="gem-val" style="font-size:11px;">+0.5 · Sust</div></div>
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:12px;max-width:68px;">On Hit</div><div class="gem-val" style="font-size:11px;">15% · Trig</div></div>
+      <div class="gem el-chaos"><div class="gem-shape">🌀</div><div class="gem-label" style="font-size:12px;max-width:68px;">Leech</div><div class="gem-val" style="font-size:11px;">+3% · Sust</div></div>
+      <div class="gem el-lightning"><div class="gem-shape">⚡</div><div class="gem-label" style="font-size:12px;max-width:68px;">Atk Spd</div><div class="gem-val" style="font-size:11px;">+10% · Off</div></div>
+      <div class="gem el-poison"><div class="gem-shape">☠️</div><div class="gem-label" style="font-size:12px;max-width:68px;">DOT</div><div class="gem-val" style="font-size:11px;">+15% · Off</div></div>
+      <div class="gem el-physical"><div class="gem-shape">⚔️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Armor</div><div class="gem-val" style="font-size:11px;">+25 · Def</div></div>
+      <div class="gem el-shadow"><div class="gem-shape">🌙</div><div class="gem-label" style="font-size:12px;max-width:68px;">Dodge</div><div class="gem-val" style="font-size:11px;">+4% · Def</div></div>
+      <div class="gem el-cold"><div class="gem-shape">❄️</div><div class="gem-label" style="font-size:12px;max-width:68px;">Barrier</div><div class="gem-val" style="font-size:11px;">+20 · Def</div></div>
+      <div class="gem el-fire"><div class="gem-shape">🔥</div><div class="gem-label" style="font-size:12px;max-width:68px;">Thorns</div><div class="gem-val" style="font-size:11px;">+8 · Def</div></div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div style="display:flex;align-items:center;gap:8px;"><div class="turn-badge">YOUR PICK</div><span class="round-label">R1</span></div>
+    <div class="timer"><div class="timer-num">8s</div><div class="timer-bar" style="width:44px;"><div class="timer-fill" style="width:55%;"></div></div></div>
+  </div>
+  <div class="hint">Drag gems down · tap twice to pick</div>
+
+  <div class="you-zone glow">
+    <div class="zone-head"><span class="zone-title you">↓ Your Orbs</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+33 T3</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ V3: List hybrid — pool as compact rows ═══════ -->
+<div id="v3" class="iteration">
+<div class="phone">
+  <div class="opp-zone">
+    <div class="zone-head"><span class="zone-title opp">Opponent</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-fire newest"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire DMG</div><div class="chip-stat">+23 T2</div></div></div>
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+      <div class="chip el-chaos"><div class="chip-ico">🌀</div><div class="chip-txt"><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+    </div>
+  </div>
+
+  <div class="divider"><div class="divider-line"></div><div class="divider-text">Pool · 16</div><div class="divider-line"></div></div>
+
+  <div class="pool" style="overflow-y: auto;">
+    <div style="padding: 6px 8px; display: flex; flex-direction: column; gap: 4px;">
+      <!-- Pool as rows — larger touch targets, full info -->
+      <div class="pool-row el-fire" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">🔥</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Fire Damage</div><div style="font-size:10px;color:var(--surface-300);">Offensive · T2 · Elemental</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+23</div><div style="font-size:9px;color:var(--surface-400);">DMG</div></div>
+      </div>
+      <div class="pool-row el-cold" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">❄️</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Cold Damage</div><div style="font-size:10px;color:var(--surface-300);">Offensive · T1 · Elemental</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+12</div><div style="font-size:9px;color:var(--surface-400);">Elem</div></div>
+      </div>
+      <div class="pool-row el-physical" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-600);border:2px solid var(--accent-400);cursor:pointer;box-shadow:0 0 12px rgba(212,168,52,0.15);">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">⚔️</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Flat Physical</div><div style="font-size:10px;color:var(--surface-300);">Offensive · T3 · Physical</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+33</div><div style="font-size:9px;color:var(--surface-400);">Phys</div></div>
+      </div>
+      <div class="pool-row el-poison" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">☠️</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Poison Damage</div><div style="font-size:10px;color:var(--surface-300);">Offensive · T1 · DOT</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+10</div><div style="font-size:9px;color:var(--surface-400);">DOT</div></div>
+      </div>
+      <div class="pool-row el-shadow" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">🌙</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Shadow Resist</div><div style="font-size:10px;color:var(--surface-300);">Defensive · T2 · Shadow</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+15%</div><div style="font-size:9px;color:var(--surface-400);">Res</div></div>
+      </div>
+      <div class="pool-row el-lightning" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">⚡</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Crit Chance</div><div style="font-size:10px;color:var(--surface-300);">Offensive · T1 · Crit</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+5%</div><div style="font-size:9px;color:var(--surface-400);">Crit</div></div>
+      </div>
+      <div class="pool-row el-physical" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">⚔️</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">Block Chance</div><div style="font-size:10px;color:var(--surface-300);">Defensive · T1</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+8%</div><div style="font-size:9px;color:var(--surface-400);">Block</div></div>
+      </div>
+      <div class="pool-row el-cold" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-700);border:1px solid var(--surface-600);cursor:pointer;">
+        <div class="chip-ico" style="width:36px;height:36px;font-size:18px;border-radius:8px;">❄️</div>
+        <div style="flex:1;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:white;">HP Regen</div><div style="font-size:10px;color:var(--surface-300);">Sustain · T2</div></div>
+        <div style="text-align:right;"><div style="font-family:Rajdhani;font-weight:700;font-size:14px;color:var(--accent-300);">+0.5</div><div style="font-size:9px;color:var(--surface-400);">/tick</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div style="display:flex;align-items:center;gap:8px;"><div class="turn-badge">YOUR PICK</div><span class="round-label">R1</span></div>
+    <div class="timer"><div class="timer-num">8s</div><div class="timer-bar" style="width:44px;"><div class="timer-fill" style="width:55%;"></div></div></div>
+  </div>
+  <div class="hint">Tap row to select · drag down to draft</div>
+
+  <div class="you-zone glow">
+    <div class="zone-head"><span class="zone-title you">↓ Your Orbs</span><span class="zone-ct">8 / 8</span></div>
+    <div class="chips">
+      <div class="chip el-physical"><div class="chip-ico">⚔️</div><div class="chip-txt"><div class="chip-name">Physical</div><div class="chip-stat">+33 T3</div></div></div>
+      <div class="chip el-lightning"><div class="chip-ico">⚡</div><div class="chip-txt"><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+      <div class="chip el-poison"><div class="chip-ico">☠️</div><div class="chip-txt"><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+      <div class="chip el-shadow"><div class="chip-ico">🌙</div><div class="chip-txt"><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+      <div class="chip el-cold"><div class="chip-ico">❄️</div><div class="chip-txt"><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+      <div class="chip el-fire"><div class="chip-ico">🔥</div><div class="chip-txt"><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function show(id) {
+  document.querySelectorAll('.iteration').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.iter-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = {v1:0,v2:1,v3:2}[id];
+  document.querySelectorAll('.iter-nav button')[idx].classList.add('active');
+}
+</script>
+</body>
+</html>

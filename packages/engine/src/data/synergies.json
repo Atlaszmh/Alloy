@@ -1,0 +1,142 @@
+[
+  {
+    "id": "assassin",
+    "name": "Assassin",
+    "requiredAffixes": ["crit_chance", "crit_damage", "attack_speed"],
+    "bonusEffects": [
+      { "stat": "synergy.assassin.firstHitCrit", "op": "flat", "value": 1 },
+      { "stat": "critMultiplier", "op": "percent", "value": 0.15 }
+    ],
+    "description": "First hit guaranteed crit; crits deal +15% bonus damage"
+  },
+  {
+    "id": "berserker",
+    "name": "Berserker",
+    "requiredAffixes": ["lifesteal", "crit_chance"],
+    "bonusEffects": [
+      { "stat": "synergy.berserker.critHealDouble", "op": "flat", "value": 1 }
+    ],
+    "description": "Critical hits heal for double lifesteal amount"
+  },
+  {
+    "id": "elementalist",
+    "name": "Elementalist",
+    "requiredAffixes": ["fire_damage", "cold_damage", "lightning_damage", "poison_damage", "shadow_damage"],
+    "condition": "any_3_elemental",
+    "bonusEffects": [
+      { "stat": "elementalDamage", "op": "percent", "value": 0.20 },
+      { "stat": "elementalResist", "op": "percent", "value": 0.10 }
+    ],
+    "description": "All elemental damage +20%; all elemental resist +10%"
+  },
+  {
+    "id": "glass_cannon",
+    "name": "Glass Cannon",
+    "requiredAffixes": ["crit_chance", "crit_damage", "attack_speed"],
+    "condition": "no_defensive_weapon",
+    "bonusEffects": [
+      { "stat": "weaponDamage", "op": "percent", "value": 0.30 },
+      { "stat": "maxHp", "op": "percent", "value": -0.25 }
+    ],
+    "description": "All weapon damage +30%, but max HP -25%"
+  },
+  {
+    "id": "fortress",
+    "name": "Fortress",
+    "requiredAffixes": ["flat_hp", "armor_rating", "block_chance"],
+    "bonusEffects": [
+      { "stat": "synergy.fortress.damageReductionAbove80", "op": "flat", "value": 0.15 }
+    ],
+    "description": "While above 80% HP, +15% damage reduction"
+  },
+  {
+    "id": "vengeance",
+    "name": "Vengeance",
+    "requiredAffixes": ["thorns", "flat_hp"],
+    "condition": "thorns_on_armor",
+    "bonusEffects": [
+      { "stat": "synergy.vengeance.thornsMissingHpScale", "op": "flat", "value": 2.0 }
+    ],
+    "description": "Thorns scale with missing HP (up to 2x at 10% HP)"
+  },
+  {
+    "id": "plague_bearer",
+    "name": "Plague Bearer",
+    "requiredAffixes": ["poison_damage", "attack_speed"],
+    "bonusEffects": [
+      { "stat": "synergy.plagueBearer.poisonStackRate", "op": "percent", "value": 0.20 },
+      { "stat": "synergy.plagueBearer.maxPoisonStacks", "op": "flat", "value": 2 }
+    ],
+    "description": "Poison stacks 20% faster; max stacks +2"
+  },
+  {
+    "id": "blood_mirror",
+    "name": "Blood Mirror",
+    "requiredAffixes": ["lifesteal", "thorns"],
+    "condition": "lifesteal_weapon_thorns_armor",
+    "bonusEffects": [
+      { "stat": "synergy.bloodMirror.reflectHeal", "op": "flat", "value": 1 }
+    ],
+    "description": "Reflected damage also heals wielder"
+  },
+  {
+    "id": "storm_conduit",
+    "name": "Storm Conduit",
+    "requiredAffixes": ["lightning_damage", "attack_speed"],
+    "bonusEffects": [
+      { "stat": "synergy.stormConduit.chainToPhantom", "op": "flat", "value": 1 },
+      { "stat": "synergy.stormConduit.chainDamagePercent", "op": "flat", "value": 0.50 }
+    ],
+    "description": "Lightning hits chain to phantom for 50% damage"
+  },
+  {
+    "id": "frozen_blade",
+    "name": "Frozen Blade",
+    "requiredAffixes": ["cold_damage", "crit_chance"],
+    "bonusEffects": [
+      { "stat": "synergy.frozenBlade.freezeOnCrit", "op": "flat", "value": 1.0 },
+      { "stat": "synergy.frozenBlade.freezeCooldown", "op": "flat", "value": 5.0 }
+    ],
+    "description": "Crits vs slowed enemies freeze for 1s (5s cooldown)"
+  },
+  {
+    "id": "immolator",
+    "name": "Immolator",
+    "requiredAffixes": ["fire_damage", "fire_damage", "dot_multiplier"],
+    "bonusEffects": [
+      { "stat": "synergy.immolator.burnDamageMultiplier", "op": "percent", "value": 1.0 },
+      { "stat": "synergy.immolator.burningFireResistReduction", "op": "flat", "value": 0.10 }
+    ],
+    "description": "Burn damage doubled; burning enemies have -10% fire resist"
+  },
+  {
+    "id": "juggernaut",
+    "name": "Juggernaut",
+    "requiredAffixes": ["armor_rating", "block_chance", "flat_hp", "fortify"],
+    "bonusEffects": [
+      { "stat": "synergy.juggernaut.stunImmune", "op": "flat", "value": 1 },
+      { "stat": "synergy.juggernaut.critImmune", "op": "flat", "value": 1 }
+    ],
+    "description": "Immune to stun; cannot be crit"
+  },
+  {
+    "id": "shadow_walker",
+    "name": "Shadow Walker",
+    "requiredAffixes": ["shadow_damage", "dodge_chance", "attack_speed"],
+    "bonusEffects": [
+      { "stat": "synergy.shadowWalker.dodgeInvisibility", "op": "flat", "value": 1 },
+      { "stat": "synergy.shadowWalker.invisibilityCrit", "op": "flat", "value": 1 }
+    ],
+    "description": "Dodged attacks grant invisibility for 1 hit (guaranteed crit)"
+  },
+  {
+    "id": "alchemist",
+    "name": "Alchemist",
+    "requiredAffixes": ["poison_damage", "chaos_damage", "lifesteal"],
+    "bonusEffects": [
+      { "stat": "synergy.alchemist.poisonHealPercent", "op": "flat", "value": 0.10 },
+      { "stat": "synergy.alchemist.chaosResistBypass", "op": "flat", "value": 0.50 }
+    ],
+    "description": "Poison heals you for 10% of DOT dealt; Chaos damage ignores 50% of resistance"
+  }
+]

@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(find /c/Projects/Alloy -type f -name *.json -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx)",
+      "Bash(find /c/Projects/Alloy -type f -not -path */.claude/*)",
+      "Bash(find c:/Projects/Alloy -maxdepth 3 -type f -name *.json -o -name *.ts -o -name *.tsx -o -name *.md)",
+      "Bash(pnpm install:*)",
+      "Bash(npm --version)",
+      "Bash(pnpm -F @alloy/engine build)",
+      "Bash(pnpm -F @alloy/engine test)",
+      "Bash(pnpm -F @alloy/tools build)",
+      "Bash(wc -l /c/Projects/Alloy/packages/engine/src/ai/*.ts /c/Projects/Alloy/packages/engine/src/balance/*.ts /c/Projects/Alloy/packages/engine/src/draft/*.ts /c/Projects/Alloy/packages/engine/src/duel/*.ts /c/Projects/Alloy/packages/engine/src/forge/*.ts /c/Projects/Alloy/packages/engine/src/pool/*.ts /c/Projects/Alloy/packages/engine/src/match/*.ts /c/Projects/Alloy/packages/engine/src/rng/*.ts)",
+      "Bash(wc -l /c/Projects/Alloy/packages/engine/tests/*.test.ts)",
+      "Bash(wc -l /c/Projects/Alloy/packages/tools/src/components/*.tsx /c/Projects/Alloy/packages/tools/src/hooks/*.ts)",
+      "Bash(wc -l /c/Projects/Alloy/packages/engine/src/data/*.json)",
+      "Bash(tree -L 3 -d /c/Projects/Alloy --ignore node_modules)",
+      "Bash(find /c/Projects/Alloy -type d -not -path */node_modules/*)",
+      "Bash(find /c/Projects/Alloy/packages/supabase -type f \\\\\\(-name *.sql -o -name *.ts -o -name *.js \\\\\\))",
+      "Bash(grep -c \"describe\\\\|it\\\\|test\" /c/Projects/Alloy/packages/engine/tests/*.test.ts)",
+      "Bash(pnpm:*)",
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__plugin_context7_context7__query-docs",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(hostname:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "Bash(mkdir:*)",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_console_messages"
+    ]
+  }
+}

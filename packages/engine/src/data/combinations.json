@@ -1,0 +1,489 @@
+[
+  {
+    "id": "ignite",
+    "name": "Ignite",
+    "components": ["chance_on_hit", "fire_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.ignite.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.ignite.dotMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.ignite.duration", "op": "flat", "value": 120 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.ignite.absorbChance", "op": "flat", "value": 0.10 }
+    ],
+    "tags": ["compound", "fire", "trigger"]
+  },
+  {
+    "id": "frostbite",
+    "name": "Frostbite",
+    "components": ["chance_on_hit", "cold_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.frostbite.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.frostbite.slowMultiplier", "op": "flat", "value": 1.0 },
+      { "stat": "compound.frostbite.coldDot", "op": "flat", "value": 1 },
+      { "stat": "compound.frostbite.rootDuration", "op": "flat", "value": 30 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.frostbite.armorBonus", "op": "flat", "value": 0.30 },
+      { "stat": "compound.frostbite.armorDuration", "op": "flat", "value": 90 }
+    ],
+    "tags": ["compound", "cold", "trigger"]
+  },
+  {
+    "id": "static_discharge",
+    "name": "Static Discharge",
+    "components": ["chance_on_hit", "lightning_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.static_discharge.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.static_discharge.chainDamage", "op": "flat", "value": 0.50 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.static_discharge.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "lightning", "trigger"]
+  },
+  {
+    "id": "envenom",
+    "name": "Envenom",
+    "components": ["chance_on_hit", "poison_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.envenom.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.envenom.stackMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.envenom.dotSpeedBonus", "op": "flat", "value": 0.50 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.envenom.poisonAttacker", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "poison", "trigger"]
+  },
+  {
+    "id": "soul_rend",
+    "name": "Soul Rend",
+    "components": ["chance_on_hit", "shadow_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.soul_rend.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.soul_rend.currentHpDamage", "op": "flat", "value": 0.05 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.soul_rend.reduceMaxHp", "op": "flat", "value": 0.03 },
+      { "stat": "compound.soul_rend.reduceDuration", "op": "flat", "value": 150 }
+    ],
+    "tags": ["compound", "shadow", "trigger"]
+  },
+  {
+    "id": "soul_siphon",
+    "name": "Soul Siphon",
+    "components": ["chance_on_hit", "lifesteal"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.soul_siphon.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.soul_siphon.fullHeal", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.soul_siphon.healOnDamaged", "op": "flat", "value": 0.25 }
+    ],
+    "tags": ["compound", "lifesteal", "trigger"]
+  },
+  {
+    "id": "concussion",
+    "name": "Concussion",
+    "components": ["chance_on_hit", "stun"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.concussion.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.concussion.stunDuration", "op": "flat", "value": 45 },
+      { "stat": "compound.concussion.durationMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.concussion.stunAttacker", "op": "flat", "value": 1 },
+      { "stat": "compound.concussion.stunAttackerDuration", "op": "flat", "value": 15 }
+    ],
+    "tags": ["compound", "stun", "trigger"]
+  },
+  {
+    "id": "retribution_aura",
+    "name": "Retribution Aura",
+    "components": ["chance_on_taking_damage", "thorns"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.retribution_aura.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.retribution_aura.thornMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.retribution_aura.duration", "op": "flat", "value": 60 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.retribution_aura.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.retribution_aura.thornMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.retribution_aura.duration", "op": "flat", "value": 60 }
+    ],
+    "tags": ["compound", "thorns", "defensive_trigger"]
+  },
+  {
+    "id": "immolation",
+    "name": "Immolation",
+    "components": ["chance_on_taking_damage", "fire_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.immolation.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.immolation.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.immolation.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.immolation.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "fire", "defensive_trigger"]
+  },
+  {
+    "id": "reactive_shield",
+    "name": "Reactive Shield",
+    "components": ["chance_on_taking_damage", "barrier"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.reactive_shield.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.reactive_shield.barrierPercent", "op": "flat", "value": 0.30 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.reactive_shield.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.reactive_shield.barrierPercent", "op": "flat", "value": 0.30 }
+    ],
+    "tags": ["compound", "barrier", "defensive_trigger"]
+  },
+  {
+    "id": "counter_strike",
+    "name": "Counter Strike",
+    "components": ["chance_on_block", "thorns"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.counter_strike.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.counter_strike.damageMultiplier", "op": "flat", "value": 1.50 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.counter_strike.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.counter_strike.damageMultiplier", "op": "flat", "value": 1.50 }
+    ],
+    "tags": ["compound", "thorns", "block_trigger"]
+  },
+  {
+    "id": "shield_bash",
+    "name": "Shield Bash",
+    "components": ["chance_on_block", "stun"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.shield_bash.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.shield_bash.stunDuration", "op": "flat", "value": 30 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.shield_bash.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.shield_bash.stunDuration", "op": "flat", "value": 30 }
+    ],
+    "tags": ["compound", "stun", "block_trigger"]
+  },
+  {
+    "id": "blood_frenzy",
+    "name": "Blood Frenzy",
+    "components": ["chance_on_low_hp", "lifesteal"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.blood_frenzy.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blood_frenzy.lifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.blood_frenzy.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blood_frenzy.lifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "tags": ["compound", "lifesteal", "low_hp_trigger"]
+  },
+  {
+    "id": "desperation",
+    "name": "Desperation",
+    "components": ["chance_on_low_hp", "attack_speed"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.desperation.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.desperation.attackSpeedMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.desperation.duration", "op": "flat", "value": 90 },
+      { "stat": "compound.desperation.oncePerFight", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.desperation.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.desperation.attackSpeedMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.desperation.duration", "op": "flat", "value": 90 },
+      { "stat": "compound.desperation.oncePerFight", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "attack_speed", "low_hp_trigger"]
+  },
+  {
+    "id": "thermal_shock",
+    "name": "Thermal Shock",
+    "components": ["fire_damage", "cold_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.thermal_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thermal_shock.stunDuration", "op": "flat", "value": 15 },
+      { "stat": "compound.thermal_shock.dotBonus", "op": "flat", "value": 0.25 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.thermal_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thermal_shock.stunDuration", "op": "flat", "value": 15 },
+      { "stat": "compound.thermal_shock.dotBonus", "op": "flat", "value": 0.25 }
+    ],
+    "tags": ["compound", "fire", "cold", "elemental"]
+  },
+  {
+    "id": "blight",
+    "name": "Blight",
+    "components": ["fire_damage", "poison_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.blight.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blight.poisonBonusOnBurn", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blight.fireBonusOnPoison", "op": "flat", "value": 0.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.blight.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blight.poisonBonusOnBurn", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blight.fireBonusOnPoison", "op": "flat", "value": 0.20 }
+    ],
+    "tags": ["compound", "fire", "poison", "elemental"]
+  },
+  {
+    "id": "storm_of_flames",
+    "name": "Storm of Flames",
+    "components": ["fire_damage", "lightning_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.storm_of_flames.active", "op": "flat", "value": 1 },
+      { "stat": "compound.storm_of_flames.lightningOnFire", "op": "flat", "value": 0.25 },
+      { "stat": "compound.storm_of_flames.igniteOnLightning", "op": "flat", "value": 0.25 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.storm_of_flames.active", "op": "flat", "value": 1 },
+      { "stat": "compound.storm_of_flames.lightningOnFire", "op": "flat", "value": 0.25 },
+      { "stat": "compound.storm_of_flames.igniteOnLightning", "op": "flat", "value": 0.25 }
+    ],
+    "tags": ["compound", "fire", "lightning", "elemental"]
+  },
+  {
+    "id": "superconductor",
+    "name": "Superconductor",
+    "components": ["cold_damage", "lightning_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.superconductor.active", "op": "flat", "value": 1 },
+      { "stat": "compound.superconductor.lightningBonusOnSlow", "op": "flat", "value": 0.30 },
+      { "stat": "compound.superconductor.extendSlow", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.superconductor.active", "op": "flat", "value": 1 },
+      { "stat": "compound.superconductor.lightningBonusOnSlow", "op": "flat", "value": 0.30 },
+      { "stat": "compound.superconductor.extendSlow", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "cold", "lightning", "elemental"]
+  },
+  {
+    "id": "frostplague",
+    "name": "Frostplague",
+    "components": ["cold_damage", "poison_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.frostplague.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frostplague.poisonSpeedOnSlow", "op": "flat", "value": 0.50 },
+      { "stat": "compound.frostplague.extraSlowOnPoison", "op": "flat", "value": 0.10 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.frostplague.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frostplague.poisonSpeedOnSlow", "op": "flat", "value": 0.50 },
+      { "stat": "compound.frostplague.extraSlowOnPoison", "op": "flat", "value": 0.10 }
+    ],
+    "tags": ["compound", "cold", "poison", "elemental"]
+  },
+  {
+    "id": "void_shock",
+    "name": "Void Shock",
+    "components": ["lightning_damage", "shadow_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.void_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.void_shock.shadowChanceOnLightning", "op": "flat", "value": 0.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.void_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.void_shock.shadowChanceOnLightning", "op": "flat", "value": 0.20 }
+    ],
+    "tags": ["compound", "lightning", "shadow", "elemental"]
+  },
+  {
+    "id": "necrosis",
+    "name": "Necrosis",
+    "components": ["poison_damage", "shadow_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.necrosis.active", "op": "flat", "value": 1 },
+      { "stat": "compound.necrosis.maxHpPerStack", "op": "flat", "value": 0.005 },
+      { "stat": "compound.necrosis.poisonStacksOnShadow", "op": "flat", "value": 2 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.necrosis.active", "op": "flat", "value": 1 },
+      { "stat": "compound.necrosis.maxHpPerStack", "op": "flat", "value": 0.005 },
+      { "stat": "compound.necrosis.poisonStacksOnShadow", "op": "flat", "value": 2 }
+    ],
+    "tags": ["compound", "poison", "shadow", "elemental"]
+  },
+  {
+    "id": "blood_mirror",
+    "name": "Blood Mirror",
+    "components": ["lifesteal", "thorns"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.blood_mirror.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_mirror.healFromThorns", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.blood_mirror.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_mirror.healFromThorns", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "lifesteal", "thorns", "utility"]
+  },
+  {
+    "id": "flicker_strike",
+    "name": "Flicker Strike",
+    "components": ["attack_speed", "crit_chance"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.flicker_strike.active", "op": "flat", "value": 1 },
+      { "stat": "compound.flicker_strike.hitInterval", "op": "flat", "value": 5 },
+      { "stat": "compound.flicker_strike.autoCrit", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.flicker_strike.active", "op": "flat", "value": 1 },
+      { "stat": "compound.flicker_strike.hitInterval", "op": "flat", "value": 5 },
+      { "stat": "compound.flicker_strike.autoCrit", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "attack_speed", "crit", "utility"]
+  },
+  {
+    "id": "vampiric_fury",
+    "name": "Vampiric Fury",
+    "components": ["lifesteal", "crit_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.vampiric_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.vampiric_fury.critLifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.vampiric_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.vampiric_fury.critLifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "tags": ["compound", "lifesteal", "crit", "utility"]
+  },
+  {
+    "id": "iron_maiden",
+    "name": "Iron Maiden",
+    "components": ["thorns", "block"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.iron_maiden.active", "op": "flat", "value": 1 },
+      { "stat": "compound.iron_maiden.blockReflectMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.iron_maiden.active", "op": "flat", "value": 1 },
+      { "stat": "compound.iron_maiden.blockReflectMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "tags": ["compound", "thorns", "block", "utility"]
+  },
+  {
+    "id": "regenerative_shield",
+    "name": "Regenerative Shield",
+    "components": ["barrier", "hp_regen"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.regenerative_shield.active", "op": "flat", "value": 1 },
+      { "stat": "compound.regenerative_shield.regenMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.regenerative_shield.active", "op": "flat", "value": 1 },
+      { "stat": "compound.regenerative_shield.regenMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "tags": ["compound", "barrier", "hp_regen", "utility"]
+  },
+  {
+    "id": "riposte",
+    "name": "Riposte",
+    "components": ["dodge", "attack_speed"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.riposte.active", "op": "flat", "value": 1 },
+      { "stat": "compound.riposte.attackSpeedOnDodge", "op": "flat", "value": 0.50 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.riposte.active", "op": "flat", "value": 1 },
+      { "stat": "compound.riposte.attackSpeedOnDodge", "op": "flat", "value": 0.50 }
+    ],
+    "tags": ["compound", "dodge", "attack_speed", "utility"]
+  },
+  {
+    "id": "fortress",
+    "name": "Fortress",
+    "components": ["flat_hp", "armor"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.fortress.active", "op": "flat", "value": 1 },
+      { "stat": "compound.fortress.hpThreshold", "op": "flat", "value": 0.80 },
+      { "stat": "compound.fortress.damageReduction", "op": "flat", "value": 0.15 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.fortress.active", "op": "flat", "value": 1 },
+      { "stat": "compound.fortress.hpThreshold", "op": "flat", "value": 0.80 },
+      { "stat": "compound.fortress.damageReduction", "op": "flat", "value": 0.15 }
+    ],
+    "tags": ["compound", "hp", "armor", "utility"]
+  },
+  {
+    "id": "sanguine_endurance",
+    "name": "Sanguine Endurance",
+    "components": ["lifesteal", "flat_hp"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.sanguine_endurance.active", "op": "flat", "value": 1 },
+      { "stat": "compound.sanguine_endurance.overhealCap", "op": "flat", "value": 1.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.sanguine_endurance.active", "op": "flat", "value": 1 },
+      { "stat": "compound.sanguine_endurance.overhealCap", "op": "flat", "value": 1.20 }
+    ],
+    "tags": ["compound", "lifesteal", "hp", "utility"]
+  }
+]

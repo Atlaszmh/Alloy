@@ -1,0 +1,41 @@
+{
+  "baseHP": 200,
+  "ticksPerSecond": 30,
+  "maxDuelTicks": 3000,
+  "baseCritMultiplier": 1.5,
+  "minAttackInterval": 9,
+  "fluxPerRound": [8, 4, 2],
+  "quickMatchFlux": 14,
+  "fluxCosts": {
+    "assignOrb": 1,
+    "combineOrbs": 2,
+    "upgradeTier": 1,
+    "swapOrb": 1,
+    "removeOrb": 1
+  },
+  "draftPoolPerRound": [16, 8, 8],
+  "draftPicksPerPlayer": [8, 4, 4],
+  "draftPoolSizeQuick": { "min": 20, "max": 24 },
+  "tierDistribution": { "1": 0.50, "2": 0.30, "3": 0.15, "4": 0.05 },
+  "draftTimerSeconds": 8,
+  "forgeTimerSeconds": { "round1": 45, "subsequent": 25 },
+  "archetypeMinOrbs": 3,
+  "baseStatScaling": {
+    "STR": {
+      "weapon": { "physicalDamage": 2.0, "flatDamageEffectiveness": 0.1 },
+      "armor": { "armor": 0.5, "damageReduction": 0.005 }
+    },
+    "INT": {
+      "weapon": { "elementalDamage": 1.5, "dotDamage": 0.1 },
+      "armor": { "elementalResistance": 0.3, "barrierStrength": 0.05 }
+    },
+    "DEX": {
+      "weapon": { "critChance": 0.005, "attackSpeed": 0.003, "penetration": 0.003 },
+      "armor": { "dodgeChance": 0.003, "critAvoidance": 0.003 }
+    },
+    "VIT": {
+      "weapon": { "lifestealEffectiveness": 0.01, "hpBonus": 5 },
+      "armor": { "maxHP": 8, "hpRegen": 0.01, "sustainEffectiveness": 0.02 }
+    }
+  }
+}

@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alloy — Draft Screen Concepts (Full 16 orbs)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-950: #060608; --surface-900: #0a0a0f; --surface-800: #111118;
+    --surface-700: #1a1a26; --surface-600: #252536; --surface-500: #363650;
+    --surface-400: #4a4a68; --surface-300: #6a6a88;
+    --accent-500: #d4a834; --accent-400: #e0bc4a; --accent-300: #ecd06a;
+    --bronze-400: #b89868;
+    --fire: #e8553a; --cold: #3a9be8; --lightning: #d4c040;
+    --poison: #2db369; --shadow: #8b3ae8; --chaos: #e83a8b;
+    --danger: #f87171; --success: #34d399;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--surface-950); color: white; font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  .concept-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; gap: 2px; padding: 8px;
+    background: rgba(6,6,8,0.95); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .concept-nav button {
+    flex: 1; padding: 10px 6px; border: none; border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px;
+    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    transition: all 0.2s; background: var(--surface-700); color: var(--surface-300);
+  }
+  .concept-nav button.active {
+    background: linear-gradient(180deg, var(--accent-400), var(--accent-500));
+    color: var(--surface-900); box-shadow: 0 2px 12px rgba(212,168,52,0.3);
+  }
+  .concept { display: none; padding-top: 56px; flex-direction: column; }
+  .concept.active { display: flex; }
+
+  .phone-frame {
+    width: 393px; height: 852px; margin: 20px auto; border-radius: 24px;
+    border: 2px solid rgba(255,255,255,0.06); overflow: hidden;
+    background: radial-gradient(ellipse at 50% 0%, rgba(30,25,40,0.4) 0%, transparent 60%), var(--surface-900);
+    box-shadow: 0 0 60px rgba(0,0,0,0.6); display: flex; flex-direction: column;
+  }
+  .concept-label {
+    text-align: center; padding: 12px;
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    color: var(--bronze-400); letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  /* ── Header ── */
+  .draft-header {
+    display: flex; align-items: center; justify-content: space-between; padding: 6px 14px;
+  }
+  .turn-badge {
+    padding: 3px 10px; border-radius: 6px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.04em;
+    background: linear-gradient(180deg, var(--accent-400), var(--accent-500));
+    color: var(--surface-900); box-shadow: 0 2px 8px rgba(212,168,52,0.3);
+  }
+  .timer { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .timer-num { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; color: var(--accent-400); }
+  .timer-bar { width: 36px; height: 3px; border-radius: 2px; background: var(--surface-600); overflow: hidden; }
+  .timer-bar-fill { width: 70%; height: 100%; background: var(--accent-500); border-radius: 2px; }
+  .instruction { text-align: center; font-size: 9px; color: var(--bronze-400); letter-spacing: 0.04em; padding: 3px 0; }
+
+  /* ── Opponent / Player chip zones ── */
+  .opp-zone {
+    margin: 6px 10px 0; border-radius: 10px;
+    border: 1px solid rgba(248,113,113,0.15);
+    background: linear-gradient(180deg, rgba(248,113,113,0.04) 0%, var(--surface-800) 100%);
+    padding: 6px 8px;
+  }
+  .player-zone {
+    margin: 3px 10px 6px; border-radius: 10px; padding: 6px 8px;
+    border: 1px solid rgba(212,168,52,0.2);
+    background: linear-gradient(0deg, rgba(212,168,52,0.04) 0%, var(--surface-800) 100%);
+    transition: all 0.2s;
+  }
+  .player-zone.highlight {
+    border-color: var(--accent-400);
+    background: linear-gradient(0deg, rgba(212,168,52,0.1) 0%, rgba(212,168,52,0.03) 100%);
+    box-shadow: 0 0 16px rgba(212,168,52,0.1);
+  }
+  .zone-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  }
+  .zone-label-opp { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--danger); }
+  .zone-label-you { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-400); }
+  .zone-count { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 600; color: var(--surface-300); }
+
+  .chip-row { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* Chip — compact orb with icon + name + stat */
+  .chip {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 6px 3px 3px; border-radius: 6px;
+    background: var(--surface-700); border: 1px solid var(--surface-600);
+    flex-shrink: 0;
+  }
+  .chip.just-taken { border-color: var(--danger); animation: chip-in 0.4s ease-out; }
+  @keyframes chip-in { 0% { transform: scale(0.7); opacity: 0; } 60% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+
+  .chip-icon {
+    width: 22px; height: 22px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; border: 1.5px solid; position: relative; overflow: hidden;
+  }
+  .chip-icon::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.12), transparent 60%); }
+  .chip-name { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 700; color: white; white-space: nowrap; max-width: 42px; overflow: hidden; text-overflow: ellipsis; }
+  .chip-stat { font-family: 'Rajdhani', sans-serif; font-size: 8px; font-weight: 600; color: var(--accent-300); white-space: nowrap; }
+
+  .el-fire .chip-icon { background: rgba(232,85,58,0.25); border-color: var(--fire); }
+  .el-cold .chip-icon { background: rgba(58,155,232,0.25); border-color: var(--cold); }
+  .el-lightning .chip-icon { background: rgba(212,192,64,0.25); border-color: var(--lightning); }
+  .el-poison .chip-icon { background: rgba(45,179,105,0.25); border-color: var(--poison); }
+  .el-shadow .chip-icon { background: rgba(139,58,232,0.25); border-color: var(--shadow); }
+  .el-physical .chip-icon { background: rgba(192,192,192,0.15); border-color: #8a8a8a; }
+  .el-chaos .chip-icon { background: rgba(232,58,139,0.25); border-color: var(--chaos); }
+
+  .zone-placeholder { font-size: 10px; font-style: italic; color: var(--surface-500); }
+
+  /* ── Pool orb styles ── */
+  .orb {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; transition: transform 0.15s, filter 0.15s;
+    user-select: none; touch-action: none;
+  }
+  .orb:hover { transform: scale(1.08); filter: brightness(1.1); }
+  .orb:active { transform: scale(0.95); }
+  .orb.selected { filter: drop-shadow(0 0 10px var(--glow-color, var(--accent-400))); }
+  .orb-shape {
+    width: var(--orb-size, 44px); height: var(--orb-size, 44px); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: calc(var(--orb-size, 44px) * 0.38); border: 2px solid; position: relative; overflow: hidden;
+  }
+  .orb-shape::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.15), transparent 60%); }
+  .orb-name { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 600; color: var(--surface-300); margin-top: 1px; text-align: center; max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .orb-stat { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 700; color: var(--accent-300); }
+
+  .el-fire .orb-shape { background: linear-gradient(135deg, rgba(232,85,58,0.3), rgba(232,85,58,0.1)); border-color: var(--fire); --glow-color: var(--fire); }
+  .el-cold .orb-shape { background: linear-gradient(135deg, rgba(58,155,232,0.3), rgba(58,155,232,0.1)); border-color: var(--cold); --glow-color: var(--cold); }
+  .el-lightning .orb-shape { background: linear-gradient(135deg, rgba(212,192,64,0.3), rgba(212,192,64,0.1)); border-color: var(--lightning); --glow-color: var(--lightning); }
+  .el-poison .orb-shape { background: linear-gradient(135deg, rgba(45,179,105,0.3), rgba(45,179,105,0.1)); border-color: var(--poison); --glow-color: var(--poison); }
+  .el-shadow .orb-shape { background: linear-gradient(135deg, rgba(139,58,232,0.3), rgba(139,58,232,0.1)); border-color: var(--shadow); --glow-color: var(--shadow); }
+  .el-physical .orb-shape { background: linear-gradient(135deg, rgba(192,192,192,0.2), rgba(120,120,120,0.1)); border-color: #8a8a8a; --glow-color: #c0c0c0; }
+  .el-chaos .orb-shape { background: linear-gradient(135deg, rgba(232,58,139,0.3), rgba(232,58,139,0.1)); border-color: var(--chaos); --glow-color: var(--chaos); }
+
+  /* ═══ CONCEPT A: Card Gallery ═══ */
+  .concept-a .pool-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 10px;
+    flex: 1; overflow-y: auto; align-content: start;
+  }
+  .card-orb {
+    background: var(--surface-800); border: 1px solid var(--surface-600); border-radius: 10px;
+    padding: 8px; display: flex; gap: 8px; align-items: center;
+    cursor: pointer; transition: all 0.15s; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .card-orb:hover { border-color: var(--surface-400); transform: translateY(-1px); }
+  .card-orb.selected { border-color: var(--accent-400); box-shadow: 0 0 12px rgba(212,168,52,0.2); }
+  .card-orb .orb-shape { --orb-size: 36px; flex-shrink: 0; }
+  .card-info { flex: 1; min-width: 0; }
+  .card-name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-detail { font-size: 9px; color: var(--surface-300); }
+  .card-stat { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 10px; color: var(--accent-300); }
+
+  /* ═══ CONCEPT B: Carousel ═══ */
+  .concept-b .focus-area {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px; padding: 0 20px;
+  }
+  .focus-orb { --orb-size: 80px; animation: float 3s ease-in-out infinite; }
+  .focus-orb .orb-shape { --orb-size: 80px; border-radius: 18px; border-width: 3px; font-size: 34px; }
+  .focus-name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; color: white; }
+  .focus-stats { display: flex; gap: 14px; }
+  .focus-stat-block { text-align: center; }
+  .focus-stat-label { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 600; color: var(--surface-400); text-transform: uppercase; letter-spacing: 0.08em; }
+  .focus-stat-value { font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 700; color: var(--accent-300); }
+  .focus-category { font-family: 'Rajdhani', sans-serif; font-size: 10px; color: var(--surface-300); text-transform: uppercase; letter-spacing: 0.1em; }
+  .carousel-strip { display: flex; gap: 6px; padding: 6px 14px; overflow-x: auto; scrollbar-width: none; }
+  .carousel-strip::-webkit-scrollbar { display: none; }
+  .carousel-thumb { --orb-size: 40px; flex-shrink: 0; opacity: 0.45; transition: opacity 0.15s, transform 0.15s; }
+  .carousel-thumb:hover, .carousel-thumb.active { opacity: 1; transform: scale(1.1); }
+  .pick-btn {
+    margin: 0 20px 6px; padding: 12px; border: none; border-radius: 10px;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; background: linear-gradient(180deg, var(--accent-400), var(--accent-500)); color: var(--surface-900);
+    box-shadow: 0 4px 16px rgba(212,168,52,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .tag-row { display: flex; gap: 3px; }
+  .tag { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: var(--surface-700); color: var(--surface-300); }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+  /* ═══ CONCEPT C: Battlefield ═══ */
+  .bf-pool {
+    flex: 1; margin: 3px 10px; border-radius: 14px;
+    background: var(--surface-800); box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+    border: 1px solid var(--surface-600); overflow: hidden;
+  }
+  .bf-pool-inner {
+    width: 100%; height: 100%; padding: 10px;
+    display: flex; flex-wrap: wrap; gap: 4px; align-content: center; justify-content: center;
+  }
+  .bf-orb { --orb-size: 48px; }
+  .bf-orb:nth-child(odd) { transform: rotate(-2deg); }
+  .bf-orb:nth-child(3n) { transform: rotate(3deg); }
+  .bf-orb:nth-child(4n+1) { transform: rotate(-1deg) translateY(-2px); }
+  .bf-divider { display: flex; align-items: center; gap: 6px; padding: 1px 14px; }
+  .bf-divider-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--surface-500), transparent); }
+  .bf-divider-text { font-family: 'Rajdhani', sans-serif; font-size: 9px; font-weight: 700; color: var(--surface-400); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+
+  /* ── Descriptions ── */
+  .desc-panel { max-width: 393px; margin: 0 auto 40px; padding: 0 20px; }
+  .desc-title { font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 700; color: var(--accent-400); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; }
+  .desc-text { font-size: 12px; line-height: 1.6; color: var(--surface-300); }
+  .desc-pros, .desc-cons { margin-top: 6px; font-size: 11px; line-height: 1.5; }
+  .desc-pros { color: var(--success); }
+  .desc-cons { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<nav class="concept-nav">
+  <button class="active" onclick="showConcept('a')">A: Cards</button>
+  <button onclick="showConcept('b')">B: Carousel</button>
+  <button onclick="showConcept('c')">C: Battlefield</button>
+</nav>
+
+<!-- 8 opponent chips, 16 pool orbs, 8 player chips = full R1 draft -->
+
+<!-- ═══════════════ CONCEPT A: Card Gallery ═══════════════ -->
+<div id="concept-a" class="concept concept-a active">
+  <div class="concept-label">A — Card Gallery · Full R1 (16 pool, 8+8 drafted)</div>
+  <div class="phone-frame">
+    <div class="opp-zone">
+      <div class="zone-header"><span class="zone-label-opp">Opponent</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-fire just-taken"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+23 T2</div></div></div>
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+        <div class="chip el-chaos"><div class="chip-icon">🌀</div><div><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+      </div>
+    </div>
+
+    <div class="draft-header">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="turn-badge">YOUR PICK</div>
+        <span style="font-family:Rajdhani;font-size:11px;color:var(--surface-300);">R1 · 16 pool</span>
+      </div>
+      <div class="timer"><div class="timer-num">8s</div><div class="timer-bar"><div class="timer-bar-fill" style="width:50%;"></div></div></div>
+    </div>
+
+    <div class="pool-grid">
+      <div class="card-orb selected el-fire"><div class="orb-shape">🔥</div><div class="card-info"><div class="card-name">Fire Damage</div><div class="card-detail">Off · T2</div><div class="card-stat">+23 DMG</div></div></div>
+      <div class="card-orb el-cold"><div class="orb-shape">❄️</div><div class="card-info"><div class="card-name">Cold Damage</div><div class="card-detail">Off · T1</div><div class="card-stat">+12 Elem</div></div></div>
+      <div class="card-orb el-physical"><div class="orb-shape">⚔️</div><div class="card-info"><div class="card-name">Flat Physical</div><div class="card-detail">Off · T3</div><div class="card-stat">+33 Phys</div></div></div>
+      <div class="card-orb el-poison"><div class="orb-shape">☠️</div><div class="card-info"><div class="card-name">Poison DMG</div><div class="card-detail">Off · T1</div><div class="card-stat">+10 DOT</div></div></div>
+      <div class="card-orb el-shadow"><div class="orb-shape">🌙</div><div class="card-info"><div class="card-name">Shadow Res</div><div class="card-detail">Def · T2</div><div class="card-stat">+15% Res</div></div></div>
+      <div class="card-orb el-lightning"><div class="orb-shape">⚡</div><div class="card-info"><div class="card-name">Crit Chance</div><div class="card-detail">Off · T1</div><div class="card-stat">+5% Crit</div></div></div>
+      <div class="card-orb el-physical"><div class="orb-shape">⚔️</div><div class="card-info"><div class="card-name">Block</div><div class="card-detail">Def · T1</div><div class="card-stat">+8% Block</div></div></div>
+      <div class="card-orb el-cold"><div class="orb-shape">❄️</div><div class="card-info"><div class="card-name">HP Regen</div><div class="card-detail">Sust · T2</div><div class="card-stat">+0.5/tick</div></div></div>
+      <div class="card-orb el-fire"><div class="orb-shape">🔥</div><div class="card-info"><div class="card-name">Chance Hit</div><div class="card-detail">Trig · T1</div><div class="card-stat">15% proc</div></div></div>
+      <div class="card-orb el-chaos"><div class="orb-shape">🌀</div><div class="card-info"><div class="card-name">Lifesteal</div><div class="card-detail">Sust · T1</div><div class="card-stat">+3% Leech</div></div></div>
+      <div class="card-orb el-lightning"><div class="orb-shape">⚡</div><div class="card-info"><div class="card-name">Atk Speed</div><div class="card-detail">Off · T2</div><div class="card-stat">+10% AS</div></div></div>
+      <div class="card-orb el-poison"><div class="orb-shape">☠️</div><div class="card-info"><div class="card-name">DOT Multi</div><div class="card-detail">Off · T1</div><div class="card-stat">+15% DOT</div></div></div>
+      <div class="card-orb el-physical"><div class="orb-shape">⚔️</div><div class="card-info"><div class="card-name">Armor</div><div class="card-detail">Def · T3</div><div class="card-stat">+25 Arm</div></div></div>
+      <div class="card-orb el-shadow"><div class="orb-shape">🌙</div><div class="card-info"><div class="card-name">Dodge</div><div class="card-detail">Def · T1</div><div class="card-stat">+4% Dodge</div></div></div>
+      <div class="card-orb el-cold"><div class="orb-shape">❄️</div><div class="card-info"><div class="card-name">Barrier</div><div class="card-detail">Def · T2</div><div class="card-stat">+20 Barr</div></div></div>
+      <div class="card-orb el-fire"><div class="orb-shape">🔥</div><div class="card-info"><div class="card-name">Thorns</div><div class="card-detail">Def · T1</div><div class="card-stat">+8 Thorns</div></div></div>
+    </div>
+
+    <div class="instruction">Tap card · drag down to draft</div>
+
+    <div class="player-zone highlight">
+      <div class="zone-header"><span class="zone-label-you">↓ Your Orbs</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+33 T3</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="desc-panel">
+    <div class="desc-title">Card Gallery — Full State</div>
+    <div class="desc-text">16 cards in 2-column grid (scrollable). Both zones show 8 chips each wrapping into 2 rows. All info readable. Opponent chips wrap tightly.</div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONCEPT B: Carousel ═══════════════ -->
+<div id="concept-b" class="concept concept-b">
+  <div class="concept-label">B — Carousel · Full R1 (16 pool, 8+8 drafted)</div>
+  <div class="phone-frame">
+    <div class="opp-zone">
+      <div class="zone-header"><span class="zone-label-opp">Opponent</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-fire just-taken"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+23 T2</div></div></div>
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+        <div class="chip el-chaos"><div class="chip-icon">🌀</div><div><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+      </div>
+    </div>
+
+    <div class="draft-header">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="turn-badge">YOUR PICK</div>
+        <span style="font-family:Rajdhani;font-size:11px;color:var(--surface-300);">R1 · 16 pool</span>
+      </div>
+      <div class="timer"><div class="timer-num">8s</div><div class="timer-bar"><div class="timer-bar-fill" style="width:50%;"></div></div></div>
+    </div>
+
+    <div class="focus-area">
+      <div class="focus-category">Offensive · Tier 2</div>
+      <div class="focus-orb orb el-fire selected"><div class="orb-shape">🔥</div></div>
+      <div class="focus-name">Fire Damage</div>
+      <div class="focus-stats">
+        <div class="focus-stat-block"><div class="focus-stat-label">Weapon</div><div class="focus-stat-value">+23</div></div>
+        <div class="focus-stat-block"><div class="focus-stat-label">Armor</div><div class="focus-stat-value">+8%</div></div>
+        <div class="focus-stat-block"><div class="focus-stat-label">Range</div><div class="focus-stat-value">18-30</div></div>
+      </div>
+      <div class="tag-row"><span class="tag">elemental</span><span class="tag">fire</span><span class="tag">dot</span></div>
+    </div>
+
+    <div class="carousel-strip">
+      <div class="carousel-thumb orb el-cold"><div class="orb-shape">❄️</div></div>
+      <div class="carousel-thumb orb el-physical"><div class="orb-shape">⚔️</div></div>
+      <div class="carousel-thumb orb el-poison"><div class="orb-shape">☠️</div></div>
+      <div class="carousel-thumb orb el-fire active"><div class="orb-shape">🔥</div></div>
+      <div class="carousel-thumb orb el-shadow"><div class="orb-shape">🌙</div></div>
+      <div class="carousel-thumb orb el-lightning"><div class="orb-shape">⚡</div></div>
+      <div class="carousel-thumb orb el-physical"><div class="orb-shape">⚔️</div></div>
+      <div class="carousel-thumb orb el-cold"><div class="orb-shape">❄️</div></div>
+      <div class="carousel-thumb orb el-fire"><div class="orb-shape">🔥</div></div>
+      <div class="carousel-thumb orb el-chaos"><div class="orb-shape">🌀</div></div>
+      <div class="carousel-thumb orb el-lightning"><div class="orb-shape">⚡</div></div>
+      <div class="carousel-thumb orb el-poison"><div class="orb-shape">☠️</div></div>
+      <div class="carousel-thumb orb el-physical"><div class="orb-shape">⚔️</div></div>
+      <div class="carousel-thumb orb el-shadow"><div class="orb-shape">🌙</div></div>
+      <div class="carousel-thumb orb el-cold"><div class="orb-shape">❄️</div></div>
+      <div class="carousel-thumb orb el-fire"><div class="orb-shape">🔥</div></div>
+    </div>
+
+    <button class="pick-btn">DRAFT THIS ORB</button>
+
+    <div class="player-zone">
+      <div class="zone-header"><span class="zone-label-you">Your Orbs</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+33 T3</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="desc-panel">
+    <div class="desc-title">Carousel — Full State</div>
+    <div class="desc-text">16 thumbnails in the horizontal strip (scrollable). Full stats on the focused orb. Both stockpile zones show 8 chips wrapping into 2 rows. Chip zone takes ~70px per zone.</div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONCEPT C: Battlefield ═══════════════ -->
+<div id="concept-c" class="concept concept-c">
+  <div class="concept-label">C — Battlefield · Full R1 (16 pool, 8+8 drafted)</div>
+  <div class="phone-frame" style="display:flex;flex-direction:column;">
+    <div class="opp-zone">
+      <div class="zone-header"><span class="zone-label-opp">Opponent</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-fire just-taken"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+23 T2</div></div></div>
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Shadow</div><div class="chip-stat">+15% T2</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Regen</div><div class="chip-stat">+0.5 T2</div></div></div>
+        <div class="chip el-chaos"><div class="chip-icon">🌀</div><div><div class="chip-name">Leech</div><div class="chip-stat">+3% T1</div></div></div>
+      </div>
+    </div>
+
+    <div class="bf-divider">
+      <div class="bf-divider-line"></div>
+      <div class="bf-divider-text">Pool · 16 orbs</div>
+      <div class="bf-divider-line"></div>
+    </div>
+
+    <div class="bf-pool" style="flex:1;">
+      <div class="bf-pool-inner">
+        <div class="bf-orb orb el-fire"><div class="orb-shape">🔥</div><div class="orb-name">Fire</div><div class="orb-stat">+23</div></div>
+        <div class="bf-orb orb el-cold"><div class="orb-shape">❄️</div><div class="orb-name">Cold</div><div class="orb-stat">+12</div></div>
+        <div class="bf-orb orb el-physical selected"><div class="orb-shape">⚔️</div><div class="orb-name">Physical</div><div class="orb-stat">+33</div></div>
+        <div class="bf-orb orb el-poison"><div class="orb-shape">☠️</div><div class="orb-name">Poison</div><div class="orb-stat">+10</div></div>
+        <div class="bf-orb orb el-shadow"><div class="orb-shape">🌙</div><div class="orb-name">Shadow</div><div class="orb-stat">+15%</div></div>
+        <div class="bf-orb orb el-lightning"><div class="orb-shape">⚡</div><div class="orb-name">Crit</div><div class="orb-stat">+5%</div></div>
+        <div class="bf-orb orb el-physical"><div class="orb-shape">⚔️</div><div class="orb-name">Block</div><div class="orb-stat">+8%</div></div>
+        <div class="bf-orb orb el-cold"><div class="orb-shape">❄️</div><div class="orb-name">Regen</div><div class="orb-stat">+0.5</div></div>
+        <div class="bf-orb orb el-fire"><div class="orb-shape">🔥</div><div class="orb-name">Proc</div><div class="orb-stat">15%</div></div>
+        <div class="bf-orb orb el-chaos"><div class="orb-shape">🌀</div><div class="orb-name">Leech</div><div class="orb-stat">+3%</div></div>
+        <div class="bf-orb orb el-lightning"><div class="orb-shape">⚡</div><div class="orb-name">Atk Spd</div><div class="orb-stat">+10%</div></div>
+        <div class="bf-orb orb el-poison"><div class="orb-shape">☠️</div><div class="orb-name">DOT</div><div class="orb-stat">+15%</div></div>
+        <div class="bf-orb orb el-physical"><div class="orb-shape">⚔️</div><div class="orb-name">Armor</div><div class="orb-stat">+25</div></div>
+        <div class="bf-orb orb el-shadow"><div class="orb-shape">🌙</div><div class="orb-name">Dodge</div><div class="orb-stat">+4%</div></div>
+        <div class="bf-orb orb el-cold"><div class="orb-shape">❄️</div><div class="orb-name">Barrier</div><div class="orb-stat">+20</div></div>
+        <div class="bf-orb orb el-fire"><div class="orb-shape">🔥</div><div class="orb-name">Thorns</div><div class="orb-stat">+8</div></div>
+      </div>
+    </div>
+
+    <div class="draft-header" style="padding:4px 14px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="turn-badge">YOUR PICK</div>
+        <span style="font-family:Rajdhani;font-size:11px;color:var(--surface-300);">R1</span>
+      </div>
+      <div class="timer"><div class="timer-num">8s</div><div class="timer-bar"><div class="timer-bar-fill" style="width:50%;"></div></div></div>
+    </div>
+    <div class="instruction">Drag orbs down to your pile</div>
+
+    <div class="player-zone highlight">
+      <div class="zone-header"><span class="zone-label-you">↓ Your Orbs</span><span class="zone-count">8 / 8</span></div>
+      <div class="chip-row">
+        <div class="chip el-physical"><div class="chip-icon">⚔️</div><div><div class="chip-name">Phys</div><div class="chip-stat">+33 T3</div></div></div>
+        <div class="chip el-lightning"><div class="chip-icon">⚡</div><div><div class="chip-name">Crit</div><div class="chip-stat">+5% T1</div></div></div>
+        <div class="chip el-poison"><div class="chip-icon">☠️</div><div><div class="chip-name">Poison</div><div class="chip-stat">+10 T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Cold</div><div class="chip-stat">+12 T1</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Fire</div><div class="chip-stat">+15 T1</div></div></div>
+        <div class="chip el-shadow"><div class="chip-icon">🌙</div><div><div class="chip-name">Dodge</div><div class="chip-stat">+4% T1</div></div></div>
+        <div class="chip el-cold"><div class="chip-icon">❄️</div><div><div class="chip-name">Barrier</div><div class="chip-stat">+20 T2</div></div></div>
+        <div class="chip el-fire"><div class="chip-icon">🔥</div><div><div class="chip-name">Thorns</div><div class="chip-stat">+8 T1</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="desc-panel">
+    <div class="desc-title">Battlefield — Full State</div>
+    <div class="desc-text">All 16 orbs visible in the scattered pool (no scrolling needed). Both stockpile zones show 8 chips wrapping to 2 rows. Fits within the 9:16 frame with room to breathe.</div>
+  </div>
+</div>
+
+<script>
+function showConcept(id) {
+  document.querySelectorAll('.concept').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.concept-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('concept-' + id).classList.add('active');
+  document.querySelectorAll('.concept-nav button')[{a:0,b:1,c:2}[id]].classList.add('active');
+}
+</script>
+</body>
+</html>
