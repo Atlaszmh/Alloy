@@ -231,6 +231,17 @@ describe('Duel Engine', () => {
     expect(results.size).toBeGreaterThan(1);
   });
 
+  // Low HP trigger test
+  it('gladiator crossing low HP threshold does not error', () => {
+    const stats0 = makeStats({ maxHP: 100, physicalDamage: 5, attackInterval: 30 });
+    const stats1 = makeStats({ maxHP: 100, physicalDamage: 40, attackInterval: 30 });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(999);
+    const log = simulate([stats0, stats1], loadouts, registry, rng, 1);
+    expect(log.result.winner).toBe(1);
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(0);
+  });
+
   // Gladiator creation tests
   describe('createGladiator', () => {
     it('initializes HP and barrier from stats', () => {

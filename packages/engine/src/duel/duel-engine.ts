@@ -277,8 +277,8 @@ export function simulate(
         }
 
         // Check on-low-HP triggers
-        updateLowHP(attacker, triggers[attackerIdx], rng, log, tick);
-        updateLowHP(defender, triggers[defenderIdx], rng, log, tick);
+        updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, tick);
+        updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, tick);
 
         // Reset attack timer
         attacker.attackTimer = attacker.stats.attackInterval;
@@ -485,6 +485,7 @@ function applyTriggerEffect(
  */
 function updateLowHP(
   gladiator: GladiatorRuntime,
+  opponent: GladiatorRuntime,
   triggerDefs: TriggerDef[],
   rng: SeededRNG,
   log: ReturnType<typeof createCombatLog>,
@@ -496,8 +497,7 @@ function updateLowHP(
     for (const trigger of triggerDefs) {
       const effect = evaluateTrigger(trigger, 'on_low_hp', gladiator, rng);
       if (effect) {
-        // For on_low_hp, the "opponent" isn't readily available here,
-        // but we apply to self (owner-focused effects)
+        applyTriggerEffect(effect, gladiator, opponent, log, tick);
         log.addEvent(tick, {
           type: 'trigger_proc',
           player: gladiator.playerId,
