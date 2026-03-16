@@ -231,6 +231,49 @@ describe('Duel Engine', () => {
     expect(results.size).toBeGreaterThan(1);
   });
 
+  // Lifesteal barrier interaction
+  it('lifesteal is based on HP damage dealt, not barrier-absorbed damage', () => {
+    const atkStats = makeStats({
+      maxHP: 100,
+      physicalDamage: 50,
+      attackInterval: 30,
+      lifestealPercent: 1.0,
+    });
+    const defStats = makeStats({
+      maxHP: 200,
+      physicalDamage: 10,
+      attackInterval: 60,
+      barrierAmount: 1000,
+    });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(42);
+    const log = simulate([atkStats, defStats], loadouts, registry, rng, 1);
+
+    const lifestealEvents = log.ticks.flatMap(t =>
+      t.events.filter((e): e is Extract<typeof e, { type: 'lifesteal' }> =>
+        e.type === 'lifesteal' && e.player === 0
+      )
+    );
+    const barrierAbsorbs = log.ticks.flatMap(t =>
+      t.events.filter((e): e is Extract<typeof e, { type: 'barrier_absorb' }> =>
+        e.type === 'barrier_absorb'
+      )
+    );
+
+    expect(barrierAbsorbs.length).toBeGreaterThan(0);
+    // With 1000 barrier, early hits fully absorbed — lifesteal should be 0 for those
+    // If incorrectly using totalDamage, every lifesteal event would show healed >= 50
+    // With the fix, while barrier absorbs all damage, no lifesteal events should fire
+    // (because damageToHP is 0)
+    if (barrierAbsorbs.length > 5) {
+      // Barrier absorbed many hits — lifesteal events should be fewer than attack events
+      const attackEvents = log.ticks.flatMap(t =>
+        t.events.filter(e => e.type === 'attack' && e.attacker === 0)
+      );
+      expect(lifestealEvents.length).toBeLessThan(attackEvents.length);
+    }
+  });
+
   // Low HP trigger test
   it('gladiator crossing low HP threshold does not error', () => {
     const stats0 = makeStats({ maxHP: 100, physicalDamage: 5, attackInterval: 30 });

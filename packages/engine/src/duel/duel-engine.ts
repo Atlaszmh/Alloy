@@ -244,8 +244,8 @@ export function simulate(
 
         // Apply lifesteal
         const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
-        if (lifesteal > 0 && totalDamage > 0) {
-          const healed = totalDamage * lifesteal;
+        if (lifesteal > 0 && damageToHP > 0) {
+          const healed = damageToHP * lifesteal;
           if (healed > 0) {
             const oldHP = attacker.currentHP;
             attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + healed);
