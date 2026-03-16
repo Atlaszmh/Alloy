@@ -98,7 +98,7 @@
   {
     "id": "concussion",
     "name": "Concussion",
-    "components": ["chance_on_hit", "stun"],
+    "components": ["chance_on_hit", "stun_chance"],
     "fluxCost": 2,
     "slotCost": 2,
     "weaponEffect": [
@@ -181,7 +181,7 @@
   {
     "id": "shield_bash",
     "name": "Shield Bash",
-    "components": ["chance_on_block", "stun"],
+    "components": ["chance_on_block", "stun_chance"],
     "fluxCost": 2,
     "slotCost": 2,
     "weaponEffect": [
@@ -407,7 +407,7 @@
   {
     "id": "iron_maiden",
     "name": "Iron Maiden",
-    "components": ["thorns", "block"],
+    "components": ["thorns", "block_chance"],
     "fluxCost": 2,
     "slotCost": 2,
     "weaponEffect": [
@@ -439,7 +439,7 @@
   {
     "id": "riposte",
     "name": "Riposte",
-    "components": ["dodge", "attack_speed"],
+    "components": ["dodge_chance", "attack_speed"],
     "fluxCost": 2,
     "slotCost": 2,
     "weaponEffect": [
@@ -455,7 +455,7 @@
   {
     "id": "fortress",
     "name": "Fortress",
-    "components": ["flat_hp", "armor"],
+    "components": ["flat_hp", "armor_rating"],
     "fluxCost": 2,
     "slotCost": 2,
     "weaponEffect": [

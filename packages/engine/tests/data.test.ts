@@ -164,4 +164,32 @@ describe('DataRegistry', () => {
       expect(balance.fluxCosts.combineOrbs).toBe(2);
     });
   });
+
+  describe('Referential Integrity', () => {
+    it('all combination component IDs reference valid affix IDs', () => {
+      const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      const combinations = registry.getAllCombinations();
+      for (const combo of combinations) {
+        for (const componentId of combo.components) {
+          expect(
+            affixIds.has(componentId),
+            `Combination "${combo.id}" references unknown affix "${componentId}"`
+          ).toBe(true);
+        }
+      }
+    });
+
+    it('all synergy required affixes reference valid affix IDs', () => {
+      const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      const synergies = registry.getAllSynergies();
+      for (const syn of synergies) {
+        for (const reqId of syn.requiredAffixes) {
+          expect(
+            affixIds.has(reqId),
+            `Synergy "${syn.id}" references unknown affix "${reqId}"`
+          ).toBe(true);
+        }
+      }
+    });
+  });
 });
