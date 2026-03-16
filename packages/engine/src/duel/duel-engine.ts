@@ -277,12 +277,39 @@ export function simulate(
           });
         }
 
+        // Reflect damage (from reflect_damage trigger)
+        if (defender.reflectMultiplier > 0 && totalDamage > 0) {
+          const reflected = Math.round(totalDamage * defender.reflectMultiplier);
+          if (reflected > 0) {
+            const oldHP = attacker.currentHP;
+            attacker.currentHP = Math.max(0, attacker.currentHP - reflected);
+            log.addEvent(tick, { type: 'thorns', reflector: defender.playerId, damage: reflected });
+            log.addEvent(tick, {
+              type: 'hp_change',
+              player: attacker.playerId,
+              oldHP,
+              newHP: attacker.currentHP,
+              maxHP: attacker.maxHP,
+            });
+          }
+        }
+
         // Check on-low-HP triggers
         updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, tick);
         updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, tick);
 
         // Reset attack timer
         attacker.attackTimer = attacker.stats.attackInterval;
+      }
+    }
+
+    // Tick down reflect buffs
+    for (const g of gladiators) {
+      if (g.reflectTicksRemaining > 0) {
+        g.reflectTicksRemaining--;
+        if (g.reflectTicksRemaining <= 0) {
+          g.reflectMultiplier = 0;
+        }
       }
     }
 
@@ -488,7 +515,8 @@ function applyTriggerEffect(
       break;
     }
     case 'reflect_damage': {
-      // Reflect damage is handled as a buff; actual reflection is processed elsewhere
+      owner.reflectMultiplier = effect.multiplier;
+      owner.reflectTicksRemaining = effect.durationTicks;
       break;
     }
   }

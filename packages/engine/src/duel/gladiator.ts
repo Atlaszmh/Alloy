@@ -20,5 +20,7 @@ export function createGladiator(playerId: 0 | 1, stats: DerivedStats): Gladiator
     attackTimer,
     stunTimer: 0,
     isLowHP: false,
+    reflectMultiplier: 0,
+    reflectTicksRemaining: 0,
   };
 }

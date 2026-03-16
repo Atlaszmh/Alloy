@@ -29,6 +29,8 @@ export interface GladiatorRuntime {
   attackTimer: number; // Ticks until next attack
   stunTimer: number; // Ticks remaining stunned (0 = not stunned)
   isLowHP: boolean; // Cached: currentHP / maxHP < 0.3
+  reflectMultiplier: number;
+  reflectTicksRemaining: number;
 }
 
 // --- Tick Events (discriminated union for combat log) ---
