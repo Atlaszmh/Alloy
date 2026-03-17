@@ -153,6 +153,11 @@
   100% { transform: scale(1); opacity: 0; }
 }
 
+@keyframes flux-pop {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-30px) scale(1.2); }
+}
+
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 
 .app-shell {
