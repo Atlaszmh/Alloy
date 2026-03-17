@@ -5,7 +5,8 @@ import type { Loadout } from '../../types/item.js';
 import type { OrbInstance } from '../../types/orb.js';
 import type { DataRegistry } from '../../data/registry.js';
 import type { SeededRNG } from '../../rng/seeded-rng.js';
-import { getActionCost } from '../../forge/flux-tracker.js';
+// getActionCost available via flux-tracker if needed
+
 import { orbValueScore, bestArchetype } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
 
@@ -456,7 +457,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    opponentStockpile: OrbInstance[],
+    _opponentStockpile: OrbInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {

@@ -1,37 +1,101 @@
 import { create } from 'zustand';
+import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, DerivedStats, OrbInstance } from '@alloy/engine';
+import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemoveOrb } from '@alloy/engine';
 
-type ForgeTab = 'weapon' | 'armor';
+export type DragSource =
+  | { from: 'stockpile'; orbUid: string }
+  | { from: 'card'; cardId: 'weapon' | 'armor'; slotIndex: number; orbUid: string }
+  | { from: 'combo'; slot: 'a' | 'b'; orbUid: string };
 
-interface ForgeStore {
-  activeTab: ForgeTab;
+interface ForgeStoreState {
+  plan: ForgePlan | null;
   selectedOrbUid: string | null;
-  dragSource: { orbUid: string } | null;
-  showCombinations: boolean;
+  dragSource: DragSource | null;
+  confirmModalOpen: boolean;
+  /** Orbs staged in combo workbench slots (not yet combined) */
+  comboSlotA: OrbInstance | null;
+  comboSlotB: OrbInstance | null;
 
-  setActiveTab: (tab: ForgeTab) => void;
+  initPlan: (state: ForgeState, registry: DataRegistry) => void;
+  applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
+  getCommitActions: () => ForgeAction[];
+  getStats: (registry: DataRegistry) => DerivedStats | null;
+  canRemove: (orbUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
-  startDrag: (orbUid: string) => void;
+  startDrag: (source: DragSource) => void;
   endDrag: () => void;
-  toggleCombinations: () => void;
+  openConfirmModal: () => void;
+  closeConfirmModal: () => void;
+  setComboSlot: (slot: 'a' | 'b', orb: OrbInstance | null) => void;
+  clearComboSlots: () => void;
   reset: () => void;
 }
 
-export const useForgeStore = create<ForgeStore>((set) => ({
-  activeTab: 'weapon',
+export const useForgeStore = create<ForgeStoreState>((set, get) => ({
+  plan: null,
   selectedOrbUid: null,
   dragSource: null,
-  showCombinations: false,
+  confirmModalOpen: false,
+  comboSlotA: null,
+  comboSlotB: null,
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  initPlan: (state, registry) => {
+    const plan = createForgePlan(state, registry);
+    set({ plan, selectedOrbUid: null, dragSource: null, confirmModalOpen: false, comboSlotA: null, comboSlotB: null });
+  },
+
+  applyAction: (action, registry) => {
+    const { plan } = get();
+    if (!plan) return { ok: false, error: 'No active plan' } as PlanResult;
+    const result = applyPlanAction(plan, action, registry);
+    if (result.ok) {
+      set({ plan: result.plan });
+    }
+    return result;
+  },
+
+  getCommitActions: () => {
+    const { plan } = get();
+    if (!plan) return [];
+    return commitPlan(plan);
+  },
+
+  getStats: (registry) => {
+    const { plan } = get();
+    if (!plan) return null;
+    return getPlannedStats(plan, registry);
+  },
+
+  canRemove: (orbUid) => {
+    const { plan } = get();
+    if (!plan) return false;
+    return canRemoveOrb(plan, orbUid);
+  },
+
   selectOrb: (uid) => set({ selectedOrbUid: uid }),
-  startDrag: (orbUid) => set({ dragSource: { orbUid } }),
+
+  startDrag: (source) => set({ dragSource: source, selectedOrbUid: null }),
+
   endDrag: () => set({ dragSource: null }),
-  toggleCombinations: () => set((s) => ({ showCombinations: !s.showCombinations })),
+
+  openConfirmModal: () => set({ confirmModalOpen: true }),
+
+  closeConfirmModal: () => set({ confirmModalOpen: false }),
+
+  setComboSlot: (slot, orb) => {
+    if (slot === 'a') set({ comboSlotA: orb });
+    else set({ comboSlotB: orb });
+  },
+
+  clearComboSlots: () => set({ comboSlotA: null, comboSlotB: null }),
+
   reset: () =>
     set({
-      activeTab: 'weapon',
+      plan: null,
       selectedOrbUid: null,
       dragSource: null,
-      showCombinations: false,
+      confirmModalOpen: false,
+      comboSlotA: null,
+      comboSlotB: null,
     }),
 }));

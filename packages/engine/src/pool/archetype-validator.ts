@@ -1,4 +1,3 @@
-import type { AffixDef } from '../types/affix.js';
 import type { OrbInstance } from '../types/orb.js';
 import type { DataRegistry } from '../data/registry.js';
 
