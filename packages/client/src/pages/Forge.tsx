@@ -407,12 +407,14 @@ function CombinationWorkbench({
   affixMap,
   onCombine,
   onClear,
+  onSocketPointerDown,
 }: {
   plan: ForgePlan;
   registry: DataRegistry;
   affixMap: Map<string, AffixDef>;
   onCombine: (orbUid1: string, orbUid2: string) => void;
   onClear: () => void;
+  onSocketPointerDown: (e: React.PointerEvent, slot: 'a' | 'b', orb: OrbInstance) => void;
 }) {
   const comboSlotA = useForgeStore(s => s.comboSlotA);
   const comboSlotB = useForgeStore(s => s.comboSlotB);
@@ -452,6 +454,7 @@ function CombinationWorkbench({
           emojiSize={16}
           statSize={10}
           nameSize={0}
+          onPointerDown={(e) => onSocketPointerDown(e, slotKey, orb)}
           catSize={0}
         />
       </div>
@@ -1025,6 +1028,7 @@ export function Forge() {
         affixMap={affixMap}
         onCombine={handleCombine}
         onClear={handleClearCombo}
+        onSocketPointerDown={(e, slot, orb) => handlePointerDown(e, { from: 'combo', slot, orbUid: orb.uid }, orb)}
       />
 
       {/* Stockpile */}
