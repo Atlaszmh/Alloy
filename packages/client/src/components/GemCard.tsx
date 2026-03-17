@@ -1,5 +1,6 @@
 import type { AffixCategory, AffixTier } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
+import { TIER_COLORS } from '@/shared/utils/element-theme';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}', cold: '\u{2744}', lightning: '\u{26A1}',
@@ -40,6 +41,7 @@ interface GemCardProps {
 export function GemCard({
   affixId,
   affixName,
+  tier,
   category,
   tags,
   statLabel,
@@ -57,6 +59,7 @@ export function GemCard({
   const symbol = ELEMENT_SYMBOLS[primaryTag] ?? '\u{2B24}';
   const artUrl = getGemArt(affixId);
   const categoryLabel = CATEGORY_LABELS[category];
+  const tierColor = TIER_COLORS[tier] ?? TIER_COLORS[1];
 
   return (
     <div
@@ -84,6 +87,7 @@ export function GemCard({
           gap: 1,
           position: 'relative',
           overflow: 'hidden',
+          boxShadow: tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
         }}
       >
         {/* Specular highlight */}
@@ -126,6 +130,30 @@ export function GemCard({
         >
           {statLabel}
         </span>
+
+        {/* Tier dots */}
+        <div
+          style={{
+            display: 'flex',
+            gap: Math.max(2, gemSize * 0.03),
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          {Array.from({ length: tier }, (_, i) => (
+            <span
+              key={i}
+              style={{
+                display: 'block',
+                width: Math.max(3, gemSize * 0.07),
+                height: Math.max(3, gemSize * 0.07),
+                borderRadius: '50%',
+                backgroundColor: tierColor,
+                boxShadow: tier >= 3 ? `0 0 3px ${tierColor}` : undefined,
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Name below gem */}
