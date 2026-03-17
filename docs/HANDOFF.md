@@ -1,7 +1,7 @@
 # Alloy — Project Handoff Document
 
-**Date:** 2026-03-14
-**Status:** Phases 1-2 Complete, Phase 3+ Remaining
+**Date:** 2026-03-17
+**Status:** Phases 1-3 In Progress (Engine complete, Client playable)
 
 ---
 
@@ -21,7 +21,7 @@ alloy/
 ├── packages/
 │   ├── engine/          ← Pure TypeScript game engine (COMPLETE)
 │   ├── tools/           ← Balance visualization dashboard (COMPLETE)
-│   ├── client/          ← React frontend (STUB - Phase 3)
+│   ├── client/          ← React frontend (ACTIVE - Phase 3)
 │   └── supabase/        ← Backend (STUB - Phase 4)
 ├── docs/
 │   └── superpowers/specs/   ← Technical design spec
@@ -81,6 +81,50 @@ Features:
 - **Match Inspector** — HP curves, damage breakdown pies, event log, stat comparison tables
 - **Balance Report** — automated outlier detection (overpowered synergies, underpicked affixes, unused combos)
 
+### Client (`packages/client/`) — Phase 3 In Progress
+
+Full match loop (menu -> draft -> forge -> duel x3 -> result) is playable against AI in-browser.
+
+**Dev server:** `pnpm -F @alloy/client dev`
+**Unit tests:** `pnpm -F @alloy/client test`
+**E2E tests:** `pnpm -F @alloy/client test:e2e`
+
+#### Forge UI Architecture
+
+The forge screen (`packages/client/src/pages/Forge.tsx`) lets players assign drafted orbs to weapon and armor item slots across 3 rounds.
+
+**Layout:**
+- **Header** — "Forge Phase" title, round number, flux counter, countdown timer, "Done Forging" button
+- **Tab bar** — Weapon / Armor toggle to switch between the two item panels
+- **ItemPanel** — 6-slot grid per item. Empty slots show `+` buttons; filled slots show `OrbIcon` with the placed affix. Clicking an empty slot with a selected orb dispatches `assign_orb`. Clicking a filled slot in rounds 2+ dispatches `remove_orb`.
+- **SynergyTracker** — Shows active and partial synergies based on equipped affixes across both items
+- **Combination zone** — Lists available compound affix combinations from stockpile orbs
+- **Stockpile** — Scrollable grid of unplaced orbs rendered as `OrbIcon` components. Click to select, click again to deselect.
+- **Stats preview bar** — Live HP, DMG, Armor, Crit calculated from current loadout via `calculateStats()`
+
+**State management:**
+- `matchStore` (Zustand) — holds the authoritative `MatchState`, dispatches `GameAction`s to the engine
+- `forgeStore` (Zustand) — UI-only state: active tab (weapon/armor), selected orb UID, drag source, combination panel visibility
+
+**Engine integration:**
+- The engine's `ForgePlan` model validates all forge actions (assign, remove, combine, upgrade, swap, set base stats) with flux cost enforcement
+- Flux budget: 8/4/2 across rounds 1/2/3
+- Round 1 locks placed orbs (no removal); rounds 2-3 allow removal at flux cost
+- AI opponent forges automatically via `AIController.planForge()` when the player clicks "Done Forging"
+
+#### Client Test Coverage
+
+| Area | Tests | Status |
+|------|-------|--------|
+| Forge page component | 17 vitest tests | Added |
+| forgeStore | 6 vitest tests | Passing |
+| draftStore | 7 vitest tests | Passing |
+| useCountdown hook | 7 vitest tests | Passing |
+| useGemSize hook | 5 vitest tests | Passing |
+| uiStore | 4 vitest tests | Passing |
+| E2E match flow | 1 Playwright test | Passing |
+| E2E forge redesign | 8 Playwright tests | Added |
+
 ---
 
 ## Known Issues & Technical Debt
@@ -124,10 +168,12 @@ This is where the game becomes playable in a browser. The engine is complete —
 - Wire up with AI opponent (engine's AIController) for local play
 - **Milestone:** Full draft playable against Tier 1 AI in browser
 
-#### Step 3.5: Forge Screen
-- Weapon/armor slot layouts, drag-and-drop orb placement
-- Combination zone, flux counter, synergy tracker, base stat selector
-- **Milestone:** Full forging with drag-drop, combinations, synergies displayed
+#### Step 3.5: Forge Screen (COMPLETE)
+- Tabbed weapon/armor item panels with 6-slot grids and OrbIcon rendering
+- Click-to-select orb placement, combination zone, flux counter, synergy tracker, base stat selector
+- Live stats preview bar (HP, DMG, Armor, Crit) from engine's `calculateStats()`
+- 17 component tests + 8 E2E tests covering forge interactions
+- **Milestone:** Full forging with click placement, combinations, synergies displayed
 
 #### Step 3.6: Duel Screen (Basic)
 - HP bars, status effects, round counter, post-duel breakdown
@@ -269,7 +315,7 @@ pnpm -F @alloy/tools build
 |---------|-------------|------------|--------------|--------|
 | `@alloy/engine` | 43 | 11 (167 tests) | ~6,300 | Complete |
 | `@alloy/tools` | 8 | — | ~1,300 | Complete |
-| `@alloy/client` | — | — | — | Stub |
+| `@alloy/client` | ~30 | 7 (46+ tests) | ~3,500 | Active |
 | `@alloy/supabase` | — | — | — | Stub |
 | Data files (JSON) | 5 | — | ~1,700 | Complete |
 | **Total** | **56** | **11** | **~9,300** | |

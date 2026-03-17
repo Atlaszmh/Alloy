@@ -99,18 +99,24 @@ export async function completeDraft(page: Page): Promise<void> {
 }
 
 export async function placeOrbs(page: Page): Promise<void> {
-  // Select an orb from stockpile (enabled, has tier in title)
-  const stockpileOrbs = page.locator('button[title*="(T"]:not([disabled])');
-
+  // Try GemCard-based stockpile first ([data-gem]), fall back to OrbIcon buttons
   for (let i = 0; i < 3; i++) {
+    const gems = page.locator('[data-gem]');
+    const stockpileOrbs = page.locator('button[title*="(T"]:not([disabled])');
+    const gemCount = await gems.count();
     const orbCount = await stockpileOrbs.count();
-    if (orbCount === 0) break;
 
-    // Click orb to select it
+    if (gemCount === 0 && orbCount === 0) break;
+
+    // Click orb/gem to select it
     try {
-      await stockpileOrbs.first().click({ timeout: 3000 });
+      if (gemCount > 0) {
+        await gems.first().click({ timeout: 3000 });
+      } else {
+        await stockpileOrbs.first().click({ timeout: 3000 });
+      }
     } catch {
-      break; // Orb not clickable, stop trying
+      break; // Not clickable, stop trying
     }
     await page.waitForTimeout(200);
 
@@ -131,6 +137,14 @@ export async function completeForge(page: Page): Promise<void> {
   const doneBtn = page.getByRole('button', { name: 'Done Forging' });
   await expect(doneBtn).toBeVisible({ timeout: 5000 });
   await doneBtn.click();
+
+  // If a confirmation modal appears, click CONFIRM
+  const confirmBtn = page.getByRole('button', { name: 'CONFIRM' });
+  const hasConfirm = await confirmBtn.isVisible({ timeout: 3000 }).catch(() => false);
+  if (hasConfirm) {
+    await confirmBtn.click();
+  }
+
   await waitForPhase(page, 'duel');
 }
 
