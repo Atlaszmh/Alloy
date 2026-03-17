@@ -7,19 +7,9 @@ import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
 import { useGemSize } from '@/hooks/useGemSize';
 import type { AffixDef, OrbInstance } from '@alloy/engine';
+import { getStatLabel } from '@/shared/utils/stat-label';
 
 const DRAFT_TIMER_MS = 15_000;
-
-// ── Helper: compute stat label from affix ──
-
-function getStatLabel(affix: AffixDef, orb: OrbInstance): string {
-  const tierData = affix.tiers[orb.tier];
-  const stat = tierData?.weaponEffect[0];
-  if (!stat) return '';
-  return stat.op === 'percent'
-    ? `${Math.round(stat.value * 100)}%`
-    : `+${stat.value}`;
-}
 
 // ── Stockpile zone using GemChip ──
 
