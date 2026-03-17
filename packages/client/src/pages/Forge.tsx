@@ -109,7 +109,7 @@ function ItemCard({
   selectedOrbUid,
   onSlotClick,
   onRemoveClick,
-  onDragOverSlot,
+  onSlotPointerDown,
   isDragTarget,
 }: {
   item: ForgedItem;
@@ -120,7 +120,7 @@ function ItemCard({
   selectedOrbUid: string | null;
   onSlotClick: (cardId: 'weapon' | 'armor', slotIndex: number) => void;
   onRemoveClick: (cardId: 'weapon' | 'armor', slotIndex: number) => void;
-  onDragOverSlot: boolean;
+  onSlotPointerDown: (e: React.PointerEvent, cardId: 'weapon' | 'armor', slotIndex: number, orb: OrbInstance) => void;
   isDragTarget: boolean;
 }) {
   const baseItem = registry.getBaseItem(item.baseItemId);
@@ -224,7 +224,9 @@ function ItemCard({
             className="group mb-1 flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-surface-600/40"
             data-slot-index={index}
             data-card-id={cardId}
+            style={{ touchAction: 'none' }}
             onClick={() => canRemove ? onRemoveClick(cardId, index) : undefined}
+            onPointerDown={canRemove ? (e) => onSlotPointerDown(e, cardId, index, orb) : undefined}
           >
             <span style={{ fontSize: 14 }}>{emoji}</span>
             <span className="flex-1 text-xs font-medium" style={{ color: COLOR_AFFIX }}>
@@ -860,6 +862,11 @@ export function Forge() {
     }
   }, [plan, applyAction, registry, setComboSlot]);
 
+  // ── Equipped slot drag handler ──
+  const handleSlotPointerDown = useCallback((e: React.PointerEvent, cardId: 'weapon' | 'armor', slotIndex: number, orb: OrbInstance) => {
+    handlePointerDown(e, { from: 'card', cardId, slotIndex, orbUid: orb.uid }, orb);
+  }, [handlePointerDown]);
+
   // ── Combination workbench handlers ──
   const handleCombine = useCallback((orbUid1: string, orbUid2: string) => {
     if (!plan) return;
@@ -908,6 +915,14 @@ export function Forge() {
 
   const flux = plan.tentativeFlux;
   const maxFlux = plan.maxFlux;
+
+  // Filter out combo-staged orbs from stockpile display
+  const comboStagedUids = new Set<string>();
+  if (comboSlotA) comboStagedUids.add(comboSlotA.uid);
+  if (comboSlotB) comboStagedUids.add(comboSlotB.uid);
+  const displayStockpile = comboStagedUids.size > 0
+    ? plan.stockpile.filter(o => !comboStagedUids.has(o.uid))
+    : plan.stockpile;
 
   return (
     <div className="page-enter flex h-full flex-col gap-2 overflow-y-auto p-3">
@@ -983,8 +998,8 @@ export function Forge() {
           selectedOrbUid={selectedOrbUid}
           onSlotClick={handleEmptySocketClick}
           onRemoveClick={handleRemoveClick}
-          onDragOverSlot={false}
-          isDragTarget={isDragging && dragSource?.from === 'stockpile' || isDragging && dragSource?.from === 'combo'}
+          onSlotPointerDown={handleSlotPointerDown}
+          isDragTarget={isDragging && (dragSource?.from === 'stockpile' || dragSource?.from === 'combo')}
         />
         <ItemCard
           item={plan.loadout.armor}
@@ -995,8 +1010,8 @@ export function Forge() {
           selectedOrbUid={selectedOrbUid}
           onSlotClick={handleEmptySocketClick}
           onRemoveClick={handleRemoveClick}
-          onDragOverSlot={false}
-          isDragTarget={isDragging && dragSource?.from === 'stockpile' || isDragging && dragSource?.from === 'combo'}
+          onSlotPointerDown={handleSlotPointerDown}
+          isDragTarget={isDragging && (dragSource?.from === 'stockpile' || dragSource?.from === 'combo')}
         />
       </div>
 
@@ -1022,10 +1037,10 @@ export function Forge() {
           className="mb-2 text-xs font-bold uppercase text-surface-400"
           style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em' }}
         >
-          Stockpile ({plan.stockpile.length})
+          Stockpile ({displayStockpile.length})
         </h3>
         <div className="grid grid-cols-4 gap-2">
-          {plan.stockpile.map(orb => {
+          {displayStockpile.map(orb => {
             const affix = affixMap.get(orb.affixId);
             if (!affix) return null;
             return (
