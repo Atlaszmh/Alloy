@@ -31,7 +31,11 @@
       "Bash(mkdir:*)",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "mcp__plugin_playwright_playwright__browser_console_messages"
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "Bash(tasklist:*)",
+      "Bash(wmic process:*)",
+      "Bash(netstat:*)",
+      "Bash(xargs wc:*)"
     ]
   }
 }

@@ -1,7 +1,7 @@
 # Alloy — Project Handoff Document
 
-**Date:** 2026-03-17
-**Status:** Phases 1-3 In Progress (Engine complete, Client playable)
+**Date:** 2026-03-16 (updated)
+**Status:** Phases 1-3 Substantially Complete, Phase 4+ Remaining
 
 ---
 
@@ -10,7 +10,6 @@
 A competitive mobile-friendly auto-battler where two rival blacksmiths draft crafting orbs from a shared pool, privately forge a weapon and armor, and their gladiators auto-duel. Quick sessions (<2 min casual, 4-6 min ranked), deep skill ceiling, zero pay-to-win.
 
 **Full spec:** `docs/superpowers/specs/2026-03-14-alloy-technical-implementation-design.md`
-**Implementation plan:** `.claude/plans/delightful-waddling-teacup.md`
 
 ---
 
@@ -21,301 +20,213 @@ alloy/
 ├── packages/
 │   ├── engine/          ← Pure TypeScript game engine (COMPLETE)
 │   ├── tools/           ← Balance visualization dashboard (COMPLETE)
-│   ├── client/          ← React frontend (ACTIVE - Phase 3)
-│   └── supabase/        ← Backend (STUB - Phase 4)
+│   ├── client/          ← React frontend (PLAYABLE — local vs AI)
+│   └── supabase/        ← Backend (STUB — schema done, functions commented)
 ├── docs/
-│   └── superpowers/specs/   ← Technical design spec
-├── package.json             ← pnpm workspace root
-├── tsconfig.base.json       ← Shared strict TS config
+│   └── superpowers/     ← Specs and plans
+├── package.json         ← pnpm workspace root
+├── tsconfig.base.json   ← Shared strict TS config
 └── pnpm-workspace.yaml
 ```
 
-**Tech Stack:** TypeScript (strict), pnpm workspaces, tsup (engine build), Vite (client/tools), Vitest (tests), Zod (data validation), React 19, Recharts (tools charts)
+**Tech Stack:** TypeScript 5.7+ (strict), pnpm 9+ workspaces, tsup (engine build), Vite 6 (client/tools), Vitest 3.x (tests), Zod 3 (data validation), React 19, React Router 7, Zustand 5, TailwindCSS v4, PixiJS 8, Supabase (PostgreSQL + Deno Edge Functions + Realtime)
 
 ---
 
-## What's Built (Phases 1-2)
+## What's Built
 
-### Game Engine (`packages/engine/`) — 167 tests, all passing
+### Game Engine (`packages/engine/`) — All tests passing
 
-The entire game engine is complete, headless, deterministic, and fully tested. Every game system runs as pure functions with immutable state.
+The entire game engine is complete, headless, deterministic, and tested. Every game system runs as pure functions with immutable state.
 
 **Run tests:** `pnpm -F @alloy/engine test`
 **Build:** `pnpm -F @alloy/engine build` (ESM + CJS + DTS)
 
-#### Engine Modules
-
 | Module | Key Files | What It Does |
 |--------|-----------|-------------|
-| **Types** | `src/types/` (13 files) | Complete type system: AffixDef, OrbInstance, EquippedSlot, ForgedItem, Loadout, MatchState, DerivedStats, CombatLog, TickEvent, ForgeAction, GameAction, etc. |
-| **Data Registry** | `src/data/` (5 JSON + 3 TS) | 33 affixes (4 tiers each), 29 combinations, 14 synergies, 14 base items, balance config. Zod-validated at load, O(1) lookups via DataRegistry class. |
-| **Seeded RNG** | `src/rng/seeded-rng.ts` | xoshiro128** with `fork()` for subsystem isolation. All randomness is deterministic from seed. |
-| **Pool Generator** | `src/pool/` | Generates draft pools with tier distribution, category weighting, archetype validation (3+ viable archetypes), trigger orb guarantees. |
-| **Draft System** | `src/draft/` | State machine: alternating picks, validation, auto-pick on timeout. `createDraftState()` → `makePick()` → complete. |
-| **Forge System** | `src/forge/forge-state.ts`, `flux-tracker.ts` | All 6 forge actions (assign, combine, upgrade, swap, remove, set base stats) with flux enforcement, round rules, full validation. |
-| **Stat Calculator** | `src/forge/stat-calculator.ts` | 9-step pipeline: base HP → inherent bonuses → base stat scaling → weapon/armor slot effects → synergy detection → flat/percent/override ordering → caps. Handles dot-notation keys, special expansion keys, aliases. |
-| **Duel Engine** | `src/duel/` (5 files) | Tick-based combat simulation (30 ticks/sec, max 3000). Dodge → block → damage calc (physical + 6 elements) → crit → barrier → HP → triggers → lifesteal → thorns → DOTs → regen → death check. Produces CombatLog for replay. |
-| **Match Controller** | `src/match/` | Full lifecycle orchestration: pool → draft → (forge → duel) × 3 → complete. Phase machine with valid transitions. Supports quick/ranked/unranked modes. |
-| **AI System** | `src/ai/` (5 files) | 5 AI tiers with strategy pattern. T1 (random) through T5 (exhaustive search with denial scoring). Draft, forge, and adapt strategies per tier. AIController dispatches to tier-appropriate strategy. |
-| **Balance Testing** | `src/balance/` (3 files) | Batch simulation runner, aggregate stats collector (pick rates, win rates, synergy/combo usage), balance report generator with automated outlier detection. |
+| **Types** | `src/types/` (13 files) | Complete type system: AffixDef, OrbInstance, EquippedSlot, ForgedItem, Loadout, MatchState, DerivedStats, CombatLog, TickEvent, ForgeAction, GameAction |
+| **Data Registry** | `src/data/` (5 JSON + 3 TS) | 33 affixes (4 tiers each), 29+ combinations, 14 synergies, 14 base items, balance config. Zod-validated, O(1) lookups via DataRegistry |
+| **Seeded RNG** | `src/rng/seeded-rng.ts` | xoshiro128** with `fork()` for subsystem isolation. All randomness is deterministic from seed |
+| **Pool Generator** | `src/pool/` | Draft pools with tier distribution, category weighting, archetype validation, trigger guarantees |
+| **Draft System** | `src/draft/` | State machine: alternating picks, validation, auto-pick. `createDraftState()` → `makePick()` → complete |
+| **Forge System** | `src/forge/forge-state.ts`, `flux-tracker.ts` | 6 forge actions (assign, combine, upgrade, swap, remove, set base stats) with flux enforcement and round rules |
+| **Stat Calculator** | `src/forge/stat-calculator.ts` | 9-step pipeline: base HP → inherent bonuses → base stat scaling → slot effects → synergy detection → flat/percent/override → caps |
+| **Duel Engine** | `src/duel/` (5 files) | Tick-based combat (30 ticks/sec, max 3000). Dodge → block → damage → crit → barrier → HP → triggers → lifesteal → thorns → DOTs → regen → death check. Returns CombatLog |
+| **Match Controller** | `src/match/` | Full lifecycle: pool → draft → (forge → duel) × 3 → complete. Phase machine with valid transitions. Quick/ranked/unranked modes |
+| **AI System** | `src/ai/` (5 files) | 5 tiers with strategy pattern. T1 (random) through T5 (exhaustive search with denial scoring). Draft, forge, and adapt strategies per tier |
+| **Balance Testing** | `src/balance/` (3 files) | Batch simulation runner, aggregate stats collector, balance report generator with outlier detection |
 
-#### Engine Architecture Highlights
+### Client (`packages/client/`) — Playable locally vs AI
 
-- **Immutable state pattern:** `(State, Action) => NewState` — no mutation, fully replayable
-- **Config-driven balance:** All game numbers live in JSON, validated by Zod schemas at load
-- **Deterministic:** Same seed + same actions = byte-identical output. RNG forks isolate subsystems.
-- **Zero UI dependencies:** Engine is a pure TypeScript library, importable anywhere
-- **Dual-purpose orbs:** Each orb has different weapon vs armor effects (defined per tier in affixes.json)
-- **Flux system:** 8/4/2 flux across 3 rounds with lock/swap/remove mechanics
-
-### Balance Dashboard (`packages/tools/`) — Builds cleanly
-
-A React + Recharts dev tool for running AI simulations and visualizing balance data.
-
-**Dev server:** `pnpm -F @alloy/tools dev`
-**Build:** `pnpm -F @alloy/tools build`
-
-Features:
-- **Simulation Runner** — configure match count, AI tiers, seed range, run batch sims in-browser
-- **Aggregate Analytics** — affix pick rate charts, synergy win rate bars, combination usage scatter plots
-- **Match Inspector** — HP curves, damage breakdown pies, event log, stat comparison tables
-- **Balance Report** — automated outlier detection (overpowered synergies, underpicked affixes, unused combos)
-
-### Client (`packages/client/`) — Phase 3 In Progress
-
-Full match loop (menu -> draft -> forge -> duel x3 -> result) is playable against AI in-browser.
+Full single-player match flow is playable in browser against AI opponents.
 
 **Dev server:** `pnpm -F @alloy/client dev`
-**Unit tests:** `pnpm -F @alloy/client test`
-**E2E tests:** `pnpm -F @alloy/client test:e2e`
 
-#### Forge UI Architecture
+#### Pages and Routing
 
-The forge screen (`packages/client/src/pages/Forge.tsx`) lets players assign drafted orbs to weapon and armor item slots across 3 rounds.
+| Path | Component | Status |
+|------|-----------|--------|
+| `/` | MainMenu | Working |
+| `/queue` | Matchmaking | UI only (server stub) |
+| `/match/:id/draft` | Draft | Working vs AI |
+| `/match/:id/forge` | Forge | Working vs AI |
+| `/match/:id/duel` | Duel | Working (PixiJS + text log) |
+| `/match/:id/adapt` | Adapt | Route exists, unreachable |
+| `/match/:id/result` | PostMatch | Working |
+| `/profile` | Profile | Local state only |
+| `/recipes` | RecipeBook | UI built |
+| `/collection` | Collection | UI built |
+| `/leaderboard` | Leaderboard | UI built |
+| `/settings` | Settings | Working |
 
-**Layout:**
-- **Header** — "Forge Phase" title, round number, flux counter, countdown timer, "Done Forging" button
-- **Tab bar** — Weapon / Armor toggle to switch between the two item panels
-- **ItemPanel** — 6-slot grid per item. Empty slots show `+` buttons; filled slots show `OrbIcon` with the placed affix. Clicking an empty slot with a selected orb dispatches `assign_orb`. Clicking a filled slot in rounds 2+ dispatches `remove_orb`.
-- **SynergyTracker** — Shows active and partial synergies based on equipped affixes across both items
-- **Combination zone** — Lists available compound affix combinations from stockpile orbs
-- **Stockpile** — Scrollable grid of unplaced orbs rendered as `OrbIcon` components. Click to select, click again to deselect.
-- **Stats preview bar** — Live HP, DMG, Armor, Crit calculated from current loadout via `calculateStats()`
+#### State Management (Zustand 5)
 
-**State management:**
-- `matchStore` (Zustand) — holds the authoritative `MatchState`, dispatches `GameAction`s to the engine
-- `forgeStore` (Zustand) — UI-only state: active tab (weapon/armor), selected orb UID, drag source, combination panel visibility
+- **matchStore** — Central store: holds MatchState, dispatches actions, memoized selectors
+- **draftStore** — Selected orb + confirm state for two-tap interaction
+- **forgeStore** — Active tab, selected orb, drag state, combination toggle
+- **uiStore** — Modal, toast, mute, debug overlay
+- **authStore** — Player ID, display name (guest login)
+- **profileStore** — ELO, wins, losses (local only, not persisted to DB)
 
-**Engine integration:**
-- The engine's `ForgePlan` model validates all forge actions (assign, remove, combine, upgrade, swap, set base stats) with flux cost enforcement
-- Flux budget: 8/4/2 across rounds 1/2/3
-- Round 1 locks placed orbs (no removal); rounds 2-3 allow removal at flux cost
-- AI opponent forges automatically via `AIController.planForge()` when the player clicks "Done Forging"
+#### Duel Rendering
 
-#### Client Test Coverage
+PixiJS 8 scene with:
+- GladiatorSprite with attack/hit/death animations
+- VFXManager for 7 element effects (fire, ice, lightning, poison, shadow, chaos, crit)
+- DamageNumbers (floating particles)
+- StatusIcons per player
+- RAF-based playback with speed controls and skip
 
-| Area | Tests | Status |
-|------|-------|--------|
-| Forge page component | 17 vitest tests | Added |
-| forgeStore | 6 vitest tests | Passing |
-| draftStore | 7 vitest tests | Passing |
-| useCountdown hook | 7 vitest tests | Passing |
-| useGemSize hook | 5 vitest tests | Passing |
-| uiStore | 4 vitest tests | Passing |
-| E2E match flow | 1 Playwright test | Passing |
-| E2E forge redesign | 8 Playwright tests | Added |
+### Balance Dashboard (`packages/tools/`) — Working
 
----
+**Dev server:** `pnpm -F @alloy/tools dev`
 
-## Known Issues & Technical Debt
+Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 
-1. **Trigger system is stubbed:** `src/duel/trigger-system.ts` `extractTriggers()` returns an empty array. The duel engine architecture supports triggers, but the data-driven extraction from loadout affixes isn't wired up yet. Compound affix triggers (e.g., Ignite's burn-on-hit) defined in `combinations.json` under `compound.*` stat keys need to be parsed into `TriggerDef` objects.
+### Supabase Backend (`packages/supabase/`) — Schema complete, functions stubbed
 
-2. **Some base stat scaling keys skip:** Keys like `flatDamageEffectiveness`, `dotDamage`, `barrierStrength`, `sustainEffectiveness` in `balance.json`'s `baseStatScaling` are skipped in stat calc (they don't map directly to `DerivedStats` fields). These would need duel engine integration to have gameplay impact.
+**Database schema** (5 migrations): profiles with ELO/rank, matches, match_rounds, mastery_tracks, player_mastery, unlocks, matchmaking_queue, leaderboard materialized view, RLS policies.
 
-3. **Synergy conditions not fully parsed:** Some synergies in `synergies.json` have special `condition` strings like `no_defensive_weapon`, `any_3_elemental`, `lifesteal_weapon_thorns_armor`. The current synergy detection in stat-calculator checks required affix IDs but doesn't evaluate these condition strings.
-
-4. **Balance tuning not done:** The 1000+ match simulation pass to verify no synergy >55% win rate and no affix <5% pick rate hasn't been run yet. The infrastructure exists — it just needs to be executed and the data files tuned based on results.
-
-5. **Engine build has strict mode:** tsup DTS generation enforces `noUnusedLocals`, which has caught several issues already. Any new code must be clean.
+**Edge functions** (7): matchmaking, match-create, draft-pick, forge-submit, match-complete, match-state, ai-match-create — all have CORS + auth pattern but DB operations are commented out.
 
 ---
 
-## What's Next (Phases 3-6)
+## Known Issues (Priority Order)
 
-### Phase 3: Frontend Foundation (Next Up)
+### Critical — Broken Game Logic
 
-This is where the game becomes playable in a browser. The engine is complete — Phase 3 layers React UI on top.
+1. **`on_low_hp` triggers never applied** — `duel-engine.ts:494-508` evaluates and logs but never calls `applyTriggerEffect`
+2. **`reflect_damage` unimplemented** — `duel-engine.ts:476-479` is a no-op
+3. **`stat_buff` never affects combat** — pushed to `activeBuffs` but values never consumed by damage calculations
+4. **AI adapt strategy identifies wrong player** — `adapt-strategy.ts` uses duel winner to infer player index; wrong when AI wins
 
-#### Step 3.1: Client Project Setup
-- Initialize `packages/client/` with Vite + React 19 + TypeScript
-- Install Tailwind CSS 4, Zustand, React Router 7
-- Create 11 page stubs matching route map:
-  - `/` MainMenu, `/queue` Matchmaking, `/match/:id/draft` Draft, `/match/:id/forge` Forge, `/match/:id/duel` Duel, `/match/:id/adapt` Adapt, `/match/:id/result` PostMatch, `/profile` Profile, `/recipes` RecipeBook, `/collection` Collection, `/leaderboard` Leaderboard
-- Set up design tokens (dark theme, element colors, tier borders)
+### High — Data Integrity
 
-#### Step 3.2: Shared Components
-- `OrbIcon.tsx` — colorblind-safe orb rendering (element icon + shape + color + tier border)
-- `Timer.tsx`, `Modal.tsx`, `Tooltip.tsx`, `HapticButton.tsx`
-- `useHaptic.ts`, `useCountdown.ts`, `useOrientation.ts` hooks
+5. **Invalid combination component IDs** — `iron_maiden` references `block`/`armor` (should be `block_chance`/`armor_rating`); `riposte` references `dodge` (should be `dodge_chance`)
+6. **~15 affix stat keys silently skipped** — no DerivedStats fields for dotDamage, shadowDamage, chaosDamage, fortify, hpOnHit, barrierOnHit, etc.
+7. **Synergy bonusEffects never applied** — `synergy.*` prefixed keys filtered by `shouldSkipKey()`
 
-#### Step 3.3: Zustand Stores
-- 7 stores: auth, match, draft, forge, duel, ui, profile
-- These bridge the engine's pure state with React's reactive UI
+### Medium — Architecture Gaps
 
-#### Step 3.4: Draft Screen
-- Tappable orb pool grid, two-tap confirm, stockpile panels, turn indicator
-- Wire up with AI opponent (engine's AIController) for local play
-- **Milestone:** Full draft playable against Tier 1 AI in browser
+8. **Trigger system stubbed** — `extractTriggers()` returns `[]`. Infrastructure exists but never activates
+9. **Adapt phase unreachable** — types, phase machine, AI, and route all exist but `match-controller.ts` never generates it
+10. **Lifesteal on pre-barrier damage** — inflates survivability against barrier builds
+11. **Pool generator seed mutation** — effective seed after archetype validation retries isn't stored
 
-#### Step 3.5: Forge Screen (COMPLETE)
-- Tabbed weapon/armor item panels with 6-slot grids and OrbIcon rendering
-- Click-to-select orb placement, combination zone, flux counter, synergy tracker, base stat selector
-- Live stats preview bar (HP, DMG, Armor, Crit) from engine's `calculateStats()`
-- 17 component tests + 8 E2E tests covering forge interactions
-- **Milestone:** Full forging with click placement, combinations, synergies displayed
+### Security (Pre-Production)
 
-#### Step 3.6: Duel Screen (Basic)
-- HP bars, status effects, round counter, post-duel breakdown
-- Basic text/UI duel playback (no PixiJS yet)
-- **Milestone:** Full match (draft → forge → duel × 3) playable vs AI
+12. **No JWT verification** — `getUserId()` accepts raw Bearer token as user ID
+13. **match-create has no auth** — any unauthenticated request can create matches
 
-#### Step 3.7: PixiJS Duel Rendering
-- Animated 2D sprites with attack/hit/death states
-- VFX particles per element (fire, ice, lightning, poison, shadow, chaos)
-- Floating damage numbers, CombatLog-driven animation timeline
-- **Milestone:** Duels render with full visual effects
+### Client
+
+14. **useDraftSync payload nesting wrong** — accesses `payload.orbUid` instead of `payload.payload.orbUid`
+15. **Base items hardcoded** — always sword/chainmail; 14 items in data unused
+16. **profileStore not persisted** — local-only despite DB schema being complete
+
+### Dead Code
+
+- `duelStore.ts` — Duel.tsx uses local state instead
+- `isSynergyActive()` duplicated in stat-calculator.ts and simulation-runner.ts
+- `tools/useSimulation.ts` reimplements engine's `runSimulation()` with divergent logic
+
+---
+
+## Test Coverage
+
+### Well Covered
+- RNG (determinism, forks, distribution, bounds)
+- Data registry (loading, validation, lookups, Zod schemas)
+- Draft (happy path, all 5 error cases, auto-pick, full simulation)
+- Forge (all 6 action types with success + failure cases, flux tracking)
+- Duel (determinism, all combat mechanics)
+- Stat calculator (empty baseline, base items, scaling, synergies, caps, modifier ordering)
+- Match controller (phase transitions, early win, full best-of-3, quick mode)
+- Pool generator (determinism, sizes, tiers, archetypes, stress test)
+- AI (all 5 tiers for draft/forge, balance win-rate tests)
+
+### Critical Gaps (No Tests)
+- **damage-calc.ts** — core combat formulas completely untested
+- **Trigger system** — all branches of evaluateTrigger/applyTriggerEffect
+- **Stun mechanic** — stunTimer logic
+- **DOT end-to-end flow** — application, ticking, expiry
+- **Simultaneous death** — tiebreaker when both die same tick
+- **adapt phase** transitions
+- **matchStore actions** — initMatch, applyAction, resetMatch
+- **All React components** — no .test.tsx files exist
+
+---
+
+## What's Next
+
+### Immediate Priorities
+1. Fix critical bugs (on_low_hp, reflect_damage, stat_buff, AI adapt)
+2. Fix data integrity issues (invalid combination IDs, affix stat key gaps)
+3. Add regression tests for damage-calc.ts and trigger system
+4. Wire up trigger system (extractTriggers from loadout affixes)
 
 ### Phase 4: Backend + Multiplayer
-- Supabase setup (Postgres, RLS, auth providers)
-- Edge functions for matchmaking, draft picks, forge submission, match completion
-- Real-time multiplayer via Supabase Broadcast channels
+- Replace MockSupabaseClient with real client (env-gated)
+- Uncomment and complete edge function DB operations
+- Add JWT verification to getUserId
+- Wire Realtime for multiplayer draft/forge/duel
 - ELO-based matchmaking with expanding window
 
 ### Phase 5: Meta + Polish
-- Profile, progression, mastery tracks, unlock flow
-- Recipe book, collection, leaderboard
-- Match polish (rematch, stats breakdown, onboarding tutorial)
-- Visual polish (VFX refinement, transitions, sound)
+- Base item selection UI (unlock the 14 items)
+- Profile persistence to Supabase
+- Mastery tracks, unlock flow, recipe book
+- Adapt phase activation
+- Sound, transitions, onboarding tutorial
 
 ### Phase 6: Launch Prep
-- E2E Playwright tests, mobile performance (60fps), accessibility
-- First ranked season, seasonal reset logic
-- Analytics integration (PostHog/Mixpanel)
-
----
-
-## How to Work With the Engine
-
-### Running a full AI match programmatically
-
-```typescript
-import { loadAndValidateData } from '@alloy/engine/src/data/loader';
-import { DataRegistry } from '@alloy/engine/src/data/registry';
-import { createMatch, applyAction, AIController, SeededRNG } from '@alloy/engine';
-
-const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
-
-let state = createMatch('match1', 42, 'ranked', ['player1', 'player2'], 'sword', 'chainmail', registry);
-
-const ai0 = new AIController(3, registry, new SeededRNG(42).fork('ai0'));
-const ai1 = new AIController(3, registry, new SeededRNG(42).fork('ai1'));
-
-// Draft all orbs
-while (state.phase.kind === 'draft') {
-  const player = state.phase.activePlayer;
-  const ai = player === 0 ? ai0 : ai1;
-  const orbUid = ai.pickOrb(state.pool, state.players[player].stockpile, state.players[1-player].stockpile);
-  const result = applyAction(state, { kind: 'draft_pick', player, orbUid }, registry);
-  if (result.ok) state = result.state;
-}
-
-// Forge + Duel loop
-while (state.phase.kind !== 'complete') {
-  if (state.phase.kind === 'forge') {
-    for (const player of [0, 1] as const) {
-      const ai = player === 0 ? ai0 : ai1;
-      const actions = ai.planForge(state.players[player].stockpile, state.players[player].loadout, state.forgeFlux?.[player] ?? 0, state.phase.round, state.players[1-player].stockpile);
-      for (const action of actions) {
-        const r = applyAction(state, { kind: 'forge_action', player, action }, registry);
-        if (r.ok) state = r.state;
-      }
-      const r = applyAction(state, { kind: 'forge_complete', player }, registry);
-      if (r.ok) state = r.state;
-    }
-  }
-  if (state.phase.kind === 'duel') {
-    const r = applyAction(state, { kind: 'advance_phase' }, registry);
-    if (r.ok) state = r.state;
-  }
-}
-
-console.log('Winner:', state.phase.kind === 'complete' ? state.phase.winner : 'unknown');
-```
-
-### Running balance simulations
-
-```typescript
-import { runSimulation, generateBalanceReport } from '@alloy/engine';
-
-const result = runSimulation({
-  matchCount: 100,
-  aiTier1: 3,
-  aiTier2: 3,
-  seedStart: 1,
-  mode: 'ranked',
-  baseWeaponId: 'sword',
-  baseArmorId: 'chainmail',
-}, registry);
-
-const issues = generateBalanceReport(result.aggregateStats);
-issues.forEach(i => console.log(`${i.severity}: ${i.type} — ${i.id} (${i.metric}: ${i.value})`));
-```
-
-### Adding a new affix
-
-1. Add the definition to `packages/engine/src/data/affixes.json` with 4 tiers, weapon/armor effects
-2. Update the expected count in `tests/data.test.ts` (currently 33)
-3. Run `pnpm -F @alloy/engine test` to verify schema validation passes
-4. Run simulations via the balance dashboard to check impact
-
-### Adding a new combination
-
-1. Add to `packages/engine/src/data/combinations.json` with component IDs, effects, tags
-2. Update the expected count in `tests/data.test.ts` (currently 29)
-3. The registry's order-independent lookup (`getCombination(a, b)`) handles it automatically
+- E2E Playwright tests
+- Mobile performance (60fps target)
+- Accessibility pass
+- First ranked season
+- Analytics integration
 
 ---
 
 ## Quick Commands
 
 ```bash
-# Install all dependencies
-pnpm install
-
-# Run engine tests (167 tests, ~1s)
-pnpm -F @alloy/engine test
-
-# Build engine (ESM + CJS + DTS)
-pnpm -F @alloy/engine build
-
-# Start balance dashboard dev server
-pnpm -F @alloy/tools dev
-
-# Build balance dashboard
-pnpm -F @alloy/tools build
+pnpm install                        # Install all dependencies
+pnpm -F @alloy/engine test          # Run engine tests
+pnpm -F @alloy/engine build         # Build engine (ESM + CJS + DTS)
+pnpm -F @alloy/client dev           # Start client dev server
+pnpm -F @alloy/tools dev            # Start balance dashboard
+pnpm test                           # Run all tests
 ```
 
 ---
 
 ## File Inventory Summary
 
-| Package | Source Files | Test Files | LOC (approx) | Status |
-|---------|-------------|------------|--------------|--------|
-| `@alloy/engine` | 43 | 11 (167 tests) | ~6,300 | Complete |
-| `@alloy/tools` | 8 | — | ~1,300 | Complete |
-| `@alloy/client` | ~30 | 7 (46+ tests) | ~3,500 | Active |
-| `@alloy/supabase` | — | — | — | Stub |
-| Data files (JSON) | 5 | — | ~1,700 | Complete |
-| **Total** | **56** | **11** | **~9,300** | |
+| Package | Source Files | Test Files | Status |
+|---------|-------------|------------|--------|
+| `@alloy/engine` | ~43 | 11 | Complete |
+| `@alloy/client` | ~70+ | 6 | Playable (local AI) |
+| `@alloy/tools` | 8 | — | Complete |
+| `@alloy/supabase` | ~15 | — | Schema done, functions stubbed |
+| Data files (JSON) | 5 | — | Complete |
