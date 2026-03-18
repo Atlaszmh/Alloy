@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Mockup C — Forge Item Cards (Stacked)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  /* surfaces */
+  --s-000: #060608; --s-050: #0a0a0f; --s-100: #111118;
+  --s-200: #1a1a26; --s-300: #252536; --s-400: #363650;
+  --s-500: #4a4a68; --s-600: #6a6a88;
+  /* gold */
+  --accent-300: #d4a834; --accent-400: #e0bc4a; --accent-500: #ecd06a;
+  /* teal */
+  --teal-400: #2dd4bf; --teal-300: #5eead4;
+  /* bronze */
+  --bronze-300: #a08050; --bronze-400: #b89868; --bronze-500: #c8a878;
+  /* elements */
+  --fire: #e8553a; --cold: #3a9be8; --lightning: #d4c040;
+  --poison: #2db369; --shadow: #8b3ae8; --chaos: #e83a8b; --physical: #c0c0c0;
+  /* tiers */
+  --t1: #8a8a8a; --t2: #3a9be8; --t3: #9b59b6; --t4: #e8553a;
+  /* feedback */
+  --success: #34d399; --warning: #fbbf24; --danger: #f87171;
+  /* shadows */
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.05);
+  --shadow-glow: 0 0 16px rgba(212,168,52,0.25);
+  --shadow-inset: inset 0 2px 4px rgba(0,0,0,0.5);
+  --shadow-button: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  /* fonts */
+  --f-display: 'Rajdhani', sans-serif;
+  --f-body: 'DM Sans', sans-serif;
+  --f-mono: 'JetBrains Mono', monospace;
+}
+html, body { height:100%; background: var(--s-000); color: #e0e0e8; font-family: var(--f-body); }
+
+/* ── 9:16 Portrait Frame ─────────────────────────────────── */
+.frame {
+  position: relative;
+  width: 390px; max-height: 844px; height: 100vh;
+  margin: 0 auto;
+  overflow-y: auto; overflow-x: hidden;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 18%, rgba(212,168,52,0.06) 0%, transparent 100%),
+    radial-gradient(ellipse 60% 30% at 50% 85%, rgba(45,212,191,0.04) 0%, transparent 100%),
+    var(--s-000);
+  scrollbar-width: thin;
+  scrollbar-color: var(--s-400) transparent;
+}
+/* noise overlay */
+.frame::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 9999;
+  opacity: 0.025;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.frame-inner { padding: 16px 14px 24px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+
+/* ── Header ───────────────────────────────────────────────── */
+.header { text-align: center; padding: 4px 0 2px; }
+.header h1 {
+  font-family: var(--f-display); font-weight: 700; font-size: 22px;
+  color: var(--accent-400); letter-spacing: 0.06em; text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(212,168,52,0.3);
+}
+.header .sub {
+  font-family: var(--f-body); font-size: 12px; color: var(--s-600);
+  margin-top: 2px;
+}
+
+/* ── Item Card (WoW-style tooltip) ────────────────────────── */
+.item-card {
+  background: var(--s-050);
+  border: 1px solid var(--s-400);
+  border-radius: 6px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.item-card .ic-section {
+  padding: 8px 12px;
+}
+.item-card .ic-divider {
+  height: 1px; background: var(--s-400); margin: 0;
+}
+
+/* card header */
+.ic-header .ic-name {
+  font-family: var(--f-display); font-weight: 700; font-size: 18px;
+  color: var(--accent-400); letter-spacing: 0.04em;
+}
+.ic-header .ic-type {
+  font-family: var(--f-body); font-size: 11px; color: var(--s-500);
+  margin-top: 1px;
+}
+
+/* inherent */
+.ic-inherent .inh-line {
+  font-family: var(--f-body); font-size: 12.5px; color: var(--teal-400);
+  line-height: 1.5;
+}
+
+/* base stats */
+.ic-base .base-label {
+  font-family: var(--f-display); font-size: 11px; color: var(--s-500);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ic-base .base-value {
+  font-family: var(--f-display); font-size: 13px; color: var(--bronze-400);
+  letter-spacing: 0.03em;
+}
+
+/* affix sections */
+.affix-category-header {
+  font-family: var(--f-display); font-size: 10px; color: var(--s-500);
+  text-align: center; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 0 3px;
+}
+.affix-category-header::before,
+.affix-category-header::after {
+  content: '───'; margin: 0 6px; color: var(--s-400);
+}
+
+.affix-line {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2.5px 0; font-size: 13px;
+  animation: affix-in 0.3s ease-out both;
+}
+@keyframes affix-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.affix-line .af-emoji { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
+.affix-line .af-stat {
+  font-family: var(--f-mono); font-weight: 700; font-size: 12px;
+  color: #e8e8f0; font-variant-numeric: tabular-nums;
+  flex: 1;
+}
+.affix-line .af-name { font-family: var(--f-body); font-size: 12.5px; color: #d0d0d8; flex: 1; }
+
+/* tier badges */
+.tier-badge {
+  font-family: var(--f-mono); font-weight: 700; font-size: 9px;
+  padding: 1px 5px; border-radius: 8px;
+  border: 1px solid; line-height: 1.4;
+  flex-shrink: 0;
+}
+.tier-badge.t1 { color: var(--t1); border-color: var(--t1); background: rgba(138,138,138,0.1); }
+.tier-badge.t2 { color: var(--t2); border-color: var(--t2); background: rgba(58,155,232,0.1); box-shadow: 0 0 4px rgba(58,155,232,0.15); }
+.tier-badge.t3 { color: var(--t3); border-color: var(--t3); background: rgba(155,89,182,0.12); box-shadow: 0 0 6px rgba(155,89,182,0.2); }
+.tier-badge.t4 { color: var(--t4); border-color: var(--t4); background: rgba(232,85,58,0.12); box-shadow: 0 0 8px rgba(232,85,58,0.25); }
+
+/* compound lines */
+.compound-line { padding: 2px 0 1px; }
+.compound-header {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--f-body); font-size: 13px; color: var(--accent-500);
+}
+.compound-header .cpd-star { color: var(--accent-400); }
+.compound-header .cpd-components { font-size: 11px; color: var(--s-500); margin-left: 2px; }
+.compound-desc {
+  font-family: var(--f-body); font-size: 11.5px; color: var(--s-600);
+  padding-left: 22px; margin-top: 1px;
+}
+
+/* empty slots */
+.ic-slots { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ic-slots .slot-btn {
+  width: 32px; height: 32px; border-radius: 5px;
+  border: 1px dashed var(--s-400); background: var(--s-100);
+  color: var(--s-500); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.ic-slots .slot-btn:hover { border-color: var(--accent-300); color: var(--accent-400); background: var(--s-200); }
+.ic-slots .slot-btn.highlight { border-color: var(--accent-400); color: var(--accent-400); box-shadow: 0 0 8px rgba(212,168,52,0.3); }
+.ic-slots .slot-count {
+  font-family: var(--f-body); font-size: 11px; color: var(--s-500); margin-left: auto;
+}
+
+/* ── Combination Workbench ────────────────────────────────── */
+.workbench {
+  background: var(--s-050); border: 1px solid var(--s-400);
+  border-radius: 6px; box-shadow: var(--shadow-card);
+  padding: 10px 12px;
+}
+.workbench .wb-title {
+  text-align: center; font-family: var(--f-display); font-weight: 700;
+  font-size: 12px; color: var(--bronze-400); letter-spacing: 0.06em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.wb-row {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.wb-slot {
+  width: 56px; height: 56px; border-radius: 8px;
+  border: 1.5px dashed var(--s-400); background: var(--s-100);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--s-500); text-align: center;
+  cursor: pointer; transition: all 0.2s;
+  box-shadow: var(--shadow-inset);
+  font-family: var(--f-body);
+  position: relative; overflow: hidden;
+}
+.wb-slot:hover { border-color: var(--bronze-400); }
+.wb-slot.filled {
+  border-style: solid;
+}
+.wb-slot .ws-emoji { font-size: 20px; }
+.wb-slot .ws-label { font-size: 9px; margin-top: 2px; color: var(--s-600); }
+
+.wb-plus { font-family: var(--f-display); font-size: 20px; color: var(--s-500); }
+.wb-arrow { font-family: var(--f-display); font-size: 20px; color: var(--bronze-400); }
+
+.wb-result {
+  min-width: 90px; min-height: 56px; border-radius: 8px;
+  border: 1.5px solid var(--s-300); background: var(--s-100);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 6px 10px; text-align: center;
+  box-shadow: var(--shadow-inset);
+  transition: all 0.3s;
+}
+.wb-result.valid {
+  border-color: var(--accent-300);
+  box-shadow: var(--shadow-glow), var(--shadow-inset);
+}
+.wb-result .wr-name {
+  font-family: var(--f-display); font-size: 12px; color: var(--accent-400);
+  letter-spacing: 0.03em;
+}
+.wb-result .wr-desc {
+  font-size: 10px; color: var(--s-600); margin-top: 2px;
+}
+.wb-result .wr-placeholder {
+  font-size: 11px; color: var(--s-500);
+}
+
+/* ── Stockpile ────────────────────────────────────────────── */
+.stockpile-label {
+  font-family: var(--f-display); font-weight: 700; font-size: 12px;
+  color: var(--s-500); letter-spacing: 0.06em; text-transform: uppercase;
+  text-align: center; margin-bottom: 4px;
+}
+.stockpile {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+  padding: 4px 0;
+}
+.orb {
+  width: 100%; aspect-ratio: 1; border-radius: 50%;
+  position: relative; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2px solid var(--t1);
+  transition: all 0.2s;
+  box-shadow: var(--shadow-inset);
+  overflow: hidden;
+}
+.orb::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(ellipse 60% 40% at 35% 30%, rgba(255,255,255,0.25), transparent 70%);
+  pointer-events: none;
+}
+.orb .orb-emoji { font-size: 16px; z-index: 1; line-height: 1; }
+.orb .orb-val {
+  font-family: var(--f-mono); font-weight: 700; font-size: 8px;
+  color: #fff; z-index: 1; margin-top: 1px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+.orb.t1 { border-color: var(--t1); }
+.orb.t2 { border-color: var(--t2); box-shadow: var(--shadow-inset), 0 0 4px rgba(58,155,232,0.2); }
+.orb.t3 { border-color: var(--t3); box-shadow: var(--shadow-inset), 0 0 6px rgba(155,89,182,0.25); }
+.orb.t4 { border-color: var(--t4); box-shadow: var(--shadow-inset), 0 0 8px rgba(232,85,58,0.3); }
+
+.orb.selected {
+  box-shadow: 0 0 12px rgba(212,168,52,0.5), 0 0 4px rgba(212,168,52,0.3);
+  border-color: var(--accent-400) !important;
+  transform: scale(1.1);
+}
+.orb.used { opacity: 0.25; pointer-events: none; }
+
+/* element backgrounds */
+.orb.el-fire     { background: radial-gradient(circle, rgba(232,85,58,0.45), rgba(232,85,58,0.15)); }
+.orb.el-cold     { background: radial-gradient(circle, rgba(58,155,232,0.45), rgba(58,155,232,0.15)); }
+.orb.el-lightning { background: radial-gradient(circle, rgba(212,192,64,0.45), rgba(212,192,64,0.15)); }
+.orb.el-poison   { background: radial-gradient(circle, rgba(45,179,105,0.45), rgba(45,179,105,0.15)); }
+.orb.el-shadow   { background: radial-gradient(circle, rgba(139,58,232,0.45), rgba(139,58,232,0.15)); }
+.orb.el-chaos    { background: radial-gradient(circle, rgba(232,58,139,0.45), rgba(232,58,139,0.15)); }
+.orb.el-physical { background: radial-gradient(circle, rgba(192,192,192,0.35), rgba(192,192,192,0.12)); }
+.orb.el-neutral  { background: radial-gradient(circle, rgba(100,100,140,0.35), rgba(100,100,140,0.12)); }
+
+/* ── Stats Bar ────────────────────────────────────────────── */
+.stats-bar {
+  display: flex; justify-content: space-around;
+  background: var(--s-050); border: 1px solid var(--s-300);
+  border-radius: 6px; padding: 8px 6px;
+  box-shadow: var(--shadow-card);
+}
+.stat-item { text-align: center; }
+.stat-item .stat-label {
+  font-family: var(--f-display); font-size: 9px; color: var(--s-500);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stat-item .stat-val {
+  font-family: var(--f-mono); font-weight: 700; font-size: 14px;
+  color: #e8e8f0; font-variant-numeric: tabular-nums;
+}
+</style>
+</head>
+<body>
+<div class="frame">
+<div class="frame-inner">
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<div class="header">
+  <h1>Forge Phase</h1>
+  <div class="sub">Round 1 — Flux: 8</div>
+</div>
+
+<!-- ── Weapon Card ─────────────────────────────────────────── -->
+<div class="item-card" id="weapon-card">
+  <!-- name -->
+  <div class="ic-section ic-header">
+    <div class="ic-name">⚔ Sword</div>
+    <div class="ic-type">One-Hand Weapon</div>
+  </div>
+  <div class="ic-divider"></div>
+  <!-- inherent -->
+  <div class="ic-section ic-inherent">
+    <div class="inh-line">+5% Crit Chance</div>
+    <div class="inh-line">−5% Attack Interval</div>
+  </div>
+  <div class="ic-divider"></div>
+  <!-- base stats -->
+  <div class="ic-section ic-base">
+    <span class="base-label">Base Stats: </span><span class="base-value">STR / VIT</span>
+  </div>
+  <div class="ic-divider"></div>
+  <!-- affixes (rendered by JS) -->
+  <div class="ic-section ic-affixes" id="weapon-affixes"></div>
+  <div class="ic-divider"></div>
+  <!-- empty slots -->
+  <div class="ic-section ic-slots" id="weapon-slots"></div>
+</div>
+
+<!-- ── Armor Card ──────────────────────────────────────────── -->
+<div class="item-card" id="armor-card">
+  <div class="ic-section ic-header">
+    <div class="ic-name">🛡 Chainmail</div>
+    <div class="ic-type">Body Armor</div>
+  </div>
+  <div class="ic-divider"></div>
+  <div class="ic-section ic-inherent">
+    <div class="inh-line">+5% Armor</div>
+    <div class="inh-line">+20 Max HP</div>
+  </div>
+  <div class="ic-divider"></div>
+  <div class="ic-section ic-base">
+    <span class="base-label">Base Stats: </span><span class="base-value">VIT / STR</span>
+  </div>
+  <div class="ic-divider"></div>
+  <div class="ic-section ic-affixes" id="armor-affixes"></div>
+  <div class="ic-divider"></div>
+  <div class="ic-section ic-slots" id="armor-slots"></div>
+</div>
+
+<!-- ── Combination Workbench ───────────────────────────────── -->
+<div class="workbench">
+  <div class="wb-title">◆ Forge Combination ◆</div>
+  <div class="wb-row">
+    <div class="wb-slot" id="combo-slot-a" data-slot="a">
+      <span style="pointer-events:none;">Drop<br>Orb</span>
+    </div>
+    <span class="wb-plus">+</span>
+    <div class="wb-slot" id="combo-slot-b" data-slot="b">
+      <span style="pointer-events:none;">Drop<br>Orb</span>
+    </div>
+    <span class="wb-arrow">→</span>
+    <div class="wb-result" id="combo-result">
+      <span class="wr-placeholder">?</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stockpile ───────────────────────────────────────────── -->
+<div>
+  <div class="stockpile-label">Stockpile</div>
+  <div class="stockpile" id="stockpile"></div>
+</div>
+
+<!-- ── Stats Bar ───────────────────────────────────────────── -->
+<div class="stats-bar">
+  <div class="stat-item"><div class="stat-label">HP</div><div class="stat-val" id="sv-hp">285</div></div>
+  <div class="stat-item"><div class="stat-label">DMG</div><div class="stat-val" id="sv-dmg">42</div></div>
+  <div class="stat-item"><div class="stat-label">Armor</div><div class="stat-val" id="sv-armor">17%</div></div>
+  <div class="stat-item"><div class="stat-label">Crit</div><div class="stat-val" id="sv-crit">13%</div></div>
+</div>
+
+</div><!-- /.frame-inner -->
+</div><!-- /.frame -->
+
+<script>
+/* ================================================================
+   DATA
+   ================================================================ */
+const EMOJIS = {
+  fire:'🔥', cold:'❄️', lightning:'⚡', poison:'☠️',
+  shadow:'🌙', chaos:'🌀', physical:'⚔️', neutral:'💠'
+};
+
+const CATEGORY_ORDER = ['offensive','defensive','sustain','utility','trigger','compound'];
+
+// Affix catalog
+const AFFIX_DB = {
+  fire_damage:       { id:'fire_damage',       name:'Fire Damage',           cat:'offensive', elem:'fire',      emoji:'🔥', statFn: t => `+${[0,10,19,31,48][t]} Fire Damage` },
+  cold_damage:       { id:'cold_damage',       name:'Cold Damage',           cat:'offensive', elem:'cold',      emoji:'❄️', statFn: t => `+${[0,9,17,28,44][t]} Cold Damage` },
+  lightning_damage:   { id:'lightning_damage',   name:'Lightning Damage',     cat:'offensive', elem:'lightning', emoji:'⚡', statFn: t => `+${[0,11,21,33,50][t]} Lightning Dmg` },
+  poison_damage:     { id:'poison_damage',     name:'Poison Damage',         cat:'offensive', elem:'poison',    emoji:'☠️', statFn: t => `+${[0,8,16,26,40][t]} Poison Damage` },
+  shadow_damage:     { id:'shadow_damage',     name:'Shadow Damage',         cat:'offensive', elem:'shadow',    emoji:'🌙', statFn: t => `+${[0,9,18,29,45][t]} Shadow Damage` },
+  crit_chance:       { id:'crit_chance',       name:'Crit Chance',           cat:'offensive', elem:'neutral',   emoji:'💢', statFn: t => `+${[0,3,5,8,12][t]}% Crit Chance` },
+  attack_speed:      { id:'attack_speed',      name:'Attack Speed',          cat:'offensive', elem:'neutral',   emoji:'💨', statFn: t => `+${[0,4,7,11,16][t]}% Attack Speed` },
+  flat_hp:           { id:'flat_hp',           name:'Flat HP',               cat:'defensive', elem:'neutral',   emoji:'❤️', statFn: t => `+${[0,35,68,110,160][t]} Max HP` },
+  armor_rating:      { id:'armor_rating',      name:'Armor Rating',          cat:'defensive', elem:'physical',  emoji:'🛡', statFn: t => `+${[0,5.5,11.5,18,26][t]}% Phys Dmg Reduction` },
+  block_chance:      { id:'block_chance',      name:'Block Chance',          cat:'defensive', elem:'neutral',   emoji:'🔰', statFn: t => `+${[0,4,8,13,18][t]}% Block Chance` },
+  hp_regen:          { id:'hp_regen',          name:'HP Regen',              cat:'defensive', elem:'neutral',   emoji:'💚', statFn: t => `+${[0,3,6,10,15][t]} HP/sec Regen` },
+  lifesteal:         { id:'lifesteal',         name:'Lifesteal',             cat:'sustain',   elem:'neutral',   emoji:'🩸', statFn: t => `+${[0,3,6,10,15][t]}% Lifesteal` },
+  thorns:            { id:'thorns',            name:'Thorns',                cat:'sustain',   elem:'physical',  emoji:'🌿', statFn: t => `+${[0,5,10,18,28][t]} Thorns Damage` },
+  stun_chance:       { id:'stun_chance',       name:'Stun Chance',           cat:'utility',   elem:'physical',  emoji:'⚔️', statFn: t => `+${[0,3,6,10,15][t]}% Stun Chance` },
+  chance_on_hit:     { id:'chance_on_hit',     name:'Chance on Hit',         cat:'trigger',   elem:'neutral',   emoji:'🎯', statFn: t => `Chance on Hit` },
+  chance_on_taking:  { id:'chance_on_taking',  name:'Chance on Taking Damage', cat:'trigger', elem:'neutral',   emoji:'💥', statFn: t => `Chance on Taking Damage` },
+};
+
+// Combination recipes
+const RECIPES = {
+  'fire_damage+chance_on_hit':      { name:'Ignite',          desc:'15% on-hit fire DoT 2x',                  emoji:'🔥', comps:['fire_damage','chance_on_hit'] },
+  'cold_damage+chance_on_hit':      { name:'Frostbite',       desc:'12% on-hit slow 3s',                      emoji:'❄️', comps:['cold_damage','chance_on_hit'] },
+  'fire_damage+cold_damage':        { name:'Thermal Shock',   desc:'20% bonus to chilled+burning targets',    emoji:'🌡️', comps:['fire_damage','cold_damage'] },
+  'lightning_damage+chance_on_hit':  { name:'Static Discharge', desc:'10% on-hit chain lightning x3',          emoji:'⚡', comps:['lightning_damage','chance_on_hit'] },
+};
+function recipeKey(a,b) { return [a,b].sort().join('+'); }
+
+/* ================================================================
+   STATE
+   ================================================================ */
+const state = {
+  weapon: {
+    maxSlots: 6,
+    affixes: [
+      { affixId:'fire_damage', tier:2 },
+      { affixId:'chance_on_hit', tier:1 },
+    ],
+    compounds: [
+      { recipe: RECIPES['fire_damage+chance_on_hit'] }
+    ]
+  },
+  armor: {
+    maxSlots: 6,
+    affixes: [
+      { affixId:'flat_hp', tier:2 },
+      { affixId:'armor_rating', tier:1 },
+    ],
+    compounds: []
+  },
+  stockpile: [
+    { affixId:'cold_damage',      tier:1 },
+    { affixId:'lightning_damage',  tier:3 },
+    { affixId:'poison_damage',    tier:1 },
+    { affixId:'shadow_damage',    tier:2 },
+    { affixId:'lifesteal',        tier:2 },
+    { affixId:'block_chance',     tier:2 },
+    { affixId:'hp_regen',         tier:1 },
+    { affixId:'crit_chance',      tier:3 },
+    { affixId:'attack_speed',     tier:2 },
+    { affixId:'stun_chance',      tier:1 },
+    { affixId:'thorns',           tier:1 },
+    { affixId:'chance_on_taking', tier:1 },
+  ],
+  selectedOrb: null,   // index into stockpile or null
+  comboSlotA: null,    // stockpile index
+  comboSlotB: null,
+  comboTarget: null,   // 'a' | 'b' | null  — next combo slot to fill
+};
+
+/* ================================================================
+   RENDER HELPERS
+   ================================================================ */
+function tierClass(t) { return 't'+t; }
+
+function renderAffixLine(affix, tier) {
+  const db = AFFIX_DB[affix];
+  if (!db) return '';
+  return `<div class="affix-line">
+    <span class="af-emoji">${db.emoji}</span>
+    <span class="af-name">${db.statFn(tier)}</span>
+    <span class="tier-badge ${tierClass(tier)}">T${tier}</span>
+  </div>`;
+}
+
+function renderCompound(cpd) {
+  const r = cpd.recipe;
+  const comp1 = AFFIX_DB[r.comps[0]];
+  const comp2 = AFFIX_DB[r.comps[1]];
+  return `<div class="compound-line">
+    <div class="compound-header">
+      <span class="cpd-star">✦</span>
+      <span>${r.name}</span>
+      <span class="cpd-components">(${comp1.emoji} ${comp1.name} + ${comp2.name})</span>
+    </div>
+    <div class="compound-desc">${r.desc}</div>
+  </div>`;
+}
+
+function slotsUsed(item) {
+  // each affix = 1 slot, each compound = 2 slots (but its components already counted)
+  // compounds are formed from affixes already in the list, so total = affixes.length + compounds.length
+  // Actually compounds consume 2 affix slots already accounted for, so slotsUsed = affixes.length
+  // But per spec, compounds are "2 slots used" meaning the two component affixes.
+  // So slots used = affixes.length (since compound components are already in affixes).
+  return item.affixes.length;
+}
+
+function renderItemAffixes(item, containerId) {
+  const el = document.getElementById(containerId);
+  // Group affixes by category in deterministic order
+  const grouped = {};
+  CATEGORY_ORDER.forEach(c => grouped[c] = []);
+
+  // Sort affixes within each category alphabetically
+  const sorted = [...item.affixes].sort((a,b) => {
+    const da = AFFIX_DB[a.affixId], db2 = AFFIX_DB[b.affixId];
+    const catA = CATEGORY_ORDER.indexOf(da.cat), catB = CATEGORY_ORDER.indexOf(db2.cat);
+    if (catA !== catB) return catA - catB;
+    return da.name.localeCompare(db2.name);
+  });
+
+  sorted.forEach(a => {
+    const db = AFFIX_DB[a.affixId];
+    if (db) grouped[db.cat].push(a);
+  });
+
+  let html = '';
+  CATEGORY_ORDER.forEach(cat => {
+    if (cat === 'compound') return; // handled separately
+    if (grouped[cat].length === 0) return;
+    const label = cat.charAt(0).toUpperCase() + cat.slice(1);
+    html += `<div class="affix-category-header">${label}</div>`;
+    grouped[cat].forEach(a => { html += renderAffixLine(a.affixId, a.tier); });
+  });
+
+  // Compounds
+  if (item.compounds.length > 0) {
+    html += `<div class="affix-category-header">Compounds</div>`;
+    item.compounds.forEach(c => { html += renderCompound(c); });
+  }
+
+  if (!html) html = '<div style="color:var(--s-500);font-size:12px;text-align:center;padding:4px 0;">No affixes yet</div>';
+  el.innerHTML = html;
+}
+
+function renderSlots(item, containerId, itemKey) {
+  const el = document.getElementById(containerId);
+  const used = slotsUsed(item);
+  const empty = item.maxSlots - used;
+  let html = '';
+  for (let i = 0; i < empty; i++) {
+    html += `<button class="slot-btn" data-item="${itemKey}" data-slotidx="${i}">+</button>`;
+  }
+  html += `<span class="slot-count">${used} of ${item.maxSlots} slots used</span>`;
+  el.innerHTML = html;
+
+  // Highlight slots if orb selected
+  if (state.selectedOrb !== null) {
+    el.querySelectorAll('.slot-btn').forEach(btn => btn.classList.add('highlight'));
+  }
+}
+
+function renderStockpile() {
+  const el = document.getElementById('stockpile');
+  let html = '';
+  state.stockpile.forEach((orb, i) => {
+    const db = AFFIX_DB[orb.affixId];
+    const elemClass = db.elem ? 'el-'+db.elem : 'el-neutral';
+    const selected = state.selectedOrb === i ? 'selected' : '';
+    const used = orb.used ? 'used' : '';
+    html += `<div class="orb ${tierClass(orb.tier)} ${elemClass} ${selected} ${used}" data-idx="${i}">
+      <span class="orb-emoji">${db.emoji}</span>
+      <span class="orb-val">${db.name.split(' ')[0]}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderComboSlots() {
+  const slotA = document.getElementById('combo-slot-a');
+  const slotB = document.getElementById('combo-slot-b');
+  const result = document.getElementById('combo-result');
+
+  [['a', slotA, state.comboSlotA], ['b', slotB, state.comboSlotB]].forEach(([key, el, idx]) => {
+    if (idx !== null) {
+      const orb = state.stockpile[idx];
+      const db = AFFIX_DB[orb.affixId];
+      el.classList.add('filled');
+      el.style.borderColor = `var(--${db.elem === 'neutral' ? 's-500' : db.elem})`;
+      el.innerHTML = `<span class="ws-emoji">${db.emoji}</span><br><span class="ws-label">${db.name.split(' ').slice(0,2).join(' ')}</span>`;
+    } else {
+      el.classList.remove('filled');
+      el.style.borderColor = '';
+      el.innerHTML = '<span style="pointer-events:none;">Drop<br>Orb</span>';
+    }
+  });
+
+  // Check recipe
+  if (state.comboSlotA !== null && state.comboSlotB !== null) {
+    const idA = state.stockpile[state.comboSlotA].affixId;
+    const idB = state.stockpile[state.comboSlotB].affixId;
+    const key = recipeKey(idA, idB);
+    const recipe = RECIPES[key];
+    if (recipe) {
+      result.classList.add('valid');
+      result.innerHTML = `<span class="wr-name">✦ ${recipe.name}</span><span class="wr-desc">${recipe.desc}</span>`;
+    } else {
+      result.classList.remove('valid');
+      result.innerHTML = '<span class="wr-placeholder" style="color:var(--danger);">No recipe</span>';
+    }
+  } else {
+    result.classList.remove('valid');
+    result.innerHTML = '<span class="wr-placeholder">?</span>';
+  }
+}
+
+function render() {
+  renderItemAffixes(state.weapon, 'weapon-affixes');
+  renderItemAffixes(state.armor, 'armor-affixes');
+  renderSlots(state.weapon, 'weapon-slots', 'weapon');
+  renderSlots(state.armor, 'armor-slots', 'armor');
+  renderStockpile();
+  renderComboSlots();
+}
+
+/* ================================================================
+   INTERACTION
+   ================================================================ */
+function placeOrbOnItem(itemKey, orbIdx) {
+  const item = state[itemKey];
+  const orb = state.stockpile[orbIdx];
+  if (slotsUsed(item) >= item.maxSlots) return;
+
+  // Check if affix already exists on item
+  if (item.affixes.some(a => a.affixId === orb.affixId)) return;
+
+  item.affixes.push({ affixId: orb.affixId, tier: orb.tier });
+  orb.used = true;
+  state.selectedOrb = null;
+
+  // Check if any new compounds form
+  const affixIds = item.affixes.map(a => a.affixId);
+  Object.entries(RECIPES).forEach(([key, recipe]) => {
+    const [c1, c2] = recipe.comps;
+    if (affixIds.includes(c1) && affixIds.includes(c2)) {
+      if (!item.compounds.some(cp => cp.recipe.name === recipe.name)) {
+        item.compounds.push({ recipe });
+      }
+    }
+  });
+
+  render();
+}
+
+// Stockpile click
+document.getElementById('stockpile').addEventListener('click', e => {
+  const orb = e.target.closest('.orb');
+  if (!orb || orb.classList.contains('used')) return;
+  const idx = parseInt(orb.dataset.idx);
+
+  if (state.selectedOrb === idx) {
+    state.selectedOrb = null; // deselect
+  } else {
+    state.selectedOrb = idx;
+  }
+  render();
+});
+
+// Item slot click (delegated)
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.slot-btn');
+  if (!btn) return;
+  if (state.selectedOrb === null) return;
+  const itemKey = btn.dataset.item;
+  placeOrbOnItem(itemKey, state.selectedOrb);
+});
+
+// Combo slot click
+document.getElementById('combo-slot-a').addEventListener('click', () => {
+  if (state.selectedOrb === null) return;
+  // If clicking again on filled slot, clear it
+  if (state.comboSlotA !== null) {
+    state.stockpile[state.comboSlotA].used = false;
+    state.comboSlotA = null;
+  }
+  state.comboSlotA = state.selectedOrb;
+  state.stockpile[state.selectedOrb].used = true;
+  state.selectedOrb = null;
+  render();
+});
+document.getElementById('combo-slot-b').addEventListener('click', () => {
+  if (state.selectedOrb === null) return;
+  if (state.comboSlotB !== null) {
+    state.stockpile[state.comboSlotB].used = false;
+    state.comboSlotB = null;
+  }
+  state.comboSlotB = state.selectedOrb;
+  state.stockpile[state.selectedOrb].used = true;
+  state.selectedOrb = null;
+  render();
+});
+
+/* ================================================================
+   INIT
+   ================================================================ */
+render();
+</script>
+</body>
+</html>

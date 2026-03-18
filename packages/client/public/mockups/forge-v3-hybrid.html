@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Forge — V3 Hybrid (Mockup H)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════
+   RESET & TOKENS
+   ═══════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --s950:#060608; --s900:#0a0a0f; --s800:#111118; --s700:#1a1a26;
+  --s600:#252536; --s500:#363650; --s400:#4a4a68; --s300:#6a6a88;
+
+  --accent-500:#d4a834; --accent-400:#e0bc4a; --accent-300:#ecd06a;
+
+  --teal:#2dd4bf; --teal-light:#5eead4;
+
+  --bronze-500:#a08050; --bronze-400:#b89868; --bronze-300:#c8a878;
+
+  --fire:#e8553a; --cold:#3a9be8; --lightning:#d4c040;
+  --poison:#2db369; --shadow:#8b3ae8; --chaos:#e83a8b; --physical:#c0c0c0;
+
+  --t1:#8a8a8a; --t2:#3a9be8; --t3:#9b59b6; --t4:#e8553a;
+
+  --affix-green:#1eff00;
+  --compound-gold:#ecd06a;
+
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.05);
+  --shadow-button: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  --shadow-glow-accent: 0 0 16px rgba(212,168,52,0.25);
+  --shadow-inset: inset 0 2px 4px rgba(0,0,0,0.5);
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--s950);
+  font-family: var(--font-body);
+  color: #e8e8f0;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════
+   APP FRAME (9:16 portrait)
+   ═══════════════════════════════════════ */
+.app-frame {
+  position: relative;
+  width: calc(100vh * 9 / 16);
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  background: var(--s900);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.app-frame::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(30,25,40,0.4) 0%, transparent 60%);
+  pointer-events:none; z-index:1;
+}
+
+/* noise overlay */
+.app-frame::after {
+  content:'';
+  position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.025' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:9999; opacity:0.5;
+}
+
+/* all content above overlays */
+.app-frame > * { position: relative; z-index: 3; }
+
+/* ═══════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════ */
+@keyframes orb-glow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 0px transparent); }
+  50% { filter: brightness(1.15) drop-shadow(0 0 6px var(--glow-color, #d4a834)); }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes phase-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-socket {
+  0%, 100% { border-color: #4a4a68; }
+  50% { border-color: #d4a834; }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.85); }
+}
+
+/* ═══════════════════════════════════════
+   1. HEADER
+   ═══════════════════════════════════════ */
+.header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 10px 12px 6px;
+  flex-shrink: 0;
+  animation: phase-enter 0.4s ease-out;
+}
+
+.header-left {}
+.header-title {
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  color: var(--accent-400); text-transform: uppercase; letter-spacing: 0.06em;
+  line-height: 1;
+}
+.header-sub {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  color: var(--s300); margin-top: 2px;
+}
+.header-sub .flux-val {
+  font-family: var(--font-mono); font-weight: 700; color: var(--accent-300);
+  transition: all 0.2s;
+}
+.header-sub .flux-val.low { color: #fbbf24; }
+.header-sub .flux-val.empty { color: #f87171; }
+.flux-change {
+  position: fixed; z-index: 10001; pointer-events: none;
+  font-family: var(--font-display); font-weight: 700; font-size: 16px;
+  animation: flux-pop 0.8s ease-out forwards;
+}
+@keyframes flux-pop {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-30px) scale(1.2); }
+}
+
+.header-right { display: flex; align-items: center; gap: 10px; }
+.timer {
+  font-family: var(--font-mono); font-weight: 700; font-size: 14px;
+  color: var(--s300);
+}
+.btn-done {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  background: var(--accent-500); color: var(--s900);
+  border: none; border-radius: 6px; padding: 5px 12px;
+  cursor: pointer; box-shadow: var(--shadow-button);
+  transition: all 0.15s;
+}
+.btn-done:hover { background: var(--accent-400); }
+.btn-done:active { transform: scale(0.95); }
+
+/* ═══════════════════════════════════════
+   2. ITEM CARDS (side-by-side)
+   ═══════════════════════════════════════ */
+.cards-row {
+  display: flex; gap: 6px;
+  padding: 0 8px 6px;
+  flex-shrink: 0;
+  animation: slide-up 0.3s ease-out;
+}
+
+.item-card {
+  flex: 1; min-width: 0;
+  background: linear-gradient(180deg, #1a1a26, #111118);
+  border: 1px solid var(--s600);
+  border-radius: 8px;
+  padding: 10px 11px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.item-card.active { border-color: rgba(212,168,52,0.5); }
+.item-card.inactive { border-color: var(--s600); }
+
+.card-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.card-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 16px;
+  color: var(--accent-300);
+}
+.card-sub {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  color: var(--s300); margin-top: 2px;
+}
+
+.card-divider {
+  height: 1px; background: var(--s600); margin: 6px 0;
+}
+
+.card-base-stats {
+  font-family: var(--font-body); font-size: 12px; color: var(--teal);
+  line-height: 1.6;
+}
+
+.card-scaling {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  color: var(--bronze-400);
+  line-height: 1.5;
+}
+
+/* Affix lines */
+.affix-line {
+  display: flex; align-items: center; gap: 5px;
+  margin: 2px 0; animation: slide-up 0.25s ease-out;
+  cursor: pointer; border-radius: 4px; padding: 1px 3px;
+  margin-left: -3px; margin-right: -3px;
+  transition: background 0.15s;
+}
+.affix-line:hover {
+  background: rgba(248,113,113,0.08);
+}
+.affix-line .remove-hint {
+  font-family: var(--font-body); font-size: 10px; color: #f87171;
+  opacity: 0; transition: opacity 0.15s; margin-left: auto; flex-shrink: 0;
+}
+.affix-line:hover .remove-hint { opacity: 1; }
+.affix-line.locked { cursor: default; }
+.affix-line.locked:hover { background: transparent; }
+.affix-line.locked .remove-hint { display: none; }
+.affix-orb {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; position: relative;
+}
+.affix-orb .orb-spec {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.25), transparent 55%);
+  pointer-events: none;
+}
+.affix-text {
+  font-family: var(--font-body); font-size: 13px; color: var(--affix-green);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+}
+.tier-pill {
+  font-family: var(--font-display); font-weight: 700; font-size: 9px;
+  padding: 2px 6px; border-radius: 99px; flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* Compound */
+.compound-line {
+  margin: 4px 0 2px; animation: scale-in 0.3s ease-out;
+}
+.compound-name {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+  color: var(--compound-gold);
+}
+.compound-components {
+  font-family: var(--font-body); font-size: 10px; color: var(--bronze-400);
+  margin-left: 31px;
+}
+.compound-effect {
+  font-family: var(--font-body); font-size: 10px; color: var(--s300);
+  font-style: italic; margin-left: 31px;
+}
+
+/* Empty sockets */
+.sockets-row {
+  display: flex; gap: 5px; align-items: center; margin-top: 3px;
+}
+.empty-socket {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px dashed var(--s400);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.empty-socket:hover { border-color: var(--accent-500); background: rgba(212,168,52,0.05); }
+.empty-socket.pulsing { animation: pulse-socket 1.2s ease-in-out infinite; }
+.slot-count {
+  font-family: var(--font-body); font-size: 10px; color: var(--s400); margin-left: 4px;
+}
+
+/* ═══════════════════════════════════════
+   3. COMBINATION WORKBENCH
+   ═══════════════════════════════════════ */
+.workbench {
+  margin: 0 8px 6px;
+  background: var(--s800);
+  background-image: radial-gradient(ellipse at 50% 50%, rgba(212,168,52,0.03), transparent 70%);
+  border: 1px solid rgba(212,168,52,0.15);
+  border-radius: 8px;
+  padding: 7px 10px 8px;
+  flex-shrink: 0;
+  animation: slide-up 0.35s ease-out;
+}
+
+.workbench-title {
+  font-family: var(--font-display); font-weight: 700; font-size: 10px;
+  color: var(--bronze-300); text-align: center; letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.workbench-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.combo-socket {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px dashed var(--s400);
+  background: var(--s950);
+  box-shadow: var(--shadow-inset);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s;
+  position: relative; overflow: hidden;
+}
+.combo-socket:hover { border-color: var(--accent-500); }
+.combo-socket.filled {
+  border-style: solid;
+}
+.combo-socket .combo-orb-spec {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.2), transparent 55%);
+  pointer-events: none;
+}
+.combo-socket .combo-emoji {
+  font-size: 16px; position: relative; z-index: 1;
+}
+
+.workbench-op {
+  font-family: var(--font-body); font-size: 16px; color: var(--s300); user-select: none;
+}
+.workbench-arrow {
+  font-family: var(--font-body); font-size: 14px; color: var(--bronze-400); user-select: none;
+}
+
+.result-zone {
+  min-width: 90px; text-align: center; padding: 4px 8px;
+  border: 1px dashed var(--s500); border-radius: 6px;
+  min-height: 36px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.result-zone.valid { border-color: rgba(212,168,52,0.3); box-shadow: 0 0 8px rgba(212,168,52,0.1); }
+.result-zone.invalid { border-color: rgba(248,113,113,0.3); }
+.result-empty {
+  font-family: var(--font-body); font-size: 20px; color: var(--s500); line-height: 1;
+}
+.result-hint {
+  font-family: var(--font-body); font-size: 9px; color: var(--s400);
+}
+.result-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  line-height: 1.2;
+}
+.result-effect {
+  font-family: var(--font-body); font-size: 9px; color: var(--s300);
+}
+.result-invalid {
+  font-family: var(--font-body); font-size: 10px; color: #f87171;
+}
+
+.workbench-buttons {
+  display: flex; gap: 6px; margin-left: 8px;
+}
+.btn-combine {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  background: var(--accent-500); color: var(--s900); border: none;
+  border-radius: 5px; padding: 4px 10px; cursor: pointer;
+  box-shadow: var(--shadow-button); transition: all 0.15s;
+  text-transform: uppercase;
+}
+.btn-combine:disabled {
+  background: var(--s500); color: var(--s300); cursor: not-allowed;
+  box-shadow: none;
+}
+.btn-combine:not(:disabled):hover { background: var(--accent-400); box-shadow: var(--shadow-glow-accent); }
+.btn-clear {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  background: var(--s500); color: var(--s300); border: none;
+  border-radius: 5px; padding: 4px 8px; cursor: pointer;
+  transition: all 0.15s; text-transform: uppercase;
+}
+.btn-clear:hover { background: var(--s400); }
+
+/* ═══════════════════════════════════════
+   4. STOCKPILE
+   ═══════════════════════════════════════ */
+.stockpile {
+  flex: 1; min-height: 0;
+  margin: 0 8px 6px;
+  background: var(--s800);
+  border: 1px solid var(--s600);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  animation: slide-up 0.4s ease-out;
+}
+.stockpile::-webkit-scrollbar { width: 3px; }
+.stockpile::-webkit-scrollbar-track { background: transparent; }
+.stockpile::-webkit-scrollbar-thumb { background: var(--s500); border-radius: 3px; }
+
+.stockpile-header {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--s400); padding: 8px 10px 4px;
+  flex-shrink: 0;
+}
+
+.stockpile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 6px 8px 10px;
+  justify-items: center;
+}
+
+/* Gem card wrapper */
+.gem-card {
+  display: flex; flex-direction: column; align-items: center;
+  cursor: pointer;
+  transition: transform 0.15s ease-out, filter 0.15s ease-out;
+  user-select: none;
+}
+.gem-card:hover { transform: scale(1.08); filter: brightness(1.1); }
+.gem-card:active { transform: scale(0.93); }
+.gem-card.selected {
+  animation: orb-glow 1.5s ease-in-out infinite;
+}
+.gem-card.fade-out {
+  animation: fade-out 0.15s ease-out forwards;
+  pointer-events: none;
+}
+
+/* The gem square */
+.gem-square {
+  width: 72px; height: 72px;
+  border-radius: 11px;
+  position: relative;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+  overflow: hidden;
+}
+.gem-square .gem-spec {
+  position: absolute; inset: 0; border-radius: 11px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 55%);
+  pointer-events: none; z-index: 1;
+}
+.gem-emoji {
+  font-size: 26px; position: relative; z-index: 2; line-height: 1.1;
+}
+.gem-value {
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+  color: white; position: relative; z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5); line-height: 1.2;
+}
+
+.gem-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  color: white; margin-top: 3px;
+  max-width: 88px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-align: center; line-height: 1.2;
+}
+.gem-category {
+  font-family: var(--font-display); font-weight: 600; font-size: 10px;
+  color: var(--accent-300); text-align: center; line-height: 1.2;
+}
+
+/* ═══════════════════════════════════════
+   5. STATS BAR
+   ═══════════════════════════════════════ */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  padding: 0 8px 8px;
+  flex-shrink: 0;
+  animation: slide-up 0.45s ease-out;
+}
+.stat-box {
+  background: var(--s700);
+  box-shadow: var(--shadow-inset);
+  border-radius: 4px; padding: 4px 8px;
+}
+.stat-label {
+  font-family: var(--font-display); font-weight: 700; font-size: 8px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--s400);
+}
+.stat-value {
+  font-family: var(--font-mono); font-weight: 700; font-size: 13px;
+  color: white; font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════ */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+  color: var(--accent-300); background: rgba(10,10,15,0.95);
+  border: 1px solid rgba(212,168,52,0.3); border-radius: 8px;
+  padding: 8px 18px; z-index: 10000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  animation: slide-up 0.3s ease-out;
+  pointer-events: none;
+  display: none;
+}
+.toast.show { display: block; }
+
+/* ═══════════════════════════════════════
+   DRAG & DROP
+   ═══════════════════════════════════════ */
+.drag-ghost {
+  position: fixed; z-index: 10001; pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.15);
+  filter: drop-shadow(0 0 20px rgba(212,168,52,0.5));
+  opacity: 0.92;
+  transition: none;
+}
+.drag-ghost .gem-square {
+  width: 80px; height: 80px; border-radius: 13px;
+}
+.drag-ghost .gem-emoji { font-size: 30px; }
+.drag-ghost .gem-value { font-size: 14px; }
+
+.gem-card.dragging {
+  opacity: 0.3;
+  transform: scale(0.9);
+}
+
+/* Drop target highlights */
+.item-card.drop-over {
+  border-color: var(--accent-400) !important;
+  box-shadow: var(--shadow-card), 0 0 20px rgba(212,168,52,0.2), inset 0 0 15px rgba(212,168,52,0.05) !important;
+}
+
+.combo-socket.drop-over {
+  border-color: var(--accent-400) !important;
+  border-style: solid !important;
+  background: rgba(212,168,52,0.08) !important;
+  box-shadow: 0 0 12px rgba(212,168,52,0.25) !important;
+}
+
+.empty-socket.drop-over {
+  border-color: var(--accent-400) !important;
+  border-style: solid !important;
+  background: rgba(212,168,52,0.1) !important;
+  transform: scale(1.2);
+}
+
+.workbench.drop-over {
+  border-color: rgba(212,168,52,0.4) !important;
+  box-shadow: 0 0 16px rgba(212,168,52,0.15) !important;
+}
+
+.stockpile.drop-over {
+  border-color: var(--accent-400) !important;
+  box-shadow: var(--shadow-card), 0 0 20px rgba(212,168,52,0.15) !important;
+}
+
+.affix-line:not(.locked) .affix-orb {
+  cursor: grab;
+}
+.affix-line:not(.locked) .affix-orb:active {
+  cursor: grabbing;
+}
+</style>
+</head>
+<body>
+
+<div class="app-frame">
+
+  <!-- 1. HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">Forge Phase</div>
+      <div class="header-sub">Round 1 · Flux: <span class="flux-val">8</span></div>
+    </div>
+    <div class="header-right">
+      <div class="timer">1:15</div>
+      <button class="btn-done">Done Forging</button>
+    </div>
+  </div>
+
+  <!-- 2. ITEM CARDS -->
+  <div class="cards-row">
+    <!-- LEFT: Weapon (active) -->
+    <div class="item-card active" id="card-weapon" data-card="weapon">
+      <div class="card-header"><span class="card-name">⚔ SWORD</span></div>
+      <div class="card-sub"><span>One-Hand</span><span>Weapon</span></div>
+      <div class="card-divider"></div>
+      <div class="card-base-stats">+5% Critical Strike Chance<br>-5% Attack Interval</div>
+      <div class="card-divider"></div>
+      <div class="card-scaling">STR<br>VIT</div>
+      <div class="card-divider"></div>
+      <div class="affixes-container" id="weapon-affixes">
+        <!-- Filled by JS for initial state -->
+      </div>
+      <div class="compounds-container" id="weapon-compounds"></div>
+      <div class="card-divider"></div>
+      <div class="sockets-row" id="weapon-sockets"></div>
+      <div class="slot-count" id="weapon-slot-count"></div>
+    </div>
+
+    <!-- RIGHT: Armor (inactive) -->
+    <div class="item-card inactive" id="card-armor" data-card="armor">
+      <div class="card-header"><span class="card-name">🛡 CHAINMAIL</span></div>
+      <div class="card-sub"><span>Body</span><span>Armor</span></div>
+      <div class="card-divider"></div>
+      <div class="card-base-stats">+5% Armor<br>+20 Max HP</div>
+      <div class="card-divider"></div>
+      <div class="card-scaling">VIT<br>STR</div>
+      <div class="card-divider"></div>
+      <div class="affixes-container" id="armor-affixes"></div>
+      <div class="compounds-container" id="armor-compounds"></div>
+      <div class="card-divider"></div>
+      <div class="sockets-row" id="armor-sockets"></div>
+      <div class="slot-count" id="armor-slot-count"></div>
+    </div>
+  </div>
+
+  <!-- 3. WORKBENCH -->
+  <div class="workbench">
+    <div class="workbench-title">◆ FORGE ◆</div>
+    <div class="workbench-row">
+      <div class="combo-socket" id="combo-a" data-slot="a"></div>
+      <div class="workbench-op">+</div>
+      <div class="combo-socket" id="combo-b" data-slot="b"></div>
+      <div class="workbench-arrow">▶</div>
+      <div class="result-zone" id="result-zone">
+        <div class="result-empty">?</div>
+        <div class="result-hint">Drop 2 gems</div>
+      </div>
+      <div class="workbench-buttons">
+        <button class="btn-combine" id="btn-combine" disabled>COMBINE 2⚡</button>
+        <button class="btn-clear" id="btn-clear">CLEAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. STOCKPILE -->
+  <div class="stockpile">
+    <div class="stockpile-header" id="stockpile-header">STOCKPILE (12)</div>
+    <div class="stockpile-grid" id="stockpile-grid">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+
+  <!-- 5. STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat-box"><div class="stat-label">HP</div><div class="stat-value">285</div></div>
+    <div class="stat-box"><div class="stat-label">DMG</div><div class="stat-value">42</div></div>
+    <div class="stat-box"><div class="stat-label">Armor</div><div class="stat-value">17%</div></div>
+    <div class="stat-box"><div class="stat-label">Crit</div><div class="stat-value">13%</div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA & CONSTANTS
+   ═══════════════════════════════════════ */
+const ELEMENTS = {
+  fire:      { color: '#e8553a', emoji: '🔥', gradFrom: 'rgba(232,85,58,0.4)',   gradTo: 'rgba(232,85,58,0.12)' },
+  cold:      { color: '#3a9be8', emoji: '❄️', gradFrom: 'rgba(58,155,232,0.4)',  gradTo: 'rgba(58,155,232,0.12)' },
+  lightning: { color: '#d4c040', emoji: '⚡', gradFrom: 'rgba(212,192,64,0.4)',  gradTo: 'rgba(212,192,64,0.12)' },
+  poison:    { color: '#2db369', emoji: '☠️', gradFrom: 'rgba(45,179,105,0.4)',  gradTo: 'rgba(45,179,105,0.12)' },
+  shadow:    { color: '#8b3ae8', emoji: '🌙', gradFrom: 'rgba(139,58,232,0.4)',  gradTo: 'rgba(139,58,232,0.12)' },
+  chaos:     { color: '#e83a8b', emoji: '🌀', gradFrom: 'rgba(232,58,139,0.4)',  gradTo: 'rgba(232,58,139,0.12)' },
+  physical:  { color: '#c0c0c0', emoji: '⚔️', gradFrom: 'rgba(192,192,192,0.3)', gradTo: 'rgba(120,120,120,0.1)' },
+};
+
+const TIERS = { 1: '#8a8a8a', 2: '#3a9be8', 3: '#9b59b6', 4: '#e8553a' };
+const CAT_LABELS = { offensive: 'Offensive', defensive: 'Defense', sustain: 'Sustain', utility: 'Utility', trigger: 'Trigger' };
+
+const FLUX_COST = { assign: 1, combine: 2 };
+
+const RECIPES = [
+  { a: 'fire_damage', b: 'chance_on_hit', name: 'Ignite', element: 'fire', effect: '15% on-hit fire DoT 2x' },
+  { a: 'cold_damage', b: 'chance_on_hit', name: 'Frostbite', element: 'cold', effect: '15% on-hit slow + cold DoT' },
+  { a: 'fire_damage', b: 'cold_damage', name: 'Thermal Shock', element: 'fire', effect: 'Stun + 25% DoT bonus' },
+  { a: 'lightning_damage', b: 'chance_on_hit', name: 'Static Discharge', element: 'lightning', effect: '15% chain lightning' },
+  { a: 'fire_damage', b: 'lightning_damage', name: 'Storm of Flames', element: 'fire', effect: 'Cross-element proc' },
+];
+
+/* ═══════════════════════════════════════
+   GAME STATE
+   ═══════════════════════════════════════ */
+const MAX_FLUX = 8;
+let flux = 6; // Start at 6 because 2 gems already placed (cost 1 each) — but let's say initial state is "free" for demo. Actually let's start fresh:
+// Initial state: 2 weapon affixes (cost 2), 2 armor affixes (cost 2) = 4 spent, 4 remaining
+// But for a cleaner demo, let's say the initial placements were free (round start setup) and flux = 8
+
+let stockpile = [
+  { id: 'cold_damage',      name: 'Cold Damage',      tier: 1, element: 'cold',      value: '+12',   cat: 'offensive' },
+  { id: 'lightning_damage',  name: 'Lightning Damage',  tier: 3, element: 'lightning', value: '+33',   cat: 'offensive' },
+  { id: 'poison_damage',    name: 'Poison Damage',     tier: 1, element: 'poison',    value: '+10',   cat: 'offensive' },
+  { id: 'shadow_damage',    name: 'Shadow Damage',     tier: 2, element: 'shadow',    value: '2.2%',  cat: 'offensive' },
+  { id: 'lifesteal',        name: 'Lifesteal',         tier: 2, element: 'physical',  value: '7%',    cat: 'sustain' },
+  { id: 'block_chance',     name: 'Block Chance',      tier: 2, element: 'physical',  value: '9%',    cat: 'defensive' },
+  { id: 'hp_regen',         name: 'HP Regen',          tier: 1, element: 'physical',  value: '+5/s',  cat: 'defensive' },
+  { id: 'crit_chance',      name: 'Crit Chance',       tier: 3, element: 'physical',  value: '16%',   cat: 'offensive' },
+  { id: 'attack_speed',     name: 'Attack Speed',      tier: 2, element: 'physical',  value: '12%',   cat: 'offensive' },
+  { id: 'stun_chance',      name: 'Stun Chance',       tier: 1, element: 'physical',  value: '4%',    cat: 'utility' },
+  { id: 'thorns',           name: 'Thorns',            tier: 1, element: 'physical',  value: '+9',    cat: 'sustain' },
+  { id: 'ch_on_taking_dmg', name: 'Ch. on Taking Dmg', tier: 1, element: 'physical',  value: '+4',    cat: 'trigger' },
+];
+
+// Card state — affixes have a `locked` flag for permanently combined gems
+const cards = {
+  weapon: {
+    maxSlots: 6,
+    affixes: [
+      { id: 'fire_damage',   name: 'Fire Damage',    tier: 2, element: 'fire',     value: '+19', cat: 'offensive', locked: false },
+      { id: 'chance_on_hit',  name: 'Chance on Hit',  tier: 1, element: 'physical', value: '+3',  cat: 'trigger', locked: false },
+    ],
+    compounds: [],
+  },
+  armor: {
+    maxSlots: 6,
+    affixes: [
+      { id: 'max_hp',  name: 'Max HP',  tier: 2, element: 'physical', value: '+68',    cat: 'defensive', locked: false },
+      { id: 'armor',   name: 'Armor',   tier: 1, element: 'physical', value: '+11.5%', cat: 'defensive', locked: false },
+    ],
+    compounds: [],
+  }
+};
+
+let activeCard = 'weapon';
+let selectedGemIndex = null;
+let comboSlots = { a: null, b: null };
+
+// Recalculate flux based on current state
+// Start with MAX_FLUX, subtract 1 per non-locked affix placed, locked affixes don't refund
+function recalcFlux() {
+  let used = 0;
+  for (const cardId of ['weapon', 'armor']) {
+    for (const a of cards[cardId].affixes) {
+      used += FLUX_COST.assign;
+    }
+    // Each compound costs 2 flux on top of the 2 component assign costs
+    used += cards[cardId].compounds.length * FLUX_COST.combine;
+  }
+  flux = MAX_FLUX - used;
+}
+
+// Actually let's track flux differently: start at MAX_FLUX, spend on place, refund on remove, spend permanently on combine
+flux = MAX_FLUX - 4; // 4 gems pre-placed = 4 flux spent
+
+function spendFlux(amount) {
+  flux -= amount;
+  renderFlux();
+}
+
+function refundFlux(amount) {
+  flux += amount;
+  renderFlux();
+}
+
+function renderFlux() {
+  const el = document.querySelector('.flux-val');
+  el.textContent = flux;
+  el.className = 'flux-val' + (flux <= 0 ? ' empty' : flux <= 2 ? ' low' : '');
+}
+
+function showFluxChange(amount, x, y) {
+  const pop = document.createElement('div');
+  pop.className = 'flux-change';
+  pop.style.left = x + 'px';
+  pop.style.top = y + 'px';
+  if (amount > 0) {
+    pop.textContent = `+${amount}⚡`;
+    pop.style.color = '#34d399';
+  } else {
+    pop.textContent = `${amount}⚡`;
+    pop.style.color = '#f87171';
+  }
+  document.body.appendChild(pop);
+  setTimeout(() => pop.remove(), 800);
+}
+
+/* ═══════════════════════════════════════
+   RENDER HELPERS
+   ═══════════════════════════════════════ */
+function makeOrbIcon(element, tier, size = 26) {
+  const el = ELEMENTS[element];
+  const tc = TIERS[tier];
+  const glow = tier >= 3 ? `box-shadow: 0 0 ${tier >= 4 ? 8 : 4}px ${tc};` : '';
+  return `<div class="affix-orb" style="
+    width:${size}px;height:${size}px;
+    background: radial-gradient(circle, ${el.color} 10%, rgba(${hexToRgb(el.color)},0.15) 80%);
+    border: 2px solid ${tc}; ${glow}
+  "><span class="orb-spec"></span><span style="font-size:${Math.round(size*0.45)}px;position:relative;z-index:1">${el.emoji}</span></div>`;
+}
+
+function makeTierPill(tier) {
+  const tc = TIERS[tier];
+  return `<span class="tier-pill" style="background:rgba(${hexToRgb(tc)},0.2);color:${tc}">T${tier}</span>`;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+function renderCard(cardId) {
+  const card = cards[cardId];
+  const affixC = document.getElementById(`${cardId}-affixes`);
+  const compC = document.getElementById(`${cardId}-compounds`);
+  const sockC = document.getElementById(`${cardId}-sockets`);
+  const countC = document.getElementById(`${cardId}-slot-count`);
+
+  // Affixes — clickable to remove (unless locked)
+  affixC.innerHTML = card.affixes.map((a, i) => `
+    <div class="affix-line${a.locked ? ' locked' : ''}" data-card="${cardId}" data-affix-index="${i}">
+      ${makeOrbIcon(a.element, a.tier)}
+      <span class="affix-text">${a.name} ${a.value}</span>
+      ${makeTierPill(a.tier)}
+      <span class="remove-hint">✕</span>
+    </div>
+  `).join('');
+
+  // Attach click-to-remove AND drag handlers for unlocked affixes
+  affixC.querySelectorAll('.affix-line:not(.locked)').forEach(line => {
+    line.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const ci = line.dataset.card;
+      const ai = parseInt(line.dataset.affixIndex);
+      removeAffix(ci, ai, e);
+    });
+    // Make the orb icon draggable
+    const orbEl = line.querySelector('.affix-orb');
+    if (orbEl) {
+      orbEl.style.touchAction = 'none';
+      orbEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const ci = line.dataset.card;
+        const ai = parseInt(line.dataset.affixIndex);
+        const gem = cards[ci].affixes[ai];
+        if (gem.locked) return;
+        dragSource = { from: 'card', cardId: ci, affixIndex: ai, gem: { ...gem } };
+        dragStartPos = { x: e.clientX, y: e.clientY };
+        isDragging = false;
+        dragIndex = null;
+      });
+    }
+  });
+
+  // Compounds (locked — these are permanent, shown with a lock icon)
+  compC.innerHTML = card.compounds.map(c => `
+    <div class="compound-line">
+      <div class="compound-name">✦ ${makeOrbIcon(c.orb.element, c.orb.tier)} ${c.name} <span style="font-size:9px;color:#6a6a88;font-weight:400">🔒</span></div>
+      <div class="compound-components">${c.components}</div>
+      <div class="compound-effect">${c.effect}</div>
+    </div>
+  `).join('');
+
+  // Sockets
+  const filled = card.affixes.length;
+  const empty = card.maxSlots - filled;
+  sockC.innerHTML = '';
+  for (let i = 0; i < empty; i++) {
+    const s = document.createElement('div');
+    s.className = 'empty-socket';
+    s.innerHTML = '◇';
+    s.style.fontSize = '10px';
+    s.style.color = '#4a4a68';
+    s.addEventListener('click', (e) => { e.stopPropagation(); placeGemInSocket(cardId, e); });
+    sockC.appendChild(s);
+  }
+  countC.textContent = `${filled} of ${card.maxSlots} slots`;
+
+  updateSocketPulse();
+}
+
+function removeAffix(cardId, affixIndex, event) {
+  const card = cards[cardId];
+  const affix = card.affixes[affixIndex];
+  if (!affix || affix.locked) return;
+
+  // Return gem to stockpile
+  const gem = { ...affix };
+  delete gem.locked;
+  stockpile.push(gem);
+  card.affixes.splice(affixIndex, 1);
+
+  // Refund flux
+  refundFlux(FLUX_COST.assign);
+  showFluxChange(+1, event.clientX, event.clientY);
+  showToast(`${gem.name} → Stockpile (+1⚡)`);
+
+  // Re-check compounds (auto-detected ones disappear if component removed)
+  checkCompounds(cardId);
+
+  renderCard(cardId);
+  renderStockpile();
+}
+
+/* ═══════════════════════════════════════
+   DRAG & DROP
+   ═══════════════════════════════════════ */
+let dragIndex = null;       // stockpile index (when dragging from stockpile)
+let dragSource = null;      // { from: 'stockpile'|'card', cardId?, affixIndex?, gem }
+let dragGhost = null;
+let dragStartPos = null;
+let isDragging = false;
+const DRAG_THRESHOLD = 6;
+
+function createDragGhost(gem) {
+  const el = ELEMENTS[gem.element];
+  const tc = TIERS[gem.tier];
+  const glow = gem.tier >= 3 ? `box-shadow: 0 0 ${gem.tier >= 4 ? 10 : 6}px ${tc};` : '';
+  const ghost = document.createElement('div');
+  ghost.className = 'drag-ghost';
+  ghost.innerHTML = `
+    <div class="gem-square" style="
+      background: linear-gradient(135deg, ${el.gradFrom}, ${el.gradTo});
+      border: 2.5px solid ${tc}; ${glow}
+    ">
+      <div class="gem-spec"></div>
+      <span class="gem-emoji">${el.emoji}</span>
+      <span class="gem-value">${gem.value}</span>
+    </div>
+  `;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function getDropTarget(x, y, fromSource) {
+  const els = document.elementsFromPoint(x, y);
+  // If dragging FROM a card or combo slot, stockpile + other cards are valid
+  if (fromSource === 'card' || fromSource === 'combo') {
+    for (const e of els) {
+      if (e.classList.contains('stockpile') || e.closest?.('.stockpile')) {
+        return { type: 'stockpile', el: document.querySelector('.stockpile') };
+      }
+    }
+    // Allow dropping on empty sockets of cards
+    for (const e of els) {
+      if (e.classList.contains('empty-socket')) {
+        const cardEl = e.closest('.item-card');
+        return { type: 'socket', cardId: cardEl?.dataset.card, el: e };
+      }
+    }
+    for (const e of els) {
+      const cardEl = e.closest?.('.item-card');
+      if (cardEl) {
+        const cardId = cardEl.dataset.card;
+        if (cards[cardId].affixes.length < cards[cardId].maxSlots) {
+          return { type: 'card', cardId, el: cardEl };
+        }
+      }
+    }
+    return null;
+  }
+  // Dragging from stockpile — original targets
+  for (const e of els) {
+    if (e.classList.contains('empty-socket')) {
+      const cardEl = e.closest('.item-card');
+      return { type: 'socket', cardId: cardEl?.dataset.card, el: e };
+    }
+    if (e.classList.contains('combo-socket') && !e.classList.contains('filled')) {
+      return { type: 'combo', slot: e.dataset.slot, el: e };
+    }
+  }
+  for (const e of els) {
+    const cardEl = e.closest?.('.item-card');
+    if (cardEl) {
+      const cardId = cardEl.dataset.card;
+      if (cards[cardId].affixes.length < cards[cardId].maxSlots) {
+        return { type: 'card', cardId, el: cardEl };
+      }
+    }
+  }
+  for (const e of els) {
+    if (e.closest?.('.workbench')) {
+      if (!comboSlots.a) return { type: 'combo', slot: 'a', el: document.getElementById('combo-a') };
+      if (!comboSlots.b) return { type: 'combo', slot: 'b', el: document.getElementById('combo-b') };
+    }
+  }
+  return null;
+}
+
+function clearDropHighlights() {
+  document.querySelectorAll('.drop-over').forEach(e => e.classList.remove('drop-over'));
+}
+
+function handlePointerDown(index, e) {
+  e.preventDefault();
+  dragIndex = index;
+  dragStartPos = { x: e.clientX, y: e.clientY };
+  isDragging = false;
+}
+
+function handlePointerMove(e) {
+  // Support both stockpile drags (dragIndex) and card drags (dragSource)
+  if (dragIndex === null && !dragSource) return;
+  if (!isDragging) {
+    if (!dragStartPos) return;
+    const dx = e.clientX - dragStartPos.x;
+    const dy = e.clientY - dragStartPos.y;
+    if (Math.sqrt(dx*dx + dy*dy) < DRAG_THRESHOLD) return;
+    isDragging = true;
+    const gem = dragSource ? dragSource.gem : stockpile[dragIndex];
+    dragGhost = createDragGhost(gem);
+    if (dragIndex !== null) {
+      const src = document.querySelector(`.gem-card[data-index="${dragIndex}"]`);
+      if (src) src.classList.add('dragging');
+    }
+  }
+  dragGhost.style.left = e.clientX + 'px';
+  dragGhost.style.top = e.clientY + 'px';
+  clearDropHighlights();
+  const fromType = dragSource ? dragSource.from : 'stockpile';
+  const target = getDropTarget(e.clientX, e.clientY, fromType);
+  if (target) target.el.classList.add('drop-over');
+}
+
+function handlePointerUp(e) {
+  // ── Dragging from COMBO workbench ──
+  if (dragSource && dragSource.from === 'combo') {
+    if (!isDragging) {
+      // Click on combo socket — just clear that slot
+      const gem = comboSlots[dragSource.slot];
+      if (gem) {
+        stockpile.push(gem);
+        comboSlots[dragSource.slot] = null;
+        renderComboSocket(dragSource.slot);
+        checkComboResult();
+        renderStockpile();
+      }
+      dragSource = null;
+      dragStartPos = null;
+      return;
+    }
+    const target = getDropTarget(e.clientX, e.clientY, 'combo');
+    const gem = dragSource.gem;
+    let handled = false;
+    if (target) {
+      if (target.type === 'stockpile') {
+        stockpile.push(gem);
+        handled = true;
+      } else if (target.type === 'socket' || target.type === 'card') {
+        const card = cards[target.cardId];
+        if (card.affixes.length < card.maxSlots && flux >= FLUX_COST.assign) {
+          card.affixes.push({ ...gem, locked: false });
+          spendFlux(FLUX_COST.assign);
+          showFluxChange(-1, e.clientX, e.clientY);
+          checkCompounds(target.cardId);
+          renderCard(target.cardId);
+          showToast(`${gem.name} → ${target.cardId === 'weapon' ? 'Weapon' : 'Armor'} (-1⚡)`);
+          handled = true;
+        } else if (flux < FLUX_COST.assign) {
+          showToast('Not enough flux!');
+        }
+      }
+    }
+    if (!handled && !target) {
+      // Dropped nowhere — return to stockpile
+      stockpile.push(gem);
+      handled = true;
+    }
+    if (handled) {
+      comboSlots[dragSource.slot] = null;
+      renderComboSocket(dragSource.slot);
+      checkComboResult();
+      renderStockpile();
+    }
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    clearDropHighlights();
+    dragSource = null;
+    dragStartPos = null;
+    isDragging = false;
+    return;
+  }
+
+  // ── Dragging from a CARD (affix orb) ──
+  if (dragSource && dragSource.from === 'card') {
+    if (!isDragging) {
+      // Was a click on the orb — remove via click
+      removeAffix(dragSource.cardId, dragSource.affixIndex, e);
+      dragSource = null;
+      dragStartPos = null;
+      return;
+    }
+    const target = getDropTarget(e.clientX, e.clientY, 'card');
+    if (target) {
+      const gem = dragSource.gem;
+      if (target.type === 'stockpile') {
+        // Remove from card → stockpile (refund flux)
+        removeAffix(dragSource.cardId, dragSource.affixIndex, e);
+      } else if (target.type === 'socket' || target.type === 'card') {
+        // Move from one card to another card
+        const srcCard = cards[dragSource.cardId];
+        const dstCard = cards[target.cardId];
+        if (target.cardId !== dragSource.cardId && dstCard.affixes.length < dstCard.maxSlots) {
+          // Remove from source (refund), add to dest (spend) — net zero flux
+          srcCard.affixes.splice(dragSource.affixIndex, 1);
+          dstCard.affixes.push({ ...gem, locked: false });
+          checkCompounds(dragSource.cardId);
+          checkCompounds(target.cardId);
+          renderCard(dragSource.cardId);
+          renderCard(target.cardId);
+          showToast(`${gem.name} → ${target.cardId === 'weapon' ? 'Weapon' : 'Armor'}`);
+          renderStockpile();
+        }
+      }
+    }
+    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+    clearDropHighlights();
+    dragSource = null;
+    dragStartPos = null;
+    isDragging = false;
+    return;
+  }
+
+  // ── Dragging from STOCKPILE ──
+  if (dragIndex === null) return;
+  if (!isDragging) {
+    selectGem(dragIndex);
+    dragIndex = null;
+    dragStartPos = null;
+    return;
+  }
+
+  const target = getDropTarget(e.clientX, e.clientY, 'stockpile');
+  if (target) {
+    const gem = stockpile[dragIndex];
+    if (target.type === 'socket' || target.type === 'card') {
+      const cardId = target.cardId;
+      const card = cards[cardId];
+      if (card.affixes.length < card.maxSlots && flux >= FLUX_COST.assign) {
+        card.affixes.push({ ...gem, locked: false });
+        stockpile.splice(dragIndex, 1);
+        spendFlux(FLUX_COST.assign);
+        showFluxChange(-1, e.clientX, e.clientY);
+        checkCompounds(cardId);
+        renderCard(cardId);
+        showToast(`${gem.name} → ${cardId === 'weapon' ? 'Weapon' : 'Armor'} (-1⚡)`);
+      } else if (flux < FLUX_COST.assign) {
+        showToast('Not enough flux!');
+      }
+    } else if (target.type === 'combo') {
+      if (!comboSlots[target.slot]) {
+        comboSlots[target.slot] = { ...gem };
+        stockpile.splice(dragIndex, 1);
+        renderComboSocket(target.slot);
+        checkComboResult();
+      }
+    }
+  }
+
+  if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+  clearDropHighlights();
+  selectedGemIndex = null;
+  dragIndex = null;
+  dragStartPos = null;
+  isDragging = false;
+  renderStockpile();
+}
+
+window.addEventListener('pointermove', handlePointerMove);
+window.addEventListener('pointerup', handlePointerUp);
+
+/* ═══════════════════════════════════════
+   STOCKPILE RENDER
+   ═══════════════════════════════════════ */
+function renderStockpile() {
+  const grid = document.getElementById('stockpile-grid');
+  grid.innerHTML = '';
+  stockpile.forEach((gem, i) => {
+    const el = ELEMENTS[gem.element];
+    const tc = TIERS[gem.tier];
+    const glow = gem.tier >= 4 ? `0 0 10px ${tc}` : gem.tier >= 3 ? `0 0 6px ${tc}` : 'none';
+
+    const card = document.createElement('div');
+    card.className = 'gem-card' + (selectedGemIndex === i ? ' selected' : '');
+    if (selectedGemIndex === i) card.style.setProperty('--glow-color', el.color);
+    card.dataset.index = i;
+    card.style.touchAction = 'none';
+    card.innerHTML = `
+      <div class="gem-square" style="
+        background: linear-gradient(135deg, ${el.gradFrom}, ${el.gradTo});
+        border: 2.5px solid ${tc};
+        box-shadow: ${glow};
+      ">
+        <div class="gem-spec"></div>
+        <span class="gem-emoji">${el.emoji}</span>
+        <span class="gem-value">${gem.value}</span>
+      </div>
+      <div class="gem-name">${gem.name}</div>
+      <div class="gem-category">${CAT_LABELS[gem.cat] || gem.cat}</div>
+    `;
+    if (selectedGemIndex === i) {
+      card.style.filter = `drop-shadow(0 0 14px ${el.color})`;
+    }
+    card.addEventListener('pointerdown', (e) => handlePointerDown(i, e));
+    grid.appendChild(card);
+  });
+  document.getElementById('stockpile-header').textContent = `STOCKPILE (${stockpile.length})`;
+}
+
+function updateSocketPulse() {
+  document.querySelectorAll('.empty-socket').forEach(s => {
+    s.classList.toggle('pulsing', selectedGemIndex !== null);
+  });
+}
+
+/* ═══════════════════════════════════════
+   CLICK INTERACTIONS
+   ═══════════════════════════════════════ */
+function selectGem(index) {
+  selectedGemIndex = selectedGemIndex === index ? null : index;
+  renderStockpile();
+  updateSocketPulse();
+}
+
+function placeGemInSocket(cardId, event) {
+  if (selectedGemIndex === null) return;
+  const card = cards[cardId];
+  if (card.affixes.length >= card.maxSlots) return;
+  if (flux < FLUX_COST.assign) { showToast('Not enough flux!'); return; }
+
+  const gem = stockpile[selectedGemIndex];
+  card.affixes.push({ ...gem, locked: false });
+  stockpile.splice(selectedGemIndex, 1);
+  selectedGemIndex = null;
+
+  spendFlux(FLUX_COST.assign);
+  if (event) showFluxChange(-1, event.clientX, event.clientY);
+
+  checkCompounds(cardId);
+  renderCard(cardId);
+  renderStockpile();
+}
+
+function checkCompounds(cardId) {
+  const card = cards[cardId];
+  const affixIds = card.affixes.map(a => a.id);
+  // Only keep compounds whose components are still present
+  // (auto-detected, not permanent — permanent ones are stored differently)
+  card.compounds = [];
+  RECIPES.forEach(r => {
+    if (affixIds.includes(r.a) && affixIds.includes(r.b)) {
+      const primaryAffix = card.affixes.find(a => a.id === r.a);
+      card.compounds.push({
+        name: r.name.toUpperCase(),
+        components: `${card.affixes.find(a=>a.id===r.a).name} + ${card.affixes.find(a=>a.id===r.b).name}`,
+        effect: r.effect,
+        orb: { element: r.element, tier: Math.max(primaryAffix?.tier||1, 1) },
+        permanent: false,
+      });
+    }
+  });
+  // Add back any permanent compounds
+  if (!card._permanentCompounds) card._permanentCompounds = [];
+  for (const pc of card._permanentCompounds) {
+    if (!card.compounds.find(c => c.name === pc.name)) {
+      card.compounds.push(pc);
+    }
+  }
+}
+
+// Card switching
+document.querySelectorAll('.item-card').forEach(c => {
+  c.addEventListener('click', () => {
+    activeCard = c.dataset.card;
+    document.querySelectorAll('.item-card').forEach(cc => {
+      cc.classList.toggle('active', cc.dataset.card === activeCard);
+      cc.classList.toggle('inactive', cc.dataset.card !== activeCard);
+    });
+  });
+});
+
+// Combo sockets — click to place
+document.querySelectorAll('.combo-socket').forEach(s => {
+  s.addEventListener('click', () => {
+    if (selectedGemIndex === null) return;
+    const slot = s.dataset.slot;
+    if (comboSlots[slot]) return;
+
+    const gem = stockpile[selectedGemIndex];
+    comboSlots[slot] = { ...gem };
+    stockpile.splice(selectedGemIndex, 1);
+    selectedGemIndex = null;
+    renderStockpile();
+    renderComboSocket(slot);
+    checkComboResult();
+  });
+});
+
+function renderComboSocket(slot) {
+  const s = document.getElementById(`combo-${slot}`);
+  const gem = comboSlots[slot];
+  if (!gem) {
+    s.innerHTML = '';
+    s.classList.remove('filled');
+    s.style.borderColor = '';
+    s.style.borderStyle = 'dashed';
+    s.style.background = '';
+    s.style.cursor = 'pointer';
+    return;
+  }
+  const el = ELEMENTS[gem.element];
+  const tc = TIERS[gem.tier];
+  s.classList.add('filled');
+  s.style.borderColor = tc;
+  s.style.background = `radial-gradient(circle, ${el.color} 10%, rgba(${hexToRgb(el.color)},0.2) 80%)`;
+  s.style.cursor = 'grab';
+  s.style.touchAction = 'none';
+  s.innerHTML = `<span class="combo-orb-spec"></span><span class="combo-emoji">${el.emoji}</span>`;
+
+  // Make filled combo socket draggable
+  s.onpointerdown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragSource = { from: 'combo', slot, gem: { ...gem } };
+    dragStartPos = { x: e.clientX, y: e.clientY };
+    isDragging = false;
+    dragIndex = null;
+  };
+}
+
+function checkComboResult() {
+  const rz = document.getElementById('result-zone');
+  const btn = document.getElementById('btn-combine');
+
+  if (!comboSlots.a || !comboSlots.b) {
+    rz.className = 'result-zone';
+    rz.innerHTML = '<div class="result-empty">?</div><div class="result-hint">Drop 2 gems</div>';
+    btn.disabled = true;
+    return;
+  }
+
+  const ids = [comboSlots.a.id, comboSlots.b.id];
+  const recipe = RECIPES.find(r => ids.includes(r.a) && ids.includes(r.b));
+
+  if (recipe) {
+    const el = ELEMENTS[recipe.element];
+    const canAfford = flux >= FLUX_COST.combine;
+    rz.className = 'result-zone valid';
+    rz.innerHTML = `<div class="result-name" style="color:${el.color}">${recipe.name}</div>
+      <div class="result-effect">${recipe.effect}</div>`;
+    btn.disabled = !canAfford;
+    btn.textContent = canAfford ? `COMBINE ${FLUX_COST.combine}⚡` : `NEED ${FLUX_COST.combine}⚡`;
+  } else {
+    rz.className = 'result-zone invalid';
+    rz.innerHTML = '<div class="result-invalid">✗ No recipe</div>';
+    btn.disabled = true;
+    btn.textContent = `COMBINE ${FLUX_COST.combine}⚡`;
+  }
+}
+
+// COMBINE — PERMANENT! Consumes both gems, creates a locked compound
+document.getElementById('btn-combine').addEventListener('click', (e) => {
+  const ids = [comboSlots.a.id, comboSlots.b.id];
+  const recipe = RECIPES.find(r => ids.includes(r.a) && ids.includes(r.b));
+  if (!recipe) return;
+  if (flux < FLUX_COST.combine) { showToast('Not enough flux!'); return; }
+
+  // Spend flux permanently
+  spendFlux(FLUX_COST.combine);
+  showFluxChange(-FLUX_COST.combine, e.clientX, e.clientY);
+
+  // The two gems are consumed — they become a permanent compound on the active card
+  const card = cards[activeCard];
+  if (!card._permanentCompounds) card._permanentCompounds = [];
+
+  // Lock both component affixes if they're on this card, or add as locked
+  const gem1 = comboSlots.a;
+  const gem2 = comboSlots.b;
+
+  // Add both as locked affixes to the active card (they take 2 slots)
+  if (card.affixes.length + 2 <= card.maxSlots) {
+    card.affixes.push({ ...gem1, locked: true });
+    card.affixes.push({ ...gem2, locked: true });
+  } else {
+    showToast('Not enough slots on ' + activeCard + '!');
+    // Refund
+    refundFlux(FLUX_COST.combine);
+    return;
+  }
+
+  // Add permanent compound
+  const primaryAffix = gem1.id === recipe.a ? gem1 : gem2;
+  const permCompound = {
+    name: recipe.name.toUpperCase(),
+    components: `${gem1.name} + ${gem2.name}`,
+    effect: recipe.effect,
+    orb: { element: recipe.element, tier: Math.max(primaryAffix.tier, 1) },
+    permanent: true,
+  };
+  card._permanentCompounds.push(permCompound);
+
+  showToast(`🔒 ${recipe.name} forged permanently! (-${FLUX_COST.combine}⚡)`);
+
+  comboSlots = { a: null, b: null };
+  renderComboSocket('a');
+  renderComboSocket('b');
+  checkComboResult();
+  checkCompounds(activeCard);
+  renderCard(activeCard);
+  renderStockpile();
+});
+
+// CLEAR — return workbench gems to stockpile (free, no flux)
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (comboSlots.a) { stockpile.push(comboSlots.a); comboSlots.a = null; }
+  if (comboSlots.b) { stockpile.push(comboSlots.b); comboSlots.b = null; }
+  renderComboSocket('a');
+  renderComboSocket('b');
+  checkComboResult();
+  renderStockpile();
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+renderFlux();
+checkCompounds('weapon');
+checkCompounds('armor');
+renderCard('weapon');
+renderCard('armor');
+renderStockpile();
+</script>
+</body>
+</html>

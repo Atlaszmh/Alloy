@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge — V2 Socketed (Variation F)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════
+   RESET & TOKENS
+   ═══════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --s950:#060608; --s900:#0a0a0f; --s800:#111118; --s700:#1a1a26;
+  --s600:#252536; --s500:#363650; --s400:#4a4a68; --s300:#6a6a88;
+
+  --accent-500:#d4a834; --accent-400:#e0bc4a; --accent-300:#ecd06a;
+
+  --teal:#2dd4bf; --teal-light:#5eead4;
+
+  --bronze-500:#a08050; --bronze-400:#b89868; --bronze-300:#c8a878;
+
+  --fire:#e8553a; --cold:#3a9be8; --lightning:#d4c040;
+  --poison:#2db369; --shadow:#8b3ae8; --chaos:#e83a8b; --physical:#c0c0c0;
+
+  --t1:#8a8a8a; --t2:#3a9be8; --t3:#9b59b6; --t4:#e8553a;
+
+  --affix-green:#1eff00;
+  --compound-gold:#ecd06a;
+
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.05);
+  --shadow-button: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  --shadow-glow-accent: 0 0 16px rgba(212,168,52,0.25);
+  --shadow-inset: inset 0 2px 4px rgba(0,0,0,0.5);
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--s950);
+  font-family: var(--font-body);
+  color: #e8e8f0;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════
+   APP FRAME (9:16 portrait)
+   ═══════════════════════════════════════ */
+.app-frame {
+  position: relative;
+  width: calc(100vh * 9 / 16);
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  background: var(--s900);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.app-frame::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(30,25,40,0.4) 0%, transparent 60%);
+  pointer-events:none; z-index:1;
+}
+
+/* noise overlay */
+.app-frame::after {
+  content:'';
+  position:absolute; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:2; opacity:0.5;
+}
+
+.app-frame > * { position: relative; z-index: 3; }
+
+/* ═══════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════ */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(26,26,38,0.9) 0%, rgba(10,10,15,0.7) 100%);
+  border-bottom: 1px solid var(--s600);
+}
+
+.header-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--accent-400);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.header-info {
+  font-size: 10px;
+  color: var(--s300);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.header-timer {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--teal);
+}
+
+.btn-done {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--s950);
+  background: linear-gradient(180deg, var(--accent-300) 0%, var(--accent-500) 100%);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+  transition: filter 0.15s;
+}
+.btn-done:hover { filter: brightness(1.15); }
+
+/* ═══════════════════════════════════════
+   ITEM CARDS — SIDE-BY-SIDE
+   ═══════════════════════════════════════ */
+.cards-row {
+  display: flex; gap: 6px;
+  padding: 6px 8px;
+  flex-shrink: 0;
+}
+
+.item-card {
+  flex: 1;
+  background: linear-gradient(180deg, var(--s700) 0%, var(--s800) 100%);
+  border: 1px solid var(--s600);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  display: flex; flex-direction: column; gap: 0;
+  overflow: hidden;
+}
+
+.item-card.active {
+  border-color: rgba(212,168,52,0.4);
+  box-shadow: var(--shadow-glow-accent), var(--shadow-card);
+}
+
+.item-card:not(.active) {
+  box-shadow: var(--shadow-card);
+  opacity: 0.85;
+}
+
+.card-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.card-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-400);
+  letter-spacing: 0.5px;
+}
+
+.card-type-row {
+  display: flex; justify-content: space-between;
+  font-size: 10px;
+  color: var(--s300);
+  margin-bottom: 4px;
+}
+
+.card-divider {
+  height: 1px;
+  background: var(--s600);
+  margin: 4px 0;
+}
+
+/* inherent */
+.inherent-line {
+  font-size: 10px;
+  color: var(--teal);
+  line-height: 1.5;
+}
+
+/* base stats */
+.base-stats {
+  font-size: 10px;
+  color: var(--bronze-400);
+  padding: 2px 0;
+}
+
+/* ═══════════════════════════════════════
+   SOCKETED AFFIXES — ORB + TEXT
+   ═══════════════════════════════════════ */
+.affix-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.orb-icon {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  position: relative;
+  /* specular highlight */
+  overflow: hidden;
+}
+
+.orb-icon::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 4px;
+  width: 10px; height: 6px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.orb-icon.fire { background: radial-gradient(circle, rgba(232,85,58,0.45) 0%, rgba(232,85,58,0.12) 100%); }
+.orb-icon.cold { background: radial-gradient(circle, rgba(58,155,232,0.45) 0%, rgba(58,155,232,0.12) 100%); }
+.orb-icon.lightning { background: radial-gradient(circle, rgba(212,192,64,0.45) 0%, rgba(212,192,64,0.12) 100%); }
+.orb-icon.poison { background: radial-gradient(circle, rgba(45,179,105,0.45) 0%, rgba(45,179,105,0.12) 100%); }
+.orb-icon.shadow { background: radial-gradient(circle, rgba(139,58,232,0.45) 0%, rgba(139,58,232,0.12) 100%); }
+.orb-icon.chaos { background: radial-gradient(circle, rgba(232,58,139,0.45) 0%, rgba(232,58,139,0.12) 100%); }
+.orb-icon.physical { background: radial-gradient(circle, rgba(192,192,192,0.45) 0%, rgba(192,192,192,0.12) 100%); }
+
+.orb-icon.t1 { border: 2px solid var(--t1); }
+.orb-icon.t2 { border: 2px solid var(--t2); }
+.orb-icon.t3 { border: 2px solid var(--t3); box-shadow: 0 0 8px rgba(155,89,182,0.4); }
+.orb-icon.t4 { border: 2px solid var(--t4); box-shadow: 0 0 10px rgba(232,85,58,0.5); }
+
+.affix-text {
+  font-size: 11px;
+  color: var(--affix-green);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tier-badge {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.tier-badge.t1 { background: rgba(138,138,138,0.2); color: var(--t1); }
+.tier-badge.t2 { background: rgba(58,155,232,0.2); color: var(--t2); }
+.tier-badge.t3 { background: rgba(155,89,182,0.2); color: var(--t3); }
+.tier-badge.t4 { background: rgba(232,85,58,0.2); color: var(--t4); }
+
+/* ═══════════════════════════════════════
+   COMPOUND SECTION
+   ═══════════════════════════════════════ */
+.compound-section {
+  padding: 3px 0;
+}
+
+.compound-header {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 2px;
+}
+
+.compound-star {
+  color: var(--compound-gold);
+  font-size: 12px;
+}
+
+.compound-orb {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--compound-gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(236,208,106,0.3);
+}
+
+.compound-orb.fire-physical {
+  background: linear-gradient(90deg, rgba(232,85,58,0.4) 0%, rgba(232,85,58,0.4) 50%, rgba(192,192,192,0.4) 50%, rgba(192,192,192,0.4) 100%);
+}
+.compound-orb.fire-cold {
+  background: linear-gradient(90deg, rgba(232,85,58,0.4) 0%, rgba(232,85,58,0.4) 50%, rgba(58,155,232,0.4) 50%, rgba(58,155,232,0.4) 100%);
+}
+.compound-orb.cold-lightning {
+  background: linear-gradient(90deg, rgba(58,155,232,0.4) 0%, rgba(58,155,232,0.4) 50%, rgba(212,192,64,0.4) 50%, rgba(212,192,64,0.4) 100%);
+}
+.compound-orb.lightning-cold {
+  background: linear-gradient(90deg, rgba(212,192,64,0.4) 0%, rgba(212,192,64,0.4) 50%, rgba(58,155,232,0.4) 50%, rgba(58,155,232,0.4) 100%);
+}
+.compound-orb.fire-lightning {
+  background: linear-gradient(90deg, rgba(232,85,58,0.4) 0%, rgba(232,85,58,0.4) 50%, rgba(212,192,64,0.4) 50%, rgba(212,192,64,0.4) 100%);
+}
+.compound-orb.lightning-poison {
+  background: linear-gradient(90deg, rgba(212,192,64,0.4) 0%, rgba(212,192,64,0.4) 50%, rgba(45,179,105,0.4) 50%, rgba(45,179,105,0.4) 100%);
+}
+
+.compound-orb::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 4px;
+  width: 10px; height: 6px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.compound-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--compound-gold);
+  letter-spacing: 0.5px;
+}
+
+.compound-recipe {
+  font-size: 10px;
+  color: var(--bronze-400);
+  padding-left: 36px;
+  line-height: 1.4;
+}
+
+.compound-desc {
+  font-size: 10px;
+  color: var(--s300);
+  font-style: italic;
+  padding-left: 36px;
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════
+   EMPTY SOCKETS
+   ═══════════════════════════════════════ */
+.sockets-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 0;
+  flex-wrap: wrap;
+}
+
+.empty-socket {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 2px dashed var(--s400);
+  background: var(--s950);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.empty-socket:hover {
+  border-color: var(--accent-500);
+  background: rgba(212,168,52,0.08);
+  transform: scale(1.1);
+}
+
+.empty-socket.pulse {
+  animation: socketPulse 1s ease-in-out infinite;
+}
+
+@keyframes socketPulse {
+  0%, 100% { border-color: var(--s400); }
+  50% { border-color: var(--accent-400); box-shadow: 0 0 8px rgba(212,168,52,0.3); }
+}
+
+.socket-count {
+  font-size: 9px;
+  color: var(--s400);
+  margin-left: 4px;
+}
+
+/* filled socket (placed orb) */
+.filled-socket {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  animation: orbPlaceIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.filled-socket::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 4px;
+  width: 10px; height: 6px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+@keyframes orbPlaceIn {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ═══════════════════════════════════════
+   COMBINATION WORKBENCH
+   ═══════════════════════════════════════ */
+.workbench {
+  padding: 6px 10px;
+  background: linear-gradient(180deg, var(--s800) 0%, var(--s900) 100%);
+  border-top: 1px solid var(--s600);
+  border-bottom: 1px solid var(--s600);
+  flex-shrink: 0;
+}
+
+.workbench-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--bronze-400);
+  text-align: center;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+}
+
+.workbench-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.wb-socket {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px dashed var(--s400);
+  background: var(--s950);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+
+.wb-socket:hover {
+  border-color: var(--accent-500);
+  background: rgba(212,168,52,0.08);
+  transform: scale(1.08);
+}
+
+.wb-socket.filled {
+  border-style: solid;
+}
+
+.wb-plus {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--s400);
+}
+
+.wb-arrow {
+  font-size: 14px;
+  color: var(--s400);
+  margin: 0 4px;
+}
+
+.wb-result {
+  min-width: 80px;
+  height: 32px;
+  border: 1px solid var(--s600);
+  border-radius: 4px;
+  background: var(--s950);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  color: var(--s400);
+  padding: 0 8px;
+}
+
+.wb-result.valid {
+  border-color: var(--compound-gold);
+  color: var(--compound-gold);
+  box-shadow: 0 0 8px rgba(236,208,106,0.2);
+}
+
+.wb-buttons {
+  display: flex; gap: 6px; margin-left: 8px;
+}
+
+.btn-combine {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--s950);
+  background: linear-gradient(180deg, var(--accent-300) 0%, var(--accent-500) 100%);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+  transition: filter 0.15s, opacity 0.15s;
+}
+.btn-combine:hover { filter: brightness(1.15); }
+.btn-combine:disabled { opacity: 0.4; cursor: default; filter: none; }
+
+.btn-clear {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--s300);
+  background: var(--s700);
+  border: 1px solid var(--s500);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.btn-clear:hover { border-color: var(--s300); }
+
+/* ═══════════════════════════════════════
+   STOCKPILE
+   ═══════════════════════════════════════ */
+.stockpile {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 8px;
+  min-height: 0;
+}
+
+.stockpile-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--s300);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.stockpile-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.stock-orb {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.stock-orb:hover { transform: translateY(-2px); }
+
+.stock-orb.selected .stock-orb-circle {
+  box-shadow: 0 0 12px rgba(212,168,52,0.6);
+  animation: orbPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.stock-orb-circle {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.stock-orb-circle::after {
+  content: '';
+  position: absolute;
+  top: 4px; left: 8px;
+  width: 16px; height: 10px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.stock-orb-stat {
+  position: absolute;
+  bottom: 3px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 8px;
+  color: rgba(255,255,255,0.9);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+.stock-orb-name {
+  font-size: 8px;
+  color: var(--s300);
+  text-align: center;
+  line-height: 1.1;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-orb.used {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════
+   STATS BAR
+   ═══════════════════════════════════════ */
+.stats-bar {
+  display: flex; justify-content: space-around;
+  padding: 6px 12px;
+  background: var(--s800);
+  border-top: 1px solid var(--s600);
+  flex-shrink: 0;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 9px;
+  color: var(--s300);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: #e8e8f0;
+}
+
+/* ═══════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════ */
+.stockpile::-webkit-scrollbar { width: 4px; }
+.stockpile::-webkit-scrollbar-track { background: var(--s900); }
+.stockpile::-webkit-scrollbar-thumb { background: var(--s500); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="app-frame">
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="header">
+    <div>
+      <div class="header-title">FORGE PHASE</div>
+      <div class="header-info">Round 1 &middot; Flux: 8</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="header-timer">0:42</div>
+      <button class="btn-done">DONE FORGING</button>
+    </div>
+  </div>
+
+  <!-- ═══ ITEM CARDS — SIDE-BY-SIDE ═══ -->
+  <div class="cards-row" id="cardsRow">
+
+    <!-- LEFT: Weapon -->
+    <div class="item-card active" id="cardWeapon" onclick="setActiveCard('weapon')">
+      <div class="card-header">
+        <span class="card-name">&#x2694; SWORD</span>
+      </div>
+      <div class="card-type-row">
+        <span>One-Hand</span>
+        <span>Weapon</span>
+      </div>
+      <div class="card-divider"></div>
+      <div class="inherent-line">+5% Crit Chance</div>
+      <div class="inherent-line">-5% Attack Interval</div>
+      <div class="card-divider"></div>
+      <div class="base-stats">STR / VIT</div>
+      <div class="card-divider"></div>
+
+      <!-- Socketed affixes container -->
+      <div id="weaponAffixes">
+        <div class="affix-line">
+          <div class="orb-icon fire t2">&#x1F525;</div>
+          <span class="affix-text">Fire Damage +19</span>
+          <span class="tier-badge t2">T2</span>
+        </div>
+        <div class="affix-line">
+          <div class="orb-icon physical t1">&#x2694;&#xFE0F;</div>
+          <span class="affix-text">Chance on Hit +3</span>
+          <span class="tier-badge t1">T1</span>
+        </div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <!-- Compound section -->
+      <div class="compound-section" id="weaponCompounds">
+        <div class="compound-header">
+          <span class="compound-star">&#x2726;</span>
+          <div class="compound-orb fire-physical">&#x1F525;&#x2694;</div>
+          <span class="compound-name">IGNITE</span>
+        </div>
+        <div class="compound-recipe">Fire Damage + Chance on Hit</div>
+        <div class="compound-desc">15% on-hit &middot; Fire DoT 2x</div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <!-- Empty sockets -->
+      <div class="sockets-row" id="weaponSockets">
+        <div class="empty-socket pulse" onclick="placeOrb('weapon')"></div>
+        <div class="empty-socket" onclick="placeOrb('weapon')"></div>
+        <div class="empty-socket" onclick="placeOrb('weapon')"></div>
+      </div>
+      <div class="socket-count" id="weaponSocketCount">3 of 6 slots</div>
+    </div>
+
+    <!-- RIGHT: Armor -->
+    <div class="item-card" id="cardArmor" onclick="setActiveCard('armor')">
+      <div class="card-header">
+        <span class="card-name">&#x1F6E1; CHAINMAIL</span>
+      </div>
+      <div class="card-type-row">
+        <span>Body</span>
+        <span>Armor</span>
+      </div>
+      <div class="card-divider"></div>
+      <div class="inherent-line">+5% Armor</div>
+      <div class="inherent-line">+20 Max HP</div>
+      <div class="card-divider"></div>
+      <div class="base-stats">VIT / STR</div>
+      <div class="card-divider"></div>
+
+      <div id="armorAffixes">
+        <div class="affix-line">
+          <div class="orb-icon physical t2">&#x2694;&#xFE0F;</div>
+          <span class="affix-text">Flat HP +68</span>
+          <span class="tier-badge t2">T2</span>
+        </div>
+        <div class="affix-line">
+          <div class="orb-icon physical t1">&#x2694;&#xFE0F;</div>
+          <span class="affix-text">Armor +11.5%</span>
+          <span class="tier-badge t1">T1</span>
+        </div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <div class="compound-section" id="armorCompounds"></div>
+
+      <div class="sockets-row" id="armorSockets">
+        <div class="empty-socket" onclick="placeOrb('armor')"></div>
+        <div class="empty-socket" onclick="placeOrb('armor')"></div>
+        <div class="empty-socket" onclick="placeOrb('armor')"></div>
+        <div class="empty-socket" onclick="placeOrb('armor')"></div>
+      </div>
+      <div class="socket-count" id="armorSocketCount">2 of 6 slots</div>
+    </div>
+  </div>
+
+  <!-- ═══ COMBINATION WORKBENCH ═══ -->
+  <div class="workbench">
+    <div class="workbench-title">&#x25C6; FORGE &#x25C6;</div>
+    <div class="workbench-row">
+      <div class="wb-socket" id="wbSlot0" onclick="placeWbOrb(0)"></div>
+      <span class="wb-plus">+</span>
+      <div class="wb-socket" id="wbSlot1" onclick="placeWbOrb(1)"></div>
+      <span class="wb-arrow">&#x25B6;</span>
+      <div class="wb-result" id="wbResult">—</div>
+      <div class="wb-buttons">
+        <button class="btn-combine" id="btnCombine" disabled onclick="doCombine()">COMBINE</button>
+        <button class="btn-clear" onclick="clearWorkbench()">CLEAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STOCKPILE ═══ -->
+  <div class="stockpile">
+    <div class="stockpile-label">Stockpile</div>
+    <div class="stockpile-grid" id="stockpileGrid"></div>
+  </div>
+
+  <!-- ═══ STATS BAR ═══ -->
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-label">HP</div><div class="stat-value" id="statHP">285</div></div>
+    <div class="stat-item"><div class="stat-label">DMG</div><div class="stat-value" id="statDMG">42</div></div>
+    <div class="stat-item"><div class="stat-label">Armor</div><div class="stat-value" id="statArmor">17%</div></div>
+    <div class="stat-item"><div class="stat-label">Crit</div><div class="stat-value" id="statCrit">13%</div></div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+   ═══════════════════════════════════════ */
+
+const ELEMENTS = {
+  fire:      { color:'#e8553a', emoji:'🔥' },
+  cold:      { color:'#3a9be8', emoji:'❄️' },
+  lightning: { color:'#d4c040', emoji:'⚡' },
+  poison:    { color:'#2db369', emoji:'☠️' },
+  shadow:    { color:'#8b3ae8', emoji:'🌙' },
+  chaos:     { color:'#e83a8b', emoji:'🌀' },
+  physical:  { color:'#c0c0c0', emoji:'⚔️' }
+};
+
+const TIER_COLORS = { 1:'#8a8a8a', 2:'#3a9be8', 3:'#9b59b6', 4:'#e8553a' };
+
+// Deterministic affix category order
+const AFFIX_ORDER = [
+  'Fire Damage','Cold Damage','Lightning Damage','Poison Damage','Shadow Damage','Chaos Damage',
+  'Crit Chance','Crit Multi','Atk Speed','Armor Pen','Elem Pen',
+  'Flat HP','Armor','Block','Dodge','Barrier','HP Regen','Dmg Reduction','Fortify',
+  'Lifesteal','Thorns','Life on Kill',
+  'Initiative','DoT Multi','Stun','Slow',
+  'Ch.on Hit','Ch.on Tkng Dmg','Ch.on Crit','Ch.on Block','Ch.on Kill','Ch.on Low HP'
+];
+
+const STOCKPILE = [
+  { id:'cold1',    name:'Cold Dmg',       element:'cold',      tier:1, stat:'+12',   affixName:'Cold Damage' },
+  { id:'light3',   name:'Lightning',      element:'lightning',  tier:3, stat:'+31',   affixName:'Lightning Damage' },
+  { id:'poison1',  name:'Poison Dmg',     element:'poison',    tier:1, stat:'+9',    affixName:'Poison Damage' },
+  { id:'shadow2',  name:'Shadow Dmg',     element:'shadow',    tier:2, stat:'+18',   affixName:'Shadow Damage' },
+  { id:'life2',    name:'Lifesteal',      element:'physical',  tier:2, stat:'+4%',   affixName:'Lifesteal' },
+  { id:'block2',   name:'Block',          element:'physical',  tier:2, stat:'+8%',   affixName:'Block' },
+  { id:'hpreg1',   name:'HP Regen',       element:'physical',  tier:1, stat:'+5',    affixName:'HP Regen' },
+  { id:'crit3',    name:'Crit Chance',    element:'physical',  tier:3, stat:'+7%',   affixName:'Crit Chance' },
+  { id:'atkspd2',  name:'Atk Speed',      element:'physical',  tier:2, stat:'+6%',   affixName:'Atk Speed' },
+  { id:'stun1',    name:'Stun',           element:'lightning',  tier:1, stat:'+2',    affixName:'Stun' },
+  { id:'thorns1',  name:'Thorns',         element:'physical',  tier:1, stat:'+8',    affixName:'Thorns' },
+  { id:'cotd1',    name:'Ch.Tkng Dmg',    element:'physical',  tier:1, stat:'+3',    affixName:'Ch.on Tkng Dmg' }
+];
+
+// Known recipes (name → { a, b, element pair class, display })
+const RECIPES = {
+  'Ignite':         { a:'Fire Damage',      b:'Ch.on Hit',        cls:'fire-physical',    desc:'15% on-hit · Fire DoT 2x' },
+  'Frostbite':      { a:'Cold Damage',      b:'Ch.on Hit',        cls:'cold-physical',    desc:'20% on-hit · Slow 2x' },
+  'Thermal Shock':  { a:'Fire Damage',      b:'Cold Damage',      cls:'fire-cold',        desc:'Shatter frozen → 2x fire AoE' },
+  'Static Discharge':{ a:'Lightning Damage', b:'Ch.on Tkng Dmg',  cls:'lightning-poison',  desc:'30% retaliate · Chain lightning' },
+  'Storm of Flames':{ a:'Fire Damage',      b:'Lightning Damage', cls:'fire-lightning',   desc:'AoE fire+lightning burst' }
+};
+
+/* ═══════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════ */
+
+let activeCard = 'weapon';
+let selectedOrb = null;
+let usedOrbs = new Set();
+
+// Placed affix data per card: [ { orbId, affixName, element, tier, stat, displayText } ]
+let cardAffixes = {
+  weapon: [],
+  armor: []
+};
+
+let weaponEmptySockets = 3;
+let armorEmptySockets = 4;
+let weaponTotalSlots = 6;
+let armorTotalSlots = 6;
+let weaponUsedSlots = 3; // 2 pre-placed + compound counts as using component slots
+let armorUsedSlots = 2;
+
+// Workbench
+let wbSlots = [null, null];
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+
+function init() {
+  renderStockpile();
+  updatePulse();
+}
+
+/* ═══════════════════════════════════════
+   RENDER STOCKPILE
+   ═══════════════════════════════════════ */
+
+function renderStockpile() {
+  const grid = document.getElementById('stockpileGrid');
+  grid.innerHTML = '';
+  STOCKPILE.forEach(orb => {
+    const el = ELEMENTS[orb.element];
+    const tc = TIER_COLORS[orb.tier];
+    const isUsed = usedOrbs.has(orb.id);
+    const isSel = selectedOrb === orb.id;
+
+    const div = document.createElement('div');
+    div.className = 'stock-orb' + (isSel ? ' selected' : '') + (isUsed ? ' used' : '');
+    div.onclick = () => { if (!isUsed) selectOrb(orb.id); };
+
+    const glow = orb.tier >= 3 ? `box-shadow: 0 0 10px ${tc}60;` : '';
+    div.innerHTML = `
+      <div class="stock-orb-circle" style="
+        background: radial-gradient(circle, ${el.color}66 0%, ${el.color}22 100%);
+        border: 2px solid ${tc};
+        ${glow}
+      ">
+        <span style="position:relative;z-index:1;">${el.emoji}</span>
+        <span class="stock-orb-stat">${orb.stat}</span>
+      </div>
+      <span class="stock-orb-name">${orb.name}</span>
+    `;
+    grid.appendChild(div);
+  });
+}
+
+/* ═══════════════════════════════════════
+   ORB SELECTION
+   ═══════════════════════════════════════ */
+
+function selectOrb(id) {
+  selectedOrb = selectedOrb === id ? null : id;
+  renderStockpile();
+  updatePulse();
+}
+
+function updatePulse() {
+  // Pulse empty sockets on active card when orb selected
+  document.querySelectorAll('.empty-socket').forEach(s => s.classList.remove('pulse'));
+  if (selectedOrb) {
+    const card = activeCard;
+    const socketsEl = document.getElementById(card + 'Sockets');
+    if (socketsEl) {
+      socketsEl.querySelectorAll('.empty-socket').forEach(s => s.classList.add('pulse'));
+    }
+  }
+}
+
+/* ═══════════════════════════════════════
+   CARD SWITCHING
+   ═══════════════════════════════════════ */
+
+function setActiveCard(card) {
+  activeCard = card;
+  document.getElementById('cardWeapon').classList.toggle('active', card === 'weapon');
+  document.getElementById('cardArmor').classList.toggle('active', card === 'armor');
+  updatePulse();
+}
+
+/* ═══════════════════════════════════════
+   PLACE ORB INTO ITEM SOCKET
+   ═══════════════════════════════════════ */
+
+function placeOrb(card) {
+  if (!selectedOrb) return;
+
+  const orb = STOCKPILE.find(o => o.id === selectedOrb);
+  if (!orb) return;
+
+  const emptySockets = card === 'weapon' ? weaponEmptySockets : armorEmptySockets;
+  if (emptySockets <= 0) return;
+
+  // Mark orb used
+  usedOrbs.add(orb.id);
+
+  // Add to card affixes
+  cardAffixes[card].push({
+    orbId: orb.id,
+    affixName: orb.affixName,
+    element: orb.element,
+    tier: orb.tier,
+    stat: orb.stat,
+    displayText: orb.affixName + ' ' + orb.stat
+  });
+
+  // Sort affixes by deterministic order
+  cardAffixes[card].sort((a, b) => {
+    return AFFIX_ORDER.indexOf(a.affixName) - AFFIX_ORDER.indexOf(b.affixName);
+  });
+
+  // Update socket count
+  if (card === 'weapon') {
+    weaponEmptySockets--;
+    weaponUsedSlots++;
+  } else {
+    armorEmptySockets--;
+    armorUsedSlots++;
+  }
+
+  selectedOrb = null;
+  renderCardAffixes(card);
+  renderCardSockets(card);
+  renderStockpile();
+  updatePulse();
+}
+
+function renderCardAffixes(card) {
+  const container = document.getElementById(card + 'Affixes');
+  // Keep existing pre-placed affixes (the first children that were in HTML)
+  // We rebuild the dynamically-placed ones after
+  const existing = container.querySelectorAll('.affix-line.dynamic');
+  existing.forEach(el => el.remove());
+
+  cardAffixes[card].forEach(aff => {
+    const el = ELEMENTS[aff.element];
+    const tc = TIER_COLORS[aff.tier];
+    const tierClass = 't' + aff.tier;
+    const glowStyle = aff.tier >= 3 ? `box-shadow: 0 0 8px ${tc}66;` : '';
+
+    const div = document.createElement('div');
+    div.className = 'affix-line dynamic';
+    div.style.animation = 'orbPlaceIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    div.innerHTML = `
+      <div class="orb-icon ${aff.element} ${tierClass}" style="${glowStyle}">${el.emoji}</div>
+      <span class="affix-text">${aff.displayText}</span>
+      <span class="tier-badge ${tierClass}">T${aff.tier}</span>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function renderCardSockets(card) {
+  const socketsEl = document.getElementById(card + 'Sockets');
+  const countEl = document.getElementById(card + 'SocketCount');
+  const empty = card === 'weapon' ? weaponEmptySockets : armorEmptySockets;
+  const used = card === 'weapon' ? weaponUsedSlots : armorUsedSlots;
+  const total = card === 'weapon' ? weaponTotalSlots : armorTotalSlots;
+
+  socketsEl.innerHTML = '';
+  for (let i = 0; i < empty; i++) {
+    const s = document.createElement('div');
+    s.className = 'empty-socket';
+    s.onclick = () => placeOrb(card);
+    socketsEl.appendChild(s);
+  }
+  countEl.textContent = (total - empty) + ' of ' + total + ' slots';
+}
+
+/* ═══════════════════════════════════════
+   WORKBENCH
+   ═══════════════════════════════════════ */
+
+function placeWbOrb(slot) {
+  if (!selectedOrb) return;
+  const orb = STOCKPILE.find(o => o.id === selectedOrb);
+  if (!orb) return;
+
+  // If slot already has an orb, return it
+  if (wbSlots[slot]) {
+    usedOrbs.delete(wbSlots[slot].id);
+  }
+
+  wbSlots[slot] = orb;
+  usedOrbs.add(orb.id);
+  selectedOrb = null;
+
+  renderWorkbench();
+  renderStockpile();
+  updatePulse();
+}
+
+function renderWorkbench() {
+  for (let i = 0; i < 2; i++) {
+    const slotEl = document.getElementById('wbSlot' + i);
+    if (wbSlots[i]) {
+      const el = ELEMENTS[wbSlots[i].element];
+      const tc = TIER_COLORS[wbSlots[i].tier];
+      slotEl.className = 'wb-socket filled';
+      slotEl.style.background = `radial-gradient(circle, ${el.color}55 0%, ${el.color}18 100%)`;
+      slotEl.style.borderColor = tc;
+      slotEl.style.borderStyle = 'solid';
+      slotEl.innerHTML = el.emoji;
+    } else {
+      slotEl.className = 'wb-socket';
+      slotEl.style.background = '';
+      slotEl.style.borderColor = '';
+      slotEl.style.borderStyle = '';
+      slotEl.innerHTML = '';
+    }
+  }
+
+  // Check recipe
+  const result = document.getElementById('wbResult');
+  const btn = document.getElementById('btnCombine');
+
+  if (wbSlots[0] && wbSlots[1]) {
+    const a = wbSlots[0].affixName;
+    const b = wbSlots[1].affixName;
+
+    let match = null;
+    for (const [name, recipe] of Object.entries(RECIPES)) {
+      if ((a === recipe.a && b === recipe.b) || (a === recipe.b && b === recipe.a)) {
+        match = { name, ...recipe };
+        break;
+      }
+    }
+
+    if (match) {
+      result.className = 'wb-result valid';
+      result.innerHTML = `✦ ${match.name}`;
+      btn.disabled = false;
+    } else {
+      result.className = 'wb-result';
+      result.innerHTML = 'No recipe';
+      btn.disabled = true;
+    }
+  } else {
+    result.className = 'wb-result';
+    result.innerHTML = '—';
+    btn.disabled = true;
+  }
+}
+
+function clearWorkbench() {
+  for (let i = 0; i < 2; i++) {
+    if (wbSlots[i]) {
+      usedOrbs.delete(wbSlots[i].id);
+      wbSlots[i] = null;
+    }
+  }
+  renderWorkbench();
+  renderStockpile();
+}
+
+function doCombine() {
+  if (!wbSlots[0] || !wbSlots[1]) return;
+
+  const a = wbSlots[0].affixName;
+  const b = wbSlots[1].affixName;
+
+  let match = null;
+  for (const [name, recipe] of Object.entries(RECIPES)) {
+    if ((a === recipe.a && b === recipe.b) || (a === recipe.b && b === recipe.a)) {
+      match = { name, ...recipe };
+      break;
+    }
+  }
+  if (!match) return;
+
+  // Determine which card to add compound to
+  const card = activeCard;
+
+  // Build compound in the card
+  const compEl = document.getElementById(card + 'Compounds');
+  const el0 = ELEMENTS[wbSlots[0].element];
+  const el1 = ELEMENTS[wbSlots[1].element];
+
+  // Create compound orb class
+  const cls = match.cls;
+
+  const compDiv = document.createElement('div');
+  compDiv.className = 'compound-section';
+  compDiv.style.animation = 'orbPlaceIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  compDiv.innerHTML = `
+    <div class="compound-header">
+      <span class="compound-star">✦</span>
+      <div class="compound-orb ${cls}">${el0.emoji}${el1.emoji}</div>
+      <span class="compound-name">${match.name.toUpperCase()}</span>
+    </div>
+    <div class="compound-recipe">${match.a} + ${match.b}</div>
+    <div class="compound-desc">${match.desc}</div>
+  `;
+  compEl.appendChild(compDiv);
+
+  // Use up 2 sockets for the compound
+  if (card === 'weapon') {
+    weaponEmptySockets = Math.max(0, weaponEmptySockets - 2);
+    weaponUsedSlots += 2;
+  } else {
+    armorEmptySockets = Math.max(0, armorEmptySockets - 2);
+    armorUsedSlots += 2;
+  }
+
+  // Clear workbench (orbs consumed)
+  wbSlots = [null, null];
+  renderWorkbench();
+  renderCardSockets(card);
+  renderStockpile();
+  updatePulse();
+}
+
+/* ═══════════════════════════════════════
+   TIMER
+   ═══════════════════════════════════════ */
+
+let timerSeconds = 42;
+setInterval(() => {
+  if (timerSeconds > 0) timerSeconds--;
+  const m = Math.floor(timerSeconds / 60);
+  const s = timerSeconds % 60;
+  document.querySelector('.header-timer').textContent = m + ':' + String(s).padStart(2, '0');
+}, 1000);
+
+/* ═══════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════ */
+
+init();
+</script>
+
+</body>
+</html>

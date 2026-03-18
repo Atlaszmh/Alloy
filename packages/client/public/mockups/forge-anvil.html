@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge — Anvil Layout Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ─────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+/* ── Design tokens ─────────────────────────────────── */
+:root{
+  --s950:#060608;--s900:#0a0a0f;--s800:#111118;--s700:#1a1a26;
+  --s600:#252536;--s500:#363650;--s400:#4a4a68;--s300:#6a6a88;
+  --accent:#d4a834;--accent-200:#ecd06a;--accent-300:#e0bc4a;--accent-400:#d4a834;--accent-500:#d4a834;
+  --teal:#2dd4bf;--teal-200:#5eead4;
+  --bronze-300:#c8a878;--bronze-400:#b89868;--bronze-500:#a08050;
+  --fire:#e8553a;--cold:#3a9be8;--lightning:#d4c040;--poison:#2db369;
+  --shadow-el:#8b3ae8;--chaos:#e83a8b;--physical:#c0c0c0;
+  --t1:#8a8a8a;--t2:#3a9be8;--t3:#9b59b6;--t4:#e8553a;
+  --success:#34d399;--warning:#fbbf24;--danger:#f87171;--info:#60a5fa;
+  --shadow-card:0 2px 8px rgba(0,0,0,0.4),0 0 1px rgba(255,255,255,0.05);
+  --shadow-button:0 4px 12px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.1);
+  --shadow-glow-accent:0 0 16px rgba(212,168,52,0.25);
+  --shadow-inset:inset 0 2px 4px rgba(0,0,0,0.5);
+  --font-display:'Rajdhani',sans-serif;
+  --font-body:'DM Sans',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+
+body{
+  background:var(--s950);font-family:var(--font-body);color:#e8e8f0;
+  display:flex;justify-content:center;align-items:center;
+  min-height:100vh;overflow:hidden;
+}
+
+/* ── 9:16 App Frame ────────────────────────────────── */
+.app-frame{
+  position:relative;width:min(100vw, calc(100vh * 9/16));
+  max-height:100vh;aspect-ratio:9/16;
+  background:var(--s900);overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.app-frame::before{
+  content:'';position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 0%,rgba(30,25,40,0.4) 0%,transparent 60%);
+}
+
+/* ── Noise Overlay ─────────────────────────────────── */
+.noise-overlay{
+  position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0.025;
+}
+
+/* ── Page enter animation ──────────────────────────── */
+.page-enter{
+  animation:pageIn 0.35s ease-out both;
+}
+@keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scaleIn{from{transform:scale(0.85);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes orbGlow{
+  0%,100%{filter:brightness(1);drop-shadow:none}
+  50%{filter:brightness(1.15) drop-shadow(0 0 6px var(--glow-color,rgba(212,168,52,0.4)))}
+}
+@keyframes pulseGlow{0%,100%{opacity:1}50%{opacity:0.7}}
+@keyframes shimmer{
+  0%{background-position:-200% center}
+  100%{background-position:200% center}
+}
+
+/* ── Utility ───────────────────────────────────────── */
+.raj{font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:0.04em}
+.mono{font-family:var(--font-mono);font-weight:700;font-variant-numeric:tabular-nums}
+.dm{font-family:var(--font-body)}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--s800)}
+::-webkit-scrollbar-thumb{background:var(--s500);border-radius:4px}
+
+/* ── Header ────────────────────────────────────────── */
+.header{
+  position:relative;z-index:2;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:12px 14px 8px;flex-shrink:0;
+}
+.header-left h1{
+  font-family:var(--font-display);font-weight:700;font-size:18px;
+  color:var(--accent-300);text-transform:uppercase;letter-spacing:0.06em;
+  line-height:1;margin-bottom:3px;
+}
+.header-left .sub{font-size:11px;color:var(--s400)}
+.header-left .sub .flux-num{color:var(--accent-200);font-family:var(--font-mono);font-weight:700}
+.header-right{display:flex;align-items:center;gap:10px}
+.timer-ring{
+  width:32px;height:32px;position:relative;
+}
+.timer-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.timer-ring circle{fill:none;stroke-width:3}
+.timer-ring .bg{stroke:var(--s600)}
+.timer-ring .fg{stroke:var(--accent);stroke-dasharray:88;stroke-dashoffset:22;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+.timer-ring .timer-text{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-weight:700;font-size:10px;color:var(--accent-200);
+}
+.btn-done{
+  font-family:var(--font-display);font-weight:700;font-size:11px;
+  text-transform:uppercase;letter-spacing:0.05em;
+  padding:6px 14px;border:none;border-radius:6px;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent-300));
+  color:var(--s950);
+  box-shadow:var(--shadow-button);
+  transition:transform 0.15s ease-out,box-shadow 0.15s ease-out,filter 0.15s ease-out;
+}
+.btn-done:hover{transform:scale(1.08)}
+.btn-done:active{transform:scale(0.93)}
+
+/* ── Equipment Panels ──────────────────────────────── */
+.equip-panel{
+  position:relative;z-index:2;
+  margin:0 10px 6px;padding:8px 10px;
+  background:var(--s700);border:1px solid rgba(212,168,52,0.4);
+  border-radius:10px;box-shadow:var(--shadow-card);flex-shrink:0;
+}
+.equip-label{
+  display:flex;align-items:baseline;gap:6px;margin-bottom:6px;
+}
+.equip-label .name{font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--accent-400);text-transform:uppercase;letter-spacing:0.04em}
+.equip-label .stats{font-size:10px;color:var(--s400)}
+.slot-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.equip-slot{
+  aspect-ratio:1;border-radius:6px;
+  border:1.5px dashed rgba(212,168,52,0.35);
+  background:var(--s950);box-shadow:var(--shadow-inset);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--s400);cursor:pointer;
+  transition:transform 0.15s ease-out,border-color 0.15s ease-out;
+  position:relative;overflow:hidden;
+}
+.equip-slot:hover{border-color:rgba(212,168,52,0.6);transform:scale(1.04)}
+.equip-slot.filled{border-style:solid;border-width:1.5px}
+.equip-slot .gem-mini{
+  width:100%;height:100%;border-radius:5px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.equip-slot .gem-mini .spec-hl{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 30% 30%,rgba(255,255,255,0.2),transparent 60%);
+  pointer-events:none;
+}
+.equip-slot .gem-mini .icon{font-size:14px;line-height:1;position:relative;z-index:1}
+.compound-badge{
+  position:absolute;top:1px;right:2px;
+  font-family:var(--font-display);font-weight:700;font-size:7px;
+  color:var(--accent-200);background:rgba(0,0,0,0.6);
+  border-radius:3px;padding:0 2px;z-index:2;
+}
+
+/* ── Combination Workbench ─────────────────────────── */
+.workbench{
+  position:relative;z-index:2;
+  margin:4px 10px 6px;padding:10px 12px 12px;
+  border-radius:12px;flex-shrink:0;
+  border:1px solid rgba(212,168,52,0.3);
+  background:var(--s700);
+  box-shadow:var(--shadow-card);
+  overflow:hidden;
+}
+.workbench::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 50%,rgba(212,168,52,0.06) 0%,transparent 70%);
+}
+.workbench-title{
+  text-align:center;font-family:var(--font-display);font-weight:700;
+  font-size:11px;color:var(--bronze-400);text-transform:uppercase;
+  letter-spacing:0.06em;margin-bottom:8px;font-variant:small-caps;
+  position:relative;z-index:1;
+}
+.combine-row{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  position:relative;z-index:1;margin-bottom:6px;
+}
+.drop-zone{
+  width:56px;height:56px;border-radius:8px;
+  border:2px dashed rgba(212,168,52,0.4);
+  background:var(--s950);box-shadow:var(--shadow-inset);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:transform 0.15s ease-out,border-color 0.15s ease-out,box-shadow 0.15s ease-out;
+  position:relative;overflow:hidden;
+}
+.drop-zone:hover{border-color:rgba(212,168,52,0.7);transform:scale(1.05)}
+.drop-zone.filled{border-style:solid;border-color:rgba(212,168,52,0.5)}
+.drop-zone .gem-wb{
+  width:100%;height:100%;border-radius:6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.drop-zone .gem-wb .spec-hl{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 30% 30%,rgba(255,255,255,0.2),transparent 60%);
+  pointer-events:none;
+}
+.drop-zone .gem-wb .icon{font-size:20px;position:relative;z-index:1}
+.drop-zone .gem-wb .val{font-family:var(--font-mono);font-weight:700;font-size:8px;color:rgba(255,255,255,0.85);position:relative;z-index:1}
+.drop-zone .placeholder-text{font-size:20px;color:var(--s400)}
+.combine-plus{font-family:var(--font-display);font-size:18px;color:var(--s400);user-select:none}
+.combine-arrow{
+  text-align:center;font-size:14px;color:var(--s400);margin-bottom:4px;
+  position:relative;z-index:1;letter-spacing:0.1em;
+}
+.result-area{
+  position:relative;z-index:1;
+  min-height:52px;border-radius:8px;
+  background:var(--s800);border:1px solid var(--s600);
+  display:flex;align-items:center;justify-content:center;
+  padding:8px;margin-bottom:8px;
+  transition:border-color 0.25s,box-shadow 0.25s;
+}
+.result-area.valid{
+  border-color:rgba(212,168,52,0.5);
+  box-shadow:var(--shadow-glow-accent),inset 0 0 20px rgba(212,168,52,0.05);
+}
+.result-area.invalid{border-color:rgba(248,113,113,0.3)}
+.result-placeholder{font-size:11px;color:var(--s400);font-family:var(--font-body)}
+.result-card{
+  display:flex;align-items:center;gap:10px;width:100%;
+  animation:scaleIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.result-gem{
+  width:44px;height:44px;border-radius:8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;font-size:22px;
+  box-shadow:0 0 12px var(--result-glow,rgba(212,168,52,0.3));
+}
+.result-gem .spec-hl{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 30% 30%,rgba(255,255,255,0.25),transparent 55%);
+  pointer-events:none;
+}
+.result-info{flex:1;min-width:0}
+.result-info .rname{font-family:var(--font-display);font-weight:700;font-size:13px;color:#fff;text-transform:uppercase;letter-spacing:0.03em}
+.result-info .rtags{display:flex;gap:4px;margin:2px 0}
+.result-info .rtags span{font-size:8px;padding:1px 5px;border-radius:3px;font-family:var(--font-display);font-weight:700;text-transform:uppercase;letter-spacing:0.03em}
+.result-info .rdesc{font-size:10px;color:var(--s300);font-family:var(--font-body)}
+.wb-buttons{
+  display:flex;gap:8px;justify-content:center;position:relative;z-index:1;
+}
+.btn-forge{
+  font-family:var(--font-display);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:0.05em;
+  padding:7px 24px;border:none;border-radius:6px;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent-300));
+  color:var(--s950);box-shadow:var(--shadow-button);
+  transition:transform 0.15s ease-out,box-shadow 0.15s ease-out,filter 0.15s ease-out,opacity 0.15s;
+}
+.btn-forge:hover:not(:disabled){transform:scale(1.08)}
+.btn-forge:active:not(:disabled){transform:scale(0.93)}
+.btn-forge:disabled{opacity:0.4;cursor:not-allowed}
+.btn-cancel{
+  font-family:var(--font-display);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:0.05em;
+  padding:7px 18px;border:1px solid var(--s600);border-radius:6px;cursor:pointer;
+  background:var(--s600);color:var(--s300);
+  transition:transform 0.15s ease-out,background 0.15s ease-out;
+}
+.btn-cancel:hover{transform:scale(1.08);background:var(--s500)}
+.btn-cancel:active{transform:scale(0.93)}
+
+/* ── Synergy Tracker ───────────────────────────────── */
+.synergy-panel{
+  position:relative;z-index:2;
+  margin:0 10px 6px;padding:6px 10px;
+  background:var(--s800);border:1px solid var(--s600);
+  border-radius:8px;flex-shrink:0;
+}
+.synergy-label{font-family:var(--font-display);font-weight:700;font-size:9px;color:var(--s400);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.synergy-pills{display:flex;gap:5px;flex-wrap:wrap}
+.synergy-pill{
+  font-family:var(--font-display);font-weight:700;font-size:9px;
+  padding:2px 8px;border-radius:4px;letter-spacing:0.03em;
+}
+.synergy-pill.inactive{background:var(--s600);color:var(--s300)}
+.synergy-pill.active{background:rgba(52,211,153,0.15);color:var(--success)}
+
+/* ── Stockpile ─────────────────────────────────────── */
+.stockpile{
+  position:relative;z-index:2;
+  margin:0 10px 6px;padding:8px 8px 6px;flex:1;min-height:0;
+  background:var(--s800);border:1px solid var(--s600);
+  border-radius:10px;box-shadow:var(--shadow-card);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.stockpile-label{
+  font-family:var(--font-display);font-weight:700;font-size:10px;
+  color:var(--s400);text-transform:uppercase;letter-spacing:0.05em;
+  margin-bottom:5px;padding:0 2px;flex-shrink:0;
+}
+.stockpile-grid{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:4px;
+  overflow-y:auto;flex:1;padding-right:2px;
+}
+.gem-card{
+  display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;transition:transform 0.15s ease-out,filter 0.15s ease-out;
+  position:relative;
+}
+.gem-card:hover{transform:scale(1.08);filter:brightness(1.1)}
+.gem-card.selected{
+  animation:orbGlow 1.5s infinite;
+}
+.gem-card.selected .gem-face{
+  box-shadow:0 0 10px var(--glow-color,rgba(212,168,52,0.5));
+}
+.gem-card.placed{opacity:0.25;pointer-events:none}
+.gem-face{
+  width:100%;aspect-ratio:1;border-radius:6px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+  border:1.5px solid var(--tier-color,var(--t1));
+  transition:box-shadow 0.15s ease-out;
+}
+.gem-face.t3-glow{box-shadow:0 0 8px var(--tier-color)}
+.gem-face .spec-hl{
+  position:absolute;inset:0;
+  background:radial-gradient(circle at 30% 30%,rgba(255,255,255,0.2),transparent 60%);
+  pointer-events:none;
+}
+.gem-face .icon{font-size:16px;position:relative;z-index:1;line-height:1}
+.gem-face .val{font-family:var(--font-mono);font-weight:700;font-size:8px;color:rgba(255,255,255,0.85);position:relative;z-index:1;margin-top:1px}
+.gem-card .gem-name{
+  font-family:var(--font-display);font-weight:700;font-size:7px;
+  color:rgba(255,255,255,0.75);text-align:center;margin-top:2px;
+  line-height:1.1;text-transform:uppercase;letter-spacing:0.02em;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* ── Stats Bar ─────────────────────────────────────── */
+.stats-bar{
+  position:relative;z-index:2;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+  margin:0 10px;padding-bottom:10px;flex-shrink:0;
+}
+.stat-box{
+  background:var(--s700);border-radius:6px;
+  box-shadow:var(--shadow-inset);
+  padding:5px 6px;text-align:center;
+}
+.stat-box .stat-label{font-family:var(--font-display);font-weight:700;font-size:8px;color:var(--s400);text-transform:uppercase;letter-spacing:0.05em}
+.stat-box .stat-val{font-family:var(--font-mono);font-weight:700;font-size:14px;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- Noise overlay -->
+<svg class="noise-overlay" width="100%" height="100%">
+  <filter id="noiseFilter"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter>
+  <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+</svg>
+
+<div class="app-frame page-enter" id="app">
+
+  <!-- 1. Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Forge Phase</h1>
+      <div class="sub">Round 1 — Flux: <span class="flux-num mono">8</span></div>
+    </div>
+    <div class="header-right">
+      <div class="timer-ring">
+        <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="14"/><circle class="fg" cx="18" cy="18" r="14"/></svg>
+        <div class="timer-text">22</div>
+      </div>
+      <button class="btn-done">Done Forging</button>
+    </div>
+  </div>
+
+  <!-- 2. Weapon Panel -->
+  <div class="equip-panel" id="weapon-panel">
+    <div class="equip-label">
+      <span class="name">⚔ Weapon</span>
+      <span class="stats dm">STR / VIT</span>
+    </div>
+    <div class="slot-grid" id="weapon-slots"></div>
+  </div>
+
+  <!-- 3. Armor Panel -->
+  <div class="equip-panel" id="armor-panel">
+    <div class="equip-label">
+      <span class="name">🛡 Armor</span>
+      <span class="stats dm">VIT / STR</span>
+    </div>
+    <div class="slot-grid" id="armor-slots"></div>
+  </div>
+
+  <!-- 4. Combination Workbench -->
+  <div class="workbench">
+    <div class="workbench-title">Combination Forge</div>
+    <div class="combine-row">
+      <div class="drop-zone" id="cz-left" data-slot="0">
+        <span class="placeholder-text">+</span>
+      </div>
+      <span class="combine-plus">+</span>
+      <div class="drop-zone" id="cz-right" data-slot="1">
+        <span class="placeholder-text">+</span>
+      </div>
+    </div>
+    <div class="combine-arrow">▼ ═══ ▼</div>
+    <div class="result-area" id="result-area">
+      <span class="result-placeholder">Place two gems to preview combination</span>
+    </div>
+    <div class="wb-buttons">
+      <button class="btn-forge" id="btn-forge" disabled>Forge (2⚡)</button>
+      <button class="btn-cancel" id="btn-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- 5. Synergy Tracker -->
+  <div class="synergy-panel">
+    <div class="synergy-label">Synergies</div>
+    <div class="synergy-pills">
+      <span class="synergy-pill inactive">🔥 Fire Mastery (3/5)</span>
+      <span class="synergy-pill active">🛡 Fortified (2/2)</span>
+      <span class="synergy-pill inactive">⚡ Conduit (1/3)</span>
+    </div>
+  </div>
+
+  <!-- 6. Stockpile -->
+  <div class="stockpile">
+    <div class="stockpile-label" id="stockpile-label">Stockpile (14)</div>
+    <div class="stockpile-grid" id="stockpile-grid"></div>
+  </div>
+
+  <!-- 7. Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-box"><div class="stat-label">HP</div><div class="stat-val">240</div></div>
+    <div class="stat-box"><div class="stat-label">DMG</div><div class="stat-val">35</div></div>
+    <div class="stat-box"><div class="stat-label">Armor</div><div class="stat-val">12%</div></div>
+    <div class="stat-box"><div class="stat-label">Crit</div><div class="stat-val">8%</div></div>
+  </div>
+
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────
+const ELEMENTS = {
+  fire:      { color:'#e8553a', icon:'🔥', grad:'linear-gradient(135deg,rgba(232,85,58,0.45),rgba(232,85,58,0.12))' },
+  cold:      { color:'#3a9be8', icon:'❄️', grad:'linear-gradient(135deg,rgba(58,155,232,0.45),rgba(58,155,232,0.12))' },
+  lightning: { color:'#d4c040', icon:'⚡', grad:'linear-gradient(135deg,rgba(212,192,64,0.45),rgba(212,192,64,0.12))' },
+  poison:    { color:'#2db369', icon:'☠️', grad:'linear-gradient(135deg,rgba(45,179,105,0.45),rgba(45,179,105,0.12))' },
+  shadow:    { color:'#8b3ae8', icon:'👁', grad:'linear-gradient(135deg,rgba(139,58,232,0.45),rgba(139,58,232,0.12))' },
+  chaos:     { color:'#e83a8b', icon:'🌀', grad:'linear-gradient(135deg,rgba(232,58,139,0.45),rgba(232,58,139,0.12))' },
+  physical:  { color:'#c0c0c0', icon:'⚔', grad:'linear-gradient(135deg,rgba(192,192,192,0.35),rgba(192,192,192,0.10))' },
+};
+const TIERS = { 1:'#8a8a8a', 2:'#3a9be8', 3:'#9b59b6', 4:'#e8553a' };
+
+const stockpileData = [
+  { id:'fire_damage',      name:'Fire Dmg',      tier:2, el:'fire',      icon:'🔥', val:'+18' },
+  { id:'cold_damage',      name:'Cold Dmg',      tier:1, el:'cold',      icon:'❄️', val:'+12' },
+  { id:'lightning_damage',  name:'Lgtn Dmg',      tier:3, el:'lightning', icon:'⚡', val:'+28' },
+  { id:'poison_damage',    name:'Poison Dmg',    tier:1, el:'poison',    icon:'☠️', val:'+10' },
+  { id:'shadow_damage',    name:'Shadow Dmg',    tier:2, el:'shadow',    icon:'👁', val:'+20' },
+  { id:'lifesteal',        name:'Lifesteal',     tier:2, el:'physical',  icon:'💉', val:'5%' },
+  { id:'armor_rating',     name:'Armor',         tier:1, el:'physical',  icon:'🛡', val:'+8' },
+  { id:'block_chance',     name:'Block',         tier:2, el:'physical',  icon:'🔰', val:'12%' },
+  { id:'hp_regen',         name:'HP Regen',      tier:1, el:'physical',  icon:'💚', val:'+3/s' },
+  { id:'crit_chance',      name:'Crit',          tier:3, el:'physical',  icon:'🎯', val:'15%' },
+  { id:'attack_speed',     name:'Atk Spd',       tier:2, el:'physical',  icon:'💨', val:'+18%' },
+  { id:'flat_hp',          name:'Flat HP',       tier:2, el:'physical',  icon:'❤️', val:'+45' },
+  { id:'chance_on_hit',    name:'On Hit',        tier:1, el:'physical',  icon:'✦',  val:'15%' },
+  { id:'thorns',           name:'Thorns',        tier:1, el:'physical',  icon:'🌵', val:'+8' },
+];
+
+const COMBOS = {
+  'fire_damage+chance_on_hit':      { name:'Ignite',          el:'fire',      icon:'🔥', desc:'15% chance on hit — Fire DoT 2×', tags:[{label:'FIRE',color:'#e8553a'},{label:'TRIGGER',color:'#d4a834'}] },
+  'cold_damage+chance_on_hit':      { name:'Frostbite',       el:'cold',      icon:'❄️', desc:'15% chance on hit — Slow + Cold DoT', tags:[{label:'COLD',color:'#3a9be8'},{label:'TRIGGER',color:'#d4a834'}] },
+  'fire_damage+cold_damage':        { name:'Thermal Shock',   el:'chaos',     icon:'🌀', desc:'Fire + Cold converge — AoE burst 1.5×', tags:[{label:'FIRE',color:'#e8553a'},{label:'COLD',color:'#3a9be8'}] },
+  'lightning_damage+chance_on_hit':  { name:'Static Discharge',el:'lightning', icon:'⚡', desc:'15% chance on hit — Chain lightning ×3', tags:[{label:'LIGHTNING',color:'#d4c040'},{label:'TRIGGER',color:'#d4a834'}] },
+};
+function comboKey(a,b){ return [a,b].sort().join('+'); }
+
+// ── State ─────────────────────────────────────────────
+const weaponSlots = [
+  { ...stockpileData[0] },  // Fire Damage T2
+  { ...stockpileData[12] }, // Chance on Hit T1 — compound badge
+  null, null, null, null,
+];
+const armorSlots = [
+  { ...stockpileData[11] }, // Flat HP T2
+  null, null, null, null, null,
+];
+
+// Track which stockpile indices are "placed" (in weapon/armor already at init)
+const placedStockpile = new Set(); // indexes placed into equip from stockpile clicks
+let selectedIdx = null;      // stockpile index currently selected
+const combineSlots = [null, null]; // { idx, orb }
+
+// ── Render helpers ────────────────────────────────────
+function gemFaceHTML(orb, size) {
+  const el = ELEMENTS[orb.el];
+  const tc = TIERS[orb.tier];
+  const t3 = orb.tier >= 3 ? ' t3-glow' : '';
+  const sz = size || '';
+  return `<div class="gem-face${t3}" style="background:${el.grad};border-color:${tc};--tier-color:${tc}${sz ? ';width:'+sz+';height:'+sz : ''}">
+    <div class="spec-hl"></div>
+    <span class="icon">${orb.icon}</span>
+    <span class="val">${orb.val}</span>
+  </div>`;
+}
+
+function renderEquipSlots(containerID, slots) {
+  const c = document.getElementById(containerID);
+  c.innerHTML = '';
+  slots.forEach((orb, i) => {
+    const s = document.createElement('div');
+    s.className = 'equip-slot' + (orb ? ' filled' : '');
+    s.dataset.index = i;
+    if (orb) {
+      const el = ELEMENTS[orb.el];
+      const tc = TIERS[orb.tier];
+      s.innerHTML = `<div class="gem-mini" style="background:${el.grad}">
+        <div class="spec-hl"></div>
+        <span class="icon">${orb.icon}</span>
+      </div>`;
+      s.style.borderColor = tc;
+      // Compound badge for weapon slots 0+1 if they form Ignite
+      if (containerID === 'weapon-slots' && i <= 1 && weaponSlots[0] && weaponSlots[1]) {
+        const ck = comboKey(weaponSlots[0].id, weaponSlots[1].id);
+        if (COMBOS[ck]) {
+          const badge = document.createElement('span');
+          badge.className = 'compound-badge';
+          badge.textContent = 'C';
+          s.appendChild(badge);
+        }
+      }
+    } else {
+      s.textContent = '+';
+    }
+    s.addEventListener('click', () => onEquipSlotClick(containerID, i));
+    c.appendChild(s);
+  });
+}
+
+function renderStockpile() {
+  const g = document.getElementById('stockpile-grid');
+  g.innerHTML = '';
+  stockpileData.forEach((orb, i) => {
+    const card = document.createElement('div');
+    card.className = 'gem-card';
+    if (placedStockpile.has(i)) card.classList.add('placed');
+    if (selectedIdx === i) card.classList.add('selected');
+    card.style.setProperty('--glow-color', ELEMENTS[orb.el].color + '88');
+    card.innerHTML = gemFaceHTML(orb) + `<span class="gem-name">${orb.name}</span>`;
+    card.addEventListener('click', () => onStockpileClick(i));
+    g.appendChild(card);
+  });
+  document.getElementById('stockpile-label').textContent =
+    `Stockpile (${stockpileData.length - placedStockpile.size})`;
+}
+
+function renderCombineSlots() {
+  [0,1].forEach(si => {
+    const el = document.getElementById(si === 0 ? 'cz-left' : 'cz-right');
+    const data = combineSlots[si];
+    if (data) {
+      el.classList.add('filled');
+      const o = data.orb;
+      const e = ELEMENTS[o.el];
+      el.innerHTML = `<div class="gem-wb" style="background:${e.grad}">
+        <div class="spec-hl"></div>
+        <span class="icon">${o.icon}</span>
+        <span class="val">${o.val}</span>
+      </div>`;
+    } else {
+      el.classList.remove('filled');
+      el.innerHTML = '<span class="placeholder-text">+</span>';
+    }
+  });
+  updateResult();
+}
+
+function updateResult() {
+  const ra = document.getElementById('result-area');
+  const fb = document.getElementById('btn-forge');
+  if (combineSlots[0] && combineSlots[1]) {
+    const ck = comboKey(combineSlots[0].orb.id, combineSlots[1].orb.id);
+    const combo = COMBOS[ck];
+    if (combo) {
+      ra.className = 'result-area valid';
+      const e = ELEMENTS[combo.el];
+      const tags = combo.tags.map(t =>
+        `<span style="background:${t.color}22;color:${t.color}">${t.label}</span>`
+      ).join('');
+      ra.innerHTML = `<div class="result-card">
+        <div class="result-gem" style="background:${e.grad};--result-glow:${e.color}66;border:1.5px solid ${e.color}">
+          <div class="spec-hl"></div>
+          <span style="position:relative;z-index:1">${combo.icon}</span>
+        </div>
+        <div class="result-info">
+          <div class="rname">${combo.name}</div>
+          <div class="rtags">${tags}</div>
+          <div class="rdesc">${combo.desc}</div>
+        </div>
+      </div>`;
+      fb.disabled = false;
+    } else {
+      ra.className = 'result-area invalid';
+      ra.innerHTML = '<span class="result-placeholder" style="color:var(--danger)">No valid combination</span>';
+      fb.disabled = true;
+    }
+  } else {
+    ra.className = 'result-area';
+    ra.innerHTML = '<span class="result-placeholder">Place two gems to preview combination</span>';
+    fb.disabled = true;
+  }
+}
+
+// ── Interaction ───────────────────────────────────────
+function onStockpileClick(idx) {
+  if (placedStockpile.has(idx)) return;
+  if (selectedIdx === idx) {
+    selectedIdx = null;
+  } else {
+    selectedIdx = idx;
+  }
+  renderStockpile();
+}
+
+function onEquipSlotClick(containerID, slotIdx) {
+  if (selectedIdx === null) return;
+  const slots = containerID === 'weapon-slots' ? weaponSlots : armorSlots;
+  if (slots[slotIdx]) return; // already filled
+  slots[slotIdx] = { ...stockpileData[selectedIdx] };
+  placedStockpile.add(selectedIdx);
+  selectedIdx = null;
+  renderEquipSlots(containerID, slots);
+  renderStockpile();
+}
+
+// Click combine drop zones
+document.getElementById('cz-left').addEventListener('click', () => fillCombineSlot(0));
+document.getElementById('cz-right').addEventListener('click', () => fillCombineSlot(1));
+
+function fillCombineSlot(si) {
+  if (selectedIdx === null) return;
+  if (combineSlots[si]) return; // already filled
+  combineSlots[si] = { idx: selectedIdx, orb: { ...stockpileData[selectedIdx] } };
+  placedStockpile.add(selectedIdx);
+  selectedIdx = null;
+  renderCombineSlots();
+  renderStockpile();
+}
+
+// Cancel
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  combineSlots.forEach((s, i) => {
+    if (s) placedStockpile.delete(s.idx);
+    combineSlots[i] = null;
+  });
+  selectedIdx = null;
+  renderCombineSlots();
+  renderStockpile();
+});
+
+// Forge (just flash and reset for mockup)
+document.getElementById('btn-forge').addEventListener('click', function() {
+  if (this.disabled) return;
+  const ra = document.getElementById('result-area');
+  ra.style.boxShadow = '0 0 30px rgba(212,168,52,0.6),inset 0 0 30px rgba(212,168,52,0.15)';
+  ra.style.borderColor = 'var(--accent-300)';
+  setTimeout(() => {
+    // Remove the orbs permanently (mockup: just clear)
+    combineSlots.forEach((s, i) => { combineSlots[i] = null; });
+    renderCombineSlots();
+    renderStockpile();
+    ra.style.boxShadow = '';
+    ra.style.borderColor = '';
+  }, 700);
+});
+
+// ── Initial render ────────────────────────────────────
+renderEquipSlots('weapon-slots', weaponSlots);
+renderEquipSlots('armor-slots', armorSlots);
+renderStockpile();
+renderCombineSlots();
+</script>
+</body>
+</html>

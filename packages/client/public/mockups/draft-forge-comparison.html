@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALLOY — Draft vs Forge Comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ── Page ── */
+body {
+  background: #1a1a1a;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px 60px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.page-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  color: #6a6a88;
+  text-align: center;
+  margin-bottom: 20px;
+  letter-spacing: 0.08em;
+}
+
+/* ── Frame wrapper ── */
+.frames {
+  display: flex;
+  gap: 40px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.frame-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.frame-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #d4a834;
+  margin-bottom: 12px;
+}
+
+.phone-frame {
+  width: 450px;
+  height: 800px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #444;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  position: relative;
+  background: #0a0a0f;
+}
+
+/* ── Noise texture overlay ── */
+.phone-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ── Radial atmosphere ── */
+.phone-frame::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  height: 180px;
+  background: radial-gradient(ellipse at center, rgba(212,168,52,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.frame-inner {
+  position: relative;
+  z-index: 2;
+  width: calc(100% / 1.4);
+  height: calc(100% / 1.4);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transform: scale(1.4);
+  transform-origin: top left;
+}
+
+.frame-inner::-webkit-scrollbar { width: 2px; }
+.frame-inner::-webkit-scrollbar-track { background: transparent; }
+.frame-inner::-webkit-scrollbar-thumb { background: #363650; border-radius: 2px; }
+
+/* ── Shared tokens ── */
+.raj { font-family: 'Rajdhani', sans-serif; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ════════════════════════════════════════
+   DRAFT FRAME
+   ════════════════════════════════════════ */
+
+/* Opponent Stockpile */
+.draft-opponent {
+  background: linear-gradient(180deg, rgba(248,113,113,0.04), #111118);
+  border: 1px solid rgba(248,113,113,0.12);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.stockpile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.stockpile-label-opp {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #f87171;
+}
+
+.stockpile-count {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 10px;
+  color: #6a6a88;
+}
+
+.chip-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+}
+
+.gem-chip {
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: #ccc;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.gem-chip.empty {
+  background: rgba(54,54,80,0.3);
+  border: 1px dashed rgba(106,106,136,0.25);
+}
+
+.gem-chip .chip-emoji { font-size: 12px; flex-shrink: 0; }
+.gem-chip .chip-name { overflow: hidden; text-overflow: ellipsis; }
+
+.gem-chip.newest { border: 1.5px solid #f87171; }
+
+/* Status Bar */
+.draft-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.your-pick-pill {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  background: linear-gradient(135deg, #d4a834, #b89020);
+  color: #0a0a0f;
+  padding: 2px 12px;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(212,168,52,0.3);
+}
+
+.round-info {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  color: #6a6a88;
+  margin-left: 8px;
+}
+
+.timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  color: #e0bc4a;
+  background: rgba(212,168,52,0.1);
+  border: 1px solid rgba(212,168,52,0.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+/* Pool Grid */
+.pool-container {
+  flex: 1;
+  background: #111118;
+  border: 1px solid #363650;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  justify-items: center;
+}
+
+.pool-gem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.pool-gem-card {
+  width: 66px;
+  height: 66px;
+  border-radius: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.pool-gem-card .specular {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 55%);
+  pointer-events: none;
+}
+
+.pool-gem-card .gem-emoji { font-size: 22px; position: relative; z-index: 1; }
+.pool-gem-card .gem-stat {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.pool-gem .gem-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  color: #fff;
+  text-align: center;
+  line-height: 1.1;
+  max-width: 66px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pool-gem .gem-cat {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 8px;
+  color: #5eead4;
+  text-align: center;
+}
+
+.pool-gem.selected .pool-gem-card {
+  filter: drop-shadow(0 0 8px rgba(212,168,52,0.6));
+}
+
+/* Instruction text */
+.draft-instruction {
+  text-align: center;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  color: #b89868;
+  padding: 3px 0;
+}
+
+/* Player Stockpile */
+.draft-player {
+  background: linear-gradient(0deg, rgba(212,168,52,0.06), #111118);
+  border: 1px solid rgba(212,168,52,0.25);
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-shadow: 0 0 14px rgba(212,168,52,0.08);
+}
+
+.stockpile-label-player {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #e0bc4a;
+}
+
+
+/* ════════════════════════════════════════
+   FORGE FRAME
+   ════════════════════════════════════════ */
+
+.forge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 4px 6px;
+}
+
+.forge-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #e0bc4a;
+}
+
+.forge-subtitle {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  color: #6a6a88;
+}
+
+.forge-subtitle .flux-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #5eead4;
+}
+
+.forge-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.done-btn {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, #d4a834, #b89020);
+  color: #0a0a0f;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+/* Item Cards row */
+.items-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.item-card {
+  flex: 1;
+  background: linear-gradient(180deg, #1a1a26, #111118);
+  border-radius: 6px;
+  padding: 6px 7px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  min-width: 0;
+}
+
+.item-card.active { border: 1.5px solid rgba(212,168,52,0.5); }
+.item-card.inactive { border: 1px solid #252536; }
+
+.item-card-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  color: #5eead4;
+}
+
+.item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  color: #6a6a88;
+}
+
+.item-divider {
+  height: 1px;
+  background: #252536;
+  margin: 3px 0;
+}
+
+.item-inherent {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  color: #2dd4bf;
+  line-height: 1.4;
+}
+
+.item-base {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  color: #b89868;
+}
+
+.affix-line {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 9px;
+  color: #1eff00;
+  line-height: 1.5;
+}
+
+.affix-orb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.tier-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 7px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.tier-pill.t1 { background: rgba(138,138,138,0.2); color: #8a8a8a; }
+.tier-pill.t2 { background: rgba(58,155,232,0.2); color: #3a9be8; }
+.tier-pill.t3 { background: rgba(155,89,182,0.2); color: #9b59b6; }
+
+.compound-block {
+  padding: 3px 0;
+}
+
+.compound-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #ecd06a;
+}
+
+.compound-recipe {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 8px;
+  color: #b89868;
+}
+
+.compound-desc {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 8px;
+  font-style: italic;
+  color: #6a6a88;
+}
+
+.empty-sockets-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.empty-socket {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px dashed #4a4a68;
+}
+
+.socket-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 9px;
+  color: #6a6a88;
+  margin-left: auto;
+}
+
+/* Workbench */
+.workbench {
+  background: linear-gradient(90deg, rgba(212,168,52,0.04), rgba(212,168,52,0.08), rgba(212,168,52,0.04));
+  border: 1px solid rgba(212,168,52,0.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.workbench-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  color: #b89868;
+  letter-spacing: 0.05em;
+}
+
+.combo-socket {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px dashed #6a6a88;
+  flex-shrink: 0;
+}
+
+.combo-plus {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #4a4a68;
+}
+
+.combo-arrow {
+  font-size: 12px;
+  color: #4a4a68;
+}
+
+.combo-result {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1.5px dashed #6a6a88;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #4a4a68;
+  flex-shrink: 0;
+}
+
+.combine-btn {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 8px;
+  text-transform: uppercase;
+  background: rgba(212,168,52,0.15);
+  color: #d4a834;
+  border: 1px solid rgba(212,168,52,0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  letter-spacing: 0.03em;
+}
+
+.clear-btn {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 8px;
+  text-transform: uppercase;
+  background: rgba(106,106,136,0.1);
+  color: #6a6a88;
+  border: 1px solid rgba(106,106,136,0.2);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Forge Stockpile */
+.forge-stockpile {
+  flex: 1;
+  background: #111118;
+  border: 1px solid #363650;
+  border-radius: 10px;
+  padding: 6px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+.forge-stockpile-header {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #e0bc4a;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.forge-gem-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  justify-items: center;
+}
+
+.forge-gem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.forge-gem-card {
+  width: 62px;
+  height: 62px;
+  border-radius: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.forge-gem-card .specular {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 55%);
+  pointer-events: none;
+}
+
+.forge-gem-card .gem-emoji { font-size: 22px; position: relative; z-index: 1; }
+.forge-gem-card .gem-stat {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.forge-gem .gem-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 9px;
+  color: #fff;
+  text-align: center;
+  line-height: 1.1;
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forge-gem .gem-cat {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 8px;
+  color: #5eead4;
+}
+
+.forge-gem-card.t3-glow {
+  filter: drop-shadow(0 0 6px rgba(155,89,182,0.4));
+}
+
+/* Stats Bar */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px 0 0;
+}
+
+.stat-cell {
+  text-align: center;
+  background: rgba(26,26,38,0.6);
+  border-radius: 4px;
+  padding: 3px 2px;
+}
+
+.stat-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 8px;
+  color: #6a6a88;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  color: #e0bc4a;
+}
+</style>
+</head>
+<body>
+
+<div class="page-title">ALLOY &mdash; Screen Comparison</div>
+
+<div class="frames">
+
+<!-- ════════════════════════════════════════
+     LEFT: DRAFT PHASE
+     ════════════════════════════════════════ -->
+<div class="frame-wrapper">
+  <div class="frame-label">DRAFT PHASE</div>
+  <div class="phone-frame">
+    <div class="frame-inner">
+
+      <!-- Opponent Stockpile -->
+      <div class="draft-opponent">
+        <div class="stockpile-header">
+          <span class="stockpile-label-opp">OPPONENT</span>
+          <span class="stockpile-count raj">3 / 8</span>
+        </div>
+        <div class="chip-grid">
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(232,85,58,0.18),rgba(232,85,58,0.06));border:1px solid rgba(232,85,58,0.2);">
+            <span class="chip-emoji">🔥</span><span class="chip-name">Fire Dmg</span>
+          </div>
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(192,192,192,0.18),rgba(192,192,192,0.06));border:1px solid rgba(192,192,192,0.2);">
+            <span class="chip-emoji">⚔️</span><span class="chip-name">Flat HP</span>
+          </div>
+          <div class="gem-chip newest" style="background:linear-gradient(135deg,rgba(45,179,105,0.18),rgba(45,179,105,0.06));border-color:#f87171;">
+            <span class="chip-emoji">☠️</span><span class="chip-name">Poison</span>
+          </div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="draft-status">
+        <div style="display:flex;align-items:center;">
+          <span class="your-pick-pill">YOUR PICK</span>
+          <span class="round-info">R1 &middot; 16 left</span>
+        </div>
+        <div class="timer">0:12</div>
+      </div>
+
+      <!-- Pool Grid -->
+      <div class="pool-container">
+        <div class="pool-grid">
+
+          <!-- 1. Fire Damage T2 SELECTED -->
+          <div class="pool-gem selected">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(232,85,58,0.4),rgba(232,85,58,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">🔥</span>
+              <span class="gem-stat">+19</span>
+            </div>
+            <span class="gem-name">Fire Damage</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 2. Cold Damage T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(58,155,232,0.4),rgba(58,155,232,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">❄️</span>
+              <span class="gem-stat">+12</span>
+            </div>
+            <span class="gem-name">Cold Damage</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 3. Lightning Damage T3 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(212,192,64,0.4),rgba(212,192,64,0.12));border:2.5px solid #9b59b6;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚡</span>
+              <span class="gem-stat">+33</span>
+            </div>
+            <span class="gem-name">Lightning Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 4. Poison Damage T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(45,179,105,0.4),rgba(45,179,105,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">☠️</span>
+              <span class="gem-stat">+10</span>
+            </div>
+            <span class="gem-name">Poison Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 5. Shadow Damage T2 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(139,58,232,0.4),rgba(139,58,232,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">🌙</span>
+              <span class="gem-stat">2.2%</span>
+            </div>
+            <span class="gem-name">Shadow Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 6. Chaos Damage T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(232,58,139,0.4),rgba(232,58,139,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">🌀</span>
+              <span class="gem-stat">+6</span>
+            </div>
+            <span class="gem-name">Chaos Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 7. Flat Physical T2 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+23</span>
+            </div>
+            <span class="gem-name">Flat Physical</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 8. Crit Chance T2 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">12%</span>
+            </div>
+            <span class="gem-name">Crit Chance</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 9. Attack Speed T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">7.5%</span>
+            </div>
+            <span class="gem-name">Attack Speed</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 10. Lifesteal T2 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">7%</span>
+            </div>
+            <span class="gem-name">Lifesteal</span>
+            <span class="gem-cat">Sustain</span>
+          </div>
+
+          <!-- 11. Flat HP T2 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+68</span>
+            </div>
+            <span class="gem-name">Flat HP</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+          <!-- 12. Armor T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">11.5%</span>
+            </div>
+            <span class="gem-name">Armor</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+          <!-- 13. Block Chance T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">6.5%</span>
+            </div>
+            <span class="gem-name">Block Chance</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+          <!-- 14. Thorns T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+9</span>
+            </div>
+            <span class="gem-name">Thorns</span>
+            <span class="gem-cat">Sustain</span>
+          </div>
+
+          <!-- 15. Chance on Hit T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+3</span>
+            </div>
+            <span class="gem-name">Chance on Hit</span>
+            <span class="gem-cat">Trigger</span>
+          </div>
+
+          <!-- 16. HP Regen T1 -->
+          <div class="pool-gem">
+            <div class="pool-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+5/s</span>
+            </div>
+            <span class="gem-name">HP Regen</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Instruction -->
+      <div class="draft-instruction">Drag gems down &middot; tap twice to pick</div>
+
+      <!-- Player Stockpile -->
+      <div class="draft-player">
+        <div class="stockpile-header">
+          <span class="stockpile-label-player">YOUR ORBS</span>
+          <span class="stockpile-count raj">4 / 8</span>
+        </div>
+        <div class="chip-grid">
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(58,155,232,0.18),rgba(58,155,232,0.06));border:1px solid rgba(58,155,232,0.2);">
+            <span class="chip-emoji">❄️</span><span class="chip-name">Cold Dmg</span>
+          </div>
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(192,192,192,0.18),rgba(192,192,192,0.06));border:1px solid rgba(192,192,192,0.2);">
+            <span class="chip-emoji">⚔️</span><span class="chip-name">Crit Ch.</span>
+          </div>
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(192,192,192,0.18),rgba(192,192,192,0.06));border:1px solid rgba(192,192,192,0.2);">
+            <span class="chip-emoji">⚔️</span><span class="chip-name">Lifesteal</span>
+          </div>
+          <div class="gem-chip" style="background:linear-gradient(135deg,rgba(212,192,64,0.18),rgba(212,192,64,0.06));border:1px solid rgba(212,192,64,0.2);">
+            <span class="chip-emoji">⚡</span><span class="chip-name">Lightning</span>
+          </div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+          <div class="gem-chip empty"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     RIGHT: FORGE PHASE
+     ════════════════════════════════════════ -->
+<div class="frame-wrapper">
+  <div class="frame-label">FORGE PHASE</div>
+  <div class="phone-frame">
+    <div class="frame-inner">
+
+      <!-- Header -->
+      <div class="forge-header">
+        <div>
+          <div class="forge-title">FORGE PHASE</div>
+          <div class="forge-subtitle">Round 1 &middot; Flux: <span class="flux-val">8</span></div>
+        </div>
+        <div class="forge-header-right">
+          <div class="timer">1:15</div>
+          <button class="done-btn">DONE FORGING</button>
+        </div>
+      </div>
+
+      <!-- Item Cards -->
+      <div class="items-row">
+
+        <!-- Sword (active) -->
+        <div class="item-card active">
+          <div class="item-card-title">&#9876; SWORD</div>
+          <div class="item-meta"><span>One-Hand</span><span>Weapon</span></div>
+          <div class="item-divider"></div>
+          <div class="item-inherent">+5% Crit Chance<br>-5% Atk Interval</div>
+          <div class="item-divider"></div>
+          <div class="item-base">STR / VIT</div>
+          <div class="item-divider"></div>
+
+          <div class="affix-line">
+            <div class="affix-orb" style="background:linear-gradient(135deg,rgba(232,85,58,0.4),rgba(232,85,58,0.15));">🔥</div>
+            <span style="flex:1;">Fire Damage +19</span>
+            <span class="tier-pill t2">T2</span>
+          </div>
+          <div class="affix-line">
+            <div class="affix-orb" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.15));">⚔️</div>
+            <span style="flex:1;">Chance on Hit +3</span>
+            <span class="tier-pill t1">T1</span>
+          </div>
+
+          <div class="item-divider"></div>
+
+          <div class="compound-block">
+            <div class="compound-name">&#10022; IGNITE</div>
+            <div class="compound-recipe">Fire Damage + Chance on Hit</div>
+            <div class="compound-desc">15% on-hit &middot; Fire DoT 2x</div>
+          </div>
+
+          <div class="item-divider"></div>
+
+          <div class="empty-sockets-row">
+            <div class="empty-socket"></div>
+            <div class="empty-socket"></div>
+            <div class="empty-socket"></div>
+            <span class="socket-count">3/6</span>
+          </div>
+        </div>
+
+        <!-- Chainmail (inactive) -->
+        <div class="item-card inactive">
+          <div class="item-card-title">&#128737; CHAINMAIL</div>
+          <div class="item-meta"><span>Body</span><span>Armor</span></div>
+          <div class="item-divider"></div>
+          <div class="item-inherent">+5% Armor<br>+20 Max HP</div>
+          <div class="item-divider"></div>
+          <div class="item-base">VIT / STR</div>
+          <div class="item-divider"></div>
+
+          <div class="affix-line">
+            <div class="affix-orb" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.15));">⚔️</div>
+            <span style="flex:1;">Max HP +68</span>
+            <span class="tier-pill t2">T2</span>
+          </div>
+          <div class="affix-line">
+            <div class="affix-orb" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.15));">⚔️</div>
+            <span style="flex:1;">Armor +11.5%</span>
+            <span class="tier-pill t1">T1</span>
+          </div>
+
+          <div class="item-divider"></div>
+
+          <div class="empty-sockets-row">
+            <div class="empty-socket"></div>
+            <div class="empty-socket"></div>
+            <div class="empty-socket"></div>
+            <div class="empty-socket"></div>
+            <span class="socket-count">2/6</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Workbench -->
+      <div class="workbench">
+        <span class="workbench-label">&#9670; FORGE &#9670;</span>
+        <div class="combo-socket"></div>
+        <span class="combo-plus">+</span>
+        <div class="combo-socket"></div>
+        <span class="combo-arrow">&#9654;</span>
+        <div class="combo-result">?</div>
+        <button class="combine-btn">COMBINE</button>
+        <button class="clear-btn">CLEAR</button>
+      </div>
+
+      <!-- Stockpile -->
+      <div class="forge-stockpile">
+        <div class="forge-stockpile-header">STOCKPILE (12)</div>
+        <div class="forge-gem-grid">
+
+          <!-- 1. Cold Damage T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(58,155,232,0.4),rgba(58,155,232,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">❄️</span>
+              <span class="gem-stat">+12</span>
+            </div>
+            <span class="gem-name">Cold Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 2. Lightning Damage T3 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card t3-glow" style="background:linear-gradient(135deg,rgba(212,192,64,0.4),rgba(212,192,64,0.12));border:2.5px solid #9b59b6;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚡</span>
+              <span class="gem-stat">+33</span>
+            </div>
+            <span class="gem-name">Lightning</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 3. Poison Damage T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(45,179,105,0.4),rgba(45,179,105,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">☠️</span>
+              <span class="gem-stat">+10</span>
+            </div>
+            <span class="gem-name">Poison Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 4. Shadow Damage T2 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(139,58,232,0.4),rgba(139,58,232,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">🌙</span>
+              <span class="gem-stat">2.2%</span>
+            </div>
+            <span class="gem-name">Shadow Dmg</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 5. Lifesteal T2 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">7%</span>
+            </div>
+            <span class="gem-name">Lifesteal</span>
+            <span class="gem-cat">Sustain</span>
+          </div>
+
+          <!-- 6. Block Chance T2 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">9%</span>
+            </div>
+            <span class="gem-name">Block Ch.</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+          <!-- 7. HP Regen T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+5/s</span>
+            </div>
+            <span class="gem-name">HP Regen</span>
+            <span class="gem-cat">Defense</span>
+          </div>
+
+          <!-- 8. Crit Chance T3 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card t3-glow" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #9b59b6;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">16%</span>
+            </div>
+            <span class="gem-name">Crit Chance</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 9. Attack Speed T2 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #3a9be8;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">12%</span>
+            </div>
+            <span class="gem-name">Atk Speed</span>
+            <span class="gem-cat">Offensive</span>
+          </div>
+
+          <!-- 10. Stun Chance T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">4%</span>
+            </div>
+            <span class="gem-name">Stun Ch.</span>
+            <span class="gem-cat">Trigger</span>
+          </div>
+
+          <!-- 11. Thorns T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+9</span>
+            </div>
+            <span class="gem-name">Thorns</span>
+            <span class="gem-cat">Sustain</span>
+          </div>
+
+          <!-- 12. Ch. on Taking Dmg T1 -->
+          <div class="forge-gem">
+            <div class="forge-gem-card" style="background:linear-gradient(135deg,rgba(192,192,192,0.4),rgba(192,192,192,0.12));border:2.5px solid #8a8a8a;">
+              <div class="specular"></div>
+              <span class="gem-emoji">⚔️</span>
+              <span class="gem-stat">+4</span>
+            </div>
+            <span class="gem-name">On Tk. Dmg</span>
+            <span class="gem-cat">Trigger</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-cell">
+          <div class="stat-label">HP</div>
+          <div class="stat-value">285</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">DMG</div>
+          <div class="stat-value">42</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Armor</div>
+          <div class="stat-value">17%</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Crit</div>
+          <div class="stat-value">13%</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</div><!-- .frames -->
+
+</body>
+</html>

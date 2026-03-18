@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge — Variation G: Accordion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════
+   RESET & TOKENS
+   ═══════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --s950:#060608; --s900:#0a0a0f; --s800:#111118; --s700:#1a1a26;
+  --s600:#252536; --s500:#363650; --s400:#4a4a68; --s300:#6a6a88;
+
+  --accent-500:#d4a834; --accent-400:#e0bc4a; --accent-300:#ecd06a;
+
+  --teal:#2dd4bf; --teal-light:#5eead4;
+
+  --bronze-500:#a08050; --bronze-400:#b89868; --bronze-300:#c8a878;
+
+  --fire:#e8553a; --cold:#3a9be8; --lightning:#d4c040;
+  --poison:#2db369; --shadow:#8b3ae8; --chaos:#e83a8b; --physical:#c0c0c0;
+
+  --t1:#8a8a8a; --t2:#3a9be8; --t3:#9b59b6; --t4:#e8553a;
+
+  --affix-green:#1eff00;
+  --compound-gold:#ecd06a;
+  --empty:#4a4a68;
+
+  --success:#34d399; --warning:#fbbf24; --danger:#f87171; --info:#60a5fa;
+
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.05);
+  --shadow-button: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+  --shadow-glow-accent: 0 0 16px rgba(212,168,52,0.25);
+  --shadow-inset: inset 0 2px 4px rgba(0,0,0,0.5);
+
+  --font-display: 'Rajdhani', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--s950);
+  font-family: var(--font-body);
+  color: #e8e8f0;
+  display: flex; justify-content: center; align-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════
+   APP FRAME (9:16 portrait)
+   ═══════════════════════════════════════ */
+.app-frame {
+  position: relative;
+  width: calc(100vh * 9 / 16);
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  background: var(--s900);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.app-frame::before {
+  content:'';
+  position:absolute; inset:0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(30,25,40,0.4) 0%, transparent 60%);
+  pointer-events:none; z-index:1;
+}
+
+.app-frame::after {
+  content:'';
+  position:absolute; inset:0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:2; opacity:0.5;
+}
+
+.app-frame > * { position: relative; z-index: 3; }
+
+/* ═══════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════ */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(212,168,52,0.15);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+.header-title {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 700;
+  color: var(--accent-400);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.header-sub {
+  font-size: 10px; color: var(--s300);
+}
+
+.header-center {
+  font-family: var(--font-mono);
+  font-size: 18px; font-weight: 700;
+  color: #e8e8f0;
+  background: var(--s800);
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--s600);
+}
+
+.btn-done {
+  font-family: var(--font-display);
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--s900);
+  background: linear-gradient(180deg, var(--accent-300), var(--accent-500));
+  border: none; border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+  transition: filter 0.15s;
+}
+.btn-done:hover { filter: brightness(1.12); }
+
+/* ═══════════════════════════════════════
+   SCROLLABLE CONTENT
+   ═══════════════════════════════════════ */
+.content {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 8px 10px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--s500) transparent;
+}
+
+/* ═══════════════════════════════════════
+   ACCORDION ITEM CARDS
+   ═══════════════════════════════════════ */
+.item-card {
+  background: var(--s800);
+  border-radius: 8px;
+  border: 1px solid var(--s600);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.item-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--s700);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(212,168,52,0.08);
+}
+.item-header:hover { background: var(--s600); }
+
+.item-header .item-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.item-header .item-name {
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 700;
+  color: var(--accent-400);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.item-header .item-stats-summary {
+  font-size: 10px; color: var(--bronze-400);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.item-header .item-slots-pill {
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700;
+  color: var(--s300);
+  background: var(--s800);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--s500);
+  flex-shrink: 0;
+}
+
+.item-header .chevron {
+  font-size: 12px; color: var(--s300);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.item-card.expanded .item-header .chevron {
+  transform: rotate(180deg);
+}
+
+/* Accordion body */
+.item-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease-out, opacity 0.25s ease 0.05s;
+}
+
+.item-card.expanded .item-body {
+  max-height: 500px;
+  opacity: 1;
+  transition: max-height 0.35s ease-out, opacity 0.2s ease 0.1s;
+}
+
+.item-body-inner {
+  padding: 10px 14px 14px;
+}
+
+/* Tooltip structure */
+.tooltip-type-line {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--s300);
+  padding-bottom: 6px;
+}
+
+.tooltip-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--s500), transparent);
+  margin: 6px 0;
+}
+
+.tooltip-inherent {
+  padding: 4px 0;
+}
+.tooltip-inherent .line {
+  font-size: 12px; color: var(--teal);
+  padding: 1px 0;
+}
+
+.tooltip-base-stats {
+  font-size: 12px; color: var(--bronze-400);
+  padding: 4px 0;
+}
+
+/* Affix sections */
+.affix-section { padding: 4px 0 2px; }
+
+.affix-section-title {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--s400);
+  padding: 2px 0 4px;
+}
+.affix-section-title::before,
+.affix-section-title::after {
+  content: ' \2500\2500 ';
+  color: var(--s500);
+}
+
+.affix-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 0;
+}
+
+.affix-row .orb-icon {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.affix-row .orb-icon.fire { background: radial-gradient(circle at 35% 35%, #ff8a65, var(--fire)); }
+.affix-row .orb-icon.cold { background: radial-gradient(circle at 35% 35%, #81d4fa, var(--cold)); }
+.affix-row .orb-icon.lightning { background: radial-gradient(circle at 35% 35%, #fff176, var(--lightning)); }
+.affix-row .orb-icon.poison { background: radial-gradient(circle at 35% 35%, #81c784, var(--poison)); }
+.affix-row .orb-icon.shadow { background: radial-gradient(circle at 35% 35%, #b388ff, var(--shadow)); }
+.affix-row .orb-icon.chaos { background: radial-gradient(circle at 35% 35%, #f48fb1, var(--chaos)); }
+.affix-row .orb-icon.physical { background: radial-gradient(circle at 35% 35%, #e0e0e0, var(--physical)); }
+
+.affix-row .affix-text {
+  font-size: 12px; color: var(--affix-green);
+  flex: 1;
+}
+
+.affix-row .tier-pill {
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.tier-pill.t1 { color: var(--t1); border-color: var(--t1); }
+.tier-pill.t2 { color: var(--t2); border-color: var(--t2); }
+.tier-pill.t3 { color: var(--t3); border-color: var(--t3); }
+.tier-pill.t4 { color: var(--t4); border-color: var(--t4); }
+
+/* Compound section */
+.compound-block {
+  padding: 4px 0 2px;
+}
+
+.compound-name {
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 700;
+  color: var(--compound-gold);
+  padding: 2px 0;
+}
+.compound-name::before { content: '\2726 '; }
+
+.compound-ingredients {
+  font-size: 10px; color: var(--bronze-400);
+  padding-left: 16px;
+}
+
+.compound-effect {
+  font-size: 10px; color: var(--s300);
+  font-style: italic;
+  padding-left: 16px;
+}
+
+/* Sockets */
+.sockets-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 0 2px;
+  flex-wrap: wrap;
+}
+
+.socket {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px dashed var(--empty);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--empty);
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.25s cubic-bezier(0.34,1.56,0.64,1), background 0.2s;
+  position: relative;
+}
+.socket:hover { border-color: var(--accent-400); }
+.socket.filled {
+  border-style: solid;
+  border-color: var(--s400);
+  background: var(--s700);
+  animation: socketFill 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes socketFill {
+  0% { transform: scale(0.3); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.sockets-label {
+  font-size: 10px; color: var(--empty);
+  width: 100%;
+  padding-top: 2px;
+}
+
+/* Affix insert animation */
+@keyframes affixSlideIn {
+  0% { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.affix-row.new-affix {
+  animation: affixSlideIn 0.2s ease-out;
+}
+
+/* ═══════════════════════════════════════
+   COMBINATION WORKBENCH
+   ═══════════════════════════════════════ */
+.workbench {
+  background: var(--s800);
+  border-radius: 8px;
+  border: 1px solid var(--s600);
+  box-shadow: var(--shadow-card);
+  padding: 10px 14px 12px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.workbench::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(212,168,52,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.workbench > * { position: relative; }
+
+.workbench-title {
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--bronze-400);
+  padding-bottom: 8px;
+}
+
+.workbench-row {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.combo-socket {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  border: 2px dashed var(--s400);
+  background: var(--s700);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: var(--s400);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+}
+.combo-socket:hover { border-color: var(--accent-400); }
+.combo-socket.filled {
+  border-style: solid;
+  border-color: var(--accent-500);
+  box-shadow: 0 0 12px rgba(212,168,52,0.2);
+}
+
+.combo-plus {
+  font-family: var(--font-mono);
+  font-size: 16px; font-weight: 700;
+  color: var(--s400);
+}
+
+.combo-arrow {
+  font-size: 16px; color: var(--s400);
+  margin: 0 4px;
+}
+
+.combo-result {
+  min-width: 100px;
+  min-height: 48px;
+  background: var(--s700);
+  border: 1px solid var(--s500);
+  border-radius: 8px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 6px 10px;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.combo-result.valid {
+  border-color: var(--compound-gold);
+  box-shadow: 0 0 16px rgba(236,208,106,0.15);
+}
+.combo-result.invalid {
+  border-color: var(--danger);
+}
+
+.combo-result-name {
+  font-family: var(--font-display);
+  font-size: 12px; font-weight: 700;
+  color: var(--compound-gold);
+  display: none;
+}
+.combo-result.valid .combo-result-name { display: block; }
+
+.combo-result-effect {
+  font-size: 9px; color: var(--s300);
+  font-style: italic;
+  text-align: center;
+  display: none;
+}
+.combo-result.valid .combo-result-effect { display: block; }
+
+.combo-result-empty {
+  font-size: 10px; color: var(--s400);
+}
+.combo-result.valid .combo-result-empty,
+.combo-result.invalid .combo-result-empty { display: none; }
+
+.combo-result-error {
+  font-size: 10px; color: var(--danger);
+  display: none;
+}
+.combo-result.invalid .combo-result-error { display: block; }
+
+.workbench-buttons {
+  display: flex; justify-content: center; gap: 8px;
+  padding-top: 8px;
+}
+
+.btn-combine {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--s900);
+  background: linear-gradient(180deg, var(--accent-300), var(--accent-500));
+  border: none; border-radius: 6px;
+  padding: 6px 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.2s, filter 0.15s;
+}
+.btn-combine.active { opacity: 1; pointer-events: auto; }
+.btn-combine.active:hover { filter: brightness(1.12); }
+
+.btn-clear {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--s300);
+  background: var(--s600);
+  border: 1px solid var(--s500);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-clear:hover { background: var(--s500); }
+
+/* ═══════════════════════════════════════
+   SYNERGY TRACKER
+   ═══════════════════════════════════════ */
+.synergies {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.synergy-pill {
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--s500);
+  background: var(--s700);
+  color: var(--s300);
+  white-space: nowrap;
+  transition: border-color 0.2s, color 0.2s;
+}
+.synergy-pill.active {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(52,211,153,0.08);
+}
+
+/* ═══════════════════════════════════════
+   STOCKPILE
+   ═══════════════════════════════════════ */
+.stockpile-label {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--s300);
+  text-transform: uppercase;
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.stockpile {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.orb {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.orb:hover { transform: translateY(-2px); }
+.orb.selected { transform: translateY(-2px); }
+
+.orb-sphere {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  position: relative;
+  border: 2px solid transparent;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.orb.selected .orb-sphere {
+  border-color: #fff;
+  box-shadow: 0 0 12px rgba(255,255,255,0.3);
+  animation: orbPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes orbPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+  50% { box-shadow: 0 0 20px rgba(255,255,255,0.5); }
+}
+
+/* Specular highlight */
+.orb-sphere::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 8px;
+  top: 6px; left: 50%; transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(255,255,255,0.45), transparent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.orb-sphere.fire { background: radial-gradient(circle at 35% 35%, #ff8a65, var(--fire), #8b2010); }
+.orb-sphere.cold { background: radial-gradient(circle at 35% 35%, #81d4fa, var(--cold), #1a4a7a); }
+.orb-sphere.lightning { background: radial-gradient(circle at 35% 35%, #fff9c4, var(--lightning), #7a6a10); }
+.orb-sphere.poison { background: radial-gradient(circle at 35% 35%, #a5d6a7, var(--poison), #0a5a2a); }
+.orb-sphere.shadow { background: radial-gradient(circle at 35% 35%, #ce93d8, var(--shadow), #3a1060); }
+.orb-sphere.chaos { background: radial-gradient(circle at 35% 35%, #f48fb1, var(--chaos), #7a1040); }
+.orb-sphere.physical { background: radial-gradient(circle at 35% 35%, #eeeeee, var(--physical), #555); }
+
+/* Tier border on orb */
+.orb-sphere.tier-t1 { border-color: var(--t1); }
+.orb-sphere.tier-t2 { border-color: var(--t2); }
+.orb-sphere.tier-t3 { border-color: var(--t3); }
+.orb-sphere.tier-t4 { border-color: var(--t4); }
+
+.orb-stat {
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  position: absolute;
+  bottom: 3px;
+}
+
+.orb-label {
+  font-size: 8px; color: var(--s300);
+  text-align: center;
+  line-height: 1.1;
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orb.used { opacity: 0.25; pointer-events: none; }
+
+/* ═══════════════════════════════════════
+   STATS BAR
+   ═══════════════════════════════════════ */
+.stats-bar {
+  display: flex; justify-content: space-around;
+  padding: 8px 14px;
+  border-top: 1px solid var(--s600);
+  background: var(--s800);
+  flex-shrink: 0;
+}
+
+.stat-item {
+  text-align: center;
+}
+.stat-item .stat-label {
+  font-size: 9px; color: var(--s400);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.stat-item .stat-value {
+  font-family: var(--font-mono);
+  font-size: 14px; font-weight: 700;
+  color: #e8e8f0;
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════ */
+.toast {
+  position: absolute;
+  top: 60px; left: 50%; transform: translateX(-50%) translateY(-20px);
+  background: var(--s700);
+  border: 1px solid var(--compound-gold);
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 12px; color: var(--compound-gold);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 100;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+</style>
+</head>
+<body>
+
+<div class="app-frame">
+  <div class="toast" id="toast"></div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">Forge Phase</div>
+      <div class="header-sub">Round 1 &middot; Flux: 8</div>
+    </div>
+    <div class="header-center" id="timer">1:15</div>
+    <button class="btn-done">Done Forging</button>
+  </div>
+
+  <!-- SCROLLABLE CONTENT -->
+  <div class="content">
+
+    <!-- ITEM CARD: WEAPON -->
+    <div class="item-card expanded" id="card-weapon" data-card="weapon">
+      <div class="item-header" onclick="toggleCard('weapon')">
+        <span class="item-icon">&#x2694;</span>
+        <span class="item-name">Sword</span>
+        <span class="item-stats-summary">STR / VIT</span>
+        <span class="item-slots-pill" id="weapon-slots-pill">3/6</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="item-body">
+        <div class="item-body-inner">
+          <div class="tooltip-type-line">
+            <span>One-Hand</span><span>Weapon</span>
+          </div>
+          <div class="tooltip-divider"></div>
+          <div class="tooltip-inherent">
+            <div class="line">+5% Critical Strike Chance</div>
+            <div class="line">-5% Attack Interval</div>
+          </div>
+          <div class="tooltip-divider"></div>
+          <div class="tooltip-base-stats">Base Stats: STR / VIT</div>
+          <div class="tooltip-divider"></div>
+
+          <!-- Affixes container -->
+          <div id="weapon-affixes">
+            <div class="affix-section">
+              <div class="affix-section-title">OFFENSIVE</div>
+              <div class="affix-row">
+                <div class="orb-icon fire">&#x1F525;</div>
+                <span class="affix-text">Fire Damage +19</span>
+                <span class="tier-pill t2">T2</span>
+              </div>
+            </div>
+            <div class="affix-section">
+              <div class="affix-section-title">TRIGGERS</div>
+              <div class="affix-row">
+                <div class="orb-icon physical">&#x2694;&#xFE0F;</div>
+                <span class="affix-text">Chance on Hit +3</span>
+                <span class="tier-pill t1">T1</span>
+              </div>
+            </div>
+            <div class="affix-section">
+              <div class="affix-section-title">COMPOUNDS</div>
+              <div class="compound-block">
+                <div class="compound-name">IGNITE</div>
+                <div class="compound-ingredients">&#x1F525; Fire Damage + Chance on Hit</div>
+                <div class="compound-effect">15% on-hit &middot; Fire DoT 2x</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tooltip-divider"></div>
+
+          <!-- Sockets -->
+          <div class="sockets-row" id="weapon-sockets">
+            <div class="socket empty" data-slot="weapon" onclick="placeOrb(this)">&#x25C7;</div>
+            <div class="socket empty" data-slot="weapon" onclick="placeOrb(this)">&#x25C7;</div>
+            <div class="socket empty" data-slot="weapon" onclick="placeOrb(this)">&#x25C7;</div>
+          </div>
+          <div class="sockets-label" id="weapon-sockets-label">3 of 6 slots filled</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ITEM CARD: ARMOR -->
+    <div class="item-card" id="card-armor" data-card="armor">
+      <div class="item-header" onclick="toggleCard('armor')">
+        <span class="item-icon">&#x1F6E1;</span>
+        <span class="item-name">Chainmail</span>
+        <span class="item-stats-summary">VIT / STR</span>
+        <span class="item-slots-pill" id="armor-slots-pill">2/6</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="item-body">
+        <div class="item-body-inner">
+          <div class="tooltip-type-line">
+            <span>Chest</span><span>Armor</span>
+          </div>
+          <div class="tooltip-divider"></div>
+          <div class="tooltip-inherent">
+            <div class="line">+5% Armor</div>
+            <div class="line">+20 Max HP</div>
+          </div>
+          <div class="tooltip-divider"></div>
+          <div class="tooltip-base-stats">Base Stats: VIT / STR</div>
+          <div class="tooltip-divider"></div>
+
+          <div id="armor-affixes">
+            <div class="affix-section">
+              <div class="affix-section-title">DEFENSIVE</div>
+              <div class="affix-row">
+                <div class="orb-icon physical">&#x2694;&#xFE0F;</div>
+                <span class="affix-text">Flat HP +68</span>
+                <span class="tier-pill t2">T2</span>
+              </div>
+              <div class="affix-row">
+                <div class="orb-icon physical">&#x2694;&#xFE0F;</div>
+                <span class="affix-text">Armor +11.5%</span>
+                <span class="tier-pill t1">T1</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tooltip-divider"></div>
+
+          <div class="sockets-row" id="armor-sockets">
+            <div class="socket empty" data-slot="armor" onclick="placeOrb(this)">&#x25C7;</div>
+            <div class="socket empty" data-slot="armor" onclick="placeOrb(this)">&#x25C7;</div>
+            <div class="socket empty" data-slot="armor" onclick="placeOrb(this)">&#x25C7;</div>
+            <div class="socket empty" data-slot="armor" onclick="placeOrb(this)">&#x25C7;</div>
+          </div>
+          <div class="sockets-label" id="armor-sockets-label">2 of 6 slots filled</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMBINATION WORKBENCH -->
+    <div class="workbench">
+      <div class="workbench-title">&#x25C6; COMBINATION FORGE &#x25C6;</div>
+      <div class="workbench-row">
+        <div class="combo-socket" id="combo-a" onclick="placeComboOrb('a')">&#x25C7;</div>
+        <span class="combo-plus">+</span>
+        <div class="combo-socket" id="combo-b" onclick="placeComboOrb('b')">&#x25C7;</div>
+        <span class="combo-arrow">&#x27A1;</span>
+        <div class="combo-result" id="combo-result">
+          <span class="combo-result-empty">Select 2 orbs</span>
+          <span class="combo-result-name" id="combo-result-name"></span>
+          <span class="combo-result-effect" id="combo-result-effect"></span>
+          <span class="combo-result-error">&#x2717; No recipe</span>
+        </div>
+      </div>
+      <div class="workbench-buttons">
+        <button class="btn-combine" id="btn-combine" onclick="doCombine()">Combine</button>
+        <button class="btn-clear" onclick="clearCombo()">Clear</button>
+      </div>
+    </div>
+
+    <!-- SYNERGY TRACKER -->
+    <div class="synergies">
+      <div class="synergy-pill">Fire Mastery (3/5)</div>
+      <div class="synergy-pill active">Fortified (2/2)</div>
+      <div class="synergy-pill">Vampirism (1/3)</div>
+      <div class="synergy-pill">Storm (0/4)</div>
+    </div>
+
+    <!-- STOCKPILE -->
+    <div class="stockpile-label">Stockpile</div>
+    <div class="stockpile" id="stockpile">
+      <!-- Orbs populated by JS -->
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- STATS BAR -->
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-label">HP</div><div class="stat-value" id="stat-hp">285</div></div>
+    <div class="stat-item"><div class="stat-label">DMG</div><div class="stat-value" id="stat-dmg">42</div></div>
+    <div class="stat-item"><div class="stat-label">Armor</div><div class="stat-value" id="stat-armor">17%</div></div>
+    <div class="stat-item"><div class="stat-label">Crit</div><div class="stat-value" id="stat-crit">13%</div></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+   ═══════════════════════════════════════ */
+const ELEMENT_EMOJI = {
+  fire:'🔥', cold:'❄️', lightning:'⚡', poison:'☠️',
+  shadow:'🌙', chaos:'🌀', physical:'⚔️'
+};
+
+const ORBS = [
+  { id:'cold-t1', name:'Cold Dmg', element:'cold', tier:'t1', stat:'+8', category:'offensive', affixText:'Cold Damage +8' },
+  { id:'lightning-t3', name:'Light Dmg', element:'lightning', tier:'t3', stat:'+31', category:'offensive', affixText:'Lightning Damage +31' },
+  { id:'poison-t1', name:'Poison Dmg', element:'poison', tier:'t1', stat:'+7', category:'offensive', affixText:'Poison Damage +7' },
+  { id:'shadow-t2', name:'Shadow Dmg', element:'shadow', tier:'t2', stat:'+18', category:'offensive', affixText:'Shadow Damage +18' },
+  { id:'lifesteal-t2', name:'Lifesteal', element:'chaos', tier:'t2', stat:'+4%', category:'sustain', affixText:'Lifesteal +4%' },
+  { id:'block-t2', name:'Block', element:'physical', tier:'t2', stat:'+6%', category:'defensive', affixText:'Block Chance +6%' },
+  { id:'hpregen-t1', name:'HP Regen', element:'poison', tier:'t1', stat:'+3', category:'sustain', affixText:'HP Regen +3/s' },
+  { id:'crit-t3', name:'Crit Chance', element:'lightning', tier:'t3', stat:'+8%', category:'offensive', affixText:'Crit Chance +8%' },
+  { id:'atkspd-t2', name:'Atk Speed', element:'fire', tier:'t2', stat:'+5%', category:'offensive', affixText:'Attack Speed +5%' },
+  { id:'stun-t1', name:'Stun', element:'lightning', tier:'t1', stat:'+2%', category:'trigger', affixText:'Chance to Stun +2%' },
+  { id:'thorns-t1', name:'Thorns', element:'physical', tier:'t1', stat:'+5', category:'defensive', affixText:'Thorns +5' },
+  { id:'chotd-t1', name:'Ch.TakeDmg', element:'physical', tier:'t1', stat:'+2', category:'trigger', affixText:'Chance on Taking Dmg +2' },
+];
+
+const RECIPES = {
+  'fire+lightning': { name:'THERMAL SHOCK', effect:'20% on-hit \u00b7 Shock DoT 3x' },
+  'lightning+fire': { name:'THERMAL SHOCK', effect:'20% on-hit \u00b7 Shock DoT 3x' },
+  'fire+cold': { name:'STORM OF FLAMES', effect:'AoE nova 2x/round' },
+  'cold+fire': { name:'STORM OF FLAMES', effect:'AoE nova 2x/round' },
+  'cold+poison': { name:'FROSTBITE', effect:'12% on-hit \u00b7 Slow + Poison 2x' },
+  'poison+cold': { name:'FROSTBITE', effect:'12% on-hit \u00b7 Slow + Poison 2x' },
+  'lightning+shadow': { name:'STATIC DISCHARGE', effect:'Chain lightning on crit' },
+  'shadow+lightning': { name:'STATIC DISCHARGE', effect:'Chain lightning on crit' },
+  'fire+physical': { name:'IGNITE', effect:'15% on-hit \u00b7 Fire DoT 2x' },
+  'physical+fire': { name:'IGNITE', effect:'15% on-hit \u00b7 Fire DoT 2x' },
+};
+
+const CATEGORY_ORDER = ['offensive','defensive','sustain','utility','trigger','compound'];
+const CATEGORY_LABELS = {
+  offensive:'OFFENSIVE', defensive:'DEFENSIVE', sustain:'SUSTAIN',
+  utility:'UTILITY', trigger:'TRIGGERS', compound:'COMPOUNDS'
+};
+
+/* ═══════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════ */
+let selectedOrb = null;
+let comboSlotA = null;
+let comboSlotB = null;
+
+// Track placed orbs per card: { weapon: [...orbIds], armor: [...orbIds] }
+const placedOrbs = { weapon: [], armor: [] };
+const baseSlots = { weapon: 3, armor: 4 };
+const baseFilled = { weapon: 3, armor: 2 };
+const maxSlots = 6;
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+function init() {
+  renderStockpile();
+  startTimer();
+}
+
+function renderStockpile() {
+  const el = document.getElementById('stockpile');
+  el.innerHTML = '';
+  ORBS.forEach(orb => {
+    const used = placedOrbs.weapon.includes(orb.id) || placedOrbs.armor.includes(orb.id)
+      || comboSlotA === orb.id || comboSlotB === orb.id;
+    const sel = selectedOrb === orb.id;
+    const div = document.createElement('div');
+    div.className = 'orb' + (sel ? ' selected' : '') + (used ? ' used' : '');
+    div.dataset.orbId = orb.id;
+    div.onclick = () => selectOrb(orb.id);
+    div.innerHTML = `
+      <div class="orb-sphere ${orb.element} tier-${orb.tier}">
+        <span>${ELEMENT_EMOJI[orb.element]}</span>
+        <span class="orb-stat">${orb.stat}</span>
+      </div>
+      <div class="orb-label">${orb.name}</div>
+    `;
+    el.appendChild(div);
+  });
+}
+
+/* ═══════════════════════════════════════
+   ACCORDION
+   ═══════════════════════════════════════ */
+function toggleCard(which) {
+  const weaponCard = document.getElementById('card-weapon');
+  const armorCard = document.getElementById('card-armor');
+
+  if (which === 'weapon') {
+    if (weaponCard.classList.contains('expanded')) return; // already expanded
+    weaponCard.classList.add('expanded');
+    armorCard.classList.remove('expanded');
+  } else {
+    if (armorCard.classList.contains('expanded')) return;
+    armorCard.classList.add('expanded');
+    weaponCard.classList.remove('expanded');
+  }
+}
+
+/* ═══════════════════════════════════════
+   ORB SELECTION & PLACEMENT
+   ═══════════════════════════════════════ */
+function selectOrb(id) {
+  if (selectedOrb === id) {
+    selectedOrb = null;
+  } else {
+    selectedOrb = id;
+  }
+  renderStockpile();
+}
+
+function placeOrb(socketEl) {
+  if (!selectedOrb) return;
+  if (socketEl.classList.contains('filled')) return;
+
+  const card = socketEl.dataset.slot; // 'weapon' or 'armor'
+  const orb = ORBS.find(o => o.id === selectedOrb);
+  if (!orb) return;
+
+  // Fill socket
+  socketEl.classList.remove('empty');
+  socketEl.classList.add('filled');
+  socketEl.innerHTML = ELEMENT_EMOJI[orb.element];
+  socketEl.onclick = null;
+
+  // Track
+  placedOrbs[card].push(orb.id);
+
+  // Add affix to card
+  addAffixToCard(card, orb);
+
+  // Update slot counts
+  updateSlotCount(card);
+
+  // Clear selection
+  selectedOrb = null;
+  renderStockpile();
+
+  // If card not expanded, expand it
+  if (!document.getElementById('card-' + card).classList.contains('expanded')) {
+    toggleCard(card);
+  }
+}
+
+function addAffixToCard(card, orb) {
+  const container = document.getElementById(card + '-affixes');
+
+  // Determine which section this belongs to
+  const catLabel = CATEGORY_LABELS[orb.category] || 'UTILITY';
+
+  // Find existing section or create one
+  let section = container.querySelector(`[data-category="${orb.category}"]`);
+  if (!section) {
+    section = document.createElement('div');
+    section.className = 'affix-section';
+    section.dataset.category = orb.category;
+    section.innerHTML = `<div class="affix-section-title">${catLabel}</div>`;
+
+    // Insert in correct order
+    const existingSections = container.querySelectorAll('.affix-section');
+    const catIndex = CATEGORY_ORDER.indexOf(orb.category);
+    let inserted = false;
+    for (const es of existingSections) {
+      const esCatIndex = CATEGORY_ORDER.indexOf(es.dataset.category);
+      if (esCatIndex > catIndex) {
+        container.insertBefore(section, es);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      // Insert before compounds block if exists, else append
+      const compoundSection = container.querySelector('[data-category="compound"]');
+      if (compoundSection) {
+        container.insertBefore(section, compoundSection);
+      } else {
+        container.appendChild(section);
+      }
+    }
+  }
+
+  // Add affix row
+  const row = document.createElement('div');
+  row.className = 'affix-row new-affix';
+  row.innerHTML = `
+    <div class="orb-icon ${orb.element}">${ELEMENT_EMOJI[orb.element]}</div>
+    <span class="affix-text">${orb.affixText}</span>
+    <span class="tier-pill ${orb.tier}">${orb.tier.toUpperCase()}</span>
+  `;
+  section.appendChild(row);
+
+  // Remove animation class after it plays
+  setTimeout(() => row.classList.remove('new-affix'), 250);
+}
+
+function updateSlotCount(card) {
+  const filled = baseFilled[card] + placedOrbs[card].length;
+  const pill = document.getElementById(card + '-slots-pill');
+  pill.textContent = filled + '/' + maxSlots;
+
+  const label = document.getElementById(card + '-sockets-label');
+  const emptyCount = baseSlots[card] - placedOrbs[card].length;
+  label.textContent = filled + ' of ' + maxSlots + ' slots filled';
+
+  // Remove an empty socket if we've filled one
+  // (already handled by the socket becoming .filled)
+}
+
+/* ═══════════════════════════════════════
+   COMBINATION FORGE
+   ═══════════════════════════════════════ */
+function placeComboOrb(slot) {
+  if (!selectedOrb) return;
+
+  const orb = ORBS.find(o => o.id === selectedOrb);
+  if (!orb) return;
+
+  const el = document.getElementById('combo-' + slot);
+
+  if (slot === 'a') {
+    comboSlotA = orb.id;
+  } else {
+    comboSlotB = orb.id;
+  }
+
+  el.classList.add('filled');
+  el.innerHTML = ELEMENT_EMOJI[orb.element];
+  el.style.fontSize = '22px';
+
+  selectedOrb = null;
+  renderStockpile();
+  checkRecipe();
+}
+
+function checkRecipe() {
+  const result = document.getElementById('combo-result');
+  const nameEl = document.getElementById('combo-result-name');
+  const effectEl = document.getElementById('combo-result-effect');
+  const btn = document.getElementById('btn-combine');
+
+  result.classList.remove('valid', 'invalid');
+  btn.classList.remove('active');
+
+  if (!comboSlotA || !comboSlotB) return;
+
+  const orbA = ORBS.find(o => o.id === comboSlotA);
+  const orbB = ORBS.find(o => o.id === comboSlotB);
+  if (!orbA || !orbB) return;
+
+  const key = orbA.element + '+' + orbB.element;
+  const recipe = RECIPES[key];
+
+  if (recipe) {
+    result.classList.add('valid');
+    nameEl.textContent = '\u2726 ' + recipe.name;
+    effectEl.textContent = recipe.effect;
+    btn.classList.add('active');
+  } else {
+    result.classList.add('invalid');
+  }
+}
+
+function doCombine() {
+  const orbA = ORBS.find(o => o.id === comboSlotA);
+  const orbB = ORBS.find(o => o.id === comboSlotB);
+  if (!orbA || !orbB) return;
+
+  const key = orbA.element + '+' + orbB.element;
+  const recipe = RECIPES[key];
+  if (!recipe) return;
+
+  showToast('\u2726 ' + recipe.name + ' forged!');
+  clearCombo();
+}
+
+function clearCombo() {
+  comboSlotA = null;
+  comboSlotB = null;
+
+  const a = document.getElementById('combo-a');
+  const b = document.getElementById('combo-b');
+  a.classList.remove('filled');
+  b.classList.remove('filled');
+  a.innerHTML = '\u25C7';
+  b.innerHTML = '\u25C7';
+  a.style.fontSize = '';
+  b.style.fontSize = '';
+
+  const result = document.getElementById('combo-result');
+  result.classList.remove('valid', 'invalid');
+  document.getElementById('btn-combine').classList.remove('active');
+
+  renderStockpile();
+}
+
+/* ═══════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════ */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+/* ═══════════════════════════════════════
+   TIMER
+   ═══════════════════════════════════════ */
+function startTimer() {
+  let seconds = 75;
+  const el = document.getElementById('timer');
+  const tick = () => {
+    if (seconds <= 0) return;
+    seconds--;
+    const m = Math.floor(seconds / 60);
+    const s = String(seconds % 60).padStart(2, '0');
+    el.textContent = m + ':' + s;
+  };
+  setInterval(tick, 1000);
+}
+
+init();
+</script>
+</body>
+</html>
