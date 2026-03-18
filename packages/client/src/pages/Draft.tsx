@@ -242,17 +242,17 @@ export function Draft() {
     return () => clearTimeout(timeout);
   }, [matchState, phase, aiController, gateway]);
 
-  // ── Phase transitions ──
-  useEffect(() => {
-    if (phase?.kind === 'forge') navigate(`/match/${code}/forge`, { replace: true });
-  }, [phase, navigate, code]);
-
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
     if (!isPlayerTurn || pool.length === 0) return;
     draftOrb(pool[0].uid);
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
+
+  // ── Phase transitions (must be after all hooks) ──
+  if (phase?.kind === 'forge') {
+    return <Navigate to={`/match/${code}/forge`} replace />;
+  }
 
   if (!matchState || phase?.kind !== 'draft') {
     return <Navigate to="/queue" replace />;

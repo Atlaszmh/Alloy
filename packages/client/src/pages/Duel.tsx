@@ -266,8 +266,13 @@ export function Duel() {
     }
   }, [phase]);
 
-  if (!matchState || !currentLog || !hpState) {
+  if (!matchState) {
     return <Navigate to="/queue" replace />;
+  }
+
+  // currentLog/hpState may not be ready yet (duel simulation runs in useEffect)
+  if (!currentLog || !hpState) {
+    return null;
   }
 
   const round = currentResult?.round ?? 1;

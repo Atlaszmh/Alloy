@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useMatchGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
@@ -561,7 +561,6 @@ function DragGhost({
 
 export function Forge() {
   const { code } = useParams();
-  const navigate = useNavigate();
 
   const gateway = useMatchGateway(code!);
   const [, forceUpdate] = useState(0);
@@ -669,13 +668,6 @@ export function Forge() {
     }
     prevFluxRef.current = plan.tentativeFlux;
   }, [plan?.tentativeFlux]);
-
-  // ── Navigate to duel when phase changes ──
-  useEffect(() => {
-    if (phase?.kind === 'duel') {
-      navigate(`/match/${code}/duel`, { replace: true });
-    }
-  }, [phase, navigate, code]);
 
   // ── Commit flow ──
   const handleCommit = useCallback(async () => {
@@ -933,9 +925,19 @@ export function Forge() {
     });
   }, [applyAction, registry]);
 
+  // ── Phase transitions (must be after all hooks) ──
+  if (phase?.kind === 'duel') {
+    return <Navigate to={`/match/${code}/duel`} replace />;
+  }
+
   // ── Render guard ──
-  if (!matchState || phase?.kind !== 'forge' || !player || !plan) {
+  if (!matchState || phase?.kind !== 'forge' || !player) {
     return <Navigate to="/queue" replace />;
+  }
+
+  // Plan initializes asynchronously via useEffect — wait for it
+  if (!plan) {
+    return null;
   }
 
   const flux = plan.tentativeFlux;
