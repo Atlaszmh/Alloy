@@ -9,6 +9,10 @@ interface ForgeSubmitOptions {
 export function useForgeSubmit({ matchId, round }: ForgeSubmitOptions) {
   const submitBuild = async (loadout: Loadout) => {
     const supabase = getSupabase();
+    if (!supabase) {
+      console.warn('[ForgeSubmit] Offline mode — skipping submit');
+      return true; // no-op success in offline mode
+    }
 
     const { data, error } = await supabase.functions.invoke('forge-submit', {
       body: {

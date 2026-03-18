@@ -32,6 +32,11 @@ export function useMatchmaking(): UseMatchmakingResult {
 
   const joinQueue = useCallback(async () => {
     const supabase = getSupabase();
+    if (!supabase) {
+      console.warn('[Matchmaking] Offline mode — cannot join queue');
+      setStatus('error');
+      return;
+    }
 
     setStatus('queued');
 
@@ -54,6 +59,10 @@ export function useMatchmaking(): UseMatchmakingResult {
 
   const leaveQueue = useCallback(async () => {
     const supabase = getSupabase();
+    if (!supabase) {
+      setStatus('idle');
+      return;
+    }
 
     await supabase.functions.invoke('matchmaking', {
       body: { action: 'leave' },
