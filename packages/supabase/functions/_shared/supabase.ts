@@ -1,42 +1,41 @@
-// Shared Supabase client for edge functions
-// In production, use createClient from @supabase/supabase-js
-// For now, this provides the interface that functions expect
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export interface SupabaseClient {
-  from: (table: string) => QueryBuilder;
-  auth: {
-    getUser: (token: string) => Promise<{ data: { user: { id: string } | null }; error: unknown }>;
-  };
-  channel: (name: string) => BroadcastChannel;
+export type { SupabaseClient };
+
+let serviceClient: SupabaseClient | null = null;
+
+export function getServiceClient(): SupabaseClient {
+  if (serviceClient) return serviceClient;
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  serviceClient = createClient(url, key);
+  return serviceClient;
 }
 
-interface QueryBuilder {
-  select: (columns?: string) => QueryBuilder;
-  insert: (data: Record<string, unknown> | Record<string, unknown>[]) => QueryBuilder;
-  update: (data: Record<string, unknown>) => QueryBuilder;
-  delete: () => QueryBuilder;
-  eq: (column: string, value: unknown) => QueryBuilder;
-  in: (column: string, values: unknown[]) => QueryBuilder;
-  order: (column: string, options?: { ascending?: boolean }) => QueryBuilder;
-  limit: (count: number) => QueryBuilder;
-  single: () => Promise<{ data: unknown; error: unknown }>;
-  then: (resolve: (result: { data: unknown; error: unknown }) => void) => void;
-}
-
-interface BroadcastChannel {
-  send: (payload: { type: string; event: string; payload: unknown }) => Promise<void>;
-}
-
-export function getSupabaseClient(_req: Request): SupabaseClient {
-  // In production: createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  // This is a placeholder that shows the expected interface
-  throw new Error('Supabase client not configured. Set up SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
-}
-
-export function getUserId(req: Request): string | null {
+export async function getUserId(req: Request): Promise<string> {
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  // In production: verify JWT and extract user ID
-  // For local dev: the token IS the user ID
-  return authHeader.slice(7);
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Missing or invalid Authorization header');
+  }
+  const token = authHeader.replace('Bearer ', '');
+  const url = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !anonKey) throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
+  const anonClient = createClient(url, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: { user }, error } = await anonClient.auth.getUser(token);
+  if (error || !user) throw new Error('Invalid or expired token');
+  return user.id;
+}
+
+export async function loadMatchByRoomCode(client: SupabaseClient, roomCode: string) {
+  const { data, error } = await client
+    .from('matches')
+    .select('*')
+    .eq('room_code', roomCode)
+    .single();
+  if (error || !data) throw new Error(`Match not found: ${roomCode}`);
+  return data;
 }

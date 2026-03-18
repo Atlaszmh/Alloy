@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router';
 import { MainMenu } from './pages/MainMenu';
 import { Matchmaking } from './pages/Matchmaking';
+import { MatchEntry } from './pages/MatchEntry';
 import { Draft } from './pages/Draft';
 import { Forge } from './pages/Forge';
 import { Duel } from './pages/Duel';
@@ -19,11 +20,12 @@ export function App() {
         <Routes>
           <Route path="/" element={<MainMenu />} />
           <Route path="/queue" element={<Matchmaking />} />
-          <Route path="/match/:id/draft" element={<Draft />} />
-          <Route path="/match/:id/forge" element={<Forge />} />
-          <Route path="/match/:id/duel" element={<Duel />} />
-          <Route path="/match/:id/adapt" element={<Adapt />} />
-          <Route path="/match/:id/result" element={<PostMatch />} />
+          <Route path="/match/:code" element={<MatchEntry />} />
+          <Route path="/match/:code/draft" element={<Draft />} />
+          <Route path="/match/:code/forge" element={<Forge />} />
+          <Route path="/match/:code/duel" element={<Duel />} />
+          <Route path="/match/:code/adapt" element={<Adapt />} />
+          <Route path="/match/:code/result" element={<PostMatch />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/recipes" element={<RecipeBook />} />
           <Route path="/collection" element={<Collection />} />

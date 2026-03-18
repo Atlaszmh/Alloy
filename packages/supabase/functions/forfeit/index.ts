@@ -1,50 +1,91 @@
 // Edge Function: POST /functions/v1/forfeit
-// Handles explicit forfeit — marks match as forfeit with forfeiting player as loser
+// Handles explicit forfeit — marks match as forfeited, other player wins.
 
-import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { getUserId } from '../_shared/supabase.ts';
+import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import type { MatchState, MatchPhase } from '@alloy/engine';
 
-interface ForfeitRequest {
-  matchId: string;
-}
-
-export default async function handler(req: Request): Promise<Response> {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const userId = getUserId(req);
-  if (!userId) return errorResponse('Unauthorized', 401);
+  try {
+    const userId = await getUserId(req);
+    const { roomCode } = await req.json() as { roomCode: string };
 
-  const body: ForfeitRequest = await req.json();
+    if (!roomCode) {
+      return errorResponse('Missing roomCode', 400);
+    }
 
-  // In production:
-  // 1. Load match
-  // const { data: match } = await supabase.from('matches').select('*').eq('id', body.matchId).single();
-  // if (!match) return errorResponse('Match not found', 404);
+    const client = getServiceClient();
+    const match = await loadMatchByRoomCode(client, roomCode);
 
-  // 2. Verify player is participant and match is active
-  // const playerIndex = match.player1_id === userId ? 0 : match.player2_id === userId ? 1 : -1;
-  // if (playerIndex === -1) return errorResponse('Not a participant');
-  // if (match.phase === 'complete') return errorResponse('Match already complete');
+    // Must be a participant
+    const playerIndex = match.player1_id === userId ? 0
+      : match.player2_id === userId ? 1
+      : -1;
+    if (playerIndex === -1) {
+      return errorResponse('Not a participant in this match', 403);
+    }
 
-  // 3. Mark as forfeit
-  // const result = playerIndex === 0 ? 'player2_win' : 'player1_win';
-  // await supabase.from('matches').update({
-  //   phase: 'complete',
-  //   result: 'forfeit',
-  //   completed_at: new Date().toISOString(),
-  // }).eq('id', body.matchId);
+    // Match must be active
+    if (match.status !== 'active') {
+      return errorResponse('Match is not active', 400);
+    }
 
-  // 4. ELO adjustment (standard loss)
-  // if (match.mode === 'ranked' && !match.is_ai_match) {
-  //   // Apply ELO change as normal loss
-  // }
+    const winner = (playerIndex === 0 ? 1 : 0) as 0 | 1;
 
-  // 5. Notify opponent
-  // await supabase.channel(`match:${body.matchId}`).send({
-  //   type: 'broadcast',
-  //   event: 'match:forfeit',
-  //   payload: { forfeitingPlayer: playerIndex },
-  // });
+    // Update game_state phase to complete
+    const gameState = match.game_state as MatchState;
+    const completePhase: MatchPhase = {
+      kind: 'complete',
+      winner,
+      scores: gameState.roundResults.reduce(
+        (acc, r) => {
+          if (r.winner === 0) acc[0]++;
+          else if (r.winner === 1) acc[1]++;
+          return acc;
+        },
+        [0, 0] as [number, number],
+      ),
+    };
 
-  return jsonResponse({ success: true, result: 'forfeit' });
-}
+    const newState: MatchState = {
+      ...gameState,
+      phase: completePhase,
+    };
+
+    const { error: updateError } = await client
+      .from('matches')
+      .update({
+        status: 'forfeited',
+        result: 'forfeit',
+        game_state: newState,
+        completed_at: new Date().toISOString(),
+        version: match.version + 1,
+      })
+      .eq('id', match.id)
+      .eq('version', match.version);
+
+    if (updateError) {
+      return errorResponse('Failed to update match', 500);
+    }
+
+    // Broadcast forfeit event
+    await client.channel(`match:${roomCode}`).send({
+      type: 'broadcast',
+      event: 'match_forfeited',
+      payload: {
+        forfeitingPlayer: playerIndex,
+        winner,
+      },
+    });
+
+    return jsonResponse({ ok: true, winner });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    const status = message.includes('not found') ? 404
+      : message.includes('Unauthorized') || message.includes('token') ? 401
+      : 500;
+    return errorResponse(message, status);
+  }
+});

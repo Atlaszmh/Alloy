@@ -1,7 +1,7 @@
 # Alloy — Project Handoff Document
 
-**Date:** 2026-03-16 (updated)
-**Status:** Phases 1-3 Substantially Complete, Phase 4+ Remaining
+**Date:** 2026-03-17 (updated)
+**Status:** Phases 1-4 Substantially Complete, Phase 5+ Remaining
 
 ---
 
@@ -20,8 +20,8 @@ alloy/
 ├── packages/
 │   ├── engine/          ← Pure TypeScript game engine (COMPLETE)
 │   ├── tools/           ← Balance visualization dashboard (COMPLETE)
-│   ├── client/          ← React frontend (PLAYABLE — local vs AI)
-│   └── supabase/        ← Backend (STUB — schema done, functions commented)
+│   ├── client/          ← React frontend (PLAYABLE — local AI + online PvP)
+│   └── supabase/        ← Backend (IMPLEMENTED — schema + 8 edge functions)
 ├── docs/
 │   └── superpowers/     ← Specs and plans
 ├── package.json         ← pnpm workspace root
@@ -56,23 +56,35 @@ The entire game engine is complete, headless, deterministic, and tested. Every g
 | **AI System** | `src/ai/` (5 files) | 5 tiers with strategy pattern. T1 (random) through T5 (exhaustive search with denial scoring). Draft, forge, and adapt strategies per tier |
 | **Balance Testing** | `src/balance/` (3 files) | Batch simulation runner, aggregate stats collector, balance report generator with outlier detection |
 
-### Client (`packages/client/`) — Playable locally vs AI
+### Client (`packages/client/`) — Playable locally vs AI and online PvP
 
-Full single-player match flow is playable in browser against AI opponents.
+Full match flow is playable in browser against AI opponents or other players via Supabase Realtime.
 
 **Dev server:** `pnpm -F @alloy/client dev`
 
+#### MatchGateway Abstraction
+
+The client uses a **MatchGateway** interface to abstract match communication:
+
+- **LocalGateway** — Used for AI matches (code prefixed with `ai-`). Runs game logic entirely in-browser via the engine. No server calls needed.
+- **RemoteGateway** — Used for PvP matches. Communicates with Supabase Edge Functions for state mutations and subscribes to Supabase Realtime channels for live updates. Includes automatic reconnection handling.
+
+The `useMatchGateway` hook selects the appropriate gateway based on the match code prefix. All game phase pages (Draft, Forge, Duel, PostMatch) consume the gateway via this hook.
+
 #### Pages and Routing
+
+Routes use `:code` (not `:id`). AI matches use codes prefixed with `ai-`.
 
 | Path | Component | Status |
 |------|-----------|--------|
 | `/` | MainMenu | Working |
-| `/queue` | Matchmaking | UI only (server stub) |
-| `/match/:id/draft` | Draft | Working vs AI |
-| `/match/:id/forge` | Forge | Working vs AI |
-| `/match/:id/duel` | Duel | Working (PixiJS + text log) |
-| `/match/:id/adapt` | Adapt | Route exists, unreachable |
-| `/match/:id/result` | PostMatch | Working |
+| `/queue` | Matchmaking | Working (AI, PvP casual, PvP ranked) |
+| `/match/:code` | MatchEntry | Working (join-via-URL for PvP) |
+| `/match/:code/draft` | Draft | Working (AI + PvP) |
+| `/match/:code/forge` | Forge | Working (AI + PvP) |
+| `/match/:code/duel` | Duel | Working (PixiJS + text log) |
+| `/match/:code/adapt` | Adapt | Route exists, unreachable |
+| `/match/:code/result` | PostMatch | Working |
 | `/profile` | Profile | Local state only |
 | `/recipes` | RecipeBook | UI built |
 | `/collection` | Collection | UI built |
@@ -85,8 +97,14 @@ Full single-player match flow is playable in browser against AI opponents.
 - **draftStore** — Selected orb + confirm state for two-tap interaction
 - **forgeStore** — Active tab, selected orb, drag state, combination toggle
 - **uiStore** — Modal, toast, mute, debug overlay
-- **authStore** — Player ID, display name (guest login)
+- **authStore** — Player ID, display name (Supabase anonymous auth with offline fallback)
 - **profileStore** — ELO, wins, losses (local only, not persisted to DB)
+
+#### Multiplayer UI Components
+
+- **DisconnectOverlay** — Shown when opponent disconnects; uses `useDisconnectTimer` hook with 60-second reconnect window
+- **Matchmaking page** — Redesigned with AI quick play, PvP casual (room codes for friend invites), and PvP ranked (Elo-based) flows
+- **MatchEntry page** — Join-via-URL flow for PvP matches
 
 #### Duel Rendering
 
@@ -103,11 +121,24 @@ PixiJS 8 scene with:
 
 Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 
-### Supabase Backend (`packages/supabase/`) — Schema complete, functions stubbed
+### Supabase Backend (`packages/supabase/`) — Implemented
 
-**Database schema** (5 migrations): profiles with ELO/rank, matches, match_rounds, mastery_tracks, player_mastery, unlocks, matchmaking_queue, leaderboard materialized view, RLS policies.
+**Database schema** (6 migrations): profiles with ELO/rank, matches, match_rounds, mastery_tracks, player_mastery, unlocks, matchmaking_queue, leaderboard materialized view, RLS policies. Migration `006_multiplayer.sql` adds room codes, multiplayer columns, matchmaker queue improvements, and cleanup triggers.
 
-**Edge functions** (7): matchmaking, match-create, draft-pick, forge-submit, match-complete, match-state, ai-match-create — all have CORS + auth pattern but DB operations are commented out.
+**Edge functions** (8 implemented, 2 deprecated):
+| Function | Status | Purpose |
+|----------|--------|---------|
+| `match-create` | Implemented | Create new match with room code |
+| `match-join` | Implemented | Join existing match by room code |
+| `draft-pick` | Implemented | Submit draft pick with validation |
+| `forge-submit` | Implemented | Submit forge actions with validation |
+| `match-state` | Implemented | Fetch current match state |
+| `forfeit` | Implemented | Forfeit a match |
+| `matchmaking` | Implemented | Elo-based queue with expanding window |
+| `match-complete` | Deprecated | Superseded by in-function completion logic |
+| `ai-match-create` | Deprecated | AI matches handled client-side via LocalGateway |
+
+All functions use shared CORS + auth utilities from `_shared/supabase.ts` with proper Supabase client initialization.
 
 ---
 
@@ -140,9 +171,8 @@ Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 
 ### Client
 
-14. **useDraftSync payload nesting wrong** — accesses `payload.orbUid` instead of `payload.payload.orbUid`
-15. **Base items hardcoded** — always sword/chainmail; 14 items in data unused
-16. **profileStore not persisted** — local-only despite DB schema being complete
+14. **Base items hardcoded** — always sword/chainmail; 14 items in data unused
+15. **profileStore not persisted** — local-only despite DB schema being complete
 
 ### Dead Code
 
@@ -173,7 +203,12 @@ Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 - **Simultaneous death** — tiebreaker when both die same tick
 - **adapt phase** transitions
 - **matchStore actions** — initMatch, applyAction, resetMatch
-- **All React components** — no .test.tsx files exist
+
+### Multiplayer Test Coverage
+- **Gateway tests:** LocalGateway, RemoteGateway, types, useMatchGateway hook, gateway integration tests
+- **Page tests:** Matchmaking, MatchEntry, Forge (updated for gateway), DisconnectOverlay
+- **Store tests:** authStore (Supabase anonymous auth + offline fallback)
+- **E2E tests:** Playwright tests for multiplayer routing (`:code` patterns, `ai-` prefix)
 
 ---
 
@@ -185,12 +220,17 @@ Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 3. Add regression tests for damage-calc.ts and trigger system
 4. Wire up trigger system (extractTriggers from loadout affixes)
 
-### Phase 4: Backend + Multiplayer
-- Replace MockSupabaseClient with real client (env-gated)
-- Uncomment and complete edge function DB operations
-- Add JWT verification to getUserId
-- Wire Realtime for multiplayer draft/forge/duel
-- ELO-based matchmaking with expanding window
+### Phase 4: Backend + Multiplayer — COMPLETE
+- MatchGateway abstraction (LocalGateway for AI, RemoteGateway for PvP)
+- Supabase anonymous auth with offline fallback
+- 8 Edge Functions implemented (match-create, match-join, draft-pick, forge-submit, match-state, forfeit, matchmaking, plus deprecated ai-match-create/match-complete)
+- Database migration 006_multiplayer.sql (room codes, multiplayer columns, matchmaker improvements)
+- RemoteGateway with Supabase Realtime sync
+- Matchmaking page with AI/PvP casual/PvP ranked flows
+- MatchEntry page for join-via-URL
+- DisconnectOverlay with 60-second reconnect window
+- Room code system for friend invites
+- Elo-based ranked matchmaking with expanding search window
 
 ### Phase 5: Meta + Polish
 - Base item selection UI (unlock the 14 items)
@@ -200,7 +240,7 @@ Simulation Runner, Aggregate Analytics, Match Inspector, Balance Report.
 - Sound, transitions, onboarding tutorial
 
 ### Phase 6: Launch Prep
-- E2E Playwright tests
+- Expand E2E Playwright tests (multiplayer routing covered, game flow not yet)
 - Mobile performance (60fps target)
 - Accessibility pass
 - First ranked season
@@ -226,7 +266,7 @@ pnpm test                           # Run all tests
 | Package | Source Files | Test Files | Status |
 |---------|-------------|------------|--------|
 | `@alloy/engine` | ~43 | 11 | Complete |
-| `@alloy/client` | ~70+ | 6 | Playable (local AI) |
+| `@alloy/client` | ~80+ | 15+ | Playable (local AI + online PvP) |
 | `@alloy/tools` | 8 | — | Complete |
-| `@alloy/supabase` | ~15 | — | Schema done, functions stubbed |
+| `@alloy/supabase` | ~20 | — | Implemented (schema + 8 edge functions) |
 | Data files (JSON) | 5 | — | Complete |

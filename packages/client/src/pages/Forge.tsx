@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { useMatchStore, selectPhase, selectPlayer } from '@/stores/matchStore';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { useMatchStore } from '@/stores/matchStore';
+import { useMatchGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
 import type { DragSource } from '@/stores/forgeStore';
 import { GemCard } from '@/components/GemCard';
@@ -21,6 +22,8 @@ import type {
   ForgePlan,
 } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 const FORGE_TIMER_MS = 90_000;
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
@@ -556,13 +559,18 @@ function DragGhost({
 // ══════════════════════════════════════════════════
 
 export function Forge() {
-  const { id } = useParams();
+  const { code } = useParams();
   const navigate = useNavigate();
 
-  const phase = useMatchStore(selectPhase);
-  const player = useMatchStore(selectPlayer(0));
-  const matchState = useMatchStore(s => s.state);
-  const dispatch = useMatchStore(s => s.dispatch);
+  const gateway = useMatchGateway(code!);
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    return gateway.subscribe(() => forceUpdate((n) => n + 1));
+  }, [gateway]);
+
+  const matchState = gateway.getState();
+  const phase = matchState?.phase ?? null;
+  const player = matchState?.players[0] ?? null;
   const aiController = useMatchStore(s => s.aiController);
   const getRegistry = useMatchStore(s => s.getRegistry);
 
@@ -585,6 +593,8 @@ export function Forge() {
     clearComboSlots,
     reset: resetForgeStore,
   } = useForgeStore();
+
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
   const registry = getRegistry();
   const affixMap = useMemo(() => {
@@ -661,27 +671,28 @@ export function Forge() {
   // ── Navigate to duel when phase changes ──
   useEffect(() => {
     if (phase?.kind === 'duel') {
-      navigate(`/match/${id}/duel`, { replace: true });
+      navigate(`/match/${code}/duel`, { replace: true });
     }
-  }, [phase, navigate, id]);
+  }, [phase, navigate, code]);
 
   // ── Commit flow ──
-  const handleCommit = useCallback(() => {
-    if (committedRef.current || !matchState || !aiController) return;
+  const handleCommit = useCallback(async () => {
+    if (committedRef.current || !matchState) return;
     committedRef.current = true;
 
-    // Replay plan actions through matchStore.dispatch
+    // Replay plan actions through gateway.dispatch
     const actions = getCommitActions();
     for (const action of actions) {
-      dispatch({ kind: 'forge_action', player: 0, action });
+      await gateway.dispatch({ kind: 'forge_action', player: 0, action });
     }
-    dispatch({ kind: 'forge_complete', player: 0 });
+    await gateway.dispatch({ kind: 'forge_complete', player: 0 });
 
-    // AI forge
-    if (phase?.kind === 'forge') {
+    // AI forge (only for local/AI matches)
+    const isAiMatch = code?.startsWith('ai-');
+    if (isAiMatch && aiController && phase?.kind === 'forge') {
       if (round === 1) {
-        dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'weapon', stat1: 'STR', stat2: 'DEX' } });
-        dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'armor', stat1: 'VIT', stat2: 'STR' } });
+        await gateway.dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'weapon', stat1: 'STR', stat2: 'DEX' } });
+        await gateway.dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'armor', stat1: 'VIT', stat2: 'STR' } });
       }
       const aiActions = aiController.planForge(
         matchState.players[1].stockpile,
@@ -691,14 +702,14 @@ export function Forge() {
         matchState.players[0].stockpile,
       );
       for (const action of aiActions) {
-        dispatch({ kind: 'forge_action', player: 1, action });
+        await gateway.dispatch({ kind: 'forge_action', player: 1, action });
       }
-      dispatch({ kind: 'forge_complete', player: 1 });
+      await gateway.dispatch({ kind: 'forge_complete', player: 1 });
     }
 
     closeConfirmModal();
     resetForgeStore();
-  }, [matchState, aiController, dispatch, phase, round, getCommitActions, closeConfirmModal, resetForgeStore]);
+  }, [matchState, aiController, gateway, phase, round, code, getCommitActions, closeConfirmModal, resetForgeStore]);
 
   // ── Timer auto-commit ──
   const handleTimerExpire = useCallback(() => {
@@ -909,11 +920,7 @@ export function Forge() {
 
   // ── Render guard ──
   if (!matchState || phase?.kind !== 'forge' || !player || !plan) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-surface-400">Loading forge...</p>
-      </div>
-    );
+    return <Navigate to="/queue" replace />;
   }
 
   const flux = plan.tentativeFlux;
@@ -929,6 +936,7 @@ export function Forge() {
 
   return (
     <div className="page-enter flex h-full flex-col gap-2 overflow-y-auto p-3">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* ForgeHeader */}
       <header className="flex items-center justify-between">
         <div>

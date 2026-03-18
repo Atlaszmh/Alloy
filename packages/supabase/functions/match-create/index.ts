@@ -1,67 +1,83 @@
 // Edge Function: POST /functions/v1/match-create
-// Creates a new match between two players (called by matchmaking or AI match flow)
+// Creates a new match with a room code for the authenticated user.
 
-import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getServiceClient, getUserId } from '../_shared/supabase.ts';
+import { createMatch, DataRegistry, loadAndValidateData } from '@alloy/engine';
+import type { MatchMode } from '@alloy/engine';
+
+let registry: DataRegistry | null = null;
+function getRegistry(): DataRegistry {
+  if (!registry) {
+    const data = loadAndValidateData();
+    registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+  }
+  return registry;
+}
 
 interface MatchCreateRequest {
-  player1Id: string;
-  player2Id: string | null;  // null for AI matches
   mode: 'quick' | 'unranked' | 'ranked';
-  isAiMatch?: boolean;
-  aiDifficulty?: number;
-  seasonId?: number;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const body: MatchCreateRequest = await req.json();
+  try {
+    const userId = await getUserId(req);
+    const body: MatchCreateRequest = await req.json();
 
-  // Generate deterministic seed
-  const poolSeed = Math.floor(Math.random() * 2147483647);
+    if (!body.mode || !['quick', 'unranked', 'ranked'].includes(body.mode)) {
+      return errorResponse('Invalid mode. Must be quick, unranked, or ranked.', 400);
+    }
 
-  // Select base weapon/armor (for now, always sword + chainmail)
-  const baseWeaponId = 'sword';
-  const baseArmorId = 'chainmail';
+    const client = getServiceClient();
 
-  // In production:
-  // 1. Insert match row
-  // const { data: match } = await supabase.from('matches').insert({
-  //   player1_id: body.player1Id,
-  //   player2_id: body.player2Id,
-  //   is_ai_match: body.isAiMatch ?? false,
-  //   ai_difficulty: body.aiDifficulty,
-  //   mode: body.mode,
-  //   season_id: body.seasonId,
-  //   pool_seed: poolSeed,
-  //   base_weapon_id: baseWeaponId,
-  //   base_armor_id: baseArmorId,
-  // }).select().single();
+    // Generate a unique room code via database function
+    const { data: roomCode, error: rpcError } = await client.rpc('generate_room_code');
+    if (rpcError || !roomCode) {
+      return errorResponse('Failed to generate room code', 500);
+    }
 
-  // 2. Create match_rounds row for round 1
-  // await supabase.from('match_rounds').insert({
-  //   match_id: match.id,
-  //   round: 1,
-  // });
+    // Generate random seed for deterministic game state
+    const seed = Math.floor(Math.random() * 999999999);
 
-  // 3. Generate pool using engine and validate archetypes
-  // const data = loadAndValidateData();
-  // const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
-  // const pool = generatePool(poolSeed, body.mode, registry);
+    // Create initial engine match state
+    // Player 2 is a placeholder until someone joins
+    const matchId = crypto.randomUUID();
+    const baseWeaponId = 'sword';
+    const baseArmorId = 'chainmail';
 
-  // 4. Broadcast match start to both players
-  // await supabase.channel(`match:${match.id}`).send({
-  //   type: 'broadcast',
-  //   event: 'match:start',
-  //   payload: { matchId: match.id, poolSeed, baseWeaponId, baseArmorId, pool },
-  // });
+    const reg = getRegistry();
+    const gameState = createMatch(matchId, seed, body.mode as MatchMode, [userId, ''], baseWeaponId, baseArmorId, reg);
 
-  const matchId = crypto.randomUUID();
+    // Room code expires in 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-  return jsonResponse({
-    matchId,
-    poolSeed,
-    baseWeaponId,
-    baseArmorId,
-  });
-}
+    const { data: match, error: insertError } = await client
+      .from('matches')
+      .insert({
+        id: matchId,
+        room_code: roomCode,
+        mode: body.mode,
+        status: 'waiting',
+        player1_id: userId,
+        game_state: gameState,
+        version: 0,
+        seed,
+        base_weapon_id: baseWeaponId,
+        base_armor_id: baseArmorId,
+        room_code_expires_at: expiresAt,
+      })
+      .select()
+      .single();
+
+    if (insertError || !match) {
+      return errorResponse(`Failed to create match: ${insertError?.message ?? 'unknown'}`, 500);
+    }
+
+    return jsonResponse({ roomCode, matchId });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    return errorResponse(message, 401);
+  }
+});

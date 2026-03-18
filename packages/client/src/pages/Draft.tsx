@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { useMatchStore, selectPhase, selectPool, selectPlayer } from '@/stores/matchStore';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { useMatchStore } from '@/stores/matchStore';
+import { useMatchGateway } from '@/gateway';
 import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
@@ -8,6 +9,8 @@ import { Timer } from '@/components/Timer';
 import { useGemSize } from '@/hooks/useGemSize';
 import type { AffixDef, OrbInstance } from '@alloy/engine';
 import { getStatLabel } from '@/shared/utils/stat-label';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -135,16 +138,21 @@ function DragGhost({
 // ── Main Draft component ──
 
 export function Draft() {
-  const { id } = useParams();
+  const { code } = useParams();
   const navigate = useNavigate();
 
-  const phase = useMatchStore(selectPhase);
-  const pool = useMatchStore(selectPool);
-  const player0 = useMatchStore(selectPlayer(0));
-  const player1 = useMatchStore(selectPlayer(1));
-  const dispatch = useMatchStore((s) => s.dispatch);
+  const gateway = useMatchGateway(code!);
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    return gateway.subscribe(() => forceUpdate((n) => n + 1));
+  }, [gateway]);
+
+  const matchState = gateway.getState();
+  const phase = matchState?.phase ?? null;
+  const pool = matchState?.pool ?? [];
+  const player0 = matchState?.players[0] ?? null;
+  const player1 = matchState?.players[1] ?? null;
   const aiController = useMatchStore((s) => s.aiController);
-  const matchState = useMatchStore((s) => s.state);
   const getRegistry = useMatchStore((s) => s.getRegistry);
 
   const selectedOrbUid = useDraftStore((s) => s.selectedOrbUid);
@@ -156,6 +164,8 @@ export function Draft() {
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
   const registry = getRegistry();
   const affixMap = new Map<string, AffixDef>();
@@ -179,9 +189,10 @@ export function Draft() {
   // ── Draft action ──
   const draftOrb = useCallback((orbUid: string) => {
     if (!isPlayerTurn) return;
-    const result = dispatch({ kind: 'draft_pick', player: 0, orbUid });
-    if (result.ok) confirmPick();
-  }, [isPlayerTurn, dispatch, confirmPick]);
+    gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid }).then((result) => {
+      if (result.ok) confirmPick();
+    });
+  }, [isPlayerTurn, gateway, confirmPick]);
 
   // ── Drag handlers ──
   const handleDragStart = useCallback((uid: string, e: React.PointerEvent) => {
@@ -224,15 +235,15 @@ export function Draft() {
       const orbUid = aiController.pickOrb(
         matchState.pool, matchState.players[1].stockpile, matchState.players[0].stockpile,
       );
-      dispatch({ kind: 'draft_pick', player: 1, orbUid });
+      gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
     }, 500);
     return () => clearTimeout(timeout);
-  }, [matchState, phase, aiController, dispatch]);
+  }, [matchState, phase, aiController, gateway]);
 
   // ── Phase transitions ──
   useEffect(() => {
-    if (phase?.kind === 'forge') navigate(`/match/${id}/forge`, { replace: true });
-  }, [phase, navigate, id]);
+    if (phase?.kind === 'forge') navigate(`/match/${code}/forge`, { replace: true });
+  }, [phase, navigate, code]);
 
   const handleTimerExpire = useCallback(() => {
     if (!isPlayerTurn || pool.length === 0) return;
@@ -241,11 +252,7 @@ export function Draft() {
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
   if (!matchState || phase?.kind !== 'draft') {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-surface-400">Loading draft...</p>
-      </div>
-    );
+    return <Navigate to="/queue" replace />;
   }
 
   const dragOrb = dragUid ? pool.find((o) => o.uid === dragUid) : null;
@@ -253,6 +260,7 @@ export function Draft() {
 
   return (
     <div className="page-enter flex h-full flex-col p-2">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* Drag ghost */}
       {dragUid && dragAffix && dragOrb && (
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />

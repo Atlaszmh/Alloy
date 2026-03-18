@@ -1,62 +1,131 @@
 // Edge Function: POST /functions/v1/draft-pick
-// Validates and records a draft pick, broadcasts to opponent
+// Validates and records a draft pick, broadcasts to opponent.
+// Uses optimistic locking with retry on version conflict.
 
-import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { getUserId } from '../_shared/supabase.ts';
+import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import { applyAction, DataRegistry, loadAndValidateData } from '@alloy/engine';
+import type { MatchState } from '@alloy/engine';
 
-interface DraftPickRequest {
-  matchId: string;
-  orbUid: string;
+// Module-scope cached registry for warm invocations
+let registry: DataRegistry | null = null;
+
+function getRegistry(): DataRegistry {
+  if (registry) return registry;
+  const data = loadAndValidateData();
+  registry = new DataRegistry(
+    data.affixes,
+    data.combinations,
+    data.synergies,
+    data.baseItems,
+    data.balance,
+  );
+  return registry;
 }
 
-export default async function handler(req: Request): Promise<Response> {
+const MAX_RETRIES = 3;
+
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const userId = getUserId(req);
-  if (!userId) return errorResponse('Unauthorized', 401);
+  try {
+    const userId = await getUserId(req);
+    const { roomCode, orbUid } = await req.json() as { roomCode: string; orbUid: string };
 
-  const body: DraftPickRequest = await req.json();
+    if (!roomCode || !orbUid) {
+      return errorResponse('Missing roomCode or orbUid', 400);
+    }
 
-  // In production:
-  // 1. Load match from DB
-  // const { data: match } = await supabase.from('matches').select('*').eq('id', body.matchId).single();
+    const client = getServiceClient();
+    const reg = getRegistry();
 
-  // 2. Verify it's this player's turn
-  // const playerIndex = match.player1_id === userId ? 0 : match.player2_id === userId ? 1 : -1;
-  // if (playerIndex === -1) return errorResponse('Not a participant');
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      // Load match fresh each attempt
+      const match = await loadMatchByRoomCode(client, roomCode);
 
-  // 3. Verify match is in draft phase
-  // if (match.phase !== 'draft') return errorResponse('Not in draft phase');
+      if (match.status !== 'active') {
+        return errorResponse('Match is not active', 400);
+      }
 
-  // 4. Validate the pick using engine
-  // - Reconstruct draft state from stored picks
-  // - Call makePick() to validate
-  // - If invalid, return error
+      // Authorize player
+      const playerIndex = match.player1_id === userId ? 0
+        : match.player2_id === userId ? 1
+        : -1;
+      if (playerIndex === -1) {
+        return errorResponse('Not a participant in this match', 403);
+      }
 
-  // 5. Store the pick
-  // const { data: round } = await supabase.from('match_rounds').select('draft_picks')
-  //   .eq('match_id', body.matchId).eq('round', 1).single();
-  // const picks = round.draft_picks || [];
-  // picks.push({ player: playerIndex, orbUid: body.orbUid, order: picks.length });
-  // await supabase.from('match_rounds').update({ draft_picks: picks })
-  //   .eq('match_id', body.matchId).eq('round', 1);
+      const gameState = match.game_state as MatchState;
 
-  // 6. Broadcast to channel
-  // await supabase.channel(`match:${body.matchId}`).send({
-  //   type: 'broadcast',
-  //   event: 'draft:pick',
-  //   payload: { player: playerIndex, orbUid: body.orbUid, pickOrder: picks.length },
-  // });
+      // Apply the draft pick action via engine
+      const result = applyAction(
+        gameState,
+        { kind: 'draft_pick', player: playerIndex as 0 | 1, orbUid },
+        reg,
+      );
 
-  // 7. Check if draft is complete → transition to forge
-  // if (allPicksMade) {
-  //   await supabase.from('matches').update({ phase: 'forge' }).eq('id', body.matchId);
-  //   await supabase.channel(`match:${body.matchId}`).send({
-  //     type: 'broadcast',
-  //     event: 'phase:forge',
-  //     payload: { round: 1, timerEnd: Date.now() + 45000 },
-  //   });
-  // }
+      if (!result.ok) {
+        return errorResponse(result.error, 400);
+      }
 
-  return jsonResponse({ success: true, pickOrder: 0 });
-}
+      const newState = result.state;
+      const phaseChanged = newState.phase.kind !== gameState.phase.kind;
+
+      // Persist with optimistic locking
+      const { data: updated, error: updateError } = await client
+        .from('matches')
+        .update({
+          game_state: newState,
+          phase: newState.phase.kind,
+          version: match.version + 1,
+        })
+        .eq('id', match.id)
+        .eq('version', match.version)
+        .select()
+        .single();
+
+      if (updateError || !updated) {
+        // Version conflict — retry from scratch
+        if (attempt < MAX_RETRIES - 1) continue;
+        return errorResponse('Version conflict — please retry', 409);
+      }
+
+      // Broadcast draft_pick event
+      const channel = client.channel(`match:${roomCode}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'draft_pick',
+        payload: {
+          player: playerIndex,
+          orbUid,
+          pool: newState.pool,
+          stockpiles: [
+            newState.players[0].stockpile,
+            newState.players[1].stockpile,
+          ],
+        },
+      });
+
+      // If phase changed (draft -> forge), broadcast phase_changed
+      if (phaseChanged) {
+        await channel.send({
+          type: 'broadcast',
+          event: 'phase_changed',
+          payload: {
+            phase: newState.phase,
+          },
+        });
+      }
+
+      return jsonResponse({ ok: true, phase: newState.phase });
+    }
+
+    return errorResponse('Failed after retries', 500);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    const status = message.includes('not found') ? 404
+      : message.includes('Unauthorized') || message.includes('token') ? 401
+      : 500;
+    return errorResponse(message, status);
+  }
+});

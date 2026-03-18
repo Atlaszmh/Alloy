@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
-import { useNavigate } from 'react-router';
-import { useMatchStore, selectPhase, selectRoundResults, selectDuelLogs } from '@/stores/matchStore';
+import { useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { useMatchStore } from '@/stores/matchStore';
+import { useMatchGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import type { CombatLog } from '@alloy/engine';
 
@@ -63,16 +64,29 @@ function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
 }
 
 export function PostMatch() {
+  const { code } = useParams();
   const navigate = useNavigate();
-  const phase = useMatchStore(selectPhase);
-  const roundResults = useMatchStore(selectRoundResults);
-  const duelLogs = useMatchStore(selectDuelLogs);
+
+  const gateway = useMatchGateway(code!);
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    return gateway.subscribe(() => forceUpdate((n) => n + 1));
+  }, [gateway]);
+
+  const matchState = gateway.getState();
+  const phase = matchState?.phase ?? null;
+  const roundResults = matchState?.roundResults ?? [];
+  const duelLogs = matchState?.duelLogs ?? [];
   const reset = useMatchStore((s) => s.reset);
 
   const winner = phase?.kind === 'complete' ? phase.winner : null;
   const scores = phase?.kind === 'complete' ? phase.scores : [0, 0];
   const isVictory = winner === 0;
   const isDraw = winner === 'draw';
+
+  if (!matchState || phase?.kind !== 'complete') {
+    return <Navigate to="/queue" replace />;
+  }
 
   const handlePlayAgain = () => {
     reset();

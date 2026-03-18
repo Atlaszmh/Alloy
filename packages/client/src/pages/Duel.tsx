@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
-import { useMatchStore, selectPhase, selectPlayer, selectDuelLogs, selectRoundResults } from '@/stores/matchStore';
+import { Navigate, useNavigate, useParams } from 'react-router';
+import { useMatchStore } from '@/stores/matchStore';
+import { useMatchGateway } from '@/gateway';
 import type { CombatLog, TickEvent, DuelResult, DerivedStats } from '@alloy/engine';
 import { calculateStats } from '@alloy/engine';
 import { DuelRenderer } from '@/components/DuelRenderer';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 function HPBar({ current, max, label, side }: { current: number; max: number; label: string; side: 'left' | 'right' }) {
   const pct = Math.max(0, Math.min(100, (current / max) * 100));
@@ -119,17 +122,24 @@ function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLo
 }
 
 export function Duel() {
-  const { id } = useParams();
+  const { code } = useParams();
   const navigate = useNavigate();
 
-  const phase = useMatchStore(selectPhase);
-  const matchState = useMatchStore((s) => s.state);
-  const dispatch = useMatchStore((s) => s.dispatch);
-  const duelLogs = useMatchStore(selectDuelLogs);
-  const roundResults = useMatchStore(selectRoundResults);
-  const player0 = useMatchStore(selectPlayer(0));
-  const player1 = useMatchStore(selectPlayer(1));
+  const gateway = useMatchGateway(code!);
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    return gateway.subscribe(() => forceUpdate((n) => n + 1));
+  }, [gateway]);
+
+  const matchState = gateway.getState();
+  const phase = matchState?.phase ?? null;
+  const duelLogs = matchState?.duelLogs ?? [];
+  const roundResults = matchState?.roundResults ?? [];
+  const player0 = matchState?.players[0] ?? null;
+  const player1 = matchState?.players[1] ?? null;
   const getRegistry = useMatchStore((s) => s.getRegistry);
+
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
   const [playbackTick, setPlaybackTick] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -144,10 +154,10 @@ export function Duel() {
       // Check if this round's duel hasn't been run yet
       const currentRound = phase.round;
       if (duelLogs.length < currentRound) {
-        dispatch({ kind: 'advance_phase' });
+        gateway.dispatch({ kind: 'advance_phase' });
       }
     }
-  }, [phase, matchState, duelLogs.length, dispatch]);
+  }, [phase, matchState, duelLogs.length, gateway]);
 
   const currentLog = useMemo(() => {
     if (!phase) return null;
@@ -234,13 +244,13 @@ export function Duel() {
   const handleContinue = () => {
     // Navigate to next phase
     if (phase?.kind === 'draft') {
-      navigate(`/match/${id}/draft`, { replace: true });
+      navigate(`/match/${code}/draft`, { replace: true });
     } else if (phase?.kind === 'forge') {
-      navigate(`/match/${id}/forge`, { replace: true });
+      navigate(`/match/${code}/forge`, { replace: true });
     } else if (phase?.kind === 'complete') {
-      navigate(`/match/${id}/result`, { replace: true });
+      navigate(`/match/${code}/result`, { replace: true });
     } else if (phase?.kind === 'adapt') {
-      navigate(`/match/${id}/forge`, { replace: true });
+      navigate(`/match/${code}/forge`, { replace: true });
     }
   };
 
@@ -254,17 +264,14 @@ export function Duel() {
   }, [phase]);
 
   if (!matchState || !currentLog || !hpState) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-surface-400">Loading duel...</p>
-      </div>
-    );
+    return <Navigate to="/queue" replace />;
   }
 
   const round = currentResult?.round ?? 1;
 
   return (
     <div className="page-enter flex h-full flex-col p-3">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
 
       {/* ═══ TOP: Opponent HP + round info ═══ */}
