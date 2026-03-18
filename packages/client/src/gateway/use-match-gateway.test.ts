@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useMatchGateway } from './use-match-gateway';
 import { LocalGateway } from './local-gateway';
+import { RemoteGateway } from './remote-gateway';
+
+// Mock supabase so RemoteGateway can construct without real credentials
+vi.mock('@/shared/utils/supabase', () => ({
+  getSupabase: () => null,
+  isOnline: () => false,
+}));
 
 describe('useMatchGateway', () => {
   it('returns LocalGateway for ai- prefixed codes', () => {
@@ -34,9 +41,10 @@ describe('useMatchGateway', () => {
     unmount();
   });
 
-  it('throws for non-ai codes', () => {
-    expect(() => {
-      renderHook(() => useMatchGateway('pvp-match-1'));
-    }).toThrow('RemoteGateway not yet implemented');
+  it('returns RemoteGateway for non-ai codes', () => {
+    const { result, unmount } = renderHook(() => useMatchGateway('pvp-match-1'));
+    expect(result.current).toBeInstanceOf(RemoteGateway);
+    expect(result.current.code).toBe('pvp-match-1');
+    unmount();
   });
 });

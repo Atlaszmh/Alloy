@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import type { MatchGateway } from './types';
 import { LocalGateway } from './local-gateway';
+import { RemoteGateway } from './remote-gateway';
 
 export function useMatchGateway(code: string): MatchGateway {
   const gatewayRef = useRef<MatchGateway | null>(null);
@@ -17,7 +18,7 @@ export function useMatchGateway(code: string): MatchGateway {
     if (code.startsWith('ai-')) {
       gatewayRef.current = new LocalGateway(code);
     } else {
-      throw new Error('RemoteGateway not yet implemented');
+      gatewayRef.current = new RemoteGateway(code);
     }
   }
 
