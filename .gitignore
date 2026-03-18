@@ -35,3 +35,4 @@ packages/supabase/.temp/
 # Logs
 *.log
 npm-debug.log*
+.claude/worktrees/
