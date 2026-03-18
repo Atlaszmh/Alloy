@@ -17,7 +17,8 @@ export function Matchmaking() {
     try {
       const seed = Math.floor(Math.random() * 999999);
       startLocalMatch(seed, 'ranked', aiTier);
-      navigate('/match/local/draft');
+      const code = 'ai-' + Math.random().toString(36).substring(2, 8);
+      navigate(`/match/${code}/draft`);
     } catch (err) {
       console.error('Failed to start match:', err);
       alert('Failed to start match: ' + (err instanceof Error ? err.message : String(err)));
