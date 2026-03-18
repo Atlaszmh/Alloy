@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { Forge } from '../Forge';
 import { useMatchStore } from '@/stores/matchStore';
@@ -263,9 +263,9 @@ function setupStores(
 
 function renderForge() {
   return render(
-    <MemoryRouter initialEntries={['/match/test-match/forge']}>
+    <MemoryRouter initialEntries={['/match/ai-test01/forge']}>
       <Routes>
-        <Route path="/match/:id/forge" element={<Forge />} />
+        <Route path="/match/:code/forge" element={<Forge />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -380,7 +380,7 @@ describe('Forge page', () => {
     expect(useForgeStore.getState().confirmModalOpen).toBe(true);
   });
 
-  it('dispatches forge actions when confirming in modal', () => {
+  it('dispatches forge actions when confirming in modal', async () => {
     const { dispatchFn } = setupStores();
     renderForge();
 
@@ -391,13 +391,15 @@ describe('Forge page', () => {
     const confirmButton = screen.getByRole('button', { name: 'CONFIRM' });
     fireEvent.click(confirmButton);
 
-    // Should dispatch forge_complete
-    expect(dispatchFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'forge_complete',
-        player: 0,
-      }),
-    );
+    // Should dispatch forge_complete (async through gateway)
+    await waitFor(() => {
+      expect(dispatchFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'forge_complete',
+          player: 0,
+        }),
+      );
+    });
   });
 
   it('displays live stats preview bar', () => {
@@ -449,7 +451,7 @@ describe('Forge page', () => {
     expect(screen.queryByText('armor:')).toBeNull();
   });
 
-  it('renders loading state when no match state', () => {
+  it('redirects to /queue when no match state', () => {
     useMatchStore.setState({
       state: null,
       aiController: null,
@@ -459,7 +461,8 @@ describe('Forge page', () => {
     useForgeStore.getState().reset();
     renderForge();
 
-    expect(screen.getByText('Loading forge...')).toBeTruthy();
+    // Should redirect away (no forge content rendered)
+    expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
   it('renders item with placed orb showing affix line', () => {
@@ -492,7 +495,7 @@ describe('Forge page', () => {
     expect(screen.getByText(/Fire Damage/)).toBeTruthy();
   });
 
-  it('renders loading state when no match state', () => {
+  it('redirects to /queue when no match state (variant)', () => {
     // No match state means no plan can be initialized
     useMatchStore.setState({
       state: null,
@@ -504,7 +507,8 @@ describe('Forge page', () => {
     useForgeStore.setState({ plan: null });
     renderForge();
 
-    expect(screen.getByText('Loading forge...')).toBeTruthy();
+    // Should redirect away (no forge content rendered)
+    expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
   it('renders base item names in ItemCard headers', () => {
