@@ -1,56 +1,75 @@
 // Edge Function: POST /functions/v1/matchmaking
-// Handles queue join/leave and ELO-based matching
+// Handles queue join/leave. Actual pairing is done by pg_cron.
 
-import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { getUserId } from '../_shared/supabase.ts';
+import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getServiceClient, getUserId } from '../_shared/supabase.ts';
 
 interface MatchmakingRequest {
   action: 'join' | 'leave';
 }
 
-// ELO matching config
-const INITIAL_WINDOW = 50;
-const WINDOW_EXPANSION = 25;
-const MAX_WINDOW = 200;
-const EXPANSION_INTERVAL_MS = 5000;
-
-export default async function handler(req: Request): Promise<Response> {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const userId = getUserId(req);
-  if (!userId) return errorResponse('Unauthorized', 401);
+  try {
+    const userId = await getUserId(req);
+    const body: MatchmakingRequest = await req.json();
 
-  const body: MatchmakingRequest = await req.json();
+    if (!body.action || !['join', 'leave'].includes(body.action)) {
+      return errorResponse('Invalid action. Must be join or leave.', 400);
+    }
 
-  if (body.action === 'leave') {
-    // Remove from queue
-    // await supabase.from('matchmaking_queue').delete().eq('player_id', userId);
-    return jsonResponse({ status: 'left_queue' });
-  }
+    const client = getServiceClient();
 
-  if (body.action === 'join') {
-    // Get player's ELO and rank
-    // const { data: profile } = await supabase.from('profiles').select('elo, rank_tier').eq('id', userId).single();
+    if (body.action === 'leave') {
+      await client
+        .from('matchmaking_queue')
+        .delete()
+        .eq('player_id', userId);
+
+      return jsonResponse({ status: 'left_queue' });
+    }
+
+    // action === 'join'
+
+    // Check for duplicate queue entries
+    const { data: existing } = await client
+      .from('matchmaking_queue')
+      .select('id')
+      .eq('player_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      return jsonResponse({ status: 'already_queued' });
+    }
+
+    // Load profile for Elo
+    const { data: profile, error: profileError } = await client
+      .from('profiles')
+      .select('elo')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !profile) {
+      return errorResponse('Profile not found', 404);
+    }
 
     // Insert into matchmaking queue
-    // await supabase.from('matchmaking_queue').insert({ player_id: userId, elo: profile.elo, rank_tier: profile.rank_tier });
+    const { error: insertError } = await client
+      .from('matchmaking_queue')
+      .insert({
+        player_id: userId,
+        elo: profile.elo,
+      });
 
-    // Try to find a match immediately
-    // The pg_cron job handles periodic matching, but we can also check here
-    // const match = await tryMatchPlayer(userId, profile.elo, profile.rank_tier);
-    // if (match) return jsonResponse({ status: 'matched', matchId: match.id });
+    if (insertError) {
+      return errorResponse(`Failed to join queue: ${insertError.message}`, 500);
+    }
 
     return jsonResponse({ status: 'queued' });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    const status = message.includes('Unauthorized') || message.includes('token') ? 401 : 500;
+    return errorResponse(message, status);
   }
-
-  return errorResponse('Invalid action');
-}
-
-// Matchmaking algorithm:
-// 1. Initial window: ±50 ELO for first 5 seconds
-// 2. Expansion: +25 ELO every 5 seconds, up to ±200 max
-// 3. Rank tier constraint: ±1 rank tier
-// 4. After 60s with no match: offer AI match option
-//
-// Implementation: pg_cron runs every 3 seconds, queries queue ordered by queued_at,
-// pairs players within ELO range. On pairing, calls match-create and removes both from queue.
+});

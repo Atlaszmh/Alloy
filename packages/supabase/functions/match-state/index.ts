@@ -1,57 +1,56 @@
-// Edge Function: GET /functions/v1/match-state?matchId={id}
-// Returns current match state with visibility filtering
+// Edge Function: GET /functions/v1/match-state?roomCode=HK7P2Q
+// Returns current match state with visibility filtering (hides opponent loadout during forge).
 
-import { corsHeaders, corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { getUserId } from '../_shared/supabase.ts';
+import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import type { MatchState } from '@alloy/engine';
 
-export default async function handler(req: Request): Promise<Response> {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
 
-  const userId = getUserId(req);
-  if (!userId) return errorResponse('Unauthorized', 401);
+  try {
+    const userId = await getUserId(req);
 
-  const url = new URL(req.url);
-  const matchId = url.searchParams.get('matchId');
-  if (!matchId) return errorResponse('matchId required');
+    const url = new URL(req.url);
+    const roomCode = url.searchParams.get('roomCode');
+    if (!roomCode) {
+      return errorResponse('roomCode query parameter required', 400);
+    }
 
-  // In production:
-  // 1. Load match
-  // const { data: match } = await supabase.from('matches').select('*').eq('id', matchId).single();
-  // if (!match) return errorResponse('Match not found', 404);
+    const client = getServiceClient();
+    const match = await loadMatchByRoomCode(client, roomCode);
 
-  // 2. Verify player is participant
-  // const playerIndex = match.player1_id === userId ? 0 : match.player2_id === userId ? 1 : -1;
-  // if (playerIndex === -1) return errorResponse('Not a participant', 403);
+    // Authorize: must be a participant
+    const playerIndex = match.player1_id === userId ? 0
+      : match.player2_id === userId ? 1
+      : -1;
+    if (playerIndex === -1) {
+      return errorResponse('Not a participant in this match', 403);
+    }
 
-  // 3. Load current round
-  // const { data: round } = await supabase.from('match_rounds').select('*')
-  //   .eq('match_id', matchId).eq('round', match.round).single();
+    const gameState = match.game_state as MatchState;
 
-  // 4. Apply visibility filtering
-  // During forge: opponent build = null
-  // During/after duel: opponent build revealed
-  // const opponentBuild = match.phase === 'forge' ? null :
-  //   (playerIndex === 0 ? round.player2_build : round.player1_build);
-  // const myBuild = playerIndex === 0 ? round.player1_build : round.player2_build;
+    // Visibility filtering: during forge phase, hide opponent's loadout
+    const filteredState = { ...gameState };
+    if (gameState.phase.kind === 'forge') {
+      const opponentIndex = playerIndex === 0 ? 1 : 0;
+      filteredState.players = gameState.players.map((p, i) =>
+        i === opponentIndex ? { ...p, loadout: null as unknown as typeof p.loadout } : p,
+      ) as [typeof gameState.players[0], typeof gameState.players[1]];
+    }
 
-  // 5. Mark used orbs in stockpiles
-  // Used-orb marking: cross-reference stockpile against loadout slots
-  // Each orb gets a `usedIn: 'weapon' | 'armor' | null` field
-
-  // 6. Load all round results for score display
-  // const { data: allRounds } = await supabase.from('match_rounds')
-  //   .select('round, duel_winner, duel_event_log')
-  //   .eq('match_id', matchId)
-  //   .order('round');
-
-  return jsonResponse({
-    match: null,
-    currentRound: 1,
-    pool: [],
-    myStockpile: [],
-    opponentStockpile: [],
-    myBuild: null,
-    opponentBuild: null,
-    combatLog: null,
-  });
-}
+    return jsonResponse({
+      matchId: match.id,
+      roomCode: match.room_code,
+      status: match.status,
+      state: filteredState,
+      playerIndex,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    const status = message.includes('not found') ? 404
+      : message.includes('Unauthorized') || message.includes('token') ? 401
+      : 500;
+    return errorResponse(message, status);
+  }
+});
