@@ -3,8 +3,9 @@ import { useMatchStore } from '@/stores/matchStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useEffect, useState } from 'react';
 import { getSupabase, isOnline } from '@/shared/utils/supabase';
+import { useMatchmaking } from '@/features/matchmaking/hooks/useMatchmaking';
 
-type View = 'menu' | 'ai-select' | 'waiting-for-friend' | 'join-match';
+type View = 'menu' | 'ai-select' | 'finding-match' | 'waiting-for-friend' | 'join-match';
 
 export function Matchmaking() {
   const navigate = useNavigate();
@@ -21,9 +22,25 @@ export function Matchmaking() {
 
   const online = isOnline();
 
+  const {
+    status: queueStatus,
+    roomCode: matchRoomCode,
+    queueTime,
+    offerAi,
+    joinQueue,
+    leaveQueue,
+  } = useMatchmaking();
+
   useEffect(() => {
     if (!playerId) loginAsGuest();
   }, [playerId, loginAsGuest]);
+
+  // Navigate to match when queue finds one
+  useEffect(() => {
+    if (queueStatus === 'matched' && matchRoomCode) {
+      navigate(`/match/${matchRoomCode}/draft`);
+    }
+  }, [queueStatus, matchRoomCode, navigate]);
 
   // Listen for match_started when waiting for friend
   useEffect(() => {
@@ -54,6 +71,23 @@ export function Matchmaking() {
       console.error('Failed to start match:', err);
       setError('Failed to start match: ' + (err instanceof Error ? err.message : String(err)));
     }
+  };
+
+  const handleFindMatch = async () => {
+    setView('finding-match');
+    setError(null);
+    await joinQueue();
+  };
+
+  const handleCancelQueue = async () => {
+    await leaveQueue();
+    setView('menu');
+  };
+
+  const handlePlayAiWhileWaiting = () => {
+    // Leave the queue and start an AI match
+    leaveQueue();
+    handlePlayVsAI(3);
   };
 
   const handleCreateMatch = async () => {
@@ -167,6 +201,45 @@ export function Matchmaking() {
     );
   }
 
+  if (view === 'finding-match') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
+        <h2 className="text-2xl font-bold text-accent-400">Find Match</h2>
+
+        <div className="flex flex-col items-center gap-3">
+          <p className="animate-pulse text-lg text-white">
+            Searching for opponent... {queueTime}s
+          </p>
+
+          {queueStatus === 'error' && (
+            <p className="text-sm text-red-400">Failed to join queue. Please try again.</p>
+          )}
+
+          {offerAi && (
+            <div className="mt-4 flex flex-col items-center gap-3 rounded-lg border border-surface-500 bg-surface-700 p-4">
+              <p className="text-sm text-surface-300">
+                No opponents found yet. Play vs AI while you wait?
+              </p>
+              <button
+                onClick={handlePlayAiWhileWaiting}
+                className="rounded-lg bg-accent-600 px-6 py-3 font-medium text-white transition-colors hover:bg-accent-500"
+              >
+                Play vs AI
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={handleCancelQueue}
+          className="mt-4 rounded-lg bg-surface-700 px-6 py-2 text-sm text-surface-400 hover:bg-surface-600"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   if (view === 'waiting-for-friend') {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
@@ -247,6 +320,13 @@ export function Matchmaking() {
 
         {online && (
           <>
+            <button
+              onClick={handleFindMatch}
+              className="rounded-lg bg-accent-600 px-6 py-3 font-medium text-white transition-colors hover:bg-accent-500"
+            >
+              Find Match
+            </button>
+
             <button
               onClick={handleCreateMatch}
               disabled={loading}
