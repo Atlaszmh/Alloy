@@ -1,5 +1,6 @@
 import { type ButtonHTMLAttributes } from 'react';
 import { useHaptic } from '@/hooks/useHaptic';
+import { playSound } from '@/shared/utils/sound-manager';
 
 interface HapticButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -51,6 +52,7 @@ export function HapticButton({
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     haptic(hapticStyle);
+    playSound('buttonClick');
     onClick?.(e);
   };
 

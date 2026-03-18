@@ -7,6 +7,7 @@ import { calculateStats } from '@alloy/engine';
 import { DuelRenderer } from '@/components/DuelRenderer';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 function HPBar({ current, max, label, side }: { current: number; max: number; label: string; side: 'left' | 'right' }) {
@@ -240,6 +241,8 @@ export function Duel() {
     }
     return events;
   }, [currentLog, playbackTick]);
+
+  useDuelSounds(visibleEvents, isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
     // Navigate to next phase

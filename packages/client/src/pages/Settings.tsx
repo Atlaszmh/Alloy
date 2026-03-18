@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router';
 import { useUIStore } from '@/stores/uiStore';
+import { playSound } from '@/shared/utils/sound-manager';
 
 type ColorblindMode = 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
 
@@ -9,7 +10,7 @@ import { useState } from 'react';
 
 export function Settings() {
   const navigate = useNavigate();
-  const { isMuted, showDebug, toggleMute, toggleDebug } = useUIStore();
+  const { isMuted, showDebug, toggleMute, toggleDebug, masterVolume, sfxVolume, uiVolume, setVolume } = useUIStore();
 
   const [colorblindMode, setColorblindMode] = useState<ColorblindMode>('none');
   const [hapticEnabled, setHapticEnabled] = useState(true);
@@ -69,13 +70,39 @@ export function Settings() {
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-surface-300">
             Audio
           </h3>
-          <div className="rounded-lg border border-surface-600 bg-surface-800 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
-            <ToggleRow
-              label="Mute Sound"
-              description="Disable all game audio"
-              enabled={isMuted}
-              onToggle={toggleMute}
+          <div className="flex flex-col gap-4 rounded-lg border border-surface-600 bg-surface-800 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+            <VolumeSlider
+              label="Master Volume"
+              value={masterVolume}
+              onChange={(v) => {
+                setVolume('master', v / 100);
+                playSound('buttonClick');
+              }}
             />
+            <VolumeSlider
+              label="SFX Volume"
+              value={sfxVolume}
+              onChange={(v) => {
+                setVolume('sfx', v / 100);
+                playSound('orbPlace');
+              }}
+            />
+            <VolumeSlider
+              label="UI Sounds"
+              value={uiVolume}
+              onChange={(v) => {
+                setVolume('ui', v / 100);
+                playSound('buttonClick');
+              }}
+            />
+            <div className="border-t border-surface-600 pt-4">
+              <ToggleRow
+                label="Mute Sound"
+                description="Disable all game audio"
+                enabled={isMuted}
+                onToggle={toggleMute}
+              />
+            </div>
           </div>
         </section>
 
@@ -94,6 +121,43 @@ export function Settings() {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function VolumeSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const pct = Math.round(value * 100);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-white">{label}</span>
+        <span className="text-xs tabular-nums text-surface-300">{pct}%</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={pct}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-surface-600
+          [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
+          [&::-webkit-slider-thumb]:bg-accent-400 [&::-webkit-slider-thumb]:shadow-[0_0_4px_rgba(0,0,0,0.4)]
+          [&::-webkit-slider-thumb]:hover:bg-accent-300
+          [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4
+          [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0
+          [&::-moz-range-thumb]:bg-accent-400 [&::-moz-range-thumb]:shadow-[0_0_4px_rgba(0,0,0,0.4)]
+          [&::-moz-range-thumb]:hover:bg-accent-300
+          [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-surface-700"
+      />
     </div>
   );
 }

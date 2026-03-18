@@ -24,6 +24,7 @@ import type {
 import { createForgeState } from '@alloy/engine';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
+import { playSound } from '@/shared/utils/sound-manager';
 
 const FORGE_TIMER_MS = 90_000;
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
@@ -659,6 +660,7 @@ export function Forge() {
     if (!plan) return;
     if (prevFluxRef.current !== null && prevFluxRef.current !== plan.tentativeFlux) {
       const diff = plan.tentativeFlux - prevFluxRef.current;
+      if (diff < 0) playSound('fluxSpend');
       const popupId = popupIdRef.current++;
       setFluxPopups(prev => [...prev, { amount: diff, id: popupId }]);
       setTimeout(() => {
@@ -679,6 +681,7 @@ export function Forge() {
   const handleCommit = useCallback(async () => {
     if (committedRef.current || !matchState) return;
     committedRef.current = true;
+    playSound('forgeSubmit');
 
     // Replay plan actions through gateway.dispatch
     const actions = getCommitActions();
@@ -713,6 +716,7 @@ export function Forge() {
 
   // ── Timer auto-commit ──
   const handleTimerExpire = useCallback(() => {
+    playSound('timerUrgent');
     handleCommit();
   }, [handleCommit]);
 
@@ -723,15 +727,20 @@ export function Forge() {
       { kind: 'assign_orb', orbUid: selectedOrbUid, target: cardId, slotIndex },
       registry,
     );
-    if (result.ok) selectOrb(null);
+    if (result.ok) {
+      playSound('orbPlace');
+      selectOrb(null);
+    }
   }, [selectedOrbUid, plan, applyAction, registry, selectOrb]);
 
   const handleRemoveClick = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
     if (!plan || plan.round === 1) return;
     applyAction({ kind: 'remove_orb', target: cardId, slotIndex }, registry);
+    playSound('orbRemove');
   }, [plan, applyAction, registry]);
 
   const handleStockpileClick = useCallback((orb: OrbInstance) => {
+    if (orb.uid !== selectedOrbUid) playSound('orbSelect');
     selectOrb(orb.uid === selectedOrbUid ? null : orb.uid);
   }, [selectedOrbUid, selectOrb]);
 
@@ -789,6 +798,7 @@ export function Forge() {
       if (!dragThresholdMet.current && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
       dragThresholdMet.current = true;
       setIsDragging(true);
+      playSound('dragStart');
       setDragPos({ x: moveEvent.clientX, y: moveEvent.clientY });
     };
 
@@ -836,6 +846,7 @@ export function Forge() {
         { kind: 'assign_orb', orbUid: source.orbUid, target: target.cardId, slotIndex: target.slotIndex },
         registry,
       );
+      playSound('dropSuccess');
     }
     // Stockpile -> Combo socket (free, just stage)
     else if (source.from === 'stockpile' && target.type === 'combo') {
@@ -873,6 +884,7 @@ export function Forge() {
         { kind: 'assign_orb', orbUid: source.orbUid, target: target.cardId, slotIndex: target.slotIndex },
         registry,
       );
+      playSound('dropSuccess');
     }
   }, [plan, applyAction, registry, setComboSlot]);
 
@@ -894,16 +906,19 @@ export function Forge() {
             registry,
           );
           if (result.ok) {
+            playSound('combineMerge');
             clearComboSlots();
             return;
           }
         }
       }
     }
+    playSound('combineFail');
   }, [plan, applyAction, registry, clearComboSlots]);
 
   const handleClearCombo = useCallback(() => {
     clearComboSlots();
+    playSound('buttonClick');
   }, [clearComboSlots]);
 
   // ── Base stat change handler ──

@@ -11,6 +11,7 @@ import type { AffixDef, OrbInstance } from '@alloy/engine';
 import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
+import { playSound } from '@/shared/utils/sound-manager';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -190,7 +191,7 @@ export function Draft() {
   const draftOrb = useCallback((orbUid: string) => {
     if (!isPlayerTurn) return;
     gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid }).then((result) => {
-      if (result.ok) confirmPick();
+      if (result.ok) { playSound('orbConfirm'); confirmPick(); }
     });
   }, [isPlayerTurn, gateway, confirmPick]);
 
@@ -201,6 +202,7 @@ export function Draft() {
     setDragUid(uid);
     setDragPos({ x: e.clientX, y: e.clientY });
     selectOrb(uid);
+    playSound('dragStart');
   }, [isPlayerTurn, selectOrb]);
 
   useEffect(() => {
@@ -216,7 +218,7 @@ export function Draft() {
       }
     };
     const handleUp = () => {
-      if (isOverDropZone && dragUid) draftOrb(dragUid);
+      if (isOverDropZone && dragUid) { playSound('dropSuccess'); draftOrb(dragUid); }
       setDragUid(null);
       setIsOverDropZone(false);
     };
@@ -246,6 +248,7 @@ export function Draft() {
   }, [phase, navigate, code]);
 
   const handleTimerExpire = useCallback(() => {
+    playSound('timerUrgent');
     if (!isPlayerTurn || pool.length === 0) return;
     draftOrb(pool[0].uid);
     cancelSelection();
@@ -338,6 +341,7 @@ export function Draft() {
                     draftOrb(orb.uid);
                   } else {
                     selectOrb(orb.uid);
+                    playSound('orbSelect');
                   }
                 }}
                 onPointerDown={(e) => handleDragStart(orb.uid, e)}

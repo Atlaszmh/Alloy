@@ -12,8 +12,13 @@ import { RecipeBook } from './pages/RecipeBook';
 import { Collection } from './pages/Collection';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
+import { useAudioUnlock } from './hooks/useAudioUnlock';
+import { useRouteSound } from './hooks/useRouteSound';
 
 export function App() {
+  useAudioUnlock();
+  useRouteSound();
+
   return (
     <div className="app-shell">
       <div className="app-frame">

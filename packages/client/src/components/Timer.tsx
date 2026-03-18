@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { useCountdown } from '@/hooks/useCountdown';
+import { playSound } from '@/shared/utils/sound-manager';
 
 interface TimerProps {
   durationMs: number;
@@ -12,6 +14,15 @@ export function Timer({ durationMs, onExpire, paused = false, className = '' }: 
   const seconds = Math.ceil(remaining / 1000);
   const totalSeconds = Math.ceil(durationMs / 1000);
   const progress = remaining / durationMs;
+  const prevSecondsRef = useRef(seconds);
+
+  // Timer tick sounds for the last 5 seconds
+  useEffect(() => {
+    if (seconds !== prevSecondsRef.current && seconds <= 5 && seconds > 0) {
+      playSound(seconds <= 3 ? 'timerUrgent' : 'timerTick');
+    }
+    prevSecondsRef.current = seconds;
+  }, [seconds]);
 
   // Tiered urgency
   const isUrgent = seconds <= 5;
