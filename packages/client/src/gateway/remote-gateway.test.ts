@@ -71,7 +71,7 @@ describe('RemoteGateway', () => {
 
   it('dispatch returns error for unsupported action kinds', async () => {
     const gw = new RemoteGateway('ABCD');
-    const result = await gw.dispatch({ kind: 'advance_phase' });
+    const result = await gw.dispatch({ kind: 'some_unknown_action' } as any);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toContain('Unsupported action kind');

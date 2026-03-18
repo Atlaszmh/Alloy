@@ -149,12 +149,26 @@ export class RemoteGateway implements MatchGateway {
           body: { roomCode: this.code, orbUid: action.orbUid },
         });
         if (error) return { ok: false, error: error.message };
+      } else if (action.kind === 'forge_action') {
+        // Forge actions are applied locally as a preview; the final state is
+        // submitted to the server when forge_complete is dispatched.
+        if (this.state) {
+          return { ok: true, state: this.state };
+        }
+        return { ok: false, error: 'No local state for forge_action preview' };
       } else if (action.kind === 'forge_complete') {
         const loadout = this.state?.players[this.playerIndex]?.loadout;
         const { error } = await supabase.functions.invoke('forge-submit', {
           body: { roomCode: this.code, loadout },
         });
         if (error) return { ok: false, error: error.message };
+      } else if (action.kind === 'advance_phase') {
+        // Phase advancement for PvP is handled server-side (e.g., in forge-submit).
+        // This is a no-op on the client; just return current state.
+        if (this.state) {
+          return { ok: true, state: this.state };
+        }
+        return { ok: false, error: 'No local state for advance_phase' };
       } else {
         return { ok: false, error: `Unsupported action kind for remote: ${action.kind}` };
       }

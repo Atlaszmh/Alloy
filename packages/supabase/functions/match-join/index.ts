@@ -33,7 +33,7 @@ Deno.serve(async (req: Request) => {
       .from('join_attempts')
       .select('*', { count: 'exact', head: true })
       .eq('ip_address', ip)
-      .gte('created_at', oneMinuteAgo);
+      .gte('attempted_at', oneMinuteAgo);
 
     if (recentAttempts !== null && recentAttempts >= 5) {
       return errorResponse('Too many join attempts. Try again in a minute.', 429);
@@ -42,8 +42,6 @@ Deno.serve(async (req: Request) => {
     // Record this attempt
     await client.from('join_attempts').insert({
       ip_address: ip,
-      room_code: roomCode,
-      user_id: userId,
     });
 
     // --- Load and validate match ---

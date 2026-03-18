@@ -10,7 +10,7 @@ type View = 'menu' | 'ai-select' | 'finding-match' | 'waiting-for-friend' | 'joi
 export function Matchmaking() {
   const navigate = useNavigate();
   const startLocalMatch = useMatchStore((s) => s.startLocalMatch);
-  const loginAsGuest = useAuthStore((s) => s.loginAsGuest);
+  const initAuth = useAuthStore((s) => s.initAuth);
   const playerId = useAuthStore((s) => s.playerId);
 
   const [view, setView] = useState<View>('menu');
@@ -32,8 +32,8 @@ export function Matchmaking() {
   } = useMatchmaking();
 
   useEffect(() => {
-    if (!playerId) loginAsGuest();
-  }, [playerId, loginAsGuest]);
+    if (!playerId) initAuth();
+  }, [playerId, initAuth]);
 
   // Navigate to match when queue finds one
   useEffect(() => {

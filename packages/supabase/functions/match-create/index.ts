@@ -3,8 +3,17 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId } from '../_shared/supabase.ts';
-import { createMatch } from '@alloy/engine';
+import { createMatch, DataRegistry, loadAndValidateData } from '@alloy/engine';
 import type { MatchMode } from '@alloy/engine';
+
+let registry: DataRegistry | null = null;
+function getRegistry(): DataRegistry {
+  if (!registry) {
+    const data = loadAndValidateData();
+    registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+  }
+  return registry;
+}
 
 interface MatchCreateRequest {
   mode: 'quick' | 'unranked' | 'ranked';
@@ -30,7 +39,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Generate random seed for deterministic game state
-    const seed = Math.floor(Math.random() * 2147483647);
+    const seed = Math.floor(Math.random() * 999999999);
 
     // Create initial engine match state
     // Player 2 is a placeholder until someone joins
@@ -38,23 +47,8 @@ Deno.serve(async (req: Request) => {
     const baseWeaponId = 'sword';
     const baseArmorId = 'chainmail';
 
-    // We store a minimal game_state that will be fully initialized when player 2 joins.
-    // The engine's createMatch() requires a DataRegistry which isn't available in the
-    // edge function yet — so we store the seed and parameters for deferred initialization.
-    const gameState = {
-      matchId,
-      seed,
-      mode: body.mode as MatchMode,
-      baseWeaponId,
-      baseArmorId,
-      phase: { kind: 'waiting' as const },
-      players: [
-        { id: userId, stockpile: [], loadout: null },
-        { id: null, stockpile: [], loadout: null },
-      ],
-      roundResults: [],
-      duelLogs: [],
-    };
+    const reg = getRegistry();
+    const gameState = createMatch(matchId, seed, body.mode as MatchMode, [userId, ''], baseWeaponId, baseArmorId, reg);
 
     // Room code expires in 5 minutes
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();

@@ -677,7 +677,7 @@ export function Forge() {
 
   // ── Commit flow ──
   const handleCommit = useCallback(async () => {
-    if (committedRef.current || !matchState || !aiController) return;
+    if (committedRef.current || !matchState) return;
     committedRef.current = true;
 
     // Replay plan actions through gateway.dispatch
@@ -687,8 +687,9 @@ export function Forge() {
     }
     await gateway.dispatch({ kind: 'forge_complete', player: 0 });
 
-    // AI forge
-    if (phase?.kind === 'forge') {
+    // AI forge (only for local/AI matches)
+    const isAiMatch = code?.startsWith('ai-');
+    if (isAiMatch && aiController && phase?.kind === 'forge') {
       if (round === 1) {
         await gateway.dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'weapon', stat1: 'STR', stat2: 'DEX' } });
         await gateway.dispatch({ kind: 'forge_action', player: 1, action: { kind: 'set_base_stats', target: 'armor', stat1: 'VIT', stat2: 'STR' } });
@@ -708,7 +709,7 @@ export function Forge() {
 
     closeConfirmModal();
     resetForgeStore();
-  }, [matchState, aiController, gateway, phase, round, getCommitActions, closeConfirmModal, resetForgeStore]);
+  }, [matchState, aiController, gateway, phase, round, code, getCommitActions, closeConfirmModal, resetForgeStore]);
 
   // ── Timer auto-commit ──
   const handleTimerExpire = useCallback(() => {
