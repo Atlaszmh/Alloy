@@ -1,6 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route } from 'react-router';
 import { MainMenu } from './pages/MainMenu';
 import { Matchmaking } from './pages/Matchmaking';
+import { MatchEntry } from './pages/MatchEntry';
 import { Draft } from './pages/Draft';
 import { Forge } from './pages/Forge';
 import { Duel } from './pages/Duel';
@@ -19,7 +20,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<MainMenu />} />
           <Route path="/queue" element={<Matchmaking />} />
-          <Route path="/match/:code" element={<Navigate to="/queue" replace />} />
+          <Route path="/match/:code" element={<MatchEntry />} />
           <Route path="/match/:code/draft" element={<Draft />} />
           <Route path="/match/:code/forge" element={<Forge />} />
           <Route path="/match/:code/duel" element={<Duel />} />
