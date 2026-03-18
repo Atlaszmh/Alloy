@@ -1,6 +1,7 @@
 import type { MatchState, GameAction, ActionResult } from '@alloy/engine';
 import type { MatchGateway, MatchEvent } from './types';
 import { getSupabase } from '@/shared/utils/supabase';
+import { useAuthStore } from '@/stores/authStore';
 
 type StateCallback = (state: MatchState) => void;
 type EventCallback = (event: MatchEvent) => void;
@@ -13,9 +14,11 @@ export class RemoteGateway implements MatchGateway {
   private stateListeners = new Set<StateCallback>();
   private eventListeners = new Set<EventCallback>();
   private channel: ReturnType<ReturnType<typeof getSupabase & (() => NonNullable<ReturnType<typeof getSupabase>>)>['channel']> | null = null;
+  private playerId: string;
 
   constructor(code: string) {
     this.code = code;
+    this.playerId = useAuthStore.getState().playerId;
     this.setupChannel();
   }
 
@@ -49,7 +52,32 @@ export class RemoteGateway implements MatchGateway {
           winner: payload.payload?.winner,
         });
       })
-      .subscribe();
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // Only emit if a different player left
+        const otherLeft = leftPresences.some(
+          (p: { user_id?: string }) => p.user_id !== this.playerId,
+        );
+        if (otherLeft) {
+          this.emitEvent({ kind: 'opponent_disconnected' });
+        }
+      })
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
+        // Only emit if a different player joined back
+        const otherJoined = newPresences.some(
+          (p: { user_id?: string }) => p.user_id !== this.playerId,
+        );
+        if (otherJoined) {
+          this.emitEvent({ kind: 'opponent_reconnected' });
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await this.channel?.track({
+            user_id: this.playerId,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
   }
 
   async fetchState(): Promise<MatchState | null> {

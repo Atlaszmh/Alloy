@@ -6,6 +6,8 @@ import type { CombatLog, TickEvent, DuelResult, DerivedStats } from '@alloy/engi
 import { calculateStats } from '@alloy/engine';
 import { DuelRenderer } from '@/components/DuelRenderer';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 function HPBar({ current, max, label, side }: { current: number; max: number; label: string; side: 'left' | 'right' }) {
   const pct = Math.max(0, Math.min(100, (current / max) * 100));
@@ -137,6 +139,8 @@ export function Duel() {
   const player1 = matchState?.players[1] ?? null;
   const getRegistry = useMatchStore((s) => s.getRegistry);
 
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
+
   const [playbackTick, setPlaybackTick] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -267,6 +271,7 @@ export function Duel() {
 
   return (
     <div className="page-enter flex h-full flex-col p-3">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
 
       {/* ═══ TOP: Opponent HP + round info ═══ */}

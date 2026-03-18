@@ -22,6 +22,8 @@ import type {
   ForgePlan,
 } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 const FORGE_TIMER_MS = 90_000;
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
@@ -592,6 +594,8 @@ export function Forge() {
     reset: resetForgeStore,
   } = useForgeStore();
 
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
+
   const registry = getRegistry();
   const affixMap = useMemo(() => {
     const m = new Map<string, AffixDef>();
@@ -931,6 +935,7 @@ export function Forge() {
 
   return (
     <div className="page-enter flex h-full flex-col gap-2 overflow-y-auto p-3">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* ForgeHeader */}
       <header className="flex items-center justify-between">
         <div>

@@ -9,6 +9,8 @@ import { Timer } from '@/components/Timer';
 import { useGemSize } from '@/hooks/useGemSize';
 import type { AffixDef, OrbInstance } from '@alloy/engine';
 import { getStatLabel } from '@/shared/utils/stat-label';
+import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -163,6 +165,8 @@ export function Draft() {
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
+
   const registry = getRegistry();
   const affixMap = new Map<string, AffixDef>();
   for (const affix of registry.getAllAffixes()) {
@@ -256,6 +260,7 @@ export function Draft() {
 
   return (
     <div className="page-enter flex h-full flex-col p-2">
+      {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* Drag ghost */}
       {dragUid && dragAffix && dragOrb && (
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
