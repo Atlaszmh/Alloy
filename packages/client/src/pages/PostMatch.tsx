@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useMatchGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
@@ -83,10 +83,6 @@ export function PostMatch() {
   const scores = phase?.kind === 'complete' ? phase.scores : [0, 0];
   const isVictory = winner === 0;
   const isDraw = winner === 'draw';
-
-  if (!matchState || phase?.kind !== 'complete') {
-    return <Navigate to="/queue" replace />;
-  }
 
   const handlePlayAgain = () => {
     reset();
