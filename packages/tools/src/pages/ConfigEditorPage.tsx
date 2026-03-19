@@ -4,6 +4,7 @@ import { defaultConfig, GameConfigSchema } from '@alloy/engine';
 import { api } from '../api/client.js';
 import type { ConfigSummary } from '../api/client.js';
 import ConfigFormEditor from '../components/ConfigFormEditor.js';
+import ConfigRawEditor from '../components/ConfigRawEditor.js';
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,8 @@ export default function ConfigEditorPage() {
   const [parentId, setParentId] = useState<string | undefined>(undefined);
 
   const [mode, setMode] = useState<'form' | 'raw'>('form');
+  const [rawJson, setRawJson] = useState<string>(() => JSON.stringify(defaultConfig(), null, 2));
+  const [rawValidationErrors, setRawValidationErrors] = useState<string[]>([]);
   const [savedConfigs, setSavedConfigs] = useState<ConfigSummary[]>([]);
   const [selectedConfigId, setSelectedConfigId] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -250,6 +253,8 @@ export default function ConfigEditorPage() {
         return;
       }
       setConfig(parsed.data as unknown as GameConfig);
+      setRawJson(JSON.stringify(parsed.data, null, 2));
+      setRawValidationErrors([]);
       setName(row.name);
       setVersion(row.version);
       setParentId(row.id);
@@ -334,6 +339,59 @@ export default function ConfigEditorPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // ─── Mode switching ───────────────────────────────────────────────────
+
+  function switchToRaw() {
+    // Serialize current config state to formatted JSON
+    const json = JSON.stringify(config, null, 2);
+    setRawJson(json);
+    setRawValidationErrors([]);
+    setMode('raw');
+  }
+
+  function switchToForm() {
+    // Attempt to parse and validate the raw JSON before switching
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch {
+      setToast({ message: 'Invalid JSON — fix syntax errors before switching to Form mode', kind: 'error' });
+      return;
+    }
+
+    const result = GameConfigSchema.safeParse(parsed);
+    if (!result.success) {
+      const errors = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      setRawValidationErrors(errors);
+      setToast({ message: `${errors.length} validation error(s) — fix before switching to Form mode`, kind: 'error' });
+      return;
+    }
+
+    setConfig(result.data as unknown as GameConfig);
+    setRawValidationErrors([]);
+    setHasUnsavedChanges(true);
+    setValidationResult(null);
+    setMode('form');
+  }
+
+  function handleRawChange(json: string) {
+    setRawJson(json);
+    setHasUnsavedChanges(true);
+    // Live-validate JSON syntax and schema so markers update
+    try {
+      const parsed = JSON.parse(json);
+      const result = GameConfigSchema.safeParse(parsed);
+      if (result.success) {
+        setRawValidationErrors([]);
+      } else {
+        const errors = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+        setRawValidationErrors(errors);
+      }
+    } catch {
+      setRawValidationErrors(['Invalid JSON syntax']);
     }
   }
 
@@ -431,10 +489,10 @@ export default function ConfigEditorPage() {
         <div style={{ marginLeft: 'auto' }}>
           {/* Mode toggle */}
           <div style={S.modeToggle}>
-            <button style={S.modeBtn(mode === 'form')} onClick={() => setMode('form')}>
+            <button style={S.modeBtn(mode === 'form')} onClick={switchToForm}>
               Form
             </button>
-            <button style={S.modeBtn(mode === 'raw')} onClick={() => setMode('raw')}>
+            <button style={S.modeBtn(mode === 'raw')} onClick={switchToRaw}>
               Raw
             </button>
           </div>
@@ -472,9 +530,11 @@ export default function ConfigEditorPage() {
             onChange={handleConfigChange}
           />
         ) : (
-          <div style={S.rawPane}>
-            Raw JSON editor — coming soon
-          </div>
+          <ConfigRawEditor
+            configJson={rawJson}
+            onChange={handleRawChange}
+            validationErrors={rawValidationErrors}
+          />
         )}
       </div>
 
