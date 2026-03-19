@@ -56,6 +56,7 @@ export interface BalanceIssue {
 }
 
 export type TabId =
+  | 'overview'
   | 'simulation'
   | 'quicksim'
   | 'config'

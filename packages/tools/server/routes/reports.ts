@@ -226,4 +226,52 @@ router.get('/config-comparison', async (req: Request, res: Response) => {
   res.json(result);
 });
 
+// GET /api/reports/matches
+router.get('/matches', async (req: Request, res: Response) => {
+  const filters = parseFilters(req.query);
+  const limit = typeof req.query.limit === 'string' ? Math.min(parseInt(req.query.limit, 10) || 50, 200) : 50;
+  const offset = typeof req.query.offset === 'string' ? parseInt(req.query.offset, 10) || 0 : 0;
+  const seed = typeof req.query.seed === 'string' && req.query.seed ? parseInt(req.query.seed, 10) : undefined;
+
+  let q = supabase
+    .from('match_results')
+    .select('id, seed, winner, rounds, duration_ms, p0_affixes, p1_affixes, run_id, config_id, created_at')
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  q = applyFilters(q as Parameters<typeof applyFilters>[0], filters);
+  if (seed !== undefined && !isNaN(seed)) {
+    q = (q as ReturnType<typeof applyFilters> & { eq: (col: string, val: unknown) => typeof q }).eq('seed', seed);
+  }
+
+  const { data, error } = await q;
+  if (error) return res.status(500).json({ error: error.message });
+
+  res.json(data ?? []);
+});
+
+// GET /api/reports/matches/:id
+router.get('/matches/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const { data: matchData, error: matchErr } = await supabase
+    .from('match_results')
+    .select('id, seed, winner, rounds, duration_ms, p0_affixes, p1_affixes, run_id, config_id, created_at, p0_loadout, p1_loadout, combat_log')
+    .eq('id', id)
+    .single();
+
+  if (matchErr) return res.status(matchErr.code === 'PGRST116' ? 404 : 500).json({ error: matchErr.message });
+
+  const { data: roundData } = await supabase
+    .from('match_round_details')
+    .select('round, winner, duration_ticks, p0_damage_dealt, p1_damage_dealt')
+    .eq('match_id', id)
+    .order('round', { ascending: true });
+
+  res.json({
+    ...matchData,
+    round_details: roundData ?? [],
+  });
+});
+
 export default router;

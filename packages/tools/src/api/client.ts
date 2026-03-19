@@ -51,6 +51,16 @@ export const api = {
       request<ConfigComparisonResult[]>(
         `/api/reports/config-comparison?configIds=${configIds.join(',')}`,
       ),
+    matches: (params: { runId?: string; limit?: number; offset?: number; seed?: number; winner?: number }) => {
+      const p = new URLSearchParams();
+      if (params.runId) p.set('runId', params.runId);
+      if (params.limit !== undefined) p.set('limit', String(params.limit));
+      if (params.offset !== undefined) p.set('offset', String(params.offset));
+      if (params.seed !== undefined) p.set('seed', String(params.seed));
+      if (params.winner !== undefined) p.set('winner', String(params.winner));
+      return request<MatchListItem[]>(`/api/reports/matches?${p}`);
+    },
+    matchDetail: (id: string) => request<MatchDetail>(`/api/reports/matches/${id}`),
   },
 };
 
@@ -132,4 +142,30 @@ export interface ConfigComparisonResult {
   totalMatches: number;
   p0WinRate: number | null;
   avgDurationMs: number;
+}
+
+export interface MatchListItem {
+  id: string;
+  seed: number;
+  winner: number | null;
+  rounds: number;
+  duration_ms: number;
+  p0_affixes: string[] | null;
+  p1_affixes: string[] | null;
+  run_id: string | null;
+  config_id: string | null;
+  created_at: string;
+}
+
+export interface MatchDetail extends MatchListItem {
+  p0_loadout: unknown;
+  p1_loadout: unknown;
+  round_details: Array<{
+    round: number;
+    winner: number | null;
+    duration_ticks: number;
+    p0_damage_dealt: number;
+    p1_damage_dealt: number;
+  }>;
+  combat_log: unknown | null;
 }

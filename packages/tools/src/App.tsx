@@ -5,17 +5,27 @@ import SimulationRunner from './components/SimulationRunner';
 import AggregateView from './components/AggregateView';
 import MatchInspector from './components/MatchInspector';
 import BalanceReport from './components/BalanceReport';
+import MetaEvolutionPage from './pages/MetaEvolutionPage.js';
+import MatchInspectorPage from './pages/MatchInspectorPage.js';
+
+// Pages created by other agents — import with graceful fallback handled at build time.
+// If these modules don't exist yet, the build will surface the error.
+import OverviewPage from './pages/OverviewPage.js';
+import BalancePage from './pages/BalancePage.js';
+import RoundAnalysisPage from './pages/RoundAnalysisPage.js';
+import DistributionsPage from './pages/DistributionsPage.js';
+import ConfigEditorPage from './pages/ConfigEditorPage.js';
 
 const tabs: { id: TabId; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
   { id: 'simulation', label: 'Simulation' },
-  { id: 'quicksim', label: 'Quick Sim' },
-  { id: 'config', label: 'Config' },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'balance', label: 'Balance Report' },
+  { id: 'config', label: 'Config Editor' },
+  { id: 'balance', label: 'Balance' },
   { id: 'rounds', label: 'Rounds' },
   { id: 'distributions', label: 'Distributions' },
-  { id: 'meta', label: 'Meta' },
-  { id: 'inspector', label: 'Match Inspector' },
+  { id: 'meta', label: 'Meta Evolution' },
+  { id: 'inspector', label: 'Inspector' },
+  { id: 'quicksim', label: 'Quick Sim' },
 ];
 
 const styles = {
@@ -71,16 +81,8 @@ const styles = {
   } as React.CSSProperties,
 };
 
-function Placeholder({ label }: { label: string }) {
-  return (
-    <div style={styles.placeholder}>
-      {label} — Coming Soon
-    </div>
-  );
-}
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>('simulation');
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [results, setResults] = useState<SimulationResults | null>(null);
 
   function handleSimulationComplete(r: SimulationResults) {
@@ -105,17 +107,27 @@ export default function App() {
         </nav>
       </header>
       <main style={styles.content}>
+        {activeTab === 'overview' && <OverviewPage />}
         {activeTab === 'simulation' && <SimulationPage />}
+        {activeTab === 'config' && <ConfigEditorPage />}
+        {activeTab === 'balance' && <BalancePage />}
+        {activeTab === 'rounds' && <RoundAnalysisPage />}
+        {activeTab === 'distributions' && <DistributionsPage />}
+        {activeTab === 'meta' && <MetaEvolutionPage />}
+        {activeTab === 'inspector' && <MatchInspectorPage />}
         {activeTab === 'quicksim' && (
-          <SimulationRunner onComplete={handleSimulationComplete} />
+          <>
+            <SimulationRunner onComplete={handleSimulationComplete} />
+            {results && (
+              <>
+                <AggregateView results={results} />
+                <MatchInspector results={results} />
+                <BalanceReport results={results} />
+              </>
+            )}
+          </>
         )}
-        {activeTab === 'config' && <Placeholder label="Config Editor" />}
         {activeTab === 'analytics' && <AggregateView results={results} />}
-        {activeTab === 'balance' && <BalanceReport results={results} />}
-        {activeTab === 'rounds' && <Placeholder label="Rounds" />}
-        {activeTab === 'distributions' && <Placeholder label="Distributions" />}
-        {activeTab === 'meta' && <Placeholder label="Meta" />}
-        {activeTab === 'inspector' && <MatchInspector results={results} />}
       </main>
     </div>
   );
