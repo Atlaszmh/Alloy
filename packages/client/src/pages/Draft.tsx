@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
-import { useMatchGateway } from '@/gateway';
+import { useGateway } from '@/gateway';
 import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
@@ -141,7 +141,7 @@ function DragGhost({
 export function Draft() {
   const { code } = useParams();
 
-  const gateway = useMatchGateway(code!);
+  const gateway = useGateway();
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     return gateway.subscribe(() => forceUpdate((n) => n + 1));
@@ -230,16 +230,27 @@ export function Draft() {
   }, [dragUid, isOverDropZone, draftOrb]);
 
   // ── AI turn ──
+  // Use stable primitives in deps to avoid timer resets from object reference changes.
+  // Both PhaseRouter and Draft subscribe to the gateway, so Draft re-renders twice per
+  // state change. Using pickIndex/activePlayer (numbers) prevents the 500ms timeout from
+  // being cancelled and rescheduled on every re-render.
+  const pickIndex = phase?.kind === 'draft' ? phase.pickIndex : -1;
+  const activePlayer = phase?.kind === 'draft' ? phase.activePlayer : -1;
+
   useEffect(() => {
-    if (!matchState || phase?.kind !== 'draft' || phase.activePlayer !== 1 || !aiController) return;
+    if (!matchState || activePlayer !== 1 || !aiController) return;
+    const currentState = gateway.getState();
+    if (!currentState || currentState.phase.kind !== 'draft') return;
     const timeout = setTimeout(() => {
+      const freshState = gateway.getState();
+      if (!freshState || freshState.phase.kind !== 'draft') return;
       const orbUid = aiController.pickOrb(
-        matchState.pool, matchState.players[1].stockpile, matchState.players[0].stockpile,
+        freshState.pool, freshState.players[1].stockpile, freshState.players[0].stockpile,
       );
       gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
     }, 500);
     return () => clearTimeout(timeout);
-  }, [matchState, phase, aiController, gateway]);
+  }, [pickIndex, activePlayer, aiController, gateway]);
 
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');

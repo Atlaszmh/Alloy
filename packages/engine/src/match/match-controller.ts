@@ -80,6 +80,8 @@ export function applyAction(
       return handleForgeComplete(state, action.player, registry);
     case 'advance_phase':
       return handleAdvancePhase(state, registry);
+    case 'duel_continue':
+      return handleDuelContinue(state, registry);
   }
 }
 
@@ -96,10 +98,12 @@ function handleDraftPick(
   // Build draft state from match state
   const balance = registry.getBalance();
   const draftRound = state.phase.round;
-  const picksPerPlayer = state.mode === 'quick'
-    ? Math.ceil(state.pool.length / 2) // Quick: draft entire pool
-    : balance.draftPicksPerPlayer[draftRound - 1];
-  const maxPicks = picksPerPlayer * 2;
+  // For quick mode, draft all orbs. Use total orbs (pool + stockpiles) so
+  // maxPicks doesn't shrink as the pool empties.
+  const totalOrbs = state.pool.length + state.players[0].stockpile.length + state.players[1].stockpile.length;
+  const maxPicks = state.mode === 'quick'
+    ? totalOrbs
+    : balance.draftPicksPerPlayer[draftRound - 1] * 2;
 
   const draftState = createDraftState(state.pool);
   const syncedDraft = {
@@ -271,6 +275,12 @@ function runDuel(
   }
 
   const round = state.phase.round;
+
+  // Idempotency: if this round's duel was already simulated, no-op.
+  // Prevents duplicate results from React StrictMode double-invoking effects.
+  if (state.duelLogs.length >= round) {
+    return ok(state);
+  }
   const masterRng = new SeededRNG(state.seed);
   const duelRng = masterRng.fork(`duel_${round}`);
 
@@ -291,18 +301,32 @@ function runDuel(
   const newRoundResults = [...state.roundResults, duelResult];
   const newDuelLogs = [...state.duelLogs, combatLog];
 
-  // Determine next phase
-  const nextPhase = state.mode === 'quick'
-    ? getNextPhaseQuick(state.phase, newRoundResults)
-    : getNextPhase(state.phase, newRoundResults);
-
-  const newState: MatchState = {
+  // Keep the phase as duel so the player can watch the combat playback.
+  // The client dispatches 'duel_continue' when the player is ready to move on.
+  return ok({
     ...state,
-    phase: nextPhase,
     roundResults: newRoundResults,
     duelLogs: newDuelLogs,
     forgeComplete: undefined,
     forgeFlux: undefined,
+  });
+}
+
+function handleDuelContinue(
+  state: MatchState,
+  registry: DataRegistry,
+): ActionResult {
+  if (state.phase.kind !== 'duel') {
+    return fail('duel_continue is only valid during the duel phase');
+  }
+
+  const nextPhase = state.mode === 'quick'
+    ? getNextPhaseQuick(state.phase, state.roundResults)
+    : getNextPhase(state.phase, state.roundResults);
+
+  const newState: MatchState = {
+    ...state,
+    phase: nextPhase,
   };
 
   // If transitioning to draft (rounds 2/3), generate a fresh pool

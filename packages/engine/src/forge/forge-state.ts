@@ -116,12 +116,43 @@ function applyAssignOrb(
     return fail('Orb not found in stockpile');
   }
 
+  const orb = state.stockpile[orbIdx];
   const item = getItem(state.loadout, action.target);
+
+  // Compound orbs require 2 consecutive slots
+  if (orb.compoundId && orb.sourceOrbs) {
+    if (!isValidSlotIndex(action.slotIndex + 1)) {
+      return fail('Compound orb requires two consecutive slots');
+    }
+    if (item.slots[action.slotIndex] !== null) {
+      return fail('First slot is already occupied');
+    }
+    if (item.slots[action.slotIndex + 1] !== null) {
+      return fail('Second slot is already occupied');
+    }
+
+    const compoundSlot: EquippedSlot = {
+      kind: 'compound',
+      orbs: orb.sourceOrbs,
+      compoundId: orb.compoundId,
+    };
+    let newItem = setSlot(item, action.slotIndex, compoundSlot);
+    newItem = setSlot(newItem, action.slotIndex + 1, compoundSlot);
+    const newStockpile = removeFromStockpile(state.stockpile, action.orbUid);
+
+    return ok({
+      ...state,
+      stockpile: newStockpile,
+      loadout: setItem(state.loadout, action.target, newItem),
+      fluxRemaining: state.fluxRemaining - cost,
+    });
+  }
+
+  // Regular single orb
   if (item.slots[action.slotIndex] !== null) {
     return fail('Slot is already occupied');
   }
 
-  const orb = state.stockpile[orbIdx];
   const newSlot: EquippedSlot = { kind: 'single', orb };
   const newItem = setSlot(item, action.slotIndex, newSlot);
   const newStockpile = removeFromStockpile(state.stockpile, action.orbUid);
@@ -140,10 +171,6 @@ function applyCombine(
   cost: number,
   registry: DataRegistry,
 ): ForgeResult {
-  if (!isValidSlotIndex(action.slotIndex) || !isValidSlotIndex(action.slotIndex + 1)) {
-    return fail('Slot index out of range (compound requires two consecutive slots 0-5)');
-  }
-
   const orbIdx1 = findOrbIndex(state.stockpile, action.orbUid1);
   if (orbIdx1 === -1) {
     return fail('First orb not found in stockpile');
@@ -162,30 +189,22 @@ function applyCombine(
     return fail('No valid combination exists for these orbs');
   }
 
-  const item = getItem(state.loadout, action.target);
-  if (item.slots[action.slotIndex] !== null) {
-    return fail('First slot is already occupied');
-  }
-  if (item.slots[action.slotIndex + 1] !== null) {
-    return fail('Second slot is already occupied');
-  }
-
-  const compoundSlot: EquippedSlot = {
-    kind: 'compound',
-    orbs: [orb1, orb2],
-    compoundId: combination.id,
-  };
-
-  let newItem = setSlot(item, action.slotIndex, compoundSlot);
-  newItem = setSlot(newItem, action.slotIndex + 1, compoundSlot);
-
+  // Remove source orbs and create a compound orb in stockpile
   let newStockpile = removeFromStockpile(state.stockpile, action.orbUid1);
   newStockpile = removeFromStockpile(newStockpile, action.orbUid2);
+
+  const compoundOrb: OrbInstance = {
+    uid: `compound_${action.orbUid1}_${action.orbUid2}`,
+    affixId: orb1.affixId,
+    tier: orb1.tier,
+    compoundId: combination.id,
+    sourceOrbs: [orb1, orb2],
+  };
+  newStockpile = [...newStockpile, compoundOrb];
 
   return ok({
     ...state,
     stockpile: newStockpile,
-    loadout: setItem(state.loadout, action.target, newItem),
     fluxRemaining: state.fluxRemaining - cost,
   });
 }

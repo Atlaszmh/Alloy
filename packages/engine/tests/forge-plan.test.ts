@@ -154,24 +154,28 @@ describe('ForgePlan', () => {
   });
 
   describe('applyPlanAction — combine', () => {
-    it('creates compound from stockpile orbs, locks both, costs flux', () => {
+    it('creates compound orb in stockpile, locks source orbs, costs flux', () => {
       const state = makeForgeState();
       const plan = createForgePlan(state, registry);
       const fluxBefore = plan.tentativeFlux;
-      // Combine fire_damage + chance_on_hit directly from stockpile (same as engine)
+      // Combine fire_damage + chance_on_hit → compound orb in stockpile
       const r = applyPlanAction(plan, {
-        kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb5', target: 'weapon', slotIndex: 0,
+        kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb5',
       }, registry);
       expect(r.ok).toBe(true); if (!r.ok) return;
       expect(r.plan.tentativeFlux).toBe(fluxBefore - data.balance.fluxCosts.combineOrbs);
       expect(r.plan.lockedOrbUids.has('orb1')).toBe(true);
       expect(r.plan.lockedOrbUids.has('orb5')).toBe(true);
       expect(r.plan.permanentCombines).toHaveLength(1);
-      // Both orbs removed from stockpile
+      // Source orbs removed from stockpile
       expect(r.plan.stockpile.find(o => o.uid === 'orb1')).toBeUndefined();
       expect(r.plan.stockpile.find(o => o.uid === 'orb5')).toBeUndefined();
-      // Compound placed in slot
-      expect(r.plan.loadout.weapon.slots[0]?.kind).toBe('compound');
+      // Compound orb now in stockpile (not on item)
+      const compoundOrb = r.plan.stockpile.find(o => o.compoundId != null);
+      expect(compoundOrb).toBeDefined();
+      expect(compoundOrb!.compoundId).toBeTruthy();
+      expect(compoundOrb!.sourceOrbs).toHaveLength(2);
+      expect(r.plan.loadout.weapon.slots[0]).toBeNull();
     });
   });
 

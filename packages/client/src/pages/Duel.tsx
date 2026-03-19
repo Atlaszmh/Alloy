@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
-import { useMatchGateway } from '@/gateway';
+import { useGateway } from '@/gateway';
 import type { CombatLog, TickEvent, DuelResult, DerivedStats } from '@alloy/engine';
 import { calculateStats } from '@alloy/engine';
 import { DuelRenderer } from '@/components/DuelRenderer';
@@ -125,7 +125,7 @@ function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLo
 export function Duel() {
   const { code } = useParams();
 
-  const gateway = useMatchGateway(code!);
+  const gateway = useGateway();
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     return gateway.subscribe(() => forceUpdate((n) => n + 1));
@@ -244,17 +244,9 @@ export function Duel() {
   useDuelSounds(visibleEvents, isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
-    // PhaseRouter re-renders automatically when phase changes
+    gateway.dispatch({ kind: 'duel_continue' });
   };
 
-  // Auto-navigate when phase changes away from duel
-  useEffect(() => {
-    if (phase?.kind === 'draft') {
-      setShowBreakdown(true);
-    } else if (phase?.kind === 'complete') {
-      setShowBreakdown(true);
-    }
-  }, [phase]);
 
   // currentLog/hpState may not be ready yet (duel simulation runs in useEffect)
   if (!currentLog || !hpState) {
@@ -391,9 +383,16 @@ export function Duel() {
             className="w-full rounded-lg bg-gradient-to-b from-accent-400 to-accent-500 py-3 font-bold text-surface-900"
             style={{ boxShadow: 'var(--shadow-button)', fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em' }}
           >
-            {phase?.kind === 'complete' ? 'SEE RESULTS' :
-             phase?.kind === 'draft' ? 'CONTINUE TO DRAFT' :
-             'CONTINUE TO FORGE'}
+            {(() => {
+              // Predict next phase from round results (phase stays 'duel' during playback)
+              const wins = [0, 0];
+              for (const r of roundResults) {
+                if (r.winner === 0) wins[0]++;
+                else if (r.winner === 1) wins[1]++;
+              }
+              if (wins[0] >= 2 || wins[1] >= 2 || round >= 3) return 'SEE RESULTS';
+              return 'CONTINUE';
+            })()}
           </button>
         </div>
       )}

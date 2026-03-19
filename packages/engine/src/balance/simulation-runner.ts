@@ -118,6 +118,9 @@ function runAIMatch(
       const result = applyAction(state, { kind: 'advance_phase' }, registry);
       if (!result.ok) throw new Error(`Duel failed: ${result.error}`);
       state = result.state;
+      const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+      if (!cont.ok) throw new Error(`Duel continue failed: ${cont.error}`);
+      state = cont.state;
     }
 
     // Handle adapt phase by skipping it (advance to next forge/duel)

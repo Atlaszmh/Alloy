@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
 
       const bothDone = newState.phase.kind === 'duel';
 
-      // If both players submitted, run the duel simulation
+      // If both players submitted, run the duel simulation and advance
       if (bothDone) {
         const duelResult = applyAction(
           newState,
@@ -104,6 +104,10 @@ Deno.serve(async (req: Request) => {
         );
         if (duelResult.ok) {
           newState = duelResult.state;
+          const cont = applyAction(newState, { kind: 'duel_continue' }, reg);
+          if (cont.ok) {
+            newState = cont.state;
+          }
         }
       }
 

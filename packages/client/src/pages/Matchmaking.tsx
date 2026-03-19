@@ -38,7 +38,7 @@ export function Matchmaking() {
   // Navigate to match when queue finds one
   useEffect(() => {
     if (queueStatus === 'matched' && matchRoomCode) {
-      navigate(`/match/${matchRoomCode}/draft`);
+      navigate(`/match/${matchRoomCode}`);
     }
   }, [queueStatus, matchRoomCode, navigate]);
 
@@ -52,7 +52,7 @@ export function Matchmaking() {
     const channel = supabase.channel(`match:${roomCode}`);
     channel
       .on('broadcast', { event: 'match_started' }, () => {
-        navigate(`/match/${roomCode}/draft`);
+        navigate(`/match/${roomCode}`);
       })
       .subscribe();
 
@@ -66,7 +66,7 @@ export function Matchmaking() {
       const seed = Math.floor(Math.random() * 999999);
       startLocalMatch(seed, 'ranked', aiTier);
       const code = 'ai-' + Math.random().toString(36).substring(2, 8);
-      navigate(`/match/${code}/draft`);
+      navigate(`/match/${code}`);
     } catch (err) {
       console.error('Failed to start match:', err);
       setError('Failed to start match: ' + (err instanceof Error ? err.message : String(err)));
@@ -148,8 +148,7 @@ export function Matchmaking() {
         return;
       }
 
-      const phase = data?.phase ?? 'draft';
-      navigate(`/match/${code}/${phase}`);
+      navigate(`/match/${code}`);
     } catch (err) {
       setError('Failed to join match: ' + (err instanceof Error ? err.message : String(err)));
     } finally {

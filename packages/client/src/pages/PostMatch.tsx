@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
-import { useMatchGateway } from '@/gateway';
+import { useGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import type { CombatLog } from '@alloy/engine';
 
@@ -67,7 +67,7 @@ export function PostMatch() {
   const { code } = useParams();
   const navigate = useNavigate();
 
-  const gateway = useMatchGateway(code!);
+  const gateway = useGateway();
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     return gateway.subscribe(() => forceUpdate((n) => n + 1));

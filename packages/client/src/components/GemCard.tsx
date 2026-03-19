@@ -17,15 +17,16 @@ const ELEMENT_GRADIENTS: Record<string, { bg: string; border: string; glow: stri
   physical:  { bg: 'rgba(192,192,192,0.3),rgba(120,120,120,0.1)', border: '#9a9a9a',               glow: '#c0c0c0' },
 };
 
-const CATEGORY_LABELS: Record<AffixCategory, string> = {
+const CATEGORY_LABELS: Record<string, string> = {
   offensive: 'Offensive', defensive: 'Defense', sustain: 'Sustain', utility: 'Utility', trigger: 'Trigger',
+  combined: 'Combined',
 };
 
 interface GemCardProps {
   affixId: string;
   affixName: string;
   tier: AffixTier;
-  category: AffixCategory;
+  category: AffixCategory | 'combined';
   tags: string[];
   statLabel: string;       // e.g., "+23", "+5%", "15%"
   gemSize: number;         // px

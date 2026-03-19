@@ -10,6 +10,7 @@ import {
   skipDuel,
   continuePastDuel,
   waitForPhase,
+  getCurrentPhase,
 } from './fixtures/match';
 
 test.describe('Match Flow', () => {
@@ -43,7 +44,8 @@ test.describe('Match Flow', () => {
       }
       await page.waitForTimeout(700);
     }
-    if (page.url().includes('/draft')) {
+    const phaseAfterPicks = await getCurrentPhase(page);
+    if (phaseAfterPicks === 'draft') {
       await screenshotFlow(page, vp, 'match-flow', '04-draft-mid');
     }
 
@@ -55,7 +57,7 @@ test.describe('Match Flow', () => {
 
     // ── 06: Forge R1 Weapon ──
     await waitForPhase(page, 'forge');
-    await expect(page.getByText('Forge Phase')).toBeVisible();
+    await expect(page.getByText('FORGE PHASE')).toBeVisible();
     await placeOrbs(page);
     await screenshotFlow(page, vp, 'match-flow', '06-forge-r1-weapon');
 
@@ -124,12 +126,11 @@ test.describe('Match Flow', () => {
 
     // ════════════ ROUND 3 (if needed) ════════════
 
-    const isDraftR3 = await page
-      .waitForURL('**/draft', { timeout: 5000 })
-      .then(() => true)
-      .catch(() => false);
+    // Wait a moment for phase to settle
+    await page.waitForTimeout(1000);
+    const phaseAfterR2 = await getCurrentPhase(page);
 
-    if (isDraftR3) {
+    if (phaseAfterR2 === 'draft') {
       // ── 16: Draft R3 ──
       await screenshotFlow(page, vp, 'match-flow', '16-draft-r3');
       await completeDraft(page);
@@ -161,7 +162,6 @@ test.describe('Match Flow', () => {
     // Verify Play Again navigates back to matchmaking
     await page.getByRole('button', { name: 'Play Again' }).click();
     await page.waitForTimeout(500);
-    // Should be on /queue page
     expect(page.url()).toContain('/queue');
   });
 });

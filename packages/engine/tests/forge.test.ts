@@ -109,27 +109,49 @@ describe('Forge System', () => {
 
   // --- combine ---
 
-  it('combine: creates compound in two consecutive slots, deducts 2 flux', () => {
+  it('combine: creates compound orb in stockpile, deducts 2 flux', () => {
     const state = makeState();
     // fire_damage + chance_on_hit = ignite (from combinations.json)
     const action: ForgeAction = {
       kind: 'combine',
       orbUid1: 'orb1',
       orbUid2: 'orb2',
-      target: 'weapon',
-      slotIndex: 0,
     };
     const result = applyForgeAction(state, action, registry);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.loadout.weapon.slots[0]).not.toBeNull();
-    expect(result.state.loadout.weapon.slots[0]!.kind).toBe('compound');
-    expect(result.state.loadout.weapon.slots[1]).not.toBeNull();
-    expect(result.state.loadout.weapon.slots[1]!.kind).toBe('compound');
-    expect(result.state.fluxRemaining).toBe(6);
+    // Source orbs removed from stockpile
     expect(result.state.stockpile.find(o => o.uid === 'orb1')).toBeUndefined();
     expect(result.state.stockpile.find(o => o.uid === 'orb2')).toBeUndefined();
+    // Compound orb created in stockpile
+    const compoundOrb = result.state.stockpile.find(o => o.compoundId === 'ignite');
+    expect(compoundOrb).toBeDefined();
+    expect(compoundOrb!.sourceOrbs).toHaveLength(2);
+    expect(compoundOrb!.uid).toBe('compound_orb1_orb2');
+    expect(result.state.fluxRemaining).toBe(6);
+    // Items unchanged
+    expect(result.state.loadout.weapon.slots[0]).toBeNull();
+  });
+
+  it('combine: compound orb can be assigned to item (occupies 2 slots)', () => {
+    const state = makeState();
+    // First combine to get compound orb in stockpile
+    const combineResult = applyForgeAction(state, {
+      kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb2',
+    }, registry);
+    expect(combineResult.ok).toBe(true);
+    if (!combineResult.ok) return;
+
+    // Then assign compound orb to weapon slot 0
+    const assignResult = applyForgeAction(combineResult.state, {
+      kind: 'assign_orb', orbUid: 'compound_orb1_orb2', target: 'weapon', slotIndex: 0,
+    }, registry);
+    expect(assignResult.ok).toBe(true);
+    if (!assignResult.ok) return;
+    expect(assignResult.state.loadout.weapon.slots[0]!.kind).toBe('compound');
+    expect(assignResult.state.loadout.weapon.slots[1]!.kind).toBe('compound');
+    expect(assignResult.state.stockpile.find(o => o.uid === 'compound_orb1_orb2')).toBeUndefined();
   });
 
   it('combine: fails if combination does not exist in registry', () => {
@@ -139,33 +161,11 @@ describe('Forge System', () => {
       kind: 'combine',
       orbUid1: 'orb1',
       orbUid2: 'orb5',
-      target: 'weapon',
-      slotIndex: 0,
     };
     const result = applyForgeAction(state, action, registry);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('combination');
-  });
-
-  it('combine: fails if slots not empty', () => {
-    let state = makeState();
-    // First assign an orb to slot 0
-    const assign: ForgeAction = { kind: 'assign_orb', orbUid: 'orb5', target: 'weapon', slotIndex: 0 };
-    const r1 = applyForgeAction(state, assign, registry);
-    expect(r1.ok).toBe(true);
-    if (!r1.ok) return;
-
-    const action: ForgeAction = {
-      kind: 'combine',
-      orbUid1: 'orb1',
-      orbUid2: 'orb2',
-      target: 'weapon',
-      slotIndex: 0,
-    };
-    const result = applyForgeAction(r1.state, action, registry);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('occupied');
   });
 
   it('combine: fails if orbs not in stockpile', () => {
@@ -174,8 +174,6 @@ describe('Forge System', () => {
       kind: 'combine',
       orbUid1: 'nonexistent1',
       orbUid2: 'orb2',
-      target: 'weapon',
-      slotIndex: 0,
     };
     const result = applyForgeAction(state, action, registry);
 

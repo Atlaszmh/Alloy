@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
-import { useMatchGateway } from '@/gateway';
+import { useMatchGateway, GatewayProvider } from '@/gateway';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
@@ -62,8 +62,10 @@ export function PhaseRouter() {
   }
 
   return (
-    <PhaseErrorBoundary resetKey={phase.kind}>
-      {renderPhase()}
-    </PhaseErrorBoundary>
+    <GatewayProvider value={gateway}>
+      <PhaseErrorBoundary resetKey={phase.kind}>
+        {renderPhase()}
+      </PhaseErrorBoundary>
+    </GatewayProvider>
   );
 }

@@ -137,7 +137,13 @@ function runSingleMatch(
       }
       continue;
     } else if (phase.kind === 'duel') {
-      action = { kind: 'advance_phase' };
+      const simResult = applyAction(state, { kind: 'advance_phase' }, registry);
+      if (simResult.ok) {
+        state = simResult.state;
+        const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+        if (cont.ok) state = cont.state;
+      }
+      continue;
     } else {
       break;
     }

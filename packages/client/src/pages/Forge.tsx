@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
-import { useMatchGateway } from '@/gateway';
+import { useGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
 import type { DragSource } from '@/stores/forgeStore';
 import { GemCard } from '@/components/GemCard';
@@ -581,7 +581,7 @@ function DragGhost({
 export function Forge() {
   const { code } = useParams();
 
-  const gateway = useMatchGateway(code!);
+  const gateway = useGateway();
   const [, forceUpdate] = useState(0);
   useEffect(() => {
     return gateway.subscribe(() => forceUpdate((n) => n + 1));

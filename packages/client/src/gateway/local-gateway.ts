@@ -4,7 +4,6 @@ import type { MatchGateway, MatchEvent } from './types';
 
 export class LocalGateway implements MatchGateway {
   readonly code: string;
-  private destroyed = false;
   private unsubscribers: (() => void)[] = [];
 
   constructor(code: string) {
@@ -21,7 +20,7 @@ export class LocalGateway implements MatchGateway {
 
   subscribe(callback: (state: MatchState) => void): () => void {
     const unsub = useMatchStore.subscribe((store) => {
-      if (!this.destroyed && store.state) {
+      if (store.state) {
         callback(store.state);
       }
     });
@@ -34,8 +33,6 @@ export class LocalGateway implements MatchGateway {
       useMatchStore.getState().state?.phase.kind ?? null;
 
     const unsub = useMatchStore.subscribe((store) => {
-      if (this.destroyed) return;
-
       const currentPhaseKind = store.state?.phase.kind ?? null;
       if (currentPhaseKind && currentPhaseKind !== previousPhaseKind) {
         previousPhaseKind = currentPhaseKind;
@@ -47,7 +44,6 @@ export class LocalGateway implements MatchGateway {
   }
 
   destroy(): void {
-    this.destroyed = true;
     for (const unsub of this.unsubscribers) {
       unsub();
     }

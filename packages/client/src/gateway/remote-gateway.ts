@@ -162,15 +162,13 @@ export class RemoteGateway implements MatchGateway {
           body: { roomCode: this.code, loadout },
         });
         if (error) return { ok: false, error: error.message };
-      } else if (action.kind === 'advance_phase') {
+      } else if (action.kind === 'advance_phase' || action.kind === 'duel_continue') {
         // Phase advancement for PvP is handled server-side (e.g., in forge-submit).
-        // This is a no-op on the client; just return current state.
+        // These are no-ops on the client; just return current state.
         if (this.state) {
           return { ok: true, state: this.state };
         }
-        return { ok: false, error: 'No local state for advance_phase' };
-      } else {
-        return { ok: false, error: `Unsupported action kind for remote: ${action.kind}` };
+        return { ok: false, error: 'No local state for advance_phase/duel_continue' };
       }
 
       // Re-fetch state after successful dispatch

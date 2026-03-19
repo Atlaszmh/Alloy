@@ -148,10 +148,11 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
 
     // Try combinations first (they use 2 flux and 2 consecutive slots)
     const combineCost = balance.fluxCosts.combineOrbs;
-    if (flux >= combineCost) {
-      for (let i = 0; i < stockpile.length && flux >= combineCost; i++) {
+    const assignCostForCombine = balance.fluxCosts.assignOrb;
+    if (flux >= combineCost + assignCostForCombine) {
+      for (let i = 0; i < stockpile.length && flux >= combineCost + assignCostForCombine; i++) {
         if (usedOrbUids.has(stockpile[i].uid)) continue;
-        for (let j = i + 1; j < stockpile.length && flux >= combineCost; j++) {
+        for (let j = i + 1; j < stockpile.length && flux >= combineCost + assignCostForCombine; j++) {
           if (usedOrbUids.has(stockpile[j].uid)) continue;
 
           const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
@@ -165,6 +166,11 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
             kind: 'combine',
             orbUid1: stockpile[i].uid,
             orbUid2: stockpile[j].uid,
+          });
+          const compoundUid = `compound_${stockpile[i].uid}_${stockpile[j].uid}`;
+          actions.push({
+            kind: 'assign_orb',
+            orbUid: compoundUid,
             target: slot.target,
             slotIndex: slot.slotIndex,
           });
@@ -172,7 +178,7 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
           usedOrbUids.add(stockpile[j].uid);
           occupiedSlots[slot.target][slot.slotIndex] = true;
           occupiedSlots[slot.target][slot.slotIndex + 1] = true;
-          flux -= combineCost;
+          flux -= combineCost + assignCostForCombine;
           break; // orb i is used, move to next i
         }
       }
@@ -354,9 +360,10 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
 
     // Try combinations first
     const combineCost = balance.fluxCosts.combineOrbs;
-    for (let i = 0; i < sortedStockpile.length && flux >= combineCost; i++) {
+    const assignCostForCombine = balance.fluxCosts.assignOrb;
+    for (let i = 0; i < sortedStockpile.length && flux >= combineCost + assignCostForCombine; i++) {
       if (usedOrbUids.has(sortedStockpile[i].uid)) continue;
-      for (let j = i + 1; j < sortedStockpile.length && flux >= combineCost; j++) {
+      for (let j = i + 1; j < sortedStockpile.length && flux >= combineCost + assignCostForCombine; j++) {
         if (usedOrbUids.has(sortedStockpile[j].uid)) continue;
 
         const combo = registry.getCombination(sortedStockpile[i].affixId, sortedStockpile[j].affixId);
@@ -370,6 +377,11 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
           kind: 'combine',
           orbUid1: sortedStockpile[i].uid,
           orbUid2: sortedStockpile[j].uid,
+        });
+        const compoundUid = `compound_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
+        actions.push({
+          kind: 'assign_orb',
+          orbUid: compoundUid,
           target: slot.target,
           slotIndex: slot.slotIndex,
         });
@@ -377,7 +389,7 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
         usedOrbUids.add(sortedStockpile[j].uid);
         occupiedSlots[slot.target][slot.slotIndex] = true;
         occupiedSlots[slot.target][slot.slotIndex + 1] = true;
-        flux -= combineCost;
+        flux -= combineCost + assignCostForCombine;
         break; // i orb is consumed, move to next i
       }
     }
@@ -508,8 +520,9 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     comboCandidates.sort((a, b) => b.score - a.score);
 
     // Apply the best non-conflicting combinations
+    const assignCostForCombine = balance.fluxCosts.assignOrb;
     for (const cand of comboCandidates) {
-      if (flux < combineCost) break;
+      if (flux < combineCost + assignCostForCombine) break;
       if (usedOrbUids.has(stockpile[cand.i].uid) || usedOrbUids.has(stockpile[cand.j].uid)) continue;
 
       const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
@@ -519,6 +532,11 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
         kind: 'combine',
         orbUid1: stockpile[cand.i].uid,
         orbUid2: stockpile[cand.j].uid,
+      });
+      const compoundUid = `compound_${stockpile[cand.i].uid}_${stockpile[cand.j].uid}`;
+      actions.push({
+        kind: 'assign_orb',
+        orbUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
@@ -526,7 +544,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       usedOrbUids.add(stockpile[cand.j].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       occupiedSlots[slot.target][slot.slotIndex + 1] = true;
-      flux -= combineCost;
+      flux -= combineCost + assignCostForCombine;
     }
 
     // Try upgrades
@@ -681,8 +699,9 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     allCombos.sort((a, b) => b.score - a.score);
 
     // Greedily select non-conflicting combinations
+    const assignCostForCombine = balance.fluxCosts.assignOrb;
     for (const cand of allCombos) {
-      if (flux < combineCost) break;
+      if (flux < combineCost + assignCostForCombine) break;
       if (usedOrbUids.has(stockpile[cand.idx1].uid) || usedOrbUids.has(stockpile[cand.idx2].uid)) continue;
 
       const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
@@ -692,6 +711,11 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
         kind: 'combine',
         orbUid1: stockpile[cand.idx1].uid,
         orbUid2: stockpile[cand.idx2].uid,
+      });
+      const compoundUid = `compound_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`;
+      actions.push({
+        kind: 'assign_orb',
+        orbUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
@@ -699,7 +723,7 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       usedOrbUids.add(stockpile[cand.idx2].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       occupiedSlots[slot.target][slot.slotIndex + 1] = true;
-      flux -= combineCost;
+      flux -= combineCost + assignCostForCombine;
     }
 
     // Try upgrades (highest value pairs first)

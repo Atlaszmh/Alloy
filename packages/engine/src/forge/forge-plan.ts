@@ -104,13 +104,39 @@ function planAssignOrb(
   if (action.slotIndex < 0 || action.slotIndex >= item.slots.length) {
     return { ok: false, error: 'Invalid slot index' };
   }
+
+  const next = clonePlan(plan);
+  const removedOrb = next.stockpile.splice(orbIndex, 1)[0];
+
+  // Compound orbs require 2 consecutive slots
+  if (removedOrb.compoundId && removedOrb.sourceOrbs) {
+    if (action.slotIndex + 1 >= item.slots.length) {
+      return { ok: false, error: 'Compound orb requires two consecutive slots' };
+    }
+    if (item.slots[action.slotIndex] !== null) {
+      return { ok: false, error: 'First slot already occupied' };
+    }
+    if (item.slots[action.slotIndex + 1] !== null) {
+      return { ok: false, error: 'Second slot already occupied' };
+    }
+
+    const compoundSlot: EquippedSlot = {
+      kind: 'compound',
+      orbs: removedOrb.sourceOrbs,
+      compoundId: removedOrb.compoundId,
+    };
+    next.loadout[action.target].slots[action.slotIndex] = compoundSlot;
+    next.loadout[action.target].slots[action.slotIndex + 1] = compoundSlot;
+    next.tentativeFlux -= cost;
+    next.actionLog.push(action);
+    return { ok: true, plan: next };
+  }
+
+  // Regular single orb
   if (item.slots[action.slotIndex] !== null) {
     return { ok: false, error: 'Slot already occupied' };
   }
-
-  const next = clonePlan(plan);
-  const orb = next.stockpile.splice(orbIndex, 1)[0];
-  next.loadout[action.target].slots[action.slotIndex] = { kind: 'single', orb };
+  next.loadout[action.target].slots[action.slotIndex] = { kind: 'single', orb: removedOrb };
   next.tentativeFlux -= cost;
   next.actionLog.push(action);
   return { ok: true, plan: next };
@@ -184,32 +210,25 @@ function planCombine(
   const combination = registry.getCombination(orb1.affixId, orb2.affixId);
   if (!combination) return { ok: false, error: 'No valid combination exists for these orbs' };
 
-  const item = plan.loadout[action.target];
-  if (item.slots[action.slotIndex] !== null) {
-    return { ok: false, error: 'First slot is already occupied' };
-  }
-  if (item.slots[action.slotIndex + 1] !== null) {
-    return { ok: false, error: 'Second slot is already occupied' };
-  }
-
   const next = clonePlan(plan);
 
-  // Remove orbs from stockpile
+  // Remove source orbs from stockpile
   const idx1 = next.stockpile.findIndex(o => o.uid === action.orbUid1);
   const removedOrb1 = next.stockpile.splice(idx1, 1)[0];
   const idx2 = next.stockpile.findIndex(o => o.uid === action.orbUid2);
   const removedOrb2 = next.stockpile.splice(idx2, 1)[0];
 
-  // Place compound in slots (same reference for both slots, matching forge-state.ts)
-  const compoundSlot: EquippedSlot = {
-    kind: 'compound',
-    orbs: [removedOrb1, removedOrb2],
+  // Create compound orb in stockpile
+  const compoundOrb: OrbInstance = {
+    uid: `compound_${action.orbUid1}_${action.orbUid2}`,
+    affixId: orb1.affixId,
+    tier: orb1.tier,
     compoundId: combination.id,
+    sourceOrbs: [removedOrb1, removedOrb2],
   };
-  next.loadout[action.target].slots[action.slotIndex] = compoundSlot;
-  next.loadout[action.target].slots[action.slotIndex + 1] = compoundSlot;
+  next.stockpile.push(compoundOrb);
 
-  // Lock both orbs and record permanent combine
+  // Lock source orbs and record permanent combine
   next.lockedOrbUids.add(action.orbUid1);
   next.lockedOrbUids.add(action.orbUid2);
   next.permanentCombines.push({ compoundId: combination.id, orbs: [removedOrb1, removedOrb2] });

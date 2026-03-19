@@ -417,6 +417,9 @@ describe('Higher tiers beat lower tiers', () => {
         const result = applyAction(state, { kind: 'advance_phase' }, registry);
         if (!result.ok) throw new Error(`Duel failed: ${result.error}`);
         state = result.state;
+        const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+        if (!cont.ok) throw new Error(`Duel continue failed: ${cont.error}`);
+        state = cont.state;
       }
 
       if (state.phase.kind === 'complete') break;

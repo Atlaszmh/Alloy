@@ -287,7 +287,13 @@ describe('Match Controller', () => {
     expect(state.duelLogs.length).toBe(1);
     expect(state.roundResults[0].round).toBe(1);
     expect([0, 1]).toContain(state.roundResults[0].winner);
-    // Should advance to draft round 2
+    // Phase stays as duel until duel_continue
+    expect(state.phase.kind).toBe('duel');
+
+    const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(cont.ok).toBe(true);
+    if (!cont.ok) return;
+    state = cont.state;
     expect(state.phase.kind).toBe('draft');
     if (state.phase.kind === 'draft') {
       expect(state.phase.round).toBe(2);
@@ -314,6 +320,10 @@ describe('Match Controller', () => {
     if (result.ok) state = result.state;
     expect(state.roundResults.length).toBe(1);
 
+    let cont = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(cont.ok).toBe(true);
+    if (cont.ok) state = cont.state;
+
     if (state.phase.kind === 'complete') {
       // Shouldn't happen after 1 round in non-quick mode, but handle edge case
       return;
@@ -336,6 +346,10 @@ describe('Match Controller', () => {
     expect(result.ok).toBe(true);
     if (result.ok) state = result.state;
     expect(state.roundResults.length).toBe(2);
+
+    cont = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(cont.ok).toBe(true);
+    if (cont.ok) state = cont.state;
 
     // Check if match already concluded (2-0)
     if (state.phase.kind === 'complete') {
@@ -364,6 +378,10 @@ describe('Match Controller', () => {
     expect(result.ok).toBe(true);
     if (result.ok) state = result.state;
     expect(state.roundResults.length).toBe(3);
+
+    cont = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(cont.ok).toBe(true);
+    if (cont.ok) state = cont.state;
     expect(state.phase.kind).toBe('complete');
     if (state.phase.kind === 'complete') {
       expect([0, 1, 'draw']).toContain(state.phase.winner);
@@ -402,6 +420,10 @@ describe('Match Controller', () => {
     const result = applyAction(state, { kind: 'advance_phase' }, registry);
     expect(result.ok).toBe(true);
     if (result.ok) state = result.state;
+
+    const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(cont.ok).toBe(true);
+    if (cont.ok) state = cont.state;
 
     expect(state.phase.kind).toBe('complete');
     expect(state.roundResults.length).toBe(1);
@@ -513,6 +535,9 @@ describe('Match Controller', () => {
 
       const result = applyAction(state, { kind: 'advance_phase' }, registry);
       if (result.ok) state = result.state;
+
+      const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+      if (cont.ok) state = cont.state;
 
       if (state.phase.kind === 'complete') break;
     }

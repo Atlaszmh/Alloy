@@ -6,8 +6,6 @@ export type ForgeAction =
       kind: 'combine';
       orbUid1: string;
       orbUid2: string;
-      target: 'weapon' | 'armor';
-      slotIndex: number;
     }
   | {
       kind: 'upgrade_tier';

@@ -52,16 +52,58 @@ export async function startMatch(page: Page): Promise<void> {
   }, FIXED_SEED);
 
   await page.getByRole('button', { name: /Tier 1/i }).click();
-  await page.waitForURL('**/match/*/draft');
-  // Wait for draft UI to render (opponent/pool/your orbs sections)
-  await page.waitForLoadState('networkidle');
+  // PhaseRouter renders at /match/:code — wait for draft UI content
+  await page.waitForURL('**/match/*', { timeout: 10_000 });
+  await waitForPhase(page, 'draft');
 }
 
+/**
+ * Wait for a phase by detecting its characteristic UI content.
+ * No longer relies on URL sub-paths since PhaseRouter uses a single URL.
+ */
 export async function waitForPhase(
   page: Page,
   phase: 'draft' | 'forge' | 'duel' | 'adapt' | 'result',
 ): Promise<void> {
-  await page.waitForURL(`**/match/*/${phase}`, { timeout: 30_000 });
+  switch (phase) {
+    case 'draft':
+      await expect(
+        page.getByText(/YOUR PICK|AI PICKING|OPPONENT/i).first()
+      ).toBeVisible({ timeout: 30_000 });
+      break;
+    case 'forge':
+      await expect(
+        page.getByText(/FORGE PHASE/i)
+      ).toBeVisible({ timeout: 30_000 });
+      break;
+    case 'duel':
+      await expect(
+        page.getByRole('button', { name: 'Skip' })
+      ).toBeVisible({ timeout: 30_000 });
+      break;
+    case 'adapt':
+      await expect(
+        page.getByText(/Adapt Phase/i)
+      ).toBeVisible({ timeout: 30_000 });
+      break;
+    case 'result':
+      await expect(
+        page.getByText(/VICTORY|DEFEAT|DRAW|Victory|Defeat|Draw/)
+      ).toBeVisible({ timeout: 30_000 });
+      break;
+  }
+}
+
+/**
+ * Detect which phase is currently displayed by checking UI content.
+ */
+export async function getCurrentPhase(page: Page): Promise<string> {
+  if (await page.getByText(/FORGE PHASE/i).isVisible().catch(() => false)) return 'forge';
+  if (await page.getByRole('button', { name: 'Skip' }).isVisible().catch(() => false)) return 'duel';
+  if (await page.getByText(/VICTORY|DEFEAT|DRAW/i).isVisible().catch(() => false)) return 'result';
+  if (await page.getByText(/YOUR PICK|AI PICKING|OPPONENT/i).first().isVisible().catch(() => false)) return 'draft';
+  if (await page.getByText(/Adapt Phase/i).isVisible().catch(() => false)) return 'adapt';
+  return 'unknown';
 }
 
 export async function pickOrb(page: Page): Promise<void> {
@@ -88,8 +130,11 @@ export async function pickOrb(page: Page): Promise<void> {
 }
 
 export async function completeDraft(page: Page): Promise<void> {
-  while (page.url().includes('/draft')) {
-    // Check for turn indicator — matches "YOUR PICK" or "Your Turn"
+  // Keep picking until the forge phase appears
+  for (let attempts = 0; attempts < 40; attempts++) {
+    const currentPhase = await getCurrentPhase(page);
+    if (currentPhase !== 'draft') return;
+
     const isOurTurn = await page.getByText(/YOUR PICK|Your Turn/i).isVisible({ timeout: 1000 }).catch(() => false);
     if (isOurTurn) {
       await pickOrb(page);

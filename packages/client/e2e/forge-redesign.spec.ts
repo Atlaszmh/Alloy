@@ -101,7 +101,6 @@ test.describe('Forge Redesign', () => {
 
     // Should transition to duel phase
     await waitForPhase(page, 'duel');
-    expect(page.url()).toContain('/duel');
   });
 
   test('cancel modal returns to forge (if modal exists)', async ({ page }) => {
@@ -118,8 +117,7 @@ test.describe('Forge Redesign', () => {
       await cancelBtn.click();
       await page.waitForTimeout(300);
       // Should still be on forge page
-      expect(page.url()).toContain('/forge');
-      await expect(page.getByText('Forge Phase')).toBeVisible();
+      await expect(page.getByText('FORGE PHASE')).toBeVisible();
     } else {
       // No modal — Done Forging transitions directly
       await waitForPhase(page, 'duel');
