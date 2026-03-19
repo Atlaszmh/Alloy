@@ -1,4 +1,6 @@
+import React from 'react';
 import type { MatchupData } from '../../api/client.js';
+import { exportCSV } from '../../utils/export.js';
 
 interface MatchupHeatmapProps {
   data: MatchupData;
@@ -119,6 +121,16 @@ function formatPct(value: number | null): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
+const exportBtnStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  fontSize: '12px',
+  background: '#27272a',
+  border: '1px solid #3f3f46',
+  borderRadius: '4px',
+  color: '#a1a1aa',
+  cursor: 'pointer',
+};
+
 export default function MatchupHeatmap({ data }: MatchupHeatmapProps) {
   if (!data || !data.archetypes || data.archetypes.length === 0) {
     return <div style={styles.emptyState}>No matchup data available</div>;
@@ -126,8 +138,23 @@ export default function MatchupHeatmap({ data }: MatchupHeatmapProps) {
 
   const { archetypes, matrix } = data;
 
+  function handleExportCSV() {
+    const records = archetypes.map((row, rowIdx) => {
+      const record: Record<string, unknown> = { archetype: row };
+      archetypes.forEach((col, colIdx) => {
+        const value = matrix[rowIdx]?.[colIdx] ?? null;
+        record[col] = value !== null ? (value * 100).toFixed(0) + '%' : '—';
+      });
+      return record;
+    });
+    exportCSV(records, 'matchup-heatmap');
+  }
+
   return (
     <div style={styles.wrapper}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+        <button style={exportBtnStyle} onClick={handleExportCSV}>Export CSV</button>
+      </div>
       <table style={styles.table}>
         <thead>
           <tr>

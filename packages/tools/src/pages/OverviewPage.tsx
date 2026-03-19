@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import type { OverviewStats } from '../api/client.js';
 import { GlobalFilters } from '../components/GlobalFilters.js';
 import type { FilterState } from '../components/GlobalFilters.js';
+import { exportCSV } from '../utils/export.js';
 
 const THEME = {
   bg: '#0f1117',
@@ -139,6 +140,31 @@ export default function OverviewPage() {
       )}
 
       {!loading && !error && data && data.totalMatches > 0 && (
+        <>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            style={{
+              padding: '4px 10px',
+              fontSize: '12px',
+              background: '#27272a',
+              border: '1px solid #3f3f46',
+              borderRadius: '4px',
+              color: '#a1a1aa',
+              cursor: 'pointer',
+            }}
+            onClick={() => {
+              exportCSV([{
+                totalMatches: data.totalMatches,
+                p0WinRate: data.p0WinRate !== null ? (data.p0WinRate * 100).toFixed(1) + '%' : '',
+                p1WinRate: data.p1WinRate !== null ? (data.p1WinRate * 100).toFixed(1) + '%' : '',
+                avgDurationMs: data.avgDurationMs,
+                mostPickedAffix: data.mostPickedAffix ?? '',
+              }], 'overview-stats');
+            }}
+          >
+            Export CSV
+          </button>
+        </div>
         <div style={styles.cardsRow}>
           <div style={styles.card}>
             <span style={styles.cardLabel}>Total Matches</span>
@@ -194,6 +220,7 @@ export default function OverviewPage() {
             <span style={styles.cardSub}>by pick count</span>
           </div>
         </div>
+        </>
       )}
     </div>
   );

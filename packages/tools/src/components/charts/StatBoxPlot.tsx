@@ -1,3 +1,4 @@
+import React, { useRef } from 'react';
 import {
   ComposedChart,
   Bar,
@@ -8,6 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { exportChartPNG } from '../../utils/export.js';
 
 export interface BoxPlotEntry {
   label: string;
@@ -107,17 +109,39 @@ function BoxPlotTooltip({
   );
 }
 
+const exportBtnStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  fontSize: '12px',
+  background: '#27272a',
+  border: '1px solid #3f3f46',
+  borderRadius: '4px',
+  color: '#a1a1aa',
+  cursor: 'pointer',
+};
+
 export default function StatBoxPlot({ data, title }: StatBoxPlotProps) {
+  const chartRef = useRef<HTMLDivElement>(null);
   const chartData = transform(data);
+
+  function handleExportPNG() {
+    const svg = chartRef.current?.querySelector('svg');
+    if (svg) exportChartPNG(svg, title.toLowerCase().replace(/\s+/g, '-'));
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: THEME.text }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: THEME.text }}>{title}</div>
+        {chartData.length > 0 && (
+          <button style={exportBtnStyle} onClick={handleExportPNG}>Export PNG</button>
+        )}
+      </div>
       {chartData.length === 0 ? (
         <div style={{ fontSize: 13, color: THEME.muted, padding: '24px 0', textAlign: 'center' }}>
           No data
         </div>
       ) : (
+        <div ref={chartRef}>
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={THEME.border} horizontal={true} vertical={false} />
@@ -149,6 +173,7 @@ export default function StatBoxPlot({ data, title }: StatBoxPlotProps) {
             <Bar dataKey="medianHeight" stackId="median" fill={THEME.success} radius={[1, 1, 0, 0]} />
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

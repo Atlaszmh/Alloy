@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client.js';
 import type { MatchListItem, MatchDetail } from '../api/client.js';
+import { exportCSV } from '../utils/export.js';
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -547,6 +548,31 @@ export default function MatchInspectorPage() {
             {/* Pagination */}
             <div style={S.paginationBar}>
               <span style={S.muted}>{matches.length} result{matches.length !== 1 ? 's' : ''} shown</span>
+              <button
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  background: '#27272a',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '4px',
+                  color: '#a1a1aa',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  const records = matches.map((m) => ({
+                    id: m.id,
+                    seed: m.seed,
+                    winner: m.winner !== null ? `P${m.winner}` : 'Draw',
+                    rounds: m.rounds,
+                    duration_ms: m.duration_ms,
+                    p0_affixes: (m.p0_affixes ?? []).join(';'),
+                    p1_affixes: (m.p1_affixes ?? []).join(';'),
+                  }));
+                  exportCSV(records as Record<string, unknown>[], 'match-list');
+                }}
+              >
+                Export CSV
+              </button>
               {hasMore && (
                 <button style={S.btnSecondary} onClick={handleNextPage} disabled={loading}>
                   {loading ? 'Loading…' : 'Load more'}

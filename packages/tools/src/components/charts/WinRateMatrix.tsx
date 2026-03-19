@@ -1,4 +1,6 @@
+import React from 'react';
 import type { AffixStat } from '../../api/client.js';
+import { exportCSV } from '../../utils/export.js';
 
 interface WinRateMatrixProps {
   data: AffixStat[];
@@ -77,6 +79,16 @@ function formatPct(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+const exportBtnStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  fontSize: '12px',
+  background: '#27272a',
+  border: '1px solid #3f3f46',
+  borderRadius: '4px',
+  color: '#a1a1aa',
+  cursor: 'pointer',
+};
+
 export default function WinRateMatrix({ data, totalMatches }: WinRateMatrixProps) {
   if (!data || data.length === 0) {
     return <div style={styles.emptyState}>No affix data available</div>;
@@ -90,8 +102,25 @@ export default function WinRateMatrix({ data, totalMatches }: WinRateMatrixProps
 
   const playerSlots = totalMatches * 2;
 
+  function handleExportCSV() {
+    const records = sorted.map((row) => {
+      const pickRate = playerSlots > 0 ? row.pickCount / playerSlots : null;
+      return {
+        affixId: row.affixId,
+        pickCount: row.pickCount,
+        winCount: row.winCount,
+        winRate: row.winRate !== null ? (row.winRate * 100).toFixed(1) + '%' : '',
+        pickRate: pickRate !== null ? (pickRate * 100).toFixed(1) + '%' : '',
+      };
+    });
+    exportCSV(records as Record<string, unknown>[], 'win-rate-matrix');
+  }
+
   return (
     <div style={styles.wrapper}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+        <button style={exportBtnStyle} onClick={handleExportCSV}>Export CSV</button>
+      </div>
       <table style={styles.table}>
         <thead>
           <tr>
