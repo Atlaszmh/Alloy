@@ -55,4 +55,13 @@ export interface BalanceIssue {
   description: string;
 }
 
-export type TabId = 'simulation' | 'analytics' | 'inspector' | 'balance';
+export type TabId =
+  | 'simulation'
+  | 'quicksim'
+  | 'config'
+  | 'analytics'
+  | 'balance'
+  | 'rounds'
+  | 'distributions'
+  | 'meta'
+  | 'inspector';

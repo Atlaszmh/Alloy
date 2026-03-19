@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { SimulationResults, TabId } from './types';
+import SimulationPage from './pages/SimulationPage.js';
 import SimulationRunner from './components/SimulationRunner';
 import AggregateView from './components/AggregateView';
 import MatchInspector from './components/MatchInspector';
@@ -7,9 +8,14 @@ import BalanceReport from './components/BalanceReport';
 
 const tabs: { id: TabId; label: string }[] = [
   { id: 'simulation', label: 'Simulation' },
+  { id: 'quicksim', label: 'Quick Sim' },
+  { id: 'config', label: 'Config' },
   { id: 'analytics', label: 'Analytics' },
-  { id: 'inspector', label: 'Match Inspector' },
   { id: 'balance', label: 'Balance Report' },
+  { id: 'rounds', label: 'Rounds' },
+  { id: 'distributions', label: 'Distributions' },
+  { id: 'meta', label: 'Meta' },
+  { id: 'inspector', label: 'Match Inspector' },
 ];
 
 const styles = {
@@ -24,16 +30,19 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '24px',
+    flexWrap: 'wrap' as const,
   } as React.CSSProperties,
   title: {
     fontSize: '18px',
     fontWeight: 700,
     color: '#6366f1',
     letterSpacing: '-0.5px',
+    flexShrink: 0,
   } as React.CSSProperties,
   tabBar: {
     display: 'flex',
     gap: '4px',
+    flexWrap: 'wrap' as const,
   } as React.CSSProperties,
   tab: (active: boolean) => ({
     padding: '8px 16px',
@@ -51,7 +60,24 @@ const styles = {
     maxWidth: '1400px',
     margin: '0 auto',
   } as React.CSSProperties,
+  placeholder: {
+    background: '#18181b',
+    border: '1px solid #27272a',
+    borderRadius: '8px',
+    padding: '40px',
+    textAlign: 'center' as const,
+    color: '#a1a1aa',
+    fontSize: '15px',
+  } as React.CSSProperties,
 };
+
+function Placeholder({ label }: { label: string }) {
+  return (
+    <div style={styles.placeholder}>
+      {label} — Coming Soon
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('simulation');
@@ -79,18 +105,17 @@ export default function App() {
         </nav>
       </header>
       <main style={styles.content}>
-        {activeTab === 'simulation' && (
+        {activeTab === 'simulation' && <SimulationPage />}
+        {activeTab === 'quicksim' && (
           <SimulationRunner onComplete={handleSimulationComplete} />
         )}
-        {activeTab === 'analytics' && (
-          <AggregateView results={results} />
-        )}
-        {activeTab === 'inspector' && (
-          <MatchInspector results={results} />
-        )}
-        {activeTab === 'balance' && (
-          <BalanceReport results={results} />
-        )}
+        {activeTab === 'config' && <Placeholder label="Config Editor" />}
+        {activeTab === 'analytics' && <AggregateView results={results} />}
+        {activeTab === 'balance' && <BalanceReport results={results} />}
+        {activeTab === 'rounds' && <Placeholder label="Rounds" />}
+        {activeTab === 'distributions' && <Placeholder label="Distributions" />}
+        {activeTab === 'meta' && <Placeholder label="Meta" />}
+        {activeTab === 'inspector' && <MatchInspector results={results} />}
       </main>
     </div>
   );
