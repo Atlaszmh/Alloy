@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useMatchGateway } from '@/gateway';
 import type { CombatLog, TickEvent, DuelResult, DerivedStats } from '@alloy/engine';
@@ -124,7 +124,6 @@ function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLo
 
 export function Duel() {
   const { code } = useParams();
-  const navigate = useNavigate();
 
   const gateway = useMatchGateway(code!);
   const [, forceUpdate] = useState(0);
@@ -245,16 +244,7 @@ export function Duel() {
   useDuelSounds(visibleEvents, isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
-    // Navigate to next phase
-    if (phase?.kind === 'draft') {
-      navigate(`/match/${code}/draft`, { replace: true });
-    } else if (phase?.kind === 'forge') {
-      navigate(`/match/${code}/forge`, { replace: true });
-    } else if (phase?.kind === 'complete') {
-      navigate(`/match/${code}/result`, { replace: true });
-    } else if (phase?.kind === 'adapt') {
-      navigate(`/match/${code}/forge`, { replace: true });
-    }
+    // PhaseRouter re-renders automatically when phase changes
   };
 
   // Auto-navigate when phase changes away from duel
@@ -265,10 +255,6 @@ export function Duel() {
       setShowBreakdown(true);
     }
   }, [phase]);
-
-  if (!matchState) {
-    return <Navigate to="/queue" replace />;
-  }
 
   // currentLog/hpState may not be ready yet (duel simulation runs in useEffect)
   if (!currentLog || !hpState) {
