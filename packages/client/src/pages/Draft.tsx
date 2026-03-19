@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useMatchGateway } from '@/gateway';
 import { useDraftStore } from '@/stores/draftStore';
@@ -140,7 +140,6 @@ function DragGhost({
 
 export function Draft() {
   const { code } = useParams();
-  const navigate = useNavigate();
 
   const gateway = useMatchGateway(code!);
   const [, forceUpdate] = useState(0);
@@ -248,15 +247,6 @@ export function Draft() {
     draftOrb(pool[0].uid);
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
-
-  // ── Phase transitions (must be after all hooks) ──
-  if (phase?.kind === 'forge') {
-    return <Navigate to={`/match/${code}/forge`} replace />;
-  }
-
-  if (!matchState || phase?.kind !== 'draft') {
-    return <Navigate to="/queue" replace />;
-  }
 
   const dragOrb = dragUid ? pool.find((o) => o.uid === dragUid) : null;
   const dragAffix = dragOrb ? affixMap.get(dragOrb.affixId) : null;
