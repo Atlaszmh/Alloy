@@ -12,3 +12,4 @@ export * from './match.js';
 export * from './game-action.js';
 export * from './ai.js';
 export * from './balance.js';
+export * from './match-report.js';
