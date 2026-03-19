@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { loadAndValidateData } from './loader.js';
 import type { GameConfig } from '../types/game-config.js';
+import type { BalanceConfig } from '../types/balance.js';
 import {
   AffixesSchema,
   CombinationsSchema,
@@ -41,7 +42,7 @@ export function defaultConfig(): GameConfig {
  */
 export function mergeConfig(
   base: GameConfig,
-  overrides: Partial<GameConfig>,
+  overrides: Partial<Omit<GameConfig, 'balance'>> & { balance?: Partial<BalanceConfig> },
 ): GameConfig {
   return {
     ...base,
