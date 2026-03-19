@@ -1,4 +1,4 @@
-import type { MatchSummary } from './simulation-runner.js';
+import type { MatchReport } from '../types/match-report.js';
 
 export interface AggregateStats {
   totalMatches: number;
@@ -18,7 +18,7 @@ export interface AggregateStats {
   avgDuelTickCount: number;    // average ticks per duel
 }
 
-export function computeAggregateStats(matches: MatchSummary[]): AggregateStats {
+export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
   const totalMatches = matches.length;
   if (totalMatches === 0) {
     return {
@@ -60,16 +60,17 @@ export function computeAggregateStats(matches: MatchSummary[]): AggregateStats {
     else draws++;
 
     totalRounds += match.rounds;
-    for (const duel of match.duelResults) {
-      totalTicks += duel.tickCount;
+    for (const round of match.roundDetails) {
+      totalTicks += round.durationTicks;
       totalDuels++;
     }
 
     // Affix tracking per player
     for (const playerIdx of [0, 1] as const) {
-      const affixes = playerIdx === 0 ? match.player0Affixes : match.player1Affixes;
-      const synergies = playerIdx === 0 ? match.player0Synergies : match.player1Synergies;
-      const combinations = playerIdx === 0 ? match.player0Combinations : match.player1Combinations;
+      const player = match.players[playerIdx];
+      const affixes = player.affixIds;
+      const synergies = player.synergyIds;
+      const combinations = player.combinationIds;
       const isWinner = match.winner === playerIdx;
 
       // Deduplicate affixes per match for pick rate

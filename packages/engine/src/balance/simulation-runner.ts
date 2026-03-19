@@ -1,13 +1,12 @@
 import type { AITier } from '../types/ai.js';
-import type { MatchMode, MatchState } from '../types/match.js';
-import type { DuelResult } from '../types/combat.js';
-import type { Loadout } from '../types/item.js';
+import type { MatchMode } from '../types/match.js';
+import type { MatchReport } from '../types/match-report.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createMatch, applyAction } from '../match/match-controller.js';
 import { AIController } from '../ai/ai-controller.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { computeAggregateStats, type AggregateStats } from './stats-collector.js';
-import { isSynergyActive, collectAffixIds } from '../forge/stat-calculator.js';
+import { extractMatchReport } from '../match/match-report.js';
 
 export interface SimulationConfig {
   matchCount: number;
@@ -19,29 +18,16 @@ export interface SimulationConfig {
   baseArmorId: string;
 }
 
-export interface MatchSummary {
-  seed: number;
-  winner: 0 | 1 | 'draw';
-  rounds: number;
-  duelResults: DuelResult[];
-  player0Affixes: string[];
-  player1Affixes: string[];
-  player0Synergies: string[];
-  player1Synergies: string[];
-  player0Combinations: string[];
-  player1Combinations: string[];
-}
-
 export interface SimulationResult {
   config: SimulationConfig;
-  matches: MatchSummary[];
+  matches: MatchReport[];
   aggregateStats: AggregateStats;
   duration: number; // ms
 }
 
 export function runSimulation(config: SimulationConfig, registry: DataRegistry): SimulationResult {
   const startTime = Date.now();
-  const matches: MatchSummary[] = [];
+  const matches: MatchReport[] = [];
 
   for (let i = 0; i < config.matchCount; i++) {
     const seed = config.seedStart + i;
@@ -61,7 +47,7 @@ function runAIMatch(
   tier2: AITier,
   config: SimulationConfig,
   registry: DataRegistry,
-): MatchSummary {
+): MatchReport {
   let state = createMatch(
     'sim_' + seed,
     seed,
@@ -137,69 +123,6 @@ function runAIMatch(
     }
   }
 
-  return extractMatchSummary(state, seed, registry);
-}
-
-function extractMatchSummary(state: MatchState, seed: number, registry: DataRegistry): MatchSummary {
-  const phase = state.phase;
-  let winner: 0 | 1 | 'draw' = 'draw';
-  if (phase.kind === 'complete') {
-    winner = phase.winner;
-  }
-
-  const rounds = state.roundResults.length;
-  const duelResults = [...state.roundResults];
-
-  // Extract affix IDs from each player's loadout
-  const player0Affixes = collectAffixIds(state.players[0].loadout);
-  const player1Affixes = collectAffixIds(state.players[1].loadout);
-
-  // Extract compound IDs
-  const player0Combinations = collectCompoundIds(state.players[0].loadout);
-  const player1Combinations = collectCompoundIds(state.players[1].loadout);
-
-  // Check synergies
-  const player0Synergies = collectActiveSynergies(state.players[0].loadout, registry);
-  const player1Synergies = collectActiveSynergies(state.players[1].loadout, registry);
-
-  return {
-    seed,
-    winner,
-    rounds,
-    duelResults,
-    player0Affixes,
-    player1Affixes,
-    player0Synergies,
-    player1Synergies,
-    player0Combinations,
-    player1Combinations,
-  };
-}
-
-
-function collectCompoundIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
-  for (const item of [loadout.weapon, loadout.armor]) {
-    for (const slot of item.slots) {
-      if (!slot) continue;
-      if (slot.kind === 'compound') {
-        ids.push(slot.compoundId);
-      }
-    }
-  }
-  return ids;
-}
-
-function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): string[] {
-  const affixIds = collectAffixIds(loadout);
-  const active: string[] = [];
-
-  for (const synergy of registry.getAllSynergies()) {
-    if (isSynergyActive(synergy.requiredAffixes, affixIds)) {
-      active.push(synergy.id);
-    }
-  }
-
-  return active;
+  return extractMatchReport(state, 'simulation', seed, registry);
 }
 
