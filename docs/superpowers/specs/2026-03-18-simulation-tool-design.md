@@ -60,7 +60,7 @@ Single deployable app within the existing monorepo. Node.js backend handles simu
 
 ### Current State
 
-Game data lives in TypeScript files (`affix-registry.ts`, `combination-registry.ts`, etc.) as hardcoded arrays. Adding a new affix means editing code and rebuilding.
+Game data already lives in JSON files (`affixes.json`, `combinations.json`, etc.) loaded by `loader.ts` and validated by Zod schemas in `schemas.ts`. The `DataRegistry` class accepts injected data via its constructor. However, the data is bundled as static assets — there's no runtime mechanism to swap configs without rebuilding. The simulation runner constructs a `DataRegistry` from these bundled files. The refactor needed is wrapping the existing `LoadedData` + `BalanceConfig` into a unified `GameConfig` shape and making the pipeline accept overrides at runtime.
 
 ### Proposed: GameConfig Schema
 
@@ -71,26 +71,25 @@ interface GameConfig {
   version: string;              // semver for tracking changes
   name: string;                 // "baseline", "fire-nerf-v2", etc.
 
-  affixes: AffixDefinition[];   // all 27+ affixes with full tier data
-  combinations: CombinationDef[];
+  affixes: AffixDef[];          // all 27+ affixes with full tier data (existing type)
+  combinations: CompoundAffixDef[]; // existing type from engine
   synergies: SynergyDef[];
   baseItems: BaseItemDef[];     // weapons + armors with base stats
 
-  balance: {
-    fluxBudgets: Record<number, number>;  // round → flux
-    draftPoolSize: Record<number, number>;
-    tickRate: number;
-    maxTicks: number;
-    statCaps: Record<string, { min: number; max: number }>;
-    actionCosts: Record<string, number>;
-  };
+  balance: BalanceConfig;       // extends existing type from types/balance.ts
+                                // existing fields: fluxPerRound, draftPoolPerRound,
+                                // draftPicksPerPlayer, draftPoolSizeQuick, tickRate,
+                                // maxDuelTicks, fluxCosts (FluxCosts type), etc.
+                                // NEW addition: statCaps — Record<string, {min, max}>
+                                // for configurable stat caps (currently hardcoded in
+                                // stat-calculator.ts, moved into config)
 }
 ```
 
 ### How It Works
 
-- Engine registries refactored to accept a `GameConfig` at initialization instead of importing hardcoded data.
-- Current hardcoded data becomes the **default config** — exported as a JSON-serializable `defaultConfig()` function.
+- `LoadedData` + `BalanceConfig` wrapped into a unified `GameConfig` type. `loadAndValidateData()` extended to accept optional overrides.
+- Current bundled JSON data becomes the **default config** — exported as a `defaultConfig()` function that returns the existing data as a `GameConfig` object.
 - Simulation tool loads, edits, and injects alternate configs.
 - Configs stored in Supabase as versioned rows for cross-version comparison.
 - Live game continues using the default config (or eventually pulls from DB).
@@ -128,6 +127,7 @@ GET  /api/reports/:id           — query aggregated match data
 4. As batches complete: update progress, stream to frontend, batch-insert match results
 5. On completion: update run status to `complete`, compute and store aggregates
 6. On cancel: signal workers to stop, mark run as `cancelled`
+7. On worker crash: mark failed batch seeds, continue remaining work with other workers. If >10% of batches fail, mark run as `failed` with partial results preserved. Individual match failures (e.g., bad seed causing engine error) are logged and skipped — they don't take down the worker.
 
 ### Performance Target
 
@@ -135,7 +135,7 @@ GET  /api/reports/:id           — query aggregated match data
 
 ### Why Express + SSE
 
-Simpler than WebSockets, no persistent connection management, works through proxies. SSE gives real-time progress without the complexity.
+Simpler than WebSockets, no persistent connection management, works through proxies. SSE gives real-time progress without the complexity. If the SSE connection drops mid-run, the frontend falls back to polling the `GET /api/simulations/:id` endpoint for current status and reconnects SSE for future updates.
 
 ## Section 3: Supabase Data Schema
 
@@ -171,7 +171,11 @@ match_results
   config_id     uuid FK?       -- null for live (uses current default)
   source        text           -- 'simulation' | 'live'
   seed          int?
-  winner        int            -- 0 or 1
+  winner        int?           -- 0, 1, or null for draw. Note: individual duels
+                               -- always produce a winner (tiebreak by HP%), so
+                               -- draws only occur at the match level (e.g., if a
+                               -- future rule allows it). Engine's 'draw' string
+                               -- maps to SQL null.
   rounds        int            -- how many rounds played
   duration_ms   float          -- total duel time across rounds
   created_at    timestamptz
@@ -264,7 +268,7 @@ The editor always shows which config your current simulation results are based o
 
 **Distributions Tab**
 - Damage histograms (physical vs elemental vs DOT)
-- HP-over-time curves (sampled from combat logs)
+- HP-over-time curves (sampled from combat logs — requires combat log storage; for large runs without logs, this section shows a message and offers to re-run a small sample with logs enabled)
 - Stat distribution box plots across all matches
 - Duel duration distribution (quick kills vs timeouts)
 
@@ -272,7 +276,7 @@ The editor always shows which config your current simulation results are based o
 - Config version selector: pick 2+ configs to compare
 - Side-by-side charts: how win rates, pick rates, and matchup spreads shifted
 - Trend lines across sequential config versions
-- Diff summary: "Config B nerfed fire by 15% → fire archetype win rate dropped from 62% to 48%"
+- Config diff viewer: shows which values changed between versions (structured diff, not prose generation — stretch goal to auto-summarize impact)
 
 **Match Inspector Tab**
 - Searchable match list with filters (winner, affixes used, duration, round count)
@@ -283,7 +287,7 @@ The editor always shows which config your current simulation results are based o
 
 - CSV export for any table/chart data
 - PNG export for individual charts (social media / reports)
-- PDF report generation with configurable sections
+- PDF export deferred to future work — CSV + PNG covers immediate needs without adding a PDF generation dependency
 
 ### Global Filter Dimensions
 
@@ -300,24 +304,27 @@ Available across all tabs:
 
 ### Engine Changes
 
-Core refactor: registries accept injected data instead of importing hardcoded arrays.
+The engine already uses `DataRegistry` with constructor injection and loads data from JSON files via `loader.ts`. The refactor is lighter than a ground-up rewrite:
 
 ```typescript
-// Before: hardcoded imports
-import { AFFIX_REGISTRY } from './data/affix-registry';
+// Pseudocode — illustrative, not actual signatures
 
-// After: config-injected
-function createEngine(config: GameConfig) {
-  const affixRegistry = buildAffixRegistry(config.affixes);
-  const comboRegistry = buildComboRegistry(config.combinations);
-  // ... returns an engine instance with all registries bound
-}
+// Current: data loaded from bundled JSON, no runtime override
+const data = loadAndValidateData();
+const registry = new DataRegistry(data);
+createMatch(id, seed, mode, players, weaponId, armorId, registry);
+
+// After: GameConfig wraps LoadedData + BalanceConfig, overrides supported
+const config = loadGameConfig(overrides?);  // merges overrides onto defaults
+const registry = new DataRegistry(config);
+createMatch(id, seed, mode, players, weaponId, armorId, registry, config.balance);
 ```
 
-- `createMatch()` accepts a `GameConfig` parameter
-- All internal functions that currently reach for global registries instead receive them via the engine instance or as parameters
-- Existing hardcoded data files become `defaultConfig()` — returns current data as a `GameConfig` object
-- No behavior changes — the default config produces identical results
+- `GameConfig` type unifies the existing `LoadedData` and `BalanceConfig` into a single serializable shape
+- `loadGameConfig()` loads defaults then deep-merges any overrides passed in
+- `createMatch()` already accepts a `DataRegistry` — it gains an optional `balanceConfig` override
+- Existing `SimulationConfig` and `MatchSummary` types mapped to the new `GameConfig` / `MatchReport` interfaces
+- No behavior changes — `loadGameConfig()` with no overrides produces identical results to current `loadAndValidateData()`
 
 ### Match Data Extraction
 
@@ -327,7 +334,7 @@ New `extractMatchReport()` function producing a standardized report from any com
 interface MatchReport {
   seed?: number;
   source: 'simulation' | 'live';
-  winner: number;
+  winner: 0 | 1 | null;        // null = draw (maps to SQL null)
   rounds: number;
   durationMs: number;
   players: PlayerReport[];     // affix_ids, combo_ids, synergies, loadout, final stats
@@ -340,9 +347,25 @@ interface MatchReport {
 - **Live matches:** the `match-complete` edge function gets revived to call the same `extractMatchReport()` and write to the same tables
 - Same schema, same tables, same reporting — the only difference is the `source` field
 
+### Migration Path
+
+- `SimulationConfig` → `GameConfig`: simulation parameters are a subset; `GameConfig` adds the full data definitions.
+- `MatchSummary` → `MatchReport`: `MatchReport` adds `roundDetails` and structured player data. `MatchSummary.duelResults: DuelResult[]` flattens into `MatchReport.roundDetails: RoundReport[]`.
+- **Confirmed gap:** `DuelResult` does not currently track total damage dealt per player — it only has `finalHP`, `tickCount`, `duration` (seconds), and `wasTiebreak`. The duel engine must be extended to accumulate `p0DamageDealt` and `p1DamageDealt` during the tick loop. This is a small addition (sum damage in the attack phase) but is required for the `match_round_details` table. Note: `match_round_details.duration_ticks` maps to `DuelResult.tickCount`, not `DuelResult.duration` (which is seconds).
+- **Base items in simulation:** `createMatch()` currently takes `baseWeaponId` and `baseArmorId` as parameters. For simulations, AI strategies handle base item selection. The `GameConfig.baseItems` array defines which items are available; the simulation runner will pass the default items (or let AI strategies choose from the available set).
+
+### Database Indexes
+
+Key indexes needed at 50k+ rows:
+- `match_results(run_id)`, `match_results(config_id)`, `match_results(source)`
+- `match_player_stats(match_id)`
+- `match_round_details(match_id)`
+- `game_configs(parent_id)`
+- `simulation_runs(config_id, status)`
+
 ### Safety Net
 
-`defaultConfig()` produces byte-identical output to the current hardcoded registries, so all existing tests remain valid without modification.
+`loadGameConfig()` with no overrides produces identical output to current `loadAndValidateData()`, so all existing tests remain valid without modification.
 
 ## Scope & Non-Goals
 
