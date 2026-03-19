@@ -35,4 +35,6 @@ export interface BalanceConfig {
       armor: Record<string, number>;
     }
   >;
+
+  statCaps: Record<string, { min: number; max: number }>;
 }

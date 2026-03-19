@@ -99,4 +99,8 @@ export const BalanceConfigSchema = z.object({
       armor: z.record(z.string(), z.number()),
     }),
   ),
+  statCaps: z.record(
+    z.string(),
+    z.object({ min: z.number(), max: z.number() }),
+  ),
 });

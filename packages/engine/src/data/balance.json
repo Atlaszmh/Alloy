@@ -37,5 +37,14 @@
       "weapon": { "lifestealEffectiveness": 0.01, "hpBonus": 5 },
       "armor": { "maxHP": 8, "hpRegen": 0.01, "sustainEffectiveness": 0.02 }
     }
+  },
+  "statCaps": {
+    "critChance": { "min": 0, "max": 0.95 },
+    "dodgeChance": { "min": 0, "max": 0.75 },
+    "blockChance": { "min": 0, "max": 0.75 },
+    "fireResistance": { "min": 0, "max": 0.90 },
+    "iceResistance": { "min": 0, "max": 0.90 },
+    "lightningResistance": { "min": 0, "max": 0.90 },
+    "poisonResistance": { "min": 0, "max": 0.90 }
   }
 }
