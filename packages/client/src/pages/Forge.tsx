@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useMatchGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
@@ -22,6 +22,7 @@ import type {
   ForgePlan,
 } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
+import { useGemSize } from '@/hooks/useGemSize';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -437,9 +438,9 @@ function CombinationWorkbench({
         <div
           data-combo-socket={slotKey}
           className="flex items-center justify-center rounded-lg border-2 border-dashed"
-          style={{ width: 56, height: 56, borderColor: COLOR_EMPTY_SOCKET }}
+          style={{ width: 72, height: 72, borderColor: COLOR_EMPTY_SOCKET }}
         >
-          <span className="text-sm" style={{ color: COLOR_EMPTY_SOCKET }}>?</span>
+          <span className="text-base" style={{ color: COLOR_EMPTY_SOCKET }}>?</span>
         </div>
       );
     }
@@ -454,9 +455,9 @@ function CombinationWorkbench({
           category={affix.category}
           tags={affix.tags}
           statLabel={getStatLabel(affix, orb)}
-          gemSize={48}
-          emojiSize={16}
-          statSize={10}
+          gemSize={64}
+          emojiSize={22}
+          statSize={11}
           nameSize={0}
           onPointerDown={(e) => onSocketPointerDown(e, slotKey, orb)}
           catSize={0}
@@ -465,39 +466,57 @@ function CombinationWorkbench({
     );
   }
 
+  function renderResultPreview() {
+    if (!recipe) {
+      return (
+        <div
+          className="flex items-center justify-center rounded-lg border-2 border-dashed"
+          style={{ width: 72, height: 72, borderColor: COLOR_EMPTY_SOCKET }}
+        >
+          <span className="text-base" style={{ color: COLOR_EMPTY_SOCKET }}>?</span>
+        </div>
+      );
+    }
+    return (
+      <div
+        className="flex items-center justify-center rounded-lg border-2"
+        style={{ width: 72, height: 72, borderColor: COLOR_COMPOUND, background: `${COLOR_COMPOUND}10` }}
+      >
+        <span
+          className="text-center text-xs font-bold px-1"
+          style={{ color: COLOR_COMPOUND, fontFamily: 'var(--font-family-display)' }}
+        >
+          {recipe.name}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="rounded-lg border border-surface-600 bg-surface-800 p-2"
+      className="rounded-lg border border-surface-600 bg-surface-800 p-4"
       style={{ boxShadow: 'var(--shadow-card)' }}
     >
       <h4
-        className="mb-2 text-center text-[10px] font-bold uppercase tracking-widest"
+        className="mb-3 text-center text-xs font-bold uppercase tracking-widest"
         style={{ color: COLOR_COMPOUND, fontFamily: 'var(--font-family-display)' }}
       >
         {'\u25C6'} FORGE {'\u25C6'}
       </h4>
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex items-center justify-center gap-3">
         {renderComboSocket(comboSlotA, 'a')}
-        <span className="text-lg font-bold text-surface-400">+</span>
+        <span className="text-xl font-bold text-surface-400">+</span>
         {renderComboSocket(comboSlotB, 'b')}
-        <span className="text-lg font-bold text-surface-400">{'\u25B6'}</span>
-        <div className="flex min-w-[56px] items-center justify-center">
-          {recipe ? (
-            <span className="text-center text-xs font-bold" style={{ color: COLOR_COMPOUND }}>
-              {recipe.name}
-            </span>
-          ) : (
-            <span className="text-xs text-surface-500">?</span>
-          )}
-        </div>
+        <span className="text-xl font-bold text-surface-400">{'\u25B6'}</span>
+        {renderResultPreview()}
       </div>
-      <div className="mt-2 flex justify-center gap-2">
+      <div className="mt-3 flex justify-center gap-3">
         <button
           disabled={!recipe || !canAfford}
           onClick={() => {
             if (comboSlotA && comboSlotB) onCombine(comboSlotA.uid, comboSlotB.uid);
           }}
-          className="rounded bg-accent-500 px-3 py-1 text-xs font-bold text-surface-900 transition-colors hover:bg-accent-400 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-md bg-accent-500 px-5 py-1.5 text-sm font-bold text-surface-900 transition-colors hover:bg-accent-400 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ fontFamily: 'var(--font-family-display)' }}
         >
           COMBINE
@@ -505,7 +524,7 @@ function CombinationWorkbench({
         <button
           disabled={!comboSlotA && !comboSlotB}
           onClick={onClear}
-          className="rounded bg-surface-600 px-3 py-1 text-xs font-medium text-surface-300 transition-colors hover:bg-surface-500 disabled:opacity-40"
+          className="rounded-md bg-surface-600 px-5 py-1.5 text-sm font-medium text-surface-300 transition-colors hover:bg-surface-500 disabled:opacity-40"
           style={{ fontFamily: 'var(--font-family-display)' }}
         >
           CLEAR
@@ -888,24 +907,16 @@ export function Forge() {
   // ── Combination workbench handlers ──
   const handleCombine = useCallback((orbUid1: string, orbUid2: string) => {
     if (!plan) return;
-    // Find first item with 2 consecutive empty slots
-    for (const target of ['weapon', 'armor'] as const) {
-      const item = plan.loadout[target];
-      for (let i = 0; i < item.slots.length - 1; i++) {
-        if (item.slots[i] === null && item.slots[i + 1] === null) {
-          const result = applyAction(
-            { kind: 'combine', orbUid1, orbUid2, target, slotIndex: i },
-            registry,
-          );
-          if (result.ok) {
-            playSound('combineMerge');
-            clearComboSlots();
-            return;
-          }
-        }
-      }
+    const result = applyAction(
+      { kind: 'combine', orbUid1, orbUid2 },
+      registry,
+    );
+    if (result.ok) {
+      playSound('combineMerge');
+      clearComboSlots();
+    } else {
+      playSound('combineFail');
     }
-    playSound('combineFail');
   }, [plan, applyAction, registry, clearComboSlots]);
 
   const handleClearCombo = useCallback(() => {
@@ -925,15 +936,8 @@ export function Forge() {
     });
   }, [applyAction, registry]);
 
-  // ── Phase transitions (must be after all hooks) ──
-  if (phase?.kind === 'duel') {
-    return <Navigate to={`/match/${code}/duel`} replace />;
-  }
-
-  // ── Render guard ──
-  if (!matchState || phase?.kind !== 'forge' || !player) {
-    return <Navigate to="/queue" replace />;
-  }
+  // Hook must be called unconditionally (before early returns)
+  const gemSizes = useGemSize(plan?.stockpile.length ?? 8);
 
   // Plan initializes asynchronously via useEffect — wait for it
   if (!plan) {
@@ -984,6 +988,9 @@ export function Forge() {
           </button>
         </div>
       </header>
+
+      {/* Stats bar — above items so character details are grouped together */}
+      <StatsBar plan={plan} registry={registry} />
 
       {/* Base stat selectors (round 1 only) */}
       {round === 1 && (
@@ -1068,8 +1075,36 @@ export function Forge() {
         >
           Stockpile ({displayStockpile.length})
         </h3>
-        <div className="grid grid-cols-4 gap-2">
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${gemSizes.columns}, 1fr)`, justifyItems: 'center' }}
+        >
           {displayStockpile.map(orb => {
+            // Compound orbs display using compound def
+            if (orb.compoundId) {
+              const compound = registry.getCombinationById(orb.compoundId);
+              if (!compound) return null;
+              return (
+                <GemCard
+                  key={orb.uid}
+                  affixId={orb.compoundId}
+                  affixName={compound.name}
+                  tier={orb.tier}
+                  category="combined"
+                  tags={compound.tags}
+                  statLabel={compound.name}
+                  gemSize={gemSizes.gemSize}
+                  emojiSize={gemSizes.emojiSize}
+                  statSize={gemSizes.statSize}
+                  nameSize={gemSizes.nameSize}
+                  catSize={gemSizes.catSize}
+                  selected={orb.uid === selectedOrbUid}
+                  onClick={() => handleStockpileClick(orb)}
+                  onPointerDown={e => handlePointerDown(e, { from: 'stockpile', orbUid: orb.uid }, orb)}
+                />
+              );
+            }
+
             const affix = affixMap.get(orb.affixId);
             if (!affix) return null;
             return (
@@ -1081,11 +1116,11 @@ export function Forge() {
                 category={affix.category}
                 tags={affix.tags}
                 statLabel={getStatLabel(affix, orb)}
-                gemSize={72}
-                emojiSize={22}
-                statSize={11}
-                nameSize={9}
-                catSize={8}
+                gemSize={gemSizes.gemSize}
+                emojiSize={gemSizes.emojiSize}
+                statSize={gemSizes.statSize}
+                nameSize={gemSizes.nameSize}
+                catSize={gemSizes.catSize}
                 selected={orb.uid === selectedOrbUid}
                 onClick={() => handleStockpileClick(orb)}
                 onPointerDown={e => handlePointerDown(e, { from: 'stockpile', orbUid: orb.uid }, orb)}
@@ -1094,9 +1129,6 @@ export function Forge() {
           })}
         </div>
       </div>
-
-      {/* Stats bar */}
-      <StatsBar plan={plan} registry={registry} />
 
       {/* Drag ghost */}
       {isDragging && dragOrb && (
