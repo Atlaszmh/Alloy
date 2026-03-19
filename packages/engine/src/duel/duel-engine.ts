@@ -49,6 +49,8 @@ export function simulate(
 
   let winner: 0 | 1 | null = null;
   let tickCount = 0;
+  let p0Damage = 0;
+  let p1Damage = 0;
 
   for (let tick = 0; tick < maxTicks; tick++) {
     tickCount = tick;
@@ -65,6 +67,8 @@ export function simulate(
         if (damage > 0) {
           const oldHP = g.currentHP;
           g.currentHP = Math.max(0, g.currentHP - damage);
+          const actualDotDmg = oldHP - g.currentHP;
+          if (attackerIdx === 0) p0Damage += actualDotDmg; else p1Damage += actualDotDmg;
           log.addEvent(tick, { type: 'dot_tick', target: g.playerId, element: dot.element, damage });
           log.addEvent(tick, {
             type: 'hp_change',
@@ -224,6 +228,8 @@ export function simulate(
         if (damageToHP > 0) {
           const oldHP = defender.currentHP;
           defender.currentHP = Math.max(0, defender.currentHP - damageToHP);
+          const actualHpDmg = oldHP - defender.currentHP;
+          if (attackerIdx === 0) p0Damage += actualHpDmg; else p1Damage += actualHpDmg;
           log.addEvent(tick, {
             type: 'hp_change',
             player: defender.playerId,
@@ -234,13 +240,27 @@ export function simulate(
         }
 
         // Process on-hit triggers (attacker side)
-        fireTriggers(triggers[attackerIdx], 'on_hit', attacker, defender, rng, log, tick);
-        if (isCrit) {
-          fireTriggers(triggers[attackerIdx], 'on_crit', attacker, defender, rng, log, tick);
+        {
+          const hpBefore0 = gladiators[0].currentHP;
+          const hpBefore1 = gladiators[1].currentHP;
+          fireTriggers(triggers[attackerIdx], 'on_hit', attacker, defender, rng, log, tick);
+          if (isCrit) {
+            fireTriggers(triggers[attackerIdx], 'on_crit', attacker, defender, rng, log, tick);
+          }
+          // Attribute trigger damage from attacker to defender
+          const defDmg = Math.max(0, (defenderIdx === 0 ? hpBefore0 : hpBefore1) - (defenderIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
+          if (attackerIdx === 0) p0Damage += defDmg; else p1Damage += defDmg;
         }
 
         // Process on-taking-damage triggers (defender side)
-        fireTriggers(triggers[defenderIdx], 'on_taking_damage', defender, attacker, rng, log, tick);
+        {
+          const hpBefore0 = gladiators[0].currentHP;
+          const hpBefore1 = gladiators[1].currentHP;
+          fireTriggers(triggers[defenderIdx], 'on_taking_damage', defender, attacker, rng, log, tick);
+          // Defender's triggers deal damage to attacker (bonus_damage)
+          const atkDmg = Math.max(0, (attackerIdx === 0 ? hpBefore0 : hpBefore1) - (attackerIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
+          if (defenderIdx === 0) p0Damage += atkDmg; else p1Damage += atkDmg;
+        }
 
         // Apply lifesteal
         const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
@@ -267,6 +287,8 @@ export function simulate(
           const thornsDmg = defender.stats.thornsDamage;
           const oldHP = attacker.currentHP;
           attacker.currentHP = Math.max(0, attacker.currentHP - thornsDmg);
+          const actualThornsDmg = oldHP - attacker.currentHP;
+          if (defenderIdx === 0) p0Damage += actualThornsDmg; else p1Damage += actualThornsDmg;
           log.addEvent(tick, { type: 'thorns', reflector: defender.playerId, damage: thornsDmg });
           log.addEvent(tick, {
             type: 'hp_change',
@@ -283,6 +305,8 @@ export function simulate(
           if (reflected > 0) {
             const oldHP = attacker.currentHP;
             attacker.currentHP = Math.max(0, attacker.currentHP - reflected);
+            const actualReflect = oldHP - attacker.currentHP;
+            if (defenderIdx === 0) p0Damage += actualReflect; else p1Damage += actualReflect;
             log.addEvent(tick, { type: 'thorns', reflector: defender.playerId, damage: reflected });
             log.addEvent(tick, {
               type: 'hp_change',
@@ -295,8 +319,22 @@ export function simulate(
         }
 
         // Check on-low-HP triggers
-        updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, tick);
-        updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, tick);
+        {
+          const hpBefore0 = gladiators[0].currentHP;
+          const hpBefore1 = gladiators[1].currentHP;
+          updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, tick);
+          // Attacker's low-HP triggers may damage defender
+          const defLowHpDmg = Math.max(0, (defenderIdx === 0 ? hpBefore0 : hpBefore1) - (defenderIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
+          if (attackerIdx === 0) p0Damage += defLowHpDmg; else p1Damage += defLowHpDmg;
+        }
+        {
+          const hpBefore0 = gladiators[0].currentHP;
+          const hpBefore1 = gladiators[1].currentHP;
+          updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, tick);
+          // Defender's low-HP triggers may damage attacker
+          const atkLowHpDmg = Math.max(0, (attackerIdx === 0 ? hpBefore0 : hpBefore1) - (attackerIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
+          if (defenderIdx === 0) p0Damage += atkLowHpDmg; else p1Damage += atkLowHpDmg;
+        }
 
         // Reset attack timer
         attacker.attackTimer = attacker.stats.attackInterval;
@@ -344,6 +382,8 @@ export function simulate(
     tickCount,
     duration: tickCount / ticksPerSecond,
     wasTiebreak,
+    p0DamageDealt: p0Damage,
+    p1DamageDealt: p1Damage,
   });
 }
 

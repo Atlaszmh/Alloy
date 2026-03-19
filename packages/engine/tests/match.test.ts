@@ -26,7 +26,7 @@ describe('Phase Machine', () => {
 
   it('transitions duel(1) -> draft(2) when no winner yet', () => {
     const results: DuelResult[] = [
-      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
+      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
     ];
     const phase: MatchPhase = { kind: 'duel', round: 1 };
     const next = getNextPhase(phase, results);
@@ -35,8 +35,8 @@ describe('Phase Machine', () => {
 
   it('transitions duel(2) -> draft(3) when tied 1-1', () => {
     const results: DuelResult[] = [
-      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
-      { round: 2, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false },
+      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
+      { round: 2, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
     ];
     const phase: MatchPhase = { kind: 'duel', round: 2 };
     const next = getNextPhase(phase, results);
@@ -45,8 +45,8 @@ describe('Phase Machine', () => {
 
   it('transitions duel(2) -> complete when 2-0', () => {
     const results: DuelResult[] = [
-      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
-      { round: 2, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
+      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
+      { round: 2, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
     ];
     const phase: MatchPhase = { kind: 'duel', round: 2 };
     const next = getNextPhase(phase, results);
@@ -59,9 +59,9 @@ describe('Phase Machine', () => {
 
   it('transitions duel(3) -> complete', () => {
     const results: DuelResult[] = [
-      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
-      { round: 2, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false },
-      { round: 3, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false },
+      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
+      { round: 2, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
+      { round: 3, winner: 1, finalHP: [0, 50], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
     ];
     const phase: MatchPhase = { kind: 'duel', round: 3 };
     const next = getNextPhase(phase, results);
@@ -74,7 +74,7 @@ describe('Phase Machine', () => {
 
   it('quick match: duel(1) -> complete', () => {
     const results: DuelResult[] = [
-      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false },
+      { round: 1, winner: 0, finalHP: [50, 0], tickCount: 100, duration: 10, wasTiebreak: false, p0DamageDealt: 0, p1DamageDealt: 0 },
     ];
     const phase: MatchPhase = { kind: 'duel', round: 1 };
     const next = getNextPhaseQuick(phase, results);

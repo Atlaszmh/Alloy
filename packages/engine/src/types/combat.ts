@@ -65,6 +65,8 @@ export interface DuelResult {
   tickCount: number;
   duration: number; // In seconds (tickCount / ticksPerSecond)
   wasTiebreak: boolean;
+  p0DamageDealt: number;
+  p1DamageDealt: number;
 }
 
 export interface CombatLog {
