@@ -76,3 +76,15 @@ CREATE TABLE match_round_details (
 );
 
 CREATE INDEX idx_match_round_details_match ON match_round_details(match_id);
+
+-- Aggregate function for affix win stats
+CREATE OR REPLACE FUNCTION affix_win_stats(p_run_id uuid)
+RETURNS TABLE(affix_id text, pick_count bigint, win_count bigint) AS $$
+  SELECT a.affix_id, COUNT(*) as pick_count,
+         COUNT(*) FILTER (WHERE mr.winner = mps.player_index) as win_count
+  FROM match_player_stats mps
+  CROSS JOIN LATERAL unnest(mps.affix_ids) AS a(affix_id)
+  JOIN match_results mr ON mr.id = mps.match_id
+  WHERE (p_run_id IS NULL OR mr.run_id = p_run_id)
+  GROUP BY a.affix_id
+$$ LANGUAGE sql;

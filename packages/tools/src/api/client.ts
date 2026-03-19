@@ -26,6 +26,32 @@ export const api = {
     cancel: (id: string) =>
       request<{ status: string }>(`/api/simulations/${id}/cancel`, { method: 'POST' }),
   },
+  reports: {
+    overview: (filters?: Record<string, string>) =>
+      request<OverviewStats>(
+        `/api/reports/overview?${new URLSearchParams(filters)}`,
+      ),
+    affixStats: (runId?: string) =>
+      request<AffixStat[]>(
+        `/api/reports/affix-stats?${new URLSearchParams({ runId: runId || '' })}`,
+      ),
+    matchups: (runId?: string) =>
+      request<MatchupData>(
+        `/api/reports/matchups?${new URLSearchParams({ runId: runId || '' })}`,
+      ),
+    roundStats: (runId?: string) =>
+      request<RoundStat[]>(
+        `/api/reports/round-stats?${new URLSearchParams({ runId: runId || '' })}`,
+      ),
+    distributions: (runId?: string) =>
+      request<DistributionData>(
+        `/api/reports/distributions?${new URLSearchParams({ runId: runId || '' })}`,
+      ),
+    configComparison: (configIds: string[]) =>
+      request<ConfigComparisonResult[]>(
+        `/api/reports/config-comparison?configIds=${configIds.join(',')}`,
+      ),
+  },
 };
 
 export interface ConfigSummary {
@@ -65,4 +91,45 @@ export interface SimulationRun {
   progress: number;
   started_at: string;
   completed_at?: string;
+}
+
+// Report types
+
+export interface OverviewStats {
+  totalMatches: number;
+  p0WinRate: number | null;
+  p1WinRate: number | null;
+  avgDurationMs: number;
+  mostPickedAffix: string | null;
+}
+
+export interface AffixStat {
+  affixId: string;
+  pickCount: number;
+  winCount: number;
+  winRate: number | null;
+}
+
+export interface MatchupData {
+  archetypes: string[];
+  matrix: number[][];
+}
+
+export interface RoundStat {
+  round: number;
+  matchCount: number;
+  avgDurationTicks: number;
+  avgTotalDamage: number;
+}
+
+export interface DistributionData {
+  durationMs: number[];
+  rounds: number[];
+}
+
+export interface ConfigComparisonResult {
+  configId: string;
+  totalMatches: number;
+  p0WinRate: number | null;
+  avgDurationMs: number;
 }
