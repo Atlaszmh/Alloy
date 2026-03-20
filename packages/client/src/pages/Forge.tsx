@@ -128,6 +128,7 @@ function ItemCard({
   onSlotPointerDown: (e: React.PointerEvent, cardId: 'weapon' | 'armor', slotIndex: number, orb: OrbInstance) => void;
   isDragTarget: boolean;
 }) {
+  const canRemoveSlot = useForgeStore(s => s.canRemove);
   const baseItem = registry.getBaseItem(item.baseItemId);
   const sortedSlots = getSortedSlots(item);
   const emptyCount = countEmptySlots(item);
@@ -197,7 +198,7 @@ function ItemCard({
       {sortedSlots.map(({ slot, index }) => {
         if (slot.kind === 'compound') {
           const combo = registry.getCombinationById(slot.compoundId);
-          const locked = !plan || slot.orbs.every(o => plan.lockedOrbUids.has(o.uid));
+          const locked = !canRemoveSlot(cardId, index);
           return (
             <div
               key={`compound-${index}`}
@@ -216,8 +217,8 @@ function ItemCard({
         const affix = affixMap.get(orb.affixId);
         if (!affix) return null;
 
-        const locked = plan.lockedOrbUids.has(orb.uid);
-        const canRemove = plan.round !== 1 && !locked;
+        const locked = !canRemoveSlot(cardId, index);
+        const isRemovable = canRemoveSlot(cardId, index);
         const primaryTag = affix.tags.find(t => t in ELEMENT_EMOJIS) ?? 'physical';
         const emoji = ELEMENT_EMOJIS[primaryTag] ?? '\u2694';
         const label = getStatLabel(affix, orb, cardId);
@@ -230,8 +231,8 @@ function ItemCard({
             data-slot-index={index}
             data-card-id={cardId}
             style={{ touchAction: 'none' }}
-            onClick={() => canRemove ? onRemoveClick(cardId, index) : undefined}
-            onPointerDown={canRemove ? (e) => onSlotPointerDown(e, cardId, index, orb) : undefined}
+            onClick={() => isRemovable ? onRemoveClick(cardId, index) : undefined}
+            onPointerDown={isRemovable ? (e) => onSlotPointerDown(e, cardId, index, orb) : undefined}
           >
             <span style={{ fontSize: 14 }}>{emoji}</span>
             <span className="flex-1 text-xs font-medium" style={{ color: COLOR_AFFIX }}>
@@ -250,7 +251,7 @@ function ItemCard({
               <span className="text-[10px] font-bold text-tier-4">+</span>
             )}
             {locked && <span style={{ color: COLOR_LOCKED, fontSize: 11 }}>{'\uD83D\uDD12'}</span>}
-            {canRemove && (
+            {isRemovable && (
               <span className="text-xs text-danger opacity-0 transition-opacity group-hover:opacity-100">
                 {'\u2715'}
               </span>
@@ -745,7 +746,7 @@ export function Forge() {
   }, [selectedOrbUid, plan, applyAction, registry, selectOrb]);
 
   const handleRemoveClick = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
-    if (!plan || plan.round === 1) return;
+    if (!plan) return;
     applyAction({ kind: 'remove_orb', target: cardId, slotIndex }, registry);
     playSound('orbRemove');
   }, [plan, applyAction, registry]);
@@ -807,9 +808,11 @@ export function Forge() {
       const dx = moveEvent.clientX - dragStartPos.current.x;
       const dy = moveEvent.clientY - dragStartPos.current.y;
       if (!dragThresholdMet.current && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
-      dragThresholdMet.current = true;
-      setIsDragging(true);
-      playSound('dragStart');
+      if (!dragThresholdMet.current) {
+        dragThresholdMet.current = true;
+        setIsDragging(true);
+        playSound('dragStart');
+      }
       setDragPos({ x: moveEvent.clientX, y: moveEvent.clientY });
     };
 
