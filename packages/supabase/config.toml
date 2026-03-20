@@ -1,16 +1,13 @@
-[project]
-id = "alloy"
-
 [db]
 port = 54322
 major_version = 15
 
 [studio]
-port = 54323
+port = 9096
 
 [auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5174"]
+site_url = "http://localhost:9098"
+additional_redirect_urls = ["http://localhost:9098"]
 
 [auth.external.google]
 enabled = false

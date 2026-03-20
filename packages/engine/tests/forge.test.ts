@@ -269,18 +269,30 @@ describe('Forge System', () => {
     expect(result.state.stockpile.find(o => o.uid === 'orb2')).toBeUndefined();
   });
 
-  it('swap_orb: fails in round 1', () => {
+  it('swap_orb: succeeds in round 1 for current-round slot', () => {
     let state = makeState({ round: 1 });
-    const assign: ForgeAction = { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 };
-    const r1 = applyForgeAction(state, assign, registry);
+    const r1 = applyForgeAction(state, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
+    const result = applyForgeAction(r1.state, { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'orb2' }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const slot = result.state.loadout.weapon.slots[0]!;
+    expect(slot.kind).toBe('single');
+    if (slot.kind === 'single') expect(slot.orb.uid).toBe('orb2');
+    expect(slot.socketedRound).toBe(1);
+    expect(result.state.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
+  });
 
-    const swap: ForgeAction = { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'orb2' };
-    const result = applyForgeAction(r1.state, swap, registry);
-
+  it('swap_orb: fails on previous-round slot (locked)', () => {
+    let state = makeState({ round: 1 });
+    const r1 = applyForgeAction(state, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    const round2State: ForgeState = { ...r1.state, round: 2, fluxRemaining: 4 };
+    const result = applyForgeAction(round2State, { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'orb2' }, registry);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('Round 1');
+    if (!result.ok) expect(result.error).toContain('locked');
   });
 
   it('swap_orb: fails if slot is empty', () => {
@@ -294,8 +306,9 @@ describe('Forge System', () => {
 
   // --- remove_orb ---
 
-  it('remove_orb: removes orb from slot, returns to stockpile, costs 1 flux', () => {
+  it('remove_orb: removes orb from slot, returns to stockpile, refunds assignOrb cost', () => {
     let state = makeState({ round: 2, fluxRemaining: 4 });
+    const startFlux = state.fluxRemaining;
     const assign: ForgeAction = { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 };
     const r1 = applyForgeAction(state, assign, registry);
     expect(r1.ok).toBe(true);
@@ -307,22 +320,53 @@ describe('Forge System', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.loadout.weapon.slots[0]).toBeNull();
-    expect(result.state.fluxRemaining).toBe(2); // 4 - 1 (assign) - 1 (remove)
+    expect(result.state.fluxRemaining).toBe(startFlux); // assign costs 1, remove refunds 1
     expect(result.state.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
   });
 
-  it('remove_orb: fails in round 1', () => {
+  it('remove_orb: succeeds in round 1 for current-round slot, refunds assignOrb cost', () => {
     let state = makeState({ round: 1 });
-    const assign: ForgeAction = { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 };
-    const r1 = applyForgeAction(state, assign, registry);
+    const startFlux = state.fluxRemaining;
+    const r1 = applyForgeAction(state, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
+    const result = applyForgeAction(r1.state, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.loadout.weapon.slots[0]).toBeNull();
+    expect(result.state.fluxRemaining).toBe(startFlux);
+    expect(result.state.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
+  });
 
-    const remove: ForgeAction = { kind: 'remove_orb', target: 'weapon', slotIndex: 0 };
-    const result = applyForgeAction(r1.state, remove, registry);
-
+  it('remove_orb: fails on previous-round slot (locked)', () => {
+    let state = makeState({ round: 1 });
+    const r1 = applyForgeAction(state, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+    const round2State: ForgeState = { ...r1.state, round: 2, fluxRemaining: 4 };
+    const result = applyForgeAction(round2State, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('Round 1');
+    if (!result.ok) expect(result.error).toContain('locked');
+  });
+
+  it('remove_orb: succeeds on current-round compound slot, returns compound orb', () => {
+    let state = makeState({ round: 1 });
+    const combineResult = applyForgeAction(state, { kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb2' }, registry);
+    expect(combineResult.ok).toBe(true);
+    if (!combineResult.ok) return;
+    const assignResult = applyForgeAction(combineResult.state, {
+      kind: 'assign_orb', orbUid: 'compound_orb1_orb2', target: 'weapon', slotIndex: 0,
+    }, registry);
+    expect(assignResult.ok).toBe(true);
+    if (!assignResult.ok) return;
+    const result = applyForgeAction(assignResult.state, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.loadout.weapon.slots[0]).toBeNull();
+    expect(result.state.loadout.weapon.slots[1]).toBeNull();
+    const compoundOrb = result.state.stockpile.find(o => o.compoundId === 'ignite');
+    expect(compoundOrb).toBeDefined();
+    expect(compoundOrb!.sourceOrbs).toHaveLength(2);
   });
 
   it('remove_orb: fails if slot is empty', () => {
@@ -380,5 +424,120 @@ describe('Forge System', () => {
     expect(getFluxForRound(1, balance, false)).toBe(8);
     expect(getFluxForRound(2, balance, false)).toBe(4);
     expect(getFluxForRound(3, balance, false)).toBe(2);
+  });
+
+  it('remove_orb cost is 0 (refund handled by handler)', () => {
+    const action: ForgeAction = { kind: 'remove_orb', target: 'weapon', slotIndex: 0 };
+    expect(getActionCost(action, balance)).toBe(0);
+  });
+
+  it('swap_orb cost equals assignOrb cost', () => {
+    const action: ForgeAction = { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'x' };
+    expect(getActionCost(action, balance)).toBe(balance.fluxCosts.assignOrb);
+  });
+
+  // --- socketedRound stamping ---
+
+  it('assign_orb: stamps socketedRound on single slot', () => {
+    const state = makeState({ round: 2, fluxRemaining: 4 });
+    const action: ForgeAction = { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 };
+    const result = applyForgeAction(state, action, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.loadout.weapon.slots[0]!.socketedRound).toBe(2);
+  });
+
+  it('assign_orb: stamps socketedRound on compound slot', () => {
+    let state = makeState({ round: 1 });
+    const combineResult = applyForgeAction(state, { kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb2' }, registry);
+    expect(combineResult.ok).toBe(true);
+    if (!combineResult.ok) return;
+    const assignResult = applyForgeAction(combineResult.state, {
+      kind: 'assign_orb', orbUid: 'compound_orb1_orb2', target: 'weapon', slotIndex: 0,
+    }, registry);
+    expect(assignResult.ok).toBe(true);
+    if (!assignResult.ok) return;
+    expect(assignResult.state.loadout.weapon.slots[0]!.socketedRound).toBe(1);
+    expect(assignResult.state.loadout.weapon.slots[1]!.socketedRound).toBe(1);
+  });
+
+  it('upgrade_tier: stamps socketedRound on upgraded slot', () => {
+    const state = makeState({ round: 1 });
+    const action: ForgeAction = {
+      kind: 'upgrade_tier', orbUid1: 'orb1', orbUid2: 'orb4',
+      target: 'weapon', slotIndex: 0,
+    };
+    const result = applyForgeAction(state, action, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.loadout.weapon.slots[0]!.socketedRound).toBe(1);
+  });
+
+  it('remove_orb: round 3 locks slots from rounds 1 and 2', () => {
+    // Assign in round 1
+    let state = makeState({ round: 1 });
+    const r1 = applyForgeAction(state, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+    expect(r1.ok).toBe(true);
+    if (!r1.ok) return;
+
+    // Assign in round 2
+    let round2: ForgeState = { ...r1.state, round: 2, fluxRemaining: 4 };
+    const r2 = applyForgeAction(round2, { kind: 'assign_orb', orbUid: 'orb2', target: 'weapon', slotIndex: 1 }, registry);
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+
+    // Advance to round 3
+    const round3: ForgeState = { ...r2.state, round: 3, fluxRemaining: 2 };
+
+    // Round 1 slot locked
+    expect(applyForgeAction(round3, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry).ok).toBe(false);
+    // Round 2 slot locked
+    expect(applyForgeAction(round3, { kind: 'remove_orb', target: 'weapon', slotIndex: 1 }, registry).ok).toBe(false);
+
+    // Assign in round 3 and remove — should work
+    const r3 = applyForgeAction(round3, { kind: 'assign_orb', orbUid: 'orb3', target: 'weapon', slotIndex: 2 }, registry);
+    expect(r3.ok).toBe(true);
+    if (!r3.ok) return;
+    const removeR3 = applyForgeAction(r3.state, { kind: 'remove_orb', target: 'weapon', slotIndex: 2 }, registry);
+    expect(removeR3.ok).toBe(true);
+  });
+
+  it('remove_orb: compound socketed in round 1 is locked in round 2', () => {
+    let state = makeState({ round: 1 });
+    const combineResult = applyForgeAction(state, { kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb2' }, registry);
+    expect(combineResult.ok).toBe(true);
+    if (!combineResult.ok) return;
+    const assignResult = applyForgeAction(combineResult.state, {
+      kind: 'assign_orb', orbUid: 'compound_orb1_orb2', target: 'weapon', slotIndex: 0,
+    }, registry);
+    expect(assignResult.ok).toBe(true);
+    if (!assignResult.ok) return;
+
+    const round2: ForgeState = { ...assignResult.state, round: 2, fluxRemaining: 4 };
+    const remove = applyForgeAction(round2, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
+    expect(remove.ok).toBe(false);
+    if (!remove.ok) expect(remove.error).toContain('locked');
+  });
+
+  it('flux refund: assign 3, remove 2, net flux = maxFlux - 1', () => {
+    const state = makeState({ round: 1 });
+    const startFlux = state.fluxRemaining;
+
+    let s = state;
+    for (const [uid, slot] of [['orb1', 0], ['orb2', 1], ['orb3', 2]] as const) {
+      const r = applyForgeAction(s, { kind: 'assign_orb', orbUid: uid, target: 'weapon', slotIndex: slot }, registry);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      s = r.state;
+    }
+    expect(s.fluxRemaining).toBe(startFlux - 3);
+
+    for (const slot of [0, 1]) {
+      const r = applyForgeAction(s, { kind: 'remove_orb', target: 'weapon', slotIndex: slot }, registry);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      s = r.state;
+    }
+    expect(s.fluxRemaining).toBe(startFlux - 1);
   });
 });

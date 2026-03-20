@@ -60,8 +60,8 @@ describe('SimulationRunner', () => {
       expect(result1.matches[i].winner).toBe(result2.matches[i].winner);
       expect(result1.matches[i].rounds).toBe(result2.matches[i].rounds);
       expect(result1.matches[i].seed).toBe(result2.matches[i].seed);
-      expect(result1.matches[i].player0Affixes).toEqual(result2.matches[i].player0Affixes);
-      expect(result1.matches[i].player1Affixes).toEqual(result2.matches[i].player1Affixes);
+      expect(result1.matches[i].players[0].affixIds).toEqual(result2.matches[i].players[0].affixIds);
+      expect(result1.matches[i].players[1].affixIds).toEqual(result2.matches[i].players[1].affixIds);
     }
   });
 
@@ -71,7 +71,7 @@ describe('SimulationRunner', () => {
     expect(result.matches.length).toBe(5);
     for (const match of result.matches) {
       expect(match.rounds).toBeGreaterThan(0);
-      expect(['draw', 0, 1]).toContain(match.winner);
+      expect([null, 0, 1]).toContain(match.winner);
     }
   });
 });

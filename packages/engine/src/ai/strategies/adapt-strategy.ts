@@ -16,6 +16,7 @@ export interface AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     rng: SeededRNG,
+    round?: 1 | 2 | 3,
   ): ForgeAction[];
 }
 
@@ -73,6 +74,7 @@ function findWeakestSlots(
   loadout: Loadout,
   registry: DataRegistry,
   maxCount: number,
+  currentRound?: 1 | 2 | 3,
 ): { target: 'weapon' | 'armor'; slotIndex: number; orb: OrbInstance; score: number }[] {
   const slots: { target: 'weapon' | 'armor'; slotIndex: number; orb: OrbInstance; score: number }[] = [];
   const targets: ('weapon' | 'armor')[] = ['weapon', 'armor'];
@@ -81,6 +83,8 @@ function findWeakestSlots(
     for (let i = 0; i < 6; i++) {
       const slot = item.slots[i];
       if (!slot) continue;
+      // Skip locked slots (from previous rounds)
+      if (currentRound !== undefined && slot.socketedRound < currentRound) continue;
       const orb = getSlotOrb(slot);
       if (!orb) continue;
       slots.push({ target, slotIndex: i, orb, score: orbValueScore(orb, registry) });
@@ -106,10 +110,11 @@ export class Tier3AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
+    round?: 1 | 2 | 3,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
-    const swapCost = balance.fluxCosts.swapOrb;
+    const swapCost = balance.fluxCosts.assignOrb;
     let flux = fluxRemaining;
 
     if (myStockpile.length === 0 || flux < swapCost) return actions;
@@ -128,8 +133,8 @@ export class Tier3AdaptStrategy implements AdaptStrategy {
 
     if (counterOrbs.length === 0) return actions;
 
-    // Find weakest equipped slots (1-2)
-    const weakSlots = findWeakestSlots(myLoadout, registry, 2);
+    // Find weakest equipped slots (1-2), filtering out locked slots
+    const weakSlots = findWeakestSlots(myLoadout, registry, 2, round);
 
     // Swap up to 2 weak slots with better counter orbs
     let swapCount = 0;
@@ -170,10 +175,11 @@ export class Tier4AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
+    round?: 1 | 2 | 3,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
-    const swapCost = balance.fluxCosts.swapOrb;
+    const swapCost = balance.fluxCosts.assignOrb;
     let flux = fluxRemaining;
 
     if (myStockpile.length === 0 || flux < swapCost) return actions;
@@ -189,8 +195,8 @@ export class Tier4AdaptStrategy implements AdaptStrategy {
       .map((orb) => ({ orb, score: counterValue(orb, damageProfile, registry) }))
       .sort((a, b) => b.score - a.score);
 
-    // Find all swappable slots sorted by weakness
-    const weakSlots = findWeakestSlots(myLoadout, registry, 4);
+    // Find all swappable slots sorted by weakness, filtering out locked slots
+    const weakSlots = findWeakestSlots(myLoadout, registry, 4, round);
 
     // Swap weak slots with better counter orbs (up to 4)
     const usedOrbs = new Set<string>();
@@ -237,10 +243,11 @@ export class Tier5AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
+    round?: 1 | 2 | 3,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
-    const swapCost = balance.fluxCosts.swapOrb;
+    const swapCost = balance.fluxCosts.assignOrb;
     let flux = fluxRemaining;
 
     if (myStockpile.length === 0 || flux < swapCost) return actions;
@@ -279,8 +286,8 @@ export class Tier5AdaptStrategy implements AdaptStrategy {
       })
       .sort((a, b) => b.score - a.score);
 
-    // Find all swappable slots
-    const allSlots = findWeakestSlots(myLoadout, registry, 6);
+    // Find all swappable slots, filtering out locked slots
+    const allSlots = findWeakestSlots(myLoadout, registry, 6, round);
 
     // Aggressively swap to counter (up to flux budget)
     const usedOrbs = new Set<string>();

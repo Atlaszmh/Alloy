@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import configRoutes from './routes/configs.js';
@@ -18,7 +20,7 @@ app.use('/api/simulations', simulationRoutes);
 app.use('/api/reports', reportRoutes);
 
 // Only start listening when run directly (not imported by tests)
-if (process.argv[1]?.includes('server/index')) {
+if (process.argv[1]?.replace(/\\/g, '/').includes('server/index')) {
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
     console.log(`Tools server running on port ${PORT}`);

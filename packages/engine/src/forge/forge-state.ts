@@ -96,7 +96,7 @@ export function applyForgeAction(
     case 'swap_orb':
       return applySwapOrb(state, action, cost);
     case 'remove_orb':
-      return applyRemoveOrb(state, action, cost);
+      return applyRemoveOrb(state, action, registry);
     case 'set_base_stats':
       return applySetBaseStats(state, action);
   }
@@ -135,6 +135,7 @@ function applyAssignOrb(
       kind: 'compound',
       orbs: orb.sourceOrbs,
       compoundId: orb.compoundId,
+      socketedRound: state.round,
     };
     let newItem = setSlot(item, action.slotIndex, compoundSlot);
     newItem = setSlot(newItem, action.slotIndex + 1, compoundSlot);
@@ -153,7 +154,7 @@ function applyAssignOrb(
     return fail('Slot is already occupied');
   }
 
-  const newSlot: EquippedSlot = { kind: 'single', orb };
+  const newSlot: EquippedSlot = { kind: 'single', orb, socketedRound: state.round };
   const newItem = setSlot(item, action.slotIndex, newSlot);
   const newStockpile = removeFromStockpile(state.stockpile, action.orbUid);
 
@@ -256,6 +257,7 @@ function applyUpgradeTier(
     orb: upgradedOrb,
     originalTier: orb1.tier,
     upgradedTier,
+    socketedRound: state.round,
   };
 
   const newItem = setSlot(item, action.slotIndex, upgradedSlot);
@@ -276,23 +278,23 @@ function applySwapOrb(
   action: Extract<ForgeAction, { kind: 'swap_orb' }>,
   cost: number,
 ): ForgeResult {
-  if (state.round === 1) {
-    return fail('Swap is not available in Round 1');
-  }
-
   if (!isValidSlotIndex(action.slotIndex)) {
     return fail('Slot index out of range (must be 0-5)');
-  }
-
-  const newOrbIdx = findOrbIndex(state.stockpile, action.newOrbUid);
-  if (newOrbIdx === -1) {
-    return fail('New orb not found in stockpile');
   }
 
   const item = getItem(state.loadout, action.target);
   const currentSlot = item.slots[action.slotIndex];
   if (currentSlot === null) {
     return fail('Cannot swap: slot is empty');
+  }
+
+  if (currentSlot.socketedRound < state.round) {
+    return fail('Cannot swap: slot is locked from a previous round');
+  }
+
+  const newOrbIdx = findOrbIndex(state.stockpile, action.newOrbUid);
+  if (newOrbIdx === -1) {
+    return fail('New orb not found in stockpile');
   }
 
   // Extract the orb being removed from the slot
@@ -306,7 +308,7 @@ function applySwapOrb(
   }
 
   const newOrb = state.stockpile[newOrbIdx];
-  const newSlot: EquippedSlot = { kind: 'single', orb: newOrb };
+  const newSlot: EquippedSlot = { kind: 'single', orb: newOrb, socketedRound: state.round };
   const newItem = setSlot(item, action.slotIndex, newSlot);
 
   let newStockpile = removeFromStockpile(state.stockpile, action.newOrbUid);
@@ -323,12 +325,8 @@ function applySwapOrb(
 function applyRemoveOrb(
   state: ForgeState,
   action: Extract<ForgeAction, { kind: 'remove_orb' }>,
-  cost: number,
+  registry: DataRegistry,
 ): ForgeResult {
-  if (state.round === 1) {
-    return fail('Remove is not available in Round 1');
-  }
-
   if (!isValidSlotIndex(action.slotIndex)) {
     return fail('Slot index out of range (must be 0-5)');
   }
@@ -339,13 +337,48 @@ function applyRemoveOrb(
     return fail('Cannot remove: slot is empty');
   }
 
+  if (currentSlot.socketedRound < state.round) {
+    return fail('Cannot remove: slot is locked from a previous round');
+  }
+
+  const balance = registry.getBalance();
+  const refund = balance.fluxCosts.assignOrb;
+  const maxFlux = getFluxForRound(state.round, balance, state.isQuickMatch);
+
+  if (currentSlot.kind === 'compound') {
+    // Find the neighbor slot sharing the same compoundId
+    const neighborIdx = item.slots.findIndex(
+      (s, i) => i !== action.slotIndex && s !== null && s.kind === 'compound' && s.compoundId === currentSlot.compoundId,
+    );
+    let newItem = setSlot(item, action.slotIndex, null);
+    if (neighborIdx !== -1) {
+      newItem = setSlot(newItem, neighborIdx, null);
+    }
+
+    // Return compound orb to stockpile
+    const compoundOrb: OrbInstance = {
+      uid: `compound_${currentSlot.orbs[0].uid}_${currentSlot.orbs[1].uid}`,
+      affixId: currentSlot.orbs[0].affixId,
+      tier: currentSlot.orbs[0].tier,
+      compoundId: currentSlot.compoundId,
+      sourceOrbs: currentSlot.orbs,
+    };
+    const newStockpile = [...state.stockpile, compoundOrb];
+
+    return ok({
+      ...state,
+      stockpile: newStockpile,
+      loadout: setItem(state.loadout, action.target, newItem),
+      fluxRemaining: Math.min(state.fluxRemaining + refund, maxFlux),
+    });
+  }
+
+  // Single or upgraded slot
   let removedOrb: OrbInstance;
   if (currentSlot.kind === 'single') {
     removedOrb = currentSlot.orb;
-  } else if (currentSlot.kind === 'upgraded') {
-    removedOrb = currentSlot.orb;
   } else {
-    return fail('Cannot remove a compound slot individually');
+    removedOrb = currentSlot.orb;
   }
 
   const newItem = setSlot(item, action.slotIndex, null);
@@ -355,7 +388,7 @@ function applyRemoveOrb(
     ...state,
     stockpile: newStockpile,
     loadout: setItem(state.loadout, action.target, newItem),
-    fluxRemaining: state.fluxRemaining - cost,
+    fluxRemaining: Math.min(state.fluxRemaining + refund, maxFlux),
   });
 }
 

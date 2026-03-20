@@ -34,7 +34,7 @@ function makeEmptyItem(baseItemId = 'sword'): ForgedItem {
 
 function makeItemWithOrb(orb: OrbInstance, slotIndex: number, baseItemId = 'sword'): ForgedItem {
   const item = makeEmptyItem(baseItemId);
-  item.slots[slotIndex] = { kind: 'single', orb };
+  item.slots[slotIndex] = { kind: 'single', orb, socketedRound: 1 };
   return item;
 }
 

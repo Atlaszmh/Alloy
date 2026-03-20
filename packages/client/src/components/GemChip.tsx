@@ -85,7 +85,7 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
           }}
         />
         {artUrl ? (
-          <img src={artUrl} alt="" style={{ width: 20, height: 20, objectFit: 'contain', position: 'relative', zIndex: 1 }} />
+          <img src={artUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 5, zIndex: 1 }} />
         ) : (
           <span style={{ position: 'relative', zIndex: 1 }}>{symbol}</span>
         )}

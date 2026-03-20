@@ -141,12 +141,48 @@ describe('forgeStore', () => {
 
   describe('canRemove', () => {
     it('returns false when no plan', () => {
-      expect(useForgeStore.getState().canRemove('orb1')).toBe(false);
+      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(false);
     });
 
-    it('returns true for unlocked orbs', () => {
-      initStore();
-      expect(useForgeStore.getState().canRemove('orb1')).toBe(true);
+    it('returns true for current-round socketed orbs', () => {
+      initStore(1);
+      useForgeStore.getState().applyAction(
+        { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 },
+        registry,
+      );
+      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(true);
+    });
+
+    it('returns false for empty slot', () => {
+      initStore(1);
+      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(false);
+    });
+  });
+
+  describe('round locking', () => {
+    it('remove_orb succeeds in round 1 for current-round slot and refunds flux', () => {
+      initStore(1);
+      const startFlux = useForgeStore.getState().plan!.tentativeFlux;
+      useForgeStore.getState().applyAction({ kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      const result = useForgeStore.getState().applyAction({ kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
+      expect(result.ok).toBe(true);
+      expect(useForgeStore.getState().plan!.tentativeFlux).toBe(startFlux);
+      expect(useForgeStore.getState().plan!.loadout.weapon.slots[0]).toBeNull();
+    });
+
+    it('swap_orb succeeds in round 1 for current-round slot', () => {
+      initStore(1);
+      useForgeStore.getState().applyAction({ kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      const result = useForgeStore.getState().applyAction(
+        { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'orb2' }, registry,
+      );
+      expect(result.ok).toBe(true);
+      const plan = useForgeStore.getState().plan!;
+      const slot = plan.loadout.weapon.slots[0]!;
+      expect(slot.kind).toBe('single');
+      if (slot.kind === 'single') expect(slot.orb.uid).toBe('orb2');
+      expect(slot.socketedRound).toBe(1);
+      expect(plan.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
     });
   });
 

@@ -258,6 +258,7 @@ describe('Tier 3 Adapt Strategy', () => {
       1,
       registry,
       adaptRng,
+      2,
     );
 
     // Validate actions (may be empty if no good swaps available, that's fine)

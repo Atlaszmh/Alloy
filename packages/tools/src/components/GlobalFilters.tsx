@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api/client.js';
 
 export interface FilterState {
   runId?: string;
@@ -123,9 +124,7 @@ export function GlobalFilters({ filters, onChange }: GlobalFiltersProps) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
 
   useEffect(() => {
-    const BASE_URL = (import.meta as unknown as { env: Record<string, string> })?.env?.VITE_API_URL ?? 'http://localhost:3001';
-    fetch(`${BASE_URL}/api/simulations`)
-      .then(r => r.ok ? r.json() : [])
+    api.simulations.list()
       .then((data: RunSummary[]) => setRuns(Array.isArray(data) ? data : []))
       .catch(() => setRuns([]));
   }, []);

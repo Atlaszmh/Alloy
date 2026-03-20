@@ -4,6 +4,7 @@ import type { AffixTier } from '../types/affix.js';
 import type { OrbInstance } from '../types/orb.js';
 import type { EquippedSlot, Loadout, ForgedItem } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
+import type { BalanceConfig } from '../types/balance.js';
 import type { DerivedStats } from '../types/derived-stats.js';
 import { calculateStats } from './stat-calculator.js';
 import { getActionCost } from './flux-tracker.js';
@@ -29,9 +30,9 @@ function deepCloneItem(item: ForgedItem): ForgedItem {
     baseStats: item.baseStats ? { ...item.baseStats } : null,
     slots: item.slots.map(s => {
       if (!s) return null;
-      if (s.kind === 'single') return { kind: 'single' as const, orb: { ...s.orb } };
-      if (s.kind === 'upgraded') return { kind: 'upgraded' as const, orb: { ...s.orb }, originalTier: s.originalTier, upgradedTier: s.upgradedTier };
-      return { kind: 'compound' as const, orbs: [{ ...s.orbs[0] }, { ...s.orbs[1] }] as [OrbInstance, OrbInstance], compoundId: s.compoundId };
+      if (s.kind === 'single') return { kind: 'single' as const, orb: { ...s.orb }, socketedRound: s.socketedRound ?? 1 };
+      if (s.kind === 'upgraded') return { kind: 'upgraded' as const, orb: { ...s.orb }, originalTier: s.originalTier, upgradedTier: s.upgradedTier, socketedRound: s.socketedRound ?? 1 };
+      return { kind: 'compound' as const, orbs: [{ ...s.orbs[0] }, { ...s.orbs[1] }] as [OrbInstance, OrbInstance], compoundId: s.compoundId, socketedRound: s.socketedRound ?? 1 };
     }),
   };
 }
@@ -80,10 +81,11 @@ export function applyPlanAction(
 
   switch (action.kind) {
     case 'assign_orb': return planAssignOrb(plan, action, cost);
-    case 'remove_orb': return planRemoveOrb(plan, action, cost);
+    case 'remove_orb': return planRemoveOrb(plan, action, cost, balance);
     case 'set_base_stats': return planSetBaseStats(plan, action);
     case 'combine': return planCombine(plan, action, cost, registry);
     case 'upgrade_tier': return planUpgradeTier(plan, action, cost);
+    case 'swap_orb': return planSwapOrb(plan, action, cost);
     default: return { ok: false, error: `Unsupported plan action: ${(action as ForgeAction).kind}` };
   }
 }
@@ -124,6 +126,7 @@ function planAssignOrb(
       kind: 'compound',
       orbs: removedOrb.sourceOrbs,
       compoundId: removedOrb.compoundId,
+      socketedRound: plan.round,
     };
     next.loadout[action.target].slots[action.slotIndex] = compoundSlot;
     next.loadout[action.target].slots[action.slotIndex + 1] = compoundSlot;
@@ -136,7 +139,7 @@ function planAssignOrb(
   if (item.slots[action.slotIndex] !== null) {
     return { ok: false, error: 'Slot already occupied' };
   }
-  next.loadout[action.target].slots[action.slotIndex] = { kind: 'single', orb: removedOrb };
+  next.loadout[action.target].slots[action.slotIndex] = { kind: 'single', orb: removedOrb, socketedRound: plan.round };
   next.tentativeFlux -= cost;
   next.actionLog.push(action);
   return { ok: true, plan: next };
@@ -145,14 +148,17 @@ function planAssignOrb(
 function planRemoveOrb(
   plan: ForgePlan,
   action: Extract<ForgeAction, { kind: 'remove_orb' }>,
-  cost: number,
+  _cost: number,
+  balance: BalanceConfig,
 ): PlanResult {
-  if (plan.round === 1) return { ok: false, error: 'Remove is not available in Round 1' };
-  if (plan.tentativeFlux < cost) return { ok: false, error: 'Not enough flux' };
-
   const item = plan.loadout[action.target];
   const slot = item.slots[action.slotIndex];
   if (!slot) return { ok: false, error: 'Slot is empty' };
+
+  // Round-locking: cannot remove orbs socketed in a previous round
+  if (slot.socketedRound < plan.round) {
+    return { ok: false, error: 'Cannot remove an orb socketed in a previous round' };
+  }
 
   // Check locked orbs
   const orbUids = slot.kind === 'compound'
@@ -169,11 +175,29 @@ function planRemoveOrb(
   next.loadout[action.target].slots[action.slotIndex] = null;
 
   // Return orb(s) to stockpile
-  if (removedSlot.kind === 'single') next.stockpile.push(removedSlot.orb);
-  else if (removedSlot.kind === 'upgraded') next.stockpile.push(removedSlot.orb);
-  else if (removedSlot.kind === 'compound') removedSlot.orbs.forEach(o => next.stockpile.push(o));
+  if (removedSlot.kind === 'single') {
+    next.stockpile.push(removedSlot.orb);
+  } else if (removedSlot.kind === 'upgraded') {
+    next.stockpile.push(removedSlot.orb);
+  } else if (removedSlot.kind === 'compound') {
+    // Clear the second consecutive slot as well
+    const nextSlotIdx = action.slotIndex + 1;
+    if (nextSlotIdx < next.loadout[action.target].slots.length) {
+      next.loadout[action.target].slots[nextSlotIdx] = null;
+    }
+    // Return as single compound orb
+    const compoundOrb: OrbInstance = {
+      uid: `compound_${removedSlot.orbs[0].uid}_${removedSlot.orbs[1].uid}`,
+      affixId: removedSlot.orbs[0].affixId,
+      tier: removedSlot.orbs[0].tier,
+      compoundId: removedSlot.compoundId,
+      sourceOrbs: [removedSlot.orbs[0], removedSlot.orbs[1]],
+    };
+    next.stockpile.push(compoundOrb);
+  }
 
-  next.tentativeFlux -= cost;
+  // Refund assignOrb cost (capped at maxFlux)
+  next.tentativeFlux = Math.min(next.tentativeFlux + balance.fluxCosts.assignOrb, next.maxFlux);
   next.actionLog.push(action);
   return { ok: true, plan: next };
 }
@@ -287,6 +311,7 @@ function planUpgradeTier(
     orb: upgradedOrb,
     originalTier: orb1.tier,
     upgradedTier,
+    socketedRound: plan.round,
   };
 
   next.loadout[action.target].slots[action.slotIndex] = upgradedSlot;
@@ -294,6 +319,51 @@ function planUpgradeTier(
   // Lock both source orbs
   next.lockedOrbUids.add(action.orbUid1);
   next.lockedOrbUids.add(action.orbUid2);
+
+  next.tentativeFlux -= cost;
+  next.actionLog.push(action);
+  return { ok: true, plan: next };
+}
+
+function planSwapOrb(
+  plan: ForgePlan,
+  action: Extract<ForgeAction, { kind: 'swap_orb' }>,
+  cost: number,
+): PlanResult {
+  if (plan.tentativeFlux < cost) return { ok: false, error: 'Not enough flux' };
+
+  const item = plan.loadout[action.target];
+  const slot = item.slots[action.slotIndex];
+  if (!slot) return { ok: false, error: 'Slot is empty' };
+
+  // Round-locking: cannot swap orbs socketed in a previous round
+  if (slot.socketedRound < plan.round) {
+    return { ok: false, error: 'Cannot swap an orb socketed in a previous round' };
+  }
+
+  // Only allow single/upgraded slots
+  if (slot.kind === 'compound') {
+    return { ok: false, error: 'Cannot swap a compound slot individually' };
+  }
+
+  // Find new orb in stockpile
+  const newOrbIndex = plan.stockpile.findIndex(o => o.uid === action.newOrbUid);
+  if (newOrbIndex === -1) return { ok: false, error: 'New orb not in stockpile' };
+
+  const next = clonePlan(plan);
+  const oldSlot = next.loadout[action.target].slots[action.slotIndex]!;
+  const newOrb = next.stockpile.splice(newOrbIndex, 1)[0];
+
+  // Return old orb to stockpile
+  if (oldSlot.kind === 'single') next.stockpile.push(oldSlot.orb);
+  else if (oldSlot.kind === 'upgraded') next.stockpile.push(oldSlot.orb);
+
+  // Place new orb in slot
+  next.loadout[action.target].slots[action.slotIndex] = {
+    kind: 'single',
+    orb: newOrb,
+    socketedRound: plan.round,
+  };
 
   next.tentativeFlux -= cost;
   next.actionLog.push(action);
@@ -310,6 +380,16 @@ export function getPlannedStats(plan: ForgePlan, registry: DataRegistry): Derive
   return calculateStats(plan.loadout, registry);
 }
 
-export function canRemoveOrb(plan: ForgePlan, orbUid: string): boolean {
-  return !plan.lockedOrbUids.has(orbUid);
+export function canRemoveOrb(plan: ForgePlan, target: 'weapon' | 'armor', slotIndex: number): boolean {
+  const slot = plan.loadout[target].slots[slotIndex];
+  if (!slot) return false;
+  if (slot.socketedRound < plan.round) return false;
+
+  const orbUids = slot.kind === 'compound'
+    ? slot.orbs.map(o => o.uid)
+    : [slot.orb.uid];
+  for (const uid of orbUids) {
+    if (plan.lockedOrbUids.has(uid)) return false;
+  }
+  return true;
 }

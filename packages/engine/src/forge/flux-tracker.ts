@@ -31,9 +31,9 @@ export function getActionCost(
     case 'upgrade_tier':
       return balance.fluxCosts.upgradeTier;
     case 'swap_orb':
-      return balance.fluxCosts.swapOrb;
+      return balance.fluxCosts.assignOrb;
     case 'remove_orb':
-      return balance.fluxCosts.removeOrb;
+      return 0;
     case 'set_base_stats':
       return 0;
   }

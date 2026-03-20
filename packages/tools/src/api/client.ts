@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:9097';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -20,6 +20,7 @@ export const api = {
       request<ConfigRow>('/api/configs', { method: 'POST', body: JSON.stringify(body) }),
   },
   simulations: {
+    list: () => request<SimulationRun[]>('/api/simulations'),
     start: (body: StartSimulationBody) =>
       request<SimulationRun>('/api/simulations', { method: 'POST', body: JSON.stringify(body) }),
     get: (id: string) => request<SimulationRun>(`/api/simulations/${id}`),

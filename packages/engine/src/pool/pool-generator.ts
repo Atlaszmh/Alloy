@@ -57,7 +57,7 @@ export function generatePool(
       const masterRng = new SeededRNG(currentSeed);
       const rng = masterRng.fork(`pool_r${round}`);
 
-      const pool = buildPool(rng, mode, registry, poolSize);
+      const pool = buildPool(rng, mode, registry, poolSize, round);
 
       if (validateArchetypes(pool, registry, balance.archetypeMinOrbs, 3)) {
         return ensureTriggerOrbs(pool, rng, registry, 2);
@@ -69,13 +69,13 @@ export function generatePool(
     // Fallback
     const masterRng = new SeededRNG(currentSeed);
     const rng = masterRng.fork(`pool_r${round}`);
-    return ensureTriggerOrbs(buildPool(rng, mode, registry, poolSize), rng, registry, 2);
+    return ensureTriggerOrbs(buildPool(rng, mode, registry, poolSize, round), rng, registry, 2);
   }
 
   // Rounds 2-3: no archetype validation, no trigger guarantee (supplemental orbs)
   const masterRng = new SeededRNG(currentSeed);
   const rng = masterRng.fork(`pool_r${round}`);
-  return buildPool(rng, mode, registry, poolSize);
+  return buildPool(rng, mode, registry, poolSize, round);
 }
 
 /**
@@ -86,6 +86,7 @@ function buildPool(
   _mode: 'quick' | 'ranked' | 'unranked',
   registry: DataRegistry,
   overrideSize: number | null,
+  round: 1 | 2 | 3 = 1,
 ): OrbInstance[] {
   const balance = registry.getBalance();
 
@@ -128,7 +129,7 @@ function buildPool(
       const affix = pickRandom(candidates, rng);
 
       pool.push({
-        uid: `orb_${orbIndex}`,
+        uid: `orb_r${round}_${orbIndex}`,
         affixId: affix.id,
         tier: tier as AffixTier,
       });

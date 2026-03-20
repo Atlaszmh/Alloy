@@ -113,23 +113,14 @@ router.get('/matchups', async (_req: Request, res: Response) => {
 router.get('/round-stats', async (req: Request, res: Response) => {
   const filters = parseFilters(req.query);
 
-  // Fetch round details joined to match_results so we can apply filters.
-  // Supabase doesn't support arbitrary JOIN syntax directly, so we first
-  // collect the relevant match IDs, then fetch round details.
-  let matchQ = supabase.from('match_results').select('id');
-  matchQ = applyFilters(matchQ as Parameters<typeof applyFilters>[0], filters);
-  const { data: matchData, error: matchErr } = await matchQ;
-  if (matchErr) return res.status(500).json({ error: matchErr.message });
-
-  const matchIds = (matchData ?? []).map((m: { id: string }) => m.id);
-  if (matchIds.length === 0) return res.json([]);
-
-  const { data: rdData, error: rdErr } = await supabase
-    .from('match_round_details')
-    .select('round, winner, duration_ticks, p0_damage_dealt, p1_damage_dealt')
-    .in('match_id', matchIds);
-
-  if (rdErr) return res.status(500).json({ error: rdErr.message });
+  // Use Supabase embedded select to join match_round_details via match_results
+  // without needing to collect all match IDs (which can exceed URL length limits).
+  let q = supabase
+    .from('match_results')
+    .select('match_round_details(round, winner, duration_ticks, p0_damage_dealt, p1_damage_dealt)');
+  q = applyFilters(q as Parameters<typeof applyFilters>[0], filters);
+  const { data, error } = await q;
+  if (error) return res.status(500).json({ error: error.message });
 
   type RoundRow = {
     round: number;
@@ -144,12 +135,14 @@ router.get('/round-stats', async (req: Request, res: Response) => {
     { wins: number; total: number; totalTicks: number; totalDamage: number }
   >();
 
-  for (const r of (rdData ?? []) as RoundRow[]) {
-    const entry = byRound.get(r.round) ?? { wins: 0, total: 0, totalTicks: 0, totalDamage: 0 };
-    entry.total += 1;
-    entry.totalTicks += r.duration_ticks;
-    entry.totalDamage += r.p0_damage_dealt + r.p1_damage_dealt;
-    byRound.set(r.round, entry);
+  for (const match of (data ?? []) as Array<{ match_round_details: RoundRow[] }>) {
+    for (const r of match.match_round_details ?? []) {
+      const entry = byRound.get(r.round) ?? { wins: 0, total: 0, totalTicks: 0, totalDamage: 0 };
+      entry.total += 1;
+      entry.totalTicks += r.duration_ticks;
+      entry.totalDamage += r.p0_damage_dealt + r.p1_damage_dealt;
+      byRound.set(r.round, entry);
+    }
   }
 
   const result = Array.from(byRound.entries())
@@ -235,7 +228,7 @@ router.get('/matches', async (req: Request, res: Response) => {
 
   let q = supabase
     .from('match_results')
-    .select('id, seed, winner, rounds, duration_ms, p0_affixes, p1_affixes, run_id, config_id, created_at')
+    .select('id, seed, winner, rounds, duration_ms, run_id, config_id, created_at, match_player_stats(player_index, affix_ids, loadout)')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -247,7 +240,22 @@ router.get('/matches', async (req: Request, res: Response) => {
   const { data, error } = await q;
   if (error) return res.status(500).json({ error: error.message });
 
-  res.json(data ?? []);
+  // Flatten player stats into p0/p1 fields for the frontend
+  const rows = (data ?? []).map((row: Record<string, unknown>) => {
+    const players = (row.match_player_stats ?? []) as Array<{
+      player_index: number; affix_ids: string[]; loadout: unknown;
+    }>;
+    const p0 = players.find(p => p.player_index === 0);
+    const p1 = players.find(p => p.player_index === 1);
+    const { match_player_stats: _, ...rest } = row;
+    return {
+      ...rest,
+      p0_affixes: p0?.affix_ids ?? [],
+      p1_affixes: p1?.affix_ids ?? [],
+    };
+  });
+
+  res.json(rows);
 });
 
 // GET /api/reports/matches/:id
@@ -256,7 +264,7 @@ router.get('/matches/:id', async (req: Request, res: Response) => {
 
   const { data: matchData, error: matchErr } = await supabase
     .from('match_results')
-    .select('id, seed, winner, rounds, duration_ms, p0_affixes, p1_affixes, run_id, config_id, created_at, p0_loadout, p1_loadout, combat_log')
+    .select('id, seed, winner, rounds, duration_ms, run_id, config_id, created_at, match_player_stats(player_index, affix_ids, combination_ids, synergy_ids, loadout, final_hp, ai_tier)')
     .eq('id', id)
     .single();
 
@@ -264,12 +272,26 @@ router.get('/matches/:id', async (req: Request, res: Response) => {
 
   const { data: roundData } = await supabase
     .from('match_round_details')
-    .select('round, winner, duration_ticks, p0_damage_dealt, p1_damage_dealt')
+    .select('round, winner, duration_ticks, p0_hp_final, p1_hp_final, p0_damage_dealt, p1_damage_dealt')
     .eq('match_id', id)
     .order('round', { ascending: true });
 
+  // Flatten player stats into p0/p1 fields for the frontend
+  const players = ((matchData as Record<string, unknown>).match_player_stats ?? []) as Array<{
+    player_index: number; affix_ids: string[]; combination_ids: string[];
+    synergy_ids: string[]; loadout: unknown; final_hp: number; ai_tier: number | null;
+  }>;
+  const p0 = players.find(p => p.player_index === 0);
+  const p1 = players.find(p => p.player_index === 1);
+  const { match_player_stats: _, ...rest } = matchData as Record<string, unknown>;
+
   res.json({
-    ...matchData,
+    ...rest,
+    p0_affixes: p0?.affix_ids ?? [],
+    p1_affixes: p1?.affix_ids ?? [],
+    p0_loadout: p0?.loadout ?? null,
+    p1_loadout: p1?.loadout ?? null,
+    players,
     round_details: roundData ?? [],
   });
 });

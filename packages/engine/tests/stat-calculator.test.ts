@@ -15,7 +15,7 @@ function makeOrb(affixId: string, tier: AffixTier = 1, uid?: string): OrbInstanc
 }
 
 function singleSlot(affixId: string, tier: AffixTier = 1): EquippedSlot {
-  return { kind: 'single', orb: makeOrb(affixId, tier) };
+  return { kind: 'single', orb: makeOrb(affixId, tier), socketedRound: 1 };
 }
 
 function upgradedSlot(affixId: string, originalTier: AffixTier, upgradedTier: AffixTier): EquippedSlot {
@@ -24,6 +24,7 @@ function upgradedSlot(affixId: string, originalTier: AffixTier, upgradedTier: Af
     orb: makeOrb(affixId, originalTier),
     originalTier,
     upgradedTier,
+    socketedRound: 1,
   };
 }
 
@@ -38,6 +39,7 @@ function compoundSlot(
     kind: 'compound',
     orbs: [makeOrb(affixId1, tier1, `orb-${affixId1}`), makeOrb(affixId2, tier2, `orb-${affixId2}`)],
     compoundId,
+    socketedRound: 1,
   };
 }
 

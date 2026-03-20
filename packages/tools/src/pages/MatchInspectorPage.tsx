@@ -223,7 +223,7 @@ function MatchDetailPanel({ matchId, onClose }: { matchId: string; onClose: () =
             return (
               <div key={i} style={{ marginBottom: '4px' }}>
                 <span style={{ color: '#6366f1', fontSize: '13px' }}>{String(weapon.id ?? weapon.name ?? `Weapon ${i + 1}`)}</span>
-                {affixes.map((a) => <span key={a} style={S.affixChip}>{a}</span>)}
+                {affixes.map((a, ai) => <span key={`${a}-${ai}`} style={S.affixChip}>{a}</span>)}
               </div>
             );
           })}
@@ -310,12 +310,12 @@ function MatchDetailPanel({ matchId, onClose }: { matchId: string; onClose: () =
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div>
                     <div style={{ color: '#6366f1', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Player 0</div>
-                    {(detail.p0_affixes ?? []).map((a) => <span key={a} style={S.affixChip}>{a}</span>)}
+                    {(detail.p0_affixes ?? []).map((a, ai) => <span key={`${a}-${ai}`} style={S.affixChip}>{a}</span>)}
                     {(!detail.p0_affixes || detail.p0_affixes.length === 0) && <span style={S.muted}>None</span>}
                   </div>
                   <div>
                     <div style={{ color: '#ef4444', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Player 1</div>
-                    {(detail.p1_affixes ?? []).map((a) => <span key={a} style={S.affixChip}>{a}</span>)}
+                    {(detail.p1_affixes ?? []).map((a, ai) => <span key={`${a}-${ai}`} style={S.affixChip}>{a}</span>)}
                     {(!detail.p1_affixes || detail.p1_affixes.length === 0) && <span style={S.muted}>None</span>}
                   </div>
                 </div>
@@ -512,8 +512,8 @@ export default function MatchInspectorPage() {
                     <td style={S.td}>{m.duration_ms}ms</td>
                     <td style={S.td}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
-                        {(m.p0_affixes ?? []).slice(0, 4).map((a) => (
-                          <span key={a} style={S.affixChip}>{a}</span>
+                        {(m.p0_affixes ?? []).slice(0, 4).map((a, i) => (
+                          <span key={`${a}-${i}`} style={S.affixChip}>{a}</span>
                         ))}
                         {(m.p0_affixes ?? []).length > 4 && (
                           <span style={{ ...S.affixChip, color: '#71717a' }}>
@@ -527,8 +527,8 @@ export default function MatchInspectorPage() {
                     </td>
                     <td style={S.td}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
-                        {(m.p1_affixes ?? []).slice(0, 4).map((a) => (
-                          <span key={a} style={S.affixChip}>{a}</span>
+                        {(m.p1_affixes ?? []).slice(0, 4).map((a, i) => (
+                          <span key={`${a}-${i}`} style={S.affixChip}>{a}</span>
                         ))}
                         {(m.p1_affixes ?? []).length > 4 && (
                           <span style={{ ...S.affixChip, color: '#71717a' }}>

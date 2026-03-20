@@ -20,7 +20,7 @@ interface ForgeStoreState {
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => DerivedStats | null;
-  canRemove: (orbUid: string) => boolean;
+  canRemove: (target: 'weapon' | 'armor', slotIndex: number) => boolean;
   selectOrb: (uid: string | null) => void;
   startDrag: (source: DragSource) => void;
   endDrag: () => void;
@@ -66,10 +66,10 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
     return getPlannedStats(plan, registry);
   },
 
-  canRemove: (orbUid) => {
+  canRemove: (target, slotIndex) => {
     const { plan } = get();
     if (!plan) return false;
-    return canRemoveOrb(plan, orbUid);
+    return canRemoveOrb(plan, target, slotIndex);
   },
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),

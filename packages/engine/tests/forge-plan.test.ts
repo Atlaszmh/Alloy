@@ -74,27 +74,27 @@ describe('ForgePlan', () => {
   });
 
   describe('applyPlanAction — remove_orb', () => {
-    it('moves orb back to stockpile and costs flux (remove has a cost)', () => {
-      const state = makeForgeState(2); // round 2 allows remove
+    it('moves orb back to stockpile and refunds assignOrb cost', () => {
+      const state = makeForgeState(1);
       const plan = createForgePlan(state, registry);
+      const startFlux = plan.tentativeFlux;
       // First assign, then remove
       const r1 = applyPlanAction(plan, {
         kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r1.ok).toBe(true);
       if (!r1.ok) return;
-      const fluxAfterAssign = r1.plan.tentativeFlux;
       const r2 = applyPlanAction(r1.plan, {
         kind: 'remove_orb', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r2.ok).toBe(true);
       if (!r2.ok) return;
-      // Remove costs flux (balance.fluxCosts.removeOrb = 1), same as the engine
-      expect(r2.plan.tentativeFlux).toBe(fluxAfterAssign - data.balance.fluxCosts.removeOrb);
+      // Refund restores flux to original
+      expect(r2.plan.tentativeFlux).toBe(startFlux);
       expect(r2.plan.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
     });
 
-    it('is blocked in round 1', () => {
+    it('is allowed in round 1 for current-round slot', () => {
       const state = makeForgeState(1);
       const plan = createForgePlan(state, registry);
       const r1 = applyPlanAction(plan, {
@@ -105,10 +105,26 @@ describe('ForgePlan', () => {
       const r2 = applyPlanAction(r1.plan, {
         kind: 'remove_orb', target: 'weapon', slotIndex: 0,
       }, registry);
+      expect(r2.ok).toBe(true);
+    });
+
+    it('is blocked for previous-round slots', () => {
+      const state = makeForgeState(2);
+      const plan = createForgePlan(state, registry);
+      const r1 = applyPlanAction(plan, {
+        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+      }, registry);
+      expect(r1.ok).toBe(true);
+      if (!r1.ok) return;
+      // Simulate advancing to round 3: the slot was socketed in round 2
+      r1.plan.round = 3;
+      const r2 = applyPlanAction(r1.plan, {
+        kind: 'remove_orb', target: 'weapon', slotIndex: 0,
+      }, registry);
       expect(r2.ok).toBe(false);
     });
 
-    it('is allowed in round 2', () => {
+    it('is allowed in round 2 for current-round slot', () => {
       const state = makeForgeState(2);
       const plan = createForgePlan(state, registry);
       const r1 = applyPlanAction(plan, {
@@ -235,15 +251,35 @@ describe('ForgePlan', () => {
   });
 
   describe('canRemoveOrb', () => {
-    it('returns true for unlocked orbs', () => {
+    it('returns true for current-round socketed orb', () => {
       const plan = createForgePlan(makeForgeState(), registry);
-      expect(canRemoveOrb(plan, 'orb1')).toBe(true);
+      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(true);
     });
 
-    it('returns false for locked orbs', () => {
+    it('returns false for empty slot', () => {
       const plan = createForgePlan(makeForgeState(), registry);
-      plan.lockedOrbUids.add('orb1');
-      expect(canRemoveOrb(plan, 'orb1')).toBe(false);
+      expect(canRemoveOrb(plan, 'weapon', 0)).toBe(false);
+    });
+
+    it('returns false for locked orbs (permanent combine)', () => {
+      const plan = createForgePlan(makeForgeState(), registry);
+      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      result.plan.lockedOrbUids.add('orb1');
+      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(false);
+    });
+
+    it('returns false for previous-round slot', () => {
+      const plan = createForgePlan(makeForgeState(), registry);
+      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      result.plan.round = 2;
+      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(false);
     });
   });
 });

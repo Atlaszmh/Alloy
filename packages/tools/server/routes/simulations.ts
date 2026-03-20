@@ -7,6 +7,16 @@ import type { MatchReport } from '@alloy/engine';
 const router = Router();
 const activeRuns = new Map<string, WorkerPool>();
 
+// List all simulation runs
+router.get('/', async (_req, res) => {
+  const { data, error } = await supabase
+    .from('simulation_runs')
+    .select('id, config_id, match_count, ai_tiers, status, progress, started_at, completed_at')
+    .order('started_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data ?? []);
+});
+
 // Start a simulation
 router.post('/', async (req, res) => {
   const { configId, matchCount, aiTiers, seedStart, mode, baseWeaponId, baseArmorId } = req.body;

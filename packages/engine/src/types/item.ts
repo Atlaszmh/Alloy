@@ -3,9 +3,9 @@ import type { BaseStatAllocation } from './base-stats.js';
 import type { OrbInstance } from './orb.js';
 
 export type EquippedSlot =
-  | { kind: 'single'; orb: OrbInstance }
-  | { kind: 'compound'; orbs: [OrbInstance, OrbInstance]; compoundId: string }
-  | { kind: 'upgraded'; orb: OrbInstance; originalTier: AffixTier; upgradedTier: AffixTier };
+  | { kind: 'single'; orb: OrbInstance; socketedRound: 1 | 2 | 3 }
+  | { kind: 'compound'; orbs: [OrbInstance, OrbInstance]; compoundId: string; socketedRound: 1 | 2 | 3 }
+  | { kind: 'upgraded'; orb: OrbInstance; originalTier: AffixTier; upgradedTier: AffixTier; socketedRound: 1 | 2 | 3 };
 
 export interface ForgedItem {
   baseItemId: string;

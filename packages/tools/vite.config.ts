@@ -6,4 +6,8 @@ export default defineConfig({
   resolve: {
     conditions: ['import', 'module', 'browser', 'default'],
   },
+  server: {
+    port: 9098,
+    strictPort: true,
+  },
 });
