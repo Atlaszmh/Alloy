@@ -50,6 +50,8 @@ interface SoundEntry {
   varyPitch?: boolean;
   /** Minimum ms between plays of this sound (throttle) */
   cooldownMs?: number;
+  /** Individual audio file paths relative to /assets/audio/sfx/ (used instead of sprite) */
+  files?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -58,15 +60,15 @@ interface SoundEntry {
 
 const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   // Draft
-  orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', varyPitch: true },
-  orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx' },
+  orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', varyPitch: true, files: ['orb-select-1.wav', 'orb-select-2.wav', 'orb-select-3.wav'] },
+  orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx', files: ['orb-confirm-1.wav', 'orb-confirm-2.wav', 'orb-confirm-3.wav'] },
   // Forge
-  orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', varyPitch: true },
-  orbRemove:       { sprite: 'orb-remove',        volume: 0.5, category: 'sfx' },
-  combineMerge:    { sprite: 'combine-merge',     volume: 0.8, category: 'sfx' },
-  combineFail:     { sprite: 'combine-fail',      volume: 0.5, category: 'sfx' },
+  orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', varyPitch: true, files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
+  orbRemove:       { sprite: 'orb-remove',        volume: 0.5, category: 'sfx', files: ['orb-remove-1.wav', 'orb-remove-2.wav', 'orb-remove-3.wav'] },
+  combineMerge:    { sprite: 'combine-merge',     volume: 0.8, category: 'sfx', files: ['combine-merge-1.wav', 'combine-merge-2.wav', 'combine-merge-3.wav'] },
+  combineFail:     { sprite: 'combine-fail',      volume: 0.5, category: 'sfx', files: ['combine-fail-1.wav', 'combine-fail-2.wav', 'combine-fail-3.wav'] },
   upgradeTier:     { sprite: 'upgrade-tier',      volume: 0.8, category: 'sfx' },
-  forgeSubmit:     { sprite: 'forge-submit',      volume: 0.7, category: 'sfx' },
+  forgeSubmit:     { sprite: 'forge-submit',      volume: 0.7, category: 'sfx', files: ['forge-submit-1.wav', 'forge-submit-2.wav', 'forge-submit-3.wav'] },
   synergyActivate: { sprite: 'synergy-activate',  volume: 0.7, category: 'sfx' },
   // Duel
   attack:          { sprite: 'attack',            volume: 0.6, category: 'sfx', varyPitch: true, cooldownMs: 80 },
@@ -79,12 +81,12 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   defeat:          { sprite: 'defeat',            volume: 0.7, category: 'sfx' },
   // UI
   buttonClick:     { sprite: 'button-click',      volume: 0.3, category: 'ui' },
-  phaseTransition: { sprite: 'phase-transition',  volume: 0.6, category: 'sfx' },
+  phaseTransition: { sprite: 'phase-transition',  volume: 0.6, category: 'sfx', files: ['phase-transition-1.wav', 'phase-transition-2.wav'] },
   timerTick:       { sprite: 'timer-tick',        volume: 0.4, category: 'ui' },
-  timerUrgent:     { sprite: 'timer-urgent',      volume: 0.6, category: 'ui' },
-  dragStart:       { sprite: 'drag-start',        volume: 0.3, category: 'ui' },
-  dropSuccess:     { sprite: 'drop-success',      volume: 0.5, category: 'sfx' },
-  fluxSpend:       { sprite: 'flux-spend',        volume: 0.4, category: 'ui' },
+  timerUrgent:     { sprite: 'timer-urgent',      volume: 0.6, category: 'ui', files: ['timer-urgent-1.wav', 'timer-urgent-2.wav'] },
+  dragStart:       { sprite: 'drag-start',        volume: 0.3, category: 'ui', files: ['drag-start-1.wav', 'drag-start-2.wav'] },
+  dropSuccess:     { sprite: 'drop-success',      volume: 0.5, category: 'sfx', files: ['drop-success-1.wav', 'drop-success-2.wav', 'drop-success-3.wav'] },
+  fluxSpend:       { sprite: 'flux-spend',        volume: 0.4, category: 'ui', files: ['flux-spend-1.wav', 'flux-spend-2.wav'] },
   matchFound:      { sprite: 'match-found',       volume: 0.7, category: 'sfx' },
   roundStart:      { sprite: 'round-start',       volume: 0.6, category: 'sfx' },
 };
@@ -388,6 +390,8 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
 class SoundManager {
   private sprite: Howl | null = null;
   private spriteLoaded = false;
+  private howls: Map<string, Howl[]> = new Map();
+  private filesLoaded = false;
   private masterVolume: number;
   private categoryVolumes: Record<SoundCategory, number>;
   private lastPlayTime: Map<SoundName, number> = new Map();
@@ -411,6 +415,35 @@ class SoundManager {
       preload: true,
       onload: () => { this.spriteLoaded = true; },
     });
+  }
+
+  /** Load individual audio files for all registry entries that have `files`. */
+  loadFiles(basePath = '/assets/audio/sfx/'): void {
+    // Pre-compute total to avoid race between onload callbacks and loop
+    let pending = 0;
+    for (const entry of Object.values(SOUND_REGISTRY)) {
+      pending += entry.files?.length ?? 0;
+    }
+    if (pending === 0) { this.filesLoaded = true; return; }
+
+    let loaded = 0;
+    for (const [name, entry] of Object.entries(SOUND_REGISTRY)) {
+      if (!entry.files?.length) continue;
+      const howls: Howl[] = [];
+      for (const file of entry.files) {
+        const howl = new Howl({
+          src: [basePath + file],
+          preload: true,
+          onload: () => { if (++loaded === pending) this.filesLoaded = true; },
+          onloaderror: (_id: number, err: unknown) => {
+            console.warn(`[SoundManager] Failed to load ${file}:`, err);
+            if (++loaded === pending) this.filesLoaded = true;
+          },
+        });
+        howls.push(howl);
+      }
+      this.howls.set(name, howls);
+    }
   }
 
   /** Play a sound by name. Respects mute, volume, cooldowns, and pitch variation. */
@@ -437,7 +470,17 @@ class SoundManager {
     // Compute pitch variation
     const rate = entry.varyPitch ? 0.92 + Math.random() * 0.16 : 1.0;
 
-    // Try Howler sprite first
+    // Try individual file variants first (skip varyPitch — files provide natural variation)
+    const variants = this.howls.get(name);
+    if (variants?.length) {
+      const howl = variants[Math.floor(Math.random() * variants.length)];
+      const id = howl.play();
+      howl.volume(effectiveVolume, id);
+      // Don't apply varyPitch rate to file variants — they already differ naturally
+      return;
+    }
+
+    // Then try Howler sprite (kept for future sprite support)
     if (this.spriteLoaded && this.sprite) {
       const id = this.sprite.play(entry.sprite);
       this.sprite.volume(effectiveVolume, id);
