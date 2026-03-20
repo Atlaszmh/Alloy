@@ -60,10 +60,10 @@ interface SoundEntry {
 
 const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   // Draft
-  orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', varyPitch: true, files: ['orb-select-1.wav', 'orb-select-2.wav', 'orb-select-3.wav'] },
+  orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', files: ['orb-select-1.wav', 'orb-select-2.wav', 'orb-select-3.wav'] },
   orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx', files: ['orb-confirm-1.wav', 'orb-confirm-2.wav', 'orb-confirm-3.wav'] },
   // Forge
-  orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', varyPitch: true, files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
+  orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
   orbRemove:       { sprite: 'orb-remove',        volume: 0.5, category: 'sfx', files: ['orb-remove-1.wav', 'orb-remove-2.wav', 'orb-remove-3.wav'] },
   combineMerge:    { sprite: 'combine-merge',     volume: 0.8, category: 'sfx', files: ['combine-merge-1.wav', 'combine-merge-2.wav', 'combine-merge-3.wav'] },
   combineFail:     { sprite: 'combine-fail',      volume: 0.5, category: 'sfx', files: ['combine-fail-1.wav', 'combine-fail-2.wav', 'combine-fail-3.wav'] },
@@ -391,7 +391,6 @@ class SoundManager {
   private sprite: Howl | null = null;
   private spriteLoaded = false;
   private howls: Map<string, Howl[]> = new Map();
-  private filesLoaded = false;
   private masterVolume: number;
   private categoryVolumes: Record<SoundCategory, number>;
   private lastPlayTime: Map<SoundName, number> = new Map();
@@ -425,9 +424,8 @@ class SoundManager {
     for (const entry of Object.values(SOUND_REGISTRY)) {
       pending += entry.files?.length ?? 0;
     }
-    if (pending === 0) { this.filesLoaded = true; return; }
+    if (pending === 0) return;
 
-    let loaded = 0;
     for (const [name, entry] of Object.entries(SOUND_REGISTRY)) {
       if (!entry.files?.length) continue;
       const howls: Howl[] = [];
@@ -435,10 +433,8 @@ class SoundManager {
         const howl = new Howl({
           src: [basePath + file],
           preload: true,
-          onload: () => { if (++loaded === pending) this.filesLoaded = true; },
           onloaderror: (_id: number, err: unknown) => {
             console.warn(`[SoundManager] Failed to load ${file}:`, err);
-            if (++loaded === pending) this.filesLoaded = true;
           },
         });
         howls.push(howl);
