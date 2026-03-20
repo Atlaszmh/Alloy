@@ -387,7 +387,7 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
 // SoundManager singleton
 // ---------------------------------------------------------------------------
 
-class SoundManager {
+export class SoundManager {
   private sprite: Howl | null = null;
   private spriteLoaded = false;
   private howls: Map<string, Howl[]> = new Map();
