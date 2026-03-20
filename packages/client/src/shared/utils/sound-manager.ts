@@ -419,6 +419,7 @@ class SoundManager {
 
   /** Load individual audio files for all registry entries that have `files`. */
   loadFiles(basePath = '/assets/audio/sfx/'): void {
+    if (this.howls.size > 0) return; // Already loaded
     // Pre-compute total to avoid race between onload callbacks and loop
     let pending = 0;
     for (const entry of Object.values(SOUND_REGISTRY)) {
