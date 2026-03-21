@@ -264,7 +264,7 @@ export function Draft() {
           const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
           setFlyingOrb({ orb: removedOrb, startPos: cachedPos, endPos });
           playSound('orbPickOpponent');
-          setTimeout(() => setFlyingOrb(null), 850);
+          setTimeout(() => setFlyingOrb(null), 950);
         }
       }
     }
@@ -437,7 +437,7 @@ export function Draft() {
               top: flyingOrb.startPos.y - halfGem,
               '--swoop-dx': `${dx}px`,
               '--swoop-dy': `${dy}px`,
-              animation: 'swoop-to-stockpile 0.8s ease-in-out forwards',
+              animation: 'swoop-to-stockpile 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards',
             } as React.CSSProperties}
           >
             <GemCard
