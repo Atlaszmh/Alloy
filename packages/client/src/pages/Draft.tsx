@@ -180,6 +180,12 @@ export function Draft() {
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
+  useEffect(() => {
+    if (isDisconnected) {
+      playSound('phaseTransition');
+    }
+  }, [isDisconnected]);
+
   const registry = getRegistry();
   const affixMap = new Map<string, AffixDef>();
   for (const affix of registry.getAllAffixes()) {
