@@ -38,7 +38,7 @@ export function PhaseRouter() {
       const label = labels[currentKind];
       if (label) {
         setTransitionLabel(label);
-        const timer = setTimeout(() => setTransitionLabel(null), 1000);
+        const timer = setTimeout(() => setTransitionLabel(null), 1200);
         return () => clearTimeout(timer);
       }
     }
@@ -90,7 +90,7 @@ export function PhaseRouter() {
         {transitionLabel && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-surface-900/80"
-            style={{ animation: 'fadeInOut 1s ease-in-out forwards' }}
+            style={{ animation: 'fadeInOut 1.2s ease-in-out forwards' }}
           >
             <h1
               className="text-4xl font-black text-accent-400"

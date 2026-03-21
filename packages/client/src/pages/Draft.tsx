@@ -189,6 +189,17 @@ export function Draft() {
   const isPlayerTurn = phase?.kind === 'draft' && phase.activePlayer === 0;
   const draftRound = phase?.kind === 'draft' ? phase.round : 1;
 
+  // Track which round's pool has been animated
+  const animatedRoundRef = useRef<number>(0);
+  const shouldAnimate = animatedRoundRef.current !== draftRound;
+
+  useEffect(() => {
+    if (animatedRoundRef.current !== draftRound) {
+      const timer = setTimeout(() => { animatedRoundRef.current = draftRound; }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [draftRound]);
+
   // Auto-scaling gem sizes
   const gemSizing = useGemSize(pool.length);
 
@@ -455,28 +466,35 @@ export function Draft() {
             minHeight: '100%',
           }}
         >
-          {pool.map((orb) => {
+          {pool.map((orb, index) => {
             const affix = affixMap.get(orb.affixId);
             if (!affix) return null;
             return (
-              <GemCard
+              <div
                 key={orb.uid}
-                uid={orb.uid}
-                affixId={orb.affixId}
-                affixName={affix.name}
-                tier={orb.tier}
-                category={affix.category}
-                tags={affix.tags}
-                statLabel={getStatLabel(affix, orb)}
-                description={affix.description}
-                gemSize={gemSizing.gemSize}
-                emojiSize={gemSizing.emojiSize}
-                statSize={gemSizing.statSize}
-                nameSize={gemSizing.nameSize}
-                catSize={gemSizing.catSize}
-                selected={orb.uid === selectedOrbUid}
-                onPointerDown={(e) => handlePointerDown(orb.uid, e)}
-              />
+                style={shouldAnimate ? {
+                  animation: 'gem-enter 0.3s ease-out both',
+                  animationDelay: `${index * 25}ms`,
+                } : undefined}
+              >
+                <GemCard
+                  uid={orb.uid}
+                  affixId={orb.affixId}
+                  affixName={affix.name}
+                  tier={orb.tier}
+                  category={affix.category}
+                  tags={affix.tags}
+                  statLabel={getStatLabel(affix, orb)}
+                  description={affix.description}
+                  gemSize={gemSizing.gemSize}
+                  emojiSize={gemSizing.emojiSize}
+                  statSize={gemSizing.statSize}
+                  nameSize={gemSizing.nameSize}
+                  catSize={gemSizing.catSize}
+                  selected={orb.uid === selectedOrbUid}
+                  onPointerDown={(e) => handlePointerDown(orb.uid, e)}
+                />
+              </div>
             );
           })}
         </div>
