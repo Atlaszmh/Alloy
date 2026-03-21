@@ -175,11 +175,11 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-@keyframes swoop-to-top {
+@keyframes swoop-to-stockpile {
   0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-  30%  { transform: translate(-25px, -20%) scale(0.9); opacity: 1; }
-  70%  { transform: translate(10px, -55%) scale(0.4); opacity: 0.8; }
-  100% { transform: translate(0, -80%) scale(0.25); opacity: 0; }
+  30%  { transform: translate(calc(var(--swoop-dx) * 0.15 - 20px), calc(var(--swoop-dy) * 0.3)) scale(0.85); opacity: 1; }
+  70%  { transform: translate(calc(var(--swoop-dx) * 0.85 + 10px), calc(var(--swoop-dy) * 0.8)) scale(0.4); opacity: 0.85; }
+  100% { transform: translate(var(--swoop-dx), var(--swoop-dy)) scale(0.3); opacity: 0; }
 }
 
 /* ── Portrait App Shell (9:16 aspect ratio) ── */

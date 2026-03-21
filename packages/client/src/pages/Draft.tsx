@@ -241,9 +241,11 @@ export function Draft() {
 
   // Track opponent picks for flying gem animation
   const prevPoolRef = useRef<OrbInstance[]>(pool);
+  const opponentZoneRef = useRef<HTMLDivElement>(null);
   const [flyingOrb, setFlyingOrb] = useState<{
     orb: OrbInstance;
     startPos: { x: number; y: number };
+    endPos: { x: number; y: number };
   } | null>(null);
 
   useEffect(() => {
@@ -256,8 +258,11 @@ export function Draft() {
       const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile) {
         const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
-        if (cachedPos) {
-          setFlyingOrb({ orb: removedOrb, startPos: cachedPos });
+        // Get opponent stockpile position as the target
+        const opRect = opponentZoneRef.current?.getBoundingClientRect();
+        if (cachedPos && opRect) {
+          const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
+          setFlyingOrb({ orb: removedOrb, startPos: cachedPos, endPos });
           playSound('orbPickOpponent');
           setTimeout(() => setFlyingOrb(null), 850);
         }
@@ -416,19 +421,24 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
-      {/* Flying gem — opponent pick animation (starts as pool-sized GemCard, shrinks as it swoops) */}
+      {/* Flying gem — opponent pick animation (starts as pool-sized GemCard, flies to opponent stockpile) */}
       {flyingOrb && (() => {
         const affix = affixMap.get(flyingOrb.orb.affixId);
         if (!affix) return null;
         const halfGem = gemSizing.gemSize / 2;
+        // Compute the translation delta from start to opponent stockpile
+        const dx = flyingOrb.endPos.x - flyingOrb.startPos.x;
+        const dy = flyingOrb.endPos.y - flyingOrb.startPos.y;
         return (
           <div
             className="pointer-events-none fixed z-50"
             style={{
               left: flyingOrb.startPos.x - halfGem,
               top: flyingOrb.startPos.y - halfGem,
-              animation: 'swoop-to-top 0.8s ease-in-out forwards',
-            }}
+              '--swoop-dx': `${dx}px`,
+              '--swoop-dy': `${dy}px`,
+              animation: 'swoop-to-stockpile 0.8s ease-in-out forwards',
+            } as React.CSSProperties}
           >
             <GemCard
               affixId={flyingOrb.orb.affixId}
@@ -449,6 +459,7 @@ export function Draft() {
       })()}
 
       {/* ═══ TOP: Opponent zone ═══ */}
+      <div ref={opponentZoneRef}>
       <StockpileZone
         label="Opponent"
         orbs={player1?.stockpile ?? []}
@@ -458,6 +469,7 @@ export function Draft() {
         isDropTarget={false}
         side="top"
       />
+      </div>
 
       {/* ═══ CENTER: Status bar ═══ */}
       <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1">
