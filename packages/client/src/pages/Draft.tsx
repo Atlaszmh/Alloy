@@ -156,17 +156,8 @@ export function Draft() {
 
   const gateway = useGateway();
   const [, forceUpdate] = useState(0);
-  const deferUpdateRef = useRef(false);
-  const pendingUpdateRef = useRef(false);
   useEffect(() => {
-    return gateway.subscribe(() => {
-      if (deferUpdateRef.current) {
-        // Animation in flight — queue the update for when it finishes
-        pendingUpdateRef.current = true;
-      } else {
-        forceUpdate((n) => n + 1);
-      }
-    });
+    return gateway.subscribe(() => forceUpdate((n) => n + 1));
   }, [gateway]);
 
   const matchState = gateway.getState();
@@ -257,6 +248,25 @@ export function Draft() {
     endPos: { x: number; y: number };
   } | null>(null);
 
+  // Start swoop animation for a given orb — returns a Promise that resolves when animation finishes
+  const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
+    const cachedPos = gemPositionsRef.current.get(orb.uid);
+    const opRect = opponentZoneRef.current?.getBoundingClientRect();
+    if (!cachedPos || !opRect) return Promise.resolve();
+
+    const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
+    setFlyingOrb({ orb, startPos: cachedPos, endPos });
+    playSound('orbPickOpponent');
+
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        playSound('dropSuccess');
+        setFlyingOrb(null);
+        resolve();
+      }, 950);
+    });
+  }, []);
+
   useEffect(() => {
     const prevPool = prevPoolRef.current;
     prevPoolRef.current = pool;
@@ -266,30 +276,10 @@ export function Draft() {
       const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
       const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile) {
-        const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
-        const opRect = opponentZoneRef.current?.getBoundingClientRect();
-        if (cachedPos && opRect) {
-          const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
-          setFlyingOrb({ orb: removedOrb, startPos: cachedPos, endPos });
-          playSound('orbPickOpponent');
-
-          // Defer gateway updates so the phase doesn't change mid-animation
-          deferUpdateRef.current = true;
-
-          setTimeout(() => {
-            playSound('dropSuccess');
-            setFlyingOrb(null);
-            // Flush deferred updates
-            deferUpdateRef.current = false;
-            if (pendingUpdateRef.current) {
-              pendingUpdateRef.current = false;
-              forceUpdate((n) => n + 1);
-            }
-          }, 950);
-        }
+        startSwoopAnimation(removedOrb);
       }
     }
-  }, [pool, isPlayerTurn, player1?.stockpile]);
+  }, [pool, isPlayerTurn, player1?.stockpile, startSwoopAnimation]);
 
   // Max orbs per player for the current draft round
   const balance = registry.getBalance();
@@ -412,16 +402,30 @@ export function Draft() {
     if (!currentState || currentState.phase.kind !== 'draft') return;
     const baseDelay = AI_CONFIGS[aiController.tier].thinkingDelayMs;
     const delay = calcAiDelay(baseDelay);
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
       const freshState = gateway.getState();
       if (!freshState || freshState.phase.kind !== 'draft') return;
       const orbUid = aiController.pickOrb(
         freshState.pool, freshState.players[1].stockpile, freshState.players[0].stockpile,
       );
+
+      // Check if this is the last pick (draft will complete after dispatch)
+      const currentPickIndex = freshState.phase.kind === 'draft' ? freshState.phase.pickIndex : 0;
+      const maxPicks = picksPerPlayer * 2;
+      const isLastPick = currentPickIndex + 1 >= maxPicks;
+
+      if (isLastPick) {
+        // Pre-animate: show the swoop BEFORE dispatching so Draft stays mounted
+        const pickedOrb = freshState.pool.find((o) => o.uid === orbUid);
+        if (pickedOrb) {
+          await startSwoopAnimation(pickedOrb);
+        }
+      }
+
       gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
     }, delay);
     return () => clearTimeout(timeout);
-  }, [pickIndex, activePlayer, aiController, gateway]);
+  }, [pickIndex, activePlayer, aiController, gateway, picksPerPlayer, startSwoopAnimation]);
 
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
