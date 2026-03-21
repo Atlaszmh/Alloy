@@ -715,6 +715,7 @@ export function Draft() {
             }).then(() => {
               // ── IMPACT MOMENT ──
               playSound('forgeSlam');
+              playSound('dropSuccess'); // gem scatter noise alongside the impact
 
               // Phase 2: Card bounces and settles
               cardEl.animate([
