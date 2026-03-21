@@ -223,11 +223,13 @@ export function Draft() {
   // Auto-scaling gem sizes
   const gemSizing = useGemSize(pool.length, containerWidth);
 
-  // Cache gem positions BEFORE React commits DOM changes
+  // Cache gem positions — merge into existing cache so positions from
+  // previous renders survive (needed for opponent pick animation, where the
+  // orb is gone from pool by the time the effect fires)
   const gemPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   useLayoutEffect(() => {
-    const positions = new Map<string, { x: number; y: number }>();
+    const positions = gemPositionsRef.current;
     for (const orb of pool) {
       const el = document.querySelector(`[data-gem-uid="${orb.uid}"]`);
       if (el) {
@@ -235,7 +237,6 @@ export function Draft() {
         positions.set(orb.uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       }
     }
-    gemPositionsRef.current = positions;
   }, [pool]);
 
   // Track opponent picks for flying gem animation
@@ -249,11 +250,9 @@ export function Draft() {
     const prevPool = prevPoolRef.current;
     prevPoolRef.current = pool;
 
-    // Detect opponent pick: pool shrunk by exactly 1 and it's now our turn
-    // (after AI picks, activePlayer flips to 0, so isPlayerTurn becomes true)
-    if (prevPool.length > 0 && pool.length === prevPool.length - 1 && isPlayerTurn) {
+    // Detect opponent pick: pool shrunk and the removed orb is in opponent's stockpile
+    if (prevPool.length > 0 && pool.length < prevPool.length) {
       const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
-      // Verify it wasn't OUR pick by checking if the orb is in opponent's stockpile
       const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile) {
         const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
