@@ -14,7 +14,7 @@ import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
-import { DRAG_THRESHOLD, classifyGesture } from './draft-gestures';
+import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -208,9 +208,9 @@ export function Draft() {
   const isOverDropZoneRef = useRef(false);
   const selectedOrbUidRef = useRef(selectedOrbUid);
 
-  // Keep refs in sync with state
+  // Keep selectedOrbUidRef in sync — needed because handleUp reads it via ref
+  // (isOverDropZoneRef is set directly in handleMove, no sync effect needed)
   useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
-  useEffect(() => { isOverDropZoneRef.current = isOverDropZone; }, [isOverDropZone]);
 
   // ── Pointer down: record start position + time, don't select yet ──
   const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
@@ -262,10 +262,11 @@ export function Draft() {
         setIsOverDropZone(false);
         isOverDropZoneRef.current = false;
       } else {
-        // Not a drag — use classifyGesture to distinguish tap from hold
+        // Not a drag — classify as tap or hold based on duration only
+        // (drag case already handled above via hasDraggedRef, so distance is < threshold here)
         const holdDuration = Date.now() - start.time;
-        const gesture = classifyGesture(start, start, holdDuration);
-        if (gesture === 'tap') {
+        if (holdDuration < HOLD_THRESHOLD) {
+          // Short press = tap — handle selection
           if (selectedOrbUidRef.current === start.uid) {
             draftOrb(start.uid);
           } else {
@@ -273,7 +274,7 @@ export function Draft() {
             playSound('orbSelect');
           }
         }
-        // 'hold' → no-op (D04)
+        // Long press = hold → no-op (D04)
       }
 
       pointerStartRef.current = null;
