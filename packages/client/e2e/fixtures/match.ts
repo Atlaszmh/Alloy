@@ -35,7 +35,14 @@ export async function startMatch(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
   await page.getByRole('button', { name: 'Play' }).click();
-  await expect(page.getByText('Choose Opponent')).toBeVisible();
+
+  // Matchmaking flow: Play → Play vs AI → Choose AI Tier
+  await page.waitForURL('**/queue', { timeout: 5000 });
+  // Wait for queue page content to render
+  const playVsAi = page.getByRole('button', { name: 'Play vs AI' });
+  await expect(playVsAi).toBeVisible({ timeout: 5000 });
+  await playVsAi.click();
+  await expect(page.getByText('Choose AI Tier')).toBeVisible({ timeout: 5000 });
 
   // Inject fixed seed
   await page.evaluate((seed) => {
