@@ -464,13 +464,17 @@ export function Draft() {
     if (remaining.length === 0) return Promise.resolve();
 
     setDraftEndGems(remaining);
-    playSound('phaseTransition');
+
+    // Play impact sound when the card lands (~580ms after animation starts)
+    setTimeout(() => {
+      playSound('phaseTransition');
+    }, 580);
 
     return new Promise((resolve) => {
       setTimeout(() => {
         setDraftEndGems(null);
         resolve();
-      }, 2200);
+      }, 4000); // linger for a few seconds after settling
     });
   }, [pool]);
 
@@ -708,7 +712,7 @@ export function Draft() {
                     },
                   ], {
                     duration: 1000,
-                    delay: 650 + gem.delay, // gems scatter AFTER card impacts at ~600ms
+                    delay: 580 + gem.delay, // gems scatter at moment of card impact
                     easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
                     fill: 'forwards',
                   });
