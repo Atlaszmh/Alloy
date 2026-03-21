@@ -8,11 +8,16 @@ import { Duel } from './Duel';
 import { Adapt } from './Adapt';
 import { PostMatch } from './PostMatch';
 
+// Duration to keep Draft mounted after draft completes (for end-of-draft animation)
+const DRAFT_END_HOLD_MS = 2500;
+
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
   const [, forceUpdate] = useState(0);
   const [transitionLabel, setTransitionLabel] = useState<string | null>(null);
   const prevPhaseRef = useRef<string | null>(null);
+  // Delayed phase: keeps rendering the previous phase component during transitions
+  const [heldPhase, setHeldPhase] = useState<string | null>(null);
 
   // Always call hooks unconditionally — pass empty string if code is missing
   const gateway = useMatchGateway(code ?? '');
@@ -29,6 +34,14 @@ export function PhaseRouter() {
     prevPhaseRef.current = currentKind;
 
     if (prevKind && currentKind && prevKind !== currentKind) {
+      // When leaving draft, hold the draft component mounted for the end animation
+      if (prevKind === 'draft' && currentKind === 'forge') {
+        setHeldPhase('draft');
+        const holdTimer = setTimeout(() => setHeldPhase(null), DRAFT_END_HOLD_MS);
+        // Don't show the standard transition overlay — draft handles its own animation
+        return () => clearTimeout(holdTimer);
+      }
+
       const labels: Record<string, string> = {
         forge: 'FORGE',
         draft: 'DRAFT',
@@ -65,9 +78,11 @@ export function PhaseRouter() {
   }
 
   const phase = matchState.phase;
+  // Use held phase if active (keeps Draft mounted during end-of-draft animation)
+  const displayPhase = heldPhase ?? phase.kind;
 
   function renderPhase() {
-    switch (phase.kind) {
+    switch (displayPhase) {
       case 'draft':
         return <Draft />;
       case 'forge':

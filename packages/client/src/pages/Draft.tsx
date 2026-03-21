@@ -289,16 +289,15 @@ export function Draft() {
     : perRound[draftRound - 1] ?? 8;
 
   // ── Draft action ──
-  const draftOrb = useCallback((orbUid: string) => {
+  const draftOrb = useCallback(async (orbUid: string) => {
     if (!isPlayerTurn) return;
-    gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid }).then((result) => {
-      if (result.ok) {
-        playSound('orbConfirm');
-        confirmPick();
-      } else {
-        cancelSelection();
-      }
-    });
+    const result = await gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid });
+    if (result.ok) {
+      playSound('orbConfirm');
+      confirmPick();
+    } else {
+      cancelSelection();
+    }
   }, [isPlayerTurn, gateway, confirmPick, cancelSelection]);
 
   // ── Pointer state refs (mutable, no re-renders, no stale closures) ──
@@ -402,30 +401,17 @@ export function Draft() {
     if (!currentState || currentState.phase.kind !== 'draft') return;
     const baseDelay = AI_CONFIGS[aiController.tier].thinkingDelayMs;
     const delay = calcAiDelay(baseDelay);
-    const timeout = setTimeout(async () => {
+    const timeout = setTimeout(() => {
       const freshState = gateway.getState();
       if (!freshState || freshState.phase.kind !== 'draft') return;
       const orbUid = aiController.pickOrb(
         freshState.pool, freshState.players[1].stockpile, freshState.players[0].stockpile,
       );
 
-      // Check if this is the last pick (draft will complete after dispatch)
-      const currentPickIndex = freshState.phase.kind === 'draft' ? freshState.phase.pickIndex : 0;
-      const maxPicks = picksPerPlayer * 2;
-      const isLastPick = currentPickIndex + 1 >= maxPicks;
-
-      if (isLastPick) {
-        // Pre-animate: show the swoop BEFORE dispatching so Draft stays mounted
-        const pickedOrb = freshState.pool.find((o) => o.uid === orbUid);
-        if (pickedOrb) {
-          await startSwoopAnimation(pickedOrb);
-        }
-      }
-
       gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
     }, delay);
     return () => clearTimeout(timeout);
-  }, [pickIndex, activePlayer, aiController, gateway, picksPerPlayer, startSwoopAnimation]);
+  }, [pickIndex, activePlayer, aiController, gateway]);
 
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
@@ -434,6 +420,58 @@ export function Draft() {
     draftOrb(pool[randomIndex].uid);
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
+
+  // ── Draft-end animation state ──
+  const [draftEndGems, setDraftEndGems] = useState<{
+    orb: OrbInstance;
+    pos: { x: number; y: number };
+    // Random physics for scatter
+    vx: number; vy: number; rotation: number; delay: number;
+  }[] | null>(null);
+
+  // Trigger the draft-end animation: capture remaining gems + positions, show "FORGE" slam
+  const startDraftEndAnimation = useCallback((): Promise<void> => {
+    const remaining = pool
+      .map((orb) => {
+        const pos = gemPositionsRef.current.get(orb.uid);
+        if (!pos) return null;
+        // Random scatter physics
+        const angle = (Math.random() - 0.5) * Math.PI * 1.5; // wide spread
+        const speed = 600 + Math.random() * 800;
+        return {
+          orb,
+          pos,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 300, // bias downward
+          rotation: (Math.random() - 0.5) * 1080, // up to 3 full rotations
+          delay: Math.random() * 150, // stagger
+        };
+      })
+      .filter(Boolean) as NonNullable<typeof draftEndGems>[number][];
+
+    if (remaining.length === 0) return Promise.resolve();
+
+    setDraftEndGems(remaining);
+    playSound('phaseTransition');
+
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        setDraftEndGems(null);
+        resolve();
+      }, 2200);
+    });
+  }, [pool]);
+
+  // Detect draft completion and trigger end animation
+  // (PhaseRouter holds Draft mounted for ~2.5s after draft→forge via heldPhase)
+  const draftEndTriggeredRef = useRef(false);
+  useEffect(() => {
+    const currentPhase = gateway.getState()?.phase;
+    if (currentPhase?.kind === 'forge' && !draftEndTriggeredRef.current) {
+      draftEndTriggeredRef.current = true;
+      startDraftEndAnimation();
+    }
+  });
 
   const dragOrb = dragUid ? pool.find((o) => o.uid === dragUid) : null;
   const dragAffix = dragOrb ? affixMap.get(dragOrb.affixId) : null;
@@ -604,6 +642,109 @@ export function Draft() {
           side="bottom"
         />
       </div>
+
+      {/* ═══ DRAFT END ANIMATION — gems scatter + "FORGE" card slams down ═══ */}
+      {draftEndGems && (
+        <div className="fixed inset-0 z-[60] overflow-hidden pointer-events-none">
+          {/* Scattering gems — each flies outward with random physics */}
+          {draftEndGems.map((gem) => {
+            const affix = affixMap.get(gem.orb.affixId);
+            if (!affix) return null;
+            return (
+              <div
+                key={gem.orb.uid}
+                className="fixed"
+                ref={(el) => {
+                  if (!el) return;
+                  el.animate([
+                    {
+                      transform: 'translate3d(0, 0, 0) rotate(0deg) scale(1)',
+                      opacity: 1,
+                    },
+                    {
+                      transform: `translate3d(${gem.vx * 0.4}px, ${gem.vy * 0.4 + 80}px, 0) rotate(${gem.rotation * 0.5}deg) scale(0.8)`,
+                      opacity: 0.9,
+                      offset: 0.4,
+                    },
+                    {
+                      transform: `translate3d(${gem.vx}px, ${gem.vy + 300}px, 0) rotate(${gem.rotation}deg) scale(0.3)`,
+                      opacity: 0,
+                    },
+                  ], {
+                    duration: 1200,
+                    delay: gem.delay + 400,
+                    easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+                    fill: 'forwards',
+                  });
+                }}
+                style={{
+                  left: gem.pos.x - gemSizing.gemSize / 2,
+                  top: gem.pos.y - gemSizing.gemSize / 2,
+                  willChange: 'transform, opacity',
+                }}
+              >
+                <GemCard
+                  affixId={gem.orb.affixId}
+                  affixName={affix.name}
+                  tier={gem.orb.tier}
+                  category={affix.category}
+                  tags={affix.tags}
+                  statLabel={getStatLabel(affix, gem.orb)}
+                  gemSize={gemSizing.gemSize}
+                  emojiSize={gemSizing.emojiSize}
+                  statSize={gemSizing.statSize}
+                  nameSize={gemSizing.nameSize}
+                  catSize={gemSizing.catSize}
+                />
+              </div>
+            );
+          })}
+
+          {/* "FORGE" card — drops from above with a bounce */}
+          <div
+            className="fixed inset-0 flex items-center justify-center"
+            ref={(el) => {
+              if (!el) return;
+              el.animate([
+                { transform: 'translateY(-120vh) scale(1.3)', opacity: 0 },
+                { transform: 'translateY(5%) scale(1.05)', opacity: 1, offset: 0.35 },
+                { transform: 'translateY(-2%) scale(0.98)', offset: 0.55 },
+                { transform: 'translateY(1%) scale(1.01)', offset: 0.7 },
+                { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.85 },
+                { transform: 'translateY(0) scale(1)', opacity: 1 },
+              ], {
+                duration: 800,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'forwards',
+              });
+            }}
+          >
+            <div
+              className="rounded-2xl border-2 border-accent-400 bg-surface-900/95 px-12 py-8 shadow-2xl"
+              style={{
+                boxShadow: '0 0 60px rgba(212, 168, 52, 0.4), 0 20px 40px rgba(0,0,0,0.5)',
+              }}
+            >
+              <h1
+                className="text-5xl font-black text-accent-400"
+                style={{
+                  fontFamily: 'var(--font-family-display)',
+                  textShadow: '0 0 30px rgba(212, 168, 52, 0.6)',
+                  letterSpacing: '0.1em',
+                }}
+              >
+                FORGE
+              </h1>
+              <p
+                className="mt-2 text-center text-sm font-semibold text-surface-300"
+                style={{ fontFamily: 'var(--font-family-display)' }}
+              >
+                ROUND {draftRound}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
