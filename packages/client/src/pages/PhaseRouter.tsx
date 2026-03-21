@@ -9,7 +9,7 @@ import { Adapt } from './Adapt';
 import { PostMatch } from './PostMatch';
 
 // Duration to keep Draft mounted after draft completes (for end-of-draft animation)
-const DRAFT_END_HOLD_MS = 4500;
+const DRAFT_END_HOLD_MS = 6000;
 
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();

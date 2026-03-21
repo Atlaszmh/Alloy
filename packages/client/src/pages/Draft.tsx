@@ -470,7 +470,7 @@ export function Draft() {
       setTimeout(() => {
         setDraftEndGems(null);
         resolve();
-      }, 4000); // linger for a few seconds after impact + settle
+      }, 5500); // buildup (1.2s) + drop (0.5s) + settle + linger
     });
   }, [pool]);
 
@@ -671,17 +671,48 @@ export function Draft() {
             const gemEls = container.querySelectorAll('[data-scatter-gem]') as NodeListOf<HTMLElement>;
             if (!cardEl) return;
 
-            // Phase 1: Card drops from above to center (the "fall")
-            const dropAnim = cardEl.animate([
-              { transform: 'translateY(-200vh) scale(1.4)', opacity: 0.5 },
-              { transform: 'translateY(0%) scale(1.08)', opacity: 1 },
+            // Phase 0: Buildup — card peeks from top with a warning shake/creak
+            const peekAnim = cardEl.animate([
+              { transform: 'translateY(-200vh) scale(1.2)', opacity: 0 },
+              { transform: 'translateY(-88vh) scale(1.15)', opacity: 0.6 },
             ], {
-              duration: 600,
-              easing: 'cubic-bezier(0.36, 0, 0.66, -0.56)', // accelerating fall
+              duration: 400,
+              easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
               fill: 'forwards',
             });
 
-            dropAnim.finished.then(() => {
+            peekAnim.finished.then(() => {
+              playSound('forgeCreak');
+
+              // Card trembles in place — "about to fall"
+              const shakeAnim = cardEl.animate([
+                { transform: 'translateY(-88vh) rotate(0deg) scale(1.15)' },
+                { transform: 'translateY(-87.5vh) rotate(-0.8deg) scale(1.15)', offset: 0.15 },
+                { transform: 'translateY(-88.5vh) rotate(0.6deg) scale(1.15)', offset: 0.3 },
+                { transform: 'translateY(-87vh) rotate(-1deg) scale(1.15)', offset: 0.5 },
+                { transform: 'translateY(-88vh) rotate(0.8deg) scale(1.16)', offset: 0.7 },
+                { transform: 'translateY(-86.5vh) rotate(-0.5deg) scale(1.17)', offset: 0.85 },
+                { transform: 'translateY(-86vh) rotate(0deg) scale(1.18)' },
+              ], {
+                duration: 800,
+                easing: 'linear',
+                fill: 'forwards',
+              });
+
+              return shakeAnim.finished;
+            }).then(() => {
+              // Phase 1: Card drops from peek position to center (the "fall")
+              const dropAnim = cardEl.animate([
+                { transform: 'translateY(-86vh) scale(1.18)', opacity: 0.8 },
+                { transform: 'translateY(0%) scale(1.08)', opacity: 1 },
+              ], {
+                duration: 500,
+                easing: 'cubic-bezier(0.55, 0, 1, 0.45)', // accelerating fall
+                fill: 'forwards',
+              });
+
+              return dropAnim.finished;
+            }).then(() => {
               // ── IMPACT MOMENT ──
               playSound('forgeSlam');
 

@@ -13,6 +13,7 @@ export type SoundName =
   | 'orbConfirm'
   | 'orbPickOpponent'
   | 'forgeSlam'
+  | 'forgeCreak'
   // Forge
   | 'orbPlace'
   | 'orbRemove'
@@ -66,6 +67,7 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx', files: ['orb-confirm-1.wav', 'orb-confirm-2.wav', 'orb-confirm-3.wav'] },
   orbPickOpponent: { sprite: 'orb-pick-opponent', volume: 0.4, category: 'sfx', varyPitch: true },
   forgeSlam:       { sprite: 'forge-slam',        volume: 0.9, category: 'sfx', files: ['forge-slam-1.wav', 'forge-slam-2.wav', 'forge-slam-3.wav'] },
+  forgeCreak:      { sprite: 'forge-creak',       volume: 0.5, category: 'sfx', files: ['forge-creak-1.wav', 'forge-creak-2.wav', 'forge-creak-3.wav'] },
   // Forge
   orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
   orbRemove:       { sprite: 'orb-remove',        volume: 0.5, category: 'sfx', files: ['orb-remove-1.wav', 'orb-remove-2.wav', 'orb-remove-3.wav'] },
