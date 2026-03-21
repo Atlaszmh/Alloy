@@ -249,10 +249,13 @@ export function Draft() {
     const prevPool = prevPoolRef.current;
     prevPoolRef.current = pool;
 
-    // Detect opponent pick: pool shrunk and it's not our turn
-    if (!isPlayerTurn && prevPool.length > pool.length) {
+    // Detect opponent pick: pool shrunk by exactly 1 and it's now our turn
+    // (after AI picks, activePlayer flips to 0, so isPlayerTurn becomes true)
+    if (prevPool.length > 0 && pool.length === prevPool.length - 1 && isPlayerTurn) {
       const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
-      if (removedOrb) {
+      // Verify it wasn't OUR pick by checking if the orb is in opponent's stockpile
+      const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
+      if (removedOrb && inOpponentStockpile) {
         const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
         if (cachedPos) {
           setFlyingOrb({ orb: removedOrb, startPos: cachedPos });
@@ -261,7 +264,7 @@ export function Draft() {
         }
       }
     }
-  }, [pool, isPlayerTurn]);
+  }, [pool, isPlayerTurn, player1?.stockpile]);
 
   // Max orbs per player for the current draft round
   const balance = registry.getBalance();
