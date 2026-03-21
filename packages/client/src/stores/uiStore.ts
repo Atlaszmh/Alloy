@@ -35,7 +35,7 @@ export const useUIStore = create<UIStore>((set) => ({
   modalOpen: null,
   toastMessage: null,
   toastType: 'info',
-  isMuted: false,
+  isMuted: (() => { try { return localStorage.getItem('alloy:muted') === 'true'; } catch { return false; } })(),
   showDebug: false,
   masterVolume: loadVolume('alloy:vol:master', 0.8),
   sfxVolume: loadVolume('alloy:vol:sfx', 1.0),
@@ -45,7 +45,11 @@ export const useUIStore = create<UIStore>((set) => ({
   closeModal: () => set({ modalOpen: null }),
   toast: (message, type = 'info') => set({ toastMessage: message, toastType: type }),
   clearToast: () => set({ toastMessage: null }),
-  toggleMute: () => set((s) => ({ isMuted: !s.isMuted })),
+  toggleMute: () => set((s) => {
+    const next = !s.isMuted;
+    try { localStorage.setItem('alloy:muted', String(next)); } catch { /* noop */ }
+    return { isMuted: next };
+  }),
   toggleDebug: () => set((s) => ({ showDebug: !s.showDebug })),
   setVolume: (category, value) => {
     // Lazy import to avoid circular dependency (sound-manager imports uiStore for mute check)

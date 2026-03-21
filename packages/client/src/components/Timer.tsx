@@ -16,9 +16,9 @@ export function Timer({ durationMs, onExpire, paused = false, className = '' }: 
   const progress = remaining / durationMs;
   const prevSecondsRef = useRef(seconds);
 
-  // Timer tick sounds for the last 5 seconds
+  // Timer tick sounds for the last 10 seconds
   useEffect(() => {
-    if (seconds !== prevSecondsRef.current && seconds <= 5 && seconds > 0) {
+    if (seconds !== prevSecondsRef.current && seconds <= 10 && seconds > 0) {
       playSound(seconds <= 3 ? 'timerUrgent' : 'timerTick');
     }
     prevSecondsRef.current = seconds;
