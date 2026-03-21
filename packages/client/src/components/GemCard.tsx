@@ -25,6 +25,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 interface GemCardProps {
+  uid?: string;
   affixId: string;
   affixName: string;
   tier: AffixTier;
@@ -43,6 +44,7 @@ interface GemCardProps {
 }
 
 export function GemCard({
+  uid,
   affixId,
   affixName,
   tier,
@@ -69,6 +71,7 @@ export function GemCard({
   const card = (
     <div
       data-gem={affixId}
+      data-gem-uid={uid}
       className="flex flex-col items-center cursor-pointer transition-all duration-150 hover:scale-[1.08] hover:brightness-110 active:scale-[0.93]"
       style={{
         touchAction: 'none',

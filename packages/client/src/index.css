@@ -170,6 +170,12 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes swoop-to-top {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  50% { transform: translate(-20px, -40%) scale(0.8); opacity: 0.9; }
+  100% { transform: translate(0, -80vh) scale(0.5); opacity: 0; }
+}
+
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 
 .app-shell {

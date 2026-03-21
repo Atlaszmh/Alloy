@@ -11,6 +11,7 @@ export type SoundName =
   // Draft
   | 'orbSelect'
   | 'orbConfirm'
+  | 'orbPickOpponent'
   // Forge
   | 'orbPlace'
   | 'orbRemove'
@@ -62,6 +63,7 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   // Draft
   orbSelect:       { sprite: 'orb-select',       volume: 0.6, category: 'sfx', files: ['orb-select-1.wav', 'orb-select-2.wav', 'orb-select-3.wav'] },
   orbConfirm:      { sprite: 'orb-confirm',       volume: 0.7, category: 'sfx', files: ['orb-confirm-1.wav', 'orb-confirm-2.wav', 'orb-confirm-3.wav'] },
+  orbPickOpponent: { sprite: 'orb-pick-opponent', volume: 0.4, category: 'sfx', varyPitch: true },
   // Forge
   orbPlace:        { sprite: 'orb-place',         volume: 0.7, category: 'sfx', files: ['orb-place-1.wav', 'orb-place-2.wav', 'orb-place-3.wav', 'orb-place-4.wav'] },
   orbRemove:       { sprite: 'orb-remove',        volume: 0.5, category: 'sfx', files: ['orb-remove-1.wav', 'orb-remove-2.wav', 'orb-remove-3.wav'] },
@@ -152,6 +154,14 @@ const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => vo
       g.gain.exponentialRampToValueAtTime(0.001, t + end);
       osc.connect(g).connect(ctx.destination); osc.start(t + start); osc.stop(t + end);
     }
+  },
+  orbPickOpponent(vol, rate) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 330 * rate;
+    g.gain.setValueAtTime(vol * 0.15, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.connect(g).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.08);
   },
   orbPlace(vol, rate) {
     const ctx = getAudioContext(); if (!ctx) return;

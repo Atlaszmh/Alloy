@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
@@ -192,6 +192,46 @@ export function Draft() {
   // Auto-scaling gem sizes
   const gemSizing = useGemSize(pool.length);
 
+  // Cache gem positions BEFORE React commits DOM changes
+  const gemPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  useLayoutEffect(() => {
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const orb of pool) {
+      const el = document.querySelector(`[data-gem-uid="${orb.uid}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        positions.set(orb.uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      }
+    }
+    gemPositionsRef.current = positions;
+  }, [pool]);
+
+  // Track opponent picks for flying gem animation
+  const prevPoolRef = useRef<OrbInstance[]>(pool);
+  const [flyingOrb, setFlyingOrb] = useState<{
+    orb: OrbInstance;
+    startPos: { x: number; y: number };
+  } | null>(null);
+
+  useEffect(() => {
+    const prevPool = prevPoolRef.current;
+    prevPoolRef.current = pool;
+
+    // Detect opponent pick: pool shrunk and it's not our turn
+    if (!isPlayerTurn && prevPool.length > pool.length) {
+      const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
+      if (removedOrb) {
+        const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
+        if (cachedPos) {
+          setFlyingOrb({ orb: removedOrb, startPos: cachedPos });
+          playSound('orbPickOpponent');
+          setTimeout(() => setFlyingOrb(null), 500);
+        }
+      }
+    }
+  }, [pool, isPlayerTurn]);
+
   // Max orbs per player for the current draft round
   const balance = registry.getBalance();
   const perRound = balance.draftPicksPerPlayer ?? [8, 4, 4];
@@ -343,6 +383,29 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
+      {/* Flying gem — opponent pick animation */}
+      {flyingOrb && (() => {
+        const affix = affixMap.get(flyingOrb.orb.affixId);
+        if (!affix) return null;
+        return (
+          <div
+            className="pointer-events-none fixed z-50"
+            style={{
+              left: flyingOrb.startPos.x - 20,
+              top: flyingOrb.startPos.y - 20,
+              animation: 'swoop-to-top 0.5s ease-in-out forwards',
+            }}
+          >
+            <GemChip
+              affixId={flyingOrb.orb.affixId}
+              affixName={affix.name.split(' ')[0]}
+              statLabel={getStatLabel(affix, flyingOrb.orb)}
+              tags={affix.tags}
+            />
+          </div>
+        );
+      })()}
+
       {/* ═══ TOP: Opponent zone ═══ */}
       <StockpileZone
         label="Opponent"
@@ -398,6 +461,7 @@ export function Draft() {
             return (
               <GemCard
                 key={orb.uid}
+                uid={orb.uid}
                 affixId={orb.affixId}
                 affixName={affix.name}
                 tier={orb.tier}
