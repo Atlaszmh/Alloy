@@ -465,12 +465,11 @@ export function Draft() {
 
     setDraftEndGems(remaining);
     // Sound + scatter timing handled by the orchestrator ref via .finished promises
-
+    // Don't clear draftEndGems — let the forge card persist on screen until
+    // PhaseRouter slides the entire draft screen away and unmounts Draft.
     return new Promise((resolve) => {
-      setTimeout(() => {
-        setDraftEndGems(null);
-        resolve();
-      }, 5500); // buildup (1.2s) + drop (0.5s) + settle + linger
+      // Resolve immediately — PhaseRouter controls the timing via DRAFT_END_HOLD_MS
+      resolve();
     });
   }, [pool]);
 
