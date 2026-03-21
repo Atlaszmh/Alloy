@@ -356,7 +356,7 @@ export function Draft() {
             {isPlayerTurn ? 'YOUR PICK' : 'OPPONENT PICKING'}
           </div>
           <span className="text-xs text-surface-300" style={{ fontFamily: 'var(--font-family-display)' }}>
-            R{draftRound} · {pool.length} left
+            ROUND {draftRound} DRAFT · {pool.length} left
           </span>
         </div>
         {isPlayerTurn && <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} />}
