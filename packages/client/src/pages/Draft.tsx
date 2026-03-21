@@ -464,17 +464,13 @@ export function Draft() {
     if (remaining.length === 0) return Promise.resolve();
 
     setDraftEndGems(remaining);
-
-    // Play impact sound when the card lands (~580ms after animation starts)
-    setTimeout(() => {
-      playSound('phaseTransition');
-    }, 580);
+    // Sound + scatter timing handled by the orchestrator ref via .finished promises
 
     return new Promise((resolve) => {
       setTimeout(() => {
         setDraftEndGems(null);
         resolve();
-      }, 4000); // linger for a few seconds after settling
+      }, 4000); // linger for a few seconds after impact + settle
     });
   }, [pool]);
 
@@ -667,56 +663,94 @@ export function Draft() {
       {draftEndGems && (
         <div
           className="fixed inset-0 z-[60] overflow-hidden pointer-events-none"
-          ref={(el) => {
-            if (!el) return;
-            // Screen shake on impact (starts at 600ms when card lands)
-            el.animate([
-              { transform: 'translate(0, 0)' },
-              { transform: 'translate(0, 0)', offset: 0.27 }, // wait for card to land
-              { transform: 'translate(-4px, 3px)', offset: 0.29 },
-              { transform: 'translate(5px, -2px)', offset: 0.32 },
-              { transform: 'translate(-3px, 4px)', offset: 0.35 },
-              { transform: 'translate(2px, -3px)', offset: 0.38 },
-              { transform: 'translate(-1px, 1px)', offset: 0.42 },
-              { transform: 'translate(0, 0)' },
+          data-draft-end-container
+          ref={(container) => {
+            if (!container) return;
+            // ── ORCHESTRATOR: chain animations with .finished promises ──
+            const cardEl = container.querySelector('[data-forge-card]') as HTMLElement;
+            const gemEls = container.querySelectorAll('[data-scatter-gem]') as NodeListOf<HTMLElement>;
+            if (!cardEl) return;
+
+            // Phase 1: Card drops from above to center (the "fall")
+            const dropAnim = cardEl.animate([
+              { transform: 'translateY(-200vh) scale(1.4)', opacity: 0.5 },
+              { transform: 'translateY(0%) scale(1.08)', opacity: 1 },
             ], {
-              duration: 2200,
-              easing: 'linear',
+              duration: 600,
+              easing: 'cubic-bezier(0.36, 0, 0.66, -0.56)', // accelerating fall
               fill: 'forwards',
+            });
+
+            dropAnim.finished.then(() => {
+              // ── IMPACT MOMENT ──
+              playSound('phaseTransition');
+
+              // Phase 2: Card bounces and settles
+              cardEl.animate([
+                { transform: 'translateY(0%) scale(1.08)' },
+                { transform: 'translateY(-5%) scale(0.95)', offset: 0.2 },
+                { transform: 'translateY(2%) scale(1.03)', offset: 0.45 },
+                { transform: 'translateY(-1%) scale(0.99)', offset: 0.65 },
+                { transform: 'translateY(0%) scale(1)', offset: 0.85 },
+                { transform: 'translateY(0%) scale(1)' },
+              ], {
+                duration: 800,
+                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+                fill: 'forwards',
+              });
+
+              // Phase 2: Screen shake on impact
+              container.animate([
+                { transform: 'translate(0, 0)' },
+                { transform: 'translate(-6px, 4px)', offset: 0.08 },
+                { transform: 'translate(7px, -3px)', offset: 0.18 },
+                { transform: 'translate(-5px, 5px)', offset: 0.28 },
+                { transform: 'translate(4px, -4px)', offset: 0.4 },
+                { transform: 'translate(-2px, 2px)', offset: 0.55 },
+                { transform: 'translate(1px, -1px)', offset: 0.7 },
+                { transform: 'translate(0, 0)' },
+              ], {
+                duration: 500,
+                easing: 'linear',
+              });
+
+              // Phase 2: Gems scatter outward FROM THE IMPACT
+              gemEls.forEach((el, i) => {
+                const gem = draftEndGems[i];
+                if (!gem) return;
+                el.animate([
+                  {
+                    transform: 'translate3d(0, 0, 0) rotate(0deg) scale(1)',
+                    opacity: 1,
+                  },
+                  {
+                    transform: `translate3d(${gem.vx * 0.5}px, ${gem.vy * 0.3 + 60}px, 0) rotate(${gem.rotation * 0.4}deg) scale(0.7)`,
+                    opacity: 0.85,
+                    offset: 0.45,
+                  },
+                  {
+                    transform: `translate3d(${gem.vx}px, ${gem.vy + 400}px, 0) rotate(${gem.rotation}deg) scale(0.2)`,
+                    opacity: 0,
+                  },
+                ], {
+                  duration: 1000,
+                  delay: gem.delay, // small stagger between gems
+                  easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+                  fill: 'forwards',
+                });
+              });
             });
           }}
         >
-          {/* Remaining gems — scatter outward on impact (delayed until card lands) */}
+          {/* Remaining gems — positioned at their last pool locations, waiting to scatter */}
           {draftEndGems.map((gem) => {
             const affix = affixMap.get(gem.orb.affixId);
             if (!affix) return null;
             return (
               <div
                 key={gem.orb.uid}
+                data-scatter-gem
                 className="fixed"
-                ref={(el) => {
-                  if (!el) return;
-                  el.animate([
-                    {
-                      transform: 'translate3d(0, 0, 0) rotate(0deg) scale(1)',
-                      opacity: 1,
-                    },
-                    {
-                      transform: `translate3d(${gem.vx * 0.5}px, ${gem.vy * 0.3 + 60}px, 0) rotate(${gem.rotation * 0.4}deg) scale(0.7)`,
-                      opacity: 0.85,
-                      offset: 0.5,
-                    },
-                    {
-                      transform: `translate3d(${gem.vx}px, ${gem.vy + 400}px, 0) rotate(${gem.rotation}deg) scale(0.2)`,
-                      opacity: 0,
-                    },
-                  ], {
-                    duration: 1000,
-                    delay: 580 + gem.delay, // gems scatter at moment of card impact
-                    easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-                    fill: 'forwards',
-                  });
-                }}
                 style={{
                   left: gem.pos.x - gemSizing.gemSize / 2,
                   top: gem.pos.y - gemSizing.gemSize / 2,
@@ -740,26 +774,11 @@ export function Draft() {
             );
           })}
 
-          {/* "FORGE" card — falls from far above with heavy impact bounce */}
+          {/* "FORGE" card — positioned center, animated by orchestrator */}
           <div
+            data-forge-card
             className="fixed inset-0 flex items-center justify-center"
-            ref={(el) => {
-              if (!el) return;
-              // Heavy drop: starts way off screen, accelerates down, bounces on impact
-              el.animate([
-                { transform: 'translateY(-200vh) scale(1.4)', opacity: 0.5 },
-                { transform: 'translateY(0%) scale(1.08)', opacity: 1, offset: 0.28 }, // IMPACT
-                { transform: 'translateY(-6%) scale(0.96)', offset: 0.4 }, // bounce up
-                { transform: 'translateY(2%) scale(1.02)', offset: 0.52 }, // settle down
-                { transform: 'translateY(-1%) scale(0.99)', offset: 0.62 }, // small bounce
-                { transform: 'translateY(0%) scale(1)', opacity: 1, offset: 0.72 }, // settled
-                { transform: 'translateY(0%) scale(1)', opacity: 1 },
-              ], {
-                duration: 2200,
-                easing: 'cubic-bezier(0.12, 0, 0.39, 0)',
-                fill: 'forwards',
-              });
-            }}
+            style={{ transform: 'translateY(-200vh)', willChange: 'transform, opacity' }}
           >
             <div
               className="rounded-2xl border-2 border-accent-400 bg-surface-900/95 px-14 py-10 shadow-2xl"
