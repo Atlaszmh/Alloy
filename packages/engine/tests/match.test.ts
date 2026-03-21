@@ -205,9 +205,12 @@ describe('Match Controller', () => {
   it('full draft completes and transitions to forge phase', () => {
     let state = makeMatch();
     const totalOrbs = state.pool.length;
+    // Each player picks draftPicksPerPlayer[0] orbs in round 1; pool may have leftovers
+    const picksPerPlayer = registry.getBalance().draftPicksPerPlayer[0];
+    const totalPicks = picksPerPlayer * 2;
 
-    // Draft all orbs using alternating picks
-    for (let i = 0; i < totalOrbs; i++) {
+    // Draft all picks using alternating picks
+    for (let i = 0; i < totalPicks; i++) {
       if (state.phase.kind !== 'draft') break;
       const orbUid = state.pool[0].uid;
       const player = state.phase.activePlayer;
@@ -220,8 +223,8 @@ describe('Match Controller', () => {
     if (state.phase.kind === 'forge') {
       expect(state.phase.round).toBe(1);
     }
-    expect(state.pool.length).toBe(0);
-    expect(state.players[0].stockpile.length + state.players[1].stockpile.length).toBe(totalOrbs);
+    expect(state.pool.length).toBe(totalOrbs - totalPicks);
+    expect(state.players[0].stockpile.length + state.players[1].stockpile.length).toBe(totalPicks);
     // Forge flux should be initialized
     expect(state.forgeFlux).toBeDefined();
     expect(state.forgeComplete).toEqual([false, false]);

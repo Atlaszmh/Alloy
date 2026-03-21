@@ -13,7 +13,7 @@
     "swapOrb": 1,
     "removeOrb": 1
   },
-  "draftPoolPerRound": [16, 8, 8],
+  "draftPoolPerRound": [24, 12, 12],
   "draftPicksPerPlayer": [8, 4, 4],
   "draftPoolSizeQuick": { "min": 20, "max": 24 },
   "tierDistribution": { "1": 0.50, "2": 0.30, "3": 0.15, "4": 0.05 },
