@@ -191,9 +191,14 @@ export function Draft() {
   const draftOrb = useCallback((orbUid: string) => {
     if (!isPlayerTurn) return;
     gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid }).then((result) => {
-      if (result.ok) { playSound('orbConfirm'); confirmPick(); }
+      if (result.ok) {
+        playSound('orbConfirm');
+        confirmPick();
+      } else {
+        cancelSelection();
+      }
     });
-  }, [isPlayerTurn, gateway, confirmPick]);
+  }, [isPlayerTurn, gateway, confirmPick, cancelSelection]);
 
   // ── Pointer state refs (mutable, no re-renders, no stale closures) ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
