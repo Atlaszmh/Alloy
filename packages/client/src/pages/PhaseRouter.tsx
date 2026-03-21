@@ -10,6 +10,9 @@ import { PostMatch } from './PostMatch';
 
 // Duration to keep Draft mounted after draft completes (for end-of-draft animation)
 const DRAFT_END_HOLD_MS = 6000;
+const SLIDE_OUT_MS = 400;
+const SLIDE_IN_MS = 400;
+const SLIDE_GAP_MS = 150;
 
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
@@ -18,6 +21,8 @@ export function PhaseRouter() {
   const prevPhaseRef = useRef<string | null>(null);
   // Delayed phase: keeps rendering the previous phase component during transitions
   const [heldPhase, setHeldPhase] = useState<string | null>(null);
+  // Slide transition: 'out' = old screen sliding left, 'in' = new screen sliding in from right
+  const [slideState, setSlideState] = useState<'idle' | 'out' | 'gap' | 'in'>('idle');
 
   // Always call hooks unconditionally — pass empty string if code is missing
   const gateway = useMatchGateway(code ?? '');
@@ -34,12 +39,34 @@ export function PhaseRouter() {
     prevPhaseRef.current = currentKind;
 
     if (prevKind && currentKind && prevKind !== currentKind) {
-      // When leaving draft, hold the draft component mounted for the end animation
+      // When leaving draft, hold the draft component mounted for the end animation,
+      // then slide out the draft screen and slide in the forge screen
       if (prevKind === 'draft' && currentKind === 'forge') {
         setHeldPhase('draft');
-        const holdTimer = setTimeout(() => setHeldPhase(null), DRAFT_END_HOLD_MS);
-        // Don't show the standard transition overlay — draft handles its own animation
-        return () => clearTimeout(holdTimer);
+        const timers: ReturnType<typeof setTimeout>[] = [];
+
+        // After the forge card animation finishes, start the slide-out
+        timers.push(setTimeout(() => {
+          setSlideState('out');
+        }, DRAFT_END_HOLD_MS));
+
+        // After slide-out completes, brief gap (blank)
+        timers.push(setTimeout(() => {
+          setSlideState('gap');
+          setHeldPhase(null); // swap to forge component
+        }, DRAFT_END_HOLD_MS + SLIDE_OUT_MS));
+
+        // After gap, slide in the forge screen
+        timers.push(setTimeout(() => {
+          setSlideState('in');
+        }, DRAFT_END_HOLD_MS + SLIDE_OUT_MS + SLIDE_GAP_MS));
+
+        // Reset to idle after slide-in completes
+        timers.push(setTimeout(() => {
+          setSlideState('idle');
+        }, DRAFT_END_HOLD_MS + SLIDE_OUT_MS + SLIDE_GAP_MS + SLIDE_IN_MS));
+
+        return () => timers.forEach(clearTimeout);
       }
 
       const labels: Record<string, string> = {
@@ -119,7 +146,20 @@ export function PhaseRouter() {
             </h1>
           </div>
         )}
-        {renderPhase()}
+        <div
+          style={{
+            height: '100%',
+            ...(slideState === 'out' ? {
+              animation: `slide-out-left ${SLIDE_OUT_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`,
+            } : slideState === 'gap' ? {
+              opacity: 0,
+            } : slideState === 'in' ? {
+              animation: `slide-in-right ${SLIDE_IN_MS}ms cubic-bezier(0, 0, 0.2, 1) forwards`,
+            } : undefined),
+          }}
+        >
+          {renderPhase()}
+        </div>
       </PhaseErrorBoundary>
     </GatewayProvider>
   );
