@@ -18,6 +18,8 @@ import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
 
 const DRAFT_TIMER_MS = 15_000;
 
+const ELEMENT_ORDER = ['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos', 'physical'];
+
 // ── Stockpile zone using GemChip ──
 
 function StockpileZone({
@@ -38,6 +40,14 @@ function StockpileZone({
   side: 'top' | 'bottom';
 }) {
   const emptyCount = Math.max(0, maxOrbs - orbs.length);
+  const newestUid = orbs.length > 0 ? orbs[orbs.length - 1].uid : null;
+  const sortedOrbs = [...orbs].sort((a, b) => {
+    const aAffix = affixMap.get(a.affixId);
+    const bAffix = affixMap.get(b.affixId);
+    const aEl = aAffix?.tags.find((t) => ELEMENT_ORDER.includes(t)) ?? 'physical';
+    const bEl = bAffix?.tags.find((t) => ELEMENT_ORDER.includes(t)) ?? 'physical';
+    return ELEMENT_ORDER.indexOf(aEl) - ELEMENT_ORDER.indexOf(bEl);
+  });
 
   return (
     <div
@@ -77,7 +87,7 @@ function StockpileZone({
       </div>
 
       <div className="grid grid-cols-4 gap-[3px]">
-        {orbs.map((orb, i) => {
+        {sortedOrbs.map((orb) => {
           const affix = affixMap.get(orb.affixId);
           if (!affix) return null;
           return (
@@ -87,7 +97,7 @@ function StockpileZone({
               affixName={affix.name.split(' ')[0]}
               statLabel={getStatLabel(affix, orb)}
               tags={affix.tags}
-              newest={i === orbs.length - 1 && orbs.length > 0}
+              newest={orb.uid === newestUid}
             />
           );
         })}
