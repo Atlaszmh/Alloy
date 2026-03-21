@@ -11,23 +11,27 @@ export interface GemSizeConfig {
 
 /**
  * Compute gem rendering sizes based on pool count.
- * Fewer gems = bigger gems. Matches approved mockup:
- *   ≤8:  110px, 4 cols (late draft / ranked R2-R3)
- *   ≤16: 100px, 4 cols (ranked R1)
- *   ≤20:  90px, 5 cols (mid quick)
- *   >20:  82px, 5 cols (quick full pool)
+ * Fewer gems = bigger gems. Tuned so all columns fit on screen:
+ *   ≤8:  100px, 4 cols (ranked R2-R3 late picks)
+ *   ≤12:  88px, 4 cols (ranked R2-R3 start)
+ *   ≤16:  82px, 4 cols (quick match mid)
+ *   ≤24:  68px, 5 cols (ranked R1 — 24 gems)
+ *   >24:  62px, 5 cols (quick full pool)
  */
 export function useGemSize(poolCount: number): GemSizeConfig {
   return useMemo(() => {
     if (poolCount <= 8) {
-      return { gemSize: 110, columns: 4, emojiSize: 40, statSize: 16, nameSize: 17, catSize: 14 };
+      return { gemSize: 100, columns: 4, emojiSize: 36, statSize: 15, nameSize: 15, catSize: 12 };
+    }
+    if (poolCount <= 12) {
+      return { gemSize: 88, columns: 4, emojiSize: 32, statSize: 14, nameSize: 14, catSize: 12 };
     }
     if (poolCount <= 16) {
-      return { gemSize: 100, columns: 4, emojiSize: 36, statSize: 15, nameSize: 16, catSize: 13 };
+      return { gemSize: 82, columns: 4, emojiSize: 30, statSize: 14, nameSize: 13, catSize: 11 };
     }
-    if (poolCount <= 20) {
-      return { gemSize: 90, columns: 5, emojiSize: 32, statSize: 14, nameSize: 14, catSize: 12 };
+    if (poolCount <= 24) {
+      return { gemSize: 68, columns: 5, emojiSize: 26, statSize: 12, nameSize: 11, catSize: 10 };
     }
-    return { gemSize: 82, columns: 5, emojiSize: 30, statSize: 14, nameSize: 13, catSize: 11 };
+    return { gemSize: 62, columns: 5, emojiSize: 24, statSize: 12, nameSize: 11, catSize: 10 };
   }, [poolCount]);
 }

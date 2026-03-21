@@ -375,10 +375,10 @@ export function Draft() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${gemSizing.columns}, 1fr)`,
+            gridTemplateColumns: `repeat(${gemSizing.columns}, minmax(0, 1fr))`,
             gap: 4,
             justifyItems: 'center',
-            alignContent: 'center',
+            alignContent: 'start',
             minHeight: '100%',
           }}
         >
