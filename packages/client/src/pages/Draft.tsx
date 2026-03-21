@@ -12,6 +12,7 @@ import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
+import { DRAG_THRESHOLD, classifyGesture } from './draft-gestures';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -194,40 +195,91 @@ export function Draft() {
     });
   }, [isPlayerTurn, gateway, confirmPick]);
 
-  // ── Drag handlers ──
-  const handleDragStart = useCallback((uid: string, e: React.PointerEvent) => {
+  // ── Pointer state refs (mutable, no re-renders, no stale closures) ──
+  const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
+  const hasDraggedRef = useRef(false);
+  const isOverDropZoneRef = useRef(false);
+  const selectedOrbUidRef = useRef(selectedOrbUid);
+
+  // Keep refs in sync with state
+  useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
+  useEffect(() => { isOverDropZoneRef.current = isOverDropZone; }, [isOverDropZone]);
+
+  // ── Pointer down: record start position + time, don't select yet ──
+  const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
     if (!isPlayerTurn) return;
     e.preventDefault();
-    setDragUid(uid);
-    setDragPos({ x: e.clientX, y: e.clientY });
-    selectOrb(uid);
-    playSound('dragStart');
-  }, [isPlayerTurn, selectOrb]);
+    pointerStartRef.current = { x: e.clientX, y: e.clientY, uid, time: Date.now() };
+    hasDraggedRef.current = false;
+  }, [isPlayerTurn]);
 
+  // ── Global pointer move + up listeners ──
   useEffect(() => {
-    if (!dragUid) return;
     const handleMove = (e: PointerEvent) => {
-      setDragPos({ x: e.clientX, y: e.clientY });
-      if (dropZoneRef.current) {
-        const rect = dropZoneRef.current.getBoundingClientRect();
-        setIsOverDropZone(
-          e.clientY >= rect.top && e.clientY <= rect.bottom &&
-          e.clientX >= rect.left && e.clientX <= rect.right,
-        );
+      const start = pointerStartRef.current;
+      if (!start) return;
+
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+
+      if (!hasDraggedRef.current && Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
+        hasDraggedRef.current = true;
+        setDragUid(start.uid);
+        selectOrb(start.uid);
+        playSound('dragStart');
+      }
+
+      if (hasDraggedRef.current) {
+        setDragPos({ x: e.clientX, y: e.clientY });
+        if (dropZoneRef.current) {
+          const rect = dropZoneRef.current.getBoundingClientRect();
+          const over = e.clientY >= rect.top && e.clientY <= rect.bottom &&
+                       e.clientX >= rect.left && e.clientX <= rect.right;
+          setIsOverDropZone(over);
+          isOverDropZoneRef.current = over;
+        }
       }
     };
+
     const handleUp = () => {
-      if (isOverDropZone && dragUid) { playSound('dropSuccess'); draftOrb(dragUid); }
-      setDragUid(null);
-      setIsOverDropZone(false);
+      const start = pointerStartRef.current;
+      if (!start) return;
+
+      if (hasDraggedRef.current) {
+        // Was dragging — check drop zone via ref (not stale state)
+        if (isOverDropZoneRef.current) {
+          playSound('dropSuccess');
+          draftOrb(start.uid);
+        }
+        setDragUid(null);
+        setIsOverDropZone(false);
+        isOverDropZoneRef.current = false;
+      } else {
+        // Not a drag — use classifyGesture to distinguish tap from hold
+        const holdDuration = Date.now() - start.time;
+        const gesture = classifyGesture(start, start, holdDuration);
+        if (gesture === 'tap') {
+          if (selectedOrbUidRef.current === start.uid) {
+            draftOrb(start.uid);
+          } else {
+            selectOrb(start.uid);
+            playSound('orbSelect');
+          }
+        }
+        // 'hold' → no-op (D04)
+      }
+
+      pointerStartRef.current = null;
+      hasDraggedRef.current = false;
     };
+
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
     return () => {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [dragUid, isOverDropZone, draftOrb]);
+  }, [draftOrb, selectOrb]);
 
   // ── AI turn ──
   // Use stable primitives in deps to avoid timer resets from object reference changes.
@@ -295,7 +347,7 @@ export function Draft() {
               boxShadow: isPlayerTurn ? '0 2px 8px rgba(212, 168, 52, 0.3)' : undefined,
             }}
           >
-            {isPlayerTurn ? 'YOUR PICK' : 'AI PICKING'}
+            {isPlayerTurn ? 'YOUR PICK' : 'OPPONENT PICKING'}
           </div>
           <span className="text-xs text-surface-300" style={{ fontFamily: 'var(--font-family-display)' }}>
             R{draftRound} · {pool.length} left
@@ -337,15 +389,7 @@ export function Draft() {
                 nameSize={gemSizing.nameSize}
                 catSize={gemSizing.catSize}
                 selected={orb.uid === selectedOrbUid}
-                onClick={() => {
-                  if (selectedOrbUid === orb.uid) {
-                    draftOrb(orb.uid);
-                  } else {
-                    selectOrb(orb.uid);
-                    playSound('orbSelect');
-                  }
-                }}
-                onPointerDown={(e) => handleDragStart(orb.uid, e)}
+                onPointerDown={(e) => handlePointerDown(orb.uid, e)}
               />
             );
           })}
