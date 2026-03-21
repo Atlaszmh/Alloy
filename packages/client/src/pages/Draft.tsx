@@ -156,8 +156,17 @@ export function Draft() {
 
   const gateway = useGateway();
   const [, forceUpdate] = useState(0);
+  const deferUpdateRef = useRef(false);
+  const pendingUpdateRef = useRef(false);
   useEffect(() => {
-    return gateway.subscribe(() => forceUpdate((n) => n + 1));
+    return gateway.subscribe(() => {
+      if (deferUpdateRef.current) {
+        // Animation in flight — queue the update for when it finishes
+        pendingUpdateRef.current = true;
+      } else {
+        forceUpdate((n) => n + 1);
+      }
+    });
   }, [gateway]);
 
   const matchState = gateway.getState();
@@ -258,13 +267,25 @@ export function Draft() {
       const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile) {
         const cachedPos = gemPositionsRef.current.get(removedOrb.uid);
-        // Get opponent stockpile position as the target
         const opRect = opponentZoneRef.current?.getBoundingClientRect();
         if (cachedPos && opRect) {
           const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
           setFlyingOrb({ orb: removedOrb, startPos: cachedPos, endPos });
           playSound('orbPickOpponent');
-          setTimeout(() => setFlyingOrb(null), 950);
+
+          // Defer gateway updates so the phase doesn't change mid-animation
+          deferUpdateRef.current = true;
+
+          setTimeout(() => {
+            playSound('dropSuccess');
+            setFlyingOrb(null);
+            // Flush deferred updates
+            deferUpdateRef.current = false;
+            if (pendingUpdateRef.current) {
+              pendingUpdateRef.current = false;
+              forceUpdate((n) => n + 1);
+            }
+          }, 950);
         }
       }
     }
@@ -477,7 +498,10 @@ export function Draft() {
       <div ref={opponentZoneRef}>
       <StockpileZone
         label="Opponent"
-        orbs={player1?.stockpile ?? []}
+        orbs={flyingOrb
+          ? (player1?.stockpile ?? []).filter((o) => o.uid !== flyingOrb.orb.uid)
+          : (player1?.stockpile ?? [])
+        }
         maxOrbs={picksPerPlayer}
         affixMap={affixMap}
         isActive={!isPlayerTurn}
