@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
@@ -11,6 +11,8 @@ import { PostMatch } from './PostMatch';
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
   const [, forceUpdate] = useState(0);
+  const [transitionLabel, setTransitionLabel] = useState<string | null>(null);
+  const prevPhaseRef = useRef<string | null>(null);
 
   // Always call hooks unconditionally — pass empty string if code is missing
   const gateway = useMatchGateway(code ?? '');
@@ -19,12 +21,33 @@ export function PhaseRouter() {
     return gateway.subscribe(() => forceUpdate((n) => n + 1));
   }, [gateway]);
 
+  const matchState = gateway.getState();
+
+  useEffect(() => {
+    const currentKind = matchState?.phase.kind ?? null;
+    const prevKind = prevPhaseRef.current;
+    prevPhaseRef.current = currentKind;
+
+    if (prevKind && currentKind && prevKind !== currentKind) {
+      const labels: Record<string, string> = {
+        forge: 'FORGE',
+        draft: 'DRAFT',
+        duel: 'DUEL',
+        adapt: 'ADAPT',
+      };
+      const label = labels[currentKind];
+      if (label) {
+        setTransitionLabel(label);
+        const timer = setTimeout(() => setTransitionLabel(null), 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [matchState?.phase.kind]);
+
   // After all hooks: handle missing code
   if (!code) {
     return <Navigate to="/queue" replace />;
   }
-
-  const matchState = gateway.getState();
 
   // Loading: gateway not ready yet
   if (!matchState) {
@@ -64,6 +87,23 @@ export function PhaseRouter() {
   return (
     <GatewayProvider value={gateway}>
       <PhaseErrorBoundary resetKey={phase.kind}>
+        {transitionLabel && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-surface-900/80"
+            style={{ animation: 'fadeInOut 1s ease-in-out forwards' }}
+          >
+            <h1
+              className="text-4xl font-black text-accent-400"
+              style={{
+                fontFamily: 'var(--font-family-display)',
+                textShadow: '0 0 30px rgba(212, 168, 52, 0.5)',
+                animation: 'phase-scale-in 0.3s ease-out',
+              }}
+            >
+              {transitionLabel}
+            </h1>
+          </div>
+        )}
         {renderPhase()}
       </PhaseErrorBoundary>
     </GatewayProvider>
