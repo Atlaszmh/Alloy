@@ -259,7 +259,7 @@ export function Draft() {
         if (cachedPos) {
           setFlyingOrb({ orb: removedOrb, startPos: cachedPos });
           playSound('orbPickOpponent');
-          setTimeout(() => setFlyingOrb(null), 500);
+          setTimeout(() => setFlyingOrb(null), 850);
         }
       }
     }
@@ -416,24 +416,33 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
-      {/* Flying gem — opponent pick animation */}
+      {/* Flying gem — opponent pick animation (starts as pool-sized GemCard, shrinks as it swoops) */}
       {flyingOrb && (() => {
         const affix = affixMap.get(flyingOrb.orb.affixId);
         if (!affix) return null;
+        const halfGem = gemSizing.gemSize / 2;
         return (
           <div
             className="pointer-events-none fixed z-50"
             style={{
-              left: flyingOrb.startPos.x - 20,
-              top: flyingOrb.startPos.y - 20,
-              animation: 'swoop-to-top 0.5s ease-in-out forwards',
+              left: flyingOrb.startPos.x - halfGem,
+              top: flyingOrb.startPos.y - halfGem,
+              animation: 'swoop-to-top 0.8s ease-in-out forwards',
             }}
           >
-            <GemChip
+            <GemCard
               affixId={flyingOrb.orb.affixId}
-              affixName={affix.name.split(' ')[0]}
-              statLabel={getStatLabel(affix, flyingOrb.orb)}
+              affixName={affix.name}
+              tier={flyingOrb.orb.tier}
+              category={affix.category}
               tags={affix.tags}
+              statLabel={getStatLabel(affix, flyingOrb.orb)}
+              gemSize={gemSizing.gemSize}
+              emojiSize={gemSizing.emojiSize}
+              statSize={gemSizing.statSize}
+              nameSize={gemSizing.nameSize}
+              catSize={gemSizing.catSize}
+              selected
             />
           </div>
         );
