@@ -307,7 +307,8 @@ export function Draft() {
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
     if (!isPlayerTurn || pool.length === 0) return;
-    draftOrb(pool[0].uid);
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    draftOrb(pool[randomIndex].uid);
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
