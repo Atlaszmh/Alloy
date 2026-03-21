@@ -421,26 +421,39 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
-      {/* Flying gem — opponent pick animation (starts as pool-sized GemCard, flies to opponent stockpile) */}
+      {/* Flying gem — opponent pick animation (JS-driven for smooth GPU compositing) */}
       {flyingOrb && (() => {
         const affix = affixMap.get(flyingOrb.orb.affixId);
         if (!affix) return null;
         const halfGem = gemSizing.gemSize / 2;
-        // Compute the translation delta from start to opponent stockpile
         const dx = flyingOrb.endPos.x - flyingOrb.startPos.x;
         const dy = flyingOrb.endPos.y - flyingOrb.startPos.y;
+        // Arc offset: swoop out 100px to the right at peak
+        const arc = 100;
         return (
           <div
             className="pointer-events-none fixed z-50"
+            ref={(el) => {
+              if (!el) return;
+              // Web Animations API — computes actual px values, GPU-composited
+              el.animate([
+                { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
+                { transform: `translate3d(${dx * 0.1 + arc * 0.6}px, ${dy * 0.15}px, 0) scale(0.9)`, opacity: 1 },
+                { transform: `translate3d(${dx * 0.3 + arc}px, ${dy * 0.4}px, 0) scale(0.7)`, opacity: 1 },
+                { transform: `translate3d(${dx * 0.6 + arc * 0.7}px, ${dy * 0.65}px, 0) scale(0.5)`, opacity: 0.95 },
+                { transform: `translate3d(${dx * 0.85 + arc * 0.3}px, ${dy * 0.85}px, 0) scale(0.35)`, opacity: 0.8 },
+                { transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.3)`, opacity: 0 },
+              ], {
+                duration: 900,
+                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+                fill: 'forwards',
+              });
+            }}
             style={{
               left: flyingOrb.startPos.x - halfGem,
               top: flyingOrb.startPos.y - halfGem,
-              '--swoop-dx': `${dx}px`,
-              '--swoop-dy': `${dy}px`,
               willChange: 'transform, opacity',
-              backfaceVisibility: 'hidden',
-              animation: 'swoop-to-stockpile 0.9s cubic-bezier(0.25, 0.1, 0.25, 1) forwards',
-            } as React.CSSProperties}
+            }}
           >
             <GemCard
               affixId={flyingOrb.orb.affixId}
