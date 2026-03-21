@@ -1,6 +1,8 @@
 import type { AffixCategory, AffixTier } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
 import { TIER_COLORS } from '@/shared/utils/element-theme';
+import { Tooltip } from './Tooltip';
+import { GemDetailPanel } from './GemDetailPanel';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}', cold: '\u{2744}', lightning: '\u{26A1}',
@@ -34,6 +36,7 @@ interface GemCardProps {
   statSize: number;        // px — stat value inside gem
   nameSize: number;        // px — name below gem
   catSize: number;         // px — category below name
+  description?: string;
   selected?: boolean;
   onClick?: () => void;
   onPointerDown?: (e: React.PointerEvent) => void;
@@ -51,6 +54,7 @@ export function GemCard({
   statSize,
   nameSize,
   catSize,
+  description,
   selected = false,
   onClick,
   onPointerDown,
@@ -62,7 +66,7 @@ export function GemCard({
   const categoryLabel = CATEGORY_LABELS[category];
   const tierColor = TIER_COLORS[tier] ?? TIER_COLORS[1];
 
-  return (
+  const card = (
     <div
       data-gem={affixId}
       className="flex flex-col items-center cursor-pointer transition-all duration-150 hover:scale-[1.08] hover:brightness-110 active:scale-[0.93]"
@@ -190,4 +194,19 @@ export function GemCard({
       </span>
     </div>
   );
+
+  return description ? (
+    <Tooltip content={
+      <GemDetailPanel
+        affixName={affixName}
+        description={description}
+        category={CATEGORY_LABELS[category] ?? category}
+        tags={tags}
+        statLabel={statLabel}
+        tier={tier}
+      />
+    }>
+      {card}
+    </Tooltip>
+  ) : card;
 }

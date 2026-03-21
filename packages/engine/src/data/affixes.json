@@ -2,6 +2,7 @@
   {
     "id": "flat_physical",
     "name": "Flat Physical Damage",
+    "description": "Adds raw physical damage to weapons and reinforces armor on defense.",
     "category": "offensive",
     "tags": ["physical", "base"],
     "tiers": {
@@ -30,6 +31,7 @@
   {
     "id": "fire_damage",
     "name": "Fire Damage",
+    "description": "Deals fire damage over time on weapons; boosts fire resistance on armor.",
     "category": "offensive",
     "tags": ["elemental", "fire", "dot"],
     "tiers": {
@@ -58,6 +60,7 @@
   {
     "id": "cold_damage",
     "name": "Cold Damage",
+    "description": "Inflicts cold damage with slowing effects on weapons; improves cold resistance on armor.",
     "category": "offensive",
     "tags": ["elemental", "cold", "control"],
     "tiers": {
@@ -86,6 +89,7 @@
   {
     "id": "lightning_damage",
     "name": "Lightning Damage",
+    "description": "Adds volatile lightning damage with wide value swings; grants lightning resistance on armor.",
     "category": "offensive",
     "tags": ["elemental", "lightning"],
     "tiers": {
@@ -114,6 +118,7 @@
   {
     "id": "poison_damage",
     "name": "Poison Damage",
+    "description": "Applies poison damage over time on weapons; increases poison resistance on armor.",
     "category": "offensive",
     "tags": ["dot", "poison"],
     "tiers": {
@@ -142,6 +147,7 @@
   {
     "id": "shadow_damage",
     "name": "Shadow Damage",
+    "description": "Deals percent-HP shadow damage on weapons; grants shadow resistance on armor.",
     "category": "offensive",
     "tags": ["shadow", "percentHP"],
     "tiers": {
@@ -170,6 +176,7 @@
   {
     "id": "chaos_damage",
     "name": "Chaos Damage",
+    "description": "Deals penetrating chaos damage that bypasses most defenses; adds chaos resistance on armor.",
     "category": "offensive",
     "tags": ["chaos", "penetrating"],
     "tiers": {
@@ -198,6 +205,7 @@
   {
     "id": "crit_chance",
     "name": "Critical Strike Chance",
+    "description": "Increases critical strike chance on weapons; improves crit avoidance on armor.",
     "category": "offensive",
     "tags": ["crit"],
     "tiers": {
@@ -226,6 +234,7 @@
   {
     "id": "crit_damage",
     "name": "Critical Strike Multiplier",
+    "description": "Boosts critical strike damage on weapons; reduces incoming crit damage on armor.",
     "category": "offensive",
     "tags": ["crit", "multiplier"],
     "tiers": {
@@ -254,6 +263,7 @@
   {
     "id": "attack_speed",
     "name": "Attack Speed",
+    "description": "Increases attack speed on weapons; grants dodge chance on armor.",
     "category": "offensive",
     "tags": ["speed", "utility"],
     "tiers": {
@@ -282,6 +292,7 @@
   {
     "id": "armor_penetration",
     "name": "Armor Penetration",
+    "description": "Ignores a portion of enemy armor on weapons; resists penetration effects on armor.",
     "category": "offensive",
     "tags": ["penetration"],
     "tiers": {
@@ -310,6 +321,7 @@
   {
     "id": "elemental_penetration",
     "name": "Elemental Penetration",
+    "description": "Bypasses enemy elemental resistances on weapons; boosts all elemental resistances on armor.",
     "category": "offensive",
     "tags": ["penetration", "elemental"],
     "tiers": {
@@ -338,6 +350,7 @@
   {
     "id": "flat_hp",
     "name": "Flat HP",
+    "description": "Increases maximum health on both weapons and armor.",
     "category": "defensive",
     "tags": ["defensive", "base"],
     "tiers": {
@@ -366,6 +379,7 @@
   {
     "id": "armor_rating",
     "name": "Armor",
+    "description": "Reduces incoming physical damage when socketed in armor.",
     "category": "defensive",
     "tags": ["defensive", "physical"],
     "tiers": {
@@ -394,6 +408,7 @@
   {
     "id": "block_chance",
     "name": "Block Chance",
+    "description": "Grants a chance to block attacks on armor; adds block-break on weapons.",
     "category": "defensive",
     "tags": ["defensive", "block"],
     "tiers": {
@@ -422,6 +437,7 @@
   {
     "id": "dodge_chance",
     "name": "Dodge Chance",
+    "description": "Grants a chance to completely evade incoming attacks on armor.",
     "category": "defensive",
     "tags": ["defensive", "evasion"],
     "tiers": {
@@ -450,6 +466,7 @@
   {
     "id": "barrier",
     "name": "Barrier",
+    "description": "Provides an absorb shield on armor; generates barrier on hit for weapons.",
     "category": "defensive",
     "tags": ["defensive", "barrier"],
     "tiers": {
@@ -478,6 +495,7 @@
   {
     "id": "hp_regen",
     "name": "HP Regeneration",
+    "description": "Adds passive health regeneration on armor; grants life on hit for weapons.",
     "category": "defensive",
     "tags": ["sustain"],
     "tiers": {
@@ -506,6 +524,7 @@
   {
     "id": "damage_reduction",
     "name": "Damage Reduction",
+    "description": "Provides flat percentage reduction to all incoming damage on armor.",
     "category": "defensive",
     "tags": ["defensive", "universal"],
     "tiers": {
@@ -534,6 +553,7 @@
   {
     "id": "fortify",
     "name": "Fortify",
+    "description": "Grants conditional damage reduction when fortify is active on armor.",
     "category": "defensive",
     "tags": ["defensive", "conditional"],
     "tiers": {
@@ -562,6 +582,7 @@
   {
     "id": "lifesteal",
     "name": "Lifesteal",
+    "description": "Heals for a percentage of damage dealt on weapons; recovers health from damage taken on armor.",
     "category": "sustain",
     "tags": ["sustain", "leech"],
     "tiers": {
@@ -590,6 +611,7 @@
   {
     "id": "thorns",
     "name": "Thorns",
+    "description": "Reflects damage back to attackers on both weapons and armor.",
     "category": "sustain",
     "tags": ["reactive", "reflect"],
     "tiers": {
@@ -618,6 +640,7 @@
   {
     "id": "life_on_kill",
     "name": "Life on Kill",
+    "description": "Restores health each time you defeat an enemy on both weapons and armor.",
     "category": "sustain",
     "tags": ["sustain", "kill"],
     "tiers": {
@@ -646,6 +669,7 @@
   {
     "id": "initiative",
     "name": "Movement/Initiative",
+    "description": "Increases turn priority on weapons; slows opponent actions on armor.",
     "category": "utility",
     "tags": ["utility", "tempo"],
     "tiers": {
@@ -674,6 +698,7 @@
   {
     "id": "dot_multiplier",
     "name": "DOT Multiplier",
+    "description": "Amplifies damage-over-time effects on weapons; reduces incoming DOT damage on armor.",
     "category": "utility",
     "tags": ["dot", "multiplier"],
     "tiers": {
@@ -702,6 +727,7 @@
   {
     "id": "stun_chance",
     "name": "Stun Chance",
+    "description": "Adds a chance to stun on hit with weapons; grants stun resistance on armor.",
     "category": "utility",
     "tags": ["control", "stun"],
     "tiers": {
@@ -730,6 +756,7 @@
   {
     "id": "slow_on_hit",
     "name": "Slow on Hit",
+    "description": "Slows enemies on hit with weapons; grants slow resistance on armor.",
     "category": "utility",
     "tags": ["control", "slow"],
     "tiers": {
@@ -758,6 +785,7 @@
   {
     "id": "chance_on_hit",
     "name": "Chance on Hit",
+    "description": "Triggers bonus proc damage when landing hits on both weapons and armor.",
     "category": "trigger",
     "tags": ["trigger", "proc"],
     "tiers": {
@@ -786,6 +814,7 @@
   {
     "id": "chance_on_taking_damage",
     "name": "Chance on Taking Damage",
+    "description": "Triggers a healing proc when taking damage, stronger on armor.",
     "category": "trigger",
     "tags": ["trigger", "reactive"],
     "tiers": {
@@ -814,6 +843,7 @@
   {
     "id": "chance_on_crit",
     "name": "Chance on Critical Strike",
+    "description": "Triggers bonus proc damage when landing critical strikes, stronger on weapons.",
     "category": "trigger",
     "tags": ["trigger", "crit"],
     "tiers": {
@@ -842,6 +872,7 @@
   {
     "id": "chance_on_block",
     "name": "Chance on Block",
+    "description": "Triggers proc damage on weapons or healing on armor when blocking an attack.",
     "category": "trigger",
     "tags": ["trigger", "block"],
     "tiers": {
@@ -870,6 +901,7 @@
   {
     "id": "chance_on_kill",
     "name": "Chance on Kill",
+    "description": "Triggers a healing proc when defeating an enemy on both weapons and armor.",
     "category": "trigger",
     "tags": ["trigger", "kill"],
     "tiers": {
@@ -898,6 +930,7 @@
   {
     "id": "chance_on_low_hp",
     "name": "Chance on Low HP",
+    "description": "Triggers a large healing proc when health drops low, stronger on armor.",
     "category": "trigger",
     "tags": ["trigger", "conditional"],
     "tiers": {

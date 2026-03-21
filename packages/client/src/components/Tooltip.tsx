@@ -29,7 +29,7 @@ export function Tooltip({ content, children }: TooltipProps) {
     >
       {children}
       {visible && (
-        <div className="animate-fade-in absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-lg border border-surface-500 bg-surface-700 px-3 py-2 text-sm whitespace-nowrap shadow-lg">
+        <div className="animate-fade-in absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-lg border border-surface-500 bg-surface-700 px-3 py-2 text-sm shadow-lg">
           {content}
         </div>
       )}

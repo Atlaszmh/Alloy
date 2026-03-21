@@ -17,6 +17,7 @@ export interface AffixTierData {
 export interface AffixDef {
   id: string; // e.g., 'fire_damage'
   name: string; // e.g., 'Fire Damage'
+  description: string; // Brief player-facing description of the affix
   category: AffixCategory;
   tags: AffixTag[];
   tiers: Record<AffixTier, AffixTierData>;
