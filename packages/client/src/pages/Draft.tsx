@@ -200,8 +200,22 @@ export function Draft() {
     }
   }, [draftRound]);
 
+  // Measure pool container for responsive sizing
+  const poolContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = poolContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // Auto-scaling gem sizes
-  const gemSizing = useGemSize(pool.length);
+  const gemSizing = useGemSize(pool.length, containerWidth);
 
   // Cache gem positions BEFORE React commits DOM changes
   const gemPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -429,7 +443,7 @@ export function Draft() {
       />
 
       {/* ═══ CENTER: Status bar ═══ */}
-      <div className="my-1 flex items-center justify-between px-1">
+      <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1">
         <div className="flex items-center gap-2">
           <div
             className={`rounded-lg px-3 py-1 text-xs font-bold ${
@@ -453,6 +467,7 @@ export function Draft() {
 
       {/* ═══ Pool grid — auto-scaling GemCards ═══ */}
       <div
+        ref={poolContainerRef}
         className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
         style={{ boxShadow: 'var(--shadow-inset)', padding: 6 }}
       >

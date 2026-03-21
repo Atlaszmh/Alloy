@@ -38,4 +38,15 @@ describe('useGemSize', () => {
     const { result: r8 } = renderHook(() => useGemSize(8));
     expect(r8.current.gemSize).toBeGreaterThan(r32.current.gemSize);
   });
+
+  it('shrinks gems when container is narrow', () => {
+    const { result } = renderHook(() => useGemSize(24, 300));
+    expect(result.current.gemSize).toBeLessThan(68);
+    expect(result.current.columns).toBe(5);
+  });
+
+  it('enforces minimum gem size of 48px', () => {
+    const { result } = renderHook(() => useGemSize(24, 100));
+    expect(result.current.gemSize).toBe(48);
+  });
 });
