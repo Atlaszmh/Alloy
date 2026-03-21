@@ -437,7 +437,9 @@ export function Draft() {
               top: flyingOrb.startPos.y - halfGem,
               '--swoop-dx': `${dx}px`,
               '--swoop-dy': `${dy}px`,
-              animation: 'swoop-to-stockpile 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+              willChange: 'transform, opacity',
+              backfaceVisibility: 'hidden',
+              animation: 'swoop-to-stockpile 0.9s cubic-bezier(0.25, 0.1, 0.25, 1) forwards',
             } as React.CSSProperties}
           >
             <GemCard

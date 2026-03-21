@@ -176,12 +176,12 @@
 }
 
 @keyframes swoop-to-stockpile {
-  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-  15%  { transform: translate(calc(var(--swoop-dx) * 0.03 + 35px), calc(var(--swoop-dy) * 0.08)) scale(0.95); opacity: 1; }
-  35%  { transform: translate(calc(var(--swoop-dx) * 0.2 + 50px), calc(var(--swoop-dy) * 0.35)) scale(0.75); opacity: 1; }
-  55%  { transform: translate(calc(var(--swoop-dx) * 0.55 + 35px), calc(var(--swoop-dy) * 0.6)) scale(0.55); opacity: 0.9; }
-  80%  { transform: translate(calc(var(--swoop-dx) * 0.9 + 8px), calc(var(--swoop-dy) * 0.9)) scale(0.35); opacity: 0.7; }
-  100% { transform: translate(var(--swoop-dx), var(--swoop-dy)) scale(0.3); opacity: 0; }
+  0%   { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  20%  { transform: translate3d(calc(var(--swoop-dx) * 0.05 + 60px), calc(var(--swoop-dy) * 0.1), 0) scale(0.92); opacity: 1; }
+  40%  { transform: translate3d(calc(var(--swoop-dx) * 0.25 + 100px), calc(var(--swoop-dy) * 0.4), 0) scale(0.7); opacity: 1; }
+  60%  { transform: translate3d(calc(var(--swoop-dx) * 0.6 + 70px), calc(var(--swoop-dy) * 0.65), 0) scale(0.5); opacity: 0.95; }
+  80%  { transform: translate3d(calc(var(--swoop-dx) * 0.9 + 20px), calc(var(--swoop-dy) * 0.9), 0) scale(0.35); opacity: 0.8; }
+  100% { transform: translate3d(var(--swoop-dx), var(--swoop-dy), 0) scale(0.3); opacity: 0; }
 }
 
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
