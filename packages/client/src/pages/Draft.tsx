@@ -8,6 +8,8 @@ import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
 import { useGemSize } from '@/hooks/useGemSize';
 import type { AffixDef, OrbInstance } from '@alloy/engine';
+import { AI_CONFIGS } from '@alloy/engine';
+import { calcAiDelay } from './ai-delay';
 import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
@@ -298,6 +300,8 @@ export function Draft() {
     if (!matchState || activePlayer !== 1 || !aiController) return;
     const currentState = gateway.getState();
     if (!currentState || currentState.phase.kind !== 'draft') return;
+    const baseDelay = AI_CONFIGS[aiController.tier].thinkingDelayMs;
+    const delay = calcAiDelay(baseDelay);
     const timeout = setTimeout(() => {
       const freshState = gateway.getState();
       if (!freshState || freshState.phase.kind !== 'draft') return;
@@ -305,7 +309,7 @@ export function Draft() {
         freshState.pool, freshState.players[1].stockpile, freshState.players[0].stockpile,
       );
       gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
-    }, 500);
+    }, delay);
     return () => clearTimeout(timeout);
   }, [pickIndex, activePlayer, aiController, gateway]);
 
