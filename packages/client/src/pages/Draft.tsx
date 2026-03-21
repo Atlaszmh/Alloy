@@ -401,17 +401,29 @@ export function Draft() {
     if (!currentState || currentState.phase.kind !== 'draft') return;
     const baseDelay = AI_CONFIGS[aiController.tier].thinkingDelayMs;
     const delay = calcAiDelay(baseDelay);
-    const timeout = setTimeout(() => {
+    const timeout = setTimeout(async () => {
       const freshState = gateway.getState();
       if (!freshState || freshState.phase.kind !== 'draft') return;
       const orbUid = aiController.pickOrb(
         freshState.pool, freshState.players[1].stockpile, freshState.players[0].stockpile,
       );
 
+      // Check if this is the last pick — if so, swoop first so Draft stays mounted
+      const currentPickIndex = freshState.phase.kind === 'draft' ? freshState.phase.pickIndex : 0;
+      const maxPicks = picksPerPlayer * 2;
+      const isLastPick = currentPickIndex + 1 >= maxPicks;
+
+      if (isLastPick) {
+        const pickedOrb = freshState.pool.find((o) => o.uid === orbUid);
+        if (pickedOrb) {
+          await startSwoopAnimation(pickedOrb);
+        }
+      }
+
       gateway.dispatch({ kind: 'draft_pick', player: 1, orbUid });
     }, delay);
     return () => clearTimeout(timeout);
-  }, [pickIndex, activePlayer, aiController, gateway]);
+  }, [pickIndex, activePlayer, aiController, gateway, picksPerPlayer, startSwoopAnimation]);
 
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
@@ -575,11 +587,15 @@ export function Draft() {
         {isPlayerTurn && <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} />}
       </div>
 
-      {/* ═══ Pool grid — auto-scaling GemCards ═══ */}
+      {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
       <div
         ref={poolContainerRef}
         className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
-        style={{ boxShadow: 'var(--shadow-inset)', padding: 6 }}
+        style={{
+          boxShadow: 'var(--shadow-inset)',
+          padding: 6,
+          visibility: draftEndGems ? 'hidden' : undefined,
+        }}
       >
         <div
           style={{
@@ -643,10 +659,30 @@ export function Draft() {
         />
       </div>
 
-      {/* ═══ DRAFT END ANIMATION — gems scatter + "FORGE" card slams down ═══ */}
+      {/* ═══ DRAFT END ANIMATION — forge card falls + scatters remaining gems ═══ */}
       {draftEndGems && (
-        <div className="fixed inset-0 z-[60] overflow-hidden pointer-events-none">
-          {/* Scattering gems — each flies outward with random physics */}
+        <div
+          className="fixed inset-0 z-[60] overflow-hidden pointer-events-none"
+          ref={(el) => {
+            if (!el) return;
+            // Screen shake on impact (starts at 600ms when card lands)
+            el.animate([
+              { transform: 'translate(0, 0)' },
+              { transform: 'translate(0, 0)', offset: 0.27 }, // wait for card to land
+              { transform: 'translate(-4px, 3px)', offset: 0.29 },
+              { transform: 'translate(5px, -2px)', offset: 0.32 },
+              { transform: 'translate(-3px, 4px)', offset: 0.35 },
+              { transform: 'translate(2px, -3px)', offset: 0.38 },
+              { transform: 'translate(-1px, 1px)', offset: 0.42 },
+              { transform: 'translate(0, 0)' },
+            ], {
+              duration: 2200,
+              easing: 'linear',
+              fill: 'forwards',
+            });
+          }}
+        >
+          {/* Remaining gems — scatter outward on impact (delayed until card lands) */}
           {draftEndGems.map((gem) => {
             const affix = affixMap.get(gem.orb.affixId);
             if (!affix) return null;
@@ -662,17 +698,17 @@ export function Draft() {
                       opacity: 1,
                     },
                     {
-                      transform: `translate3d(${gem.vx * 0.4}px, ${gem.vy * 0.4 + 80}px, 0) rotate(${gem.rotation * 0.5}deg) scale(0.8)`,
-                      opacity: 0.9,
-                      offset: 0.4,
+                      transform: `translate3d(${gem.vx * 0.5}px, ${gem.vy * 0.3 + 60}px, 0) rotate(${gem.rotation * 0.4}deg) scale(0.7)`,
+                      opacity: 0.85,
+                      offset: 0.5,
                     },
                     {
-                      transform: `translate3d(${gem.vx}px, ${gem.vy + 300}px, 0) rotate(${gem.rotation}deg) scale(0.3)`,
+                      transform: `translate3d(${gem.vx}px, ${gem.vy + 400}px, 0) rotate(${gem.rotation}deg) scale(0.2)`,
                       opacity: 0,
                     },
                   ], {
-                    duration: 1200,
-                    delay: gem.delay + 400,
+                    duration: 1000,
+                    delay: 650 + gem.delay, // gems scatter AFTER card impacts at ~600ms
                     easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
                     fill: 'forwards',
                   });
@@ -700,44 +736,46 @@ export function Draft() {
             );
           })}
 
-          {/* "FORGE" card — drops from above with a bounce */}
+          {/* "FORGE" card — falls from far above with heavy impact bounce */}
           <div
             className="fixed inset-0 flex items-center justify-center"
             ref={(el) => {
               if (!el) return;
+              // Heavy drop: starts way off screen, accelerates down, bounces on impact
               el.animate([
-                { transform: 'translateY(-120vh) scale(1.3)', opacity: 0 },
-                { transform: 'translateY(5%) scale(1.05)', opacity: 1, offset: 0.35 },
-                { transform: 'translateY(-2%) scale(0.98)', offset: 0.55 },
-                { transform: 'translateY(1%) scale(1.01)', offset: 0.7 },
-                { transform: 'translateY(0) scale(1)', opacity: 1, offset: 0.85 },
-                { transform: 'translateY(0) scale(1)', opacity: 1 },
+                { transform: 'translateY(-200vh) scale(1.4)', opacity: 0.5 },
+                { transform: 'translateY(0%) scale(1.08)', opacity: 1, offset: 0.28 }, // IMPACT
+                { transform: 'translateY(-6%) scale(0.96)', offset: 0.4 }, // bounce up
+                { transform: 'translateY(2%) scale(1.02)', offset: 0.52 }, // settle down
+                { transform: 'translateY(-1%) scale(0.99)', offset: 0.62 }, // small bounce
+                { transform: 'translateY(0%) scale(1)', opacity: 1, offset: 0.72 }, // settled
+                { transform: 'translateY(0%) scale(1)', opacity: 1 },
               ], {
-                duration: 800,
-                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                duration: 2200,
+                easing: 'cubic-bezier(0.12, 0, 0.39, 0)',
                 fill: 'forwards',
               });
             }}
           >
             <div
-              className="rounded-2xl border-2 border-accent-400 bg-surface-900/95 px-12 py-8 shadow-2xl"
+              className="rounded-2xl border-2 border-accent-400 bg-surface-900/95 px-14 py-10 shadow-2xl"
               style={{
-                boxShadow: '0 0 60px rgba(212, 168, 52, 0.4), 0 20px 40px rgba(0,0,0,0.5)',
+                boxShadow: '0 0 80px rgba(212, 168, 52, 0.5), 0 25px 50px rgba(0,0,0,0.6)',
               }}
             >
               <h1
-                className="text-5xl font-black text-accent-400"
+                className="text-6xl font-black text-accent-400"
                 style={{
                   fontFamily: 'var(--font-family-display)',
-                  textShadow: '0 0 30px rgba(212, 168, 52, 0.6)',
-                  letterSpacing: '0.1em',
+                  textShadow: '0 0 40px rgba(212, 168, 52, 0.7)',
+                  letterSpacing: '0.12em',
                 }}
               >
                 FORGE
               </h1>
               <p
-                className="mt-2 text-center text-sm font-semibold text-surface-300"
-                style={{ fontFamily: 'var(--font-family-display)' }}
+                className="mt-3 text-center text-base font-bold text-surface-300"
+                style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.15em' }}
               >
                 ROUND {draftRound}
               </p>
