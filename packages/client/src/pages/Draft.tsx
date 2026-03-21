@@ -683,7 +683,7 @@ export function Draft() {
 
             dropAnim.finished.then(() => {
               // ── IMPACT MOMENT ──
-              playSound('phaseTransition');
+              playSound('forgeSlam');
 
               // Phase 2: Card bounces and settles
               cardEl.animate([
