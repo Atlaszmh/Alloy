@@ -233,14 +233,15 @@ export function Draft() {
     return () => observer.disconnect();
   }, []);
 
-  // Lock gem sizing to the initial pool count for this round — don't resize as gems are picked
+  // Lock gem sizing to the initial pool count for this round — don't resize as gems are picked.
+  // Once the end animation triggers, freeze sizing so the scatter uses the same gem sizes.
   const initialPoolCountRef = useRef(0);
   if (pool.length > 0 && initialPoolCountRef.current === 0) {
     initialPoolCountRef.current = pool.length;
   }
-  // Reset when round changes
+  // Reset when round changes, but NOT if the end animation is active
   const prevRoundRef = useRef(draftRound);
-  if (prevRoundRef.current !== draftRound) {
+  if (prevRoundRef.current !== draftRound && !draftEndTriggeredRef.current) {
     prevRoundRef.current = draftRound;
     initialPoolCountRef.current = pool.length;
   }
