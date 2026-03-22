@@ -47,6 +47,8 @@ export function useOpponentPickAnimation({
 
   const prevPoolRef = useRef<OrbInstance[]>(pool);
   const [swoopingUid, setSwoopingUid] = useState<string | null>(null);
+  // Track UIDs that were manually swooped (e.g. last AI pick) so auto-detect skips them
+  const manuallySwoopedRef = useRef<Set<string>>(new Set());
 
   // Animate the actual DOM element to fly to opponent stockpile
   const animateGemToStockpile = useCallback((uid: string): Promise<void> => {
@@ -91,6 +93,7 @@ export function useOpponentPickAnimation({
 
   // Start swoop for a specific orb (called by AI turn effect for last pick)
   const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
+    manuallySwoopedRef.current.add(orb.uid);
     return animateGemToStockpile(orb.uid);
   }, [animateGemToStockpile]);
 
@@ -103,7 +106,7 @@ export function useOpponentPickAnimation({
     if (prevPool.length > 0 && pool.length < prevPool.length) {
       const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
       const inOpponentStockpile = removedOrb && opponentStockpile.some((o) => o.uid === removedOrb.uid);
-      if (removedOrb && inOpponentStockpile) {
+      if (removedOrb && inOpponentStockpile && !manuallySwoopedRef.current.has(removedOrb.uid)) {
         animateGemToStockpile(removedOrb.uid);
       }
     }

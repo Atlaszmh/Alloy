@@ -7,6 +7,7 @@ export default defineConfig({
     conditions: ['import', 'module', 'browser', 'default'],
   },
   server: {
+    host: true,
     port: 9098,
     strictPort: true,
   },

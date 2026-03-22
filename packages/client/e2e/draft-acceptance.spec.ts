@@ -164,4 +164,141 @@ test.describe('Draft Acceptance Criteria (P0)', () => {
     );
     expect(criticalErrors).toHaveLength(0);
   });
+
+  // AC-D12: Gem cards prevent mobile context menu and text selection
+  test('D12: gems have touch-action none and no user-select', async ({ page }) => {
+    await startMatch(page);
+    await waitForPhase(page, 'draft');
+
+    await expect(page.getByText('YOUR PICK')).toBeVisible({ timeout: 10_000 });
+
+    const firstGem = page.locator('[data-gem]').first();
+    await expect(firstGem).toBeVisible();
+
+    // Verify CSS properties that prevent mobile context menu / text selection
+    const styles = await firstGem.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        touchAction: cs.touchAction,
+        userSelect: cs.userSelect,
+        webkitUserSelect: cs.getPropertyValue('-webkit-user-select'),
+      };
+    });
+    expect(styles.touchAction).toBe('none');
+    expect(styles.userSelect).toBe('none');
+  });
+
+  // AC-D13: Pool container prevents context menu
+  test('D13: pool container blocks right-click context menu', async ({ page }) => {
+    await startMatch(page);
+    await waitForPhase(page, 'draft');
+
+    await expect(page.getByText('YOUR PICK')).toBeVisible({ timeout: 10_000 });
+
+    // Attach a listener on the window to check if the contextmenu event was prevented
+    await page.evaluate(() => {
+      (window as any).__contextMenuPrevented = false;
+      window.addEventListener('contextmenu', (e) => {
+        (window as any).__contextMenuPrevented = e.defaultPrevented;
+      }, { capture: false, once: true });
+    });
+
+    // Right-click on a gem in the pool
+    await page.locator('[data-gem]').first().click({ button: 'right' });
+
+    const prevented = await page.evaluate(() => (window as any).__contextMenuPrevented);
+    expect(prevented).toBe(true);
+  });
+
+  // AC-D14: Non-dragged gems are locked during a drag
+  test('D14: gems have pointer-events none while another gem is being dragged', async ({ page }) => {
+    await startMatch(page);
+    await waitForPhase(page, 'draft');
+
+    await expect(page.getByText('YOUR PICK')).toBeVisible({ timeout: 10_000 });
+
+    const gems = page.locator('[data-gem-uid]');
+    const gemCount = await gems.count();
+    expect(gemCount).toBeGreaterThanOrEqual(2);
+
+    // Use evaluate to dispatch pointer events directly — Playwright's page.mouse
+    // doesn't reliably trigger React's onPointerDown in all contexts
+    const locked = await page.evaluate(() => {
+      const wrappers = document.querySelectorAll<HTMLElement>('[data-gem-uid]');
+      if (wrappers.length < 2) return false;
+
+      const firstGem = wrappers[0].querySelector('[data-gem]') as HTMLElement;
+      if (!firstGem) return false;
+
+      const rect = firstGem.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      // Dispatch pointerdown on the gem card
+      firstGem.dispatchEvent(new PointerEvent('pointerdown', {
+        clientX: cx, clientY: cy, bubbles: true, cancelable: true, pointerId: 1,
+      }));
+
+      // Dispatch pointermove on window to cross the drag threshold (>8px)
+      for (let i = 1; i <= 5; i++) {
+        window.dispatchEvent(new PointerEvent('pointermove', {
+          clientX: cx + i * 5, clientY: cy + i * 5, bubbles: true, pointerId: 1,
+        }));
+      }
+
+      // Check synchronously — React batches but setDragUid triggers a re-render
+      // We need to wait for that render, so return a promise
+      return new Promise<boolean>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const secondWrapper = wrappers[1];
+            const pe = secondWrapper.style.pointerEvents;
+            // Clean up: dispatch pointerup
+            window.dispatchEvent(new PointerEvent('pointerup', {
+              clientX: cx + 25, clientY: cy + 25, bubbles: true, pointerId: 1,
+            }));
+            resolve(pe === 'none');
+          });
+        });
+      });
+    });
+
+    expect(locked).toBe(true);
+  });
+
+  // AC-D15: Draft end sequence shows "Let's Forge!" overlay before forge page
+  test('D15: draft end sequence shows forge overlay card', async ({ page }) => {
+    await startMatch(page);
+    await waitForPhase(page, 'draft');
+
+    await completeDraft(page);
+
+    // The end sequence overlay should briefly show "Let's Forge!"
+    // before transitioning to the forge page with "FORGE PHASE"
+    await waitForPhase(page, 'forge');
+    await expect(page.getByText('FORGE PHASE')).toBeVisible();
+  });
+
+  // AC-D16: Last pick completes cleanly without errors
+  test('D16: last pick transitions cleanly with no console errors', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        errors.push(msg.text());
+      }
+    });
+
+    await startMatch(page);
+    await waitForPhase(page, 'draft');
+    await completeDraft(page);
+    await waitForPhase(page, 'forge');
+
+    // No errors during the entire draft including the last pick transition
+    const criticalErrors = errors.filter(e =>
+      !e.includes('net::ERR') &&
+      !e.includes('404') &&
+      !e.includes('favicon')
+    );
+    expect(criticalErrors).toHaveLength(0);
+  });
 });

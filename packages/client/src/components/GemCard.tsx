@@ -75,6 +75,9 @@ export function GemCard({
       className="flex flex-col items-center cursor-pointer transition-all duration-150 hover:scale-[1.08] hover:brightness-110 active:scale-[0.93]"
       style={{
         touchAction: 'none',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
         filter: selected ? `drop-shadow(0 0 14px ${colors.glow})` : undefined,
       }}
       onClick={onClick}

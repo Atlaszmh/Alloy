@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { OrbInstance } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
@@ -17,6 +17,8 @@ interface UseDraftEndSequenceOptions {
   phase: { kind: string } | null;
   draftRound: number;
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;
+  /** UID of gem currently swooping — end sequence waits for this to clear */
+  swoopingUid: string | null;
 }
 
 interface UseDraftEndSequenceResult {
@@ -31,11 +33,13 @@ export function useDraftEndSequence({
   phase,
   draftRound,
   gemPositionsRef,
+  swoopingUid,
 }: UseDraftEndSequenceOptions): UseDraftEndSequenceResult {
   const [isActive, setIsActive] = useState(false);
 
   // Snapshot pool UIDs for scatter physics — keep last non-empty pool
   const triggeredRef = useRef(false);
+  const pendingForgeRef = useRef(false);
   const scatterPhysicsRef = useRef<ScatterPhysics[]>([]);
   const lastPoolUidsRef = useRef<string[]>([]);
 
@@ -93,14 +97,30 @@ export function useDraftEndSequence({
     }
   }, []);
 
-  // Detect draft completion and trigger animation
+  // Detect draft completion and trigger animation (wait for any in-flight swoop)
   useLayoutEffect(() => {
     if (phase?.kind === 'forge' && !triggeredRef.current) {
+      if (swoopingUid) {
+        // A swoop is still in flight — defer until it clears
+        pendingForgeRef.current = true;
+      } else {
+        triggeredRef.current = true;
+        pendingForgeRef.current = false;
+        scatterPhysicsRef.current = generateScatterPhysics();
+        setIsActive(true);
+      }
+    }
+  });
+
+  // Fire deferred forge trigger once swoop completes
+  useEffect(() => {
+    if (pendingForgeRef.current && !swoopingUid && !triggeredRef.current) {
       triggeredRef.current = true;
+      pendingForgeRef.current = false;
       scatterPhysicsRef.current = generateScatterPhysics();
       setIsActive(true);
     }
-  });
+  }, [swoopingUid, generateScatterPhysics]);
 
   // Build overlay — ONLY contains the forge card, no duplicate gems
   let overlayElement: React.ReactNode = null;
@@ -217,7 +237,7 @@ export function useDraftEndSequence({
                 letterSpacing: '0.12em',
               }}
             >
-              FORGE
+              Let's Forge!
             </h1>
             <p
               className="mt-3 text-center text-base font-bold text-surface-300"

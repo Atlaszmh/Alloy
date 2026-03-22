@@ -222,6 +222,7 @@ export function Draft() {
     phase,
     draftRound,
     gemPositionsRef,
+    swoopingUid,
   });
 
   // Max orbs per player for the current draft round
@@ -243,6 +244,44 @@ export function Draft() {
     }
   }, [isPlayerTurn, gateway, confirmPick, cancelSelection]);
 
+  // ── Swoop gem to player's stockpile (used for double-tap picks) ──
+  const swoopToPlayerStockpile = useCallback((uid: string) => {
+    const el = document.querySelector(`[data-gem-uid="${uid}"]`) as HTMLElement;
+    if (!el || !dropZoneRef.current) {
+      // Fallback: just dispatch without animation
+      draftOrb(uid);
+      return;
+    }
+
+    const gemRect = el.getBoundingClientRect();
+    const targetRect = dropZoneRef.current.getBoundingClientRect();
+    const dx = (targetRect.left + targetRect.width / 2) - (gemRect.left + gemRect.width / 2);
+    const dy = (targetRect.top + targetRect.height / 2) - (gemRect.top + gemRect.height / 2);
+
+    // Switch to fixed so it escapes the grid container
+    el.style.position = 'fixed';
+    el.style.left = `${gemRect.left}px`;
+    el.style.top = `${gemRect.top}px`;
+    el.style.width = `${gemRect.width}px`;
+    el.style.zIndex = '999';
+    el.style.filter = 'drop-shadow(0 0 14px rgba(212, 168, 52, 0.5))';
+
+    playSound('orbSelect');
+
+    el.animate([
+      { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
+      { transform: `translate3d(${dx * 0.3 - 60}px, ${dy * 0.3}px, 0) scale(0.85)`, opacity: 1 },
+      { transform: `translate3d(${dx * 0.7 - 30}px, ${dy * 0.7}px, 0) scale(0.5)`, opacity: 0.9 },
+      { transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.3)`, opacity: 0 },
+    ], {
+      duration: 500,
+      easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+      fill: 'forwards',
+    }).finished.then(() => {
+      draftOrb(uid);
+    });
+  }, [draftOrb]);
+
   // ── Pointer state refs (mutable, no re-renders, no stale closures) ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
   const hasDraggedRef = useRef(false);
@@ -255,6 +294,8 @@ export function Draft() {
   // ── Pointer down: record start position + time, don't select yet ──
   const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
     if (!isPlayerTurn) return;
+    // Block new interactions while a gem is being dragged
+    if (pointerStartRef.current && hasDraggedRef.current) return;
     e.preventDefault();
     pointerStartRef.current = { x: e.clientX, y: e.clientY, uid, time: Date.now() };
     hasDraggedRef.current = false;
@@ -357,7 +398,8 @@ export function Draft() {
         if (holdDuration < HOLD_THRESHOLD) {
           // Short press = tap — handle selection
           if (selectedOrbUidRef.current === start.uid) {
-            draftOrb(start.uid);
+            // Second tap — swoop the gem to player's stockpile then pick
+            swoopToPlayerStockpile(start.uid);
           } else {
             selectOrb(start.uid);
             playSound('orbSelect');
@@ -376,7 +418,7 @@ export function Draft() {
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [draftOrb, selectOrb]);
+  }, [draftOrb, selectOrb, swoopToPlayerStockpile]);
 
   // ── AI turn ──
   const pickIndex = phase?.kind === 'draft' ? phase.pickIndex : -1;
@@ -468,6 +510,7 @@ export function Draft() {
           boxShadow: 'var(--shadow-inset)',
           padding: 6,
         }}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <div
           style={{
@@ -505,7 +548,12 @@ export function Draft() {
                     damping: 25,
                     delay: index * 0.025,
                   }}
-                  style={{ gridColumn: col, gridRow: row }}
+                  style={{
+                    gridColumn: col,
+                    gridRow: row,
+                    // Lock non-dragged gems while a drag is in progress
+                    pointerEvents: dragUid && orb.uid !== dragUid ? 'none' : undefined,
+                  }}
                 >
                   <GemCard
                     affixId={orb.affixId}
