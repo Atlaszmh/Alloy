@@ -177,16 +177,6 @@
 
 /* swoop-to-stockpile: now driven by Web Animations API in Draft.tsx for smooth GPU compositing */
 
-@keyframes slide-out-left {
-  0%   { transform: translateX(0); opacity: 1; }
-  100% { transform: translateX(-110%); opacity: 0.3; }
-}
-
-@keyframes slide-in-right {
-  0%   { transform: translateX(110%); opacity: 0.3; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 
 .app-shell {
