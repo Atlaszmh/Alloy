@@ -464,9 +464,16 @@ export function Draft() {
     vx: number; vy: number; rotation: number; delay: number;
   }[] | null>(null);
 
+  // Snapshot the pool while still in draft phase — used for scatter animation
+  // so we animate the gems that were ACTUALLY on screen, not whatever pool exists after phase change
+  const lastDraftPoolRef = useRef<OrbInstance[]>([]);
+  if (phase?.kind === 'draft' && pool.length > 0) {
+    lastDraftPoolRef.current = pool;
+  }
+
   // Trigger the draft-end animation: capture remaining gems + positions, show "FORGE" slam
   const startDraftEndAnimation = useCallback((): Promise<void> => {
-    const remaining = pool
+    const remaining = lastDraftPoolRef.current
       .map((orb) => {
         const pos = gemPositionsRef.current.get(orb.uid);
         if (!pos) return null;
@@ -494,7 +501,7 @@ export function Draft() {
       // Resolve immediately — PhaseRouter controls the timing via DRAFT_END_HOLD_MS
       resolve();
     });
-  }, [pool]);
+  }, []); // no deps — reads from lastDraftPoolRef and gemPositionsRef
 
   // Detect draft completion and trigger end animation.
   // CRITICAL: We must hide the pool grid via direct DOM manipulation in useLayoutEffect
