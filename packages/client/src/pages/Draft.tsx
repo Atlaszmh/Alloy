@@ -458,7 +458,6 @@ export function Draft() {
             ROUND {draftRound} DRAFT · {pool.length} left
           </span>
         </div>
-        {isPlayerTurn && <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} />}
       </div>
 
       {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
@@ -527,10 +526,23 @@ export function Draft() {
         </div>
       </div>
 
-      {/* Instruction */}
-      <p className="my-0.5 text-center text-[10px] tracking-wide" style={{ color: 'var(--color-bronze-400)' }}>
-        Drag gems down · tap twice to pick
-      </p>
+      {/* ═══ Timer bar — fixed height to prevent layout shift ═══ */}
+      <div className="my-0.5" style={{ minHeight: 32 }}>
+        {isPlayerTurn ? (
+          <div className="flex items-center justify-between px-2">
+            <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-bronze-400)' }}>
+              Drag gems down · tap twice to pick
+            </p>
+            <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center">
+            <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-surface-500)' }}>
+              Waiting for opponent...
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* ═══ BOTTOM: Player drop zone ═══ */}
       <div ref={dropZoneRef}>
