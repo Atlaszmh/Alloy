@@ -233,8 +233,18 @@ export function Draft() {
     return () => observer.disconnect();
   }, []);
 
-  // Auto-scaling gem sizes
-  const gemSizing = useGemSize(pool.length, containerWidth);
+  // Lock gem sizing to the initial pool count for this round — don't resize as gems are picked
+  const initialPoolCountRef = useRef(0);
+  if (pool.length > 0 && initialPoolCountRef.current === 0) {
+    initialPoolCountRef.current = pool.length;
+  }
+  // Reset when round changes
+  const prevRoundRef = useRef(draftRound);
+  if (prevRoundRef.current !== draftRound) {
+    prevRoundRef.current = draftRound;
+    initialPoolCountRef.current = pool.length;
+  }
+  const gemSizing = useGemSize(initialPoolCountRef.current || pool.length, containerWidth);
 
   // Cache gem positions — merge into existing cache so positions from
   // previous renders survive (needed for opponent pick animation, where the
