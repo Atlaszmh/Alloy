@@ -41,10 +41,13 @@ export function useOpponentPickAnimation({
   useLayoutEffect(() => {
     const positions = gemPositionsRef.current;
     for (const orb of pool) {
-      const el = document.querySelector(`[data-gem-uid="${orb.uid}"]`);
+      // Query the GemCard's outer div (data-gem), not the motion.div wrapper (data-gem-uid),
+      // because the grid cell may be wider than the GemCard content due to 1fr columns
+      const el = document.querySelector(`[data-gem-uid="${orb.uid}"] [data-gem]`) ??
+                 document.querySelector(`[data-gem-uid="${orb.uid}"]`);
       if (el) {
         const rect = el.getBoundingClientRect();
-        positions.set(orb.uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+        positions.set(orb.uid, { x: rect.left, y: rect.top });
       }
     }
   }, [pool]);
@@ -100,7 +103,6 @@ export function useOpponentPickAnimation({
   if (flyingOrb) {
     const affix = affixMap.get(flyingOrb.orb.affixId);
     if (affix) {
-      const halfGem = gemSizing.gemSize / 2;
       const dx = flyingOrb.endPos.x - flyingOrb.startPos.x;
       const dy = flyingOrb.endPos.y - flyingOrb.startPos.y;
       // Arc offset: swoop out 100px to the right at peak
@@ -125,8 +127,8 @@ export function useOpponentPickAnimation({
             });
           }}
           style={{
-            left: flyingOrb.startPos.x - halfGem,
-            top: flyingOrb.startPos.y - halfGem,
+            left: flyingOrb.startPos.x,
+            top: flyingOrb.startPos.y,
             willChange: 'transform, opacity',
           }}
         >

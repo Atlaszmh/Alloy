@@ -241,8 +241,8 @@ export function useDraftEndSequence({
               data-scatter-gem
               className="fixed"
               style={{
-                left: gem.pos.x - sizing.gemSize / 2,
-                top: gem.pos.y - sizing.gemSize / 2,
+                left: gem.pos.x,
+                top: gem.pos.y,
                 willChange: 'transform, opacity',
               }}
             >
