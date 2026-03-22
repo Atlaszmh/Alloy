@@ -16,6 +16,7 @@
     "@alloy/engine": "workspace:*",
     "@supabase/supabase-js": "^2.99.2",
     "@types/howler": "^2.2.12",
+    "framer-motion": "^12.38.0",
     "howler": "^2.2.4",
     "pixi.js": "^8.0.0",
     "react": "^19.0.0",
