@@ -47,25 +47,30 @@ export function Timer({ durationMs, onExpire, paused = false, className = '' }: 
       : '';
 
   return (
-    <div className={`flex flex-col items-center gap-0.5 ${className}`}>
-      {/* Number */}
-      <div
-        className={`stat-number text-lg ${textColor} ${pulseClass}`}
-      >
-        {seconds}s
+    <div className={`flex flex-col gap-1 ${className}`}>
+      {/* Label + countdown */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] tracking-wide" style={{ color: 'var(--color-bronze-400)' }}>
+          Drag gems down · tap twice to pick
+        </span>
+        <span
+          className={`stat-number text-sm font-bold ${textColor} ${pulseClass}`}
+          style={{ fontFamily: 'var(--font-family-display)', minWidth: 28, textAlign: 'right' }}
+        >
+          {seconds}s
+        </span>
       </div>
 
-      {/* Progress bar */}
+      {/* Full-width progress bar */}
       <div
-        className="h-1 overflow-hidden rounded-full bg-surface-600"
-        style={{ width: 48 }}
+        className="h-1.5 overflow-hidden rounded-full bg-surface-600"
       >
         <div
           className="h-full rounded-full transition-all duration-200"
           style={{
             width: `${progress * 100}%`,
             backgroundColor: barColor,
-            boxShadow: isUrgent ? `0 0 6px ${barColor}` : undefined,
+            boxShadow: isUrgent ? `0 0 8px ${barColor}` : undefined,
           }}
         />
       </div>

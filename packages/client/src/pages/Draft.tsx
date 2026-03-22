@@ -526,17 +526,12 @@ export function Draft() {
         </div>
       </div>
 
-      {/* ═══ Timer bar — fixed height to prevent layout shift ═══ */}
-      <div className="my-0.5" style={{ minHeight: 32 }}>
+      {/* ═══ Timer bar — full width, fixed height to prevent layout shift ═══ */}
+      <div className="mx-1 my-0.5" style={{ minHeight: 28 }}>
         {isPlayerTurn ? (
-          <div className="flex items-center justify-between px-2">
-            <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-bronze-400)' }}>
-              Drag gems down · tap twice to pick
-            </p>
-            <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} />
-          </div>
+          <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
         ) : (
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center" style={{ minHeight: 28 }}>
             <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-surface-500)' }}>
               Waiting for opponent...
             </p>
