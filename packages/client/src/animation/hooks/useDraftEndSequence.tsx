@@ -118,6 +118,9 @@ export function useDraftEndSequence({
         data-draft-end-container
         ref={(container) => {
           if (!container) return;
+          // Guard: only run the orchestrator once (React may call ref callback on re-renders)
+          if (container.dataset.orchestrated) return;
+          container.dataset.orchestrated = 'true';
           // ── ORCHESTRATOR: chain animations with .finished promises ──
           const cardEl = container.querySelector('[data-forge-card]') as HTMLElement;
           const gemEls = container.querySelectorAll('[data-scatter-gem]') as NodeListOf<HTMLElement>;

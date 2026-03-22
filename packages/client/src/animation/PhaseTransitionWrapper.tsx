@@ -17,8 +17,11 @@ export function PhaseTransitionWrapper({
         initial={{ x: '100%', opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: '-100%', opacity: 0 }}
-        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-        style={{ height: '100%' }}
+        transition={{
+          duration: 0.4,
+          ease: [0.4, 0, 0.2, 1],
+        }}
+        style={{ height: '100%', overflow: 'hidden' }}
       >
         {children}
       </motion.div>

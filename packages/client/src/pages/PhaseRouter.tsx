@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
@@ -8,6 +8,9 @@ import { Forge } from './Forge';
 import { Duel } from './Duel';
 import { Adapt } from './Adapt';
 import { PostMatch } from './PostMatch';
+
+// How long to keep Draft mounted for the forge slam animation before sliding out
+const DRAFT_EXIT_DELAY_MS = 5500;
 
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
@@ -42,8 +45,33 @@ export function PhaseRouter() {
   const phase = matchState.phase;
   const phaseKey = phase.kind + ('round' in phase ? `-r${phase.round}` : '');
 
+  // Delayed phase key: holds the old key during draft→forge so Draft stays mounted
+  // for the forge slam animation. After the delay, the key updates and AnimatePresence
+  // triggers the slide transition.
+  const [displayPhaseKey, setDisplayPhaseKey] = useState(phaseKey);
+  const [displayPhaseKind, setDisplayPhaseKind] = useState(phase.kind);
+  const prevPhaseKindRef = useRef(phase.kind);
+
+  useEffect(() => {
+    const prevKind = prevPhaseKindRef.current;
+    prevPhaseKindRef.current = phase.kind;
+
+    if (prevKind === 'draft' && phase.kind === 'forge') {
+      // Delay the key update so Draft stays mounted for forge slam
+      const timer = setTimeout(() => {
+        setDisplayPhaseKey(phaseKey);
+        setDisplayPhaseKind(phase.kind);
+      }, DRAFT_EXIT_DELAY_MS);
+      return () => clearTimeout(timer);
+    }
+
+    // For all other transitions, update immediately
+    setDisplayPhaseKey(phaseKey);
+    setDisplayPhaseKind(phase.kind);
+  }, [phaseKey, phase.kind]);
+
   function renderPhase() {
-    switch (phase.kind) {
+    switch (displayPhaseKind) {
       case 'draft':
         return <Draft />;
       case 'forge':
@@ -63,7 +91,7 @@ export function PhaseRouter() {
   return (
     <GatewayProvider value={gateway}>
       <PhaseErrorBoundary resetKey={phase.kind}>
-        <PhaseTransitionWrapper phaseKey={phaseKey}>
+        <PhaseTransitionWrapper phaseKey={displayPhaseKey}>
           {renderPhase()}
         </PhaseTransitionWrapper>
       </PhaseErrorBoundary>
