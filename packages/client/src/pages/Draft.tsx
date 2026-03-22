@@ -466,8 +466,12 @@ export function Draft() {
 
   // Snapshot the pool while still in draft phase — used for scatter animation
   // so we animate the gems that were ACTUALLY on screen, not whatever pool exists after phase change
+  // Snapshot the pool for the scatter animation. Always keep the last non-empty pool
+  // so it survives the phase change to forge (where pool may be empty/different).
+  // Once the end animation has been triggered, stop updating so we keep the final state.
+  const draftEndTriggeredRef = useRef(false);
   const lastDraftPoolRef = useRef<OrbInstance[]>([]);
-  if (phase?.kind === 'draft' && pool.length > 0) {
+  if (pool.length > 0 && !draftEndTriggeredRef.current) {
     lastDraftPoolRef.current = pool;
   }
 
@@ -507,7 +511,6 @@ export function Draft() {
   // CRITICAL: We must hide the pool grid via direct DOM manipulation in useLayoutEffect
   // BEFORE the browser paints. Calling setDraftEndGems alone would schedule a new render,
   // allowing the browser to paint the reflowed grid first (causing a visual blink).
-  const draftEndTriggeredRef = useRef(false);
   useLayoutEffect(() => {
     const currentPhase = gateway.getState()?.phase;
     if (currentPhase?.kind === 'forge' && !draftEndTriggeredRef.current) {
