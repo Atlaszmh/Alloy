@@ -280,16 +280,28 @@ export function Draft() {
         // Grab the actual gem element and prepare it for dragging
         draggedEl = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement;
         if (draggedEl) {
-          draggedEl.style.zIndex = '50';
-          draggedEl.style.position = 'relative';
+          // Capture current position before switching to fixed
+          const rect = draggedEl.getBoundingClientRect();
+          draggedEl.dataset.origLeft = String(rect.left);
+          draggedEl.dataset.origTop = String(rect.top);
+          // Switch to fixed positioning so it breaks out of the overflow:hidden container
+          draggedEl.style.position = 'fixed';
+          draggedEl.style.left = `${rect.left}px`;
+          draggedEl.style.top = `${rect.top}px`;
+          draggedEl.style.width = `${rect.width}px`;
+          draggedEl.style.zIndex = '999';
           draggedEl.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
           draggedEl.style.pointerEvents = 'none';
         }
       }
 
       if (hasDraggedRef.current && draggedEl) {
-        // Move the actual gem element
-        draggedEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.08)`;
+        // Move the gem relative to where it started
+        const origLeft = parseFloat(draggedEl.dataset.origLeft ?? '0');
+        const origTop = parseFloat(draggedEl.dataset.origTop ?? '0');
+        draggedEl.style.left = `${origLeft + dx}px`;
+        draggedEl.style.top = `${origTop + dy}px`;
+        draggedEl.style.transform = 'scale(1.08)';
 
         if (dropZoneRef.current) {
           const rect = dropZoneRef.current.getBoundingClientRect();
@@ -303,11 +315,16 @@ export function Draft() {
 
     const resetDraggedEl = () => {
       if (draggedEl) {
-        draggedEl.style.zIndex = '';
         draggedEl.style.position = '';
+        draggedEl.style.left = '';
+        draggedEl.style.top = '';
+        draggedEl.style.width = '';
+        draggedEl.style.zIndex = '';
         draggedEl.style.transform = '';
         draggedEl.style.filter = '';
         draggedEl.style.pointerEvents = '';
+        delete draggedEl.dataset.origLeft;
+        delete draggedEl.dataset.origTop;
         draggedEl = null;
       }
     };
@@ -395,7 +412,7 @@ export function Draft() {
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
   return (
-    <div className="page-enter flex h-full flex-col p-2">
+    <div className="page-enter flex h-full flex-col p-2" style={{ overflow: 'hidden' }}>
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* Drag moves the actual gem element via direct DOM manipulation */}
 
@@ -437,7 +454,7 @@ export function Draft() {
       {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
       <div
         ref={poolContainerRef}
-        className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
+        className="flex-1 overflow-hidden rounded-xl border border-surface-600 bg-surface-800"
         style={{
           boxShadow: 'var(--shadow-inset)',
           padding: 6,

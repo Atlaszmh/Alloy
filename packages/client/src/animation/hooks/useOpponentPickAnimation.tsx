@@ -62,9 +62,13 @@ export function useOpponentPickAnimation({
     setSwoopingUid(uid);
     playSound('orbPickOpponent');
 
-    // Set z-index so it flies above other gems
-    el.style.zIndex = '50';
-    el.style.position = 'relative';
+    // Switch to fixed positioning so it escapes the overflow:hidden pool container
+    const rect = el.getBoundingClientRect();
+    el.style.position = 'fixed';
+    el.style.left = `${rect.left}px`;
+    el.style.top = `${rect.top}px`;
+    el.style.width = `${rect.width}px`;
+    el.style.zIndex = '999';
 
     const anim = el.animate([
       { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
