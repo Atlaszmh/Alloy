@@ -170,9 +170,9 @@ export function useDraftEndSequence({
           }).then(() => {
             // ── IMPACT MOMENT ──
             playSound('forgeSlam');
-            playSound('dropSuccess'); // gem scatter noise alongside the impact
-            // Stagger a second scatter sound for a richer "gems flying" effect
-            setTimeout(() => playSound('dropSuccess'), 120);
+            playSound('gemScatter'); // backgammon tiles scattering
+            // Stagger a second scatter for a richer "gems flying" effect
+            setTimeout(() => playSound('gemScatter'), 150);
 
             // Phase 2: Card bounces and settles
             cardEl.animate([
