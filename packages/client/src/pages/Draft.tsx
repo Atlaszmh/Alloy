@@ -336,9 +336,18 @@ export function Draft() {
       if (hasDraggedRef.current) {
         if (isOverDropZoneRef.current) {
           playSound('dropSuccess');
+          // Hide the gem immediately — don't reset to grid position
+          // (AnimatePresence exit would show a fading ghost otherwise)
+          if (draggedEl) {
+            draggedEl.style.opacity = '0';
+            draggedEl.style.pointerEvents = '';
+          }
+          draggedEl = null;
           draftOrb(start.uid);
+        } else {
+          // Failed drop — snap back to grid position
+          resetDraggedEl();
         }
-        resetDraggedEl();
         setDragUid(null);
         setIsOverDropZone(false);
         isOverDropZoneRef.current = false;
