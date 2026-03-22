@@ -52,9 +52,13 @@ function StockpileZone({
     return ELEMENT_ORDER.indexOf(aEl) - ELEMENT_ORDER.indexOf(bEl);
   });
 
+  // Fixed height: header (~20px) + grid rows (each ~41px with gap) + padding
+  const rows = Math.ceil(maxOrbs / 4);
+  const fixedHeight = 20 + rows * 41 + 10; // header + rows + padding
+
   return (
     <div
-      className={`rounded-[10px] border px-2 py-[5px] transition-all duration-200 ${
+      className={`rounded-[10px] border px-2 py-[5px] ${
         isDropTarget
           ? 'border-accent-400 bg-accent-500/10 shadow-[0_0_20px_rgba(212,168,52,0.15)]'
           : side === 'top'
@@ -62,6 +66,7 @@ function StockpileZone({
             : 'border-[rgba(212,168,52,0.25)]'
       }`}
       style={{
+        height: fixedHeight,
         background: isDropTarget
           ? undefined
           : side === 'top'
@@ -425,8 +430,8 @@ export function Draft() {
       {/* Flying gem — opponent pick animation */}
       {flyingGemElement}
 
-      {/* ═══ TOP: Opponent zone ═══ */}
-      <div ref={opponentZoneRef}>
+      {/* ═══ TOP: Opponent zone (fixed height) ═══ */}
+      <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
       <StockpileZone
         label="Opponent"
         orbs={filteredOpponentStockpile}
@@ -438,8 +443,8 @@ export function Draft() {
       />
       </div>
 
-      {/* ═══ CENTER: Status bar ═══ */}
-      <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1">
+      {/* ═══ CENTER: Status bar (fixed height) ═══ */}
+      <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1" style={{ flexShrink: 0 }}>
         <div className="flex items-center gap-2">
           <div
             className={`rounded-lg px-3 py-1 text-xs font-bold ${
@@ -526,12 +531,12 @@ export function Draft() {
         </div>
       </div>
 
-      {/* ═══ Timer bar — full width, fixed height to prevent layout shift ═══ */}
-      <div className="mx-1 my-0.5" style={{ minHeight: 28 }}>
+      {/* ═══ Timer bar — full width, fixed height ═══ */}
+      <div className="mx-1 my-0.5" style={{ height: 32, flexShrink: 0 }}>
         {isPlayerTurn ? (
           <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
         ) : (
-          <div className="flex items-center justify-center" style={{ minHeight: 28 }}>
+          <div className="flex items-center justify-center h-full">
             <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-surface-500)' }}>
               Waiting for opponent...
             </p>
@@ -539,8 +544,8 @@ export function Draft() {
         )}
       </div>
 
-      {/* ═══ BOTTOM: Player drop zone ═══ */}
-      <div ref={dropZoneRef}>
+      {/* ═══ BOTTOM: Player drop zone (fixed height) ═══ */}
+      <div ref={dropZoneRef} style={{ flexShrink: 0 }}>
         <StockpileZone
           label="Your Orbs"
           orbs={player0?.stockpile ?? []}
