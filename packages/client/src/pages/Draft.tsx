@@ -260,14 +260,11 @@ export function Draft() {
     opponentZoneRef,
   });
 
-  const { overlayElement, isActive: isDraftEnding } = useDraftEndSequence({
+  const { overlayElement } = useDraftEndSequence({
     pool,
     phase,
-    gemSizing,
     draftRound,
-    affixMap,
     gemPositionsRef,
-    poolContainerRef,
   });
 
   // Max orbs per player for the current draft round
@@ -472,7 +469,6 @@ export function Draft() {
         style={{
           boxShadow: 'var(--shadow-inset)',
           padding: 6,
-          visibility: isDraftEnding ? 'hidden' : undefined,
         }}
       >
         <div
