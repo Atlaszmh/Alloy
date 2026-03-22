@@ -117,46 +117,6 @@ function StockpileZone({
   );
 }
 
-// ── Drag ghost ──
-
-function DragGhost({
-  position,
-  affix,
-  orb,
-}: {
-  position: { x: number; y: number };
-  affix: AffixDef;
-  orb: OrbInstance;
-}) {
-  return (
-    <div
-      className="pointer-events-none fixed z-50"
-      style={{
-        left: position.x - 48,
-        top: position.y - 48,
-        filter: 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))',
-        transform: 'scale(1.1)',
-        opacity: 0.9,
-      }}
-    >
-      <GemCard
-        affixId={orb.affixId}
-        affixName={affix.name}
-        tier={orb.tier}
-        category={affix.category}
-        tags={affix.tags}
-        statLabel={getStatLabel(affix, orb)}
-        gemSize={96}
-        emojiSize={36}
-        statSize={14}
-        nameSize={14}
-        catSize={11}
-        selected
-      />
-    </div>
-  );
-}
-
 // ── Main Draft component ──
 
 export function Draft() {
@@ -182,7 +142,6 @@ export function Draft() {
   const cancelSelection = useDraftStore((s) => s.cancelSelection);
 
   const [dragUid, setDragUid] = useState<string | null>(null);
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
@@ -247,10 +206,10 @@ export function Draft() {
   const opponentZoneRef = useRef<HTMLDivElement>(null);
 
   const {
-    swoopTarget,
     startSwoopAnimation,
     filteredOpponentStockpile,
     gemPositionsRef,
+    swoopingUid,
   } = useOpponentPickAnimation({
     pool,
     opponentStockpile: player1?.stockpile ?? [],
@@ -303,6 +262,8 @@ export function Draft() {
 
   // ── Global pointer move + up listeners ──
   useEffect(() => {
+    let draggedEl: HTMLElement | null = null;
+
     const handleMove = (e: PointerEvent) => {
       const start = pointerStartRef.current;
       if (!start) return;
@@ -315,10 +276,21 @@ export function Draft() {
         setDragUid(start.uid);
         selectOrb(start.uid);
         playSound('dragStart');
+
+        // Grab the actual gem element and prepare it for dragging
+        draggedEl = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement;
+        if (draggedEl) {
+          draggedEl.style.zIndex = '50';
+          draggedEl.style.position = 'relative';
+          draggedEl.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
+          draggedEl.style.pointerEvents = 'none';
+        }
       }
 
-      if (hasDraggedRef.current) {
-        setDragPos({ x: e.clientX, y: e.clientY });
+      if (hasDraggedRef.current && draggedEl) {
+        // Move the actual gem element
+        draggedEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.08)`;
+
         if (dropZoneRef.current) {
           const rect = dropZoneRef.current.getBoundingClientRect();
           const over = e.clientY >= rect.top && e.clientY <= rect.bottom &&
@@ -329,16 +301,27 @@ export function Draft() {
       }
     };
 
+    const resetDraggedEl = () => {
+      if (draggedEl) {
+        draggedEl.style.zIndex = '';
+        draggedEl.style.position = '';
+        draggedEl.style.transform = '';
+        draggedEl.style.filter = '';
+        draggedEl.style.pointerEvents = '';
+        draggedEl = null;
+      }
+    };
+
     const handleUp = () => {
       const start = pointerStartRef.current;
       if (!start) return;
 
       if (hasDraggedRef.current) {
-        // Was dragging — check drop zone via ref (not stale state)
         if (isOverDropZoneRef.current) {
           playSound('dropSuccess');
           draftOrb(start.uid);
         }
+        resetDraggedEl();
         setDragUid(null);
         setIsOverDropZone(false);
         isOverDropZoneRef.current = false;
@@ -411,16 +394,10 @@ export function Draft() {
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
-  const dragOrb = dragUid ? pool.find((o) => o.uid === dragUid) : null;
-  const dragAffix = dragOrb ? affixMap.get(dragOrb.affixId) : null;
-
   return (
     <div className="page-enter flex h-full flex-col p-2">
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
-      {/* Drag ghost */}
-      {dragUid && dragAffix && dragOrb && (
-        <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
-      )}
+      {/* Drag moves the actual gem element via direct DOM manipulation */}
 
       {/* ═══ TOP: Opponent zone (fixed height) ═══ */}
       <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
@@ -476,7 +453,7 @@ export function Draft() {
             minHeight: '100%',
           }}
         >
-          <AnimatePresence custom={swoopTarget}>
+          <AnimatePresence>
             {pool.map((orb, index) => {
               const affix = affixMap.get(orb.affixId);
               if (!affix) return null;
@@ -484,40 +461,27 @@ export function Draft() {
               const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
               const col = (slot % gemSizing.columns) + 1;
               const row = Math.floor(slot / gemSizing.columns) + 1;
-              // Is this the gem being swooped to opponent stockpile?
-              const isSwooping = swoopTarget?.uid === orb.uid;
               return (
                 <motion.div
                   key={orb.uid}
+                  data-gem-uid={orb.uid}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={isSwooping ? {
-                    // Fly to opponent stockpile with arc
-                    x: swoopTarget!.dx,
-                    y: swoopTarget!.dy,
-                    scale: 0.3,
-                    opacity: 0,
-                    transition: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1] },
-                  } : {
-                    scale: 0.5,
-                    opacity: 0,
-                    transition: { duration: 0.2 },
-                  }}
+                  exit={swoopingUid === orb.uid
+                    // Swooping gem: hold visible for 0.9s while Web Animations API handles the flight
+                    ? { opacity: 1, transition: { duration: 0.9 } }
+                    // Normal exit: quick scale-down
+                    : { scale: 0.5, opacity: 0, transition: { duration: 0.2 } }
+                  }
                   transition={{
                     type: 'spring',
                     stiffness: 400,
                     damping: 25,
                     delay: index * 0.025,
                   }}
-                  style={{
-                    gridColumn: col,
-                    gridRow: row,
-                    zIndex: isSwooping ? 50 : undefined,
-                    position: isSwooping ? 'relative' : undefined,
-                  }}
+                  style={{ gridColumn: col, gridRow: row }}
                 >
                   <GemCard
-                    uid={orb.uid}
                     affixId={orb.affixId}
                     affixName={affix.name}
                     tier={orb.tier}

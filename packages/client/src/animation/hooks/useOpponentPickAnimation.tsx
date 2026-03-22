@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { OrbInstance } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
@@ -11,21 +11,15 @@ interface UseOpponentPickAnimationOptions {
   opponentZoneRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export interface SwoopTarget {
-  uid: string;
-  dx: number;  // delta X from gem's current position to opponent stockpile
-  dy: number;  // delta Y
-}
-
 interface UseOpponentPickAnimationResult {
-  /** Currently swooping gem UID + target delta — pass to pool grid for custom exit animation */
-  swoopTarget: SwoopTarget | null;
   /** Pre-animate a specific orb's swoop (for last AI pick before dispatch) */
   startSwoopAnimation: (orb: OrbInstance) => Promise<void>;
   /** Opponent stockpile with the in-flight orb filtered out */
   filteredOpponentStockpile: OrbInstance[];
   /** Shared position cache — used by useDraftEndSequence */
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;
+  /** UID of gem currently animating (used to set long exit hold on AnimatePresence) */
+  swoopingUid: string | null;
 }
 
 // ── Hook ──
@@ -52,40 +46,53 @@ export function useOpponentPickAnimation({
   }, [pool]);
 
   const prevPoolRef = useRef<OrbInstance[]>(pool);
-  const [swoopTarget, setSwoopTarget] = useState<SwoopTarget | null>(null);
+  const [swoopingUid, setSwoopingUid] = useState<string | null>(null);
 
-  // Compute swoop delta from a gem's cached position to the opponent stockpile center
-  const computeSwoopDelta = useCallback((uid: string): SwoopTarget | null => {
-    const gemPos = gemPositionsRef.current.get(uid);
+  // Animate the actual DOM element to fly to opponent stockpile
+  const animateGemToStockpile = useCallback((uid: string): Promise<void> => {
+    const el = document.querySelector(`[data-gem-uid="${uid}"]`) as HTMLElement;
     const opRect = opponentZoneRef.current?.getBoundingClientRect();
-    if (!gemPos || !opRect) return null;
+    if (!el || !opRect) return Promise.resolve();
 
-    return {
-      uid,
-      dx: (opRect.left + opRect.width / 2) - gemPos.x,
-      dy: (opRect.top + opRect.height / 2) - gemPos.y,
-    };
-  }, [opponentZoneRef]);
+    const gemRect = el.getBoundingClientRect();
+    const dx = (opRect.left + opRect.width / 2) - (gemRect.left + gemRect.width / 2);
+    const dy = (opRect.top + opRect.height / 2) - (gemRect.top + gemRect.height / 2);
+    const arc = 100;
 
-  // Start swoop for a specific orb — returns Promise that resolves when done
-  const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
-    const target = computeSwoopDelta(orb.uid);
-    if (!target) return Promise.resolve();
-
-    setSwoopTarget(target);
+    setSwoopingUid(uid);
     playSound('orbPickOpponent');
 
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        playSound('dropSuccess');
-        setSwoopTarget(null);
-        resolve();
-      }, 950);
-    });
-  }, [computeSwoopDelta]);
+    // Set z-index so it flies above other gems
+    el.style.zIndex = '50';
+    el.style.position = 'relative';
 
-  // Detect opponent picks automatically
-  useEffect(() => {
+    const anim = el.animate([
+      { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
+      { transform: `translate3d(${dx * 0.1 + arc * 0.6}px, ${dy * 0.15}px, 0) scale(0.9)`, opacity: 1 },
+      { transform: `translate3d(${dx * 0.3 + arc}px, ${dy * 0.4}px, 0) scale(0.7)`, opacity: 1 },
+      { transform: `translate3d(${dx * 0.6 + arc * 0.7}px, ${dy * 0.65}px, 0) scale(0.5)`, opacity: 0.95 },
+      { transform: `translate3d(${dx * 0.85 + arc * 0.3}px, ${dy * 0.85}px, 0) scale(0.35)`, opacity: 0.8 },
+      { transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.3)`, opacity: 0 },
+    ], {
+      duration: 900,
+      easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+      fill: 'forwards',
+    });
+
+    return anim.finished.then(() => {
+      playSound('dropSuccess');
+      setSwoopingUid(null);
+    });
+  }, [opponentZoneRef]);
+
+  // Start swoop for a specific orb (called by AI turn effect for last pick)
+  const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
+    return animateGemToStockpile(orb.uid);
+  }, [animateGemToStockpile]);
+
+  // Detect opponent picks in useLayoutEffect — fires before paint,
+  // element is still in DOM (AnimatePresence hasn't removed it yet)
+  useLayoutEffect(() => {
     const prevPool = prevPoolRef.current;
     prevPoolRef.current = pool;
 
@@ -93,20 +100,20 @@ export function useOpponentPickAnimation({
       const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
       const inOpponentStockpile = removedOrb && opponentStockpile.some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile) {
-        startSwoopAnimation(removedOrb);
+        animateGemToStockpile(removedOrb.uid);
       }
     }
-  }, [pool, isPlayerTurn, opponentStockpile, startSwoopAnimation]);
+  });
 
   // Filter swooping orb from opponent stockpile display
-  const filteredOpponentStockpile = swoopTarget
-    ? opponentStockpile.filter((o) => o.uid !== swoopTarget.uid)
+  const filteredOpponentStockpile = swoopingUid
+    ? opponentStockpile.filter((o) => o.uid !== swoopingUid)
     : opponentStockpile;
 
   return {
-    swoopTarget,
     startSwoopAnimation,
     filteredOpponentStockpile,
     gemPositionsRef,
+    swoopingUid,
   };
 }
