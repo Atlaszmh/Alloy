@@ -474,7 +474,6 @@ export function Draft() {
             {pool.map((orb, index) => {
               const affix = affixMap.get(orb.affixId);
               if (!affix) return null;
-              // Pin gems to their original grid slot so they don't reflow when others are picked
               const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
               const col = (slot % gemSizing.columns) + 1;
               const row = Math.floor(slot / gemSizing.columns) + 1;
@@ -484,12 +483,13 @@ export function Draft() {
                   data-gem-uid={orb.uid}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={swoopingUid === orb.uid
-                    // Swooping gem: hold visible for 0.9s while Web Animations API handles the flight
-                    ? { opacity: 1, transition: { duration: 0.9 } }
-                    // Normal exit: quick scale-down
-                    : { scale: 0.5, opacity: 0, transition: { duration: 0.2 } }
-                  }
+                  exit={{
+                    // Hold element in DOM for 1s so Web Animations API swoop can complete.
+                    // Element is invisible at this point (either dragged away by player,
+                    // or swooping via fixed position + Web Animations API).
+                    opacity: 0,
+                    transition: { duration: 1 },
+                  }}
                   transition={{
                     type: 'spring',
                     stiffness: 400,
