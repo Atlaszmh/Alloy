@@ -16,7 +16,7 @@ import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
-import { useOpponentPickAnimation } from '@/animation/hooks/useOpponentPickAnimation';
+import { useOpponentPickAnimation, type SwoopTarget } from '@/animation/hooks/useOpponentPickAnimation';
 import { useDraftEndSequence } from '@/animation/hooks/useDraftEndSequence';
 
 const DRAFT_TIMER_MS = 15_000;
@@ -247,7 +247,7 @@ export function Draft() {
   const opponentZoneRef = useRef<HTMLDivElement>(null);
 
   const {
-    flyingGemElement,
+    swoopTarget,
     startSwoopAnimation,
     filteredOpponentStockpile,
     gemPositionsRef,
@@ -255,8 +255,6 @@ export function Draft() {
     pool,
     opponentStockpile: player1?.stockpile ?? [],
     isPlayerTurn,
-    affixMap,
-    gemSizing,
     opponentZoneRef,
   });
 
@@ -424,9 +422,6 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
-      {/* Flying gem — opponent pick animation */}
-      {flyingGemElement}
-
       {/* ═══ TOP: Opponent zone (fixed height) ═══ */}
       <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
       <StockpileZone
@@ -481,7 +476,7 @@ export function Draft() {
             minHeight: '100%',
           }}
         >
-          <AnimatePresence>
+          <AnimatePresence custom={swoopTarget}>
             {pool.map((orb, index) => {
               const affix = affixMap.get(orb.affixId);
               if (!affix) return null;
@@ -489,19 +484,37 @@ export function Draft() {
               const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
               const col = (slot % gemSizing.columns) + 1;
               const row = Math.floor(slot / gemSizing.columns) + 1;
+              // Is this the gem being swooped to opponent stockpile?
+              const isSwooping = swoopTarget?.uid === orb.uid;
               return (
                 <motion.div
                   key={orb.uid}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.5, opacity: 0 }}
+                  exit={isSwooping ? {
+                    // Fly to opponent stockpile with arc
+                    x: swoopTarget!.dx,
+                    y: swoopTarget!.dy,
+                    scale: 0.3,
+                    opacity: 0,
+                    transition: { duration: 0.9, ease: [0.25, 0.1, 0.25, 1] },
+                  } : {
+                    scale: 0.5,
+                    opacity: 0,
+                    transition: { duration: 0.2 },
+                  }}
                   transition={{
                     type: 'spring',
                     stiffness: 400,
                     damping: 25,
                     delay: index * 0.025,
                   }}
-                  style={{ gridColumn: col, gridRow: row }}
+                  style={{
+                    gridColumn: col,
+                    gridRow: row,
+                    zIndex: isSwooping ? 50 : undefined,
+                    position: isSwooping ? 'relative' : undefined,
+                  }}
                 >
                   <GemCard
                     uid={orb.uid}
