@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
@@ -15,6 +15,8 @@ import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
+import { useOpponentPickAnimation } from '@/animation/hooks/useOpponentPickAnimation';
+import { useDraftEndSequence } from '@/animation/hooks/useDraftEndSequence';
 
 const DRAFT_TIMER_MS = 15_000;
 
@@ -208,17 +210,6 @@ export function Draft() {
     gemGridSlotRef.current = new Map();
   }, [draftRound]);
 
-  // Track which round's pool has been animated
-  const animatedRoundRef = useRef<number>(0);
-  const shouldAnimate = animatedRoundRef.current !== draftRound;
-
-  useEffect(() => {
-    if (animatedRoundRef.current !== draftRound) {
-      const timer = setTimeout(() => { animatedRoundRef.current = draftRound; }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [draftRound]);
-
   // Measure pool container for responsive sizing
   const poolContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -234,76 +225,44 @@ export function Draft() {
   }, []);
 
   // Lock gem sizing to the initial pool count for this round — don't resize as gems are picked.
-  // Once the end animation triggers, freeze sizing so the scatter uses the same gem sizes.
   const initialPoolCountRef = useRef(0);
   if (pool.length > 0 && initialPoolCountRef.current === 0) {
     initialPoolCountRef.current = pool.length;
   }
-  // Reset when round changes, but NOT if the end animation is active
+  // Reset when round changes
   const prevRoundRef = useRef(draftRound);
-  if (prevRoundRef.current !== draftRound && !draftEndTriggeredRef.current) {
+  if (prevRoundRef.current !== draftRound) {
     prevRoundRef.current = draftRound;
-    initialPoolCountRef.current = pool.length;
+    initialPoolCountRef.current = pool.length > 0 ? pool.length : initialPoolCountRef.current;
   }
   const gemSizing = useGemSize(initialPoolCountRef.current || pool.length, containerWidth);
 
-  // Cache gem positions — merge into existing cache so positions from
-  // previous renders survive (needed for opponent pick animation, where the
-  // orb is gone from pool by the time the effect fires)
-  const gemPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-
-  useLayoutEffect(() => {
-    const positions = gemPositionsRef.current;
-    for (const orb of pool) {
-      const el = document.querySelector(`[data-gem-uid="${orb.uid}"]`);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        positions.set(orb.uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-      }
-    }
-  }, [pool]);
-
-  // Track opponent picks for flying gem animation
-  const prevPoolRef = useRef<OrbInstance[]>(pool);
+  // ── Animation hooks ──
   const opponentZoneRef = useRef<HTMLDivElement>(null);
-  const [flyingOrb, setFlyingOrb] = useState<{
-    orb: OrbInstance;
-    startPos: { x: number; y: number };
-    endPos: { x: number; y: number };
-  } | null>(null);
 
-  // Start swoop animation for a given orb — returns a Promise that resolves when animation finishes
-  const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
-    const cachedPos = gemPositionsRef.current.get(orb.uid);
-    const opRect = opponentZoneRef.current?.getBoundingClientRect();
-    if (!cachedPos || !opRect) return Promise.resolve();
+  const {
+    flyingGemElement,
+    startSwoopAnimation,
+    filteredOpponentStockpile,
+    gemPositionsRef,
+  } = useOpponentPickAnimation({
+    pool,
+    opponentStockpile: player1?.stockpile ?? [],
+    isPlayerTurn,
+    affixMap,
+    gemSizing,
+    opponentZoneRef,
+  });
 
-    const endPos = { x: opRect.left + opRect.width / 2, y: opRect.top + opRect.height / 2 };
-    setFlyingOrb({ orb, startPos: cachedPos, endPos });
-    playSound('orbPickOpponent');
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        playSound('dropSuccess');
-        setFlyingOrb(null);
-        resolve();
-      }, 950);
-    });
-  }, []);
-
-  useEffect(() => {
-    const prevPool = prevPoolRef.current;
-    prevPoolRef.current = pool;
-
-    // Detect opponent pick: pool shrunk and the removed orb is in opponent's stockpile
-    if (prevPool.length > 0 && pool.length < prevPool.length) {
-      const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
-      const inOpponentStockpile = removedOrb && player1?.stockpile.some((o) => o.uid === removedOrb.uid);
-      if (removedOrb && inOpponentStockpile) {
-        startSwoopAnimation(removedOrb);
-      }
-    }
-  }, [pool, isPlayerTurn, player1?.stockpile, startSwoopAnimation]);
+  const { overlayElement, isActive: isDraftEnding } = useDraftEndSequence({
+    pool,
+    phase,
+    gemSizing,
+    draftRound,
+    affixMap,
+    gemPositionsRef,
+    poolContainerRef,
+  });
 
   // Max orbs per player for the current draft round
   const balance = registry.getBalance();
@@ -331,7 +290,6 @@ export function Draft() {
   const selectedOrbUidRef = useRef(selectedOrbUid);
 
   // Keep selectedOrbUidRef in sync — needed because handleUp reads it via ref
-  // (isOverDropZoneRef is set directly in handleMove, no sync effect needed)
   useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
 
   // ── Pointer down: record start position + time, don't select yet ──
@@ -385,7 +343,6 @@ export function Draft() {
         isOverDropZoneRef.current = false;
       } else {
         // Not a drag — classify as tap or hold based on duration only
-        // (drag case already handled above via hasDraggedRef, so distance is < threshold here)
         const holdDuration = Date.now() - start.time;
         if (holdDuration < HOLD_THRESHOLD) {
           // Short press = tap — handle selection
@@ -396,7 +353,7 @@ export function Draft() {
             playSound('orbSelect');
           }
         }
-        // Long press = hold → no-op (D04)
+        // Long press = hold -> no-op (D04)
       }
 
       pointerStartRef.current = null;
@@ -412,10 +369,6 @@ export function Draft() {
   }, [draftOrb, selectOrb]);
 
   // ── AI turn ──
-  // Use stable primitives in deps to avoid timer resets from object reference changes.
-  // Both PhaseRouter and Draft subscribe to the gateway, so Draft re-renders twice per
-  // state change. Using pickIndex/activePlayer (numbers) prevents the 500ms timeout from
-  // being cancelled and rescheduled on every re-render.
   const pickIndex = phase?.kind === 'draft' ? phase.pickIndex : -1;
   const activePlayer = phase?.kind === 'draft' ? phase.activePlayer : -1;
 
@@ -457,73 +410,6 @@ export function Draft() {
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
-  // ── Draft-end animation state ──
-  const [draftEndGems, setDraftEndGems] = useState<{
-    orb: OrbInstance;
-    pos: { x: number; y: number };
-    // Random physics for scatter
-    vx: number; vy: number; rotation: number; delay: number;
-  }[] | null>(null);
-
-  // Snapshot the pool while still in draft phase — used for scatter animation
-  // so we animate the gems that were ACTUALLY on screen, not whatever pool exists after phase change
-  // Snapshot the pool for the scatter animation. Always keep the last non-empty pool
-  // so it survives the phase change to forge (where pool may be empty/different).
-  // Once the end animation has been triggered, stop updating so we keep the final state.
-  const draftEndTriggeredRef = useRef(false);
-  const lastDraftPoolRef = useRef<OrbInstance[]>([]);
-  if (pool.length > 0 && !draftEndTriggeredRef.current) {
-    lastDraftPoolRef.current = pool;
-  }
-
-  // Trigger the draft-end animation: capture remaining gems + positions, show "FORGE" slam
-  const startDraftEndAnimation = useCallback((): Promise<void> => {
-    const remaining = lastDraftPoolRef.current
-      .map((orb) => {
-        const pos = gemPositionsRef.current.get(orb.uid);
-        if (!pos) return null;
-        // Random scatter physics
-        const angle = (Math.random() - 0.5) * Math.PI * 1.5; // wide spread
-        const speed = 600 + Math.random() * 800;
-        return {
-          orb,
-          pos,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 300, // bias downward
-          rotation: (Math.random() - 0.5) * 1080, // up to 3 full rotations
-          delay: Math.random() * 150, // stagger
-        };
-      })
-      .filter(Boolean) as NonNullable<typeof draftEndGems>[number][];
-
-    if (remaining.length === 0) return Promise.resolve();
-
-    setDraftEndGems(remaining);
-    // Sound + scatter timing handled by the orchestrator ref via .finished promises
-    // Don't clear draftEndGems — let the forge card persist on screen until
-    // PhaseRouter slides the entire draft screen away and unmounts Draft.
-    return new Promise((resolve) => {
-      // Resolve immediately — PhaseRouter controls the timing via DRAFT_END_HOLD_MS
-      resolve();
-    });
-  }, []); // no deps — reads from lastDraftPoolRef and gemPositionsRef
-
-  // Detect draft completion and trigger end animation.
-  // CRITICAL: We must hide the pool grid via direct DOM manipulation in useLayoutEffect
-  // BEFORE the browser paints. Calling setDraftEndGems alone would schedule a new render,
-  // allowing the browser to paint the reflowed grid first (causing a visual blink).
-  useLayoutEffect(() => {
-    const currentPhase = gateway.getState()?.phase;
-    if (currentPhase?.kind === 'forge' && !draftEndTriggeredRef.current) {
-      draftEndTriggeredRef.current = true;
-      // Hide the pool grid IMMEDIATELY via DOM before the browser paints
-      if (poolContainerRef.current) {
-        poolContainerRef.current.style.visibility = 'hidden';
-      }
-      startDraftEndAnimation();
-    }
-  });
-
   const dragOrb = dragUid ? pool.find((o) => o.uid === dragUid) : null;
   const dragAffix = dragOrb ? affixMap.get(dragOrb.affixId) : null;
 
@@ -535,66 +421,14 @@ export function Draft() {
         <DragGhost position={dragPos} affix={dragAffix} orb={dragOrb} />
       )}
 
-      {/* Flying gem — opponent pick animation (JS-driven for smooth GPU compositing) */}
-      {flyingOrb && (() => {
-        const affix = affixMap.get(flyingOrb.orb.affixId);
-        if (!affix) return null;
-        const halfGem = gemSizing.gemSize / 2;
-        const dx = flyingOrb.endPos.x - flyingOrb.startPos.x;
-        const dy = flyingOrb.endPos.y - flyingOrb.startPos.y;
-        // Arc offset: swoop out 100px to the right at peak
-        const arc = 100;
-        return (
-          <div
-            className="pointer-events-none fixed z-50"
-            ref={(el) => {
-              if (!el) return;
-              // Web Animations API — computes actual px values, GPU-composited
-              el.animate([
-                { transform: 'translate3d(0, 0, 0) scale(1)', opacity: 1 },
-                { transform: `translate3d(${dx * 0.1 + arc * 0.6}px, ${dy * 0.15}px, 0) scale(0.9)`, opacity: 1 },
-                { transform: `translate3d(${dx * 0.3 + arc}px, ${dy * 0.4}px, 0) scale(0.7)`, opacity: 1 },
-                { transform: `translate3d(${dx * 0.6 + arc * 0.7}px, ${dy * 0.65}px, 0) scale(0.5)`, opacity: 0.95 },
-                { transform: `translate3d(${dx * 0.85 + arc * 0.3}px, ${dy * 0.85}px, 0) scale(0.35)`, opacity: 0.8 },
-                { transform: `translate3d(${dx}px, ${dy}px, 0) scale(0.3)`, opacity: 0 },
-              ], {
-                duration: 900,
-                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-                fill: 'forwards',
-              });
-            }}
-            style={{
-              left: flyingOrb.startPos.x - halfGem,
-              top: flyingOrb.startPos.y - halfGem,
-              willChange: 'transform, opacity',
-            }}
-          >
-            <GemCard
-              affixId={flyingOrb.orb.affixId}
-              affixName={affix.name}
-              tier={flyingOrb.orb.tier}
-              category={affix.category}
-              tags={affix.tags}
-              statLabel={getStatLabel(affix, flyingOrb.orb)}
-              gemSize={gemSizing.gemSize}
-              emojiSize={gemSizing.emojiSize}
-              statSize={gemSizing.statSize}
-              nameSize={gemSizing.nameSize}
-              catSize={gemSizing.catSize}
-              selected
-            />
-          </div>
-        );
-      })()}
+      {/* Flying gem — opponent pick animation */}
+      {flyingGemElement}
 
       {/* ═══ TOP: Opponent zone ═══ */}
       <div ref={opponentZoneRef}>
       <StockpileZone
         label="Opponent"
-        orbs={flyingOrb
-          ? (player1?.stockpile ?? []).filter((o) => o.uid !== flyingOrb.orb.uid)
-          : (player1?.stockpile ?? [])
-        }
+        orbs={filteredOpponentStockpile}
         maxOrbs={picksPerPlayer}
         affixMap={affixMap}
         isActive={!isPlayerTurn}
@@ -633,7 +467,7 @@ export function Draft() {
         style={{
           boxShadow: 'var(--shadow-inset)',
           padding: 6,
-          visibility: draftEndGems ? 'hidden' : undefined,
+          visibility: isDraftEnding ? 'hidden' : undefined,
         }}
       >
         <div
@@ -659,10 +493,6 @@ export function Draft() {
                 style={{
                   gridColumn: col,
                   gridRow: row,
-                  ...(shouldAnimate ? {
-                    animation: 'gem-enter 0.3s ease-out both',
-                    animationDelay: `${index * 25}ms`,
-                  } : undefined),
                 }}
               >
                 <GemCard
@@ -707,186 +537,7 @@ export function Draft() {
       </div>
 
       {/* ═══ DRAFT END ANIMATION — forge card falls + scatters remaining gems ═══ */}
-      {draftEndGems && (
-        <div
-          className="fixed inset-0 z-[60] overflow-hidden pointer-events-none"
-          data-draft-end-container
-          ref={(container) => {
-            if (!container) return;
-            // ── ORCHESTRATOR: chain animations with .finished promises ──
-            const cardEl = container.querySelector('[data-forge-card]') as HTMLElement;
-            const gemEls = container.querySelectorAll('[data-scatter-gem]') as NodeListOf<HTMLElement>;
-            if (!cardEl) return;
-
-            // Phase 0: Buildup — card peeks from top with a warning shake/creak
-            const peekAnim = cardEl.animate([
-              { transform: 'translateY(-200vh) scale(1.2)', opacity: 0 },
-              { transform: 'translateY(-88vh) scale(1.15)', opacity: 0.6 },
-            ], {
-              duration: 400,
-              easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-              fill: 'forwards',
-            });
-
-            peekAnim.finished.then(() => {
-              playSound('forgeCreak');
-
-              // Card trembles in place — "about to fall"
-              const shakeAnim = cardEl.animate([
-                { transform: 'translateY(-88vh) rotate(0deg) scale(1.15)' },
-                { transform: 'translateY(-87.5vh) rotate(-0.8deg) scale(1.15)', offset: 0.15 },
-                { transform: 'translateY(-88.5vh) rotate(0.6deg) scale(1.15)', offset: 0.3 },
-                { transform: 'translateY(-87vh) rotate(-1deg) scale(1.15)', offset: 0.5 },
-                { transform: 'translateY(-88vh) rotate(0.8deg) scale(1.16)', offset: 0.7 },
-                { transform: 'translateY(-86.5vh) rotate(-0.5deg) scale(1.17)', offset: 0.85 },
-                { transform: 'translateY(-86vh) rotate(0deg) scale(1.18)' },
-              ], {
-                duration: 800,
-                easing: 'linear',
-                fill: 'forwards',
-              });
-
-              return shakeAnim.finished;
-            }).then(() => {
-              // Phase 1: Card drops from peek position to center (the "fall")
-              const dropAnim = cardEl.animate([
-                { transform: 'translateY(-86vh) scale(1.18)', opacity: 0.8 },
-                { transform: 'translateY(0%) scale(1.08)', opacity: 1 },
-              ], {
-                duration: 500,
-                easing: 'cubic-bezier(0.55, 0, 1, 0.45)', // accelerating fall
-                fill: 'forwards',
-              });
-
-              return dropAnim.finished;
-            }).then(() => {
-              // ── IMPACT MOMENT ──
-              playSound('forgeSlam');
-              playSound('dropSuccess'); // gem scatter noise alongside the impact
-              // Stagger a second scatter sound for a richer "gems flying" effect
-              setTimeout(() => playSound('dropSuccess'), 120);
-
-              // Phase 2: Card bounces and settles
-              cardEl.animate([
-                { transform: 'translateY(0%) scale(1.08)' },
-                { transform: 'translateY(-5%) scale(0.95)', offset: 0.2 },
-                { transform: 'translateY(2%) scale(1.03)', offset: 0.45 },
-                { transform: 'translateY(-1%) scale(0.99)', offset: 0.65 },
-                { transform: 'translateY(0%) scale(1)', offset: 0.85 },
-                { transform: 'translateY(0%) scale(1)' },
-              ], {
-                duration: 800,
-                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-                fill: 'forwards',
-              });
-
-              // Phase 2: Screen shake on impact
-              container.animate([
-                { transform: 'translate(0, 0)' },
-                { transform: 'translate(-6px, 4px)', offset: 0.08 },
-                { transform: 'translate(7px, -3px)', offset: 0.18 },
-                { transform: 'translate(-5px, 5px)', offset: 0.28 },
-                { transform: 'translate(4px, -4px)', offset: 0.4 },
-                { transform: 'translate(-2px, 2px)', offset: 0.55 },
-                { transform: 'translate(1px, -1px)', offset: 0.7 },
-                { transform: 'translate(0, 0)' },
-              ], {
-                duration: 500,
-                easing: 'linear',
-              });
-
-              // Phase 2: Gems scatter outward FROM THE IMPACT
-              gemEls.forEach((el, i) => {
-                const gem = draftEndGems[i];
-                if (!gem) return;
-                el.animate([
-                  {
-                    transform: 'translate3d(0, 0, 0) rotate(0deg) scale(1)',
-                    opacity: 1,
-                  },
-                  {
-                    transform: `translate3d(${gem.vx * 0.5}px, ${gem.vy * 0.3 + 60}px, 0) rotate(${gem.rotation * 0.4}deg) scale(0.7)`,
-                    opacity: 0.85,
-                    offset: 0.45,
-                  },
-                  {
-                    transform: `translate3d(${gem.vx}px, ${gem.vy + 400}px, 0) rotate(${gem.rotation}deg) scale(0.2)`,
-                    opacity: 0,
-                  },
-                ], {
-                  duration: 1000,
-                  delay: gem.delay, // small stagger between gems
-                  easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-                  fill: 'forwards',
-                });
-              });
-            });
-          }}
-        >
-          {/* Remaining gems — positioned at their last pool locations, waiting to scatter */}
-          {draftEndGems.map((gem) => {
-            const affix = affixMap.get(gem.orb.affixId);
-            if (!affix) return null;
-            return (
-              <div
-                key={gem.orb.uid}
-                data-scatter-gem
-                className="fixed"
-                style={{
-                  left: gem.pos.x - gemSizing.gemSize / 2,
-                  top: gem.pos.y - gemSizing.gemSize / 2,
-                  willChange: 'transform, opacity',
-                }}
-              >
-                <GemCard
-                  affixId={gem.orb.affixId}
-                  affixName={affix.name}
-                  tier={gem.orb.tier}
-                  category={affix.category}
-                  tags={affix.tags}
-                  statLabel={getStatLabel(affix, gem.orb)}
-                  gemSize={gemSizing.gemSize}
-                  emojiSize={gemSizing.emojiSize}
-                  statSize={gemSizing.statSize}
-                  nameSize={gemSizing.nameSize}
-                  catSize={gemSizing.catSize}
-                />
-              </div>
-            );
-          })}
-
-          {/* "FORGE" card — positioned center, animated by orchestrator */}
-          <div
-            data-forge-card
-            className="fixed inset-0 flex items-center justify-center"
-            style={{ transform: 'translateY(-200vh)', willChange: 'transform, opacity' }}
-          >
-            <div
-              className="rounded-2xl border-2 border-accent-400 bg-surface-900/95 px-14 py-10 shadow-2xl"
-              style={{
-                boxShadow: '0 0 80px rgba(212, 168, 52, 0.5), 0 25px 50px rgba(0,0,0,0.6)',
-              }}
-            >
-              <h1
-                className="text-6xl font-black text-accent-400"
-                style={{
-                  fontFamily: 'var(--font-family-display)',
-                  textShadow: '0 0 40px rgba(212, 168, 52, 0.7)',
-                  letterSpacing: '0.12em',
-                }}
-              >
-                FORGE
-              </h1>
-              <p
-                className="mt-3 text-center text-base font-bold text-surface-300"
-                style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.15em' }}
-              >
-                ROUND {draftRound}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {overlayElement}
     </div>
   );
 }
