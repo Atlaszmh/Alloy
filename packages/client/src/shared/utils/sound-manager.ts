@@ -91,7 +91,7 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   timerTick:       { sprite: 'timer-tick',        volume: 0.4, category: 'ui' },
   timerUrgent:     { sprite: 'timer-urgent',      volume: 0.6, category: 'ui', files: ['timer-urgent-1.wav', 'timer-urgent-2.wav'] },
   dragStart:       { sprite: 'drag-start',        volume: 0.3, category: 'ui', files: ['drag-start-1.wav', 'drag-start-2.wav'] },
-  dropSuccess:     { sprite: 'drop-success',      volume: 0.5, category: 'sfx', files: ['drop-success-1.wav', 'drop-success-2.wav', 'drop-success-3.wav'] },
+  dropSuccess:     { sprite: 'drop-success',      volume: 0.7, category: 'sfx', files: ['drop-success-1.wav', 'drop-success-2.wav', 'drop-success-3.wav'] },
   fluxSpend:       { sprite: 'flux-spend',        volume: 0.4, category: 'ui', files: ['flux-spend-1.wav', 'flux-spend-2.wav'] },
   matchFound:      { sprite: 'match-found',       volume: 0.7, category: 'sfx' },
   roundStart:      { sprite: 'round-start',       volume: 0.6, category: 'sfx' },

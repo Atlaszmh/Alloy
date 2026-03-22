@@ -715,6 +715,8 @@ export function Draft() {
               // ── IMPACT MOMENT ──
               playSound('forgeSlam');
               playSound('dropSuccess'); // gem scatter noise alongside the impact
+              // Stagger a second scatter sound for a richer "gems flying" effect
+              setTimeout(() => playSound('dropSuccess'), 120);
 
               // Phase 2: Card bounces and settles
               cardEl.animate([
