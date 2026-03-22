@@ -195,6 +195,19 @@ export function Draft() {
   const isPlayerTurn = phase?.kind === 'draft' && phase.activePlayer === 0;
   const draftRound = phase?.kind === 'draft' ? phase.round : 1;
 
+  // Track each orb's original grid slot so gems don't reflow when others are removed
+  const gemGridSlotRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    // Assign grid slots on initial pool load (per round)
+    if (pool.length > 0 && gemGridSlotRef.current.size === 0) {
+      pool.forEach((orb, i) => gemGridSlotRef.current.set(orb.uid, i));
+    }
+  }, [pool]);
+  // Reset grid slots when round changes
+  useEffect(() => {
+    gemGridSlotRef.current = new Map();
+  }, [draftRound]);
+
   // Track which round's pool has been animated
   const animatedRoundRef = useRef<number>(0);
   const shouldAnimate = animatedRoundRef.current !== draftRound;
@@ -615,13 +628,21 @@ export function Draft() {
           {pool.map((orb, index) => {
             const affix = affixMap.get(orb.affixId);
             if (!affix) return null;
+            // Pin gems to their original grid slot so they don't reflow when others are picked
+            const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
+            const col = (slot % gemSizing.columns) + 1;
+            const row = Math.floor(slot / gemSizing.columns) + 1;
             return (
               <div
                 key={orb.uid}
-                style={shouldAnimate ? {
-                  animation: 'gem-enter 0.3s ease-out both',
-                  animationDelay: `${index * 25}ms`,
-                } : undefined}
+                style={{
+                  gridColumn: col,
+                  gridRow: row,
+                  ...(shouldAnimate ? {
+                    animation: 'gem-enter 0.3s ease-out both',
+                    animationDelay: `${index * 25}ms`,
+                  } : undefined),
+                }}
               >
                 <GemCard
                   uid={orb.uid}
