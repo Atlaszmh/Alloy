@@ -473,10 +473,11 @@ export function Draft() {
     });
   }, [pool]);
 
-  // Detect draft completion and trigger end animation
-  // (PhaseRouter holds Draft mounted for ~2.5s after draft→forge via heldPhase)
+  // Detect draft completion and trigger end animation BEFORE the browser paints.
+  // useLayoutEffect runs synchronously after DOM mutations, preventing the pool grid
+  // from visually reflowing before we hide it with the forge card animation overlay.
   const draftEndTriggeredRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const currentPhase = gateway.getState()?.phase;
     if (currentPhase?.kind === 'forge' && !draftEndTriggeredRef.current) {
       draftEndTriggeredRef.current = true;
