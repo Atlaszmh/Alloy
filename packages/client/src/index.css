@@ -170,11 +170,6 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
-@keyframes gem-enter {
-  0% { transform: scale(0.7); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
 /* swoop-to-stockpile: now driven by Web Animations API in Draft.tsx for smooth GPU compositing */
 
 /* ── Portrait App Shell (9:16 aspect ratio) ── */

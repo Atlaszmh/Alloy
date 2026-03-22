@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useMatchStore } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
 import { useDraftStore } from '@/stores/draftStore';
@@ -480,41 +481,49 @@ export function Draft() {
             minHeight: '100%',
           }}
         >
-          {pool.map((orb, index) => {
-            const affix = affixMap.get(orb.affixId);
-            if (!affix) return null;
-            // Pin gems to their original grid slot so they don't reflow when others are picked
-            const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
-            const col = (slot % gemSizing.columns) + 1;
-            const row = Math.floor(slot / gemSizing.columns) + 1;
-            return (
-              <div
-                key={orb.uid}
-                style={{
-                  gridColumn: col,
-                  gridRow: row,
-                }}
-              >
-                <GemCard
-                  uid={orb.uid}
-                  affixId={orb.affixId}
-                  affixName={affix.name}
-                  tier={orb.tier}
-                  category={affix.category}
-                  tags={affix.tags}
-                  statLabel={getStatLabel(affix, orb)}
-                  description={affix.description}
-                  gemSize={gemSizing.gemSize}
-                  emojiSize={gemSizing.emojiSize}
-                  statSize={gemSizing.statSize}
-                  nameSize={gemSizing.nameSize}
-                  catSize={gemSizing.catSize}
-                  selected={orb.uid === selectedOrbUid}
-                  onPointerDown={(e) => handlePointerDown(orb.uid, e)}
-                />
-              </div>
-            );
-          })}
+          <AnimatePresence>
+            {pool.map((orb, index) => {
+              const affix = affixMap.get(orb.affixId);
+              if (!affix) return null;
+              // Pin gems to their original grid slot so they don't reflow when others are picked
+              const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
+              const col = (slot % gemSizing.columns) + 1;
+              const row = Math.floor(slot / gemSizing.columns) + 1;
+              return (
+                <motion.div
+                  key={orb.uid}
+                  initial={{ scale: 0.7, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 400,
+                    damping: 25,
+                    delay: index * 0.025,
+                  }}
+                  style={{ gridColumn: col, gridRow: row }}
+                >
+                  <GemCard
+                    uid={orb.uid}
+                    affixId={orb.affixId}
+                    affixName={affix.name}
+                    tier={orb.tier}
+                    category={affix.category}
+                    tags={affix.tags}
+                    statLabel={getStatLabel(affix, orb)}
+                    description={affix.description}
+                    gemSize={gemSizing.gemSize}
+                    emojiSize={gemSizing.emojiSize}
+                    statSize={gemSizing.statSize}
+                    nameSize={gemSizing.nameSize}
+                    catSize={gemSizing.catSize}
+                    selected={orb.uid === selectedOrbUid}
+                    onPointerDown={(e) => handlePointerDown(orb.uid, e)}
+                  />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       </div>
 
