@@ -473,14 +473,19 @@ export function Draft() {
     });
   }, [pool]);
 
-  // Detect draft completion and trigger end animation BEFORE the browser paints.
-  // useLayoutEffect runs synchronously after DOM mutations, preventing the pool grid
-  // from visually reflowing before we hide it with the forge card animation overlay.
+  // Detect draft completion and trigger end animation.
+  // CRITICAL: We must hide the pool grid via direct DOM manipulation in useLayoutEffect
+  // BEFORE the browser paints. Calling setDraftEndGems alone would schedule a new render,
+  // allowing the browser to paint the reflowed grid first (causing a visual blink).
   const draftEndTriggeredRef = useRef(false);
   useLayoutEffect(() => {
     const currentPhase = gateway.getState()?.phase;
     if (currentPhase?.kind === 'forge' && !draftEndTriggeredRef.current) {
       draftEndTriggeredRef.current = true;
+      // Hide the pool grid IMMEDIATELY via DOM before the browser paints
+      if (poolContainerRef.current) {
+        poolContainerRef.current.style.visibility = 'hidden';
+      }
       startDraftEndAnimation();
     }
   });
