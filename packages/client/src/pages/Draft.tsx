@@ -234,7 +234,10 @@ export function Draft() {
 
   // ── Draft action ──
   const draftOrb = useCallback(async (orbUid: string) => {
-    if (!isPlayerTurn) return;
+    if (!isPlayerTurn) {
+      isPickingRef.current = false;
+      return;
+    }
     const result = await gateway.dispatch({ kind: 'draft_pick', player: 0, orbUid });
     if (result.ok) {
       playSound('orbConfirm');
@@ -242,10 +245,12 @@ export function Draft() {
     } else {
       cancelSelection();
     }
+    isPickingRef.current = false;
   }, [isPlayerTurn, gateway, confirmPick, cancelSelection]);
 
   // ── Swoop gem to player's stockpile (used for double-tap picks) ──
   const swoopToPlayerStockpile = useCallback((uid: string) => {
+    isPickingRef.current = true;
     const el = document.querySelector(`[data-gem-uid="${uid}"]`) as HTMLElement;
     if (!el || !dropZoneRef.current) {
       // Fallback: just dispatch without animation
@@ -287,6 +292,10 @@ export function Draft() {
   const hasDraggedRef = useRef(false);
   const isOverDropZoneRef = useRef(false);
   const selectedOrbUidRef = useRef(selectedOrbUid);
+  // Lock ALL interactions while a pick is being processed (swoop animation + dispatch)
+  const isPickingRef = useRef(false);
+  // Persist draggedEl across effect re-runs so cleanup can always find it
+  const draggedElRef = useRef<HTMLElement | null>(null);
 
   // Keep selectedOrbUidRef in sync — needed because handleUp reads it via ref
   useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
@@ -294,7 +303,8 @@ export function Draft() {
   // ── Pointer down: record start position + time, don't select yet ──
   const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
     if (!isPlayerTurn) return;
-    // Block new interactions while a gem is being dragged
+    // Block ALL interactions while a pick is in flight (swoop/dispatch) or drag active
+    if (isPickingRef.current) return;
     if (pointerStartRef.current && hasDraggedRef.current) return;
     e.preventDefault();
     pointerStartRef.current = { x: e.clientX, y: e.clientY, uid, time: Date.now() };
@@ -303,8 +313,6 @@ export function Draft() {
 
   // ── Global pointer move + up listeners ──
   useEffect(() => {
-    let draggedEl: HTMLElement | null = null;
-
     const handleMove = (e: PointerEvent) => {
       const start = pointerStartRef.current;
       if (!start) return;
@@ -319,23 +327,25 @@ export function Draft() {
         playSound('dragStart');
 
         // Grab the actual gem element and prepare it for dragging
-        draggedEl = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement;
-        if (draggedEl) {
+        const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement;
+        draggedElRef.current = el;
+        if (el) {
           // Capture current position before switching to fixed
-          const rect = draggedEl.getBoundingClientRect();
-          draggedEl.dataset.origLeft = String(rect.left);
-          draggedEl.dataset.origTop = String(rect.top);
+          const rect = el.getBoundingClientRect();
+          el.dataset.origLeft = String(rect.left);
+          el.dataset.origTop = String(rect.top);
           // Switch to fixed positioning so it breaks out of the overflow:hidden container
-          draggedEl.style.position = 'fixed';
-          draggedEl.style.left = `${rect.left}px`;
-          draggedEl.style.top = `${rect.top}px`;
-          draggedEl.style.width = `${rect.width}px`;
-          draggedEl.style.zIndex = '999';
-          draggedEl.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
-          draggedEl.style.pointerEvents = 'none';
+          el.style.position = 'fixed';
+          el.style.left = `${rect.left}px`;
+          el.style.top = `${rect.top}px`;
+          el.style.width = `${rect.width}px`;
+          el.style.zIndex = '999';
+          el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
+          el.style.pointerEvents = 'none';
         }
       }
 
+      const draggedEl = draggedElRef.current;
       if (hasDraggedRef.current && draggedEl) {
         // Move the gem relative to where it started
         const origLeft = parseFloat(draggedEl.dataset.origLeft ?? '0');
@@ -355,18 +365,19 @@ export function Draft() {
     };
 
     const resetDraggedEl = () => {
-      if (draggedEl) {
-        draggedEl.style.position = '';
-        draggedEl.style.left = '';
-        draggedEl.style.top = '';
-        draggedEl.style.width = '';
-        draggedEl.style.zIndex = '';
-        draggedEl.style.transform = '';
-        draggedEl.style.filter = '';
-        draggedEl.style.pointerEvents = '';
-        delete draggedEl.dataset.origLeft;
-        delete draggedEl.dataset.origTop;
-        draggedEl = null;
+      const el = draggedElRef.current;
+      if (el) {
+        el.style.position = '';
+        el.style.left = '';
+        el.style.top = '';
+        el.style.width = '';
+        el.style.zIndex = '';
+        el.style.transform = '';
+        el.style.filter = '';
+        el.style.pointerEvents = '';
+        delete el.dataset.origLeft;
+        delete el.dataset.origTop;
+        draggedElRef.current = null;
       }
     };
 
@@ -377,13 +388,15 @@ export function Draft() {
       if (hasDraggedRef.current) {
         if (isOverDropZoneRef.current) {
           playSound('dropSuccess');
+          isPickingRef.current = true;
           // Hide the gem immediately — don't reset to grid position
           // (AnimatePresence exit would show a fading ghost otherwise)
-          if (draggedEl) {
-            draggedEl.style.opacity = '0';
-            draggedEl.style.pointerEvents = '';
+          const el = draggedElRef.current;
+          if (el) {
+            el.style.opacity = '0';
+            el.style.pointerEvents = '';
           }
-          draggedEl = null;
+          draggedElRef.current = null;
           draftOrb(start.uid);
         } else {
           // Failed drop — snap back to grid position
