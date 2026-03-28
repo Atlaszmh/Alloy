@@ -1,13 +1,14 @@
 import { useNavigate } from 'react-router';
+import { useUIStore } from '@/stores/uiStore';
 
 export function MainMenu() {
   const navigate = useNavigate();
+  const { devMode, toggleDevMode } = useUIStore();
 
   return (
     <div className="page-enter flex h-full flex-col items-center justify-center gap-10 p-6">
       {/* Title with atmospheric glow */}
       <div className="relative text-center">
-        {/* Background glow */}
         <div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 blur-3xl"
           style={{
@@ -36,7 +37,6 @@ export function MainMenu() {
 
       {/* Buttons — vertical stack */}
       <div className="flex w-full max-w-xs flex-col gap-3">
-        {/* Play button spans full width */}
         <button
           onClick={() => navigate('/queue')}
           className="rounded-lg bg-gradient-to-b from-accent-400 to-accent-500 px-6 py-4 text-lg font-bold tracking-wide text-surface-900 active:translate-y-px active:scale-[0.98]"
@@ -69,15 +69,17 @@ export function MainMenu() {
           </button>
         ))}
 
+        {/* Dev Mode toggle */}
         <button
-          onClick={() => navigate('/settings')}
-          className="rounded-lg border border-surface-600 bg-surface-800 px-5 py-3 font-medium text-surface-300 transition-all hover:border-surface-500 hover:bg-surface-700 active:translate-y-px"
-          style={{
-            fontFamily: 'var(--font-family-display)',
-            letterSpacing: '0.03em',
-          }}
+          onClick={toggleDevMode}
+          className={`rounded-lg border px-5 py-2 text-sm font-medium transition-all active:translate-y-px ${
+            devMode
+              ? 'border-green-500/40 bg-green-500/10 text-green-400'
+              : 'border-surface-600 bg-surface-800 text-surface-400 hover:border-surface-500 hover:bg-surface-700'
+          }`}
+          style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.03em' }}
         >
-          Settings
+          {devMode ? '● Dev Mode On' : 'Dev Mode'}
         </button>
       </div>
     </div>
