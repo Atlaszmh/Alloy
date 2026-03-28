@@ -520,10 +520,11 @@ export function Draft() {
       {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
       <div
         ref={poolContainerRef}
-        className="flex-1 overflow-hidden rounded-xl border border-surface-600 bg-surface-800"
+        className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
         style={{
           boxShadow: 'var(--shadow-inset)',
           padding: 6,
+          minHeight: 0,
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
