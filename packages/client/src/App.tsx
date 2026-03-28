@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useParams } from 'react-router';
+import { AppShell } from './components/AppShell';
 import { MainMenu } from './pages/MainMenu';
 import { Matchmaking } from './pages/Matchmaking';
 import { PhaseRouter } from './pages/PhaseRouter';
@@ -20,20 +21,18 @@ export function App() {
   useRouteSound();
 
   return (
-    <div className="app-shell">
-      <div className="app-frame">
-        <Routes>
-          <Route path="/" element={<MainMenu />} />
-          <Route path="/queue" element={<Matchmaking />} />
-          <Route path="/match/:code" element={<PhaseRouter />} />
-          <Route path="/match/:code/*" element={<MatchRedirect />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/recipes" element={<RecipeBook />} />
-          <Route path="/collection" element={<Collection />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </div>
-    </div>
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route path="/" element={<MainMenu />} />
+        <Route path="/queue" element={<Matchmaking />} />
+        <Route path="/match/:code" element={<PhaseRouter />} />
+        <Route path="/match/:code/*" element={<MatchRedirect />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/recipes" element={<RecipeBook />} />
+        <Route path="/collection" element={<Collection />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+    </Routes>
   );
 }
