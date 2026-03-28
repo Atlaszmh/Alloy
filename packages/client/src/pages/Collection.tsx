@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import type { AffixDef, AffixCategory, AffixTier, StatModifier } from '@alloy/engine';
 
@@ -103,7 +102,6 @@ function AffixCard({ affix, index }: { affix: AffixDef; index: number }) {
 }
 
 export function Collection() {
-  const navigate = useNavigate();
   const registry = useMatchStore.getState().getRegistry();
 
   const [search, setSearch] = useState('');
@@ -141,14 +139,8 @@ export function Collection() {
 
   return (
     <div className="page-enter flex h-full flex-col overflow-y-auto p-4">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4">
         <h2 className="text-lg font-bold text-accent-400">Collection</h2>
-        <button
-          onClick={() => navigate('/')}
-          className="text-sm text-surface-300 hover:text-white"
-        >
-          Back
-        </button>
       </header>
 
       {/* Search */}

@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { RecipeEntry } from '@/features/meta/components/RecipeEntry';
 
@@ -92,7 +91,6 @@ function getStatColorClass(key: string): string {
 }
 
 export function RecipeBook() {
-  const navigate = useNavigate();
   const registry = useMatchStore.getState().getRegistry();
 
   const [search, setSearch] = useState('');
@@ -123,14 +121,8 @@ export function RecipeBook() {
 
   return (
     <div className="page-enter flex h-full flex-col overflow-y-auto p-4">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4">
         <h2 className="text-lg font-bold text-accent-400">Recipe Book</h2>
-        <button
-          onClick={() => navigate('/')}
-          className="text-sm text-surface-300 hover:text-white"
-        >
-          Back
-        </button>
       </header>
 
       {/* Search */}

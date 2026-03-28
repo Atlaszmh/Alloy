@@ -1,21 +1,13 @@
-import { useNavigate } from 'react-router';
 import { LeaderboardRow } from '@/features/meta/components/LeaderboardRow';
 import { useLeaderboard } from '@/features/meta/hooks/useLeaderboard';
 
 export function Leaderboard() {
-  const navigate = useNavigate();
   const entries = useLeaderboard();
 
   return (
     <div className="page-enter flex h-full flex-col overflow-y-auto p-4">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4">
         <h2 className="text-lg font-bold text-accent-400">Leaderboard</h2>
-        <button
-          onClick={() => navigate('/')}
-          className="text-sm text-surface-300 hover:text-white"
-        >
-          Back
-        </button>
       </header>
 
       <div className="overflow-x-auto rounded-lg border border-surface-600 shadow-[0_2px_8px_rgba(0,0,0,0.4)]">

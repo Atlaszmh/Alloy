@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router';
 import { ProfileCard } from '@/features/meta/components/ProfileCard';
 import { RankBadge } from '@/features/meta/components/RankBadge';
 import { MasteryTrack } from '@/features/meta/components/MasteryTrack';
@@ -14,19 +13,12 @@ const MASTERY_TRACKS = [
 ];
 
 export function Profile() {
-  const navigate = useNavigate();
   const profile = useProfile();
 
   return (
     <div className="page-enter flex h-full flex-col overflow-y-auto p-4">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4">
         <h2 className="text-lg font-bold text-accent-400">Profile</h2>
-        <button
-          onClick={() => navigate('/')}
-          className="text-sm text-surface-300 hover:text-white"
-        >
-          Back
-        </button>
       </header>
 
       {/* Profile Card */}
