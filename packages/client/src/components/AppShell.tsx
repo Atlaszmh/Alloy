@@ -44,7 +44,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <div className="app-frame">
-        <main className="flex-1">
+        <main className="flex-1" style={{ minHeight: 0, overflow: 'hidden' }}>
           <Outlet />
         </main>
 
