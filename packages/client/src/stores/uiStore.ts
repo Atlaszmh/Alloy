@@ -21,6 +21,9 @@ interface UIStore {
   masterVolume: number;
   sfxVolume: number;
   uiVolume: number;
+  devMode: boolean;
+  colorblindMode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
+  hapticEnabled: boolean;
 
   openModal: (id: string) => void;
   closeModal: () => void;
@@ -29,6 +32,9 @@ interface UIStore {
   toggleMute: () => void;
   toggleDebug: () => void;
   setVolume: (category: 'master' | SoundCategory, value: number) => void;
+  toggleDevMode: () => void;
+  setColorblindMode: (mode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia') => void;
+  setHapticEnabled: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -40,6 +46,9 @@ export const useUIStore = create<UIStore>((set) => ({
   masterVolume: loadVolume('alloy:vol:master', 0.8),
   sfxVolume: loadVolume('alloy:vol:sfx', 1.0),
   uiVolume: loadVolume('alloy:vol:ui', 1.0),
+  devMode: (() => { try { return localStorage.getItem('alloy:devMode') === 'true'; } catch { return false; } })(),
+  colorblindMode: (() => { try { return (localStorage.getItem('alloy:colorblindMode') as UIStore['colorblindMode']) ?? 'none'; } catch { return 'none' as const; } })(),
+  hapticEnabled: (() => { try { return localStorage.getItem('alloy:hapticEnabled') !== 'false'; } catch { return true; } })(),
 
   openModal: (id) => set({ modalOpen: id }),
   closeModal: () => set({ modalOpen: null }),
@@ -65,5 +74,18 @@ export const useUIStore = create<UIStore>((set) => ({
     } else {
       set(category === 'sfx' ? { sfxVolume: value } : { uiVolume: value });
     }
+  },
+  toggleDevMode: () => set((s) => {
+    const next = !s.devMode;
+    try { localStorage.setItem('alloy:devMode', String(next)); } catch { /* noop */ }
+    return { devMode: next };
+  }),
+  setColorblindMode: (mode) => {
+    try { localStorage.setItem('alloy:colorblindMode', mode); } catch { /* noop */ }
+    set({ colorblindMode: mode });
+  },
+  setHapticEnabled: (enabled) => {
+    try { localStorage.setItem('alloy:hapticEnabled', String(enabled)); } catch { /* noop */ }
+    set({ hapticEnabled: enabled });
   },
 }));
