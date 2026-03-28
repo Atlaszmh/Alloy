@@ -42,7 +42,8 @@ function StockpileZone({
   isDropTarget: boolean;
   side: 'top' | 'bottom';
 }) {
-  const emptyCount = Math.max(0, maxOrbs - orbs.length);
+  const totalSlots = Math.max(maxOrbs, orbs.length);
+  const emptyCount = Math.max(0, totalSlots - orbs.length);
   const newestUid = orbs.length > 0 ? orbs[orbs.length - 1].uid : null;
   const sortedOrbs = [...orbs].sort((a, b) => {
     const aAffix = affixMap.get(a.affixId);
@@ -51,10 +52,6 @@ function StockpileZone({
     const bEl = bAffix?.tags.find((t) => ELEMENT_ORDER.includes(t)) ?? 'physical';
     return ELEMENT_ORDER.indexOf(aEl) - ELEMENT_ORDER.indexOf(bEl);
   });
-
-  // Fixed height: header (~20px) + grid rows (each ~41px with gap) + padding
-  const rows = Math.ceil(maxOrbs / 4);
-  const fixedHeight = 20 + rows * 41 + 10; // header + rows + padding
 
   return (
     <div
@@ -66,7 +63,6 @@ function StockpileZone({
             : 'border-[rgba(212,168,52,0.25)]'
       }`}
       style={{
-        height: fixedHeight,
         background: isDropTarget
           ? undefined
           : side === 'top'
@@ -90,11 +86,17 @@ function StockpileZone({
           className="text-[10px] font-semibold text-surface-300"
           style={{ fontFamily: 'var(--font-family-display)' }}
         >
-          {orbs.length} / {maxOrbs}
+          {orbs.length} / {totalSlots}
         </span>
       </div>
 
-      <div className="grid grid-cols-4 gap-[3px]">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+          gap: 3,
+        }}
+      >
         {sortedOrbs.map((orb) => {
           const affix = affixMap.get(orb.affixId);
           if (!affix) return null;
