@@ -111,9 +111,6 @@ function StockpileZone({
             />
           );
         })}
-        {Array.from({ length: emptyCount }, (_, i) => (
-          <GemChip key={`empty-${i}`} empty />
-        ))}
       </div>
     </div>
   );
