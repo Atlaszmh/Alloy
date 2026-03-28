@@ -11,7 +11,7 @@ Add a persistent bottom tab bar across all app phases, a settings drawer that wo
 
 ### AppShell Layout
 
-A new `AppShell` component wraps all routes via a React Router layout route, replacing the current flat route structure.
+A new `AppShell` component wraps all routes via a React Router layout route. It replaces the existing `app-shell` / `app-frame` wrapper divs in `App.tsx` — the AppShell component takes over their layout responsibilities (full viewport height, flex column).
 
 ```
 <AppShell>
@@ -40,7 +40,9 @@ A new `AppShell` component wraps all routes via a React Router layout route, rep
 </Route>
 ```
 
-Existing per-page "Back" buttons on Settings, Leaderboard, Collection, etc. are removed — the tab bar handles navigation globally.
+Existing per-page "Back" buttons on Settings, Leaderboard, Collection, Profile, and RecipeBook are removed — the tab bar handles navigation globally. The MainMenu Settings button is also removed since Settings is now accessible via the tab bar.
+
+The `<main>` element gets `padding-bottom: 46px` to prevent content being obscured by the tab bar.
 
 ## Components
 
@@ -68,9 +70,11 @@ Existing per-page "Back" buttons on Settings, Leaderboard, Collection, etc. are 
 | Dev | Code brackets | Open DevDrawer | No confirm (overlay) |
 
 **Active game detection:**
-- Current route matches `/match/:code`
-- Phase is not `complete`
+- Current route matches `/match/:code` and phase is not `complete`
+- Also applies on `/queue` when the player is actively searching/waiting
 - When active: Home and Ranks taps open `ConfirmLeaveDialog` instead of navigating
+- On `/queue`, leaving calls `leaveQueue()` before navigating
+- On PostMatch (route is `/match/:code` but phase is `complete`): no confirm needed, navigate freely
 
 **Dev tab visibility:**
 - Visible when `import.meta.env.DEV` is true OR `uiStore.devMode` is enabled
@@ -92,6 +96,8 @@ Existing per-page "Back" buttons on Settings, Leaderboard, Collection, etc. are 
 - `SettingsDrawer` renders `SettingsContent` inside a slide-up panel
 - The standalone `/settings` route also uses `SettingsContent` (for direct URL access)
 - Works identically during active games and on non-game screens — no navigation occurs
+- Promote `colorblindMode` and `hapticEnabled` from local `useState` in Settings.tsx to `uiStore` so state persists when the drawer unmounts
+- Both drawers (Settings and Dev) auto-close on route navigation
 
 ### 3. DevDrawer
 
@@ -105,8 +111,9 @@ Existing per-page "Back" buttons on Settings, Leaderboard, Collection, etc. are 
 
 **Jump to Phase:**
 - Buttons: Draft, Forge, Duel, Adapt, PostMatch
-- Each creates a mock AI match via `useMatchStore` and navigates to `/match/ai-dev-{phase}`
-- Uses existing `LocalGateway` infrastructure
+- Each calls `matchStore.startLocalMatch()` with a fixed seed and default AI tier, then navigates to `/match/ai-{randomId}`
+- The `ai-` prefix is what `useMatchGateway` uses to route to `LocalGateway` — no new prefix needed
+- To jump to a specific phase, the dev drawer advances the match state programmatically after creation (dispatch actions to skip phases)
 
 **Animations:**
 - Trigger swoop animation
@@ -131,10 +138,13 @@ Existing per-page "Back" buttons on Settings, Leaderboard, Collection, etc. are 
 
 **Content:**
 - Title: "Leave match?"
-- Body: "You're in an active game. Leaving will forfeit the match."
+- Body (in-match): "You're in an active game. Leaving will forfeit the match."
+- Body (in-queue): "You're searching for an opponent. Leaving will cancel matchmaking."
 - Buttons:
   - "Stay" — closes dialog, no action
   - "Leave" — navigates to the requested destination
+
+**Navigation ownership:** TabBar holds the pending destination in local state. When the player confirms, TabBar calls `onConfirm`, which navigates to the stored destination. The dialog itself is stateless regarding destination.
 
 **Props:**
 ```tsx
@@ -160,8 +170,12 @@ interface ConfirmLeaveDialogProps {
 **File:** `packages/client/src/stores/uiStore.ts`
 
 Add:
-- `devMode: boolean` — controls Dev tab visibility in tab bar
+- `devMode: boolean` — controls Dev tab visibility in tab bar (persisted to localStorage so it survives reloads during development; production builds ignore this flag since `import.meta.env.DEV` is false)
 - `toggleDevMode: () => void`
+- `colorblindMode: ColorblindMode` — promoted from Settings local state
+- `hapticEnabled: boolean` — promoted from Settings local state
+- `setColorblindMode: (mode: ColorblindMode) => void`
+- `setHapticEnabled: (enabled: boolean) => void`
 
 ## Interaction Flows
 
