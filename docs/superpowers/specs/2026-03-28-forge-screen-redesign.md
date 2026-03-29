@@ -29,7 +29,7 @@ The forge screen is split into two tabs matching distinct player actions:
 ### Tab 1: Plan & Combine
 - **Purpose:** Survey all gems, discover combinations, craft compound gems
 - **Top:** Gem tray grid (all stockpile orbs, scrollable)
-- **Bottom:** Combination workbench with 2 combine slots (matches engine's 2-input combine system)
+- **Bottom:** Combination workbench with 3 combine slots (supports upcoming 3-gem combine mechanic)
 
 ### Tab 2: Equip
 - **Purpose:** Socket gems into weapon and armor
@@ -47,8 +47,7 @@ interface ForgeStore {
   // Existing (keep)
   plan: ForgePlan | null;
   selectedOrbUid: string | null;
-  comboSlotA: OrbInstance | null;
-  comboSlotB: OrbInstance | null;
+  comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null]; // 3 combine slots
   confirmModalOpen: boolean;
 
   // New
@@ -134,8 +133,8 @@ Weapon: [STR ▾] [VIT ▾]    Armor: [VIT ▾] [STR ▾]
 
 **Header:** "⚒ COMBINATION WORKBENCH" — 10px uppercase #b89868, centered
 
-**Layout:** 2 slots + "→" arrow (▶, 16px, #6a6a88) + result box, centered horizontally
-- "+" symbol between slots (16px, #6a6a88, Rajdhani 700)
+**Layout:** 3 slots + "→" arrow (▶, 16px, #6a6a88) + result box, centered horizontally
+- "+" symbols between slots (16px, #6a6a88, Rajdhani 700)
 - Each slot: 52px rounded square (border-radius 8px)
   - Empty: dashed border 2px #363650, dark inset background
   - Filled: solid element-colored border, emoji + abbreviated stat inside
@@ -219,7 +218,7 @@ When flux reaches 0:
 ### Combining (Tab 1)
 1. Tap gem in tray → gem highlights
 2. Tap empty combine slot → gem stages into slot, dims in tray with ⚒ badge
-3. When both slots filled, glow signal appears (white = basic, gold = unique)
+3. When 2-3 slots filled, glow signal appears (white = basic, gold = unique)
 4. Tap COMBINE → gems consumed, new gem appears in tray with scale-pop animation
 5. Tap filled slot to unstage (gem returns to tray at full opacity)
 
@@ -296,7 +295,7 @@ Match draft screen patterns:
 | `pages/Forge.tsx` | Main component — layout, tab switching, animation orchestration |
 | `stores/forgeStore.ts` | Zustand — selection, activeTab, activeItemTab, combine slots (refactor existing) |
 | `components/ForgeGemTray.tsx` | Gem grid with responsive sizing, selection, dimming |
-| `components/CombineWorkbench.tsx` | 2-slot workbench, glow signals, combine button |
+| `components/CombineWorkbench.tsx` | 3-slot workbench, glow signals, combine button |
 | `components/ItemSocketView.tsx` | Item display, socket grid, equipped list |
 | `components/ItemMiniPreview.tsx` | Compact other-item bar with socket dots |
 | `components/ForgeHeader.tsx` | 2-row header with stats, timer, flux, base stat selectors |
@@ -319,7 +318,7 @@ Match draft screen patterns:
 - F03: Tab switching preserves gem tray state
 - F04: Stage gem in combine slot, gem dims in tray
 - F05: Unstage gem from combine slot, gem restores in tray
-- F06: Glow signal appears when both slots filled
+- F06: Glow signal appears when 2+ slots filled
 - F07: Combine produces new gem in tray
 - F08: Equip tab — place gem in socket, gem dims in tray
 - F09: Equip tab — remove gem from socket, gem restores
