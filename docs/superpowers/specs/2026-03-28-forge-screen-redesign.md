@@ -29,7 +29,7 @@ The forge screen is split into two tabs matching distinct player actions:
 ### Tab 1: Plan & Combine
 - **Purpose:** Survey all gems, discover combinations, craft compound gems
 - **Top:** Gem tray grid (all stockpile orbs, scrollable)
-- **Bottom:** Combination workbench with 3 drag-slots
+- **Bottom:** Combination workbench with 2 combine slots (matches engine's 2-input combine system)
 
 ### Tab 2: Equip
 - **Purpose:** Socket gems into weapon and armor
@@ -37,6 +37,30 @@ The forge screen is split into two tabs matching distinct player actions:
 - **Bottom:** Item view with visual socket grid
 
 Players freely switch between tabs at any time — no forced flow.
+
+## Store State
+
+The `forgeStore.ts` is refactored to include:
+
+```ts
+interface ForgeStore {
+  // Existing (keep)
+  plan: ForgePlan | null;
+  selectedOrbUid: string | null;
+  comboSlotA: OrbInstance | null;
+  comboSlotB: OrbInstance | null;
+  confirmModalOpen: boolean;
+
+  // New
+  activeTab: 'combine' | 'equip';       // Default: 'combine'
+  activeItemTab: 'weapon' | 'armor';    // Default: 'weapon'
+
+  // Removed
+  // dragSource — replaced by tap-to-place interaction
+}
+```
+
+**Reset behavior:** On round change (new forge phase), `activeTab` resets to `'combine'`, `activeItemTab` resets to `'weapon'`, combo slots clear, selection clears.
 
 ## Layout Specification
 
@@ -58,6 +82,7 @@ HP 228   DMG 2   ARM 53%   CRT 0%        ⚡8
 - Stats as colored mini pills: HP green (#34d399), DMG white, ARM teal (#2dd4bf), CRT red (#f87171) when 0%
 - Stat label 9px uppercase #6a6a88, value 11px Rajdhani 700
 - Flux right-aligned, #fbbf24, 12px
+- **Flux at 0:** text #f87171 (danger red), counter pulses with `timer-pulse` animation
 
 ### Tab Bar (~36px)
 - Two tabs, 50/50 split: "⚒ Plan & Combine" / "⚔ Equip"
@@ -68,6 +93,8 @@ HP 228   DMG 2   ARM 53%   CRT 0%        ⚡8
 
 **Label:** "STOCKPILE · {count} ORBS" — 10px uppercase, #b89868, Rajdhani
 
+**Empty state (0 gems):** Show centered message "All orbs assigned" in #6a6a88, 12px. Gem tray maintains minimum height (~120px) so layout doesn't collapse.
+
 **Responsive grid sizing:**
 
 | Gem Count | Columns | Gem Size | Emoji | Stat Text | Name Text |
@@ -76,6 +103,8 @@ HP 228   DMG 2   ARM 53%   CRT 0%        ⚡8
 | 9-12      | 4       | 68px     | 26px  | 9px       | 9px       |
 | 13-16     | 5       | 58px     | 22px  | 8px       | 8px       |
 | 17+       | 5       | 52px     | 20px  | 8px       | 8px       |
+
+Tested against target viewports: 375px (iPhone SE) = 4×76=304+gaps OK, 5×52=260+gaps OK. 393px (iPhone 15) and 412px (Pixel 7) have more room.
 
 Minimum gem size: 48px (touch target). Container scrolls with styled thin scrollbar (4px, #363650 thumb).
 
@@ -88,14 +117,25 @@ Minimum gem size: 48px (touch target). Container scrolls with styled thin scroll
 - Equipped state: opacity 0.35, "⚔" badge top-right (8px)
 - Staged state: opacity 0.35, "⚒" badge top-right (8px)
 
-**Gem sizes lock to initial count per round** — don't shrink as gems are placed (matches draft pattern).
+**Gem sizes lock to initial count per round** — don't shrink as gems are placed (matches draft pattern). When a combine consumes 2 gems and produces 1, the grid retains its original column/size tier. The consumed gems are removed and the grid reflows to fill gaps (no empty placeholders). The size tier only recalculates on round transitions.
+
+### Base Stat Selection (Round 1 only)
+
+In round 1, base stat selectors appear as a compact row between the header and gem tray:
+```
+Weapon: [STR ▾] [VIT ▾]    Armor: [VIT ▾] [STR ▾]
+```
+- Styled as game-UI pill dropdowns (background #252536, border #363650, text white, Rajdhani)
+- NOT raw `<select>` elements — use custom dropdown or styled selects
+- Free action (no flux cost)
+- Hidden in rounds 2-3 (base stats are locked after round 1)
 
 ### Combination Workbench (Tab 1, bottom ~40%)
 
 **Header:** "⚒ COMBINATION WORKBENCH" — 10px uppercase #b89868, centered
 
-**Layout:** 3 slots → "→" arrow → result box, centered horizontally
-- "+" symbols between slots (16px, #6a6a88)
+**Layout:** 2 slots + "→" arrow (▶, 16px, #6a6a88) + result box, centered horizontally
+- "+" symbol between slots (16px, #6a6a88, Rajdhani 700)
 - Each slot: 52px rounded square (border-radius 8px)
   - Empty: dashed border 2px #363650, dark inset background
   - Filled: solid element-colored border, emoji + abbreviated stat inside
@@ -111,7 +151,16 @@ Minimum gem size: 48px (touch target). Container scrolls with styled thin scroll
 
 **Buttons:** COMBINE (gold, disabled when <2 slots filled) + CLEAR (surface-600)
 
-**Warm border glow** on workbench container: box-shadow inset 0 0 30px rgba(232,85,58,0.05)
+**Warm border glow** on workbench container: box-shadow inset 0 0 30px rgba(212,168,52,0.04) (gold tint matching forge theme)
+
+### Flux Exhaustion
+
+When flux reaches 0:
+- Flux counter turns red (#f87171) and pulses
+- Combine button disabled if combine cost > 0 flux
+- Assign orb disabled (costs flux)
+- Remove orb still works (free action, refunds flux)
+- Tapping a disabled action shows a brief toast: "Not enough flux" (0.8s fade-out, positioned near the flux counter)
 
 ### Item Section (Tab 2, bottom ~45%)
 
@@ -123,7 +172,10 @@ Minimum gem size: 48px (touch target). Container scrolls with styled thin scroll
 - Name + type badge ("WEAPON" / "ARMOR")
 - Inherent bonuses: teal (#2dd4bf) positive, red (#f87171) negative
 - Base stats: bronze (#b89868)
-- 3×2 socket grid, gap 6px:
+- Socket grid adapts to item's actual slot count:
+  - 6 slots (standard): 3×2 grid, gap 6px
+  - Fewer slots: center in available space (e.g., 4 slots = 2×2)
+  - More slots (future): 4×2 or scrollable row
   - Each socket: 48px rounded square
   - Empty: background #111118, dashed border #363650, inset shadow
   - Filled: element-colored bg at 20%, solid element border, emoji + short stat text
@@ -156,6 +208,8 @@ Minimum gem size: 48px (touch target). Container scrolls with styled thin scroll
 
 **Rule:** Element name stays full (Fire, Cold, Shadow, etc.). Stat type abbreviates (Damage→Dmg, Penetration→Pen, Resistance→Res). Never less than 3 characters.
 
+**Implementation:** Extend the existing `shared/utils/stat-label.ts` with an abbreviation lookup rather than creating a separate file. Add a `getStatAbbreviation(stat: string): string` export.
+
 ## Interaction Design
 
 ### Gem Selection
@@ -165,15 +219,20 @@ Minimum gem size: 48px (touch target). Container scrolls with styled thin scroll
 ### Combining (Tab 1)
 1. Tap gem in tray → gem highlights
 2. Tap empty combine slot → gem stages into slot, dims in tray with ⚒ badge
-3. When 2-3 slots filled, glow signal appears (white = basic, gold = unique)
-4. Tap COMBINE → gems consumed, new gem appears in tray
+3. When both slots filled, glow signal appears (white = basic, gold = unique)
+4. Tap COMBINE → gems consumed, new gem appears in tray with scale-pop animation
 5. Tap filled slot to unstage (gem returns to tray at full opacity)
 
 ### Equipping (Tab 2)
 1. Tap gem in tray → gem highlights
 2. Tap empty socket → gem placed, fills socket with element color, dims in tray with ⚔ badge
-3. Tap filled socket → gem removed, returns to tray at full opacity
+3. Tap filled socket → gem removed, returns to tray at full opacity (if removable — see round-locking rules below)
 4. Tap item tab or mini preview bar to switch items
+
+### Round-Locking Rules
+- Gems socketed in previous rounds are locked (cannot be removed)
+- Locked sockets show 🔒 icon, no hover/tap interaction
+- Gems socketed in the current round can be freely removed
 
 ### Drag-and-Drop (future enhancement)
 Drag from tray to combine slot or socket. Same gesture system as draft screen (8px threshold, pointer events). Not required for initial implementation — tap-to-place is the primary interaction.
@@ -183,9 +242,9 @@ Drag from tray to combine slot or socket. Same gesture system as draft screen (8
 | Action | Sound | Notes |
 |--------|-------|-------|
 | Select gem | orbSelect | Existing sound |
-| Stage in combine slot | clink (new) | Metallic tap, short |
+| Stage in combine slot | clink (new) | Metallic tap, short. Stub with orbSelect until asset arrives. |
 | Unstage from slot | orbRemove | Existing sound |
-| Combine (execute) | forgeHammer (new) | Heavy, satisfying impact |
+| Combine (execute) | forgeHammer (new) | Heavy, satisfying impact. Stub with combineMerge until asset arrives. |
 | Combine fail | combineFail | Existing sound |
 | Place in socket | orbPlace | Existing sound |
 | Remove from socket | orbRemove | Existing sound |
@@ -222,36 +281,45 @@ Match draft screen patterns:
 - Pointer lock during drag to prevent multi-touch exploits
 - Min 44px touch targets on all interactive elements
 
-## File Organization (target: 10-12 files)
+## Accessibility
+
+- Tab switching: focusable with keyboard, aria-selected on active tab
+- Gem cards: `role="button"`, `aria-label` including gem name, stat, and state (e.g., "Fire Attack, +23 Phys Dmg, Tier 2, equipped")
+- Combine result: `aria-live="polite"` region announces glow signal change ("Unique combination available" / "Basic combination available")
+- Confirmation modal: follow existing Modal component's focus-trap pattern
+- Socket grid: arrow key navigation between sockets within the grid
+
+## File Organization (target: 10-11 files)
 
 | File | Role |
 |------|------|
 | `pages/Forge.tsx` | Main component — layout, tab switching, animation orchestration |
-| `pages/forge-gestures.ts` | Pure gesture constants + classifier (reuse draft pattern) |
-| `stores/forgeStore.ts` | Minimal Zustand — selection, tab state, combine slots (exists, refactor) |
+| `stores/forgeStore.ts` | Zustand — selection, activeTab, activeItemTab, combine slots (refactor existing) |
 | `components/ForgeGemTray.tsx` | Gem grid with responsive sizing, selection, dimming |
-| `components/CombineWorkbench.tsx` | 3-slot workbench, glow signals, combine button |
-| `components/ItemSocketView.tsx` | Item display, 3×2 socket grid, equipped list |
+| `components/CombineWorkbench.tsx` | 2-slot workbench, glow signals, combine button |
+| `components/ItemSocketView.tsx` | Item display, socket grid, equipped list |
 | `components/ItemMiniPreview.tsx` | Compact other-item bar with socket dots |
-| `components/ForgeHeader.tsx` | 2-row header with stats, timer, flux |
-| `hooks/useForgeGemSize.ts` | Responsive gem sizing for forge (adapt useGemSize) |
+| `components/ForgeHeader.tsx` | 2-row header with stats, timer, flux, base stat selectors |
+| `hooks/useForgeGemSize.ts` | Responsive gem sizing for forge (adapt existing useGemSize) |
 | `animation/hooks/useForgeAnimations.tsx` | Combine + socket placement animations |
-| `shared/utils/stat-abbreviations.ts` | Standard abbreviation map |
+| `shared/utils/stat-label.ts` | Extend with abbreviation map (existing file) |
+
+**Note:** Gesture handling is inline in `Forge.tsx` for the initial tap-to-place implementation. A separate `forge-gestures.ts` will be extracted when drag-and-drop is added as a future enhancement.
 
 ## Testing Requirements
 
 ### Unit Tests
-- `forgeStore.test.ts` — tab switching, selection, combine slot staging
-- `stat-abbreviations.test.ts` — all abbreviation mappings
-- `useForgeGemSize.test.ts` — all breakpoints (8, 12, 16, 24+ gems)
+- `forgeStore.test.ts` — tab switching, selection, combine slot staging, reset on round change
+- `stat-label.test.ts` — all abbreviation mappings (extend existing tests)
+- `useForgeGemSize.test.ts` — all breakpoints (8, 12, 16, 17+ gems), container shrinking, minimum size
 
 ### E2E Tests (4 device profiles)
-- F01: All stockpile gems visible on initial load
+- F01: All stockpile gems visible on initial load (no scrolling needed for ≤12 gems)
 - F02: Tap gem to select, tap again to deselect
 - F03: Tab switching preserves gem tray state
 - F04: Stage gem in combine slot, gem dims in tray
 - F05: Unstage gem from combine slot, gem restores in tray
-- F06: Glow signal appears when 2+ slots filled
+- F06: Glow signal appears when both slots filled
 - F07: Combine produces new gem in tray
 - F08: Equip tab — place gem in socket, gem dims in tray
 - F09: Equip tab — remove gem from socket, gem restores
@@ -262,3 +330,6 @@ Match draft screen patterns:
 - F14: No console errors during full flow
 - F15: Touch-action: none on interactive elements
 - F16: Context menu blocked on gem tray
+- F17: Flux exhaustion disables combine/assign, shows toast
+- F18: Base stat selectors visible in round 1, hidden in round 2+
+- F19: Round-locked sockets show lock icon, not removable
