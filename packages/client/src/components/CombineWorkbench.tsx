@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { DataRegistry, OrbInstance } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
-import { getStatLabel } from '@/shared/utils/stat-label';
+import { getStatLabel, getStatAbbreviation } from '@/shared/utils/stat-label';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}',
