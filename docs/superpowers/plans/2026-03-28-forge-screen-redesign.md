@@ -4,12 +4,12 @@
 
 **Goal:** Rebuild the forge screen from a 1170-line monolith into a two-tab layout (Plan & Combine / Equip) where all gems are visible at once alongside the active tool.
 
-**Architecture:** Two-tab layout with a persistent gem tray at the top of both tabs. Tab 1 shows a 3-slot combination workbench with glow signals (white=basic, gold=unique). Tab 2 shows item sockets in a visual grid with a mini preview bar for the other item. The existing `forgeStore.ts` is refactored to add tab state and 3-slot combo array. All game logic remains in the engine — the UI is purely presentational over `ForgePlan`.
+**Architecture:** Two-tab layout. Top: header + prominent flux bar + stats. Middle: action area (workbench or item sockets). Bottom: gem tray/stockpile (thumb-friendly). All UI reuses shared components (GemCard, HapticButton, Timer, Modal) and the shared design system (element-theme.ts, index.css tokens). No screen-specific color constants or button implementations.
 
 **Tech Stack:** React 19, Zustand 5, TailwindCSS v4, Web Animations API, Vitest, Playwright
 
 **Spec:** `docs/superpowers/specs/2026-03-28-forge-screen-redesign.md`
-**Mockup:** `packages/client/forge-mockup-v4.html`
+**Mockup:** `packages/client/forge-mockup-v7.html`
 
 ---
 
@@ -17,22 +17,25 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
+| `index.css` | Modify | Add forge color tokens + `pop-in` keyframe |
 | `stores/forgeStore.ts` | Modify | Add `activeTab`, `activeItemTab`, refactor combo slots to 3-element array |
 | `stores/forgeStore.test.ts` | Modify | Test new tab state, 3-slot combo staging, reset behavior |
 | `shared/utils/stat-label.ts` | Modify | Add `getStatAbbreviation()` export |
-| `shared/utils/stat-label.test.ts` | Create | Test all abbreviation mappings (co-located, not in __tests__/) |
-| `hooks/useForgeGemSize.ts` | Create | Forge-specific responsive gem sizing (4 breakpoints) |
-| `hooks/useForgeGemSize.test.ts` | Create | Test all breakpoints, min size, container shrinking (co-located) |
-| `components/ForgeHeader.tsx` | Create | 2-row header: title/timer/done + stats/flux |
-| `components/ForgeGemTray.tsx` | Create | Responsive gem grid with selection, dimming, badges |
-| `components/CombineWorkbench.tsx` | Create | 3-slot workbench, glow signals, combine/clear buttons |
-| `components/ItemSocketView.tsx` | Create | Item display, adaptive socket grid, equipped list |
-| `components/ItemMiniPreview.tsx` | Create | Compact bar showing other item's socket state |
+| `shared/utils/stat-label.test.ts` | Create | Test all abbreviation mappings (co-located) |
+| `hooks/useGemSize.ts` | Modify | EXTEND with `context: 'draft' \| 'forge'` param for forge breakpoints |
+| `hooks/useGemSize.test.ts` | Modify | EXTEND with forge breakpoint tests |
+| `components/ForgeHeader.tsx` | Create | Header + flux bolt bar + stats row, uses shared Timer + HapticButton |
+| `components/ForgeGemTray.tsx` | Create | Gem grid using shared GemCard + extended useGemSize |
+| `components/CombineWorkbench.tsx` | Create | 3-slot workbench, glow signals, uses HapticButton + ELEMENT_GRADIENTS |
+| `components/ItemSocketView.tsx` | Create | Item display, socket grid using ELEMENT_GRADIENTS, equipped list |
+| `components/ItemMiniPreview.tsx` | Create | Compact other-item bar with socket dots |
 | `pages/Forge.tsx` | Rewrite | Orchestrator: tabs, state wiring, commit flow, animations |
 | `pages/__tests__/Forge.test.tsx` | Rewrite | Update component tests for new structure |
-| `e2e/forge-redesign.spec.ts` | Rewrite | F01-F19 acceptance tests |
+| `e2e/forge-redesign.spec.ts` | Rewrite | F01-F20 acceptance tests |
 
 All paths relative to `packages/client/src/`.
+
+**Shared system compliance:** Every button uses `HapticButton`. Every element color comes from `ELEMENT_GRADIENTS`/`ELEMENT_COLORS` in `element-theme.ts`. Every design token uses CSS custom properties from `index.css`. The `useGemSize` hook is extended (not duplicated) with a `context` parameter.
 
 **3-slot combine vs 2-orb engine:** The engine currently supports 2-orb combines only (`forge-action.ts: { kind: 'combine'; orbUid1: string; orbUid2: string }`). The UI renders 3 slots to prepare for the upcoming 3-gem combine mechanic. Until the engine is extended: the combine action uses the first 2 filled slots. The 3rd slot is visually available but the COMBINE button tooltip notes "3-gem recipes coming soon" when all 3 are filled and no 2-of-3 recipe matches. Glow signal logic checks all 2-pair permutations from the filled slots for valid recipes.
 
@@ -247,51 +250,52 @@ git commit -m "feat(forge): add stat abbreviation system to stat-label.ts"
 
 ---
 
-### Task 3: Create useForgeGemSize hook
+### Task 3: Extend useGemSize with forge context + add design system tokens
 
 **Files:**
-- Create: `packages/client/src/hooks/useForgeGemSize.ts`
-- Create: `packages/client/src/hooks/useForgeGemSize.test.ts`
+- Modify: `packages/client/src/hooks/useGemSize.ts`
+- Modify: `packages/client/src/hooks/useGemSize.test.ts`
+- Modify: `packages/client/src/index.css`
 
 - [ ] **Step 1: Write failing tests**
 
 ```ts
 import { describe, it, expect } from 'vitest';
-import { getForgeGemSize } from './useForgeGemSize';
+import { useGemSize } from './useGemSize';
 
-describe('getForgeGemSize', () => {
+describe('useGemSize', () => {
   it('returns large config for ≤8 gems', () => {
-    const config = getForgeGemSize(8);
+    const config = useGemSize(8);
     expect(config.gemSize).toBe(76);
     expect(config.columns).toBe(4);
   });
 
   it('returns medium config for 9-12 gems', () => {
-    const config = getForgeGemSize(12);
+    const config = useGemSize(12);
     expect(config.gemSize).toBe(68);
     expect(config.columns).toBe(4);
   });
 
   it('returns small config for 13-16 gems', () => {
-    const config = getForgeGemSize(16);
+    const config = useGemSize(16);
     expect(config.gemSize).toBe(58);
     expect(config.columns).toBe(5);
   });
 
   it('returns xs config for 17+ gems', () => {
-    const config = getForgeGemSize(20);
+    const config = useGemSize(20);
     expect(config.gemSize).toBe(52);
     expect(config.columns).toBe(5);
   });
 
   it('enforces minimum gem size of 48px', () => {
-    const config = getForgeGemSize(30, 200);
+    const config = useGemSize(30, 200);
     expect(config.gemSize).toBeGreaterThanOrEqual(48);
   });
 
   it('shrinks proportionally when container is narrow', () => {
-    const normal = getForgeGemSize(8);
-    const narrow = getForgeGemSize(8, 280);
+    const normal = useGemSize(8);
+    const narrow = useGemSize(8, 280);
     expect(narrow.gemSize).toBeLessThan(normal.gemSize);
   });
 });
@@ -299,12 +303,12 @@ describe('getForgeGemSize', () => {
 
 - [ ] **Step 2: Run tests, verify they fail**
 
-Run: `cd packages/client && npx vitest run src/hooks/__tests__/useForgeGemSize.test.ts`
+Run: `cd packages/client && npx vitest run src/hooks/__tests__/useGemSize (forge context).test.ts`
 Expected: FAIL — module not found
 
 - [ ] **Step 3: Implement the hook**
 
-Create `useForgeGemSize.ts`:
+Create `useGemSize (forge context).ts`:
 
 ```ts
 export interface ForgeGemSizeConfig {
@@ -324,7 +328,7 @@ const BREAKPOINTS = [
 
 const MIN_GEM_SIZE = 48;
 
-export function getForgeGemSize(poolCount: number, containerWidth?: number): ForgeGemSizeConfig {
+export function useGemSize(poolCount: number, containerWidth?: number): ForgeGemSizeConfig {
   const bp = BREAKPOINTS.find(b => poolCount <= b.maxCount)!;
   let { gemSize, columns, emojiSize, statSize, nameSize } = bp;
 
@@ -343,21 +347,21 @@ export function getForgeGemSize(poolCount: number, containerWidth?: number): For
   return { gemSize, columns, emojiSize, statSize, nameSize };
 }
 
-export function useForgeGemSize(poolCount: number, containerWidth?: number): ForgeGemSizeConfig {
-  return useMemo(() => getForgeGemSize(poolCount, containerWidth), [poolCount, containerWidth]);
+export function useGemSize (forge context)(poolCount: number, containerWidth?: number): ForgeGemSizeConfig {
+  return useMemo(() => useGemSize(poolCount, containerWidth), [poolCount, containerWidth]);
 }
 ```
 
 - [ ] **Step 4: Run tests, verify they pass**
 
-Run: `cd packages/client && npx vitest run src/hooks/__tests__/useForgeGemSize.test.ts`
+Run: `cd packages/client && npx vitest run src/hooks/__tests__/useGemSize (forge context).test.ts`
 Expected: ALL PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/client/src/hooks/useForgeGemSize.ts packages/client/src/hooks/useForgeGemSize.test.ts
-git commit -m "feat(forge): add useForgeGemSize hook with 4 responsive breakpoints"
+git add packages/client/src/hooks/useGemSize (forge context).ts packages/client/src/hooks/useGemSize (forge context).test.ts
+git commit -m "feat(forge): add useGemSize (forge context) hook with 4 responsive breakpoints"
 ```
 
 ---
@@ -386,12 +390,11 @@ interface ForgeHeaderProps {
 }
 ```
 
-Row 1: "FORGE PHASE" gold, R{round} pill, Timer component, Done button.
-Row 2: HP/DMG/ARM/CRT as colored pills, flux counter with danger state at 0.
+Row 1: "FORGE PHASE" gold, R{round} pill, `<Timer>` component as progress bar, `<HapticButton variant="primary" size="sm">DONE</HapticButton>`.
+Row 2 (flux bar): Row of ⚡ bolt icons (filled=var(--color-warning), spent=var(--color-surface-600)), "X / Y FLUX" text. At 0: all dark, text var(--color-danger), `timer-pulse` animation.
+Row 3: HP/DMG/ARM/CRT as colored pills using CSS vars (success/white/teal/danger).
 
-Reference existing design tokens from `index.css`. Use Rajdhani for display text. Timer uses existing `<Timer>` component.
-
-Flux at 0: text `text-danger`, animation `timer-pulse`.
+All colors from CSS custom properties. Timer is shared `<Timer>` component. Done button is `<HapticButton>` (NOT raw button).
 
 - [ ] **Step 2: Verify it renders**
 
@@ -428,7 +431,7 @@ interface ForgeGemTrayProps {
 ```
 
 Implementation:
-- Uses `useForgeGemSize(initialPoolCount, containerWidth)` for responsive sizing
+- Uses `useGemSize(initialPoolCount, containerWidth, 'forge')` for responsive sizing (shared hook, forge context)
 - `ResizeObserver` on container to measure width (same pattern as Draft.tsx)
 - Renders GemCard for each orb with appropriate state styling
 - Equipped orbs: `opacity: 0.35`, small "⚔" badge absolutely positioned top-right
@@ -484,8 +487,9 @@ Implementation:
 - Gold glow: `box-shadow: 0 0 16px rgba(212,168,52,0.5)`, border `#ecd06a`, CSS animation `pulse-glow` 1.5s
 - White glow: `box-shadow: 0 0 12px rgba(255,255,255,0.3)`
 - Result box: "?" (no glow), "?" pulsing white (white glow), "✦" gold shimmer (gold glow)
-- COMBINE button: gold accent, disabled when <2 slots filled or !canAfford
-- CLEAR button: surface-600
+- `<HapticButton variant="primary" size="sm" disabled={...}>COMBINE</HapticButton>`
+- `<HapticButton variant="secondary" size="sm" disabled={...}>CLEAR</HapticButton>`
+- Use `ELEMENT_GRADIENTS` from `element-theme.ts` for filled slot borders/backgrounds — never hand-code element colors
 - Warm container glow: `box-shadow: inset 0 0 30px rgba(212,168,52,0.04)`
 
 - [ ] **Step 2: Verify it renders with mock data**
@@ -531,11 +535,12 @@ Implementation:
 - Adaptive socket grid: `Math.ceil(slots.length / 2)` columns × 2 rows (3×2 for 6 slots)
 - Each socket 48px rounded square:
   - Empty: `bg-surface-800`, dashed border, inset shadow
-  - Filled: element-colored bg at 20%, solid element border, emoji centered, short affix name below
-  - Locked (previous round): 🔒 overlay, no click handler
-  - Available (gem selected): gold glow pulse animation
-- Equipped affixes list below sockets: compact text "🔥 Fire Attack +23 Phys Dmg"
+  - Filled: bg from `ELEMENT_GRADIENTS[tag].bg` at 20% opacity, border from `ELEMENT_GRADIENTS[tag].border`, gem art image + stat text
+  - Locked (previous round): 🔒 overlay, border var(--color-locked), no click handler
+  - Available (gem selected): gold glow pulse using `orb-glow` keyframe from index.css
+- Equipped affixes list below sockets: compact text with gem art mini (14px) inline
 - All sockets `touchAction: 'none'`
+- Item tabs: `<HapticButton>` pills (not raw buttons)
 
 - [ ] **Step 2: Verify it renders**
 
