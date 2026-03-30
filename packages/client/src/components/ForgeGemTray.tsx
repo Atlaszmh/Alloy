@@ -39,7 +39,7 @@ export function ForgeGemTray({
   }, []);
 
   const { gemSize, columns, emojiSize, statSize, nameSize, catSize } =
-    useGemSize(initialPoolCount);
+    useGemSize(initialPoolCount, undefined, 'forge');
 
   const affixMap = useMemo(() => {
     const map = new Map<string, AffixDef>();
