@@ -44,6 +44,14 @@
   --color-tier-3: #9b59b6;
   --color-tier-4: #e8553a;
 
+  /* Forge — affix & socket semantic colors */
+  --color-affix: #1eff00;
+  --color-compound: #ecd06a;
+  --color-inherent: #2dd4bf;
+  --color-base-stat: #b89868;
+  --color-empty-socket: #4a4a68;
+  --color-locked: #6a6a88;
+
   /* Feedback */
   --color-success: #34d399;
   --color-warning: #fbbf24;
@@ -175,7 +183,14 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes pop-in {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* swoop-to-stockpile: now driven by Web Animations API in Draft.tsx for smooth GPU compositing */
+
 
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 

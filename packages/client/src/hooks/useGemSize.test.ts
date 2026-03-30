@@ -49,4 +49,35 @@ describe('useGemSize', () => {
     const { result } = renderHook(() => useGemSize(24, 100));
     expect(result.current.gemSize).toBe(48);
   });
+
+  describe('forge context', () => {
+    it('returns forge-large for ≤8 gems', () => {
+      const { result } = renderHook(() => useGemSize(8, undefined, 'forge'));
+      expect(result.current.gemSize).toBe(76);
+      expect(result.current.columns).toBe(4);
+    });
+
+    it('returns forge-medium for 9-12 gems', () => {
+      const { result } = renderHook(() => useGemSize(12, undefined, 'forge'));
+      expect(result.current.gemSize).toBe(68);
+      expect(result.current.columns).toBe(4);
+    });
+
+    it('returns forge-small for 13-16 gems', () => {
+      const { result } = renderHook(() => useGemSize(16, undefined, 'forge'));
+      expect(result.current.gemSize).toBe(58);
+      expect(result.current.columns).toBe(5);
+    });
+
+    it('returns forge-xs for 17+ gems', () => {
+      const { result } = renderHook(() => useGemSize(20, undefined, 'forge'));
+      expect(result.current.gemSize).toBe(52);
+      expect(result.current.columns).toBe(5);
+    });
+
+    it('defaults to draft context', () => {
+      const { result } = renderHook(() => useGemSize(8));
+      expect(result.current.gemSize).toBe(100); // Draft breakpoint, not forge
+    });
+  });
 });
