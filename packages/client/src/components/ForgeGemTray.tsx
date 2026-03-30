@@ -41,6 +41,31 @@ export function ForgeGemTray({
   const { gemSize, columns, emojiSize, statSize, nameSize, catSize } =
     useGemSize(initialPoolCount, undefined, 'forge');
 
+  const gridRef = useRef<HTMLDivElement>(null);
+  const hasAnimatedRef = useRef(false);
+
+  // Gem cascade entry animation (Web Animations API)
+  useEffect(() => {
+    if (!gridRef.current || hasAnimatedRef.current) return;
+    const gems = gridRef.current.querySelectorAll('[data-gem]');
+    if (gems.length === 0) return;
+    hasAnimatedRef.current = true;
+    gems.forEach((el, i) => {
+      (el as HTMLElement).animate(
+        [
+          { opacity: '0', transform: 'scale(0.7)' },
+          { opacity: '1', transform: 'scale(1)' },
+        ],
+        {
+          duration: 300,
+          easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+          delay: i * 25,
+          fill: 'backwards',
+        },
+      );
+    });
+  }, [stockpile.length]);
+
   const affixMap = useMemo(() => {
     const map = new Map<string, AffixDef>();
     for (const a of registry.getAllAffixes()) {
@@ -87,6 +112,7 @@ export function ForgeGemTray({
       ) : (
         /* Grid */
         <div
+          ref={gridRef}
           style={{
             display: 'grid',
             gridTemplateColumns: `repeat(${columns}, 1fr)`,

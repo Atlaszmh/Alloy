@@ -340,7 +340,7 @@ export function Forge() {
       {tabBarJSX}
 
       {/* 3. Action area (flex-1 to fill middle) */}
-      <div className="flex-1 overflow-y-auto px-3 py-2">
+      <div className="flex-1 overflow-y-auto px-3 py-2" key={activeTab} style={{ animation: 'fade-in 0.2s ease-out' }}>
         {activeTab === 'combine' ? (
           <CombineWorkbench
             comboSlots={comboSlots}
