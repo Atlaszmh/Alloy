@@ -20,6 +20,7 @@ interface CombineWorkbenchProps {
   comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
+  isDragging?: boolean;
   onSlotClick: (index: number) => void;
   onCombine: () => void;
   onClearAll: () => void;
@@ -68,6 +69,7 @@ export function CombineWorkbench({
   comboSlots,
   registry,
   canAfford,
+  isDragging,
   onSlotClick,
   onCombine,
   onClearAll,
@@ -117,9 +119,11 @@ export function CombineWorkbench({
               </span>
             )}
             <Slot
+              index={idx}
               orb={orb}
               registry={registry}
               glowSignal={glowSignal}
+              isDragging={isDragging}
               onClick={() => onSlotClick(idx)}
             />
           </div>
@@ -167,29 +171,42 @@ export function CombineWorkbench({
 /* ---- Slot ---- */
 
 function Slot({
+  index,
   orb,
   registry,
   glowSignal,
+  isDragging,
   onClick,
 }: {
+  index: number;
   orb: OrbInstance | null;
   registry: DataRegistry;
   glowSignal: GlowSignal;
+  isDragging?: boolean;
   onClick: () => void;
 }) {
   if (!orb) {
+    const dropGlow = isDragging
+      ? '0 0 12px rgba(212,168,52,0.4)'
+      : 'none';
+    const dropBorder = isDragging
+      ? '2px dashed var(--color-bronze-light)'
+      : '2px dashed var(--color-surface-500)';
     return (
       <button
+        data-combo-slot={index}
         onClick={onClick}
         className="flex items-center justify-center cursor-pointer"
         style={{
           width: '52px',
           height: '52px',
           borderRadius: '8px',
-          border: '2px dashed var(--color-surface-500)',
+          border: dropBorder,
           background: 'var(--color-surface-800)',
           color: 'var(--color-surface-300)',
           fontSize: '16px',
+          boxShadow: dropGlow,
+          transition: 'box-shadow 0.2s, border-color 0.2s',
         }}
         aria-label="Empty combo slot"
       >
@@ -216,6 +233,7 @@ function Slot({
 
   return (
     <button
+      data-combo-slot={index}
       onClick={onClick}
       className="flex flex-col items-center justify-center cursor-pointer"
       style={{

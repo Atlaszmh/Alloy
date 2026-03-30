@@ -9,6 +9,7 @@ interface ItemSocketViewProps {
   registry: DataRegistry;
   plan: ForgePlan;
   selectedOrbUid: string | null;
+  isDragging?: boolean;
   onSocketClick: (slotIndex: number) => void;
   onSocketRemove: (slotIndex: number) => void;
 }
@@ -29,6 +30,7 @@ export function ItemSocketView({
   registry,
   plan,
   selectedOrbUid,
+  isDragging,
   onSocketClick,
   onSocketRemove,
 }: ItemSocketViewProps) {
@@ -122,18 +124,21 @@ export function ItemSocketView({
         {item.slots.map((slot, index) => {
           if (slot === null) {
             // Empty socket
-            const isPulsing = selectedOrbUid !== null;
+            const isPulsing = selectedOrbUid !== null || isDragging;
             return (
               <button
                 key={index}
+                data-forge-socket={index}
                 onClick={() => onSocketClick(index)}
                 style={{
                   width: 48,
                   height: 48,
                   borderRadius: 8,
                   background: 'var(--color-surface-800)',
-                  border: '1.5px dashed var(--color-empty-socket)',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+                  border: isDragging ? '1.5px dashed var(--color-bronze-light)' : '1.5px dashed var(--color-empty-socket)',
+                  boxShadow: isDragging
+                    ? '0 0 12px rgba(212,168,52,0.4), inset 0 2px 4px rgba(0,0,0,0.5)'
+                    : 'inset 0 2px 4px rgba(0,0,0,0.5)',
                   cursor: 'pointer',
                   touchAction: 'none',
                   animation: isPulsing ? 'orb-glow 1.5s ease-in-out infinite' : 'none',
@@ -141,6 +146,7 @@ export function ItemSocketView({
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: 0,
+                  transition: 'box-shadow 0.2s, border-color 0.2s',
                 }}
               />
             );

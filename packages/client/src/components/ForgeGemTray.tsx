@@ -11,6 +11,8 @@ interface ForgeGemTrayProps {
   equippedUids: Set<string>;
   stagedUids: Set<string>;
   onSelectOrb: (uid: string) => void;
+  onPointerDown: (uid: string, e: React.PointerEvent) => void;
+  dragUid: string | null;
   initialPoolCount: number;
 }
 
@@ -21,6 +23,8 @@ export function ForgeGemTray({
   equippedUids,
   stagedUids,
   onSelectOrb,
+  onPointerDown,
+  dragUid,
   initialPoolCount,
 }: ForgeGemTrayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -160,6 +164,8 @@ export function ForgeGemTray({
               statLabel = affix ? getStatLabel(affix, orb) : '';
             }
 
+            const isDragTarget = dragUid !== null && dragUid !== orb.uid;
+
             return (
               <div
                 key={orb.uid}
@@ -169,9 +175,11 @@ export function ForgeGemTray({
                   touchAction: 'none',
                   WebkitTouchCallout: 'none',
                   userSelect: 'none',
+                  pointerEvents: isDragTarget ? 'none' : undefined,
                 }}
               >
                 <GemCard
+                  uid={orb.uid}
                   affixId={affixId}
                   affixName={affixName}
                   tier={orb.tier}
@@ -185,6 +193,7 @@ export function ForgeGemTray({
                   catSize={catSize}
                   selected={orb.uid === selectedOrbUid}
                   onClick={() => onSelectOrb(orb.uid)}
+                  onPointerDown={(e) => onPointerDown(orb.uid, e)}
                 />
 
                 {/* State badge */}

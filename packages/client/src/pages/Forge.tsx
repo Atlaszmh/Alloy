@@ -13,6 +13,7 @@ import { Modal } from '@/components/Modal';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { playSound } from '@/shared/utils/sound-manager';
+import { DRAG_THRESHOLD } from '@/pages/draft-gestures';
 import type { BaseStat, OrbInstance } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
 
@@ -73,6 +74,13 @@ export function Forge() {
   const [baseStatWeapon, setBaseStatWeapon] = useState<[BaseStat, BaseStat]>(['STR', 'VIT']);
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
+
+  // ── Drag state (matches Draft screen pattern) ──
+  const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
+  const hasDraggedRef = useRef(false);
+  const draggedElRef = useRef<HTMLElement | null>(null);
+  const isDraggingRef = useRef(false);
+  const [dragUid, setDragUid] = useState<string | null>(null);
 
   // ── Initialize plan on mount / round change ──
   useEffect(() => {
@@ -168,6 +176,155 @@ export function Forge() {
     selectOrb(uid === selectedOrbUid ? null : uid);
     playSound('orbSelect');
   }, [selectedOrbUid, selectOrb]);
+
+  // ── Drag helpers ──
+  function resetDraggedEl() {
+    const el = draggedElRef.current;
+    if (el) {
+      el.style.position = '';
+      el.style.left = '';
+      el.style.top = '';
+      el.style.width = '';
+      el.style.zIndex = '';
+      el.style.transform = '';
+      el.style.filter = '';
+      el.style.pointerEvents = '';
+      delete el.dataset.origLeft;
+      delete el.dataset.origTop;
+      draggedElRef.current = null;
+    }
+  }
+
+  function findDropTarget(x: number, y: number):
+    | { type: 'combo'; slotIndex: number }
+    | { type: 'socket'; slotIndex: number }
+    | null {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+
+    const comboEl = (el as HTMLElement).closest('[data-combo-slot]');
+    if (comboEl) {
+      const index = parseInt(comboEl.getAttribute('data-combo-slot')!, 10);
+      return { type: 'combo', slotIndex: index };
+    }
+
+    const socketEl = (el as HTMLElement).closest('[data-forge-socket]');
+    if (socketEl) {
+      const index = parseInt(socketEl.getAttribute('data-forge-socket')!, 10);
+      return { type: 'socket', slotIndex: index };
+    }
+
+    return null;
+  }
+
+  // ── Drag: pointerdown handler (passed to ForgeGemTray) ──
+  const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
+    if (isDraggingRef.current) return;
+    e.preventDefault();
+    pointerStartRef.current = { x: e.clientX, y: e.clientY, uid, time: Date.now() };
+    hasDraggedRef.current = false;
+  }, []);
+
+  // ── Drag: global pointermove + pointerup ──
+  useEffect(() => {
+    function onPointerMove(e: PointerEvent) {
+      const start = pointerStartRef.current;
+      if (!start) return;
+
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (!hasDraggedRef.current && dist >= DRAG_THRESHOLD) {
+        hasDraggedRef.current = true;
+        isDraggingRef.current = true;
+        setDragUid(start.uid);
+
+        const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        el.dataset.origLeft = String(rect.left);
+        el.dataset.origTop = String(rect.top);
+        el.style.position = 'fixed';
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        el.style.width = `${rect.width}px`;
+        el.style.zIndex = '999';
+        el.style.filter = 'drop-shadow(0 0 8px rgba(212,168,52,0.6))';
+        el.style.pointerEvents = 'none';
+
+        draggedElRef.current = el;
+        playSound('dragStart');
+      }
+
+      if (hasDraggedRef.current && draggedElRef.current) {
+        const origLeft = parseFloat(draggedElRef.current.dataset.origLeft!);
+        const origTop = parseFloat(draggedElRef.current.dataset.origTop!);
+        draggedElRef.current.style.left = `${origLeft + dx}px`;
+        draggedElRef.current.style.top = `${origTop + dy}px`;
+        draggedElRef.current.style.transform = 'scale(1.08)';
+      }
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      const start = pointerStartRef.current;
+      if (!start) return;
+
+      if (hasDraggedRef.current) {
+        // Was a drag — check drop target
+        const target = findDropTarget(e.clientX, e.clientY);
+        const draggedUid = start.uid;
+
+        if (target && target.type === 'combo') {
+          const orb = useForgeStore.getState().plan?.stockpile.find(o => o.uid === draggedUid);
+          const slots = useForgeStore.getState().comboSlots;
+          if (orb && !slots[target.slotIndex]) {
+            setComboSlotByIndex(target.slotIndex, orb);
+            playSound('orbSelect');
+            if (draggedElRef.current) draggedElRef.current.style.opacity = '0';
+          } else {
+            resetDraggedEl();
+          }
+        } else if (target && target.type === 'socket') {
+          const result = applyAction(
+            { kind: 'assign_orb', orbUid: draggedUid, target: activeItemTab, slotIndex: target.slotIndex },
+            registry,
+          );
+          if (result.ok) {
+            playSound('orbPlace');
+            if (draggedElRef.current) draggedElRef.current.style.opacity = '0';
+          } else {
+            playSound('combineFail');
+            resetDraggedEl();
+          }
+        } else {
+          // No valid target — snap back
+          resetDraggedEl();
+        }
+
+        // Clean up after a short delay to let opacity transition
+        setTimeout(() => {
+          resetDraggedEl();
+          setDragUid(null);
+          isDraggingRef.current = false;
+        }, 50);
+      } else {
+        // Was a tap — toggle selection
+        handleSelectOrb(start.uid);
+      }
+
+      pointerStartRef.current = null;
+      hasDraggedRef.current = false;
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [activeItemTab, registry, applyAction, setComboSlotByIndex, handleSelectOrb]);
 
   // ── Combine slot click ──
   const handleComboSlotClick = useCallback((index: number) => {
@@ -346,6 +503,7 @@ export function Forge() {
             comboSlots={comboSlots}
             registry={registry}
             canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
+            isDragging={dragUid !== null}
             onSlotClick={handleComboSlotClick}
             onCombine={handleCombine}
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
@@ -375,6 +533,7 @@ export function Forge() {
               registry={registry}
               plan={plan}
               selectedOrbUid={selectedOrbUid}
+              isDragging={dragUid !== null}
               onSocketClick={handleSocketClick}
               onSocketRemove={handleSocketRemove}
             />
@@ -396,6 +555,8 @@ export function Forge() {
         equippedUids={equippedUids}
         stagedUids={stagedUids}
         onSelectOrb={handleSelectOrb}
+        onPointerDown={handlePointerDown}
+        dragUid={dragUid}
         initialPoolCount={initialPoolCountRef.current || plan.stockpile.length}
       />
 
