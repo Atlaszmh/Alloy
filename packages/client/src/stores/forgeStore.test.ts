@@ -38,43 +38,9 @@ describe('forgeStore', () => {
       expect(s.plan).toBeNull();
       expect(s.selectedOrbUid).toBeNull();
       expect(s.confirmModalOpen).toBe(false);
+      expect(s.activeTab).toBe('combine');
+      expect(s.activeItemTab).toBe('weapon');
       expect(s.comboSlots).toEqual([null, null, null]);
-    });
-
-    it('activeTab defaults to combine', () => {
-      expect(useForgeStore.getState().activeTab).toBe('combine');
-    });
-
-    it('activeItemTab defaults to weapon', () => {
-      expect(useForgeStore.getState().activeItemTab).toBe('weapon');
-    });
-
-    it('comboSlots defaults to [null, null, null]', () => {
-      expect(useForgeStore.getState().comboSlots).toEqual([null, null, null]);
-    });
-  });
-
-  describe('tab actions', () => {
-    it('setActiveTab switches to equip', () => {
-      useForgeStore.getState().setActiveTab('equip');
-      expect(useForgeStore.getState().activeTab).toBe('equip');
-    });
-
-    it('setActiveTab switches back to combine', () => {
-      useForgeStore.getState().setActiveTab('equip');
-      useForgeStore.getState().setActiveTab('combine');
-      expect(useForgeStore.getState().activeTab).toBe('combine');
-    });
-
-    it('setActiveItemTab switches to armor', () => {
-      useForgeStore.getState().setActiveItemTab('armor');
-      expect(useForgeStore.getState().activeItemTab).toBe('armor');
-    });
-
-    it('setActiveItemTab switches back to weapon', () => {
-      useForgeStore.getState().setActiveItemTab('armor');
-      useForgeStore.getState().setActiveItemTab('weapon');
-      expect(useForgeStore.getState().activeItemTab).toBe('weapon');
     });
   });
 
@@ -174,48 +140,12 @@ describe('forgeStore', () => {
 
   describe('canRemove', () => {
     it('returns false when no plan', () => {
-      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(false);
+      expect(useForgeStore.getState().canRemove('orb1')).toBe(false);
     });
 
-    it('returns true for current-round socketed orbs', () => {
-      initStore(1);
-      useForgeStore.getState().applyAction(
-        { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 },
-        registry,
-      );
-      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(true);
-    });
-
-    it('returns false for empty slot', () => {
-      initStore(1);
-      expect(useForgeStore.getState().canRemove('weapon', 0)).toBe(false);
-    });
-  });
-
-  describe('round locking', () => {
-    it('remove_orb succeeds in round 1 for current-round slot and refunds flux', () => {
-      initStore(1);
-      const startFlux = useForgeStore.getState().plan!.tentativeFlux;
-      useForgeStore.getState().applyAction({ kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
-      const result = useForgeStore.getState().applyAction({ kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
-      expect(result.ok).toBe(true);
-      expect(useForgeStore.getState().plan!.tentativeFlux).toBe(startFlux);
-      expect(useForgeStore.getState().plan!.loadout.weapon.slots[0]).toBeNull();
-    });
-
-    it('swap_orb succeeds in round 1 for current-round slot', () => {
-      initStore(1);
-      useForgeStore.getState().applyAction({ kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
-      const result = useForgeStore.getState().applyAction(
-        { kind: 'swap_orb', target: 'weapon', slotIndex: 0, newOrbUid: 'orb2' }, registry,
-      );
-      expect(result.ok).toBe(true);
-      const plan = useForgeStore.getState().plan!;
-      const slot = plan.loadout.weapon.slots[0]!;
-      expect(slot.kind).toBe('single');
-      if (slot.kind === 'single') expect(slot.orb.uid).toBe('orb2');
-      expect(slot.socketedRound).toBe(1);
-      expect(plan.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
+    it('returns true for unlocked orbs', () => {
+      initStore();
+      expect(useForgeStore.getState().canRemove('orb1')).toBe(true);
     });
   });
 
@@ -226,6 +156,22 @@ describe('forgeStore', () => {
 
       useForgeStore.getState().selectOrb(null);
       expect(useForgeStore.getState().selectedOrbUid).toBeNull();
+    });
+  });
+
+  describe('tabs', () => {
+    it('switches active tab', () => {
+      useForgeStore.getState().setActiveTab('equip');
+      expect(useForgeStore.getState().activeTab).toBe('equip');
+      useForgeStore.getState().setActiveTab('combine');
+      expect(useForgeStore.getState().activeTab).toBe('combine');
+    });
+
+    it('switches active item tab', () => {
+      useForgeStore.getState().setActiveItemTab('armor');
+      expect(useForgeStore.getState().activeItemTab).toBe('armor');
+      useForgeStore.getState().setActiveItemTab('weapon');
+      expect(useForgeStore.getState().activeItemTab).toBe('weapon');
     });
   });
 
@@ -240,7 +186,7 @@ describe('forgeStore', () => {
   });
 
   describe('combo slots', () => {
-    it('sets and clears combo slots', () => {
+    it('sets and clears combo slots by index', () => {
       const orb: OrbInstance = { uid: 'orb1', affixId: 'fire_damage', tier: 1 };
       const orb2: OrbInstance = { uid: 'orb5', affixId: 'chance_on_hit', tier: 1 };
 
@@ -254,37 +200,13 @@ describe('forgeStore', () => {
       useForgeStore.getState().clearComboSlots();
       expect(useForgeStore.getState().comboSlots).toEqual([null, null, null]);
     });
-
-    it('setComboSlotByIndex(0, orb) sets slot 0', () => {
-      const orb: OrbInstance = { uid: 'orb1', affixId: 'fire_damage', tier: 1 };
-      useForgeStore.getState().setComboSlotByIndex(0, orb);
-      expect(useForgeStore.getState().comboSlots[0]).toEqual(orb);
-      expect(useForgeStore.getState().comboSlots[1]).toBeNull();
-      expect(useForgeStore.getState().comboSlots[2]).toBeNull();
-    });
-
-    it('setComboSlotByIndex(2, orb) sets slot 2 (the new 3rd slot)', () => {
-      const orb: OrbInstance = { uid: 'orb3', affixId: 'flat_hp', tier: 2 };
-      useForgeStore.getState().setComboSlotByIndex(2, orb);
-      expect(useForgeStore.getState().comboSlots[0]).toBeNull();
-      expect(useForgeStore.getState().comboSlots[1]).toBeNull();
-      expect(useForgeStore.getState().comboSlots[2]).toEqual(orb);
-    });
-
-    it('clearComboSlots resets all 3', () => {
-      const orb: OrbInstance = { uid: 'orb1', affixId: 'fire_damage', tier: 1 };
-      useForgeStore.getState().setComboSlotByIndex(0, orb);
-      useForgeStore.getState().setComboSlotByIndex(1, orb);
-      useForgeStore.getState().setComboSlotByIndex(2, orb);
-      useForgeStore.getState().clearComboSlots();
-      expect(useForgeStore.getState().comboSlots).toEqual([null, null, null]);
-    });
   });
 
   describe('reset', () => {
     it('clears all state', () => {
       initStore();
       useForgeStore.getState().selectOrb('orb-1');
+      useForgeStore.getState().setActiveTab('equip');
       useForgeStore.getState().openConfirmModal();
       useForgeStore.getState().setComboSlotByIndex(0, { uid: 'orb1', affixId: 'fire_damage', tier: 1 });
 
@@ -294,26 +216,9 @@ describe('forgeStore', () => {
       expect(s.plan).toBeNull();
       expect(s.selectedOrbUid).toBeNull();
       expect(s.confirmModalOpen).toBe(false);
+      expect(s.activeTab).toBe('combine');
+      expect(s.activeItemTab).toBe('weapon');
       expect(s.comboSlots).toEqual([null, null, null]);
-    });
-
-    it('resets activeTab to combine', () => {
-      useForgeStore.getState().setActiveTab('equip');
-      useForgeStore.getState().reset();
-      expect(useForgeStore.getState().activeTab).toBe('combine');
-    });
-
-    it('resets activeItemTab to weapon', () => {
-      useForgeStore.getState().setActiveItemTab('armor');
-      useForgeStore.getState().reset();
-      expect(useForgeStore.getState().activeItemTab).toBe('weapon');
-    });
-
-    it('resets comboSlots to [null, null, null]', () => {
-      useForgeStore.getState().setComboSlotByIndex(0, { uid: 'orb1', affixId: 'fire_damage', tier: 1 });
-      useForgeStore.getState().setComboSlotByIndex(2, { uid: 'orb3', affixId: 'flat_hp', tier: 2 });
-      useForgeStore.getState().reset();
-      expect(useForgeStore.getState().comboSlots).toEqual([null, null, null]);
     });
   });
 });

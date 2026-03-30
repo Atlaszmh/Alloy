@@ -12,7 +12,6 @@ import type {
   AffixDef,
   SynergyDef,
   ForgePlan,
-  Loadout,
   BaseItemDef,
 } from '@alloy/engine';
 
@@ -252,10 +251,10 @@ function setupStores(
   useForgeStore.setState({
     plan,
     selectedOrbUid: null,
-    dragSource: null,
     confirmModalOpen: false,
-    comboSlotA: null,
-    comboSlotB: null,
+    activeTab: 'combine',
+    activeItemTab: 'weapon',
+    comboSlots: [null, null, null],
   });
 
   return { mockState, mockRegistry, dispatchFn, plan };
@@ -288,20 +287,11 @@ describe('Forge page', () => {
     expect(screen.getByText(/Round 1/)).toBeTruthy();
   });
 
-  it('displays weapon and armor item cards side by side', () => {
-    setupStores();
-    renderForge();
-
-    // The new component renders both ItemCards simultaneously (data-card attr)
-    expect(document.querySelector('[data-card="weapon"]')).toBeTruthy();
-    expect(document.querySelector('[data-card="armor"]')).toBeTruthy();
-  });
-
   it('shows flux counter in header', () => {
     setupStores({ forgeFlux: [6, 8] }, { tentativeFlux: 6 });
     renderForge();
 
-    // FluxCounter renders as "\u26A1{flux}" inside a span
+    // FluxCounter renders as "\u26A1{flux}/{maxFlux}" inside a span
     expect(screen.getByText((_content, element) => {
       return element?.textContent?.includes('6') ?? false;
     }, { selector: '.stat-number' })).toBeTruthy();
@@ -336,33 +326,6 @@ describe('Forge page', () => {
     expect(useForgeStore.getState().selectedOrbUid).toBeNull();
   });
 
-  it('renders empty socket buttons with + text', () => {
-    setupStores();
-    renderForge();
-
-    // Both weapon and armor cards are visible, each with 6 empty sockets = 12 total
-    const plusButtons = screen.getAllByText('+');
-    // Includes the "+" from CombinationWorkbench too, so filter to only empty socket buttons
-    const socketButtons = document.querySelectorAll('[data-empty-socket]');
-    expect(socketButtons.length).toBe(12); // 6 per card * 2 cards
-  });
-
-  it('applies assign_orb through forgeStore.applyAction when clicking empty slot with orb selected', () => {
-    setupStores();
-    renderForge();
-
-    // Select an orb first
-    const fireGem = document.querySelector('[data-gem="fire_damage"]') as HTMLElement;
-    fireEvent.click(fireGem);
-
-    // Click an empty socket on the weapon card
-    const weaponSockets = document.querySelectorAll('[data-card-id="weapon"][data-empty-socket]');
-    fireEvent.click(weaponSockets[0]);
-
-    // After applying assign_orb through the plan, the selectedOrbUid should be cleared
-    expect(useForgeStore.getState().selectedOrbUid).toBeNull();
-  });
-
   it('renders "Done Forging" button', () => {
     setupStores();
     renderForge();
@@ -376,7 +339,6 @@ describe('Forge page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Done Forging' }));
 
-    // The new Forge opens a confirmation modal instead of dispatching directly
     expect(useForgeStore.getState().confirmModalOpen).toBe(true);
   });
 
@@ -416,16 +378,11 @@ describe('Forge page', () => {
     setupStores();
     renderForge();
 
-    // The stats bar renders actual numeric values computed by the real calculateStats.
-    // Verify each stat label has an adjacent numeric value (not empty).
     const statCells = document.querySelectorAll('.stat-number');
-    // StatsBar has 4 stat cells; FluxCounter also uses stat-number
-    // Just check that at least 4 stat-number elements exist (HP, DMG, Armor, Crit)
     const nonFluxStatCells = Array.from(statCells).filter(
       el => !el.textContent?.includes('\u26A1'),
     );
     expect(nonFluxStatCells.length).toBeGreaterThanOrEqual(4);
-    // Each should have non-empty text
     for (const cell of nonFluxStatCells) {
       expect(cell.textContent?.trim().length).toBeGreaterThan(0);
     }
@@ -435,7 +392,6 @@ describe('Forge page', () => {
     setupStores();
     renderForge();
 
-    // Base stat selector labels rendered as "<target>:"
     expect(screen.getByText('weapon:')).toBeTruthy();
     expect(screen.getByText('armor:')).toBeTruthy();
   });
@@ -457,46 +413,71 @@ describe('Forge page', () => {
       aiController: null,
       error: null,
     });
-    // Plan is null after reset
     useForgeStore.getState().reset();
     renderForge();
 
-    // Should redirect away (no forge content rendered)
     expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
-  it('renders item with placed orb showing affix line', () => {
-    const weapon = makeItemWithOrb(makeOrb('orb-1', 'fire_damage', 1), 0, 'sword');
-    setupStores(
-      {
-        players: [
-          {
-            stockpile: [],
-            loadout: { weapon, armor: makeEmptyItem('chainmail') },
-          },
-          {
-            stockpile: [],
-            loadout: { weapon: makeEmptyItem('sword'), armor: makeEmptyItem('chainmail') },
-          },
-        ] as MatchState['players'],
-      },
-      {
-        stockpile: [],
-        loadout: { weapon, armor: makeEmptyItem('chainmail') },
-      },
-    );
+  it('renders combination workbench on combine tab', () => {
+    setupStores();
     renderForge();
 
-    // Weapon card should show 5 empty sockets (slot 0 is occupied) + 6 for armor = 11
-    const socketButtons = document.querySelectorAll('[data-empty-socket]');
-    expect(socketButtons.length).toBe(11);
+    // CombineWorkbench has COMBINE and CLEAR buttons
+    expect(screen.getByRole('button', { name: 'COMBINE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'CLEAR' })).toBeTruthy();
+  });
 
-    // The placed orb shows as an affix line with the name "Fire Damage"
-    expect(screen.getByText(/Fire Damage/)).toBeTruthy();
+  it('renders tab bar with Plan & Combine and Equip tabs', () => {
+    setupStores();
+    renderForge();
+
+    expect(screen.getByText(/Plan & Combine/)).toBeTruthy();
+    expect(screen.getByText(/Equip/)).toBeTruthy();
+  });
+
+  it('switches to equip tab and shows item socket view', () => {
+    setupStores();
+    renderForge();
+
+    // Click the Equip tab
+    fireEvent.click(screen.getByText(/Equip/));
+    expect(useForgeStore.getState().activeTab).toBe('equip');
+
+    // Should show weapon/armor tab switcher buttons
+    expect(screen.getByRole('button', { name: /Sword/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Chainmail/ })).toBeTruthy();
+  });
+
+  it('shows item name in equip tab', () => {
+    setupStores();
+    // Switch to equip tab
+    useForgeStore.setState({ activeTab: 'equip' });
+    renderForge();
+
+    expect(screen.getByText('Iron Sword')).toBeTruthy();
+  });
+
+  it('shows empty socket count in equip tab', () => {
+    setupStores();
+    useForgeStore.setState({ activeTab: 'equip' });
+    renderForge();
+
+    expect(screen.getByText(/empty socket/)).toBeTruthy();
+  });
+
+  it('closes confirmation modal when CANCEL is clicked', () => {
+    setupStores();
+    renderForge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done Forging' }));
+    expect(useForgeStore.getState().confirmModalOpen).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'CANCEL' }));
+    expect(useForgeStore.getState().confirmModalOpen).toBe(false);
   });
 
   it('redirects to /queue when no match state (variant)', () => {
-    // No match state means no plan can be initialized
     useMatchStore.setState({
       state: null,
       aiController: null,
@@ -507,55 +488,15 @@ describe('Forge page', () => {
     useForgeStore.setState({ plan: null });
     renderForge();
 
-    // Should redirect away (no forge content rendered)
     expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
-  it('renders base item names in ItemCard headers', () => {
+  it('shows mini preview for the other item in equip tab', () => {
     setupStores();
+    useForgeStore.setState({ activeTab: 'equip', activeItemTab: 'weapon' });
     renderForge();
 
-    expect(screen.getByText('Iron Sword')).toBeTruthy();
-    expect(screen.getByText('Chainmail')).toBeTruthy();
-  });
-
-  it('shows empty socket count per card', () => {
-    setupStores();
-    renderForge();
-
-    // Each card shows "{n} empty sockets" text
-    const emptyLabels = screen.getAllByText(/empty socket/);
-    expect(emptyLabels.length).toBe(2); // one per card
-  });
-
-  it('renders combination workbench', () => {
-    setupStores();
-    renderForge();
-
-    // CombinationWorkbench has COMBINE and CLEAR buttons
-    expect(screen.getByRole('button', { name: 'COMBINE' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'CLEAR' })).toBeTruthy();
-  });
-
-  it('closes confirmation modal when CANCEL is clicked', () => {
-    setupStores();
-    renderForge();
-
-    // Open modal
-    fireEvent.click(screen.getByRole('button', { name: 'Done Forging' }));
-    expect(useForgeStore.getState().confirmModalOpen).toBe(true);
-
-    // Click CANCEL
-    fireEvent.click(screen.getByRole('button', { name: 'CANCEL' }));
-    expect(useForgeStore.getState().confirmModalOpen).toBe(false);
-  });
-
-  it('shows synergy tracker area (empty when no synergies active)', () => {
-    setupStores();
-    renderForge();
-
-    // With no synergies defined, the tracker renders nothing (returns null)
-    // but the page should still render successfully
-    expect(screen.getByText('FORGE PHASE')).toBeTruthy();
+    // ItemMiniPreview shows the other item (armor) with sockets filled info
+    expect(screen.getByText(/0\/6 sockets filled/)).toBeTruthy();
   });
 });

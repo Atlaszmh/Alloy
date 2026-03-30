@@ -2,38 +2,34 @@ import { create } from 'zustand';
 import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, DerivedStats, OrbInstance } from '@alloy/engine';
 import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemoveOrb } from '@alloy/engine';
 
-export type DragSource =
-  | { from: 'stockpile'; orbUid: string }
-  | { from: 'card'; cardId: 'weapon' | 'armor'; slotIndex: number; orbUid: string }
-  | { from: 'combo'; slot: 'a' | 'b'; orbUid: string };
-
-type ComboSlots = [OrbInstance | null, OrbInstance | null, OrbInstance | null];
-
 interface ForgeStoreState {
   plan: ForgePlan | null;
   selectedOrbUid: string | null;
   confirmModalOpen: boolean;
+
+  /** Two-tab layout state */
   activeTab: 'combine' | 'equip';
   activeItemTab: 'weapon' | 'armor';
-  /** Orbs staged in combo workbench slots (not yet combined) */
-  comboSlots: ComboSlots;
+
+  /** 3-slot combine workbench (engine only uses first 2 currently) */
+  comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
 
   initPlan: (state: ForgeState, registry: DataRegistry) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => DerivedStats | null;
-  canRemove: (target: 'weapon' | 'armor', slotIndex: number) => boolean;
+  canRemove: (orbUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
   setActiveTab: (tab: 'combine' | 'equip') => void;
   setActiveItemTab: (tab: 'weapon' | 'armor') => void;
-  openConfirmModal: () => void;
-  closeConfirmModal: () => void;
   setComboSlotByIndex: (index: number, orb: OrbInstance | null) => void;
   clearComboSlots: () => void;
+  openConfirmModal: () => void;
+  closeConfirmModal: () => void;
   reset: () => void;
 }
 
-const initialComboSlots: ComboSlots = [null, null, null];
+const EMPTY_COMBO: [OrbInstance | null, OrbInstance | null, OrbInstance | null] = [null, null, null];
 
 export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   plan: null,
@@ -41,11 +37,18 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   confirmModalOpen: false,
   activeTab: 'combine',
   activeItemTab: 'weapon',
-  comboSlots: [...initialComboSlots],
+  comboSlots: [...EMPTY_COMBO],
 
   initPlan: (state, registry) => {
     const plan = createForgePlan(state, registry);
-    set({ plan, selectedOrbUid: null, confirmModalOpen: false, comboSlots: [...initialComboSlots] });
+    set({
+      plan,
+      selectedOrbUid: null,
+      confirmModalOpen: false,
+      activeTab: 'combine',
+      activeItemTab: 'weapon',
+      comboSlots: [...EMPTY_COMBO],
+    });
   },
 
   applyAction: (action, registry) => {
@@ -70,10 +73,10 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
     return getPlannedStats(plan, registry);
   },
 
-  canRemove: (target, slotIndex) => {
+  canRemove: (orbUid) => {
     const { plan } = get();
     if (!plan) return false;
-    return canRemoveOrb(plan, target, slotIndex);
+    return canRemoveOrb(plan, orbUid);
   },
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),
@@ -82,17 +85,17 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
 
   setActiveItemTab: (tab) => set({ activeItemTab: tab }),
 
-  openConfirmModal: () => set({ confirmModalOpen: true }),
-
-  closeConfirmModal: () => set({ confirmModalOpen: false }),
-
   setComboSlotByIndex: (index, orb) => {
-    const slots = [...get().comboSlots] as ComboSlots;
+    const slots = [...get().comboSlots] as [OrbInstance | null, OrbInstance | null, OrbInstance | null];
     slots[index] = orb;
     set({ comboSlots: slots });
   },
 
-  clearComboSlots: () => set({ comboSlots: [...initialComboSlots] }),
+  clearComboSlots: () => set({ comboSlots: [...EMPTY_COMBO] }),
+
+  openConfirmModal: () => set({ confirmModalOpen: true }),
+
+  closeConfirmModal: () => set({ confirmModalOpen: false }),
 
   reset: () =>
     set({
@@ -101,6 +104,6 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
       confirmModalOpen: false,
       activeTab: 'combine',
       activeItemTab: 'weapon',
-      comboSlots: [...initialComboSlots],
+      comboSlots: [...EMPTY_COMBO],
     }),
 }));
