@@ -7,14 +7,16 @@ export type DragSource =
   | { from: 'card'; cardId: 'weapon' | 'armor'; slotIndex: number; orbUid: string }
   | { from: 'combo'; slot: 'a' | 'b'; orbUid: string };
 
+type ComboSlots = [OrbInstance | null, OrbInstance | null, OrbInstance | null];
+
 interface ForgeStoreState {
   plan: ForgePlan | null;
   selectedOrbUid: string | null;
-  dragSource: DragSource | null;
   confirmModalOpen: boolean;
+  activeTab: 'combine' | 'equip';
+  activeItemTab: 'weapon' | 'armor';
   /** Orbs staged in combo workbench slots (not yet combined) */
-  comboSlotA: OrbInstance | null;
-  comboSlotB: OrbInstance | null;
+  comboSlots: ComboSlots;
 
   initPlan: (state: ForgeState, registry: DataRegistry) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
@@ -22,26 +24,28 @@ interface ForgeStoreState {
   getStats: (registry: DataRegistry) => DerivedStats | null;
   canRemove: (target: 'weapon' | 'armor', slotIndex: number) => boolean;
   selectOrb: (uid: string | null) => void;
-  startDrag: (source: DragSource) => void;
-  endDrag: () => void;
+  setActiveTab: (tab: 'combine' | 'equip') => void;
+  setActiveItemTab: (tab: 'weapon' | 'armor') => void;
   openConfirmModal: () => void;
   closeConfirmModal: () => void;
-  setComboSlot: (slot: 'a' | 'b', orb: OrbInstance | null) => void;
+  setComboSlotByIndex: (index: number, orb: OrbInstance | null) => void;
   clearComboSlots: () => void;
   reset: () => void;
 }
 
+const initialComboSlots: ComboSlots = [null, null, null];
+
 export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   plan: null,
   selectedOrbUid: null,
-  dragSource: null,
   confirmModalOpen: false,
-  comboSlotA: null,
-  comboSlotB: null,
+  activeTab: 'combine',
+  activeItemTab: 'weapon',
+  comboSlots: [...initialComboSlots],
 
   initPlan: (state, registry) => {
     const plan = createForgePlan(state, registry);
-    set({ plan, selectedOrbUid: null, dragSource: null, confirmModalOpen: false, comboSlotA: null, comboSlotB: null });
+    set({ plan, selectedOrbUid: null, confirmModalOpen: false, comboSlots: [...initialComboSlots] });
   },
 
   applyAction: (action, registry) => {
@@ -74,28 +78,29 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),
 
-  startDrag: (source) => set({ dragSource: source, selectedOrbUid: null }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
 
-  endDrag: () => set({ dragSource: null }),
+  setActiveItemTab: (tab) => set({ activeItemTab: tab }),
 
   openConfirmModal: () => set({ confirmModalOpen: true }),
 
   closeConfirmModal: () => set({ confirmModalOpen: false }),
 
-  setComboSlot: (slot, orb) => {
-    if (slot === 'a') set({ comboSlotA: orb });
-    else set({ comboSlotB: orb });
+  setComboSlotByIndex: (index, orb) => {
+    const slots = [...get().comboSlots] as ComboSlots;
+    slots[index] = orb;
+    set({ comboSlots: slots });
   },
 
-  clearComboSlots: () => set({ comboSlotA: null, comboSlotB: null }),
+  clearComboSlots: () => set({ comboSlots: [...initialComboSlots] }),
 
   reset: () =>
     set({
       plan: null,
       selectedOrbUid: null,
-      dragSource: null,
       confirmModalOpen: false,
-      comboSlotA: null,
-      comboSlotB: null,
+      activeTab: 'combine',
+      activeItemTab: 'weapon',
+      comboSlots: [...initialComboSlots],
     }),
 }));
