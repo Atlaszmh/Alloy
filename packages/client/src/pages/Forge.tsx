@@ -188,10 +188,10 @@ export function Forge() {
       el.style.width = '';
       el.style.zIndex = '';
       el.style.transform = '';
+      el.style.willChange = '';
       el.style.filter = '';
       el.style.pointerEvents = '';
-      delete el.dataset.origLeft;
-      delete el.dataset.origTop;
+      el.style.opacity = '';
       draggedElRef.current = null;
     }
   }
@@ -245,13 +245,13 @@ export function Forge() {
         draggedElRef.current = el;
         if (el) {
           const rect = el.getBoundingClientRect();
-          el.dataset.origLeft = String(rect.left);
-          el.dataset.origTop = String(rect.top);
+          // Set fixed position ONCE at drag start — movement uses translate3d (GPU composited)
           el.style.position = 'fixed';
           el.style.left = `${rect.left}px`;
           el.style.top = `${rect.top}px`;
           el.style.width = `${rect.width}px`;
           el.style.zIndex = '999';
+          el.style.willChange = 'transform';
           el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
           el.style.pointerEvents = 'none';
         }
@@ -259,11 +259,8 @@ export function Forge() {
 
       const draggedEl = draggedElRef.current;
       if (hasDraggedRef.current && draggedEl) {
-        const origLeft = parseFloat(draggedEl.dataset.origLeft ?? '0');
-        const origTop = parseFloat(draggedEl.dataset.origTop ?? '0');
-        draggedEl.style.left = `${origLeft + dx}px`;
-        draggedEl.style.top = `${origTop + dy}px`;
-        draggedEl.style.transform = 'scale(1.08)';
+        // Use translate3d for buttery-smooth GPU-composited movement (no layout recalc)
+        draggedEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.08)`;
       }
     }
 
