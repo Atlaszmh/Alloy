@@ -188,10 +188,11 @@ export function Forge() {
       el.style.width = '';
       el.style.zIndex = '';
       el.style.transform = '';
-      el.style.willChange = '';
       el.style.filter = '';
       el.style.pointerEvents = '';
       el.style.opacity = '';
+      delete el.dataset.origLeft;
+      delete el.dataset.origTop;
       draggedElRef.current = null;
     }
   }
@@ -240,21 +241,21 @@ export function Forge() {
         dragUidRef.current = start.uid;
         playSound('dragStart');
 
+        // Grab the wrapper element (data-gem-uid is on the wrapper, matching Draft pattern)
         const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
         draggedElRef.current = el;
         if (el) {
           const rect = el.getBoundingClientRect();
-          // Fixed position ONCE — movement via translate3d (GPU composited, no layout recalc)
-          el.style.cssText = `
-            position: fixed !important;
-            left: ${rect.left}px !important;
-            top: ${rect.top}px !important;
-            width: ${rect.width}px !important;
-            z-index: 999 !important;
-            will-change: transform;
-            filter: drop-shadow(0 0 16px rgba(212, 168, 52, 0.5));
-            pointer-events: none;
-          `;
+          el.dataset.origLeft = String(rect.left);
+          el.dataset.origTop = String(rect.top);
+          // Individual style sets — matches Draft exactly, won't fight React
+          el.style.position = 'fixed';
+          el.style.left = `${rect.left}px`;
+          el.style.top = `${rect.top}px`;
+          el.style.width = `${rect.width}px`;
+          el.style.zIndex = '999';
+          el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
+          el.style.pointerEvents = 'none';
         }
 
         // Lock pointer events on non-dragged gems via DOM (no React re-render)
@@ -272,8 +273,12 @@ export function Forge() {
 
       const draggedEl = draggedElRef.current;
       if (hasDraggedRef.current && draggedEl) {
-        // Use translate3d for buttery-smooth GPU-composited movement (no layout recalc)
-        draggedEl.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.08)`;
+        // Move relative to start — matches Draft exactly
+        const origLeft = parseFloat(draggedEl.dataset.origLeft ?? '0');
+        const origTop = parseFloat(draggedEl.dataset.origTop ?? '0');
+        draggedEl.style.left = `${origLeft + dx}px`;
+        draggedEl.style.top = `${origTop + dy}px`;
+        draggedEl.style.transform = 'scale(1.08)';
       }
     }
 

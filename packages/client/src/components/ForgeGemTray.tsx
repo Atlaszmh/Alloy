@@ -168,17 +168,14 @@ export function ForgeGemTray({
             return (
               <div
                 key={orb.uid}
+                data-gem-uid={orb.uid}
                 style={{
-                  position: 'relative',
                   opacity: dimmed ? 0.35 : 1,
                   pointerEvents: dragUid && dragUid !== orb.uid ? 'none' : undefined,
-                  touchAction: 'none',
-                  WebkitTouchCallout: 'none',
-                  userSelect: 'none',
                 }}
               >
+                <div style={{ position: 'relative' }}>
                 <GemCard
-                  uid={orb.uid}
                   affixId={affixId}
                   affixName={affixName}
                   tier={orb.tier}
@@ -194,8 +191,7 @@ export function ForgeGemTray({
                   onClick={() => onSelectOrb(orb.uid)}
                   onPointerDown={(e) => onPointerDown(orb.uid, e)}
                 />
-
-                {/* State badge — only equipped badge shown (staged gems are filtered out) */}
+                {/* Equipped badge */}
                 {isEquipped && (
                   <div
                     style={{
@@ -220,6 +216,7 @@ export function ForgeGemTray({
                     {'\u2694'}
                   </div>
                 )}
+              </div>
               </div>
             );
           })}
