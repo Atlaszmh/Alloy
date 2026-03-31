@@ -3,6 +3,7 @@ import type { DataRegistry, OrbInstance } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
 import { getStatLabel, getStatAbbreviation } from '@/shared/utils/stat-label';
+import { getGemArt } from '@/shared/utils/art-registry';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}',
@@ -231,33 +232,44 @@ function Slot({
   const filledBorder =
     glowSignal === 'gold' ? 'var(--color-compound)' : borderColor;
 
+  const artUrl = getGemArt(orb.affixId);
+  const bgGradient = gradient
+    ? `linear-gradient(135deg, ${gradient.bg})`
+    : 'var(--color-surface-800)';
+
   return (
     <button
       data-combo-slot={index}
       onClick={onClick}
-      className="flex flex-col items-center justify-center cursor-pointer"
+      className="flex flex-col items-center justify-center cursor-pointer overflow-hidden"
       style={{
         width: '52px',
         height: '52px',
         borderRadius: '8px',
         border: `2px solid ${filledBorder}`,
-        background: 'var(--color-surface-800)',
+        background: bgGradient,
         boxShadow: filledShadow,
+        position: 'relative',
       }}
       aria-label={`Combo slot: ${element ?? 'unknown'} orb`}
     >
-      <span style={{ fontSize: '20px', lineHeight: 1 }}>{emoji}</span>
-      {statText && (
-        <span
-          style={{
-            fontSize: '8px',
-            color: 'var(--color-surface-300)',
-            lineHeight: 1,
-            marginTop: '2px',
-          }}
-        >
-          {statText}
-        </span>
+      {/* Specular highlight */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%)',
+          pointerEvents: 'none',
+        }}
+      />
+      {artUrl ? (
+        <img
+          src={artUrl}
+          alt={orb.affixId}
+          style={{ width: 36, height: 36, objectFit: 'contain', position: 'relative', zIndex: 1 }}
+        />
+      ) : (
+        <span style={{ fontSize: '20px', lineHeight: 1, position: 'relative', zIndex: 1 }}>{emoji}</span>
       )}
     </button>
   );

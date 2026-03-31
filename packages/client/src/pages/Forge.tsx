@@ -80,7 +80,8 @@ export function Forge() {
   const hasDraggedRef = useRef(false);
   const draggedElRef = useRef<HTMLElement | null>(null);
   const isDraggingRef = useRef(false);
-  const [dragUid, setDragUid] = useState<string | null>(null);
+  const dragUidRef = useRef<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // ── Initialize plan on mount / round change ──
   useEffect(() => {
@@ -238,7 +239,14 @@ export function Forge() {
       if (!hasDraggedRef.current && dist >= DRAG_THRESHOLD) {
         hasDraggedRef.current = true;
         isDraggingRef.current = true;
-        setDragUid(start.uid);
+        dragUidRef.current = start.uid;
+        setIsDragging(true);
+        // Lock pointer events on non-dragged gems via DOM (avoids per-move re-render)
+        document.querySelectorAll('[data-gem-uid]').forEach(el => {
+          if ((el as HTMLElement).dataset.gemUid !== start.uid) {
+            (el as HTMLElement).style.pointerEvents = 'none';
+          }
+        });
 
         const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
         if (!el) return;
@@ -306,8 +314,13 @@ export function Forge() {
         // Clean up after a short delay to let opacity transition
         setTimeout(() => {
           resetDraggedEl();
-          setDragUid(null);
+          dragUidRef.current = null;
           isDraggingRef.current = false;
+          setIsDragging(false);
+          // Unlock pointer events on all gems
+          document.querySelectorAll('[data-gem-uid]').forEach(el => {
+            (el as HTMLElement).style.pointerEvents = '';
+          });
         }, 50);
       } else {
         // Was a tap — toggle selection
@@ -503,7 +516,7 @@ export function Forge() {
             comboSlots={comboSlots}
             registry={registry}
             canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
-            isDragging={dragUid !== null}
+            isDragging={isDragging}
             onSlotClick={handleComboSlotClick}
             onCombine={handleCombine}
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
@@ -533,7 +546,7 @@ export function Forge() {
               registry={registry}
               plan={plan}
               selectedOrbUid={selectedOrbUid}
-              isDragging={dragUid !== null}
+              isDragging={isDragging}
               onSocketClick={handleSocketClick}
               onSocketRemove={handleSocketRemove}
             />
@@ -556,7 +569,7 @@ export function Forge() {
         stagedUids={stagedUids}
         onSelectOrb={handleSelectOrb}
         onPointerDown={handlePointerDown}
-        dragUid={dragUid}
+        dragUid={null}
         initialPoolCount={initialPoolCountRef.current || plan.stockpile.length}
       />
 

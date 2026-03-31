@@ -12,7 +12,7 @@ interface ForgeGemTrayProps {
   stagedUids: Set<string>;
   onSelectOrb: (uid: string) => void;
   onPointerDown: (uid: string, e: React.PointerEvent) => void;
-  dragUid: string | null;
+  dragUid?: string | null; // Deprecated — pointer lock handled via DOM
   initialPoolCount: number;
 }
 
@@ -164,8 +164,6 @@ export function ForgeGemTray({
               statLabel = affix ? getStatLabel(affix, orb) : '';
             }
 
-            const isDragTarget = dragUid !== null && dragUid !== orb.uid;
-
             return (
               <div
                 key={orb.uid}
@@ -175,7 +173,6 @@ export function ForgeGemTray({
                   touchAction: 'none',
                   WebkitTouchCallout: 'none',
                   userSelect: 'none',
-                  pointerEvents: isDragTarget ? 'none' : undefined,
                 }}
               >
                 <GemCard
