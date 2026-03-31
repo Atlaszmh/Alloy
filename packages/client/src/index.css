@@ -192,6 +192,12 @@
 /* swoop-to-stockpile: now driven by Web Animations API in Draft.tsx for smooth GPU compositing */
 
 
+/* ── Forge drag-and-drop target glow ── */
+.forge-drop-active {
+  box-shadow: 0 0 12px rgba(212, 168, 52, 0.4) !important;
+  border-color: var(--color-bronze-light) !important;
+}
+
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 
 .app-shell {

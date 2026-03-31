@@ -75,11 +75,11 @@ export function Forge() {
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
 
-  // ── Drag state (exact Draft screen pattern) ──
+  // ── Drag state — ALL refs, ZERO React state during drag to avoid re-render fighting ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
   const hasDraggedRef = useRef(false);
   const draggedElRef = useRef<HTMLElement | null>(null);
-  const [dragUid, setDragUid] = useState<string | null>(null);
+  const dragUidRef = useRef<string | null>(null);
   const selectedOrbUidRef = useRef(selectedOrbUid);
   useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
 
@@ -237,24 +237,37 @@ export function Forge() {
 
       if (!hasDraggedRef.current && Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
         hasDraggedRef.current = true;
-        setDragUid(start.uid);
-        selectOrb(start.uid);
+        dragUidRef.current = start.uid;
         playSound('dragStart');
 
         const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
         draggedElRef.current = el;
         if (el) {
           const rect = el.getBoundingClientRect();
-          // Set fixed position ONCE at drag start — movement uses translate3d (GPU composited)
-          el.style.position = 'fixed';
-          el.style.left = `${rect.left}px`;
-          el.style.top = `${rect.top}px`;
-          el.style.width = `${rect.width}px`;
-          el.style.zIndex = '999';
-          el.style.willChange = 'transform';
-          el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
-          el.style.pointerEvents = 'none';
+          // Fixed position ONCE — movement via translate3d (GPU composited, no layout recalc)
+          el.style.cssText = `
+            position: fixed !important;
+            left: ${rect.left}px !important;
+            top: ${rect.top}px !important;
+            width: ${rect.width}px !important;
+            z-index: 999 !important;
+            will-change: transform;
+            filter: drop-shadow(0 0 16px rgba(212, 168, 52, 0.5));
+            pointer-events: none;
+          `;
         }
+
+        // Lock pointer events on non-dragged gems via DOM (no React re-render)
+        document.querySelectorAll('[data-gem-uid]').forEach(gem => {
+          if ((gem as HTMLElement).dataset.gemUid !== start.uid) {
+            (gem as HTMLElement).style.pointerEvents = 'none';
+          }
+        });
+
+        // Add isDragging class to drop target containers for glow feedback
+        document.querySelectorAll('[data-combo-slot], [data-forge-socket]').forEach(el => {
+          (el as HTMLElement).classList.add('forge-drop-active');
+        });
       }
 
       const draggedEl = draggedElRef.current;
@@ -290,7 +303,7 @@ export function Forge() {
           }
         } else if (target && target.type === 'socket') {
           const result = applyAction(
-            { kind: 'assign_orb', orbUid: draggedUid, target: activeItemTab, slotIndex: target.slotIndex },
+            { kind: 'assign_orb', orbUid: draggedUid, target: useForgeStore.getState().activeItemTab, slotIndex: target.slotIndex },
             registry,
           );
           if (result.ok) {
@@ -310,7 +323,16 @@ export function Forge() {
           resetDraggedEl();
         }
 
-        setDragUid(null);
+        // Clean up drag state
+        dragUidRef.current = null;
+        // Unlock pointer events on all gems
+        document.querySelectorAll('[data-gem-uid]').forEach(gem => {
+          (gem as HTMLElement).style.pointerEvents = '';
+        });
+        // Remove drop target glow
+        document.querySelectorAll('.forge-drop-active').forEach(el => {
+          el.classList.remove('forge-drop-active');
+        });
       } else {
         // Not a drag — classify as tap or hold
         const holdDuration = Date.now() - start.time;
@@ -335,7 +357,7 @@ export function Forge() {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [activeItemTab, registry, applyAction, setComboSlotByIndex, selectOrb]);
+  }, [applyAction, registry, setComboSlotByIndex, selectOrb]);
 
   // ── Combine slot click ──
   const handleComboSlotClick = useCallback((index: number) => {
@@ -514,7 +536,6 @@ export function Forge() {
             comboSlots={comboSlots}
             registry={registry}
             canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
-            isDragging={dragUid !== null}
             onSlotClick={handleComboSlotClick}
             onCombine={handleCombine}
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
@@ -544,7 +565,6 @@ export function Forge() {
               registry={registry}
               plan={plan}
               selectedOrbUid={selectedOrbUid}
-              isDragging={dragUid !== null}
               onSocketClick={handleSocketClick}
               onSocketRemove={handleSocketRemove}
             />
@@ -567,7 +587,7 @@ export function Forge() {
         stagedUids={stagedUids}
         onSelectOrb={handleSelectOrb}
         onPointerDown={handlePointerDown}
-        dragUid={dragUid}
+        dragUid={null}
         initialPoolCount={initialPoolCountRef.current || plan.stockpile.length}
       />
 
