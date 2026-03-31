@@ -12,7 +12,7 @@ interface ForgeGemTrayProps {
   stagedUids: Set<string>;
   onSelectOrb: (uid: string) => void;
   onPointerDown: (uid: string, e: React.PointerEvent) => void;
-  dragUid?: string | null; // Deprecated — pointer lock handled via DOM
+  dragUid: string | null;
   initialPoolCount: number;
 }
 
@@ -128,9 +128,10 @@ export function ForgeGemTray({
           }}
         >
           {stockpile.map((orb) => {
+            // Staged gems are REMOVED from display (not dimmed)
+            if (stagedUids.has(orb.uid)) return null;
             const isEquipped = equippedUids.has(orb.uid);
-            const isStaged = stagedUids.has(orb.uid);
-            const dimmed = isEquipped || isStaged;
+            const dimmed = isEquipped;
 
             let affixName: string;
             let category: 'offensive' | 'defensive' | 'sustain' | 'utility' | 'trigger' | 'combined';
@@ -170,6 +171,7 @@ export function ForgeGemTray({
                 style={{
                   position: 'relative',
                   opacity: dimmed ? 0.35 : 1,
+                  pointerEvents: dragUid && dragUid !== orb.uid ? 'none' : undefined,
                   touchAction: 'none',
                   WebkitTouchCallout: 'none',
                   userSelect: 'none',
@@ -193,8 +195,8 @@ export function ForgeGemTray({
                   onPointerDown={(e) => onPointerDown(orb.uid, e)}
                 />
 
-                {/* State badge */}
-                {(isEquipped || isStaged) && (
+                {/* State badge — only equipped badge shown (staged gems are filtered out) */}
+                {isEquipped && (
                   <div
                     style={{
                       position: 'absolute',
@@ -215,7 +217,7 @@ export function ForgeGemTray({
                       pointerEvents: 'none',
                     }}
                   >
-                    {isEquipped ? '\u2694' : '\u2692'}
+                    {'\u2694'}
                   </div>
                 )}
               </div>

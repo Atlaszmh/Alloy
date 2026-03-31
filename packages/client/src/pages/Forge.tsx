@@ -75,13 +75,13 @@ export function Forge() {
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
 
-  // ── Drag state (matches Draft screen pattern) ──
+  // ── Drag state (exact Draft screen pattern) ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
   const hasDraggedRef = useRef(false);
   const draggedElRef = useRef<HTMLElement | null>(null);
-  const isDraggingRef = useRef(false);
-  const dragUidRef = useRef<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const [dragUid, setDragUid] = useState<string | null>(null);
+  const selectedOrbUidRef = useRef(selectedOrbUid);
+  useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
 
   // ── Initialize plan on mount / round change ──
   useEffect(() => {
@@ -218,15 +218,15 @@ export function Forge() {
     return null;
   }
 
-  // ── Drag: pointerdown handler (passed to ForgeGemTray) ──
+  // ── Drag: pointerdown handler (passed to ForgeGemTray) — matches Draft exactly ──
   const handlePointerDown = useCallback((uid: string, e: React.PointerEvent) => {
-    if (isDraggingRef.current) return;
+    if (pointerStartRef.current && hasDraggedRef.current) return;
     e.preventDefault();
     pointerStartRef.current = { x: e.clientX, y: e.clientY, uid, time: Date.now() };
     hasDraggedRef.current = false;
   }, []);
 
-  // ── Drag: global pointermove + pointerup ──
+  // ── Drag: global pointermove + pointerup (matches Draft pattern exactly) ──
   useEffect(() => {
     function onPointerMove(e: PointerEvent) {
       const start = pointerStartRef.current;
@@ -234,44 +234,36 @@ export function Forge() {
 
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (!hasDraggedRef.current && dist >= DRAG_THRESHOLD) {
+      if (!hasDraggedRef.current && Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
         hasDraggedRef.current = true;
-        isDraggingRef.current = true;
-        dragUidRef.current = start.uid;
-        setIsDragging(true);
-        // Lock pointer events on non-dragged gems via DOM (avoids per-move re-render)
-        document.querySelectorAll('[data-gem-uid]').forEach(el => {
-          if ((el as HTMLElement).dataset.gemUid !== start.uid) {
-            (el as HTMLElement).style.pointerEvents = 'none';
-          }
-        });
+        setDragUid(start.uid);
+        selectOrb(start.uid);
+        playSound('dragStart');
 
         const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
-        if (!el) return;
-
-        const rect = el.getBoundingClientRect();
-        el.dataset.origLeft = String(rect.left);
-        el.dataset.origTop = String(rect.top);
-        el.style.position = 'fixed';
-        el.style.left = `${rect.left}px`;
-        el.style.top = `${rect.top}px`;
-        el.style.width = `${rect.width}px`;
-        el.style.zIndex = '999';
-        el.style.filter = 'drop-shadow(0 0 8px rgba(212,168,52,0.6))';
-        el.style.pointerEvents = 'none';
-
         draggedElRef.current = el;
-        playSound('dragStart');
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          el.dataset.origLeft = String(rect.left);
+          el.dataset.origTop = String(rect.top);
+          el.style.position = 'fixed';
+          el.style.left = `${rect.left}px`;
+          el.style.top = `${rect.top}px`;
+          el.style.width = `${rect.width}px`;
+          el.style.zIndex = '999';
+          el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
+          el.style.pointerEvents = 'none';
+        }
       }
 
-      if (hasDraggedRef.current && draggedElRef.current) {
-        const origLeft = parseFloat(draggedElRef.current.dataset.origLeft!);
-        const origTop = parseFloat(draggedElRef.current.dataset.origTop!);
-        draggedElRef.current.style.left = `${origLeft + dx}px`;
-        draggedElRef.current.style.top = `${origTop + dy}px`;
-        draggedElRef.current.style.transform = 'scale(1.08)';
+      const draggedEl = draggedElRef.current;
+      if (hasDraggedRef.current && draggedEl) {
+        const origLeft = parseFloat(draggedEl.dataset.origLeft ?? '0');
+        const origTop = parseFloat(draggedEl.dataset.origTop ?? '0');
+        draggedEl.style.left = `${origLeft + dx}px`;
+        draggedEl.style.top = `${origTop + dy}px`;
+        draggedEl.style.transform = 'scale(1.08)';
       }
     }
 
@@ -290,7 +282,12 @@ export function Forge() {
           if (orb && !slots[target.slotIndex]) {
             setComboSlotByIndex(target.slotIndex, orb);
             playSound('orbSelect');
-            if (draggedElRef.current) draggedElRef.current.style.opacity = '0';
+            const el = draggedElRef.current;
+            if (el) {
+              el.style.opacity = '0';
+              el.style.pointerEvents = '';
+            }
+            draggedElRef.current = null;
           } else {
             resetDraggedEl();
           }
@@ -301,7 +298,12 @@ export function Forge() {
           );
           if (result.ok) {
             playSound('orbPlace');
-            if (draggedElRef.current) draggedElRef.current.style.opacity = '0';
+            const el = draggedElRef.current;
+            if (el) {
+              el.style.opacity = '0';
+              el.style.pointerEvents = '';
+            }
+            draggedElRef.current = null;
           } else {
             playSound('combineFail');
             resetDraggedEl();
@@ -311,20 +313,19 @@ export function Forge() {
           resetDraggedEl();
         }
 
-        // Clean up after a short delay to let opacity transition
-        setTimeout(() => {
-          resetDraggedEl();
-          dragUidRef.current = null;
-          isDraggingRef.current = false;
-          setIsDragging(false);
-          // Unlock pointer events on all gems
-          document.querySelectorAll('[data-gem-uid]').forEach(el => {
-            (el as HTMLElement).style.pointerEvents = '';
-          });
-        }, 50);
+        setDragUid(null);
       } else {
-        // Was a tap — toggle selection
-        handleSelectOrb(start.uid);
+        // Not a drag — classify as tap or hold
+        const holdDuration = Date.now() - start.time;
+        if (holdDuration < 300) {
+          if (selectedOrbUidRef.current === start.uid) {
+            // Double-tap — deselect
+            selectOrb(null);
+          } else {
+            selectOrb(start.uid);
+            playSound('orbSelect');
+          }
+        }
       }
 
       pointerStartRef.current = null;
@@ -337,7 +338,7 @@ export function Forge() {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [activeItemTab, registry, applyAction, setComboSlotByIndex, handleSelectOrb]);
+  }, [activeItemTab, registry, applyAction, setComboSlotByIndex, selectOrb]);
 
   // ── Combine slot click ──
   const handleComboSlotClick = useCallback((index: number) => {
@@ -516,7 +517,7 @@ export function Forge() {
             comboSlots={comboSlots}
             registry={registry}
             canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
-            isDragging={isDragging}
+            isDragging={dragUid !== null}
             onSlotClick={handleComboSlotClick}
             onCombine={handleCombine}
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
@@ -546,7 +547,7 @@ export function Forge() {
               registry={registry}
               plan={plan}
               selectedOrbUid={selectedOrbUid}
-              isDragging={isDragging}
+              isDragging={dragUid !== null}
               onSocketClick={handleSocketClick}
               onSocketRemove={handleSocketRemove}
             />
@@ -569,7 +570,7 @@ export function Forge() {
         stagedUids={stagedUids}
         onSelectOrb={handleSelectOrb}
         onPointerDown={handlePointerDown}
-        dragUid={null}
+        dragUid={dragUid}
         initialPoolCount={initialPoolCountRef.current || plan.stockpile.length}
       />
 
