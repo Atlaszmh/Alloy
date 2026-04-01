@@ -34,6 +34,8 @@ interface GemCardProps {
   statLabel: string;       // e.g., "+23", "+5%", "15%"
   description?: string;
   selected?: boolean;
+  /** When true, name/category are hidden inside the gem — shown via tooltip instead */
+  compact?: boolean;
   onClick?: () => void;
   onPointerDown?: (e: React.PointerEvent) => void;
 }
@@ -48,6 +50,7 @@ export function GemCard({
   statLabel,
   description,
   selected = false,
+  compact = false,
   onClick,
   onPointerDown,
 }: GemCardProps) {
@@ -73,7 +76,7 @@ export function GemCard({
       onClick={onClick}
       onPointerDown={onPointerDown}
     >
-      {/* Gem shape with stat inside */}
+      {/* Gem shape — all info inside the gem frame */}
       <div
         style={{
           width: 'var(--gem-size)',
@@ -81,11 +84,6 @@ export function GemCard({
           borderRadius: 'var(--gem-radius)',
           border: `2.5px solid ${colors.border}`,
           background: `linear-gradient(135deg, ${colors.bg})`,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 1,
           position: 'relative',
           overflow: 'hidden',
           boxShadow: tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
@@ -116,92 +114,133 @@ export function GemCard({
             }}
           />
         ) : (
-          <span style={{ fontSize: 'var(--icon-md)', position: 'relative', zIndex: 1 }}>{symbol}</span>
+          <span style={{
+            fontSize: 'var(--icon-md)',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 1,
+          }}>{symbol}</span>
         )}
 
-        {/* Stat value inside gem */}
+        {/* Stat value — top left */}
         <span
           style={{
+            position: 'absolute',
+            top: 'calc(var(--gem-size) * 0.05)',
+            left: 'calc(var(--gem-size) * 0.06)',
             fontFamily: 'var(--font-family-display)',
             fontWeight: 700,
-            fontSize: 'var(--text-2xs)',
-            color: 'rgba(255,255,255,0.92)',
-            position: 'relative',
-            zIndex: 1,
+            fontSize: 'var(--text-sm)',
+            color: 'rgba(255,255,255,0.95)',
+            textShadow: '0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)',
+            zIndex: 3,
           }}
         >
           {statLabel}
         </span>
 
-        {/* Tier dots */}
+        {/* Category dot — top right */}
         <div
           style={{
-            display: 'flex',
-            gap: 'var(--gap-xs)',
-            position: 'relative',
-            zIndex: 1,
+            position: 'absolute',
+            top: 'calc(var(--gem-size) * 0.06)',
+            right: 'calc(var(--gem-size) * 0.06)',
+            width: 'calc(var(--gem-size) * 0.08)',
+            height: 'calc(var(--gem-size) * 0.08)',
+            borderRadius: '50%',
+            background: colors.border,
+            border: '1.5px solid rgba(255,255,255,0.3)',
+            zIndex: 3,
           }}
-        >
-          {Array.from({ length: tier }, (_, i) => (
-            <span
-              key={i}
+        />
+
+        {/* Tier dots — above the name band */}
+        {tier > 1 && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: compact ? 'calc(var(--gem-size) * 0.06)' : 'calc(var(--gem-size) * 0.22)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: 'var(--gap-xs)',
+              zIndex: 3,
+            }}
+          >
+            {Array.from({ length: tier }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  display: 'block',
+                  width: 'calc(var(--gem-size) * 0.06)',
+                  height: 'calc(var(--gem-size) * 0.06)',
+                  borderRadius: '50%',
+                  backgroundColor: tierColor,
+                  boxShadow: tier >= 3 ? `0 0 3px ${tierColor}` : undefined,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Bottom gradient band with name — hidden in compact mode */}
+        {!compact && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, transparent 100%)',
+              padding: 'calc(var(--gem-size) * 0.04) calc(var(--gem-size) * 0.06) calc(var(--gem-size) * 0.04)',
+              textAlign: 'center',
+              zIndex: 3,
+            }}
+          >
+            <div
               style={{
-                display: 'block',
-                width: 'calc(var(--gem-size) * 0.07)',
-                height: 'calc(var(--gem-size) * 0.07)',
-                borderRadius: '50%',
-                backgroundColor: tierColor,
-                boxShadow: tier >= 3 ? `0 0 3px ${tierColor}` : undefined,
+                fontFamily: 'var(--font-family-display)',
+                fontWeight: 700,
+                fontSize: 'var(--text-xs)',
+                color: 'white',
+                lineHeight: 1.15,
+                textShadow: '0 1px 4px rgba(0,0,0,0.95)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
-            />
-          ))}
-        </div>
+            >
+              {affixName}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Name below gem */}
-      <span
-        style={{
-          fontFamily: 'var(--font-family-display)',
-          fontWeight: 700,
-          fontSize: 'var(--text-xs)',
-          color: 'white',
-          textAlign: 'center',
-          marginTop: 'var(--gap-xs)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          maxWidth: 'calc(var(--gem-size) + var(--gap-lg))',
-        }}
-      >
-        {affixName}
-      </span>
-
-      {/* Category below name */}
-      <span
-        style={{
-          fontFamily: 'var(--font-family-display)',
-          fontWeight: 600,
-          fontSize: 'var(--text-2xs)',
-          color: 'var(--color-accent-300)',
-          textAlign: 'center',
-        }}
-      >
-        {categoryLabel}
-      </span>
     </div>
   );
 
-  return description ? (
-    <Tooltip content={
-      <GemDetailPanel
-        affixName={affixName}
-        description={description}
-        category={CATEGORY_LABELS[category] ?? category}
-        tags={tags}
-        statLabel={statLabel}
-        tier={tier}
-      />
-    }>
+  // Compact mode: always show tooltip with name + category + stat
+  // Normal mode: show tooltip only if description exists
+  const tooltipContent = compact ? (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontWeight: 700, color: 'white', fontFamily: 'var(--font-family-display)' }}>{affixName}</div>
+      <div style={{ fontSize: '0.85em', color: colors.border }}>{categoryLabel}</div>
+      {statLabel && <div style={{ fontSize: '0.85em', color: 'var(--color-surface-300)' }}>{statLabel}</div>}
+    </div>
+  ) : description ? (
+    <GemDetailPanel
+      affixName={affixName}
+      description={description}
+      category={CATEGORY_LABELS[category] ?? category}
+      tags={tags}
+      statLabel={statLabel}
+      tier={tier}
+    />
+  ) : null;
+
+  return tooltipContent ? (
+    <Tooltip content={tooltipContent}>
       {card}
     </Tooltip>
   ) : card;

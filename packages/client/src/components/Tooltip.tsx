@@ -8,8 +8,10 @@ interface TooltipProps {
 export function Tooltip({ content, children }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const timeout = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const isTouchRef = useRef(false);
 
   const show = () => {
+    if (isTouchRef.current) return; // Don't hover-show on touch devices
     clearTimeout(timeout.current);
     timeout.current = setTimeout(() => setVisible(true), 300);
   };
@@ -17,6 +19,14 @@ export function Tooltip({ content, children }: TooltipProps) {
   const hide = () => {
     clearTimeout(timeout.current);
     setVisible(false);
+    isTouchRef.current = false;
+  };
+
+  const handleTap = () => {
+    // Toggle on tap for touch devices
+    if (isTouchRef.current) {
+      setVisible(v => !v);
+    }
   };
 
   return (
@@ -24,6 +34,8 @@ export function Tooltip({ content, children }: TooltipProps) {
       className="relative inline-block"
       onPointerEnter={show}
       onPointerLeave={hide}
+      onTouchStart={() => { isTouchRef.current = true; }}
+      onClick={handleTap}
       onFocus={show}
       onBlur={hide}
     >
