@@ -525,8 +525,8 @@ export function Forge() {
       {/* 2. Tab bar */}
       {tabBarJSX}
 
-      {/* 3. Action area (flex-1 to fill middle) */}
-      <div className="overflow-y-auto" key={activeTab} style={{ flex: '0 0 auto', padding: 'var(--gap-sm) var(--gap-md)', animation: 'fade-in 0.2s ease-out' }}>
+      {/* 3. Action area — grows to fill available space */}
+      <div className="overflow-y-auto" key={activeTab} style={{ flex: 1, minHeight: 0, padding: 'var(--gap-sm) var(--gap-md)', animation: 'fade-in 0.2s ease-out' }}>
         {activeTab === 'combine' ? (
           <CombineWorkbench
             comboSlots={comboSlots}
@@ -564,8 +564,8 @@ export function Forge() {
         )}
       </div>
 
-      {/* 4. Gem tray at bottom */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* 4. Gem tray at bottom — shrinks to content, gems sized for 5-across */}
+      <div style={{ flexShrink: 0, padding: '0 var(--gap-md) var(--gap-sm)' }}>
         <ForgeGemTray
           stockpile={plan.stockpile}
           registry={registry}

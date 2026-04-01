@@ -112,12 +112,11 @@ export function ItemSocketView({
         )}
       </div>
 
-      {/* Socket grid */}
+      {/* Socket grid — sockets fill available width */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, var(--socket-size))`,
-          gridTemplateRows: 'repeat(2, var(--socket-size))',
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gap: 'var(--gap-sm)',
         }}
       >
@@ -131,8 +130,8 @@ export function ItemSocketView({
                 data-forge-socket={index}
                 onClick={() => onSocketClick(index)}
                 style={{
-                  width: 'var(--socket-size)',
-                  height: 'var(--socket-size)',
+                  width: '100%',
+                  aspectRatio: '1',
                   borderRadius: 'var(--socket-radius)',
                   background: 'var(--color-surface-800)',
                   border: isDragging ? '1.5px dashed var(--color-bronze-light)' : '1.5px dashed var(--color-empty-socket)',
@@ -166,8 +165,8 @@ export function ItemSocketView({
               <div
                 key={index}
                 style={{
-                  width: 'var(--socket-size)',
-                  height: 'var(--socket-size)',
+                  width: '100%',
+                  aspectRatio: '1',
                   borderRadius: 'var(--socket-radius)',
                   background: `linear-gradient(135deg, ${gradient.bg})`,
                   border: '2px solid var(--color-locked)',

@@ -14,28 +14,15 @@ interface ForgeGemTrayProps {
   dragUid: string | null;
 }
 
-/** Compute optimal gem size to fill available tray area */
+/** Compute optimal gem size: max size that allows 5 gems per row */
 function computeTrayGemSize(
   containerWidth: number,
-  containerHeight: number,
-  gemCount: number,
   gap: number,
 ): number | null {
-  if (gemCount === 0 || containerWidth === 0 || containerHeight === 0) return null;
-
-  // Try column counts from 2-6, pick the one that produces the largest gems that fit
-  let bestSize = 0;
-  for (let cols = 2; cols <= 6; cols++) {
-    const rows = Math.ceil(gemCount / cols);
-    const cellW = (containerWidth - (cols - 1) * gap) / cols;
-    // Account for gem name + category text below the gem (~28px)
-    const cellH = (containerHeight - (rows - 1) * gap) / rows - 28;
-    const size = Math.min(cellW, cellH);
-    if (size > bestSize) bestSize = size;
-  }
-
-  // Clamp: stay close to the standard ~110px, modest scaling
-  return Math.max(90, Math.min(150, Math.floor(bestSize)));
+  if (containerWidth === 0) return null;
+  // Size so 5 gems fit across with gaps
+  const maxForFive = Math.floor((containerWidth - 4 * gap) / 5);
+  return Math.max(80, Math.min(maxForFive, 140));
 }
 
 export function ForgeGemTray({
@@ -53,21 +40,18 @@ export function ForgeGemTray({
   const [localGemSize, setLocalGemSize] = useState<number | null>(null);
   const hasAnimatedRef = useRef(false);
 
-  // Count visible gems (not staged)
-  const visibleCount = stockpile.filter(o => !stagedUids.has(o.uid)).length;
-
-  // Measure tray container and compute optimal gem size
+  // Measure tray container and compute optimal gem size (5 gems per row)
   useEffect(() => {
     const el = trayRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      const size = computeTrayGemSize(width, height, visibleCount, 10);
+      const { width } = entry.contentRect;
+      const size = computeTrayGemSize(width, 10);
       setLocalGemSize(size);
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [visibleCount]);
+  }, []);
 
   // Gem cascade entry animation (Web Animations API)
   useEffect(() => {
@@ -104,10 +88,6 @@ export function ForgeGemTray({
       ref={trayRef}
       onContextMenu={(e) => e.preventDefault()}
       style={{
-        minHeight: 0,
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
         ...(localGemSize ? { '--gem-size': `${localGemSize}px`, '--gem-radius': `${localGemSize * 0.16}px` } as React.CSSProperties : {}),
       }}
     >
@@ -150,10 +130,6 @@ export function ForgeGemTray({
             gap: 'var(--gap-md)',
             justifyItems: 'center',
             alignContent: 'start',
-            flex: 1,
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#363650 transparent',
           }}
         >
           {stockpile.map((orb) => {

@@ -199,9 +199,9 @@ function Slot({
         onClick={onClick}
         className="flex items-center justify-center cursor-pointer"
         style={{
-          width: 'var(--socket-size)',
-          height: 'var(--socket-size)',
-          borderRadius: 'var(--socket-radius)',
+          width: 'var(--gem-size-sm)',
+          height: 'var(--gem-size-sm)',
+          borderRadius: 'var(--gem-radius-sm)',
           border: dropBorder,
           background: 'var(--color-surface-800)',
           color: 'var(--color-surface-300)',
