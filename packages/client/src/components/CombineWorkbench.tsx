@@ -135,8 +135,8 @@ export function CombineWorkbench({
           style={{
             fontSize: '16px',
             color: 'var(--color-surface-300)',
-            marginLeft: '4px',
-            marginRight: '4px',
+            marginLeft: 'var(--gap-sm)',
+            marginRight: 'var(--gap-sm)',
           }}
         >
           {'\u25B6'}
@@ -199,13 +199,13 @@ function Slot({
         onClick={onClick}
         className="flex items-center justify-center cursor-pointer"
         style={{
-          width: '52px',
-          height: '52px',
-          borderRadius: '8px',
+          width: 'var(--socket-size)',
+          height: 'var(--socket-size)',
+          borderRadius: 'var(--socket-radius)',
           border: dropBorder,
           background: 'var(--color-surface-800)',
           color: 'var(--color-surface-300)',
-          fontSize: '16px',
+          fontSize: 'var(--icon-md)',
           boxShadow: dropGlow,
           transition: 'box-shadow 0.2s, border-color 0.2s',
         }}
@@ -243,9 +243,9 @@ function Slot({
       onClick={onClick}
       className="flex flex-col items-center justify-center cursor-pointer overflow-hidden"
       style={{
-        width: '52px',
-        height: '52px',
-        borderRadius: '8px',
+        width: 'var(--socket-size)',
+        height: 'var(--socket-size)',
+        borderRadius: 'var(--socket-radius)',
         border: `2px solid ${filledBorder}`,
         background: bgGradient,
         boxShadow: filledShadow,
@@ -266,10 +266,10 @@ function Slot({
         <img
           src={artUrl}
           alt={orb.affixId}
-          style={{ width: 36, height: 36, objectFit: 'contain', position: 'relative', zIndex: 1 }}
+          style={{ width: 'var(--gem-size-sm)', height: 'var(--gem-size-sm)', objectFit: 'contain', position: 'relative', zIndex: 1 }}
         />
       ) : (
-        <span style={{ fontSize: '20px', lineHeight: 1, position: 'relative', zIndex: 1 }}>{emoji}</span>
+        <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1, position: 'relative', zIndex: 1 }}>{emoji}</span>
       )}
     </button>
   );
@@ -307,13 +307,13 @@ function ResultBox({ glowSignal }: { glowSignal: GlowSignal }) {
     <div
       className="flex items-center justify-center"
       style={{
-        width: '52px',
-        height: '52px',
-        borderRadius: '8px',
+        width: 'var(--socket-size)',
+        height: 'var(--socket-size)',
+        borderRadius: 'var(--socket-radius)',
         border: `2px ${borderStyle} ${borderColor}`,
         background: 'var(--color-surface-800)',
         boxShadow: shadow,
-        fontSize: '16px',
+        fontSize: 'var(--icon-md)',
         color: symbolColor,
         animation: isGold ? 'pulse-glow 1.5s ease-in-out infinite' : undefined,
       }}
