@@ -12,7 +12,8 @@ export function MainMenu() {
         <div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 blur-3xl"
           style={{
-            width: 300,
+            width: '80%',
+            maxWidth: 300,
             height: 200,
             background: 'radial-gradient(ellipse, rgba(212, 168, 52, 0.4), transparent 70%)',
           }}
