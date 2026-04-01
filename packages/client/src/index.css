@@ -74,6 +74,36 @@
   /* Spacing */
   --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
 
+  /* ── Responsive Sizing Tokens ──
+     All derive from --frame-h (set by AppShell ResizeObserver).
+     Pattern: clamp(min, calc(var(--frame-h) * scale), max)
+     Fallback: --frame-h defaults to 812px for SSR/tests */
+
+  /* Component sizing */
+  --socket-size: clamp(36px, calc(var(--frame-h, 812px) * 0.055), 56px);
+  --gem-size: clamp(56px, calc(var(--frame-h, 812px) * 0.095), 104px);
+  --gem-size-sm: clamp(40px, calc(var(--frame-h, 812px) * 0.065), 72px);
+  --icon-md: clamp(16px, calc(var(--frame-h, 812px) * 0.025), 24px);
+
+  /* Spacing */
+  --gap-xs: clamp(2px, calc(var(--frame-h, 812px) * 0.004), 4px);
+  --gap-sm: clamp(4px, calc(var(--frame-h, 812px) * 0.007), 8px);
+  --gap-md: clamp(6px, calc(var(--frame-h, 812px) * 0.012), 14px);
+  --gap-lg: clamp(10px, calc(var(--frame-h, 812px) * 0.02), 20px);
+
+  /* Typography */
+  --text-2xs: clamp(7px, calc(var(--frame-h, 812px) * 0.01), 10px);
+  --text-xs: clamp(9px, calc(var(--frame-h, 812px) * 0.013), 13px);
+  --text-sm: clamp(11px, calc(var(--frame-h, 812px) * 0.016), 15px);
+  --text-md: clamp(14px, calc(var(--frame-h, 812px) * 0.02), 18px);
+  --text-lg: clamp(18px, calc(var(--frame-h, 812px) * 0.028), 26px);
+
+  /* Derived */
+  --gem-radius: calc(var(--gem-size) * 0.16);
+  --gem-radius-sm: calc(var(--gem-size-sm) * 0.16);
+  --socket-radius: calc(var(--socket-size) * 0.17);
+  --tabbar-h: clamp(40px, calc(var(--frame-h, 812px) * 0.055), 52px);
+
   /* Animations */
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-slide-up: slide-up 0.2s ease-out;
