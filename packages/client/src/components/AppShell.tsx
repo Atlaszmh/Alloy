@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TabBar } from './TabBar';
 import { SettingsDrawer } from './SettingsDrawer';
@@ -25,6 +25,18 @@ export function AppShell() {
 
   const confirmVariant = isInQueue ? 'queue' : 'match';
 
+  // Measure app-frame height and set --frame-h for responsive tokens
+  const frameRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const ro = new ResizeObserver(([entry]) => {
+      frame.style.setProperty('--frame-h', `${entry.contentRect.height}px`);
+    });
+    ro.observe(frame);
+    return () => ro.disconnect();
+  }, []);
+
   // Close drawers on route change
   useEffect(() => {
     setSettingsOpen(false);
@@ -43,7 +55,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <div className="app-frame">
+      <div className="app-frame" ref={frameRef}>
         <main className="flex-1" style={{ minHeight: 0, overflow: 'hidden' }}>
           <Outlet />
         </main>
