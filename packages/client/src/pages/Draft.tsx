@@ -7,7 +7,6 @@ import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
-import { useGemSize } from '@/hooks/useGemSize';
 import type { AffixDef, OrbInstance } from '@alloy/engine';
 import { AI_CONFIGS } from '@alloy/engine';
 import { calcAiDelay } from './ai-delay';
@@ -69,7 +68,7 @@ function StockpileZone({
             ? 'linear-gradient(180deg, rgba(248,113,113,0.04), var(--color-surface-800))'
             : 'linear-gradient(0deg, rgba(212,168,52,0.06), var(--color-surface-800))',
         boxShadow: isDropTarget ? undefined : side === 'bottom' ? '0 0 14px rgba(212,168,52,0.08)' : 'var(--shadow-card)',
-        margin: side === 'top' ? '5px 7px 0' : '2px 7px 5px',
+        margin: side === 'top' ? 'var(--gap-sm) var(--gap-sm) 0' : '2px var(--gap-sm) var(--gap-sm)',
       }}
     >
       <div className="mb-1 flex items-center justify-between">
@@ -93,8 +92,8 @@ function StockpileZone({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-          gap: 3,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(var(--gem-size), 1fr))',
+          gap: 'var(--gap-sm)',
         }}
       >
         {sortedOrbs.map((orb) => {
@@ -174,32 +173,7 @@ export function Draft() {
     gemGridSlotRef.current = new Map();
   }, [draftRound]);
 
-  // Measure pool container for responsive sizing
   const poolContainerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  useEffect(() => {
-    const el = poolContainerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      setContainerWidth(entries[0].contentRect.width);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  // Lock gem sizing to the initial pool count for this round — don't resize as gems are picked.
-  const initialPoolCountRef = useRef(0);
-  if (pool.length > 0 && initialPoolCountRef.current === 0) {
-    initialPoolCountRef.current = pool.length;
-  }
-  // Reset when round changes
-  const prevRoundRef = useRef(draftRound);
-  if (prevRoundRef.current !== draftRound) {
-    prevRoundRef.current = draftRound;
-    initialPoolCountRef.current = pool.length > 0 ? pool.length : initialPoolCountRef.current;
-  }
-  const gemSizing = useGemSize(initialPoolCountRef.current || pool.length, containerWidth);
 
   // ── Animation hooks ──
   const opponentZoneRef = useRef<HTMLDivElement>(null);
@@ -520,7 +494,7 @@ export function Draft() {
         className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
         style={{
           boxShadow: 'var(--shadow-inset)',
-          padding: 6,
+          padding: 'var(--gap-sm)',
           minHeight: 0,
         }}
         onContextMenu={(e) => e.preventDefault()}
@@ -528,8 +502,8 @@ export function Draft() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${gemSizing.columns}, minmax(0, 1fr))`,
-            gap: 4,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(var(--gem-size), 1fr))',
+            gap: 'var(--gap-md)',
             justifyItems: 'center',
             alignContent: 'start',
             minHeight: '100%',
@@ -540,8 +514,6 @@ export function Draft() {
               const affix = affixMap.get(orb.affixId);
               if (!affix) return null;
               const slot = gemGridSlotRef.current.get(orb.uid) ?? index;
-              const col = (slot % gemSizing.columns) + 1;
-              const row = Math.floor(slot / gemSizing.columns) + 1;
               return (
                 <motion.div
                   key={orb.uid}
@@ -562,8 +534,7 @@ export function Draft() {
                     delay: index * 0.025,
                   }}
                   style={{
-                    gridColumn: col,
-                    gridRow: row,
+                    order: slot,
                     // Lock non-dragged gems while a drag is in progress
                     pointerEvents: dragUid && orb.uid !== dragUid ? 'none' : undefined,
                   }}
@@ -587,7 +558,7 @@ export function Draft() {
       </div>
 
       {/* ═══ Timer bar — full width, fixed height ═══ */}
-      <div className="mx-1 my-0.5" style={{ height: 32, flexShrink: 0 }}>
+      <div className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
         {isPlayerTurn ? (
           <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
         ) : (
