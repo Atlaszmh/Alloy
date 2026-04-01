@@ -28,7 +28,7 @@ export function TabBar({ onSettingsOpen, onDevOpen, onConfirmLeave, isInActiveGa
   return (
     <div
       style={{
-        height: 46,
+        height: 'var(--tabbar-h)',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
@@ -97,8 +97,8 @@ function TabButton({ label, icon, active, onClick, color }: {
     <button
       aria-label={label}
       onClick={onClick}
-      className="flex flex-col items-center gap-[2px] border-0 bg-transparent"
-      style={{ padding: '6px 12px', position: 'relative', cursor: 'pointer' }}
+      className="flex flex-col items-center border-0 bg-transparent"
+      style={{ gap: 'var(--gap-xs)', padding: 'var(--gap-sm) var(--gap-md)', position: 'relative', cursor: 'pointer' }}
     >
       {active && (
         <div
@@ -117,7 +117,7 @@ function TabButton({ label, icon, active, onClick, color }: {
       {active && (
         <span
           style={{
-            fontSize: 9,
+            fontSize: 'var(--text-2xs)',
             fontWeight: 700,
             color: strokeColor,
             letterSpacing: '0.05em',
