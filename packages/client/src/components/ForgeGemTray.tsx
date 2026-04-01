@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import type { AffixDef, DataRegistry, OrbInstance } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
@@ -14,6 +14,30 @@ interface ForgeGemTrayProps {
   dragUid: string | null;
 }
 
+/** Compute optimal gem size to fill available tray area */
+function computeTrayGemSize(
+  containerWidth: number,
+  containerHeight: number,
+  gemCount: number,
+  gap: number,
+): number | null {
+  if (gemCount === 0 || containerWidth === 0 || containerHeight === 0) return null;
+
+  // Try column counts from 2-6, pick the one that produces the largest gems that fit
+  let bestSize = 0;
+  for (let cols = 2; cols <= 6; cols++) {
+    const rows = Math.ceil(gemCount / cols);
+    const cellW = (containerWidth - (cols - 1) * gap) / cols;
+    // Account for gem name text below the gem (~20px)
+    const cellH = (containerHeight - (rows - 1) * gap) / rows - 20;
+    const size = Math.min(cellW, cellH);
+    if (size > bestSize) bestSize = size;
+  }
+
+  // Clamp to the global --gem-size range (56-104px)
+  return Math.max(56, Math.min(104, Math.floor(bestSize)));
+}
+
 export function ForgeGemTray({
   stockpile,
   registry,
@@ -25,7 +49,25 @@ export function ForgeGemTray({
   dragUid,
 }: ForgeGemTrayProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
+  const [localGemSize, setLocalGemSize] = useState<number | null>(null);
   const hasAnimatedRef = useRef(false);
+
+  // Count visible gems (not staged)
+  const visibleCount = stockpile.filter(o => !stagedUids.has(o.uid)).length;
+
+  // Measure tray container and compute optimal gem size
+  useEffect(() => {
+    const el = trayRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      const size = computeTrayGemSize(width, height, visibleCount, 10);
+      setLocalGemSize(size);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [visibleCount]);
 
   // Gem cascade entry animation (Web Animations API)
   useEffect(() => {
@@ -59,8 +101,15 @@ export function ForgeGemTray({
 
   return (
     <div
+      ref={trayRef}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ minHeight: 0 }}
+      style={{
+        minHeight: 0,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        ...(localGemSize ? { '--gem-size': `${localGemSize}px`, '--gem-radius': `${localGemSize * 0.16}px` } as React.CSSProperties : {}),
+      }}
     >
       {/* Label */}
       <div
@@ -100,6 +149,8 @@ export function ForgeGemTray({
             gridTemplateColumns: 'repeat(auto-fill, minmax(var(--gem-size), 1fr))',
             gap: 'var(--gap-md)',
             justifyItems: 'center',
+            alignContent: 'start',
+            flex: 1,
             overflowY: 'auto',
             scrollbarWidth: 'thin',
             scrollbarColor: '#363650 transparent',
