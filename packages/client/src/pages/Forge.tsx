@@ -7,7 +7,6 @@ import { ForgeHeader } from '@/components/ForgeHeader';
 import { ForgeGemTray } from '@/components/ForgeGemTray';
 import { CombineWorkbench } from '@/components/CombineWorkbench';
 import { ItemSocketView } from '@/components/ItemSocketView';
-import { ItemMiniPreview } from '@/components/ItemMiniPreview';
 import { HapticButton } from '@/components/HapticButton';
 import { Modal } from '@/components/Modal';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
@@ -47,7 +46,6 @@ export function Forge() {
   const selectedOrbUid = useForgeStore(s => s.selectedOrbUid);
   const confirmModalOpen = useForgeStore(s => s.confirmModalOpen);
   const activeTab = useForgeStore(s => s.activeTab);
-  const activeItemTab = useForgeStore(s => s.activeItemTab);
   const comboSlots = useForgeStore(s => s.comboSlots);
   const {
     initPlan,
@@ -55,7 +53,6 @@ export function Forge() {
     getCommitActions,
     selectOrb,
     setActiveTab,
-    setActiveItemTab,
     setComboSlotByIndex,
     clearComboSlots,
     openConfirmModal,
@@ -70,7 +67,7 @@ export function Forge() {
   // ── Local state ──
   const committedRef = useRef(false);
   const prevFluxRef = useRef<number | null>(null);
-  const initialPoolCountRef = useRef(0);
+
   const [baseStatWeapon, setBaseStatWeapon] = useState<[BaseStat, BaseStat]>(['STR', 'VIT']);
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
@@ -87,7 +84,7 @@ export function Forge() {
   useEffect(() => {
     if (!matchState || phase?.kind !== 'forge' || !player) return;
     committedRef.current = false;
-    initialPoolCountRef.current = 0;
+
 
     const forgeState = createForgeState(
       player.stockpile,
@@ -112,12 +109,6 @@ export function Forge() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase?.kind === 'forge' ? `${round}` : 'none']);
 
-  // ── Lock initial pool count for gem sizing ──
-  useEffect(() => {
-    if (plan && initialPoolCountRef.current === 0) {
-      initialPoolCountRef.current = plan.stockpile.length;
-    }
-  }, [plan]);
 
   // ── Flux change tracking ──
   useEffect(() => {
@@ -199,7 +190,7 @@ export function Forge() {
 
   function findDropTarget(x: number, y: number):
     | { type: 'combo'; slotIndex: number }
-    | { type: 'socket'; slotIndex: number }
+    | { type: 'socket'; slotIndex: number; cardId: 'weapon' | 'armor' }
     | null {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
@@ -213,7 +204,9 @@ export function Forge() {
     const socketEl = (el as HTMLElement).closest('[data-forge-socket]');
     if (socketEl) {
       const index = parseInt(socketEl.getAttribute('data-forge-socket')!, 10);
-      return { type: 'socket', slotIndex: index };
+      const cardEl = (socketEl as HTMLElement).closest('[data-item-card]');
+      const cardId = (cardEl?.getAttribute('data-item-card') ?? 'weapon') as 'weapon' | 'armor';
+      return { type: 'socket', slotIndex: index, cardId };
     }
 
     return null;
@@ -308,7 +301,7 @@ export function Forge() {
           }
         } else if (target && target.type === 'socket') {
           const result = applyAction(
-            { kind: 'assign_orb', orbUid: draggedUid, target: useForgeStore.getState().activeItemTab, slotIndex: target.slotIndex },
+            { kind: 'assign_orb', orbUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
             registry,
           );
           if (result.ok) {
@@ -395,9 +388,8 @@ export function Forge() {
   }, [plan, comboSlots, applyAction, registry, clearComboSlots]);
 
   // ── Socket click (equip tab) ──
-  const handleSocketClick = useCallback((slotIndex: number) => {
+  const handleSocketClick = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
     if (!selectedOrbUid || !plan) return;
-    const cardId = activeItemTab;
     const result = applyAction(
       { kind: 'assign_orb', orbUid: selectedOrbUid, target: cardId, slotIndex },
       registry,
@@ -409,15 +401,14 @@ export function Forge() {
       setFluxToast('Not enough flux!');
       setTimeout(() => setFluxToast(null), 800);
     }
-  }, [selectedOrbUid, plan, activeItemTab, applyAction, registry, selectOrb]);
+  }, [selectedOrbUid, plan, applyAction, registry, selectOrb]);
 
   // ── Socket remove (equip tab) ──
-  const handleSocketRemove = useCallback((slotIndex: number) => {
+  const handleSocketRemove = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
     if (!plan || plan.round === 1) return;
-    const cardId = activeItemTab;
     applyAction({ kind: 'remove_orb', target: cardId, slotIndex }, registry);
     playSound('orbRemove');
-  }, [plan, activeItemTab, applyAction, registry]);
+  }, [plan, applyAction, registry]);
 
   // ── Base stat change ──
   const handleBaseStatChange = useCallback((target: 'weapon' | 'armor', index: 0 | 1, value: BaseStat) => {
@@ -535,7 +526,7 @@ export function Forge() {
       {tabBarJSX}
 
       {/* 3. Action area (flex-1 to fill middle) */}
-      <div className="flex-1 overflow-y-auto px-3 py-2" key={activeTab} style={{ animation: 'fade-in 0.2s ease-out' }}>
+      <div className="overflow-y-auto" key={activeTab} style={{ flex: '0 0 auto', padding: 'var(--gap-sm) var(--gap-md)', animation: 'fade-in 0.2s ease-out' }}>
         {activeTab === 'combine' ? (
           <CombineWorkbench
             comboSlots={comboSlots}
@@ -546,55 +537,46 @@ export function Forge() {
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
           />
         ) : (
-          <>
-            {/* Item tab switcher */}
-            <div className="flex gap-2 mb-2">
-              <HapticButton
-                variant={activeItemTab === 'weapon' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setActiveItemTab('weapon')}
-              >
-                {'\u2694'} Sword
-              </HapticButton>
-              <HapticButton
-                variant={activeItemTab === 'armor' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setActiveItemTab('armor')}
-              >
-                {'\uD83D\uDEE1'} Chainmail
-              </HapticButton>
+          <div style={{ display: 'flex', gap: 'var(--gap-md)' }}>
+            <div style={{ flex: 1, minWidth: 0 }} data-item-card="weapon">
+              <ItemSocketView
+                item={plan.loadout.weapon}
+                cardId="weapon"
+                registry={registry}
+                plan={plan}
+                selectedOrbUid={selectedOrbUid}
+                onSocketClick={(slotIndex) => handleSocketClick('weapon', slotIndex)}
+                onSocketRemove={(slotIndex) => handleSocketRemove('weapon', slotIndex)}
+              />
             </div>
-            <ItemSocketView
-              item={plan.loadout[activeItemTab]}
-              cardId={activeItemTab}
-              registry={registry}
-              plan={plan}
-              selectedOrbUid={selectedOrbUid}
-              onSocketClick={handleSocketClick}
-              onSocketRemove={handleSocketRemove}
-            />
-            <ItemMiniPreview
-              item={plan.loadout[activeItemTab === 'weapon' ? 'armor' : 'weapon']}
-              itemType={activeItemTab === 'weapon' ? 'armor' : 'weapon'}
-              registry={registry}
-              onClick={() => setActiveItemTab(activeItemTab === 'weapon' ? 'armor' : 'weapon')}
-            />
-          </>
+            <div style={{ flex: 1, minWidth: 0 }} data-item-card="armor">
+              <ItemSocketView
+                item={plan.loadout.armor}
+                cardId="armor"
+                registry={registry}
+                plan={plan}
+                selectedOrbUid={selectedOrbUid}
+                onSocketClick={(slotIndex) => handleSocketClick('armor', slotIndex)}
+                onSocketRemove={(slotIndex) => handleSocketRemove('armor', slotIndex)}
+              />
+            </div>
+          </div>
         )}
       </div>
 
       {/* 4. Gem tray at bottom */}
-      <ForgeGemTray
-        stockpile={plan.stockpile}
-        registry={registry}
-        selectedOrbUid={selectedOrbUid}
-        equippedUids={equippedUids}
-        stagedUids={stagedUids}
-        onSelectOrb={handleSelectOrb}
-        onPointerDown={handlePointerDown}
-        dragUid={null}
-        initialPoolCount={initialPoolCountRef.current || plan.stockpile.length}
-      />
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <ForgeGemTray
+          stockpile={plan.stockpile}
+          registry={registry}
+          selectedOrbUid={selectedOrbUid}
+          equippedUids={equippedUids}
+          stagedUids={stagedUids}
+          onSelectOrb={handleSelectOrb}
+          onPointerDown={handlePointerDown}
+          dragUid={null}
+        />
+      </div>
 
       {/* Confirmation modal */}
       <Modal open={confirmModalOpen} onClose={closeConfirmModal} title="Commit your forge?">
