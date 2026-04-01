@@ -32,11 +32,6 @@ interface GemCardProps {
   category: AffixCategory | 'combined';
   tags: string[];
   statLabel: string;       // e.g., "+23", "+5%", "15%"
-  gemSize: number;         // px
-  emojiSize: number;       // px
-  statSize: number;        // px — stat value inside gem
-  nameSize: number;        // px — name below gem
-  catSize: number;         // px — category below name
   description?: string;
   selected?: boolean;
   onClick?: () => void;
@@ -51,11 +46,6 @@ export function GemCard({
   category,
   tags,
   statLabel,
-  gemSize,
-  emojiSize,
-  statSize,
-  nameSize,
-  catSize,
   description,
   selected = false,
   onClick,
@@ -86,9 +76,9 @@ export function GemCard({
       {/* Gem shape with stat inside */}
       <div
         style={{
-          width: gemSize,
-          height: gemSize,
-          borderRadius: gemSize * 0.16,
+          width: 'var(--gem-size)',
+          height: 'var(--gem-size)',
+          borderRadius: 'var(--gem-radius)',
           border: `2.5px solid ${colors.border}`,
           background: `linear-gradient(135deg, ${colors.bg})`,
           display: 'flex',
@@ -126,7 +116,7 @@ export function GemCard({
             }}
           />
         ) : (
-          <span style={{ fontSize: emojiSize, position: 'relative', zIndex: 1 }}>{symbol}</span>
+          <span style={{ fontSize: 'var(--icon-md)', position: 'relative', zIndex: 1 }}>{symbol}</span>
         )}
 
         {/* Stat value inside gem */}
@@ -134,7 +124,7 @@ export function GemCard({
           style={{
             fontFamily: 'var(--font-family-display)',
             fontWeight: 700,
-            fontSize: statSize,
+            fontSize: 'var(--text-2xs)',
             color: 'rgba(255,255,255,0.92)',
             position: 'relative',
             zIndex: 1,
@@ -147,7 +137,7 @@ export function GemCard({
         <div
           style={{
             display: 'flex',
-            gap: Math.max(2, gemSize * 0.03),
+            gap: 'var(--gap-xs)',
             position: 'relative',
             zIndex: 1,
           }}
@@ -157,8 +147,8 @@ export function GemCard({
               key={i}
               style={{
                 display: 'block',
-                width: Math.max(3, gemSize * 0.07),
-                height: Math.max(3, gemSize * 0.07),
+                width: 'calc(var(--gem-size) * 0.07)',
+                height: 'calc(var(--gem-size) * 0.07)',
                 borderRadius: '50%',
                 backgroundColor: tierColor,
                 boxShadow: tier >= 3 ? `0 0 3px ${tierColor}` : undefined,
@@ -173,14 +163,14 @@ export function GemCard({
         style={{
           fontFamily: 'var(--font-family-display)',
           fontWeight: 700,
-          fontSize: nameSize,
+          fontSize: 'var(--text-xs)',
           color: 'white',
           textAlign: 'center',
-          marginTop: 2,
+          marginTop: 'var(--gap-xs)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          maxWidth: gemSize + 16,
+          maxWidth: 'calc(var(--gem-size) + var(--gap-lg))',
         }}
       >
         {affixName}
@@ -191,7 +181,7 @@ export function GemCard({
         style={{
           fontFamily: 'var(--font-family-display)',
           fontWeight: 600,
-          fontSize: catSize,
+          fontSize: 'var(--text-2xs)',
           color: 'var(--color-accent-300)',
           textAlign: 'center',
         }}

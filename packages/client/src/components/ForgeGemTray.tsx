@@ -160,11 +160,6 @@ export function ForgeGemTray({
                   category={category}
                   tags={tags}
                   statLabel={statLabel}
-                  gemSize={0}
-                  emojiSize={0}
-                  statSize={0}
-                  nameSize={0}
-                  catSize={0}
                   selected={orb.uid === selectedOrbUid}
                   onClick={() => onSelectOrb(orb.uid)}
                   onPointerDown={(e) => onPointerDown(orb.uid, e)}

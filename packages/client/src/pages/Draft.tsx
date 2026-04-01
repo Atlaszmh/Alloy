@@ -576,11 +576,6 @@ export function Draft() {
                     tags={affix.tags}
                     statLabel={getStatLabel(affix, orb)}
                     description={affix.description}
-                    gemSize={gemSizing.gemSize}
-                    emojiSize={gemSizing.emojiSize}
-                    statSize={gemSizing.statSize}
-                    nameSize={gemSizing.nameSize}
-                    catSize={gemSizing.catSize}
                     selected={orb.uid === selectedOrbUid}
                     onPointerDown={(e) => handlePointerDown(orb.uid, e)}
                   />
