@@ -339,7 +339,7 @@ export function Duel() {
       {/* Duel view — mobile: canvas stacked above log; desktop: side-by-side */}
       {viewMode === 'pixi' && hpState ? (
         <div className="flex flex-1 flex-col gap-2 overflow-hidden">
-          <div className="flex-1" style={{ minHeight: 280 }}>
+          <div style={{ flexShrink: 0 }}>
             <DuelRenderer
               combatLog={currentLog}
               stats={hpState.stats}
@@ -348,10 +348,10 @@ export function Duel() {
             />
           </div>
           <div
-            className="max-h-32 overflow-hidden rounded-lg border border-surface-600 bg-surface-800 p-2"
-            style={{ boxShadow: 'var(--shadow-card)' }}
+            className="flex-1 overflow-hidden rounded-lg border border-surface-600 bg-surface-800 p-2"
+            style={{ minHeight: 0, boxShadow: 'var(--shadow-card)' }}
           >
-            <EventLog events={visibleEvents.slice(-5)} maxHeight="120px" />
+            <EventLog events={visibleEvents.slice(-5)} maxHeight="100%" />
           </div>
         </div>
       ) : (

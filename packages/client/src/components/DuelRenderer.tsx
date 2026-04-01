@@ -68,6 +68,7 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
 
     const app = new Application();
     let destroyed = false;
+    let ro: ResizeObserver | null = null;
 
     app.init({
       width: STAGE_WIDTH,
@@ -79,6 +80,16 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
 
       containerRef.current!.appendChild(app.canvas);
       appRef.current = app;
+
+      // ResizeObserver scales the Pixi stage to fill the container
+      ro = new ResizeObserver(([entry]) => {
+        const { width } = entry.contentRect;
+        if (width === 0) return; // container not visible yet
+        const height = width / (15 / 8);
+        app.renderer.resize(width, height);
+        app.stage.scale.set(width / STAGE_WIDTH);
+      });
+      ro.observe(containerRef.current!);
 
       const state = stateRef.current;
       state.maxHp = [stats[0].maxHP, stats[1].maxHP];
@@ -138,6 +149,7 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
 
     return () => {
       destroyed = true;
+      ro?.disconnect();
       if (appRef.current) {
         appRef.current.destroy(true);
         appRef.current = null;
@@ -179,7 +191,7 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
     <div
       ref={containerRef}
       className="mx-auto overflow-hidden rounded-lg border border-surface-600"
-      style={{ width: STAGE_WIDTH, height: STAGE_HEIGHT }}
+      style={{ width: '100%', aspectRatio: '15 / 8' }}
     />
   );
 }
