@@ -110,6 +110,10 @@ function StockpileZone({
             />
           );
         })}
+        {/* Reserve space for empty slots so zone height is stable from the start */}
+        {Array.from({ length: emptyCount }, (_, i) => (
+          <GemChip key={`empty-${i}`} empty />
+        ))}
       </div>
     </div>
   );
