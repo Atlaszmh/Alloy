@@ -34,8 +34,8 @@ function computeTrayGemSize(
     if (size > bestSize) bestSize = size;
   }
 
-  // Clamp: min 56px, max 180px (generous — let gems fill the space)
-  return Math.max(56, Math.min(180, Math.floor(bestSize)));
+  // Clamp: stay close to the standard ~110px, modest scaling
+  return Math.max(90, Math.min(150, Math.floor(bestSize)));
 }
 
 export function ForgeGemTray({

@@ -192,7 +192,7 @@ export function Draft() {
         const size = Math.min(cellW, cellH);
         if (size > bestSize) bestSize = size;
       }
-      setPoolGemSize(Math.max(56, Math.min(180, Math.floor(bestSize))));
+      setPoolGemSize(Math.max(90, Math.min(150, Math.floor(bestSize))));
     });
     ro.observe(el);
     return () => ro.disconnect();

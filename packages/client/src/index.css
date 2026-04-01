@@ -80,10 +80,10 @@
      Fallback: --frame-h defaults to 812px for SSR/tests */
 
   /* Component sizing */
-  --socket-size: clamp(36px, calc(var(--frame-h, 812px) * 0.065), 72px);
-  --gem-size: clamp(56px, calc(var(--frame-h, 812px) * 0.11), 140px);
+  --socket-size: clamp(40px, calc(var(--frame-h, 812px) * 0.065), 72px);
+  --gem-size: clamp(90px, calc(var(--frame-h, 812px) * 0.14), 130px);
   --gem-size-sm: clamp(40px, calc(var(--frame-h, 812px) * 0.065), 72px);
-  --icon-md: clamp(16px, calc(var(--frame-h, 812px) * 0.03), 32px);
+  --icon-md: clamp(18px, calc(var(--frame-h, 812px) * 0.03), 32px);
 
   /* Spacing */
   --gap-xs: clamp(2px, calc(var(--frame-h, 812px) * 0.004), 4px);
