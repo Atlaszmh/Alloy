@@ -37,12 +37,12 @@ export function ForgeHeader({
       }}
     >
       {/* Row 1: Header bar */}
-      <div className="flex items-center gap-2 px-3 py-1" style={{ minHeight: 28 }}>
+      <div className="flex items-center gap-2 px-3 py-1" style={{ minHeight: 'var(--text-lg)' }}>
         <span
           style={{
             fontFamily: DISPLAY_FONT,
             fontWeight: 700,
-            fontSize: 14,
+            fontSize: 'var(--text-md)',
             letterSpacing: '0.04em',
             color: 'var(--color-accent-500)',
           }}
@@ -55,8 +55,8 @@ export function ForgeHeader({
           className="rounded-full px-1.5"
           style={{
             fontFamily: DISPLAY_FONT,
-            fontSize: 10,
-            lineHeight: '18px',
+            fontSize: 'var(--text-xs)',
+            lineHeight: 1.5,
             color: 'var(--color-bronze-light)',
             backgroundColor: 'var(--color-surface-600)',
             border: '1px solid var(--color-surface-500)',
@@ -79,7 +79,6 @@ export function ForgeHeader({
       {/* Row 2: Flux bar */}
       <div
         className={`flex flex-col items-center py-1 ${fluxEmpty ? 'animate-[timer-pulse_0.8s_ease-in-out_infinite]' : ''}`}
-        style={{ minHeight: 40 }}
       >
         {/* Lightning bolts */}
         <div className="flex items-center gap-1">
@@ -91,7 +90,7 @@ export function ForgeHeader({
                 key={i}
                 className={shouldPulse ? 'animate-[timer-pulse_1.2s_ease-in-out_infinite]' : ''}
                 style={{
-                  fontSize: 18,
+                  fontSize: 'var(--text-lg)',
                   color: filled ? 'var(--color-warning)' : 'var(--color-surface-600)',
                   textShadow: filled ? '0 0 6px var(--color-warning)' : undefined,
                 }}
@@ -107,7 +106,7 @@ export function ForgeHeader({
           style={{
             fontFamily: DISPLAY_FONT,
             fontWeight: 700,
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             color: fluxEmpty ? 'var(--color-danger)' : 'var(--color-surface-300)',
           }}
         >
@@ -118,7 +117,6 @@ export function ForgeHeader({
       {/* Row 3: Stats row */}
       <div
         className="flex items-center justify-center gap-3 px-3 py-1"
-        style={{ minHeight: 24 }}
       >
         <StatItem label="HP" value={stats.maxHP} color="var(--color-success)" />
         <StatItem label="DMG" value={stats.physicalDamage} color="white" />
@@ -154,7 +152,7 @@ function StatItem({
       <span
         style={{
           fontFamily: DISPLAY_FONT,
-          fontSize: 9,
+          fontSize: 'var(--text-2xs)',
           textTransform: 'uppercase',
           color: 'var(--color-surface-300)',
         }}
@@ -165,7 +163,7 @@ function StatItem({
         style={{
           fontFamily: DISPLAY_FONT,
           fontWeight: 700,
-          fontSize: 11,
+          fontSize: 'var(--text-xs)',
           color,
         }}
       >
