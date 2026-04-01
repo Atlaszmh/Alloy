@@ -1,7 +1,6 @@
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import type { AffixDef, DataRegistry, OrbInstance } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
-import { useGemSize } from '@/hooks/useGemSize';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 interface ForgeGemTrayProps {
@@ -13,7 +12,6 @@ interface ForgeGemTrayProps {
   onSelectOrb: (uid: string) => void;
   onPointerDown: (uid: string, e: React.PointerEvent) => void;
   dragUid: string | null;
-  initialPoolCount: number;
 }
 
 export function ForgeGemTray({
@@ -25,26 +23,7 @@ export function ForgeGemTray({
   onSelectOrb,
   onPointerDown,
   dragUid,
-  initialPoolCount,
 }: ForgeGemTrayProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const { gemSize, columns, emojiSize, statSize, nameSize, catSize } =
-    useGemSize(initialPoolCount, undefined, 'forge');
-
   const gridRef = useRef<HTMLDivElement>(null);
   const hasAnimatedRef = useRef(false);
 
@@ -80,9 +59,8 @@ export function ForgeGemTray({
 
   return (
     <div
-      ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ minHeight: 120 }}
+      style={{ minHeight: 0 }}
     >
       {/* Label */}
       <div
@@ -92,7 +70,7 @@ export function ForgeGemTray({
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
           color: 'var(--color-bronze-light)',
-          marginBottom: 6,
+          marginBottom: 'var(--gap-sm)',
         }}
       >
         STOCKPILE &middot; {stockpile.length} ORBS
@@ -105,7 +83,7 @@ export function ForgeGemTray({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: 100,
+            minHeight: 0,
             color: 'var(--color-surface-300)',
             fontSize: 12,
             fontFamily: 'var(--font-family-display)',
@@ -119,8 +97,8 @@ export function ForgeGemTray({
           ref={gridRef}
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${columns}, 1fr)`,
-            gap: 8,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(var(--gem-size), 1fr))',
+            gap: 'var(--gap-md)',
             justifyItems: 'center',
             overflowY: 'auto',
             scrollbarWidth: 'thin',
@@ -182,11 +160,11 @@ export function ForgeGemTray({
                   category={category}
                   tags={tags}
                   statLabel={statLabel}
-                  gemSize={gemSize}
-                  emojiSize={emojiSize}
-                  statSize={statSize}
-                  nameSize={nameSize}
-                  catSize={catSize}
+                  gemSize={0}
+                  emojiSize={0}
+                  statSize={0}
+                  nameSize={0}
+                  catSize={0}
                   selected={orb.uid === selectedOrbUid}
                   onClick={() => onSelectOrb(orb.uid)}
                   onPointerDown={(e) => onPointerDown(orb.uid, e)}
@@ -198,14 +176,14 @@ export function ForgeGemTray({
                       position: 'absolute',
                       top: -2,
                       right: -2,
-                      width: 16,
-                      height: 16,
+                      width: 'var(--icon-md)',
+                      height: 'var(--icon-md)',
                       borderRadius: '50%',
                       backgroundColor: 'white',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 8,
+                      fontSize: 'var(--text-2xs)',
                       lineHeight: 1,
                       color: '#1a1a2e',
                       fontWeight: 700,
