@@ -28,14 +28,14 @@ function computeTrayGemSize(
   for (let cols = 2; cols <= 6; cols++) {
     const rows = Math.ceil(gemCount / cols);
     const cellW = (containerWidth - (cols - 1) * gap) / cols;
-    // Account for gem name text below the gem (~20px)
-    const cellH = (containerHeight - (rows - 1) * gap) / rows - 20;
+    // Account for gem name + category text below the gem (~28px)
+    const cellH = (containerHeight - (rows - 1) * gap) / rows - 28;
     const size = Math.min(cellW, cellH);
     if (size > bestSize) bestSize = size;
   }
 
-  // Clamp to the global --gem-size range (56-104px)
-  return Math.max(56, Math.min(104, Math.floor(bestSize)));
+  // Clamp: min 56px, max 180px (generous — let gems fill the space)
+  return Math.max(56, Math.min(180, Math.floor(bestSize)));
 }
 
 export function ForgeGemTray({

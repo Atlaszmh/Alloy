@@ -174,6 +174,29 @@ export function Draft() {
   }, [draftRound]);
 
   const poolContainerRef = useRef<HTMLDivElement>(null);
+  const [poolGemSize, setPoolGemSize] = useState<number | null>(null);
+
+  // Measure pool container and compute optimal gem size to fill available space
+  useEffect(() => {
+    const el = poolContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0 || pool.length === 0) return;
+      let bestSize = 0;
+      for (let cols = 2; cols <= 7; cols++) {
+        const rows = Math.ceil(pool.length / cols);
+        const gap = 10;
+        const cellW = (width - (cols - 1) * gap) / cols;
+        const cellH = (height - (rows - 1) * gap) / rows - 28;
+        const size = Math.min(cellW, cellH);
+        if (size > bestSize) bestSize = size;
+      }
+      setPoolGemSize(Math.max(56, Math.min(180, Math.floor(bestSize))));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [pool.length]);
 
   // ── Animation hooks ──
   const opponentZoneRef = useRef<HTMLDivElement>(null);
@@ -496,6 +519,7 @@ export function Draft() {
           boxShadow: 'var(--shadow-inset)',
           padding: 'var(--gap-sm)',
           minHeight: 0,
+          ...(poolGemSize ? { '--gem-size': `${poolGemSize}px`, '--gem-radius': `${poolGemSize * 0.16}px` } as React.CSSProperties : {}),
         }}
         onContextMenu={(e) => e.preventDefault()}
       >
