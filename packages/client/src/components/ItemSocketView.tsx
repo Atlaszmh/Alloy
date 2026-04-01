@@ -38,15 +38,15 @@ export function ItemSocketView({
   const cols = Math.ceil(item.slots.length / 2);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-md)' }}>
       {/* Item info */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-sm)' }}>
           <span
             style={{
               fontFamily: 'var(--font-family-display)',
               fontWeight: 700,
-              fontSize: 16,
+              fontSize: 'var(--text-md)',
               color: 'white',
             }}
           >
@@ -54,7 +54,7 @@ export function ItemSocketView({
           </span>
           <span
             style={{
-              fontSize: 8,
+              fontSize: 'var(--text-2xs)',
               fontFamily: 'var(--font-family-display)',
               fontWeight: 700,
               textTransform: 'uppercase',
@@ -71,7 +71,7 @@ export function ItemSocketView({
 
         {/* Inherent bonuses */}
         {baseItem.inherentBonuses.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 'var(--gap-sm)', flexWrap: 'wrap' }}>
             {baseItem.inherentBonuses.map((bonus, i) => {
               const isPositive = bonus.value >= 0;
               const sign = isPositive ? '+' : '';
@@ -83,7 +83,7 @@ export function ItemSocketView({
                 <span
                   key={i}
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--text-xs)',
                     fontFamily: 'var(--font-family-display)',
                     color: isPositive ? 'var(--color-inherent)' : 'var(--color-danger)',
                   }}
@@ -99,7 +99,7 @@ export function ItemSocketView({
         {item.baseStats && (
           <div
             style={{
-              fontSize: 10,
+              fontSize: 'var(--text-xs)',
               fontFamily: 'var(--font-family-display)',
               color: 'var(--color-base-stat)',
               display: 'flex',
@@ -116,9 +116,9 @@ export function ItemSocketView({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, 48px)`,
-          gridTemplateRows: 'repeat(2, 48px)',
-          gap: 6,
+          gridTemplateColumns: `repeat(${cols}, var(--socket-size))`,
+          gridTemplateRows: 'repeat(2, var(--socket-size))',
+          gap: 'var(--gap-sm)',
         }}
       >
         {item.slots.map((slot, index) => {
@@ -131,9 +131,9 @@ export function ItemSocketView({
                 data-forge-socket={index}
                 onClick={() => onSocketClick(index)}
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
+                  width: 'var(--socket-size)',
+                  height: 'var(--socket-size)',
+                  borderRadius: 'var(--socket-radius)',
                   background: 'var(--color-surface-800)',
                   border: isDragging ? '1.5px dashed var(--color-bronze-light)' : '1.5px dashed var(--color-empty-socket)',
                   boxShadow: isDragging
@@ -166,9 +166,9 @@ export function ItemSocketView({
               <div
                 key={index}
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
+                  width: 'var(--socket-size)',
+                  height: 'var(--socket-size)',
+                  borderRadius: 'var(--socket-radius)',
                   background: `linear-gradient(135deg, ${gradient.bg})`,
                   border: '2px solid var(--color-locked)',
                   display: 'flex',
@@ -180,7 +180,7 @@ export function ItemSocketView({
                   cursor: 'default',
                 }}
               >
-                <span style={{ fontSize: 16, lineHeight: 1 }}>{'\uD83D\uDD12'}</span>
+                <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1 }}>{'\uD83D\uDD12'}</span>
               </div>
             );
           }
@@ -191,9 +191,9 @@ export function ItemSocketView({
               key={index}
               onClick={() => onSocketRemove(index)}
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 8,
+                width: 'var(--socket-size)',
+                height: 'var(--socket-size)',
+                borderRadius: 'var(--socket-radius)',
                 background: `linear-gradient(135deg, ${gradient.bg})`,
                 border: `2px solid ${gradient.border}`,
                 display: 'flex',
@@ -207,13 +207,13 @@ export function ItemSocketView({
               }}
             >
               {gemArt ? (
-                <img src={gemArt} alt={affix.name} style={{ width: 20, height: 20 }} />
+                <img src={gemArt} alt={affix.name} style={{ width: 'var(--icon-md)', height: 'var(--icon-md)' }} />
               ) : (
-                <span style={{ fontSize: 20, lineHeight: 1 }}>{emoji}</span>
+                <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1 }}>{emoji}</span>
               )}
               <span
                 style={{
-                  fontSize: 7,
+                  fontSize: 'var(--text-2xs)',
                   fontFamily: 'var(--font-family-display)',
                   color: 'white',
                   lineHeight: 1,
@@ -231,7 +231,7 @@ export function ItemSocketView({
       </div>
 
       {/* Equipped affixes list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}>
         {item.slots.map((slot, index) => {
           if (!slot) return null;
           const orb = getSlotOrb(slot);
@@ -245,12 +245,12 @@ export function ItemSocketView({
             <div
               key={index}
               style={{
-                fontSize: 10,
+                fontSize: 'var(--text-xs)',
                 fontFamily: 'var(--font-family-display)',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-xs)',
               }}
             >
               <span>{emoji}</span>
