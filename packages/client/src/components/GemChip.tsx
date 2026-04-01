@@ -34,9 +34,9 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
     return (
       <div
         style={{
-          borderRadius: 7,
+          borderRadius: 'var(--gem-radius-sm)',
           border: '1px dashed var(--color-surface-500)',
-          minHeight: 38,
+          minHeight: 'var(--gem-size-sm)',
           opacity: 0.25,
         }}
       />
@@ -53,8 +53,8 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
     <div
       className="flex items-center gap-[5px]"
       style={{
-        padding: '4px 6px 4px 4px',
-        borderRadius: 7,
+        padding: 'var(--gap-xs) var(--gap-sm) var(--gap-xs) var(--gap-xs)',
+        borderRadius: 'var(--gem-radius-sm)',
         background: 'var(--color-surface-700)',
         border: newest ? '1px solid var(--color-danger)' : '1px solid var(--color-surface-500)',
         animation: newest ? 'pop-in 0.4s ease-out' : undefined,
@@ -63,14 +63,14 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
       {/* Icon */}
       <div
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 6,
+          width: 'var(--gem-size-sm)',
+          height: 'var(--gem-size-sm)',
+          borderRadius: 'var(--gem-radius-sm)',
           flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 15,
+          fontSize: 'var(--text-sm)',
           border: `1.5px solid ${border}`,
           background: bg,
           position: 'relative',
@@ -85,7 +85,7 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
           }}
         />
         {artUrl ? (
-          <img src={artUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 5, zIndex: 1 }} />
+          <img src={artUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--gem-radius-sm)', zIndex: 1 }} />
         ) : (
           <span style={{ position: 'relative', zIndex: 1 }}>{symbol}</span>
         )}
@@ -96,7 +96,7 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
         <div
           style={{
             fontFamily: 'var(--font-family-display)',
-            fontSize: 12,
+            fontSize: 'var(--text-sm)',
             fontWeight: 700,
             color: 'white',
             whiteSpace: 'nowrap',
@@ -109,7 +109,7 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
         <div
           style={{
             fontFamily: 'var(--font-family-display)',
-            fontSize: 10,
+            fontSize: 'var(--text-xs)',
             fontWeight: 600,
             color: 'var(--color-accent-300)',
             whiteSpace: 'nowrap',
