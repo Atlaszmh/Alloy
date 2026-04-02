@@ -2,7 +2,7 @@
   "baseHP": 200,
   "ticksPerSecond": 30,
   "maxDuelTicks": 3000,
-  "baseCritMultiplier": 1.5,
+  "baseCritMultiplier": 150,
   "minAttackInterval": 9,
   "fluxPerRound": [8, 4, 2],
   "quickMatchFlux": 14,
@@ -39,12 +39,14 @@
     }
   },
   "statCaps": {
-    "critChance": { "min": 0, "max": 0.95 },
-    "dodgeChance": { "min": 0, "max": 0.75 },
-    "blockChance": { "min": 0, "max": 0.75 },
-    "fireResistance": { "min": 0, "max": 0.90 },
-    "iceResistance": { "min": 0, "max": 0.90 },
-    "lightningResistance": { "min": 0, "max": 0.90 },
-    "poisonResistance": { "min": 0, "max": 0.90 }
+    "critChance": { "min": 0, "max": 75 },
+    "dodgeChance": { "min": 0, "max": 50 },
+    "blockChance": { "min": 0, "max": 50 },
+    "fireResistance": { "min": 0, "max": 90 },
+    "coldResistance": { "min": 0, "max": 90 },
+    "lightningResistance": { "min": 0, "max": 90 },
+    "poisonResistance": { "min": 0, "max": 90 },
+    "shadowResistance": { "min": 0, "max": 90 },
+    "chaosResistance": { "min": 0, "max": 90 }
   }
 }
