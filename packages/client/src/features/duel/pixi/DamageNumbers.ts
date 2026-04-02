@@ -1,4 +1,6 @@
 import { Container, Text } from 'pixi.js';
+import type { DamageBreakdown, Element } from '@alloy/engine';
+import { DAMAGE_COLORS, PIXI_COLORS } from '../colors.js';
 
 interface FloatingNumber {
   text: Text;
@@ -38,7 +40,7 @@ export class DamageNumbers {
     let lifespan: number;
 
     if (isCrit) {
-      fontSize = 18;
+      fontSize = 28;
       fontWeight = 'bold';
       lifespan = 75;
     } else if (isDot) {
@@ -66,11 +68,11 @@ export class DamageNumbers {
         fontWeight,
         dropShadow: isCrit
           ? {
-              alpha: 0.8,
-              angle: Math.PI / 4,
-              blur: 4,
-              color: 0x000000,
-              distance: 2,
+              alpha: 0.9,
+              angle: 0,
+              blur: 6,
+              color: 0xfbbf24,
+              distance: 0,
             }
           : undefined,
       },
@@ -93,6 +95,191 @@ export class DamageNumbers {
       life: lifespan,
       maxLife: lifespan,
       scaleStart: startScale,
+    });
+  }
+
+  /**
+   * Spawn a cascade of floating numbers from a full DamageBreakdown.
+   * Each non-zero damage type gets its own colored number, stacked vertically.
+   */
+  spawnFromBreakdown(
+    breakdown: DamageBreakdown,
+    targetX: number,
+    targetY: number,
+  ): void {
+    const entries: Array<{ label: string; color: number; net: number }> = [];
+
+    // Physical damage
+    if (breakdown.physical.net > 0) {
+      entries.push({
+        label: `-${Math.round(breakdown.physical.net)}`,
+        color: DAMAGE_COLORS.physical,
+        net: breakdown.physical.net,
+      });
+    }
+
+    // Elemental damage
+    for (const [elem, elemBd] of Object.entries(breakdown.elemental) as [
+      Element,
+      { net: number } | undefined,
+    ][]) {
+      if (elemBd && elemBd.net > 0) {
+        entries.push({
+          label: `-${Math.round(elemBd.net)} ${elem}`,
+          color: DAMAGE_COLORS[elem],
+          net: elemBd.net,
+        });
+      }
+    }
+
+    if (entries.length === 0) return;
+
+    // For crits, the first (largest) entry gets the crit treatment
+    const isFirstCrit = breakdown.isCrit;
+
+    entries.forEach((entry, i) => {
+      const isCritEntry = isFirstCrit && i === 0;
+      const fontSize = isCritEntry ? 28 : 13;
+      const fontWeight: 'bold' | 'normal' = isCritEntry ? 'bold' : 'normal';
+      const fillColor = isCritEntry ? PIXI_COLORS.crit : entry.color;
+      const lifespan = isCritEntry ? 75 : 60;
+
+      const text = new Text({
+        text: entry.label,
+        style: {
+          fontFamily: 'monospace',
+          fontSize,
+          fill: fillColor,
+          fontWeight,
+          dropShadow: isCritEntry
+            ? {
+                alpha: 0.9,
+                angle: 0,
+                blur: 6,
+                color: 0xfbbf24,
+                distance: 0,
+              }
+            : undefined,
+        },
+      });
+
+      text.anchor = { x: 0.5, y: 0.5 } as any;
+      text.x = targetX + (Math.random() - 0.5) * 30;
+      text.y = targetY + i * 20;
+      this.container.addChild(text);
+
+      const startScale = isCritEntry ? 1.4 : 1;
+      text.scale.set(startScale);
+
+      this.active.push({
+        text,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: -1.5,
+        life: lifespan,
+        maxLife: lifespan,
+        scaleStart: startScale,
+      });
+    });
+  }
+
+  /**
+   * Spawn a healing number. Green for effective heal, dimmed for overheal.
+   */
+  spawnHeal(
+    amount: number,
+    x: number,
+    y: number,
+    isOverheal: boolean,
+  ): void {
+    const color = isOverheal ? 0x6b8f7b : PIXI_COLORS.healing;
+    const label = `+${Math.round(amount)}`;
+
+    const text = new Text({
+      text: label,
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 14,
+        fill: color,
+        fontWeight: 'bold',
+      },
+    });
+
+    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.x = x + (Math.random() - 0.5) * 30;
+    text.y = y;
+    this.container.addChild(text);
+
+    text.scale.set(1);
+
+    this.active.push({
+      text,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: -2,
+      life: 60,
+      maxLife: 60,
+      scaleStart: 1,
+    });
+  }
+
+  /**
+   * Spawn a blue "DODGE" floating text.
+   */
+  spawnDodge(x: number, y: number): void {
+    const text = new Text({
+      text: 'DODGE',
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 14,
+        fill: PIXI_COLORS.dodged,
+        fontWeight: 'bold',
+      },
+    });
+
+    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.x = x + (Math.random() - 0.5) * 30;
+    text.y = y;
+    this.container.addChild(text);
+
+    text.scale.set(1);
+
+    this.active.push({
+      text,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: -1.5,
+      life: 60,
+      maxLife: 60,
+      scaleStart: 1,
+    });
+  }
+
+  /**
+   * Spawn a grey "BLOCK" floating text with the blocked amount.
+   */
+  spawnBlock(amount: number, x: number, y: number): void {
+    const text = new Text({
+      text: `BLOCK ${Math.round(amount)}`,
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 13,
+        fill: PIXI_COLORS.blocked,
+        fontWeight: 'normal',
+      },
+    });
+
+    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.x = x + (Math.random() - 0.5) * 30;
+    text.y = y;
+    this.container.addChild(text);
+
+    text.scale.set(1);
+
+    this.active.push({
+      text,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: -1.5,
+      life: 60,
+      maxLife: 60,
+      scaleStart: 1,
     });
   }
 
