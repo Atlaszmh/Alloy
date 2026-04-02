@@ -1,4 +1,4 @@
-import type { AffixTier, StatModifier } from './affix.js';
+import type { AffixTier } from './affix.js';
 import type { BaseStatAllocation } from './base-stats.js';
 import type { OrbInstance } from './orb.js';
 
@@ -22,8 +22,8 @@ export interface BaseItemDef {
   id: string;
   type: 'weapon' | 'armor';
   name: string;
-  inherentBonuses: StatModifier[];
-  unlockLevel: number;
+  baseStats: Record<string, number>;
+  description: string;
 }
 
 export function createEmptyForgedItem(baseItemId: string): ForgedItem {

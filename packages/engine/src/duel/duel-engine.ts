@@ -144,16 +144,16 @@ export function simulate(
           continue;
         }
 
-        // Roll dodge
-        if (rng.nextBool(defender.stats.dodgeChance)) {
+        // Roll dodge (integer percentage -> fraction)
+        if (rng.nextBool(defender.stats.dodgeChance / 100)) {
           log.addEvent(tick, { type: 'dodge', dodger: defender.playerId });
           attacker.attackTimer = attacker.stats.attackInterval;
           continue;
         }
 
-        // Roll block
+        // Roll block (integer percentage -> fraction)
         const effectiveBlockChance = Math.max(0, defender.stats.blockChance - attacker.stats.blockBreakChance);
-        if (rng.nextBool(effectiveBlockChance)) {
+        if (rng.nextBool(effectiveBlockChance / 100)) {
           const rawTotal = calculateTotalDamage(attacker.stats, defender.stats);
           log.addEvent(tick, { type: 'block', blocker: defender.playerId, blockedDamage: rawTotal });
 
@@ -178,14 +178,15 @@ export function simulate(
           }
         }
 
-        // Roll crit
+        // Roll crit (integer percentages -> fractions)
         const effectiveCritChance = Math.max(0, getBuffedStat(attacker, 'critChance') - getBuffedStat(defender, 'critAvoidance'));
-        const isCrit = rng.nextBool(effectiveCritChance);
+        const isCrit = rng.nextBool(effectiveCritChance / 100);
         if (isCrit) {
-          totalDamage *= attacker.stats.critMultiplier;
-          physDmg *= attacker.stats.critMultiplier;
+          const critMult = attacker.stats.critMultiplier / 100; // 150 -> 1.5x
+          totalDamage *= critMult;
+          physDmg *= critMult;
           for (const ed of elemDamages) {
-            ed.damage *= attacker.stats.critMultiplier;
+            ed.damage *= critMult;
           }
         }
 
@@ -262,10 +263,10 @@ export function simulate(
           if (defenderIdx === 0) p0Damage += atkDmg; else p1Damage += atkDmg;
         }
 
-        // Apply lifesteal
+        // Apply lifesteal (integer percentage -> fraction)
         const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
         if (lifesteal > 0 && damageToHP > 0) {
-          const healed = damageToHP * lifesteal;
+          const healed = damageToHP * (lifesteal / 100);
           if (healed > 0) {
             const oldHP = attacker.currentHP;
             attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + healed);

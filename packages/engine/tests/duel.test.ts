@@ -78,7 +78,7 @@ describe('Duel Engine', () => {
   // 4. Block prevents damage
   it('high blockChance gladiator blocks attacks', () => {
     const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackInterval: 15 });
-    const blocker = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, blockChance: 1.0 });
+    const blocker = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, blockChance: 100 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(77);
 
@@ -89,7 +89,7 @@ describe('Duel Engine', () => {
     );
     expect(blockEvents.length).toBeGreaterThan(0);
 
-    // Blocker should take no damage since blockChance = 1.0
+    // Blocker should take no damage since blockChance = 100 (100%)
     // (blocker is player 1)
     const hpDrops = log.ticks.flatMap((t) =>
       t.events.filter(
@@ -102,7 +102,7 @@ describe('Duel Engine', () => {
   // 5. Dodge avoids damage
   it('high dodgeChance gladiator dodges attacks', () => {
     const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackInterval: 15 });
-    const dodger = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, dodgeChance: 1.0 });
+    const dodger = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, dodgeChance: 100 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(55);
 
@@ -128,7 +128,7 @@ describe('Duel Engine', () => {
       maxHP: 200,
       physicalDamage: 30,
       attackInterval: 15,
-      lifestealPercent: 0.5,
+      lifestealPercent: 50,
     });
     const defender = makeStats({ maxHP: 500, physicalDamage: 20, attackInterval: 15 });
     const loadouts = makeLoadouts();
@@ -216,8 +216,8 @@ describe('Duel Engine', () => {
       maxHP: 200,
       physicalDamage: 15,
       attackInterval: 20,
-      critChance: 0.3,
-      dodgeChance: 0.2,
+      critChance: 30,
+      dodgeChance: 20,
     });
     const loadouts = makeLoadouts();
 
@@ -237,7 +237,7 @@ describe('Duel Engine', () => {
       maxHP: 100,
       physicalDamage: 50,
       attackInterval: 30,
-      lifestealPercent: 1.0,
+      lifestealPercent: 100,
     });
     const defStats = makeStats({
       maxHP: 200,
@@ -347,10 +347,10 @@ describe('Duel Engine', () => {
     });
 
     it('applies initiative to reduce attack timer', () => {
-      const stats = makeStats({ attackInterval: 30, initiative: 0.5 });
+      const stats = makeStats({ attackInterval: 30, initiative: 50 }); // 50 = 50%
       const g = createGladiator(1, stats);
 
-      expect(g.attackTimer).toBe(15); // 30 * (1 - 0.5) = 15
+      expect(g.attackTimer).toBe(15); // 30 * (1 - 50/100) = 15
     });
   });
 });

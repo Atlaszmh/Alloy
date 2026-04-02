@@ -43,52 +43,81 @@ function compoundSlot(
   };
 }
 
+describe('calculateStats integer scale', () => {
+  it('sword base stats produce integer-scale values', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const stats = calculateStats(loadout, registry);
+    expect(stats.armor).toBeGreaterThanOrEqual(1);
+    expect(stats.armor).toBeLessThan(100);
+    expect(stats.attackInterval).toBeGreaterThanOrEqual(9);
+    expect(stats.critChance).toBeGreaterThanOrEqual(0);
+    expect(stats.critChance).toBeLessThanOrEqual(75);
+  });
+
+  it('caps are enforced at integer scale', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const stats = calculateStats(loadout, registry);
+    expect(stats.dodgeChance).toBeLessThanOrEqual(50);
+    expect(stats.blockChance).toBeLessThanOrEqual(50);
+    expect(stats.resistances.fire).toBeLessThanOrEqual(90);
+  });
+});
+
 describe('Stat Calculator', () => {
-  // Test 1: Empty loadout returns base stats
+  // Test 1: Empty loadout returns base stats with new base item system
   it('empty loadout returns base stats', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
 
-    // Base 200 + 20 flat from chainmail inherent bonus
+    // Base 200 + 20 flat from chainmail baseStats.maxHP
     expect(stats.maxHP).toBe(balance.baseHP + 20);
-    expect(stats.critMultiplier).toBe(balance.baseCritMultiplier); // 1.5
-    expect(stats.physicalDamage).toBe(0);
+    expect(stats.critMultiplier).toBe(balance.baseCritMultiplier); // 150
+    // Sword: physicalDamage 40
+    expect(stats.physicalDamage).toBe(40);
     expect(stats.elementalDamage.fire).toBe(0);
-    expect(stats.armor).toBe(0);
-    expect(stats.critChance).toBe(0);
+    // Chainmail: armor 20
+    expect(stats.armor).toBe(20);
+    // Sword: critChance 5
+    expect(stats.critChance).toBe(5);
+    // Chainmail: blockChance 5
+    expect(stats.blockChance).toBe(5);
     expect(stats.dodgeChance).toBe(0);
-    expect(stats.blockChance).toBe(0);
   });
 
-  // Test 2: Base item inherent bonuses applied
-  it('applies base item inherent bonuses', () => {
-    // Sword: critChance +5% (percent), attackInterval -5% (percent)
-    // Chainmail: armor +5% (percent), maxHP +20 (flat)
+  // Test 2: Base item stats applied
+  it('applies base item stats', () => {
+    // Sword: physicalDamage 40, attackInterval 54, critChance 5
+    // Chainmail: armor 20, maxHP 20, blockChance 5
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
 
-    // maxHP: base 200 + 20 flat from chainmail = 220, then no percent on maxHP from these items
-    // Actually chainmail has armor percent and maxHP flat
-    expect(stats.maxHP).toBe(200 + 20); // 220
+    // maxHP: base 200 + 20 flat from chainmail = 220
+    expect(stats.maxHP).toBe(220);
 
-    // critChance starts at 0, then 0 * (1 + 0.05) = 0 (percent on zero is zero)
-    expect(stats.critChance).toBe(0);
+    // critChance: 5 from sword (flat)
+    expect(stats.critChance).toBe(5);
 
-    // attackInterval starts at 30, then 30 * (1 + (-0.05)) = 30 * 0.95 = 28.5
-    expect(stats.attackInterval).toBe(30 * 0.95);
+    // attackInterval: 54 from sword (overrides default 30)
+    expect(stats.attackInterval).toBe(54);
+
+    // armor: 20 from chainmail
+    expect(stats.armor).toBe(20);
   });
 
-  // Test 2b: Axe inherent bonuses (flat + percent)
-  it('applies axe inherent bonuses correctly', () => {
-    // Axe: critMultiplier +15% (percent), physicalDamage +10 (flat)
+  // Test 2b: Axe base stats
+  it('applies axe base stats correctly', () => {
+    // Axe: physicalDamage 60, attackInterval 75
     const loadout = createEmptyLoadout('axe', 'chainmail');
     const stats = calculateStats(loadout, registry);
 
-    // physicalDamage: 0 + 10 flat = 10
-    expect(stats.physicalDamage).toBe(10);
+    // physicalDamage: 60 flat from axe
+    expect(stats.physicalDamage).toBe(60);
 
-    // critMultiplier: base 1.5, then 1.5 * (1 + 0.15) = 1.725
-    expect(stats.critMultiplier).toBeCloseTo(1.725);
+    // attackInterval: 75 from axe (overrides default)
+    expect(stats.attackInterval).toBe(75);
+
+    // critMultiplier: base 150, no bonus from axe
+    expect(stats.critMultiplier).toBe(150);
   });
 
   // Test 3: Single affix applied to weapon
@@ -108,27 +137,24 @@ describe('Stat Calculator', () => {
     const stats = calculateStats(loadout, registry);
 
     // flat_hp T1 armorEffect: maxHP +45 flat
-    // Base 200 + 20 (chainmail inherent) + 45 = 265
+    // Base 200 + 20 (chainmail) + 45 = 265
     expect(stats.maxHP).toBe(265);
   });
 
   // Test 5: Compound affix applied correctly
   it('applies compound affix to weapon', () => {
     // Ignite compound on weapon: all effects are compound.* keys which are skipped
-    // The stats shouldn't change from compound.* modifiers
     const loadout = createEmptyLoadout('sword', 'chainmail');
     loadout.weapon.slots[0] = compoundSlot('chance_on_hit', 'fire_damage', 'ignite');
     const stats = calculateStats(loadout, registry);
 
     // compound.ignite.* keys should be skipped
-    // No change to base fire damage
     expect(stats.elementalDamage.fire).toBe(0);
   });
 
   // Test 6: Upgraded orb uses upgraded tier values
   it('upgraded orb uses upgraded tier values', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    // fire_damage upgraded from T1 to T2 on weapon
     loadout.weapon.slots[0] = upgradedSlot('fire_damage', 1 as AffixTier, 2 as AffixTier);
     const stats = calculateStats(loadout, registry);
 
@@ -144,22 +170,22 @@ describe('Stat Calculator', () => {
 
     // STR weapon scaling: physicalDamage +2.0 per allocation
     // Two STR allocations = +2.0 + 2.0 = +4.0 flat physical damage
-    expect(stats.physicalDamage).toBe(4.0);
+    // Plus sword base: 40
+    expect(stats.physicalDamage).toBe(44);
   });
 
   it('applies base stat scaling (DEX on weapon reduces attack interval)', () => {
-    const loadout = createEmptyLoadout('axe', 'chainmail'); // axe has no attackInterval inherent bonus
+    const loadout = createEmptyLoadout('axe', 'chainmail');
     loadout.weapon.baseStats = { stat1: 'DEX', stat2: 'DEX' };
     const stats = calculateStats(loadout, registry);
 
-    // DEX weapon: critChance +0.005 flat each = +0.01 flat total
-    // DEX weapon: attackSpeed +0.003 each = -0.003 -0.003 = -0.006 percent on attackInterval
-    // DEX weapon: penetration is skipped
-    // critChance: 0 + 0.01 flat = 0.01, no percent from axe on critChance
-    expect(stats.critChance).toBeCloseTo(0.01);
+    // DEX weapon: critChance +0.5 flat each = +1.0 flat total
+    // Axe has no critChance base stat, so critChance = 1.0
+    expect(stats.critChance).toBeCloseTo(1.0);
 
-    // attackInterval: 30 * (1 + (-0.006)) = 30 * 0.994 = 29.82
-    expect(stats.attackInterval).toBeCloseTo(29.82);
+    // DEX weapon: attackSpeed +0.003 each = -0.003 -0.003 = -0.006 percent on attackInterval
+    // attackInterval: 75 (axe base) * (1 + (-0.006)) = 75 * 0.994 = 74.55
+    expect(stats.attackInterval).toBeCloseTo(74.55);
   });
 
   it('applies base stat scaling (VIT on armor)', () => {
@@ -168,7 +194,6 @@ describe('Stat Calculator', () => {
     const stats = calculateStats(loadout, registry);
 
     // VIT armor: maxHP +8 flat each = +16 total
-    // VIT armor: hpRegen +0.01 flat each = +0.02 total
     // maxHP: 200 + 20 (chainmail) + 16 = 236
     expect(stats.maxHP).toBe(236);
     expect(stats.hpRegen).toBeCloseTo(0.02);
@@ -176,19 +201,14 @@ describe('Stat Calculator', () => {
 
   // Test 8: Synergy detection
   it('detects active synergy when all required affixes present', () => {
-    // "vengeance" synergy requires: thorns, flat_hp
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    loadout.weapon.slots[0] = singleSlot('flat_physical', 1); // not needed but filler
+    loadout.weapon.slots[0] = singleSlot('flat_physical', 1);
     loadout.armor.slots[0] = singleSlot('flat_hp', 1);
 
-    // Need to find "thorns" affix
     const thornsAffix = registry.findAffix('thorns');
     if (thornsAffix) {
       loadout.weapon.slots[1] = singleSlot('thorns', 1);
       const stats = calculateStats(loadout, registry);
-      // vengeance synergy bonusEffects are synergy.* keys, which get skipped in stat calc
-      // So the synergy is detected but doesn't change DerivedStats directly
-      // Just verifying no error occurs
       expect(stats).toBeDefined();
     }
   });
@@ -196,7 +216,7 @@ describe('Stat Calculator', () => {
   // Test 8b: Synergy with stat-affecting bonus
   it('applies synergy bonus effects that affect DerivedStats', () => {
     // "assassin" synergy requires: crit_chance, crit_damage, attack_speed
-    // bonusEffects include critMultiplier percent +0.15
+    // bonusEffects include critMultiplier flat +15
     const loadout = createEmptyLoadout('sword', 'chainmail');
     loadout.weapon.slots[0] = singleSlot('crit_chance', 1);
     loadout.weapon.slots[1] = singleSlot('crit_damage', 1);
@@ -204,72 +224,59 @@ describe('Stat Calculator', () => {
 
     const stats = calculateStats(loadout, registry);
 
-    // critMultiplier: base 1.5
-    // crit_damage T1 weaponEffect: critDamage (maps to critMultiplier) +0.225 percent
-    // assassin synergy: critMultiplier +0.15 percent
-    // Sword inherent: critChance +5% percent, attackInterval -5% percent
-    // Total critMultiplier percent = 0.225 + 0.15 = 0.375
-    // critMultiplier = 1.5 * (1 + 0.375) = 1.5 * 1.375 = 2.0625
-    expect(stats.critMultiplier).toBeCloseTo(2.0625);
+    // critMultiplier: base 150
+    // crit_damage T1 weaponEffect: critDamage (maps to critMultiplier) +23 flat
+    // assassin synergy: critMultiplier +15 flat
+    // Total critMultiplier flat = 150 + 23 + 15 = 188
+    // No percent on critMultiplier, so stays at 188
+    expect(stats.critMultiplier).toBe(188);
   });
 
   // Test 9: Modifier ordering: flat before percent
   it('applies flat modifiers before percent modifiers', () => {
     const loadout = createEmptyLoadout('axe', 'chainmail');
-    // axe: physicalDamage +10 flat, critMultiplier +15% percent
+    // axe: physicalDamage 60 flat
     // flat_physical T1 on weapon: physicalDamage +15 flat
     loadout.weapon.slots[0] = singleSlot('flat_physical', 1);
     const stats = calculateStats(loadout, registry);
 
-    // physicalDamage: 0 + 10 (axe flat) + 15 (affix flat) = 25
-    // No percent modifier on physicalDamage
-    expect(stats.physicalDamage).toBe(25);
+    // physicalDamage: 60 (axe base) + 15 (affix flat) = 75
+    expect(stats.physicalDamage).toBe(75);
   });
 
-  // Test 10: Caps enforced
-  it('caps critChance at 0.95', () => {
+  // Test 10: Caps enforced at integer scale
+  it('caps critChance at 75', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    // Stack many crit_chance orbs (they're percent on 0 base, so we need flat crit too)
-    // Actually crit_chance weaponEffect is percent on critChance
-    // With DEX scaling we can get flat crit, then percent stacks on it
     loadout.weapon.baseStats = { stat1: 'DEX', stat2: 'DEX' };
-    // critChance starts at 0, + 0.01 flat from DEX scaling
-    // Each crit_chance T4 adds percent - but percent on small number won't exceed 0.95
-
-    // Let's just use override to test capping
-    // Actually, the data doesn't have override modifiers, so let's test the cap function directly
-    // We can't easily get critChance > 0.95 with real data, but we can verify the cap logic works
     const stats = calculateStats(loadout, registry);
-    expect(stats.critChance).toBeLessThanOrEqual(0.95);
+    expect(stats.critChance).toBeLessThanOrEqual(75);
     expect(stats.critChance).toBeGreaterThanOrEqual(0);
   });
 
-  it('caps dodgeChance at 0.75', () => {
+  it('caps dodgeChance at 50', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
-    expect(stats.dodgeChance).toBeLessThanOrEqual(0.75);
+    expect(stats.dodgeChance).toBeLessThanOrEqual(50);
     expect(stats.dodgeChance).toBeGreaterThanOrEqual(0);
   });
 
-  it('caps blockChance at 0.75', () => {
+  it('caps blockChance at 50', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
-    expect(stats.blockChance).toBeLessThanOrEqual(0.75);
+    expect(stats.blockChance).toBeLessThanOrEqual(50);
     expect(stats.blockChance).toBeGreaterThanOrEqual(0);
   });
 
   it('enforces minimum attack interval', () => {
     const loadout = createEmptyLoadout('dagger', 'leather');
-    // Dagger: attackInterval -12% percent
-    // Leather: attackInterval -5% percent, dodgeChance +10% percent
     const stats = calculateStats(loadout, registry);
     expect(stats.attackInterval).toBeGreaterThanOrEqual(balance.minAttackInterval);
   });
 
-  it('caps resistances at 0.90', () => {
+  it('caps resistances at 90', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
-    expect(stats.resistances.fire).toBeLessThanOrEqual(0.90);
+    expect(stats.resistances.fire).toBeLessThanOrEqual(90);
     expect(stats.resistances.fire).toBeGreaterThanOrEqual(0);
   });
 
@@ -294,8 +301,9 @@ describe('Stat Calculator', () => {
 
     // flat_physical T1: physicalDamage +15 flat
     // flat_physical T2: physicalDamage +23 flat
-    // Total: 15 + 23 = 38
-    expect(stats.physicalDamage).toBe(38);
+    // Sword base: 40
+    // Total: 40 + 15 + 23 = 78
+    expect(stats.physicalDamage).toBe(78);
   });
 
   // Test: frozen output
@@ -305,28 +313,28 @@ describe('Stat Calculator', () => {
     expect(Object.isFrozen(stats)).toBe(true);
   });
 
-  // Test: staff allElementalDamage inherent bonus
+  // Test: staff allElementalDamage base stat expands to all elements
   it('staff allElementalDamage bonus expands to all elements', () => {
-    // Staff: allElementalDamage +15% percent, allResistances +8% percent
+    // Staff: physicalDamage 25, attackInterval 60, allElementalDamage 10
     const loadout = createEmptyLoadout('staff', 'chainmail');
-    // Put a fire_damage orb on weapon to have a base elemental damage
+    // Put a fire_damage orb on weapon to add to fire elemental damage
     loadout.weapon.slots[0] = singleSlot('fire_damage', 1);
     const stats = calculateStats(loadout, registry);
 
-    // fire: 12 flat, then 12 * (1 + 0.15) = 13.8
-    expect(stats.elementalDamage.fire).toBeCloseTo(13.8);
-    // other elements: 0 flat, then 0 * (1 + 0.15) = 0
-    expect(stats.elementalDamage.cold).toBe(0);
+    // fire: 10 (staff allElementalDamage) + 12 (fire_damage T1) = 22 flat, no percent
+    expect(stats.elementalDamage.fire).toBe(22);
+    // other elements: 10 flat from allElementalDamage
+    expect(stats.elementalDamage.cold).toBe(10);
   });
 
-  // Test: armor affix applies armorEffect
+  // Test: armor affix applies armorEffect with flat resistance
   it('fire_damage on armor applies resistance bonus', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
     loadout.armor.slots[0] = singleSlot('fire_damage', 1);
     const stats = calculateStats(loadout, registry);
 
-    // fire_damage T1 armorEffect: resistances.fire +0.08 percent
-    // resistances.fire starts at 0, so 0 * (1 + 0.08) = 0
-    expect(stats.resistances.fire).toBe(0);
+    // fire_damage T1 armorEffect: resistances.fire +8 flat
+    // Now with flat ops, it actually adds resistance
+    expect(stats.resistances.fire).toBe(8);
   });
 });

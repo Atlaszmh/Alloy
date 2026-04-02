@@ -5,7 +5,7 @@
     "requiredAffixes": ["crit_chance", "crit_damage", "attack_speed"],
     "bonusEffects": [
       { "stat": "synergy.assassin.firstHitCrit", "op": "flat", "value": 1 },
-      { "stat": "critMultiplier", "op": "percent", "value": 0.15 }
+      { "stat": "critMultiplier", "op": "flat", "value": 15 }
     ],
     "description": "First hit guaranteed crit; crits deal +15% bonus damage"
   },
@@ -24,8 +24,8 @@
     "requiredAffixes": ["fire_damage", "cold_damage", "lightning_damage", "poison_damage", "shadow_damage"],
     "condition": "any_3_elemental",
     "bonusEffects": [
-      { "stat": "elementalDamage", "op": "percent", "value": 0.20 },
-      { "stat": "elementalResist", "op": "percent", "value": 0.10 }
+      { "stat": "elementalDamage", "op": "flat", "value": 20 },
+      { "stat": "elementalResist", "op": "flat", "value": 10 }
     ],
     "description": "All elemental damage +20%; all elemental resist +10%"
   },
@@ -35,8 +35,8 @@
     "requiredAffixes": ["crit_chance", "crit_damage", "attack_speed"],
     "condition": "no_defensive_weapon",
     "bonusEffects": [
-      { "stat": "weaponDamage", "op": "percent", "value": 0.30 },
-      { "stat": "maxHp", "op": "percent", "value": -0.25 }
+      { "stat": "weaponDamage", "op": "flat", "value": 30 },
+      { "stat": "maxHp", "op": "flat", "value": -25 }
     ],
     "description": "All weapon damage +30%, but max HP -25%"
   },
@@ -45,7 +45,7 @@
     "name": "Fortress",
     "requiredAffixes": ["flat_hp", "armor_rating", "block_chance"],
     "bonusEffects": [
-      { "stat": "synergy.fortress.damageReductionAbove80", "op": "flat", "value": 0.15 }
+      { "stat": "synergy.fortress.damageReductionAbove80", "op": "flat", "value": 15 }
     ],
     "description": "While above 80% HP, +15% damage reduction"
   },
@@ -64,7 +64,7 @@
     "name": "Plague Bearer",
     "requiredAffixes": ["poison_damage", "attack_speed"],
     "bonusEffects": [
-      { "stat": "synergy.plagueBearer.poisonStackRate", "op": "percent", "value": 0.20 },
+      { "stat": "synergy.plagueBearer.poisonStackRate", "op": "flat", "value": 20 },
       { "stat": "synergy.plagueBearer.maxPoisonStacks", "op": "flat", "value": 2 }
     ],
     "description": "Poison stacks 20% faster; max stacks +2"
@@ -104,8 +104,8 @@
     "name": "Immolator",
     "requiredAffixes": ["fire_damage", "fire_damage", "dot_multiplier"],
     "bonusEffects": [
-      { "stat": "synergy.immolator.burnDamageMultiplier", "op": "percent", "value": 1.0 },
-      { "stat": "synergy.immolator.burningFireResistReduction", "op": "flat", "value": 0.10 }
+      { "stat": "synergy.immolator.burnDamageMultiplier", "op": "flat", "value": 100 },
+      { "stat": "synergy.immolator.burningFireResistReduction", "op": "flat", "value": 10 }
     ],
     "description": "Burn damage doubled; burning enemies have -10% fire resist"
   },
@@ -134,8 +134,8 @@
     "name": "Alchemist",
     "requiredAffixes": ["poison_damage", "chaos_damage", "lifesteal"],
     "bonusEffects": [
-      { "stat": "synergy.alchemist.poisonHealPercent", "op": "flat", "value": 0.10 },
-      { "stat": "synergy.alchemist.chaosResistBypass", "op": "flat", "value": 0.50 }
+      { "stat": "synergy.alchemist.poisonHealPercent", "op": "flat", "value": 10 },
+      { "stat": "synergy.alchemist.chaosResistBypass", "op": "flat", "value": 50 }
     ],
     "description": "Poison heals you for 10% of DOT dealt; Chaos damage ignores 50% of resistance"
   }

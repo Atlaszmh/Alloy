@@ -60,8 +60,8 @@ const BaseItemDefSchema = z.object({
   id: z.string(),
   type: z.enum(['weapon', 'armor']),
   name: z.string(),
-  inherentBonuses: z.array(StatModifierSchema),
-  unlockLevel: z.number().int().nonnegative(),
+  baseStats: z.record(z.string(), z.number()),
+  description: z.string(),
 });
 
 export const BaseItemsSchema = z.array(BaseItemDefSchema);

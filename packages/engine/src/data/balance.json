@@ -22,20 +22,20 @@
   "archetypeMinOrbs": 3,
   "baseStatScaling": {
     "STR": {
-      "weapon": { "physicalDamage": 2.0, "flatDamageEffectiveness": 0.1 },
-      "armor": { "armor": 0.5, "damageReduction": 0.005 }
+      "weapon": { "physicalDamage": 2.0, "flatDamageEffectiveness": 10 },
+      "armor": { "armor": 1, "damageReduction": 1 }
     },
     "INT": {
-      "weapon": { "elementalDamage": 1.5, "dotDamage": 0.1 },
-      "armor": { "elementalResistance": 0.3, "barrierStrength": 0.05 }
+      "weapon": { "elementalDamage": 1.5, "dotDamage": 10 },
+      "armor": { "elementalResistance": 1, "barrierStrength": 5 }
     },
     "DEX": {
-      "weapon": { "critChance": 0.005, "attackSpeed": 0.003, "penetration": 0.003 },
-      "armor": { "dodgeChance": 0.003, "critAvoidance": 0.003 }
+      "weapon": { "critChance": 0.5, "attackSpeed": 0.003, "penetration": 0.5 },
+      "armor": { "dodgeChance": 0.5, "critAvoidance": 0.5 }
     },
     "VIT": {
-      "weapon": { "lifestealEffectiveness": 0.01, "hpBonus": 5 },
-      "armor": { "maxHP": 8, "hpRegen": 0.01, "sustainEffectiveness": 0.02 }
+      "weapon": { "lifestealEffectiveness": 1, "hpBonus": 5 },
+      "armor": { "maxHP": 8, "hpRegen": 0.01, "sustainEffectiveness": 2 }
     }
   },
   "statCaps": {

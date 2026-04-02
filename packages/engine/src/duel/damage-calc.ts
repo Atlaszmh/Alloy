@@ -3,17 +3,19 @@ import type { ActiveDOT } from '../types/combat.js';
 
 /**
  * Calculate physical damage after armor mitigation and armor penetration.
- * Formula: physicalDamage * (1 - armor * (1 - armorPenetration))
+ * Armor and armorPenetration are integer percentages (1 = 1%).
+ * Formula: physicalDamage * (1 - (armor/100) * (1 - armorPenetration/100))
  */
 export function calculatePhysicalDamage(attacker: DerivedStats, defender: DerivedStats): number {
-  const effectiveArmor = defender.armor * (1 - attacker.armorPenetration);
+  const effectiveArmor = (defender.armor / 100) * (1 - attacker.armorPenetration / 100);
   const mitigation = Math.max(0, Math.min(1, effectiveArmor));
   return Math.max(0, attacker.physicalDamage * (1 - mitigation));
 }
 
 /**
  * Calculate elemental damage for a specific element after resistance and penetration.
- * Formula: elementalDamage[type] * (1 - resistance[type] * (1 - elementalPenetration))
+ * Resistances and elementalPenetration are integer percentages (1 = 1%).
+ * Formula: elementalDamage[type] * (1 - (resistance[type]/100) * (1 - elementalPenetration/100))
  */
 export function calculateElementalDamage(
   attacker: DerivedStats,
@@ -22,21 +24,22 @@ export function calculateElementalDamage(
 ): number {
   const baseDmg = attacker.elementalDamage[element];
   if (baseDmg <= 0) return 0;
-  const effectiveResist = defender.resistances[element] * (1 - attacker.elementalPenetration);
+  const effectiveResist = (defender.resistances[element] / 100) * (1 - attacker.elementalPenetration / 100);
   const mitigation = Math.max(0, Math.min(1, effectiveResist));
   return Math.max(0, baseDmg * (1 - mitigation));
 }
 
 /**
  * Calculate DOT tick damage after resistance and DOT multiplier.
+ * dotMultiplier is integer scale (100 = 1.0x baseline).
  */
 export function calculateDOTDamage(
   dot: ActiveDOT,
   defender: DerivedStats,
   attacker: DerivedStats,
 ): number {
-  const resist = defender.resistances[dot.element] * (1 - attacker.elementalPenetration);
+  const resist = (defender.resistances[dot.element] / 100) * (1 - attacker.elementalPenetration / 100);
   const effectiveResist = Math.max(0, Math.min(1, resist));
   const rawDamage = dot.damagePerTick * dot.stacks;
-  return Math.max(0, rawDamage * (1 - effectiveResist) * attacker.dotMultiplier);
+  return Math.max(0, rawDamage * (1 - effectiveResist) * (attacker.dotMultiplier / 100));
 }

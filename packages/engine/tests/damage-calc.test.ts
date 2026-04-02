@@ -17,31 +17,31 @@ describe('calculatePhysicalDamage', () => {
 
   it('reduces damage by 50% with 50% armor and 0% penetration', () => {
     const attacker = makeStats({ physicalDamage: 100, armorPenetration: 0 });
-    const defender = makeStats({ armor: 0.5 });
+    const defender = makeStats({ armor: 50 }); // 50 = 50%
     expect(calculatePhysicalDamage(attacker, defender)).toBe(50);
   });
 
   it('armor penetration bypasses armor', () => {
-    const attacker = makeStats({ physicalDamage: 100, armorPenetration: 0.5 });
-    const defender = makeStats({ armor: 0.5 });
+    const attacker = makeStats({ physicalDamage: 100, armorPenetration: 50 }); // 50 = 50%
+    const defender = makeStats({ armor: 50 }); // 50 = 50%
     expect(calculatePhysicalDamage(attacker, defender)).toBe(75);
   });
 
   it('100% armor with 0% penetration deals zero damage', () => {
     const attacker = makeStats({ physicalDamage: 100, armorPenetration: 0 });
-    const defender = makeStats({ armor: 1.0 });
+    const defender = makeStats({ armor: 100 }); // 100 = 100%
     expect(calculatePhysicalDamage(attacker, defender)).toBe(0);
   });
 
   it('100% armor with 100% penetration deals full damage', () => {
-    const attacker = makeStats({ physicalDamage: 100, armorPenetration: 1.0 });
-    const defender = makeStats({ armor: 1.0 });
+    const attacker = makeStats({ physicalDamage: 100, armorPenetration: 100 }); // 100 = 100%
+    const defender = makeStats({ armor: 100 }); // 100 = 100%
     expect(calculatePhysicalDamage(attacker, defender)).toBe(100);
   });
 
   it('never returns negative damage', () => {
     const attacker = makeStats({ physicalDamage: 0 });
-    const defender = makeStats({ armor: 1.0 });
+    const defender = makeStats({ armor: 100 });
     expect(calculatePhysicalDamage(attacker, defender)).toBeGreaterThanOrEqual(0);
   });
 
@@ -66,7 +66,7 @@ describe('calculateElementalDamage', () => {
       elementalDamage: { fire: 100, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
     });
     const defender = makeStats({
-      resistances: { fire: 0.5, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 50, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 50 = 50%
     });
     expect(calculateElementalDamage(attacker, defender, 'fire')).toBe(50);
   });
@@ -74,10 +74,10 @@ describe('calculateElementalDamage', () => {
   it('elemental penetration bypasses resistance', () => {
     const attacker = makeStats({
       elementalDamage: { fire: 100, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
-      elementalPenetration: 0.5,
+      elementalPenetration: 50, // 50 = 50%
     });
     const defender = makeStats({
-      resistances: { fire: 0.8, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 80, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 80 = 80%
     });
     expect(calculateElementalDamage(attacker, defender, 'fire')).toBe(60);
   });
@@ -93,7 +93,7 @@ describe('calculateElementalDamage', () => {
       elementalDamage: { fire: 100, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
     });
     const defender = makeStats({
-      resistances: { fire: 0.9, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 90, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 90 = 90%
     });
     expect(calculateElementalDamage(attacker, defender, 'fire')).toBeCloseTo(10);
   });
@@ -103,7 +103,7 @@ describe('calculateElementalDamage', () => {
       elementalDamage: { fire: 100, cold: 50, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
     });
     const defender = makeStats({
-      resistances: { fire: 0.5, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 50, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 50 = 50%
     });
     expect(calculateElementalDamage(attacker, defender, 'fire')).toBe(50);
     expect(calculateElementalDamage(attacker, defender, 'cold')).toBe(50);
@@ -116,7 +116,7 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 10, remainingTicks: 30, sourceAffixId: 'test', stacks: 1,
     };
     const defender = makeStats();
-    const attacker = makeStats({ dotMultiplier: 1 });
+    const attacker = makeStats({ dotMultiplier: 100 }); // 100 = 1.0x
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(10);
   });
 
@@ -125,7 +125,7 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 10, remainingTicks: 30, sourceAffixId: 'test', stacks: 3,
     };
     const defender = makeStats();
-    const attacker = makeStats({ dotMultiplier: 1 });
+    const attacker = makeStats({ dotMultiplier: 100 }); // 100 = 1.0x
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(30);
   });
 
@@ -134,9 +134,9 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 100, remainingTicks: 30, sourceAffixId: 'test', stacks: 1,
     };
     const defender = makeStats({
-      resistances: { fire: 0.5, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 50, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 50 = 50%
     });
-    const attacker = makeStats({ dotMultiplier: 1, elementalPenetration: 0 });
+    const attacker = makeStats({ dotMultiplier: 100, elementalPenetration: 0 }); // 100 = 1.0x
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(50);
   });
 
@@ -145,7 +145,7 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 10, remainingTicks: 30, sourceAffixId: 'test', stacks: 1,
     };
     const defender = makeStats();
-    const attacker = makeStats({ dotMultiplier: 2.0 });
+    const attacker = makeStats({ dotMultiplier: 200 }); // 200 = 2.0x
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(20);
   });
 
@@ -154,9 +154,9 @@ describe('calculateDOTDamage', () => {
       element: 'poison', damagePerTick: 50, remainingTicks: 30, sourceAffixId: 'test', stacks: 1,
     };
     const defender = makeStats({
-      resistances: { fire: 0, cold: 0, lightning: 0, poison: 1.0, shadow: 0, chaos: 0 },
+      resistances: { fire: 0, cold: 0, lightning: 0, poison: 100, shadow: 0, chaos: 0 }, // 100 = 100%
     });
-    const attacker = makeStats({ dotMultiplier: 1, elementalPenetration: 0 });
+    const attacker = makeStats({ dotMultiplier: 100, elementalPenetration: 0 }); // 100 = 1.0x
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(0);
   });
 
@@ -165,9 +165,9 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 100, remainingTicks: 30, sourceAffixId: 'test', stacks: 1,
     };
     const defender = makeStats({
-      resistances: { fire: 0.8, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 80, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 80 = 80%
     });
-    const attacker = makeStats({ dotMultiplier: 1, elementalPenetration: 0.5 });
+    const attacker = makeStats({ dotMultiplier: 100, elementalPenetration: 50 }); // 100 = 1.0x, 50 = 50%
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(60);
   });
 
@@ -176,9 +176,9 @@ describe('calculateDOTDamage', () => {
       element: 'fire', damagePerTick: 10, remainingTicks: 30, sourceAffixId: 'test', stacks: 2,
     };
     const defender = makeStats({
-      resistances: { fire: 0.5, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+      resistances: { fire: 50, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 }, // 50 = 50%
     });
-    const attacker = makeStats({ dotMultiplier: 1.5, elementalPenetration: 0.5 });
+    const attacker = makeStats({ dotMultiplier: 150, elementalPenetration: 50 }); // 150 = 1.5x, 50 = 50%
     expect(calculateDOTDamage(dot, defender, attacker)).toBe(22.5);
   });
 });

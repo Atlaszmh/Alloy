@@ -69,19 +69,16 @@ export function ItemSocketView({
           </span>
         </div>
 
-        {/* Inherent bonuses */}
-        {baseItem.inherentBonuses.length > 0 && (
+        {/* Base item stats */}
+        {Object.keys(baseItem.baseStats).length > 0 && (
           <div style={{ display: 'flex', gap: 'var(--gap-sm)', flexWrap: 'wrap' }}>
-            {baseItem.inherentBonuses.map((bonus, i) => {
-              const isPositive = bonus.value >= 0;
+            {Object.entries(baseItem.baseStats).map(([stat, value]) => {
+              const isPositive = value >= 0;
               const sign = isPositive ? '+' : '';
-              const label =
-                bonus.op === 'percent'
-                  ? `${sign}${Math.round(bonus.value * 100)}% ${bonus.stat}`
-                  : `${sign}${bonus.value} ${bonus.stat}`;
+              const label = `${sign}${value} ${stat}`;
               return (
                 <span
-                  key={i}
+                  key={stat}
                   style={{
                     fontSize: 'var(--text-xs)',
                     fontFamily: 'var(--font-family-display)',

@@ -139,7 +139,7 @@ describe('DataRegistry', () => {
       const sword = registry.getBaseItem('sword');
       expect(sword.type).toBe('weapon');
       expect(sword.name).toBe('Sword');
-      expect(sword.unlockLevel).toBe(0);
+      expect(sword.baseStats.physicalDamage).toBe(40);
     });
 
     it('should throw for unknown base item ID', () => {

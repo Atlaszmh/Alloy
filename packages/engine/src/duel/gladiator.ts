@@ -6,7 +6,7 @@ import type { GladiatorRuntime } from '../types/combat.js';
  * Initiative reduces the initial attack timer so faster gladiators strike first.
  */
 export function createGladiator(playerId: 0 | 1, stats: DerivedStats): GladiatorRuntime {
-  const attackTimer = Math.max(1, Math.round(stats.attackInterval * (1 - stats.initiative)));
+  const attackTimer = Math.max(1, Math.round(stats.attackInterval * (1 - stats.initiative / 100)));
 
   return {
     playerId,

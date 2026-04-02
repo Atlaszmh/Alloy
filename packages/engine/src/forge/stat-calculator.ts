@@ -238,15 +238,20 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   stats.maxHP = balance.baseHP;
   stats.critMultiplier = balance.baseCritMultiplier;
 
-  // Step 2: Apply base item inherent bonuses
+  // Step 2: Apply base item stats as flat modifiers
+  // Weapon attackInterval is an override (it IS the base attack speed, not an addition)
   const weaponDef = registry.getBaseItem(loadout.weapon.baseItemId);
   const armorDef = registry.getBaseItem(loadout.armor.baseItemId);
 
-  for (const mod of weaponDef.inherentBonuses) {
-    addToBucket(buckets, mod);
+  for (const [stat, value] of Object.entries(weaponDef.baseStats)) {
+    if (stat === 'attackInterval') {
+      stats.attackInterval = value; // Override the default with weapon's base attack interval
+    } else {
+      addToBucket(buckets, { stat, op: 'flat', value });
+    }
   }
-  for (const mod of armorDef.inherentBonuses) {
-    addToBucket(buckets, mod);
+  for (const [stat, value] of Object.entries(armorDef.baseStats)) {
+    addToBucket(buckets, { stat, op: 'flat', value });
   }
 
   // Step 3: Apply base stat scaling
@@ -364,15 +369,27 @@ function applyBucketsToStats(stats: DerivedStats, buckets: ModifierBuckets): voi
   }
 }
 
-/** Clamp stats to their allowed ranges. */
+/** Clamp stats to their allowed ranges using integer-scale caps from balance config. */
 function applyCaps(stats: DerivedStats, balance: BalanceConfig): void {
-  stats.critChance = clamp(stats.critChance, 0, 0.95);
-  stats.dodgeChance = clamp(stats.dodgeChance, 0, 0.75);
-  stats.blockChance = clamp(stats.blockChance, 0, 0.75);
+  const caps = balance.statCaps;
+
+  if (caps.critChance) {
+    stats.critChance = clamp(stats.critChance, caps.critChance.min, caps.critChance.max);
+  }
+  if (caps.dodgeChance) {
+    stats.dodgeChance = clamp(stats.dodgeChance, caps.dodgeChance.min, caps.dodgeChance.max);
+  }
+  if (caps.blockChance) {
+    stats.blockChance = clamp(stats.blockChance, caps.blockChance.min, caps.blockChance.max);
+  }
+
   stats.attackInterval = Math.max(stats.attackInterval, balance.minAttackInterval);
 
   for (const el of ALL_ELEMENTS) {
-    stats.resistances[el] = clamp(stats.resistances[el], 0, 0.90);
+    const capKey = `${el}Resistance`;
+    if (caps[capKey]) {
+      stats.resistances[el] = clamp(stats.resistances[el], caps[capKey].min, caps[capKey].max);
+    }
   }
 }
 
