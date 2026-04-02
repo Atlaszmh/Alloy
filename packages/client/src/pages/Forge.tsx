@@ -405,7 +405,7 @@ export function Forge() {
 
   // ── Socket remove (equip tab) ──
   const handleSocketRemove = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
-    if (!plan || plan.round === 1) return;
+    if (!plan) return;
     applyAction({ kind: 'remove_orb', target: cardId, slotIndex }, registry);
     playSound('orbRemove');
   }, [plan, applyAction, registry]);
