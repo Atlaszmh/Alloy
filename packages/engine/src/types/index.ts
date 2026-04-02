@@ -7,6 +7,7 @@ export * from './item.js';
 export * from './combination.js';
 export * from './synergy.js';
 export * from './combat.js';
+export * from './damage-breakdown.js';
 export * from './forge-action.js';
 export * from './match.js';
 export * from './game-action.js';
