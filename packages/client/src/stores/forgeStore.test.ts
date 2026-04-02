@@ -209,6 +209,7 @@ describe('forgeStore', () => {
       useForgeStore.getState().setActiveTab('equip');
       useForgeStore.getState().openConfirmModal();
       useForgeStore.getState().setComboSlotByIndex(0, { uid: 'orb1', affixId: 'fire_damage', tier: 1 });
+      useForgeStore.getState().selectBaseItem('weapon', 'sword');
 
       useForgeStore.getState().reset();
 
@@ -219,6 +220,30 @@ describe('forgeStore', () => {
       expect(s.activeTab).toBe('combine');
       expect(s.activeItemTab).toBe('weapon');
       expect(s.comboSlots).toEqual([null, null, null]);
+      expect(s.itemSelectionPhase).toBe('weapon');
+      expect(s.selectedWeaponId).toBeNull();
+      expect(s.selectedArmorId).toBeNull();
+    });
+  });
+
+  describe('item selection', () => {
+    it('starts in weapon selection phase', () => {
+      expect(useForgeStore.getState().itemSelectionPhase).toBe('weapon');
+    });
+
+    it('advances weapon → armor → done', () => {
+      useForgeStore.getState().selectBaseItem('weapon', 'sword');
+      expect(useForgeStore.getState().itemSelectionPhase).toBe('armor');
+      expect(useForgeStore.getState().selectedWeaponId).toBe('sword');
+
+      useForgeStore.getState().selectBaseItem('armor', 'chainmail');
+      expect(useForgeStore.getState().itemSelectionPhase).toBe('done');
+      expect(useForgeStore.getState().selectedArmorId).toBe('chainmail');
+    });
+
+    it('selectedWeaponId and selectedArmorId start null', () => {
+      expect(useForgeStore.getState().selectedWeaponId).toBeNull();
+      expect(useForgeStore.getState().selectedArmorId).toBeNull();
     });
   });
 });

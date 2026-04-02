@@ -11,6 +11,7 @@ import { HapticButton } from '@/components/HapticButton';
 import { Modal } from '@/components/Modal';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD } from '@/pages/draft-gestures';
 import type { BaseStat, OrbInstance } from '@alloy/engine';
@@ -47,11 +48,15 @@ export function Forge() {
   const confirmModalOpen = useForgeStore(s => s.confirmModalOpen);
   const activeTab = useForgeStore(s => s.activeTab);
   const comboSlots = useForgeStore(s => s.comboSlots);
+  const itemSelectionPhase = useForgeStore(s => s.itemSelectionPhase);
+  const selectedWeaponId = useForgeStore(s => s.selectedWeaponId);
+  const selectedArmorId = useForgeStore(s => s.selectedArmorId);
   const {
     initPlan,
     applyAction,
     getCommitActions,
     selectOrb,
+    selectBaseItem,
     setActiveTab,
     setComboSlotByIndex,
     clearComboSlots,
@@ -88,8 +93,8 @@ export function Forge() {
 
     const forgeState = createForgeState(
       player.stockpile,
-      matchState.baseWeaponId,
-      matchState.baseArmorId,
+      selectedWeaponId ?? matchState.baseWeaponId,
+      selectedArmorId ?? matchState.baseArmorId,
       round,
       registry.getBalance(),
       matchState.mode === 'quick',
@@ -442,6 +447,19 @@ export function Forge() {
     }
     return uids;
   }, [comboSlots]);
+
+  // ── Item selection phase (before forge UI) ──
+  if (itemSelectionPhase !== 'done') {
+    const itemType = itemSelectionPhase;
+    const items = registry.getBaseItemsByType(itemType);
+    return (
+      <BaseItemSelector
+        itemType={itemType}
+        items={items}
+        onSelect={(item) => selectBaseItem(itemType, item.id)}
+      />
+    );
+  }
 
   // ── Wait for plan ──
   if (!plan) return null;

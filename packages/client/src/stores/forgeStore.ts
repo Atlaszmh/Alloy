@@ -14,12 +14,18 @@ interface ForgeStoreState {
   /** 3-slot combine workbench (engine only uses first 2 currently) */
   comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
 
+  /** Item selection phase — weapon first, then armor, then done */
+  itemSelectionPhase: 'weapon' | 'armor' | 'done';
+  selectedWeaponId: string | null;
+  selectedArmorId: string | null;
+
   initPlan: (state: ForgeState, registry: DataRegistry) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => DerivedStats | null;
   canRemove: (orbUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
+  selectBaseItem: (itemType: 'weapon' | 'armor', itemId: string) => void;
   setActiveTab: (tab: 'combine' | 'equip') => void;
   setActiveItemTab: (tab: 'weapon' | 'armor') => void;
   setComboSlotByIndex: (index: number, orb: OrbInstance | null) => void;
@@ -38,6 +44,9 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   activeTab: 'combine',
   activeItemTab: 'weapon',
   comboSlots: [...EMPTY_COMBO],
+  itemSelectionPhase: 'weapon',
+  selectedWeaponId: null,
+  selectedArmorId: null,
 
   initPlan: (state, registry) => {
     const plan = createForgePlan(state, registry);
@@ -81,6 +90,14 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),
 
+  selectBaseItem: (itemType, itemId) => {
+    if (itemType === 'weapon') {
+      set({ selectedWeaponId: itemId, itemSelectionPhase: 'armor' });
+    } else {
+      set({ selectedArmorId: itemId, itemSelectionPhase: 'done' });
+    }
+  },
+
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   setActiveItemTab: (tab) => set({ activeItemTab: tab }),
@@ -105,5 +122,8 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
       activeTab: 'combine',
       activeItemTab: 'weapon',
       comboSlots: [...EMPTY_COMBO],
+      itemSelectionPhase: 'weapon',
+      selectedWeaponId: null,
+      selectedArmorId: null,
     }),
 }));
