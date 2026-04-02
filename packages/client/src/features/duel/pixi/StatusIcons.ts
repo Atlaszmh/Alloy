@@ -1,14 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { Element } from '@alloy/engine';
-
-const ELEMENT_COLORS: Record<Element, number> = {
-  fire: 0xe85d3a,
-  cold: 0x3a9be8,
-  lightning: 0xe8d03a,
-  poison: 0x4ae83a,
-  shadow: 0x8b3ae8,
-  chaos: 0xe83a8b,
-};
+import { DAMAGE_COLORS } from '../colors.js';
 
 export type StatusType = Element | 'stun' | 'barrier' | 'buff' | 'debuff';
 
@@ -162,7 +154,7 @@ export class StatusIcons {
         break;
       default:
         // Element DOT
-        color = element ? ELEMENT_COLORS[element] : ELEMENT_COLORS[type as Element];
+        color = element ? DAMAGE_COLORS[element] : DAMAGE_COLORS[type as Element];
         label = (type as string).charAt(0).toUpperCase();
         gfx.circle(0, 0, size);
         gfx.fill({ color, alpha: 0.8 });
