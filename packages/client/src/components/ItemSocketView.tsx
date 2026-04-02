@@ -159,71 +159,70 @@ export function ItemSocketView({
           const emoji = ELEMENT_EMOJIS[tag] ?? '\u2694';
           const gemArt = getGemArt(orb.affixId);
 
-          if (isLocked) {
-            // Locked socket
-            return (
-              <div
-                key={index}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1',
-                  borderRadius: 'var(--socket-radius)',
-                  background: `linear-gradient(135deg, ${gradient.bg})`,
-                  border: '2px solid var(--color-locked)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                  touchAction: 'none',
-                  cursor: 'default',
-                }}
-              >
-                <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1 }}>{'\uD83D\uDD12'}</span>
+          // Shared socket styles — Option B gem card layout
+          const socketStyle: React.CSSProperties = {
+            width: '100%',
+            aspectRatio: '1',
+            borderRadius: 'var(--socket-radius)',
+            background: `linear-gradient(135deg, ${gradient.bg})`,
+            border: isLocked ? '2px solid var(--color-locked)' : `2px solid ${gradient.border}`,
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: isLocked ? 'default' : 'pointer',
+            touchAction: 'none',
+            padding: 0,
+          };
+
+          const socketContent = (
+            <>
+              {/* Full gem art or emoji */}
+              {gemArt ? (
+                <img src={gemArt} alt={affix.name} style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover', zIndex: 1,
+                }} />
+              ) : (
+                <span style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: 'var(--icon-md)', zIndex: 1,
+                }}>{emoji}</span>
+              )}
+              {/* Specular highlight */}
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%)',
+              }} />
+              {/* Name in bottom gradient band */}
+              <div style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)',
+                padding: '4px 4px 3px', textAlign: 'center',
+              }}>
+                <div style={{
+                  fontFamily: 'var(--font-family-display)', fontWeight: 700,
+                  fontSize: 'var(--text-2xs)', color: 'white', lineHeight: 1.15,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.95)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{affix.name}</div>
               </div>
-            );
+              {/* Lock icon overlay */}
+              {isLocked && (
+                <div style={{
+                  position: 'absolute', top: 4, right: 4, zIndex: 3,
+                  fontSize: 'var(--text-xs)',
+                }}>{'\uD83D\uDD12'}</div>
+              )}
+            </>
+          );
+
+          if (isLocked) {
+            return <div key={index} style={socketStyle}>{socketContent}</div>;
           }
 
-          // Filled socket (removable)
           return (
-            <button
-              key={index}
-              onClick={() => onSocketRemove(index)}
-              style={{
-                width: 'var(--socket-size)',
-                height: 'var(--socket-size)',
-                borderRadius: 'var(--socket-radius)',
-                background: `linear-gradient(135deg, ${gradient.bg})`,
-                border: `2px solid ${gradient.border}`,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                touchAction: 'none',
-                padding: 0,
-                gap: 1,
-              }}
-            >
-              {gemArt ? (
-                <img src={gemArt} alt={affix.name} style={{ width: 'var(--icon-md)', height: 'var(--icon-md)' }} />
-              ) : (
-                <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1 }}>{emoji}</span>
-              )}
-              <span
-                style={{
-                  fontSize: 'var(--text-2xs)',
-                  fontFamily: 'var(--font-family-display)',
-                  color: 'white',
-                  lineHeight: 1,
-                  maxWidth: 44,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {affix.name}
-              </span>
+            <button key={index} onClick={() => onSocketRemove(index)} style={socketStyle}>
+              {socketContent}
             </button>
           );
         })}
