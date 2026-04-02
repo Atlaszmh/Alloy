@@ -1,4 +1,5 @@
 import type { DerivedStats, Element } from './derived-stats.js';
+import type { DamageBreakdown, DotTickBreakdown, HealBreakdown } from './damage-breakdown.js';
 
 // --- Gladiator Runtime State (used during duel simulation) ---
 
@@ -36,19 +37,19 @@ export interface GladiatorRuntime {
 // --- Tick Events (discriminated union for combat log) ---
 
 export type TickEvent =
-  | {
-      type: 'attack';
-      attacker: 0 | 1;
-      damage: number;
-      damageType: 'physical' | Element;
-      isCrit: boolean;
-    }
-  | { type: 'block'; blocker: 0 | 1; blockedDamage: number }
-  | { type: 'dodge'; dodger: 0 | 1 }
+  | { type: 'attack'; attacker: 0 | 1; breakdown: DamageBreakdown }
+  | { type: 'dot_tick'; target: 0 | 1; breakdown: DotTickBreakdown }
+  | { type: 'heal'; player: 0 | 1; breakdown: HealBreakdown }
   | { type: 'dot_apply'; target: 0 | 1; element: Element; dps: number; durationTicks: number }
-  | { type: 'dot_tick'; target: 0 | 1; element: Element; damage: number }
+  /** @deprecated Use breakdown.blocked on the attack event instead */
+  | { type: 'block'; blocker: 0 | 1; blockedDamage: number }
+  /** @deprecated Dodge is now indicated by breakdown.dodged on the attack event */
+  | { type: 'dodge'; dodger: 0 | 1 }
+  /** @deprecated Use the heal event with source: 'lifesteal' instead */
   | { type: 'lifesteal'; player: 0 | 1; healed: number }
+  /** @deprecated Thorns will be modelled as a triggered effect */
   | { type: 'thorns'; reflector: 0 | 1; damage: number }
+  /** @deprecated Use breakdown.barrierAbsorbed on the attack event instead */
   | { type: 'barrier_absorb'; player: 0 | 1; absorbed: number; remaining: number }
   | { type: 'trigger_proc'; player: 0 | 1; triggerId: string; effectDescription: string }
   | { type: 'synergy_proc'; player: 0 | 1; synergyId: string; effectDescription: string }
