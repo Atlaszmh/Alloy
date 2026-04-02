@@ -537,8 +537,8 @@ export function Forge() {
             onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
           />
         ) : (
-          <div style={{ display: 'flex', gap: 'var(--gap-md)' }}>
-            <div style={{ flex: 1, minWidth: 0 }} data-item-card="weapon">
+          <div style={{ display: 'flex', gap: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 'var(--gap-md)' }} data-item-card="weapon">
               <ItemSocketView
                 item={plan.loadout.weapon}
                 cardId="weapon"
@@ -549,7 +549,14 @@ export function Forge() {
                 onSocketRemove={(slotIndex) => handleSocketRemove('weapon', slotIndex)}
               />
             </div>
-            <div style={{ flex: 1, minWidth: 0 }} data-item-card="armor">
+            {/* Visual divider between items */}
+            <div style={{
+              width: 1,
+              alignSelf: 'stretch',
+              background: 'linear-gradient(to bottom, transparent, var(--color-surface-500) 15%, var(--color-surface-500) 85%, transparent)',
+              flexShrink: 0,
+            }} />
+            <div style={{ flex: 1, minWidth: 0, paddingLeft: 'var(--gap-md)' }} data-item-card="armor">
               <ItemSocketView
                 item={plan.loadout.armor}
                 cardId="armor"

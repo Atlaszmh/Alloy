@@ -230,7 +230,7 @@ export function ItemSocketView({
       </div>
 
       {/* Equipped affixes list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-sm)' }}>
         {item.slots.map((slot, index) => {
           if (!slot) return null;
           const orb = getSlotOrb(slot);
@@ -244,18 +244,18 @@ export function ItemSocketView({
             <div
               key={index}
               style={{
-                fontSize: 'var(--text-xs)',
+                fontSize: 'var(--text-sm)',
                 fontFamily: 'var(--font-family-display)',
                 color: 'white',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--gap-xs)',
+                gap: 'var(--gap-sm)',
               }}
             >
               <span>{emoji}</span>
-              <span>{affix.name}</span>
+              <span style={{ fontWeight: 600 }}>{affix.name}</span>
               {statValue && (
-                <span style={{ color: 'var(--color-surface-300)' }}>{statValue}</span>
+                <span style={{ color: 'var(--color-surface-300)', fontSize: 'var(--text-xs)' }}>{statValue}</span>
               )}
               {isLocked && <span>{'\uD83D\uDD12'}</span>}
             </div>
