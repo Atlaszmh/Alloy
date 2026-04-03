@@ -336,7 +336,7 @@ function MatchDetailPanel({ matchId, onClose }: { matchId: string; onClose: () =
                           {r.winner === null ? 'Draw' : `P${r.winner}`}
                         </span>
                       </span>
-                      <span><span style={{ color: '#a1a1aa' }}>Duration: </span><span style={{ fontFamily: 'monospace' }}>{r.duration_ticks} ticks</span></span>
+                      <span><span style={{ color: '#a1a1aa' }}>Duration: </span><span style={{ fontFamily: 'monospace' }}>{r.duration_ticks}s</span></span>
                       <span><span style={{ color: '#a1a1aa' }}>P0 Dmg: </span><span style={{ fontFamily: 'monospace', color: '#6366f1' }}>{r.p0_damage_dealt.toFixed(0)}</span></span>
                       <span><span style={{ color: '#a1a1aa' }}>P1 Dmg: </span><span style={{ fontFamily: 'monospace', color: '#ef4444' }}>{r.p1_damage_dealt.toFixed(0)}</span></span>
                     </div>
