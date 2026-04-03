@@ -6,7 +6,7 @@
       "name": "Dagger",
       "baseStats": {
         "physicalDamage": 20,
-        "attackInterval": 30,
+        "attackSpeed": 1.0,
         "critChance": 8
       },
       "description": "Fast, crit-oriented"
@@ -17,7 +17,7 @@
       "name": "Sword",
       "baseStats": {
         "physicalDamage": 40,
-        "attackInterval": 54,
+        "attackSpeed": 1.8,
         "critChance": 5
       },
       "description": "Balanced"
@@ -28,7 +28,7 @@
       "name": "Mace",
       "baseStats": {
         "physicalDamage": 50,
-        "attackInterval": 66,
+        "attackSpeed": 2.2,
         "armorPenetration": 10
       },
       "description": "Armor penetration"
@@ -39,7 +39,7 @@
       "name": "Axe",
       "baseStats": {
         "physicalDamage": 60,
-        "attackInterval": 75
+        "attackSpeed": 2.5
       },
       "description": "Raw physical"
     },
@@ -49,7 +49,7 @@
       "name": "Battleaxe",
       "baseStats": {
         "physicalDamage": 80,
-        "attackInterval": 90,
+        "attackSpeed": 3.0,
         "critMultiplier": 25
       },
       "description": "Slow, devastating"
@@ -60,7 +60,7 @@
       "name": "Staff",
       "baseStats": {
         "physicalDamage": 25,
-        "attackInterval": 60,
+        "attackSpeed": 2.0,
         "allElementalDamage": 10
       },
       "description": "Elemental bonus"
@@ -71,7 +71,7 @@
       "name": "Wand",
       "baseStats": {
         "physicalDamage": 15,
-        "attackInterval": 42,
+        "attackSpeed": 1.4,
         "allElementalDamage": 8
       },
       "description": "Fast elemental"
