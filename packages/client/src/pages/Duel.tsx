@@ -1,86 +1,53 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
-import { useMatchStore } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
-import type { CombatLog, TickEvent, DuelResult, DerivedStats } from '@alloy/engine';
+import type { CombatLog, CombatEvent, DuelResult, DerivedStats } from '@alloy/engine';
 import { calculateStats } from '@alloy/engine';
 import { DuelRenderer } from '@/components/DuelRenderer';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
+import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
+import { useMatchStore } from '@/stores/matchStore';
 
-function HPBar({ current, max, label, side }: { current: number; max: number; label: string; side: 'left' | 'right' }) {
+/* ═══════════════════════════════════════════════════════════════
+   HPBar — slim bar used for both top (enemy) and bottom (player)
+   ═══════════════════════════════════════════════════════════════ */
+
+function HPBar({ current, max, label }: { current: number; max: number; label: string }) {
   const pct = Math.max(0, Math.min(100, (current / max) * 100));
   const isLow = pct < 30;
 
   return (
-    <div className={`flex-1 ${side === 'right' ? 'text-right' : ''}`}>
-      <div className="mb-1 flex items-baseline justify-between text-xs">
-        <span
-          className="font-bold text-surface-400"
-          style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em', textTransform: 'uppercase' }}
-        >
-          {label}
-        </span>
-        <span className={`stat-number ${isLow ? 'text-danger' : 'text-white'}`} style={isLow ? { animation: 'pulse-glow 1.5s ease-in-out infinite' } : undefined}>
-          {Math.round(current)} / {Math.round(max)}
-        </span>
-      </div>
-      <div className="h-3 overflow-hidden rounded-full bg-surface-600">
+    <div className="flex items-center gap-2">
+      <span
+        className="w-10 shrink-0 text-xs font-bold text-surface-400"
+        style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em', textTransform: 'uppercase' }}
+      >
+        {label}
+      </span>
+      <div className="h-3 flex-1 overflow-hidden rounded-full bg-surface-600">
         <div
-          className={`hp-bar-fill h-full rounded-full ${
+          className={`h-full rounded-full ${
             isLow ? 'bg-danger' : pct < 60 ? 'bg-warning' : 'bg-success'
           }`}
-          style={{ width: `${pct}%`, float: side }}
+          style={{ width: `${pct}%`, transition: 'width 80ms linear' }}
         />
       </div>
+      <span
+        className={`stat-number w-20 shrink-0 text-right text-xs ${isLow ? 'text-danger' : 'text-white'}`}
+        style={isLow ? { animation: 'pulse-glow 1.5s ease-in-out infinite' } : undefined}
+      >
+        {Math.round(current)} / {Math.round(max)}
+      </span>
     </div>
   );
 }
 
-function EventLog({ events, maxHeight }: { events: { tick: number; event: TickEvent }[]; maxHeight: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [events.length]);
-
-  const formatEvent = (tick: number, event: TickEvent): string => {
-    const t = `[${(tick / 30).toFixed(1)}s]`;
-    switch (event.type) {
-      case 'attack': return `${t} P${event.attacker + 1} attacks for ${Math.round(event.damage)} ${event.damageType}${event.isCrit ? ' CRIT!' : ''}`;
-      case 'block': return `${t} P${event.blocker + 1} blocks ${Math.round(event.blockedDamage)} damage`;
-      case 'dodge': return `${t} P${event.dodger + 1} dodges!`;
-      case 'dot_apply': return `${t} P${event.target + 1} afflicted with ${event.element} DOT`;
-      case 'dot_tick': return `${t} P${event.target + 1} takes ${Math.round(event.damage)} ${event.element} DOT`;
-      case 'lifesteal': return `${t} P${event.player + 1} heals ${Math.round(event.healed)} (lifesteal)`;
-      case 'thorns': return `${t} P${event.reflector + 1} reflects ${Math.round(event.damage)} (thorns)`;
-      case 'barrier_absorb': return `${t} P${event.player + 1} barrier absorbs ${Math.round(event.absorbed)}`;
-      case 'hp_change': return `${t} P${event.player + 1}: ${Math.round(event.oldHP)} → ${Math.round(event.newHP)} HP`;
-      case 'death': return `${t} P${event.player + 1} is defeated!`;
-      case 'stun': return `${t} P${event.target + 1} stunned for ${(event.durationTicks / 30).toFixed(1)}s`;
-      default: return `${t} ${event.type}`;
-    }
-  };
-
-  return (
-    <div ref={ref} className="overflow-y-auto font-mono text-xs leading-5" style={{ maxHeight }}>
-      {events.map((e, i) => (
-        <div
-          key={`${e.tick}-${e.event.type}-${i}`}
-          className={`${
-            e.event.type === 'death' ? 'text-danger font-bold' :
-            e.event.type === 'attack' && e.event.isCrit ? 'text-warning' :
-            'text-surface-400'
-          }`}
-        >
-          {formatEvent(e.tick, e.event)}
-        </div>
-      ))}
-    </div>
-  );
-}
+/* ═══════════════════════════════════════════════════════════════
+   PostDuelBreakdown — shown at the end of playback
+   ═══════════════════════════════════════════════════════════════ */
 
 function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLog: CombatLog }) {
   const totalDamage = [0, 0];
@@ -88,14 +55,15 @@ function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLo
   const critCount = [0, 0];
   const attackCount = [0, 0];
 
-  for (const tick of combatLog.ticks) {
-    for (const event of tick.events) {
+  for (const frame of combatLog.frames) {
+    for (const event of frame.events) {
       if (event.type === 'attack') {
-        totalDamage[event.attacker] += event.damage;
+        totalDamage[event.attacker] += event.breakdown.totalNet;
         attackCount[event.attacker]++;
-        if (event.isCrit) critCount[event.attacker]++;
+        if (event.breakdown.isCrit) critCount[event.attacker]++;
       }
       if (event.type === 'lifesteal') totalHealing[event.player] += event.healed;
+      if (event.type === 'heal') totalHealing[event.player] += event.breakdown.effectiveHeal;
     }
   }
 
@@ -122,6 +90,10 @@ function PostDuelBreakdown({ result, combatLog }: { result: DuelResult; combatLo
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Duel — main page
+   ═══════════════════════════════════════════════════════════════ */
+
 export function Duel() {
   const { code } = useParams();
 
@@ -141,17 +113,15 @@ export function Duel() {
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
-  const [playbackTick, setPlaybackTick] = useState(0);
+  const [playbackTime, setPlaybackTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
-  const [viewMode, setViewMode] = useState<'pixi' | 'text'>('pixi');
   const [showCelebration, setShowCelebration] = useState(false);
   const animationRef = useRef<number>(0);
 
   // Run the duel (engine simulation) when we enter duel phase
   useEffect(() => {
     if (phase?.kind === 'duel' && matchState) {
-      // Check if this round's duel hasn't been run yet
       const currentRound = phase.round;
       if (duelLogs.length < currentRound) {
         gateway.dispatch({ kind: 'advance_phase' });
@@ -173,39 +143,40 @@ export function Duel() {
     return currentLog.result;
   }, [currentLog]);
 
-  // Playback animation
+  // Playback animation — advance in real time
   useEffect(() => {
     if (!isPlaying || !currentLog) return;
 
-    const maxTick = currentLog.ticks[currentLog.ticks.length - 1]?.tick ?? 0;
+    const maxTime = currentLog.frames[currentLog.frames.length - 1]?.time ?? 0;
+    let startTimestamp: number | null = null;
+    let startPlaybackTime = playbackTime;
 
-    const step = () => {
-      setPlaybackTick((prev) => {
-        if (prev >= maxTick) {
-          // Don't call setState inside setState — return value and handle in effect
-          return prev;
-        }
-        return prev + 1;
-      });
-      animationRef.current = requestAnimationFrame(step);
+    const step = (timestamp: number) => {
+      if (startTimestamp === null) startTimestamp = timestamp;
+      const elapsed = (timestamp - startTimestamp) / 1000;
+      const newTime = Math.min(startPlaybackTime + elapsed, maxTime);
+      setPlaybackTime(newTime);
+      if (newTime < maxTime) {
+        animationRef.current = requestAnimationFrame(step);
+      }
     };
 
     animationRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(animationRef.current);
   }, [isPlaying, currentLog]);
 
-  // Handle playback completion — separate effect to avoid setState inside setState
+  // Handle playback completion
   useEffect(() => {
     if (!currentLog || isPlaying) return;
-    const maxTick = currentLog.ticks[currentLog.ticks.length - 1]?.tick ?? 0;
-    if (playbackTick >= maxTick && maxTick > 0 && !showBreakdown) {
+    const maxTime = currentLog.frames[currentLog.frames.length - 1]?.time ?? 0;
+    if (playbackTime >= maxTime && maxTime > 0 && !showBreakdown) {
       setIsPlaying(false);
       setShowBreakdown(true);
       if (currentLog.result.winner === 0) {
         setShowCelebration(true);
       }
     }
-  }, [playbackTick, currentLog, isPlaying, showBreakdown]);
+  }, [playbackTime, currentLog, isPlaying, showBreakdown]);
 
   // Compute HP at current playback tick
   const hpState = useMemo(() => {
@@ -216,9 +187,9 @@ export function Duel() {
     let hp = [stats0.maxHP, stats1.maxHP];
     const maxHp = [...hp];
 
-    for (const tick of currentLog.ticks) {
-      if (tick.tick > playbackTick) break;
-      for (const event of tick.events) {
+    for (const frame of currentLog.frames) {
+      if (frame.time > playbackTime) break;
+      for (const event of frame.events) {
         if (event.type === 'hp_change') {
           hp[event.player] = event.newHP;
         }
@@ -226,27 +197,26 @@ export function Duel() {
     }
 
     return { hp, maxHp, stats: [stats0, stats1] as [DerivedStats, DerivedStats] };
-  }, [currentLog, playbackTick, player0, player1, getRegistry]);
+  }, [currentLog, playbackTime, player0, player1, getRegistry]);
 
-  // Collect events up to current tick for the log
+  // Collect events up to current tick for the combat log
   const visibleEvents = useMemo(() => {
     if (!currentLog) return [];
-    const events: { tick: number; event: TickEvent }[] = [];
-    for (const tick of currentLog.ticks) {
-      if (tick.tick > playbackTick) break;
-      for (const event of tick.events) {
-        events.push({ tick: tick.tick, event });
+    const events: { time: number; event: CombatEvent }[] = [];
+    for (const frame of currentLog.frames) {
+      if (frame.time > playbackTime) break;
+      for (const event of frame.events) {
+        events.push({ time: frame.time, event });
       }
     }
     return events;
-  }, [currentLog, playbackTick]);
+  }, [currentLog, playbackTime]);
 
   useDuelSounds(visibleEvents, isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
     gateway.dispatch({ kind: 'duel_continue' });
   };
-
 
   // currentLog/hpState may not be ready yet (duel simulation runs in useEffect)
   if (!currentLog || !hpState) {
@@ -256,19 +226,14 @@ export function Duel() {
   const round = currentResult?.round ?? 1;
 
   return (
-    <div className="page-enter flex h-full flex-col p-3">
+    <div className="page-enter flex h-full flex-col" style={{ minHeight: 0 }}>
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
 
-      {/* ═══ TOP: Opponent HP + round info ═══ */}
-      <div className="mb-2">
-        <div className="mb-1 flex items-center justify-between">
-          <span
-            className="text-xs font-bold uppercase text-danger"
-            style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.06em' }}
-          >
-            Opponent
-          </span>
+      {/* ═══ TOP BAR (~5%): Round pips + Enemy HP + Timer ═══ */}
+      <div className="shrink-0 border-b border-surface-700 px-3 py-1.5">
+        <div className="flex items-center gap-2">
+          {/* Round pips */}
           <div className="flex items-center gap-1">
             {roundResults.map((r, i) => (
               <span
@@ -280,103 +245,82 @@ export function Duel() {
                 R{i + 1}
               </span>
             ))}
-            <span
-              className="ml-1 text-xs text-surface-400"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              Round {round}
+            <span className="text-xs text-surface-400" style={{ fontFamily: 'var(--font-family-display)' }}>
+              R{round}
             </span>
           </div>
-        </div>
-        <HPBar current={hpState.hp[1]} max={hpState.maxHp[1]} label="AI" side="left" />
-      </div>
 
-      {/* Playback controls */}
-      <div className="mb-2 flex items-center gap-2">
-        <button
-          onClick={() => {
-            if (!isPlaying) {
-              if (playbackTick >= (currentLog.ticks[currentLog.ticks.length - 1]?.tick ?? 0)) {
-                setPlaybackTick(0);
-                setShowBreakdown(false);
-                setShowCelebration(false);
-              }
-              setIsPlaying(true);
-            } else {
-              setIsPlaying(false);
-            }
-          }}
-          className="rounded bg-surface-600 px-3 py-1 text-sm text-white hover:bg-surface-500"
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <button
-          onClick={() => {
-            setPlaybackTick(currentLog.ticks[currentLog.ticks.length - 1]?.tick ?? 0);
-            setIsPlaying(false);
-            setShowBreakdown(true);
-            if (currentLog.result.winner === 0) setShowCelebration(true);
-          }}
-          className="rounded bg-surface-600 px-3 py-1 text-sm text-surface-400 hover:bg-surface-500"
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
-          Skip
-        </button>
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setViewMode(viewMode === 'pixi' ? 'text' : 'pixi')}
-            className="rounded bg-surface-700 px-2 py-0.5 text-xs text-surface-400 hover:bg-surface-600"
-          >
-            {viewMode === 'pixi' ? 'Text View' : 'Visual View'}
-          </button>
-          <span className="stat-number text-xs text-surface-400">
-            {(playbackTick / 30).toFixed(1)}s / {currentResult ? currentResult.duration.toFixed(1) : '?'}s
+          {/* Enemy HP bar */}
+          <div className="flex-1">
+            <HPBar current={hpState.hp[1]} max={hpState.maxHp[1]} label="AI" />
+          </div>
+
+          {/* Timer */}
+          <span className="stat-number shrink-0 text-xs text-surface-400">
+            {playbackTime.toFixed(1)}s / {currentResult ? currentResult.duration.toFixed(1) : '?'}s
           </span>
         </div>
       </div>
 
-      {/* Duel view — mobile: canvas stacked above log; desktop: side-by-side */}
-      {viewMode === 'pixi' && hpState ? (
-        <div className="flex flex-1 flex-col gap-2 overflow-hidden">
-          <div style={{ flexShrink: 0 }}>
-            <DuelRenderer
-              combatLog={currentLog}
-              stats={hpState.stats}
-              currentTick={playbackTick}
-              isPlaying={isPlaying}
-            />
-          </div>
-          <div
-            className="flex-1 overflow-hidden rounded-lg border border-surface-600 bg-surface-800 p-2"
-            style={{ minHeight: 0, boxShadow: 'var(--shadow-card)' }}
-          >
-            <EventLog events={visibleEvents.slice(-5)} maxHeight="100%" />
-          </div>
+      {/* ═══ ARENA (~50%): PixiJS canvas + playback controls overlay ═══ */}
+      <div className="relative" style={{ flex: '5 1 0%', minHeight: 0 }}>
+        <div className="h-full w-full">
+          <DuelRenderer
+            combatLog={currentLog}
+            stats={hpState.stats}
+            currentTime={playbackTime}
+            isPlaying={isPlaying}
+          />
         </div>
-      ) : (
-        <div
-          className="flex-1 overflow-hidden rounded-lg border border-surface-600 bg-surface-800 p-3"
-          style={{ boxShadow: 'var(--shadow-card)' }}
-        >
-          <EventLog events={visibleEvents} maxHeight="100%" />
-        </div>
-      )}
 
-      {/* ═══ BOTTOM: Player HP ═══ */}
-      <div className="mt-2">
-        <HPBar current={hpState.hp[0]} max={hpState.maxHp[0]} label="You" side="left" />
-        <span
-          className="mt-0.5 block text-xs uppercase text-accent-400"
-          style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.06em' }}
-        >
-          You
-        </span>
+        {/* Playback controls overlay — bottom of arena */}
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2">
+          <button
+            onClick={() => {
+              if (!isPlaying) {
+                if (playbackTime >= (currentLog.frames[currentLog.frames.length - 1]?.time ?? 0)) {
+                  setPlaybackTime(0);
+                  setShowBreakdown(false);
+                  setShowCelebration(false);
+                }
+                setIsPlaying(true);
+              } else {
+                setIsPlaying(false);
+              }
+            }}
+            className="rounded bg-surface-600/80 px-3 py-1 text-sm text-white backdrop-blur-sm hover:bg-surface-500/80"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button
+            onClick={() => {
+              setPlaybackTime(currentLog.frames[currentLog.frames.length - 1]?.time ?? 0);
+              setIsPlaying(false);
+              setShowBreakdown(true);
+              if (currentLog.result.winner === 0) setShowCelebration(true);
+            }}
+            className="rounded bg-surface-600/80 px-3 py-1 text-sm text-surface-400 backdrop-blur-sm hover:bg-surface-500/80"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            Skip
+          </button>
+        </div>
+      </div>
+
+      {/* ═══ PLAYER HP BAR (~5%) ═══ */}
+      <div className="shrink-0 border-t border-surface-700 px-3 py-1.5">
+        <HPBar current={hpState.hp[0]} max={hpState.maxHp[0]} label="You" />
+      </div>
+
+      {/* ═══ COMBAT LOG (~40%) ═══ */}
+      <div style={{ flex: '4 1 0%', minHeight: 0 }} className="overflow-hidden">
+        <CombatLogPanel events={visibleEvents} />
       </div>
 
       {/* Post-duel breakdown */}
       {showBreakdown && currentResult && (
-        <div style={{ animation: 'slide-up 0.2s ease-out' }} className="mt-2 space-y-3">
+        <div style={{ animation: 'slide-up 0.2s ease-out' }} className="shrink-0 space-y-3 p-3">
           <PostDuelBreakdown result={currentResult} combatLog={currentLog} />
           <button
             onClick={handleContinue}
@@ -384,7 +328,6 @@ export function Duel() {
             style={{ boxShadow: 'var(--shadow-button)', fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em' }}
           >
             {(() => {
-              // Predict next phase from round results (phase stays 'duel' during playback)
               const wins = [0, 0];
               for (const r of roundResults) {
                 if (r.winner === 0) wins[0]++;
