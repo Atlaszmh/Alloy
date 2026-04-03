@@ -38,7 +38,7 @@ function AttackHeader({
   if (breakdown.dodged) {
     return (
       <div style={{ color: UI_COLORS.dodged, fontWeight: 600 }}>
-        [{formatTime(time)}s] \u2694 {who} — <span style={{ fontStyle: 'italic' }}>DODGED</span>
+        [{formatTime(time)}s] {'\u2694'} {who} — <span style={{ fontStyle: 'italic' }}>DODGED</span>
       </div>
     );
   }
@@ -46,7 +46,7 @@ function AttackHeader({
   const label = breakdown.isCrit ? `${who} — CRIT!` : who;
   return (
     <div style={{ color: breakdown.isCrit ? UI_COLORS.crit : '#cbd5e1', fontWeight: 600 }}>
-      [{formatTime(time)}s] \u2694 {label}
+      [{formatTime(time)}s] {'\u2694'} {label}
     </div>
   );
 }
@@ -64,10 +64,10 @@ function DamageRows({ breakdown }: { breakdown: DamageBreakdown }) {
         {Math.round(p.raw)} physical{' '}
         {p.mitigated > 0 && (
           <span style={{ color: UI_COLORS.muted }}>
-            \u2192 -{Math.round(p.mitigated)} armor ({pct(p.reductionPct)})
+            {'\u2192'} -{Math.round(p.mitigated)} armor ({pct(p.reductionPct)})
           </span>
         )}{' '}
-        \u2192 <strong>{Math.round(p.net)}</strong>
+        {'\u2192'} <strong>{Math.round(p.net)}</strong>
       </div>,
     );
   }
@@ -80,10 +80,10 @@ function DamageRows({ breakdown }: { breakdown: DamageBreakdown }) {
         {Math.round(eb.raw)} {elem}{' '}
         {eb.mitigated > 0 && (
           <span style={{ color: UI_COLORS.muted }}>
-            \u2192 -{Math.round(eb.mitigated)} resist ({pct(eb.reductionPct)})
+            {'\u2192'} -{Math.round(eb.mitigated)} resist ({pct(eb.reductionPct)})
           </span>
         )}{' '}
-        \u2192 <strong>{Math.round(eb.net)}</strong>
+        {'\u2192'} <strong>{Math.round(eb.net)}</strong>
       </div>,
     );
   }
@@ -92,7 +92,7 @@ function DamageRows({ breakdown }: { breakdown: DamageBreakdown }) {
   if (breakdown.blocked > 0) {
     rows.push(
       <div key="blocked" style={{ paddingLeft: 16, color: UI_COLORS.blocked, fontSize: 13 }}>
-        \uD83D\uDEE1 Blocked {Math.round(breakdown.blocked)}
+        {'\uD83D\uDEE1'} Blocked {Math.round(breakdown.blocked)}
       </div>,
     );
   }
@@ -101,7 +101,7 @@ function DamageRows({ breakdown }: { breakdown: DamageBreakdown }) {
   if (breakdown.barrierAbsorbed > 0) {
     rows.push(
       <div key="barrier" style={{ paddingLeft: 16, color: UI_COLORS.blocked, fontSize: 13 }}>
-        \uD83D\uDFE6 Barrier absorbed {Math.round(breakdown.barrierAbsorbed)}
+        {'\uD83D\uDFE6'} Barrier absorbed {Math.round(breakdown.barrierAbsorbed)}
       </div>,
     );
   }
@@ -143,10 +143,10 @@ function DotDamageRow({ breakdown }: { breakdown: DotTickBreakdown }) {
       {Math.round(breakdown.rawTotal)} raw{' '}
       {breakdown.reductionPct > 0 && (
         <span style={{ color: UI_COLORS.muted }}>
-          \u2192 -{Math.round(breakdown.rawTotal - breakdown.netDamage)} resist ({pct(breakdown.reductionPct)})
+          {'\u2192'} -{Math.round(breakdown.rawTotal - breakdown.netDamage)} resist ({pct(breakdown.reductionPct)})
         </span>
       )}{' '}
-      \u2192 <strong>{Math.round(breakdown.netDamage)}</strong>
+      {'\u2192'} <strong>{Math.round(breakdown.netDamage)}</strong>
     </div>
   );
 }
@@ -162,7 +162,7 @@ function AttackSummary({
   return (
     <div style={{ paddingLeft: 16, fontSize: 13, color: UI_COLORS.muted, marginTop: 2 }}>
       {breakdown.isCrit && (
-        <span style={{ color: UI_COLORS.crit, marginRight: 8 }}>\u2605 CRIT</span>
+        <span style={{ color: UI_COLORS.crit, marginRight: 8 }}>{'\u2605'} CRIT</span>
       )}
       <span>{Math.round(breakdown.totalNet)} total</span>
       {hpEvent && (
@@ -187,14 +187,12 @@ function getBackgroundTint(group: SwingGroup): string {
     const dotEvent = group.events[0]?.event;
     if (dotEvent && dotEvent.type === 'dot_tick') {
       const elem = dotEvent.breakdown.element;
-      // Use the damage color with low opacity
       const hex = DAMAGE_CSS_COLORS[elem];
       return hex.replace('#', 'rgba(') ? `${hexToRgba(hex, 0.08)}` : 'rgba(249, 115, 22, 0.08)';
     }
     return 'rgba(249, 115, 22, 0.08)';
   }
   if (group.type === 'attack') {
-    // Red tint for enemy attacks, neutral for player
     if (group.attacker === 1) return 'rgba(239, 68, 68, 0.06)';
     return 'rgba(148, 163, 184, 0.04)';
   }
@@ -231,7 +229,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.enemyHP, fontWeight: 700, fontSize: 14 }}>
-          [{formatTime(group.time)}s] \uD83D\uDC80 {who} died!
+          [{formatTime(group.time)}s] {'\uD83D\uDC80'} {who} died!
         </div>
       </div>
     );
@@ -257,7 +255,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.healing, fontWeight: 600 }}>
-          [{formatTime(group.time)}s] \u2764\uFE0F Heal
+          [{formatTime(group.time)}s] {'\u2764\uFE0F'} Heal
         </div>
         {healEvents.map((e, i) => {
           const he = e.event as { type: 'heal'; breakdown: HealBreakdown };
@@ -282,7 +280,6 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
   const triggerEvents = group.events.filter((e) => e.event.type === 'trigger_proc' || e.event.type === 'synergy_proc');
 
   if (!attackEvent || attackEvent.event.type !== 'attack') {
-    // Fallback for orphan groups
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.muted, fontSize: 13 }}>
@@ -293,7 +290,6 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
   }
 
   const bd = attackEvent.event.breakdown;
-  // Find the hp_change for the target
   const targetHp = hpEvents.find((e) => {
     if (e.event.type !== 'hp_change') return false;
     return e.event.player === group.target;
@@ -315,7 +311,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
         if (e.event.type !== 'trigger_proc' && e.event.type !== 'synergy_proc') return null;
         return (
           <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
-            \u2728 {e.event.effectDescription}
+            {'\u2728'} {e.event.effectDescription}
           </div>
         );
       })}

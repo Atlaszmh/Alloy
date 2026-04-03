@@ -178,13 +178,17 @@ export function Duel() {
     }
   }, [playbackTime, currentLog, isPlaying, showBreakdown]);
 
-  // Compute HP at current playback tick
-  const hpState = useMemo(() => {
-    if (!currentLog || !player0 || !player1) return null;
+  // Stable stats reference — only recalculates when loadouts change, not on every tick
+  const derivedStats = useMemo(() => {
+    if (!player0 || !player1) return null;
     const reg = getRegistry();
-    const stats0 = calculateStats(player0.loadout, reg);
-    const stats1 = calculateStats(player1.loadout, reg);
-    let hp = [stats0.maxHP, stats1.maxHP];
+    return [calculateStats(player0.loadout, reg), calculateStats(player1.loadout, reg)] as [DerivedStats, DerivedStats];
+  }, [player0, player1, getRegistry]);
+
+  // Compute HP at current playback time
+  const hpState = useMemo(() => {
+    if (!currentLog || !derivedStats) return null;
+    let hp = [derivedStats[0].maxHP, derivedStats[1].maxHP];
     const maxHp = [...hp];
 
     for (const frame of currentLog.frames) {
@@ -196,8 +200,8 @@ export function Duel() {
       }
     }
 
-    return { hp, maxHp, stats: [stats0, stats1] as [DerivedStats, DerivedStats] };
-  }, [currentLog, playbackTime, player0, player1, getRegistry]);
+    return { hp, maxHp, stats: derivedStats };
+  }, [currentLog, playbackTime, derivedStats]);
 
   // Collect events up to current tick for the combat log
   const visibleEvents = useMemo(() => {
@@ -263,7 +267,7 @@ export function Duel() {
       </div>
 
       {/* ═══ ARENA (~50%): PixiJS canvas + playback controls overlay ═══ */}
-      <div className="relative" style={{ flex: '5 1 0%', minHeight: 0 }}>
+      <div className="relative" style={{ flex: '5 1 0%', minHeight: 120 }}>
         <div className="h-full w-full">
           <DuelRenderer
             combatLog={currentLog}

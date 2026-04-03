@@ -21,11 +21,11 @@
   "archetypeMinOrbs": 3,
   "baseStatScaling": {
     "STR": {
-      "weapon": { "physicalDamage": 2.0, "flatDamageEffectiveness": 10 },
+      "weapon": { "physicalDamage": 0.5, "flatDamageEffectiveness": 3 },
       "armor": { "armor": 1, "damageReduction": 1 }
     },
     "INT": {
-      "weapon": { "elementalDamage": 1.5, "dotDamage": 10 },
+      "weapon": { "elementalDamage": 0.4, "dotDamage": 3 },
       "armor": { "elementalResistance": 1, "barrierStrength": 5 }
     },
     "DEX": {

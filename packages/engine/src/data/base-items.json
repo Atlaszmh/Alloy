@@ -5,7 +5,7 @@
       "type": "weapon",
       "name": "Dagger",
       "baseStats": {
-        "physicalDamage": 20,
+        "physicalDamage": 5,
         "attackSpeed": 1.0,
         "critChance": 8
       },
@@ -16,7 +16,7 @@
       "type": "weapon",
       "name": "Sword",
       "baseStats": {
-        "physicalDamage": 40,
+        "physicalDamage": 10,
         "attackSpeed": 1.8,
         "critChance": 5
       },
@@ -27,7 +27,7 @@
       "type": "weapon",
       "name": "Mace",
       "baseStats": {
-        "physicalDamage": 50,
+        "physicalDamage": 12,
         "attackSpeed": 2.2,
         "armorPenetration": 10
       },
@@ -38,7 +38,7 @@
       "type": "weapon",
       "name": "Axe",
       "baseStats": {
-        "physicalDamage": 60,
+        "physicalDamage": 15,
         "attackSpeed": 2.5
       },
       "description": "Raw physical"
@@ -48,7 +48,7 @@
       "type": "weapon",
       "name": "Battleaxe",
       "baseStats": {
-        "physicalDamage": 80,
+        "physicalDamage": 20,
         "attackSpeed": 3.0,
         "critMultiplier": 25
       },
@@ -59,9 +59,9 @@
       "type": "weapon",
       "name": "Staff",
       "baseStats": {
-        "physicalDamage": 25,
+        "physicalDamage": 6,
         "attackSpeed": 2.0,
-        "allElementalDamage": 10
+        "allElementalDamage": 3
       },
       "description": "Elemental bonus"
     },
@@ -70,9 +70,9 @@
       "type": "weapon",
       "name": "Wand",
       "baseStats": {
-        "physicalDamage": 15,
+        "physicalDamage": 4,
         "attackSpeed": 1.4,
-        "allElementalDamage": 8
+        "allElementalDamage": 2
       },
       "description": "Fast elemental"
     }
