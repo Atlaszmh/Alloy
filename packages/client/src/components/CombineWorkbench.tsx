@@ -83,34 +83,19 @@ export function CombineWorkbench({
   const filledCount = comboSlots.filter(Boolean).length;
 
   return (
-    <section
-      className="rounded-lg p-3"
+    <div
       style={{
-        border: '1px solid var(--color-surface-600)',
-        boxShadow: 'inset 0 0 30px rgba(212,168,52,0.04)',
+        padding: 'var(--gap-sm) var(--gap-md)',
+        borderTop: '1px solid var(--color-surface-700)',
       }}
     >
-      {/* Header */}
-      <h3
-        className="text-center uppercase mb-2"
-        style={{
-          fontSize: '10px',
-          color: 'var(--color-bronze-light)',
-          fontFamily: 'var(--font-family-display)',
-          letterSpacing: '0.06em',
-        }}
-      >
-        {'\u2692'} COMBINATION WORKBENCH
-      </h3>
-
-      {/* Slots row */}
-      <div className="flex items-center justify-center gap-1.5 mb-3">
+      <div className="flex items-center justify-center gap-1.5">
         {comboSlots.map((orb, idx) => (
           <div key={idx} className="flex items-center gap-1.5">
             {idx > 0 && (
               <span
                 style={{
-                  fontSize: '16px',
+                  fontSize: 'var(--text-sm)',
                   color: 'var(--color-surface-300)',
                   fontFamily: 'var(--font-family-display)',
                   fontWeight: 700,
@@ -133,10 +118,10 @@ export function CombineWorkbench({
         {/* Arrow */}
         <span
           style={{
-            fontSize: '16px',
+            fontSize: 'var(--text-sm)',
             color: 'var(--color-surface-300)',
-            marginLeft: 'var(--gap-sm)',
-            marginRight: 'var(--gap-sm)',
+            marginLeft: 'var(--gap-xs)',
+            marginRight: 'var(--gap-xs)',
           }}
         >
           {'\u25B6'}
@@ -144,28 +129,28 @@ export function CombineWorkbench({
 
         {/* Result box */}
         <ResultBox glowSignal={glowSignal} />
-      </div>
 
-      {/* Buttons row */}
-      <div className="flex justify-center gap-2">
-        <HapticButton
-          variant="primary"
-          size="sm"
-          disabled={filledCount < 2 || !canAfford}
-          onClick={onCombine}
-        >
-          COMBINE
-        </HapticButton>
-        <HapticButton
-          variant="secondary"
-          size="sm"
-          disabled={filledCount === 0}
-          onClick={onClearAll}
-        >
-          CLEAR
-        </HapticButton>
+        {/* Buttons inline */}
+        <div className="flex gap-1.5" style={{ marginLeft: 'var(--gap-md)' }}>
+          <HapticButton
+            variant="primary"
+            size="sm"
+            disabled={filledCount < 2 || !canAfford}
+            onClick={onCombine}
+          >
+            COMBINE
+          </HapticButton>
+          <HapticButton
+            variant="secondary"
+            size="sm"
+            disabled={filledCount === 0}
+            onClick={onClearAll}
+          >
+            CLEAR
+          </HapticButton>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
