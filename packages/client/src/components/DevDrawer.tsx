@@ -1,27 +1,31 @@
 import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useUIStore } from '@/stores/uiStore';
+import type { DebugPhaseTarget } from '@alloy/engine';
 
 interface DevDrawerProps {
   open: boolean;
   onClose: () => void;
 }
 
+const PHASE_TARGETS: { label: string; target: DebugPhaseTarget }[] = [
+  { label: 'draft', target: 'draft' },
+  { label: 'forge', target: 'forge' },
+  { label: 'duel', target: 'duel' },
+  { label: 'postmatch', target: 'complete' },
+];
+
 export function DevDrawer({ open, onClose }: DevDrawerProps) {
   const navigate = useNavigate();
-  const { startLocalMatch } = useMatchStore();
+  const { startDebugMatch } = useMatchStore();
   const { showDebug, toggleDebug } = useUIStore();
 
   if (!open) return null;
 
-  // TODO: Currently all phase jumps start at draft — skipping to a specific
-  // phase requires engine support to fast-forward match state. For now this
-  // is still useful: it creates a fresh match quickly without going through
-  // the matchmaking flow.
-  const jumpToPhase = (_phase: string) => {
+  const jumpToPhase = (target: DebugPhaseTarget) => {
     try {
       const seed = 42; // Fixed seed for reproducibility
-      startLocalMatch(seed, 'ranked', 3);
+      startDebugMatch(seed, 'ranked', 3, target);
       const code = 'ai-' + Math.random().toString(36).substring(2, 8);
       navigate(`/match/${code}`);
       onClose();
@@ -68,14 +72,14 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-surface-300">
                 Jump to Phase
               </h3>
-              <div className="grid grid-cols-3 gap-2">
-                {['draft', 'forge', 'duel', 'adapt', 'postmatch'].map((phase) => (
+              <div className="grid grid-cols-2 gap-2">
+                {PHASE_TARGETS.map(({ label, target }) => (
                   <button
-                    key={phase}
-                    onClick={() => jumpToPhase(phase)}
+                    key={target}
+                    onClick={() => jumpToPhase(target)}
                     className="rounded-lg border border-surface-500 bg-surface-700 px-3 py-2 text-xs font-semibold capitalize text-white transition-colors hover:border-green-500 hover:bg-surface-600"
                   >
-                    {phase}
+                    {label}
                   </button>
                 ))}
               </div>

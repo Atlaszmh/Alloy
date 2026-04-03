@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, OrbInstance } from '@alloy/engine';
-import { createMatch, applyAction, DataRegistry, loadAndValidateData, AIController, SeededRNG } from '@alloy/engine';
+import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, OrbInstance, DebugPhaseTarget } from '@alloy/engine';
+import { createMatch, applyAction, createDebugMatch, DataRegistry, loadAndValidateData, AIController, SeededRNG } from '@alloy/engine';
 
 let registry: DataRegistry | null = null;
 
@@ -18,6 +18,7 @@ interface MatchStore {
   error: string | null;
 
   startLocalMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5) => void;
+  startDebugMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, targetPhase: DebugPhaseTarget) => void;
   dispatch: (action: GameAction) => ActionResult;
   getRegistry: () => DataRegistry;
   reset: () => void;
@@ -38,6 +39,22 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
       'sword',
       'chainmail',
       reg,
+    );
+    const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
+    set({ state, aiController: ai, error: null });
+  },
+
+  startDebugMatch: (seed, mode, aiTier, targetPhase) => {
+    const reg = getRegistry();
+    const state = createDebugMatch(
+      `debug_${Date.now()}`,
+      seed,
+      mode,
+      ['player', 'ai'],
+      'sword',
+      'chainmail',
+      reg,
+      targetPhase,
     );
     const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
     set({ state, aiController: ai, error: null });

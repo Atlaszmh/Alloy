@@ -1,8 +1,9 @@
 import type { MatchState, MatchMode, PlayerState, MatchPhase } from '../types/match.js';
 import type { GameAction, ActionResult } from '../types/game-action.js';
 import type { ForgeAction } from '../types/forge-action.js';
-import type { Loadout } from '../types/item.js';
+import type { Loadout, EquippedSlot, ForgedItem } from '../types/item.js';
 import type { DerivedStats } from '../types/derived-stats.js';
+import type { OrbInstance } from '../types/orb.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createEmptyLoadout } from '../types/item.js';
 import { generatePool } from '../pool/pool-generator.js';
@@ -345,4 +346,160 @@ function handleDuelContinue(
   }
 
   return ok(newState);
+}
+
+// ---------------------------------------------------------------------------
+// Debug helpers — fast-forward a match to an arbitrary phase
+// ---------------------------------------------------------------------------
+
+export type DebugPhaseTarget = 'draft' | 'forge' | 'duel' | 'complete';
+
+/**
+ * Create a match and fast-forward it to the given phase.
+ *
+ * - draft:    normal match (round 1 draft)
+ * - forge:    auto-drafts orbs for both players, lands in forge
+ * - duel:     auto-drafts + auto-forges (sockets orbs, sets base stats)
+ * - complete: runs the full round-1 simulation
+ */
+export function createDebugMatch(
+  matchId: string,
+  seed: number,
+  mode: MatchMode,
+  playerIds: [string, string],
+  baseWeaponId: string,
+  baseArmorId: string,
+  registry: DataRegistry,
+  targetPhase: DebugPhaseTarget,
+): MatchState {
+  let state = createMatch(matchId, seed, mode, playerIds, baseWeaponId, baseArmorId, registry);
+
+  if (targetPhase === 'draft') return state;
+
+  // --- Auto-draft: alternate picks between both players ---
+  state = debugAutoDraft(state, seed, registry);
+
+  if (targetPhase === 'forge') return state;
+
+  // --- Auto-forge: socket orbs + set base stats, then complete forge ---
+  state = debugAutoForge(state, registry);
+
+  if (targetPhase === 'duel') return state;
+
+  // --- Run duel to completion ---
+  const duelResult = runDuel(state, registry);
+  if (duelResult.ok) state = duelResult.state;
+
+  const continueResult = handleDuelContinue(state, registry);
+  if (continueResult.ok) state = continueResult.state;
+
+  return state;
+}
+
+/**
+ * Auto-draft all orbs, alternating picks between players.
+ * Returns state in forge phase with both players' stockpiles populated.
+ */
+function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry): MatchState {
+  const phase = state.phase;
+  if (phase.kind !== 'draft') return state;
+
+  const rng = new SeededRNG(seed).fork('debug_draft');
+  const balance = registry.getBalance();
+  const pool = [...state.pool];
+  const stockpiles: [OrbInstance[], OrbInstance[]] = [
+    [...state.players[0].stockpile],
+    [...state.players[1].stockpile],
+  ];
+
+  const totalOrbs = pool.length + stockpiles[0].length + stockpiles[1].length;
+  const maxPicks = state.mode === 'quick'
+    ? totalOrbs
+    : balance.draftPicksPerPlayer[phase.round - 1] * 2;
+
+  let picked = 0;
+  while (picked < maxPicks && pool.length > 0) {
+    const idx = rng.nextInt(0, pool.length - 1);
+    const orb = pool.splice(idx, 1)[0];
+    const player: 0 | 1 = (picked % 2) as 0 | 1;
+    stockpiles[player].push(orb);
+    picked++;
+  }
+
+  // Advance to forge
+  const forgeRound = phase.round;
+  const isQuick = state.mode === 'quick';
+  const flux = getFluxForRound(forgeRound as 1 | 2 | 3, balance, isQuick);
+
+  return {
+    ...state,
+    pool,
+    players: [
+      { ...state.players[0], stockpile: stockpiles[0] },
+      { ...state.players[1], stockpile: stockpiles[1] },
+    ],
+    phase: { kind: 'forge', round: forgeRound },
+    forgeFlux: [flux, flux],
+    forgeComplete: [false, false],
+  };
+}
+
+/**
+ * Auto-forge for both players: set base stats, socket up to 3 orbs per item.
+ * Returns state in duel phase ready for simulation.
+ */
+function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState {
+  if (state.phase.kind !== 'forge') return state;
+
+  const round = state.phase.round;
+  const newPlayers = [...state.players] as [PlayerState, PlayerState];
+
+  for (const p of [0, 1] as const) {
+    const player = state.players[p];
+    const remaining = [...player.stockpile];
+    let weapon: ForgedItem = { ...player.loadout.weapon, slots: [...player.loadout.weapon.slots] };
+    let armor: ForgedItem = { ...player.loadout.armor, slots: [...player.loadout.armor.slots] };
+
+    // Set base stats if not already set (round 1)
+    if (!weapon.baseStats) {
+      weapon = { ...weapon, baseStats: { stat1: 'STR', stat2: 'DEX' } };
+    }
+    if (!armor.baseStats) {
+      armor = { ...armor, baseStats: { stat1: 'VIT', stat2: 'INT' } };
+    }
+
+    // Socket orbs into empty weapon slots (up to 3)
+    let socketed = 0;
+    for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
+      if (weapon.slots[slot] === null) {
+        const orb = remaining.shift()!;
+        weapon.slots[slot] = { kind: 'single', orb, socketedRound: round } as EquippedSlot;
+        socketed++;
+      }
+    }
+
+    // Socket orbs into empty armor slots (up to 3)
+    socketed = 0;
+    for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
+      if (armor.slots[slot] === null) {
+        const orb = remaining.shift()!;
+        armor.slots[slot] = { kind: 'single', orb, socketedRound: round } as EquippedSlot;
+        socketed++;
+      }
+    }
+
+    newPlayers[p] = {
+      ...player,
+      stockpile: remaining,
+      loadout: { weapon, armor },
+    };
+  }
+
+  return {
+    ...state,
+    players: newPlayers,
+    phase: { kind: 'duel', round: state.phase.round },
+    forgeComplete: undefined,
+    forgeFlux: undefined,
+  };
 }
