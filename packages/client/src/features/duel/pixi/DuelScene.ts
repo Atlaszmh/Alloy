@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import type { TickEvent, DerivedStats, Element } from '@alloy/engine';
+import type { CombatEvent, DerivedStats, Element } from '@alloy/engine';
+import { getDominantDamageType } from '@alloy/engine';
 import { GladiatorSprite } from './GladiatorSprite.js';
 import { VFXManager } from './VFXManager.js';
 import { DamageNumbers } from './DamageNumbers.js';
@@ -32,12 +33,18 @@ export class DuelScene {
 
   private hp: [number, number] = [0, 0];
   private maxHp: [number, number] = [0, 0];
-  private lastProcessedTick = -1;
+  private lastProcessedTime = -1;
+
+  // Cooldown tracking
+  private attackSpeeds: [number, number] = [1.0, 1.0];
+  private lastAttackTime: [number, number] = [0, 0];
+  private currentTime = 0;
 
   async init(app: Application, stats: [DerivedStats, DerivedStats]): Promise<void> {
     this.app = app;
     this.maxHp = [stats[0].maxHP, stats[1].maxHP];
     this.hp = [stats[0].maxHP, stats[1].maxHP];
+    this.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];
 
     // Arena floor
     const floor = new Graphics();
@@ -55,9 +62,11 @@ export class DuelScene {
     }
     app.stage.addChild(floorLines);
 
-    // Create gladiators
-    const g0 = new GladiatorSprite(0xc8a84e, 'You', P0_X, GLADIATOR_Y, 1);
-    const g1 = new GladiatorSprite(0xe85d3a, 'AI', P1_X, GLADIATOR_Y, -1);
+    // Create gladiators (with cooldown ring info)
+    const atkSec0 = stats[0].attackSpeed;
+    const atkSec1 = stats[1].attackSpeed;
+    const g0 = new GladiatorSprite(0xc8a84e, 'You', P0_X, GLADIATOR_Y, 1, 'weapon', atkSec0);
+    const g1 = new GladiatorSprite(0xe85d3a, 'AI', P1_X, GLADIATOR_Y, -1, 'weapon', atkSec1);
     app.stage.addChild(g0.container);
     app.stage.addChild(g1.container);
     this.gladiators = [g0, g1];
@@ -106,8 +115,10 @@ export class DuelScene {
     this.drawHPBars();
   }
 
-  processEvent(tick: number, event: TickEvent): void {
+  processEvent(time: number, event: CombatEvent): void {
     if (!this.gladiators || !this.vfx || !this.damageNumbers || !this.statusIcons) return;
+
+    this.currentTime = time;
 
     const playerX = (p: 0 | 1) => (p === 0 ? P0_X : P1_X);
     const playerPos = (p: 0 | 1) => ({ x: playerX(p), y: GLADIATOR_Y - 30 });
@@ -116,6 +127,11 @@ export class DuelScene {
       case 'attack': {
         const target: 0 | 1 = event.attacker === 0 ? 1 : 0;
 
+        // Track attack timing for cooldown ring
+        this.lastAttackTime[event.attacker] = time;
+        this.gladiators[event.attacker].triggerAttackPulse();
+        this.gladiators[event.attacker].setCooldownProgress(0);
+
         // Gladiator attack animation
         this.gladiators[event.attacker].playAttack();
 
@@ -123,22 +139,23 @@ export class DuelScene {
         this.gladiators[target].playHit();
 
         // VFX: element effect
+        const dmgType = getDominantDamageType(event.breakdown);
         this.vfx.spawnEffect(
-          event.damageType,
+          dmgType,
           playerPos(event.attacker),
           playerPos(target),
         );
 
         // Crit effect
-        if (event.isCrit) {
+        if (event.breakdown.isCrit) {
           this.vfx.spawnEffect('crit', playerPos(target), playerPos(target));
         }
 
         // Damage number
-        const color = ELEMENT_COLORS[event.damageType] ?? 0xffffff;
-        const label = `${event.isCrit ? 'CRIT ' : ''}${Math.round(event.damage)}`;
+        const color = ELEMENT_COLORS[dmgType] ?? 0xffffff;
+        const label = `${event.breakdown.isCrit ? 'CRIT ' : ''}${Math.round(event.breakdown.totalNet)}`;
         this.damageNumbers.spawn(label, playerX(target), GLADIATOR_Y - 70, color, {
-          isCrit: event.isCrit,
+          isCrit: event.breakdown.isCrit,
         });
         break;
       }
@@ -172,9 +189,9 @@ export class DuelScene {
       }
 
       case 'dot_tick': {
-        const elementColor = ELEMENT_COLORS[event.element] ?? 0xff0000;
+        const elementColor = ELEMENT_COLORS[event.breakdown.element] ?? 0xff0000;
         this.damageNumbers.spawn(
-          `${Math.round(event.damage)}`,
+          `${Math.round(event.breakdown.netDamage)}`,
           playerX(event.target),
           GLADIATOR_Y - 80,
           elementColor,
@@ -182,7 +199,7 @@ export class DuelScene {
         );
 
         this.vfx.spawnEffect(
-          event.element,
+          event.breakdown.element,
           playerPos(event.target),
           playerPos(event.target),
           0.3,
@@ -253,7 +270,7 @@ export class DuelScene {
         );
         this.statusIcons.addStatus(event.target, 'stun');
         // Remove stun icon after duration
-        const stunMs = event.durationTicks * 33;
+        const stunMs = event.duration * 1000;
         setTimeout(() => {
           this.statusIcons?.removeStatus(event.target, 'stun');
         }, stunMs);
@@ -287,6 +304,15 @@ export class DuelScene {
   }
 
   update(dt: number): void {
+    // Update cooldown progress based on ticks elapsed since last attack
+    if (this.gladiators) {
+      for (const i of [0, 1] as const) {
+        const elapsed = this.currentTime - this.lastAttackTime[i];
+        const progress = Math.min(1, elapsed / this.attackSpeeds[i]);
+        this.gladiators[i].setCooldownProgress(progress);
+      }
+    }
+
     this.gladiators?.[0].update(dt);
     this.gladiators?.[1].update(dt);
     this.vfx?.update(dt);
@@ -294,20 +320,23 @@ export class DuelScene {
     this.statusIcons?.update(dt);
   }
 
-  get processedTick(): number {
-    return this.lastProcessedTick;
+  get processedTime(): number {
+    return this.lastProcessedTime;
   }
 
-  set processedTick(tick: number) {
-    this.lastProcessedTick = tick;
+  set processedTime(time: number) {
+    this.lastProcessedTime = time;
   }
 
   reset(stats?: [DerivedStats, DerivedStats]): void {
     if (stats) {
       this.maxHp = [stats[0].maxHP, stats[1].maxHP];
+      this.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];
     }
     this.hp = [...this.maxHp];
-    this.lastProcessedTick = -1;
+    this.lastProcessedTime = -1;
+    this.lastAttackTime = [0, 0];
+    this.currentTime = 0;
 
     this.gladiators?.[0].reset();
     this.gladiators?.[1].reset();
