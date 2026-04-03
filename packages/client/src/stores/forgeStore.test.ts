@@ -38,8 +38,6 @@ describe('forgeStore', () => {
       expect(s.plan).toBeNull();
       expect(s.selectedOrbUid).toBeNull();
       expect(s.confirmModalOpen).toBe(false);
-      expect(s.activeTab).toBe('combine');
-      expect(s.activeItemTab).toBe('weapon');
       expect(s.comboSlots).toEqual([null, null, null]);
     });
   });
@@ -159,22 +157,6 @@ describe('forgeStore', () => {
     });
   });
 
-  describe('tabs', () => {
-    it('switches active tab', () => {
-      useForgeStore.getState().setActiveTab('equip');
-      expect(useForgeStore.getState().activeTab).toBe('equip');
-      useForgeStore.getState().setActiveTab('combine');
-      expect(useForgeStore.getState().activeTab).toBe('combine');
-    });
-
-    it('switches active item tab', () => {
-      useForgeStore.getState().setActiveItemTab('armor');
-      expect(useForgeStore.getState().activeItemTab).toBe('armor');
-      useForgeStore.getState().setActiveItemTab('weapon');
-      expect(useForgeStore.getState().activeItemTab).toBe('weapon');
-    });
-  });
-
   describe('confirm modal', () => {
     it('opens and closes', () => {
       useForgeStore.getState().openConfirmModal();
@@ -206,7 +188,6 @@ describe('forgeStore', () => {
     it('clears all state', () => {
       initStore();
       useForgeStore.getState().selectOrb('orb-1');
-      useForgeStore.getState().setActiveTab('equip');
       useForgeStore.getState().openConfirmModal();
       useForgeStore.getState().setComboSlotByIndex(0, { uid: 'orb1', affixId: 'fire_damage', tier: 1 });
       useForgeStore.getState().selectBaseItem('weapon', 'sword');
@@ -217,8 +198,6 @@ describe('forgeStore', () => {
       expect(s.plan).toBeNull();
       expect(s.selectedOrbUid).toBeNull();
       expect(s.confirmModalOpen).toBe(false);
-      expect(s.activeTab).toBe('combine');
-      expect(s.activeItemTab).toBe('weapon');
       expect(s.comboSlots).toEqual([null, null, null]);
       expect(s.itemSelectionPhase).toBe('weapon');
       expect(s.selectedWeaponId).toBeNull();

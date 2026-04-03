@@ -7,10 +7,6 @@ interface ForgeStoreState {
   selectedOrbUid: string | null;
   confirmModalOpen: boolean;
 
-  /** Two-tab layout state */
-  activeTab: 'combine' | 'equip';
-  activeItemTab: 'weapon' | 'armor';
-
   /** 3-slot combine workbench (engine only uses first 2 currently) */
   comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
 
@@ -26,8 +22,6 @@ interface ForgeStoreState {
   canRemove: (orbUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
   selectBaseItem: (itemType: 'weapon' | 'armor', itemId: string) => void;
-  setActiveTab: (tab: 'combine' | 'equip') => void;
-  setActiveItemTab: (tab: 'weapon' | 'armor') => void;
   setComboSlotByIndex: (index: number, orb: OrbInstance | null) => void;
   clearComboSlots: () => void;
   openConfirmModal: () => void;
@@ -41,8 +35,6 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   plan: null,
   selectedOrbUid: null,
   confirmModalOpen: false,
-  activeTab: 'combine',
-  activeItemTab: 'weapon',
   comboSlots: [...EMPTY_COMBO],
   itemSelectionPhase: 'weapon',
   selectedWeaponId: null,
@@ -54,8 +46,6 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
       plan,
       selectedOrbUid: null,
       confirmModalOpen: false,
-      activeTab: 'combine',
-      activeItemTab: 'weapon',
       comboSlots: [...EMPTY_COMBO],
     });
   },
@@ -113,10 +103,6 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
     }
   },
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
-
-  setActiveItemTab: (tab) => set({ activeItemTab: tab }),
-
   setComboSlotByIndex: (index, orb) => {
     const slots = [...get().comboSlots] as [OrbInstance | null, OrbInstance | null, OrbInstance | null];
     slots[index] = orb;
@@ -134,8 +120,6 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
       plan: null,
       selectedOrbUid: null,
       confirmModalOpen: false,
-      activeTab: 'combine',
-      activeItemTab: 'weapon',
       comboSlots: [...EMPTY_COMBO],
       itemSelectionPhase: 'weapon',
       selectedWeaponId: null,
