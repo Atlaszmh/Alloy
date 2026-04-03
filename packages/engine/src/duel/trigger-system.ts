@@ -36,8 +36,8 @@ export function evaluateTrigger(
   if (!rng.nextBool(trigger.chance)) return null;
 
   // Set cooldown
-  if (trigger.cooldownTicks > 0) {
-    gladiator.cooldowns.set(trigger.affixId, trigger.cooldownTicks);
+  if (trigger.cooldown > 0) {
+    gladiator.cooldowns.set(trigger.affixId, trigger.cooldown);
   }
 
   return trigger.effect;
