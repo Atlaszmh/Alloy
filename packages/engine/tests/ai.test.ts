@@ -25,14 +25,15 @@ function makePool(seed: number): OrbInstance[] {
 function makeDummyCombatLog(): CombatLog {
   return {
     seed: 42,
-    ticks: [],
+    frames: [],
     result: {
       round: 1,
       winner: 0,
       finalHP: [100, 0],
-      tickCount: 100,
-      duration: 3.33,
+      duration: 10,
       wasTiebreak: false,
+      p0DamageDealt: 0,
+      p1DamageDealt: 0,
     },
   };
 }
@@ -285,14 +286,15 @@ describe('adapt strategy player identification', () => {
 
     const mockDuelLog = {
       seed: 42,
-      ticks: [],
+      frames: [],
       result: {
         round: 1,
         winner: 0 as 0 | 1,
         finalHP: [50, 0] as [number, number],
-        tickCount: 100,
-        duration: 3.33,
+        duration: 10,
         wasTiebreak: false,
+        p0DamageDealt: 0,
+        p1DamageDealt: 0,
       },
     };
 

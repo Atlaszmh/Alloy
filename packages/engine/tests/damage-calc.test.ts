@@ -154,7 +154,7 @@ describe('calculateDOTBreakdown', () => {
     const bd = calculateDOTBreakdown('fire', 10, 1, makeStats(), 0, 100);
 
     expect(bd.element).toBe('fire');
-    expect(bd.damagePerTick).toBe(10);
+    expect(bd.damagePerSecond).toBe(10);
     expect(bd.stacks).toBe(1);
     expect(bd.rawTotal).toBe(10);
     expect(bd.netDamage).toBe(10);

@@ -49,7 +49,7 @@ describe('calculateStats integer scale', () => {
     const stats = calculateStats(loadout, registry);
     expect(stats.armor).toBeGreaterThanOrEqual(1);
     expect(stats.armor).toBeLessThan(100);
-    expect(stats.attackInterval).toBeGreaterThanOrEqual(9);
+    expect(stats.attackSpeed).toBeGreaterThanOrEqual(0.3);
     expect(stats.critChance).toBeGreaterThanOrEqual(0);
     expect(stats.critChance).toBeLessThanOrEqual(75);
   });
@@ -86,7 +86,7 @@ describe('Stat Calculator', () => {
 
   // Test 2: Base item stats applied
   it('applies base item stats', () => {
-    // Sword: physicalDamage 40, attackInterval 54, critChance 5
+    // Sword: physicalDamage 40, attackSpeed 1.8, critChance 5
     // Chainmail: armor 20, maxHP 20, blockChance 5
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
@@ -97,8 +97,8 @@ describe('Stat Calculator', () => {
     // critChance: 5 from sword (flat)
     expect(stats.critChance).toBe(5);
 
-    // attackInterval: 54 from sword (overrides default 30)
-    expect(stats.attackInterval).toBe(54);
+    // attackSpeed: 1.8 from sword (overrides default 1.0)
+    expect(stats.attackSpeed).toBe(1.8);
 
     // armor: 20 from chainmail
     expect(stats.armor).toBe(20);
@@ -106,15 +106,15 @@ describe('Stat Calculator', () => {
 
   // Test 2b: Axe base stats
   it('applies axe base stats correctly', () => {
-    // Axe: physicalDamage 60, attackInterval 75
+    // Axe: physicalDamage 60, attackSpeed 2.5
     const loadout = createEmptyLoadout('axe', 'chainmail');
     const stats = calculateStats(loadout, registry);
 
     // physicalDamage: 60 flat from axe
     expect(stats.physicalDamage).toBe(60);
 
-    // attackInterval: 75 from axe (overrides default)
-    expect(stats.attackInterval).toBe(75);
+    // attackSpeed: 2.5 from axe (overrides default)
+    expect(stats.attackSpeed).toBe(2.5);
 
     // critMultiplier: base 150, no bonus from axe
     expect(stats.critMultiplier).toBe(150);
@@ -183,9 +183,9 @@ describe('Stat Calculator', () => {
     // Axe has no critChance base stat, so critChance = 1.0
     expect(stats.critChance).toBeCloseTo(1.0);
 
-    // DEX weapon: attackSpeed +0.003 each = -0.003 -0.003 = -0.006 percent on attackInterval
-    // attackInterval: 75 (axe base) * (1 + (-0.006)) = 75 * 0.994 = 74.55
-    expect(stats.attackInterval).toBeCloseTo(74.55);
+    // DEX weapon: attackSpeed +0.003 each = -0.003 -0.003 = -0.006 percent on attackSpeed
+    // attackSpeed: 2.5 (axe base) * (1 + (-0.006)) = 2.5 * 0.994 = 2.485
+    expect(stats.attackSpeed).toBeCloseTo(2.485);
   });
 
   it('applies base stat scaling (VIT on armor)', () => {
@@ -267,10 +267,10 @@ describe('Stat Calculator', () => {
     expect(stats.blockChance).toBeGreaterThanOrEqual(0);
   });
 
-  it('enforces minimum attack interval', () => {
+  it('enforces minimum attack speed', () => {
     const loadout = createEmptyLoadout('dagger', 'leather');
     const stats = calculateStats(loadout, registry);
-    expect(stats.attackInterval).toBeGreaterThanOrEqual(balance.minAttackInterval);
+    expect(stats.attackSpeed).toBeGreaterThanOrEqual(balance.minAttackSpeed);
   });
 
   it('caps resistances at 90', () => {
@@ -315,7 +315,7 @@ describe('Stat Calculator', () => {
 
   // Test: staff allElementalDamage base stat expands to all elements
   it('staff allElementalDamage bonus expands to all elements', () => {
-    // Staff: physicalDamage 25, attackInterval 60, allElementalDamage 10
+    // Staff: physicalDamage 25, attackSpeed 2.0, allElementalDamage 10
     const loadout = createEmptyLoadout('staff', 'chainmail');
     // Put a fire_damage orb on weapon to add to fire elemental damage
     loadout.weapon.slots[0] = singleSlot('fire_damage', 1);

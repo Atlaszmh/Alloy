@@ -72,23 +72,23 @@ function makeAttackBreakdown(physNet: number, isCrit: boolean, elemNet?: { eleme
 function makeCombatLogWithDamage(): CombatLog {
   return {
     seed: 42,
-    ticks: [
+    frames: [
       {
-        tick: 1,
+        time: 0.1,
         events: [
           { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(25, false) },
           { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(0, false, { element: 'fire', net: 15 }) },
         ],
       },
       {
-        tick: 2,
+        time: 0.2,
         events: [
           { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(20, true) },
-          { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerTick: 10, stacks: 1, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } },
+          { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerSecond: 10, stacks: 1, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } },
         ],
       },
       {
-        tick: 3,
+        time: 0.3,
         events: [
           { type: 'attack', attacker: 1, breakdown: makeAttackBreakdown(30, false) },
         ],
@@ -98,9 +98,10 @@ function makeCombatLogWithDamage(): CombatLog {
       round: 1,
       winner: 0,
       finalHP: [50, 0],
-      tickCount: 100,
-      duration: 3.33,
+      duration: 10,
       wasTiebreak: false,
+      p0DamageDealt: 0,
+      p1DamageDealt: 0,
     },
   };
 }

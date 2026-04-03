@@ -23,7 +23,7 @@ function makeLoadouts(): [ReturnType<typeof createEmptyLoadout>, ReturnType<type
 describe('Duel Engine', () => {
   // 1. Mirror determinism
   it('mirror match with same seed produces identical CombatLog', () => {
-    const stats = makeStats({ maxHP: 200, physicalDamage: 10, attackInterval: 30 });
+    const stats = makeStats({ maxHP: 200, physicalDamage: 10, attackSpeed: 1.0 });
     const statsArr: [DerivedStats, DerivedStats] = [stats, { ...stats }];
     const loadouts = makeLoadouts();
 
@@ -34,31 +34,31 @@ describe('Duel Engine', () => {
     const log2 = simulate([{ ...stats }, { ...stats }], loadouts, registry, rng2, 1);
 
     expect(log1.result.winner).toBe(log2.result.winner);
-    expect(log1.result.tickCount).toBe(log2.result.tickCount);
+    expect(log1.result.duration).toBe(log2.result.duration);
     expect(log1.result.finalHP).toEqual(log2.result.finalHP);
-    expect(log1.ticks.length).toBe(log2.ticks.length);
+    expect(log1.frames.length).toBe(log2.frames.length);
   });
 
   // 2. One-shot kill
   it('high damage attacker kills low HP defender quickly', () => {
-    const attacker = makeStats({ maxHP: 200, physicalDamage: 500, attackInterval: 10 });
-    const defender = makeStats({ maxHP: 50, physicalDamage: 1, attackInterval: 30 });
+    const attacker = makeStats({ maxHP: 200, physicalDamage: 500, attackSpeed: 0.3 });
+    const defender = makeStats({ maxHP: 50, physicalDamage: 1, attackSpeed: 1.0 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(99);
 
     const log = simulate([attacker, defender], loadouts, registry, rng, 1);
 
     expect(log.result.winner).toBe(0);
-    expect(log.result.tickCount).toBeLessThan(20);
+    expect(log.result.duration).toBeLessThan(2.0);
     expect(log.result.finalHP[1]).toBe(0);
   });
 
   // 3. HP regen heals
-  it('gladiator with hpRegen gains HP each tick', () => {
+  it('gladiator with hpRegen gains HP each second', () => {
     const stats = makeStats({
       maxHP: 200,
       physicalDamage: 5,
-      attackInterval: 30,
+      attackSpeed: 1.0,
       hpRegen: 1,
     });
     const loadouts = makeLoadouts();
@@ -67,8 +67,8 @@ describe('Duel Engine', () => {
     const log = simulate([stats, { ...stats }], loadouts, registry, rng, 1);
 
     // Look for hp_change events from regen (HP going up)
-    const regenEvents = log.ticks.flatMap((t) =>
-      t.events.filter(
+    const regenEvents = log.frames.flatMap((f) =>
+      f.events.filter(
         (e) => e.type === 'hp_change' && e.newHP > e.oldHP,
       ),
     );
@@ -77,22 +77,22 @@ describe('Duel Engine', () => {
 
   // 4. Block prevents damage
   it('high blockChance gladiator blocks attacks', () => {
-    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackInterval: 15 });
-    const blocker = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, blockChance: 100 });
+    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackSpeed: 0.5 });
+    const blocker = makeStats({ maxHP: 200, physicalDamage: 1, attackSpeed: 1.0, blockChance: 100, blockAmount: 9999 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(77);
 
     const log = simulate([attacker, blocker], loadouts, registry, rng, 1);
 
-    const blockEvents = log.ticks.flatMap((t) =>
-      t.events.filter((e) => e.type === 'block'),
+    const blockEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'block'),
     );
     expect(blockEvents.length).toBeGreaterThan(0);
 
     // Blocker should take no damage since blockChance = 100 (100%)
     // (blocker is player 1)
-    const hpDrops = log.ticks.flatMap((t) =>
-      t.events.filter(
+    const hpDrops = log.frames.flatMap((f) =>
+      f.events.filter(
         (e) => e.type === 'hp_change' && e.player === 1 && e.newHP < e.oldHP,
       ),
     );
@@ -101,21 +101,21 @@ describe('Duel Engine', () => {
 
   // 5. Dodge avoids damage
   it('high dodgeChance gladiator dodges attacks', () => {
-    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackInterval: 15 });
-    const dodger = makeStats({ maxHP: 200, physicalDamage: 1, attackInterval: 30, dodgeChance: 100 });
+    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackSpeed: 0.5 });
+    const dodger = makeStats({ maxHP: 200, physicalDamage: 1, attackSpeed: 1.0, dodgeChance: 100 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(55);
 
     const log = simulate([attacker, dodger], loadouts, registry, rng, 1);
 
-    const dodgeEvents = log.ticks.flatMap((t) =>
-      t.events.filter((e) => e.type === 'dodge'),
+    const dodgeEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'dodge'),
     );
     expect(dodgeEvents.length).toBeGreaterThan(0);
 
     // Dodger should take no damage
-    const hpDrops = log.ticks.flatMap((t) =>
-      t.events.filter(
+    const hpDrops = log.frames.flatMap((f) =>
+      f.events.filter(
         (e) => e.type === 'hp_change' && e.player === 1 && e.newHP < e.oldHP,
       ),
     );
@@ -127,43 +127,43 @@ describe('Duel Engine', () => {
     const attacker = makeStats({
       maxHP: 200,
       physicalDamage: 30,
-      attackInterval: 15,
+      attackSpeed: 0.5,
       lifestealPercent: 50,
     });
-    const defender = makeStats({ maxHP: 500, physicalDamage: 20, attackInterval: 15 });
+    const defender = makeStats({ maxHP: 500, physicalDamage: 20, attackSpeed: 0.5 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(88);
 
     const log = simulate([attacker, defender], loadouts, registry, rng, 1);
 
-    const lifestealEvents = log.ticks.flatMap((t) =>
-      t.events.filter((e) => e.type === 'lifesteal' && e.player === 0),
+    const lifestealEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'lifesteal' && e.player === 0),
     );
     expect(lifestealEvents.length).toBeGreaterThan(0);
   });
 
   // 7. Thorns damages attacker
   it('defender with thorns damages attacker on hit', () => {
-    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackInterval: 15 });
-    const thorny = makeStats({ maxHP: 500, physicalDamage: 1, attackInterval: 60, thornsDamage: 10 });
+    const attacker = makeStats({ maxHP: 200, physicalDamage: 20, attackSpeed: 0.5 });
+    const thorny = makeStats({ maxHP: 500, physicalDamage: 1, attackSpeed: 2.0, thornsDamage: 10 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(44);
 
     const log = simulate([attacker, thorny], loadouts, registry, rng, 1);
 
-    const thornsEvents = log.ticks.flatMap((t) =>
-      t.events.filter((e) => e.type === 'thorns' && e.reflector === 1),
+    const thornsEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'thorns' && e.reflector === 1),
     );
     expect(thornsEvents.length).toBeGreaterThan(0);
   });
 
   // 8. Barrier absorbs first
   it('barrier absorbs damage before HP', () => {
-    const attacker = makeStats({ maxHP: 200, physicalDamage: 30, attackInterval: 15 });
+    const attacker = makeStats({ maxHP: 200, physicalDamage: 30, attackSpeed: 0.5 });
     const shielded = makeStats({
       maxHP: 200,
       physicalDamage: 1,
-      attackInterval: 60,
+      attackSpeed: 2.0,
       barrierAmount: 100,
     });
     const loadouts = makeLoadouts();
@@ -171,8 +171,8 @@ describe('Duel Engine', () => {
 
     const log = simulate([attacker, shielded], loadouts, registry, rng, 1);
 
-    const barrierEvents = log.ticks.flatMap((t) =>
-      t.events.filter((e) => e.type === 'barrier_absorb' && e.player === 1),
+    const barrierEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'barrier_absorb' && e.player === 1),
     );
     expect(barrierEvents.length).toBeGreaterThan(0);
 
@@ -184,30 +184,30 @@ describe('Duel Engine', () => {
     }
   });
 
-  // 9. Max ticks timeout
+  // 9. Max duration timeout
   it('if no one dies, tiebreaker determines winner by higher HP%', () => {
     // Both gladiators with tiny damage and huge HP — should time out
-    const stats1 = makeStats({ maxHP: 10000, physicalDamage: 1, attackInterval: 30 });
-    const stats2 = makeStats({ maxHP: 10000, physicalDamage: 2, attackInterval: 30 });
+    const stats1 = makeStats({ maxHP: 10000, physicalDamage: 1, attackSpeed: 1.0 });
+    const stats2 = makeStats({ maxHP: 10000, physicalDamage: 2, attackSpeed: 1.0 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(11);
 
     const log = simulate([stats1, stats2], loadouts, registry, rng, 1);
 
     expect(log.result.wasTiebreak).toBe(true);
-    expect(log.result.tickCount).toBe(3000);
+    expect(log.result.duration).toBe(100);
   });
 
   // 10. Same seed = same result
   it('same seed produces identical results', () => {
-    const stats = makeStats({ maxHP: 200, physicalDamage: 15, attackInterval: 20 });
+    const stats = makeStats({ maxHP: 200, physicalDamage: 15, attackSpeed: 0.7 });
     const loadouts = makeLoadouts();
 
     const log1 = simulate([{ ...stats }, { ...stats }], loadouts, registry, new SeededRNG(777), 1);
     const log2 = simulate([{ ...stats }, { ...stats }], loadouts, registry, new SeededRNG(777), 1);
 
     expect(log1.result).toEqual(log2.result);
-    expect(log1.ticks.length).toBe(log2.ticks.length);
+    expect(log1.frames.length).toBe(log2.frames.length);
   });
 
   // 11. Different seeds = potentially different results
@@ -215,7 +215,7 @@ describe('Duel Engine', () => {
     const stats = makeStats({
       maxHP: 200,
       physicalDamage: 15,
-      attackInterval: 20,
+      attackSpeed: 0.7,
       critChance: 30,
       dodgeChance: 20,
     });
@@ -224,7 +224,7 @@ describe('Duel Engine', () => {
     const results = new Set<string>();
     for (let seed = 0; seed < 20; seed++) {
       const log = simulate([{ ...stats }, { ...stats }], loadouts, registry, new SeededRNG(seed), 1);
-      results.add(`${log.result.winner}-${log.result.tickCount}`);
+      results.add(`${log.result.winner}-${log.result.duration}`);
     }
 
     // With randomness (crit, dodge), different seeds should yield at least some variation
@@ -236,26 +236,26 @@ describe('Duel Engine', () => {
     const atkStats = makeStats({
       maxHP: 100,
       physicalDamage: 50,
-      attackInterval: 30,
+      attackSpeed: 1.0,
       lifestealPercent: 100,
     });
     const defStats = makeStats({
       maxHP: 200,
       physicalDamage: 10,
-      attackInterval: 60,
+      attackSpeed: 2.0,
       barrierAmount: 1000,
     });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(42);
     const log = simulate([atkStats, defStats], loadouts, registry, rng, 1);
 
-    const lifestealEvents = log.ticks.flatMap(t =>
-      t.events.filter((e): e is Extract<typeof e, { type: 'lifesteal' }> =>
+    const lifestealEvents = log.frames.flatMap(f =>
+      f.events.filter((e): e is Extract<typeof e, { type: 'lifesteal' }> =>
         e.type === 'lifesteal' && e.player === 0
       )
     );
-    const barrierAbsorbs = log.ticks.flatMap(t =>
-      t.events.filter((e): e is Extract<typeof e, { type: 'barrier_absorb' }> =>
+    const barrierAbsorbs = log.frames.flatMap(f =>
+      f.events.filter((e): e is Extract<typeof e, { type: 'barrier_absorb' }> =>
         e.type === 'barrier_absorb'
       )
     );
@@ -267,8 +267,8 @@ describe('Duel Engine', () => {
     // (because damageToHP is 0)
     if (barrierAbsorbs.length > 5) {
       // Barrier absorbed many hits — lifesteal events should be fewer than attack events
-      const attackEvents = log.ticks.flatMap(t =>
-        t.events.filter(e => e.type === 'attack' && e.attacker === 0)
+      const attackEvents = log.frames.flatMap(f =>
+        f.events.filter(e => e.type === 'attack' && e.attacker === 0)
       );
       expect(lifestealEvents.length).toBeLessThan(attackEvents.length);
     }
@@ -276,8 +276,8 @@ describe('Duel Engine', () => {
 
   // Low HP trigger test
   it('gladiator crossing low HP threshold does not error', () => {
-    const stats0 = makeStats({ maxHP: 100, physicalDamage: 5, attackInterval: 30 });
-    const stats1 = makeStats({ maxHP: 100, physicalDamage: 40, attackInterval: 30 });
+    const stats0 = makeStats({ maxHP: 100, physicalDamage: 5, attackSpeed: 1.0 });
+    const stats1 = makeStats({ maxHP: 100, physicalDamage: 40, attackSpeed: 1.0 });
     const loadouts = makeLoadouts();
     const rng = new SeededRNG(999);
     const log = simulate([stats0, stats1], loadouts, registry, rng, 1);
@@ -290,13 +290,13 @@ describe('Duel Engine', () => {
     const stats0 = makeStats({
       maxHP: 50,
       physicalDamage: 100,
-      attackInterval: 30,
+      attackSpeed: 1.0,
       thornsDamage: 100,
     });
     const stats1 = makeStats({
       maxHP: 50,
       physicalDamage: 100,
-      attackInterval: 30,
+      attackSpeed: 1.0,
       thornsDamage: 100,
     });
     const loadouts = makeLoadouts();
@@ -305,7 +305,7 @@ describe('Duel Engine', () => {
     const log = simulate([stats0, stats1], loadouts, registry, rng, 1);
 
     expect([0, 1]).toContain(log.result.winner);
-    const deaths = log.ticks.flatMap(t => t.events.filter(e => e.type === 'death'));
+    const deaths = log.frames.flatMap(f => f.events.filter(e => e.type === 'death'));
     expect(deaths.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -314,13 +314,13 @@ describe('Duel Engine', () => {
       const stats0 = makeStats({
         maxHP: 50,
         physicalDamage: 200,
-        attackInterval: 30,
+        attackSpeed: 1.0,
         thornsDamage: 200,
       });
       const stats1 = makeStats({
         maxHP: 50,
         physicalDamage: 200,
-        attackInterval: 30,
+        attackSpeed: 1.0,
         thornsDamage: 200,
       });
       const loadouts = makeLoadouts();
@@ -347,10 +347,10 @@ describe('Duel Engine', () => {
     });
 
     it('applies initiative to reduce attack timer', () => {
-      const stats = makeStats({ attackInterval: 30, initiative: 50 }); // 50 = 50%
+      const stats = makeStats({ attackSpeed: 1.0, initiative: 50 }); // 50 = 50%
       const g = createGladiator(1, stats);
 
-      expect(g.attackTimer).toBe(15); // 30 * (1 - 50/100) = 15
+      expect(g.attackTimer).toBeCloseTo(0.5); // 1.0 * (1 - 50/100) = 0.5
     });
   });
 });

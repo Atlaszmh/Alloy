@@ -94,6 +94,6 @@ describe('extractMatchReport', () => {
     expect([0, 1]).toContain(report.roundDetails[0].winner);
     expect(report.roundDetails[0].p0DamageDealt).toBeGreaterThanOrEqual(0);
     expect(report.roundDetails[0].p1DamageDealt).toBeGreaterThanOrEqual(0);
-    expect(report.roundDetails[0].durationTicks).toBeGreaterThan(0);
+    expect(report.roundDetails[0].duration).toBeGreaterThan(0);
   });
 });

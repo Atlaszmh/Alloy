@@ -239,7 +239,7 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   stats.critMultiplier = balance.baseCritMultiplier;
 
   // Step 2: Apply base item stats as flat modifiers
-  // Weapon attackInterval is an override (it IS the base attack speed, not an addition)
+  // Weapon attackSpeed is an override (it IS the base attack speed, not an addition)
   const weaponDef = registry.getBaseItem(loadout.weapon.baseItemId);
   const armorDef = registry.getBaseItem(loadout.armor.baseItemId);
 
