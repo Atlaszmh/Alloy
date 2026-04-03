@@ -1,5 +1,4 @@
-import type { DerivedStats, Element } from '../types/derived-stats.js';
-import { ALL_ELEMENTS } from '../types/derived-stats.js';
+import type { DerivedStats } from '../types/derived-stats.js';
 import type {
   GladiatorRuntime,
   CombatLog,
@@ -11,9 +10,12 @@ import type { Loadout } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import { createGladiator } from './gladiator.js';
-import { calculatePhysicalDamage, calculateElementalDamage, calculateDOTDamage } from './damage-calc.js';
+import { calculateAttackBreakdown, calculateDOTBreakdown } from './damage-calc.js';
 import { extractTriggers, evaluateTrigger } from './trigger-system.js';
 import { createCombatLog } from './combat-log.js';
+
+const STEPS_PER_SECOND = 10;
+const STEP_DURATION = 0.1;
 
 /**
  * Run a full duel simulation between two gladiators.
@@ -27,8 +29,7 @@ export function simulate(
   round: number,
 ): CombatLog {
   const balance = registry.getBalance();
-  const maxTicks = balance.maxDuelTicks;
-  const ticksPerSecond = balance.ticksPerSecond;
+  const maxSteps = balance.maxDuelSeconds * STEPS_PER_SECOND;
 
   // Initialize gladiators
   const gladiators: [GladiatorRuntime, GladiatorRuntime] = [
@@ -48,45 +49,64 @@ export function simulate(
   const firstPlayer: 0 | 1 = gladiators[0].attackTimer <= gladiators[1].attackTimer ? 0 : 1;
 
   let winner: 0 | 1 | null = null;
-  let tickCount = 0;
+  let lastStep = 0;
   let p0Damage = 0;
   let p1Damage = 0;
 
-  for (let tick = 0; tick < maxTicks; tick++) {
-    tickCount = tick;
+  for (let step = 0; step < maxSteps; step++) {
+    lastStep = step;
+    const time = Math.round(step * STEP_DURATION * 10) / 10;
 
     // 1. Process DOTs for both gladiators
     for (let p = 0; p < 2; p++) {
       const g = gladiators[p] as GladiatorRuntime;
-      const attackerIdx = p === 0 ? 1 : 0;
-      const attackerStats = gladiators[attackerIdx].stats;
 
       for (let d = g.activeDOTs.length - 1; d >= 0; d--) {
         const dot = g.activeDOTs[d];
-        const damage = calculateDOTDamage(dot, g.stats, attackerStats);
-        if (damage > 0) {
-          const oldHP = g.currentHP;
-          g.currentHP = Math.max(0, g.currentHP - damage);
-          const actualDotDmg = oldHP - g.currentHP;
-          if (attackerIdx === 0) p0Damage += actualDotDmg; else p1Damage += actualDotDmg;
-          log.addEvent(tick, { type: 'dot_tick', target: g.playerId, element: dot.element, damage });
-          log.addEvent(tick, {
-            type: 'hp_change',
-            player: g.playerId,
-            oldHP,
-            newHP: g.currentHP,
-            maxHP: g.maxHP,
-          });
+
+        // Advance accumulator
+        dot.accumulator = Math.round((dot.accumulator + STEP_DURATION) * 10) / 10;
+
+        // Fire DOT when accumulator reaches tickInterval
+        if (dot.accumulator >= dot.tickInterval) {
+          dot.accumulator = 0;
+
+          const sourcePlayer = gladiators[dot.sourcePlayerId];
+          const breakdown = calculateDOTBreakdown(
+            dot.element,
+            dot.damagePerSecond,
+            dot.stacks,
+            g.stats,
+            sourcePlayer.stats.elementalPenetration,
+            sourcePlayer.stats.dotMultiplier,
+          );
+          const damage = breakdown.netDamage;
+          if (damage > 0) {
+            const oldHP = g.currentHP;
+            g.currentHP = Math.max(0, g.currentHP - damage);
+            const actualDotDmg = oldHP - g.currentHP;
+            if (dot.sourcePlayerId === 0) p0Damage += actualDotDmg; else p1Damage += actualDotDmg;
+            log.addEvent(time, { type: 'dot_tick', target: g.playerId, breakdown });
+            log.addEvent(time, {
+              type: 'hp_change',
+              player: g.playerId,
+              oldHP,
+              newHP: g.currentHP,
+              maxHP: g.maxHP,
+            });
+          }
         }
-        dot.remainingTicks--;
-        if (dot.remainingTicks <= 0) {
+
+        // Decrement remaining duration
+        dot.remaining = Math.round((dot.remaining - STEP_DURATION) * 10) / 10;
+        if (dot.remaining <= 0) {
           g.activeDOTs.splice(d, 1);
         }
       }
     }
 
     // Check death after DOTs
-    const dotDeath = checkDeath(gladiators, rng, log, tick);
+    const dotDeath = checkDeath(gladiators, rng, log, time);
     if (dotDeath !== null) {
       winner = dotDeath;
       break;
@@ -96,16 +116,28 @@ export function simulate(
     for (let p = 0; p < 2; p++) {
       const g = gladiators[p] as GladiatorRuntime;
       if (g.stats.hpRegen > 0 && g.currentHP < g.maxHP && g.currentHP > 0) {
-        const oldHP = g.currentHP;
-        g.currentHP = Math.min(g.maxHP, g.currentHP + g.stats.hpRegen);
-        if (g.currentHP !== oldHP) {
-          log.addEvent(tick, {
-            type: 'hp_change',
-            player: g.playerId,
-            oldHP,
-            newHP: g.currentHP,
-            maxHP: g.maxHP,
-          });
+        g.regenAccumulator = Math.round((g.regenAccumulator + STEP_DURATION) * 10) / 10;
+        if (g.regenAccumulator >= g.regenInterval) {
+          g.regenAccumulator = 0;
+          const rawHeal = g.stats.hpRegen;
+          const effectiveHeal = Math.min(rawHeal, g.maxHP - g.currentHP);
+          const overheal = rawHeal - effectiveHeal;
+          g.currentHP += effectiveHeal;
+          if (effectiveHeal > 0) {
+            const oldHP = g.currentHP - effectiveHeal;
+            log.addEvent(time, {
+              type: 'heal',
+              player: g.playerId,
+              breakdown: { source: 'regen', rawHeal, effectiveHeal, overheal },
+            });
+            log.addEvent(time, {
+              type: 'hp_change',
+              player: g.playerId,
+              oldHP,
+              newHP: g.currentHP,
+              maxHP: g.maxHP,
+            });
+          }
         }
       }
     }
@@ -127,97 +159,72 @@ export function simulate(
       // Decrement cooldowns
       for (const [key, val] of attacker.cooldowns) {
         if (val > 0) {
-          attacker.cooldowns.set(key, val - 1);
+          attacker.cooldowns.set(key, Math.round((val - STEP_DURATION) * 10) / 10);
         } else {
           attacker.cooldowns.delete(key);
         }
       }
 
+      // Handle stun timer (before attack timer)
+      if (attacker.stunTimer > 0) {
+        attacker.stunTimer = Math.round((attacker.stunTimer - STEP_DURATION) * 10) / 10;
+        if (attacker.stunTimer < 0) attacker.stunTimer = 0;
+      }
+
       // Decrement attack timer
-      attacker.attackTimer--;
+      attacker.attackTimer = Math.round((attacker.attackTimer - STEP_DURATION) * 10) / 10;
 
       if (attacker.attackTimer <= 0) {
         // Check stun
         if (attacker.stunTimer > 0) {
-          attacker.stunTimer--;
-          attacker.attackTimer = attacker.stats.attackInterval;
+          attacker.attackTimer = attacker.stats.attackSpeed;
           continue;
         }
 
         // Roll dodge (integer percentage -> fraction)
-        if (rng.nextBool(defender.stats.dodgeChance / 100)) {
-          log.addEvent(tick, { type: 'dodge', dodger: defender.playerId });
-          attacker.attackTimer = attacker.stats.attackInterval;
-          continue;
-        }
+        const isDodged = rng.nextBool(defender.stats.dodgeChance / 100);
 
         // Roll block (integer percentage -> fraction)
         const effectiveBlockChance = Math.max(0, defender.stats.blockChance - attacker.stats.blockBreakChance);
-        if (rng.nextBool(effectiveBlockChance / 100)) {
-          const rawTotal = calculateTotalDamage(attacker.stats, defender.stats);
-          log.addEvent(tick, { type: 'block', blocker: defender.playerId, blockedDamage: rawTotal });
-
-          // Process on_block triggers for defender
-          fireTriggers(triggers[defenderIdx], 'on_block', defender, attacker, rng, log, tick);
-
-          attacker.attackTimer = attacker.stats.attackInterval;
-          continue;
-        }
-
-        // Calculate damage
-        let physDmg = calculatePhysicalDamage(attacker.stats, defender.stats);
-        let totalDamage = physDmg;
-
-        // Elemental damage
-        const elemDamages: { element: Element; damage: number }[] = [];
-        for (const elem of ALL_ELEMENTS) {
-          const eDmg = calculateElementalDamage(attacker.stats, defender.stats, elem);
-          if (eDmg > 0) {
-            elemDamages.push({ element: elem, damage: eDmg });
-            totalDamage += eDmg;
-          }
-        }
+        const isBlocked = !isDodged && rng.nextBool(effectiveBlockChance / 100);
+        const blockAmt = isBlocked ? defender.stats.blockAmount : 0;
 
         // Roll crit (integer percentages -> fractions)
         const effectiveCritChance = Math.max(0, getBuffedStat(attacker, 'critChance') - getBuffedStat(defender, 'critAvoidance'));
-        const isCrit = rng.nextBool(effectiveCritChance / 100);
-        if (isCrit) {
-          const critMult = attacker.stats.critMultiplier / 100; // 150 -> 1.5x
-          totalDamage *= critMult;
-          physDmg *= critMult;
-          for (const ed of elemDamages) {
-            ed.damage *= critMult;
-          }
+        const isCrit = !isDodged && rng.nextBool(effectiveCritChance / 100);
+
+        // Calculate full attack breakdown
+        const breakdown = calculateAttackBreakdown(attacker.stats, defender.stats, isCrit, isDodged, blockAmt);
+
+        if (isDodged) {
+          // Emit attack event with dodged breakdown + legacy dodge event
+          log.addEvent(time, { type: 'attack', attacker: attacker.playerId, breakdown });
+          log.addEvent(time, { type: 'dodge', dodger: defender.playerId });
+          attacker.attackTimer = attacker.stats.attackSpeed;
+          continue;
         }
 
-        // Emit attack event (physical)
-        if (physDmg > 0) {
-          log.addEvent(tick, {
-            type: 'attack',
-            attacker: attacker.playerId,
-            damage: physDmg,
-            damageType: 'physical',
-            isCrit,
-          });
+        if (isBlocked) {
+          // Process on_block triggers for defender
+          fireTriggers(triggers[defenderIdx], 'on_block', defender, attacker, rng, log, time);
         }
-        // Emit elemental attack events
-        for (const ed of elemDamages) {
-          log.addEvent(tick, {
-            type: 'attack',
-            attacker: attacker.playerId,
-            damage: ed.damage,
-            damageType: ed.element,
-            isCrit,
-          });
+
+        // Emit single attack event with breakdown
+        log.addEvent(time, { type: 'attack', attacker: attacker.playerId, breakdown });
+
+        // Also emit legacy block event for backward compatibility
+        if (isBlocked) {
+          log.addEvent(time, { type: 'block', blocker: defender.playerId, blockedDamage: breakdown.blocked });
         }
 
         // Apply barrier absorption
-        let damageToHP = totalDamage;
+        let damageToHP = breakdown.totalNet;
         if (defender.barrier > 0 && damageToHP > 0) {
           const absorbed = Math.min(defender.barrier, damageToHP);
           defender.barrier -= absorbed;
           damageToHP -= absorbed;
-          log.addEvent(tick, {
+          breakdown.barrierAbsorbed = absorbed;
+          log.addEvent(time, {
             type: 'barrier_absorb',
             player: defender.playerId,
             absorbed,
@@ -231,7 +238,7 @@ export function simulate(
           defender.currentHP = Math.max(0, defender.currentHP - damageToHP);
           const actualHpDmg = oldHP - defender.currentHP;
           if (attackerIdx === 0) p0Damage += actualHpDmg; else p1Damage += actualHpDmg;
-          log.addEvent(tick, {
+          log.addEvent(time, {
             type: 'hp_change',
             player: defender.playerId,
             oldHP,
@@ -244,9 +251,9 @@ export function simulate(
         {
           const hpBefore0 = gladiators[0].currentHP;
           const hpBefore1 = gladiators[1].currentHP;
-          fireTriggers(triggers[attackerIdx], 'on_hit', attacker, defender, rng, log, tick);
+          fireTriggers(triggers[attackerIdx], 'on_hit', attacker, defender, rng, log, time);
           if (isCrit) {
-            fireTriggers(triggers[attackerIdx], 'on_crit', attacker, defender, rng, log, tick);
+            fireTriggers(triggers[attackerIdx], 'on_crit', attacker, defender, rng, log, time);
           }
           // Attribute trigger damage from attacker to defender
           const defDmg = Math.max(0, (defenderIdx === 0 ? hpBefore0 : hpBefore1) - (defenderIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
@@ -257,7 +264,7 @@ export function simulate(
         {
           const hpBefore0 = gladiators[0].currentHP;
           const hpBefore1 = gladiators[1].currentHP;
-          fireTriggers(triggers[defenderIdx], 'on_taking_damage', defender, attacker, rng, log, tick);
+          fireTriggers(triggers[defenderIdx], 'on_taking_damage', defender, attacker, rng, log, time);
           // Defender's triggers deal damage to attacker (bonus_damage)
           const atkDmg = Math.max(0, (attackerIdx === 0 ? hpBefore0 : hpBefore1) - (attackerIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
           if (defenderIdx === 0) p0Damage += atkDmg; else p1Damage += atkDmg;
@@ -266,13 +273,21 @@ export function simulate(
         // Apply lifesteal (integer percentage -> fraction)
         const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
         if (lifesteal > 0 && damageToHP > 0) {
-          const healed = damageToHP * (lifesteal / 100);
-          if (healed > 0) {
+          const rawHeal = Math.round(damageToHP * lifesteal / 100);
+          if (rawHeal > 0) {
+            const effectiveHeal = Math.min(rawHeal, attacker.maxHP - attacker.currentHP);
+            const overheal = rawHeal - effectiveHeal;
             const oldHP = attacker.currentHP;
-            attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + healed);
-            log.addEvent(tick, { type: 'lifesteal', player: attacker.playerId, healed });
+            attacker.currentHP += effectiveHeal;
+            log.addEvent(time, {
+              type: 'heal',
+              player: attacker.playerId,
+              breakdown: { source: 'lifesteal', rawHeal, effectiveHeal, overheal },
+            });
+            // Legacy lifesteal event for backward compatibility
+            log.addEvent(time, { type: 'lifesteal', player: attacker.playerId, healed: effectiveHeal });
             if (attacker.currentHP !== oldHP) {
-              log.addEvent(tick, {
+              log.addEvent(time, {
                 type: 'hp_change',
                 player: attacker.playerId,
                 oldHP,
@@ -290,8 +305,8 @@ export function simulate(
           attacker.currentHP = Math.max(0, attacker.currentHP - thornsDmg);
           const actualThornsDmg = oldHP - attacker.currentHP;
           if (defenderIdx === 0) p0Damage += actualThornsDmg; else p1Damage += actualThornsDmg;
-          log.addEvent(tick, { type: 'thorns', reflector: defender.playerId, damage: thornsDmg });
-          log.addEvent(tick, {
+          log.addEvent(time, { type: 'thorns', reflector: defender.playerId, damage: thornsDmg });
+          log.addEvent(time, {
             type: 'hp_change',
             player: attacker.playerId,
             oldHP,
@@ -301,15 +316,15 @@ export function simulate(
         }
 
         // Reflect damage (from reflect_damage trigger)
-        if (defender.reflectMultiplier > 0 && totalDamage > 0) {
-          const reflected = Math.round(totalDamage * defender.reflectMultiplier);
+        if (defender.reflectMultiplier > 0 && breakdown.totalNet > 0) {
+          const reflected = Math.round(breakdown.totalNet * defender.reflectMultiplier);
           if (reflected > 0) {
             const oldHP = attacker.currentHP;
             attacker.currentHP = Math.max(0, attacker.currentHP - reflected);
             const actualReflect = oldHP - attacker.currentHP;
             if (defenderIdx === 0) p0Damage += actualReflect; else p1Damage += actualReflect;
-            log.addEvent(tick, { type: 'thorns', reflector: defender.playerId, damage: reflected });
-            log.addEvent(tick, {
+            log.addEvent(time, { type: 'thorns', reflector: defender.playerId, damage: reflected });
+            log.addEvent(time, {
               type: 'hp_change',
               player: attacker.playerId,
               oldHP,
@@ -323,7 +338,7 @@ export function simulate(
         {
           const hpBefore0 = gladiators[0].currentHP;
           const hpBefore1 = gladiators[1].currentHP;
-          updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, tick);
+          updateLowHP(attacker, defender, triggers[attackerIdx], rng, log, time);
           // Attacker's low-HP triggers may damage defender
           const defLowHpDmg = Math.max(0, (defenderIdx === 0 ? hpBefore0 : hpBefore1) - (defenderIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
           if (attackerIdx === 0) p0Damage += defLowHpDmg; else p1Damage += defLowHpDmg;
@@ -331,29 +346,29 @@ export function simulate(
         {
           const hpBefore0 = gladiators[0].currentHP;
           const hpBefore1 = gladiators[1].currentHP;
-          updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, tick);
+          updateLowHP(defender, attacker, triggers[defenderIdx], rng, log, time);
           // Defender's low-HP triggers may damage attacker
           const atkLowHpDmg = Math.max(0, (attackerIdx === 0 ? hpBefore0 : hpBefore1) - (attackerIdx === 0 ? gladiators[0].currentHP : gladiators[1].currentHP));
           if (defenderIdx === 0) p0Damage += atkLowHpDmg; else p1Damage += atkLowHpDmg;
         }
 
         // Reset attack timer
-        attacker.attackTimer = attacker.stats.attackInterval;
+        attacker.attackTimer = attacker.stats.attackSpeed;
       }
     }
 
     // Tick down reflect buffs
     for (const g of gladiators) {
-      if (g.reflectTicksRemaining > 0) {
-        g.reflectTicksRemaining--;
-        if (g.reflectTicksRemaining <= 0) {
+      if (g.reflectRemaining > 0) {
+        g.reflectRemaining = Math.round((g.reflectRemaining - STEP_DURATION) * 10) / 10;
+        if (g.reflectRemaining <= 0) {
           g.reflectMultiplier = 0;
         }
       }
     }
 
     // 4. Check death
-    const deathResult = checkDeath(gladiators, rng, log, tick);
+    const deathResult = checkDeath(gladiators, rng, log, time);
     if (deathResult !== null) {
       winner = deathResult;
       break;
@@ -362,8 +377,8 @@ export function simulate(
 
   // Post-simulation: timeout tiebreak
   let wasTiebreak = false;
+  const duration = Math.round(lastStep * STEP_DURATION * 10) / 10;
   if (winner === null) {
-    tickCount = maxTicks;
     wasTiebreak = true;
     const hp0Pct = gladiators[0].currentHP / gladiators[0].maxHP;
     const hp1Pct = gladiators[1].currentHP / gladiators[1].maxHP;
@@ -380,23 +395,11 @@ export function simulate(
     round,
     winner,
     finalHP: [gladiators[0].currentHP, gladiators[1].currentHP],
-    tickCount,
-    duration: tickCount / ticksPerSecond,
+    duration: wasTiebreak ? balance.maxDuelSeconds : duration,
     wasTiebreak,
     p0DamageDealt: p0Damage,
     p1DamageDealt: p1Damage,
   });
-}
-
-/**
- * Calculate total raw damage (physical + all elemental) for block events.
- */
-function calculateTotalDamage(attacker: DerivedStats, defender: DerivedStats): number {
-  let total = calculatePhysicalDamage(attacker, defender);
-  for (const elem of ALL_ELEMENTS) {
-    total += calculateElementalDamage(attacker, defender, elem);
-  }
-  return total;
 }
 
 /**
@@ -406,15 +409,15 @@ function checkDeath(
   gladiators: [GladiatorRuntime, GladiatorRuntime],
   rng: SeededRNG,
   log: ReturnType<typeof createCombatLog>,
-  tick: number,
+  time: number,
 ): 0 | 1 | null {
   const dead0 = gladiators[0].currentHP <= 0;
   const dead1 = gladiators[1].currentHP <= 0;
 
   if (!dead0 && !dead1) return null;
 
-  if (dead0) log.addEvent(tick, { type: 'death', player: 0 });
-  if (dead1) log.addEvent(tick, { type: 'death', player: 1 });
+  if (dead0) log.addEvent(time, { type: 'death', player: 0 });
+  if (dead1) log.addEvent(time, { type: 'death', player: 1 });
 
   if (dead0 && dead1) {
     // Both die: higher HP% wins, or RNG tiebreak
@@ -429,13 +432,13 @@ function checkDeath(
 }
 
 /**
- * Process active buffs: decrement remaining ticks and remove expired ones.
+ * Process active buffs: decrement remaining duration and remove expired ones.
  */
 function processBuffs(gladiator: GladiatorRuntime): void {
   for (let i = gladiator.activeBuffs.length - 1; i >= 0; i--) {
     const buff = gladiator.activeBuffs[i];
-    buff.remainingTicks--;
-    if (buff.remainingTicks <= 0) {
+    buff.remaining = Math.round((buff.remaining - STEP_DURATION) * 10) / 10;
+    if (buff.remaining <= 0) {
       gladiator.activeBuffs.splice(i, 1);
     }
   }
@@ -464,13 +467,13 @@ function fireTriggers(
   _opponent: GladiatorRuntime,
   rng: SeededRNG,
   log: ReturnType<typeof createCombatLog>,
-  tick: number,
+  time: number,
 ): void {
   for (const trigger of triggerDefs) {
     const effect = evaluateTrigger(trigger, condition, owner, rng);
     if (effect) {
-      applyTriggerEffect(effect, owner, _opponent, log, tick);
-      log.addEvent(tick, {
+      applyTriggerEffect(effect, owner, _opponent, log, time);
+      log.addEvent(time, {
         type: 'trigger_proc',
         player: owner.playerId,
         triggerId: trigger.affixId,
@@ -488,30 +491,33 @@ function applyTriggerEffect(
   owner: GladiatorRuntime,
   opponent: GladiatorRuntime,
   log: ReturnType<typeof createCombatLog>,
-  tick: number,
+  time: number,
 ): void {
   switch (effect.kind) {
     case 'apply_dot': {
       opponent.activeDOTs.push({
         element: effect.element,
-        damagePerTick: effect.dps,
-        remainingTicks: effect.durationTicks,
+        damagePerSecond: effect.dps,
+        remaining: effect.duration,
+        tickInterval: 1.0,
+        accumulator: 0,
         sourceAffixId: 'trigger',
         stacks: 1,
+        sourcePlayerId: owner.playerId,
       });
-      log.addEvent(tick, {
+      log.addEvent(time, {
         type: 'dot_apply',
         target: opponent.playerId,
         element: effect.element,
         dps: effect.dps,
-        durationTicks: effect.durationTicks,
+        duration: effect.duration,
       });
       break;
     }
     case 'bonus_damage': {
       const oldHP = opponent.currentHP;
       opponent.currentHP = Math.max(0, opponent.currentHP - effect.amount);
-      log.addEvent(tick, {
+      log.addEvent(time, {
         type: 'hp_change',
         player: opponent.playerId,
         oldHP,
@@ -524,7 +530,7 @@ function applyTriggerEffect(
       const healAmount = effect.isPercent ? owner.maxHP * effect.amount : effect.amount;
       const oldHP = owner.currentHP;
       owner.currentHP = Math.min(owner.maxHP, owner.currentHP + healAmount);
-      log.addEvent(tick, {
+      log.addEvent(time, {
         type: 'hp_change',
         player: owner.playerId,
         oldHP,
@@ -538,11 +544,11 @@ function applyTriggerEffect(
       break;
     }
     case 'stun': {
-      opponent.stunTimer += effect.durationTicks;
-      log.addEvent(tick, {
+      opponent.stunTimer += effect.duration;
+      log.addEvent(time, {
         type: 'stun',
         target: opponent.playerId,
-        durationTicks: effect.durationTicks,
+        duration: effect.duration,
       });
       break;
     }
@@ -550,14 +556,14 @@ function applyTriggerEffect(
       owner.activeBuffs.push({
         stat: effect.stat,
         value: effect.value,
-        remainingTicks: effect.durationTicks,
+        remaining: effect.duration,
         sourceId: 'trigger',
       });
       break;
     }
     case 'reflect_damage': {
       owner.reflectMultiplier = effect.multiplier;
-      owner.reflectTicksRemaining = effect.durationTicks;
+      owner.reflectRemaining = effect.duration;
       break;
     }
   }
@@ -572,7 +578,7 @@ function updateLowHP(
   triggerDefs: TriggerDef[],
   rng: SeededRNG,
   log: ReturnType<typeof createCombatLog>,
-  tick: number,
+  time: number,
 ): void {
   const isNowLow = gladiator.currentHP > 0 && gladiator.currentHP / gladiator.maxHP < 0.3;
   if (isNowLow && !gladiator.isLowHP) {
@@ -580,8 +586,8 @@ function updateLowHP(
     for (const trigger of triggerDefs) {
       const effect = evaluateTrigger(trigger, 'on_low_hp', gladiator, rng);
       if (effect) {
-        applyTriggerEffect(effect, gladiator, opponent, log, tick);
-        log.addEvent(tick, {
+        applyTriggerEffect(effect, gladiator, opponent, log, time);
+        log.addEvent(time, {
           type: 'trigger_proc',
           player: gladiator.playerId,
           triggerId: trigger.affixId,
