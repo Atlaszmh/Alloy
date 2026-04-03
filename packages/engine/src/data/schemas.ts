@@ -78,10 +78,9 @@ const FluxCostsSchema = z.object({
 
 export const BalanceConfigSchema = z.object({
   baseHP: z.number().positive(),
-  ticksPerSecond: z.number().int().positive(),
-  maxDuelTicks: z.number().int().positive(),
+  maxDuelSeconds: z.number().positive(),
   baseCritMultiplier: z.number().positive(),
-  minAttackInterval: z.number().int().positive(),
+  minAttackSpeed: z.number().positive(),
   fluxPerRound: z.tuple([z.number().int(), z.number().int(), z.number().int()]),
   quickMatchFlux: z.number().int().positive(),
   fluxCosts: FluxCostsSchema,

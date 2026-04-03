@@ -34,7 +34,8 @@ describe('Data Loading & Validation', () => {
     const data = loadAndValidateData();
     expect(data.balance.baseHP).toBe(200);
     expect(data.balance.fluxPerRound).toEqual([8, 4, 2]);
-    expect(data.balance.ticksPerSecond).toBe(30);
+    expect(data.balance.maxDuelSeconds).toBe(100);
+    expect(data.balance.minAttackSpeed).toBe(0.3);
   });
 });
 

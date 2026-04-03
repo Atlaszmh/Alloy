@@ -11,10 +11,9 @@ export interface FluxCosts {
 
 export interface BalanceConfig {
   baseHP: number;
-  ticksPerSecond: number;
-  maxDuelTicks: number;
+  maxDuelSeconds: number;
   baseCritMultiplier: number;
-  minAttackInterval: number; // In ticks
+  minAttackSpeed: number; // In seconds (minimum time between attacks)
 
   fluxPerRound: [number, number, number]; // [8, 4, 2]
   quickMatchFlux: number; // Effectively unlimited for quick matches

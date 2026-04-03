@@ -1,9 +1,8 @@
 {
   "baseHP": 200,
-  "ticksPerSecond": 30,
-  "maxDuelTicks": 3000,
+  "maxDuelSeconds": 100,
   "baseCritMultiplier": 150,
-  "minAttackInterval": 9,
+  "minAttackSpeed": 0.3,
   "fluxPerRound": [8, 4, 2],
   "quickMatchFlux": 14,
   "fluxCosts": {
