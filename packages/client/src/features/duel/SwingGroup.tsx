@@ -1,11 +1,11 @@
-import type { TickEvent, DamageBreakdown, DotTickBreakdown, HealBreakdown, Element } from '@alloy/engine';
+import type { CombatEvent, DamageBreakdown, DotTickBreakdown, HealBreakdown, Element } from '@alloy/engine';
 import type { SwingGroup } from './combat-log-grouper.js';
 import { DAMAGE_CSS_COLORS, UI_COLORS } from './colors.js';
 
 /* ---------- helpers ---------- */
 
-function formatTime(tick: number, ticksPerSecond: number): string {
-  return (tick / ticksPerSecond).toFixed(1);
+function formatTime(time: number): string {
+  return time.toFixed(1);
 }
 
 function pct(n: number): string {
@@ -25,13 +25,11 @@ const ELEMENT_EMOJI: Record<Element, string> = {
 
 function AttackHeader({
   breakdown,
-  tick,
-  ticksPerSecond,
+  time,
   attacker,
 }: {
   breakdown: DamageBreakdown;
-  tick: number;
-  ticksPerSecond: number;
+  time: number;
   attacker?: 0 | 1;
 }) {
   const isPlayer = attacker === 0;
@@ -40,7 +38,7 @@ function AttackHeader({
   if (breakdown.dodged) {
     return (
       <div style={{ color: UI_COLORS.dodged, fontWeight: 600 }}>
-        [{formatTime(tick, ticksPerSecond)}s] \u2694 {who} — <span style={{ fontStyle: 'italic' }}>DODGED</span>
+        [{formatTime(time)}s] \u2694 {who} — <span style={{ fontStyle: 'italic' }}>DODGED</span>
       </div>
     );
   }
@@ -48,7 +46,7 @@ function AttackHeader({
   const label = breakdown.isCrit ? `${who} — CRIT!` : who;
   return (
     <div style={{ color: breakdown.isCrit ? UI_COLORS.crit : '#cbd5e1', fontWeight: 600 }}>
-      [{formatTime(tick, ticksPerSecond)}s] \u2694 {label}
+      [{formatTime(time)}s] \u2694 {label}
     </div>
   );
 }
@@ -124,17 +122,15 @@ function HealRow({ breakdown }: { breakdown: HealBreakdown }) {
 
 function DotHeader({
   breakdown,
-  tick,
-  ticksPerSecond,
+  time,
 }: {
   breakdown: DotTickBreakdown;
-  tick: number;
-  ticksPerSecond: number;
+  time: number;
 }) {
   const emoji = ELEMENT_EMOJI[breakdown.element] ?? '\uD83D\uDD25';
   return (
     <div style={{ color: DAMAGE_CSS_COLORS[breakdown.element], fontWeight: 600 }}>
-      [{formatTime(tick, ticksPerSecond)}s] {emoji}{' '}
+      [{formatTime(time)}s] {emoji}{' '}
       {breakdown.element.charAt(0).toUpperCase() + breakdown.element.slice(1)}
       {breakdown.stacks > 1 && ` \u00D7${breakdown.stacks}`}
     </div>
@@ -216,10 +212,9 @@ function hexToRgba(hex: string, alpha: number): string {
 
 export interface SwingGroupProps {
   group: SwingGroup;
-  ticksPerSecond: number;
 }
 
-export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) {
+export function SwingGroupComponent({ group }: SwingGroupProps) {
   const bg = getBackgroundTint(group);
 
   const containerStyle: React.CSSProperties = {
@@ -236,7 +231,7 @@ export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) 
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.enemyHP, fontWeight: 700, fontSize: 14 }}>
-          [{formatTime(group.tick, ticksPerSecond)}s] \uD83D\uDC80 {who} died!
+          [{formatTime(group.time)}s] \uD83D\uDC80 {who} died!
         </div>
       </div>
     );
@@ -248,7 +243,7 @@ export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) 
     if (dotEvent && dotEvent.type === 'dot_tick') {
       return (
         <div style={containerStyle}>
-          <DotHeader breakdown={dotEvent.breakdown} tick={group.tick} ticksPerSecond={ticksPerSecond} />
+          <DotHeader breakdown={dotEvent.breakdown} time={group.time} />
           <DotDamageRow breakdown={dotEvent.breakdown} />
         </div>
       );
@@ -262,7 +257,7 @@ export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) 
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.healing, fontWeight: 600 }}>
-          [{formatTime(group.tick, ticksPerSecond)}s] \u2764\uFE0F Heal
+          [{formatTime(group.time)}s] \u2764\uFE0F Heal
         </div>
         {healEvents.map((e, i) => {
           const he = e.event as { type: 'heal'; breakdown: HealBreakdown };
@@ -291,7 +286,7 @@ export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) 
     return (
       <div style={containerStyle}>
         <div style={{ color: UI_COLORS.muted, fontSize: 13 }}>
-          [{formatTime(group.tick, ticksPerSecond)}s] ...
+          [{formatTime(group.time)}s] ...
         </div>
       </div>
     );
@@ -308,8 +303,7 @@ export function SwingGroupComponent({ group, ticksPerSecond }: SwingGroupProps) 
     <div style={containerStyle}>
       <AttackHeader
         breakdown={bd}
-        tick={group.tick}
-        ticksPerSecond={ticksPerSecond}
+        time={group.time}
         attacker={group.attacker}
       />
       <DamageRows breakdown={bd} />

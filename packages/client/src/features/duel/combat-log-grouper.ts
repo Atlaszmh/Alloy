@@ -1,11 +1,11 @@
-import type { TickEvent } from '@alloy/engine';
+import type { CombatEvent } from '@alloy/engine';
 
 export interface SwingGroup {
   type: 'attack' | 'dot_tick' | 'heal' | 'death';
-  tick: number;
+  time: number;
   attacker?: 0 | 1;
   target?: 0 | 1;
-  events: Array<{ tick: number; event: TickEvent }>;
+  events: Array<{ time: number; event: CombatEvent }>;
 }
 
 /**
@@ -22,19 +22,19 @@ export interface SwingGroup {
  *   if they share the same tick; otherwise they start a new miscellaneous group.
  */
 export function groupEventsIntoSwings(
-  flatEvents: Array<{ tick: number; event: TickEvent }>,
+  flatEvents: Array<{ time: number; event: CombatEvent }>,
 ): SwingGroup[] {
   const groups: SwingGroup[] = [];
   let current: SwingGroup | null = null;
 
   for (const entry of flatEvents) {
-    const { tick, event } = entry;
+    const { time, event } = entry;
 
     if (event.type === 'death') {
       // Death always gets its own group
       groups.push({
         type: 'death',
-        tick,
+        time,
         target: event.player,
         events: [entry],
       });
@@ -46,7 +46,7 @@ export function groupEventsIntoSwings(
       // DOT ticks always get their own group
       groups.push({
         type: 'dot_tick',
-        tick,
+        time,
         target: event.target,
         events: [entry],
       });
@@ -58,7 +58,7 @@ export function groupEventsIntoSwings(
       // Attack starts a new group
       current = {
         type: 'attack',
-        tick,
+        time,
         attacker: event.attacker,
         target: event.attacker === 0 ? 1 : 0,
         events: [entry],
@@ -68,14 +68,14 @@ export function groupEventsIntoSwings(
     }
 
     if (event.type === 'heal') {
-      // If there's a current group at the same tick (e.g. lifesteal after attack), attach
-      if (current && current.tick === tick) {
+      // If there's a current group at the same time (e.g. lifesteal after attack), attach
+      if (current && current.time === time) {
         current.events.push(entry);
       } else {
         // Standalone heal gets its own group
         current = {
           type: 'heal',
-          tick,
+          time,
           target: event.player,
           events: [entry],
         };
@@ -85,14 +85,14 @@ export function groupEventsIntoSwings(
     }
 
     // All other events (hp_change, trigger_proc, stun, dot_apply, etc.)
-    // attach to the current group if same tick, otherwise start a new group
-    if (current && current.tick === tick) {
+    // attach to the current group if same time, otherwise start a new group
+    if (current && current.time === time) {
       current.events.push(entry);
     } else {
-      // Orphan event at a new tick — create a minimal group
+      // Orphan event at a new time — create a minimal group
       current = {
         type: 'attack',
-        tick,
+        time,
         events: [entry],
       };
       groups.push(current);

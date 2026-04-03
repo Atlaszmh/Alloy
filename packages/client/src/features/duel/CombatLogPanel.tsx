@@ -1,15 +1,14 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { TickEvent } from '@alloy/engine';
+import type { CombatEvent } from '@alloy/engine';
 import { groupEventsIntoSwings } from './combat-log-grouper.js';
 import { SwingGroupComponent } from './SwingGroup.js';
 import { UI_COLORS } from './colors.js';
 
 export interface CombatLogPanelProps {
-  events: Array<{ tick: number; event: TickEvent }>;
-  ticksPerSecond: number;
+  events: Array<{ time: number; event: CombatEvent }>;
 }
 
-export function CombatLogPanel({ events, ticksPerSecond }: CombatLogPanelProps) {
+export function CombatLogPanel({ events }: CombatLogPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const groups = useMemo(() => groupEventsIntoSwings(events), [events]);
@@ -75,7 +74,7 @@ export function CombatLogPanel({ events, ticksPerSecond }: CombatLogPanelProps) 
           </div>
         )}
         {reversed.map((group, i) => (
-          <SwingGroupComponent key={`${group.tick}-${i}`} group={group} ticksPerSecond={ticksPerSecond} />
+          <SwingGroupComponent key={`${group.time}-${i}`} group={group} />
         ))}
       </div>
     </div>
