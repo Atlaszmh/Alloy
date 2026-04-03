@@ -17,6 +17,17 @@ The duel engine simulates at 30 ticks/second. HP regen fires every tick (30x/sec
 
 Replace the tick-based time model with a seconds-native system. All balance values, combat log timestamps, durations, and client playback use seconds as the base unit. The engine loop iterates in 0.1s steps (10 steps/second) internally, but this is an implementation detail — all public APIs and data speak seconds.
 
+## Conversion Strategy
+
+**All numeric values keep their current numbers. The unit changes from "per tick" to "per second".** This is a deliberate 30x reduction in effective rates for regen and DOTs. The game will need a balance pass, which is already planned.
+
+This applies uniformly to:
+- `hpRegen` affix values (stay 5, 8, 12, 14 — now mean HP/sec instead of HP/tick)
+- `hpRegen` base stat scaling (stays 0.01 — now means 0.01 HP/sec per VIT point instead of per-tick)
+- DOT `damagePerTick` values (renamed `damagePerSecond`, same numbers)
+
+Duration/cooldown values are different — they were in tick counts and need dividing by 30 to become seconds.
+
 ## Design
 
 ### 1. Time Model
@@ -30,25 +41,23 @@ Replace the tick-based time model with a seconds-native system. All balance valu
 | `ticksPerSecond: 30` | Removed | Internal constant `STEPS_PER_SECOND = 10` |
 | `maxDuelTicks: 3000` | `maxDuelSeconds: 100` | Same duration |
 | `minAttackInterval: 9` (ticks) | `minAttackSpeed: 0.3` (seconds) | 9/30 = 0.3 |
-| `attackInterval: 30` (ticks) | `attackSpeed: 1.0` (seconds) | Human-readable |
-| `hpRegen: 5` (per tick) | `hpRegen: 5` (per second) | Value stays, meaning changes |
-| `damagePerTick: N` | `damagePerSecond: N` | Value stays, meaning changes |
+| `attackInterval: N` (ticks) | `attackSpeed: N/30` (seconds) | Divide by 30 |
+| `hpRegen: N` (per tick) | `hpRegen: N` (per second) | Value stays, meaning changes (30x reduction) |
+| `damagePerTick: N` | `damagePerSecond: N` | Value stays, meaning changes (30x reduction) |
 | `durationTicks: N` | `duration: N / 30` | Convert to seconds |
 | `cooldownTicks: N` | `cooldown: N / 30` | Convert to seconds |
-
-**Balance impact:** hpRegen and DOT damage values keep their numeric values but change meaning from "per tick" to "per second". This is effectively a 30x reduction in healing/DOT rate. This is intentional — the current rates were producing unreadable combat and will be rebalanced.
 
 ### 2. Engine Internals
 
 **Step resolution:** `STEPS_PER_SECOND = 10` is a module-level constant in `duel-engine.ts`. Each step = 0.1s. The step size is `STEP_DURATION = 0.1`.
 
-**Attack timers:** Count down by `STEP_DURATION` (0.1) per step. A weapon with `attackSpeed: 1.5` fires when its timer reaches 0, then resets to 1.5. Initiative reduces the initial timer by a percentage (unchanged logic, just in seconds).
+**Attack timers:** Count down by `STEP_DURATION` (0.1) per step. Fire when timer `<= 0` (standard overshoot handling — any remainder is lost on reset). A weapon with `attackSpeed: 1.5` fires when its timer reaches 0, then resets to `attackSpeed`. Initiative reduces the initial timer by a percentage (unchanged logic, just in seconds). Minimum timer floor: `STEP_DURATION` (0.1s), enforced in `createGladiator`.
 
-**Regen:** Fires once per second by default. `GladiatorRuntime` gains a `regenAccumulator: number` (starts at 0). Each step adds `STEP_DURATION`. When accumulator >= `regenInterval` (default 1.0s), regen fires and accumulator resets. Buffs/modifiers can alter `regenInterval` (e.g. "50% faster regen" sets it to 0.5).
+**Regen:** Fires once per second by default. `GladiatorRuntime` gains a `regenAccumulator: number` (starts at 0). Each step adds `STEP_DURATION`. When accumulator `>= regenInterval` (default 1.0s), regen fires and accumulator resets to 0. Buffs/modifiers can alter `regenInterval` (e.g. "50% faster regen" sets it to 0.5). Accumulators are snapped via `Math.round(val * 10) / 10` to avoid floating-point drift.
 
 **DOTs:** Each `ActiveDOT` gains:
 - `tickInterval: number` — seconds between damage ticks (default 1.0)
-- `accumulator: number` — seconds since last tick (starts at 0)
+- `accumulator: number` — seconds since last tick (starts at 0, snapped same as regen)
 
 Each step adds `STEP_DURATION` to the accumulator. When it crosses `tickInterval`, the DOT fires and accumulator resets. This is the modifier hook for future buffs/gems that alter DOT tick rate.
 
@@ -68,6 +77,11 @@ cooldownTicks  → cooldown        // seconds
 damagePerTick  → damagePerSecond
 ```
 
+**CombatEvent variant changes:**
+- `dot_apply`: `durationTicks: number` → `duration: number` (seconds)
+- `stun`: `durationTicks: number` → `duration: number` (seconds)
+- All other variants: field names unchanged (they use `player`, `attacker`, etc.)
+
 ### 4. Combat Log Structure
 
 ```typescript
@@ -86,7 +100,7 @@ interface CombatLog {
 }
 ```
 
-`time` is in seconds (0.0, 0.1, 0.2, ...). Only steps that produce events get entries (same as current behavior).
+`time` is in seconds (0.0, 0.1, 0.2, ...), snapped via `Math.round(step * STEP_DURATION * 10) / 10`. Only steps that produce events get entries (same as current behavior).
 
 ### 5. DuelResult
 
@@ -115,7 +129,7 @@ interface DuelResult {
 }
 ```
 
-`tickCount` is removed. `duration` is computed directly from the step counter.
+`tickCount` is removed. `duration` is computed directly from the step counter: `step * STEP_DURATION`.
 
 ### 6. GladiatorRuntime
 
@@ -219,18 +233,27 @@ interface BalanceConfig {
 }
 ```
 
-**baseStatScaling VIT armor hpRegen:** `0.01` → `0.3` (preserving: 0.01 per-tick * 30 ticks/sec = 0.3 per-second).
+**baseStatScaling VIT armor hpRegen:** Stays `0.01` (now means 0.01 HP/sec per VIT point — consistent with "values stay, meaning changes" strategy).
 
-**baseStatScaling DEX weapon attackSpeed:** `0.003` — this was a per-tick reduction. Needs conversion to seconds. `0.003 ticks * 30 = 0.09s` reduction per DEX point? Review during balance pass. For now, keep as `0.003` and note it needs tuning.
+**baseStatScaling DEX weapon attackSpeed:** `0.003` is a percent modifier (not a flat tick value). The stat calculator applies it as a percentage reduction on attack speed. It stays `0.003` (0.3% faster per DEX point) — no conversion needed since it's a dimensionless ratio.
 
-### 9. Affix Data Migration
+### 9. Affix & Base Item Data Migration
 
 **hpRegen affixes:** Values stay as-is, meaning changes from per-tick to per-second.
 - Tier 1: 5 HP/sec, Tier 2: 8 HP/sec, Tier 3: 12 HP/sec, Tier 4: 14 HP/sec
 
+**base-items.json attackInterval → attackSpeed:** Divide by 30:
+- Dagger: `30` → `1.0`
+- Sword: `54` → `1.8`
+- Mace: `66` → `2.2`
+- Axe: `75` → `2.5`
+- Battleaxe: `90` → `3.0`
+- Staff: `60` → `2.0`
+- Wand: `42` → `1.4`
+
 **Trigger/effect durations:** All `durationTicks` values divided by 30 to convert to seconds. All `cooldownTicks` values divided by 30.
 
-**DOT trigger effects:** `dps` field stays as-is (already named "dps" = damage per second).
+**DOT trigger effects:** `dps` field stays as-is (already named "dps" = damage per second). DOT `damagePerTick` fields in damage breakdowns rename to `damagePerSecond`, values stay.
 
 ### 10. Client Playback
 
@@ -248,7 +271,9 @@ const step = (timestamp: number) => {
 };
 ```
 
-**DuelRenderer:** `currentTick` prop → `currentTime: number` (seconds). Event processing iterates `frames` comparing `frame.time <= currentTime`. Cooldown ring progress: `elapsed / attackSpeed` (no `/ 30` conversion).
+**DuelRenderer:** `currentTick` prop → `currentTime: number` (seconds). Event processing iterates `frames` comparing `frame.time <= currentTime`. `lastProcessedTick` → `lastProcessedTime`. `lastAttackTick` → `lastAttackTime`. Cooldown ring progress: `(currentTime - lastAttackTime) / attackSpeed` — no `/ 30` conversion needed.
+
+**DuelScene.ts:** Same changes as DuelRenderer. Stun duration display: `event.durationTicks * 33` → `event.duration * 1000` (seconds to milliseconds).
 
 **CombatLogPanel & SwingGroup:** `ticksPerSecond` prop removed. `formatTime` simplifies to `time.toFixed(1)`. Grouper works on `{ time: number; event: CombatEvent }`.
 
@@ -257,6 +282,8 @@ const step = (timestamp: number) => {
 **RecipeBook:** Duration displays directly in seconds — no `"tick duration"` text.
 
 **PostMatch:** Iterates `frames` instead of `ticks`.
+
+**stat-label.ts:** `attackInterval` mapping → `attackSpeed`.
 
 ### 11. Trigger System
 
@@ -292,7 +319,7 @@ type TriggerEffect =
 **Existing engine tests (duel.test.ts):** Migrate values:
 - `attackInterval: 30` → `attackSpeed: 1.0`
 - `attackInterval: 15` → `attackSpeed: 0.5`
-- `attackInterval: 10` → `attackSpeed: 0.33`
+- `attackInterval: 10` → `attackSpeed: 0.3` (round to clean 0.1s multiple)
 - `attackInterval: 60` → `attackSpeed: 2.0`
 - Assertions on `tickCount` → assertions on `duration`
 - `hpRegen: 1` stays `hpRegen: 1` (now means 1 HP/sec, fires once/sec)
@@ -306,6 +333,7 @@ type TriggerEffect =
 - Combat log `frames` have `time` values in clean 0.1s increments
 - `duration` field matches last frame time
 - Regen with modified `regenInterval: 0.5` fires twice per second
+- Timer overshoot: attackSpeed that doesn't divide evenly into 0.1s still fires correctly
 
 **Playwright tests:**
 - Playback duration is proportional to real duel duration (not instant)
@@ -313,9 +341,17 @@ type TriggerEffect =
 - HP bars update smoothly without flickering
 
 **Existing test migration:**
-- `stat-calculator.test.ts`: `hpRegen: 0.02` → update expected value to match new VIT scaling
+- `stat-calculator.test.ts`: Update expected values for new units
 - `Forge.test.tsx`: Remove `ticksPerSecond` from mock balance, add `maxDuelSeconds`
 - `damage-calc.test.ts`: `damagePerTick` → `damagePerSecond` in DOT breakdown tests
+- `derived-stats.test.ts`: `attackInterval` default → `attackSpeed: 1.0`
+- `match.test.ts`: `tickCount` → `duration` in mock DuelResults
+- `match-report.test.ts`: `durationTicks` → `duration`
+- `ai-tiers.test.ts`: `tickCount` → `duration` in mocks
+- `ai.test.ts`: `tickCount` → `duration` in mocks
+- `combat-log-grouper.test.ts`: `tick` → `time`, `damagePerTick` → `damagePerSecond`
+- `stat-label.test.ts`: `attackInterval` → `attackSpeed`
+- `BaseItemSelector.test.tsx`: `attackInterval` → `attackSpeed` in mock items
 
 ## Files Changed
 
@@ -323,50 +359,72 @@ type TriggerEffect =
 | File | Change |
 |---|---|
 | `types/balance.ts` | Remove `ticksPerSecond`, `maxDuelTicks`, `minAttackInterval`; add `maxDuelSeconds`, `minAttackSpeed` |
-| `types/derived-stats.ts` | `attackInterval` → `attackSpeed` (seconds); `hpRegen` comment → per second |
-| `types/combat.ts` | `TickEvent` → `CombatEvent`; all `*Ticks` → seconds; `ActiveDOT` gains `tickInterval`/`accumulator`; `GladiatorRuntime` gains `regenAccumulator`/`regenInterval` |
+| `types/derived-stats.ts` | `attackInterval` → `attackSpeed` (seconds); `hpRegen` comment → per second; default `attackSpeed: 1.0` |
+| `types/combat.ts` | `TickEvent` → `CombatEvent`; all `*Ticks` → seconds; `ActiveDOT` gains `tickInterval`/`accumulator`; `GladiatorRuntime` gains `regenAccumulator`/`regenInterval`; `dot_apply.durationTicks` → `duration`; `stun.durationTicks` → `duration` |
 | `types/damage-breakdown.ts` | `damagePerTick` → `damagePerSecond` |
 | `types/match-report.ts` | `durationTicks` → `duration` |
-| `data/balance.json` | Migrate all values per Section 8 |
+| `data/balance.json` | Remove `ticksPerSecond`; `maxDuelTicks` → `maxDuelSeconds: 100`; `minAttackInterval` → `minAttackSpeed: 0.3` |
+| `data/base-items.json` | `attackInterval` → `attackSpeed` with /30 conversion for all 7 weapons |
 | `data/schemas.ts` | Update Zod schema to match new BalanceConfig |
 | `data/affixes.json` | Trigger durations / 30; hpRegen values stay |
-| `duel/duel-engine.ts` | Rewrite loop to 0.1s steps; regen/DOT accumulator pattern; seconds throughout |
-| `duel/gladiator.ts` | `attackTimer` in seconds; `regenAccumulator`/`regenInterval` init |
-| `duel/combat-log.ts` | `ticks` → `frames`; `tick` → `time` |
+| `duel/duel-engine.ts` | Rewrite loop to 0.1s steps; regen/DOT accumulator pattern; seconds throughout; fire attacks when timer <= 0 |
+| `duel/gladiator.ts` | `attackTimer` in seconds; `regenAccumulator`/`regenInterval` init; min timer floor = `STEP_DURATION` |
+| `duel/combat-log.ts` | `ticks` → `frames`; `tick` → `time`; snap time values |
 | `duel/damage-calc.ts` | `damagePerTick` → `damagePerSecond` |
 | `duel/trigger-system.ts` | `cooldownTicks` → `cooldown` (seconds) |
-| `forge/stat-calculator.ts` | `attackInterval` → `attackSpeed` mapping |
+| `forge/stat-calculator.ts` | `attackInterval` → `attackSpeed`; update alias map; update cap to `minAttackSpeed`; review sign-inversion logic for attackSpeed scaling |
 | `match/match-report.ts` | `durationTicks` → `duration` |
 | `balance/stats-collector.ts` | Sum seconds instead of ticks |
+| `ai/evaluation.ts` | `log.ticks` → `log.frames` |
+| `ai/item-selection.ts` | `attackInterval` → `attackSpeed` references |
 | `tests/duel.test.ts` | Migrate all tick values to seconds |
 | `tests/duel-breakdown.test.ts` | Migrate values |
 | `tests/damage-calc.test.ts` | `damagePerTick` → `damagePerSecond` |
-| `tests/stat-calculator.test.ts` | Update expected hpRegen |
-| `tests/data.test.ts` | Remove `ticksPerSecond` assertion |
+| `tests/stat-calculator.test.ts` | Update expected values for new units |
+| `tests/data.test.ts` | Remove `ticksPerSecond` assertion; add `maxDuelSeconds` check |
+| `tests/derived-stats.test.ts` | `attackInterval` default → `attackSpeed: 1.0` |
+| `tests/match.test.ts` | `tickCount` → `duration` in mock DuelResults |
+| `tests/match-report.test.ts` | `durationTicks` → `duration` |
+| `tests/ai-tiers.test.ts` | `tickCount` → `duration` in mocks |
+| `tests/ai.test.ts` | `tickCount` → `duration` in mocks |
 
 ### Client package
 | File | Change |
 |---|---|
 | `pages/Duel.tsx` | `playbackTick` → `playbackTime`; iterate `frames`; remove `/ 30` conversions |
-| `components/DuelRenderer.tsx` | `currentTick` → `currentTime`; remove `/ 30` from cooldown rings |
+| `components/DuelRenderer.tsx` | `currentTick` → `currentTime`; `lastAttackTick` → `lastAttackTime`; remove `/ 30` from cooldown rings |
 | `features/duel/CombatLogPanel.tsx` | Remove `ticksPerSecond` prop |
-| `features/duel/SwingGroup.tsx` | Remove `ticksPerSecond`; simplify `formatTime` |
+| `features/duel/SwingGroup.tsx` | Remove `ticksPerSecond`; simplify `formatTime` to `time.toFixed(1)` |
 | `features/duel/combat-log-grouper.ts` | `tick` → `time` throughout |
-| `features/duel/pixi/DuelScene.ts` | Remove `/ 30` conversions |
-| `features/forge/BaseItemCard.tsx` | Display `attackSpeed` directly |
+| `features/duel/__tests__/combat-log-grouper.test.ts` | `tick` → `time`; update mock values to seconds |
+| `features/duel/pixi/DuelScene.ts` | Remove `/ 30` conversions; stun duration `* 33` → `* 1000` |
+| `features/forge/BaseItemCard.tsx` | Display `attackSpeed` directly, no `/ 30` |
+| `features/forge/__tests__/BaseItemSelector.test.tsx` | `attackInterval` → `attackSpeed` in mock items |
+| `shared/utils/stat-label.ts` | `attackInterval` → `attackSpeed` mapping |
+| `shared/utils/stat-label.test.ts` | Update test for `attackSpeed` |
 | `pages/PostMatch.tsx` | Iterate `frames` instead of `ticks` |
-| `pages/RecipeBook.tsx` | Display duration in seconds |
+| `pages/RecipeBook.tsx` | Display duration in seconds directly |
 | `hooks/useDuelSounds.ts` | Update types only |
-| `pages/__tests__/Forge.test.tsx` | Update mock balance |
+| `pages/__tests__/Forge.test.tsx` | Remove `ticksPerSecond` from mock balance, add `maxDuelSeconds` |
 
 ### Tools package
 | File | Change |
 |---|---|
-| `components/MatchInspector.tsx` | Update combat log iteration |
+| `components/MatchInspector.tsx` | Update combat log iteration; update format strings for DOT/stun (seconds not ticks) |
 | `components/ConfigFormEditor.tsx` | Update field names |
+
+### Database-adjacent (out of scope for this spec)
+| File | Notes |
+|---|---|
+| `tools/server/routes/simulations.ts` | Writes `duration_ticks` to DB — needs separate DB migration or mapping update |
+| `supabase/functions/match-complete/index.ts` | Writes `duration_ticks` to DB — same |
+
+Database schema changes are out of scope for this spec. These files should map `duration` (seconds) to the existing `duration_ticks` column until a DB migration is performed separately.
 
 ## Risks
 
-1. **Balance reset** — Healing/DOT rates change dramatically. Mitigated: balance passes are already planned.
-2. **Floating point drift** — 0.1s steps accumulate rounding errors over 100s. Mitigated: use `Math.round(time * 10) / 10` for frame timestamps to snap to clean 0.1s values.
+1. **Balance reset** — Healing/DOT rates change dramatically (30x reduction). Mitigated: balance passes are already planned.
+2. **Floating point drift** — 0.1s steps accumulate rounding errors over 100s. Mitigated: snap frame timestamps and accumulators via `Math.round(val * 10) / 10`.
 3. **Wide blast radius** — ~146 references across the codebase. Mitigated: TypeScript will catch most breakage at compile time since field names are changing (not just values). Existing test suite covers engine behavior.
+4. **Non-round attack speeds** — Values like `attackSpeed: 0.33` don't divide evenly into 0.1s steps. Mitigated: engine fires when timer `<= 0` (standard overshoot). Test values should use clean multiples of 0.1 where possible.
+5. **Persisted combat logs** — Any stored logs use the old `ticks` format. Mitigated: no long-term log persistence exists currently; in-flight matches will need to complete before deploy.
