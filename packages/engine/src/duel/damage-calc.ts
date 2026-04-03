@@ -116,13 +116,13 @@ export function calculateAttackBreakdown(
  */
 export function calculateDOTBreakdown(
   element: Element,
-  damagePerTick: number,
+  damagePerSecond: number,
   stacks: number,
   defender: DerivedStats,
   attackerElemPen: number,
   attackerDotMultiplier: number,
 ): DotTickBreakdown {
-  const rawTotal = Math.round(damagePerTick * stacks * (attackerDotMultiplier / 100));
+  const rawTotal = Math.round(damagePerSecond * stacks * (attackerDotMultiplier / 100));
   const resistPoints = defender.resistances[element];
   const effectiveResist = Math.max(0, resistPoints - attackerElemPen);
   const reductionPct = Math.min(effectiveResist, 90);
@@ -131,7 +131,7 @@ export function calculateDOTBreakdown(
 
   return {
     element,
-    damagePerTick,
+    damagePerSecond,
     stacks,
     rawTotal,
     resistPoints,
