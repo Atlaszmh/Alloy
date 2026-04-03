@@ -222,20 +222,23 @@ export function extractDamageProfile(
   const elemental: Record<string, number> = {};
   let total = 0;
 
-  for (const tick of log.ticks) {
-    for (const event of tick.events) {
+  for (const frame of log.frames) {
+    for (const event of frame.events) {
       if (event.type === 'attack' && event.attacker === attackerPlayer) {
-        total += event.damage;
-        if (event.damageType === 'physical') {
-          physical += event.damage;
-        } else {
-          elemental[event.damageType] = (elemental[event.damageType] ?? 0) + event.damage;
+        const bd = event.breakdown;
+        total += bd.totalNet;
+        physical += bd.physical.net;
+        for (const [elem, elemBd] of Object.entries(bd.elemental)) {
+          if (elemBd) {
+            elemental[elem] = (elemental[elem] ?? 0) + elemBd.net;
+          }
         }
       }
       if (event.type === 'dot_tick' && event.target !== attackerPlayer) {
         // DOT damage dealt by attacker
-        total += event.damage;
-        elemental[event.element] = (elemental[event.element] ?? 0) + event.damage;
+        const bd = event.breakdown;
+        total += bd.netDamage;
+        elemental[bd.element] = (elemental[bd.element] ?? 0) + bd.netDamage;
       }
     }
   }
