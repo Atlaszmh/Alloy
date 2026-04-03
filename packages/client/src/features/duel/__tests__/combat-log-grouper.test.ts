@@ -4,9 +4,9 @@ import { groupEventsIntoSwings } from '../combat-log-grouper.js';
 describe('groupEventsIntoSwings', () => {
   it('groups attack + heal into one swing group', () => {
     const events = [
-      { tick: 30, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 40, armorPoints: 10, armorPenetration: 0, effectiveArmor: 10, reductionPct: 10, mitigated: 4, net: 36 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 40, totalMitigated: 4, totalNet: 36, isCrit: false } } },
-      { tick: 30, event: { type: 'heal', player: 0, breakdown: { source: 'lifesteal', rawHeal: 8, effectiveHeal: 8, overheal: 0 } } },
-      { tick: 30, event: { type: 'hp_change', player: 1, oldHP: 200, newHP: 164, maxHP: 200 } },
+      { time: 1.0, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 40, armorPoints: 10, armorPenetration: 0, effectiveArmor: 10, reductionPct: 10, mitigated: 4, net: 36 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 40, totalMitigated: 4, totalNet: 36, isCrit: false } } },
+      { time: 1.0, event: { type: 'heal', player: 0, breakdown: { source: 'lifesteal', rawHeal: 8, effectiveHeal: 8, overheal: 0 } } },
+      { time: 1.0, event: { type: 'hp_change', player: 1, oldHP: 200, newHP: 164, maxHP: 200 } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(1);
@@ -16,8 +16,8 @@ describe('groupEventsIntoSwings', () => {
 
   it('separates DOT ticks into their own groups', () => {
     const events = [
-      { tick: 60, event: { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerTick: 5, stacks: 2, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } } },
-      { tick: 90, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 40, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 40 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 40, totalMitigated: 0, totalNet: 40, isCrit: false } } },
+      { time: 2.0, event: { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerSecond: 5, stacks: 2, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } } },
+      { time: 3.0, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 40, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 40 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 40, totalMitigated: 0, totalNet: 40, isCrit: false } } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(2);
@@ -32,7 +32,7 @@ describe('groupEventsIntoSwings', () => {
 
   it('creates a death group', () => {
     const events = [
-      { tick: 100, event: { type: 'death', player: 1 } },
+      { time: 3.3, event: { type: 'death', player: 1 } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(1);
@@ -41,8 +41,8 @@ describe('groupEventsIntoSwings', () => {
 
   it('groups standalone heal (regen) into its own group', () => {
     const events = [
-      { tick: 50, event: { type: 'heal', player: 0, breakdown: { source: 'regen', rawHeal: 12, effectiveHeal: 12, overheal: 0 } } },
-      { tick: 50, event: { type: 'hp_change', player: 0, oldHP: 188, newHP: 200, maxHP: 200 } },
+      { time: 1.7, event: { type: 'heal', player: 0, breakdown: { source: 'regen', rawHeal: 12, effectiveHeal: 12, overheal: 0 } } },
+      { time: 1.7, event: { type: 'hp_change', player: 0, oldHP: 188, newHP: 200, maxHP: 200 } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(1);
@@ -50,11 +50,11 @@ describe('groupEventsIntoSwings', () => {
     expect(groups[0].events).toHaveLength(2);
   });
 
-  it('attaches hp_change / trigger_proc to current attack group at same tick', () => {
+  it('attaches hp_change / trigger_proc to current attack group at same time', () => {
     const events = [
-      { tick: 30, event: { type: 'attack', attacker: 1, breakdown: { dodged: false, physical: { raw: 20, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 20 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 20, totalMitigated: 0, totalNet: 20, isCrit: false } } },
-      { tick: 30, event: { type: 'trigger_proc', player: 1, triggerId: 'burn', effectDescription: 'Apply burn' } },
-      { tick: 30, event: { type: 'hp_change', player: 0, oldHP: 200, newHP: 180, maxHP: 200 } },
+      { time: 1.0, event: { type: 'attack', attacker: 1, breakdown: { dodged: false, physical: { raw: 20, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 20 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 20, totalMitigated: 0, totalNet: 20, isCrit: false } } },
+      { time: 1.0, event: { type: 'trigger_proc', player: 1, triggerId: 'burn', effectDescription: 'Apply burn' } },
+      { time: 1.0, event: { type: 'hp_change', player: 0, oldHP: 200, newHP: 180, maxHP: 200 } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(1);
@@ -63,10 +63,10 @@ describe('groupEventsIntoSwings', () => {
     expect(groups[0].attacker).toBe(1);
   });
 
-  it('creates separate groups for events at different ticks', () => {
+  it('creates separate groups for events at different times', () => {
     const events = [
-      { tick: 30, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 30, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 30 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 30, totalMitigated: 0, totalNet: 30, isCrit: false } } },
-      { tick: 60, event: { type: 'attack', attacker: 1, breakdown: { dodged: false, physical: { raw: 25, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 25 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 25, totalMitigated: 0, totalNet: 25, isCrit: false } } },
+      { time: 1.0, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 30, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 30 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 30, totalMitigated: 0, totalNet: 30, isCrit: false } } },
+      { time: 2.0, event: { type: 'attack', attacker: 1, breakdown: { dodged: false, physical: { raw: 25, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 25 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 25, totalMitigated: 0, totalNet: 25, isCrit: false } } },
     ];
     const groups = groupEventsIntoSwings(events as any);
     expect(groups).toHaveLength(2);
