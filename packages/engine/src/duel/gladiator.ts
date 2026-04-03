@@ -1,12 +1,14 @@
 import type { DerivedStats } from '../types/derived-stats.js';
 import type { GladiatorRuntime } from '../types/combat.js';
 
+const STEP_DURATION = 0.1;
+
 /**
  * Create a GladiatorRuntime from DerivedStats for use in duel simulation.
  * Initiative reduces the initial attack timer so faster gladiators strike first.
  */
 export function createGladiator(playerId: 0 | 1, stats: DerivedStats): GladiatorRuntime {
-  const attackTimer = Math.max(1, Math.round(stats.attackInterval * (1 - stats.initiative / 100)));
+  const attackTimer = Math.max(STEP_DURATION, stats.attackSpeed * (1 - stats.initiative / 100));
 
   return {
     playerId,
@@ -21,6 +23,8 @@ export function createGladiator(playerId: 0 | 1, stats: DerivedStats): Gladiator
     stunTimer: 0,
     isLowHP: false,
     reflectMultiplier: 0,
-    reflectTicksRemaining: 0,
+    reflectRemaining: 0,
+    regenAccumulator: 0,
+    regenInterval: 1.0,
   };
 }
