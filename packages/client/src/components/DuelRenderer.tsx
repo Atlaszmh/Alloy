@@ -1,6 +1,8 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import type { CombatLog, TickEvent, DerivedStats, Element } from '@alloy/engine';
+import type { CombatLog, CombatEvent, DerivedStats, Element } from '@alloy/engine';
+import { CooldownRing } from '@/features/duel/pixi/CooldownRing.js';
+import { DamageNumbers } from '@/features/duel/pixi/DamageNumbers.js';
 
 const ELEMENT_COLORS: Record<Element | 'physical', number> = {
   fire: 0xe85d3a,
@@ -18,14 +20,6 @@ const GLADIATOR_Y = 200;
 const P0_X = 150;
 const P1_X = 450;
 
-interface FloatingText {
-  text: Text;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-}
-
 interface Particle {
   gfx: Graphics;
   x: number;
@@ -40,26 +34,29 @@ interface Particle {
 interface DuelRendererProps {
   combatLog: CombatLog;
   stats: [DerivedStats, DerivedStats];
-  currentTick: number;
+  currentTime: number;
   isPlaying: boolean;
-  onTickUpdate?: (tick: number) => void;
+  onTimeUpdate?: (time: number) => void;
 }
 
-export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickUpdate }: DuelRendererProps) {
+export function DuelRenderer({ combatLog, stats, currentTime, isPlaying, onTimeUpdate }: DuelRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const stateRef = useRef({
     gladiators: null as [Container, Container] | null,
     hpBars: null as [Graphics, Graphics] | null,
     hpTexts: null as [Text, Text] | null,
-    floatingTexts: [] as FloatingText[],
+    damageNumbers: null as DamageNumbers | null,
     particles: [] as Particle[],
     particleContainer: null as Container | null,
-    floatContainer: null as Container | null,
     hp: [0, 0] as [number, number],
     maxHp: [0, 0] as [number, number],
     tick: 0,
-    lastProcessedTick: -1,
+    lastProcessedTime: -1,
+    cooldownRings: null as [CooldownRing, CooldownRing] | null,
+    attackSpeeds: [1.0, 1.0] as [number, number],
+    lastAttackTime: [0, 0] as [number, number],
+    currentTime: 0,
   });
 
   // Initialize PixiJS
@@ -114,14 +111,26 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
       app.stage.addChild(g1);
       state.gladiators = [g0, g1];
 
-      // HP bars
+      // Cooldown rings
+      state.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];
+      const atkSec0 = stats[0].attackSpeed;
+      const atkSec1 = stats[1].attackSpeed;
+      const ring0 = new CooldownRing(40, 0x3b82f6, 'weapon', atkSec0);
+      ring0.container.y = -25;
+      g0.addChild(ring0.container);
+      const ring1 = new CooldownRing(40, 0xef4444, 'weapon', atkSec1);
+      ring1.container.y = -25;
+      g1.addChild(ring1.container);
+      state.cooldownRings = [ring0, ring1];
+
+      // HP bars (in-canvas)
       const hpBar0 = new Graphics();
       const hpBar1 = new Graphics();
       app.stage.addChild(hpBar0);
       app.stage.addChild(hpBar1);
       state.hpBars = [hpBar0, hpBar1];
 
-      // HP text
+      // HP text (in-canvas)
       const hpText0 = new Text({ text: '', style: { fontFamily: 'monospace', fontSize: 12, fill: '#ffffff' } });
       hpText0.x = P0_X - 60;
       hpText0.y = 25;
@@ -132,24 +141,41 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
       app.stage.addChild(hpText1);
       state.hpTexts = [hpText0, hpText1];
 
-      // Containers for particles and floating text
+      // Particle container
       state.particleContainer = new Container();
       app.stage.addChild(state.particleContainer);
-      state.floatContainer = new Container();
-      app.stage.addChild(state.floatContainer);
+
+      // DamageNumbers (manages its own container on the stage)
+      state.damageNumbers = new DamageNumbers(app.stage);
 
       drawHPBars(state);
 
       // Render loop
       app.ticker.add((time) => {
-        updateFloatingTexts(state, time.deltaTime);
+        // Update damage number animations
+        state.damageNumbers?.update(time.deltaTime);
+
         updateParticles(state, time.deltaTime);
+
+        // Update cooldown ring progress and animation
+        if (state.cooldownRings) {
+          for (const i of [0, 1] as const) {
+            const elapsed = state.currentTime - state.lastAttackTime[i];
+            const progress = Math.min(1, elapsed / state.attackSpeeds[i]);
+            state.cooldownRings[i].setProgress(progress);
+            state.cooldownRings[i].update(time.deltaTime);
+          }
+        }
       });
     });
 
     return () => {
       destroyed = true;
       ro?.disconnect();
+      if (stateRef.current.damageNumbers) {
+        stateRef.current.damageNumbers.destroy();
+        stateRef.current.damageNumbers = null;
+      }
       if (appRef.current) {
         appRef.current.destroy(true);
         appRef.current = null;
@@ -163,29 +189,32 @@ export function DuelRenderer({ combatLog, stats, currentTick, isPlaying, onTickU
     if (!appRef.current || !state.gladiators) return;
 
     // Reset if we went backwards
-    if (currentTick < state.lastProcessedTick) {
+    if (currentTime < state.lastProcessedTime) {
       state.hp = [...state.maxHp];
-      state.lastProcessedTick = -1;
-      // Clear floating texts and particles
-      for (const ft of state.floatingTexts) ft.text.destroy();
-      state.floatingTexts = [];
+      state.lastProcessedTime = -1;
+      state.lastAttackTime = [0, 0];
+      state.currentTime = 0;
+      // Clear damage numbers and particles
+      state.damageNumbers?.clear();
       for (const p of state.particles) p.gfx.destroy();
       state.particles = [];
     }
 
-    // Process all ticks from last processed to current
-    for (const tickData of combatLog.ticks) {
-      if (tickData.tick <= state.lastProcessedTick) continue;
-      if (tickData.tick > currentTick) break;
+    // Process all frames from last processed to current
+    for (const frame of combatLog.frames) {
+      if (frame.time <= state.lastProcessedTime) continue;
+      if (frame.time > currentTime) break;
 
-      for (const event of tickData.events) {
-        processEvent(state, event, appRef.current);
+      state.currentTime = frame.time;
+      for (const event of frame.events) {
+        processEvent(state, event);
       }
     }
 
-    state.lastProcessedTick = currentTick;
+    state.currentTime = currentTime;
+    state.lastProcessedTime = currentTime;
     drawHPBars(state);
-  }, [currentTick, combatLog]);
+  }, [currentTime, combatLog]);
 
   return (
     <div
@@ -238,14 +267,17 @@ type StateType = {
   gladiators: [Container, Container] | null;
   hpBars: [Graphics, Graphics] | null;
   hpTexts: [Text, Text] | null;
-  floatingTexts: FloatingText[];
+  damageNumbers: DamageNumbers | null;
   particles: Particle[];
   particleContainer: Container | null;
-  floatContainer: Container | null;
   hp: [number, number];
   maxHp: [number, number];
   tick: number;
-  lastProcessedTick: number;
+  lastProcessedTime: number;
+  cooldownRings: [CooldownRing, CooldownRing] | null;
+  attackSpeeds: [number, number];
+  lastAttackTime: [number, number];
+  currentTime: number;
 };
 
 function drawHPBars(state: StateType) {
@@ -277,11 +309,22 @@ function drawHPBars(state: StateType) {
   }
 }
 
-function processEvent(state: StateType, event: TickEvent, app: Application) {
+function processEvent(state: StateType, event: CombatEvent) {
   const playerX = (p: 0 | 1) => p === 0 ? P0_X : P1_X;
 
   switch (event.type) {
     case 'attack': {
+      const target: 0 | 1 = event.attacker === 0 ? 1 : 0;
+      const targetX = playerX(target);
+      const targetY = GLADIATOR_Y - 70;
+
+      // Track attack timing for cooldown ring + trigger pulse
+      state.lastAttackTime[event.attacker] = state.currentTime;
+      if (state.cooldownRings) {
+        state.cooldownRings[event.attacker].triggerPulse();
+        state.cooldownRings[event.attacker].setProgress(0);
+      }
+
       // Animate attack: jolt attacker forward
       const g = state.gladiators?.[event.attacker];
       if (g) {
@@ -291,15 +334,33 @@ function processEvent(state: StateType, event: TickEvent, app: Application) {
         setTimeout(() => { if (g) g.x = origX; }, 100);
       }
 
-      // Damage number
-      const color = event.isCrit ? 0xfbbf24 : event.damageType === 'physical' ? 0xffffff : ELEMENT_COLORS[event.damageType];
-      const target: 0 | 1 = event.attacker === 0 ? 1 : 0;
-      spawnFloatingText(state, `${event.isCrit ? 'CRIT ' : ''}${Math.round(event.damage)}`, playerX(target), GLADIATOR_Y - 70, color);
+      // Dodged?
+      if (event.breakdown.dodged) {
+        state.damageNumbers?.spawnDodge(targetX, targetY);
+        break;
+      }
 
-      // Hit particles
-      spawnHitParticles(state, playerX(target), GLADIATOR_Y - 30, ELEMENT_COLORS[event.damageType] ?? 0xffffff, event.isCrit ? 8 : 4);
+      // Damage numbers from breakdown (multi-element cascade)
+      if (event.breakdown.totalNet > 0) {
+        state.damageNumbers?.spawnFromBreakdown(event.breakdown, targetX, targetY);
+      }
 
-      // Hit flash
+      // Block text if any damage was blocked
+      if (event.breakdown.blocked > 0) {
+        state.damageNumbers?.spawnBlock(event.breakdown.blocked, targetX, targetY - 20);
+      }
+
+      // VFX particles for each element with non-zero damage
+      if (event.breakdown.physical.net > 0) {
+        spawnHitParticles(state, targetX, GLADIATOR_Y - 30, ELEMENT_COLORS.physical, event.breakdown.isCrit ? 6 : 3);
+      }
+      for (const [elem, elemBd] of Object.entries(event.breakdown.elemental) as [Element, { net: number } | undefined][]) {
+        if (elemBd && elemBd.net > 0) {
+          spawnHitParticles(state, targetX, GLADIATOR_Y - 30, ELEMENT_COLORS[elem] ?? 0xffffff, event.breakdown.isCrit ? 6 : 3);
+        }
+      }
+
+      // Hit flash on target
       const targetG = state.gladiators?.[target];
       if (targetG) {
         targetG.alpha = 0.5;
@@ -308,30 +369,55 @@ function processEvent(state: StateType, event: TickEvent, app: Application) {
       break;
     }
 
-    case 'dodge': {
-      spawnFloatingText(state, 'DODGE', playerX(event.dodger), GLADIATOR_Y - 70, 0x60a5fa);
+    case 'heal': {
+      const isOverheal = event.breakdown.overheal > 0 && event.breakdown.effectiveHeal === 0;
+      state.damageNumbers?.spawnHeal(
+        event.breakdown.effectiveHeal > 0 ? event.breakdown.effectiveHeal : event.breakdown.overheal,
+        playerX(event.player),
+        GLADIATOR_Y - 90,
+        isOverheal,
+      );
       break;
     }
 
+    // Legacy dodge event (deprecated but still emitted)
+    case 'dodge': {
+      state.damageNumbers?.spawnDodge(playerX(event.dodger), GLADIATOR_Y - 70);
+      break;
+    }
+
+    // Legacy block event (deprecated but still emitted)
     case 'block': {
-      spawnFloatingText(state, `BLOCK ${Math.round(event.blockedDamage)}`, playerX(event.blocker), GLADIATOR_Y - 70, 0x8a8a8a);
+      state.damageNumbers?.spawnBlock(event.blockedDamage, playerX(event.blocker), GLADIATOR_Y - 70);
       break;
     }
 
     case 'dot_tick': {
-      const elementColor = ELEMENT_COLORS[event.element] ?? 0xff0000;
-      spawnFloatingText(state, `${Math.round(event.damage)}`, playerX(event.target), GLADIATOR_Y - 80, elementColor);
+      const elementColor = ELEMENT_COLORS[event.breakdown.element] ?? 0xff0000;
+      state.damageNumbers?.spawn(
+        `-${Math.round(event.breakdown.netDamage)}`,
+        playerX(event.target),
+        GLADIATOR_Y - 80,
+        elementColor,
+        { isDot: true },
+      );
       spawnHitParticles(state, playerX(event.target), GLADIATOR_Y - 30, elementColor, 3);
       break;
     }
 
+    // Legacy lifesteal event (deprecated, prefer heal event)
     case 'lifesteal': {
-      spawnFloatingText(state, `+${Math.round(event.healed)}`, playerX(event.player), GLADIATOR_Y - 90, 0x34d399);
+      state.damageNumbers?.spawnHeal(event.healed, playerX(event.player), GLADIATOR_Y - 90, false);
       break;
     }
 
     case 'thorns': {
-      spawnFloatingText(state, `${Math.round(event.damage)} thorns`, playerX(event.reflector === 0 ? 1 : 0), GLADIATOR_Y - 70, 0x8b3ae8);
+      state.damageNumbers?.spawn(
+        `${Math.round(event.damage)} thorns`,
+        playerX(event.reflector === 0 ? 1 : 0),
+        GLADIATOR_Y - 70,
+        0x8b3ae8,
+      );
       break;
     }
 
@@ -346,47 +432,26 @@ function processEvent(state: StateType, event: TickEvent, app: Application) {
         deadG.alpha = 0.3;
         deadG.y = GLADIATOR_Y + 10;
       }
-      spawnFloatingText(state, 'DEFEATED', playerX(event.player), GLADIATOR_Y - 90, 0xf87171);
+      state.damageNumbers?.spawn('DEFEATED', playerX(event.player), GLADIATOR_Y - 90, 0xf87171);
       spawnHitParticles(state, playerX(event.player), GLADIATOR_Y - 20, 0xf87171, 15);
       break;
     }
 
     case 'stun': {
-      spawnFloatingText(state, 'STUNNED', playerX(event.target), GLADIATOR_Y - 80, 0xe8d03a);
+      state.damageNumbers?.spawn('STUNNED', playerX(event.target), GLADIATOR_Y - 80, 0xe8d03a);
       break;
     }
 
     case 'barrier_absorb': {
-      spawnFloatingText(state, `Shield ${Math.round(event.absorbed)}`, playerX(event.player), GLADIATOR_Y - 70, 0x60a5fa);
+      state.damageNumbers?.spawn(
+        `Shield ${Math.round(event.absorbed)}`,
+        playerX(event.player),
+        GLADIATOR_Y - 70,
+        0x60a5fa,
+      );
       break;
     }
   }
-}
-
-function spawnFloatingText(state: StateType, text: string, x: number, y: number, color: number) {
-  if (!state.floatContainer) return;
-
-  const t = new Text({
-    text,
-    style: {
-      fontFamily: 'monospace',
-      fontSize: text.includes('CRIT') ? 16 : 13,
-      fill: color,
-      fontWeight: text.includes('CRIT') || text.includes('DEFEATED') ? 'bold' : 'normal',
-    },
-  });
-  t.anchor = { x: 0.5, y: 0.5 } as any;
-  t.x = x + (Math.random() - 0.5) * 30;
-  t.y = y;
-  state.floatContainer.addChild(t);
-
-  state.floatingTexts.push({
-    text: t,
-    vx: (Math.random() - 0.5) * 0.5,
-    vy: -1.5,
-    life: 60,
-    maxLife: 60,
-  });
 }
 
 function spawnHitParticles(state: StateType, x: number, y: number, color: number, count: number) {
@@ -413,21 +478,6 @@ function spawnHitParticles(state: StateType, x: number, y: number, color: number
       maxLife: 50,
       color,
     });
-  }
-}
-
-function updateFloatingTexts(state: StateType, dt: number) {
-  for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
-    const ft = state.floatingTexts[i];
-    ft.text.x += ft.vx * dt;
-    ft.text.y += ft.vy * dt;
-    ft.life -= dt;
-    ft.text.alpha = Math.max(0, ft.life / ft.maxLife);
-
-    if (ft.life <= 0) {
-      ft.text.destroy();
-      state.floatingTexts.splice(i, 1);
-    }
   }
 }
 
