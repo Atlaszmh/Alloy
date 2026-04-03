@@ -1,34 +1,36 @@
-import type { TickEvent, DuelResult, CombatLog } from '../types/combat.js';
+import type { CombatEvent, DuelResult, CombatLog } from '../types/combat.js';
 
 export interface CombatLogBuilder {
-  ticks: { tick: number; events: TickEvent[] }[];
-  addEvent(tick: number, event: TickEvent): void;
+  frames: { time: number; events: CombatEvent[] }[];
+  addEvent(time: number, event: CombatEvent): void;
   finalize(result: DuelResult): CombatLog;
 }
 
 /**
- * Create a combat log builder that accumulates tick events
+ * Create a combat log builder that accumulates events by time
  * and finalizes into a frozen CombatLog.
  */
 export function createCombatLog(seed: number): CombatLogBuilder {
-  const tickMap = new Map<number, TickEvent[]>();
-  const ticks: { tick: number; events: TickEvent[] }[] = [];
+  const timeMap = new Map<number, CombatEvent[]>();
+  const frames: { time: number; events: CombatEvent[] }[] = [];
 
   return {
-    ticks,
-    addEvent(tick: number, event: TickEvent): void {
-      let bucket = tickMap.get(tick);
+    frames,
+    addEvent(time: number, event: CombatEvent): void {
+      // Snap to clean 0.1s to avoid floating-point drift
+      const snapped = Math.round(time * 10) / 10;
+      let bucket = timeMap.get(snapped);
       if (!bucket) {
         bucket = [];
-        tickMap.set(tick, bucket);
-        ticks.push({ tick, events: bucket });
+        timeMap.set(snapped, bucket);
+        frames.push({ time: snapped, events: bucket });
       }
       bucket.push(event);
     },
     finalize(result: DuelResult): CombatLog {
       return Object.freeze({
         seed,
-        ticks: [...ticks],
+        frames: [...frames],
         result: { ...result },
       }) as CombatLog;
     },
