@@ -15,8 +15,7 @@ function formatPrimaryStat(item: BaseItemDef): string {
 
 function formatSecondaryStat(item: BaseItemDef): string {
   if (item.type === 'weapon') {
-    const ticks = item.baseStats.attackInterval ?? 30;
-    return `Speed: ${(ticks / 30).toFixed(1)}s`;
+    return `Speed: ${(item.baseStats.attackSpeed ?? 1.0).toFixed(1)}s`;
   }
   return `+${item.baseStats.hp ?? 0} HP`;
 }

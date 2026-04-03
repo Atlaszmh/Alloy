@@ -45,7 +45,7 @@ export function formatCompoundStat(key: string, value: number): string {
       case 'dotMultiplier':
         return `${value}x DOT multiplier`;
       case 'duration':
-        return `${value} tick duration`;
+        return `${value}s duration`;
       case 'chainDamage':
         return `+${value} chain damage`;
       case 'damageMultiplier':

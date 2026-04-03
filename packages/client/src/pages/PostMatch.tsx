@@ -13,12 +13,12 @@ function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
     let attacks = [0, 0];
 
     for (const log of duelLogs) {
-      for (const tick of log.ticks) {
-        for (const event of tick.events) {
+      for (const frame of log.frames) {
+        for (const event of frame.events) {
           if (event.type === 'attack') {
-            totalDamage[event.attacker] += event.damage;
+            totalDamage[event.attacker] += event.breakdown.totalNet;
             attacks[event.attacker]++;
-            if (event.isCrit) critHits[event.attacker]++;
+            if (event.breakdown.isCrit) critHits[event.attacker]++;
           }
           if (event.type === 'lifesteal') {
             totalHealing[event.player] += event.healed;

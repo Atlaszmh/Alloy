@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { playSound } from '@/shared/utils/sound-manager';
-import type { TickEvent } from '@alloy/engine';
+import type { CombatEvent } from '@alloy/engine';
 
 export function useDuelSounds(
-  visibleEvents: Array<{ tick: number; event: TickEvent }>,
+  visibleEvents: Array<{ time: number; event: CombatEvent }>,
   isPlaying: boolean,
   showBreakdown: boolean,
   currentResult: { winner: number } | null,
@@ -28,7 +28,7 @@ export function useDuelSounds(
     for (const { event } of newEvents) {
       switch (event.type) {
         case 'attack':
-          playSound(event.isCrit ? 'crit' : 'attack');
+          playSound(event.breakdown.isCrit ? 'crit' : 'attack');
           break;
         case 'dodge':
           playSound('dodge');

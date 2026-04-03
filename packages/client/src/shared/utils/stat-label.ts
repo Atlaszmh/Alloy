@@ -8,7 +8,7 @@ const STAT_ABBREVIATIONS: Record<string, string> = {
   poisonDamage: 'Psn Dmg',
   shadowDamage: 'Shadow Dmg',
   chaosDamage: 'Chaos Dmg',
-  attackInterval: 'Atk Spd',
+  attackSpeed: 'Atk Spd',
   critChance: 'Crit',
   critMultiplier: 'Crit Mult',
   maxHP: 'HP',
