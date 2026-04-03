@@ -78,7 +78,7 @@ router.post('/', async (req, res) => {
       const roundRows = insertedMatches.flatMap((m: { id: string }, i: number) =>
         batch[i].roundDetails.map(rd => ({
           match_id: m.id, round: rd.round, winner: rd.winner,
-          duration_ticks: rd.durationTicks,
+          duration_ticks: rd.duration, // TODO: rename DB column in separate migration
           p0_hp_final: rd.p0HpFinal, p1_hp_final: rd.p1HpFinal,
           p0_damage_dealt: rd.p0DamageDealt, p1_damage_dealt: rd.p1DamageDealt,
         }))
