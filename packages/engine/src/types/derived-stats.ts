@@ -13,7 +13,7 @@ export interface DerivedStats {
   maxHP: number;
   physicalDamage: number;
   elementalDamage: Record<Element, number>;
-  attackInterval: number; // In ticks (minimum capped)
+  attackSpeed: number; // Seconds between attacks
   armor: number; // Integer points, 1 = 1% physical damage reduction
   resistances: Record<Element, number>; // Integer points, 1 = 1% elemental damage reduction
   critChance: number; // Integer percentage, 1 = 1%
@@ -26,7 +26,7 @@ export interface DerivedStats {
   dodgeChance: number; // Integer percentage, 1 = 1%
   thornsDamage: number;
   barrierAmount: number;
-  hpRegen: number; // Per tick
+  hpRegen: number; // HP per second
   armorPenetration: number; // Integer percentage, 1 = 1%
   elementalPenetration: number; // Integer percentage, 1 = 1%
   stunChance: number; // Integer percentage, 1 = 1%
@@ -44,7 +44,7 @@ export function createEmptyDerivedStats(): DerivedStats {
     maxHP: 0,
     physicalDamage: 0,
     elementalDamage: { ...zeroElements },
-    attackInterval: 30, // 1 second at 30 ticks/sec
+    attackSpeed: 1.0, // 1 second between attacks
     armor: 0,
     resistances: { ...zeroElements },
     critChance: 0,

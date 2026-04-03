@@ -14,7 +14,7 @@ describe('createEmptyDerivedStats', () => {
     expect(s.resistances.fire).toBe(0);
     expect(s.resistances.shadow).toBe(0);
     expect(s.resistances.chaos).toBe(0);
-    expect(s.attackInterval).toBe(30);
+    expect(s.attackSpeed).toBe(1.0);
     expect(s.critMultiplier).toBe(150); // 150 = 1.5x, integer scale
     expect(s.dotMultiplier).toBe(100); // 100 = 1.0x baseline
     expect(s.maxHP).toBe(0);
