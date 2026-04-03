@@ -406,8 +406,7 @@ function isBaseItemChanged(a: BaseItemDef, b: BaseItemDef): boolean {
   return (
     a.name !== b.name ||
     a.type !== b.type ||
-    a.unlockLevel !== b.unlockLevel ||
-    areEffectsChanged(a.inherentBonuses, b.inherentBonuses)
+    JSON.stringify(a.baseStats) !== JSON.stringify(b.baseStats)
   );
 }
 
@@ -853,7 +852,7 @@ function BaseItemPanel({
   const anyChanged = baseline ? isBaseItemChanged(item, baseline) : false;
   const nameChanged = baseline ? item.name !== baseline.name : false;
   const typeChanged = baseline ? item.type !== baseline.type : false;
-  const levelChanged = baseline ? item.unlockLevel !== baseline.unlockLevel : false;
+  const baseStatsChanged = baseline ? JSON.stringify(item.baseStats) !== JSON.stringify(baseline.baseStats) : false;
 
   return (
     <div>
@@ -895,26 +894,21 @@ function BaseItemPanel({
         </select>
       </div>
 
-      <div style={S.fieldRow}>
-        <span style={S.fieldLabel}>Unlock Level</span>
-        <input
-          type="number"
-          style={S.numberInput(levelChanged)}
-          value={item.unlockLevel}
-          min={0}
-          onChange={(e) => onChange({ ...item, unlockLevel: Number(e.target.value) })}
-        />
-      </div>
-
       <div style={S.divider} />
 
       <div style={S.tierCard}>
-        <EffectList
-          label="Inherent Bonuses"
-          effects={item.inherentBonuses}
-          baselineEffects={baseline?.inherentBonuses}
-          onChange={(effects) => onChange({ ...item, inherentBonuses: effects })}
-        />
+        <div style={S.fieldLabel}>Base Stats {baseStatsChanged && <span style={{ color: '#f59e0b' }}>(modified)</span>}</div>
+        {Object.entries(item.baseStats).map(([stat, value]) => (
+          <div key={stat} style={S.fieldRow}>
+            <span style={S.fieldLabel}>{stat}</span>
+            <input
+              type="number"
+              style={S.numberInput(baseline ? (baseline.baseStats[stat] !== value) : false)}
+              value={value}
+              onChange={(e) => onChange({ ...item, baseStats: { ...item.baseStats, [stat]: Number(e.target.value) } })}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1003,10 +997,9 @@ function BalancePanel({
       <div style={S.sectionLabel}>Combat</div>
       <div style={S.balanceGrid}>
         <BalanceNumField label="Base HP" value={bal.baseHP} baselineValue={bbl?.baseHP} onChange={(v) => update('baseHP', v)} />
-        <BalanceNumField label="Ticks/Second" value={bal.ticksPerSecond} baselineValue={bbl?.ticksPerSecond} onChange={(v) => update('ticksPerSecond', v)} min={1} />
-        <BalanceNumField label="Max Duel Ticks" value={bal.maxDuelTicks} baselineValue={bbl?.maxDuelTicks} onChange={(v) => update('maxDuelTicks', v)} min={1} />
+        <BalanceNumField label="Max Duel Seconds" value={bal.maxDuelSeconds} baselineValue={bbl?.maxDuelSeconds} onChange={(v) => update('maxDuelSeconds', v)} min={1} />
         <BalanceNumField label="Base Crit Mult" value={bal.baseCritMultiplier} baselineValue={bbl?.baseCritMultiplier} onChange={(v) => update('baseCritMultiplier', v)} step={0.1} />
-        <BalanceNumField label="Min Attack Interval (ticks)" value={bal.minAttackInterval} baselineValue={bbl?.minAttackInterval} onChange={(v) => update('minAttackInterval', v)} min={1} />
+        <BalanceNumField label="Min Attack Speed (s)" value={bal.minAttackSpeed} baselineValue={bbl?.minAttackSpeed} onChange={(v) => update('minAttackSpeed', v)} min={0.1} step={0.1} />
       </div>
 
       <div style={S.sectionLabel}>Flux</div>

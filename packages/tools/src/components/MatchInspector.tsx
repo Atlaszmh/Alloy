@@ -3,7 +3,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
-import type { CombatLog, TickEvent } from '@alloy/engine';
+import type { CombatLog, CombatEvent } from '@alloy/engine';
+import { getDominantDamageType } from '@alloy/engine';
 import type { SimulationResults } from '../types';
 
 const card: React.CSSProperties = {
@@ -28,13 +29,13 @@ const mono: React.CSSProperties = {
 
 const PIE_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#71717a'];
 
-function extractHPCurves(log: CombatLog): { tick: number; hp0: number; hp1: number }[] {
-  const points: { tick: number; hp0: number; hp1: number }[] = [];
+function extractHPCurves(log: CombatLog): { time: number; hp0: number; hp1: number }[] {
+  const points: { time: number; hp0: number; hp1: number }[] = [];
   let hp0 = -1;
   let hp1 = -1;
 
-  for (const tickData of log.ticks) {
-    for (const event of tickData.events) {
+  for (const frame of log.frames) {
+    for (const event of frame.events) {
       if (event.type === 'hp_change') {
         if (hp0 < 0) {
           // Initialize from maxHP on first encounter
@@ -46,7 +47,7 @@ function extractHPCurves(log: CombatLog): { tick: number; hp0: number; hp1: numb
       }
     }
     if (hp0 >= 0 && hp1 >= 0) {
-      points.push({ tick: tickData.tick, hp0: Math.max(0, hp0), hp1: Math.max(0, hp1) });
+      points.push({ time: frame.time, hp0: Math.max(0, hp0), hp1: Math.max(0, hp1) });
     }
   }
 
@@ -55,15 +56,24 @@ function extractHPCurves(log: CombatLog): { tick: number; hp0: number; hp1: numb
 
 function extractDamageBreakdown(log: CombatLog, player: 0 | 1): { name: string; value: number }[] {
   const dmg = new Map<string, number>();
-  for (const tickData of log.ticks) {
-    for (const event of tickData.events) {
+  for (const frame of log.frames) {
+    for (const event of frame.events) {
       if (event.type === 'attack' && event.attacker === player) {
-        const key = event.damageType;
-        dmg.set(key, (dmg.get(key) ?? 0) + event.damage);
+        // Accumulate physical + each elemental channel separately
+        const bd = event.breakdown;
+        if (bd.physical.net > 0) {
+          dmg.set('physical', (dmg.get('physical') ?? 0) + bd.physical.net);
+        }
+        for (const [elem, elemBd] of Object.entries(bd.elemental)) {
+          if (elemBd && elemBd.net > 0) {
+            dmg.set(elem, (dmg.get(elem) ?? 0) + elemBd.net);
+          }
+        }
       }
       if (event.type === 'dot_tick' && event.target !== player) {
-        const key = `${event.element} (DOT)`;
-        dmg.set(key, (dmg.get(key) ?? 0) + event.damage);
+        const bd = event.breakdown;
+        const key = `${bd.element} (DOT)`;
+        dmg.set(key, (dmg.get(key) ?? 0) + bd.netDamage);
       }
       if (event.type === 'thorns' && event.reflector === player) {
         dmg.set('thorns', (dmg.get('thorns') ?? 0) + event.damage);
@@ -81,34 +91,39 @@ const EVENT_FILTER_TYPES = [
   'synergy_proc', 'stun', 'hp_change', 'death',
 ] as const;
 
-function formatEvent(tick: number, event: TickEvent): string {
+function formatEvent(time: number, event: CombatEvent): string {
+  const t = time.toFixed(1);
   switch (event.type) {
     case 'attack':
-      return `[${tick}] P${event.attacker} attacks for ${event.damage.toFixed(1)} ${event.damageType}${event.isCrit ? ' (CRIT)' : ''}`;
+      return `[${t}s] P${event.attacker} attacks for ${event.breakdown.totalNet.toFixed(1)} ${getDominantDamageType(event.breakdown)}${event.breakdown.isCrit ? ' (CRIT)' : ''}`;
     case 'block':
-      return `[${tick}] P${event.blocker} blocks ${event.blockedDamage.toFixed(1)} damage`;
+      return `[${t}s] P${event.blocker} blocks ${event.blockedDamage.toFixed(1)} damage`;
     case 'dodge':
-      return `[${tick}] P${event.dodger} dodges`;
+      return `[${t}s] P${event.dodger} dodges`;
     case 'dot_apply':
-      return `[${tick}] P${event.target} receives ${event.element} DOT (${event.dps}/tick, ${event.durationTicks} ticks)`;
+      return `[${t}s] P${event.target} receives ${event.element} DOT (${event.dps}/sec, ${event.duration}s)`;
     case 'dot_tick':
-      return `[${tick}] P${event.target} takes ${event.damage.toFixed(1)} ${event.element} DOT`;
+      return `[${t}s] P${event.target} takes ${event.breakdown.netDamage.toFixed(1)} ${event.breakdown.element} DOT`;
     case 'lifesteal':
-      return `[${tick}] P${event.player} heals ${event.healed.toFixed(1)} (lifesteal)`;
+      return `[${t}s] P${event.player} heals ${event.healed.toFixed(1)} (lifesteal)`;
     case 'thorns':
-      return `[${tick}] P${event.reflector} reflects ${event.damage.toFixed(1)} thorns`;
+      return `[${t}s] P${event.reflector} reflects ${event.damage.toFixed(1)} thorns`;
     case 'barrier_absorb':
-      return `[${tick}] P${event.player} barrier absorbs ${event.absorbed.toFixed(1)} (${event.remaining.toFixed(0)} left)`;
+      return `[${t}s] P${event.player} barrier absorbs ${event.absorbed.toFixed(1)} (${event.remaining.toFixed(0)} left)`;
     case 'trigger_proc':
-      return `[${tick}] P${event.player} trigger: ${event.triggerId} - ${event.effectDescription}`;
+      return `[${t}s] P${event.player} trigger: ${event.triggerId} - ${event.effectDescription}`;
     case 'synergy_proc':
-      return `[${tick}] P${event.player} synergy: ${event.synergyId} - ${event.effectDescription}`;
+      return `[${t}s] P${event.player} synergy: ${event.synergyId} - ${event.effectDescription}`;
     case 'stun':
-      return `[${tick}] P${event.target} stunned for ${event.durationTicks} ticks`;
+      return `[${t}s] P${event.target} stunned for ${event.duration}s`;
     case 'hp_change':
-      return `[${tick}] P${event.player} HP: ${event.oldHP.toFixed(0)} -> ${event.newHP.toFixed(0)} / ${event.maxHP}`;
+      return `[${t}s] P${event.player} HP: ${event.oldHP.toFixed(0)} -> ${event.newHP.toFixed(0)} / ${event.maxHP}`;
     case 'death':
-      return `[${tick}] P${event.player} DIES`;
+      return `[${t}s] P${event.player} DIES`;
+    case 'heal':
+      return `[${t}s] P${event.player} heals ${event.breakdown.effectiveHeal.toFixed(1)} (${event.breakdown.source})`;
+    default:
+      return `[${t}s] ${(event as CombatEvent).type}`;
   }
 }
 
@@ -150,10 +165,10 @@ export default function MatchInspector({ results }: Props) {
   const filteredEvents = useMemo(() => {
     if (!log) return [];
     const items: string[] = [];
-    for (const tickData of log.ticks) {
-      for (const event of tickData.events) {
+    for (const frame of log.frames) {
+      for (const event of frame.events) {
         if (eventFilter === 'all' || event.type === eventFilter) {
-          items.push(formatEvent(tickData.tick, event));
+          items.push(formatEvent(frame.time, event));
         }
       }
     }
@@ -220,7 +235,7 @@ export default function MatchInspector({ results }: Props) {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={hpCurves}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-              <XAxis dataKey="tick" stroke="#71717a" fontSize={12} label={{ value: 'Tick', position: 'insideBottom', offset: -5, fill: '#71717a' }} />
+              <XAxis dataKey="time" stroke="#71717a" fontSize={12} label={{ value: 'Time (s)', position: 'insideBottom', offset: -5, fill: '#71717a' }} />
               <YAxis stroke="#71717a" fontSize={12} />
               <Tooltip
                 contentStyle={{ background: '#1a1b23', border: '1px solid #27272a', borderRadius: '6px' }}
@@ -281,7 +296,7 @@ export default function MatchInspector({ results }: Props) {
             <tbody>
               <StatRow label="Max HP" v0={formatStat(p0Stats.maxHP)} v1={formatStat(p1Stats.maxHP)} />
               <StatRow label="Physical Dmg" v0={formatStat(p0Stats.physicalDamage)} v1={formatStat(p1Stats.physicalDamage)} />
-              <StatRow label="Attack Interval" v0={formatStat(p0Stats.attackInterval)} v1={formatStat(p1Stats.attackInterval)} />
+              <StatRow label="Attack Speed" v0={formatStat(p0Stats.attackSpeed)} v1={formatStat(p1Stats.attackSpeed)} />
               <StatRow label="Armor" v0={formatStat(p0Stats.armor, true)} v1={formatStat(p1Stats.armor, true)} />
               <StatRow label="Crit Chance" v0={formatStat(p0Stats.critChance, true)} v1={formatStat(p1Stats.critChance, true)} />
               <StatRow label="Crit Multi" v0={formatStat(p0Stats.critMultiplier)} v1={formatStat(p1Stats.critMultiplier)} />
