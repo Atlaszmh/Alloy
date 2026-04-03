@@ -16,7 +16,7 @@ interface ModifierBuckets {
 // ---- Stat key aliases: data keys that map to DerivedStats fields ----
 // Some affix data uses different keys than DerivedStats. We map them here.
 const STAT_KEY_ALIASES: Record<string, string> = {
-  attackSpeed: 'attackInterval', // attackSpeed percent is inverted for attackInterval
+  attackSpeed: 'attackSpeed',
   critDamage: 'critMultiplier',
   lifesteal: 'lifestealPercent',
   blockBreak: 'blockBreakChance',
@@ -177,7 +177,7 @@ const BASE_STAT_SCALING_MAP: Record<string, string | null> = {
 
   // DEX weapon
   critChance: 'critChance',
-  attackSpeed: 'attackInterval', // inverted
+  attackSpeed: 'attackSpeed', // inverted
   penetration: null, // duel engine
   // DEX armor
   dodgeChance: 'dodgeChance',
@@ -208,12 +208,12 @@ function applyBaseStatScaling(
       const mappedKey = BASE_STAT_SCALING_MAP[scaleKey];
       if (mappedKey === null || mappedKey === undefined) continue;
 
-      // attackSpeed scaling is special: positive value means faster attacks = lower interval
+      // attackSpeed scaling is special: positive value means faster attacks = lower seconds
       if (scaleKey === 'attackSpeed') {
-        // attackSpeed: percent reduction of attack interval
+        // attackSpeed: percent reduction of attack speed (seconds)
         buckets.percent.set(
-          'attackInterval',
-          (buckets.percent.get('attackInterval') ?? 0) + (-scaleValue),
+          'attackSpeed',
+          (buckets.percent.get('attackSpeed') ?? 0) + (-scaleValue),
         );
       } else {
         // Determine if this should be flat or percent based on the value magnitude
@@ -244,8 +244,8 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   const armorDef = registry.getBaseItem(loadout.armor.baseItemId);
 
   for (const [stat, value] of Object.entries(weaponDef.baseStats)) {
-    if (stat === 'attackInterval') {
-      stats.attackInterval = value; // Override the default with weapon's base attack interval
+    if (stat === 'attackSpeed') {
+      stats.attackSpeed = value; // Override the default with weapon's base attack speed
     } else {
       addToBucket(buckets, { stat, op: 'flat', value });
     }
@@ -383,7 +383,7 @@ function applyCaps(stats: DerivedStats, balance: BalanceConfig): void {
     stats.blockChance = clamp(stats.blockChance, caps.blockChance.min, caps.blockChance.max);
   }
 
-  stats.attackInterval = Math.max(stats.attackInterval, balance.minAttackInterval);
+  stats.attackSpeed = Math.max(stats.attackSpeed, balance.minAttackSpeed);
 
   for (const el of ALL_ELEMENTS) {
     const capKey = `${el}Resistance`;
