@@ -330,6 +330,69 @@ describe('Duel Engine', () => {
     }
   });
 
+  // Regen timing: once per second, not per step
+  it('regen fires once per second, not per step', () => {
+    // Give opponent some damage so player 0 takes hits and has room to regen
+    const regenGladiator = makeStats({
+      maxHP: 500,
+      physicalDamage: 1,
+      attackSpeed: 100, // very slow, won't attack
+      hpRegen: 10,
+      initiative: 0,
+    });
+    const damager = makeStats({
+      maxHP: 10000,
+      physicalDamage: 5,
+      attackSpeed: 0.5, // attacks frequently to keep HP below max
+      initiative: 0,
+    });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(42);
+    const log = simulate([regenGladiator, damager], loadouts, registry, rng, 1);
+
+    // Count heal events for player 0 — should be roughly 1 per second of combat
+    const healEvents = log.frames.flatMap((f) =>
+      f.events.filter((e) => e.type === 'heal' && e.player === 0),
+    );
+    // With 1/sec regen, expect roughly duel-duration heal events, not 10x that
+    expect(healEvents.length).toBeLessThan(150);
+    expect(healEvents.length).toBeGreaterThan(20);
+  });
+
+  // Attack timing: attackSpeed 2.0 fires at correct intervals
+  it('attack at attackSpeed 2.0 fires at correct intervals', () => {
+    const attacker = makeStats({ maxHP: 10000, physicalDamage: 10, attackSpeed: 2.0, initiative: 0 });
+    const defender = makeStats({ maxHP: 10000, physicalDamage: 0, attackSpeed: 100, initiative: 0 });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(42);
+    const log = simulate([attacker, defender], loadouts, registry, rng, 1);
+
+    const attackFrames = log.frames
+      .filter((f) => f.events.some((e) => e.type === 'attack' && e.attacker === 0))
+      .map((f) => f.time);
+
+    // Timer decrements at start of each step, so first attack fires at step 19 (time 1.9s)
+    // Second attack fires 20 steps later at time 3.9s — interval is exactly 2.0s
+    expect(attackFrames.length).toBeGreaterThan(2);
+    const interval = attackFrames[1] - attackFrames[0];
+    expect(interval).toBeCloseTo(2.0, 1);
+    // Verify first attack is within 1 step of expected
+    expect(attackFrames[0]).toBeCloseTo(1.9, 1);
+  });
+
+  // Frame times should be clean 0.1s values (no floating-point drift)
+  it('combat log frame times are clean 0.1s values', () => {
+    const stats = makeStats({ maxHP: 200, physicalDamage: 20, attackSpeed: 1.0 });
+    const loadouts = makeLoadouts();
+    const rng = new SeededRNG(42);
+    const log = simulate([stats, { ...stats }], loadouts, registry, rng, 1);
+
+    for (const frame of log.frames) {
+      const rounded = Math.round(frame.time * 10) / 10;
+      expect(frame.time).toBe(rounded);
+    }
+  });
+
   // Gladiator creation tests
   describe('createGladiator', () => {
     it('initializes HP and barrier from stats', () => {
