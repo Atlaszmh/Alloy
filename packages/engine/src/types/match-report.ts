@@ -24,7 +24,7 @@ export interface PlayerReport {
 export interface RoundReport {
   round: number;
   winner: 0 | 1;
-  durationTicks: number;
+  duration: number; // seconds
   p0HpFinal: number;
   p1HpFinal: number;
   p0DamageDealt: number;

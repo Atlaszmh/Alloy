@@ -36,7 +36,7 @@ export interface DamageBreakdown {
 
 export interface DotTickBreakdown {
   element: Element;
-  damagePerTick: number;
+  damagePerSecond: number;
   stacks: number;
   rawTotal: number;
   resistPoints: number;
@@ -44,6 +44,24 @@ export interface DotTickBreakdown {
   effectiveResist: number;
   reductionPct: number;
   netDamage: number;
+}
+
+/**
+ * Return the dominant damage type from a DamageBreakdown.
+ * Compares physical net damage against each elemental net damage and returns
+ * whichever dealt the most. Falls back to 'physical' when everything is zero.
+ */
+export function getDominantDamageType(bd: DamageBreakdown): 'physical' | Element {
+  let best: 'physical' | Element = 'physical';
+  let bestNet = bd.physical.net;
+
+  for (const [elem, elemBd] of Object.entries(bd.elemental) as [Element, ElementalBreakdown | undefined][]) {
+    if (elemBd && elemBd.net > bestNet) {
+      best = elem;
+      bestNet = elemBd.net;
+    }
+  }
+  return best;
 }
 
 export type HealSource = 'lifesteal' | 'regen' | 'hot' | 'burst';
