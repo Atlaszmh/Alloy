@@ -85,7 +85,22 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   canRemove: (orbUid) => {
     const { plan } = get();
     if (!plan) return false;
-    return canRemoveOrb(plan, orbUid);
+    // Find which item+slot holds this orb
+    for (const target of ['weapon', 'armor'] as const) {
+      const item = plan.loadout[target];
+      for (let i = 0; i < item.slots.length; i++) {
+        const slot = item.slots[i];
+        if (!slot) continue;
+        const uids = slot.kind === 'compound'
+          ? slot.orbs.map(o => o.uid)
+          : [slot.orb.uid];
+        if (uids.includes(orbUid)) {
+          return canRemoveOrb(plan, target, i);
+        }
+      }
+    }
+    // Orb not found in any slot — it's in stockpile, not equipped
+    return true;
   },
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),

@@ -63,6 +63,7 @@ describe('SoundManager', () => {
       'dragStart', 'dropSuccess',
       'combineMerge', 'combineFail',
       'forgeSubmit', 'fluxSpend', 'timerUrgent', 'phaseTransition',
+      'forgeSlam', 'forgeCreak', 'gemScatter',
     ];
 
     const SYNTH_ONLY_SOUNDS: SoundName[] = [
@@ -77,7 +78,7 @@ describe('SoundManager', () => {
       mgr.loadFiles();
       // loadFiles populates the howls map; check it was called with multiple files
       const allSrcs = MockHowl.mock.calls.map(
-        (c: [{ src: string[] }]) => c[0].src[0],
+        (c: unknown[]) => (c[0] as { src: string[] }).src[0],
       );
       for (const name of SOUNDS_WITH_FILES) {
         const prefix = name.replace(/([A-Z])/g, '-$1').toLowerCase(); // orbSelect -> orb-select
@@ -90,7 +91,7 @@ describe('SoundManager', () => {
       const mgr = freshManager();
       mgr.loadFiles();
       const allSrcs = MockHowl.mock.calls.map(
-        (c: [{ src: string[] }]) => c[0].src[0],
+        (c: unknown[]) => (c[0] as { src: string[] }).src[0],
       );
       for (const name of SYNTH_ONLY_SOUNDS) {
         const prefix = name.replace(/([A-Z])/g, '-$1').toLowerCase();
@@ -174,8 +175,8 @@ describe('SoundManager', () => {
       const callsBefore = MockHowl.mock.calls.length;
       mgr.loadFiles();
       const callsAfter = MockHowl.mock.calls.length;
-      // Should create 33 Howl instances (total file count)
-      expect(callsAfter - callsBefore).toBe(33);
+      // Should create 42 Howl instances (total file count across all file-backed sounds)
+      expect(callsAfter - callsBefore).toBe(42);
     });
 
     it('does not double-load on repeated calls', () => {
@@ -189,7 +190,7 @@ describe('SoundManager', () => {
     it('uses correct base path', () => {
       const mgr = freshManager();
       mgr.loadFiles('/custom/path/');
-      const srcs = MockHowl.mock.calls.map((c: [{ src: string[] }]) => c[0].src[0]);
+      const srcs = MockHowl.mock.calls.map((c: unknown[]) => (c[0] as { src: string[] }).src[0]);
       for (const src of srcs) {
         expect(src).toMatch(/^\/custom\/path\//);
       }

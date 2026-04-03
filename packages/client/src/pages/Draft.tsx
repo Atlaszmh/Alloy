@@ -15,7 +15,7 @@ import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
-import { useOpponentPickAnimation, type SwoopTarget } from '@/animation/hooks/useOpponentPickAnimation';
+import { useOpponentPickAnimation } from '@/animation/hooks/useOpponentPickAnimation';
 import { useDraftEndSequence } from '@/animation/hooks/useDraftEndSequence';
 
 const DRAFT_TIMER_MS = 15_000;

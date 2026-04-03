@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { DerivedStats } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { Timer } from '@/components/Timer';
 
@@ -6,7 +7,7 @@ interface ForgeHeaderProps {
   round: 1 | 2 | 3;
   flux: number;
   maxFlux: number;
-  stats: { maxHP: number; physicalDamage: number; armor: number; critChance: number };
+  stats: DerivedStats | null;
   timerDurationMs: number;
   onTimerExpire: () => void;
   onDone: () => void;
@@ -118,17 +119,17 @@ export function ForgeHeader({
       <div
         className="flex items-center justify-center gap-3 px-3 py-1"
       >
-        <StatItem label="HP" value={stats.maxHP} color="var(--color-success)" />
-        <StatItem label="DMG" value={stats.physicalDamage} color="white" />
+        <StatItem label="HP" value={stats?.maxHP ?? 0} color="var(--color-success)" />
+        <StatItem label="DMG" value={stats?.physicalDamage ?? 0} color="white" />
         <StatItem
           label="ARM"
-          value={`${Math.round(stats.armor * 100)}%`}
+          value={`${stats?.armor ?? 0}%`}
           color="var(--color-teal-500)"
         />
         <StatItem
           label="CRT"
-          value={`${Math.round(stats.critChance * 100)}%`}
-          color={stats.critChance === 0 ? 'var(--color-danger)' : 'white'}
+          value={`${stats?.critChance ?? 0}%`}
+          color={(stats?.critChance ?? 0) === 0 ? 'var(--color-danger)' : 'white'}
         />
       </div>
 

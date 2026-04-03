@@ -55,7 +55,7 @@ export class RemoteGateway implements MatchGateway {
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         // Only emit if a different player left
         const otherLeft = leftPresences.some(
-          (p: { user_id?: string }) => p.user_id !== this.playerId,
+          (p) => (p as Record<string, unknown>).user_id !== this.playerId,
         );
         if (otherLeft) {
           this.emitEvent({ kind: 'opponent_disconnected' });
@@ -64,7 +64,7 @@ export class RemoteGateway implements MatchGateway {
       .on('presence', { event: 'join' }, ({ newPresences }) => {
         // Only emit if a different player joined back
         const otherJoined = newPresences.some(
-          (p: { user_id?: string }) => p.user_id !== this.playerId,
+          (p) => (p as Record<string, unknown>).user_id !== this.playerId,
         );
         if (otherJoined) {
           this.emitEvent({ kind: 'opponent_reconnected' });
@@ -169,6 +169,8 @@ export class RemoteGateway implements MatchGateway {
           return { ok: true, state: this.state };
         }
         return { ok: false, error: 'No local state for advance_phase/duel_continue' };
+      } else {
+        return { ok: false, error: `Unsupported action kind: ${(action as GameAction).kind}` };
       }
 
       // Re-fetch state after successful dispatch

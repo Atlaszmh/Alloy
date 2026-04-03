@@ -44,6 +44,31 @@ function makePool(seed: number): OrbInstance[] {
   return generatePool(seed, 'ranked', registry);
 }
 
+function makePhysicalBreakdown(raw: number, net: number) {
+  return { raw, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: raw - net, net };
+}
+
+function makeAttackBreakdown(physNet: number, isCrit: boolean, elemNet?: { element: string; net: number }) {
+  const physical = makePhysicalBreakdown(physNet, physNet);
+  const elemental: Record<string, { raw: number; resistPoints: number; elementalPenetration: number; effectiveResist: number; reductionPct: number; mitigated: number; net: number }> = {};
+  let totalNet = physNet;
+  if (elemNet) {
+    elemental[elemNet.element] = { raw: elemNet.net, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, mitigated: 0, net: elemNet.net };
+    totalNet += elemNet.net;
+  }
+  return {
+    dodged: false,
+    physical,
+    elemental,
+    blocked: 0,
+    barrierAbsorbed: 0,
+    totalRaw: totalNet,
+    totalMitigated: 0,
+    totalNet,
+    isCrit,
+  };
+}
+
 function makeCombatLogWithDamage(): CombatLog {
   return {
     seed: 42,
@@ -51,21 +76,21 @@ function makeCombatLogWithDamage(): CombatLog {
       {
         tick: 1,
         events: [
-          { type: 'attack', attacker: 0, damage: 25, damageType: 'physical', isCrit: false },
-          { type: 'attack', attacker: 0, damage: 15, damageType: 'fire', isCrit: false },
+          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(25, false) },
+          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(0, false, { element: 'fire', net: 15 }) },
         ],
       },
       {
         tick: 2,
         events: [
-          { type: 'attack', attacker: 0, damage: 20, damageType: 'physical', isCrit: true },
-          { type: 'dot_tick', target: 1, element: 'fire', damage: 10 },
+          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(20, true) },
+          { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerTick: 10, stacks: 1, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } },
         ],
       },
       {
         tick: 3,
         events: [
-          { type: 'attack', attacker: 1, damage: 30, damageType: 'physical', isCrit: false },
+          { type: 'attack', attacker: 1, breakdown: makeAttackBreakdown(30, false) },
         ],
       },
     ],

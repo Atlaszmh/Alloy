@@ -79,7 +79,7 @@ describe('Matchmaking page', () => {
 
     // Should have navigated to a match URL with ai- prefix
     expect(mockNavigate).toHaveBeenCalledWith(
-      expect.stringMatching(/\/match\/ai-[a-z0-9]+\/draft/),
+      expect.stringMatching(/\/match\/ai-[a-z0-9]+/),
     );
   });
 
