@@ -89,10 +89,9 @@ const MOCK_AFFIXES: AffixDef[] = [
 
 const MOCK_BALANCE = {
   baseHP: 100,
-  ticksPerSecond: 20,
-  maxDuelTicks: 6000,
+  maxDuelSeconds: 100,
   baseCritMultiplier: 1.5,
-  minAttackInterval: 5,
+  minAttackSpeed: 0.3,
   fluxPerRound: [8, 4, 2] as [number, number, number],
   quickMatchFlux: 99,
   fluxCosts: {
@@ -125,7 +124,7 @@ const MOCK_BASE_ITEMS: Record<string, BaseItemDef> = {
     id: 'sword',
     type: 'weapon',
     name: 'Iron Sword',
-    baseStats: { physicalDamage: 10, attackInterval: 30 },
+    baseStats: { physicalDamage: 10, attackSpeed: 1.0 },
     description: 'A basic sword',
   },
   chainmail: {

@@ -3,8 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { BaseItemSelector } from '../BaseItemSelector.js';
 
 const mockWeapons = [
-  { id: 'sword', type: 'weapon' as const, name: 'Sword', baseStats: { physicalDamage: 40, attackInterval: 54 }, description: 'Balanced' },
-  { id: 'dagger', type: 'weapon' as const, name: 'Dagger', baseStats: { physicalDamage: 20, attackInterval: 30 }, description: 'Fast' },
+  { id: 'sword', type: 'weapon' as const, name: 'Sword', baseStats: { physicalDamage: 40, attackSpeed: 1.8 }, description: 'Balanced' },
+  { id: 'dagger', type: 'weapon' as const, name: 'Dagger', baseStats: { physicalDamage: 20, attackSpeed: 1.0 }, description: 'Fast' },
 ];
 
 describe('BaseItemSelector', () => {

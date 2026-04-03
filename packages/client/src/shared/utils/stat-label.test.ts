@@ -7,7 +7,7 @@ describe('getStatAbbreviation', () => {
     ['coldDamage', 'Cold Dmg'],
     ['poisonDamage', 'Psn Dmg'],
     ['chaosDamage', 'Chaos Dmg'],
-    ['attackInterval', 'Atk Spd'],
+    ['attackSpeed', 'Atk Spd'],
     ['critChance', 'Crit'],
     ['maxHP', 'HP'],
     ['coldResistance', 'Cold Res'],
