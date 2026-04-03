@@ -15,7 +15,7 @@ export interface AggregateStats {
   combinationWinRates: Map<string, number>;   // compoundId -> win% when used
 
   avgMatchDuration: number;    // average rounds
-  avgDuelTickCount: number;    // average ticks per duel
+  avgDuelDuration: number;    // average seconds per duel
 }
 
 export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
@@ -34,7 +34,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
       combinationUsageRates: new Map(),
       combinationWinRates: new Map(),
       avgMatchDuration: 0,
-      avgDuelTickCount: 0,
+      avgDuelDuration: 0,
     };
   }
 
@@ -50,7 +50,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
   const combinationStats = new Map<string, { uses: number; wins: number }>();
 
   let totalRounds = 0;
-  let totalTicks = 0;
+  let totalDuration = 0;
   let totalDuels = 0;
 
   for (const match of matches) {
@@ -61,7 +61,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
 
     totalRounds += match.rounds;
     for (const round of match.roundDetails) {
-      totalTicks += round.durationTicks;
+      totalDuration += round.duration;
       totalDuels++;
     }
 
@@ -145,6 +145,6 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
     combinationUsageRates,
     combinationWinRates,
     avgMatchDuration: totalRounds / totalMatches,
-    avgDuelTickCount: totalDuels > 0 ? totalTicks / totalDuels : 0,
+    avgDuelDuration: totalDuels > 0 ? totalDuration / totalDuels : 0,
   };
 }

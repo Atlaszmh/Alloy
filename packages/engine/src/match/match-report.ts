@@ -46,7 +46,7 @@ export function extractMatchReport(
   const roundDetails: RoundReport[] = state.roundResults.map((r) => ({
     round: r.round,
     winner: r.winner,
-    durationTicks: r.tickCount,
+    duration: r.duration,
     p0HpFinal: r.finalHP[0],
     p1HpFinal: r.finalHP[1],
     p0DamageDealt: r.p0DamageDealt,
