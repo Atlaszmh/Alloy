@@ -293,8 +293,6 @@ function setupStores(
     plan,
     selectedOrbUid: null,
     confirmModalOpen: false,
-    activeTab: 'combine',
-    activeItemTab: 'weapon',
     comboSlots: [null, null, null],
     itemSelectionPhase: 'done',
     selectedWeaponId: 'sword',
@@ -463,54 +461,18 @@ describe('Forge page', () => {
     expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
-  it('renders combination workbench on combine tab', () => {
+  it('renders combination workbench', () => {
     setupStores();
     renderForge();
 
-    // CombineWorkbench has COMBINE and CLEAR buttons
     expect(screen.getByRole('button', { name: 'COMBINE' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'CLEAR' })).toBeTruthy();
   });
 
-  it('renders tab bar with Plan & Combine and Equip tabs', () => {
+  it('shows empty sockets for both items', () => {
     setupStores();
     renderForge();
 
-    expect(screen.getByText(/Plan & Combine/)).toBeTruthy();
-    expect(screen.getByText(/Equip/)).toBeTruthy();
-  });
-
-  it('switches to equip tab and shows item socket view', () => {
-    setupStores();
-    renderForge();
-
-    // Click the Equip tab
-    fireEvent.click(screen.getByText(/Equip/));
-    expect(useForgeStore.getState().activeTab).toBe('equip');
-
-    // Should show both items side by side
-    expect(screen.getByText('Iron Sword')).toBeTruthy();
-    expect(screen.getByText('Chainmail')).toBeTruthy();
-  });
-
-  it('shows item name in equip tab', () => {
-    setupStores();
-    renderForge();
-
-    // Switch to equip tab by clicking
-    fireEvent.click(screen.getByText(/Equip/));
-
-    expect(screen.getByText('Iron Sword')).toBeTruthy();
-  });
-
-  it('shows empty sockets in equip tab', () => {
-    setupStores();
-    renderForge();
-
-    // Switch to equip tab by clicking
-    fireEvent.click(screen.getByText(/Equip/));
-
-    // Each item has 6 empty slots, both items displayed = 12 socket elements
     const sockets = document.querySelectorAll('[data-forge-socket]');
     expect(sockets.length).toBe(12);
   });
@@ -541,15 +503,12 @@ describe('Forge page', () => {
     expect(screen.queryByText('FORGE PHASE')).toBeNull();
   });
 
-  it('shows both items side by side in equip tab', () => {
+  it('shows items and workbench simultaneously', () => {
     setupStores();
     renderForge();
 
-    // Switch to equip tab by clicking
-    fireEvent.click(screen.getByText(/Equip/));
-
-    // Both items should be visible simultaneously
     expect(screen.getByText('Iron Sword')).toBeTruthy();
     expect(screen.getByText('Chainmail')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'COMBINE' })).toBeTruthy();
   });
 });
