@@ -46,7 +46,6 @@ export function Forge() {
   const plan = useForgeStore(s => s.plan);
   const selectedOrbUid = useForgeStore(s => s.selectedOrbUid);
   const confirmModalOpen = useForgeStore(s => s.confirmModalOpen);
-  const activeTab = useForgeStore(s => s.activeTab);
   const comboSlots = useForgeStore(s => s.comboSlots);
   const itemSelectionPhase = useForgeStore(s => s.itemSelectionPhase);
   const selectedWeaponId = useForgeStore(s => s.selectedWeaponId);
@@ -57,7 +56,6 @@ export function Forge() {
     getCommitActions,
     selectOrb,
     selectBaseItem,
-    setActiveTab,
     setComboSlotByIndex,
     clearComboSlots,
     openConfirmModal,
@@ -495,34 +493,6 @@ export function Forge() {
     </div>
   ) : undefined;
 
-  // ── Tab bar JSX ──
-  const tabBarJSX = (
-    <div className="flex" style={{ background: 'var(--color-surface-900)' }}>
-      <button
-        className={`flex-1 py-2 text-center text-sm font-semibold ${activeTab === 'combine' ? 'text-accent-400' : 'text-surface-300'}`}
-        style={{
-          fontFamily: 'var(--font-family-display)',
-          borderBottom: activeTab === 'combine' ? '2px solid var(--color-accent-500)' : '2px solid transparent',
-        }}
-        aria-selected={activeTab === 'combine'}
-        onClick={() => { setActiveTab('combine'); playSound('buttonClick'); }}
-      >
-        {'\u2692'} Plan & Combine
-      </button>
-      <button
-        className={`flex-1 py-2 text-center text-sm font-semibold ${activeTab === 'equip' ? 'text-accent-400' : 'text-surface-300'}`}
-        style={{
-          fontFamily: 'var(--font-family-display)',
-          borderBottom: activeTab === 'equip' ? '2px solid var(--color-accent-500)' : '2px solid transparent',
-        }}
-        aria-selected={activeTab === 'equip'}
-        onClick={() => { setActiveTab('equip'); playSound('buttonClick'); }}
-      >
-        {'\u2694'} Equip
-      </button>
-    </div>
-  );
-
   return (
     <div className="page-enter flex h-full flex-col" style={{ background: 'var(--color-surface-950)' }}>
       {/* PvP disconnect overlay */}
@@ -540,56 +510,56 @@ export function Forge() {
         baseStatSelectors={baseStatSelectorJSX}
       />
 
-      {/* 2. Tab bar */}
-      {tabBarJSX}
-
-      {/* 3. Action area — grows to fill available space */}
-      <div className="overflow-y-auto" key={activeTab} style={{ flex: 1, minHeight: 0, padding: 'var(--gap-sm) var(--gap-md)', animation: 'fade-in 0.2s ease-out' }}>
-        {activeTab === 'combine' ? (
-          <CombineWorkbench
-            comboSlots={comboSlots}
-            registry={registry}
-            canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
-            onSlotClick={handleComboSlotClick}
-            onCombine={handleCombine}
-            onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
-          />
-        ) : (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <div style={{ flex: 1, minWidth: 0, paddingRight: 'var(--gap-md)' }} data-item-card="weapon">
-              <ItemSocketView
-                item={plan.loadout.weapon}
-                cardId="weapon"
-                registry={registry}
-                plan={plan}
-                selectedOrbUid={selectedOrbUid}
-                onSocketClick={(slotIndex) => handleSocketClick('weapon', slotIndex)}
-                onSocketRemove={(slotIndex) => handleSocketRemove('weapon', slotIndex)}
-              />
-            </div>
-            {/* Visual divider between items */}
-            <div style={{
-              width: 1,
-              alignSelf: 'stretch',
-              background: 'linear-gradient(to bottom, transparent, var(--color-surface-500) 15%, var(--color-surface-500) 85%, transparent)',
-              flexShrink: 0,
-            }} />
-            <div style={{ flex: 1, minWidth: 0, paddingLeft: 'var(--gap-md)' }} data-item-card="armor">
-              <ItemSocketView
-                item={plan.loadout.armor}
-                cardId="armor"
-                registry={registry}
-                plan={plan}
-                selectedOrbUid={selectedOrbUid}
-                onSocketClick={(slotIndex) => handleSocketClick('armor', slotIndex)}
-                onSocketRemove={(slotIndex) => handleSocketRemove('armor', slotIndex)}
-              />
-            </div>
+      {/* 2. Items area — scrollable middle */}
+      <div
+        className="overflow-y-auto"
+        style={{ flex: 1, minHeight: 0, padding: 'var(--gap-sm) var(--gap-md)' }}
+      >
+        <div style={{ display: 'flex', gap: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, paddingRight: 'var(--gap-md)' }} data-item-card="weapon">
+            <ItemSocketView
+              item={plan.loadout.weapon}
+              cardId="weapon"
+              registry={registry}
+              plan={plan}
+              selectedOrbUid={selectedOrbUid}
+              onSocketClick={(slotIndex) => handleSocketClick('weapon', slotIndex)}
+              onSocketRemove={(slotIndex) => handleSocketRemove('weapon', slotIndex)}
+            />
           </div>
-        )}
+          <div style={{
+            width: 1,
+            alignSelf: 'stretch',
+            background: 'linear-gradient(to bottom, transparent, var(--color-surface-500) 15%, var(--color-surface-500) 85%, transparent)',
+            flexShrink: 0,
+          }} />
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: 'var(--gap-md)' }} data-item-card="armor">
+            <ItemSocketView
+              item={plan.loadout.armor}
+              cardId="armor"
+              registry={registry}
+              plan={plan}
+              selectedOrbUid={selectedOrbUid}
+              onSocketClick={(slotIndex) => handleSocketClick('armor', slotIndex)}
+              onSocketRemove={(slotIndex) => handleSocketRemove('armor', slotIndex)}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* 4. Gem tray at bottom — shrinks to content, gems sized for 5-across */}
+      {/* 3. Combine workbench — pinned above stockpile */}
+      <div style={{ flexShrink: 0 }}>
+        <CombineWorkbench
+          comboSlots={comboSlots}
+          registry={registry}
+          canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
+          onSlotClick={handleComboSlotClick}
+          onCombine={handleCombine}
+          onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
+        />
+      </div>
+
+      {/* 4. Gem tray — pinned at bottom */}
       <div style={{ flexShrink: 0, padding: '0 var(--gap-md) var(--gap-sm)' }}>
         <ForgeGemTray
           stockpile={plan.stockpile}
