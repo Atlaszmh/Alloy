@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
+import { useForgeStore } from '@/stores/forgeStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { DebugPhaseTarget } from '@alloy/engine';
 
@@ -26,6 +27,16 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
     try {
       const seed = 42; // Fixed seed for reproducibility
       startDebugMatch(seed, 'ranked', 3, target);
+
+      // Skip the BaseItemSelector for phases that already have items set
+      if (target !== 'draft') {
+        useForgeStore.setState({
+          itemSelectionPhase: 'done',
+          selectedWeaponId: 'sword',
+          selectedArmorId: 'chainmail',
+        });
+      }
+
       const code = 'ai-' + Math.random().toString(36).substring(2, 8);
       navigate(`/match/${code}`);
       onClose();

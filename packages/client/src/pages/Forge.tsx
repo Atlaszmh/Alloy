@@ -60,7 +60,6 @@ export function Forge() {
     clearComboSlots,
     openConfirmModal,
     closeConfirmModal,
-    reset: resetForgeStore,
   } = useForgeStore();
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
@@ -157,8 +156,7 @@ export function Forge() {
     }
 
     closeConfirmModal();
-    resetForgeStore();
-  }, [matchState, aiController, gateway, phase, round, isAiMatch, getCommitActions, closeConfirmModal, resetForgeStore]);
+  }, [matchState, aiController, gateway, phase, round, isAiMatch, getCommitActions, closeConfirmModal]);
 
   // ── Timer auto-commit ──
   const handleTimerExpire = useCallback(() => {
