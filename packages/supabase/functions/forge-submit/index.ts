@@ -4,7 +4,8 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
-import { applyAction, DataRegistry, loadAndValidateData } from '@alloy/engine';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
+import { applyAction, DataRegistry, loadAndValidateData, validateLoadout } from '@alloy/engine';
 import type { MatchState, Loadout } from '@alloy/engine';
 
 // Module-scope cached registry for warm invocations
@@ -40,16 +41,22 @@ function calculateEloDelta(
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'forge-submit');
+    if (rateLimited) return rateLimited;
+
     const { roomCode, loadout } = await req.json() as { roomCode: string; loadout: Loadout };
 
     if (!roomCode || !loadout) {
       return errorResponse('Missing roomCode or loadout', 400);
     }
-
-    const client = getServiceClient();
     const reg = getRegistry();
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -70,6 +77,12 @@ Deno.serve(async (req: Request) => {
 
       if (gameState.phase.kind !== 'forge') {
         return errorResponse('Not in forge phase', 400);
+      }
+
+      // Validate the loadout against the player's stockpile and data registry
+      const validation = validateLoadout(loadout, gameState.players[playerIndex].stockpile, reg);
+      if (!validation.valid) {
+        return errorResponse(`Invalid loadout: ${validation.errors[0]}`, 400);
       }
 
       // Mark this player as forge-complete
@@ -181,20 +194,20 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // If match is complete, calculate Elo updates
+      // If match is complete, calculate Elo updates atomically
       if (matchComplete) {
         const phase = newState.phase as { kind: 'complete'; winner: 0 | 1 | 'draw'; scores: [number, number] };
 
         try {
           const { data: p1 } = await client
             .from('profiles')
-            .select('id, elo, matches_played, matches_won')
+            .select('id, elo, matches_played')
             .eq('id', match.player1_id)
             .single();
 
           const { data: p2 } = await client
             .from('profiles')
-            .select('id, elo, matches_played, matches_won')
+            .select('id, elo, matches_played')
             .eq('id', match.player2_id)
             .single();
 
@@ -203,23 +216,8 @@ Deno.serve(async (req: Request) => {
             const delta1 = calculateEloDelta(p1.elo, p2.elo, p1Won, p1.matches_played);
             const delta2 = calculateEloDelta(p2.elo, p1.elo, !p1Won, p2.matches_played);
 
-            await client
-              .from('profiles')
-              .update({
-                elo: p1.elo + delta1,
-                matches_played: p1.matches_played + 1,
-                matches_won: p1.matches_won + (p1Won ? 1 : 0),
-              })
-              .eq('id', p1.id);
-
-            await client
-              .from('profiles')
-              .update({
-                elo: p2.elo + delta2,
-                matches_played: p2.matches_played + 1,
-                matches_won: p2.matches_won + (!p1Won ? 1 : 0),
-              })
-              .eq('id', p2.id);
+            await client.rpc('update_elo', { p_player_id: p1.id, p_elo_delta: delta1, p_won: p1Won });
+            await client.rpc('update_elo', { p_player_id: p2.id, p_elo_delta: delta2, p_won: !p1Won });
 
             // Store elo delta on match
             await client
@@ -228,14 +226,8 @@ Deno.serve(async (req: Request) => {
               .eq('id', match.id);
           } else if (p1 && p2) {
             // Draw — both get +1 match played, no elo change
-            await client
-              .from('profiles')
-              .update({ matches_played: p1.matches_played + 1 })
-              .eq('id', p1.id);
-            await client
-              .from('profiles')
-              .update({ matches_played: p2.matches_played + 1 })
-              .eq('id', p2.id);
+            await client.rpc('update_elo', { p_player_id: p1.id, p_elo_delta: 0, p_won: false });
+            await client.rpc('update_elo', { p_player_id: p2.id, p_elo_delta: 0, p_won: false });
           }
         } catch (_eloErr) {
           // Elo update failure should not fail the whole request
@@ -248,10 +240,12 @@ Deno.serve(async (req: Request) => {
 
     return errorResponse('Failed after retries', 500);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('not found') ? 404
-      : message.includes('Unauthorized') || message.includes('token') ? 401
-      : 500;
-    return errorResponse(message, status);
+    console.error('forge-submit error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    const isNotFound = message.includes('not found');
+    const status = isAuth ? 401 : isNotFound ? 404 : 500;
+    const label = isAuth ? 'Unauthorized' : isNotFound ? 'Match not found' : 'Internal server error';
+    return errorResponse(label, status);
   }
 });

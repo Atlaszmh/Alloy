@@ -3,6 +3,7 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 import { createMatch, DataRegistry, loadAndValidateData } from '@alloy/engine';
 import type { MatchMode } from '@alloy/engine';
 
@@ -21,16 +22,22 @@ interface MatchCreateRequest {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'match-create');
+    if (rateLimited) return rateLimited;
+
     const body: MatchCreateRequest = await req.json();
 
     if (!body.mode || !['quick', 'unranked', 'ranked'].includes(body.mode)) {
       return errorResponse('Invalid mode. Must be quick, unranked, or ranked.', 400);
     }
-
-    const client = getServiceClient();
 
     // Generate a unique room code via database function
     const { data: roomCode, error: rpcError } = await client.rpc('generate_room_code');
@@ -72,12 +79,15 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (insertError || !match) {
-      return errorResponse(`Failed to create match: ${insertError?.message ?? 'unknown'}`, 500);
+      console.error('Failed to create match:', insertError?.message ?? 'unknown');
+      return errorResponse('Failed to create match', 500);
     }
 
     return jsonResponse({ roomCode, matchId });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return errorResponse(message, 401);
+    console.error('match-create error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    return errorResponse(isAuth ? 'Unauthorized' : 'Internal server error', isAuth ? 401 : 500);
   }
 });
