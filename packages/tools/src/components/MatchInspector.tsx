@@ -152,7 +152,7 @@ export default function MatchInspector({ results }: Props) {
   const [eventFilter, setEventFilter] = useState<string>('all');
 
   const match = results?.matches[selectedMatch] ?? null;
-  const log = match?.duelLogs[selectedRound] ?? null;
+  const log = match?.combatLogs?.[selectedRound] ?? null;
 
   const hpCurves = useMemo(() => {
     if (!log) return [];
@@ -183,8 +183,8 @@ export default function MatchInspector({ results }: Props) {
     );
   }
 
-  const p0Stats = match?.player0Stats;
-  const p1Stats = match?.player1Stats;
+  const p0Stats = match?.playerStats?.[0] ?? null;
+  const p1Stats = match?.playerStats?.[1] ?? null;
 
   return (
     <div>
@@ -203,13 +203,13 @@ export default function MatchInspector({ results }: Props) {
           >
             {results.matches.map((m, i) => (
               <option key={i} value={i}>
-                #{i} (seed {m.seed}) - Winner: {m.winner === 'draw' ? 'Draw' : `P${m.winner}`}
+                #{i} (seed {m.seed}) - Winner: {m.winner === null ? 'Draw' : `P${m.winner}`}
               </option>
             ))}
           </select>
         </div>
 
-        {match && match.duelLogs.length > 1 && (
+        {match && (match.combatLogs?.length ?? 0) > 1 && (
           <div>
             <span style={{ fontSize: '13px', color: '#a1a1aa', marginRight: '8px' }}>Round:</span>
             <select
@@ -220,7 +220,7 @@ export default function MatchInspector({ results }: Props) {
               value={selectedRound}
               onChange={(e) => setSelectedRound(Number(e.target.value))}
             >
-              {match.duelLogs.map((_, i) => (
+              {(match.combatLogs ?? []).map((_, i) => (
                 <option key={i} value={i}>Round {i + 1}</option>
               ))}
             </select>

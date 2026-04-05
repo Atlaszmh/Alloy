@@ -1,4 +1,6 @@
 import type { Loadout } from './item.js';
+import type { CombatLog } from './combat.js';
+import type { DerivedStats } from './derived-stats.js';
 
 export interface MatchReport {
   seed?: number;
@@ -8,7 +10,8 @@ export interface MatchReport {
   durationMs: number;
   players: PlayerReport[];
   roundDetails: RoundReport[];
-  combatLog?: unknown[];
+  combatLogs?: CombatLog[];
+  playerStats?: [DerivedStats | null, DerivedStats | null];
 }
 
 export interface PlayerReport {

@@ -1,8 +1,9 @@
 import type { MatchState } from '../types/match.js';
 import type { MatchReport, PlayerReport, RoundReport } from '../types/match-report.js';
+import type { DerivedStats } from '../types/derived-stats.js';
 import type { Loadout } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
-import { collectAffixIds, isSynergyActive } from '../forge/stat-calculator.js';
+import { collectAffixIds, isSynergyActive, calculateStats } from '../forge/stat-calculator.js';
 
 /**
  * Extract a standardized MatchReport from a completed MatchState.
@@ -53,6 +54,21 @@ export function extractMatchReport(
     p1DamageDealt: r.p1DamageDealt,
   }));
 
+  // Include combat logs if available
+  const combatLogs = state.duelLogs.length > 0 ? state.duelLogs : undefined;
+
+  // Compute player stats if registry is available
+  let playerStats: [DerivedStats | null, DerivedStats | null] | undefined;
+  if (registry) {
+    try {
+      const s0 = calculateStats(state.players[0].loadout, registry);
+      const s1 = calculateStats(state.players[1].loadout, registry);
+      playerStats = [s0, s1];
+    } catch {
+      playerStats = [null, null];
+    }
+  }
+
   return {
     seed,
     source,
@@ -61,6 +77,8 @@ export function extractMatchReport(
     durationMs,
     players,
     roundDetails,
+    combatLogs,
+    playerStats,
   };
 }
 
