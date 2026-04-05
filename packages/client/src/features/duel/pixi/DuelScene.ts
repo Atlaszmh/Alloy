@@ -6,6 +6,8 @@ import { VFXManager } from './VFXManager.js';
 import { DamageNumbers } from './DamageNumbers.js';
 import { StatusIcons } from './StatusIcons.js';
 
+export type HPChangeCallback = (hp: [number, number], maxHp: [number, number]) => void;
+
 const ELEMENT_COLORS: Record<Element | 'physical', number> = {
   fire: 0xe85d3a,
   cold: 0x3a9be8,
@@ -40,6 +42,12 @@ export class DuelScene {
   private lastAttackTime: [number, number] = [0, 0];
   private currentTime = 0;
 
+  // Track pending timeouts to clear on destroy/reset
+  private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
+  // External callback for HP changes (so React can render HP bars)
+  onHPChange: HPChangeCallback | null = null;
+
   async init(app: Application, stats: [DerivedStats, DerivedStats]): Promise<void> {
     this.app = app;
     this.maxHp = [stats[0].maxHP, stats[1].maxHP];
@@ -62,11 +70,9 @@ export class DuelScene {
     }
     app.stage.addChild(floorLines);
 
-    // Create gladiators (with cooldown ring info)
-    const atkSec0 = stats[0].attackSpeed;
-    const atkSec1 = stats[1].attackSpeed;
-    const g0 = new GladiatorSprite(0xc8a84e, 'You', P0_X, GLADIATOR_Y, 1, 'weapon', atkSec0);
-    const g1 = new GladiatorSprite(0xe85d3a, 'AI', P1_X, GLADIATOR_Y, -1, 'weapon', atkSec1);
+    // Create gladiators
+    const g0 = new GladiatorSprite(0xc8a84e, 'You', P0_X, GLADIATOR_Y, 1);
+    const g1 = new GladiatorSprite(0xe85d3a, 'AI', P1_X, GLADIATOR_Y, -1);
     app.stage.addChild(g0.container);
     app.stage.addChild(g1.container);
     this.gladiators = [g0, g1];
@@ -127,10 +133,8 @@ export class DuelScene {
       case 'attack': {
         const target: 0 | 1 = event.attacker === 0 ? 1 : 0;
 
-        // Track attack timing for cooldown ring
+        // Track attack timing
         this.lastAttackTime[event.attacker] = time;
-        this.gladiators[event.attacker].triggerAttackPulse();
-        this.gladiators[event.attacker].setCooldownProgress(0);
 
         // Gladiator attack animation
         this.gladiators[event.attacker].playAttack();
@@ -247,7 +251,7 @@ export class DuelScene {
       case 'trigger_proc': {
         this.statusIcons.addStatus(event.player, 'buff');
         // Auto-remove buff icon after some time (simple approach)
-        setTimeout(() => {
+        this.safeTimeout(() => {
           this.statusIcons?.removeStatus(event.player, 'buff');
         }, 1500);
         break;
@@ -255,7 +259,7 @@ export class DuelScene {
 
       case 'synergy_proc': {
         this.statusIcons.addStatus(event.player, 'buff');
-        setTimeout(() => {
+        this.safeTimeout(() => {
           this.statusIcons?.removeStatus(event.player, 'buff');
         }, 1500);
         break;
@@ -271,7 +275,7 @@ export class DuelScene {
         this.statusIcons.addStatus(event.target, 'stun');
         // Remove stun icon after duration
         const stunMs = event.duration * 1000;
-        setTimeout(() => {
+        this.safeTimeout(() => {
           this.statusIcons?.removeStatus(event.target, 'stun');
         }, stunMs);
         break;
@@ -280,6 +284,7 @@ export class DuelScene {
       case 'hp_change': {
         this.hp[event.player] = event.newHP;
         this.drawHPBars();
+        this.onHPChange?.(this.hp, this.maxHp);
         break;
       }
 
@@ -304,20 +309,15 @@ export class DuelScene {
   }
 
   update(dt: number): void {
-    // Update cooldown progress based on ticks elapsed since last attack
-    if (this.gladiators) {
-      for (const i of [0, 1] as const) {
-        const elapsed = this.currentTime - this.lastAttackTime[i];
-        const progress = Math.min(1, elapsed / this.attackSpeeds[i]);
-        this.gladiators[i].setCooldownProgress(progress);
-      }
-    }
-
     this.gladiators?.[0].update(dt);
     this.gladiators?.[1].update(dt);
     this.vfx?.update(dt);
     this.damageNumbers?.update(dt);
     this.statusIcons?.update(dt);
+  }
+
+  getHP(): { hp: [number, number]; maxHp: [number, number] } {
+    return { hp: [...this.hp] as [number, number], maxHp: [...this.maxHp] as [number, number] };
   }
 
   get processedTime(): number {
@@ -338,6 +338,8 @@ export class DuelScene {
     this.lastAttackTime = [0, 0];
     this.currentTime = 0;
 
+    this.clearPendingTimeouts();
+
     this.gladiators?.[0].reset();
     this.gladiators?.[1].reset();
     this.vfx?.clear();
@@ -348,6 +350,8 @@ export class DuelScene {
   }
 
   destroy(): void {
+    this.clearPendingTimeouts();
+
     this.gladiators?.[0].destroy();
     this.gladiators?.[1].destroy();
     this.vfx?.destroy();
@@ -360,6 +364,21 @@ export class DuelScene {
     this.vfx = null;
     this.damageNumbers = null;
     this.statusIcons = null;
+  }
+
+  private safeTimeout(fn: () => void, ms: number): void {
+    const id = setTimeout(() => {
+      this.pendingTimeouts.delete(id);
+      fn();
+    }, ms);
+    this.pendingTimeouts.add(id);
+  }
+
+  private clearPendingTimeouts(): void {
+    for (const id of this.pendingTimeouts) {
+      clearTimeout(id);
+    }
+    this.pendingTimeouts.clear();
   }
 
   private drawHPBars(): void {
