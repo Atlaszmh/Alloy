@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import type { DataRegistry, OrbInstance } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
-import { getStatLabel, getStatAbbreviation } from '@/shared/utils/stat-label';
 import { getGemArt } from '@/shared/utils/art-registry';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
@@ -32,12 +31,6 @@ function getOrbElement(orb: OrbInstance, registry: DataRegistry) {
   if (!affix) return null;
   const elementTag = affix.tags.find((t: string) => ELEMENT_TAGS.has(t));
   return elementTag ?? null;
-}
-
-function getOrbStatText(orb: OrbInstance, registry: DataRegistry) {
-  const affix = registry.getAffix(orb.affixId);
-  if (!affix) return '';
-  return getStatLabel(affix, orb);
 }
 
 type GlowSignal = 'none' | 'white' | 'gold';
@@ -203,7 +196,6 @@ function Slot({
 
   const element = getOrbElement(orb, registry);
   const emoji = element ? ELEMENT_SYMBOLS[element] : '?';
-  const statText = getOrbStatText(orb, registry);
   const gradient = element ? ELEMENT_GRADIENTS[element] : null;
   const borderColor = gradient?.border ?? 'var(--color-surface-500)';
 

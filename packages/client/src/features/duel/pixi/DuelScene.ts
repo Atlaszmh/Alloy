@@ -23,7 +23,6 @@ export const P0_X = 150;
 export const P1_X = 450;
 
 export class DuelScene {
-  private app: Application | null = null;
   private gladiators: [GladiatorSprite, GladiatorSprite] | null = null;
   private hpBars: [Graphics, Graphics] | null = null;
   private hpTexts: [Text, Text] | null = null;
@@ -41,7 +40,6 @@ export class DuelScene {
   private currentTime = 0;
 
   async init(app: Application, stats: [DerivedStats, DerivedStats]): Promise<void> {
-    this.app = app;
     this.maxHp = [stats[0].maxHP, stats[1].maxHP];
     this.hp = [stats[0].maxHP, stats[1].maxHP];
     this.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];

@@ -39,7 +39,7 @@ interface DuelRendererProps {
   onTimeUpdate?: (time: number) => void;
 }
 
-export function DuelRenderer({ combatLog, stats, currentTime, isPlaying, onTimeUpdate }: DuelRendererProps) {
+export function DuelRenderer({ combatLog, stats, currentTime, isPlaying: _isPlaying, onTimeUpdate: _onTimeUpdate }: DuelRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const stateRef = useRef({

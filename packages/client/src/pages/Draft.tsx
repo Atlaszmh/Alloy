@@ -29,7 +29,7 @@ function StockpileZone({
   orbs,
   maxOrbs,
   affixMap,
-  isActive,
+  isActive: _isActive,
   isDropTarget,
   side,
 }: {

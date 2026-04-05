@@ -11,7 +11,7 @@ export class ChaosEffect extends BaseEffect {
   }
 
   play(
-    origin: { x: number; y: number },
+    _origin: { x: number; y: number },
     target: { x: number; y: number },
   ): void {
     // Reality-tear distortion lines around target

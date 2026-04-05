@@ -138,7 +138,7 @@ export function Matchmaking() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('match-join', {
+      const { error: fnError } = await supabase.functions.invoke('match-join', {
         body: { roomCode: code },
       });
 

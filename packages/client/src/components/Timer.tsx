@@ -12,7 +12,6 @@ interface TimerProps {
 export function Timer({ durationMs, onExpire, paused = false, className = '' }: TimerProps) {
   const remaining = useCountdown(durationMs, onExpire, paused);
   const seconds = Math.ceil(remaining / 1000);
-  const totalSeconds = Math.ceil(durationMs / 1000);
   const progress = remaining / durationMs;
   const prevSecondsRef = useRef(seconds);
 

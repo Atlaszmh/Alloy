@@ -1,4 +1,3 @@
-import type { AffixCategory } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {

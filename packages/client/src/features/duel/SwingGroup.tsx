@@ -1,4 +1,4 @@
-import type { CombatEvent, DamageBreakdown, DotTickBreakdown, HealBreakdown, Element } from '@alloy/engine';
+import type { DamageBreakdown, DotTickBreakdown, HealBreakdown, Element } from '@alloy/engine';
 import type { SwingGroup } from './combat-log-grouper.js';
 import { DAMAGE_CSS_COLORS, UI_COLORS } from './colors.js';
 

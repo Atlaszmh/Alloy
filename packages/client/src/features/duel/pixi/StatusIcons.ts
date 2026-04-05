@@ -22,7 +22,7 @@ export class StatusIcons {
 
   constructor(
     parent: Container,
-    private positions: [{ x: number; y: number }, { x: number; y: number }],
+    positions: [{ x: number; y: number }, { x: number; y: number }],
   ) {
     this.parentContainer = parent;
 

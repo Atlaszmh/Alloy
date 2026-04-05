@@ -64,7 +64,7 @@ function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
 }
 
 export function PostMatch() {
-  const { code } = useParams();
+  useParams();
   const navigate = useNavigate();
 
   const gateway = useGateway();
