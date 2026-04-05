@@ -19,6 +19,7 @@ export function PhaseRouter() {
   const gateway = useMatchGateway(code ?? '');
 
   useEffect(() => {
+    if (!gateway) return;
     return gateway.subscribe(() => forceUpdate((n) => n + 1));
   }, [gateway]);
 
@@ -26,9 +27,9 @@ export function PhaseRouter() {
     return <Navigate to="/queue" replace />;
   }
 
-  const matchState = gateway.getState();
+  const matchState = gateway?.getState() ?? null;
 
-  if (!matchState) {
+  if (!gateway || !matchState) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
         <h2

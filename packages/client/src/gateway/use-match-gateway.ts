@@ -1,33 +1,35 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import type { MatchGateway } from './types';
 import { LocalGateway } from './local-gateway';
 import { RemoteGateway } from './remote-gateway';
 
-export function useMatchGateway(code: string): MatchGateway {
+/**
+ * Creates a MatchGateway scoped to the given match code.
+ *
+ * Gateway construction is deferred to useEffect so that React 19 StrictMode
+ * double-mount cycles cleanly: each mount creates its own gateway and the
+ * cleanup function destroys only the instance it created, preventing the
+ * "destroyed flag" bug where the second instance is nuked by the first
+ * cleanup.
+ */
+export function useMatchGateway(code: string): MatchGateway | null {
   const gatewayRef = useRef<MatchGateway | null>(null);
-  const codeRef = useRef<string>(code);
-
-  if (gatewayRef.current === null || codeRef.current !== code) {
-    // Destroy old gateway if code changed
-    if (gatewayRef.current !== null) {
-      gatewayRef.current.destroy();
-    }
-
-    codeRef.current = code;
-
-    if (code.startsWith('ai-')) {
-      gatewayRef.current = new LocalGateway(code);
-    } else {
-      gatewayRef.current = new RemoteGateway(code);
-    }
-  }
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
+    const isLocal = code.startsWith('ai-');
+    const gw = isLocal ? new LocalGateway(code) : new RemoteGateway(code);
+    gatewayRef.current = gw;
+    forceUpdate((n) => n + 1);
+
     return () => {
-      gatewayRef.current?.destroy();
-      gatewayRef.current = null;
+      gw.destroy();
+      // Only null out the ref if it still points to *our* instance
+      if (gatewayRef.current === gw) {
+        gatewayRef.current = null;
+      }
     };
-  }, []);
+  }, [code]);
 
   return gatewayRef.current;
 }
