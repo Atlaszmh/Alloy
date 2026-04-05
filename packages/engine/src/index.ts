@@ -13,6 +13,8 @@ export { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemov
 export type { ForgePlan, PlanResult } from './forge/forge-plan.js';
 export { getFluxForRound, getActionCost } from './forge/flux-tracker.js';
 export { calculateStats } from './forge/stat-calculator.js';
+export { validateLoadout } from './forge/loadout-validator.js';
+export type { LoadoutValidationResult } from './forge/loadout-validator.js';
 export { simulate } from './duel/duel-engine.js';
 export { createGladiator } from './duel/gladiator.js';
 export { createMatch, applyAction, createDebugMatch } from './match/match-controller.js';
