@@ -75,7 +75,7 @@ export class GladiatorSprite {
         fill: '#ffffff',
       },
     });
-    this.nameLabel.anchor = { x: 0.5, y: 0 } as any;
+    this.nameLabel.anchor.set(0.5, 0);
     this.nameLabel.x = 0;
     this.nameLabel.y = 8;
     this.container.addChild(this.nameLabel);

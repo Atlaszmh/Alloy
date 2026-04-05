@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useGateway } from '@/gateway';
 import type { CombatLog, CombatEvent, DuelResult, DerivedStats } from '@alloy/engine';
 import { calculateStats } from '@alloy/engine';
-import { DuelRenderer } from '@/components/DuelRenderer';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
 import { useMatchStore } from '@/stores/matchStore';
+import { usePixiApp } from '@/features/duel/hooks/usePixiApp.js';
+import { useDuelPlayback } from '@/features/duel/hooks/useDuelPlayback.js';
+import { DuelScene, STAGE_WIDTH } from '@/features/duel/pixi/DuelScene.js';
 
 /* ═══════════════════════════════════════════════════════════════
    HPBar — slim bar used for both top (enemy) and bottom (player)
@@ -113,11 +115,17 @@ export function Duel() {
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
-  const [playbackTime, setPlaybackTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const animationRef = useRef<number>(0);
+
+  // HP state driven by DuelScene callbacks
+  const [hpState, setHpState] = useState<{ hp: [number, number]; maxHp: [number, number] } | null>(null);
+
+  // ── PixiJS + DuelScene setup ──
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const appRef = usePixiApp(canvasContainerRef);
+  const sceneRef = useRef<DuelScene | null>(null);
+  const [scene, setScene] = useState<DuelScene | null>(null);
 
   // Run the duel (engine simulation) when we enter duel phase
   useEffect(() => {
@@ -143,87 +151,118 @@ export function Duel() {
     return currentLog.result;
   }, [currentLog]);
 
-  // Playback animation — advance in real time
-  useEffect(() => {
-    if (!isPlaying || !currentLog) return;
-
-    const maxTime = currentLog.frames[currentLog.frames.length - 1]?.time ?? 0;
-    let startTimestamp: number | null = null;
-    let startPlaybackTime = playbackTime;
-
-    const step = (timestamp: number) => {
-      if (startTimestamp === null) startTimestamp = timestamp;
-      const elapsed = (timestamp - startTimestamp) / 1000;
-      const newTime = Math.min(startPlaybackTime + elapsed, maxTime);
-      setPlaybackTime(newTime);
-      if (newTime < maxTime) {
-        animationRef.current = requestAnimationFrame(step);
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animationRef.current);
-  }, [isPlaying, currentLog]);
-
-  // Handle playback completion
-  useEffect(() => {
-    if (!currentLog || isPlaying) return;
-    const maxTime = currentLog.frames[currentLog.frames.length - 1]?.time ?? 0;
-    if (playbackTime >= maxTime && maxTime > 0 && !showBreakdown) {
-      setIsPlaying(false);
-      setShowBreakdown(true);
-      if (currentLog.result.winner === 0) {
-        setShowCelebration(true);
-      }
-    }
-  }, [playbackTime, currentLog, isPlaying, showBreakdown]);
-
-  // Stable stats reference — only recalculates when loadouts change, not on every tick
+  // Stable stats reference
   const derivedStats = useMemo(() => {
     if (!player0 || !player1) return null;
     const reg = getRegistry();
     return [calculateStats(player0.loadout, reg), calculateStats(player1.loadout, reg)] as [DerivedStats, DerivedStats];
   }, [player0, player1, getRegistry]);
 
-  // Compute HP at current playback time
-  const hpState = useMemo(() => {
-    if (!currentLog || !derivedStats) return null;
-    let hp = [derivedStats[0].maxHP, derivedStats[1].maxHP];
-    const maxHp = [...hp];
+  // Initialize DuelScene when app is ready
+  useEffect(() => {
+    const app = appRef.current;
+    if (!app || !derivedStats) return;
 
-    for (const frame of currentLog.frames) {
-      if (frame.time > playbackTime) break;
-      for (const event of frame.events) {
-        if (event.type === 'hp_change') {
-          hp[event.player] = event.newHP;
-        }
+    // Already have a scene for this app? Skip.
+    if (sceneRef.current) return;
+
+    const duelScene = new DuelScene();
+
+    // HP change callback to update React state
+    duelScene.onHPChange = (hp, maxHp) => {
+      setHpState({ hp: [...hp] as [number, number], maxHp: [...maxHp] as [number, number] });
+    };
+
+    duelScene.init(app, derivedStats).then(() => {
+      sceneRef.current = duelScene;
+      setScene(duelScene);
+      // Initialize HP state
+      const initialHP = duelScene.getHP();
+      setHpState(initialHP);
+    });
+
+    return () => {
+      duelScene.destroy();
+      sceneRef.current = null;
+      setScene(null);
+    };
+  }, [appRef.current, derivedStats]);
+
+  // Handle canvas scaling via ResizeObserver
+  useEffect(() => {
+    const container = canvasContainerRef.current;
+    const app = appRef.current;
+    if (!container || !app) return;
+
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) return;
+      app.renderer.resize(width, height);
+      app.stage.scale.set(width / STAGE_WIDTH);
+    });
+
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [appRef.current]);
+
+  // ── Playback (driven by useDuelPlayback) ──
+  const playback = useDuelPlayback(currentLog, scene);
+
+  // Handle playback completion — show breakdown when playback ends
+  useEffect(() => {
+    if (!currentLog || playback.isPlaying) return;
+    if (playback.currentTime >= playback.maxTime && playback.maxTime > 0 && !showBreakdown) {
+      setShowBreakdown(true);
+      if (currentLog.result.winner === 0) {
+        setShowCelebration(true);
       }
     }
+  }, [playback.currentTime, playback.maxTime, playback.isPlaying, currentLog, showBreakdown]);
 
-    return { hp, maxHp, stats: derivedStats };
-  }, [currentLog, playbackTime, derivedStats]);
-
-  // Collect events up to current tick for the combat log
+  // Collect events up to current playback time for the combat log
   const visibleEvents = useMemo(() => {
     if (!currentLog) return [];
     const events: { time: number; event: CombatEvent }[] = [];
     for (const frame of currentLog.frames) {
-      if (frame.time > playbackTime) break;
+      if (frame.time > playback.currentTime) break;
       for (const event of frame.events) {
         events.push({ time: frame.time, event });
       }
     }
     return events;
-  }, [currentLog, playbackTime]);
+  }, [currentLog, playback.currentTime]);
 
-  useDuelSounds(visibleEvents, isPlaying, showBreakdown, currentResult);
+  useDuelSounds(visibleEvents, playback.isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
     gateway.dispatch({ kind: 'duel_continue' });
   };
 
-  // currentLog/hpState may not be ready yet (duel simulation runs in useEffect)
-  if (!currentLog || !hpState) {
+  const handlePlayPause = useCallback(() => {
+    if (!playback.isPlaying) {
+      if (playback.currentTime >= playback.maxTime && playback.maxTime > 0) {
+        setShowBreakdown(false);
+        setShowCelebration(false);
+      }
+      playback.play();
+    } else {
+      playback.pause();
+    }
+  }, [playback]);
+
+  const handleSkip = useCallback(() => {
+    playback.skip();
+    setShowBreakdown(true);
+    if (currentLog?.result.winner === 0) setShowCelebration(true);
+  }, [playback, currentLog]);
+
+  // Wait for currentLog and initial HP to be ready
+  const effectiveHpState = hpState ?? (derivedStats ? {
+    hp: [derivedStats[0].maxHP, derivedStats[1].maxHP] as [number, number],
+    maxHp: [derivedStats[0].maxHP, derivedStats[1].maxHP] as [number, number],
+  } : null);
+
+  if (!currentLog || !effectiveHpState) {
     return null;
   }
 
@@ -256,54 +295,34 @@ export function Duel() {
 
           {/* Enemy HP bar */}
           <div className="flex-1">
-            <HPBar current={hpState.hp[1]} max={hpState.maxHp[1]} label="AI" />
+            <HPBar current={effectiveHpState.hp[1]} max={effectiveHpState.maxHp[1]} label="AI" />
           </div>
 
           {/* Timer */}
           <span className="stat-number shrink-0 text-xs text-surface-400">
-            {playbackTime.toFixed(1)}s / {currentResult ? currentResult.duration.toFixed(1) : '?'}s
+            {Math.max(0, playback.currentTime).toFixed(1)}s / {currentResult ? currentResult.duration.toFixed(1) : '?'}s
           </span>
         </div>
       </div>
 
       {/* ═══ ARENA (~50%): PixiJS canvas + playback controls overlay ═══ */}
       <div className="relative" style={{ flex: '5 1 0%', minHeight: 120 }}>
-        <div className="h-full w-full">
-          <DuelRenderer
-            combatLog={currentLog}
-            stats={hpState.stats}
-            currentTime={playbackTime}
-            isPlaying={isPlaying}
-          />
-        </div>
+        <div
+          ref={canvasContainerRef}
+          className="mx-auto h-full w-full overflow-hidden rounded-lg border border-surface-600"
+        />
 
         {/* Playback controls overlay — bottom of arena */}
         <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2">
           <button
-            onClick={() => {
-              if (!isPlaying) {
-                if (playbackTime >= (currentLog.frames[currentLog.frames.length - 1]?.time ?? 0)) {
-                  setPlaybackTime(0);
-                  setShowBreakdown(false);
-                  setShowCelebration(false);
-                }
-                setIsPlaying(true);
-              } else {
-                setIsPlaying(false);
-              }
-            }}
+            onClick={handlePlayPause}
             className="rounded bg-surface-600/80 px-3 py-1 text-sm text-white backdrop-blur-sm hover:bg-surface-500/80"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
-            {isPlaying ? 'Pause' : 'Play'}
+            {playback.isPlaying ? 'Pause' : 'Play'}
           </button>
           <button
-            onClick={() => {
-              setPlaybackTime(currentLog.frames[currentLog.frames.length - 1]?.time ?? 0);
-              setIsPlaying(false);
-              setShowBreakdown(true);
-              if (currentLog.result.winner === 0) setShowCelebration(true);
-            }}
+            onClick={handleSkip}
             className="rounded bg-surface-600/80 px-3 py-1 text-sm text-surface-400 backdrop-blur-sm hover:bg-surface-500/80"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
@@ -314,7 +333,7 @@ export function Duel() {
 
       {/* ═══ PLAYER HP BAR (~5%) ═══ */}
       <div className="shrink-0 border-t border-surface-700 px-3 py-1.5">
-        <HPBar current={hpState.hp[0]} max={hpState.maxHp[0]} label="You" />
+        <HPBar current={effectiveHpState.hp[0]} max={effectiveHpState.maxHp[0]} label="You" />
       </div>
 
       {/* ═══ COMBAT LOG (~40%) ═══ */}
