@@ -72,8 +72,8 @@ describe('Stat Calculator', () => {
     // Base 200 + 20 flat from chainmail baseStats.maxHP
     expect(stats.maxHP).toBe(balance.baseHP + 20);
     expect(stats.critMultiplier).toBe(balance.baseCritMultiplier); // 150
-    // Sword: physicalDamage 40
-    expect(stats.physicalDamage).toBe(40);
+    // Sword: physicalDamage 10
+    expect(stats.physicalDamage).toBe(10);
     expect(stats.elementalDamage.fire).toBe(0);
     // Chainmail: armor 20
     expect(stats.armor).toBe(20);
@@ -86,7 +86,7 @@ describe('Stat Calculator', () => {
 
   // Test 2: Base item stats applied
   it('applies base item stats', () => {
-    // Sword: physicalDamage 40, attackSpeed 1.8, critChance 5
+    // Sword: physicalDamage 10, attackSpeed 1.8, critChance 5
     // Chainmail: armor 20, maxHP 20, blockChance 5
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const stats = calculateStats(loadout, registry);
@@ -106,12 +106,12 @@ describe('Stat Calculator', () => {
 
   // Test 2b: Axe base stats
   it('applies axe base stats correctly', () => {
-    // Axe: physicalDamage 60, attackSpeed 2.5
+    // Axe: physicalDamage 15, attackSpeed 2.5
     const loadout = createEmptyLoadout('axe', 'chainmail');
     const stats = calculateStats(loadout, registry);
 
-    // physicalDamage: 60 flat from axe
-    expect(stats.physicalDamage).toBe(60);
+    // physicalDamage: 15 flat from axe
+    expect(stats.physicalDamage).toBe(15);
 
     // attackSpeed: 2.5 from axe (overrides default)
     expect(stats.attackSpeed).toBe(2.5);
@@ -126,8 +126,8 @@ describe('Stat Calculator', () => {
     loadout.weapon.slots[0] = singleSlot('fire_damage', 1);
     const stats = calculateStats(loadout, registry);
 
-    // fire_damage T1 weaponEffect: elementalDamage.fire +12 flat
-    expect(stats.elementalDamage.fire).toBe(12);
+    // fire_damage T1 weaponEffect: elementalDamage.fire +3 flat
+    expect(stats.elementalDamage.fire).toBe(3);
   });
 
   // Test 4: Single affix applied to armor
@@ -158,8 +158,8 @@ describe('Stat Calculator', () => {
     loadout.weapon.slots[0] = upgradedSlot('fire_damage', 1 as AffixTier, 2 as AffixTier);
     const stats = calculateStats(loadout, registry);
 
-    // fire_damage T2 weaponEffect: elementalDamage.fire +19 flat
-    expect(stats.elementalDamage.fire).toBe(19);
+    // fire_damage T2 weaponEffect: elementalDamage.fire +5 flat
+    expect(stats.elementalDamage.fire).toBe(5);
   });
 
   // Test 7: Base stat scaling applies correctly
@@ -168,10 +168,10 @@ describe('Stat Calculator', () => {
     loadout.weapon.baseStats = { stat1: 'STR', stat2: 'STR' };
     const stats = calculateStats(loadout, registry);
 
-    // STR weapon scaling: physicalDamage +2.0 per allocation
-    // Two STR allocations = +2.0 + 2.0 = +4.0 flat physical damage
-    // Plus sword base: 40
-    expect(stats.physicalDamage).toBe(44);
+    // STR weapon scaling: physicalDamage +0.5 per allocation
+    // Two STR allocations = +0.5 + 0.5 = +1.0 flat physical damage
+    // Plus sword base: 10
+    expect(stats.physicalDamage).toBe(11);
   });
 
   it('applies base stat scaling (DEX on weapon reduces attack interval)', () => {
@@ -235,13 +235,13 @@ describe('Stat Calculator', () => {
   // Test 9: Modifier ordering: flat before percent
   it('applies flat modifiers before percent modifiers', () => {
     const loadout = createEmptyLoadout('axe', 'chainmail');
-    // axe: physicalDamage 60 flat
-    // flat_physical T1 on weapon: physicalDamage +15 flat
+    // axe: physicalDamage 15 flat
+    // flat_physical T1 on weapon: physicalDamage +4 flat
     loadout.weapon.slots[0] = singleSlot('flat_physical', 1);
     const stats = calculateStats(loadout, registry);
 
-    // physicalDamage: 60 (axe base) + 15 (affix flat) = 75
-    expect(stats.physicalDamage).toBe(75);
+    // physicalDamage: 15 (axe base) + 4 (flat_physical T1) = 19
+    expect(stats.physicalDamage).toBe(19);
   });
 
   // Test 10: Caps enforced at integer scale
@@ -287,10 +287,10 @@ describe('Stat Calculator', () => {
     loadout.weapon.slots[1] = singleSlot('fire_damage', 2);
     const stats = calculateStats(loadout, registry);
 
-    // fire_damage T1 weaponEffect: elementalDamage.fire +12 flat
-    // fire_damage T2 weaponEffect: elementalDamage.fire +19 flat
-    // Total: 12 + 19 = 31
-    expect(stats.elementalDamage.fire).toBe(31);
+    // fire_damage T1 weaponEffect: elementalDamage.fire +3 flat
+    // fire_damage T2 weaponEffect: elementalDamage.fire +5 flat
+    // Total: 3 + 5 = 8
+    expect(stats.elementalDamage.fire).toBe(8);
   });
 
   it('multiple flat_physical affixes stack on weapon', () => {
@@ -299,11 +299,11 @@ describe('Stat Calculator', () => {
     loadout.weapon.slots[1] = singleSlot('flat_physical', 2);
     const stats = calculateStats(loadout, registry);
 
-    // flat_physical T1: physicalDamage +15 flat
-    // flat_physical T2: physicalDamage +23 flat
-    // Sword base: 40
-    // Total: 40 + 15 + 23 = 78
-    expect(stats.physicalDamage).toBe(78);
+    // flat_physical T1: physicalDamage +4 flat
+    // flat_physical T2: physicalDamage +6 flat
+    // Sword base: 10
+    // Total: 10 + 4 + 6 = 20
+    expect(stats.physicalDamage).toBe(20);
   });
 
   // Test: frozen output
@@ -315,16 +315,16 @@ describe('Stat Calculator', () => {
 
   // Test: staff allElementalDamage base stat expands to all elements
   it('staff allElementalDamage bonus expands to all elements', () => {
-    // Staff: physicalDamage 25, attackSpeed 2.0, allElementalDamage 10
+    // Staff: physicalDamage 6, attackSpeed 2.0, allElementalDamage 3
     const loadout = createEmptyLoadout('staff', 'chainmail');
     // Put a fire_damage orb on weapon to add to fire elemental damage
     loadout.weapon.slots[0] = singleSlot('fire_damage', 1);
     const stats = calculateStats(loadout, registry);
 
-    // fire: 10 (staff allElementalDamage) + 12 (fire_damage T1) = 22 flat, no percent
-    expect(stats.elementalDamage.fire).toBe(22);
-    // other elements: 10 flat from allElementalDamage
-    expect(stats.elementalDamage.cold).toBe(10);
+    // fire: 3 (staff allElementalDamage) + 3 (fire_damage T1) = 6 flat, no percent
+    expect(stats.elementalDamage.fire).toBe(6);
+    // other elements: 3 flat from allElementalDamage
+    expect(stats.elementalDamage.cold).toBe(3);
   });
 
   // Test: armor affix applies armorEffect with flat resistance
