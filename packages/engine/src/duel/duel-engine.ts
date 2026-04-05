@@ -232,17 +232,17 @@ export function simulate(
           });
         }
 
-        // Apply damage to HP
+        // Apply damage to HP (allow negative for tiebreak resolution)
         if (damageToHP > 0) {
           const oldHP = defender.currentHP;
-          defender.currentHP = Math.max(0, defender.currentHP - damageToHP);
-          const actualHpDmg = oldHP - defender.currentHP;
+          defender.currentHP -= damageToHP;
+          const actualHpDmg = oldHP - Math.max(0, defender.currentHP);
           if (attackerIdx === 0) p0Damage += actualHpDmg; else p1Damage += actualHpDmg;
           log.addEvent(time, {
             type: 'hp_change',
             player: defender.playerId,
-            oldHP,
-            newHP: defender.currentHP,
+            oldHP: Math.max(0, oldHP),
+            newHP: Math.max(0, defender.currentHP),
             maxHP: defender.maxHP,
           });
         }
@@ -298,19 +298,19 @@ export function simulate(
           }
         }
 
-        // Apply thorns
+        // Apply thorns (allow negative for tiebreak resolution)
         if (defender.stats.thornsDamage > 0) {
           const thornsDmg = defender.stats.thornsDamage;
           const oldHP = attacker.currentHP;
-          attacker.currentHP = Math.max(0, attacker.currentHP - thornsDmg);
-          const actualThornsDmg = oldHP - attacker.currentHP;
+          attacker.currentHP -= thornsDmg;
+          const actualThornsDmg = oldHP - Math.max(0, attacker.currentHP);
           if (defenderIdx === 0) p0Damage += actualThornsDmg; else p1Damage += actualThornsDmg;
           log.addEvent(time, { type: 'thorns', reflector: defender.playerId, damage: thornsDmg });
           log.addEvent(time, {
             type: 'hp_change',
             player: attacker.playerId,
-            oldHP,
-            newHP: attacker.currentHP,
+            oldHP: Math.max(0, oldHP),
+            newHP: Math.max(0, attacker.currentHP),
             maxHP: attacker.maxHP,
           });
         }
@@ -352,8 +352,18 @@ export function simulate(
           if (defenderIdx === 0) p0Damage += atkLowHpDmg; else p1Damage += atkLowHpDmg;
         }
 
-        // Reset attack timer
-        attacker.attackTimer = attacker.stats.attackSpeed;
+        // Roll stun chance on hit (not dodged)
+        if (attacker.stats.stunChance > 0 && defender.stunTimer <= 0) {
+          if (rng.nextBool(attacker.stats.stunChance / 100)) {
+            const stunDuration = 0.5; // 0.5 second stun
+            defender.stunTimer += stunDuration;
+            log.addEvent(time, { type: 'stun', target: defender.playerId, duration: stunDuration });
+          }
+        }
+
+        // Reset attack timer (slowPercent increases effective attack speed = slower attacks)
+        const slowFactor = 1 + (defender.stats.slowPercent ?? 0) / 100;
+        attacker.attackTimer = attacker.stats.attackSpeed * slowFactor;
       }
     }
 
@@ -394,7 +404,7 @@ export function simulate(
   return log.finalize({
     round,
     winner,
-    finalHP: [gladiators[0].currentHP, gladiators[1].currentHP],
+    finalHP: [Math.max(0, gladiators[0].currentHP), Math.max(0, gladiators[1].currentHP)],
     duration: wasTiebreak ? balance.maxDuelSeconds : duration,
     wasTiebreak,
     p0DamageDealt: p0Damage,

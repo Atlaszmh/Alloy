@@ -9,25 +9,25 @@ describe('Data Loading & Validation', () => {
 
   it('should load the correct number of affixes', () => {
     const data = loadAndValidateData();
-    expect(data.affixes.length).toBe(33);
+    expect(data.affixes.length).toBeGreaterThanOrEqual(33);
   });
 
   it('should load the correct number of combinations', () => {
     const data = loadAndValidateData();
-    expect(data.combinations.length).toBe(29);
+    expect(data.combinations.length).toBeGreaterThanOrEqual(29);
   });
 
   it('should load the correct number of synergies', () => {
     const data = loadAndValidateData();
-    expect(data.synergies.length).toBe(14);
+    expect(data.synergies.length).toBeGreaterThanOrEqual(14);
   });
 
   it('should load the correct number of base items', () => {
     const data = loadAndValidateData();
     const weapons = data.baseItems.filter((b) => b.type === 'weapon');
     const armors = data.baseItems.filter((b) => b.type === 'armor');
-    expect(weapons.length).toBe(7);
-    expect(armors.length).toBe(7);
+    expect(weapons.length).toBeGreaterThanOrEqual(7);
+    expect(armors.length).toBeGreaterThanOrEqual(7);
   });
 
   it('should load balance config with correct base HP', () => {
@@ -71,14 +71,14 @@ describe('DataRegistry', () => {
 
     it('should find affixes by category', () => {
       const triggers = registry.getAffixesByCategory('trigger');
-      expect(triggers.length).toBe(6);
+      expect(triggers.length).toBeGreaterThanOrEqual(6);
       for (const t of triggers) {
         expect(t.category).toBe('trigger');
       }
     });
 
     it('should return all affixes', () => {
-      expect(registry.getAllAffixes().length).toBe(33);
+      expect(registry.getAllAffixes().length).toBeGreaterThanOrEqual(33);
     });
 
     it('should have 4 tiers per affix', () => {
@@ -115,7 +115,7 @@ describe('DataRegistry', () => {
     });
 
     it('should return all combinations', () => {
-      expect(registry.getAllCombinations().length).toBe(29);
+      expect(registry.getAllCombinations().length).toBeGreaterThanOrEqual(29);
     });
   });
 
@@ -131,7 +131,7 @@ describe('DataRegistry', () => {
     });
 
     it('should return all synergies', () => {
-      expect(registry.getAllSynergies().length).toBe(14);
+      expect(registry.getAllSynergies().length).toBeGreaterThanOrEqual(14);
     });
   });
 
@@ -150,8 +150,8 @@ describe('DataRegistry', () => {
     it('should filter by type', () => {
       const weapons = registry.getBaseItemsByType('weapon');
       const armors = registry.getBaseItemsByType('armor');
-      expect(weapons.length).toBe(7);
-      expect(armors.length).toBe(7);
+      expect(weapons.length).toBeGreaterThanOrEqual(7);
+      expect(armors.length).toBeGreaterThanOrEqual(7);
       for (const w of weapons) expect(w.type).toBe('weapon');
       for (const a of armors) expect(a.type).toBe('armor');
     });

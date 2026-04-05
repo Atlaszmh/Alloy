@@ -393,6 +393,89 @@ describe('Duel Engine', () => {
     }
   });
 
+  // Double-death tiebreak: gladiator with less overkill should win more
+  it('simultaneous death tiebreak favors gladiator with less overkill', () => {
+    // P0 has 100HP and does 200 damage; P1 has 100HP and does 50 damage
+    // P0 kills P1 with more overkill, P1 kills P0 with less overkill
+    // So P0 (less overkill received, higher remaining HP%) should win less
+    // Actually: P0 takes 50 dmg = -50 HP, P1 takes 200 dmg = -100 HP
+    // P0: currentHP = 100 - 50 = 50 (alive most times), P1: currentHP = 100 - 200 = -100
+    // Let's use thorns to force simultaneous death:
+    // Both have 100HP, P0 does 200 damage with 0 thorns, P1 does 0 damage with 200 thorns
+    // P0 attacks P1: P1 goes to -100, thorns hit P0 for 200 → P0 goes to -100
+    // Both die simultaneously, equal overkill → coinflip (~50/50)
+
+    // Better test: asymmetric overkill via different damage
+    // P0: 150 physDmg, 100 thorns. P1: 50 physDmg, 100 thorns.
+    // Both have 50 HP, very fast attacks.
+    // First hits: P0 hits P1 for 150 → P1 at -100, thorns P0 for 100 → P0 at -50
+    // P0 currentHP = -50, P1 currentHP = -100 → P0 has less overkill, P0 should win
+    let p0Wins = 0;
+    const TRIALS = 50;
+    for (let seed = 0; seed < TRIALS; seed++) {
+      const rng = new SeededRNG(seed);
+      const s0 = makeStats({ maxHP: 50, physicalDamage: 200, attackSpeed: 0.3, thornsDamage: 50 });
+      const s1 = makeStats({ maxHP: 50, physicalDamage: 200, attackSpeed: 0.3, thornsDamage: 150 });
+      const result = simulate([s0, s1], makeLoadouts(), registry, rng, 1);
+      if (result.result.winner === 0) p0Wins++;
+    }
+    // P0 attacks first (initiative tie → P0 goes first), deals 200 to P1 → P1 at -150
+    // P0 takes 50 thorns → P0 at 0. Both dead, but P0 has less overkill → P0 wins.
+    // With tiebreak fix, P0 should win consistently (not coinflip).
+    expect(p0Wins).toBeGreaterThan(TRIALS * 0.8);
+  });
+
+  // stunChance: high stunChance should produce stun events
+  it('gladiator with 100% stunChance produces stun events', () => {
+    const rng = new SeededRNG(42);
+    const s0 = makeStats({ maxHP: 500, physicalDamage: 10, attackSpeed: 0.3, stunChance: 100 });
+    const s1 = makeStats({ maxHP: 500, physicalDamage: 10, attackSpeed: 0.3 });
+    const result = simulate([s0, s1], makeLoadouts(), registry, rng, 1);
+
+    const stunEvents = result.frames.flatMap((f) => f.events).filter((e) => e.type === 'stun');
+    expect(stunEvents.length).toBeGreaterThan(0);
+    // All stuns should target P1 (defender of P0's attacks)
+    for (const e of stunEvents) {
+      if (e.type === 'stun') expect(e.target).toBe(1);
+    }
+  });
+
+  // slowPercent: gladiator facing slow should attack fewer times
+  it('slowPercent reduces opponent attack frequency', () => {
+    const rng1 = new SeededRNG(99);
+    const rng2 = new SeededRNG(99);
+
+    // Without slow: both attack normally
+    const s0 = makeStats({ maxHP: 1000, physicalDamage: 5, attackSpeed: 1.0 });
+    const s1Normal = makeStats({ maxHP: 1000, physicalDamage: 5, attackSpeed: 1.0 });
+    const resultNormal = simulate([s0, s1Normal], makeLoadouts(), registry, rng1, 1);
+
+    // With slow: P0 has 100% slowPercent, P1 attacks slower
+    const s0Slow = makeStats({ maxHP: 1000, physicalDamage: 5, attackSpeed: 1.0, slowPercent: 100 });
+    const s1Slow = makeStats({ maxHP: 1000, physicalDamage: 5, attackSpeed: 1.0 });
+    const resultSlow = simulate([s0Slow, s1Slow], makeLoadouts(), registry, rng2, 1);
+
+    // Count P1's attacks in each
+    const p1AttacksNormal = resultNormal.frames.flatMap((f) => f.events).filter((e) => e.type === 'attack' && e.attacker === 1).length;
+    const p1AttacksSlow = resultSlow.frames.flatMap((f) => f.events).filter((e) => e.type === 'attack' && e.attacker === 1).length;
+
+    // P1 should attack fewer times when P0 has slowPercent
+    expect(p1AttacksSlow).toBeLessThan(p1AttacksNormal);
+  });
+
+  // HP regen: gladiator with hpRegen should produce heal events
+  it('gladiator with hpRegen produces regen_heal events', () => {
+    const rng = new SeededRNG(42);
+    const s0 = makeStats({ maxHP: 500, physicalDamage: 10, attackSpeed: 1.0, hpRegen: 5 });
+    const s1 = makeStats({ maxHP: 500, physicalDamage: 10, attackSpeed: 1.0 });
+    const result = simulate([s0, s1], makeLoadouts(), registry, rng, 1);
+
+    const healEvents = result.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === 'heal' && e.player === 0 && e.breakdown.source === 'regen');
+    expect(healEvents.length).toBeGreaterThan(0);
+  });
+
   // Gladiator creation tests
   describe('createGladiator', () => {
     it('initializes HP and barrier from stats', () => {
