@@ -111,6 +111,3 @@ export interface TriggerDef {
   cooldown: number; // seconds (0 = no cooldown)
   effect: TriggerEffect;
 }
-
-/** @deprecated Use CombatEvent instead */
-export type TickEvent = CombatEvent;
