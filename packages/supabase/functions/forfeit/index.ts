@@ -3,20 +3,27 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 import type { MatchState, MatchPhase } from '@alloy/engine';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'forfeit');
+    if (rateLimited) return rateLimited;
+
     const { roomCode } = await req.json() as { roomCode: string };
 
     if (!roomCode) {
       return errorResponse('Missing roomCode', 400);
     }
-
-    const client = getServiceClient();
     const match = await loadMatchByRoomCode(client, roomCode);
 
     // Must be a participant
@@ -82,10 +89,12 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ ok: true, winner });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('not found') ? 404
-      : message.includes('Unauthorized') || message.includes('token') ? 401
-      : 500;
-    return errorResponse(message, status);
+    console.error('forfeit error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    const isNotFound = message.includes('not found');
+    const status = isAuth ? 401 : isNotFound ? 404 : 500;
+    const label = isAuth ? 'Unauthorized' : isNotFound ? 'Match not found' : 'Internal server error';
+    return errorResponse(label, status);
   }
 });

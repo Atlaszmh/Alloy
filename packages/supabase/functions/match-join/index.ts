@@ -3,6 +3,7 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 
 interface MatchJoinRequest {
   roomCode: string;
@@ -10,9 +11,17 @@ interface MatchJoinRequest {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'match-join');
+    if (rateLimited) return rateLimited;
+
     const body: MatchJoinRequest = await req.json();
 
     if (!body.roomCode || typeof body.roomCode !== 'string') {
@@ -20,7 +29,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const roomCode = body.roomCode.toUpperCase().trim();
-    const client = getServiceClient();
 
     // --- Rate limiting: max 5 join attempts per IP per minute ---
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
@@ -42,6 +50,7 @@ Deno.serve(async (req: Request) => {
     // Record this attempt
     await client.from('join_attempts').insert({
       ip_address: ip,
+      player_id: userId,
     });
 
     // --- Load and validate match ---
@@ -103,8 +112,12 @@ Deno.serve(async (req: Request) => {
       phase: gameState.phase,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('not found') ? 404 : 401;
-    return errorResponse(message, status);
+    console.error('match-join error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    const isNotFound = message.includes('not found');
+    const status = isAuth ? 401 : isNotFound ? 404 : 500;
+    const label = isAuth ? 'Unauthorized' : isNotFound ? 'Match not found' : 'Internal server error';
+    return errorResponse(label, status);
   }
 });

@@ -4,32 +4,10 @@
 // match_round_details reporting tables.
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
-import { getServiceClient } from '../_shared/supabase.ts';
+import { getServiceClient, getUserId } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 import { extractMatchReport } from '@alloy/engine';
 import type { MatchState } from '@alloy/engine';
-
-/** Attempt to resolve the authenticated user ID from the Authorization header.
- *  Returns null (rather than throwing) so live matches without auth still work. */
-async function tryGetUserId(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.replace('Bearer ', '');
-  const url = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-  if (!url || !anonKey) return null;
-
-  try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const anonClient = createClient(url, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user } } = await anonClient.auth.getUser(token);
-    return user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
@@ -49,8 +27,11 @@ Deno.serve(async (req: Request) => {
 
     const report = extractMatchReport(state, 'live', seed);
 
+    const userId = await getUserId(req);
     const client = getServiceClient();
-    const userId = await tryGetUserId(req);
+
+    const rateLimited = await checkRateLimit(client, userId, 'match-complete');
+    if (rateLimited) return rateLimited;
 
     // Insert into match_results
     const { data: matchRow, error: matchError } = await client
@@ -76,7 +57,7 @@ Deno.serve(async (req: Request) => {
     const playerRows = report.players.map((p) => ({
       match_id: matchId,
       player_index: p.playerIndex,
-      user_id: p.playerIndex === 0 ? (userId ?? null) : null,
+      user_id: p.playerIndex === 0 ? userId : null,
       final_hp: p.finalHP,
       affix_ids: p.affixIds,
       combination_ids: p.combinationIds,
@@ -116,7 +97,9 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({ ok: true, matchId });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return errorResponse(message, 500);
+    console.error('match-complete error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    return errorResponse(isAuth ? 'Unauthorized' : 'Internal server error', isAuth ? 401 : 500);
   }
 });

@@ -4,6 +4,7 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId, loadMatchByRoomCode } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 import { applyAction, DataRegistry, loadAndValidateData } from '@alloy/engine';
 import type { MatchState } from '@alloy/engine';
 
@@ -27,16 +28,22 @@ const MAX_RETRIES = 3;
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'draft-pick');
+    if (rateLimited) return rateLimited;
+
     const { roomCode, orbUid } = await req.json() as { roomCode: string; orbUid: string };
 
     if (!roomCode || !orbUid) {
       return errorResponse('Missing roomCode or orbUid', 400);
     }
-
-    const client = getServiceClient();
     const reg = getRegistry();
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -122,10 +129,12 @@ Deno.serve(async (req: Request) => {
 
     return errorResponse('Failed after retries', 500);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('not found') ? 404
-      : message.includes('Unauthorized') || message.includes('token') ? 401
-      : 500;
-    return errorResponse(message, status);
+    console.error('draft-pick error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    const isNotFound = message.includes('not found');
+    const status = isAuth ? 401 : isNotFound ? 404 : 500;
+    const label = isAuth ? 'Unauthorized' : isNotFound ? 'Match not found' : 'Internal server error';
+    return errorResponse(label, status);
   }
 });
