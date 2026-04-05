@@ -3,6 +3,7 @@
 
 import { corsResponse, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getServiceClient, getUserId } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 
 interface MatchmakingRequest {
   action: 'join' | 'leave';
@@ -10,16 +11,22 @@ interface MatchmakingRequest {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsResponse();
+  if (req.method !== 'POST') {
+    return errorResponse('Method not allowed', 405);
+  }
 
   try {
     const userId = await getUserId(req);
+    const client = getServiceClient();
+
+    const rateLimited = await checkRateLimit(client, userId, 'matchmaking');
+    if (rateLimited) return rateLimited;
+
     const body: MatchmakingRequest = await req.json();
 
     if (!body.action || !['join', 'leave'].includes(body.action)) {
       return errorResponse('Invalid action. Must be join or leave.', 400);
     }
-
-    const client = getServiceClient();
 
     if (body.action === 'leave') {
       await client
@@ -46,7 +53,7 @@ Deno.serve(async (req: Request) => {
     // Load profile for Elo
     const { data: profile, error: profileError } = await client
       .from('profiles')
-      .select('elo')
+      .select('elo, rank_tier')
       .eq('id', userId)
       .single();
 
@@ -60,16 +67,19 @@ Deno.serve(async (req: Request) => {
       .insert({
         player_id: userId,
         elo: profile.elo,
+        rank_tier: profile.rank_tier,
       });
 
     if (insertError) {
-      return errorResponse(`Failed to join queue: ${insertError.message}`, 500);
+      console.error('Failed to join queue:', insertError.message);
+      return errorResponse('Failed to join queue', 500);
     }
 
     return jsonResponse({ status: 'queued' });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('Unauthorized') || message.includes('token') ? 401 : 500;
-    return errorResponse(message, status);
+    console.error('matchmaking error:', err);
+    const message = err instanceof Error ? err.message : '';
+    const isAuth = message.includes('Authorization') || message.includes('token');
+    return errorResponse(isAuth ? 'Unauthorized' : 'Internal server error', isAuth ? 401 : 500);
   }
 });
