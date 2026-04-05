@@ -1,4 +1,6 @@
-import type { MatchState, CombatLog, DuelResult, DerivedStats, AITier } from '@alloy/engine';
+import type { AITier, MatchReport } from '@alloy/engine';
+
+export type { MatchReport } from '@alloy/engine';
 
 export interface SimulationConfig {
   matchCount: number;
@@ -7,23 +9,9 @@ export interface SimulationConfig {
   startingSeed: number;
 }
 
-export interface MatchResult {
-  matchIndex: number;
-  seed: number;
-  winner: 0 | 1 | 'draw';
-  scores: [number, number];
-  duelLogs: CombatLog[];
-  roundResults: DuelResult[];
-  finalState: MatchState;
-  player0Stats: DerivedStats | null;
-  player1Stats: DerivedStats | null;
-  player0Affixes: string[];
-  player1Affixes: string[];
-}
-
 export interface SimulationResults {
   config: SimulationConfig;
-  matches: MatchResult[];
+  matches: MatchReport[];
   startedAt: number;
   completedAt: number;
 }

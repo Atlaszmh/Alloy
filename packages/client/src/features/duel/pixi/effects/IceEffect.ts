@@ -9,7 +9,7 @@ export class IceEffect extends BaseEffect {
   }
 
   play(
-    origin: { x: number; y: number },
+    _origin: { x: number; y: number },
     target: { x: number; y: number },
   ): void {
     const count = Math.floor(8 * this.intensity);

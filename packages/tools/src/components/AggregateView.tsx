@@ -48,8 +48,8 @@ export default function AggregateView({ results }: Props) {
     const stats = new Map<string, { pickCount: number; winCount: number; category: string }>();
     for (const m of results.matches) {
       const allAffixes = [
-        { affixes: m.player0Affixes, won: m.winner === 0 },
-        { affixes: m.player1Affixes, won: m.winner === 1 },
+        { affixes: m.players[0].affixIds, won: m.winner === 0 },
+        { affixes: m.players[1].affixIds, won: m.winner === 1 },
       ];
       for (const { affixes, won } of allAffixes) {
         const unique = new Set(affixes);

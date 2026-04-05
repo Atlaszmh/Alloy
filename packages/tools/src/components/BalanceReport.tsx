@@ -59,8 +59,8 @@ function generateBalanceReport(results: SimulationResults): BalanceIssue[] {
   const affixStats = new Map<string, { picks: number; wins: number }>();
   for (const m of results.matches) {
     for (const { affixes, won } of [
-      { affixes: m.player0Affixes, won: m.winner === 0 },
-      { affixes: m.player1Affixes, won: m.winner === 1 },
+      { affixes: m.players[0].affixIds, won: m.winner === 0 },
+      { affixes: m.players[1].affixIds, won: m.winner === 1 },
     ]) {
       for (const id of new Set(affixes)) {
         const s = affixStats.get(id) ?? { picks: 0, wins: 0 };

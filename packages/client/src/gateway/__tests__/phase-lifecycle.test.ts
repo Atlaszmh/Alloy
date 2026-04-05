@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useMatchStore } from '@/stores/matchStore';
 import { LocalGateway } from '../local-gateway';
 

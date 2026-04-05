@@ -32,7 +32,7 @@ export function useDraftEndSequence({
   pool,
   phase,
   draftRound,
-  gemPositionsRef,
+  gemPositionsRef: _gemPositionsRef,
   swoopingUid,
 }: UseDraftEndSequenceOptions): UseDraftEndSequenceResult {
   const [isActive, setIsActive] = useState(false);

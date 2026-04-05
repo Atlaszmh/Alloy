@@ -32,9 +32,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.99.2
         version: 2.99.2
-      '@types/howler':
-        specifier: ^2.2.12
-        version: 2.2.12
       framer-motion:
         specifier: ^12.38.0
         version: 12.38.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -72,6 +69,9 @@ importers:
       '@testing-library/user-event':
         specifier: ^14.6.1
         version: 14.6.1(@testing-library/dom@10.4.1)
+      '@types/howler':
+        specifier: ^2.2.12
+        version: 2.2.12
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14

@@ -27,7 +27,7 @@ interface UseOpponentPickAnimationResult {
 export function useOpponentPickAnimation({
   pool,
   opponentStockpile,
-  isPlayerTurn,
+  isPlayerTurn: _isPlayerTurn,
   opponentZoneRef,
 }: UseOpponentPickAnimationOptions): UseOpponentPickAnimationResult {
   // Cache gem positions — merge so positions survive across pool changes
