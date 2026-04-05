@@ -36,3 +36,9 @@ packages/supabase/.temp/
 *.log
 npm-debug.log*
 .claude/worktrees/
+
+# Engine type declaration output
+dist-types/
+
+# Screenshots (local test artifacts)
+packages/screenshots/
