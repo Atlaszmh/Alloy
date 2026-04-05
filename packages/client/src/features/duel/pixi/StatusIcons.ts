@@ -173,7 +173,7 @@ export class StatusIcons {
         fontWeight: 'bold',
       },
     });
-    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.anchor.set(0.5, 0.5);
     container.addChild(text);
 
     return container;

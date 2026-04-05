@@ -78,7 +78,7 @@ export class DamageNumbers {
       },
     });
 
-    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.anchor.set(0.5, 0.5);
     text.x = x + (Math.random() - 0.5) * 30;
     text.y = y;
     this.container.addChild(text);
@@ -163,7 +163,7 @@ export class DamageNumbers {
         },
       });
 
-      text.anchor = { x: 0.5, y: 0.5 } as any;
+      text.anchor.set(0.5, 0.5);
       text.x = targetX + (Math.random() - 0.5) * 30;
       text.y = targetY + i * 20;
       this.container.addChild(text);
@@ -204,7 +204,7 @@ export class DamageNumbers {
       },
     });
 
-    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.anchor.set(0.5, 0.5);
     text.x = x + (Math.random() - 0.5) * 30;
     text.y = y;
     this.container.addChild(text);
@@ -235,7 +235,7 @@ export class DamageNumbers {
       },
     });
 
-    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.anchor.set(0.5, 0.5);
     text.x = x + (Math.random() - 0.5) * 30;
     text.y = y;
     this.container.addChild(text);
@@ -266,7 +266,7 @@ export class DamageNumbers {
       },
     });
 
-    text.anchor = { x: 0.5, y: 0.5 } as any;
+    text.anchor.set(0.5, 0.5);
     text.x = x + (Math.random() - 0.5) * 30;
     text.y = y;
     this.container.addChild(text);
