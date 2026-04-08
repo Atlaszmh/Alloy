@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { CooldownRing } from './CooldownRing.js';
 
 export type GladiatorState = 'idle' | 'attack' | 'hit' | 'death';
 
@@ -13,6 +14,7 @@ export class GladiatorSprite {
   private weapon: Graphics;
   private shield: Graphics;
   private nameLabel: Text;
+  private cooldownRing: CooldownRing | null = null;
 
   private state: GladiatorState = 'idle';
   private bodyColor: number;
@@ -34,6 +36,8 @@ export class GladiatorSprite {
     x: number,
     y: number,
     facing: 1 | -1 = 1,
+    weaponName?: string,
+    attackSpeedSec?: number,
   ) {
     this.bodyColor = color;
     this.baseX = x;
@@ -79,6 +83,15 @@ export class GladiatorSprite {
     this.nameLabel.x = 0;
     this.nameLabel.y = 8;
     this.container.addChild(this.nameLabel);
+
+    // Cooldown ring (only if weapon info provided)
+    if (weaponName !== undefined && attackSpeedSec !== undefined) {
+      const ringColor = facing === 1 ? 0x3b82f6 : 0xef4444; // blue P0, red P1
+      this.cooldownRing = new CooldownRing(40, ringColor, weaponName, attackSpeedSec);
+      // Position the ring centered on the body
+      this.cooldownRing.container.y = -25;
+      this.container.addChild(this.cooldownRing.container);
+    }
   }
 
   get x(): number {
@@ -159,6 +172,17 @@ export class GladiatorSprite {
         break;
       // 'hit' is handled by the timer above
     }
+
+    // Update cooldown ring
+    this.cooldownRing?.update(dt);
+  }
+
+  setCooldownProgress(progress: number): void {
+    this.cooldownRing?.setProgress(progress);
+  }
+
+  triggerAttackPulse(): void {
+    this.cooldownRing?.triggerPulse();
   }
 
   reset(): void {
@@ -170,9 +194,11 @@ export class GladiatorSprite {
     this.container.y = this.baseY;
     this.container.alpha = 1;
     this.container.rotation = 0;
+    this.cooldownRing?.setProgress(0);
   }
 
   destroy(): void {
+    this.cooldownRing?.destroy();
     this.container.destroy({ children: true });
   }
 

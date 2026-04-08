@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Superpowers brainstorm sessions
+.superpowers/
+
 # Build outputs
 dist/
 *.tsbuildinfo

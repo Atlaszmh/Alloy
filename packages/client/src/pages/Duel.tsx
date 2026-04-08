@@ -9,9 +9,9 @@ import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
 import { useMatchStore } from '@/stores/matchStore';
-import { usePixiApp } from '@/features/duel/hooks/usePixiApp.js';
+import { Application } from 'pixi.js';
 import { useDuelPlayback } from '@/features/duel/hooks/useDuelPlayback.js';
-import { DuelScene, STAGE_WIDTH } from '@/features/duel/pixi/DuelScene.js';
+import { DuelScene, STAGE_WIDTH, STAGE_HEIGHT } from '@/features/duel/pixi/DuelScene.js';
 
 /* ═══════════════════════════════════════════════════════════════
    HPBar — slim bar used for both top (enemy) and bottom (player)
@@ -123,9 +123,9 @@ export function Duel() {
 
   // ── PixiJS + DuelScene setup ──
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const appRef = usePixiApp(canvasContainerRef);
   const sceneRef = useRef<DuelScene | null>(null);
   const [scene, setScene] = useState<DuelScene | null>(null);
+  const [pixiApp, setPixiApp] = useState<import('pixi.js').Application | null>(null);
 
   // Run the duel (engine simulation) when we enter duel phase
   useEffect(() => {
@@ -158,12 +158,37 @@ export function Duel() {
     return [calculateStats(player0.loadout, reg), calculateStats(player1.loadout, reg)] as [DerivedStats, DerivedStats];
   }, [player0, player1, getRegistry]);
 
-  // Initialize DuelScene when app is ready
+  // Create PixiJS Application
   useEffect(() => {
-    const app = appRef.current;
-    if (!app || !derivedStats) return;
+    const container = canvasContainerRef.current;
+    if (!container) return;
 
-    // Already have a scene for this app? Skip.
+    const app = new Application();
+    let destroyed = false;
+
+    app.init({
+      width: STAGE_WIDTH,
+      height: STAGE_HEIGHT,
+      background: 0x0a0a0f,
+      antialias: true,
+    }).then(() => {
+      if (destroyed) { app.destroy(); return; }
+      container.appendChild(app.canvas);
+      setPixiApp(app);
+    });
+
+    return () => {
+      destroyed = true;
+      app.destroy(true);
+      setPixiApp(null);
+    };
+  }, []);
+
+  // Initialize DuelScene when app + stats are ready
+  useEffect(() => {
+    if (!pixiApp || !derivedStats) return;
+
+    // Already have a scene? Skip.
     if (sceneRef.current) return;
 
     const duelScene = new DuelScene();
@@ -173,7 +198,7 @@ export function Duel() {
       setHpState({ hp: [...hp] as [number, number], maxHp: [...maxHp] as [number, number] });
     };
 
-    duelScene.init(app, derivedStats).then(() => {
+    duelScene.init(pixiApp, derivedStats).then(() => {
       sceneRef.current = duelScene;
       setScene(duelScene);
       // Initialize HP state
@@ -186,27 +211,40 @@ export function Duel() {
       sceneRef.current = null;
       setScene(null);
     };
-  }, [appRef.current, derivedStats]);
+  }, [pixiApp, derivedStats]);
 
   // Handle canvas scaling via ResizeObserver
   useEffect(() => {
     const container = canvasContainerRef.current;
-    const app = appRef.current;
-    if (!container || !app) return;
+    if (!container || !pixiApp) return;
 
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
-      app.renderer.resize(width, height);
-      app.stage.scale.set(width / STAGE_WIDTH);
+      pixiApp.renderer.resize(width, height);
+      pixiApp.stage.scale.set(width / STAGE_WIDTH);
     });
 
     ro.observe(container);
     return () => ro.disconnect();
-  }, [appRef.current]);
+  }, [pixiApp]);
 
   // ── Playback (driven by useDuelPlayback) ──
   const playback = useDuelPlayback(currentLog, scene);
+
+  // Auto-start playback once scene and combat log are both ready
+  const hasAutoStarted = useRef(false);
+  useEffect(() => {
+    if (scene && currentLog && !hasAutoStarted.current) {
+      hasAutoStarted.current = true;
+      playback.play();
+    }
+  }, [scene, currentLog, playback]);
+
+  // Reset auto-start flag when combat log changes (new round)
+  useEffect(() => {
+    hasAutoStarted.current = false;
+  }, [currentLog]);
 
   // Handle playback completion — show breakdown when playback ends
   useEffect(() => {

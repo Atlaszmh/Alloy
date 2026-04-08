@@ -1,10 +1,11 @@
 import type { AITier } from '../types/ai.js';
 import type { CombatLog } from '../types/combat.js';
 import type { ForgeAction } from '../types/forge-action.js';
-import type { Loadout } from '../types/item.js';
+import type { BaseItemDef, Loadout } from '../types/item.js';
 import type { OrbInstance } from '../types/orb.js';
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
+import { selectAIItems } from './item-selection.js';
 import type { DraftStrategy } from './strategies/draft-strategy.js';
 import type { ForgeStrategy } from './strategies/forge-strategy.js';
 import type { AdaptStrategy } from './strategies/adapt-strategy.js';
@@ -72,6 +73,12 @@ export class AIController {
       this.registry,
       this.rng,
     );
+  }
+
+  selectItems(
+    playerDraftedGems: Array<{ tags: string[] }>,
+  ): { weapon: BaseItemDef; armor: BaseItemDef } {
+    return selectAIItems(this.tier, playerDraftedGems, this.registry, this.rng);
   }
 
   planAdapt(
