@@ -39,6 +39,7 @@ packages/supabase/.temp/
 *.log
 npm-debug.log*
 .claude/worktrees/
+.worktrees/
 
 # Engine type declaration output
 dist-types/
