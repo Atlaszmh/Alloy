@@ -1,0 +1,566 @@
+[
+  {
+    "id": "ignite",
+    "name": "Ignite",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "ignite",
+    "outputBonusEffects": [
+      { "stat": "compound.ignite.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.ignite.dotMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.ignite.duration", "op": "flat", "value": 120 },
+      { "stat": "compound.ignite.absorbChance", "op": "flat", "value": 0.10 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "trigger"]
+  },
+  {
+    "id": "frostbite",
+    "name": "Frostbite",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "frostbite",
+    "outputBonusEffects": [
+      { "stat": "compound.frostbite.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.frostbite.slowMultiplier", "op": "flat", "value": 1.0 },
+      { "stat": "compound.frostbite.coldDot", "op": "flat", "value": 1 },
+      { "stat": "compound.frostbite.rootDuration", "op": "flat", "value": 30 },
+      { "stat": "compound.frostbite.armorBonus", "op": "flat", "value": 0.30 },
+      { "stat": "compound.frostbite.armorDuration", "op": "flat", "value": 90 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "cold", "trigger"]
+  },
+  {
+    "id": "static_discharge",
+    "name": "Static Discharge",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "static_discharge",
+    "outputBonusEffects": [
+      { "stat": "compound.static_discharge.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.static_discharge.chainDamage", "op": "flat", "value": 0.50 },
+      { "stat": "compound.static_discharge.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lightning", "trigger"]
+  },
+  {
+    "id": "envenom",
+    "name": "Envenom",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "poison_damage" }
+    ],
+    "outputAffixId": "envenom",
+    "outputBonusEffects": [
+      { "stat": "compound.envenom.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.envenom.stackMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.envenom.dotSpeedBonus", "op": "flat", "value": 0.50 },
+      { "stat": "compound.envenom.poisonAttacker", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "poison", "trigger"]
+  },
+  {
+    "id": "soul_rend",
+    "name": "Soul Rend",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "shadow_damage" }
+    ],
+    "outputAffixId": "soul_rend",
+    "outputBonusEffects": [
+      { "stat": "compound.soul_rend.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.soul_rend.currentHpDamage", "op": "flat", "value": 0.05 },
+      { "stat": "compound.soul_rend.reduceMaxHp", "op": "flat", "value": 0.03 },
+      { "stat": "compound.soul_rend.reduceDuration", "op": "flat", "value": 150 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "shadow", "trigger"]
+  },
+  {
+    "id": "soul_siphon",
+    "name": "Soul Siphon",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "lifesteal" }
+    ],
+    "outputAffixId": "soul_siphon",
+    "outputBonusEffects": [
+      { "stat": "compound.soul_siphon.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.soul_siphon.fullHeal", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_siphon.healOnDamaged", "op": "flat", "value": 0.25 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lifesteal", "trigger"]
+  },
+  {
+    "id": "concussion",
+    "name": "Concussion",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_hit" },
+      { "kind": "affix", "id": "stun_chance" }
+    ],
+    "outputAffixId": "concussion",
+    "outputBonusEffects": [
+      { "stat": "compound.concussion.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.concussion.stunDuration", "op": "flat", "value": 45 },
+      { "stat": "compound.concussion.durationMultiplier", "op": "flat", "value": 3.0 },
+      { "stat": "compound.concussion.stunAttacker", "op": "flat", "value": 1 },
+      { "stat": "compound.concussion.stunAttackerDuration", "op": "flat", "value": 15 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "stun", "trigger"]
+  },
+  {
+    "id": "retribution_aura",
+    "name": "Retribution Aura",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_taking_damage" },
+      { "kind": "affix", "id": "thorns" }
+    ],
+    "outputAffixId": "retribution_aura",
+    "outputBonusEffects": [
+      { "stat": "compound.retribution_aura.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.retribution_aura.thornMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.retribution_aura.duration", "op": "flat", "value": 60 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "thorns", "defensive_trigger"]
+  },
+  {
+    "id": "immolation",
+    "name": "Immolation",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_taking_damage" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "immolation",
+    "outputBonusEffects": [
+      { "stat": "compound.immolation.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.immolation.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "defensive_trigger"]
+  },
+  {
+    "id": "reactive_shield",
+    "name": "Reactive Shield",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_taking_damage" },
+      { "kind": "affix", "id": "barrier" }
+    ],
+    "outputAffixId": "reactive_shield",
+    "outputBonusEffects": [
+      { "stat": "compound.reactive_shield.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.reactive_shield.barrierPercent", "op": "flat", "value": 0.30 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "barrier", "defensive_trigger"]
+  },
+  {
+    "id": "counter_strike",
+    "name": "Counter Strike",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_block" },
+      { "kind": "affix", "id": "thorns" }
+    ],
+    "outputAffixId": "counter_strike",
+    "outputBonusEffects": [
+      { "stat": "compound.counter_strike.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.counter_strike.damageMultiplier", "op": "flat", "value": 1.50 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "thorns", "block_trigger"]
+  },
+  {
+    "id": "shield_bash",
+    "name": "Shield Bash",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_block" },
+      { "kind": "affix", "id": "stun_chance" }
+    ],
+    "outputAffixId": "shield_bash",
+    "outputBonusEffects": [
+      { "stat": "compound.shield_bash.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.shield_bash.stunDuration", "op": "flat", "value": 30 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "stun", "block_trigger"]
+  },
+  {
+    "id": "blood_frenzy",
+    "name": "Blood Frenzy",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_low_hp" },
+      { "kind": "affix", "id": "lifesteal" }
+    ],
+    "outputAffixId": "blood_frenzy",
+    "outputBonusEffects": [
+      { "stat": "compound.blood_frenzy.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blood_frenzy.lifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lifesteal", "low_hp_trigger"]
+  },
+  {
+    "id": "desperation",
+    "name": "Desperation",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_low_hp" },
+      { "kind": "affix", "id": "attack_speed" }
+    ],
+    "outputAffixId": "desperation",
+    "outputBonusEffects": [
+      { "stat": "compound.desperation.hpThreshold", "op": "flat", "value": 0.30 },
+      { "stat": "compound.desperation.attackSpeedMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.desperation.duration", "op": "flat", "value": 90 },
+      { "stat": "compound.desperation.oncePerFight", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "attack_speed", "low_hp_trigger"]
+  },
+  {
+    "id": "thermal_shock",
+    "name": "Thermal Shock",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "fire_damage" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "thermal_shock",
+    "outputBonusEffects": [
+      { "stat": "compound.thermal_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thermal_shock.stunDuration", "op": "flat", "value": 15 },
+      { "stat": "compound.thermal_shock.dotBonus", "op": "flat", "value": 0.25 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "cold", "elemental"]
+  },
+  {
+    "id": "blight",
+    "name": "Blight",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "fire_damage" },
+      { "kind": "affix", "id": "poison_damage" }
+    ],
+    "outputAffixId": "blight",
+    "outputBonusEffects": [
+      { "stat": "compound.blight.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blight.poisonBonusOnBurn", "op": "flat", "value": 0.30 },
+      { "stat": "compound.blight.fireBonusOnPoison", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "poison", "elemental"]
+  },
+  {
+    "id": "storm_of_flames",
+    "name": "Storm of Flames",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "fire_damage" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "storm_of_flames",
+    "outputBonusEffects": [
+      { "stat": "compound.storm_of_flames.active", "op": "flat", "value": 1 },
+      { "stat": "compound.storm_of_flames.lightningOnFire", "op": "flat", "value": 0.25 },
+      { "stat": "compound.storm_of_flames.igniteOnLightning", "op": "flat", "value": 0.25 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "lightning", "elemental"]
+  },
+  {
+    "id": "superconductor",
+    "name": "Superconductor",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "cold_damage" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "superconductor",
+    "outputBonusEffects": [
+      { "stat": "compound.superconductor.active", "op": "flat", "value": 1 },
+      { "stat": "compound.superconductor.lightningBonusOnSlow", "op": "flat", "value": 0.30 },
+      { "stat": "compound.superconductor.extendSlow", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "cold", "lightning", "elemental"]
+  },
+  {
+    "id": "frostplague",
+    "name": "Frostplague",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "cold_damage" },
+      { "kind": "affix", "id": "poison_damage" }
+    ],
+    "outputAffixId": "frostplague",
+    "outputBonusEffects": [
+      { "stat": "compound.frostplague.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frostplague.poisonSpeedOnSlow", "op": "flat", "value": 0.50 },
+      { "stat": "compound.frostplague.extraSlowOnPoison", "op": "flat", "value": 0.10 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "cold", "poison", "elemental"]
+  },
+  {
+    "id": "void_shock",
+    "name": "Void Shock",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "lightning_damage" },
+      { "kind": "affix", "id": "shadow_damage" }
+    ],
+    "outputAffixId": "void_shock",
+    "outputBonusEffects": [
+      { "stat": "compound.void_shock.active", "op": "flat", "value": 1 },
+      { "stat": "compound.void_shock.shadowChanceOnLightning", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lightning", "shadow", "elemental"]
+  },
+  {
+    "id": "necrosis",
+    "name": "Necrosis",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "poison_damage" },
+      { "kind": "affix", "id": "shadow_damage" }
+    ],
+    "outputAffixId": "necrosis",
+    "outputBonusEffects": [
+      { "stat": "compound.necrosis.active", "op": "flat", "value": 1 },
+      { "stat": "compound.necrosis.maxHpPerStack", "op": "flat", "value": 0.005 },
+      { "stat": "compound.necrosis.poisonStacksOnShadow", "op": "flat", "value": 2 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "poison", "shadow", "elemental"]
+  },
+  {
+    "id": "blood_mirror",
+    "name": "Blood Mirror",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "lifesteal" },
+      { "kind": "affix", "id": "thorns" }
+    ],
+    "outputAffixId": "blood_mirror",
+    "outputBonusEffects": [
+      { "stat": "compound.blood_mirror.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_mirror.healFromThorns", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lifesteal", "thorns", "utility"]
+  },
+  {
+    "id": "flicker_strike",
+    "name": "Flicker Strike",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "attack_speed" },
+      { "kind": "affix", "id": "crit_chance" }
+    ],
+    "outputAffixId": "flicker_strike",
+    "outputBonusEffects": [
+      { "stat": "compound.flicker_strike.active", "op": "flat", "value": 1 },
+      { "stat": "compound.flicker_strike.hitInterval", "op": "flat", "value": 5 },
+      { "stat": "compound.flicker_strike.autoCrit", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "attack_speed", "crit", "utility"]
+  },
+  {
+    "id": "vampiric_fury",
+    "name": "Vampiric Fury",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "lifesteal" },
+      { "kind": "affix", "id": "crit_damage" }
+    ],
+    "outputAffixId": "vampiric_fury",
+    "outputBonusEffects": [
+      { "stat": "compound.vampiric_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.vampiric_fury.critLifestealMultiplier", "op": "flat", "value": 3.0 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lifesteal", "crit", "utility"]
+  },
+  {
+    "id": "iron_maiden",
+    "name": "Iron Maiden",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "thorns" },
+      { "kind": "affix", "id": "block_chance" }
+    ],
+    "outputAffixId": "iron_maiden",
+    "outputBonusEffects": [
+      { "stat": "compound.iron_maiden.active", "op": "flat", "value": 1 },
+      { "stat": "compound.iron_maiden.blockReflectMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "thorns", "block", "utility"]
+  },
+  {
+    "id": "regenerative_shield",
+    "name": "Regenerative Shield",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "barrier" },
+      { "kind": "affix", "id": "hp_regen" }
+    ],
+    "outputAffixId": "regenerative_shield",
+    "outputBonusEffects": [
+      { "stat": "compound.regenerative_shield.active", "op": "flat", "value": 1 },
+      { "stat": "compound.regenerative_shield.regenMultiplier", "op": "flat", "value": 2.0 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "barrier", "hp_regen", "utility"]
+  },
+  {
+    "id": "riposte",
+    "name": "Riposte",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "dodge_chance" },
+      { "kind": "affix", "id": "attack_speed" }
+    ],
+    "outputAffixId": "riposte",
+    "outputBonusEffects": [
+      { "stat": "compound.riposte.active", "op": "flat", "value": 1 },
+      { "stat": "compound.riposte.attackSpeedOnDodge", "op": "flat", "value": 0.50 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "dodge", "attack_speed", "utility"]
+  },
+  {
+    "id": "fortress",
+    "name": "Fortress",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "flat_hp" },
+      { "kind": "affix", "id": "armor_rating" }
+    ],
+    "outputAffixId": "fortress",
+    "outputBonusEffects": [
+      { "stat": "compound.fortress.active", "op": "flat", "value": 1 },
+      { "stat": "compound.fortress.hpThreshold", "op": "flat", "value": 0.80 },
+      { "stat": "compound.fortress.damageReduction", "op": "flat", "value": 0.15 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "hp", "armor", "utility"]
+  },
+  {
+    "id": "sanguine_endurance",
+    "name": "Sanguine Endurance",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "lifesteal" },
+      { "kind": "affix", "id": "flat_hp" }
+    ],
+    "outputAffixId": "sanguine_endurance",
+    "outputBonusEffects": [
+      { "stat": "compound.sanguine_endurance.active", "op": "flat", "value": 1 },
+      { "stat": "compound.sanguine_endurance.overhealCap", "op": "flat", "value": 1.20 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lifesteal", "hp", "utility"]
+  },
+
+  {
+    "id": "cat_off_off",
+    "name": "Offensive Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "offensive", "inputB": "offensive" },
+    "outputAffixId": "__offensive_fusion__",
+    "outputBonusEffects": [
+      { "stat": "damage", "op": "percent", "value": 0.05 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  },
+  {
+    "id": "cat_def_def",
+    "name": "Defensive Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "defensive", "inputB": "defensive" },
+    "outputAffixId": "__defensive_fusion__",
+    "outputBonusEffects": [
+      { "stat": "armor", "op": "percent", "value": 0.05 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  },
+  {
+    "id": "cat_off_def",
+    "name": "Balanced Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "offensive", "inputB": "defensive" },
+    "outputAffixId": "__balanced_fusion__",
+    "outputBonusEffects": [
+      { "stat": "damage", "op": "percent", "value": 0.03 },
+      { "stat": "armor", "op": "percent", "value": 0.03 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  },
+  {
+    "id": "cat_sustain_any",
+    "name": "Sustain Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "sustain", "inputB": "any" },
+    "outputAffixId": "__sustain_fusion__",
+    "outputBonusEffects": [
+      { "stat": "hp_regen", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  },
+  {
+    "id": "cat_trigger_any",
+    "name": "Trigger Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "trigger", "inputB": "any" },
+    "outputAffixId": "__trigger_fusion__",
+    "outputBonusEffects": [
+      { "stat": "trigger_chance", "op": "flat", "value": 0.03 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  },
+  {
+    "id": "cat_utility_any",
+    "name": "Utility Fusion",
+    "type": "category",
+    "categoryRule": { "inputA": "utility", "inputB": "any" },
+    "outputAffixId": "__utility_fusion__",
+    "outputBonusEffects": [
+      { "stat": "all_stats", "op": "percent", "value": 0.02 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": []
+  }
+]

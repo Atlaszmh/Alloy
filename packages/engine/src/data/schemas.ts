@@ -41,6 +41,32 @@ const CompoundAffixDefSchema = z.object({
 
 export const CombinationsSchema = z.array(CompoundAffixDefSchema);
 
+// --- Recipe Schemas ---
+
+const RecipeComponentSchema = z.object({
+  kind: z.enum(['affix', 'recipe']),
+  id: z.string(),
+});
+
+const CategoryRuleSchema = z.object({
+  inputA: z.string(),
+  inputB: z.string(),
+});
+
+const RecipeDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['signature', 'category']),
+  components: z.tuple([RecipeComponentSchema, RecipeComponentSchema]).optional(),
+  categoryRule: CategoryRuleSchema.optional(),
+  outputAffixId: z.string(),
+  outputBonusEffects: z.array(StatModifierSchema),
+  maxDepthContribution: z.number().int().nonnegative(),
+  tags: z.array(z.string()),
+});
+
+export const RecipesSchema = z.array(RecipeDefinitionSchema);
+
 // --- Synergy Schemas ---
 
 const SynergyDefSchema = z.object({
