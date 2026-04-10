@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useMatchStore } from '@/stores/matchStore';
+import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { useRunStore } from '@/stores/runStore';
 import { useGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import type { CombatLog } from '@alloy/engine';
@@ -78,11 +79,14 @@ export function PostMatch() {
   const roundResults = matchState?.roundResults ?? [];
   const duelLogs = matchState?.duelLogs ?? [];
   const reset = useMatchStore((s) => s.reset);
+  const isRunMode = useMatchStore(selectIsRunMode);
+  const runStatus = useRunStore((s) => s.status);
+  const runRound = useRunStore((s) => s.round);
 
   const winner = phase?.kind === 'complete' ? phase.winner : null;
   const scores = phase?.kind === 'complete' ? phase.scores : [0, 0];
-  const isVictory = winner === 0;
-  const isDraw = winner === 'draw';
+  const isVictory = isRunMode ? runStatus === 'won' : winner === 0;
+  const isDraw = !isRunMode && winner === 'draw';
 
   const handlePlayAgain = () => {
     reset();
@@ -113,11 +117,17 @@ export function PostMatch() {
               : {}),
         }}
       >
-        {isDraw ? 'DRAW!' : isVictory ? 'VICTORY!' : 'DEFEAT'}
+        {isRunMode
+          ? (isVictory ? 'RUN WON!' : 'RUN OVER')
+          : (isDraw ? 'DRAW!' : isVictory ? 'VICTORY!' : 'DEFEAT')}
       </h2>
 
       <p className="text-lg text-surface-400" style={{ fontFamily: 'var(--font-family-display)' }}>
-        Score: <span className="stat-number text-white">{scores[0]}</span> — <span className="stat-number text-white">{scores[1]}</span>
+        {isRunMode
+          ? (isVictory
+              ? <>Reached Round <span className="stat-number text-white">{runRound}</span>!</>
+              : <>Eliminated after <span className="stat-number text-white">{runRound}</span> {runRound === 1 ? 'round' : 'rounds'}.</>)
+          : <>Score: <span className="stat-number text-white">{scores[0]}</span> — <span className="stat-number text-white">{scores[1]}</span></>}
       </p>
 
       <div className="flex w-full max-w-xs flex-col gap-2">

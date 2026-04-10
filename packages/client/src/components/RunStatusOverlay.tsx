@@ -1,12 +1,18 @@
+import { useState } from 'react';
 import { useRunStore } from '@/stores/runStore';
 
+/**
+ * Full-screen overlay shown when a run ends (lost all lives).
+ * Renders on top of the PostMatch page. Dismissable so the player can see results.
+ * For 'won' status, the PostMatch page handles the messaging directly.
+ */
 export function RunStatusOverlay() {
   const status = useRunStore((s) => s.status);
   const round = useRunStore((s) => s.round);
+  const [dismissed, setDismissed] = useState(false);
 
-  if (status === 'active') return null;
-
-  const isWon = status === 'won';
+  // Only show for lost status (run over). Won is handled by PostMatch.
+  if (status !== 'lost' || dismissed) return null;
 
   return (
     <div
@@ -30,14 +36,12 @@ export function RunStatusOverlay() {
             fontFamily: 'var(--font-family-display)',
             fontSize: 'clamp(2rem, 8vw, 4rem)',
             fontWeight: 900,
-            color: isWon ? 'var(--color-accent-400)' : 'var(--color-danger)',
-            textShadow: isWon
-              ? '0 0 40px rgba(212, 168, 52, 0.7)'
-              : '0 0 40px rgba(248, 113, 113, 0.5)',
+            color: 'var(--color-danger)',
+            textShadow: '0 0 40px rgba(248, 113, 113, 0.5)',
             letterSpacing: '0.08em',
           }}
         >
-          {isWon ? 'Run Won!' : 'Run Over'}
+          Run Over
         </h1>
 
         <p
@@ -48,10 +52,20 @@ export function RunStatusOverlay() {
             color: 'var(--color-surface-300)',
           }}
         >
-          {isWon
-            ? `Goal reached at Round ${round}!`
-            : `Eliminated after ${round} ${round === 1 ? 'round' : 'rounds'}.`}
+          Eliminated after {round} {round === 1 ? 'round' : 'rounds'}.
         </p>
+
+        <button
+          onClick={() => setDismissed(true)}
+          className="mt-4 rounded-lg px-8 py-3 font-bold text-white"
+          style={{
+            background: 'var(--color-surface-600)',
+            fontFamily: 'var(--font-family-display)',
+            letterSpacing: '0.04em',
+          }}
+        >
+          VIEW RESULTS
+        </button>
       </div>
     </div>
   );

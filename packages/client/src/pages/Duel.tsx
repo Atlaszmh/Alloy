@@ -8,7 +8,7 @@ import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
-import { useMatchStore } from '@/stores/matchStore';
+import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { Application } from 'pixi.js';
 import { useDuelPlayback } from '@/features/duel/hooks/useDuelPlayback.js';
 import { DuelScene, STAGE_WIDTH, STAGE_HEIGHT } from '@/features/duel/pixi/DuelScene.js';
@@ -112,6 +112,7 @@ export function Duel() {
   const player0 = matchState?.players[0] ?? null;
   const player1 = matchState?.players[1] ?? null;
   const getRegistry = useMatchStore((s) => s.getRegistry);
+  const isRunMode = useMatchStore(selectIsRunMode);
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
@@ -389,6 +390,9 @@ export function Duel() {
             style={{ boxShadow: 'var(--shadow-button)', fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em' }}
           >
             {(() => {
+              if (isRunMode) {
+                return 'NEXT ROUND';
+              }
               const wins = [0, 0];
               for (const r of roundResults) {
                 if (r.winner === 0) wins[0]++;
