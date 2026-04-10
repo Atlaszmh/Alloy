@@ -1,6 +1,7 @@
 import type { AffixCategory, AffixDef, AffixTier } from '../types/affix.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
+import { createGem } from '../types/gem.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { validateArchetypes } from './archetype-validator.js';
 
@@ -31,7 +32,7 @@ function pickRandom<T>(arr: T[], rng: SeededRNG): T {
 }
 
 /**
- * Generate a deterministic pool of orbs from a seed.
+ * Generate a deterministic pool of gems from a seed.
  *
  * @param round - Which draft round (1, 2, or 3). Round 1 gets archetype
  *   validation and trigger guarantees. Rounds 2-3 are supplemental pools.
@@ -42,7 +43,7 @@ export function generatePool(
   mode: 'quick' | 'ranked' | 'unranked',
   registry: DataRegistry,
   round: 1 | 2 | 3 = 1,
-): OrbInstance[] {
+): GemInstance[] {
   const balance = registry.getBalance();
   let currentSeed = seed;
 
@@ -60,7 +61,7 @@ export function generatePool(
       const pool = buildPool(rng, mode, registry, poolSize, round);
 
       if (validateArchetypes(pool, registry, balance.archetypeMinOrbs, 3)) {
-        return ensureTriggerOrbs(pool, rng, registry, 2);
+        return ensureTriggerGems(pool, rng, registry, 2);
       }
 
       currentSeed = currentSeed + 1;
@@ -69,10 +70,10 @@ export function generatePool(
     // Fallback
     const masterRng = new SeededRNG(currentSeed);
     const rng = masterRng.fork(`pool_r${round}`);
-    return ensureTriggerOrbs(buildPool(rng, mode, registry, poolSize, round), rng, registry, 2);
+    return ensureTriggerGems(buildPool(rng, mode, registry, poolSize, round), rng, registry, 2);
   }
 
-  // Rounds 2-3: no archetype validation, no trigger guarantee (supplemental orbs)
+  // Rounds 2-3: no archetype validation, no trigger guarantee (supplemental gems)
   const masterRng = new SeededRNG(currentSeed);
   const rng = masterRng.fork(`pool_r${round}`);
   return buildPool(rng, mode, registry, poolSize, round);
@@ -87,7 +88,7 @@ function buildPool(
   registry: DataRegistry,
   overrideSize: number | null,
   round: 1 | 2 | 3 = 1,
-): OrbInstance[] {
+): GemInstance[] {
   const balance = registry.getBalance();
 
   // Determine pool size
@@ -114,8 +115,8 @@ function buildPool(
 
   const allAffixes = registry.getAllAffixes();
 
-  const pool: OrbInstance[] = [];
-  let orbIndex = 0;
+  const pool: GemInstance[] = [];
+  let gemIndex = 0;
 
   for (const [tier, count] of tierTargets) {
     for (let i = 0; i < count; i++) {
@@ -128,12 +129,14 @@ function buildPool(
 
       const affix = pickRandom(candidates, rng);
 
-      pool.push({
-        uid: `orb_r${round}_${orbIndex}`,
-        affixId: affix.id,
-        tier: tier as AffixTier,
-      });
-      orbIndex++;
+      // All pool gems start as common rarity (rarity scaling comes later with RunState)
+      pool.push(createGem(
+        `gem_r${round}_${gemIndex}`,
+        affix.id,
+        tier as 1 | 2 | 3 | 4 | 5,
+        'common',
+      ));
+      gemIndex++;
     }
   }
 
@@ -164,18 +167,18 @@ function computeTierTargets(
   return rawCounts;
 }
 
-function ensureTriggerOrbs(
-  pool: OrbInstance[],
+function ensureTriggerGems(
+  pool: GemInstance[],
   rng: SeededRNG,
   registry: DataRegistry,
   minTriggers: number,
-): OrbInstance[] {
+): GemInstance[] {
   const triggerAffixes = registry.getAffixesByCategory('trigger');
   if (triggerAffixes.length === 0) return pool;
 
   let triggerCount = 0;
-  for (const orb of pool) {
-    const affix = registry.findAffix(orb.affixId);
+  for (const gem of pool) {
+    const affix = registry.findAffix(gem.affixId);
     if (affix && affix.category === 'trigger') {
       triggerCount++;
     }
@@ -186,10 +189,12 @@ function ensureTriggerOrbs(
     const affix = registry.findAffix(result[i].affixId);
     if (affix && affix.category !== 'trigger') {
       const triggerAffix = pickRandom(triggerAffixes, rng);
-      result[i] = {
-        ...result[i],
-        affixId: triggerAffix.id,
-      };
+      result[i] = createGem(
+        result[i].uid,
+        triggerAffix.id,
+        result[i].tier,
+        result[i].rarity,
+      );
       triggerCount++;
     }
   }

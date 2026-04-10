@@ -1,15 +1,14 @@
 import { createDraftState, makePick, autoPickRandom } from '../src/draft/draft-state.js';
 import type { DraftState } from '../src/draft/draft-state.js';
-import type { OrbInstance } from '../src/types/orb.js';
+import type { GemInstance } from '../src/types/gem.js';
+import { createGem } from '../src/types/gem.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
-/** Helper: create a pool of N dummy orbs. */
-function makePool(n: number): OrbInstance[] {
-  return Array.from({ length: n }, (_, i) => ({
-    uid: `orb-${i}`,
-    affixId: `affix-${i % 5}`,
-    tier: (((i % 3) + 1) as 1 | 2 | 3),
-  }));
+/** Helper: create a pool of N dummy gems. */
+function makePool(n: number): GemInstance[] {
+  return Array.from({ length: n }, (_, i) =>
+    createGem(`orb-${i}`, `affix-${i % 5}`, (((i % 3) + 1) as 1 | 2 | 3), 'common'),
+  );
 }
 
 describe('Draft System', () => {

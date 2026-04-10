@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { extractTriggers } from '../src/duel/trigger-system.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import { createGem } from '../src/types/gem.js';
 import type { Loadout } from '../src/types/item.js';
 import type { AffixTier } from '../src/types/affix.js';
 
@@ -14,11 +15,7 @@ function makeLoadout(
 ): Loadout {
   const toSlot = (s: { affixId: string; tier: AffixTier } | null) =>
     s
-      ? {
-          kind: 'single' as const,
-          orb: { uid: `uid_${s.affixId}_${s.tier}`, affixId: s.affixId, tier: s.tier },
-          socketedRound: 1 as const,
-        }
+      ? { gem: createGem(`uid_${s.affixId}_${s.tier}`, s.affixId, s.tier as 1|2|3|4|5, 'common') }
       : null;
 
   return {
@@ -103,30 +100,10 @@ describe('extractTriggers', () => {
     expect(triggers.map((t) => t.condition)).toContain('on_taking_damage');
   });
 
-  it('skips compound slots', () => {
-    const loadout: Loadout = {
-      weapon: {
-        baseItemId: 'sword',
-        baseStats: null,
-        slots: [
-          {
-            kind: 'compound',
-            orbs: [
-              { uid: 'a', affixId: 'chance_on_hit', tier: 1 },
-              { uid: 'b', affixId: 'chance_on_crit', tier: 1 },
-            ],
-            compoundId: 'some_compound',
-            socketedRound: 1,
-          },
-          null, null, null, null, null,
-        ],
-      },
-      armor: {
-        baseItemId: 'chainmail',
-        baseStats: null,
-        slots: [null, null, null, null, null, null],
-      },
-    };
+  it('non-trigger gem slots are skipped', () => {
+    const loadout = makeLoadout(
+      [{ affixId: 'flat_physical', tier: 1 }],
+    );
     const triggers = extractTriggers(loadout, registry);
     expect(triggers).toEqual([]);
   });

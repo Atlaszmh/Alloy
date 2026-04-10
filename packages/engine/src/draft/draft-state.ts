@@ -1,4 +1,4 @@
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import {
   validateActivePlayer,
@@ -10,8 +10,8 @@ import {
 // --- Types ---
 
 export interface DraftState {
-  pool: OrbInstance[];
-  stockpiles: [OrbInstance[], OrbInstance[]];
+  pool: GemInstance[];
+  stockpiles: [GemInstance[], GemInstance[]];
   pickIndex: number;
   activePlayer: 0 | 1;
   maxPicks: number;
@@ -28,7 +28,7 @@ export type DraftResult =
  * Create an initial draft state from a pool of orbs.
  * All orbs in the pool will be drafted (maxPicks = pool.length).
  */
-export function createDraftState(pool: OrbInstance[]): DraftState {
+export function createDraftState(pool: GemInstance[]): DraftState {
   return {
     pool: [...pool],
     stockpiles: [[], []],
@@ -68,7 +68,7 @@ export function makePick(
 
   const newPool = [...state.pool.slice(0, orbIndex), ...state.pool.slice(orbIndex + 1)];
 
-  const newStockpiles: [OrbInstance[], OrbInstance[]] = [
+  const newStockpiles: [GemInstance[], GemInstance[]] = [
     [...state.stockpiles[0]],
     [...state.stockpiles[1]],
   ];

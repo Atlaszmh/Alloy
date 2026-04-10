@@ -1,54 +1,66 @@
 import type { AffixTier } from '../types/affix.js';
 import type { CombatLog } from '../types/combat.js';
-import type { OrbInstance } from '../types/orb.js';
 import type { DataRegistry } from '../data/registry.js';
 import { ARCHETYPE_TAGS } from '../pool/archetype-validator.js';
 import type { ArchetypeId } from '../pool/archetype-validator.js';
 
 /**
- * Tier value multipliers for scoring orbs.
- * Higher tier orbs are disproportionately more valuable.
+ * Minimal orb/gem shape needed for evaluation functions.
+ * Works with both OrbInstance and GemInstance.
  */
-const TIER_VALUES: Record<AffixTier, number> = {
+interface EvalUnit {
+  uid: string;
+  affixId: string;
+  tier: number;
+}
+
+/**
+ * Tier value multipliers for scoring orbs/gems.
+ * Higher tier units are disproportionately more valuable.
+ */
+const TIER_VALUES: Record<number, number> = {
   1: 1,
   2: 2,
   3: 3,
   4: 5,
+  5: 8,
 };
 
 /**
- * Score an individual orb based on its tier and the average value range of the affix.
+ * Score an individual orb/gem based on its tier and the average value range of the affix.
  */
-export function orbValueScore(orb: OrbInstance, registry: DataRegistry): number {
-  const affix = registry.findAffix(orb.affixId);
+export function orbValueScore(unit: EvalUnit, registry: DataRegistry): number {
+  const affix = registry.findAffix(unit.affixId);
   if (!affix) return 0;
 
-  const tierData = affix.tiers[orb.tier];
+  // Clamp tier to valid AffixTier range for data lookup
+  const lookupTier = Math.min(unit.tier, 4) as AffixTier;
+  const tierData = affix.tiers[lookupTier];
   const baseValue = (tierData.valueRange[0] + tierData.valueRange[1]) / 2;
-  return TIER_VALUES[orb.tier] * baseValue;
+  return (TIER_VALUES[unit.tier] ?? TIER_VALUES[4]) * baseValue;
 }
 
 /**
- * Check whether an orb's affix tags overlap with a given archetype's tags.
+ * Check whether a unit's affix tags overlap with a given archetype's tags.
  */
 export function archetypeMatch(
-  orb: OrbInstance,
+  unit: EvalUnit,
   archetype: ArchetypeId,
   registry: DataRegistry,
 ): boolean {
-  const affix = registry.findAffix(orb.affixId);
+  const affix = registry.findAffix(unit.affixId);
   if (!affix) return false;
 
   const archetypeTags = ARCHETYPE_TAGS[archetype];
-  const orbTags = new Set(affix.tags);
-  return archetypeTags.some((t) => orbTags.has(t));
+  const unitTags = new Set(affix.tags);
+  return archetypeTags.some((t) => unitTags.has(t));
 }
 
 /**
  * Measure how focused a stockpile is on a single archetype.
- * Returns a value from 0 to 1 where 1 means all orbs match one archetype.
+ * Returns a value from 0 to 1 where 1 means all units match one archetype.
  */
-export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry): number {
+export function buildCoherence(stockpile: EvalUnit[], registry: DataRegistry): number {
   if (stockpile.length === 0) return 0;
 
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
@@ -56,8 +68,8 @@ export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry)
 
   for (const arch of archetypes) {
     let matchCount = 0;
-    for (const orb of stockpile) {
-      if (archetypeMatch(orb, arch, registry)) {
+    for (const unit of stockpile) {
+      if (archetypeMatch(unit, arch, registry)) {
         matchCount++;
       }
     }
@@ -72,7 +84,7 @@ export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry)
 /**
  * Count how many valid pairwise combinations could be formed from the stockpile.
  */
-export function combinationPotential(stockpile: OrbInstance[], registry: DataRegistry): number {
+export function combinationPotential(stockpile: EvalUnit[], registry: DataRegistry): number {
   let count = 0;
   for (let i = 0; i < stockpile.length; i++) {
     for (let j = i + 1; j < stockpile.length; j++) {
@@ -86,69 +98,71 @@ export function combinationPotential(stockpile: OrbInstance[], registry: DataReg
 }
 
 /**
- * Compute the denial value of taking a particular orb: how much does it
- * hurt the opponent? Checks whether the orb enables combinations in
+ * Compute the denial value of taking a particular unit: how much does it
+ * hurt the opponent? Checks whether the unit enables combinations in
  * the opponent's stockpile.
  */
 export function denialValue(
-  orb: OrbInstance,
-  opponentStockpile: OrbInstance[],
+  unit: EvalUnit,
+  opponentStockpile: EvalUnit[],
   registry: DataRegistry,
 ): number {
   let value = 0;
-  // Check if this orb forms a combination with any of the opponent's orbs
-  for (const oppOrb of opponentStockpile) {
-    const combo = registry.getCombination(orb.affixId, oppOrb.affixId);
+  const tierVal = TIER_VALUES[unit.tier] ?? TIER_VALUES[4];
+  // Check if this unit forms a combination with any of the opponent's units
+  for (const oppUnit of opponentStockpile) {
+    const combo = registry.getCombination(unit.affixId, oppUnit.affixId);
     if (combo) {
-      value += TIER_VALUES[orb.tier] * 3; // Combinations are high-value
+      value += tierVal * 3; // Combinations are high-value
     }
   }
   // Check if opponent has matching affixes (denying upgrade potential)
-  for (const oppOrb of opponentStockpile) {
-    if (oppOrb.affixId === orb.affixId) {
-      value += TIER_VALUES[orb.tier] * 2;
+  for (const oppUnit of opponentStockpile) {
+    if (oppUnit.affixId === unit.affixId) {
+      value += tierVal * 2;
     }
   }
-  // Also add base orb value as denial (denying a good orb is worth something)
-  value += orbValueScore(orb, registry) * 0.3;
+  // Also add base unit value as denial (denying a good unit is worth something)
+  value += orbValueScore(unit, registry) * 0.3;
   return value;
 }
 
 /**
- * Score an orb's synergy potential with an existing stockpile.
+ * Score a unit's synergy potential with an existing stockpile.
  * Checks how many archetypes it reinforces and how many combinations it enables.
  */
 export function synergyPotential(
-  orb: OrbInstance,
-  myStockpile: OrbInstance[],
+  unit: EvalUnit,
+  myStockpile: EvalUnit[],
   registry: DataRegistry,
 ): number {
   let score = 0;
+  const tierVal = TIER_VALUES[unit.tier] ?? TIER_VALUES[4];
 
   // Check combination potential with existing stockpile
   for (const existing of myStockpile) {
-    const combo = registry.getCombination(orb.affixId, existing.affixId);
+    const combo = registry.getCombination(unit.affixId, existing.affixId);
     if (combo) {
-      score += TIER_VALUES[orb.tier] * 4; // Combinations are very valuable
+      score += tierVal * 4; // Combinations are very valuable
     }
   }
 
   // Check upgrade potential (same affix)
   for (const existing of myStockpile) {
-    if (existing.affixId === orb.affixId && orb.tier < 4) {
-      score += TIER_VALUES[orb.tier] * 2;
+    if (existing.affixId === unit.affixId && unit.tier < 4) {
+      score += tierVal * 2;
     }
   }
 
   // Check archetype coherence bonus
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
-  const orbAffix = registry.findAffix(orb.affixId);
-  if (orbAffix) {
-    const orbTags = new Set(orbAffix.tags);
+  const unitAffix = registry.findAffix(unit.affixId);
+  if (unitAffix) {
+    const unitTags = new Set(unitAffix.tags);
     for (const arch of archetypes) {
       const archTags = ARCHETYPE_TAGS[arch];
-      if (!archTags.some((t) => orbTags.has(t))) continue;
-      // Count how many existing orbs match this archetype
+      if (!archTags.some((t) => unitTags.has(t))) continue;
+      // Count how many existing units match this archetype
       let matchCount = 0;
       for (const existing of myStockpile) {
         if (archetypeMatch(existing, arch, registry)) matchCount++;
@@ -161,33 +175,34 @@ export function synergyPotential(
 }
 
 /**
- * Compute a counter-value score for an orb based on damage patterns
- * observed in a combat log. Higher score means the orb better counters
+ * Compute a counter-value score for a unit based on damage patterns
+ * observed in a combat log. Higher score means the unit better counters
  * the opponent's damage.
  */
 export function counterValue(
-  orb: OrbInstance,
+  unit: EvalUnit,
   damageProfile: DamageProfile,
   registry: DataRegistry,
 ): number {
-  const affix = registry.findAffix(orb.affixId);
+  const affix = registry.findAffix(unit.affixId);
   if (!affix) return 0;
 
   let score = 0;
   const tags = new Set(affix.tags);
+  const tierVal = TIER_VALUES[unit.tier] ?? TIER_VALUES[4];
 
   // If opponent deals lots of physical damage, defensive/physical tags help
   if (damageProfile.physical > 0.3) {
     if (tags.has('defensive') || tags.has('block') || tags.has('physical')) {
-      score += damageProfile.physical * TIER_VALUES[orb.tier] * 5;
+      score += damageProfile.physical * tierVal * 5;
     }
   }
 
   // Check elemental damage patterns
   for (const [element, fraction] of Object.entries(damageProfile.elemental)) {
     if (fraction > 0.1 && tags.has(element)) {
-      // Orbs with the same element tag on armor give resistance
-      score += fraction * TIER_VALUES[orb.tier] * 5;
+      // Units with the same element tag on armor give resistance
+      score += fraction * tierVal * 5;
     }
   }
 
@@ -195,7 +210,7 @@ export function counterValue(
   if (tags.has('evasion') || tags.has('barrier')) {
     const totalDamage = damageProfile.physical +
       Object.values(damageProfile.elemental).reduce((s, v) => s + v, 0);
-    score += totalDamage * TIER_VALUES[orb.tier] * 2;
+    score += totalDamage * tierVal * 2;
   }
 
   return score;
@@ -255,10 +270,10 @@ export function extractDamageProfile(
 }
 
 /**
- * Find the best archetype for a stockpile (most matching orbs).
+ * Find the best archetype for a stockpile (most matching units).
  */
 export function bestArchetype(
-  stockpile: OrbInstance[],
+  stockpile: EvalUnit[],
   registry: DataRegistry,
 ): ArchetypeId {
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
@@ -267,8 +282,8 @@ export function bestArchetype(
 
   for (const arch of archetypes) {
     let count = 0;
-    for (const orb of stockpile) {
-      if (archetypeMatch(orb, arch, registry)) count++;
+    for (const unit of stockpile) {
+      if (archetypeMatch(unit, arch, registry)) count++;
     }
     if (count > bestCount) {
       bestCount = count;

@@ -225,8 +225,7 @@ describe('Match Controller', () => {
     }
     expect(state.pool.length).toBe(totalOrbs - totalPicks);
     expect(state.players[0].stockpile.length + state.players[1].stockpile.length).toBe(totalPicks);
-    // Forge flux should be initialized
-    expect(state.forgeFlux).toBeDefined();
+    // Forge complete should be initialized
     expect(state.forgeComplete).toEqual([false, false]);
   });
 
@@ -241,7 +240,7 @@ describe('Match Controller', () => {
       const result = applyAction(state, {
         kind: 'forge_action',
         player: 0,
-        action: { kind: 'assign_orb', orbUid: orb.uid, target: 'weapon', slotIndex: 0 },
+        action: { kind: 'socket_gem', gemUid: orb.uid, target: 'weapon', slotIndex: 0 },
       }, registry);
 
       expect(result.ok).toBe(true);
@@ -441,7 +440,7 @@ describe('Match Controller', () => {
     const result = applyAction(state, {
       kind: 'forge_action',
       player: 0,
-      action: { kind: 'assign_orb', orbUid: 'fake', target: 'weapon', slotIndex: 0 },
+      action: { kind: 'socket_gem', gemUid: 'fake', target: 'weapon', slotIndex: 0 },
     }, registry);
     expect(result.ok).toBe(false);
   });
@@ -507,7 +506,7 @@ describe('Match Controller', () => {
       result = applyAction(state, {
         kind: 'forge_action',
         player,
-        action: { kind: 'assign_orb', orbUid: orb.uid, target: 'weapon', slotIndex: 0 },
+        action: { kind: 'socket_gem', gemUid: orb.uid, target: 'weapon', slotIndex: 0 },
       }, registry);
       if (result.ok) state = result.state;
     }

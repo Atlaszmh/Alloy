@@ -1,6 +1,6 @@
 import type { CombatLog, DuelResult } from './combat.js';
 import type { Loadout } from './item.js';
-import type { OrbInstance } from './orb.js';
+import type { GemInstance } from './gem.js';
 
 // --- Match Phases ---
 
@@ -17,7 +17,7 @@ export type MatchMode = 'quick' | 'unranked' | 'ranked';
 
 export interface PlayerState {
   id: string;
-  stockpile: OrbInstance[]; // All drafted orbs
+  stockpile: GemInstance[]; // All drafted orbs
   loadout: Loadout;
 }
 
@@ -30,7 +30,7 @@ export interface MatchState {
   baseWeaponId: string;
   baseArmorId: string;
   phase: MatchPhase;
-  pool: OrbInstance[]; // Shared draft pool (shrinks as picks happen)
+  pool: GemInstance[]; // Shared draft pool (shrinks as picks happen)
   players: [PlayerState, PlayerState];
   roundResults: DuelResult[];
   duelLogs: CombatLog[];

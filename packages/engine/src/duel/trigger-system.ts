@@ -30,10 +30,10 @@ export function extractTriggers(loadout: Loadout, registry: DataRegistry): Trigg
   for (const { item, slots } of targets) {
     for (const slot of slots) {
       if (!slot) continue;
-      if (slot.kind === 'compound') continue; // compounds don't have trigger affixes
 
-      const affixId = slot.orb.affixId;
-      const tier: AffixTier = slot.kind === 'upgraded' ? slot.upgradedTier : slot.orb.tier;
+      const gem = slot.gem;
+      const affixId = gem.affixId;
+      const tier: AffixTier = gem.tier as AffixTier;
 
       const affix = registry.getAffix(affixId);
       if (!affix || affix.category !== 'trigger') continue;
@@ -63,7 +63,7 @@ export function extractTriggers(loadout: Loadout, registry: DataRegistry): Trigg
 
 /**
  * Build a TriggerEffect from stat modifiers.
- * Maps procDamage → bonus_damage, procHeal → heal.
+ * Maps procDamage -> bonus_damage, procHeal -> heal.
  */
 function buildTriggerEffect(modifiers: AffixDef['tiers'][1]['weaponEffect']): TriggerEffect | null {
   for (const mod of modifiers) {

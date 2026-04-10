@@ -1,15 +1,14 @@
 import type { MatchState, MatchMode, PlayerState, MatchPhase } from '../types/match.js';
 import type { GameAction, ActionResult } from '../types/game-action.js';
 import type { ForgeAction } from '../types/forge-action.js';
-import type { Loadout, EquippedSlot, ForgedItem } from '../types/item.js';
+import type { Loadout, ForgedItem } from '../types/item.js';
 import type { DerivedStats } from '../types/derived-stats.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createEmptyLoadout } from '../types/item.js';
 import { generatePool } from '../pool/pool-generator.js';
 import { createDraftState, makePick } from '../draft/draft-state.js';
 import { applyForgeAction as applyForge } from '../forge/forge-state.js';
-import { getFluxForRound } from '../forge/flux-tracker.js';
 import { calculateStats } from '../forge/stat-calculator.js';
 import { simulate } from '../duel/duel-engine.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
@@ -99,11 +98,11 @@ function handleDraftPick(
   // Build draft state from match state
   const balance = registry.getBalance();
   const draftRound = state.phase.round;
-  // For quick mode, draft all orbs. Use total orbs (pool + stockpiles) so
+  // For quick mode, draft all gems. Use total gems (pool + stockpiles) so
   // maxPicks doesn't shrink as the pool empties.
-  const totalOrbs = state.pool.length + state.players[0].stockpile.length + state.players[1].stockpile.length;
+  const totalGems = state.pool.length + state.players[0].stockpile.length + state.players[1].stockpile.length;
   const maxPicks = state.mode === 'quick'
-    ? totalOrbs
+    ? totalGems
     : balance.draftPicksPerPlayer[draftRound - 1] * 2;
 
   const draftState = createDraftState(state.pool);
@@ -137,10 +136,6 @@ function handleDraftPick(
     const nextPhase = state.mode === 'quick'
       ? getNextPhaseQuick(state.phase, state.roundResults)
       : getNextPhase(state.phase, state.roundResults);
-    const balance = registry.getBalance();
-    const isQuick = state.mode === 'quick';
-    const forgeRound = nextPhase.kind === 'forge' ? nextPhase.round : 1;
-    const flux = getFluxForRound(forgeRound as 1 | 2 | 3, balance, isQuick);
     newPhase = nextPhase;
 
     return ok({
@@ -148,7 +143,6 @@ function handleDraftPick(
       pool: newDraft.pool,
       players: newPlayers,
       phase: newPhase,
-      forgeFlux: [flux, flux],
       forgeComplete: [false, false],
     });
   } else {
@@ -184,14 +178,12 @@ function handleForgeAction(
 
   const round = state.phase.round;
   const playerState = state.players[player];
-  const currentFlux = state.forgeFlux?.[player] ?? 0;
 
-  // Build a ForgeState from player state
+  // Build a ForgeState from player state (no flux needed)
   const forgeState = {
     stockpile: [...playerState.stockpile],
     loadout: playerState.loadout,
     round: round as 1 | 2 | 3,
-    fluxRemaining: currentFlux,
     isQuickMatch: state.mode === 'quick',
   };
 
@@ -210,14 +202,9 @@ function handleForgeAction(
     loadout: newForgeState.loadout,
   };
 
-  // Update flux tracking
-  const newForgeFlux = [...(state.forgeFlux ?? [0, 0])] as [number, number];
-  newForgeFlux[player] = newForgeState.fluxRemaining;
-
   return ok({
     ...state,
     players: newPlayers,
-    forgeFlux: newForgeFlux,
   });
 }
 
@@ -336,12 +323,8 @@ function handleDuelContinue(
     newState.pool = newPool;
   }
 
-  // If transitioning to forge, set up forge flux
+  // If transitioning to forge, set up forge state
   if (nextPhase.kind === 'forge') {
-    const balance = registry.getBalance();
-    const isQuick = state.mode === 'quick';
-    const flux = getFluxForRound(nextPhase.round as 1 | 2 | 3, balance, isQuick);
-    newState.forgeFlux = [flux, flux];
     newState.forgeComplete = [false, false];
   }
 
@@ -358,8 +341,8 @@ export type DebugPhaseTarget = 'draft' | 'forge' | 'duel' | 'complete';
  * Create a match and fast-forward it to the given phase.
  *
  * - draft:    normal match (round 1 draft)
- * - forge:    auto-drafts orbs for both players, lands in forge
- * - duel:     auto-drafts + auto-forges (sockets orbs, sets base stats)
+ * - forge:    auto-drafts gems for both players, lands in forge
+ * - duel:     auto-drafts + auto-forges (sockets gems, sets base stats)
  * - complete: runs the full round-1 simulation
  */
 export function createDebugMatch(
@@ -381,7 +364,7 @@ export function createDebugMatch(
 
   if (targetPhase === 'forge') return state;
 
-  // --- Auto-forge: socket orbs + set base stats, then complete forge ---
+  // --- Auto-forge: socket gems + set base stats, then complete forge ---
   state = debugAutoForge(state, registry);
 
   if (targetPhase === 'duel') return state;
@@ -397,7 +380,7 @@ export function createDebugMatch(
 }
 
 /**
- * Auto-draft all orbs, alternating picks between players.
+ * Auto-draft all gems, alternating picks between players.
  * Returns state in forge phase with both players' stockpiles populated.
  */
 function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry): MatchState {
@@ -407,29 +390,27 @@ function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry)
   const rng = new SeededRNG(seed).fork('debug_draft');
   const balance = registry.getBalance();
   const pool = [...state.pool];
-  const stockpiles: [OrbInstance[], OrbInstance[]] = [
+  const stockpiles: [GemInstance[], GemInstance[]] = [
     [...state.players[0].stockpile],
     [...state.players[1].stockpile],
   ];
 
-  const totalOrbs = pool.length + stockpiles[0].length + stockpiles[1].length;
+  const totalGems = pool.length + stockpiles[0].length + stockpiles[1].length;
   const maxPicks = state.mode === 'quick'
-    ? totalOrbs
+    ? totalGems
     : balance.draftPicksPerPlayer[phase.round - 1] * 2;
 
   let picked = 0;
   while (picked < maxPicks && pool.length > 0) {
     const idx = rng.nextInt(0, pool.length - 1);
-    const orb = pool.splice(idx, 1)[0];
+    const gem = pool.splice(idx, 1)[0];
     const player: 0 | 1 = (picked % 2) as 0 | 1;
-    stockpiles[player].push(orb);
+    stockpiles[player].push(gem);
     picked++;
   }
 
   // Advance to forge
   const forgeRound = phase.round;
-  const isQuick = state.mode === 'quick';
-  const flux = getFluxForRound(forgeRound as 1 | 2 | 3, balance, isQuick);
 
   return {
     ...state,
@@ -439,19 +420,17 @@ function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry)
       { ...state.players[1], stockpile: stockpiles[1] },
     ],
     phase: { kind: 'forge', round: forgeRound },
-    forgeFlux: [flux, flux],
     forgeComplete: [false, false],
   };
 }
 
 /**
- * Auto-forge for both players: set base stats, socket up to 3 orbs per item.
+ * Auto-forge for both players: set base stats, socket up to 3 gems per item.
  * Returns state in duel phase ready for simulation.
  */
 function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState {
   if (state.phase.kind !== 'forge') return state;
 
-  const round = state.phase.round;
   const newPlayers = [...state.players] as [PlayerState, PlayerState];
 
   for (const p of [0, 1] as const) {
@@ -468,22 +447,22 @@ function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState 
       armor = { ...armor, baseStats: { stat1: 'VIT', stat2: 'INT' } };
     }
 
-    // Socket orbs into empty weapon slots (up to 3)
+    // Socket gems into empty weapon slots (up to 3)
     let socketed = 0;
     for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
       if (weapon.slots[slot] === null) {
-        const orb = remaining.shift()!;
-        weapon.slots[slot] = { kind: 'single', orb, socketedRound: round } as EquippedSlot;
+        const gem = remaining.shift()!;
+        weapon.slots[slot] = { gem };
         socketed++;
       }
     }
 
-    // Socket orbs into empty armor slots (up to 3)
+    // Socket gems into empty armor slots (up to 3)
     socketed = 0;
     for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
       if (armor.slots[slot] === null) {
-        const orb = remaining.shift()!;
-        armor.slots[slot] = { kind: 'single', orb, socketedRound: round } as EquippedSlot;
+        const gem = remaining.shift()!;
+        armor.slots[slot] = { gem };
         socketed++;
       }
     }

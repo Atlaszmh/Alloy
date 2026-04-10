@@ -30,7 +30,7 @@ export function extractMatchReport(
   const players: PlayerReport[] = ([0, 1] as const).map((playerIndex) => {
     const loadout = state.players[playerIndex].loadout;
     const affixIds = collectAffixIds(loadout);
-    const combinationIds = collectCompoundIds(loadout);
+    const combinationIds: string[] = []; // Compound slots no longer exist in new gem model
     const synergyIds = registry ? collectActiveSynergies(loadout, registry) : [];
     const finalHP = lastRound ? lastRound.finalHP[playerIndex] : 0;
 
@@ -80,19 +80,6 @@ export function extractMatchReport(
     combatLogs,
     playerStats,
   };
-}
-
-function collectCompoundIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
-  for (const item of [loadout.weapon, loadout.armor]) {
-    for (const slot of item.slots) {
-      if (!slot) continue;
-      if (slot.kind === 'compound') {
-        ids.push(slot.compoundId);
-      }
-    }
-  }
-  return ids;
 }
 
 function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): string[] {

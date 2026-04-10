@@ -102,6 +102,41 @@ const FluxCostsSchema = z.object({
   removeOrb: z.number().int().nonnegative(),
 });
 
+const GemRaritySchema = z.enum(['common', 'magic', 'rare', 'epic', 'legendary']);
+
+const PoolScalingEntrySchema = z.object({
+  roundRange: z.tuple([z.number().int(), z.number().int()]),
+  tiers: z.tuple([z.number().int(), z.number().int()]),
+  rarities: z.array(GemRaritySchema),
+  poolSize: z.number().int().positive(),
+});
+
+const GemBalanceConfigSchema = z.object({
+  tierValues: z.array(z.number()),
+  rarityMultipliers: z.record(GemRaritySchema, z.number()),
+  matchingRarityBonus: z.number().nonnegative(),
+  depthBonusPerLevel: z.number().nonnegative(),
+  maxRecipeDepth: z.number().int().positive(),
+  recipeQualityThresholds: z.record(GemRaritySchema, z.number()),
+  poolScaling: z.array(PoolScalingEntrySchema),
+  goalRound: z.number().int().positive(),
+  endlessStartRound: z.number().int().positive(),
+  lives: z.object({
+    default: z.number().int().positive(),
+    min: z.number().int().positive(),
+    max: z.number().int().positive(),
+  }),
+  lifeRecovery: z.object({
+    winStreak: z.number().int().positive(),
+    milestoneRounds: z.array(z.number().int().positive()),
+    discoveryThreshold: z.number().int().positive(),
+  }),
+  flux: z.object({
+    rewards: z.record(z.string(), z.number()),
+    costs: z.record(z.string(), z.number()),
+  }),
+});
+
 export const BalanceConfigSchema = z.object({
   baseHP: z.number().positive(),
   maxDuelSeconds: z.number().positive(),
@@ -128,4 +163,5 @@ export const BalanceConfigSchema = z.object({
     z.string(),
     z.object({ min: z.number(), max: z.number() }),
   ),
+  gem: GemBalanceConfigSchema,
 });

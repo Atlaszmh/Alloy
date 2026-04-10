@@ -2,26 +2,27 @@ import { describe, it, expect } from 'vitest';
 import { validateLoadout } from '../src/forge/loadout-validator.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
-import type { OrbInstance } from '../src/types/orb.js';
+import type { GemInstance } from '../src/types/gem.js';
+import { createGem } from '../src/types/gem.js';
 import type { Loadout } from '../src/types/item.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 
 const data = loadAndValidateData();
 const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
 
-function makeStockpile(): OrbInstance[] {
+function makeStockpile(): GemInstance[] {
   return [
-    { uid: 'orb1', affixId: 'fire_damage', tier: 1 },
-    { uid: 'orb2', affixId: 'cold_damage', tier: 1 },
-    { uid: 'orb3', affixId: 'crit_chance', tier: 2 },
-    { uid: 'orb4', affixId: 'attack_speed', tier: 1 },
+    createGem('gem1', 'fire_damage', 1, 'common'),
+    createGem('gem2', 'cold_damage', 1, 'common'),
+    createGem('gem3', 'crit_chance', 2, 'common'),
+    createGem('gem4', 'attack_speed', 1, 'common'),
   ];
 }
 
 function makeValidLoadout(): Loadout {
   const loadout = createEmptyLoadout('sword', 'chainmail');
-  loadout.weapon.slots[0] = { kind: 'single', orb: { uid: 'orb1', affixId: 'fire_damage', tier: 1 }, socketedRound: 1 };
-  loadout.armor.slots[0] = { kind: 'single', orb: { uid: 'orb2', affixId: 'cold_damage', tier: 1 }, socketedRound: 1 };
+  loadout.weapon.slots[0] = { gem: createGem('gem1', 'fire_damage', 1, 'common') };
+  loadout.armor.slots[0] = { gem: createGem('gem2', 'cold_damage', 1, 'common') };
   return loadout;
 }
 
@@ -34,11 +35,7 @@ describe('validateLoadout', () => {
 
   it('rejects unknown affixId', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    loadout.weapon.slots[0] = {
-      kind: 'single',
-      orb: { uid: 'orb1', affixId: 'totally_fake_affix', tier: 1 },
-      socketedRound: 1,
-    };
+    loadout.weapon.slots[0] = { gem: createGem('gem1', 'totally_fake_affix', 1, 'common') };
     const result = validateLoadout(loadout, makeStockpile(), registry);
     expect(result.valid).toBe(false);
     expect(result.errors).toContainEqual(expect.stringContaining('Unknown affix'));
@@ -46,23 +43,19 @@ describe('validateLoadout', () => {
 
   it('rejects duplicate UIDs', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    loadout.weapon.slots[0] = { kind: 'single', orb: { uid: 'orb1', affixId: 'fire_damage', tier: 1 }, socketedRound: 1 };
-    loadout.armor.slots[0] = { kind: 'single', orb: { uid: 'orb1', affixId: 'fire_damage', tier: 1 }, socketedRound: 1 };
+    loadout.weapon.slots[0] = { gem: createGem('gem1', 'fire_damage', 1, 'common') };
+    loadout.armor.slots[0] = { gem: createGem('gem1', 'fire_damage', 1, 'common') };
     const result = validateLoadout(loadout, makeStockpile(), registry);
     expect(result.valid).toBe(false);
-    expect(result.errors).toContainEqual(expect.stringContaining('Duplicate orb UID'));
+    expect(result.errors).toContainEqual(expect.stringContaining('Duplicate gem UID'));
   });
 
-  it('rejects orb not in stockpile', () => {
+  it('rejects gem not in stockpile', () => {
     const loadout = createEmptyLoadout('sword', 'chainmail');
-    loadout.weapon.slots[0] = {
-      kind: 'single',
-      orb: { uid: 'orb_unknown', affixId: 'fire_damage', tier: 1 },
-      socketedRound: 1,
-    };
+    loadout.weapon.slots[0] = { gem: createGem('gem_unknown', 'fire_damage', 1, 'common') };
     const result = validateLoadout(loadout, makeStockpile(), registry);
     expect(result.valid).toBe(false);
-    expect(result.errors).toContainEqual(expect.stringContaining('Orb not in stockpile'));
+    expect(result.errors).toContainEqual(expect.stringContaining('Gem not in stockpile'));
   });
 
   it('rejects empty loadout', () => {

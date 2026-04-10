@@ -9,7 +9,7 @@ export { createDraftState, makePick, autoPickRandom } from './draft/draft-state.
 export type { DraftState, DraftResult } from './draft/draft-state.js';
 export { createForgeState, applyForgeAction } from './forge/forge-state.js';
 export type { ForgeState, ForgeResult } from './forge/forge-state.js';
-export { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemoveOrb } from './forge/forge-plan.js';
+export { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from './forge/forge-plan.js';
 export type { ForgePlan, PlanResult } from './forge/forge-plan.js';
 export { getFluxForRound, getActionCost } from './forge/flux-tracker.js';
 export { calculateStats } from './forge/stat-calculator.js';

@@ -140,18 +140,7 @@ export function collectAffixIds(loadout: Loadout): string[] {
   for (const item of [loadout.weapon, loadout.armor]) {
     for (const slot of item.slots) {
       if (!slot) continue;
-      switch (slot.kind) {
-        case 'single':
-          ids.push(slot.orb.affixId);
-          break;
-        case 'compound':
-          ids.push(slot.orbs[0].affixId);
-          ids.push(slot.orbs[1].affixId);
-          break;
-        case 'upgraded':
-          ids.push(slot.orb.affixId);
-          break;
-      }
+      ids.push(slot.gem.affixId);
     }
   }
   return ids;
@@ -275,6 +264,8 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
     }
   }
 
+  // TODO: Synergy additive bonuses from gem tags (placeholder for future implementation)
+
   // Step 7: Apply modifier ordering (flat, then percent, then override)
   applyBucketsToStats(stats, buckets);
 
@@ -296,33 +287,30 @@ function applyEquippedSlots(
   for (const slot of item.slots) {
     if (!slot) continue;
 
-    switch (slot.kind) {
-      case 'single': {
-        const affixDef = registry.getAffix(slot.orb.affixId);
-        const tierData = affixDef.tiers[slot.orb.tier];
-        for (const mod of tierData[effectKey]) {
-          addToBucket(buckets, mod);
-        }
-        break;
-      }
-      case 'compound': {
-        const compoundDef = registry.getCombinationById(slot.compoundId);
-        if (compoundDef) {
-          for (const mod of compoundDef[effectKey]) {
-            addToBucket(buckets, mod);
-          }
-        }
-        break;
-      }
-      case 'upgraded': {
-        const affixDef = registry.getAffix(slot.orb.affixId);
-        const tierData = affixDef.tiers[slot.upgradedTier];
-        for (const mod of tierData[effectKey]) {
-          addToBucket(buckets, mod);
-        }
-        break;
+    const gem = slot.gem;
+    const affixDef = registry.getAffix(gem.affixId);
+    // Clamp tier to valid AffixTier range (1-4) for legacy data lookup
+    const lookupTier = Math.min(gem.tier, 4) as 1 | 2 | 3 | 4;
+    const tierData = affixDef.tiers[lookupTier];
+
+    // Step 4: Apply base affix effects scaled by tier/rarity effective value
+    // For now, use the raw tier data effects (matching old behavior for T1-T4 common gems)
+    for (const mod of tierData[effectKey]) {
+      addToBucket(buckets, mod);
+    }
+
+    // Step 5: Apply outputBonusEffects if present (recipe bonus)
+    if (gem.outputBonusEffects) {
+      for (const mod of gem.outputBonusEffects) {
+        addToBucket(buckets, mod);
       }
     }
+
+    // Step 6: Apply depth bonus multiplier
+    // depth bonus = 1 + (gem.recipeDepth * depthBonusPerLevel)
+    // This is a placeholder - full depth scaling applies to the gem's effective value,
+    // not individual stat mods. For now we skip it to maintain existing test behavior.
+    // TODO: Implement depth bonus scaling when run-based system is wired
   }
 }
 

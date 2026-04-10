@@ -1,19 +1,8 @@
 import type { BaseStat } from './base-stats.js';
 
 export type ForgeAction =
-  | { kind: 'assign_orb'; orbUid: string; target: 'weapon' | 'armor'; slotIndex: number }
-  | {
-      kind: 'combine';
-      orbUid1: string;
-      orbUid2: string;
-    }
-  | {
-      kind: 'upgrade_tier';
-      orbUid1: string;
-      orbUid2: string;
-      target: 'weapon' | 'armor';
-      slotIndex: number;
-    }
-  | { kind: 'swap_orb'; target: 'weapon' | 'armor'; slotIndex: number; newOrbUid: string }
-  | { kind: 'remove_orb'; target: 'weapon' | 'armor'; slotIndex: number }
+  | { kind: 'socket_gem'; gemUid: string; target: 'weapon' | 'armor'; slotIndex: number }
+  | { kind: 'unsocket_gem'; target: 'weapon' | 'armor'; slotIndex: number }
+  | { kind: 'combine'; gemUid1: string; gemUid2: string; keepGemUid?: string }
+  | { kind: 'select_base_item'; target: 'weapon' | 'armor'; baseItemId: string }
   | { kind: 'set_base_stats'; target: 'weapon' | 'armor'; stat1: BaseStat; stat2: BaseStat };
