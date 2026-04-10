@@ -3,10 +3,10 @@ import {
   startMatch,
   screenshotFlow,
   getViewport,
-  pickOrb,
+  pickGem,
   completeDraft,
   completeForge,
-  placeOrbs,
+  placeGems,
   skipDuel,
   continuePastDuel,
   waitForPhase,
@@ -40,7 +40,7 @@ test.describe('Match Flow', () => {
     for (let i = 0; i < 3; i++) {
       const isOurTurn = await page.getByText(/YOUR PICK|Your Turn/i).isVisible().catch(() => false);
       if (isOurTurn) {
-        await pickOrb(page);
+        await pickGem(page);
       }
       await page.waitForTimeout(700);
     }
@@ -58,7 +58,7 @@ test.describe('Match Flow', () => {
     // ── 06: Forge R1 Weapon ──
     await waitForPhase(page, 'forge');
     await expect(page.getByText('FORGE PHASE')).toBeVisible();
-    await placeOrbs(page);
+    await placeGems(page);
     await screenshotFlow(page, vp, 'match-flow', '06-forge-r1-weapon');
 
     // ── 07: Forge R1 Armor ──
@@ -112,7 +112,7 @@ test.describe('Match Flow', () => {
 
     // ── 13: Forge R2 ──
     await waitForPhase(page, 'forge');
-    await placeOrbs(page);
+    await placeGems(page);
     await screenshotFlow(page, vp, 'match-flow', '13-forge-r2');
     await completeForge(page);
 
@@ -137,7 +137,7 @@ test.describe('Match Flow', () => {
 
       // ── 17: Forge R3 ──
       await waitForPhase(page, 'forge');
-      await placeOrbs(page);
+      await placeGems(page);
       await screenshotFlow(page, vp, 'match-flow', '17-forge-r3');
       await completeForge(page);
 
