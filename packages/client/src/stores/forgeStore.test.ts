@@ -22,11 +22,11 @@ function makeMockGems(): GemInstance[] {
   ];
 }
 
-function makeForgeState(round: 1 | 2 | 3 = 1) {
+function makeForgeState(round: number = 1) {
   return createForgeState(makeMockGems(), 'sword', 'chainmail', round, data.balance, false);
 }
 
-function initStore(round: 1 | 2 | 3 = 1) {
+function initStore(round: number = 1) {
   const state = makeForgeState(round);
   useForgeStore.getState().initPlan(state, registry);
 }

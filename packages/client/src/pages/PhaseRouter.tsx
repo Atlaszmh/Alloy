@@ -6,7 +6,6 @@ import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
-import { Adapt } from './Adapt';
 import { PostMatch } from './PostMatch';
 
 // How long to keep Draft mounted for the forge slam animation before sliding out
@@ -77,8 +76,6 @@ export function PhaseRouter() {
         return <Forge />;
       case 'duel':
         return <Duel />;
-      case 'adapt':
-        return <Adapt />;
       case 'complete':
         return <PostMatch />;
       default:

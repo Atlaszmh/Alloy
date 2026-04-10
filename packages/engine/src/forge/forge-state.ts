@@ -10,7 +10,7 @@ import type { CombinationEngine } from '../combine/combination-engine.js';
 export interface ForgeState {
   stockpile: GemInstance[];
   loadout: Loadout;
-  round: 1 | 2 | 3;
+  round: number;
   isQuickMatch: boolean;
 }
 
@@ -27,7 +27,7 @@ export function createForgeState(
   stockpile: GemInstance[],
   weaponBaseId: string,
   armorBaseId: string,
-  round: 1 | 2 | 3,
+  round: number,
   _balance: BalanceConfig,
   _isQuickMatch: boolean,
 ): ForgeState {

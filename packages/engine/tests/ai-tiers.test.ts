@@ -416,7 +416,7 @@ describe('Higher tiers beat lower tiers', () => {
         const ai = player === 0 ? ai0 : ai1;
         const stockpile = state.players[player].stockpile;
         const loadout = state.players[player].loadout;
-        const flux = state.forgeFlux?.[player] ?? 0;
+        const flux = 0; // flux is deprecated
         const oppStockpile = state.players[player === 0 ? 1 : 0].stockpile;
 
         const forgeActions = ai.planForge(stockpile, loadout, flux, forgeRound, oppStockpile);

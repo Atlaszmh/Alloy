@@ -61,7 +61,7 @@ export class AIController {
     stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
-    round: 1 | 2 | 3,
+    round: number,
     opponentStockpile: GemInstance[],
   ): ForgeAction[] {
     return this.forgeStrategy.plan(
@@ -88,7 +88,7 @@ export class AIController {
     myStockpile: GemInstance[],
     fluxRemaining: number,
     myPlayerIdx: 0 | 1,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[] {
     return this.adaptStrategy.adapt(
       previousLog,

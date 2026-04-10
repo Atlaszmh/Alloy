@@ -19,7 +19,7 @@ export { simulate } from './duel/duel-engine.js';
 export { createGladiator } from './duel/gladiator.js';
 export { createMatch, applyAction, createDebugMatch } from './match/match-controller.js';
 export type { DebugPhaseTarget } from './match/match-controller.js';
-export { getNextPhase } from './match/phase-machine.js';
+export { getNextPhase, getNextPhaseQuick, getNextPhaseRun, countWins } from './match/phase-machine.js';
 export { AIController } from './ai/ai-controller.js';
 export { defaultConfig, mergeConfig, GameConfigSchema } from './data/game-config.js';
 export { extractMatchReport } from './match/match-report.js';
@@ -48,3 +48,17 @@ export {
   applyMatchingRarityBonus,
   determineOutputTierRarity,
 } from './combine/combine-quality.js';
+
+// Run system
+export {
+  createRunState,
+  loseLife,
+  winRound,
+  checkLifeRecovery,
+  isRunOver,
+  isGoalReached,
+  advanceRound,
+} from './run/run-state.js';
+export type { RunState, CreateRunOpts, LifeRecoveryConfig } from './run/run-state.js';
+export { getPoolConfigForRound, DEFAULT_SCALING } from './run/pool-scaling.js';
+export type { PoolScalingEntry } from './run/pool-scaling.js';

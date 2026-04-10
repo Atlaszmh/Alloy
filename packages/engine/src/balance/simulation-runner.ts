@@ -17,8 +17,7 @@ import {
   isRunOver,
   isGoalReached,
 } from '../run/run-state.js';
-// getPoolConfigForRound is available but not used yet — pool scaling is a future task
-// import { getPoolConfigForRound } from '../run/pool-scaling.js';
+// Pool scaling is now integrated into generatePool
 
 export interface SimulationConfig {
   matchCount: number;
@@ -155,7 +154,7 @@ function simulateSingleRun(
 
   while (runState.status === 'active' && runState.round <= config.maxRounds) {
     const roundSeed = runSeed + runState.round;
-    // Future: use getPoolConfigForRound(runState.round) to scale pool per round
+    // Pool scaling is now handled inside generatePool via getPoolConfigForRound
 
     // Run one match (best-of-3) for this round
     const matchReport = runAIMatch(
@@ -289,7 +288,7 @@ function runAIMatch(
         const actions = ai.planForge(
           state.players[player].stockpile,
           state.players[player].loadout,
-          state.forgeFlux?.[player] ?? 0,
+          0, // flux is deprecated
           forgePhase.round,
           state.players[1 - player as 0 | 1].stockpile,
         );
@@ -312,18 +311,7 @@ function runAIMatch(
       state = cont.state;
     }
 
-    // Handle adapt phase by skipping it (advance to next forge/duel)
-    if (state.phase.kind === 'adapt') {
-      // No adapt actions for now; just advance
-      const result = applyAction(state, { kind: 'advance_phase' }, registry);
-      if (result.ok) {
-        state = result.state;
-      } else {
-        // If advance_phase doesn't work for adapt, we need to handle it differently
-        // For now, just break to avoid infinite loop
-        break;
-      }
-    }
+    // (adapt phase was removed — no longer needed)
   }
 
   return extractMatchReport(state, 'simulation', seed, registry);

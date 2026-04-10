@@ -7,7 +7,7 @@ import type { ForgeAction } from '../types/forge-action.js';
  * Kept for backward compatibility during migration.
  */
 export function getFluxForRound(
-  _round: 1 | 2 | 3,
+  _round: number,
   _balance: BalanceConfig,
   _isQuickMatch: boolean,
 ): number {

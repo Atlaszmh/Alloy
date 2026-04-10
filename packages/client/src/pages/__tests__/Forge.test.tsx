@@ -180,8 +180,7 @@ function createMockMatchState(overrides: Partial<MatchState> = {}): MatchState {
     ],
     roundResults: [],
     duelLogs: [],
-    forgeFlux: [8, 8],
-    fluxPerRound: [8, 4, 2],
+    // forgeFlux and fluxPerRound removed from MatchState
     baseWeaponId: 'sword',
     baseArmorId: 'chainmail',
     ...overrides,
@@ -268,7 +267,7 @@ function setupStores(
     armor: { ...mockState.players[0].loadout.armor } as ForgedItem,
   };
   const round = planOverrides.round ??
-    (mockState.phase?.kind === 'forge' ? (mockState.phase as { round: 1 | 2 | 3 }).round : 1);
+    (mockState.phase?.kind === 'forge' ? (mockState.phase as { round: number }).round : 1);
 
   const plan = createMockPlan({
     stockpile,

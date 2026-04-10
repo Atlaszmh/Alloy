@@ -9,7 +9,7 @@ import { calculateStats } from './stat-calculator.js';
 export interface ForgePlan {
   stockpile: GemInstance[];
   loadout: Loadout;
-  round: 1 | 2 | 3;
+  round: number;
   lockedGemUids: Set<string>;
   actionLog: ForgeAction[];
 }

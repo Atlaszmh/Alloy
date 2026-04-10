@@ -12,7 +12,15 @@ import { applyForgeAction as applyForge } from '../forge/forge-state.js';
 import { calculateStats } from '../forge/stat-calculator.js';
 import { simulate } from '../duel/duel-engine.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
-import { getNextPhase, getNextPhaseQuick } from './phase-machine.js';
+import { getNextPhase, getNextPhaseQuick, getNextPhaseRun, countWins } from './phase-machine.js';
+import {
+  createRunState,
+  winRound as runWinRound,
+  loseLife as runLoseLife,
+  checkLifeRecovery,
+  advanceRound as runAdvanceRound,
+  isRunOver,
+} from '../run/run-state.js';
 
 function fail(error: string): ActionResult {
   return { ok: false, error };
@@ -33,11 +41,12 @@ export function createMatch(
   baseWeaponId: string,
   baseArmorId: string,
   registry: DataRegistry,
+  runConfig?: { startingLives?: number; goalRound?: number },
 ): MatchState {
-  const pool = generatePool(seed, mode, registry, 1);
-  const balance = registry.getBalance();
+  const poolMode = mode === 'run_async' || mode === 'run_live' ? mode : mode;
+  const pool = generatePool(seed, poolMode, registry, 1);
 
-  return {
+  const state: MatchState = {
     matchId,
     seed,
     mode,
@@ -59,8 +68,17 @@ export function createMatch(
     ],
     roundResults: [],
     duelLogs: [],
-    fluxPerRound: balance.fluxPerRound,
   };
+
+  // Initialize RunState for run-based modes
+  if (mode === 'run_async' || mode === 'run_live') {
+    state.runState = createRunState({
+      startingLives: runConfig?.startingLives ?? 3,
+      goalRound: runConfig?.goalRound ?? 10,
+    });
+  }
+
+  return state;
 }
 
 /**
@@ -95,17 +113,35 @@ function handleDraftPick(
     return fail('Not in draft phase');
   }
 
-  // Build draft state from match state
   const balance = registry.getBalance();
   const draftRound = state.phase.round;
+  const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
+
   // For quick mode, draft all gems. Use total gems (pool + stockpiles) so
   // maxPicks doesn't shrink as the pool empties.
   const totalGems = state.pool.length + state.players[0].stockpile.length + state.players[1].stockpile.length;
-  const maxPicks = state.mode === 'quick'
-    ? totalGems
-    : balance.draftPicksPerPlayer[draftRound - 1] * 2;
+
+  let maxPicks: number;
+  if (state.mode === 'quick') {
+    maxPicks = totalGems;
+  } else if (isRunMode) {
+    // In run modes, player 0 picks all — poolSize / 2 allotment
+    maxPicks = Math.ceil(state.pool.length / 2) + state.players[0].stockpile.length;
+    // But also account for gems already picked — use total pool
+    maxPicks = Math.ceil(totalGems / 2);
+  } else {
+    // Ranked/unranked: clamp round to 1-3 for legacy config arrays
+    const clampedRound = Math.min(draftRound, 3);
+    maxPicks = balance.draftPicksPerPlayer[clampedRound - 1] * 2;
+  }
 
   const draftState = createDraftState(state.pool);
+
+  // In run_async mode, player 0 is the human and always picks (no alternation)
+  const activePlayer = (state.mode === 'run_async')
+    ? state.phase.activePlayer  // Always 0 in run_async (set below)
+    : state.phase.activePlayer;
+
   const syncedDraft = {
     ...draftState,
     pool: [...state.pool],
@@ -114,7 +150,7 @@ function handleDraftPick(
       [...state.players[1].stockpile],
     ] as [typeof state.players[0]['stockpile'], typeof state.players[1]['stockpile']],
     pickIndex: state.phase.pickIndex,
-    activePlayer: state.phase.activePlayer,
+    activePlayer: activePlayer,
     maxPicks,
     isComplete: false,
   };
@@ -130,12 +166,26 @@ function handleDraftPick(
     { ...state.players[1], stockpile: newDraft.stockpiles[1] },
   ];
 
+  // In run_async mode, draft is complete when player 0 has picked their allotment
+  // or pool is exhausted
+  let isComplete = newDraft.isComplete;
+  if (state.mode === 'run_async' && !isComplete) {
+    const p0Picks = newDraft.stockpiles[0].length;
+    const maxPlayerPicks = Math.ceil(totalGems / 2);
+    isComplete = p0Picks >= maxPlayerPicks || newDraft.pool.length === 0;
+  }
+
   let newPhase: MatchPhase;
-  if (newDraft.isComplete) {
+  if (isComplete) {
     // Draft is done, advance to forge
-    const nextPhase = state.mode === 'quick'
-      ? getNextPhaseQuick(state.phase, state.roundResults)
-      : getNextPhase(state.phase, state.roundResults);
+    let nextPhase: MatchPhase;
+    if (state.mode === 'quick') {
+      nextPhase = getNextPhaseQuick(state.phase, state.roundResults);
+    } else if (isRunMode && state.runState) {
+      nextPhase = getNextPhaseRun(state.phase, state.roundResults, state.runState);
+    } else {
+      nextPhase = getNextPhase(state.phase, state.roundResults);
+    }
     newPhase = nextPhase;
 
     return ok({
@@ -146,11 +196,16 @@ function handleDraftPick(
       forgeComplete: [false, false],
     });
   } else {
+    // In run_async mode, activePlayer is always 0
+    const nextActivePlayer = state.mode === 'run_async'
+      ? 0 as const
+      : newDraft.activePlayer;
+
     newPhase = {
       kind: 'draft',
       round: draftRound,
       pickIndex: newDraft.pickIndex,
-      activePlayer: newDraft.activePlayer,
+      activePlayer: nextActivePlayer,
     };
 
     return ok({
@@ -180,10 +235,12 @@ function handleForgeAction(
   const playerState = state.players[player];
 
   // Build a ForgeState from player state (no flux needed)
+  // Clamp round to 1-3 for ForgeState type compat
+  const forgeRound = Math.min(round, 3) as 1 | 2 | 3;
   const forgeState = {
     stockpile: [...playerState.stockpile],
     loadout: playerState.loadout,
-    round: round as 1 | 2 | 3,
+    round: forgeRound,
     isQuickMatch: state.mode === 'quick',
   };
 
@@ -224,6 +281,11 @@ function handleForgeComplete(
   const newForgeComplete = [...(state.forgeComplete ?? [false, false])] as [boolean, boolean];
   newForgeComplete[player] = true;
 
+  // In run_async mode, only player 0 forges — auto-complete player 1
+  if (state.mode === 'run_async' && player === 0) {
+    newForgeComplete[1] = true;
+  }
+
   // If both players are done, advance to duel phase
   if (newForgeComplete[0] && newForgeComplete[1]) {
     const round = state.phase.round;
@@ -233,7 +295,6 @@ function handleForgeComplete(
       ...state,
       phase: newPhase,
       forgeComplete: newForgeComplete,
-      forgeFlux: undefined,
     });
   }
 
@@ -296,7 +357,6 @@ function runDuel(
     roundResults: newRoundResults,
     duelLogs: newDuelLogs,
     forgeComplete: undefined,
-    forgeFlux: undefined,
   });
 }
 
@@ -308,16 +368,60 @@ function handleDuelContinue(
     return fail('duel_continue is only valid during the duel phase');
   }
 
-  const nextPhase = state.mode === 'quick'
-    ? getNextPhaseQuick(state.phase, state.roundResults)
-    : getNextPhase(state.phase, state.roundResults);
+  const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
+
+  // Update RunState if present
+  let updatedRunState = state.runState;
+  if (isRunMode && updatedRunState) {
+    // Determine if player 0 won the last duel
+    const lastResult = state.roundResults[state.roundResults.length - 1];
+    if (lastResult) {
+      if (lastResult.winner === 0) {
+        updatedRunState = runWinRound(updatedRunState);
+      } else {
+        updatedRunState = runLoseLife(updatedRunState);
+      }
+      // Check life recovery
+      updatedRunState = checkLifeRecovery(updatedRunState);
+    }
+
+    // Check if run is over before advancing
+    if (isRunOver(updatedRunState)) {
+      const wins = countWins(state.roundResults);
+      return ok({
+        ...state,
+        runState: updatedRunState,
+        phase: { kind: 'complete', winner: 1, scores: wins },
+      });
+    }
+
+    // Advance run round
+    updatedRunState = runAdvanceRound(updatedRunState);
+
+    // Check if goal was just reached (status changed to 'won')
+    if (updatedRunState.status === 'won') {
+      // Continue playing (endless mode) — don't complete
+      // The player can keep going past the goal
+    }
+  }
+
+  // Determine next phase
+  let nextPhase: MatchPhase;
+  if (state.mode === 'quick') {
+    nextPhase = getNextPhaseQuick(state.phase, state.roundResults);
+  } else if (isRunMode && updatedRunState) {
+    nextPhase = getNextPhaseRun(state.phase, state.roundResults, updatedRunState);
+  } else {
+    nextPhase = getNextPhase(state.phase, state.roundResults);
+  }
 
   const newState: MatchState = {
     ...state,
     phase: nextPhase,
+    runState: updatedRunState,
   };
 
-  // If transitioning to draft (rounds 2/3), generate a fresh pool
+  // If transitioning to draft, generate a fresh pool for the new round
   if (nextPhase.kind === 'draft') {
     const newPool = generatePool(state.seed, state.mode, registry, nextPhase.round);
     newState.pool = newPool;
@@ -396,15 +500,24 @@ function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry)
   ];
 
   const totalGems = pool.length + stockpiles[0].length + stockpiles[1].length;
-  const maxPicks = state.mode === 'quick'
-    ? totalGems
-    : balance.draftPicksPerPlayer[phase.round - 1] * 2;
+
+  let maxPicks: number;
+  if (state.mode === 'quick') {
+    maxPicks = totalGems;
+  } else if (state.mode === 'run_async' || state.mode === 'run_live') {
+    // In run mode, player 0 gets half the pool
+    maxPicks = Math.ceil(totalGems / 2);
+  } else {
+    const clampedRound = Math.min(phase.round, 3);
+    maxPicks = balance.draftPicksPerPlayer[clampedRound - 1] * 2;
+  }
 
   let picked = 0;
   while (picked < maxPicks && pool.length > 0) {
     const idx = rng.nextInt(0, pool.length - 1);
     const gem = pool.splice(idx, 1)[0];
-    const player: 0 | 1 = (picked % 2) as 0 | 1;
+    // In run_async mode, all picks go to player 0
+    const player: 0 | 1 = state.mode === 'run_async' ? 0 : (picked % 2) as 0 | 1;
     stockpiles[player].push(gem);
     picked++;
   }
@@ -479,6 +592,5 @@ function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState 
     players: newPlayers,
     phase: { kind: 'duel', round: state.phase.round },
     forgeComplete: undefined,
-    forgeFlux: undefined,
   };
 }

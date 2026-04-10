@@ -4,6 +4,7 @@ import type { DerivedStats } from '../types/derived-stats.js';
 import type { ForgedItem, Loadout } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
 import { ALL_ELEMENTS, createEmptyDerivedStats } from '../types/derived-stats.js';
+import { RARITY_MULTIPLIERS } from '../types/gem.js';
 
 // ---- Internal types ----
 
@@ -293,24 +294,28 @@ function applyEquippedSlots(
     const lookupTier = Math.min(gem.tier, 4) as 1 | 2 | 3 | 4;
     const tierData = affixDef.tiers[lookupTier];
 
-    // Step 4: Apply base affix effects scaled by tier/rarity effective value
-    // For now, use the raw tier data effects (matching old behavior for T1-T4 common gems)
+    // Rarity multiplier: common = 1.0, magic = 1.25, rare = 1.5, epic = 2.0, legendary = 3.0
+    const rarityMult = RARITY_MULTIPLIERS[gem.rarity];
+
+    // Apply base affix effects scaled by rarity multiplier
     for (const mod of tierData[effectKey]) {
-      addToBucket(buckets, mod);
+      addToBucket(buckets, {
+        stat: mod.stat,
+        op: mod.op,
+        value: mod.value * rarityMult,
+      });
     }
 
-    // Step 5: Apply outputBonusEffects if present (recipe bonus)
+    // Apply outputBonusEffects if present (recipe bonus), also scaled by rarity
     if (gem.outputBonusEffects) {
       for (const mod of gem.outputBonusEffects) {
-        addToBucket(buckets, mod);
+        addToBucket(buckets, {
+          stat: mod.stat,
+          op: mod.op,
+          value: mod.value * rarityMult,
+        });
       }
     }
-
-    // Step 6: Apply depth bonus multiplier
-    // depth bonus = 1 + (gem.recipeDepth * depthBonusPerLevel)
-    // This is a placeholder - full depth scaling applies to the gem's effective value,
-    // not individual stat mods. For now we skip it to maintain existing test behavior.
-    // TODO: Implement depth bonus scaling when run-based system is wired
   }
 }
 

@@ -16,7 +16,7 @@ export interface AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     rng: SeededRNG,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[];
 }
 
@@ -72,7 +72,7 @@ function findWeakestSlots(
   loadout: Loadout,
   registry: DataRegistry,
   maxCount: number,
-  _currentRound?: 1 | 2 | 3,
+  _currentRound?: number,
 ): { target: 'weapon' | 'armor'; slotIndex: number; gem: GemInstance; score: number }[] {
   const slots: { target: 'weapon' | 'armor'; slotIndex: number; gem: GemInstance; score: number }[] = [];
   const targets: ('weapon' | 'armor')[] = ['weapon', 'armor'];
@@ -105,7 +105,7 @@ export class Tier3AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
 
@@ -173,7 +173,7 @@ export class Tier4AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
 
@@ -241,7 +241,7 @@ export class Tier5AdaptStrategy implements AdaptStrategy {
     myPlayerIdx: 0 | 1,
     registry: DataRegistry,
     _rng: SeededRNG,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
 
