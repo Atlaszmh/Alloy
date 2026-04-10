@@ -12,8 +12,16 @@ import {
   AIController,
   SeededRNG,
   extractMatchReport,
+  runRunSimulation,
 } from '@alloy/engine';
-import type { AITier, MatchMode, MatchReport, GameConfig } from '@alloy/engine';
+import type {
+  AITier,
+  MatchMode,
+  MatchReport,
+  GameConfig,
+  RunSimulationConfig,
+  RunSimulationResult,
+} from '@alloy/engine';
 
 export interface WorkerData {
   configJson: string; // JSON.stringify'd GameConfig
@@ -24,10 +32,20 @@ export interface WorkerData {
   mode: MatchMode;
   baseWeaponId: string;
   baseArmorId: string;
+  /** When set to 'run', uses runRunSimulation instead of individual matches */
+  simulationMode?: 'match' | 'run';
+  /** Run simulation parameters (only used when simulationMode === 'run') */
+  runConfig?: {
+    runCount: number;
+    maxRounds: number;
+    startingLives: number;
+    goalRound: number;
+  };
 }
 
 export type WorkerMessage =
   | { type: 'result'; report: MatchReport }
+  | { type: 'run_result'; result: RunSimulationResult }
   | { type: 'error'; seed: number; error: string }
   | { type: 'done' };
 
@@ -132,25 +150,51 @@ const config = JSON.parse(data.configJson) as GameConfig;
 const registry = buildRegistry(config);
 
 (async () => {
-  for (let i = 0; i < data.matchCount; i++) {
-    const seed = data.seedStart + i;
+  if (data.simulationMode === 'run' && data.runConfig) {
+    // Run simulation mode: simulate full runs with lives
     try {
-      const report = runAIMatch(
-        seed,
-        data.aiTier1,
-        data.aiTier2,
-        data.mode,
-        data.baseWeaponId,
-        data.baseArmorId,
-        registry,
-      );
-      parentPort!.postMessage({ type: 'result', report } satisfies WorkerMessage);
+      const runSimConfig: RunSimulationConfig = {
+        runCount: data.runConfig.runCount,
+        maxRounds: data.runConfig.maxRounds,
+        startingLives: data.runConfig.startingLives,
+        goalRound: data.runConfig.goalRound,
+        seed: data.seedStart,
+        aiTier: data.aiTier1,
+        mode: data.mode,
+        baseWeaponId: data.baseWeaponId,
+        baseArmorId: data.baseArmorId,
+      };
+      const result = runRunSimulation(runSimConfig, registry);
+      parentPort!.postMessage({ type: 'run_result', result } satisfies WorkerMessage);
     } catch (err) {
       parentPort!.postMessage({
         type: 'error',
-        seed,
+        seed: data.seedStart,
         error: err instanceof Error ? err.message : String(err),
       } satisfies WorkerMessage);
+    }
+  } else {
+    // Standard match simulation mode
+    for (let i = 0; i < data.matchCount; i++) {
+      const seed = data.seedStart + i;
+      try {
+        const report = runAIMatch(
+          seed,
+          data.aiTier1,
+          data.aiTier2,
+          data.mode,
+          data.baseWeaponId,
+          data.baseArmorId,
+          registry,
+        );
+        parentPort!.postMessage({ type: 'result', report } satisfies WorkerMessage);
+      } catch (err) {
+        parentPort!.postMessage({
+          type: 'error',
+          seed,
+          error: err instanceof Error ? err.message : String(err),
+        } satisfies WorkerMessage);
+      }
     }
   }
   parentPort!.postMessage({ type: 'done' } satisfies WorkerMessage);

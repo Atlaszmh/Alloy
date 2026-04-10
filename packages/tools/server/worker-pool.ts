@@ -24,6 +24,15 @@ export interface SimulationRequest {
   mode: MatchMode;
   baseWeaponId: string;
   baseArmorId: string;
+  /** When set to 'run', uses runRunSimulation instead of individual matches */
+  simulationMode?: 'match' | 'run';
+  /** Run simulation parameters (only used when simulationMode === 'run') */
+  runConfig?: {
+    runCount: number;
+    maxRounds: number;
+    startingLives: number;
+    goalRound: number;
+  };
 }
 
 export class WorkerPool {
@@ -74,6 +83,8 @@ export class WorkerPool {
         mode: request.mode,
         baseWeaponId: request.baseWeaponId,
         baseArmorId: request.baseArmorId,
+        simulationMode: request.simulationMode,
+        runConfig: request.runConfig,
       };
 
       return new Promise<void>((resolve, reject) => {
@@ -89,6 +100,10 @@ export class WorkerPool {
             completed++;
             onResult(msg.report);
             onProgress(completed + failed, matchCount);
+          } else if (msg.type === 'run_result') {
+            // Run simulation completed — count each run as a completed item
+            completed += msg.result.runs.length;
+            onProgress(completed, matchCount);
           } else if (msg.type === 'error') {
             failed++;
             onProgress(completed + failed, matchCount);

@@ -7,6 +7,18 @@ import { AIController } from '../ai/ai-controller.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { computeAggregateStats, type AggregateStats } from './stats-collector.js';
 import { extractMatchReport } from '../match/match-report.js';
+import { calculateEffectiveValue } from '../types/gem.js';
+import {
+  createRunState,
+  loseLife,
+  winRound,
+  advanceRound,
+  checkLifeRecovery,
+  isRunOver,
+  isGoalReached,
+} from '../run/run-state.js';
+// getPoolConfigForRound is available but not used yet — pool scaling is a future task
+// import { getPoolConfigForRound } from '../run/pool-scaling.js';
 
 export interface SimulationConfig {
   matchCount: number;
@@ -39,6 +51,197 @@ export function runSimulation(config: SimulationConfig, registry: DataRegistry):
   const duration = Date.now() - startTime;
 
   return { config, matches, aggregateStats, duration };
+}
+
+// --- Run Simulation (multi-round with lives) ---
+
+export interface RunSimulationConfig {
+  runCount: number;        // Number of runs to simulate
+  maxRounds: number;       // Max rounds per run (e.g., 20)
+  startingLives: number;   // Default: 3
+  goalRound: number;       // Default: 10
+  seed: number;
+  aiTier: AITier;          // AI tier for draft + forge decisions
+  mode: MatchMode;
+  baseWeaponId: string;
+  baseArmorId: string;
+}
+
+export interface RoundDetail {
+  gemsSocketed: number;
+  combineCount: number;
+  avgGemQuality: number;
+}
+
+export interface RunReport {
+  seed: number;
+  roundsPlayed: number;
+  won: boolean;
+  livesRemaining: number;
+  roundDetails: RoundDetail[];
+}
+
+export interface RunSimulationResult {
+  runs: RunReport[];
+  averageRunLength: number;
+  winRate: number;                  // % of runs that reached goal
+  averageGemsPerRound: number;
+  legendaryAchievementRate: number; // % of runs that produced a legendary gem
+}
+
+/**
+ * Simulate full runs (multiple rounds with lives) using the run-state system.
+ * Each run plays matches until lives run out or the goal round is reached.
+ */
+export function runRunSimulation(
+  config: RunSimulationConfig,
+  registry: DataRegistry,
+): RunSimulationResult {
+  const runs: RunReport[] = [];
+
+  for (let r = 0; r < config.runCount; r++) {
+    const runSeed = config.seed + r * 10000;
+    const report = simulateSingleRun(runSeed, config, registry);
+    runs.push(report);
+  }
+
+  const totalRounds = runs.reduce((sum, r) => sum + r.roundsPlayed, 0);
+  const averageRunLength = runs.length > 0 ? totalRounds / runs.length : 0;
+  const winRate = runs.length > 0
+    ? (runs.filter(r => r.won).length / runs.length) * 100
+    : 0;
+
+  // Average gems per round across all runs
+  let totalGems = 0;
+  let totalRoundDetails = 0;
+  let runsWithLegendary = 0;
+
+  for (const run of runs) {
+    let hasLegendary = false;
+    for (const rd of run.roundDetails) {
+      totalGems += rd.gemsSocketed;
+      totalRoundDetails++;
+      // A legendary gem has quality >= 3.0 (tier 1 * legendary 3.0 multiplier)
+      if (rd.avgGemQuality >= 3.0) hasLegendary = true;
+    }
+    if (hasLegendary) runsWithLegendary++;
+  }
+
+  const averageGemsPerRound = totalRoundDetails > 0 ? totalGems / totalRoundDetails : 0;
+  const legendaryAchievementRate = runs.length > 0
+    ? (runsWithLegendary / runs.length) * 100
+    : 0;
+
+  return {
+    runs,
+    averageRunLength,
+    winRate,
+    averageGemsPerRound,
+    legendaryAchievementRate,
+  };
+}
+
+function simulateSingleRun(
+  runSeed: number,
+  config: RunSimulationConfig,
+  registry: DataRegistry,
+): RunReport {
+  let runState = createRunState({
+    startingLives: config.startingLives,
+    goalRound: config.goalRound,
+  });
+
+  const roundDetails: RoundDetail[] = [];
+
+  while (runState.status === 'active' && runState.round <= config.maxRounds) {
+    const roundSeed = runSeed + runState.round;
+    // Future: use getPoolConfigForRound(runState.round) to scale pool per round
+
+    // Run one match (best-of-3) for this round
+    const matchReport = runAIMatch(
+      roundSeed,
+      config.aiTier,
+      config.aiTier, // opponent is same tier for now
+      {
+        matchCount: 1,
+        aiTier1: config.aiTier,
+        aiTier2: config.aiTier,
+        seedStart: roundSeed,
+        mode: config.mode,
+        baseWeaponId: config.baseWeaponId,
+        baseArmorId: config.baseArmorId,
+      },
+      registry,
+    );
+
+    // Extract round metrics from the match report
+    const detail = extractRoundDetail(matchReport);
+    roundDetails.push(detail);
+
+    // Determine if the "run player" (player 0) won or lost this round
+    const player0Won = matchReport.winner === 0;
+
+    if (player0Won) {
+      runState = winRound(runState);
+    } else {
+      runState = loseLife(runState);
+    }
+
+    // Check for life recovery
+    runState = checkLifeRecovery(runState);
+
+    // Check termination conditions before advancing
+    if (isRunOver(runState) || isGoalReached(runState)) {
+      break;
+    }
+
+    runState = advanceRound(runState);
+  }
+
+  return {
+    seed: runSeed,
+    roundsPlayed: roundDetails.length,
+    won: runState.status === 'won' || isGoalReached(runState),
+    livesRemaining: runState.lives,
+    roundDetails,
+  };
+}
+
+/**
+ * Extract per-round metrics from a completed match report.
+ */
+function extractRoundDetail(report: MatchReport): RoundDetail {
+  // Count gems socketed from player 0's loadout
+  const loadout = report.players[0]?.loadout;
+  let gemsSocketed = 0;
+  let totalQuality = 0;
+
+  if (loadout) {
+    for (const item of [loadout.weapon, loadout.armor]) {
+      for (const slot of item.slots) {
+        if (slot) {
+          gemsSocketed++;
+          totalQuality += calculateEffectiveValue(slot.gem.tier, slot.gem.rarity);
+        }
+      }
+    }
+  }
+
+  const avgGemQuality = gemsSocketed > 0 ? totalQuality / gemsSocketed : 0;
+
+  // combineCount: count gems with recipeDepth > 0 (they were produced by combining)
+  let combineCount = 0;
+  if (loadout) {
+    for (const item of [loadout.weapon, loadout.armor]) {
+      for (const slot of item.slots) {
+        if (slot && slot.gem.recipeDepth > 0) {
+          combineCount++;
+        }
+      }
+    }
+  }
+
+  return { gemsSocketed, combineCount, avgGemQuality };
 }
 
 function runAIMatch(

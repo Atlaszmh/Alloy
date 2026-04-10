@@ -23,10 +23,17 @@ export { getNextPhase } from './match/phase-machine.js';
 export { AIController } from './ai/ai-controller.js';
 export { defaultConfig, mergeConfig, GameConfigSchema } from './data/game-config.js';
 export { extractMatchReport } from './match/match-report.js';
-export { runSimulation } from './balance/simulation-runner.js';
+export { runSimulation, runRunSimulation } from './balance/simulation-runner.js';
 export { computeAggregateStats } from './balance/stats-collector.js';
 export { generateBalanceReport } from './balance/balance-report.js';
-export type { SimulationConfig, SimulationResult } from './balance/simulation-runner.js';
+export type {
+  SimulationConfig,
+  SimulationResult,
+  RunSimulationConfig,
+  RunSimulationResult,
+  RunReport,
+  RoundDetail,
+} from './balance/simulation-runner.js';
 export type { AggregateStats } from './balance/stats-collector.js';
 export type { BalanceIssue } from './balance/balance-report.js';
 
