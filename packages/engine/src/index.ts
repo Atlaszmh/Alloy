@@ -29,3 +29,15 @@ export { generateBalanceReport } from './balance/balance-report.js';
 export type { SimulationConfig, SimulationResult } from './balance/simulation-runner.js';
 export type { AggregateStats } from './balance/stats-collector.js';
 export type { BalanceIssue } from './balance/balance-report.js';
+
+// Gem combination system
+export { CombinationEngine } from './combine/combination-engine.js';
+export type { CombineResult, CombineLayer, CombineConfig } from './combine/combination-engine.js';
+export { RecipeRegistry } from './combine/recipe-registry.js';
+export type { RecipeDefinition, RecipeComponent } from './combine/recipe-registry.js';
+export { DiscoveryState } from './combine/discovery-state.js';
+export {
+  computeAverageQuality,
+  applyMatchingRarityBonus,
+  determineOutputTierRarity,
+} from './combine/combine-quality.js';
