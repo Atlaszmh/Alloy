@@ -7,7 +7,7 @@ import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
-import type { AffixDef, OrbInstance } from '@alloy/engine';
+import type { AffixDef, GemInstance } from '@alloy/engine';
 import { AI_CONFIGS } from '@alloy/engine';
 import { calcAiDelay } from './ai-delay';
 import { getStatLabel } from '@/shared/utils/stat-label';
@@ -34,7 +34,7 @@ function StockpileZone({
   side,
 }: {
   label: string;
-  orbs: OrbInstance[];
+  orbs: GemInstance[];
   maxOrbs: number;
   affixMap: Map<string, AffixDef>;
   isActive: boolean;
@@ -106,6 +106,7 @@ function StockpileZone({
               affixName={affix.name.split(' ')[0]}
               statLabel={getStatLabel(affix, orb)}
               tags={affix.tags}
+              rarity={orb.rarity}
               newest={orb.uid === newestUid}
             />
           );
@@ -571,6 +572,7 @@ export function Draft() {
                     affixId={orb.affixId}
                     affixName={affix.name}
                     tier={orb.tier}
+                    rarity={orb.rarity}
                     category={affix.category}
                     tags={affix.tags}
                     statLabel={getStatLabel(affix, orb)}
@@ -601,7 +603,7 @@ export function Draft() {
       {/* ═══ BOTTOM: Player drop zone (fixed height) ═══ */}
       <div ref={dropZoneRef} style={{ flexShrink: 0 }}>
         <StockpileZone
-          label="Your Orbs"
+          label="Your Gems"
           orbs={player0?.stockpile ?? []}
           maxOrbs={picksPerPlayer}
           affixMap={affixMap}

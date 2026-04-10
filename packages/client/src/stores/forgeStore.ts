@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, DerivedStats, OrbInstance } from '@alloy/engine';
-import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemoveOrb } from '@alloy/engine';
+import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, DerivedStats, GemInstance } from '@alloy/engine';
+import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from '@alloy/engine';
 
 interface ForgeStoreState {
   plan: ForgePlan | null;
@@ -8,7 +8,7 @@ interface ForgeStoreState {
   confirmModalOpen: boolean;
 
   /** 3-slot combine workbench (engine only uses first 2 currently) */
-  comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
+  comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
 
   /** Item selection phase — weapon first, then armor, then done */
   itemSelectionPhase: 'weapon' | 'armor' | 'done';
@@ -19,17 +19,17 @@ interface ForgeStoreState {
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => DerivedStats | null;
-  canRemove: (orbUid: string) => boolean;
+  canRemove: (gemUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
   selectBaseItem: (itemType: 'weapon' | 'armor', itemId: string) => void;
-  setComboSlotByIndex: (index: number, orb: OrbInstance | null) => void;
+  setComboSlotByIndex: (index: number, gem: GemInstance | null) => void;
   clearComboSlots: () => void;
   openConfirmModal: () => void;
   closeConfirmModal: () => void;
   reset: () => void;
 }
 
-const EMPTY_COMBO: [OrbInstance | null, OrbInstance | null, OrbInstance | null] = [null, null, null];
+const EMPTY_COMBO: [GemInstance | null, GemInstance | null, GemInstance | null] = [null, null, null];
 
 export const useForgeStore = create<ForgeStoreState>((set, get) => ({
   plan: null,
@@ -72,24 +72,21 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
     return getPlannedStats(plan, registry);
   },
 
-  canRemove: (orbUid) => {
+  canRemove: (gemUid) => {
     const { plan } = get();
     if (!plan) return false;
-    // Find which item+slot holds this orb
+    // Find which item+slot holds this gem
     for (const target of ['weapon', 'armor'] as const) {
       const item = plan.loadout[target];
       for (let i = 0; i < item.slots.length; i++) {
         const slot = item.slots[i];
         if (!slot) continue;
-        const uids = slot.kind === 'compound'
-          ? slot.orbs.map(o => o.uid)
-          : [slot.orb.uid];
-        if (uids.includes(orbUid)) {
-          return canRemoveOrb(plan, target, i);
+        if (slot.gem.uid === gemUid) {
+          return canUnsocketGem(plan, target, i);
         }
       }
     }
-    // Orb not found in any slot — it's in stockpile, not equipped
+    // Gem not found in any slot — it's in stockpile, not equipped
     return true;
   },
 
@@ -103,9 +100,9 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
     }
   },
 
-  setComboSlotByIndex: (index, orb) => {
-    const slots = [...get().comboSlots] as [OrbInstance | null, OrbInstance | null, OrbInstance | null];
-    slots[index] = orb;
+  setComboSlotByIndex: (index, gem) => {
+    const slots = [...get().comboSlots] as [GemInstance | null, GemInstance | null, GemInstance | null];
+    slots[index] = gem;
     set({ comboSlots: slots });
   },
 

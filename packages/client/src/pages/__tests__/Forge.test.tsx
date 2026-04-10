@@ -6,7 +6,7 @@ import { useMatchStore } from '@/stores/matchStore';
 import { useForgeStore } from '@/stores/forgeStore';
 import type {
   MatchState,
-  OrbInstance,
+  GemInstance,
   ForgedItem,
   AffixDef,
   SynergyDef,
@@ -42,8 +42,8 @@ import { Forge } from '../Forge';
 /*  Helpers: minimal mock data                                         */
 /* ------------------------------------------------------------------ */
 
-function makeOrb(uid: string, affixId: string, tier: 1 | 2 | 3 | 4 = 1): OrbInstance {
-  return { uid, affixId, tier };
+function makeGem(uid: string, affixId: string, tier: 1 | 2 | 3 | 4 | 5 = 1): GemInstance {
+  return { uid, affixId, tier, rarity: 'common', recipeDepth: 0, combinable: true, tags: [affixId] };
 }
 
 function makeEmptyItem(baseItemId = 'sword'): ForgedItem {
@@ -162,8 +162,8 @@ function createMockMatchState(overrides: Partial<MatchState> = {}): MatchState {
     players: [
       {
         stockpile: [
-          makeOrb('orb-1', 'fire_damage', 1),
-          makeOrb('orb-2', 'cold_resist', 1),
+          makeGem('orb-1', 'fire_damage', 1),
+          makeGem('orb-2', 'cold_resist', 1),
         ],
         loadout: {
           weapon: makeEmptyItem('sword'),
@@ -191,18 +191,15 @@ function createMockMatchState(overrides: Partial<MatchState> = {}): MatchState {
 function createMockPlan(overrides: Partial<ForgePlan> = {}): ForgePlan {
   return {
     stockpile: [
-      makeOrb('orb-1', 'fire_damage', 1),
-      makeOrb('orb-2', 'cold_resist', 1),
+      makeGem('orb-1', 'fire_damage', 1),
+      makeGem('orb-2', 'cold_resist', 1),
     ],
     loadout: {
       weapon: makeEmptyItem('sword'),
       armor: makeEmptyItem('chainmail'),
     },
-    tentativeFlux: 8,
-    maxFlux: 8,
     round: 1,
-    lockedOrbUids: new Set(),
-    permanentCombines: [],
+    lockedGemUids: new Set(),
     actionLog: [],
     ...overrides,
   };
@@ -265,7 +262,7 @@ function setupStores(
   });
 
   // Build plan from match state (or overrides)
-  const stockpile = planOverrides.stockpile ?? [...(mockState.players[0].stockpile as OrbInstance[])];
+  const stockpile = planOverrides.stockpile ?? [...(mockState.players[0].stockpile as GemInstance[])];
   const loadout = planOverrides.loadout ?? {
     weapon: { ...mockState.players[0].loadout.weapon } as ForgedItem,
     armor: { ...mockState.players[0].loadout.armor } as ForgedItem,
@@ -276,8 +273,6 @@ function setupStores(
   const plan = createMockPlan({
     stockpile,
     loadout,
-    tentativeFlux: (mockState.forgeFlux as number[])?.[0] ?? 8,
-    maxFlux: 8,
     round,
     ...planOverrides,
   });
@@ -337,9 +332,9 @@ describe('Forge page', () => {
     setupStores();
     renderForge();
 
-    // ForgeGemTray renders "STOCKPILE · 2 ORBS"
+    // ForgeGemTray renders "STOCKPILE · 2 GEMS"
     expect(screen.getByText(/STOCKPILE/)).toBeTruthy();
-    expect(screen.getByText(/2 ORBS/)).toBeTruthy();
+    expect(screen.getByText(/2 GEMS/)).toBeTruthy();
   });
 
   it('renders GemCard components for stockpile orbs', () => {

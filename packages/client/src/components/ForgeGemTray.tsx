@@ -1,10 +1,10 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
-import type { AffixDef, DataRegistry, OrbInstance } from '@alloy/engine';
+import type { AffixDef, DataRegistry, GemInstance } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 interface ForgeGemTrayProps {
-  stockpile: OrbInstance[];
+  stockpile: GemInstance[];
   registry: DataRegistry;
   selectedOrbUid: string | null;
   equippedUids: Set<string>;
@@ -102,7 +102,7 @@ export function ForgeGemTray({
           marginBottom: 'var(--gap-sm)',
         }}
       >
-        STOCKPILE &middot; {stockpile.length} ORBS
+        STOCKPILE &middot; {stockpile.length} GEMS
       </div>
 
       {/* Empty state */}
@@ -118,7 +118,7 @@ export function ForgeGemTray({
             fontFamily: 'var(--font-family-display)',
           }}
         >
-          All orbs assigned
+          All gems assigned
         </div>
       ) : (
         /* Grid */
@@ -144,8 +144,8 @@ export function ForgeGemTray({
             let statLabel: string;
             let affixId: string;
 
-            if (orb.compoundId) {
-              const compound = registry.getCombinationById(orb.compoundId);
+            if (orb.sourceRecipe) {
+              const compound = registry.getCombinationById(orb.sourceRecipe);
               if (compound) {
                 affixId = compound.id;
                 affixName = compound.name;
@@ -184,6 +184,7 @@ export function ForgeGemTray({
                   affixId={affixId}
                   affixName={affixName}
                   tier={orb.tier}
+                  rarity={orb.rarity}
                   category={category}
                   tags={tags}
                   statLabel={statLabel}

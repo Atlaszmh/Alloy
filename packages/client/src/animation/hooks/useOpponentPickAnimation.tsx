@@ -1,21 +1,21 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { OrbInstance } from '@alloy/engine';
+import type { GemInstance } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
 // ── Types ──
 
 interface UseOpponentPickAnimationOptions {
-  pool: OrbInstance[];
-  opponentStockpile: OrbInstance[];
+  pool: GemInstance[];
+  opponentStockpile: GemInstance[];
   isPlayerTurn: boolean;
   opponentZoneRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface UseOpponentPickAnimationResult {
   /** Pre-animate a specific orb's swoop (for last AI pick before dispatch) */
-  startSwoopAnimation: (orb: OrbInstance) => Promise<void>;
+  startSwoopAnimation: (orb: GemInstance) => Promise<void>;
   /** Opponent stockpile with the in-flight orb filtered out */
-  filteredOpponentStockpile: OrbInstance[];
+  filteredOpponentStockpile: GemInstance[];
   /** Shared position cache — used by useDraftEndSequence */
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;
   /** UID of gem currently animating (used to set long exit hold on AnimatePresence) */
@@ -45,7 +45,7 @@ export function useOpponentPickAnimation({
     }
   }, [pool]);
 
-  const prevPoolRef = useRef<OrbInstance[]>(pool);
+  const prevPoolRef = useRef<GemInstance[]>(pool);
   const [swoopingUid, setSwoopingUid] = useState<string | null>(null);
   // Track UIDs that were manually swooped (e.g. last AI pick) so auto-detect skips them
   const manuallySwoopedRef = useRef<Set<string>>(new Set());
@@ -92,7 +92,7 @@ export function useOpponentPickAnimation({
   }, [opponentZoneRef]);
 
   // Start swoop for a specific orb (called by AI turn effect for last pick)
-  const startSwoopAnimation = useCallback((orb: OrbInstance): Promise<void> => {
+  const startSwoopAnimation = useCallback((orb: GemInstance): Promise<void> => {
     manuallySwoopedRef.current.add(orb.uid);
     return animateGemToStockpile(orb.uid);
   }, [animateGemToStockpile]);

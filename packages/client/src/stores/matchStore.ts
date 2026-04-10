@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, OrbInstance, DebugPhaseTarget } from '@alloy/engine';
+import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, GemInstance, DebugPhaseTarget } from '@alloy/engine';
 import { createMatch, applyAction, createDebugMatch, DataRegistry, loadAndValidateData, AIController, SeededRNG } from '@alloy/engine';
 
 let registry: DataRegistry | null = null;
@@ -80,7 +80,7 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
 }));
 
 // Stable empty arrays to avoid infinite re-render loops with Zustand selectors
-const EMPTY_POOL: OrbInstance[] = [];
+const EMPTY_POOL: GemInstance[] = [];
 const EMPTY_RESULTS: DuelResult[] = [];
 const EMPTY_LOGS: CombatLog[] = [];
 
