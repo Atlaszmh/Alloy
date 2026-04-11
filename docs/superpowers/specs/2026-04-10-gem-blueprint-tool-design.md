@@ -26,6 +26,10 @@ A visual blueprint explorer and gem editor for designing, browsing, and testing 
 - Cross-run Codex integration
 - Live PvP testing from the tool
 
+### Data Model Target
+
+This tool targets the **current (pre-refactor) data model**: `AffixDef` (T1-T4), `CompoundAffixDef`, `SynergyDef`. When the gem refactor lands (introducing `GemInstance` with rarity, `RecipeDefinition` with depth, T1-T5), the tool will be updated to match. Depth-2+ chains in the tree visualization are a **visual concept** — the current `CompoundAffixDef.components` stores flat `[affixId, affixId]` pairs, not recursive recipe references. The tree computes depth by scanning which recipes' outputs appear as other recipes' inputs.
+
 ---
 
 ## 1. Architecture
@@ -147,10 +151,16 @@ interface TreeNode {
 ```
 
 Build the graph by:
-1. Create nodes for all 33+ affixes (depth 0)
+1. Create nodes for all affixes (depth 0)
 2. For each recipe, create a node (depth 1) with edges to its two component nodes
 3. For depth-2+ chains: scan recipes whose components include a depth-1+ recipe result. Assign depth = max(parent depths) + 1.
 4. Cap at depth 3.
+
+**Edge case handling:**
+- **Orphaned recipe** (component affix was deleted): render as an error node (red border, "missing component: {id}" label). Do not filter out — makes the broken reference visible so the user can fix it.
+- **Missing affix reference**: same treatment as orphaned recipe — error node with the missing ID shown.
+- **Circular references** (recipe A uses recipe B's output, and B uses A's output): detect during graph construction via visited-set tracking. If a cycle is found, cap the cycle at the first revisit and render the cycle-closing edge as a dashed red line with a warning icon. Log to console.
+- **Duplicate component pairs**: validated at save time (Recipe Editor prevents duplicates). If found in loaded data, the first recipe wins and the duplicate is flagged in the Data Browser with a warning badge.
 
 ### Performance
 
@@ -225,6 +235,7 @@ Each tab shows:
 | ID | Auto-generated | |
 | Description | Textarea | |
 | Required affixes | Multi-select list | Add/remove from all affixes |
+| Condition | Text input (optional) | For count-based thresholds like `any_4_elemental`. Leave blank for simple "all required present" synergies. |
 | Bonus effects | Effect table | stat/op/value rows |
 
 ### Footer Toolbar
@@ -233,7 +244,7 @@ Each tab shows:
 |--------|--------|
 | **Save** | Writes current gem data store back to JSON files via `PUT` API calls. Shows success/error toast. |
 | **Revert** | Discards all unsaved changes, reloads from disk |
-| **Test in Sim** | Opens SimTestModal: pick AI tiers (1-5 for each player), match count (1-20), mode (quick/ranked), seed. Runs simulation using current (possibly unsaved) gem data. Shows results inline: win rates, top affixes, top recipes used, any balance flags. |
+| **Test in Sim** | Opens SimTestModal: pick AI tiers (1-5 for each player), match count (1-20), mode (quick/ranked), seed. **Saves current gem data to disk first** (so the simulation runner loads the latest data), then runs simulation via existing `/api/simulations` endpoint. Shows results inline: win rates, top affixes, top recipes used, any balance flags. |
 | **Export** | Downloads `gem-data-YYYY-MM-DD.json` bundle containing all affixes, recipes, synergies |
 | **Import** | File upload → replaces gem data store (with confirmation dialog) |
 
@@ -250,13 +261,22 @@ Triggered by dragging one affix onto another in the data browser:
 ## 4. Gem Data Store (Zustand)
 
 ```typescript
+type WorkbenchTab = 'affixes' | 'recipes' | 'synergies';
+
 interface GemDataState {
+  // Data
   affixes: AffixDef[];
   recipes: CompoundAffixDef[];
   synergies: SynergyDef[];
   isDirty: boolean;
 
-  // Actions
+  // UI state
+  selectedTab: WorkbenchTab;
+  selectedItemId: string | null; // ID of the item loaded in the editor
+  setSelectedTab: (tab: WorkbenchTab) => void;
+  setSelectedItem: (id: string | null) => void;
+
+  // Persistence
   loadFromServer: () => Promise<void>;
   saveToServer: () => Promise<void>;
   revert: () => Promise<void>;
@@ -282,7 +302,6 @@ interface GemDataState {
 }
 
 interface GemDataBundle {
-  version: number;
   exportedAt: string;
   affixes: AffixDef[];
   recipes: CompoundAffixDef[];
@@ -304,13 +323,13 @@ PUT  /recipes/:id         → upsert recipe (body: CompoundAffixDef)
 DELETE /recipes/:id       → delete recipe
 PUT  /synergies/:id       → upsert synergy (body: SynergyDef)
 DELETE /synergies/:id     → delete synergy
-POST /export              → returns GemDataBundle JSON
-POST /import              → accepts GemDataBundle JSON, overwrites files
+GET  /export              → returns GemDataBundle JSON (frontend constructs Blob download client-side)
+POST /import              → accepts GemDataBundle JSON body, validates all entries against Zod schemas, overwrites files atomically (write all 3 files or none). Returns validation errors if any entry fails.
 ```
 
 **Implementation:** Routes read/write directly to the JSON data files on disk (`packages/engine/src/data/*.json`). Uses `fs.readFile` / `fs.writeFile` with JSON.parse/stringify. No database needed — the JSON files ARE the source of truth.
 
-**Validation:** All writes validate against Zod schemas (existing `packages/engine/src/data/schemas.ts`) before writing to disk.
+**Validation:** All writes (upsert, import) validate against Zod schemas (`packages/engine/src/data/schemas.ts`) before writing to disk. On validation failure, the write is rejected and the error is returned to the client. Import is atomic: if any entry in the bundle fails validation, no files are written.
 
 ---
 
@@ -330,15 +349,17 @@ Implementation: add a section toggle at the top of the sidebar (or as a top nav 
 
 ### 25 New Signature Recipes
 
+All component names below are exact affix IDs from `affixes.json`. Pairs have been verified to not conflict with existing recipes in `combinations.json`.
+
 #### Elemental Mastery (completing the element grid)
 
 | Recipe | Components | Effect | Tags |
 |--------|-----------|--------|------|
-| **Venomstrike** | poison + shadow | Poison ticks apply shadow vulnerability, +25% shadow damage to poisoned targets | compound, poison, shadow, elemental |
-| **Chaos Storm** | chaos + lightning | Lightning strikes have 20% chance to apply random elemental DoT | compound, chaos, lightning, elemental |
-| **Shadowflame** | shadow + fire | Burns deal shadow damage instead of fire (bypasses fire resist) | compound, shadow, fire, elemental |
-| **Permafrost** | cold + armor_rating | Armor scales with cold damage, slowed targets take +15% physical | compound, cold, defensive |
-| **Toxic Cloud** | poison + chaos | Poison AoE spreads to phantom target, chaos amplifies stacks | compound, poison, chaos, elemental |
+| **Chaos Storm** | chaos_damage + lightning_damage | Lightning strikes have 20% chance to apply random elemental DoT | compound, chaos, lightning, elemental |
+| **Shadowflame** | shadow_damage + fire_damage | Burns deal shadow damage instead of fire (bypasses fire resist) | compound, shadow, fire, elemental |
+| **Permafrost** | cold_damage + armor_rating | Armor scales with cold damage, slowed targets take +15% physical | compound, cold, defensive |
+| **Toxic Cloud** | poison_damage + chaos_damage | Poison AoE spreads to phantom target, chaos amplifies stacks | compound, poison, chaos, elemental |
+| **Void Grasp** | shadow_damage + slow_on_hit | Slowed targets take +20% shadow damage, slow duration +50% | compound, shadow, control |
 
 #### Conditional/Transformation (Backpack Battles-inspired)
 
@@ -354,10 +375,10 @@ Implementation: add a section toggle at the top of the sidebar (or as a top nav 
 
 | Recipe | Components | Effect | Tags |
 |--------|-----------|--------|------|
-| **Frozen Venom** | cold_damage + poison_damage | Frozen targets take 2x poison tick rate | compound, cold, poison, elemental |
 | **Electrocute** | lightning_damage + stun_chance | Stunned targets take stored lightning damage on stun end | compound, lightning, control |
 | **Mire** | slow_on_hit + poison_damage | Slow % increases per poison stack on target | compound, control, poison |
 | **Shatter** | cold_damage + crit_damage | Crits against frozen/slowed targets deal bonus cold burst | compound, cold, crit |
+| **Paralysis** | lightning_damage + slow_on_hit | Slowed targets have 15% chance to be stunned on lightning hit | compound, lightning, control |
 
 #### Support-gem style (Path of Exile inspired)
 
@@ -380,46 +401,48 @@ Implementation: add a section toggle at the top of the sidebar (or as a top nav 
 
 | Recipe | Components | Effect | Tags |
 |--------|-----------|--------|------|
-| **Probability Field** | chaos_damage + dodge_chance | Dodges deal chaos damage back to attacker | compound, chaos, reactive |
+| **Probability Field** | chaos_damage + dodge_chance | Dodges deal chaos damage back to attacker | compound, chaos, reactive  |
 | **Temporal Rift** | initiative + slow_on_hit | First attack slows for 3x duration | compound, utility, control |
 | **Entropy** | chaos_damage + dot_multiplier | DoTs on target have 10% chance per tick to spread a random DoT | compound, chaos, dot |
 | **Hex** | shadow_damage + chance_on_taking_damage | Taking damage curses attacker: -15% hit chance for 3s | compound, shadow, defensive_trigger |
 
 ### 8 New Synergies
 
-| Synergy | Required Affixes | Effect |
-|---------|-----------------|--------|
-| **Elemental Overload** | 4+ different element affixes | All elemental damage +30%, -20% physical |
-| **Poison Master** | poison_damage + slow_on_hit + dot_multiplier | Poison ignores 50% of target poison resist |
-| **Thorns Wall** | thorns + block_chance + armor_rating | Blocked hits reflect 200% thorns |
-| **Momentum Fighter** | attack_speed + flat_physical + crit_chance | After 5 consecutive hits: guaranteed crit + 2x attack speed for 2s |
-| **Death's Embrace** | chance_on_low_hp + lifesteal + crit_damage | Below 30% HP: all attacks lifesteal at 2x rate |
-| **Chaos Agent** | chaos_damage + 2 different trigger types | All triggers +25% proc chance, effects randomize |
-| **Elemental Chain** | 3+ elemental compound recipes equipped | Elemental hits chain to phantom target for 30% damage |
-| **Sentinel** | fortify + flat_hp + hp_regen + barrier | Immune to crits, +50% healing received, -30% attack speed |
+The existing `SynergyDef` type uses `requiredAffixes: string[]` (all must be present) and an optional `condition: string` field for count-based or negative thresholds. Synergies that need "N of M" semantics use the `condition` field — the Synergy Editor should expose this as an optional text input.
+
+| Synergy | Required Affixes | Condition | Effect |
+|---------|-----------------|-----------|--------|
+| **Elemental Overload** | fire_damage, cold_damage, lightning_damage, poison_damage | `any_4_elemental` (4+ of the 6 element affixes) | All elemental damage +30%, -20% physical |
+| **Poison Master** | poison_damage, slow_on_hit, dot_multiplier | — | Poison ignores 50% of target poison resist |
+| **Thorns Wall** | thorns, block_chance, armor_rating | — | Blocked hits reflect 200% thorns |
+| **Momentum Fighter** | attack_speed, flat_physical, crit_chance | — | After 5 consecutive hits: guaranteed crit + 2x attack speed for 2s |
+| **Death's Embrace** | chance_on_low_hp, lifesteal, crit_damage | — | Below 30% HP: all attacks lifesteal at 2x rate |
+| **Chaos Agent** | chaos_damage, chance_on_hit, chance_on_crit | — | All triggers +25% proc chance, effects randomize |
+| **Elemental Chain** | fire_damage, cold_damage, lightning_damage | `any_3_elemental_compound` (3+ elemental compound recipes equipped) | Elemental hits chain to phantom for 30% damage |
+| **Sentinel** | fortify, flat_hp, hp_regen, barrier | — | Immune to crits, +50% healing received, -30% attack speed |
 
 ### Example Depth-2+ Chains (for tree visualization)
 
 These demonstrate the multi-depth paths the radial tree will visualize:
 
 ```
-Fire + Cold → Thermal Shock (depth 1)
-  Thermal Shock + Crit Damage → Shatter (depth 2)
+fire_damage + cold_damage → Thermal Shock (depth 1)
+  Thermal Shock + crit_damage → Shatter (depth 2)
 
-Fire + Poison → Blight (depth 1)
-  Blight + Shadow → Shadowflame (depth 2)
+fire_damage + poison_damage → Blight (depth 1)
+  Blight + shadow_damage → Shadowflame (depth 2)
 
-Lifesteal + Barrier → Vampiric Aura (depth 1)
-  Vampiric Aura + Crit Damage → Vampiric Fury+ (depth 2)
+lifesteal + barrier → Vampiric Aura (depth 1)
+  Vampiric Aura + crit_damage → Vampiric Fury+ (depth 2)
 
-Cold + Poison → Frozen Venom (depth 1)
-  Frozen Venom + Slow on Hit → Mire+ (depth 2)
+lightning_damage + slow_on_hit → Paralysis (depth 1)
+  Paralysis + poison_damage → Mire+ (depth 2) — total lockdown chain
 
-Attack Speed + Flat Physical → Momentum (depth 1)
-  Momentum + Crit Chance → Momentum Fighter synergy unlock path
+attack_speed + flat_physical → Momentum (depth 1)
+  Momentum + crit_chance → Momentum Fighter synergy unlock path
 
-Fortify + Block Chance → Bastion (depth 1)
-  Bastion + Flat HP → Martyr+ (depth 2) — ultimate tank chain
+fortify + block_chance → Bastion (depth 1)
+  Bastion + flat_hp → Martyr+ (depth 2) — ultimate tank chain
 ```
 
 ---
