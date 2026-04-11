@@ -17,6 +17,7 @@ import type { ForgeState } from '../src/forge/forge-state.js';
 const data = loadAndValidateData();
 const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
 const balance = data.balance;
+const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
 function makePool(seed: number): OrbInstance[] {
   return generatePool(seed, 'ranked', registry);
@@ -164,6 +165,20 @@ describe('AI Forge Strategies', () => {
 
     const forgeState = createForgeState(stockpile, 'sword', 'chainmail', 1, balance, false);
     applyAllActions(forgeState, actions);
+  });
+
+  it('T2 forge uses generic combine on leftover orbs', () => {
+    const stockpile: OrbInstance[] = [
+      { uid: 'g1', affixId: 'cold_damage', tier: 1 },
+      { uid: 'g2', affixId: 'armor_rating', tier: 1 },
+      { uid: 'g3', affixId: 'crit_damage', tier: 2 },
+    ];
+    const ai = new AIController(2, registry, new SeededRNG(42).fork('ai'));
+    const actions = ai.planForge(stockpile, emptyLoadout, 10, 1, []);
+    const combines = actions.filter(a => a.kind === 'combine');
+    expect(combines.length).toBeGreaterThanOrEqual(1);
+    const genericCombine = combines.find(a => a.kind === 'combine' && a.keepGemUid);
+    expect(genericCombine).toBeDefined();
   });
 });
 

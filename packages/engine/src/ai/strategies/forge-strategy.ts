@@ -1,4 +1,5 @@
 import type { AffixCategory } from '../../types/affix.js';
+import type { BalanceConfig } from '../../types/balance.js';
 import type { BaseStat } from '../../types/base-stats.js';
 import type { ForgeAction } from '../../types/forge-action.js';
 import type { Loadout } from '../../types/item.js';
@@ -184,6 +185,12 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
       }
     }
 
+    // Try generic combines on leftover orbs
+    const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
+    actions.push(...genericResult.actions);
+    flux -= genericResult.fluxSpent;
+    pushGenericResults(stockpile, genericResult.actions);
+
     // Assign remaining orbs to empty slots
     const assignCost = balance.fluxCosts.assignOrb;
     for (const orb of stockpile) {
@@ -313,6 +320,66 @@ function archetypeToStats(archetype: string): [BaseStat, BaseStat] {
       return ['INT', 'DEX'];
     default:
       return ['STR', 'VIT'];
+  }
+}
+
+/**
+ * Try generic combines on leftover orbs: pair the highest-value orb
+ * with the lowest-value orb, consume the low one, promote the high one +1 tier.
+ */
+function tryGenericCombines(
+  stockpile: OrbInstance[],
+  usedOrbUids: Set<string>,
+  flux: number,
+  balance: BalanceConfig,
+  registry: DataRegistry,
+): { actions: ForgeAction[]; fluxSpent: number } {
+  const actions: ForgeAction[] = [];
+  let fluxSpent = 0;
+  const combineCost = balance.fluxCosts.combineOrbs;
+  const remaining = stockpile
+    .filter(o => !usedOrbUids.has(o.uid))
+    .sort((a, b) => orbValueScore(b, registry) - orbValueScore(a, registry));
+  if (remaining.length < 2) return { actions, fluxSpent };
+  let left = 0;
+  let right = remaining.length - 1;
+  while (left < right && (flux - fluxSpent) >= combineCost) {
+    const keepOrb = remaining[left];
+    const sacrificeOrb = remaining[right];
+    if (keepOrb.tier >= 4) { left++; continue; }
+    actions.push({
+      kind: 'combine',
+      orbUid1: keepOrb.uid,
+      orbUid2: sacrificeOrb.uid,
+      keepGemUid: keepOrb.uid,
+    });
+    usedOrbUids.add(keepOrb.uid);
+    usedOrbUids.add(sacrificeOrb.uid);
+    fluxSpent += combineCost;
+    left++;
+    right--;
+  }
+  return { actions, fluxSpent };
+}
+
+/**
+ * Push synthetic upgraded orbs into the stockpile so downstream assignment
+ * can see the results of generic combines.
+ */
+function pushGenericResults(
+  stockpile: OrbInstance[],
+  genericActions: ForgeAction[],
+): void {
+  for (const action of genericActions) {
+    if (action.kind === 'combine' && action.keepGemUid) {
+      const keptOrb = stockpile.find(o => o.uid === action.keepGemUid);
+      if (!keptOrb) continue;
+      stockpile.push({
+        uid: `generic_${action.orbUid1}_${action.orbUid2}`,
+        affixId: keptOrb.affixId,
+        tier: Math.min(keptOrb.tier + 1, 4) as 1 | 2 | 3 | 4,
+      });
+    }
   }
 }
 
