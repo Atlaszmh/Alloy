@@ -495,6 +495,12 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
       }
     }
 
+    // Try generic combines on leftover orbs
+    const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
+    actions.push(...genericResult.actions);
+    flux -= genericResult.fluxSpent;
+    pushGenericResults(stockpile, genericResult.actions);
+
     // Assign remaining orbs with balanced weapon/armor split
     const assignCost = balance.fluxCosts.assignOrb;
     for (const orb of sortedStockpile) {
@@ -654,6 +660,12 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= upgradeCost;
     }
+
+    // Try generic combines on leftover orbs
+    const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
+    actions.push(...genericResult.actions);
+    flux -= genericResult.fluxSpent;
+    pushGenericResults(stockpile, genericResult.actions);
 
     // Assign remaining orbs sorted by value
     const assignCost = balance.fluxCosts.assignOrb;
@@ -834,6 +846,12 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= upgradeCost;
     }
+
+    // Try generic combines on leftover orbs
+    const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
+    actions.push(...genericResult.actions);
+    flux -= genericResult.fluxSpent;
+    pushGenericResults(stockpile, genericResult.actions);
 
     // Assign remaining orbs sorted by value, placing highest value first
     const assignCost = balance.fluxCosts.assignOrb;

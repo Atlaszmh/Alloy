@@ -39,6 +39,7 @@ const registry = new DataRegistry(
   data.balance,
 );
 const balance = data.balance;
+const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
 function makePool(seed: number): OrbInstance[] {
   return generatePool(seed, 'ranked', registry);
@@ -324,10 +325,11 @@ describe('Determinism', () => {
       expect(pick1).toBe(pick2);
 
       // Forge plans should match
-      const stockpile = pool.slice(0, 8);
+      const stockpile1 = pool.slice(0, 8);
+      const stockpile2 = pool.slice(0, 8);
       const loadout = createEmptyLoadout('sword', 'chainmail');
-      const actions1 = ai1.planForge(stockpile, loadout, 8, 1, []);
-      const actions2 = ai2.planForge(stockpile, loadout, 8, 1, []);
+      const actions1 = ai1.planForge(stockpile1, loadout, 8, 1, []);
+      const actions2 = ai2.planForge(stockpile2, loadout, 8, 1, []);
       expect(actions1).toEqual(actions2);
     }
   });
@@ -497,4 +499,23 @@ describe('Higher tiers beat lower tiers', () => {
     const t5WinRate = t5Wins / totalMatches;
     expect(t5WinRate).toBeGreaterThanOrEqual(0.45);
   });
+});
+
+// ---- Generic Combine Support ----
+
+describe('generic combine support', () => {
+  const noRecipeStockpile: OrbInstance[] = [
+    { uid: 'nr1', affixId: 'cold_damage', tier: 1 },
+    { uid: 'nr2', affixId: 'armor_rating', tier: 2 },
+    { uid: 'nr3', affixId: 'crit_chance', tier: 1 },
+  ];
+
+  for (const tier of [3, 4, 5] as const) {
+    it(`T${tier} attempts generic combines when no recipes available`, () => {
+      const ai = new AIController(tier, registry, new SeededRNG(99).fork('ai'));
+      const actions = ai.planForge([...noRecipeStockpile], emptyLoadout, 10, 1, []);
+      const combines = actions.filter(a => a.kind === 'combine');
+      expect(combines.length).toBeGreaterThanOrEqual(1);
+    });
+  }
 });
