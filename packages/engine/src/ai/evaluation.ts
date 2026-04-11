@@ -73,16 +73,23 @@ export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry)
  * Count how many valid pairwise combinations could be formed from the stockpile.
  */
 export function combinationPotential(stockpile: OrbInstance[], registry: DataRegistry): number {
-  let count = 0;
+  let score = 0;
   for (let i = 0; i < stockpile.length; i++) {
     for (let j = i + 1; j < stockpile.length; j++) {
       const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
       if (combo) {
-        count++;
+        // Recipe match: highest value
+        score += TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier];
+      } else if (stockpile[i].affixId === stockpile[j].affixId) {
+        // Same affix generic upgrade: medium value
+        score += (TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier]) * 0.6;
+      } else {
+        // Cross-affix generic: low but nonzero value
+        score += (TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier]) * 0.2;
       }
     }
   }
-  return count;
+  return score;
 }
 
 /**

@@ -9,6 +9,7 @@ import { Tier1AdaptStrategy, Tier2AdaptStrategy } from '../src/ai/strategies/ada
 import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js';
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
+import { combinationPotential } from '../src/ai/evaluation.js';
 import type { OrbInstance } from '../src/types/orb.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
 import type { CombatLog } from '../src/types/combat.js';
@@ -320,5 +321,29 @@ describe('adapt strategy player identification', () => {
     // AI is player 1 (the loser) — should not error
     const actions2 = ai.planAdapt(mockDuelLog, emptyLoadout, emptyLoadout, [], 0, 1);
     expect(actions2).toEqual([]);
+  });
+});
+
+describe('combinationPotential — generic awareness', () => {
+  it('counts generic upgrade potential for non-recipe pairs', () => {
+    const stockpile: OrbInstance[] = [
+      { uid: 'a', affixId: 'cold_damage', tier: 1 },
+      { uid: 'b', affixId: 'armor_rating', tier: 1 },
+    ];
+    const potential = combinationPotential(stockpile, registry);
+    expect(potential).toBeGreaterThan(0);
+  });
+
+  it('values same-affix pairs higher than cross-affix pairs', () => {
+    const sameAffix: OrbInstance[] = [
+      { uid: 'a', affixId: 'fire_damage', tier: 1 },
+      { uid: 'b', affixId: 'fire_damage', tier: 2 },
+    ];
+    const crossAffix: OrbInstance[] = [
+      { uid: 'c', affixId: 'cold_damage', tier: 1 },
+      { uid: 'd', affixId: 'armor_rating', tier: 1 },
+    ];
+    expect(combinationPotential(sameAffix, registry))
+      .toBeGreaterThan(combinationPotential(crossAffix, registry));
   });
 });
