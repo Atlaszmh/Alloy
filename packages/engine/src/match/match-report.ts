@@ -41,6 +41,7 @@ export function extractMatchReport(
       combinationIds,
       synergyIds,
       loadout,
+      genericUpgradeCount: countGenericUpgrades(loadout),
     };
   });
 
@@ -93,6 +94,18 @@ function collectCompoundIds(loadout: Loadout): string[] {
     }
   }
   return ids;
+}
+
+function countGenericUpgrades(loadout: Loadout): number {
+  let count = 0;
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (!slot) continue;
+      if (slot.kind === 'single' && slot.orb.uid.startsWith('generic_')) count++;
+      if (slot.kind === 'upgraded' && slot.orb.uid.startsWith('generic_')) count++;
+    }
+  }
+  return count;
 }
 
 function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): string[] {

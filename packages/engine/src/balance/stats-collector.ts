@@ -14,6 +14,7 @@ export interface AggregateStats {
   combinationUsageRates: Map<string, number>; // compoundId -> % of matches where used
   combinationWinRates: Map<string, number>;   // compoundId -> win% when used
 
+  avgGenericUpgradesPerPlayer: number;
   avgMatchDuration: number;    // average rounds
   avgDuelDuration: number;    // average seconds per duel
 }
@@ -33,6 +34,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
       synergyWinRates: new Map(),
       combinationUsageRates: new Map(),
       combinationWinRates: new Map(),
+      avgGenericUpgradesPerPlayer: 0,
       avgMatchDuration: 0,
       avgDuelDuration: 0,
     };
@@ -52,6 +54,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
   let totalRounds = 0;
   let totalDuration = 0;
   let totalDuels = 0;
+  let totalGenericUpgrades = 0;
 
   for (const match of matches) {
     // Win counting
@@ -71,6 +74,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
       const affixes = player.affixIds;
       const synergies = player.synergyIds;
       const combinations = player.combinationIds;
+      totalGenericUpgrades += player.genericUpgradeCount;
       const isWinner = match.winner === playerIdx;
 
       // Deduplicate affixes per match for pick rate
@@ -144,6 +148,7 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
     synergyWinRates,
     combinationUsageRates,
     combinationWinRates,
+    avgGenericUpgradesPerPlayer: totalGenericUpgrades / playerInstances,
     avgMatchDuration: totalRounds / totalMatches,
     avgDuelDuration: totalDuels > 0 ? totalDuration / totalDuels : 0,
   };

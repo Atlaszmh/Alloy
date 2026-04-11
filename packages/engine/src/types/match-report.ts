@@ -22,6 +22,7 @@ export interface PlayerReport {
   combinationIds: string[];
   synergyIds: string[];
   loadout: Loadout;
+  genericUpgradeCount: number;
 }
 
 export interface RoundReport {
