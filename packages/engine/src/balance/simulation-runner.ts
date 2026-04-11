@@ -77,8 +77,24 @@ function runAIMatch(
     state = result.state;
   }
 
-  // Forge + Duel rounds
+  // Forge + Duel rounds (with draft for rounds 2/3 in ranked mode)
   while (state.phase.kind !== 'complete') {
+    // Handle draft phases for rounds 2/3
+    if (state.phase.kind === 'draft') {
+      while (state.phase.kind === 'draft') {
+        const player = state.phase.activePlayer;
+        const ai = player === 0 ? ai0 : ai1;
+        const orbUid = ai.pickOrb(
+          state.pool,
+          state.players[player].stockpile,
+          state.players[1 - player as 0 | 1].stockpile,
+        );
+        const result = applyAction(state, { kind: 'draft_pick', player, orbUid }, registry);
+        if (!result.ok) throw new Error(`Draft (round ${state.phase.round}) failed: ${result.error}`);
+        state = result.state;
+      }
+    }
+
     if (state.phase.kind === 'forge') {
       const forgePhase = state.phase;
       for (const player of [0, 1] as const) {
