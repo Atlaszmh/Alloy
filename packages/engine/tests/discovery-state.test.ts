@@ -56,4 +56,21 @@ describe('DiscoveryState', () => {
     ds.recordSynergyDiscovery('assassin');
     expect(ds.isSynergyDiscovered('assassin')).toBe(true);
   });
+
+  it('totalDiscoveryCount returns sum of recipes and synergies', () => {
+    const ds = new DiscoveryState();
+    expect(ds.totalDiscoveryCount()).toBe(0);
+
+    ds.recordDiscovery('burn');
+    expect(ds.totalDiscoveryCount()).toBe(1);
+
+    ds.recordDiscovery('chill');
+    expect(ds.totalDiscoveryCount()).toBe(2);
+
+    ds.recordSynergyDiscovery('assassin');
+    expect(ds.totalDiscoveryCount()).toBe(3);
+
+    ds.recordSynergyDiscovery('mage');
+    expect(ds.totalDiscoveryCount()).toBe(4);
+  });
 });

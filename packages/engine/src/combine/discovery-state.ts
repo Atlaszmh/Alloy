@@ -35,6 +35,10 @@ export class DiscoveryState {
     return this.discoveredSynergies.has(synergyId);
   }
 
+  totalDiscoveryCount(): number {
+    return this.discovered.size + this.discoveredSynergies.size;
+  }
+
   serialize(): {
     discoveredRecipes: string[];
     attemptedCombos: string[];
