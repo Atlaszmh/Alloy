@@ -139,20 +139,21 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
       armor: loadout.armor.slots.map((s) => s !== null),
     };
 
-    // Try combinations first
-    for (let i = 0; i < stockpile.length; i++) {
-      if (usedGemUids.has(stockpile[i].uid)) continue;
-      for (let j = i + 1; j < stockpile.length; j++) {
-        if (usedGemUids.has(stockpile[j].uid)) continue;
+    // Try combinations first (only from round 3 onward)
+    if (round >= 3) {
+      for (let i = 0; i < stockpile.length; i++) {
+        if (usedGemUids.has(stockpile[i].uid)) continue;
+        for (let j = i + 1; j < stockpile.length; j++) {
+          if (usedGemUids.has(stockpile[j].uid)) continue;
 
-        const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
-        if (!combo) continue;
+          const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
+          if (!combo) continue;
 
-        actions.push({
-          kind: 'combine',
-          gemUid1: stockpile[i].uid,
-          gemUid2: stockpile[j].uid,
-        });
+          actions.push({
+            kind: 'combine',
+            gemUid1: stockpile[i].uid,
+            gemUid2: stockpile[j].uid,
+          });
 
         // Socket the result
         const combinedUid = `combined_${stockpile[i].uid}_${stockpile[j].uid}`;
@@ -171,6 +172,7 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
         usedGemUids.add(stockpile[j].uid);
         break; // gem i is used, move to next i
       }
+    }
     }
 
     // Socket remaining gems to empty slots
