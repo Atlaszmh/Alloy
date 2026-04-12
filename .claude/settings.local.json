@@ -145,7 +145,9 @@
       "Bash(bash /c/Users/hahnz/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.2/skills/brainstorming/scripts/start-server.sh --project-dir /c/Projects/Alloy)",
       "mcp__plugin_playwright_playwright__browser_resize",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(xargs basename:*)",
+      "Bash(wc -l c:/Projects/Alloy/packages/engine/tests/*.test.ts)"
     ]
   }
 }
