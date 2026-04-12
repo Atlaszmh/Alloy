@@ -8,6 +8,7 @@ import type { SeededRNG } from '../../rng/seeded-rng.js';
 
 import { orbValueScore, bestArchetype } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
+import { calculateStats } from '../../forge/stat-calculator.js';
 
 export interface ForgeStrategy {
   plan(
@@ -240,6 +241,17 @@ function findEmptySlot(
     }
   }
   return null;
+}
+
+/**
+ * Calculate average stat quality for loadout as a quality metric.
+ * Used to determine if a combination improves the overall loadout.
+ */
+function calculateQuality(loadout: Loadout, registry: DataRegistry): number {
+  const result = calculateStats(loadout, registry);
+  const stats = result.stats;
+  // Weight key defensive and offensive stats equally
+  return (stats.maxHP + stats.physicalDamage + stats.elementalResist) / 3;
 }
 
 /**
@@ -621,12 +633,54 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     allCombos.sort((a, b) => b.score - a.score);
 
     // Greedily select non-conflicting combinations
+    // Only combine if quality improves (Tier 5 quality delta check)
     for (const cand of allCombos) {
       if (usedGemUids.has(stockpile[cand.idx1].uid) || usedGemUids.has(stockpile[cand.idx2].uid)) continue;
 
       const slot = findEmptySlot(occupiedSlots, 'weapon', rng);
       if (!slot) break;
 
+      // Calculate quality before combination
+      const qualityBefore = calculateQuality(loadout, registry);
+
+      // Simulate combination to check quality improvement
+      // Create a temporary loadout with the combined gem socketed
+      const tempLoadout: Loadout = {
+        weapon: {
+          baseItemId: loadout.weapon.baseItemId,
+          baseStats: loadout.weapon.baseStats,
+          slots: loadout.weapon.slots.map(s => s ? { gem: { ...s.gem } } : null),
+        },
+        armor: {
+          baseItemId: loadout.armor.baseItemId,
+          baseStats: loadout.armor.baseStats,
+          slots: loadout.armor.slots.map(s => s ? { gem: { ...s.gem } } : null),
+        },
+      };
+
+      // Socket the combined gem
+      const combo = registry.getCombination(stockpile[cand.idx1].affixId, stockpile[cand.idx2].affixId);
+      if (!combo) continue;
+
+      const combinedGem: GemInstance = {
+        uid: `combined_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`,
+        affixId: combo.output,
+        tier: Math.max(stockpile[cand.idx1].tier, stockpile[cand.idx2].tier),
+        rarity: Math.max(stockpile[cand.idx1].rarity, stockpile[cand.idx2].rarity),
+        recipeDepth: Math.max(stockpile[cand.idx1].recipeDepth, stockpile[cand.idx2].recipeDepth) + 1,
+        combinable: true,
+        tags: [...new Set([...stockpile[cand.idx1].tags, ...stockpile[cand.idx2].tags])],
+      };
+
+      tempLoadout[slot.target].slots[slot.slotIndex] = { gem: combinedGem };
+
+      // Calculate quality after combination
+      const qualityAfter = calculateQuality(tempLoadout, registry);
+
+      // Only proceed if quality improves
+      if (qualityAfter <= qualityBefore) continue;
+
+      // Apply to real loadout and actions
       actions.push({
         kind: 'combine',
         gemUid1: stockpile[cand.idx1].uid,
@@ -639,6 +693,10 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
+
+      // Update actual loadout for subsequent iterations
+      loadout[slot.target].slots[slot.slotIndex] = { gem: combinedGem };
+
       usedGemUids.add(stockpile[cand.idx1].uid);
       usedGemUids.add(stockpile[cand.idx2].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
