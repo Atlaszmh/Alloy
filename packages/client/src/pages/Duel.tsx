@@ -156,7 +156,7 @@ export function Duel() {
   const derivedStats = useMemo(() => {
     if (!player0 || !player1) return null;
     const reg = getRegistry();
-    return [calculateStats(player0.loadout, reg), calculateStats(player1.loadout, reg)] as [DerivedStats, DerivedStats];
+    return [calculateStats(player0.loadout, reg).stats, calculateStats(player1.loadout, reg).stats] as [DerivedStats, DerivedStats];
   }, [player0, player1, getRegistry]);
 
   // Create PixiJS Application

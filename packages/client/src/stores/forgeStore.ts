@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, DerivedStats, GemInstance } from '@alloy/engine';
+import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, GemInstance, StatsResult } from '@alloy/engine';
 import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from '@alloy/engine';
 
 interface ForgeStoreState {
@@ -18,7 +18,7 @@ interface ForgeStoreState {
   initPlan: (state: ForgeState, registry: DataRegistry) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
-  getStats: (registry: DataRegistry) => DerivedStats | null;
+  getStats: (registry: DataRegistry) => StatsResult | null;
   canRemove: (gemUid: string) => boolean;
   selectOrb: (uid: string | null) => void;
   selectBaseItem: (itemType: 'weapon' | 'armor', itemId: string) => void;

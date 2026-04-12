@@ -37,9 +37,7 @@ export class DuelScene {
   private lastProcessedTime = -1;
 
   // Cooldown tracking
-  private attackSpeeds: [number, number] = [1.0, 1.0];
   private lastAttackTime: [number, number] = [0, 0];
-  private currentTime = 0;
 
   // Track pending timeouts to clear on destroy/reset
   private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -50,7 +48,6 @@ export class DuelScene {
   async init(app: Application, stats: [DerivedStats, DerivedStats]): Promise<void> {
     this.maxHp = [stats[0].maxHP, stats[1].maxHP];
     this.hp = [stats[0].maxHP, stats[1].maxHP];
-    this.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];
 
     // Arena floor
     const floor = new Graphics();
@@ -121,8 +118,6 @@ export class DuelScene {
 
   processEvent(time: number, event: CombatEvent): void {
     if (!this.gladiators || !this.vfx || !this.damageNumbers || !this.statusIcons) return;
-
-    this.currentTime = time;
 
     const playerX = (p: 0 | 1) => (p === 0 ? P0_X : P1_X);
     const playerPos = (p: 0 | 1) => ({ x: playerX(p), y: GLADIATOR_Y - 30 });
@@ -329,12 +324,10 @@ export class DuelScene {
   reset(stats?: [DerivedStats, DerivedStats]): void {
     if (stats) {
       this.maxHp = [stats[0].maxHP, stats[1].maxHP];
-      this.attackSpeeds = [stats[0].attackSpeed, stats[1].attackSpeed];
     }
     this.hp = [...this.maxHp];
     this.lastProcessedTime = -1;
     this.lastAttackTime = [0, 0];
-    this.currentTime = 0;
 
     this.clearPendingTimeouts();
 

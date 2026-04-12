@@ -110,7 +110,8 @@ export function Forge() {
   }, [phase?.kind === 'forge' ? `${round}` : 'none']);
 
   // ── Derived stats ──
-  const derivedStats = useForgeStore(s => s.getStats)(registry);
+  const statsResult = useForgeStore(s => s.getStats)(registry);
+  const derivedStats = statsResult?.stats ?? null;
 
   // ── Commit flow ──
   const handleCommit = useCallback(async () => {

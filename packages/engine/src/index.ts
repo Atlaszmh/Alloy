@@ -13,6 +13,7 @@ export { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsoc
 export type { ForgePlan, PlanResult } from './forge/forge-plan.js';
 export { earnFlux, spendFlux, canSpendFlux } from './run/flux-state.js';
 export { calculateStats } from './forge/stat-calculator.js';
+export type { StatsResult } from './forge/stat-calculator.js';
 export { validateLoadout } from './forge/loadout-validator.js';
 export type { LoadoutValidationResult } from './forge/loadout-validator.js';
 export { simulate } from './duel/duel-engine.js';

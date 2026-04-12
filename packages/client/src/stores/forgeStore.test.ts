@@ -131,9 +131,9 @@ describe('forgeStore', () => {
 
     it('returns derived stats from plan loadout', () => {
       initStore();
-      const stats = useForgeStore.getState().getStats(registry);
-      expect(stats).not.toBeNull();
-      expect(stats!.maxHP).toBeGreaterThan(0);
+      const result = useForgeStore.getState().getStats(registry);
+      expect(result).not.toBeNull();
+      expect(result!.stats.maxHP).toBeGreaterThan(0);
     });
   });
 
