@@ -21,7 +21,7 @@ import {
   advanceRound as runAdvanceRound,
   isRunOver,
 } from '../run/run-state.js';
-import { earnFlux } from '../run/flux-state.js';
+import { earnFlux, spendFlux, canSpendFlux } from '../run/flux-state.js';
 
 function fail(error: string): ActionResult {
   return { ok: false, error };
@@ -230,6 +230,47 @@ function handleForgeAction(
 
   if (state.forgeComplete?.[player]) {
     return fail('Player has already completed forging this round');
+  }
+
+  // Handle flux spend actions (run mode only, player 0 only)
+  const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
+  if (isRunMode && player === 0) {
+    const balance = registry.getBalance();
+    const fluxCosts = balance.gem.flux.costs;
+
+    // Check if this is a flux spend action (they're handled here, not by applyForge)
+    switch (action.kind) {
+      case 'boost_combine': {
+        if (!state.runState) return fail('No runState in run mode');
+        const cost = fluxCosts.boostCombine ?? 3;
+        if (!canSpendFlux(state.runState.flux, cost)) {
+          return fail(`Insufficient flux for boost_combine (need ${cost}, have ${state.runState.flux})`);
+        }
+        const updatedRunState = { ...state.runState, flux: spendFlux(state.runState.flux, cost) };
+        // Note: boost_combine effect is handled by forge-plan when applying combine action
+        return ok({ ...state, runState: updatedRunState });
+      }
+      case 'reroll_pool': {
+        if (!state.runState) return fail('No runState in run mode');
+        const cost = fluxCosts.rerollPool ?? 5;
+        if (!canSpendFlux(state.runState.flux, cost)) {
+          return fail(`Insufficient flux for reroll_pool (need ${cost}, have ${state.runState.flux})`);
+        }
+        let updatedRunState = { ...state.runState, flux: spendFlux(state.runState.flux, cost) };
+        updatedRunState = { ...updatedRunState, rerollNextDraft: true };
+        return ok({ ...state, runState: updatedRunState });
+      }
+      case 'guarantee_rarity': {
+        if (!state.runState) return fail('No runState in run mode');
+        const cost = fluxCosts.guaranteeRarity ?? 4;
+        if (!canSpendFlux(state.runState.flux, cost)) {
+          return fail(`Insufficient flux for guarantee_rarity (need ${cost}, have ${state.runState.flux})`);
+        }
+        const updatedRunState = { ...state.runState, flux: spendFlux(state.runState.flux, cost) };
+        // Note: guarantee_rarity effect is handled at next draft phase
+        return ok({ ...state, runState: updatedRunState });
+      }
+    }
   }
 
   const round = state.phase.round;

@@ -521,7 +521,54 @@ describe('Match Controller', () => {
     return state;
   }
 
-  // 9. Flux earning on duel win
+  // 9. Flux spending validation (run mode)
+  it('flux spend action is rejected if balance is insufficient in run mode', () => {
+    let state = createMatch('flux-test', 123, 'run_async', ['player1', 'player2'], BASE_WEAPON, BASE_ARMOR, registry);
+    state = draftAll(state);
+    state = doSimpleForge(state, 0);
+
+    // Update runState to have low flux
+    if (state.runState) {
+      state.runState = { ...state.runState, flux: 1 };  // Only 1 flux available
+    }
+
+    // Try to spend 5 flux on reroll_pool (should fail)
+    const result = applyAction(state, {
+      kind: 'forge_action',
+      player: 0,
+      action: { kind: 'reroll_pool' },
+    }, registry);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('flux spend action is accepted if balance is sufficient in run mode', () => {
+    let state = createMatch('flux-test', 456, 'run_async', ['player1', 'player2'], BASE_WEAPON, BASE_ARMOR, registry);
+    state = draftAll(state);
+    state = doSimpleForge(state, 0);
+
+    // Update runState to have sufficient flux
+    if (state.runState) {
+      state.runState = { ...state.runState, flux: 10 };  // Sufficient flux
+    }
+
+    // Try to spend flux on reroll_pool (should succeed)
+    const result = applyAction(state, {
+      kind: 'forge_action',
+      player: 0,
+      action: { kind: 'reroll_pool' },
+    }, registry);
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.state.runState) {
+      // Check that flux was deducted
+      expect(result.state.runState.flux).toBeLessThan(10);
+      // Check that rerollNextDraft flag was set
+      expect(result.state.runState.rerollNextDraft).toBe(true);
+    }
+  });
+
+  // 10. Flux earning on duel win
   it('flux is earned on duel win', () => {
     let state = draftAll(makeMatch('unranked'));
     state = doSimpleForge(state, 0);
