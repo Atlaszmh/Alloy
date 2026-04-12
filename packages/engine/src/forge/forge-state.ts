@@ -94,6 +94,13 @@ export function applyForgeAction(
       return applySelectBaseItem(state, action);
     case 'set_base_stats':
       return applySetBaseStats(state, action);
+    case 'boost_combine':
+    case 'reroll_pool':
+    case 'guarantee_rarity':
+      // These flux spend actions are handled at match-controller level
+      return fail(`Flux action '${action.kind}' must be handled by match controller`);
+    default:
+      return fail(`Unknown action kind`);
   }
 }
 
