@@ -22,6 +22,7 @@ import {
   isRunOver,
 } from '../run/run-state.js';
 import { earnFlux, spendFlux, canSpendFlux } from '../run/flux-state.js';
+import { DiscoveryState } from '../combine/discovery-state.js';
 
 function fail(error: string): ActionResult {
   return { ok: false, error };
@@ -71,12 +72,13 @@ export function createMatch(
     duelLogs: [],
   };
 
-  // Initialize RunState for run-based modes
+  // Initialize RunState and DiscoveryState for run-based modes
   if (mode === 'run_async' || mode === 'run_live') {
     state.runState = createRunState({
       startingLives: runConfig?.startingLives ?? 3,
       goalRound: runConfig?.goalRound ?? 10,
     });
+    state.discoveryState = new DiscoveryState();
   }
 
   return state;
@@ -414,8 +416,10 @@ function handleDuelContinue(
 
   const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
 
-  // Update RunState if present
+  // Update RunState and DiscoveryState if present
   let updatedRunState = state.runState;
+  let updatedDiscoveryState = state.discoveryState;
+
   if (isRunMode && updatedRunState) {
     // Determine if player 0 won the last duel
     const lastResult = state.roundResults[state.roundResults.length - 1];
@@ -429,8 +433,20 @@ function handleDuelContinue(
       } else {
         updatedRunState = runLoseLife(updatedRunState);
       }
-      // Check life recovery
-      updatedRunState = checkLifeRecovery(updatedRunState);
+
+      // Record synergy discoveries for player 0
+      if (updatedDiscoveryState) {
+        const statsResult = calculateStats(state.players[0].loadout, registry);
+        for (const synergy of statsResult.activeSynergies) {
+          if (synergy.isActive && !updatedDiscoveryState.isSynergyDiscovered(synergy.synergyId)) {
+            updatedDiscoveryState.recordSynergyDiscovery(synergy.synergyId);
+          }
+        }
+      }
+
+      // Check life recovery with combined discovery count
+      const discoveryCount = updatedDiscoveryState?.totalDiscoveryCount() ?? 0;
+      updatedRunState = checkLifeRecovery(updatedRunState, discoveryCount);
     }
 
     // Check if run is over before advancing
@@ -439,6 +455,7 @@ function handleDuelContinue(
       return ok({
         ...state,
         runState: updatedRunState,
+        discoveryState: updatedDiscoveryState,
         phase: { kind: 'complete', winner: 1, scores: wins },
       });
     }
@@ -474,6 +491,7 @@ function handleDuelContinue(
     ...state,
     phase: nextPhase,
     runState: updatedRunState,
+    discoveryState: updatedDiscoveryState,
   };
 
   // If transitioning to draft, generate a fresh pool for the new round

@@ -2,6 +2,7 @@ import type { CombatLog, DuelResult } from './combat.js';
 import type { Loadout } from './item.js';
 import type { GemInstance } from './gem.js';
 import type { RunState } from '../run/run-state.js';
+import type { DiscoveryState } from '../combine/discovery-state.js';
 
 // --- Match Phases ---
 
@@ -36,4 +37,5 @@ export interface MatchState {
   duelLogs: CombatLog[];
   forgeComplete?: [boolean, boolean]; // Whether each player has completed forging
   runState?: RunState; // Present in run modes (run_async, run_live)
+  discoveryState?: DiscoveryState; // Present in run modes (run_async, run_live)
 }
