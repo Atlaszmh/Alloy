@@ -21,6 +21,8 @@ export { createMatch, applyAction, createDebugMatch } from './match/match-contro
 export type { DebugPhaseTarget } from './match/match-controller.js';
 export { getNextPhase, getNextPhaseQuick, getNextPhaseRun, countWins } from './match/phase-machine.js';
 export { AIController } from './ai/ai-controller.js';
+export { generateSyntheticOpponent, getTierName } from './ai/synthetic-opponent.js';
+export type { SyntheticOpponent } from './ai/synthetic-opponent.js';
 export { defaultConfig, mergeConfig, GameConfigSchema } from './data/game-config.js';
 export { extractMatchReport } from './match/match-report.js';
 export { runSimulation, runRunSimulation } from './balance/simulation-runner.js';
