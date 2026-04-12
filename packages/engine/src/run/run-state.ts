@@ -24,6 +24,8 @@ export interface RunState {
   totalLosses: number;
   goalRound: number;
   lifeRecovery: LifeRecoveryConfig;
+  flux: number;
+  rerollNextDraft: boolean;
 }
 
 export interface CreateRunOpts {
@@ -53,6 +55,8 @@ export function createRunState(opts: CreateRunOpts = {}): RunState {
       ...DEFAULT_LIFE_RECOVERY,
       ...opts.lifeRecovery,
     },
+    flux: 0,
+    rerollNextDraft: false,
   };
 }
 
