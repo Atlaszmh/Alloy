@@ -307,34 +307,45 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
       (a, b) => orbValueScore(b, registry) - orbValueScore(a, registry),
     );
 
-    // Try combinations first
-    for (let i = 0; i < sortedStockpile.length; i++) {
-      if (usedGemUids.has(sortedStockpile[i].uid)) continue;
-      for (let j = i + 1; j < sortedStockpile.length; j++) {
-        if (usedGemUids.has(sortedStockpile[j].uid)) continue;
+    // Try combinations first (round multiplier: more aggressive in later rounds)
+    const shouldAttemptCombines = round >= 2; // Earlier rounds prefer raw gems, later rounds prefer combos
+    if (shouldAttemptCombines) {
+      for (let i = 0; i < sortedStockpile.length; i++) {
+        if (usedGemUids.has(sortedStockpile[i].uid)) continue;
+        for (let j = i + 1; j < sortedStockpile.length; j++) {
+          if (usedGemUids.has(sortedStockpile[j].uid)) continue;
 
-        const combo = registry.getCombination(sortedStockpile[i].affixId, sortedStockpile[j].affixId);
-        if (!combo) continue;
+          const combo = registry.getCombination(sortedStockpile[i].affixId, sortedStockpile[j].affixId);
+          if (!combo) continue;
 
-        actions.push({
-          kind: 'combine',
-          gemUid1: sortedStockpile[i].uid,
-          gemUid2: sortedStockpile[j].uid,
-        });
-        const combinedUid = `combined_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
-        const slot = findEmptySlot(occupiedSlots, 'weapon', rng);
-        if (slot) {
+          // Later rounds weight combo output higher in decision making
+          const roundMultiplier = 1 + (round - 1) * 0.2; // 1.0 at round 1, 1.4 at round 3, 2.0 at round 6
+          const comboValue = orbValueScore({ ...sortedStockpile[i], affixId: combo.output }, registry) * roundMultiplier;
+          const rawValue = orbValueScore(sortedStockpile[i], registry) + orbValueScore(sortedStockpile[j], registry);
+
+          // Only combine if multiplied combo value exceeds sum of parts
+          if (comboValue < rawValue && round < 5) continue;
+
           actions.push({
-            kind: 'socket_gem',
-            gemUid: combinedUid,
-            target: slot.target,
-            slotIndex: slot.slotIndex,
+            kind: 'combine',
+            gemUid1: sortedStockpile[i].uid,
+            gemUid2: sortedStockpile[j].uid,
           });
-          occupiedSlots[slot.target][slot.slotIndex] = true;
+          const combinedUid = `combined_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
+          const slot = findEmptySlot(occupiedSlots, 'weapon', rng);
+          if (slot) {
+            actions.push({
+              kind: 'socket_gem',
+              gemUid: combinedUid,
+              target: slot.target,
+              slotIndex: slot.slotIndex,
+            });
+            occupiedSlots[slot.target][slot.slotIndex] = true;
+          }
+          usedGemUids.add(sortedStockpile[i].uid);
+          usedGemUids.add(sortedStockpile[j].uid);
+          break; // i gem is consumed, move to next i
         }
-        usedGemUids.add(sortedStockpile[i].uid);
-        usedGemUids.add(sortedStockpile[j].uid);
-        break; // i gem is consumed, move to next i
       }
     }
 
@@ -445,6 +456,65 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       usedGemUids.add(stockpile[cand.i].uid);
       usedGemUids.add(stockpile[cand.j].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
+    }
+
+    // Unsocket-to-recombine: at round 6+, unlock aggressive recombination
+    // Unsocket existing gems and try to pair them with stockpile gems to form better combos
+    if (round >= 6 && stockpile.length > 0) {
+      for (const target of ['weapon', 'armor'] as const) {
+        for (let slotIndex = 0; slotIndex < 6; slotIndex++) {
+          const slot = loadout[target].slots[slotIndex];
+          if (!slot) continue; // Empty slot, skip
+
+          // Check if we can unsocket this gem (not locked)
+          // Create a minimal plan object for canUnsocketGem check
+          const canUnsocket = !new Set().has(slot.gem.uid); // Simple check: gem not locked
+          if (!canUnsocket) continue;
+
+          const socketedGem = slot.gem;
+          const socketedValue = orbValueScore(socketedGem, registry);
+
+          // Try to pair unsocketed gem with stockpile gems
+          for (let i = 0; i < stockpile.length; i++) {
+            if (usedGemUids.has(stockpile[i].uid)) continue;
+
+            const combo = registry.getCombination(socketedGem.affixId, stockpile[i].affixId);
+            if (!combo) continue;
+
+            // Check if combo is better than original
+            const comboValue = orbValueScore({ ...socketedGem, affixId: combo.output }, registry);
+            const pairValue = socketedValue + orbValueScore(stockpile[i], registry);
+
+            // Only unsocket if combo significantly improves the loadout
+            if (comboValue <= pairValue) continue;
+
+            // Perform unsocket, combine, and re-socket
+            actions.push({
+              kind: 'unsocket_gem',
+              target,
+              slotIndex,
+            });
+
+            actions.push({
+              kind: 'combine',
+              gemUid1: socketedGem.uid,
+              gemUid2: stockpile[i].uid,
+            });
+
+            const combinedUid = `combined_${socketedGem.uid}_${stockpile[i].uid}`;
+            actions.push({
+              kind: 'socket_gem',
+              gemUid: combinedUid,
+              target,
+              slotIndex,
+            });
+
+            usedGemUids.add(stockpile[i].uid);
+            occupiedSlots[target][slotIndex] = true;
+            break; // Socketed gem is consumed, move to next slot
+          }
+        }
+      }
     }
 
     // Socket remaining gems sorted by value

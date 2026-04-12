@@ -4,7 +4,7 @@ import { generatePool } from '../src/pool/pool-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { AIController } from '../src/ai/ai-controller.js';
 import { Tier1DraftStrategy, Tier2DraftStrategy } from '../src/ai/strategies/draft-strategy.js';
-import { Tier1ForgeStrategy, Tier2ForgeStrategy } from '../src/ai/strategies/forge-strategy.js';
+import { Tier1ForgeStrategy, Tier2ForgeStrategy, Tier4ForgeStrategy } from '../src/ai/strategies/forge-strategy.js';
 import { Tier1AdaptStrategy, Tier2AdaptStrategy } from '../src/ai/strategies/adapt-strategy.js';
 import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js';
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
@@ -164,6 +164,33 @@ describe('AI Forge Strategies', () => {
     expect(actions.length).toBeGreaterThan(0);
 
     const forgeState = createForgeState(stockpile, 'sword', 'chainmail', 1, balance, false);
+    applyAllActions(forgeState, actions);
+  });
+
+  it('Tier 4 forge runs without error at round 6+', () => {
+    // Create a basic stockpile
+    const stockpile: GemInstance[] = [
+      createGem('stock_1', 'fire_damage', 1, 'common'),
+      createGem('stock_2', 'cold_damage', 1, 'common'),
+      createGem('stock_3', 'armor_rating', 1, 'common'),
+    ];
+
+    // Create a loadout with a socketed gem
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = { gem: createGem('loaded_1', 'flat_hp', 2, 'common') };
+
+    const rng = new SeededRNG(700);
+    const strategy = new Tier4ForgeStrategy();
+
+    // Plan forge at round 6 (unsocket-to-recombine logic should be enabled)
+    const actions = strategy.plan(stockpile, loadout, 8, 6, [], registry, rng);
+
+    // Should produce some actions
+    expect(actions.length).toBeGreaterThan(0);
+
+    // All actions should be valid - apply them through forge system
+    const forgeState = createForgeState(stockpile, 'sword', 'chainmail', 6, balance, false);
+    forgeState.loadout = loadout;
     applyAllActions(forgeState, actions);
   });
 });

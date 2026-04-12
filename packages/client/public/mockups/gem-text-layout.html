@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Gem Text Layout Options</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060608; color: #eee; font-family: 'Rajdhani', sans-serif; padding: 24px; }
+  h2 { color: #d4a834; margin-bottom: 6px; font-size: 22px; }
+  .subtitle { color: #6a6a88; font-size: 14px; margin-bottom: 24px; }
+  .section { margin-bottom: 36px; }
+  .section h3 { color: #d4a834; font-size: 16px; margin-bottom: 4px; }
+  .section p { color: #6a6a88; font-size: 13px; margin-bottom: 12px; }
+  .gem-row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+  .gem {
+    width: 120px; height: 120px;
+    position: relative; border-radius: 20px; overflow: hidden;
+    flex-shrink: 0;
+  }
+  .gem img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0;
+  }
+  .gem .specular {
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%);
+    z-index: 1; pointer-events: none;
+  }
+  .gem .stat {
+    position: absolute; top: 6px; left: 7px;
+    font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.95);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7);
+    z-index: 3;
+  }
+  .gem .tier-dots {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 3px; z-index: 3;
+  }
+  .gem .tier-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+  .gem .bottom-band {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, transparent 100%);
+    padding: 6px 7px 6px; text-align: center; z-index: 3;
+  }
+  .gem .name {
+    font-size: 12px; font-weight: 700; color: white; line-height: 1.15;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .gem .category {
+    font-size: 10px; font-weight: 600; line-height: 1.15;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+  }
+  .gem .cat-badge {
+    position: absolute; top: 5px; right: 5px;
+    font-size: 8px; font-weight: 700; text-transform: uppercase;
+    background: rgba(0,0,0,0.65); padding: 2px 5px; border-radius: 3px;
+    letter-spacing: 0.04em; z-index: 3;
+    text-shadow: none;
+  }
+  .gem .cat-dot {
+    position: absolute; top: 7px; right: 7px;
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.3); z-index: 3;
+  }
+
+  .current-gem-wrapper { display: flex; flex-direction: column; align-items: center; width: 120px; }
+  .current-gem-wrapper .ext-name { font-size: 12px; font-weight: 700; color: white; margin-top: 3px; text-align: center; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .current-gem-wrapper .ext-cat { font-size: 10px; font-weight: 600; text-align: center; }
+  hr { border-color: #252536; margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<h2>Gem Card Text Placement</h2>
+<p class="subtitle">Move name + category inside the gem frame to save ~28px per gem. Using actual gem art.</p>
+
+<!-- CURRENT -->
+<div class="section">
+  <h3>Current: Text Below Gem</h3>
+  <p>Name and category sit outside the gem, adding height.</p>
+  <div class="gem-row">
+    <div class="current-gem-wrapper">
+      <div class="gem" style="border: 2.5px solid #e8553a;">
+        <img src="/assets/gems/square/square_00_00.png"><div class="specular"></div>
+        <div class="stat">+12</div>
+        <div class="tier-dots" style="bottom:6px;"><div class="tier-dot" style="background:#e8553a;"></div><div class="tier-dot" style="background:#e8553a;"></div></div>
+      </div>
+      <div class="ext-name">Chaos Damage</div>
+      <div class="ext-cat" style="color:#e8553a;">Offensive</div>
+    </div>
+    <div class="current-gem-wrapper">
+      <div class="gem" style="border: 2.5px solid #2db369;">
+        <img src="/assets/gems/faceted/faceted_00_02.png"><div class="specular"></div>
+        <div class="stat">+45</div>
+      </div>
+      <div class="ext-name">HP Regeneration</div>
+      <div class="ext-cat" style="color:#2db369;">Defense</div>
+    </div>
+    <div class="current-gem-wrapper">
+      <div class="gem" style="border: 2.5px solid #8b3ae8;">
+        <img src="/assets/gems/round/round_01_03.png"><div class="specular"></div>
+        <div class="stat">18%</div>
+        <div class="tier-dots" style="bottom:6px;"><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div></div>
+      </div>
+      <div class="ext-name">DOT Multiplier</div>
+      <div class="ext-cat" style="color:#8b3ae8;">Utility</div>
+    </div>
+    <div class="current-gem-wrapper">
+      <div class="gem" style="border: 2.5px solid #3a9be8;">
+        <img src="/assets/gems/teardrop/teardrop_00_05.png"><div class="specular"></div>
+        <div class="stat">+9</div>
+      </div>
+      <div class="ext-name">Block Chance</div>
+      <div class="ext-cat" style="color:#3a9be8;">Defense</div>
+    </div>
+    <div class="current-gem-wrapper">
+      <div class="gem" style="border: 2.5px solid #d4c040;">
+        <img src="/assets/gems/faceted/faceted_01_06.png"><div class="specular"></div>
+        <div class="stat">23%</div>
+        <div class="tier-dots" style="bottom:6px;"><div class="tier-dot" style="background:#d4c040;"></div><div class="tier-dot" style="background:#d4c040;"></div></div>
+      </div>
+      <div class="ext-name">Crit Strike Multi</div>
+      <div class="ext-cat" style="color:#d4c040;">Offensive</div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- OPTION A -->
+<div class="section">
+  <h3>A: Bottom Gradient Band — Name + Category</h3>
+  <p>Both lines inside a dark gradient at the bottom of the gem.</p>
+  <div class="gem-row">
+    <div class="gem" style="border: 2.5px solid #e8553a;">
+      <img src="/assets/gems/square/square_00_00.png"><div class="specular"></div>
+      <div class="stat">+12</div>
+      <div class="tier-dots" style="bottom:38px;"><div class="tier-dot" style="background:#e8553a;"></div><div class="tier-dot" style="background:#e8553a;"></div></div>
+      <div class="bottom-band"><div class="name">Chaos Damage</div><div class="category" style="color:#e8553a;">Offensive</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #2db369;">
+      <img src="/assets/gems/faceted/faceted_00_02.png"><div class="specular"></div>
+      <div class="stat">+45</div>
+      <div class="bottom-band"><div class="name">HP Regeneration</div><div class="category" style="color:#2db369;">Defense</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #8b3ae8;">
+      <img src="/assets/gems/round/round_01_03.png"><div class="specular"></div>
+      <div class="stat">18%</div>
+      <div class="tier-dots" style="bottom:38px;"><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div></div>
+      <div class="bottom-band"><div class="name">DOT Multiplier</div><div class="category" style="color:#8b3ae8;">Utility</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #3a9be8;">
+      <img src="/assets/gems/teardrop/teardrop_00_05.png"><div class="specular"></div>
+      <div class="stat">+9</div>
+      <div class="bottom-band"><div class="name">Block Chance</div><div class="category" style="color:#3a9be8;">Defense</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #d4c040;">
+      <img src="/assets/gems/faceted/faceted_01_06.png"><div class="specular"></div>
+      <div class="stat">23%</div>
+      <div class="tier-dots" style="bottom:38px;"><div class="tier-dot" style="background:#d4c040;"></div><div class="tier-dot" style="background:#d4c040;"></div></div>
+      <div class="bottom-band"><div class="name">Crit Strike Multi</div><div class="category" style="color:#d4c040;">Offensive</div></div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- OPTION B -->
+<div class="section">
+  <h3>B: Name Only + Category Dot</h3>
+  <p>Just the name in the bottom gradient. Category shown as a colored dot top-right.</p>
+  <div class="gem-row">
+    <div class="gem" style="border: 2.5px solid #e8553a;">
+      <img src="/assets/gems/square/square_00_00.png"><div class="specular"></div>
+      <div class="stat">+12</div>
+      <div class="cat-dot" style="background:#e8553a;"></div>
+      <div class="tier-dots" style="bottom:28px;"><div class="tier-dot" style="background:#e8553a;"></div><div class="tier-dot" style="background:#e8553a;"></div></div>
+      <div class="bottom-band" style="padding:4px 7px 5px;"><div class="name">Chaos Damage</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #2db369;">
+      <img src="/assets/gems/faceted/faceted_00_02.png"><div class="specular"></div>
+      <div class="stat">+45</div>
+      <div class="cat-dot" style="background:#2db369;"></div>
+      <div class="bottom-band" style="padding:4px 7px 5px;"><div class="name">HP Regeneration</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #8b3ae8;">
+      <img src="/assets/gems/round/round_01_03.png"><div class="specular"></div>
+      <div class="stat">18%</div>
+      <div class="cat-dot" style="background:#8b3ae8;"></div>
+      <div class="tier-dots" style="bottom:28px;"><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div><div class="tier-dot" style="background:#8b3ae8;"></div></div>
+      <div class="bottom-band" style="padding:4px 7px 5px;"><div class="name">DOT Multiplier</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #3a9be8;">
+      <img src="/assets/gems/teardrop/teardrop_00_05.png"><div class="specular"></div>
+      <div class="stat">+9</div>
+      <div class="cat-dot" style="background:#3a9be8;"></div>
+      <div class="bottom-band" style="padding:4px 7px 5px;"><div class="name">Block Chance</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #d4c040;">
+      <img src="/assets/gems/faceted/faceted_01_06.png"><div class="specular"></div>
+      <div class="stat">23%</div>
+      <div class="cat-dot" style="background:#d4c040;"></div>
+      <div class="tier-dots" style="bottom:28px;"><div class="tier-dot" style="background:#d4c040;"></div><div class="tier-dot" style="background:#d4c040;"></div></div>
+      <div class="bottom-band" style="padding:4px 7px 5px;"><div class="name">Crit Strike Multi</div></div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- OPTION C -->
+<div class="section">
+  <h3>C: Full Interior — Stat / Badge / Name</h3>
+  <p>Everything inside. Stat top-left, abbreviated category badge top-right (OFF/DEF/UTL/SUS), tier dots centered, name bottom.</p>
+  <div class="gem-row">
+    <div class="gem" style="border: 2.5px solid #e8553a;">
+      <img src="/assets/gems/square/square_00_00.png"><div class="specular"></div>
+      <div class="stat">+12</div>
+      <div class="cat-badge" style="color:#e8553a;">OFF</div>
+      <div class="tier-dots" style="top:50%; transform:translate(-50%,-50%);"><div class="tier-dot" style="background:#e8553a; box-shadow:0 0 4px rgba(232,85,58,0.6);"></div><div class="tier-dot" style="background:#e8553a; box-shadow:0 0 4px rgba(232,85,58,0.6);"></div></div>
+      <div class="bottom-band" style="padding:5px 7px;"><div class="name">Chaos Damage</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #2db369;">
+      <img src="/assets/gems/faceted/faceted_00_02.png"><div class="specular"></div>
+      <div class="stat">+45</div>
+      <div class="cat-badge" style="color:#2db369;">DEF</div>
+      <div class="bottom-band" style="padding:5px 7px;"><div class="name">HP Regeneration</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #8b3ae8;">
+      <img src="/assets/gems/round/round_01_03.png"><div class="specular"></div>
+      <div class="stat">18%</div>
+      <div class="cat-badge" style="color:#8b3ae8;">UTL</div>
+      <div class="tier-dots" style="top:50%; transform:translate(-50%,-50%);"><div class="tier-dot" style="background:#8b3ae8; box-shadow:0 0 4px rgba(139,58,232,0.6);"></div><div class="tier-dot" style="background:#8b3ae8; box-shadow:0 0 4px rgba(139,58,232,0.6);"></div><div class="tier-dot" style="background:#8b3ae8; box-shadow:0 0 4px rgba(139,58,232,0.6);"></div></div>
+      <div class="bottom-band" style="padding:5px 7px;"><div class="name">DOT Multiplier</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #3a9be8;">
+      <img src="/assets/gems/teardrop/teardrop_00_05.png"><div class="specular"></div>
+      <div class="stat">+9</div>
+      <div class="cat-badge" style="color:#3a9be8;">DEF</div>
+      <div class="bottom-band" style="padding:5px 7px;"><div class="name">Block Chance</div></div>
+    </div>
+    <div class="gem" style="border: 2.5px solid #d4c040;">
+      <img src="/assets/gems/faceted/faceted_01_06.png"><div class="specular"></div>
+      <div class="stat">23%</div>
+      <div class="cat-badge" style="color:#d4c040;">OFF</div>
+      <div class="tier-dots" style="top:50%; transform:translate(-50%,-50%);"><div class="tier-dot" style="background:#d4c040; box-shadow:0 0 4px rgba(212,192,64,0.6);"></div><div class="tier-dot" style="background:#d4c040; box-shadow:0 0 4px rgba(212,192,64,0.6);"></div></div>
+      <div class="bottom-band" style="padding:5px 7px;"><div class="name">Crit Strike Multi</div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
