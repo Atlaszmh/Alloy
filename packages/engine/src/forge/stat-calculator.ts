@@ -137,14 +137,18 @@ function isValidStatKey(stats: DerivedStats, key: string): boolean {
 
 /** Collect all affix IDs present across both items in a loadout. */
 export function collectAffixIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
+  const ids = new Set<string>();
   for (const item of [loadout.weapon, loadout.armor]) {
     for (const slot of item.slots) {
       if (!slot) continue;
-      ids.push(slot.gem.affixId);
+      // Spread gem's tags (which include affixId as first entry from createGem)
+      // Use Set to automatically deduplicate when same affix appears on multiple gems
+      for (const tag of slot.gem.tags) {
+        ids.add(tag);
+      }
     }
   }
-  return ids;
+  return Array.from(ids);
 }
 
 // ---- Base stat scaling ----
