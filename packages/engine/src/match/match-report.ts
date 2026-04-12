@@ -63,7 +63,7 @@ export function extractMatchReport(
     try {
       const s0 = calculateStats(state.players[0].loadout, registry);
       const s1 = calculateStats(state.players[1].loadout, registry);
-      playerStats = [s0, s1];
+      playerStats = [s0.stats, s1.stats];
     } catch {
       playerStats = [null, null];
     }

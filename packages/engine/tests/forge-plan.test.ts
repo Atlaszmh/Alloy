@@ -178,13 +178,13 @@ describe('ForgePlan', () => {
   });
 
   describe('getPlannedStats', () => {
-    it('returns DerivedStats from plan loadout', () => {
+    it('returns StatsResult from plan loadout', () => {
       // Use real base item IDs that exist in the data registry
       const state = createForgeState(makeMockGems(), 'sword', 'chainmail', 1, data.balance, false);
       const plan = createForgePlan(state, registry);
-      const stats = getPlannedStats(plan, registry);
-      expect(stats.maxHP).toBeGreaterThan(0);
-      expect(typeof stats.physicalDamage).toBe('number');
+      const result = getPlannedStats(plan, registry);
+      expect(result.stats.maxHP).toBeGreaterThan(0);
+      expect(typeof result.stats.physicalDamage).toBe('number');
     });
   });
 

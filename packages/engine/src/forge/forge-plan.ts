@@ -3,8 +3,7 @@ import type { ForgeAction } from '../types/forge-action.js';
 import type { GemInstance } from '../types/gem.js';
 import type { Loadout, ForgedItem } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
-import type { DerivedStats } from '../types/derived-stats.js';
-import { calculateStats } from './stat-calculator.js';
+import { calculateStats, type StatsResult } from './stat-calculator.js';
 
 export interface ForgePlan {
   stockpile: GemInstance[];
@@ -196,7 +195,7 @@ export function commitPlan(plan: ForgePlan): ForgeAction[] {
   return [...plan.actionLog];
 }
 
-export function getPlannedStats(plan: ForgePlan, registry: DataRegistry): DerivedStats {
+export function getPlannedStats(plan: ForgePlan, registry: DataRegistry): StatsResult {
   return calculateStats(plan.loadout, registry);
 }
 

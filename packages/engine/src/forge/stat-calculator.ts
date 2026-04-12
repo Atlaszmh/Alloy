@@ -3,8 +3,16 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { DerivedStats } from '../types/derived-stats.js';
 import type { ForgedItem, Loadout } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
+import type { ActiveSynergy } from '../types/synergy.js';
 import { ALL_ELEMENTS, createEmptyDerivedStats } from '../types/derived-stats.js';
 import { RARITY_MULTIPLIERS } from '../types/gem.js';
+
+// ---- Public types ----
+
+export interface StatsResult {
+  stats: DerivedStats;
+  activeSynergies: ActiveSynergy[];
+}
 
 // ---- Internal types ----
 
@@ -151,6 +159,24 @@ export function collectAffixIds(loadout: Loadout): string[] {
   return Array.from(ids);
 }
 
+/**
+ * Compute which synergies are active for a given loadout.
+ * Returns array of ActiveSynergy with isActive flag and missingCount.
+ */
+function computeActiveSynergies(loadout: Loadout, registry: DataRegistry): ActiveSynergy[] {
+  const affixIds = collectAffixIds(loadout);
+  const synergies = registry.getAllSynergies();
+  return synergies.map(synergy => {
+    const isActive = isSynergyActive(synergy.requiredAffixes, affixIds);
+    const missingCount = isActive ? 0 : synergy.requiredAffixes.length - affixIds.filter(id => synergy.requiredAffixes.includes(id)).length;
+    return {
+      synergyId: synergy.id,
+      isActive,
+      missingCount,
+    };
+  });
+}
+
 // ---- Base stat scaling ----
 
 /** Map base-stat scaling keys to DerivedStats modifier keys where possible. */
@@ -223,7 +249,7 @@ function applyBaseStatScaling(
 
 // ---- Main pipeline ----
 
-export function calculateStats(loadout: Loadout, registry: DataRegistry): DerivedStats {
+export function calculateStats(loadout: Loadout, registry: DataRegistry): StatsResult {
   const balance = registry.getBalance();
   const buckets = createBuckets();
 
@@ -258,7 +284,7 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   // Step 5: Iterate armor equipped slots
   applyEquippedSlots(buckets, loadout.armor, 'armor', registry);
 
-  // Step 6: Detect active synergies
+  // Step 6: Detect active synergies and compute activeSynergies array
   const affixIds = collectAffixIds(loadout);
   const synergies = registry.getAllSynergies();
   for (const synergy of synergies) {
@@ -269,6 +295,9 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
     }
   }
 
+  // Compute active synergies for reporting
+  const activeSynergies = computeActiveSynergies(loadout, registry);
+
   // TODO: Synergy additive bonuses from gem tags (placeholder for future implementation)
 
   // Step 7: Apply modifier ordering (flat, then percent, then override)
@@ -277,8 +306,11 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   // Step 8: Apply caps/floors
   applyCaps(stats, balance);
 
-  // Step 9: Return frozen DerivedStats
-  return Object.freeze(stats);
+  // Step 9: Return frozen DerivedStats with activeSynergies
+  return {
+    stats: Object.freeze(stats),
+    activeSynergies,
+  };
 }
 
 function applyEquippedSlots(

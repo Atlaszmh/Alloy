@@ -376,9 +376,11 @@ function runDuel(
   const duelRng = masterRng.fork(`duel_${round}`);
 
   // Calculate derived stats for both players
+  const statsResult0 = calculateStats(state.players[0].loadout, registry);
+  const statsResult1 = calculateStats(state.players[1].loadout, registry);
   const stats: [DerivedStats, DerivedStats] = [
-    calculateStats(state.players[0].loadout, registry),
-    calculateStats(state.players[1].loadout, registry),
+    statsResult0.stats,
+    statsResult1.stats,
   ];
 
   const loadouts: [Loadout, Loadout] = [
