@@ -520,4 +520,48 @@ describe('Match Controller', () => {
 
     return state;
   }
+
+  // 9. Flux earning on duel win
+  it('flux is earned on duel win', () => {
+    let state = draftAll(makeMatch('unranked'));
+    state = doSimpleForge(state, 0);
+    state = doSimpleForge(state, 1);
+    state = completeForgeBothPlayers(state);
+
+    // Initialize runState for a run mode match
+    if (!state.runState) {
+      state.runState = {
+        lives: 3,
+        startingLives: 3,
+        round: 1,
+        status: 'active',
+        consecutiveWins: 0,
+        totalWins: 0,
+        totalLosses: 0,
+        goalRound: 10,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5, 10], discoveryThreshold: 5 },
+        flux: 0,
+        rerollNextDraft: false,
+      };
+    }
+
+    const initialFlux = state.runState.flux;
+
+    // Run duel
+    let result = applyAction(state, { kind: 'advance_phase' }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    state = result.state;
+
+    // Continue duel (process result)
+    result = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    state = result.state;
+
+    // Check that flux was earned if player 0 won
+    if (state.runState && state.roundResults[0]?.winner === 0) {
+      expect(state.runState.flux).toBeGreaterThan(initialFlux);
+    }
+  });
 });

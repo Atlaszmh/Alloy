@@ -21,6 +21,7 @@ import {
   advanceRound as runAdvanceRound,
   isRunOver,
 } from '../run/run-state.js';
+import { earnFlux } from '../run/flux-state.js';
 
 function fail(error: string): ActionResult {
   return { ok: false, error };
@@ -378,6 +379,10 @@ function handleDuelContinue(
     if (lastResult) {
       if (lastResult.winner === 0) {
         updatedRunState = runWinRound(updatedRunState);
+        // Earn flux on win: +1
+        const balance = registry.getBalance();
+        const winFlux = balance.gem.flux.rewards.win ?? 1;
+        updatedRunState = { ...updatedRunState, flux: earnFlux(updatedRunState.flux, winFlux) };
       } else {
         updatedRunState = runLoseLife(updatedRunState);
       }
@@ -397,6 +402,13 @@ function handleDuelContinue(
 
     // Advance run round
     updatedRunState = runAdvanceRound(updatedRunState);
+
+    // Earn flux on milestone round (after advancing)
+    const balance = registry.getBalance();
+    const milestoneFlux = balance.gem.flux.rewards.milestone ?? 3;
+    if (updatedRunState.lifeRecovery.milestoneRounds.includes(updatedRunState.round)) {
+      updatedRunState = { ...updatedRunState, flux: earnFlux(updatedRunState.flux, milestoneFlux) };
+    }
 
     // Check if goal was just reached (status changed to 'won')
     if (updatedRunState.status === 'won') {
