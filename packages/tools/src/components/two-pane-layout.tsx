@@ -14,7 +14,7 @@ export const TwoPaneLayout: React.FC<TwoPaneLayoutProps> = ({
   rightWidth = '50%',
 }) => {
   return (
-    <div className="flex h-screen bg-slate-900">
+    <div className="flex h-full min-h-0 bg-slate-900">
       {/* Left Pane */}
       <div className="flex-1 border-r border-slate-700 bg-slate-800 overflow-hidden" style={{ width: leftWidth }}>
         {left}

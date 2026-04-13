@@ -12,15 +12,9 @@ export const GemBlueprintApp: React.FC = () => {
   }, [loadDataFromJSON])
 
   return (
-    <div className="h-screen bg-slate-900">
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="bg-slate-950 border-b border-slate-700 px-6 py-4">
-          <h1 className="text-2xl font-bold text-white">Gem Blueprint Tool</h1>
-          <p className="text-sm text-slate-400">Design and test new gems, recipes, and synergies</p>
-        </div>
-
-        {/* Main Layout */}
+    <div className="flex flex-col h-full w-full bg-slate-900">
+      {/* Main Layout - fills remaining space */}
+      <div className="flex-1 min-h-0">
         <TwoPaneLayout left={<RadialTreeBrowser />} right={<WorkbenchEditor />} />
       </div>
     </div>

@@ -109,7 +109,9 @@ export default function App() {
         </nav>
       </header>
       {activeTab === 'gem-blueprint' ? (
-        <GemBlueprintApp />
+        <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+          <GemBlueprintApp />
+        </div>
       ) : (
         <main style={styles.content}>
           {activeTab === 'overview' && <OverviewPage />}
