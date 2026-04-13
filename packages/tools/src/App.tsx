@@ -7,6 +7,7 @@ import MatchInspector from './components/MatchInspector';
 import BalanceReport from './components/BalanceReport';
 import MetaEvolutionPage from './pages/MetaEvolutionPage.js';
 import MatchInspectorPage from './pages/MatchInspectorPage.js';
+import { GemBlueprintApp } from './gem-blueprint-app';
 
 // Pages created by other agents — import with graceful fallback handled at build time.
 // If these modules don't exist yet, the build will surface the error.
@@ -26,6 +27,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: 'meta', label: 'Meta Evolution' },
   { id: 'inspector', label: 'Inspector' },
   { id: 'quicksim', label: 'Quick Sim' },
+  { id: 'gem-blueprint', label: 'Gem Blueprint' },
 ];
 
 const styles = {
@@ -106,29 +108,33 @@ export default function App() {
           ))}
         </nav>
       </header>
-      <main style={styles.content}>
-        {activeTab === 'overview' && <OverviewPage />}
-        {activeTab === 'simulation' && <SimulationPage />}
-        {activeTab === 'config' && <ConfigEditorPage />}
-        {activeTab === 'balance' && <BalancePage />}
-        {activeTab === 'rounds' && <RoundAnalysisPage />}
-        {activeTab === 'distributions' && <DistributionsPage />}
-        {activeTab === 'meta' && <MetaEvolutionPage />}
-        {activeTab === 'inspector' && <MatchInspectorPage />}
-        {activeTab === 'quicksim' && (
-          <>
-            <SimulationRunner onComplete={handleSimulationComplete} />
-            {results && (
-              <>
-                <AggregateView results={results} />
-                <MatchInspector results={results} />
-                <BalanceReport results={results} />
-              </>
-            )}
-          </>
-        )}
-        {activeTab === 'analytics' && <AggregateView results={results} />}
-      </main>
+      {activeTab === 'gem-blueprint' ? (
+        <GemBlueprintApp />
+      ) : (
+        <main style={styles.content}>
+          {activeTab === 'overview' && <OverviewPage />}
+          {activeTab === 'simulation' && <SimulationPage />}
+          {activeTab === 'config' && <ConfigEditorPage />}
+          {activeTab === 'balance' && <BalancePage />}
+          {activeTab === 'rounds' && <RoundAnalysisPage />}
+          {activeTab === 'distributions' && <DistributionsPage />}
+          {activeTab === 'meta' && <MetaEvolutionPage />}
+          {activeTab === 'inspector' && <MatchInspectorPage />}
+          {activeTab === 'quicksim' && (
+            <>
+              <SimulationRunner onComplete={handleSimulationComplete} />
+              {results && (
+                <>
+                  <AggregateView results={results} />
+                  <MatchInspector results={results} />
+                  <BalanceReport results={results} />
+                </>
+              )}
+            </>
+          )}
+          {activeTab === 'analytics' && <AggregateView results={results} />}
+        </main>
+      )}
     </div>
   );
 }

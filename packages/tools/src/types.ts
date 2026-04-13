@@ -53,4 +53,5 @@ export type TabId =
   | 'rounds'
   | 'distributions'
   | 'meta'
-  | 'inspector';
+  | 'inspector'
+  | 'gem-blueprint';
