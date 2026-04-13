@@ -3,7 +3,7 @@ import type { BalanceConfig } from '../../types/balance.js';
 import type { BaseStat } from '../../types/base-stats.js';
 import type { ForgeAction } from '../../types/forge-action.js';
 import type { Loadout } from '../../types/item.js';
-import type { OrbInstance } from '../../types/orb.js';
+import type { GemInstance } from '../../types/gem.js';
 import type { DataRegistry } from '../../data/registry.js';
 import type { SeededRNG } from '../../rng/seeded-rng.js';
 // getActionCost available via flux-tracker if needed
@@ -13,11 +13,11 @@ import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
 
 export interface ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    opponentStockpile: OrbInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[];
@@ -32,11 +32,11 @@ const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
  */
 export class Tier1ForgeStrategy implements ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    _opponentStockpile: OrbInstance[],
+    _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {
@@ -103,11 +103,11 @@ export class Tier1ForgeStrategy implements ForgeStrategy {
  */
 export class Tier2ForgeStrategy implements ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    _opponentStockpile: OrbInstance[],
+    _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {
@@ -328,7 +328,7 @@ function archetypeToStats(archetype: string): [BaseStat, BaseStat] {
  * with the lowest-value orb, consume the low one, promote the high one +1 tier.
  */
 function tryGenericCombines(
-  stockpile: OrbInstance[],
+  stockpile: GemInstance[],
   usedOrbUids: Set<string>,
   flux: number,
   balance: BalanceConfig,
@@ -367,7 +367,7 @@ function tryGenericCombines(
  * can see the results of generic combines.
  */
 function pushGenericResults(
-  stockpile: OrbInstance[],
+  stockpile: GemInstance[],
   genericActions: ForgeAction[],
 ): void {
   for (const action of genericActions) {
@@ -390,11 +390,11 @@ function pushGenericResults(
  */
 export class Tier3ForgeStrategy implements ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    _opponentStockpile: OrbInstance[],
+    _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {
@@ -538,11 +538,11 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
  */
 export class Tier4ForgeStrategy implements ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    _opponentStockpile: OrbInstance[],
+    _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {
@@ -708,11 +708,11 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
  */
 export class Tier5ForgeStrategy implements ForgeStrategy {
   plan(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
     round: 1 | 2 | 3,
-    opponentStockpile: OrbInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): ForgeAction[] {

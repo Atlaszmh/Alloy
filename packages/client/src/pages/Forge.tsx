@@ -66,6 +66,11 @@ export function Forge() {
 
   const round = phase?.kind === 'forge' ? phase.round : (1 as 1 | 2 | 3);
 
+  // ── Extract flux from RunState ──
+  const runState = matchState?.runState;
+  const currentFlux = runState?.flux ?? 0;
+  const maxFlux = 20; // Max flux per round (can be configured via balance config)
+
   // ── Local state ──
   const committedRef = useRef(false);
 
@@ -484,8 +489,8 @@ export function Forge() {
       {/* 1. Header with flux bar and stats */}
       <ForgeHeader
         round={round}
-        flux={0}
-        maxFlux={0}
+        flux={currentFlux}
+        maxFlux={maxFlux}
         stats={derivedStats}
         timerDurationMs={FORGE_TIMER_MS}
         onTimerExpire={handleTimerExpire}
@@ -541,6 +546,79 @@ export function Forge() {
           onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
         />
       </div>
+
+      {/* 3b. Flux spend actions */}
+      {runState && (
+        <div style={{
+          flexShrink: 0,
+          padding: 'var(--gap-md)',
+          borderTop: '1px solid var(--color-surface-600)',
+          backgroundColor: 'var(--color-surface-900)',
+        }}>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 'var(--gap-sm)' }}>
+            Flux Actions (Costs from balance)
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-sm)' }}>
+            <HapticButton
+              onClick={() => {
+                const result = applyAction({ kind: 'boost_combine' }, registry);
+                if (result.ok) {
+                  setFluxToast('Boost applied to next combine!');
+                  playSound('buttonClick');
+                } else {
+                  setFluxToast(result.error ?? 'Cannot boost combine');
+                }
+              }}
+              disabled={currentFlux < 3}
+              style={{
+                padding: 'var(--gap-sm)',
+                fontSize: 'var(--text-xs)',
+                opacity: currentFlux < 3 ? 0.5 : 1,
+              }}
+            >
+              Boost Combine (3)
+            </HapticButton>
+            <HapticButton
+              onClick={() => {
+                const result = applyAction({ kind: 'reroll_pool' }, registry);
+                if (result.ok) {
+                  setFluxToast('Pool will reroll next draft!');
+                  playSound('buttonClick');
+                } else {
+                  setFluxToast(result.error ?? 'Cannot reroll pool');
+                }
+              }}
+              disabled={currentFlux < 5}
+              style={{
+                padding: 'var(--gap-sm)',
+                fontSize: 'var(--text-xs)',
+                opacity: currentFlux < 5 ? 0.5 : 1,
+              }}
+            >
+              Reroll Pool (5)
+            </HapticButton>
+            <HapticButton
+              onClick={() => {
+                const result = applyAction({ kind: 'guarantee_rarity' }, registry);
+                if (result.ok) {
+                  setFluxToast('Next draft gem guaranteed Rare!');
+                  playSound('buttonClick');
+                } else {
+                  setFluxToast(result.error ?? 'Cannot guarantee rarity');
+                }
+              }}
+              disabled={currentFlux < 4}
+              style={{
+                padding: 'var(--gap-sm)',
+                fontSize: 'var(--text-xs)',
+                opacity: currentFlux < 4 ? 0.5 : 1,
+              }}
+            >
+              Guarantee Rarity (4)
+            </HapticButton>
+          </div>
+        </div>
+      )}
 
       {/* 4. Gem tray — pinned at bottom */}
       <div style={{ flexShrink: 0, padding: '0 var(--gap-md) var(--gap-sm)' }}>

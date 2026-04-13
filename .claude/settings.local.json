@@ -157,7 +157,8 @@
       "mcp__plugin_playwright_playwright__browser_close",
       "Bash(curl -s http://localhost:9098)",
       "mcp__plugin_playwright_playwright__browser_press_key",
-      "Bash(pkill -f \"vite|tsx.*dev\")"
+      "Bash(pkill -f \"vite|tsx.*dev\")",
+      "Bash(curl -s http://localhost:3000)"
     ]
   }
 }

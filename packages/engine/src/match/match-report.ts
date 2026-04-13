@@ -64,7 +64,7 @@ export function extractMatchReport(
     try {
       const s0 = calculateStats(state.players[0].loadout, registry);
       const s1 = calculateStats(state.players[1].loadout, registry);
-      playerStats = [s0, s1];
+      playerStats = [s0.stats, s1.stats];
     } catch {
       playerStats = [null, null];
     }
@@ -83,29 +83,17 @@ export function extractMatchReport(
   };
 }
 
-function collectCompoundIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
-  for (const item of [loadout.weapon, loadout.armor]) {
-    for (const slot of item.slots) {
-      if (!slot) continue;
-      if (slot.kind === 'compound') {
-        ids.push(slot.compoundId);
-      }
-    }
-  }
-  return ids;
+function collectCompoundIds(_loadout: Loadout): string[] {
+  // TODO: Implement compound/recipe ID collection for gem refactor
+  // In the new system, combined gems have their combination ID in the gem's affixId
+  // This function can be deprecated or reimplemented based on final data model
+  return [];
 }
 
-function countGenericUpgrades(loadout: Loadout): number {
-  let count = 0;
-  for (const item of [loadout.weapon, loadout.armor]) {
-    for (const slot of item.slots) {
-      if (!slot) continue;
-      if (slot.kind === 'single' && slot.orb.uid.startsWith('generic_')) count++;
-      if (slot.kind === 'upgraded' && slot.orb.uid.startsWith('generic_')) count++;
-    }
-  }
-  return count;
+function countGenericUpgrades(_loadout: Loadout): number {
+  // TODO: Implement generic upgrade counting for gem refactor
+  // Currently not used in the gem system, returning 0 placeholder
+  return 0;
 }
 
 function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): string[] {

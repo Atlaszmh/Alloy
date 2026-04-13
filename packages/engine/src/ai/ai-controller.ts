@@ -68,7 +68,7 @@ export class AIController {
       stockpile,
       loadout,
       fluxRemaining,
-      round,
+      round as (1 | 2 | 3),
       opponentStockpile,
       this.registry,
       this.rng,
