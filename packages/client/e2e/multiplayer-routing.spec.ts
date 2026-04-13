@@ -55,7 +55,7 @@ test.describe('Multiplayer Routing', () => {
     // Wait for draft UI to render (opponent heading should be visible)
     await expect(page.getByRole('heading', { name: 'Opponent' })).toBeVisible({ timeout: 10_000 });
 
-    // Pool should be visible (grid of orbs)
+    // Pool should be visible (grid of gems)
     await expect(page.locator('[data-gem]').first()).toBeVisible({ timeout: 5000 });
   });
 

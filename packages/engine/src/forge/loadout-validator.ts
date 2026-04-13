@@ -1,5 +1,5 @@
 import type { Loadout, EquippedSlot } from '../types/item.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 
 export interface LoadoutValidationResult {
@@ -7,22 +7,12 @@ export interface LoadoutValidationResult {
   errors: string[];
 }
 
-/** Collect every orb UID referenced by a loadout's equipped slots. */
+/** Collect every gem UID referenced by a loadout's equipped slots. */
 function collectSlotUids(slots: (EquippedSlot | null)[]): string[] {
   const uids: string[] = [];
   for (const slot of slots) {
     if (!slot) continue;
-    switch (slot.kind) {
-      case 'single':
-        uids.push(slot.orb.uid);
-        break;
-      case 'compound':
-        uids.push(slot.orbs[0].uid, slot.orbs[1].uid);
-        break;
-      case 'upgraded':
-        uids.push(slot.orb.uid);
-        break;
-    }
+    uids.push(slot.gem.uid);
   }
   return uids;
 }
@@ -32,17 +22,7 @@ function collectSlotAffixIds(slots: (EquippedSlot | null)[]): string[] {
   const ids: string[] = [];
   for (const slot of slots) {
     if (!slot) continue;
-    switch (slot.kind) {
-      case 'single':
-        ids.push(slot.orb.affixId);
-        break;
-      case 'compound':
-        ids.push(slot.orbs[0].affixId, slot.orbs[1].affixId);
-        break;
-      case 'upgraded':
-        ids.push(slot.orb.affixId);
-        break;
-    }
+    ids.push(slot.gem.affixId);
   }
   return ids;
 }
@@ -52,13 +32,13 @@ function collectSlotAffixIds(slots: (EquippedSlot | null)[]): string[] {
  *
  * Checks:
  * 1. All affix IDs in the loadout are known to the registry
- * 2. No duplicate orb UIDs (same orb used in multiple slots)
- * 3. All orb UIDs are present in the player's stockpile
+ * 2. No duplicate gem UIDs (same gem used in multiple slots)
+ * 3. All gem UIDs are present in the player's stockpile
  * 4. Loadout is not completely empty (must have at least one equipped slot)
  */
 export function validateLoadout(
   loadout: Loadout,
-  stockpile: OrbInstance[],
+  stockpile: GemInstance[],
   registry: DataRegistry,
 ): LoadoutValidationResult {
   const errors: string[] = [];
@@ -83,22 +63,22 @@ export function validateLoadout(
   const uidSet = new Set<string>();
   for (const uid of allUids) {
     if (uidSet.has(uid)) {
-      errors.push(`Duplicate orb UID: ${uid}`);
+      errors.push(`Duplicate gem UID: ${uid}`);
     }
     uidSet.add(uid);
   }
 
-  // 3. Check all orbs are in stockpile
-  const stockpileUids = new Set(stockpile.map((o) => o.uid));
+  // 3. Check all gems are in stockpile
+  const stockpileUids = new Set(stockpile.map((g) => g.uid));
   for (const uid of allUids) {
     if (!stockpileUids.has(uid)) {
-      errors.push(`Orb not in stockpile: ${uid}`);
+      errors.push(`Gem not in stockpile: ${uid}`);
     }
   }
 
   // 4. Check loadout is not completely empty
   if (allUids.length === 0) {
-    errors.push('Loadout is empty — must equip at least one orb');
+    errors.push('Loadout is empty — must equip at least one gem');
   }
 
   return { valid: errors.length === 0, errors };

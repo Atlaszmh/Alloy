@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
+import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
 import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
+import { RunLivesDisplay } from '@/components/RunLivesDisplay';
+import { RunRoundCounter } from '@/components/RunRoundCounter';
+import { RunStatusOverlay } from '@/components/RunStatusOverlay';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
-import { Adapt } from './Adapt';
 import { PostMatch } from './PostMatch';
 
 // How long to keep Draft mounted for the forge slam animation before sliding out
@@ -15,6 +18,7 @@ const DRAFT_EXIT_DELAY_MS = 5500;
 export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
   const [, forceUpdate] = useState(0);
+  const isRunMode = useMatchStore(selectIsRunMode);
 
   const gateway = useMatchGateway(code ?? '');
 
@@ -77,8 +81,6 @@ export function PhaseRouter() {
         return <Forge />;
       case 'duel':
         return <Duel />;
-      case 'adapt':
-        return <Adapt />;
       case 'complete':
         return <PostMatch />;
       default:
@@ -89,11 +91,33 @@ export function PhaseRouter() {
 
   return (
     <GatewayProvider value={gateway}>
-      <PhaseErrorBoundary resetKey={phase.kind}>
-        <PhaseTransitionWrapper phaseKey={displayPhaseKey}>
-          {renderPhase()}
-        </PhaseTransitionWrapper>
-      </PhaseErrorBoundary>
+      <div className="flex h-full flex-col">
+        {/* Run mode header bar */}
+        {isRunMode && phase?.kind !== 'complete' && (
+          <div
+            className="flex shrink-0 items-center justify-between px-3 py-1.5"
+            style={{
+              background: 'var(--color-surface-900)',
+              borderBottom: '1px solid var(--color-surface-700)',
+            }}
+          >
+            <RunLivesDisplay />
+            <RunRoundCounter />
+          </div>
+        )}
+
+        {/* Phase content */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <PhaseErrorBoundary resetKey={phase.kind}>
+            <PhaseTransitionWrapper phaseKey={displayPhaseKey}>
+              {renderPhase()}
+            </PhaseTransitionWrapper>
+          </PhaseErrorBoundary>
+        </div>
+      </div>
+
+      {/* Run status overlay (shown when run ends) */}
+      {isRunMode && <RunStatusOverlay />}
     </GatewayProvider>
   );
 }

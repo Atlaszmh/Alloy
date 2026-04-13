@@ -1,8 +1,17 @@
+import type { GemRarity } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}', cold: '\u{2744}', lightning: '\u{26A1}',
   poison: '\u{2620}', shadow: '\u{1F319}', chaos: '\u{1F300}', physical: '\u{2694}',
+};
+
+const RARITY_BORDER_COLORS: Record<GemRarity, string> = {
+  common: 'var(--color-surface-500)',
+  magic: '#3b82f6',
+  rare: '#eab308',
+  epic: '#a855f7',
+  legendary: '#f59e0b',
 };
 
 const CHIP_BG: Record<string, string> = {
@@ -24,11 +33,12 @@ interface GemChipProps {
   affixName?: string;
   statLabel?: string;
   tags?: string[];
+  rarity?: GemRarity;
   newest?: boolean;
   empty?: boolean;
 }
 
-export function GemChip({ affixId, affixName, statLabel, tags, newest = false, empty = false }: GemChipProps) {
+export function GemChip({ affixId, affixName, statLabel, tags, rarity, newest = false, empty = false }: GemChipProps) {
   if (empty) {
     return (
       <div
@@ -47,6 +57,7 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
   const border = CHIP_BORDER[primaryTag] ?? CHIP_BORDER.physical;
   const symbol = ELEMENT_SYMBOLS[primaryTag] ?? '\u{2B24}';
   const artUrl = affixId ? getGemArt(affixId) : null;
+  const rarityBorder = rarity ? RARITY_BORDER_COLORS[rarity] : undefined;
 
   return (
     <div
@@ -55,7 +66,11 @@ export function GemChip({ affixId, affixName, statLabel, tags, newest = false, e
         padding: 'var(--gap-xs) var(--gap-sm) var(--gap-xs) var(--gap-xs)',
         borderRadius: 'var(--gem-radius-sm)',
         background: 'var(--color-surface-700)',
-        border: newest ? '1px solid var(--color-danger)' : '1px solid var(--color-surface-500)',
+        border: newest
+          ? '1px solid var(--color-danger)'
+          : rarityBorder && rarity !== 'common'
+            ? `1px solid ${rarityBorder}`
+            : '1px solid var(--color-surface-500)',
         animation: newest ? 'pop-in 0.4s ease-out' : undefined,
       }}
     >

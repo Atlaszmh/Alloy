@@ -1,0 +1,44 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]: Alloy Balance Dashboard
+      - navigation [ref=e6]:
+        - button "Overview" [ref=e7] [cursor=pointer]
+        - button "Simulation" [ref=e8] [cursor=pointer]
+        - button "Config Editor" [ref=e9] [cursor=pointer]
+        - button "Balance" [ref=e10] [cursor=pointer]
+        - button "Rounds" [ref=e11] [cursor=pointer]
+        - button "Distributions" [ref=e12] [cursor=pointer]
+        - button "Meta Evolution" [ref=e13] [cursor=pointer]
+        - button "Inspector" [ref=e14] [cursor=pointer]
+        - button "Quick Sim" [ref=e15] [cursor=pointer]
+        - button "Gem Blueprint" [active] [ref=e16] [cursor=pointer]
+    - generic [ref=e43]:
+      - img [ref=e46]
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - heading "Workbench Editor" [level=2] [ref=e50]
+          - paragraph [ref=e51]: Select a node to edit
+        - generic [ref=e52]:
+          - button "Affixes" [ref=e53]
+          - button "Recipes" [ref=e54]
+          - button "Synergies" [ref=e55]
+        - paragraph [ref=e58]: Select a gem from the tree to begin editing
+        - generic [ref=e59]:
+          - button "Save Changes" [ref=e60]
+          - button "Revert" [ref=e61]
+          - button "Test in Sim" [ref=e62]
+          - button "Export" [ref=e63]
+          - button "Import" [ref=e64]
+  - generic [ref=e67]:
+    - generic [ref=e68]: "[plugin:vite:css] [postcss] ENOENT: no such file or directory, open 'C:\\Projects\\Alloy\\packages\\tools\\tailwindcss\\base'"
+    - generic [ref=e70]: at async open (node:internal/fs/promises:637:25) at async Object.readFile (node:internal/fs/promises:1269:14) at async Object.load (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:43756:25) at async loadImportContent (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-C9BXG1mU.js:673:19) at async Promise.all (index 0) at async resolveImportId (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-C9BXG1mU.js:629:27) at async parseStyles$1 (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-C9BXG1mU.js:537:5) at async Object.Once (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-C9BXG1mU.js:794:22) at async LazyResult.runAsync (C:\Projects\Alloy\node_modules\.pnpm\postcss@8.5.8\node_modules\postcss\lib\lazy-result.js:293:11) at async runPostCSS (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:43853:21) at async compilePostCSS (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:43823:18) at async compileCSS (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:43678:27) at async TransformPluginContext.handler (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:42994:11) at async EnvironmentPluginContainer.transform (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:42323:18) at async loadAndTransform (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:35739:27) at async viteTransformMiddleware (file:///C:/Projects/Alloy/node_modules/.pnpm/vite@6.4.1_@types+node@25.5.0_jiti@2.6.1_lightningcss@1.31.1_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-D4NMHUTW.js:37254:24
+    - generic [ref=e71]:
+      - text: Click outside, press Esc key, or fix the code to dismiss.
+      - text: You can also disable this overlay by setting
+      - code [ref=e72]: server.hmr.overlay
+      - text: to
+      - code [ref=e73]: "false"
+      - text: in
+      - code [ref=e74]: vite.config.ts
+      - text: .

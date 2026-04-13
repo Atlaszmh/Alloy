@@ -1,4 +1,4 @@
-import type { AffixCategory, AffixTier } from '@alloy/engine';
+import type { AffixCategory, AffixTier, GemRarity } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
 import { TIER_COLORS } from '@/shared/utils/element-theme';
 import { Tooltip } from './Tooltip';
@@ -7,6 +7,22 @@ import { GemDetailPanel } from './GemDetailPanel';
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}', cold: '\u{2744}', lightning: '\u{26A1}',
   poison: '\u{2620}', shadow: '\u{1F319}', chaos: '\u{1F300}', physical: '\u{2694}',
+};
+
+const RARITY_COLORS: Record<GemRarity, string> = {
+  common: '#9ca3af',
+  magic: '#3b82f6',
+  rare: '#eab308',
+  epic: '#a855f7',
+  legendary: '#f59e0b',
+};
+
+const RARITY_LABELS: Record<GemRarity, string> = {
+  common: 'Common',
+  magic: 'Magic',
+  rare: 'Rare',
+  epic: 'Epic',
+  legendary: 'Legendary',
 };
 
 const ELEMENT_GRADIENTS: Record<string, { bg: string; border: string; glow: string }> = {
@@ -28,7 +44,8 @@ interface GemCardProps {
   uid?: string;
   affixId: string;
   affixName: string;
-  tier: AffixTier;
+  tier: AffixTier | 5;
+  rarity?: GemRarity;
   category: AffixCategory | 'combined';
   tags: string[];
   statLabel: string;       // e.g., "+23", "+5%", "15%"
@@ -45,6 +62,7 @@ export function GemCard({
   affixId,
   affixName,
   tier,
+  rarity,
   category,
   tags,
   statLabel,
@@ -60,6 +78,8 @@ export function GemCard({
   const artUrl = getGemArt(affixId);
   const categoryLabel = CATEGORY_LABELS[category];
   const tierColor = TIER_COLORS[tier] ?? TIER_COLORS[1];
+  const rarityColor = rarity ? RARITY_COLORS[rarity] : undefined;
+  const rarityLabel = rarity ? RARITY_LABELS[rarity] : undefined;
 
   const card = (
     <div
@@ -82,11 +102,15 @@ export function GemCard({
           width: 'var(--gem-size)',
           height: 'var(--gem-size)',
           borderRadius: 'var(--gem-radius)',
-          border: `2.5px solid ${colors.border}`,
+          border: rarityColor
+            ? `2.5px solid ${rarityColor}`
+            : `2.5px solid ${colors.border}`,
           background: `linear-gradient(135deg, ${colors.bg})`,
           position: 'relative',
           overflow: 'hidden',
-          boxShadow: tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
+          boxShadow: rarityColor && rarity !== 'common'
+            ? `0 0 ${6 + (rarity === 'legendary' ? 10 : rarity === 'epic' ? 8 : rarity === 'rare' ? 6 : 4)}px ${rarityColor}`
+            : tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
         }}
       >
         {/* Specular highlight */}
@@ -214,6 +238,20 @@ export function GemCard({
             >
               {affixName}
             </div>
+            {rarityLabel && rarity !== 'common' && (
+              <div
+                style={{
+                  fontFamily: 'var(--font-family-display)',
+                  fontWeight: 600,
+                  fontSize: 'var(--text-2xs)',
+                  color: rarityColor,
+                  lineHeight: 1.1,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.95)',
+                }}
+              >
+                {rarityLabel}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -225,6 +263,7 @@ export function GemCard({
   const tooltipContent = compact ? (
     <div style={{ textAlign: 'center' }}>
       <div style={{ fontWeight: 700, color: 'white', fontFamily: 'var(--font-family-display)' }}>{affixName}</div>
+      {rarityLabel && <div style={{ fontSize: '0.85em', color: rarityColor }}>{rarityLabel}</div>}
       <div style={{ fontSize: '0.85em', color: colors.border }}>{categoryLabel}</div>
       {statLabel && <div style={{ fontSize: '0.85em', color: 'var(--color-surface-300)' }}>{statLabel}</div>}
     </div>

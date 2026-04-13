@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   startMatch,
   waitForPhase,
-  pickOrb,
+  pickGem,
   completeDraft,
   completeForge,
   skipDuel,
@@ -78,7 +78,7 @@ test.describe('Draft Acceptance Criteria (P0)', () => {
 
     // Both stockpile zones should be visible
     await expect(page.getByText('Opponent')).toBeVisible();
-    await expect(page.getByText('Your Orbs')).toBeVisible();
+    await expect(page.getByText('Your Gems')).toBeVisible();
   });
 
   // AC-D09: Draft completes and transitions to forge
@@ -127,7 +127,7 @@ test.describe('Draft Acceptance Criteria (P0)', () => {
 
     // Pick our first gem to trigger AI turn
     await expect(page.getByText('YOUR PICK')).toBeVisible({ timeout: 10_000 });
-    await pickOrb(page);
+    await pickGem(page);
 
     // AI should be picking now
     await expect(page.getByText('OPPONENT PICKING')).toBeVisible({ timeout: 5_000 });

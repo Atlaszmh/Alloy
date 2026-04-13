@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useMatchStore } from '@/stores/matchStore';
+import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
 import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
-import type { AffixDef, OrbInstance } from '@alloy/engine';
+import type { AffixDef, GemInstance } from '@alloy/engine';
 import { AI_CONFIGS } from '@alloy/engine';
 import { calcAiDelay } from './ai-delay';
 import { getStatLabel } from '@/shared/utils/stat-label';
@@ -34,7 +34,7 @@ function StockpileZone({
   side,
 }: {
   label: string;
-  orbs: OrbInstance[];
+  orbs: GemInstance[];
   maxOrbs: number;
   affixMap: Map<string, AffixDef>;
   isActive: boolean;
@@ -106,6 +106,7 @@ function StockpileZone({
               affixName={affix.name.split(' ')[0]}
               statLabel={getStatLabel(affix, orb)}
               tags={affix.tags}
+              rarity={orb.rarity}
               newest={orb.uid === newestUid}
             />
           );
@@ -137,6 +138,8 @@ export function Draft() {
   const player1 = matchState?.players[1] ?? null;
   const aiController = useMatchStore((s) => s.aiController);
   const getRegistry = useMatchStore((s) => s.getRegistry);
+
+  const isRunMode = useMatchStore(selectIsRunMode);
 
   const selectedOrbUid = useDraftStore((s) => s.selectedOrbUid);
   const selectOrb = useDraftStore((s) => s.selectOrb);
@@ -480,18 +483,20 @@ export function Draft() {
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {/* Drag moves the actual gem element via direct DOM manipulation */}
 
-      {/* ═══ TOP: Opponent zone (fixed height) ═══ */}
-      <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
-      <StockpileZone
-        label="Opponent"
-        orbs={filteredOpponentStockpile}
-        maxOrbs={picksPerPlayer}
-        affixMap={affixMap}
-        isActive={!isPlayerTurn}
-        isDropTarget={false}
-        side="top"
-      />
-      </div>
+      {/* ═══ TOP: Opponent zone (hidden in run mode — no opponent drafting) ═══ */}
+      {!isRunMode && (
+        <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
+        <StockpileZone
+          label="Opponent"
+          orbs={filteredOpponentStockpile}
+          maxOrbs={picksPerPlayer}
+          affixMap={affixMap}
+          isActive={!isPlayerTurn}
+          isDropTarget={false}
+          side="top"
+        />
+        </div>
+      )}
 
       {/* ═══ CENTER: Status bar (fixed height) ═══ */}
       <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1" style={{ flexShrink: 0 }}>
@@ -507,7 +512,7 @@ export function Draft() {
               boxShadow: isPlayerTurn ? '0 2px 8px rgba(212, 168, 52, 0.3)' : undefined,
             }}
           >
-            {isPlayerTurn ? 'YOUR PICK' : 'OPPONENT PICKING'}
+            {isRunMode ? 'PICK YOUR GEMS' : (isPlayerTurn ? 'YOUR PICK' : 'OPPONENT PICKING')}
           </div>
           <span className="text-xs text-surface-300" style={{ fontFamily: 'var(--font-family-display)' }}>
             ROUND {draftRound} DRAFT · {pool.length} left
@@ -571,6 +576,7 @@ export function Draft() {
                     affixId={orb.affixId}
                     affixName={affix.name}
                     tier={orb.tier}
+                    rarity={orb.rarity}
                     category={affix.category}
                     tags={affix.tags}
                     statLabel={getStatLabel(affix, orb)}
@@ -587,7 +593,7 @@ export function Draft() {
 
       {/* ═══ Timer bar — full width, fixed height ═══ */}
       <div className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
-        {isPlayerTurn ? (
+        {(isPlayerTurn || isRunMode) ? (
           <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -601,7 +607,7 @@ export function Draft() {
       {/* ═══ BOTTOM: Player drop zone (fixed height) ═══ */}
       <div ref={dropZoneRef} style={{ flexShrink: 0 }}>
         <StockpileZone
-          label="Your Orbs"
+          label="Your Gems"
           orbs={player0?.stockpile ?? []}
           maxOrbs={picksPerPlayer}
           affixMap={affixMap}

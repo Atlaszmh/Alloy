@@ -1,4 +1,4 @@
-import type { AffixDef, DataRegistry, EquippedSlot, ForgedItem, ForgePlan, OrbInstance } from '@alloy/engine';
+import type { AffixDef, DataRegistry, EquippedSlot, ForgedItem, ForgePlan, GemInstance } from '@alloy/engine';
 import { ELEMENT_GRADIENTS, ELEMENT_EMOJIS } from '@/shared/utils/element-theme';
 import { getGemArt } from '@/shared/utils/art-registry';
 import { getStatLabel } from '@/shared/utils/stat-label';
@@ -16,8 +16,8 @@ interface ItemSocketViewProps {
 
 const ELEMENTS = ['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos'] as const;
 
-function getSlotOrb(slot: EquippedSlot): OrbInstance {
-  return slot.kind === 'compound' ? slot.orbs[0] : slot.orb;
+function getSlotGem(slot: EquippedSlot): GemInstance {
+  return slot.gem;
 }
 
 function getElementTag(affix: AffixDef): string {
@@ -148,11 +148,11 @@ export function ItemSocketView({
             );
           }
 
-          const orb = getSlotOrb(slot);
+          const orb = getSlotGem(slot);
           const affix = registry.getAffix(orb.affixId);
           const tag = getElementTag(affix);
           const gradient = ELEMENT_GRADIENTS[tag];
-          const isLocked = plan.lockedOrbUids.has(orb.uid);
+          const isLocked = plan.lockedGemUids.has(orb.uid);
           const emoji = ELEMENT_EMOJIS[tag] ?? '\u2694';
           const gemArt = getGemArt(orb.affixId);
 
@@ -229,11 +229,11 @@ export function ItemSocketView({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-sm)' }}>
         {item.slots.map((slot, index) => {
           if (!slot) return null;
-          const orb = getSlotOrb(slot);
+          const orb = getSlotGem(slot);
           const affix = registry.getAffix(orb.affixId);
           const tag = getElementTag(affix);
           const emoji = ELEMENT_EMOJIS[tag] ?? '\u2694';
-          const isLocked = plan.lockedOrbUids.has(orb.uid);
+          const isLocked = plan.lockedGemUids.has(orb.uid);
           const statValue = getStatLabel(affix, orb, cardId);
 
           return (

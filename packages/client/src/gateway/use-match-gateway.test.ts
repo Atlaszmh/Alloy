@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useMatchGateway } from './use-match-gateway';
 import { LocalGateway } from './local-gateway';
 import { RemoteGateway } from './remote-gateway';

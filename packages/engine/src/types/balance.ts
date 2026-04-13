@@ -1,5 +1,6 @@
 import type { AffixTier } from './affix.js';
 import type { BaseStat } from './base-stats.js';
+import type { GemRarity } from './gem.js';
 
 export interface FluxCosts {
   assignOrb: number;
@@ -7,6 +8,28 @@ export interface FluxCosts {
   upgradeTier: number;
   swapOrb: number;
   removeOrb: number;
+}
+
+export interface PoolScalingEntry {
+  roundRange: [number, number];
+  tiers: [number, number];
+  rarities: GemRarity[];
+  poolSize: number;
+}
+
+export interface GemBalanceConfig {
+  tierValues: number[];
+  rarityMultipliers: Record<GemRarity, number>;
+  matchingRarityBonus: number;
+  depthBonusPerLevel: number;
+  maxRecipeDepth: number;
+  recipeQualityThresholds: Record<GemRarity, number>;
+  poolScaling: PoolScalingEntry[];
+  goalRound: number;
+  endlessStartRound: number;
+  lives: { default: number; min: number; max: number };
+  lifeRecovery: { winStreak: number; milestoneRounds: number[]; discoveryThreshold: number };
+  flux: { rewards: Record<string, number>; costs: Record<string, number> };
 }
 
 export interface BalanceConfig {
@@ -36,4 +59,6 @@ export interface BalanceConfig {
   >;
 
   statCaps: Record<string, { min: number; max: number }>;
+
+  gem: GemBalanceConfig;
 }

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { getSupabase, isOnline } from '@/shared/utils/supabase';
 import { useMatchmaking } from '@/features/matchmaking/hooks/useMatchmaking';
 
-type View = 'menu' | 'ai-select' | 'finding-match' | 'waiting-for-friend' | 'join-match';
+type View = 'menu' | 'ai-select' | 'run-select' | 'finding-match' | 'waiting-for-friend' | 'join-match';
 
 export function Matchmaking() {
   const navigate = useNavigate();
@@ -70,6 +70,21 @@ export function Matchmaking() {
     } catch (err) {
       console.error('Failed to start match:', err);
       setError('Failed to start match: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
+  const handleStartRun = (aiTier: 1 | 2 | 3 | 4 | 5) => {
+    try {
+      const seed = Math.floor(Math.random() * 999999);
+      startLocalMatch(seed, 'run_async', aiTier, undefined, undefined, {
+        startingLives: 3,
+        goalRound: 10,
+      });
+      const code = 'ai-run-' + Math.random().toString(36).substring(2, 8);
+      navigate(`/match/${code}`);
+    } catch (err) {
+      console.error('Failed to start run:', err);
+      setError('Failed to start run: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -167,6 +182,41 @@ export function Matchmaking() {
   };
 
   // --- VIEWS ---
+
+  if (view === 'run-select') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
+        <h2 className="text-2xl font-bold text-accent-400">Start Run</h2>
+        <p className="max-w-xs text-center text-sm text-surface-400">
+          3 lives, 10 rounds. Lose all lives and the run ends. Win streaks recover lives.
+        </p>
+
+        <div className="flex w-full max-w-xs flex-col gap-2">
+          {([1, 2, 3, 4, 5] as const).map((tier) => (
+            <button
+              key={tier}
+              onClick={() => handleStartRun(tier)}
+              className="rounded-lg bg-surface-600 px-6 py-3 text-left font-medium text-white transition-colors hover:bg-surface-500"
+            >
+              <span className="text-accent-400">Tier {tier}</span>
+              <span className="ml-2 text-sm text-surface-400">
+                {tier === 1 ? 'Random' : tier === 2 ? 'Basic' : tier === 3 ? 'Standard' : tier === 4 ? 'Advanced' : 'Expert'}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-sm text-red-400">{error}</p>}
+
+        <button
+          onClick={() => { setView('menu'); setError(null); }}
+          className="mt-4 rounded-lg bg-surface-700 px-6 py-2 text-sm text-surface-400 hover:bg-surface-600"
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
 
   if (view === 'ai-select') {
     return (
@@ -315,6 +365,14 @@ export function Matchmaking() {
           className="rounded-lg bg-surface-600 px-6 py-3 font-medium text-white transition-colors hover:bg-surface-500"
         >
           Play vs AI
+        </button>
+
+        <button
+          onClick={() => setView('run-select')}
+          className="rounded-lg bg-gradient-to-r from-accent-600 to-accent-500 px-6 py-3 font-medium text-white transition-colors hover:from-accent-500 hover:to-accent-400"
+          style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.03em' }}
+        >
+          Start Run
         </button>
 
         {online && (

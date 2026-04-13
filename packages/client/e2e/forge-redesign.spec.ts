@@ -76,20 +76,19 @@ test.describe('Forge Screen Redesign', () => {
     await expect(page.getByText(/COMBINATION WORKBENCH/i)).toBeVisible({ timeout: 5000 });
   });
 
-  // F06: Stockpile displays orb count
-  test('F06: stockpile displays orb count', async ({ page }) => {
-    // ForgeGemTray renders "STOCKPILE · N ORBS"
+  // F06: Stockpile displays gem count
+  test('F06: stockpile displays gem count', async ({ page }) => {
+    // ForgeGemTray renders "STOCKPILE · N GEMS"
     const stockpileLabel = page.getByText(/STOCKPILE/i);
     await expect(stockpileLabel).toBeVisible();
     const text = await stockpileLabel.textContent();
-    expect(text).toMatch(/\d+\s*ORBS/i);
+    expect(text).toMatch(/\d+\s*GEMS/i);
   });
 
-  // F07: Flux counter visible
-  test('F07: flux counter visible', async ({ page }) => {
-    // ForgeHeader renders "X / Y FLUX"
-    const fluxText = page.getByText(/FLUX/i);
-    await expect(fluxText.first()).toBeVisible();
+  // F07: Flux counter removed in gem refactor — skip
+  test.skip('F07: flux counter visible (removed in gem refactor)', async ({ page }) => {
+    // Flux resource was removed as part of the gem system refactor.
+    // This test is kept as a placeholder in case a replacement resource is added.
   });
 
   // F08: Timer and Done button visible
@@ -196,7 +195,6 @@ test.describe('Forge Screen Redesign', () => {
   test('F17: full UI renders without error', async ({ page }) => {
     // Verify key elements are present
     await expect(page.getByText(/FORGE PHASE/i)).toBeVisible();
-    await expect(page.getByText(/FLUX/i).first()).toBeVisible();
     await expect(page.locator('[data-gem]').first()).toBeVisible();
     await expect(page.getByRole('button', { name: /DONE/i })).toBeVisible();
   });

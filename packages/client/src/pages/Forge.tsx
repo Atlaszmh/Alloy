@@ -14,7 +14,7 @@ import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD } from '@/pages/draft-gestures';
-import type { BaseStat, OrbInstance } from '@alloy/engine';
+import type { BaseStat, GemInstance } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
@@ -68,7 +68,6 @@ export function Forge() {
 
   // ── Local state ──
   const committedRef = useRef(false);
-  const prevFluxRef = useRef<number | null>(null);
 
   const [baseStatWeapon, setBaseStatWeapon] = useState<[BaseStat, BaseStat]>(['STR', 'VIT']);
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
@@ -100,7 +99,6 @@ export function Forge() {
       weapon: { ...player.loadout.weapon, slots: [...player.loadout.weapon.slots] },
       armor: { ...player.loadout.armor, slots: [...player.loadout.armor.slots] },
     };
-    forgeState.fluxRemaining = matchState.forgeFlux?.[0] ?? forgeState.fluxRemaining;
 
     initPlan(forgeState, registry);
 
@@ -111,19 +109,9 @@ export function Forge() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase?.kind === 'forge' ? `${round}` : 'none']);
 
-
-  // ── Flux change tracking ──
-  useEffect(() => {
-    if (!plan) return;
-    if (prevFluxRef.current !== null && prevFluxRef.current !== plan.tentativeFlux) {
-      const diff = plan.tentativeFlux - prevFluxRef.current;
-      if (diff < 0) playSound('fluxSpend');
-    }
-    prevFluxRef.current = plan.tentativeFlux;
-  }, [plan?.tentativeFlux]);
-
   // ── Derived stats ──
-  const derivedStats = useForgeStore(s => s.getStats)(registry);
+  const statsResult = useForgeStore(s => s.getStats)(registry);
+  const derivedStats = statsResult?.stats ?? null;
 
   // ── Commit flow ──
   const handleCommit = useCallback(async () => {
@@ -145,7 +133,7 @@ export function Forge() {
       const aiActions = aiController.planForge(
         matchState.players[1].stockpile,
         matchState.players[1].loadout,
-        matchState.forgeFlux?.[1] ?? 0,
+        0,
         round,
         matchState.players[0].stockpile,
       );
@@ -302,7 +290,7 @@ export function Forge() {
           }
         } else if (target && target.type === 'socket') {
           const result = applyAction(
-            { kind: 'assign_orb', orbUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
+            { kind: 'socket_gem', gemUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
             registry,
           );
           if (result.ok) {
@@ -377,9 +365,9 @@ export function Forge() {
   // ── Combine handler ──
   const handleCombine = useCallback(() => {
     if (!plan) return;
-    const filled = comboSlots.filter((s): s is OrbInstance => s !== null);
+    const filled = comboSlots.filter((s): s is GemInstance => s !== null);
     if (filled.length < 2) return;
-    const result = applyAction({ kind: 'combine', orbUid1: filled[0].uid, orbUid2: filled[1].uid }, registry);
+    const result = applyAction({ kind: 'combine', gemUid1: filled[0].uid, gemUid2: filled[1].uid }, registry);
     if (result.ok) {
       playSound('combineMerge');
       clearComboSlots();
@@ -392,14 +380,14 @@ export function Forge() {
   const handleSocketClick = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
     if (!selectedOrbUid || !plan) return;
     const result = applyAction(
-      { kind: 'assign_orb', orbUid: selectedOrbUid, target: cardId, slotIndex },
+      { kind: 'socket_gem', gemUid: selectedOrbUid, target: cardId, slotIndex },
       registry,
     );
     if (result.ok) {
       playSound('orbPlace');
       selectOrb(null);
     } else {
-      setFluxToast('Not enough flux!');
+      setFluxToast('Slot occupied or gem not found!');
       setTimeout(() => setFluxToast(null), 800);
     }
   }, [selectedOrbUid, plan, applyAction, registry, selectOrb]);
@@ -407,7 +395,7 @@ export function Forge() {
   // ── Socket remove (equip tab) ──
   const handleSocketRemove = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
     if (!plan) return;
-    applyAction({ kind: 'remove_orb', target: cardId, slotIndex }, registry);
+    applyAction({ kind: 'unsocket_gem', target: cardId, slotIndex }, registry);
     playSound('orbRemove');
   }, [plan, applyAction, registry]);
 
@@ -429,8 +417,7 @@ export function Forge() {
     for (const item of [plan.loadout.weapon, plan.loadout.armor]) {
       for (const slot of item.slots) {
         if (!slot) continue;
-        if (slot.kind === 'compound') slot.orbs.forEach(o => uids.add(o.uid));
-        else uids.add(slot.orb.uid);
+        uids.add(slot.gem.uid);
       }
     }
     return uids;
@@ -459,8 +446,6 @@ export function Forge() {
 
   // ── Wait for plan ──
   if (!plan) return null;
-
-  const balance = registry.getBalance();
 
   // ── Base stat selectors JSX (R1 only) ──
   const baseStatSelectorJSX = round === 1 ? (
@@ -499,8 +484,8 @@ export function Forge() {
       {/* 1. Header with flux bar and stats */}
       <ForgeHeader
         round={round}
-        flux={plan.tentativeFlux}
-        maxFlux={plan.maxFlux}
+        flux={0}
+        maxFlux={0}
         stats={derivedStats}
         timerDurationMs={FORGE_TIMER_MS}
         onTimerExpire={handleTimerExpire}
@@ -550,7 +535,7 @@ export function Forge() {
         <CombineWorkbench
           comboSlots={comboSlots}
           registry={registry}
-          canAfford={plan.tentativeFlux >= balance.fluxCosts.combineOrbs}
+          canAfford={true}
           onSlotClick={handleComboSlotClick}
           onCombine={handleCombine}
           onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}

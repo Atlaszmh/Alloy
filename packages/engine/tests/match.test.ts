@@ -84,32 +84,6 @@ describe('Phase Machine', () => {
     }
   });
 
-  describe('adapt phase transitions', () => {
-    it('adapt → duel is a valid transition (same round)', () => {
-      expect(isValidTransition(
-        { kind: 'adapt', round: 2 },
-        { kind: 'duel', round: 2 },
-      )).toBe(true);
-    });
-
-    it('adapt → forge is NOT a valid transition', () => {
-      expect(isValidTransition(
-        { kind: 'adapt', round: 2 },
-        { kind: 'forge', round: 2 },
-      )).toBe(false);
-    });
-
-    it('getNextPhase returns duel for adapt phase', () => {
-      const next = getNextPhase({ kind: 'adapt', round: 2 }, []);
-      expect(next.kind).toBe('duel');
-    });
-
-    it('getNextPhaseQuick returns duel for adapt phase', () => {
-      const next = getNextPhaseQuick({ kind: 'adapt', round: 2 }, []);
-      expect(next.kind).toBe('duel');
-    });
-  });
-
   it('validates transitions correctly', () => {
     expect(isValidTransition(
       { kind: 'draft', round: 1, pickIndex: 0, activePlayer: 0 },
@@ -225,8 +199,7 @@ describe('Match Controller', () => {
     }
     expect(state.pool.length).toBe(totalOrbs - totalPicks);
     expect(state.players[0].stockpile.length + state.players[1].stockpile.length).toBe(totalPicks);
-    // Forge flux should be initialized
-    expect(state.forgeFlux).toBeDefined();
+    // Forge complete should be initialized
     expect(state.forgeComplete).toEqual([false, false]);
   });
 
@@ -241,7 +214,7 @@ describe('Match Controller', () => {
       const result = applyAction(state, {
         kind: 'forge_action',
         player: 0,
-        action: { kind: 'assign_orb', orbUid: orb.uid, target: 'weapon', slotIndex: 0 },
+        action: { kind: 'socket_gem', gemUid: orb.uid, target: 'weapon', slotIndex: 0 },
       }, registry);
 
       expect(result.ok).toBe(true);
@@ -441,7 +414,7 @@ describe('Match Controller', () => {
     const result = applyAction(state, {
       kind: 'forge_action',
       player: 0,
-      action: { kind: 'assign_orb', orbUid: 'fake', target: 'weapon', slotIndex: 0 },
+      action: { kind: 'socket_gem', gemUid: 'fake', target: 'weapon', slotIndex: 0 },
     }, registry);
     expect(result.ok).toBe(false);
   });
@@ -507,7 +480,7 @@ describe('Match Controller', () => {
       result = applyAction(state, {
         kind: 'forge_action',
         player,
-        action: { kind: 'assign_orb', orbUid: orb.uid, target: 'weapon', slotIndex: 0 },
+        action: { kind: 'socket_gem', gemUid: orb.uid, target: 'weapon', slotIndex: 0 },
       }, registry);
       if (result.ok) state = result.state;
     }
@@ -547,4 +520,95 @@ describe('Match Controller', () => {
 
     return state;
   }
+
+  // 9. Flux spending validation (run mode)
+  it('flux spend action is rejected if balance is insufficient in run mode', () => {
+    let state = createMatch('flux-test', 123, 'run_async', ['player1', 'player2'], BASE_WEAPON, BASE_ARMOR, registry);
+    state = draftAll(state);
+    state = doSimpleForge(state, 0);
+
+    // Update runState to have low flux
+    if (state.runState) {
+      state.runState = { ...state.runState, flux: 1 };  // Only 1 flux available
+    }
+
+    // Try to spend 5 flux on reroll_pool (should fail)
+    const result = applyAction(state, {
+      kind: 'forge_action',
+      player: 0,
+      action: { kind: 'reroll_pool' },
+    }, registry);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('flux spend action is accepted if balance is sufficient in run mode', () => {
+    let state = createMatch('flux-test', 456, 'run_async', ['player1', 'player2'], BASE_WEAPON, BASE_ARMOR, registry);
+    state = draftAll(state);
+    state = doSimpleForge(state, 0);
+
+    // Update runState to have sufficient flux
+    if (state.runState) {
+      state.runState = { ...state.runState, flux: 10 };  // Sufficient flux
+    }
+
+    // Try to spend flux on reroll_pool (should succeed)
+    const result = applyAction(state, {
+      kind: 'forge_action',
+      player: 0,
+      action: { kind: 'reroll_pool' },
+    }, registry);
+
+    expect(result.ok).toBe(true);
+    if (result.ok && result.state.runState) {
+      // Check that flux was deducted
+      expect(result.state.runState.flux).toBeLessThan(10);
+      // Check that rerollNextDraft flag was set
+      expect(result.state.runState.rerollNextDraft).toBe(true);
+    }
+  });
+
+  // 10. Flux earning on duel win
+  it('flux is earned on duel win', () => {
+    let state = draftAll(makeMatch('unranked'));
+    state = doSimpleForge(state, 0);
+    state = doSimpleForge(state, 1);
+    state = completeForgeBothPlayers(state);
+
+    // Initialize runState for a run mode match
+    if (!state.runState) {
+      state.runState = {
+        lives: 3,
+        startingLives: 3,
+        round: 1,
+        status: 'active',
+        consecutiveWins: 0,
+        totalWins: 0,
+        totalLosses: 0,
+        goalRound: 10,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5, 10], discoveryThreshold: 5 },
+        flux: 0,
+        rerollNextDraft: false,
+      };
+    }
+
+    const initialFlux = state.runState.flux;
+
+    // Run duel
+    let result = applyAction(state, { kind: 'advance_phase' }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    state = result.state;
+
+    // Continue duel (process result)
+    result = applyAction(state, { kind: 'duel_continue' }, registry);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    state = result.state;
+
+    // Check that flux was earned if player 0 won
+    if (state.runState && state.roundResults[0]?.winner === 0) {
+      expect(state.runState.flux).toBeGreaterThan(initialFlux);
+    }
+  });
 });

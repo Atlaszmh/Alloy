@@ -23,7 +23,8 @@ import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 import { createMatch, applyAction } from '../src/match/match-controller.js';
 import type { AITier } from '../src/types/ai.js';
-import type { OrbInstance } from '../src/types/orb.js';
+import type { GemInstance } from '../src/types/gem.js';
+import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
 import type { CombatLog } from '../src/types/combat.js';
 import type { ForgeState } from '../src/forge/forge-state.js';
@@ -41,7 +42,7 @@ const registry = new DataRegistry(
 const balance = data.balance;
 const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
-function makePool(seed: number): OrbInstance[] {
+function makePool(seed: number): GemInstance[] {
   return generatePool(seed, 'ranked', registry);
 }
 
@@ -130,7 +131,7 @@ describe('Tier 3 Draft Strategy', () => {
     const rng = new SeededRNG(100);
     const strategy = new Tier3DraftStrategy();
 
-    const picks: OrbInstance[] = [];
+    const picks: GemInstance[] = [];
     let remaining = [...pool];
 
     for (let i = 0; i < Math.min(8, pool.length); i++) {
@@ -167,7 +168,7 @@ describe('Tier 5 Draft Strategy', () => {
     const rng = new SeededRNG(300);
     const strategy = new Tier5DraftStrategy();
 
-    const picks: OrbInstance[] = [];
+    const picks: GemInstance[] = [];
     let remaining = [...pool];
 
     for (let i = 0; i < Math.min(10, pool.length); i++) {
@@ -203,13 +204,13 @@ describe('Tier 3 Forge Strategy', () => {
 
 describe('Tier 4 Forge Strategy', () => {
   it('tries combinations', () => {
-    const stockpile: OrbInstance[] = [
-      { uid: 't4_orb_1', affixId: 'chance_on_hit', tier: 1 },
-      { uid: 't4_orb_2', affixId: 'fire_damage', tier: 1 },
-      { uid: 't4_orb_3', affixId: 'cold_damage', tier: 1 },
-      { uid: 't4_orb_4', affixId: 'crit_chance', tier: 2 },
-      { uid: 't4_orb_5', affixId: 'attack_speed', tier: 1 },
-      { uid: 't4_orb_6', affixId: 'block_chance', tier: 1 },
+    const stockpile: GemInstance[] = [
+      createGem('t4_orb_1', 'chance_on_hit', 1, 'common'),
+      createGem('t4_orb_2', 'fire_damage', 1, 'common'),
+      createGem('t4_orb_3', 'cold_damage', 1, 'common'),
+      createGem('t4_orb_4', 'crit_chance', 2, 'common'),
+      createGem('t4_orb_5', 'attack_speed', 1, 'common'),
+      createGem('t4_orb_6', 'block_chance', 1, 'common'),
     ];
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const rng = new SeededRNG(500);
@@ -229,15 +230,15 @@ describe('Tier 4 Forge Strategy', () => {
 
 describe('Tier 5 Forge Strategy', () => {
   it('maximizes combinations', () => {
-    const stockpile: OrbInstance[] = [
-      { uid: 't5_orb_1', affixId: 'chance_on_hit', tier: 2 },
-      { uid: 't5_orb_2', affixId: 'fire_damage', tier: 2 },
-      { uid: 't5_orb_3', affixId: 'cold_damage', tier: 1 },
-      { uid: 't5_orb_4', affixId: 'crit_chance', tier: 3 },
-      { uid: 't5_orb_5', affixId: 'flat_physical', tier: 2 },
-      { uid: 't5_orb_6', affixId: 'flat_hp', tier: 1 },
-      { uid: 't5_orb_7', affixId: 'lifesteal', tier: 1 },
-      { uid: 't5_orb_8', affixId: 'armor_rating', tier: 1 },
+    const stockpile: GemInstance[] = [
+      createGem('t5_orb_1', 'chance_on_hit', 2, 'common'),
+      createGem('t5_orb_2', 'fire_damage', 2, 'common'),
+      createGem('t5_orb_3', 'cold_damage', 1, 'common'),
+      createGem('t5_orb_4', 'crit_chance', 3, 'common'),
+      createGem('t5_orb_5', 'flat_physical', 2, 'common'),
+      createGem('t5_orb_6', 'flat_hp', 1, 'common'),
+      createGem('t5_orb_7', 'lifesteal', 1, 'common'),
+      createGem('t5_orb_8', 'armor_rating', 1, 'common'),
     ];
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const rng = new SeededRNG(600);
@@ -290,16 +291,15 @@ describe('Tier 3 Adapt Strategy', () => {
 
     // Validate actions (may be empty if no good swaps available, that's fine)
     if (adaptActions.length > 0) {
-      // All swap actions should be valid
+      // Adapt now produces unsocket_gem + socket_gem pairs
       for (const action of adaptActions) {
-        expect(action.kind).toBe('swap_orb');
+        expect(['unsocket_gem', 'socket_gem']).toContain(action.kind);
       }
-      // Apply them through forge system (round 2 for swaps)
+      // Apply them through forge system (round 2)
       const adaptForgeState: ForgeState = {
         stockpile: adaptStockpile,
         loadout: resultState.loadout,
         round: 2,
-        fluxRemaining: 4,
         isQuickMatch: false,
       };
       applyAllActions(adaptForgeState, adaptActions);
@@ -347,7 +347,7 @@ describe('Robustness', () => {
 
         // Draft
         let remaining = [...pool];
-        const myStockpile: OrbInstance[] = [];
+        const myStockpile: GemInstance[] = [];
         for (let i = 0; i < Math.min(8, remaining.length); i++) {
           const uid = ai.pickOrb(remaining, myStockpile, []);
           const orb = remaining.find((o) => o.uid === uid);
@@ -418,7 +418,7 @@ describe('Higher tiers beat lower tiers', () => {
         const ai = player === 0 ? ai0 : ai1;
         const stockpile = state.players[player].stockpile;
         const loadout = state.players[player].loadout;
-        const flux = state.forgeFlux?.[player] ?? 0;
+        const flux = 0; // flux is deprecated
         const oppStockpile = state.players[player === 0 ? 1 : 0].stockpile;
 
         const forgeActions = ai.planForge(stockpile, loadout, flux, forgeRound, oppStockpile);

@@ -113,7 +113,7 @@ export async function getCurrentPhase(page: Page): Promise<string> {
   return 'unknown';
 }
 
-export async function pickOrb(page: Page): Promise<void> {
+export async function pickGem(page: Page): Promise<void> {
   // GemCards have data-gem attribute. Find any in the pool.
   const gems = page.locator('[data-gem]');
   const count = await gems.count();
@@ -126,15 +126,10 @@ export async function pickOrb(page: Page): Promise<void> {
     await page.waitForTimeout(300);
     return;
   }
-
-  // Fallback: try old OrbIcon selector (for forge screen)
-  const orbButtons = page.locator('button[title*="(T"]:not([disabled])');
-  const orbCount = await orbButtons.count();
-  if (orbCount > 0) {
-    await orbButtons.first().click();
-    await page.waitForTimeout(200);
-  }
 }
+
+/** @deprecated Use pickGem instead */
+export const pickOrb = pickGem;
 
 export async function completeDraft(page: Page): Promise<void> {
   // Keep picking until the forge phase appears
@@ -144,29 +139,23 @@ export async function completeDraft(page: Page): Promise<void> {
 
     const isOurTurn = await page.getByText(/YOUR PICK|Your Turn/i).isVisible({ timeout: 1000 }).catch(() => false);
     if (isOurTurn) {
-      await pickOrb(page);
+      await pickGem(page);
     }
     await page.waitForTimeout(600);
   }
 }
 
-export async function placeOrbs(page: Page): Promise<void> {
-  // Try GemCard-based stockpile first ([data-gem]), fall back to OrbIcon buttons
+export async function placeGems(page: Page): Promise<void> {
+  // Try GemCard-based stockpile ([data-gem])
   for (let i = 0; i < 3; i++) {
     const gems = page.locator('[data-gem]');
-    const stockpileOrbs = page.locator('button[title*="(T"]:not([disabled])');
     const gemCount = await gems.count();
-    const orbCount = await stockpileOrbs.count();
 
-    if (gemCount === 0 && orbCount === 0) break;
+    if (gemCount === 0) break;
 
-    // Click orb/gem to select it
+    // Click gem to select it
     try {
-      if (gemCount > 0) {
-        await gems.first().click({ timeout: 3000 });
-      } else {
-        await stockpileOrbs.first().click({ timeout: 3000 });
-      }
+      await gems.first().click({ timeout: 3000 });
     } catch {
       break; // Not clickable, stop trying
     }
@@ -184,6 +173,9 @@ export async function placeOrbs(page: Page): Promise<void> {
     await page.waitForTimeout(300);
   }
 }
+
+/** @deprecated Use placeGems instead */
+export const placeOrbs = placeGems;
 
 export async function completeForge(page: Page): Promise<void> {
   const doneBtn = page.getByRole('button', { name: 'Done Forging' });

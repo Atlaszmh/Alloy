@@ -1,11 +1,9 @@
-import type { AffixTier } from './affix.js';
 import type { BaseStatAllocation } from './base-stats.js';
-import type { OrbInstance } from './orb.js';
+import type { GemInstance } from './gem.js';
 
-export type EquippedSlot =
-  | { kind: 'single'; orb: OrbInstance; socketedRound: 1 | 2 | 3 }
-  | { kind: 'compound'; orbs: [OrbInstance, OrbInstance]; compoundId: string; socketedRound: 1 | 2 | 3 }
-  | { kind: 'upgraded'; orb: OrbInstance; originalTier: AffixTier; upgradedTier: AffixTier; socketedRound: 1 | 2 | 3 };
+export interface EquippedSlot {
+  gem: GemInstance;
+}
 
 export interface ForgedItem {
   baseItemId: string;

@@ -3,7 +3,16 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { DerivedStats } from '../types/derived-stats.js';
 import type { ForgedItem, Loadout } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
+import type { ActiveSynergy } from '../types/synergy.js';
 import { ALL_ELEMENTS, createEmptyDerivedStats } from '../types/derived-stats.js';
+import { RARITY_MULTIPLIERS } from '../types/gem.js';
+
+// ---- Public types ----
+
+export interface StatsResult {
+  stats: DerivedStats;
+  activeSynergies: ActiveSynergy[];
+}
 
 // ---- Internal types ----
 
@@ -136,25 +145,36 @@ function isValidStatKey(stats: DerivedStats, key: string): boolean {
 
 /** Collect all affix IDs present across both items in a loadout. */
 export function collectAffixIds(loadout: Loadout): string[] {
-  const ids: string[] = [];
+  const ids = new Set<string>();
   for (const item of [loadout.weapon, loadout.armor]) {
     for (const slot of item.slots) {
       if (!slot) continue;
-      switch (slot.kind) {
-        case 'single':
-          ids.push(slot.orb.affixId);
-          break;
-        case 'compound':
-          ids.push(slot.orbs[0].affixId);
-          ids.push(slot.orbs[1].affixId);
-          break;
-        case 'upgraded':
-          ids.push(slot.orb.affixId);
-          break;
+      // Spread gem's tags (which include affixId as first entry from createGem)
+      // Use Set to automatically deduplicate when same affix appears on multiple gems
+      for (const tag of slot.gem.tags) {
+        ids.add(tag);
       }
     }
   }
-  return ids;
+  return Array.from(ids);
+}
+
+/**
+ * Compute which synergies are active for a given loadout.
+ * Returns array of ActiveSynergy with isActive flag and missingCount.
+ */
+function computeActiveSynergies(loadout: Loadout, registry: DataRegistry): ActiveSynergy[] {
+  const affixIds = collectAffixIds(loadout);
+  const synergies = registry.getAllSynergies();
+  return synergies.map(synergy => {
+    const isActive = isSynergyActive(synergy.requiredAffixes, affixIds);
+    const missingCount = isActive ? 0 : synergy.requiredAffixes.length - affixIds.filter(id => synergy.requiredAffixes.includes(id)).length;
+    return {
+      synergyId: synergy.id,
+      isActive,
+      missingCount,
+    };
+  });
 }
 
 // ---- Base stat scaling ----
@@ -229,7 +249,7 @@ function applyBaseStatScaling(
 
 // ---- Main pipeline ----
 
-export function calculateStats(loadout: Loadout, registry: DataRegistry): DerivedStats {
+export function calculateStats(loadout: Loadout, registry: DataRegistry): StatsResult {
   const balance = registry.getBalance();
   const buckets = createBuckets();
 
@@ -264,7 +284,7 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
   // Step 5: Iterate armor equipped slots
   applyEquippedSlots(buckets, loadout.armor, 'armor', registry);
 
-  // Step 6: Detect active synergies
+  // Step 6: Detect active synergies and compute activeSynergies array
   const affixIds = collectAffixIds(loadout);
   const synergies = registry.getAllSynergies();
   for (const synergy of synergies) {
@@ -275,14 +295,22 @@ export function calculateStats(loadout: Loadout, registry: DataRegistry): Derive
     }
   }
 
+  // Compute active synergies for reporting
+  const activeSynergies = computeActiveSynergies(loadout, registry);
+
+  // TODO: Synergy additive bonuses from gem tags (placeholder for future implementation)
+
   // Step 7: Apply modifier ordering (flat, then percent, then override)
   applyBucketsToStats(stats, buckets);
 
   // Step 8: Apply caps/floors
   applyCaps(stats, balance);
 
-  // Step 9: Return frozen DerivedStats
-  return Object.freeze(stats);
+  // Step 9: Return frozen DerivedStats with activeSynergies
+  return {
+    stats: Object.freeze(stats),
+    activeSynergies,
+  };
 }
 
 function applyEquippedSlots(
@@ -296,31 +324,32 @@ function applyEquippedSlots(
   for (const slot of item.slots) {
     if (!slot) continue;
 
-    switch (slot.kind) {
-      case 'single': {
-        const affixDef = registry.getAffix(slot.orb.affixId);
-        const tierData = affixDef.tiers[slot.orb.tier];
-        for (const mod of tierData[effectKey]) {
-          addToBucket(buckets, mod);
-        }
-        break;
-      }
-      case 'compound': {
-        const compoundDef = registry.getCombinationById(slot.compoundId);
-        if (compoundDef) {
-          for (const mod of compoundDef[effectKey]) {
-            addToBucket(buckets, mod);
-          }
-        }
-        break;
-      }
-      case 'upgraded': {
-        const affixDef = registry.getAffix(slot.orb.affixId);
-        const tierData = affixDef.tiers[slot.upgradedTier];
-        for (const mod of tierData[effectKey]) {
-          addToBucket(buckets, mod);
-        }
-        break;
+    const gem = slot.gem;
+    const affixDef = registry.getAffix(gem.affixId);
+    // Clamp tier to valid AffixTier range (1-4) for legacy data lookup
+    const lookupTier = Math.min(gem.tier, 4) as 1 | 2 | 3 | 4;
+    const tierData = affixDef.tiers[lookupTier];
+
+    // Rarity multiplier: common = 1.0, magic = 1.25, rare = 1.5, epic = 2.0, legendary = 3.0
+    const rarityMult = RARITY_MULTIPLIERS[gem.rarity];
+
+    // Apply base affix effects scaled by rarity multiplier
+    for (const mod of tierData[effectKey]) {
+      addToBucket(buckets, {
+        stat: mod.stat,
+        op: mod.op,
+        value: mod.value * rarityMult,
+      });
+    }
+
+    // Apply outputBonusEffects if present (recipe bonus), also scaled by rarity
+    if (gem.outputBonusEffects) {
+      for (const mod of gem.outputBonusEffects) {
+        addToBucket(buckets, {
+          stat: mod.stat,
+          op: mod.op,
+          value: mod.value * rarityMult,
+        });
       }
     }
   }

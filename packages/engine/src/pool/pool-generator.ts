@@ -1,8 +1,10 @@
-import type { AffixCategory, AffixDef, AffixTier } from '../types/affix.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { AffixCategory, AffixDef } from '../types/affix.js';
+import type { GemInstance, GemRarity } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
+import { createGem } from '../types/gem.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { validateArchetypes } from './archetype-validator.js';
+import { getPoolConfigForRound } from '../run/pool-scaling.js';
 
 /**
  * Category weight targets for pool generation.
@@ -31,25 +33,37 @@ function pickRandom<T>(arr: T[], rng: SeededRNG): T {
 }
 
 /**
- * Generate a deterministic pool of orbs from a seed.
+ * Generate a deterministic pool of gems from a seed.
  *
- * @param round - Which draft round (1, 2, or 3). Round 1 gets archetype
- *   validation and trigger guarantees. Rounds 2-3 are supplemental pools.
+ * @param round - Which draft round. Round 1 gets archetype validation and
+ *   trigger guarantees. Subsequent rounds are supplemental pools.
  *   Each round forks a unique RNG stream so pools are independent.
+ *   Accepts any positive number (unlimited rounds for run modes).
  */
 export function generatePool(
   seed: number,
-  mode: 'quick' | 'ranked' | 'unranked',
+  mode: 'quick' | 'ranked' | 'unranked' | 'run_async' | 'run_live',
   registry: DataRegistry,
-  round: 1 | 2 | 3 = 1,
-): OrbInstance[] {
+  round: number = 1,
+): GemInstance[] {
   const balance = registry.getBalance();
   let currentSeed = seed;
 
+  // For run modes, use pool scaling config; for legacy modes, use balance config
+  const isRunMode = mode === 'run_async' || mode === 'run_live';
+
   // Determine pool size
-  const poolSize = mode === 'quick'
-    ? null // quick mode uses its own size config
-    : balance.draftPoolPerRound[round - 1];
+  let poolSize: number | null;
+  if (isRunMode) {
+    const poolConfig = getPoolConfigForRound(round);
+    poolSize = poolConfig.poolSize;
+  } else if (mode === 'quick') {
+    poolSize = null; // quick mode uses its own size config
+  } else {
+    // Ranked/unranked: clamp round to 1-3 for legacy config arrays
+    const clampedRound = Math.min(round, 3);
+    poolSize = balance.draftPoolPerRound[clampedRound - 1];
+  }
 
   // Round 1: validate archetypes, guarantee triggers
   if (round === 1) {
@@ -60,7 +74,7 @@ export function generatePool(
       const pool = buildPool(rng, mode, registry, poolSize, round);
 
       if (validateArchetypes(pool, registry, balance.archetypeMinOrbs, 3)) {
-        return ensureTriggerOrbs(pool, rng, registry, 2);
+        return ensureTriggerGems(pool, rng, registry, 2);
       }
 
       currentSeed = currentSeed + 1;
@@ -69,10 +83,10 @@ export function generatePool(
     // Fallback
     const masterRng = new SeededRNG(currentSeed);
     const rng = masterRng.fork(`pool_r${round}`);
-    return ensureTriggerOrbs(buildPool(rng, mode, registry, poolSize, round), rng, registry, 2);
+    return ensureTriggerGems(buildPool(rng, mode, registry, poolSize, round), rng, registry, 2);
   }
 
-  // Rounds 2-3: no archetype validation, no trigger guarantee (supplemental orbs)
+  // Rounds 2+: no archetype validation, no trigger guarantee (supplemental gems)
   const masterRng = new SeededRNG(currentSeed);
   const rng = masterRng.fork(`pool_r${round}`);
   return buildPool(rng, mode, registry, poolSize, round);
@@ -80,15 +94,18 @@ export function generatePool(
 
 /**
  * Build the raw pool (before archetype validation).
+ * Uses round-based scaling for run modes (tier range + rarity from pool config).
  */
 function buildPool(
   rng: SeededRNG,
-  _mode: 'quick' | 'ranked' | 'unranked',
+  mode: 'quick' | 'ranked' | 'unranked' | 'run_async' | 'run_live',
   registry: DataRegistry,
   overrideSize: number | null,
-  round: 1 | 2 | 3 = 1,
-): OrbInstance[] {
+  round: number = 1,
+): GemInstance[] {
   const balance = registry.getBalance();
+  const isRunMode = mode === 'run_async' || mode === 'run_live';
+  const poolConfig = isRunMode ? getPoolConfigForRound(round) : null;
 
   // Determine pool size
   let poolSize: number;
@@ -99,9 +116,6 @@ function buildPool(
     const sizeConfig = balance.draftPoolSizeQuick;
     poolSize = rng.nextInt(sizeConfig.min, sizeConfig.max);
   }
-
-  // Generate tier distribution targets
-  const tierTargets = computeTierTargets(poolSize, balance.tierDistribution, rng);
 
   // Build affix caches by category
   const affixesByCategory = new Map<AffixCategory, AffixDef[]>();
@@ -114,26 +128,52 @@ function buildPool(
 
   const allAffixes = registry.getAllAffixes();
 
-  const pool: OrbInstance[] = [];
-  let orbIndex = 0;
+  const pool: GemInstance[] = [];
 
-  for (const [tier, count] of tierTargets) {
-    for (let i = 0; i < count; i++) {
+  if (isRunMode && poolConfig) {
+    // Run mode: use pool config for tier range and rarity
+    for (let i = 0; i < poolSize; i++) {
       let category = pickCategory(rng);
       let candidates = affixesByCategory.get(category);
-
       if (!candidates || candidates.length === 0) {
         candidates = allAffixes;
       }
 
       const affix = pickRandom(candidates, rng);
+      const tier = rng.nextInt(poolConfig.tiers[0], poolConfig.tiers[1]) as 1 | 2 | 3 | 4 | 5;
+      const rarity: GemRarity = pickRandom(poolConfig.rarities, rng);
 
-      pool.push({
-        uid: `orb_r${round}_${orbIndex}`,
-        affixId: affix.id,
-        tier: tier as AffixTier,
-      });
-      orbIndex++;
+      pool.push(createGem(
+        `gem_r${round}_${i}`,
+        affix.id,
+        tier,
+        rarity,
+      ));
+    }
+  } else {
+    // Legacy mode: use tier distribution, all common rarity
+    const tierTargets = computeTierTargets(poolSize, balance.tierDistribution, rng);
+    let gemIndex = 0;
+
+    for (const [tier, count] of tierTargets) {
+      for (let i = 0; i < count; i++) {
+        let category = pickCategory(rng);
+        let candidates = affixesByCategory.get(category);
+
+        if (!candidates || candidates.length === 0) {
+          candidates = allAffixes;
+        }
+
+        const affix = pickRandom(candidates, rng);
+
+        pool.push(createGem(
+          `gem_r${round}_${gemIndex}`,
+          affix.id,
+          tier as 1 | 2 | 3 | 4 | 5,
+          'common',
+        ));
+        gemIndex++;
+      }
     }
   }
 
@@ -142,13 +182,13 @@ function buildPool(
 
 function computeTierTargets(
   poolSize: number,
-  distribution: Record<AffixTier, number>,
+  distribution: Record<number, number>,
   rng: SeededRNG,
-): [AffixTier, number][] {
-  const tiers: AffixTier[] = [1, 2, 3, 4];
-  const rawCounts: [AffixTier, number][] = tiers.map((t) => [
+): [number, number][] {
+  const tiers = [1, 2, 3, 4];
+  const rawCounts: [number, number][] = tiers.map((t) => [
     t,
-    Math.floor(poolSize * distribution[t]),
+    Math.floor(poolSize * (distribution[t] ?? 0)),
   ]);
 
   let assigned = rawCounts.reduce((sum, [, c]) => sum + c, 0);
@@ -164,18 +204,18 @@ function computeTierTargets(
   return rawCounts;
 }
 
-function ensureTriggerOrbs(
-  pool: OrbInstance[],
+function ensureTriggerGems(
+  pool: GemInstance[],
   rng: SeededRNG,
   registry: DataRegistry,
   minTriggers: number,
-): OrbInstance[] {
+): GemInstance[] {
   const triggerAffixes = registry.getAffixesByCategory('trigger');
   if (triggerAffixes.length === 0) return pool;
 
   let triggerCount = 0;
-  for (const orb of pool) {
-    const affix = registry.findAffix(orb.affixId);
+  for (const gem of pool) {
+    const affix = registry.findAffix(gem.affixId);
     if (affix && affix.category === 'trigger') {
       triggerCount++;
     }
@@ -186,10 +226,12 @@ function ensureTriggerOrbs(
     const affix = registry.findAffix(result[i].affixId);
     if (affix && affix.category !== 'trigger') {
       const triggerAffix = pickRandom(triggerAffixes, rng);
-      result[i] = {
-        ...result[i],
-        affixId: triggerAffix.id,
-      };
+      result[i] = createGem(
+        result[i].uid,
+        triggerAffix.id,
+        result[i].tier,
+        result[i].rarity,
+      );
       triggerCount++;
     }
   }

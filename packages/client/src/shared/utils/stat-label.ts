@@ -1,4 +1,4 @@
-import type { AffixDef, AffixTier, OrbInstance } from '@alloy/engine';
+import type { AffixDef, AffixTier, GemInstance } from '@alloy/engine';
 
 const STAT_ABBREVIATIONS: Record<string, string> = {
   physicalDamage: 'Phys Dmg',
@@ -36,7 +36,7 @@ export function getStatAbbreviation(stat: string): string {
 
 export function getStatLabel(
   affix: AffixDef,
-  orb: OrbInstance,
+  orb: GemInstance,
   target: 'weapon' | 'armor' = 'weapon',
 ): string {
   const tierData = affix.tiers[orb.tier as AffixTier];

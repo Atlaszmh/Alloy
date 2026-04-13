@@ -1,4 +1,4 @@
-import type { OrbInstance } from '../../types/orb.js';
+import type { GemInstance } from '../../types/gem.js';
 import type { DataRegistry } from '../../data/registry.js';
 import type { SeededRNG } from '../../rng/seeded-rng.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
@@ -13,9 +13,9 @@ import {
 
 export interface DraftStrategy {
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): string;
@@ -27,9 +27,9 @@ export interface DraftStrategy {
  */
 export class Tier1DraftStrategy implements DraftStrategy {
   pickOrb(
-    pool: OrbInstance[],
-    _myStockpile: OrbInstance[],
-    _opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    _myStockpile: GemInstance[],
+    _opponentStockpile: GemInstance[],
     _registry: DataRegistry,
     rng: SeededRNG,
   ): string {
@@ -57,9 +57,9 @@ export class Tier2DraftStrategy implements DraftStrategy {
   private tier1Fallback = new Tier1DraftStrategy();
 
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): string {
@@ -99,9 +99,9 @@ export class Tier3DraftStrategy implements DraftStrategy {
   private chosenArchetype: ArchetypeId | null = null;
 
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
   ): string {
@@ -168,9 +168,9 @@ export class Tier4DraftStrategy implements DraftStrategy {
   private chosenArchetype: ArchetypeId | null = null;
 
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     _rng: SeededRNG,
   ): string {
@@ -243,9 +243,9 @@ export class Tier4DraftStrategy implements DraftStrategy {
  */
 export class Tier5DraftStrategy implements DraftStrategy {
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
     registry: DataRegistry,
     _rng: SeededRNG,
   ): string {

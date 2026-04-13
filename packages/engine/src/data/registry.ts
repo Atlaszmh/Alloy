@@ -3,6 +3,7 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { CompoundAffixDef } from '../types/combination.js';
 import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
+import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
   return [id1, id2].sort().join('+');
@@ -16,6 +17,7 @@ export class DataRegistry {
   private synergyMap: Map<string, SynergyDef>;
   private baseItemMap: Map<string, BaseItemDef>;
   private baseItemsByType: Map<string, BaseItemDef[]>;
+  private recipeRegistry: RecipeRegistry;
 
   constructor(
     private readonly affixes: AffixDef[],
@@ -23,6 +25,7 @@ export class DataRegistry {
     private readonly synergies: SynergyDef[],
     baseItems: BaseItemDef[],
     private readonly balanceConfig: BalanceConfig,
+    recipes: RecipeDefinition[] = [],
   ) {
     // Build affix maps
     this.affixMap = new Map(affixes.map((a) => [a.id, a]));
@@ -56,6 +59,9 @@ export class DataRegistry {
       existing.push(item);
       this.baseItemsByType.set(item.type, existing);
     }
+
+    // Build recipe registry
+    this.recipeRegistry = new RecipeRegistry(recipes);
   }
 
   // --- Affix Lookups ---
@@ -119,6 +125,12 @@ export class DataRegistry {
 
   getBaseItemsByType(type: 'weapon' | 'armor'): BaseItemDef[] {
     return this.baseItemsByType.get(type) ?? [];
+  }
+
+  // --- Recipe Lookups ---
+
+  getRecipeRegistry(): RecipeRegistry {
+    return this.recipeRegistry;
   }
 
   // --- Balance ---

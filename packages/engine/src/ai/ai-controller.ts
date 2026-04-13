@@ -2,7 +2,7 @@ import type { AITier } from '../types/ai.js';
 import type { CombatLog } from '../types/combat.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { BaseItemDef, Loadout } from '../types/item.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import { selectAIItems } from './item-selection.js';
@@ -50,19 +50,19 @@ export class AIController {
   }
 
   pickOrb(
-    pool: OrbInstance[],
-    myStockpile: OrbInstance[],
-    opponentStockpile: OrbInstance[],
+    pool: GemInstance[],
+    myStockpile: GemInstance[],
+    opponentStockpile: GemInstance[],
   ): string {
     return this.draftStrategy.pickOrb(pool, myStockpile, opponentStockpile, this.registry, this.rng);
   }
 
   planForge(
-    stockpile: OrbInstance[],
+    stockpile: GemInstance[],
     loadout: Loadout,
     fluxRemaining: number,
-    round: 1 | 2 | 3,
-    opponentStockpile: OrbInstance[],
+    round: number,
+    opponentStockpile: GemInstance[],
   ): ForgeAction[] {
     return this.forgeStrategy.plan(
       stockpile,
@@ -85,10 +85,10 @@ export class AIController {
     previousLog: CombatLog,
     opponentLoadout: Loadout,
     myLoadout: Loadout,
-    myStockpile: OrbInstance[],
+    myStockpile: GemInstance[],
     fluxRemaining: number,
     myPlayerIdx: 0 | 1,
-    round?: 1 | 2 | 3,
+    round?: number,
   ): ForgeAction[] {
     return this.adaptStrategy.adapt(
       previousLog,

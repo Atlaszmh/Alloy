@@ -50,7 +50,7 @@ function runAIMatch(seed: number): MatchState {
         const actions = ai.planForge(
           state.players[player].stockpile,
           state.players[player].loadout,
-          state.forgeFlux?.[player] ?? 0,
+          0, // flux is deprecated
           forgePhase.round,
           state.players[1 - player as 0 | 1].stockpile,
         );
@@ -72,11 +72,7 @@ function runAIMatch(seed: number): MatchState {
       state = cont.state;
     }
 
-    if (state.phase.kind === 'adapt') {
-      const result = applyAction(state, { kind: 'advance_phase' }, registry);
-      if (result.ok) state = result.state;
-      else break;
-    }
+    // (adapt phase was removed)
   }
 
   return state;

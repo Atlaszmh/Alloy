@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DataRegistry, OrbInstance } from '@alloy/engine';
+import type { DataRegistry, GemInstance } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
 import { getGemArt } from '@/shared/utils/art-registry';
@@ -17,7 +17,7 @@ const ELEMENT_SYMBOLS: Record<string, string> = {
 const ELEMENT_TAGS = new Set(Object.keys(ELEMENT_SYMBOLS));
 
 interface CombineWorkbenchProps {
-  comboSlots: [OrbInstance | null, OrbInstance | null, OrbInstance | null];
+  comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
   isDragging?: boolean;
@@ -26,7 +26,7 @@ interface CombineWorkbenchProps {
   onClearAll: () => void;
 }
 
-function getOrbElement(orb: OrbInstance, registry: DataRegistry) {
+function getOrbElement(orb: GemInstance, registry: DataRegistry) {
   const affix = registry.getAffix(orb.affixId);
   if (!affix) return null;
   const elementTag = affix.tags.find((t: string) => ELEMENT_TAGS.has(t));
@@ -36,10 +36,10 @@ function getOrbElement(orb: OrbInstance, registry: DataRegistry) {
 type GlowSignal = 'none' | 'white' | 'gold';
 
 function computeGlowSignal(
-  slots: [OrbInstance | null, OrbInstance | null, OrbInstance | null],
+  slots: [GemInstance | null, GemInstance | null, GemInstance | null],
   registry: DataRegistry,
 ): GlowSignal {
-  const filled = slots.filter((s): s is OrbInstance => s !== null);
+  const filled = slots.filter((s): s is GemInstance => s !== null);
   if (filled.length < 2) return 'none';
 
   // Check all 2-pair permutations from the 3 slots
@@ -158,7 +158,7 @@ function Slot({
   onClick,
 }: {
   index: number;
-  orb: OrbInstance | null;
+  orb: GemInstance | null;
   registry: DataRegistry;
   glowSignal: GlowSignal;
   isDragging?: boolean;

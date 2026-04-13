@@ -1,150 +1,123 @@
 import { describe, it, expect } from 'vitest';
-import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canRemoveOrb } from '../src/forge/forge-plan.js';
+import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from '../src/forge/forge-plan.js';
 import { createForgeState } from '../src/forge/forge-state.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
-import type { OrbInstance } from '../src/types/orb.js';
+import type { GemInstance } from '../src/types/gem.js';
+import { createGem } from '../src/types/gem.js';
 
 const data = loadAndValidateData();
 const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
 
-function makeMockOrbs(): OrbInstance[] {
+function makeMockGems(): GemInstance[] {
   return [
-    { uid: 'orb1', affixId: 'fire_damage', tier: 1 },
-    { uid: 'orb2', affixId: 'cold_damage', tier: 1 },
-    { uid: 'orb3', affixId: 'flat_hp', tier: 2 },
-    { uid: 'orb4', affixId: 'armor_rating', tier: 1 },
-    { uid: 'orb5', affixId: 'chance_on_hit', tier: 1 },
-    { uid: 'orb6', affixId: 'lifesteal', tier: 2 },
-    { uid: 'orb7', affixId: 'fire_damage', tier: 2 },
+    createGem('gem1', 'fire_damage', 1, 'common'),
+    createGem('gem2', 'cold_damage', 1, 'common'),
+    createGem('gem3', 'flat_hp', 2, 'common'),
+    createGem('gem4', 'armor_rating', 1, 'common'),
+    createGem('gem5', 'chance_on_hit', 1, 'common'),
+    createGem('gem6', 'lifesteal', 2, 'common'),
+    createGem('gem7', 'fire_damage', 2, 'common'),
   ];
 }
 
 function makeForgeState(round: 1 | 2 | 3 = 1) {
-  return createForgeState(makeMockOrbs(), 'iron_sword', 'iron_armor', round, data.balance, false);
+  return createForgeState(makeMockGems(), 'iron_sword', 'iron_armor', round, data.balance, false);
 }
 
 describe('ForgePlan', () => {
   describe('createForgePlan', () => {
-    it('snapshots stockpile, loadout, and flux', () => {
+    it('snapshots stockpile and loadout', () => {
       const state = makeForgeState();
       const plan = createForgePlan(state, registry);
       expect(plan.stockpile).toHaveLength(state.stockpile.length);
-      expect(plan.tentativeFlux).toBe(state.fluxRemaining);
       expect(plan.round).toBe(1);
-      expect(plan.lockedOrbUids.size).toBe(0);
-      expect(plan.permanentCombines).toHaveLength(0);
+      expect(plan.lockedGemUids.size).toBe(0);
       expect(plan.actionLog).toHaveLength(0);
     });
 
-    it('deep clones — mutations to plan do not affect original state', () => {
+    it('deep clones -- mutations to plan do not affect original state', () => {
       const state = makeForgeState();
       const originalStockpileLength = state.stockpile.length;
       const plan = createForgePlan(state, registry);
-      plan.stockpile.push({ uid: 'extra', affixId: 'thorns', tier: 1 });
+      plan.stockpile.push(createGem('extra', 'thorns', 1, 'common'));
       expect(state.stockpile).toHaveLength(originalStockpileLength);
     });
   });
 
-  describe('applyPlanAction — assign_orb', () => {
-    it('moves orb from stockpile to loadout and decrements flux', () => {
+  describe('applyPlanAction -- socket_gem', () => {
+    it('moves gem from stockpile to loadout', () => {
       const state = makeForgeState();
       const plan = createForgePlan(state, registry);
-      const startFlux = plan.tentativeFlux;
       const result = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+        kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.plan.tentativeFlux).toBe(startFlux - data.balance.fluxCosts.assignOrb);
-      expect(result.plan.stockpile.find(o => o.uid === 'orb1')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
       expect(result.plan.loadout.weapon.slots[0]).not.toBeNull();
       expect(result.plan.actionLog).toHaveLength(1);
     });
 
-    it('fails when no flux remaining', () => {
+    it('fails when slot occupied', () => {
       const state = makeForgeState();
       const plan = createForgePlan(state, registry);
-      plan.tentativeFlux = 0;
-      const result = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+      const r1 = applyPlanAction(plan, {
+        kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
-      expect(result.ok).toBe(false);
+      expect(r1.ok).toBe(true);
+      if (!r1.ok) return;
+      const r2 = applyPlanAction(r1.plan, {
+        kind: 'socket_gem', gemUid: 'gem2', target: 'weapon', slotIndex: 0,
+      }, registry);
+      expect(r2.ok).toBe(false);
     });
   });
 
-  describe('applyPlanAction — remove_orb', () => {
-    it('moves orb back to stockpile and refunds assignOrb cost', () => {
+  describe('applyPlanAction -- unsocket_gem', () => {
+    it('moves gem back to stockpile', () => {
       const state = makeForgeState(1);
       const plan = createForgePlan(state, registry);
-      const startFlux = plan.tentativeFlux;
-      // First assign, then remove
       const r1 = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+        kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r1.ok).toBe(true);
       if (!r1.ok) return;
       const r2 = applyPlanAction(r1.plan, {
-        kind: 'remove_orb', target: 'weapon', slotIndex: 0,
+        kind: 'unsocket_gem', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r2.ok).toBe(true);
       if (!r2.ok) return;
-      // Refund restores flux to original
-      expect(r2.plan.tentativeFlux).toBe(startFlux);
-      expect(r2.plan.stockpile.find(o => o.uid === 'orb1')).toBeDefined();
+      expect(r2.plan.stockpile.find(g => g.uid === 'gem1')).toBeDefined();
     });
 
-    it('is allowed in round 1 for current-round slot', () => {
+    it('is blocked for locked gems', () => {
       const state = makeForgeState(1);
       const plan = createForgePlan(state, registry);
       const r1 = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+        kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r1.ok).toBe(true);
       if (!r1.ok) return;
+      r1.plan.lockedGemUids.add('gem1');
       const r2 = applyPlanAction(r1.plan, {
-        kind: 'remove_orb', target: 'weapon', slotIndex: 0,
-      }, registry);
-      expect(r2.ok).toBe(true);
-    });
-
-    it('is blocked for previous-round slots', () => {
-      const state = makeForgeState(2);
-      const plan = createForgePlan(state, registry);
-      const r1 = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
-      }, registry);
-      expect(r1.ok).toBe(true);
-      if (!r1.ok) return;
-      // Simulate advancing to round 3: the slot was socketed in round 2
-      r1.plan.round = 3;
-      const r2 = applyPlanAction(r1.plan, {
-        kind: 'remove_orb', target: 'weapon', slotIndex: 0,
+        kind: 'unsocket_gem', target: 'weapon', slotIndex: 0,
       }, registry);
       expect(r2.ok).toBe(false);
     });
 
-    it('is allowed in round 2 for current-round slot', () => {
-      const state = makeForgeState(2);
+    it('fails on empty slot', () => {
+      const state = makeForgeState();
       const plan = createForgePlan(state, registry);
-      const r1 = applyPlanAction(plan, {
-        kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0,
+      const r = applyPlanAction(plan, {
+        kind: 'unsocket_gem', target: 'weapon', slotIndex: 0,
       }, registry);
-      expect(r1.ok).toBe(true);
-      if (!r1.ok) return;
-      const r2 = applyPlanAction(r1.plan, {
-        kind: 'remove_orb', target: 'weapon', slotIndex: 0,
-      }, registry);
-      expect(r2.ok).toBe(true);
-    });
-
-    it('cannot remove a locked orb (tested via combine)', () => {
-      // Covered in combine tests below
+      expect(r.ok).toBe(false);
     });
   });
 
-  describe('applyPlanAction — set_base_stats', () => {
-    it('is reversible — can change stats multiple times', () => {
+  describe('applyPlanAction -- set_base_stats', () => {
+    it('is reversible -- can change stats multiple times', () => {
       const state = makeForgeState(1);
       const plan = createForgePlan(state, registry);
       let r = applyPlanAction(plan, {
@@ -169,58 +142,23 @@ describe('ForgePlan', () => {
     });
   });
 
-  describe('applyPlanAction — combine', () => {
-    it('creates compound orb in stockpile, locks source orbs, costs flux', () => {
+  describe('applyPlanAction -- combine', () => {
+    it('creates combined gem in stockpile and locks source gems', () => {
       const state = makeForgeState();
       const plan = createForgePlan(state, registry);
-      const fluxBefore = plan.tentativeFlux;
-      // Combine fire_damage + chance_on_hit → compound orb in stockpile
+      // Combine fire_damage + chance_on_hit
       const r = applyPlanAction(plan, {
-        kind: 'combine', orbUid1: 'orb1', orbUid2: 'orb5',
+        kind: 'combine', gemUid1: 'gem1', gemUid2: 'gem5',
       }, registry);
       expect(r.ok).toBe(true); if (!r.ok) return;
-      expect(r.plan.tentativeFlux).toBe(fluxBefore - data.balance.fluxCosts.combineOrbs);
-      expect(r.plan.lockedOrbUids.has('orb1')).toBe(true);
-      expect(r.plan.lockedOrbUids.has('orb5')).toBe(true);
-      expect(r.plan.permanentCombines).toHaveLength(1);
-      // Source orbs removed from stockpile
-      expect(r.plan.stockpile.find(o => o.uid === 'orb1')).toBeUndefined();
-      expect(r.plan.stockpile.find(o => o.uid === 'orb5')).toBeUndefined();
-      // Compound orb now in stockpile (not on item)
-      const compoundOrb = r.plan.stockpile.find(o => o.compoundId != null);
-      expect(compoundOrb).toBeDefined();
-      expect(compoundOrb!.compoundId).toBeTruthy();
-      expect(compoundOrb!.sourceOrbs).toHaveLength(2);
-      expect(r.plan.loadout.weapon.slots[0]).toBeNull();
-    });
-  });
-
-  describe('applyPlanAction — upgrade_tier', () => {
-    it('fuses same-affix orbs and locks them', () => {
-      const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
-      // orb1 = fire_damage T1, orb7 = fire_damage T2
-      const fluxBefore = plan.tentativeFlux;
-      const r = applyPlanAction(plan, {
-        kind: 'upgrade_tier', orbUid1: 'orb1', orbUid2: 'orb7', target: 'weapon', slotIndex: 0,
-      }, registry);
-      expect(r.ok).toBe(true); if (!r.ok) return;
-      expect(r.plan.tentativeFlux).toBe(fluxBefore - data.balance.fluxCosts.upgradeTier);
-      expect(r.plan.lockedOrbUids.has('orb1')).toBe(true);
-      expect(r.plan.lockedOrbUids.has('orb7')).toBe(true);
-      const slot = r.plan.loadout.weapon.slots[0];
-      expect(slot?.kind).toBe('upgraded');
-    });
-
-    it('cannot remove upgraded orb', () => {
-      const state = makeForgeState(2); // round 2 allows remove
-      const plan = createForgePlan(state, registry);
-      const r = applyPlanAction(plan, {
-        kind: 'upgrade_tier', orbUid1: 'orb1', orbUid2: 'orb7', target: 'weapon', slotIndex: 0,
-      }, registry);
-      expect(r.ok).toBe(true); if (!r.ok) return;
-      const r2 = applyPlanAction(r.plan, { kind: 'remove_orb', target: 'weapon', slotIndex: 0 }, registry);
-      expect(r2.ok).toBe(false);
+      expect(r.plan.lockedGemUids.has('gem1')).toBe(true);
+      expect(r.plan.lockedGemUids.has('gem5')).toBe(true);
+      // Source gems removed from stockpile
+      expect(r.plan.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
+      expect(r.plan.stockpile.find(g => g.uid === 'gem5')).toBeUndefined();
+      // Combined gem now in stockpile
+      const combinedGem = r.plan.stockpile.find(g => g.uid.startsWith('combined_'));
+      expect(combinedGem).toBeDefined();
     });
   });
 
@@ -228,58 +166,49 @@ describe('ForgePlan', () => {
     it('produces correct ForgeAction replay log', () => {
       const state = makeForgeState();
       let plan = createForgePlan(state, registry);
-      let r = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      let r = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(r.ok).toBe(true); if (!r.ok) return;
-      r = applyPlanAction(r.plan, { kind: 'assign_orb', orbUid: 'orb3', target: 'armor', slotIndex: 0 }, registry);
+      r = applyPlanAction(r.plan, { kind: 'socket_gem', gemUid: 'gem3', target: 'armor', slotIndex: 0 }, registry);
       expect(r.ok).toBe(true); if (!r.ok) return;
       const actions = commitPlan(r.plan);
       expect(actions).toHaveLength(2);
-      expect(actions[0].kind).toBe('assign_orb');
-      expect(actions[1].kind).toBe('assign_orb');
+      expect(actions[0].kind).toBe('socket_gem');
+      expect(actions[1].kind).toBe('socket_gem');
     });
   });
 
   describe('getPlannedStats', () => {
-    it('returns DerivedStats from plan loadout', () => {
+    it('returns StatsResult from plan loadout', () => {
       // Use real base item IDs that exist in the data registry
-      const state = createForgeState(makeMockOrbs(), 'sword', 'chainmail', 1, data.balance, false);
+      const state = createForgeState(makeMockGems(), 'sword', 'chainmail', 1, data.balance, false);
       const plan = createForgePlan(state, registry);
-      const stats = getPlannedStats(plan, registry);
-      expect(stats.maxHP).toBeGreaterThan(0);
-      expect(typeof stats.physicalDamage).toBe('number');
+      const result = getPlannedStats(plan, registry);
+      expect(result.stats.maxHP).toBeGreaterThan(0);
+      expect(typeof result.stats.physicalDamage).toBe('number');
     });
   });
 
-  describe('canRemoveOrb', () => {
-    it('returns true for current-round socketed orb', () => {
+  describe('canUnsocketGem', () => {
+    it('returns true for socketed gem', () => {
       const plan = createForgePlan(makeForgeState(), registry);
-      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      const result = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(true);
+      expect(canUnsocketGem(result.plan, 'weapon', 0)).toBe(true);
     });
 
     it('returns false for empty slot', () => {
       const plan = createForgePlan(makeForgeState(), registry);
-      expect(canRemoveOrb(plan, 'weapon', 0)).toBe(false);
+      expect(canUnsocketGem(plan, 'weapon', 0)).toBe(false);
     });
 
-    it('returns false for locked orbs (permanent combine)', () => {
+    it('returns false for locked gems', () => {
       const plan = createForgePlan(makeForgeState(), registry);
-      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
+      const result = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      result.plan.lockedOrbUids.add('orb1');
-      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(false);
-    });
-
-    it('returns false for previous-round slot', () => {
-      const plan = createForgePlan(makeForgeState(), registry);
-      const result = applyPlanAction(plan, { kind: 'assign_orb', orbUid: 'orb1', target: 'weapon', slotIndex: 0 }, registry);
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      result.plan.round = 2;
-      expect(canRemoveOrb(result.plan, 'weapon', 0)).toBe(false);
+      result.plan.lockedGemUids.add('gem1');
+      expect(canUnsocketGem(result.plan, 'weapon', 0)).toBe(false);
     });
   });
 });

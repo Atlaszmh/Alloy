@@ -47,5 +47,29 @@
     "poisonResistance": { "min": 0, "max": 90 },
     "shadowResistance": { "min": 0, "max": 90 },
     "chaosResistance": { "min": 0, "max": 90 }
+  },
+  "gem": {
+    "tierValues": [0, 1.0, 2.0, 3.0, 4.0, 5.0],
+    "rarityMultipliers": { "common": 1.0, "magic": 1.25, "rare": 1.5, "epic": 2.0, "legendary": 3.0 },
+    "matchingRarityBonus": 0.15,
+    "depthBonusPerLevel": 0.10,
+    "maxRecipeDepth": 3,
+    "recipeQualityThresholds": { "common": 0, "magic": 2.0, "rare": 3.5, "epic": 5.5, "legendary": 8.0 },
+    "poolScaling": [
+      { "roundRange": [1, 2], "tiers": [1, 2], "rarities": ["common", "magic"], "poolSize": 20 },
+      { "roundRange": [3, 4], "tiers": [1, 3], "rarities": ["common", "magic"], "poolSize": 18 },
+      { "roundRange": [5, 6], "tiers": [2, 3], "rarities": ["common", "magic", "rare"], "poolSize": 16 },
+      { "roundRange": [7, 8], "tiers": [2, 4], "rarities": ["magic", "rare"], "poolSize": 14 },
+      { "roundRange": [9, 10], "tiers": [3, 4], "rarities": ["magic", "rare", "epic"], "poolSize": 12 },
+      { "roundRange": [11, 999], "tiers": [3, 5], "rarities": ["rare", "epic"], "poolSize": 10 }
+    ],
+    "goalRound": 10,
+    "endlessStartRound": 11,
+    "lives": { "default": 3, "min": 1, "max": 5 },
+    "lifeRecovery": { "winStreak": 3, "milestoneRounds": [6, 10], "discoveryThreshold": 5 },
+    "flux": {
+      "rewards": { "win": 1, "discovery": 2, "milestone": 3 },
+      "costs": { "boostCombine": 3, "rerollPool": 5, "guaranteeRarity": 4 }
+    }
   }
 }

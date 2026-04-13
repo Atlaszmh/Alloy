@@ -1,5 +1,7 @@
-import type { OrbInstance } from '../types/orb.js';
 import type { DataRegistry } from '../data/registry.js';
+
+/** Minimal shape needed for archetype validation - works with both OrbInstance and GemInstance */
+interface ArchetypeUnit { affixId: string }
 
 export type ArchetypeId =
   | 'physical_burst'
@@ -32,7 +34,7 @@ const ALL_ARCHETYPES = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
  * Count how many orbs in the pool contribute to each archetype.
  */
 export function countArchetypeOrbs(
-  pool: OrbInstance[],
+  pool: ArchetypeUnit[],
   registry: DataRegistry,
 ): Record<ArchetypeId, number> {
   const counts = {} as Record<ArchetypeId, number>;
@@ -61,7 +63,7 @@ export function countArchetypeOrbs(
  * at least `archetypeMinOrbs` orbs contributing to them.
  */
 export function validateArchetypes(
-  pool: OrbInstance[],
+  pool: ArchetypeUnit[],
   registry: DataRegistry,
   archetypeMinOrbs: number,
   minArchetypes: number = 3,

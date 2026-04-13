@@ -3,7 +3,7 @@ import { useLocation } from 'react-router';
 import { playSound } from '@/shared/utils/sound-manager';
 
 /** Phase segments within a match route that trigger phase transition sounds. */
-const PHASE_SEGMENTS = new Set(['draft', 'forge', 'duel', 'adapt', 'result']);
+const PHASE_SEGMENTS = new Set(['draft', 'forge', 'duel', 'result']);
 
 /**
  * Plays a phase-transition sound when navigating between game phases.

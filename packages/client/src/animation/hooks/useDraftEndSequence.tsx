@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { OrbInstance } from '@alloy/engine';
+import type { GemInstance } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
 // ── Types ──
@@ -13,7 +13,7 @@ interface ScatterPhysics {
 }
 
 interface UseDraftEndSequenceOptions {
-  pool: OrbInstance[];
+  pool: GemInstance[];
   phase: { kind: string } | null;
   draftRound: number;
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;

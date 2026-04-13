@@ -1,0 +1,123 @@
+- generic [ref=e4]:
+  - main [ref=e5]:
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]: ❤
+          - generic [ref=e106]: ❤
+          - generic [ref=e107]: ❤
+          - generic [ref=e108]: ❤
+          - generic [ref=e109]: ❤
+          - generic [ref=e110]: 3 lives
+        - generic [ref=e112]: Round 1 / 10
+      - generic [ref=e117]:
+        - generic [ref=e119]:
+          - generic [ref=e120]: PICK YOUR GEMS
+          - generic [ref=e121]: ROUND 1 DRAFT · 20 left
+        - generic [ref=e123]:
+          - generic [ref=e126] [cursor=pointer]:
+            - img "Poison Damage" [ref=e127]
+            - generic [ref=e128]: "+12"
+            - generic [ref=e133]:
+              - generic [ref=e134]: Poison Damage
+              - generic [ref=e135]: Magic
+          - generic [ref=e138] [cursor=pointer]:
+            - img "Critical Strike Multiplier" [ref=e139]
+            - generic [ref=e140]: "+23"
+            - generic [ref=e143]: Critical Strike Multiplier
+          - generic [ref=e146] [cursor=pointer]:
+            - img "Barrier" [ref=e147]
+            - generic [ref=e148]: "+5"
+            - generic [ref=e151]: Barrier
+          - generic [ref=e154] [cursor=pointer]:
+            - img "Barrier" [ref=e155]
+            - generic [ref=e156]: "+9"
+            - generic [ref=e161]:
+              - generic [ref=e162]: Barrier
+              - generic [ref=e163]: Magic
+          - generic [ref=e166] [cursor=pointer]:
+            - img "Flat Physical Damage" [ref=e167]
+            - generic [ref=e168]: "+6"
+            - generic [ref=e174]: Flat Physical Damage
+          - generic [ref=e177] [cursor=pointer]:
+            - img "Cold Damage" [ref=e178]
+            - generic [ref=e179]: "+2"
+            - generic [ref=e181]:
+              - generic [ref=e182]: Cold Damage
+              - generic [ref=e183]: Magic
+          - generic [ref=e186] [cursor=pointer]:
+            - img "Thorns" [ref=e187]
+            - generic [ref=e188]: "+14"
+            - generic [ref=e193]:
+              - generic [ref=e194]: Thorns
+              - generic [ref=e195]: Magic
+          - generic [ref=e198] [cursor=pointer]:
+            - img "Critical Strike Multiplier" [ref=e199]
+            - generic [ref=e200]: "+23"
+            - generic [ref=e203]: Critical Strike Multiplier
+          - generic [ref=e206] [cursor=pointer]:
+            - img "Chance on Block" [ref=e207]
+            - generic [ref=e208]: "+1"
+            - generic [ref=e211]: Chance on Block
+          - generic [ref=e214] [cursor=pointer]:
+            - img "Fortify" [ref=e215]
+            - generic [ref=e221]: Fortify
+          - generic [ref=e224] [cursor=pointer]:
+            - img "Dodge Chance" [ref=e225]
+            - generic [ref=e228]: Dodge Chance
+          - generic [ref=e231] [cursor=pointer]:
+            - img "Fire Damage" [ref=e232]
+            - generic [ref=e233]: "+5"
+            - generic [ref=e239]: Fire Damage
+          - generic [ref=e242] [cursor=pointer]:
+            - img "Damage Reduction" [ref=e243]
+            - generic [ref=e249]: Damage Reduction
+          - generic [ref=e252] [cursor=pointer]:
+            - img "Critical Strike Multiplier" [ref=e253]
+            - generic [ref=e254]: "+36"
+            - generic [ref=e260]: Critical Strike Multiplier
+          - generic [ref=e263] [cursor=pointer]:
+            - img "Chaos Damage" [ref=e264]
+            - generic [ref=e265]: "+2"
+            - generic [ref=e270]:
+              - generic [ref=e271]: Chaos Damage
+              - generic [ref=e272]: Magic
+          - generic [ref=e275] [cursor=pointer]:
+            - img "Chaos Damage" [ref=e276]
+            - generic [ref=e277]: "+2"
+            - generic [ref=e280]: Chaos Damage
+          - generic [ref=e283] [cursor=pointer]:
+            - img "Slow on Hit" [ref=e284]
+            - generic [ref=e285]: "+12"
+            - generic [ref=e291]: Slow on Hit
+          - generic [ref=e294] [cursor=pointer]:
+            - img "Chance on Hit" [ref=e295]
+            - generic [ref=e296]: "+1"
+            - generic [ref=e301]:
+              - generic [ref=e302]: Chance on Hit
+              - generic [ref=e303]: Magic
+          - generic [ref=e306] [cursor=pointer]:
+            - img "Armor Penetration" [ref=e307]
+            - generic [ref=e308]: "+7"
+            - generic [ref=e311]: Armor Penetration
+          - generic [ref=e314] [cursor=pointer]:
+            - img "Lifesteal" [ref=e315]
+            - generic [ref=e316]: "+7"
+            - generic [ref=e321]:
+              - generic [ref=e322]: Lifesteal
+              - generic [ref=e323]: Magic
+        - generic [ref=e326]:
+          - generic [ref=e327]: Drag gems down · tap twice to pick
+          - generic [ref=e328]: 14s
+        - generic [ref=e333]:
+          - heading "Your Gems" [level=3] [ref=e334]
+          - generic [ref=e335]: 0 / 8
+  - generic [ref=e18]:
+    - button "Home" [ref=e20] [cursor=pointer]:
+      - img [ref=e23]
+    - button "Ranks" [ref=e27] [cursor=pointer]:
+      - img [ref=e29]
+    - button "Settings" [ref=e31] [cursor=pointer]:
+      - img [ref=e33]
+    - button "Dev" [ref=e36] [cursor=pointer]:
+      - img [ref=e38]

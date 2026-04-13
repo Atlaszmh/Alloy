@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 
 interface DraftStore {
+  /** @deprecated Use selectedGemUid — kept as alias for backward compat */
   selectedOrbUid: string | null;
+  selectedGemUid: string | null;
   selectOrb: (uid: string) => void;
+  selectGem: (uid: string) => void;
   confirmPick: () => void;
   cancelSelection: () => void;
   reset: () => void;
@@ -10,8 +13,10 @@ interface DraftStore {
 
 export const useDraftStore = create<DraftStore>((set) => ({
   selectedOrbUid: null,
+  get selectedGemUid() { return this.selectedOrbUid; },
 
   selectOrb: (uid) => set({ selectedOrbUid: uid }),
+  selectGem: (uid) => set({ selectedOrbUid: uid }),
 
   confirmPick: () => set({ selectedOrbUid: null }),
 

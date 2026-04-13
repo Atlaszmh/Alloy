@@ -4,7 +4,7 @@ import { HapticButton } from '@/components/HapticButton';
 import { Timer } from '@/components/Timer';
 
 interface ForgeHeaderProps {
-  round: 1 | 2 | 3;
+  round: number;
   flux: number;
   maxFlux: number;
   stats: DerivedStats | null;
