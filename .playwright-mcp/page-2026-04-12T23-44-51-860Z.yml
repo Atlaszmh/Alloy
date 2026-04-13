@@ -1,0 +1,23 @@
+- generic [ref=e4]:
+  - main [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - heading "ALLOY" [level=1] [ref=e9]
+        - paragraph [ref=e10]: Forge. Fight. Prevail.
+      - generic [ref=e11]:
+        - button "PLAY" [ref=e12]
+        - button "Recipe Book" [ref=e13]
+        - button "Collection" [ref=e14]
+        - button "Leaderboard" [ref=e15]
+        - button "Profile" [ref=e16]
+        - button "Dev Mode" [ref=e17]
+  - generic [ref=e18]:
+    - button "Home" [ref=e20] [cursor=pointer]:
+      - img [ref=e23]
+      - generic [ref=e26]: Home
+    - button "Ranks" [ref=e27] [cursor=pointer]:
+      - img [ref=e29]
+    - button "Settings" [ref=e31] [cursor=pointer]:
+      - img [ref=e33]
+    - button "Dev" [ref=e36] [cursor=pointer]:
+      - img [ref=e38]

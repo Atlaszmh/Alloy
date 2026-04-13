@@ -147,7 +147,14 @@
       "Bash(git pull:*)",
       "Bash(git stash:*)",
       "Bash(xargs basename:*)",
-      "Bash(wc -l c:/Projects/Alloy/packages/engine/tests/*.test.ts)"
+      "Bash(wc -l c:/Projects/Alloy/packages/engine/tests/*.test.ts)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(pkill -f \"node\")",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(/dev/null cd:*)",
+      "Bash(curl -s http://localhost:9099)",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_close"
     ]
   }
 }

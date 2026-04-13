@@ -338,49 +338,147 @@ Strength       [Dropdown: weak|normal|strong]
     - Intentional randomness that occasionally breaks rules
     - Synergy: Random chance to double spell effects
 
-### 8 New Synergies
+### 25 New Synergies (One per Recipe)
 
-1. **Elemental Fusion** (Transformation)
+#### Elemental Mastery Synergies
+
+1. **Overload Trigger** (Transformation)
    - Trigger: Fire + Chill present
-   - Effect: Create Magma Explosion affix instantly
+   - Effect: Activates Overload state; next damaging skill deals 50% extra damage
    - Strength: Strong
 
-2. **Conductive Chain** (Support)
+2. **Lightning Cooldown Reduction** (Support)
    - Trigger: Lightning + Water synergy active
-   - Effect: Next spell chains to 2 additional targets
+   - Effect: Lightning skills have 50% reduced cooldown
    - Strength: Normal
 
 3. **Permafrost Field** (Conditional)
    - Trigger: Nature + Frost present
    - Condition: Enemy movement > 0
-   - Effect: Slows enemy by 20%
+   - Effect: Slows enemy movement by 20%
    - Strength: Normal
 
-4. **Temporal Instability** (Transformation)
+4. **Wildfire Spread** (Transformation)
+   - Trigger: Fire + Nature combination active
+   - Effect: Damage dealt spreads to adjacent enemies (50% of damage)
+   - Strength: Normal
+
+5. **Storm Surge Chaining** (Support)
+   - Trigger: Lightning + Nature synergy active
+   - Effect: Next spell chains to 2 nearby enemies
+   - Strength: Normal
+
+6. **Mud Slick Immobilize** (Conditional)
+   - Trigger: Earth + Water combination active
+   - Condition: Enemy is slowed or movement impaired
+   - Effect: Immobilizes target for 1 turn
+   - Strength: Normal
+
+#### Conditional & Transformation Synergies
+
+7. **Reinforced Defense** (Support)
+   - Trigger: Berserk + Armor both active
+   - Effect: Damage reduction scales with attack speed (1% per 10% AS)
+   - Strength: Normal
+
+8. **Temporal Instability** (Transformation)
    - Trigger: Slow + Haste both active
-   - Effect: Randomly apply either 2x speed or 0.5x speed
+   - Effect: Randomly grants either 2x action speed or 0.5x speed for next turn
    - Strength: Strong
 
-5. **Counter Momentum** (Support)
-   - Trigger: Reflect + Thorns active
-   - Effect: Each reflection increases melee damage by 5% (stacks)
-   - Strength: Normal
-
-6. **Curse Amplification** (Conditional)
-   - Trigger: Curse + Weakness present
-   - Condition: Target has 2+ curses
-   - Effect: New curses are 25% more potent
+9. **Symmetry Break** (Conditional)
+   - Trigger: Chaos + Order present
+   - Effect: Randomizes enemy spell targeting (redirects 50% of spells)
    - Strength: Strong
 
-7. **Overload Cascade** (Transformation)
-   - Trigger: Empower + Overload combination cast
-   - Effect: Create area-of-effect shockwave
-   - Strength: Strong
+10. **Regenerative Toxin Conversion** (Support)
+    - Trigger: Poison + Healing synergy active
+    - Effect: 30% of damage taken converts to healing
+    - Strength: Normal
 
-8. **Wellspring Abundance** (Support)
-   - Trigger: Mana Pool + Regeneration active
-   - Effect: Mana regen scales with (current mana / max mana)
-   - Strength: Normal
+11. **Phase Shift Teleport** (Transformation)
+    - Trigger: Stun + Movement active
+    - Effect: When stunned, teleport to nearby location instead of freezing
+    - Strength: Strong
+
+#### Layering & Stacking Synergies
+
+12. **Hemorrhage Scaling** (Support)
+    - Trigger: Critical Strike + Bleed present
+    - Effect: Bleed damage scales with critical chance (1% per 1% crit)
+    - Strength: Normal
+
+13. **Counter Momentum** (Support)
+    - Trigger: Reflect + Thorns active
+    - Effect: Each reflection increases next melee damage by 5% (stacks, max 50%)
+    - Strength: Normal
+
+14. **Curse Amplification** (Conditional)
+    - Trigger: Curse + Weakness present
+    - Condition: Target has 2+ curses
+    - Effect: Each new curse is 25% more potent
+    - Strength: Strong
+
+15. **Overload Cascade** (Transformation)
+    - Trigger: Empower + Overload combination cast
+    - Effect: Creates area-of-effect shockwave affecting nearby enemies
+    - Strength: Strong
+
+#### Support-Gem Style Synergies
+
+16. **Fortified Ward Charging** (Support)
+    - Trigger: Ward + Protection both active
+    - Effect: Ward charges by 20% whenever damage is prevented
+    - Strength: Normal
+
+17. **Bulwark Stacking** (Support)
+    - Trigger: Resistance + Fortification synergy active
+    - Effect: Resistance stacks grant 2% bonus armor per stack
+    - Strength: Normal
+
+18. **Sacred Aura Intensification** (Support)
+    - Trigger: Aura + Blessing both active
+    - Effect: Aura effects intensify by 10% per nearby buff on allies
+    - Strength: Normal
+
+19. **Wellspring Abundance** (Support)
+    - Trigger: Mana Pool + Regeneration active
+    - Effect: Mana regeneration scales with max mana pool (0.5% per 100 max mana)
+    - Strength: Normal
+
+#### Tank/Sustain & Chaos/Utility Synergies
+
+20. **Vitality Surge Scaling** (Support)
+    - Trigger: Health + Regeneration present
+    - Effect: Healing received scales with missing health % (max heal = missing health)
+    - Strength: Normal
+
+21. **Phantom Dodge Stacking** (Conditional)
+    - Trigger: Evasion + Dodge both active
+    - Condition: Dodge triggered in previous turn
+    - Effect: Dodge chance increases by 5% per consecutive successful evasion (stacks, max 50%)
+    - Strength: Normal
+
+22. **Amplified Summons** (Support)
+    - Trigger: Summoned Allies + Empowerment active
+    - Effect: Summoned units inherit all active buff effects (at 75% potency)
+    - Strength: Normal
+
+23. **Anguish Amplification** (Conditional)
+    - Trigger: Curse + Torment present
+    - Condition: Target is cursed
+    - Effect: Cursed enemies take 25% increased spell damage
+    - Strength: Strong
+
+24. **Alchemical Ascension** (Support)
+    - Trigger: Transmute + Enhancement both active
+    - Effect: Transmute outputs gain 1 enhancement bonus per ingredient
+    - Strength: Normal
+
+25. **Fortune's Gambit** (Transformation)
+    - Trigger: Chaos + Luck both active
+    - Effect: Random chance (10%) to double spell effects and refresh cooldown
+    - Strength: Strong
 
 ### Depth-2 & Depth-3 Example Chains
 
@@ -439,7 +537,7 @@ Tier 5: Primordial Superconductor (Depth 3, Generic Upgrade)
 
 ### Phase 4: Content & Polish (Week 4)
 - [ ] Load 25 new starter recipes
-- [ ] Load 8 new synergies
+- [ ] Load 25 new synergies
 - [ ] UI polish + accessibility
 - [ ] Documentation + tutorials
 
@@ -452,7 +550,7 @@ Tier 5: Primordial Superconductor (Depth 3, Generic Upgrade)
 - ✅ Synergy visualization and testing
 - ✅ JSON persistence with git-compatible output
 - ✅ Simulation engine integration working
-- ✅ All 25 starter recipes and 8 synergies loaded
+- ✅ All 25 starter recipes and 25 synergies loaded
 - ✅ Tool runs without errors on Windows, macOS, Linux
 - ✅ Load time < 2 seconds for full gem database
 
