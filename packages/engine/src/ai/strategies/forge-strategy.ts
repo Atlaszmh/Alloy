@@ -9,6 +9,7 @@ import type { SeededRNG } from '../../rng/seeded-rng.js';
 import { orbValueScore, bestArchetype } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
 import { calculateStats } from '../../forge/stat-calculator.js';
+import { RARITY_ORDER } from '../../types/gem.js';
 
 export interface ForgeStrategy {
   plan(
@@ -251,7 +252,8 @@ function calculateQuality(loadout: Loadout, registry: DataRegistry): number {
   const result = calculateStats(loadout, registry);
   const stats = result.stats;
   // Weight key defensive and offensive stats equally
-  return (stats.maxHP + stats.physicalDamage + stats.elementalResist) / 3;
+  const totalResist = Object.values(stats.resistances).reduce((a, b) => a + b, 0);
+  return (stats.maxHP + stats.physicalDamage + totalResist) / 3;
 }
 
 /**
@@ -332,7 +334,7 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
 
           // Later rounds weight combo output higher in decision making
           const roundMultiplier = 1 + (round - 1) * 0.2; // 1.0 at round 1, 1.4 at round 3, 2.0 at round 6
-          const comboValue = orbValueScore({ ...sortedStockpile[i], affixId: combo.output }, registry) * roundMultiplier;
+          const comboValue = orbValueScore({ ...sortedStockpile[i], affixId: combo.id }, registry) * roundMultiplier;
           const rawValue = orbValueScore(sortedStockpile[i], registry) + orbValueScore(sortedStockpile[j], registry);
 
           // Only combine if multiplied combo value exceeds sum of parts
@@ -494,7 +496,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
             if (!combo) continue;
 
             // Check if combo is better than original
-            const comboValue = orbValueScore({ ...socketedGem, affixId: combo.output }, registry);
+            const comboValue = orbValueScore({ ...socketedGem, affixId: combo.id }, registry);
             const pairValue = socketedValue + orbValueScore(stockpile[i], registry);
 
             // Only unsocket if combo significantly improves the loadout
@@ -662,11 +664,18 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       const combo = registry.getCombination(stockpile[cand.idx1].affixId, stockpile[cand.idx2].affixId);
       if (!combo) continue;
 
+      const maxTier = Math.max(stockpile[cand.idx1].tier, stockpile[cand.idx2].tier) as (1 | 2 | 3 | 4 | 5);
+      const maxRarityIdx = Math.max(
+        RARITY_ORDER.indexOf(stockpile[cand.idx1].rarity),
+        RARITY_ORDER.indexOf(stockpile[cand.idx2].rarity),
+      );
+      const maxRarity = RARITY_ORDER[maxRarityIdx];
+
       const combinedGem: GemInstance = {
         uid: `combined_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`,
-        affixId: combo.output,
-        tier: Math.max(stockpile[cand.idx1].tier, stockpile[cand.idx2].tier),
-        rarity: Math.max(stockpile[cand.idx1].rarity, stockpile[cand.idx2].rarity),
+        affixId: combo.id,
+        tier: maxTier,
+        rarity: maxRarity,
         recipeDepth: Math.max(stockpile[cand.idx1].recipeDepth, stockpile[cand.idx2].recipeDepth) + 1,
         combinable: true,
         tags: [...new Set([...stockpile[cand.idx1].tags, ...stockpile[cand.idx2].tags])],
