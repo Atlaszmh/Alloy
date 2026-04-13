@@ -14,14 +14,14 @@ export const TwoPaneLayout: React.FC<TwoPaneLayoutProps> = ({
   rightWidth = '50%',
 }) => {
   return (
-    <div className="flex h-full min-h-0 bg-slate-900">
+    <div className="flex h-full w-full min-h-0 bg-slate-900">
       {/* Left Pane */}
-      <div className="flex-1 border-r border-slate-700 bg-slate-800 overflow-hidden" style={{ width: leftWidth }}>
+      <div className="flex-1 border-r border-slate-700 bg-slate-800 overflow-hidden flex flex-col min-h-0" style={{ width: leftWidth }}>
         {left}
       </div>
 
       {/* Right Pane */}
-      <div className="flex-1 bg-slate-800 overflow-hidden" style={{ width: rightWidth }}>
+      <div className="flex-1 bg-slate-800 overflow-hidden flex flex-col min-h-0" style={{ width: rightWidth }}>
         {right}
       </div>
     </div>

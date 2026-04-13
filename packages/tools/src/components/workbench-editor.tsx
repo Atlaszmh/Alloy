@@ -5,7 +5,7 @@ export const WorkbenchEditor: React.FC = () => {
   const { selectedNode, editMode } = useGemBlueprintStore()
 
   return (
-    <div className="flex flex-col h-full bg-slate-800 text-slate-100">
+    <div className="flex flex-col h-full flex-1 min-h-0 bg-slate-800 text-slate-100">
       {/* Workbench Header */}
       <div className="border-b border-slate-700 px-6 py-4 bg-slate-900">
         <h2 className="text-lg font-semibold">Workbench Editor</h2>
