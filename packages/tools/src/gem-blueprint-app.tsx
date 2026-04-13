@@ -12,7 +12,7 @@ export const GemBlueprintApp: React.FC = () => {
   }, [loadDataFromJSON])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#0f172a' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', width: '100%', backgroundColor: '#0f172a' }}>
       {/* Main Layout - fills remaining space */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <TwoPaneLayout left={<RadialTreeBrowser />} right={<WorkbenchEditor />} />

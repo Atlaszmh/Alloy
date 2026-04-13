@@ -1,4 +1,16 @@
 // Affix type from engine + local extensions
+export interface StatEffect {
+  stat: string
+  op: 'flat' | 'percent' | 'override'
+  value: number
+}
+
+export interface TierEffects {
+  weaponEffect: StatEffect[]
+  armorEffect: StatEffect[]
+  valueRange: [number, number]
+}
+
 export interface Affix {
   id: string
   name: string
@@ -9,6 +21,7 @@ export interface Affix {
   description: string
   flavorText?: string
   tags: string[]
+  tierEffects?: Record<string, TierEffects>
 }
 
 export interface Recipe {

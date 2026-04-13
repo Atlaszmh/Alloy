@@ -31,7 +31,7 @@ describe('D3 Tree Renderer', () => {
         id: 'recipe-1',
         inputs: ['fire', 'water'],
         output: 'steam',
-        depth: 1,
+        depth: 1 as const,
         type: 'signature' as const,
         weight: 1,
         notes: '',
