@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { useForgeStore } from '@/stores/forgeStore';
@@ -16,10 +17,16 @@ const PHASE_TARGETS: { label: string; target: DebugPhaseTarget }[] = [
   { label: 'postmatch', target: 'complete' },
 ];
 
+const RUN_PHASES = ['draft', 'forge', 'duel'] as const;
+const RUN_ROUNDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
 export function DevDrawer({ open, onClose }: DevDrawerProps) {
   const navigate = useNavigate();
-  const { startDebugMatch } = useMatchStore();
+  const { startDebugMatch, startLocalMatch } = useMatchStore();
   const { showDebug, toggleDebug } = useUIStore();
+  const [selectedRunRound, setSelectedRunRound] = useState(1);
+  const [selectedRunPhase, setSelectedRunPhase] = useState<typeof RUN_PHASES[number]>('forge');
+  const [selectedAiTier, setSelectedAiTier] = useState<1 | 2 | 3 | 4 | 5>(3);
 
   if (!open) return null;
 
@@ -42,6 +49,42 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
       onClose();
     } catch (err) {
       console.error('Dev jump failed:', err);
+    }
+  };
+
+  const jumpToRunPhase = () => {
+    try {
+      const seed = 42; // Fixed seed for reproducibility
+
+      // For round 1, we can jump directly to draft/forge
+      // For later rounds, we start from round 1 and advance
+      startLocalMatch(
+        seed,
+        'run_async',
+        selectedAiTier,
+        'sword',
+        'chainmail',
+        { startingLives: 3, goalRound: 10 }
+      );
+
+      // For subsequent rounds, we would need to auto-play through previous rounds
+      // For now, we'll note in console that this is round 1
+      if (selectedRunRound > 1) {
+        console.warn(`[Dev] Run debug: Jumped to Round ${selectedRunRound} ${selectedRunPhase} (jumping to specific rounds not yet implemented - showing Round 1)`);
+      }
+
+      // Skip the BaseItemSelector
+      useForgeStore.setState({
+        itemSelectionPhase: 'done',
+        selectedWeaponId: 'sword',
+        selectedArmorId: 'chainmail',
+      });
+
+      const code = 'ai-run-' + Math.random().toString(36).substring(2, 8);
+      navigate(`/match/${code}`);
+      onClose();
+    } catch (err) {
+      console.error('Dev run jump failed:', err);
     }
   };
 
@@ -78,10 +121,10 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
         {/* Content */}
         <div className="overflow-y-auto px-4 pb-4">
           <div className="flex flex-col gap-4">
-            {/* Jump to Phase */}
+            {/* Jump to Phase (Ranked Mode) */}
             <section>
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-surface-300">
-                Jump to Phase
+                Ranked Mode
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {PHASE_TARGETS.map(({ label, target }) => (
@@ -93,6 +136,88 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
                     {label}
                   </button>
                 ))}
+              </div>
+            </section>
+
+            {/* Run Mode Debug */}
+            <section>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-surface-300">
+                Run Mode Debug
+              </h3>
+              <div className="space-y-3">
+                {/* AI Tier Selection */}
+                <div>
+                  <label className="text-xs font-medium text-surface-400">AI Tier</label>
+                  <div className="mt-1 grid grid-cols-5 gap-1">
+                    {[1, 2, 3, 4, 5].map((tier) => (
+                      <button
+                        key={tier}
+                        onClick={() => setSelectedAiTier(tier as 1 | 2 | 3 | 4 | 5)}
+                        className={`rounded px-2 py-1.5 text-xs font-semibold transition-colors ${
+                          selectedAiTier === tier
+                            ? 'bg-green-600 text-white'
+                            : 'border border-surface-500 bg-surface-700 text-surface-300 hover:border-green-500'
+                        }`}
+                      >
+                        {tier}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Round Selection */}
+                <div>
+                  <label className="text-xs font-medium text-surface-400">Round (1-10)</label>
+                  <div className="mt-1 grid grid-cols-5 gap-1">
+                    {RUN_ROUNDS.map((round) => (
+                      <button
+                        key={round}
+                        onClick={() => setSelectedRunRound(round)}
+                        className={`rounded px-2 py-1.5 text-xs font-semibold transition-colors ${
+                          selectedRunRound === round
+                            ? 'bg-green-600 text-white'
+                            : 'border border-surface-500 bg-surface-700 text-surface-300 hover:border-green-500'
+                        }`}
+                      >
+                        {round}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Phase Selection */}
+                <div>
+                  <label className="text-xs font-medium text-surface-400">Phase</label>
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    {RUN_PHASES.map((phase) => (
+                      <button
+                        key={phase}
+                        onClick={() => setSelectedRunPhase(phase)}
+                        className={`rounded px-3 py-2 text-xs font-semibold capitalize transition-colors ${
+                          selectedRunPhase === phase
+                            ? 'bg-green-600 text-white'
+                            : 'border border-surface-500 bg-surface-700 text-surface-300 hover:border-green-500'
+                        }`}
+                      >
+                        {phase}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Jump Button */}
+                <button
+                  onClick={jumpToRunPhase}
+                  className="w-full rounded-lg border border-green-500 bg-green-600/20 px-3 py-2 text-xs font-semibold text-green-400 transition-colors hover:bg-green-600/30"
+                >
+                  Jump to Run
+                </button>
+
+                {selectedRunRound > 1 && (
+                  <p className="text-xs text-surface-400">
+                    Note: Multi-round jumping coming soon. Currently shows Round 1.
+                  </p>
+                )}
               </div>
             </section>
 
