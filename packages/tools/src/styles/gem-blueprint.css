@@ -1,0 +1,127 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* D3 SVG Styles */
+.radial-tree-svg {
+  background: #1e293b;
+  cursor: grab;
+}
+
+.radial-tree-svg.dragging {
+  cursor: grabbing;
+}
+
+.node {
+  cursor: pointer;
+  transition: r 0.2s, opacity 0.2s;
+}
+
+.node:hover {
+  stroke: #fbbf24;
+  stroke-width: 2px;
+}
+
+.node.selected {
+  stroke: #60a5fa;
+  stroke-width: 3px;
+}
+
+.node.faded {
+  opacity: 0.2;
+}
+
+.link {
+  fill: none;
+  stroke: #64748b;
+  stroke-width: 1.5px;
+  opacity: 0.6;
+}
+
+.link.recipe {
+  stroke: #3b82f6;
+}
+
+.link.synergy {
+  stroke: #f97316;
+}
+
+.link.synergy.dashed {
+  stroke-dasharray: 5, 5;
+}
+
+.link.highlighted {
+  stroke: #60a5fa;
+  stroke-width: 2.5px;
+  opacity: 1;
+}
+
+.node-label {
+  font-size: 11px;
+  font-family: system-ui, -apple-system, sans-serif;
+  fill: #e2e8f0;
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.node-label.highlighted {
+  fill: #fbbf24;
+  font-weight: bold;
+}
+
+/* Workbench Styles */
+.workbench-tabs {
+  @apply flex border-b border-slate-600;
+}
+
+.workbench-tab {
+  @apply px-4 py-2 text-sm font-medium text-slate-400 border-b-2 border-transparent cursor-pointer hover:text-slate-200;
+}
+
+.workbench-tab.active {
+  @apply border-b-2 border-blue-500 text-blue-400;
+}
+
+.form-group {
+  @apply mb-4;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-slate-300 mb-2;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  @apply w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-slate-100 focus:border-blue-500 focus:outline-none;
+}
+
+.form-textarea {
+  @apply resize-none;
+}
+
+.button {
+  @apply px-4 py-2 rounded font-medium text-sm transition-colors;
+}
+
+.button-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.button-secondary {
+  @apply bg-slate-700 text-slate-200 hover:bg-slate-600;
+}
+
+.button-danger {
+  @apply bg-red-600 text-white hover:bg-red-700;
+}
+
+/* Tooltip */
+.tooltip {
+  @apply absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-slate-950 text-slate-100 px-3 py-2 rounded text-xs whitespace-nowrap pointer-events-none opacity-0 transition-opacity;
+}
+
+.tooltip.visible {
+  @apply opacity-100;
+}

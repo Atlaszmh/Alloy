@@ -11,7 +11,7 @@
     "declaration": false,
     "declarationMap": false,
     "noEmit": true,
-    "types": ["vite/client", "vitest/globals", "jsdom"]
+    "types": ["vite/client"]
   },
   "include": ["src"]
 }
