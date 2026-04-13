@@ -16,6 +16,7 @@ import BalancePage from './pages/BalancePage.js';
 import RoundAnalysisPage from './pages/RoundAnalysisPage.js';
 import DistributionsPage from './pages/DistributionsPage.js';
 import ConfigEditorPage from './pages/ConfigEditorPage.js';
+import './styles/gem-blueprint.css';
 
 const tabs: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },

@@ -79,13 +79,13 @@ export const RadialTreeBrowser: React.FC = () => {
   }, [affixes, recipes, selectedNode, setSelectedNode])
 
   return (
-    <div className="w-full h-full flex-1 flex flex-col min-h-0 bg-slate-800">
+    <div style={{ width: '100%', height: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: '#1e293b' }}>
       <svg
         ref={svgRef}
-        className="radial-tree-svg flex-1"
+        className="radial-tree-svg"
         width={CONTAINER_SIZE}
         height={CONTAINER_SIZE}
-        style={{ width: '100%', height: '100%', minHeight: 0 }}
+        style={{ width: '100%', height: '100%', minHeight: 0, flex: 1, backgroundColor: '#1e293b' }}
       />
     </div>
   )

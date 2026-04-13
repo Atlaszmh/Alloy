@@ -154,7 +154,10 @@
       "Bash(/dev/null cd:*)",
       "Bash(curl -s http://localhost:9099)",
       "mcp__plugin_playwright_playwright__browser_wait_for",
-      "mcp__plugin_playwright_playwright__browser_close"
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(curl -s http://localhost:9098)",
+      "mcp__plugin_playwright_playwright__browser_press_key",
+      "Bash(pkill -f \"vite|tsx.*dev\")"
     ]
   }
 }
