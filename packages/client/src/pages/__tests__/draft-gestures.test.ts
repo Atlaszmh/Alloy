@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyGesture } from '../draft-gestures';
+import { classifyGesture, INSPECT_THRESHOLD } from '../draft-gestures';
 
 describe('draft gesture classification', () => {
   it('classifies small movement + short hold as tap', () => {
@@ -24,5 +24,9 @@ describe('draft gesture classification', () => {
 
   it('classifies small movement + long hold as hold (no-op)', () => {
     expect(classifyGesture({ x: 100, y: 100 }, { x: 102, y: 101 }, 400)).toBe('hold');
+  });
+
+  it('exports INSPECT_THRESHOLD as 500ms', () => {
+    expect(INSPECT_THRESHOLD).toBe(500);
   });
 });

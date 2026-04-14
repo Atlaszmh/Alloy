@@ -1,5 +1,6 @@
 export const DRAG_THRESHOLD = 8;    // px
 export const HOLD_THRESHOLD = 300;  // ms
+export const INSPECT_THRESHOLD = 500;  // ms — long-press opens inspect panel
 
 export function classifyGesture(
   startPos: { x: number; y: number },
