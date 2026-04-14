@@ -81,6 +81,14 @@ export function GemCard({
   const rarityColor = rarity ? RARITY_COLORS[rarity] : undefined;
   const rarityLabel = rarity ? RARITY_LABELS[rarity] : undefined;
 
+  const rarityAnimation: Record<GemRarity, string | undefined> = {
+    common: undefined,
+    magic: 'shimmer-magic 3s ease-in-out infinite',
+    rare: 'shimmer-rare 2.5s ease-in-out infinite',
+    epic: 'pulse-epic 2s ease-in-out infinite',
+    legendary: 'legendary-aura 2.5s ease-in-out infinite',
+  };
+
   const card = (
     <div
       data-gem={affixId}
@@ -102,15 +110,18 @@ export function GemCard({
           width: 'var(--gem-size)',
           height: 'var(--gem-size)',
           borderRadius: 'var(--gem-radius)',
-          border: rarityColor
-            ? `2.5px solid ${rarityColor}`
-            : `2.5px solid ${colors.border}`,
+          border: rarity === 'legendary'
+            ? `3px solid ${rarityColor}`
+            : rarityColor
+              ? `2.5px solid ${rarityColor}`
+              : `2.5px solid ${colors.border}`,
           background: `linear-gradient(135deg, ${colors.bg})`,
           position: 'relative',
           overflow: 'hidden',
-          boxShadow: rarityColor && rarity !== 'common'
-            ? `0 0 ${6 + (rarity === 'legendary' ? 10 : rarity === 'epic' ? 8 : rarity === 'rare' ? 6 : 4)}px ${rarityColor}`
+          boxShadow: rarity && rarity !== 'common'
+            ? undefined  // animation controls box-shadow
             : tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
+          animation: rarity ? rarityAnimation[rarity] : undefined,
         }}
       >
         {/* Specular highlight */}

@@ -219,6 +219,30 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Rarity glow animations — progressive intensity */
+@keyframes shimmer-magic {
+  0%, 100% { box-shadow: 0 0 6px rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 0 14px rgba(59, 130, 246, 0.6); }
+}
+@keyframes shimmer-rare {
+  0%, 100% { box-shadow: 0 0 10px rgba(234, 179, 8, 0.3); }
+  50% { box-shadow: 0 0 18px rgba(234, 179, 8, 0.6); }
+}
+@keyframes pulse-epic {
+  0%, 100% { box-shadow: 0 0 14px rgba(168, 85, 247, 0.4); }
+  50% { box-shadow: 0 0 24px rgba(168, 85, 247, 0.7); }
+}
+@keyframes legendary-aura {
+  0% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.5), 0 0 36px rgba(245, 158, 11, 0.15); }
+  33% { box-shadow: 0 0 28px rgba(245, 158, 11, 0.7), 0 0 48px rgba(245, 158, 11, 0.25); }
+  66% { box-shadow: 0 0 22px rgba(251, 191, 36, 0.6), 0 0 42px rgba(245, 158, 11, 0.2); }
+  100% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.5), 0 0 36px rgba(245, 158, 11, 0.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0s !important; }
+}
+
 /* swoop-to-stockpile: now driven by Web Animations API in Draft.tsx for smooth GPU compositing */
 
 
