@@ -1,4 +1,5 @@
 import type { AffixDef, AffixTier, GemInstance } from '@alloy/engine';
+import { RARITY_MULTIPLIERS } from '@alloy/engine';
 
 const STAT_ABBREVIATIONS: Record<string, string> = {
   physicalDamage: 'Phys Dmg',
@@ -43,7 +44,9 @@ export function getStatLabel(
   const effects = target === 'weapon' ? tierData?.weaponEffect : tierData?.armorEffect;
   const stat = effects?.[0];
   if (!stat) return '';
+  const mult = RARITY_MULTIPLIERS[orb.rarity];
+  const effective = stat.value * mult;
   return stat.op === 'percent'
-    ? `${Math.round(stat.value * 100)}%`
-    : `+${stat.value}`;
+    ? `${Math.round(effective * 100)}%`
+    : `+${Number.isInteger(effective) ? effective : effective.toFixed(1)}`;
 }
