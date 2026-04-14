@@ -117,7 +117,8 @@ export function GemCard({
               : `2.5px solid ${colors.border}`,
           background: `linear-gradient(135deg, ${colors.bg})`,
           position: 'relative',
-          overflow: 'hidden',
+          // NOTE: overflow:hidden + border-radius clips box-shadow in Chrome.
+          // Children use borderRadius:'inherit' instead to self-clip.
           boxShadow: rarity && rarity !== 'common'
             ? undefined  // animation controls box-shadow
             : tier >= 3 ? `0 0 ${4 + tier * 2}px ${tierColor}` : undefined,
@@ -129,6 +130,7 @@ export function GemCard({
           style={{
             position: 'absolute',
             inset: 0,
+            borderRadius: 'inherit',
             background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent 55%)',
             pointerEvents: 'none',
           }}
@@ -145,6 +147,7 @@ export function GemCard({
               width: '100%',
               height: '100%',
               objectFit: 'cover',
+              borderRadius: 'inherit',
               zIndex: 1,
             }}
           />
@@ -228,6 +231,7 @@ export function GemCard({
               bottom: 0,
               left: 0,
               right: 0,
+              borderRadius: 'inherit',
               background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, transparent 100%)',
               padding: 'calc(var(--gem-size) * 0.04) calc(var(--gem-size) * 0.06) calc(var(--gem-size) * 0.04)',
               textAlign: 'center',
