@@ -52,6 +52,7 @@ export function MainMenu() {
 
         {[
           { label: 'Recipe Book', path: '/recipes' },
+          { label: 'Gems', path: '/gems' },
           { label: 'Collection', path: '/collection' },
           { label: 'Leaderboard', path: '/leaderboard' },
           { label: 'Profile', path: '/profile' },

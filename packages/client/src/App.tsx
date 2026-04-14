@@ -8,6 +8,7 @@ import { RecipeBook } from './pages/RecipeBook';
 import { Collection } from './pages/Collection';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
+import { GemEncyclopedia } from './pages/GemEncyclopedia';
 import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useRouteSound } from './hooks/useRouteSound';
 
@@ -32,6 +33,7 @@ export function App() {
         <Route path="/collection" element={<Collection />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/gems" element={<GemEncyclopedia />} />
       </Route>
     </Routes>
   );
