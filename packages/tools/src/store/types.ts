@@ -19,7 +19,8 @@ export interface Affix {
   categories: string[]
   icon: string
   description: string
-  flavorText?: string
+  weaponFlavorText?: string
+  armorFlavorText?: string
   tags: string[]
   tierEffects?: Record<string, TierEffects>
 }
