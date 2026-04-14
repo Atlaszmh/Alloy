@@ -13,8 +13,9 @@ import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
-import { DRAG_THRESHOLD } from '@/pages/draft-gestures';
-import type { BaseStat, GemInstance } from '@alloy/engine';
+import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
+import { GemInspectPanel } from '@/components/GemInspectPanel';
+import type { AffixDef, BaseStat, CompoundAffixDef, GemInstance } from '@alloy/engine';
 import { createForgeState } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
@@ -77,6 +78,10 @@ export function Forge() {
   const [baseStatWeapon, setBaseStatWeapon] = useState<[BaseStat, BaseStat]>(['STR', 'VIT']);
   const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
+  const [inspectGem, setInspectGem] = useState<{
+    gem: GemInstance;
+    affixDef: AffixDef | CompoundAffixDef;
+  } | null>(null);
 
   // ── Drag state — ALL refs, ZERO React state during drag to avoid re-render fighting ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
@@ -326,17 +331,28 @@ export function Forge() {
           el.classList.remove('forge-drop-active');
         });
       } else {
-        // Not a drag — classify as tap or hold
+        // Not a drag — classify as tap, hold, or inspect
         const holdDuration = Date.now() - start.time;
-        if (holdDuration < 300) {
+        if (holdDuration >= INSPECT_THRESHOLD) {
+          // Long-press (>=500ms): open inspect panel
+          const gem = useForgeStore.getState().plan?.stockpile.find(g => g.uid === start.uid);
+          if (gem) {
+            const affixDef = registry.findAffix(gem.affixId)
+              ?? registry.getCombinationById(gem.affixId);
+            if (affixDef) {
+              setInspectGem({ gem, affixDef });
+            }
+          }
+        } else if (holdDuration < 300) {
+          // Tap: select or deselect
           if (selectedOrbUidRef.current === start.uid) {
-            // Double-tap — deselect
             selectOrb(null);
           } else {
             selectOrb(start.uid);
             playSound('orbSelect');
           }
         }
+        // 300-499ms: no-op (existing behavior)
       }
 
       pointerStartRef.current = null;
@@ -633,6 +649,21 @@ export function Forge() {
           dragUid={null}
         />
       </div>
+
+      {/* Gem inspect panel (long-press on tray gem) */}
+      {inspectGem && (
+        <GemInspectPanel
+          gem={{
+            name: inspectGem.affixDef.name,
+            description: inspectGem.affixDef.description,
+            weaponFlavorText: inspectGem.affixDef.weaponFlavorText,
+            armorFlavorText: inspectGem.affixDef.armorFlavorText,
+            tags: inspectGem.affixDef.tags,
+          }}
+          context="both"
+          onClose={() => setInspectGem(null)}
+        />
+      )}
 
       {/* Confirmation modal */}
       <Modal open={confirmModalOpen} onClose={closeConfirmModal} title="Commit your forge?">
