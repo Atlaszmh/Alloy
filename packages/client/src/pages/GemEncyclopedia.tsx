@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
-import type { AffixCategory } from '@alloy/engine';
+import type { AffixCategory, GemRarity } from '@alloy/engine';
+import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
 
 type FilterTab = 'all' | AffixCategory | 'compound';
 
@@ -38,6 +39,24 @@ export function GemEncyclopedia() {
   const registry = getRegistry();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedRarity, setSelectedRarity] = useState<GemRarity>('common');
+
+  const RARITY_COLORS: Record<GemRarity, string> = {
+    common: '#9ca3af', magic: '#3b82f6', rare: '#eab308', epic: '#a855f7', legendary: '#f59e0b',
+  };
+
+  const mult = RARITY_MULTIPLIERS[selectedRarity];
+
+  function fmtVal(value: number, op: string): string {
+    const eff = value * mult;
+    if (op === 'percent') return `${Math.round(eff * 100)}%`;
+    return `+${Number.isInteger(eff) ? eff : eff.toFixed(1)}`;
+  }
+
+  function fmtBase(value: number, op: string): string {
+    if (op === 'percent') return `${Math.round(value * 100)}%`;
+    return `+${value}`;
+  }
 
   const entries = useMemo<EncyclopediaEntry[]>(() => {
     const base: EncyclopediaEntry[] = registry.getAllAffixes().map((a) => ({
@@ -134,6 +153,28 @@ export function GemEncyclopedia() {
               <h2 className="text-lg font-bold text-white">{selected.name}</h2>
               <p className="text-sm text-surface-300">{selected.description}</p>
 
+              {/* Rarity selector tabs */}
+              <div className="flex gap-1">
+                {RARITY_ORDER.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setSelectedRarity(r)}
+                    className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
+                      selectedRarity === r
+                        ? 'text-white'
+                        : 'text-surface-500 hover:text-surface-300'
+                    }`}
+                    style={selectedRarity === r ? {
+                      backgroundColor: `${RARITY_COLORS[r]}20`,
+                      color: RARITY_COLORS[r],
+                      border: `1px solid ${RARITY_COLORS[r]}40`,
+                    } : undefined}
+                  >
+                    {r.charAt(0).toUpperCase() + r.slice(1)}
+                  </button>
+                ))}
+              </div>
+
               {/* Weapon section */}
               {selected.weaponFlavorText.length > 0 && (
                 <div>
@@ -151,7 +192,11 @@ export function GemEncyclopedia() {
                             <span className="w-8 font-semibold text-surface-500">T{tier}</span>
                             {data.weaponEffect.map((e, i) => (
                               <span key={i}>
-                                {e.stat}: <span className="text-accent-400">{e.op === 'flat' ? '+' : ''}{e.value}{e.op === 'percent' ? '%' : ''}</span>
+                                {e.stat}:{' '}
+                                <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
+                                {selectedRarity !== 'common' && (
+                                  <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -162,7 +207,11 @@ export function GemEncyclopedia() {
                     <div className="flex flex-wrap gap-2 text-xs text-surface-300">
                       {selected.weaponEffect.map((e, i) => (
                         <span key={i}>
-                          {e.stat}: <span className="text-accent-400">{e.op === 'flat' ? '+' : ''}{e.value}{e.op === 'percent' ? '%' : ''}</span>
+                          {e.stat}:{' '}
+                          <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
+                          {selectedRarity !== 'common' && (
+                            <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -187,7 +236,11 @@ export function GemEncyclopedia() {
                             <span className="w-8 font-semibold text-surface-500">T{tier}</span>
                             {data.armorEffect.map((e, i) => (
                               <span key={i}>
-                                {e.stat}: <span className="text-emerald-400">{e.op === 'flat' ? '+' : ''}{e.value}{e.op === 'percent' ? '%' : ''}</span>
+                                {e.stat}:{' '}
+                                <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
+                                {selectedRarity !== 'common' && (
+                                  <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -198,12 +251,23 @@ export function GemEncyclopedia() {
                     <div className="flex flex-wrap gap-2 text-xs text-surface-300">
                       {selected.armorEffect.map((e, i) => (
                         <span key={i}>
-                          {e.stat}: <span className="text-emerald-400">{e.op === 'flat' ? '+' : ''}{e.value}{e.op === 'percent' ? '%' : ''}</span>
+                          {e.stat}:{' '}
+                          <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
+                          {selectedRarity !== 'common' && (
+                            <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
+                          )}
                         </span>
                       ))}
                     </div>
                   ) : null}
                 </div>
+              )}
+
+              {/* Rarity multiplier footer */}
+              {selectedRarity !== 'common' && (
+                <p className="text-xs" style={{ color: RARITY_COLORS[selectedRarity] }}>
+                  {selectedRarity.charAt(0).toUpperCase() + selectedRarity.slice(1)}: {mult}x multiplier
+                </p>
               )}
 
               {/* Tags */}

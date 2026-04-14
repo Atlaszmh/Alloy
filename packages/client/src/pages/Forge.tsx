@@ -659,6 +659,17 @@ export function Forge() {
             weaponFlavorText: inspectGem.affixDef.weaponFlavorText,
             armorFlavorText: inspectGem.affixDef.armorFlavorText,
             tags: inspectGem.affixDef.tags,
+            rarity: inspectGem.gem.rarity,
+            tier: inspectGem.gem.tier,
+            tiers: 'tiers' in inspectGem.affixDef
+              ? (inspectGem.affixDef as AffixDef).tiers
+              : undefined,
+            weaponEffect: 'weaponEffect' in inspectGem.affixDef
+              ? inspectGem.affixDef.weaponEffect
+              : undefined,
+            armorEffect: 'armorEffect' in inspectGem.affixDef
+              ? inspectGem.affixDef.armorEffect
+              : undefined,
           }}
           context="both"
           onClose={() => setInspectGem(null)}
