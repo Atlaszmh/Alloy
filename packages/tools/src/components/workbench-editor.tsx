@@ -9,6 +9,12 @@ export const WorkbenchEditor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('affixes')
 
   const selectedAffix = selectedNode ? affixes.find((a) => a.id === selectedNode) : null
+  const hasWeaponEffects = selectedAffix?.tierEffects
+    ? Object.values(selectedAffix.tierEffects).some(t => t.weaponEffect.length > 0)
+    : false;
+  const hasArmorEffects = selectedAffix?.tierEffects
+    ? Object.values(selectedAffix.tierEffects).some(t => t.armorEffect.length > 0)
+    : false;
 
   // Find recipes that involve this gem
   const relatedRecipes = selectedNode
@@ -74,24 +80,6 @@ export const WorkbenchEditor: React.FC = () => {
           <div style={{ flex: 1, padding: '1.5rem', overflow: 'auto' }}>
             {activeTab === 'affixes' && (
               <div>
-                {/* Description Section */}
-                <div
-                  style={{
-                    backgroundColor: '#334155',
-                    padding: '1.25rem',
-                    borderRadius: '0.375rem',
-                    marginBottom: '1.5rem',
-                    borderLeft: '4px solid #6366f1',
-                  }}
-                >
-                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.75rem' }}>
-                    {selectedAffix.categories.includes('compound') ? '✨ Compound Effect' : '⚔️ Effect Description'}
-                  </h4>
-                  <p style={{ color: '#e2e8f0', fontSize: '0.95rem', lineHeight: '1.6', margin: 0 }}>
-                    {selectedAffix.description}
-                  </p>
-                </div>
-
                 <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '1rem' }}>Properties</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div>
@@ -133,63 +121,114 @@ export const WorkbenchEditor: React.FC = () => {
                   )}
                 </div>
 
-                {selectedAffix.tierEffects && Object.keys(selectedAffix.tierEffects).length > 0 && (
-                  <>
-                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '1rem' }}>Effects by Tier</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      {Object.entries(selectedAffix.tierEffects).map(([tierKey, effects]) => (
-                        <div
-                          key={tierKey}
-                          style={{
+                {/* Weapon Section */}
+                {hasWeaponEffects && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.75rem' }}>
+                      Weapon
+                    </h3>
+                    {selectedAffix.weaponFlavorText && (
+                      <div style={{
+                        backgroundColor: '#334155',
+                        padding: '1rem',
+                        borderRadius: '0.375rem',
+                        marginBottom: '1rem',
+                        borderLeft: '3px solid #fbbf24',
+                      }}>
+                        <p style={{ color: '#e2e8f0', fontSize: '0.875rem', lineHeight: '1.6', margin: 0 }}>
+                          {selectedAffix.weaponFlavorText}
+                        </p>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {selectedAffix.tierEffects && Object.entries(selectedAffix.tierEffects).map(([tierKey, effects]) =>
+                        effects.weaponEffect.length > 0 ? (
+                          <div key={tierKey} style={{
                             backgroundColor: '#334155',
-                            padding: '1rem',
+                            padding: '0.75rem 1rem',
                             borderRadius: '0.375rem',
-                            borderLeft: '3px solid #8b5cf6',
-                          }}
-                        >
-                          <p style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.75rem', fontWeight: 600 }}>
-                            Tier {tierKey}
-                          </p>
-
-                          {effects.weaponEffect.length > 0 && (
-                            <div style={{ marginBottom: '0.75rem' }}>
-                              <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>Weapon</p>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {effects.weaponEffect.map((effect, idx) => (
-                                  <p key={idx} style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
-                                    <span style={{ color: '#94a3b8' }}>{effect.stat}</span>: <span style={{ color: '#fbbf24' }}>
-                                      {effect.op === 'flat' ? '+' : effect.op === 'percent' ? '+' : ''}{effect.value}{effect.op === 'percent' ? '%' : ''}
-                                    </span>
-                                  </p>
-                                ))}
-                              </div>
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, minWidth: '3rem' }}>
+                              T{tierKey}
+                            </span>
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                              {effects.weaponEffect.map((effect, idx) => (
+                                <span key={idx} style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
+                                  <span style={{ color: '#94a3b8' }}>{effect.stat}</span>:{' '}
+                                  <span style={{ color: '#fbbf24' }}>
+                                    {effect.op === 'flat' ? '+' : ''}{effect.value}{effect.op === 'percent' ? '%' : ''}
+                                  </span>
+                                </span>
+                              ))}
+                              {effects.valueRange && effects.valueRange[0] !== 0 && effects.valueRange[1] !== 0 && (
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                  Range: {effects.valueRange[0]}–{effects.valueRange[1]}
+                                </span>
+                              )}
                             </div>
-                          )}
-
-                          {effects.armorEffect.length > 0 && (
-                            <div>
-                              <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>Armor</p>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {effects.armorEffect.map((effect, idx) => (
-                                  <p key={idx} style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
-                                    <span style={{ color: '#94a3b8' }}>{effect.stat}</span>: <span style={{ color: '#34d399' }}>
-                                      {effect.op === 'flat' ? '+' : effect.op === 'percent' ? '+' : ''}{effect.value}{effect.op === 'percent' ? '%' : ''}
-                                    </span>
-                                  </p>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {effects.valueRange && effects.valueRange[0] !== 0 && effects.valueRange[1] !== 0 && (
-                            <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.5rem' }}>
-                              Range: {effects.valueRange[0]} - {effects.valueRange[1]}
-                            </p>
-                          )}
-                        </div>
-                      ))}
+                          </div>
+                        ) : null
+                      )}
                     </div>
-                  </>
+                  </div>
+                )}
+
+                {/* Armor Section */}
+                {hasArmorEffects && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#cbd5e1', marginBottom: '0.75rem' }}>
+                      Armor
+                    </h3>
+                    {selectedAffix.armorFlavorText && (
+                      <div style={{
+                        backgroundColor: '#334155',
+                        padding: '1rem',
+                        borderRadius: '0.375rem',
+                        marginBottom: '1rem',
+                        borderLeft: '3px solid #34d399',
+                      }}>
+                        <p style={{ color: '#e2e8f0', fontSize: '0.875rem', lineHeight: '1.6', margin: 0 }}>
+                          {selectedAffix.armorFlavorText}
+                        </p>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {selectedAffix.tierEffects && Object.entries(selectedAffix.tierEffects).map(([tierKey, effects]) =>
+                        effects.armorEffect.length > 0 ? (
+                          <div key={tierKey} style={{
+                            backgroundColor: '#334155',
+                            padding: '0.75rem 1rem',
+                            borderRadius: '0.375rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '1rem',
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, minWidth: '3rem' }}>
+                              T{tierKey}
+                            </span>
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                              {effects.armorEffect.map((effect, idx) => (
+                                <span key={idx} style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
+                                  <span style={{ color: '#94a3b8' }}>{effect.stat}</span>:{' '}
+                                  <span style={{ color: '#34d399' }}>
+                                    {effect.op === 'flat' ? '+' : ''}{effect.value}{effect.op === 'percent' ? '%' : ''}
+                                  </span>
+                                </span>
+                              ))}
+                              {effects.valueRange && effects.valueRange[0] !== 0 && effects.valueRange[1] !== 0 && (
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                  Range: {effects.valueRange[0]}–{effects.valueRange[1]}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )}
