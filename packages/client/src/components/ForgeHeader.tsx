@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import type { DerivedStats } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { Timer } from '@/components/Timer';
@@ -26,6 +27,7 @@ export function ForgeHeader({
   onDone,
   baseStatSelectors,
 }: ForgeHeaderProps) {
+  const navigate = useNavigate();
   const fluxEmpty = flux === 0;
   const fluxLow = flux > 0 && flux <= 2;
 
@@ -70,6 +72,15 @@ export function ForgeHeader({
         <div className="ml-auto">
           <Timer durationMs={timerDurationMs} onExpire={onTimerExpire} />
         </div>
+
+        {/* Gem Library shortcut */}
+        <button
+          onClick={() => navigate('/gems')}
+          className="text-xs text-surface-400 hover:text-accent-400"
+          style={{ fontFamily: 'var(--font-family-body)' }}
+        >
+          Gem Library
+        </button>
 
         {/* Done button */}
         <HapticButton variant="primary" size="sm" onClick={onDone}>
