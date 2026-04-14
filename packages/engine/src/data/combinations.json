@@ -2,6 +2,9 @@
   {
     "id": "ignite",
     "name": "Ignite",
+    "description": "Stacks exponential burn damage on weapons; absorbs enemy fire to generate defensive shields on armor.",
+    "weaponFlavorText": "Each attack stacks independent ignite effects. One ignite is persistent damage. Two ignites amplify each other. Three is exponential. The longer you keep hitting the same target, the more the burns cascade. Eventually, the fire becomes self-sustaining.",
+    "armorFlavorText": "Enemy fire magic doesn't hurt you -- it fuels you. Incoming fire damage is absorbed and converted into passive defensive shields. Standing in the flames makes you stronger. They burn, you get tougher.",
     "components": ["chance_on_hit", "fire_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -18,6 +21,9 @@
   {
     "id": "frostbite",
     "name": "Frostbite",
+    "description": "Applies escalating frost that slows and sets up executions on weapons; forms counter-chill shields on armor.",
+    "weaponFlavorText": "Every strike applies frost that slows enemy movement drastically. Stack enough frost and enemies become nearly immobilized. While frozen, they take increased damage from all sources -- you're setting them up for execution. The cold is a debilitating status, not just damage.",
+    "armorFlavorText": "When enemies attack you, temporary frost shields form that reflect cold back at the attacker. You don't absorb heat -- you create it to push back damage. The contrast between your armor's extreme cold and their heat creates defensive shockwaves.",
     "components": ["chance_on_hit", "cold_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -36,6 +42,9 @@
   {
     "id": "static_discharge",
     "name": "Static Discharge",
+    "description": "Chains lightning damage to a secondary target on weapons; releases area damage bursts on armor.",
+    "weaponFlavorText": "On proc, your strike deals 50% chain damage that carries to a secondary target. It's a bonus hit, not a bounce -- one extra enemy takes a portion of your original damage. Pairs brutally with high base lightning hits.",
+    "armorFlavorText": "On proc, releases an area damage burst around you. Standing in the middle of a group means everyone near you takes the hit. It's not targeted -- it just detonates.",
     "components": ["chance_on_hit", "lightning_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -51,6 +60,9 @@
   {
     "id": "envenom",
     "name": "Envenom",
+    "description": "Stacks poison that amplifies exponentially on weapons; infects attackers with reflected toxins on armor.",
+    "weaponFlavorText": "Each poison stack increases the damage of all other poison stacks. One poison is a trickle. Two is a leak. Five is a cascade. You're incentivized to layer poisons on the same target repeatedly. They die to the exponential growth, not the initial hit.",
+    "armorFlavorText": "Your blood is laced with counter-toxins. Enemies who damage you get infected with their own poisons reflected back. It's not resistance -- it's weaponization. They poison themselves through contact with you.",
     "components": ["chance_on_hit", "poison_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -67,6 +79,9 @@
   {
     "id": "soul_rend",
     "name": "Soul Rend",
+    "description": "Rips into enemies based on current health and permanently reduces their max HP on weapons; drains enemy max health into your reserves on armor.",
+    "weaponFlavorText": "Your attacks rip into enemies based on how much life they currently have -- full health enemies take catastrophic damage, but at low health they take less. The secondary effect permanently reduces enemy maximum HP. You're not just damaging them -- you're permanently crippling them.",
+    "armorFlavorText": "When enemies attack you, their maximum health is siphoned into your reserves. Long fights mean you accumulate their power while they lose it. You're literally draining enemy health bars through their assault attempts. Enemies get progressively weaker, you get progressively stronger.",
     "components": ["chance_on_hit", "shadow_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -83,6 +98,9 @@
   {
     "id": "soul_siphon",
     "name": "Soul Siphon",
+    "description": "Converts all damage dealt into instant health on weapons; passively heals from enemy attacks on armor.",
+    "weaponFlavorText": "Every point of damage you deal instantly becomes health restored. Hit harder, heal harder. Single strong enemy? You're unkillable because each blow sustains you. Group of enemies? You're healing multiple times per second from every strike. Combat duration is no longer a concern.",
+    "armorFlavorText": "Standing there and getting attacked heals you. Enemies literally feed you. The longer they attack, the healthier you get. It's not even a proc -- it's automatic. Every wound they inflict on you is a mistake that heals your wounds instead.",
     "components": ["chance_on_hit", "lifesteal"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -98,6 +116,9 @@
   {
     "id": "concussion",
     "name": "Concussion",
+    "description": "Chain-stuns targets into helplessness on weapons; negates crowd control effects on armor.",
+    "weaponFlavorText": "Your attacks stun targets, interrupting their abilities, their attacks, their plans. They can't dodge while stunned. They can't counterattack. Their power doesn't matter if they can't use it. Rapid hits chain stuns -- enemies become helpless punching bags.",
+    "armorFlavorText": "Crowd control effects aimed at you simply don't land. Stun attempts fail. Slow effects fizzle. Disable magic bounces off. You're immune to control at a mechanical level. Enemies can't lock you down.",
     "components": ["chance_on_hit", "stun_chance"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -115,6 +136,9 @@
   {
     "id": "retribution_aura",
     "name": "Retribution Aura",
+    "description": "Multiplies thorns counterattack when wounded on weapons; amplifies reflective aura damage on sustained assault on armor.",
+    "weaponFlavorText": "When you take damage, you automatically retaliate with thorns that multiply your counterattack. Getting hurt fuels your offense. Every wound inflicted on you creates a wave of thorns back at the attacker.",
+    "armorFlavorText": "Your thorns aura activates when enemies attack you, dealing reflective damage that scales up. The more sustained the assault, the more damage they're taking from your aura alone. Attacking you becomes a war of attrition you're winning.",
     "components": ["chance_on_taking_damage", "thorns"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -133,6 +157,9 @@
   {
     "id": "immolation",
     "name": "Immolation",
+    "description": "Triggers area fire explosions when taking damage on weapons; creates retaliatory firestorms on armor.",
+    "weaponFlavorText": "Getting hit triggers an area-of-effect fire explosion. Every damage instance you take becomes a damage instance you deal to nearby enemies. It's damage redistribution -- you're spreading the pain.",
+    "armorFlavorText": "Taking damage creates a firestorm around you. Enemies who hurt you hurt everything near them. You're a walking bomb -- every hit against you is a mistake that damages their allies.",
     "components": ["chance_on_taking_damage", "fire_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -149,6 +176,9 @@
   {
     "id": "reactive_shield",
     "name": "Reactive Shield",
+    "description": "Converts incoming damage into temporary shields on weapons; spawns protective barriers from sustained assault on armor.",
+    "weaponFlavorText": "Taking damage generates temporary shields that absorb overflow. You're converting incoming damage into outgoing protection.",
+    "armorFlavorText": "Every hit you take spawns protective barriers. Getting attacked makes you harder to kill. Sustained assault activates your defenses until enemies run out of time.",
     "components": ["chance_on_taking_damage", "barrier"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -165,6 +195,9 @@
   {
     "id": "counter_strike",
     "name": "Counter Strike",
+    "description": "Triggers automatic counterattacks on successful blocks from weapons; activates thorn effects on blocks from armor.",
+    "weaponFlavorText": "Successfully blocking an attack triggers an automatic counterattack. Defense becomes instant retaliation. Every block is a free attack.",
+    "armorFlavorText": "Blocks don't just prevent damage -- they activate thorn effects that hurt the attacker. Your defense is actively damaging them.",
     "components": ["chance_on_block", "thorns"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -181,6 +214,9 @@
   {
     "id": "shield_bash",
     "name": "Shield Bash",
+    "description": "Stuns attackers on successful blocks from weapons; causes enemies to stun themselves on contact with armor.",
+    "weaponFlavorText": "When you successfully block, the attacker gets stunned. Your defense disables their offense.",
+    "armorFlavorText": "Enemies attacking you have a chance to stun themselves from the impact of your armor. Your defense is so solid it backfires on them.",
     "components": ["chance_on_block", "stun_chance"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -197,6 +233,9 @@
   {
     "id": "blood_frenzy",
     "name": "Blood Frenzy",
+    "description": "Massively amplifies lifesteal when desperate on weapons; triggers massive healing boosts at low health on armor.",
+    "weaponFlavorText": "When health drops below 30%, lifesteal gets amplified massively. Low health means high healing. You become a vampire when desperate, healing more per strike than you're taking damage.",
+    "armorFlavorText": "Low health triggers massive healing boosts. You're hardest to kill when you should be dead. Enemies can never quite finish you.",
     "components": ["chance_on_low_hp", "lifesteal"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -213,6 +252,9 @@
   {
     "id": "desperation",
     "name": "Desperation",
+    "description": "Doubles attack speed in an adrenaline surge at low health on weapons; doubles movement and dodge at low health on armor.",
+    "weaponFlavorText": "When health drops below 30%, attack speed doubles. Desperation makes you fast. One activation per fight -- use it wisely.",
+    "armorFlavorText": "Low health makes you move faster, dodging more attacks. Enemies can't hit what's moving at double speed.",
     "components": ["chance_on_low_hp", "attack_speed"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -233,6 +275,9 @@
   {
     "id": "thermal_shock",
     "name": "Thermal Shock",
+    "description": "Stuns enemies briefly through rapid temperature changes on weapons; cancels out opposing elemental attacks on armor.",
+    "weaponFlavorText": "Fire and cold damage interact -- rapid temperature changes stun enemies briefly. Burning plus freezing equals disorientation.",
+    "armorFlavorText": "Fire and cold attacks cancel each other out. You're defended by elemental opposition.",
     "components": ["fire_damage", "cold_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -251,6 +296,9 @@
   {
     "id": "blight",
     "name": "Blight",
+    "description": "Creates a fire-poison feedback loop that amplifies both elements on weapons; weakens enemy fire and poison synergies on armor.",
+    "weaponFlavorText": "Fire boosts poison damage, poison boosts fire damage. Stack them together and they amplify each other exponentially. Fire plus poison become a feedback loop of devastation.",
+    "armorFlavorText": "Enemy fire and poison effects are weakened and interact poorly. Their elemental combinations fall apart against you.",
     "components": ["fire_damage", "poison_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -269,6 +317,9 @@
   {
     "id": "storm_of_flames",
     "name": "Storm of Flames",
+    "description": "Chains lightning between enemies with each bounce applying fire on weapons; grounds and disperses fire and lightning attacks on armor.",
+    "weaponFlavorText": "Lightning bounces between enemies, and each bounce applies fire. Chaining enemies means cascading fire. Multi-target becomes super-effective.",
+    "armorFlavorText": "Fire and lightning attacks get grounded and dispersed. You're protected by both elements working against incoming damage.",
     "components": ["fire_damage", "lightning_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -287,6 +338,9 @@
   {
     "id": "superconductor",
     "name": "Superconductor",
+    "description": "Amplifies lightning damage against slowed enemies on weapons; slows incoming electricity through cold aura on armor.",
+    "weaponFlavorText": "Lightning damage gets amplified when enemies are slowed. Cold plus lightning equals exponential damage. Freeze them, then zap them harder.",
+    "armorFlavorText": "Lightning trying to zap you gets slowed by your cold aura. Electricity moves through molasses around you.",
     "components": ["cold_damage", "lightning_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -305,6 +359,9 @@
   {
     "id": "frostplague",
     "name": "Frostplague",
+    "description": "Accelerates poison on slowed enemies for double weakness on weapons; weakens both poison and cold effects on armor.",
+    "weaponFlavorText": "Poison damage speeds up when enemies are slowed. Slow poison victims and their toxins work faster. Double weakness.",
+    "armorFlavorText": "Poison and cold effects are weakened together. You're resistant to both.",
     "components": ["cold_damage", "poison_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -323,6 +380,9 @@
   {
     "id": "void_shock",
     "name": "Void Shock",
+    "description": "Triggers shadow effects through lightning that ignore defenses on weapons; disperses lightning into shadow rifts on armor.",
+    "weaponFlavorText": "Lightning triggers shadow effects that ignore enemy defenses. Electricity becomes existential threat.",
+    "armorFlavorText": "Lightning attacks get pulled into shadow rifts and dispersed. Enemies can't locate where you are.",
     "components": ["lightning_damage", "shadow_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -339,6 +399,9 @@
   {
     "id": "necrosis",
     "name": "Necrosis",
+    "description": "Permanently erodes enemy max HP through stacking poison on weapons; negates enemy poison and shadow effects on armor.",
+    "weaponFlavorText": "Poison stacks cause permanent maximum health reduction. Enemies get permanently weaker as poison builds up. Their full health bar shrinks.",
+    "armorFlavorText": "Enemy poison and shadow effects are negated. Death magic bounces off you.",
     "components": ["poison_damage", "shadow_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -357,6 +420,9 @@
   {
     "id": "blood_mirror",
     "name": "Blood Mirror",
+    "description": "Converts thorns damage into health healing on weapons; feeds health from enemies hurt by your thorns aura on armor.",
+    "weaponFlavorText": "Thorns damage is converted to health healing. Your defensive thorns heal you. Defense becomes sustain.",
+    "armorFlavorText": "Enemies hurt by your thorns aura feed you health. Attacking you makes you stronger.",
     "components": ["lifesteal", "thorns"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -373,6 +439,9 @@
   {
     "id": "flicker_strike",
     "name": "Flicker Strike",
+    "description": "Guarantees automatic crits at high attack speed on weapons; auto-dodges enemy critical attacks on armor.",
+    "weaponFlavorText": "At attack speeds fast enough, you automatically crit every 5th hit. Speed unlocks guaranteed critical strikes.",
+    "armorFlavorText": "Every critical attack against you is automatically dodged. Enemies' risky plays fail.",
     "components": ["attack_speed", "crit_chance"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -391,6 +460,9 @@
   {
     "id": "vampiric_fury",
     "name": "Vampiric Fury",
+    "description": "Heals 3x more from critical strikes on weapons; converts enemy crits into healing on armor.",
+    "weaponFlavorText": "Critical strikes heal you 3x more than normal hits. Crits become your heal mechanic. Maximize crits, maximize healing.",
+    "armorFlavorText": "Critical hits against you trigger healing instead of damage. Enemies feeding you through risky crits.",
     "components": ["lifesteal", "crit_damage"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -407,6 +479,9 @@
   {
     "id": "iron_maiden",
     "name": "Iron Maiden",
+    "description": "Multiplies thorn damage output on blocks from weapons; triggers maximum thorns on every block from armor.",
+    "weaponFlavorText": "Blocks multiply thorn damage output. Defensive blocking becomes offensive.",
+    "armorFlavorText": "Every block triggers maximum thorns. Your defense is a porcupine they keep hitting.",
     "components": ["thorns", "block_chance"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -423,6 +498,9 @@
   {
     "id": "regenerative_shield",
     "name": "Regenerative Shield",
+    "description": "Heals shields through regeneration making barriers permanent on weapons; passively regenerates shields on armor.",
+    "weaponFlavorText": "Shields generated are also healed by your regeneration. Barriers become permanent.",
+    "armorFlavorText": "Your shields regenerate passively. You're perpetually overshielded.",
     "components": ["barrier", "hp_regen"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -439,6 +517,9 @@
   {
     "id": "riposte",
     "name": "Riposte",
+    "description": "Triggers automatic counterattacks on dodges from weapons; increases attack speed on each successful dodge on armor.",
+    "weaponFlavorText": "Dodging attacks triggers automatic counterattacks. Evasion becomes offense.",
+    "armorFlavorText": "Every dodge you pull off increases your attack speed temporarily. Avoiding damage makes you faster.",
     "components": ["dodge_chance", "attack_speed"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -455,6 +536,9 @@
   {
     "id": "fortress",
     "name": "Fortress",
+    "description": "Grants damage reduction while above 80% health on weapons; stacks massive armor and health bonuses on armor.",
+    "weaponFlavorText": "While above 80% health, you gain damage reduction. Stay healthy, stay harder to kill.",
+    "armorFlavorText": "Massive armor and health bonuses stack. You're a literal castle.",
     "components": ["flat_hp", "armor_rating"],
     "fluxCost": 2,
     "slotCost": 2,
@@ -473,6 +557,9 @@
   {
     "id": "sanguine_endurance",
     "name": "Sanguine Endurance",
+    "description": "Allows lifesteal to overheal up to 120% max health creating permanent shields on weapons; increases health pool and heals from enemy damage on armor.",
+    "weaponFlavorText": "Lifesteal can overheal you up to 120% max health. Excess healing creates permanent shields. Massive sustain.",
+    "armorFlavorText": "Health pool is increased, and you heal from enemy damage. Attrition is impossible.",
     "components": ["lifesteal", "flat_hp"],
     "fluxCost": 2,
     "slotCost": 2,

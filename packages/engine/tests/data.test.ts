@@ -81,6 +81,19 @@ describe('DataRegistry', () => {
       expect(registry.getAllAffixes().length).toBeGreaterThanOrEqual(33);
     });
 
+    it('should have description fields on all affixes', () => {
+      for (const affix of registry.getAllAffixes()) {
+        expect(typeof affix.description).toBe('string');
+        expect(affix.description.length).toBeGreaterThan(0);
+        expect(typeof affix.weaponFlavorText).toBe('string');
+        expect(typeof affix.armorFlavorText).toBe('string');
+        expect(
+          affix.weaponFlavorText.length > 0 || affix.armorFlavorText.length > 0,
+          `Affix "${affix.id}" has no flavor text on either side`
+        ).toBe(true);
+      }
+    });
+
     it('should have 4 tiers per affix', () => {
       for (const affix of registry.getAllAffixes()) {
         const tiers = Object.keys(affix.tiers);
@@ -116,6 +129,19 @@ describe('DataRegistry', () => {
 
     it('should return all combinations', () => {
       expect(registry.getAllCombinations().length).toBeGreaterThanOrEqual(29);
+    });
+
+    it('should have description fields on all combinations', () => {
+      for (const combo of registry.getAllCombinations()) {
+        expect(typeof combo.description).toBe('string');
+        expect(combo.description.length).toBeGreaterThan(0);
+        expect(typeof combo.weaponFlavorText).toBe('string');
+        expect(typeof combo.armorFlavorText).toBe('string');
+        expect(
+          combo.weaponFlavorText.length > 0 || combo.armorFlavorText.length > 0,
+          `Combination "${combo.id}" has no flavor text on either side`
+        ).toBe(true);
+      }
     });
   });
 

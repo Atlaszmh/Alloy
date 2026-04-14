@@ -2,7 +2,9 @@
   {
     "id": "flat_physical",
     "name": "Flat Physical Damage",
-    "description": "Adds raw physical damage to weapons and reinforces armor on defense.",
+    "description": "Adds raw physical damage to strikes; reinforces armor with denser physical mass.",
+    "weaponFlavorText": "Pure brute force without apology. Your blade becomes heavier, sharper, more devastating. This is the foundation of damage in its most honest form.",
+    "armorFlavorText": "You're built different. Denser muscle, thicker bone, heavier frame. Taking hits becomes a matter of sheer physical mass. Enemies swing, you absorb, they regret.",
     "category": "offensive",
     "tags": [
       "physical",
@@ -94,7 +96,9 @@
   {
     "id": "fire_damage",
     "name": "Fire Damage",
-    "description": "Deals fire damage over time on weapons; boosts fire resistance on armor.",
+    "description": "Adds flat fire elemental damage to strikes; grants fire resistance on armor.",
+    "weaponFlavorText": "Adds flat fire elemental damage to every strike. No burning, no DoT, no secondary effect -- just raw heat applied directly to whoever you're hitting. The burn fantasy lives in the Ignite compound. This is the foundation.",
+    "armorFlavorText": "Adds fire resistance. Enemy fire spells and flame attacks deal less damage. You don't become fireproof, but you stop being kindling.",
     "category": "offensive",
     "tags": [
       "elemental",
@@ -187,7 +191,9 @@
   {
     "id": "cold_damage",
     "name": "Cold Damage",
-    "description": "Inflicts cold damage with slowing effects on weapons; improves cold resistance on armor.",
+    "description": "Adds flat cold elemental damage to strikes; grants cold resistance on armor.",
+    "weaponFlavorText": "Adds flat cold elemental damage to every attack. No slow, no freeze on its own -- just biting cold damage. The slowing fantasy lives in the Frostbite compound. This is the ingredient, not the meal.",
+    "armorFlavorText": "Adds cold resistance. Enemies wielding frost magic will find their spells hitting softer. You're not immune -- you're just harder to ice.",
     "category": "offensive",
     "tags": [
       "elemental",
@@ -280,7 +286,9 @@
   {
     "id": "lightning_damage",
     "name": "Lightning Damage",
-    "description": "Adds volatile lightning damage with wide value swings; grants lightning resistance on armor.",
+    "description": "Adds flat lightning elemental damage with wide value swings; grants lightning resistance on armor.",
+    "weaponFlavorText": "Adds flat lightning elemental damage to every attack. Higher per-hit values than fire or cold, no secondary effect on its own. Chain lightning is Static Discharge's job -- this gem just hits hard and fast.",
+    "armorFlavorText": "Adds lightning resistance. Enemy electrical attacks lose potency. Their arc spells still crackle impressively. They just don't hurt as much.",
     "category": "offensive",
     "tags": [
       "elemental",
@@ -372,7 +380,9 @@
   {
     "id": "poison_damage",
     "name": "Poison Damage",
-    "description": "Applies poison damage over time on weapons; increases poison resistance on armor.",
+    "description": "Applies stacking poison DoT on weapons; coats armor in counter-toxins that poison attackers.",
+    "weaponFlavorText": "DoT that stacks -- multiple poison wounds interact exponentially. Each additional poison amplifies all previous poisons. Layering poison is your game.",
+    "armorFlavorText": "Your defenses are coated in counter-toxins. Enemies who damage you get poisoned in return by their own attack. They're self-poisoning against you.",
     "category": "offensive",
     "tags": [
       "dot",
@@ -464,7 +474,9 @@
   {
     "id": "shadow_damage",
     "name": "Shadow Damage",
-    "description": "Deals percent-HP shadow damage on weapons; grants shadow resistance on armor.",
+    "description": "Deals damage scaled on enemy current health; reduces enemy accuracy on armor.",
+    "weaponFlavorText": "Damage scaled on enemy current health -- full health enemies take maximum damage, low health take minimum. You're executing, not farming damage.",
+    "armorFlavorText": "Shadows confuse incoming attacks and make them less likely to land. Enemy accuracy drops around you. Their perception is unreliable.",
     "category": "offensive",
     "tags": [
       "shadow",
@@ -556,7 +568,9 @@
   {
     "id": "chaos_damage",
     "name": "Chaos Damage",
-    "description": "Deals penetrating chaos damage that bypasses most defenses; adds chaos resistance on armor.",
+    "description": "Deals highly variable damage that bypasses defenses unpredictably; shifts armor defenses to confuse attackers.",
+    "weaponFlavorText": "Highly variable damage with unpredictable scaling. Each strike's power is different -- impossible to predict or prepare for. Your damage is chaotic by design.",
+    "armorFlavorText": "Your defenses shift unpredictably. Incoming attacks hit something different each time. Enemies can't learn your patterns because you don't have one.",
     "category": "offensive",
     "tags": [
       "chaos",
@@ -648,7 +662,9 @@
   {
     "id": "crit_chance",
     "name": "Critical Strike Chance",
-    "description": "Increases critical strike chance on weapons; improves crit avoidance on armor.",
+    "description": "Increases critical strike chance on weapons; improves defensive positioning to avoid incoming crits on armor.",
+    "weaponFlavorText": "Your strikes find weak points with supernatural accuracy. Every blow is searching for that perfect angle, that critical vulnerability. You're never wasting energy on inefficient attacks.",
+    "armorFlavorText": "Your defensive positioning is surgical. You know exactly where incoming attacks are coming from before they arrive. You're not standing in front of the sword -- you're standing beside it.",
     "category": "offensive",
     "tags": [
       "crit"
@@ -739,7 +755,9 @@
   {
     "id": "crit_damage",
     "name": "Critical Strike Multiplier",
-    "description": "Boosts critical strike damage on weapons; reduces incoming crit damage on armor.",
+    "description": "Boosts critical strike damage on weapons; converts incoming crit momentum into counterforce on armor.",
+    "weaponFlavorText": "When you land a critical strike, it explodes with devastating force. Your critical hits don't just hurt -- they devastate. Massive multiplier on already dangerous blows.",
+    "armorFlavorText": "Your defensive stance converts attack momentum into counterforce. Enemies who hit you experience backlash proportional to their commit. Critical hits against you cause them massive recoil damage.",
     "category": "offensive",
     "tags": [
       "crit",
@@ -831,7 +849,9 @@
   {
     "id": "attack_speed",
     "name": "Attack Speed",
-    "description": "Increases attack speed on weapons; grants dodge chance on armor.",
+    "description": "Increases attack speed on weapons; grants evasive speed and dodge chance on armor.",
+    "weaponFlavorText": "Your movements blur with supernatural speed. You swing faster, strike more often, attack before enemies can react. By the time they perceive the danger, you've already hit them twice.",
+    "armorFlavorText": "You move with impossible grace and speed. Incoming attacks meet empty space. You're already somewhere else when the blow arrives. Speed is your ultimate defense.",
     "category": "offensive",
     "tags": [
       "speed",
@@ -923,7 +943,9 @@
   {
     "id": "armor_penetration",
     "name": "Armor Penetration",
-    "description": "Ignores a portion of enemy armor on weapons; resists penetration effects on armor.",
+    "description": "Shreds through enemy armor on weapons; resists penetration effects on armor.",
+    "weaponFlavorText": "Your attacks shred through enemy defenses like paper. Their armor, shields, resistances -- all irrelevant. You hit them through their protections. Defenses become meaningless.",
+    "armorFlavorText": "Enemy armor becomes a liability. The stronger their defenses, the harder you punish them for trying. Their protection collapses when you're near. They built that fortress and you're the siege engine.",
     "category": "offensive",
     "tags": [
       "penetration"
@@ -1015,6 +1037,8 @@
     "id": "elemental_penetration",
     "name": "Elemental Penetration",
     "description": "Bypasses enemy elemental resistances on weapons; boosts all elemental resistances on armor.",
+    "weaponFlavorText": "Bypasses elemental resistances with surgical precision. Fire-resistant? Irrelevant. They burn anyway. You ignore their resistances entirely -- magic protections simply don't apply.",
+    "armorFlavorText": "Your resistances punch through enemy magical protections. You're resistant to fire and you resist their fire-resistance buffs. Double-negating enemy magical advantages.",
     "category": "offensive",
     "tags": [
       "penetration",
@@ -1106,7 +1130,9 @@
   {
     "id": "flat_hp",
     "name": "Flat HP",
-    "description": "Increases maximum health on both weapons and armor.",
+    "description": "Increases maximum health on both weapons and armor, extending fight endurance.",
+    "weaponFlavorText": "A larger health pool means you can sustain longer fights and deal more cumulative damage. You're built for marathons, not sprints.",
+    "armorFlavorText": "Raw maximum health. More hit points means enemies have to hit you more times to win. It's straightforward -- you absorb punishment through sheer capacity.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1198,7 +1224,9 @@
   {
     "id": "armor_rating",
     "name": "Armor",
-    "description": "Reduces incoming physical damage when socketed in armor.",
+    "description": "Reduces incoming physical damage as a flat percentage on armor; no weapon effect.",
+    "weaponFlavorText": "",
+    "armorFlavorText": "Reduces incoming physical damage as a flat percentage. Enemies swing. You shrug. The number goes down. That's the whole thing, and it's perfectly effective.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1266,7 +1294,9 @@
   {
     "id": "block_chance",
     "name": "Block Chance",
-    "description": "Grants a chance to block attacks on armor; adds block-break on weapons.",
+    "description": "Grants a chance to physically block attacks on armor; adds block-break to bypass enemy blocks on weapons.",
+    "weaponFlavorText": "Your strikes can physically parry and redirect incoming danger, turning defense into counterattack. You're not dodging -- you're hitting back.",
+    "armorFlavorText": "You actively block attacks with physical barriers, negating damage entirely. Blocks are complete protection -- incoming damage just stops at your shield.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1358,7 +1388,9 @@
   {
     "id": "dodge_chance",
     "name": "Dodge Chance",
-    "description": "Grants a chance to completely evade incoming attacks on armor.",
+    "description": "Grants a chance to completely evade incoming attacks on armor; no weapon effect.",
+    "weaponFlavorText": "",
+    "armorFlavorText": "You're not there when the attack lands. Probability warps around you -- incoming strikes just whiff. You're a ghost until you need to be solid.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1426,7 +1458,9 @@
   {
     "id": "barrier",
     "name": "Barrier",
-    "description": "Provides an absorb shield on armor; generates barrier on hit for weapons.",
+    "description": "Generates temporary shield layers on hit with weapons; provides an absorb shield on armor.",
+    "weaponFlavorText": "Successful strikes generate temporary shield layers that absorb overflow damage. You're building protection as you attack.",
+    "armorFlavorText": "Temporary shields that regenerate regularly. Incoming damage hits shields first, health second. You're perpetually overshielded.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1518,7 +1552,9 @@
   {
     "id": "hp_regen",
     "name": "HP Regeneration",
-    "description": "Adds passive health regeneration on armor; grants life on hit for weapons.",
+    "description": "Grants life on hit for weapons; adds constant passive health regeneration on armor.",
+    "weaponFlavorText": "Passive health recovery ticks constantly, keeping you in combat longer. The fight duration is your advantage -- eventually, their damage output can't out-pace your healing.",
+    "armorFlavorText": "Constant passive regeneration that ticks even while standing still. You repair damage automatically. Long wars are won through attrition.",
     "category": "defensive",
     "tags": [
       "sustain"
@@ -1609,7 +1645,9 @@
   {
     "id": "damage_reduction",
     "name": "Damage Reduction",
-    "description": "Provides flat percentage reduction to all incoming damage on armor.",
+    "description": "Provides flat percentage reduction to all incoming damage on armor; no weapon effect.",
+    "weaponFlavorText": "",
+    "armorFlavorText": "Hard cap on incoming damage. Every hit deals less damage, period. Simple math -- enemies face a ceiling on how much they can possibly hurt you. No matter how strong they are.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1677,7 +1715,9 @@
   {
     "id": "fortify",
     "name": "Fortify",
-    "description": "Grants conditional damage reduction when fortify is active on armor.",
+    "description": "Grants permanent magical armor enhancement on armor; no weapon effect.",
+    "weaponFlavorText": "",
+    "armorFlavorText": "Permanent magical armor enhancement. Your basic durability is increased at all times. Attacks just bounce off more often naturally.",
     "category": "defensive",
     "tags": [
       "defensive",
@@ -1746,6 +1786,8 @@
     "id": "lifesteal",
     "name": "Lifesteal",
     "description": "Heals for a percentage of damage dealt on weapons; recovers health from damage taken on armor.",
+    "weaponFlavorText": "Every point of damage you deal instantly becomes health restored. High damage means high healing. You're a vampire -- combat sustains you.",
+    "armorFlavorText": "Enemy attacks feed you. They damage you, they heal you. Extended melee becomes unwinnable for them because they're healing their opponent.",
     "category": "sustain",
     "tags": [
       "sustain",
@@ -1837,7 +1879,9 @@
   {
     "id": "thorns",
     "name": "Thorns",
-    "description": "Reflects damage back to attackers on both weapons and armor.",
+    "description": "Reflects damage to enemies on hit with weapons; reflects damage back to attackers when hit on armor.",
+    "weaponFlavorText": "Your attacks are jagged and dangerous. Enemies hurt themselves trying to touch you. Self-defense through sharp edges.",
+    "armorFlavorText": "Your armor is covered in enchanted spikes. Enemy melee becomes hazardous. They're attacking a cactus. It doesn't end well for them.",
     "category": "sustain",
     "tags": [
       "reactive",
@@ -1929,7 +1973,9 @@
   {
     "id": "life_on_kill",
     "name": "Life on Kill",
-    "description": "Restores health each time you defeat an enemy on both weapons and armor.",
+    "description": "Restores massive health on finishing blows from weapons; transfers nearby dead enemy health on armor.",
+    "weaponFlavorText": "Finishing blows restore massive health in one burst. Kills equal instant full heal. You're incentivized to go for executions, not just wear enemies down.",
+    "armorFlavorText": "Dead enemies nearby transfer remaining health to you. The battlefield becomes a corpse-powered healing field. Multi-kill scenarios become impossible to stop.",
     "category": "sustain",
     "tags": [
       "sustain",
@@ -2021,7 +2067,9 @@
   {
     "id": "initiative",
     "name": "Movement/Initiative",
-    "description": "Increases turn priority on weapons; slows opponent actions on armor.",
+    "description": "Grants first-strike advantage on weapons; perceives incoming threats before they land on armor.",
+    "weaponFlavorText": "You act first in combat sequences. You get the first strike before enemies can react. Speed advantage equals strategic advantage.",
+    "armorFlavorText": "You perceive incoming threats before they land. You're already moving to defend before the attack even commits. Reaction time is supernatural.",
     "category": "utility",
     "tags": [
       "utility",
@@ -2113,7 +2161,9 @@
   {
     "id": "dot_multiplier",
     "name": "DOT Multiplier",
-    "description": "Amplifies damage-over-time effects on weapons; reduces incoming DOT damage on armor.",
+    "description": "Amplifies all damage-over-time effects on weapons; reduces incoming DoT damage on armor.",
+    "weaponFlavorText": "All damage-over-time effects you apply are amplified. More damage per tick, longer duration, stacking higher. Persistent damage becomes your primary damage source.",
+    "armorFlavorText": "DoT effects targeting you are reduced. Poison loses potency. Fire burns less hot. Bleed ticks lighter. Persistent damage is your weakness mitigated.",
     "category": "utility",
     "tags": [
       "dot",
@@ -2205,7 +2255,9 @@
   {
     "id": "stun_chance",
     "name": "Stun Chance",
-    "description": "Adds a chance to stun on hit with weapons; grants stun resistance on armor.",
+    "description": "Adds a chance to stun and interrupt enemies on weapons; grants stun resistance on armor.",
+    "weaponFlavorText": "Chance to interrupt and disable enemies entirely. Stunned enemies can't act, can't dodge, can't retaliate. Complete control.",
+    "armorFlavorText": "When enemies attack, they have a chance to stun themselves. Their own aggression backfires. Their attack fails and they stand helpless.",
     "category": "utility",
     "tags": [
       "control",
@@ -2297,7 +2349,9 @@
   {
     "id": "slow_on_hit",
     "name": "Slow on Hit",
-    "description": "Slows enemies on hit with weapons; grants slow resistance on armor.",
+    "description": "Saps enemy momentum on weapon hits; grants slow resistance on armor.",
+    "weaponFlavorText": "Your strikes sap enemy momentum. Movement speed drops dramatically with each hit. Chasers become statues. Fleers can't escape. Movement becomes impossible.",
+    "armorFlavorText": "Attackers slow down after hitting you. Their combat momentum dies. They become sluggish against you. Time becomes your ally.",
     "category": "utility",
     "tags": [
       "control",
@@ -2389,7 +2443,9 @@
   {
     "id": "chance_on_hit",
     "name": "Chance on Hit",
-    "description": "Triggers bonus proc damage when landing hits on both weapons and armor.",
+    "description": "Triggers bonus proc damage when landing hits on weapons; activates passive defensive magic on armor.",
+    "weaponFlavorText": "Passive magical blessing on every attack. The more you swing, the more procs you generate. Raw hit count equals magic generation.",
+    "armorFlavorText": "Combat proximity triggers passive defensive magic. Just standing near attackers activates your safeguards. Your aura defends you.",
     "category": "trigger",
     "tags": [
       "trigger",
@@ -2481,7 +2537,9 @@
   {
     "id": "chance_on_taking_damage",
     "name": "Chance on Taking Damage",
-    "description": "Triggers a healing proc when taking damage, stronger on armor.",
+    "description": "Triggers a healing proc when taking damage; pain fuels retaliation on weapons and strengthens defenses on armor.",
+    "weaponFlavorText": "Pain fuels your retaliation. Every hit you take triggers counteroffense. You get stronger the more you bleed.",
+    "armorFlavorText": "Damage taken activates defenses that strengthen you. Taking punishment makes you tougher. Enemies literally power your defenses by attacking you.",
     "category": "trigger",
     "tags": [
       "trigger",
@@ -2573,7 +2631,9 @@
   {
     "id": "chance_on_crit",
     "name": "Chance on Critical Strike",
-    "description": "Triggers bonus proc damage when landing critical strikes, stronger on weapons.",
+    "description": "Procs bonus damage on critical strikes from weapons; procs counterattack damage when enemies crit you on armor.",
+    "weaponFlavorText": "Procs bonus damage on critical strikes -- smaller amounts than the armor version, but attached to your strongest hits. Crit-heavy builds double-dip: more crits means more procs.",
+    "armorFlavorText": "Procs bonus damage when enemies crit you -- and at higher values than the weapon version. Enemies landing their biggest hits are accidentally triggering your counterattack. Their risk is your reward.",
     "category": "trigger",
     "tags": [
       "trigger",
@@ -2665,7 +2725,9 @@
   {
     "id": "chance_on_block",
     "name": "Chance on Block",
-    "description": "Triggers proc damage on weapons or healing on armor when blocking an attack.",
+    "description": "Triggers offensive magic on successful blocks from weapons; activates healing on blocks from armor.",
+    "weaponFlavorText": "Successfully blocking doesn't just stop damage -- it triggers offensive magic. Defense becomes your offense vector.",
+    "armorFlavorText": "Every successful block automatically activates magical effects. Blocking is now your most dangerous action, not your most defensive one.",
     "category": "trigger",
     "tags": [
       "trigger",
@@ -2757,7 +2819,9 @@
   {
     "id": "chance_on_kill",
     "name": "Chance on Kill",
-    "description": "Triggers a healing proc when defeating an enemy on both weapons and armor.",
+    "description": "Triggers jackpot healing effects on finishing blows; dead enemies feed your defenses on armor.",
+    "weaponFlavorText": "Finishing blows trigger jackpot effects beyond just winning. Kill count equals magic generation. Massacre equals power surge.",
+    "armorFlavorText": "Enemies dying near you feed your defenses. The battlefield sustains you. Dead enemies become your shield.",
     "category": "trigger",
     "tags": [
       "trigger",
@@ -2849,7 +2913,9 @@
   {
     "id": "chance_on_low_hp",
     "name": "Chance on Low HP",
-    "description": "Triggers a large healing proc when health drops low, stronger on armor.",
+    "description": "Unlocks desperation power with damage multipliers on weapons; surges defenses near death on armor.",
+    "weaponFlavorText": "Desperation unlocks power. When you're near death, special effects activate. Low HP means high damage multiplier.",
+    "armorFlavorText": "When close to death, defenses surge. The more desperate you are, the harder you are to kill. You're practically invulnerable at 1 HP.",
     "category": "trigger",
     "tags": [
       "trigger",

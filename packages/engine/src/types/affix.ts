@@ -18,6 +18,8 @@ export interface AffixDef {
   id: string; // e.g., 'fire_damage'
   name: string; // e.g., 'Fire Damage'
   description: string; // Brief player-facing description of the affix
+  weaponFlavorText: string; // Flavor + mechanical explanation for weapon use
+  armorFlavorText: string; // Flavor + mechanical explanation for armor use
   category: AffixCategory;
   tags: AffixTag[];
   tiers: Record<AffixTier, AffixTierData>;

@@ -19,6 +19,9 @@ const AffixTierDataSchema = z.object({
 const AffixDefSchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string(),
+  weaponFlavorText: z.string(),
+  armorFlavorText: z.string(),
   category: z.enum(['offensive', 'defensive', 'sustain', 'utility', 'trigger']),
   tags: z.array(z.string()),
   tiers: z.record(z.coerce.number().pipe(z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])), AffixTierDataSchema),
@@ -31,6 +34,9 @@ export const AffixesSchema = z.array(AffixDefSchema);
 const CompoundAffixDefSchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string(),
+  weaponFlavorText: z.string(),
+  armorFlavorText: z.string(),
   components: z.tuple([z.string(), z.string()]),
   fluxCost: z.number().int().positive(),
   slotCost: z.number().int().positive(),
