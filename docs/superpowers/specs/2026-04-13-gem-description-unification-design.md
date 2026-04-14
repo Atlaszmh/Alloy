@@ -34,9 +34,16 @@ All three fields are added to both base affixes and compound affixes:
 
 | Field | Purpose | Length | Existing? |
 |---|---|---|---|
-| `description` | Brief one-liner shown on gem cards | 1 sentence | Yes (base only) |
+| `description` | Brief summary shown on gem cards — must mention both weapon and armor effects in plain mechanical terms | 1 sentence | Yes (base only, needs rewrite) |
 | `weaponFlavorText` | Flavor + mechanical explanation for weapon use | 2–4 sentences | No |
 | `armorFlavorText` | Flavor + mechanical explanation for armor use | 2–4 sentences | No |
+
+**`description` authoring rule:** The one-liner must convey both axes at a glance. Use the pattern `"[weapon effect]; [armor effect]."` For gems with only one active side, just describe that side. Examples:
+- `"Adds flat fire damage to every strike; grants fire resistance on armor."` ✓
+- `"Adds flat fire damage to every strike."` ✓ (weapon-only gem)
+- `"Adds flat fire elemental damage."` ✗ (omits armor — too vague)
+
+Existing `description` strings in `affixes.json` are single-axis and must be rewritten during the data migration step to include both effects where applicable.
 
 ### Engine Type Changes
 
