@@ -17,6 +17,7 @@ interface ItemSocketViewProps {
 
 const ELEMENTS = ['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos'] as const;
 
+
 function getSlotGem(slot: EquippedSlot): GemInstance {
   return slot.gem;
 }
@@ -111,18 +112,20 @@ export function ItemSocketView({
         )}
       </div>
 
-      {/* Socket grid — sockets fill available width */}
+      {/* Socket grid — sockets fill available width.
+          Pulse animation lives on the grid container so all empty sockets
+          stay in sync regardless of when they become empty. */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gap: 'var(--gap-sm)',
+          animation: (selectedOrbUid !== null || isDragging) ? 'orb-glow 1.5s ease-in-out infinite' : 'none',
         }}
       >
         {item.slots.map((slot, index) => {
           if (slot === null) {
             // Empty socket
-            const isPulsing = selectedOrbUid !== null || isDragging;
             return (
               <button
                 key={index}
@@ -139,7 +142,6 @@ export function ItemSocketView({
                     : 'inset 0 2px 4px rgba(0,0,0,0.5)',
                   cursor: 'pointer',
                   touchAction: 'none',
-                  animation: isPulsing ? 'orb-glow 1.5s ease-in-out infinite' : 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

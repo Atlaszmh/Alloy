@@ -356,17 +356,11 @@ export function Forge() {
 
         let handled = false;
 
-        // Helper: hide dragged element, then clear all styles after React re-renders.
-        // This prevents stale position:fixed / opacity:0 from persisting on the DOM element.
+        // Helper: clear all drag styles immediately on successful drop.
+        // We clear synchronously so no stale position:fixed / width / height
+        // persists on the DOM element through React's re-render cycle.
         function completeDrop() {
-          const el = draggedElRef.current;
-          if (el) {
-            el.style.opacity = '0';
-            // Clear all drag styles after React re-renders so the element
-            // returns to normal layout without stale fixed positioning.
-            requestAnimationFrame(() => clearDragStyles(el));
-          }
-          draggedElRef.current = null;
+          resetDraggedEl();
         }
 
         // Helper: remove gem from its drag source
