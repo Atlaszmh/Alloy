@@ -28,6 +28,17 @@ export interface CombineConfig {
   matchingRarityBonus: number; // Default: 0.15
 }
 
+export interface CombinePreview {
+  /** true if this affix pair has been attempted before */
+  known: boolean;
+  /** which combination layer would handle this pair */
+  layer: CombineLayer;
+  /** the output gem — only populated when known is true */
+  gem: GemInstance | null;
+  /** recipe ID if signature layer and known */
+  recipeId?: string;
+}
+
 const DEFAULT_CONFIG: CombineConfig = {
   matchingRarityBonus: 0.15,
 };
@@ -79,6 +90,26 @@ export class CombinationEngine {
 
     // Layer 3: Generic upgrade
     return this.genericUpgrade(gemA, gemB, outputUid, keepGemUid);
+  }
+
+  previewCombine(gemA: GemInstance, gemB: GemInstance): CombinePreview | null {
+    if (!gemA.combinable || !gemB.combinable) return null;
+
+    const known = this.discovery.hasAttempted(gemA.affixId, gemB.affixId);
+    const tempDiscovery = this.discovery.clone();
+    const tempEngine = new CombinationEngine(this.registry, tempDiscovery, this.categoryMap, this.config);
+
+    try {
+      const result = tempEngine.combine(gemA, gemB, '__preview__');
+      return {
+        known,
+        layer: result.layer,
+        gem: known ? result.gem : null,
+        recipeId: known ? result.recipeId : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private trySignature(

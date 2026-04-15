@@ -391,4 +391,61 @@ describe('CombinationEngine', () => {
       expect(discovery.hasAttempted('fire_damage', 'crit_chance')).toBe(true);
     });
   });
+
+  describe('previewCombine', () => {
+    it('returns known=false with no gem for never-attempted combos', () => {
+      const freshDiscovery = new DiscoveryState();
+      const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
+
+      const gemA = createGem('a', 'fire_damage', 2, 'common');
+      const gemB = createGem('b', 'cold_damage', 2, 'common');
+
+      const preview = previewEngine.previewCombine(gemA, gemB);
+      expect(preview).not.toBeNull();
+      expect(preview!.known).toBe(false);
+      expect(preview!.gem).toBeNull();
+      expect(preview!.layer).toBeDefined();
+
+      // Discovery state should NOT be mutated
+      expect(freshDiscovery.totalDiscoveryCount()).toBe(0);
+      expect(freshDiscovery.hasAttempted('fire_damage', 'cold_damage')).toBe(false);
+    });
+
+    it('returns known=true with gem after combo has been attempted', () => {
+      const freshDiscovery = new DiscoveryState();
+      const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
+
+      const gemA = createGem('a', 'fire_damage', 2, 'common');
+      const gemB = createGem('b', 'cold_damage', 2, 'common');
+
+      // First: actually combine to record the attempt
+      const actual = previewEngine.combine(gemA, gemB, 'out');
+      expect(freshDiscovery.hasAttempted('fire_damage', 'cold_damage')).toBe(true);
+
+      // Now preview should return known=true with the gem
+      const gemA2 = createGem('a2', 'fire_damage', 2, 'common');
+      const gemB2 = createGem('b2', 'cold_damage', 2, 'common');
+      const preview = previewEngine.previewCombine(gemA2, gemB2);
+
+      expect(preview).not.toBeNull();
+      expect(preview!.known).toBe(true);
+      expect(preview!.gem).not.toBeNull();
+      expect(preview!.gem!.affixId).toBe(actual.gem.affixId);
+      expect(preview!.gem!.tier).toBe(actual.gem.tier);
+      expect(preview!.gem!.rarity).toBe(actual.gem.rarity);
+      expect(preview!.layer).toBe(actual.layer);
+    });
+
+    it('returns null for non-combinable gems', () => {
+      const freshDiscovery = new DiscoveryState();
+      const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
+
+      const gem = createGem('a', 'fire_damage', 5, 'legendary');
+      expect(gem.combinable).toBe(false);
+
+      const other = createGem('b', 'cold_damage', 1, 'common');
+      const preview = previewEngine.previewCombine(gem, other);
+      expect(preview).toBeNull();
+    });
+  });
 });

@@ -65,6 +65,10 @@ export class DiscoveryState {
     return ds;
   }
 
+  clone(): DiscoveryState {
+    return DiscoveryState.deserialize(this.serialize());
+  }
+
   static comboKey(idA: string, idB: string): string {
     return [idA, idB].sort().join('+');
   }
