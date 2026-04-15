@@ -200,20 +200,25 @@ export function Forge() {
   }, [selectedOrbUid, selectOrb]);
 
   // ── Drag helpers ──
+  function clearDragStyles(el: HTMLElement) {
+    el.style.position = '';
+    el.style.left = '';
+    el.style.top = '';
+    el.style.width = '';
+    el.style.height = '';
+    el.style.zIndex = '';
+    el.style.transform = '';
+    el.style.filter = '';
+    el.style.pointerEvents = '';
+    el.style.opacity = '';
+    delete el.dataset.origLeft;
+    delete el.dataset.origTop;
+  }
+
   function resetDraggedEl() {
     const el = draggedElRef.current;
     if (el) {
-      el.style.position = '';
-      el.style.left = '';
-      el.style.top = '';
-      el.style.width = '';
-      el.style.zIndex = '';
-      el.style.transform = '';
-      el.style.filter = '';
-      el.style.pointerEvents = '';
-      el.style.opacity = '';
-      delete el.dataset.origLeft;
-      delete el.dataset.origTop;
+      clearDragStyles(el);
       draggedElRef.current = null;
     }
   }
@@ -309,6 +314,7 @@ export function Forge() {
           el.style.left = `${rect.left}px`;
           el.style.top = `${rect.top}px`;
           el.style.width = `${rect.width}px`;
+          el.style.height = `${rect.height}px`;
           el.style.zIndex = '999';
           el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
           el.style.pointerEvents = 'none';
@@ -350,8 +356,29 @@ export function Forge() {
 
         let handled = false;
 
+        // Helper: hide dragged element, then clear all styles after React re-renders.
+        // This prevents stale position:fixed / opacity:0 from persisting on the DOM element.
+        function completeDrop() {
+          const el = draggedElRef.current;
+          if (el) {
+            el.style.opacity = '0';
+            // Clear all drag styles after React re-renders so the element
+            // returns to normal layout without stale fixed positioning.
+            requestAnimationFrame(() => clearDragStyles(el));
+          }
+          draggedElRef.current = null;
+        }
+
+        // Helper: remove gem from its drag source
+        function removeFromSource() {
+          if (source?.type === 'combo') {
+            setComboSlotByIndex(source.slotIndex, null);
+          } else if (source?.type === 'socket') {
+            applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
+          }
+        }
+
         if (target && target.type === 'combo') {
-          // Check if dropping onto the same combo slot it came from
           const isSameSlot = source?.type === 'combo' && source.slotIndex === target.slotIndex;
           if (isSameSlot) {
             resetDraggedEl();
@@ -359,23 +386,12 @@ export function Forge() {
           } else {
             const slots = useForgeStore.getState().comboSlots;
             if (!slots[target.slotIndex]) {
-              // Remove from source first
-              if (source?.type === 'combo') {
-                setComboSlotByIndex(source.slotIndex, null);
-              } else if (source?.type === 'socket') {
-                applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
-              }
-              // Find the gem in stockpile to place in combo slot
+              removeFromSource();
               const orb = useForgeStore.getState().plan?.stockpile.find(o => o.uid === draggedUid);
               if (orb) {
                 setComboSlotByIndex(target.slotIndex, orb);
                 playSound('orbSelect');
-                const el = draggedElRef.current;
-                if (el) {
-                  el.style.opacity = '0';
-                  el.style.pointerEvents = '';
-                }
-                draggedElRef.current = null;
+                completeDrop();
                 handled = true;
               }
             }
@@ -385,7 +401,6 @@ export function Forge() {
             }
           }
         } else if (target && target.type === 'socket') {
-          // Check if dropping onto the same socket it came from
           const isSameSlot = source?.type === 'socket'
             && source.target === target.cardId
             && source.slotIndex === target.slotIndex;
@@ -393,25 +408,14 @@ export function Forge() {
             resetDraggedEl();
             handled = true;
           } else {
-            // Remove from source first
-            if (source?.type === 'combo') {
-              setComboSlotByIndex(source.slotIndex, null);
-            } else if (source?.type === 'socket') {
-              applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
-            }
-            // Now socket the gem at the target
+            removeFromSource();
             const result = applyAction(
               { kind: 'socket_gem', gemUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
               registry,
             );
             if (result.ok) {
               playSound('orbPlace');
-              const el = draggedElRef.current;
-              if (el) {
-                el.style.opacity = '0';
-                el.style.pointerEvents = '';
-              }
-              draggedElRef.current = null;
+              completeDrop();
             } else {
               playSound('combineFail');
               resetDraggedEl();
@@ -419,22 +423,12 @@ export function Forge() {
             handled = true;
           }
         } else if (target && target.type === 'tray') {
-          // Dropped on tray — return gem to stockpile
-          if (source?.type === 'combo') {
-            setComboSlotByIndex(source.slotIndex, null);
+          if (source?.type === 'combo' || source?.type === 'socket') {
+            removeFromSource();
             playSound('orbRemove');
-            resetDraggedEl();
-            handled = true;
-          } else if (source?.type === 'socket') {
-            applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
-            playSound('orbRemove');
-            resetDraggedEl();
-            handled = true;
-          } else {
-            // Dragged from stockpile to tray — no-op, snap back
-            resetDraggedEl();
-            handled = true;
           }
+          resetDraggedEl();
+          handled = true;
         }
 
         if (!handled) {
