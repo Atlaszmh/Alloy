@@ -50,10 +50,10 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/60"
+        className="absolute inset-0 z-40 bg-black/60"
       />
       {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 flex h-full w-80 flex-col overflow-y-auto bg-surface-800 shadow-2xl">
+      <div className="absolute right-0 top-0 z-50 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto bg-surface-800 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface-600 p-4">
           <h2

@@ -165,11 +165,17 @@ export function GemEncyclopedia() {
       </div>
 
       {/* Gem card grid */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div
+        className="flex-1 overflow-y-auto p-4"
+        style={{
+          '--gem-size': '72px',
+          '--gem-radius': `${72 * 0.16}px`,
+        } as React.CSSProperties}
+      >
         <div
-          className="grid gap-3"
+          className="grid gap-4"
           style={{
-            gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(var(--gem-size), 1fr))',
           }}
         >
           {filtered.map((entry) => (
