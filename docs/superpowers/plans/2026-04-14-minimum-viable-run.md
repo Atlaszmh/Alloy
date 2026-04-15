@@ -141,46 +141,69 @@ generation. Now passes registry.getBalance().gem.poolScaling."
 
 ---
 
-### Task 2: Add `previewCombine` method to CombinationEngine
+### Task 2: Add `previewCombine` method with discovery gating
 
-The `CombinationEngine.combine()` method mutates `DiscoveryState` (records attempts and discoveries). For a preview, we need a read-only version that shows what the result *would* be without side effects.
+The combine preview should only reveal the output gem if the player has previously attempted that combination. First-time combos stay mysterious ("?") so players organically discover recipes. `DiscoveryState` already tracks attempted combos via `hasAttempted(affixIdA, affixIdB)`.
+
+**Design:**
+- `previewCombine` returns a `CombinePreview` with `known: boolean` and `gem: GemInstance | null`
+- `known` is `true` only if `discovery.hasAttempted(gemA.affixId, gemB.affixId)`
+- `layer` is always returned (so the UI can show gold/white glow hints for unknown combos)
+- `gem` is only populated when `known` is `true`
 
 **Files:**
-- Modify: `packages/engine/src/combine/combination-engine.ts` (add `previewCombine` method)
-- Modify: `packages/engine/src/index.ts` (export `CombinePreview` type if needed)
+- Modify: `packages/engine/src/combine/combination-engine.ts` (add `previewCombine` method + `CombinePreview` type)
+- Modify: `packages/engine/src/combine/discovery-state.ts` (add `clone()`)
+- Modify: `packages/engine/src/index.ts` (export `CombinePreview` type)
 - Test: `packages/engine/tests/combination-engine.test.ts`
 
-- [ ] **Step 1: Write failing test for `previewCombine`**
+- [ ] **Step 1: Write failing tests for `previewCombine`**
 
-Add to `packages/engine/tests/combination-engine.test.ts`:
-
-This `describe` block should go **inside** the existing `describe('CombinationEngine')` block in the test file. The existing `beforeEach` creates variables named `registry` (a `RecipeRegistry`), `discovery`, and `categoryMap`. These tests create their own local `discovery` and `engine` to verify isolation.
+Add to `packages/engine/tests/combination-engine.test.ts`. This `describe` block should go **inside** the existing `describe('CombinationEngine')` block. The existing `beforeEach` creates variables named `registry` (a `RecipeRegistry`), `discovery`, and `categoryMap`.
 
 ```typescript
 describe('previewCombine', () => {
-  it('returns the same gem result as combine without mutating discovery state', () => {
-    // Setup: create engine with fresh empty discovery state
+  it('returns known=false with no gem for never-attempted combos', () => {
     const freshDiscovery = new DiscoveryState();
     const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
 
     const gemA = createGem('a', 'fire_damage', 2, 'common');
     const gemB = createGem('b', 'cold_damage', 2, 'common');
 
-    // Preview should return a result
     const preview = previewEngine.previewCombine(gemA, gemB);
     expect(preview).not.toBeNull();
-    expect(preview!.gem.tier).toBeGreaterThanOrEqual(1);
-    expect(preview!.gem.rarity).toBeDefined();
+    expect(preview!.known).toBe(false);
+    expect(preview!.gem).toBeNull();
+    expect(preview!.layer).toBeDefined();
 
     // Discovery state should NOT be mutated
     expect(freshDiscovery.totalDiscoveryCount()).toBe(0);
+    expect(freshDiscovery.hasAttempted('fire_damage', 'cold_damage')).toBe(false);
+  });
 
-    // Now actually combine — should produce the same gem properties
+  it('returns known=true with gem after combo has been attempted', () => {
+    const freshDiscovery = new DiscoveryState();
+    const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
+
+    const gemA = createGem('a', 'fire_damage', 2, 'common');
+    const gemB = createGem('b', 'cold_damage', 2, 'common');
+
+    // First: actually combine to record the attempt
     const actual = previewEngine.combine(gemA, gemB, 'out');
+    expect(freshDiscovery.hasAttempted('fire_damage', 'cold_damage')).toBe(true);
+
+    // Now preview should return known=true with the gem
+    const gemA2 = createGem('a2', 'fire_damage', 2, 'common');
+    const gemB2 = createGem('b2', 'cold_damage', 2, 'common');
+    const preview = previewEngine.previewCombine(gemA2, gemB2);
+
+    expect(preview).not.toBeNull();
+    expect(preview!.known).toBe(true);
+    expect(preview!.gem).not.toBeNull();
+    expect(preview!.gem!.affixId).toBe(actual.gem.affixId);
+    expect(preview!.gem!.tier).toBe(actual.gem.tier);
+    expect(preview!.gem!.rarity).toBe(actual.gem.rarity);
     expect(preview!.layer).toBe(actual.layer);
-    expect(preview!.gem.affixId).toBe(actual.gem.affixId);
-    expect(preview!.gem.tier).toBe(actual.gem.tier);
-    expect(preview!.gem.rarity).toBe(actual.gem.rarity);
   });
 
   it('returns null for non-combinable gems', () => {
@@ -188,7 +211,6 @@ describe('previewCombine', () => {
     const previewEngine = new CombinationEngine(registry, freshDiscovery, categoryMap);
 
     const gem = createGem('a', 'fire_damage', 5, 'legendary');
-    // gem with tier 5 + legendary is not combinable
     expect(gem.combinable).toBe(false);
 
     const other = createGem('b', 'cold_damage', 1, 'common');
@@ -204,43 +226,7 @@ Run: `cd packages/engine && npx vitest run tests/combination-engine.test.ts -t "
 
 Expected: FAIL — `previewCombine` does not exist yet.
 
-- [ ] **Step 3: Implement `previewCombine`**
-
-Add to `packages/engine/src/combine/combination-engine.ts`, inside the `CombinationEngine` class:
-
-```typescript
-/**
- * Preview what a combine would produce without mutating discovery state.
- * Returns null if either gem is not combinable.
- */
-previewCombine(
-  gemA: GemInstance,
-  gemB: GemInstance,
-): CombineResult | null {
-  if (!gemA.combinable || !gemB.combinable) {
-    return null;
-  }
-
-  // Create a temporary discovery state snapshot so we don't mutate the real one
-  const tempDiscovery = this.discovery.clone();
-  const tempEngine = new CombinationEngine(
-    this.registry,
-    tempDiscovery,
-    this.categoryMap,
-    this.config,
-  );
-
-  try {
-    return tempEngine.combine(gemA, gemB, '__preview__');
-  } catch {
-    return null;
-  }
-}
-```
-
-This requires `DiscoveryState` to have a `clone()` method.
-
-- [ ] **Step 4: Add `clone()` to `DiscoveryState`**
+- [ ] **Step 3: Add `clone()` to `DiscoveryState`**
 
 In `packages/engine/src/combine/discovery-state.ts`, add a method that leverages the existing `serialize`/`deserialize` round-trip:
 
@@ -252,27 +238,101 @@ clone(): DiscoveryState {
 
 This is a one-liner that reuses existing tested code paths and avoids any `any` casts.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 4: Implement `previewCombine` and `CombinePreview` type**
+
+Add the type and method to `packages/engine/src/combine/combination-engine.ts`:
+
+```typescript
+// Add near the top with other exported types:
+export interface CombinePreview {
+  /** true if this affix pair has been attempted before (player knows the result) */
+  known: boolean;
+  /** which combination layer would handle this pair */
+  layer: CombineLayer;
+  /** the output gem — only populated when known is true */
+  gem: GemInstance | null;
+  /** recipe ID if signature layer and known */
+  recipeId?: string;
+}
+```
+
+Add inside the `CombinationEngine` class:
+
+```typescript
+/**
+ * Preview what a combine would produce without mutating discovery state.
+ * Returns null if either gem is not combinable.
+ * Returns CombinePreview with known=false (gem=null) for never-attempted combos.
+ * Returns CombinePreview with known=true (gem populated) for previously-attempted combos.
+ */
+previewCombine(
+  gemA: GemInstance,
+  gemB: GemInstance,
+): CombinePreview | null {
+  if (!gemA.combinable || !gemB.combinable) {
+    return null;
+  }
+
+  const known = this.discovery.hasAttempted(gemA.affixId, gemB.affixId);
+
+  // Run combine on a cloned discovery state to get the result without side effects
+  const tempDiscovery = this.discovery.clone();
+  const tempEngine = new CombinationEngine(
+    this.registry,
+    tempDiscovery,
+    this.categoryMap,
+    this.config,
+  );
+
+  try {
+    const result = tempEngine.combine(gemA, gemB, '__preview__');
+    return {
+      known,
+      layer: result.layer,
+      gem: known ? result.gem : null,
+      recipeId: known ? result.recipeId : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+```
+
+- [ ] **Step 5: Export `CombinePreview` from engine index**
+
+In `packages/engine/src/index.ts`, update the combination engine exports:
+
+```typescript
+// Change:
+export type { CombineResult, CombineLayer, CombineConfig } from './combine/combination-engine.js';
+// To:
+export type { CombineResult, CombineLayer, CombineConfig, CombinePreview } from './combine/combination-engine.js';
+```
+
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `cd packages/engine && npx vitest run tests/combination-engine.test.ts -t "previewCombine"`
 
 Expected: PASS
 
-- [ ] **Step 6: Run the full engine test suite**
+- [ ] **Step 7: Run the full engine test suite**
 
 Run: `cd packages/engine && npx vitest run`
 
 Expected: ALL PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add packages/engine/src/combine/combination-engine.ts packages/engine/src/combine/discovery-state.ts packages/engine/tests/combination-engine.test.ts
-git commit -m "feat(engine): add previewCombine for side-effect-free combine preview
+git add packages/engine/src/combine/combination-engine.ts packages/engine/src/combine/discovery-state.ts packages/engine/src/index.ts packages/engine/tests/combination-engine.test.ts
+git commit -m "feat(engine): add discovery-gated previewCombine
 
-Adds CombinationEngine.previewCombine() that returns the same result as
-combine() without mutating DiscoveryState. Uses DiscoveryState.clone()
-to create a temporary snapshot. Returns null for non-combinable gems."
+Adds CombinationEngine.previewCombine() that returns CombinePreview:
+- known=false (gem=null) for never-attempted combos — player must
+  discover the result organically by actually combining
+- known=true (gem populated) for previously-attempted combos
+Uses DiscoveryState.hasAttempted() for gating and .clone() for
+side-effect-free computation."
 ```
 
 ---
@@ -476,39 +536,91 @@ process what happened before the next round begins."
 
 ## Chunk 3: Client — Combine preview + PostMatch enrichment (Tasks 4-5)
 
-### Task 4: Wire combine preview into Forge UI
+### Task 4: Wire discovery-gated combine preview into Forge UI + resize to standard gem size
 
-Show the predicted output gem (tier + rarity) in the CombineWorkbench result box when 2 gems are selected.
+Two changes in one task since they both touch `CombineWorkbench`:
 
-**Approach:** When the forgeStore's `comboSlots` has 2 filled gems, instantiate a temporary `CombinationEngine` and call `previewCombine`. Display the result in the existing `ResultBox` component. No new stores needed — this is a derived computation in the Forge page.
+1. **Discovery-gated preview:** Show the output gem only for previously-attempted combos. Unknown combos show "?" with glow hints.
+2. **Standard gem sizing:** Upgrade all combine workbench slots and result box from `--socket-size` (40-72px) to `--gem-size` (90-130px) — the same size as gems in the draft grid and forge tray.
+
+**Approach:** Pass the full `CombinePreview` (not just the gem) from Forge → CombineWorkbench. The UI checks `preview.known` to decide what to render. Slot and result box sizing changes from `--socket-size` / `--gem-size-sm` to `--gem-size` / `--gem-radius` throughout the component.
 
 **Files:**
-- Modify: `packages/client/src/components/CombineWorkbench.tsx` (accept `previewGem` prop, render it in ResultBox)
+- Modify: `packages/client/src/components/CombineWorkbench.tsx` (accept `preview` prop, update `ResultBox` + `Slot` sizing)
 - Modify: `packages/client/src/pages/Forge.tsx` (compute preview, pass to CombineWorkbench)
 
-- [ ] **Step 1: Add `previewGem` prop to CombineWorkbench**
+- [ ] **Step 1: Update CombineWorkbench — sizing + preview prop**
 
 In `packages/client/src/components/CombineWorkbench.tsx`:
 
-Add to `CombineWorkbenchProps`:
+Add import for `CombinePreview`:
 ```typescript
-previewGem?: GemInstance | null;
+import type { DataRegistry, GemInstance, CombinePreview } from '@alloy/engine';
 ```
 
-Update the `ResultBox` rendering (around line 124) to pass the preview:
+Update `CombineWorkbenchProps` — replace `previewGem` with the richer `preview`:
+```typescript
+interface CombineWorkbenchProps {
+  comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
+  registry: DataRegistry;
+  canAfford: boolean;
+  isDragging?: boolean;
+  preview?: CombinePreview | null;
+  onSlotClick: (index: number) => void;
+  onCombine: () => void;
+  onClearAll: () => void;
+}
+```
+
+Update `ResultBox` rendering call to pass the preview:
 ```tsx
-<ResultBox glowSignal={glowSignal} previewGem={previewGem ?? null} registry={registry} />
+<ResultBox glowSignal={glowSignal} preview={preview ?? null} registry={registry} />
 ```
 
-Update `ResultBox` to accept and render the preview:
+**Sizing changes in `Slot` component:**
+Replace all occurrences of `--socket-size` / `--socket-radius` with `--gem-size` / `--gem-radius` in the `Slot` component. Specifically:
+
+Empty slot:
+```tsx
+// BEFORE:
+width: 'var(--gem-size-sm)',
+height: 'var(--gem-size-sm)',
+borderRadius: 'var(--gem-radius-sm)',
+// AFTER:
+width: 'var(--gem-size)',
+height: 'var(--gem-size)',
+borderRadius: 'var(--gem-radius)',
+```
+
+Filled slot:
+```tsx
+// BEFORE:
+width: 'var(--socket-size)',
+height: 'var(--socket-size)',
+borderRadius: 'var(--socket-radius)',
+// AFTER:
+width: 'var(--gem-size)',
+height: 'var(--gem-size)',
+borderRadius: 'var(--gem-radius)',
+```
+
+And the gem art image inside filled slot:
+```tsx
+// BEFORE:
+style={{ width: 'var(--gem-size-sm)', height: 'var(--gem-size-sm)', ... }}
+// AFTER: (use a percentage of gem-size so it scales)
+style={{ width: '70%', height: '70%', ... }}
+```
+
+**Update `ResultBox` — discovery-gated rendering + standard sizing:**
 ```tsx
 function ResultBox({
   glowSignal,
-  previewGem,
+  preview,
   registry,
 }: {
   glowSignal: GlowSignal;
-  previewGem: GemInstance | null;
+  preview: CombinePreview | null;
   registry: DataRegistry;
 }) {
   const isGold = glowSignal === 'gold';
@@ -529,19 +641,20 @@ function ResultBox({
       ? '0 0 12px rgba(255,255,255,0.3)'
       : 'none';
 
-  if (previewGem) {
-    const affix = registry.findAffix(previewGem.affixId);
+  // Known combo with gem preview — show full gem details
+  if (preview?.known && preview.gem) {
+    const affix = registry.findAffix(preview.gem.affixId);
     const element = affix?.tags.find((t: string) => ELEMENT_TAGS.has(t));
     const gradient = element ? ELEMENT_GRADIENTS[element] : null;
-    const artUrl = getGemArt(previewGem.affixId);
+    const artUrl = getGemArt(preview.gem.affixId);
 
     return (
       <div
         className="flex flex-col items-center justify-center overflow-hidden"
         style={{
-          width: 'var(--socket-size)',
-          height: 'var(--socket-size)',
-          borderRadius: 'var(--socket-radius)',
+          width: 'var(--gem-size)',
+          height: 'var(--gem-size)',
+          borderRadius: 'var(--gem-radius)',
           border: `2px solid ${borderColor}`,
           background: gradient
             ? `linear-gradient(135deg, ${gradient.bg})`
@@ -551,7 +664,6 @@ function ResultBox({
           animation: 'pulse-glow 1.5s ease-in-out infinite',
         }}
       >
-        {/* Specular highlight */}
         <div
           style={{
             position: 'absolute',
@@ -563,30 +675,17 @@ function ResultBox({
         {artUrl ? (
           <img
             src={artUrl}
-            alt={previewGem.affixId}
-            style={{
-              width: 'var(--gem-size-sm)',
-              height: 'var(--gem-size-sm)',
-              objectFit: 'contain',
-              position: 'relative',
-              zIndex: 1,
-              opacity: 0.7,
-            }}
+            alt={preview.gem.affixId}
+            style={{ width: '70%', height: '70%', objectFit: 'contain', position: 'relative', zIndex: 1, opacity: 0.8 }}
           />
         ) : (
-          <span style={{
-            fontSize: 'var(--icon-sm)',
-            position: 'relative',
-            zIndex: 1,
-            opacity: 0.7,
-          }}>
+          <span style={{ fontSize: 'var(--icon-lg)', position: 'relative', zIndex: 1, opacity: 0.8 }}>
             {element ? ELEMENT_SYMBOLS[element] : '\u2726'}
           </span>
         )}
-        {/* Tier + rarity label */}
         <span
           style={{
-            fontSize: '8px',
+            fontSize: 'calc(var(--gem-size) * 0.1)',
             fontFamily: 'var(--font-family-display)',
             fontWeight: 700,
             color: 'white',
@@ -596,12 +695,13 @@ function ResultBox({
             zIndex: 1,
           }}
         >
-          T{previewGem.tier} {previewGem.rarity.slice(0, 3)}
+          T{preview.gem.tier} {preview.gem.rarity.slice(0, 3)}
         </span>
       </div>
     );
   }
 
+  // Unknown combo or no preview — show mystery "?" with glow hints
   const symbol = isGold ? '\u2726' : '?';
   const symbolColor = isGold
     ? 'var(--color-compound)'
@@ -613,23 +713,25 @@ function ResultBox({
     <div
       className="flex items-center justify-center"
       style={{
-        width: 'var(--socket-size)',
-        height: 'var(--socket-size)',
-        borderRadius: 'var(--socket-radius)',
+        width: 'var(--gem-size)',
+        height: 'var(--gem-size)',
+        borderRadius: 'var(--gem-radius)',
         border: `2px ${borderStyle} ${borderColor}`,
         background: 'var(--color-surface-800)',
         boxShadow: shadow,
-        fontSize: 'var(--icon-md)',
+        fontSize: 'var(--icon-lg)',
         color: symbolColor,
         animation: isGold ? 'pulse-glow 1.5s ease-in-out infinite' : undefined,
       }}
       aria-live="polite"
       aria-label={
-        isGold
-          ? 'Unique compound available'
-          : isWhite
-            ? 'Basic combination available'
-            : 'No combination'
+        preview && !preview.known
+          ? 'Undiscovered combination'
+          : isGold
+            ? 'Unique compound available'
+            : isWhite
+              ? 'Basic combination available'
+              : 'No combination'
       }
     >
       {symbol}
@@ -647,9 +749,10 @@ In `packages/client/src/pages/Forge.tsx`:
 Add imports:
 ```typescript
 import { CombinationEngine, DiscoveryState } from '@alloy/engine';
+import type { CombinePreview } from '@alloy/engine';
 ```
 
-Add two `useMemo` hooks (near the other derived values, after `statsResult`). The first memoizes the `categoryMap` since it's expensive to rebuild on every combo slot change. The second computes the preview:
+Add two `useMemo` hooks (near the other derived values, after `statsResult`). The first memoizes the `categoryMap` since it's expensive to rebuild on every combo slot change. The second computes the discovery-gated preview:
 
 ```typescript
 // Memoize categoryMap — only changes if registry changes (never during a match)
@@ -661,7 +764,7 @@ const categoryMap = useMemo(() => {
   return map;
 }, [registry]);
 
-const combinePreviewGem = useMemo(() => {
+const combinePreview: CombinePreview | null = useMemo(() => {
   const filled = comboSlots.filter((s): s is GemInstance => s !== null);
   if (filled.length < 2) return null;
 
@@ -671,8 +774,7 @@ const combinePreviewGem = useMemo(() => {
     const engine = new CombinationEngine(recipeRegistry, discovery, categoryMap, {
       matchingRarityBonus: registry.getBalance().gem.matchingRarityBonus,
     });
-    const result = engine.previewCombine(filled[0], filled[1]);
-    return result?.gem ?? null;
+    return engine.previewCombine(filled[0], filled[1]);
   } catch {
     return null;
   }
@@ -685,31 +787,35 @@ Pass to `CombineWorkbench`:
   comboSlots={comboSlots}
   registry={registry}
   canAfford={true}
-  previewGem={combinePreviewGem}
+  preview={combinePreview}
   onSlotClick={handleComboSlotClick}
   onCombine={handleCombine}
   onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
 />
 ```
 
-- [ ] **Step 3: Test manually — drag two gems into combine slots, verify preview appears**
+- [ ] **Step 3: Test manually — verify discovery gating and gem sizing**
 
 1. Start a run, complete draft, enter forge
-2. Drag or tap two gems into the combine workbench slots
-3. Verify: the result box shows a preview gem with art/element, tier + rarity label (e.g., "T2 com")
-4. Click "COMBINE" — verify the actual result matches the preview
-5. Clear slots — verify result box goes back to "?"
+2. **Sizing check:** Verify combine slot circles are now the same size as gems in the tray below (standard `--gem-size`, not tiny socket size)
+3. **Unknown combo:** Drag two never-combined gems into slots. Result box should show "?" (gold shimmer if it's a signature recipe match, white for generic). No gem art revealed.
+4. **Combine:** Click COMBINE. The gems merge — you now know this combo.
+5. **Known combo:** Get or create two more gems of the same affix types. Drag into slots. Result box should now show the full preview: gem art, tier + rarity label.
+6. **Non-run mode:** Verify standard (ranked/quick) matches still work — no crashes from missing discoveryState.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add packages/client/src/components/CombineWorkbench.tsx packages/client/src/pages/Forge.tsx
-git commit -m "feat(client): show combine preview in forge workbench
+git commit -m "feat(client): discovery-gated combine preview + standard gem sizing
 
-When two gems are placed in the combine slots, the result box now
-shows a preview of the output gem (art, tier, rarity) before the
-player commits. Uses CombinationEngine.previewCombine() to compute
-the result without side effects."
+Combine workbench now uses standard --gem-size for all slots (matching
+the draft grid and forge tray) instead of the smaller --socket-size.
+
+Preview shows full gem output only for previously-attempted combos.
+Unknown combos show '?' with glow hints (gold for signature recipes,
+white for generic). Players must actually combine to discover results,
+building out their gem knowledge organically."
 ```
 
 ---
