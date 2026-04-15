@@ -1,5 +1,6 @@
 import type { GemRarity, StatModifier } from '@alloy/engine';
-import { RARITY_MULTIPLIERS } from '@alloy/engine';
+import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
+import { getGemArt } from '@/shared/utils/art-registry';
 
 type InspectContext = 'weapon' | 'armor' | 'both';
 
@@ -11,6 +12,7 @@ interface GemInspectPanelProps {
     armorFlavorText: string;
     category?: string;
     tags: string[];
+    affixId?: string;
     tier?: number;
     rarity?: GemRarity;
     weaponEffect?: StatModifier[];
@@ -19,18 +21,25 @@ interface GemInspectPanelProps {
   };
   context: InspectContext;
   onClose: () => void;
+  /** Recipe ingredients for compound gems */
+  recipe?: { component1Name: string; component2Name: string };
+  /** Currently selected rarity — parent owns this state */
+  selectedRarity?: GemRarity;
+  /** Callback when user switches rarity tab */
+  onRarityChange?: (rarity: GemRarity) => void;
 }
 
-export function GemInspectPanel({ gem, context, onClose }: GemInspectPanelProps) {
+export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity, onRarityChange }: GemInspectPanelProps) {
   const showWeapon = context === 'weapon' || context === 'both';
   const showArmor = context === 'armor' || context === 'both';
 
-  const mult = gem.rarity ? RARITY_MULTIPLIERS[gem.rarity] : 1;
-  const rarityName = gem.rarity ? gem.rarity.charAt(0).toUpperCase() + gem.rarity.slice(1) : 'Common';
   const RARITY_COLORS: Record<string, string> = {
-    common: '#9ca3af', magic: '#3b82f6', rare: '#eab308', epic: '#a855f7', legendary: '#f59e0b',
+    common: '#9ca3af', uncommon: '#2dd4bf', magic: '#3b82f6', rare: '#facc15', epic: '#a855f7', legendary: '#c2410c',
   };
-  const rarityColor = gem.rarity ? RARITY_COLORS[gem.rarity] ?? '#9ca3af' : '#9ca3af';
+  const effectiveRarity = selectedRarity ?? gem.rarity ?? 'common';
+  const mult = RARITY_MULTIPLIERS[effectiveRarity];
+  const rarityName = effectiveRarity.charAt(0).toUpperCase() + effectiveRarity.slice(1);
+  const rarityColor = RARITY_COLORS[effectiveRarity] ?? '#9ca3af';
 
   function formatVal(value: number, op: string, multiplier: number): string {
     const eff = value * multiplier;
@@ -43,29 +52,78 @@ export function GemInspectPanel({ gem, context, onClose }: GemInspectPanelProps)
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/60"
+        className="absolute inset-0 z-40 bg-black/60"
       />
       {/* Panel */}
-      <div className="fixed right-0 top-0 z-50 flex h-full w-80 flex-col overflow-y-auto bg-surface-800 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-600 p-4">
+      <div className="absolute right-0 top-0 z-50 flex h-full w-[70%] flex-col overflow-y-auto overflow-x-hidden bg-surface-800 shadow-2xl">
+        {/* Header with gem art */}
+        <div className="flex items-center gap-3 border-b border-surface-600 p-4">
+          {gem.affixId && (() => {
+            const artUrl = getGemArt(gem.affixId);
+            return artUrl ? (
+              <img
+                src={artUrl}
+                alt={gem.name}
+                className="shrink-0 rounded-lg"
+                style={{ width: 48, height: 48, objectFit: 'cover' }}
+              />
+            ) : null;
+          })()}
           <h2
-            className="text-lg font-bold"
+            className="min-w-0 flex-1 text-lg font-bold"
             style={{ fontFamily: 'var(--font-family-display)', color: 'var(--color-accent-400)' }}
           >
             {gem.name}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-surface-400 hover:bg-surface-700 hover:text-white"
+            className="shrink-0 rounded p-1 text-surface-400 hover:bg-surface-700 hover:text-white"
           >
             ✕
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex min-w-0 flex-col gap-4 p-4">
           {/* Brief description */}
           <p className="text-sm leading-relaxed text-surface-300">{gem.description}</p>
+
+          {/* Recipe ingredients — compound gems only */}
+          {recipe && (
+            <div className="rounded border border-surface-600 bg-surface-900/50 p-2">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-surface-400">
+                Made from
+              </h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-white">{recipe.component1Name}</span>
+                <span className="text-surface-400">+</span>
+                <span className="font-medium text-white">{recipe.component2Name}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Rarity selector tabs — shown when parent provides callbacks */}
+          {selectedRarity && onRarityChange && (
+            <div className="flex flex-wrap gap-1">
+              {RARITY_ORDER.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => onRarityChange(r)}
+                  className={`shrink-0 rounded px-2 py-1 text-xs font-semibold transition-colors ${
+                    selectedRarity === r
+                      ? 'text-white'
+                      : 'text-surface-500 hover:text-surface-300'
+                  }`}
+                  style={selectedRarity === r ? {
+                    backgroundColor: `${RARITY_COLORS[r]}20`,
+                    color: RARITY_COLORS[r],
+                    border: `1px solid ${RARITY_COLORS[r]}40`,
+                  } : undefined}
+                >
+                  {r.charAt(0).toUpperCase() + r.slice(1)}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Weapon flavor text */}
           {showWeapon && gem.weaponFlavorText.length > 0 && (
@@ -156,7 +214,7 @@ export function GemInspectPanel({ gem, context, onClose }: GemInspectPanelProps)
                   </div>
                   {/* Footer math */}
                   {firstStat && mult !== 1 && (
-                    <p className="mt-1 text-xs text-surface-400">
+                    <p className="mt-1 break-words text-xs text-surface-400">
                       Base: {formatVal(firstStat.value, firstStat.op, 1)}{' '}
                       <span style={{ color: rarityColor }}>
                         x {rarityName} ({mult}x)
