@@ -53,7 +53,7 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
         className="absolute inset-0 z-40 bg-black/60"
       />
       {/* Panel */}
-      <div className="absolute right-0 top-0 z-50 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto bg-surface-800 shadow-2xl">
+      <div className="absolute right-0 top-0 z-50 flex h-full w-80 max-w-[85%] flex-col overflow-y-auto overflow-x-hidden bg-surface-800 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-surface-600 p-4">
           <h2
@@ -70,7 +70,7 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
           </button>
         </div>
 
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex min-w-0 flex-col gap-4 p-4">
           {/* Brief description */}
           <p className="text-sm leading-relaxed text-surface-300">{gem.description}</p>
 
@@ -90,12 +90,12 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
 
           {/* Rarity selector tabs — shown when parent provides callbacks */}
           {selectedRarity && onRarityChange && (
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {RARITY_ORDER.map((r) => (
                 <button
                   key={r}
                   onClick={() => onRarityChange(r)}
-                  className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
+                  className={`shrink-0 rounded px-2 py-1 text-xs font-semibold transition-colors ${
                     selectedRarity === r
                       ? 'text-white'
                       : 'text-surface-500 hover:text-surface-300'
@@ -201,7 +201,7 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
                   </div>
                   {/* Footer math */}
                   {firstStat && mult !== 1 && (
-                    <p className="mt-1 text-xs text-surface-400">
+                    <p className="mt-1 break-words text-xs text-surface-400">
                       Base: {formatVal(firstStat.value, firstStat.op, 1)}{' '}
                       <span style={{ color: rarityColor }}>
                         x {rarityName} ({mult}x)
