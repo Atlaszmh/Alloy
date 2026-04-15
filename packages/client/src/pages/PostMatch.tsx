@@ -4,7 +4,7 @@ import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { useRunStore } from '@/stores/runStore';
 import { useGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
-import type { CombatLog } from '@alloy/engine';
+import type { CombatLog, MatchState } from '@alloy/engine';
 
 function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
   const stats = useMemo(() => {
@@ -57,6 +57,49 @@ function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
             <span className="stat-number w-16 text-right text-white">{player}</span>
             <span className="flex-1 text-center text-surface-400" style={{ fontFamily: 'var(--font-family-display)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
             <span className="stat-number w-16 text-white">{ai}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RunSummary({ matchState }: { matchState: MatchState }) {
+  const runState = matchState.runState;
+  const discoveryState = matchState.discoveryState;
+  if (!runState) return null;
+
+  const roundsCompleted = runState.totalWins + runState.totalLosses;
+
+  const stats = [
+    { label: 'Rounds Completed', value: roundsCompleted },
+    { label: 'Wins', value: runState.totalWins },
+    { label: 'Losses', value: runState.totalLosses },
+    { label: 'Flux Earned', value: runState.flux },
+    { label: 'Recipes Found', value: discoveryState?.totalDiscoveryCount() ?? 0 },
+  ];
+
+  return (
+    <div
+      className="w-full max-w-md rounded-lg border border-surface-600 bg-surface-800 p-4"
+      style={{ boxShadow: 'var(--shadow-card)' }}
+    >
+      <h3
+        className="mb-3 text-sm font-bold uppercase text-surface-400"
+        style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.04em' }}
+      >
+        Run Summary
+      </h3>
+      <div className="space-y-1.5">
+        {stats.map(({ label, value }) => (
+          <div key={label} className="flex items-center justify-between text-xs">
+            <span
+              className="text-surface-400"
+              style={{ fontFamily: 'var(--font-family-display)', fontSize: '0.65rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}
+            >
+              {label}
+            </span>
+            <span className="stat-number text-white">{value}</span>
           </div>
         ))}
       </div>
@@ -162,6 +205,9 @@ export function PostMatch() {
           </div>
         ))}
       </div>
+
+      {/* Run summary (run mode only) */}
+      {isRunMode && matchState && <RunSummary matchState={matchState} />}
 
       {/* Match statistics */}
       {duelLogs.length > 0 && <MatchStatistics duelLogs={duelLogs} />}
