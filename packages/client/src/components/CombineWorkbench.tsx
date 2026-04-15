@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DataRegistry, GemInstance } from '@alloy/engine';
+import type { DataRegistry, GemInstance, CombinePreview } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
 import { getGemArt } from '@/shared/utils/art-registry';
@@ -20,6 +20,7 @@ interface CombineWorkbenchProps {
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
+  preview?: CombinePreview | null;
   isDragging?: boolean;
   onSlotClick: (index: number) => void;
   onCombine: () => void;
@@ -63,6 +64,7 @@ export function CombineWorkbench({
   comboSlots,
   registry,
   canAfford,
+  preview,
   isDragging,
   onSlotClick,
   onCombine,
@@ -121,7 +123,7 @@ export function CombineWorkbench({
         </span>
 
         {/* Result box */}
-        <ResultBox glowSignal={glowSignal} />
+        <ResultBox glowSignal={glowSignal} preview={preview ?? null} registry={registry} />
 
         {/* Buttons inline */}
         <div className="flex gap-1.5" style={{ marginLeft: 'var(--gap-md)' }}>
@@ -177,9 +179,9 @@ function Slot({
         onClick={onClick}
         className="flex items-center justify-center cursor-pointer"
         style={{
-          width: 'var(--gem-size-sm)',
-          height: 'var(--gem-size-sm)',
-          borderRadius: 'var(--gem-radius-sm)',
+          width: 'var(--gem-size)',
+          height: 'var(--gem-size)',
+          borderRadius: 'var(--gem-radius)',
           border: dropBorder,
           background: 'var(--color-surface-800)',
           color: 'var(--color-surface-300)',
@@ -220,9 +222,9 @@ function Slot({
       onClick={onClick}
       className="flex flex-col items-center justify-center cursor-pointer overflow-hidden"
       style={{
-        width: 'var(--socket-size)',
-        height: 'var(--socket-size)',
-        borderRadius: 'var(--socket-radius)',
+        width: 'var(--gem-size)',
+        height: 'var(--gem-size)',
+        borderRadius: 'var(--gem-radius)',
         border: `2px solid ${filledBorder}`,
         background: bgGradient,
         boxShadow: filledShadow,
@@ -243,7 +245,7 @@ function Slot({
         <img
           src={artUrl}
           alt={orb.affixId}
-          style={{ width: 'var(--gem-size-sm)', height: 'var(--gem-size-sm)', objectFit: 'contain', position: 'relative', zIndex: 1 }}
+          style={{ width: '70%', height: '70%', objectFit: 'contain', position: 'relative', zIndex: 1 }}
         />
       ) : (
         <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1, position: 'relative', zIndex: 1 }}>{emoji}</span>
@@ -254,7 +256,15 @@ function Slot({
 
 /* ---- Result Box ---- */
 
-function ResultBox({ glowSignal }: { glowSignal: GlowSignal }) {
+function ResultBox({
+  glowSignal,
+  preview,
+  registry,
+}: {
+  glowSignal: GlowSignal;
+  preview: CombinePreview | null;
+  registry: DataRegistry;
+}) {
   const isGold = glowSignal === 'gold';
   const isWhite = glowSignal === 'white';
   const hasGlow = isGold || isWhite;
@@ -273,6 +283,67 @@ function ResultBox({ glowSignal }: { glowSignal: GlowSignal }) {
       ? '0 0 12px rgba(255,255,255,0.3)'
       : 'none';
 
+  // Known combo with gem preview — show full gem details
+  if (preview?.known && preview.gem) {
+    const affix = registry.findAffix(preview.gem.affixId);
+    const element = affix?.tags.find((t: string) => ELEMENT_TAGS.has(t));
+    const gradient = element ? ELEMENT_GRADIENTS[element] : null;
+    const artUrl = getGemArt(preview.gem.affixId);
+
+    return (
+      <div
+        className="flex flex-col items-center justify-center overflow-hidden"
+        style={{
+          width: 'var(--gem-size)',
+          height: 'var(--gem-size)',
+          borderRadius: 'var(--gem-radius)',
+          border: `2px solid ${borderColor}`,
+          background: gradient
+            ? `linear-gradient(135deg, ${gradient.bg})`
+            : 'var(--color-surface-800)',
+          boxShadow: shadow,
+          position: 'relative',
+          animation: 'pulse-glow 1.5s ease-in-out infinite',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%)',
+            pointerEvents: 'none',
+          }}
+        />
+        {artUrl ? (
+          <img
+            src={artUrl}
+            alt={preview.gem.affixId}
+            style={{ width: '70%', height: '70%', objectFit: 'contain', position: 'relative', zIndex: 1, opacity: 0.8 }}
+          />
+        ) : (
+          <span style={{ fontSize: 'var(--icon-lg)', position: 'relative', zIndex: 1, opacity: 0.8 }}>
+            {element ? ELEMENT_SYMBOLS[element] : '\u2726'}
+          </span>
+        )}
+        <span
+          style={{
+            fontSize: 'calc(var(--gem-size) * 0.1)',
+            fontFamily: 'var(--font-family-display)',
+            fontWeight: 700,
+            color: 'white',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          T{preview.gem.tier} {preview.gem.rarity.slice(0, 3)}
+        </span>
+      </div>
+    );
+  }
+
+  // Unknown combo or no preview — show mystery "?" with glow hints
   const symbol = isGold ? '\u2726' : '?';
   const symbolColor = isGold
     ? 'var(--color-compound)'
@@ -284,23 +355,25 @@ function ResultBox({ glowSignal }: { glowSignal: GlowSignal }) {
     <div
       className="flex items-center justify-center"
       style={{
-        width: 'var(--socket-size)',
-        height: 'var(--socket-size)',
-        borderRadius: 'var(--socket-radius)',
+        width: 'var(--gem-size)',
+        height: 'var(--gem-size)',
+        borderRadius: 'var(--gem-radius)',
         border: `2px ${borderStyle} ${borderColor}`,
         background: 'var(--color-surface-800)',
         boxShadow: shadow,
-        fontSize: 'var(--icon-md)',
+        fontSize: 'var(--icon-lg)',
         color: symbolColor,
         animation: isGold ? 'pulse-glow 1.5s ease-in-out infinite' : undefined,
       }}
       aria-live="polite"
       aria-label={
-        isGold
-          ? 'Unique compound available'
-          : isWhite
-            ? 'Basic combination available'
-            : 'No combination'
+        preview && !preview.known
+          ? 'Undiscovered combination'
+          : isGold
+            ? 'Unique compound available'
+            : isWhite
+              ? 'Basic combination available'
+              : 'No combination'
       }
     >
       {symbol}

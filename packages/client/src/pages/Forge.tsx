@@ -15,8 +15,8 @@ import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
-import type { AffixDef, BaseStat, CompoundAffixDef, GemInstance } from '@alloy/engine';
-import { createForgeState } from '@alloy/engine';
+import type { AffixDef, BaseStat, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
+import { createForgeState, CombinationEngine, DiscoveryState } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
@@ -122,6 +122,31 @@ export function Forge() {
   // ── Derived stats ──
   const statsResult = useForgeStore(s => s.getStats)(registry);
   const derivedStats = statsResult?.stats ?? null;
+
+  // Memoize categoryMap — only changes if registry changes (never during a match)
+  const categoryMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const affix of registry.getAllAffixes()) {
+      map[affix.id] = affix.category;
+    }
+    return map;
+  }, [registry]);
+
+  const combinePreview: CombinePreview | null = useMemo(() => {
+    const filled = comboSlots.filter((s): s is GemInstance => s !== null);
+    if (filled.length < 2) return null;
+
+    try {
+      const recipeRegistry = registry.getRecipeRegistry();
+      const discovery = matchState?.discoveryState ?? new DiscoveryState();
+      const engine = new CombinationEngine(recipeRegistry, discovery, categoryMap, {
+        matchingRarityBonus: registry.getBalance().gem.matchingRarityBonus,
+      });
+      return engine.previewCombine(filled[0], filled[1]);
+    } catch {
+      return null;
+    }
+  }, [comboSlots, registry, categoryMap, matchState?.discoveryState]);
 
   // ── Commit flow ──
   const handleCommit = useCallback(async () => {
@@ -557,6 +582,7 @@ export function Forge() {
           comboSlots={comboSlots}
           registry={registry}
           canAfford={true}
+          preview={combinePreview}
           onSlotClick={handleComboSlotClick}
           onCombine={handleCombine}
           onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
