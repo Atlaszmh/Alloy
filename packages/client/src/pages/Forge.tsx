@@ -87,6 +87,7 @@ export function Forge() {
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
   const hasDraggedRef = useRef(false);
   const draggedElRef = useRef<HTMLElement | null>(null);
+  const dragOriginalElRef = useRef<HTMLElement | null>(null);
   const dragUidRef = useRef<string | null>(null);
   const dragSourceRef = useRef<
     | { type: 'stockpile' }
@@ -200,27 +201,20 @@ export function Forge() {
   }, [selectedOrbUid, selectOrb]);
 
   // ── Drag helpers ──
-  function clearDragStyles(el: HTMLElement) {
-    el.style.position = '';
-    el.style.left = '';
-    el.style.top = '';
-    el.style.width = '';
-    el.style.height = '';
-    el.style.zIndex = '';
-    el.style.transform = '';
-    el.style.filter = '';
-    el.style.pointerEvents = '';
-    el.style.opacity = '';
-    delete el.dataset.origLeft;
-    delete el.dataset.origTop;
-  }
-
   function resetDraggedEl() {
-    const el = draggedElRef.current;
-    if (el) {
-      clearDragStyles(el);
-      draggedElRef.current = null;
+    // Remove the drag ghost clone
+    const ghost = draggedElRef.current;
+    if (ghost && ghost.parentNode) {
+      ghost.remove();
     }
+    draggedElRef.current = null;
+
+    // Restore original element opacity
+    const orig = dragOriginalElRef.current;
+    if (orig) {
+      orig.style.opacity = '';
+    }
+    dragOriginalElRef.current = null;
   }
 
   function findDropTarget(x: number, y: number):
@@ -302,22 +296,32 @@ export function Forge() {
           }
         }
 
-        // Grab the wrapper element (data-gem-uid is on the wrapper, matching Draft pattern)
-        const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
-        draggedElRef.current = el;
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          el.dataset.origLeft = String(rect.left);
-          el.dataset.origTop = String(rect.top);
-          // Individual style sets — matches Draft exactly, won't fight React
-          el.style.position = 'fixed';
-          el.style.left = `${rect.left}px`;
-          el.style.top = `${rect.top}px`;
-          el.style.width = `${rect.width}px`;
-          el.style.height = `${rect.height}px`;
-          el.style.zIndex = '999';
-          el.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
-          el.style.pointerEvents = 'none';
+        // Find the original element and create a drag ghost clone
+        const origEl = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
+        if (origEl) {
+          const rect = origEl.getBoundingClientRect();
+
+          // Create a clone for the drag ghost
+          const ghost = origEl.cloneNode(true) as HTMLElement;
+          ghost.removeAttribute('data-gem-uid'); // prevent querySelector from finding the ghost
+          ghost.style.position = 'fixed';
+          ghost.style.left = `${rect.left}px`;
+          ghost.style.top = `${rect.top}px`;
+          ghost.style.width = `${rect.width}px`;
+          ghost.style.height = `${rect.height}px`;
+          ghost.style.zIndex = '999';
+          ghost.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
+          ghost.style.pointerEvents = 'none';
+          ghost.style.margin = '0';
+          ghost.dataset.origLeft = String(rect.left);
+          ghost.dataset.origTop = String(rect.top);
+          document.body.appendChild(ghost);
+
+          draggedElRef.current = ghost;
+          dragOriginalElRef.current = origEl;
+
+          // Dim the original
+          origEl.style.opacity = '0.3';
         }
 
         // Lock pointer events on non-dragged gems via DOM (no React re-render)
@@ -356,13 +360,6 @@ export function Forge() {
 
         let handled = false;
 
-        // Helper: clear all drag styles immediately on successful drop.
-        // We clear synchronously so no stale position:fixed / width / height
-        // persists on the DOM element through React's re-render cycle.
-        function completeDrop() {
-          resetDraggedEl();
-        }
-
         // Helper: remove gem from its drag source
         function removeFromSource() {
           if (source?.type === 'combo') {
@@ -385,7 +382,7 @@ export function Forge() {
               if (orb) {
                 setComboSlotByIndex(target.slotIndex, orb);
                 playSound('orbSelect');
-                completeDrop();
+                resetDraggedEl();
                 handled = true;
               }
             }
@@ -409,7 +406,7 @@ export function Forge() {
             );
             if (result.ok) {
               playSound('orbPlace');
-              completeDrop();
+              resetDraggedEl();
             } else {
               playSound('combineFail');
               resetDraggedEl();
@@ -433,9 +430,10 @@ export function Forge() {
         // Clean up drag state
         dragUidRef.current = null;
         dragSourceRef.current = null;
-        // Unlock pointer events on all gems
+        // Unlock pointer events + restore opacity on all gems
         document.querySelectorAll('[data-gem-uid]').forEach(gem => {
           (gem as HTMLElement).style.pointerEvents = '';
+          (gem as HTMLElement).style.opacity = '';
         });
         // Remove drop target glow
         document.querySelectorAll('.forge-drop-active').forEach(el => {
