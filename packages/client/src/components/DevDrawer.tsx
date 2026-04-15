@@ -22,7 +22,7 @@ const RUN_ROUNDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 export function DevDrawer({ open, onClose }: DevDrawerProps) {
   const navigate = useNavigate();
-  const { startDebugMatch, startLocalMatch } = useMatchStore();
+  const { startDebugMatch } = useMatchStore();
   const { showDebug, toggleDebug } = useUIStore();
   const [selectedRunRound, setSelectedRunRound] = useState(1);
   const [selectedRunPhase, setSelectedRunPhase] = useState<typeof RUN_PHASES[number]>('forge');
@@ -54,24 +54,17 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
 
   const jumpToRunPhase = () => {
     try {
-      const seed = 42; // Fixed seed for reproducibility
-
-      // For round 1, we can jump directly to draft/forge
-      // For later rounds, we start from round 1 and advance
-      startLocalMatch(
+      const seed = 42;
+      startDebugMatch(
         seed,
         'run_async',
         selectedAiTier,
+        selectedRunPhase === 'duel' ? 'duel' : selectedRunPhase === 'forge' ? 'forge' : 'draft',
         'sword',
         'chainmail',
-        { startingLives: 3, goalRound: 10 }
+        selectedRunRound,
+        { startingLives: 3, goalRound: 10 },
       );
-
-      // For subsequent rounds, we would need to auto-play through previous rounds
-      // For now, we'll note in console that this is round 1
-      if (selectedRunRound > 1) {
-        console.warn(`[Dev] Run debug: Jumped to Round ${selectedRunRound} ${selectedRunPhase} (jumping to specific rounds not yet implemented - showing Round 1)`);
-      }
 
       // Skip the BaseItemSelector
       useForgeStore.setState({
@@ -213,11 +206,6 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
                   Jump to Run
                 </button>
 
-                {selectedRunRound > 1 && (
-                  <p className="text-xs text-surface-400">
-                    Note: Multi-round jumping coming soon. Currently shows Round 1.
-                  </p>
-                )}
               </div>
             </section>
 

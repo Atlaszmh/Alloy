@@ -47,7 +47,7 @@ interface MatchStore {
   error: string | null;
 
   startLocalMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, weaponId?: string, armorId?: string, runConfig?: RunConfig) => void;
-  startDebugMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, targetPhase: DebugPhaseTarget, weaponId?: string, armorId?: string) => void;
+  startDebugMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, targetPhase: DebugPhaseTarget, weaponId?: string, armorId?: string, targetRound?: number, runConfig?: RunConfig) => void;
   dispatch: (action: GameAction) => ActionResult;
   getRegistry: () => DataRegistry;
   reset: () => void;
@@ -77,7 +77,7 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
     syncRunStore(state);
   },
 
-  startDebugMatch: (seed, mode, aiTier, targetPhase, weaponId = 'sword', armorId = 'chainmail') => {
+  startDebugMatch: (seed, mode, aiTier, targetPhase, weaponId = 'sword', armorId = 'chainmail', targetRound = 1, runConfig) => {
     const reg = getRegistry();
     const state = createDebugMatch(
       `debug_${Date.now()}`,
@@ -88,9 +88,14 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
       armorId,
       reg,
       targetPhase,
+      targetRound,
+      runConfig,
     );
     const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
     set({ state, aiController: ai, error: null });
+
+    // Sync runStore for run modes
+    syncRunStore(state);
   },
 
   dispatch: (action) => {

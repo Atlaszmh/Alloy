@@ -521,6 +521,9 @@ export type DebugPhaseTarget = 'draft' | 'forge' | 'duel' | 'complete';
  * - forge:    auto-drafts gems for both players, lands in forge
  * - duel:     auto-drafts + auto-forges (sockets gems, sets base stats)
  * - complete: runs the full round-1 simulation
+ *
+ * When targetRound > 1, fast-forwards through previous rounds
+ * (auto-draft, auto-forge, duel, continue) to reach the target round.
  */
 export function createDebugMatch(
   matchId: string,
@@ -531,9 +534,28 @@ export function createDebugMatch(
   baseArmorId: string,
   registry: DataRegistry,
   targetPhase: DebugPhaseTarget,
+  targetRound: number = 1,
+  runConfig?: { startingLives?: number; goalRound?: number },
 ): MatchState {
-  let state = createMatch(matchId, seed, mode, playerIds, baseWeaponId, baseArmorId, registry);
+  let state = createMatch(matchId, seed, mode, playerIds, baseWeaponId, baseArmorId, registry, runConfig);
 
+  // Fast-forward through completed rounds to reach targetRound
+  for (let r = 1; r < targetRound; r++) {
+    // Auto-draft current round
+    state = debugAutoDraft(state, seed, registry);
+    // Auto-forge current round
+    state = debugAutoForge(state, registry);
+    // Run duel
+    const duelResult = runDuel(state, registry);
+    if (duelResult.ok) state = duelResult.state;
+    // Continue to next round (updates RunState, generates new pool)
+    const continueResult = handleDuelContinue(state, registry);
+    if (continueResult.ok) state = continueResult.state;
+    // If the run ended (lives depleted), stop early
+    if (state.phase.kind === 'complete') return state;
+  }
+
+  // Now at targetRound — apply the target phase
   if (targetPhase === 'draft') return state;
 
   // --- Auto-draft: alternate picks between both players ---
