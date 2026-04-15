@@ -4,8 +4,6 @@ import { MainMenu } from './pages/MainMenu';
 import { Matchmaking } from './pages/Matchmaking';
 import { PhaseRouter } from './pages/PhaseRouter';
 import { Profile } from './pages/Profile';
-import { RecipeBook } from './pages/RecipeBook';
-import { Collection } from './pages/Collection';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 import { GemEncyclopedia } from './pages/GemEncyclopedia';
@@ -29,8 +27,6 @@ export function App() {
         <Route path="/match/:code" element={<PhaseRouter />} />
         <Route path="/match/:code/*" element={<MatchRedirect />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/recipes" element={<RecipeBook />} />
-        <Route path="/collection" element={<Collection />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/gems" element={<GemEncyclopedia />} />
