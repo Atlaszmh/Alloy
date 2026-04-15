@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
+import { GemCard } from '@/components/GemCard';
+import { GemInspectPanel } from '@/components/GemInspectPanel';
 import type { AffixCategory, GemRarity } from '@alloy/engine';
-import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
 
 type FilterTab = 'all' | AffixCategory | 'compound';
 
@@ -13,7 +14,7 @@ interface EncyclopediaEntry {
   weaponFlavorText: string;
   armorFlavorText: string;
   tags: string[];
-  category?: AffixCategory;
+  category: AffixCategory | 'combined';
   isCompound: boolean;
   weaponEffect?: Array<{ stat: string; op: string; value: number }>;
   armorEffect?: Array<{ stat: string; op: string; value: number }>;
@@ -21,6 +22,8 @@ interface EncyclopediaEntry {
     weaponEffect: Array<{ stat: string; op: string; value: number }>;
     armorEffect: Array<{ stat: string; op: string; value: number }>;
   }>;
+  /** Compound gems: input affix IDs */
+  components?: [string, string];
 }
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
@@ -38,25 +41,9 @@ export function GemEncyclopedia() {
   const getRegistry = useMatchStore((s) => s.getRegistry);
   const registry = getRegistry();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRarity, setSelectedRarity] = useState<GemRarity>('common');
-
-  const RARITY_COLORS: Record<GemRarity, string> = {
-    common: '#9ca3af', magic: '#3b82f6', rare: '#eab308', epic: '#a855f7', legendary: '#f59e0b',
-  };
-
-  const mult = RARITY_MULTIPLIERS[selectedRarity];
-
-  function fmtVal(value: number, op: string): string {
-    const eff = value * mult;
-    if (op === 'percent') return `${Math.round(eff * 100)}%`;
-    return `+${Number.isInteger(eff) ? eff : eff.toFixed(1)}`;
-  }
-
-  function fmtBase(value: number, op: string): string {
-    if (op === 'percent') return `${Math.round(value * 100)}%`;
-    return `+${value}`;
-  }
 
   const entries = useMemo<EncyclopediaEntry[]>(() => {
     const base: EncyclopediaEntry[] = registry.getAllAffixes().map((a) => ({
@@ -77,24 +64,63 @@ export function GemEncyclopedia() {
       weaponFlavorText: c.weaponFlavorText,
       armorFlavorText: c.armorFlavorText,
       tags: c.tags,
+      category: 'combined' as const,
       isCompound: true,
       weaponEffect: c.weaponEffect,
       armorEffect: c.armorEffect,
+      components: c.components as [string, string],
     }));
     return [...base, ...compounds];
   }, [registry]);
 
   const filtered = useMemo(() => {
-    if (activeTab === 'all') return entries;
-    if (activeTab === 'compound') return entries.filter((e) => e.isCompound);
-    return entries.filter((e) => !e.isCompound && e.category === activeTab);
-  }, [entries, activeTab]);
+    let result = entries;
 
-  const selected = selectedId ? entries.find((e) => e.id === selectedId) : null;
+    // Category/compound filter
+    if (activeTab === 'compound') {
+      result = result.filter((e) => e.isCompound);
+    } else if (activeTab !== 'all') {
+      result = result.filter((e) => !e.isCompound && e.category === activeTab);
+    }
+
+    // Search filter
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.id.toLowerCase().includes(q) ||
+        e.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [entries, activeTab, search]);
+
+  const selected = selectedId ? entries.find((e) => e.id === selectedId) ?? null : null;
+
+  // Resolve recipe component names for compound gems
+  const recipe = selected?.isCompound && selected.components
+    ? {
+        component1Name: registry.findAffix(selected.components[0])?.name ?? selected.components[0],
+        component2Name: registry.findAffix(selected.components[1])?.name ?? selected.components[1],
+      }
+    : undefined;
+
+  // Compute statLabel for a base affix at tier 1 common rarity (grid baseline)
+  function getGridStatLabel(entry: EncyclopediaEntry): string {
+    if (entry.isCompound || !entry.tiers) return '';
+    const tier1 = entry.tiers['1'];
+    if (!tier1) return '';
+    const stat = tier1.weaponEffect[0];
+    if (!stat) return '';
+    return stat.op === 'percent'
+      ? `${Math.round(stat.value * 100)}%`
+      : `+${stat.value}`;
+  }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header with back button */}
+      {/* Header */}
       <div className="flex items-center gap-3 border-b border-surface-600 p-4">
         <button
           onClick={() => navigate(-1)}
@@ -127,165 +153,70 @@ export function GemEncyclopedia() {
         ))}
       </div>
 
-      {/* Content: list + detail */}
-      <div className="flex min-h-0 flex-1">
-        {/* Gem list */}
-        <div className="w-48 overflow-y-auto border-r border-surface-600">
+      {/* Search bar */}
+      <div className="border-b border-surface-600 px-4 py-2">
+        <input
+          type="text"
+          placeholder="Search gems..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-lg border border-surface-600 bg-surface-800 px-3 py-2 text-sm text-white placeholder-surface-500 focus:border-accent-500 focus:outline-none"
+        />
+      </div>
+
+      {/* Gem card grid */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div
+          className="grid gap-3"
+          style={{
+            gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+          }}
+        >
           {filtered.map((entry) => (
-            <button
+            <GemCard
               key={entry.id}
+              affixId={entry.id}
+              affixName={entry.name}
+              tier={1}
+              rarity="common"
+              category={entry.isCompound ? 'combined' : entry.category}
+              tags={entry.tags}
+              statLabel={getGridStatLabel(entry)}
+              description={entry.description}
+              selected={selectedId === entry.id}
               onClick={() => setSelectedId(entry.id)}
-              className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                selectedId === entry.id
-                  ? 'bg-surface-700 text-white'
-                  : 'text-surface-300 hover:bg-surface-700/50'
-              }`}
-            >
-              {entry.name}
-            </button>
+            />
           ))}
         </div>
 
-        {/* Detail panel */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {selected ? (
-            <div className="flex flex-col gap-4">
-              <h2 className="text-lg font-bold text-white">{selected.name}</h2>
-              <p className="text-sm text-surface-300">{selected.description}</p>
-
-              {/* Rarity selector tabs */}
-              <div className="flex gap-1">
-                {RARITY_ORDER.map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setSelectedRarity(r)}
-                    className={`rounded px-2 py-1 text-xs font-semibold transition-colors ${
-                      selectedRarity === r
-                        ? 'text-white'
-                        : 'text-surface-500 hover:text-surface-300'
-                    }`}
-                    style={selectedRarity === r ? {
-                      backgroundColor: `${RARITY_COLORS[r]}20`,
-                      color: RARITY_COLORS[r],
-                      border: `1px solid ${RARITY_COLORS[r]}40`,
-                    } : undefined}
-                  >
-                    {r.charAt(0).toUpperCase() + r.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              {/* Weapon section */}
-              {selected.weaponFlavorText.length > 0 && (
-                <div>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-surface-400">
-                    Weapon
-                  </h3>
-                  <p className="mb-2 text-sm leading-relaxed text-surface-200">
-                    {selected.weaponFlavorText}
-                  </p>
-                  {selected.tiers ? (
-                    <div className="flex flex-col gap-1">
-                      {Object.entries(selected.tiers).map(([tier, data]) =>
-                        data.weaponEffect.length > 0 ? (
-                          <div key={tier} className="flex gap-2 text-xs text-surface-300">
-                            <span className="w-8 font-semibold text-surface-500">T{tier}</span>
-                            {data.weaponEffect.map((e, i) => (
-                              <span key={i}>
-                                {e.stat}:{' '}
-                                <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
-                                {selectedRarity !== 'common' && (
-                                  <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null
-                      )}
-                    </div>
-                  ) : selected.weaponEffect && selected.weaponEffect.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 text-xs text-surface-300">
-                      {selected.weaponEffect.map((e, i) => (
-                        <span key={i}>
-                          {e.stat}:{' '}
-                          <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
-                          {selectedRarity !== 'common' && (
-                            <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {/* Armor section */}
-              {selected.armorFlavorText.length > 0 && (
-                <div>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-surface-400">
-                    Armor
-                  </h3>
-                  <p className="mb-2 text-sm leading-relaxed text-surface-200">
-                    {selected.armorFlavorText}
-                  </p>
-                  {selected.tiers ? (
-                    <div className="flex flex-col gap-1">
-                      {Object.entries(selected.tiers).map(([tier, data]) =>
-                        data.armorEffect.length > 0 ? (
-                          <div key={tier} className="flex gap-2 text-xs text-surface-300">
-                            <span className="w-8 font-semibold text-surface-500">T{tier}</span>
-                            {data.armorEffect.map((e, i) => (
-                              <span key={i}>
-                                {e.stat}:{' '}
-                                <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
-                                {selectedRarity !== 'common' && (
-                                  <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
-                                )}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null
-                      )}
-                    </div>
-                  ) : selected.armorEffect && selected.armorEffect.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 text-xs text-surface-300">
-                      {selected.armorEffect.map((e, i) => (
-                        <span key={i}>
-                          {e.stat}:{' '}
-                          <span style={{ color: RARITY_COLORS[selectedRarity] }}>{fmtVal(e.value, e.op)}</span>
-                          {selectedRarity !== 'common' && (
-                            <span className="ml-1 text-surface-600">(base {fmtBase(e.value, e.op)})</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {/* Rarity multiplier footer */}
-              {selectedRarity !== 'common' && (
-                <p className="text-xs" style={{ color: RARITY_COLORS[selectedRarity] }}>
-                  {selectedRarity.charAt(0).toUpperCase() + selectedRarity.slice(1)}: {mult}x multiplier
-                </p>
-              )}
-
-              {/* Tags */}
-              {selected.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {selected.tags.map((tag) => (
-                    <span key={tag} className="rounded bg-surface-700 px-2 py-0.5 text-xs text-surface-300">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-surface-500">Select a gem to view details</p>
-          )}
-        </div>
+        {filtered.length === 0 && (
+          <p className="text-sm text-surface-500">No gems match your filters.</p>
+        )}
       </div>
+
+      {/* Inspect panel overlay */}
+      {selected && (
+        <GemInspectPanel
+          gem={{
+            name: selected.name,
+            description: selected.description,
+            weaponFlavorText: selected.weaponFlavorText,
+            armorFlavorText: selected.armorFlavorText,
+            category: selected.isCompound ? 'combined' : selected.category,
+            tags: selected.tags,
+            tier: selected.isCompound ? undefined : 1,
+            rarity: selectedRarity,
+            weaponEffect: selected.weaponEffect,
+            armorEffect: selected.armorEffect,
+            tiers: selected.tiers,
+          }}
+          context="both"
+          onClose={() => setSelectedId(null)}
+          recipe={recipe}
+          selectedRarity={selectedRarity}
+          onRarityChange={setSelectedRarity}
+        />
+      )}
     </div>
   );
 }
