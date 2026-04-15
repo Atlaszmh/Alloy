@@ -199,6 +199,7 @@ export function GemEncyclopedia() {
         <GemInspectPanel
           gem={{
             name: selected.name,
+            affixId: selected.id,
             description: selected.description,
             weaponFlavorText: selected.weaponFlavorText,
             armorFlavorText: selected.armorFlavorText,

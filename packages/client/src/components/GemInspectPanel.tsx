@@ -1,5 +1,6 @@
 import type { GemRarity, StatModifier } from '@alloy/engine';
 import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
+import { getGemArt } from '@/shared/utils/art-registry';
 
 type InspectContext = 'weapon' | 'armor' | 'both';
 
@@ -11,6 +12,7 @@ interface GemInspectPanelProps {
     armorFlavorText: string;
     category?: string;
     tags: string[];
+    affixId?: string;
     tier?: number;
     rarity?: GemRarity;
     weaponEffect?: StatModifier[];
@@ -54,17 +56,28 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
       />
       {/* Panel */}
       <div className="absolute right-0 top-0 z-50 flex h-full w-[70%] flex-col overflow-y-auto overflow-x-hidden bg-surface-800 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-600 p-4">
+        {/* Header with gem art */}
+        <div className="flex items-center gap-3 border-b border-surface-600 p-4">
+          {gem.affixId && (() => {
+            const artUrl = getGemArt(gem.affixId);
+            return artUrl ? (
+              <img
+                src={artUrl}
+                alt={gem.name}
+                className="shrink-0 rounded-lg"
+                style={{ width: 48, height: 48, objectFit: 'cover' }}
+              />
+            ) : null;
+          })()}
           <h2
-            className="text-lg font-bold"
+            className="min-w-0 flex-1 text-lg font-bold"
             style={{ fontFamily: 'var(--font-family-display)', color: 'var(--color-accent-400)' }}
           >
             {gem.name}
           </h2>
           <button
             onClick={onClose}
-            className="rounded p-1 text-surface-400 hover:bg-surface-700 hover:text-white"
+            className="shrink-0 rounded p-1 text-surface-400 hover:bg-surface-700 hover:text-white"
           >
             ✕
           </button>
