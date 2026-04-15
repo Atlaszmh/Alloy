@@ -55,7 +55,7 @@ export function generatePool(
   // Determine pool size
   let poolSize: number | null;
   if (isRunMode) {
-    const poolConfig = getPoolConfigForRound(round);
+    const poolConfig = getPoolConfigForRound(round, balance.gem.poolScaling);
     poolSize = poolConfig.poolSize;
   } else if (mode === 'quick') {
     poolSize = null; // quick mode uses its own size config
@@ -105,7 +105,7 @@ function buildPool(
 ): GemInstance[] {
   const balance = registry.getBalance();
   const isRunMode = mode === 'run_async' || mode === 'run_live';
-  const poolConfig = isRunMode ? getPoolConfigForRound(round) : null;
+  const poolConfig = isRunMode ? getPoolConfigForRound(round, balance.gem.poolScaling) : null;
 
   // Determine pool size
   let poolSize: number;

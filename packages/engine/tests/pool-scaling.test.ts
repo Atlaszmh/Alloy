@@ -7,11 +7,11 @@ import {
 
 describe('Pool Scaling', () => {
   describe('getPoolConfigForRound with default scaling', () => {
-    it('round 1 → poolSize 20, tiers [1,2], rarities [common, magic]', () => {
+    it('round 1 → poolSize 20, tiers [1,2], rarities [common, uncommon]', () => {
       const config = getPoolConfigForRound(1);
       expect(config.poolSize).toBe(20);
       expect(config.tiers).toEqual([1, 2]);
-      expect(config.rarities).toEqual(['common', 'magic']);
+      expect(config.rarities).toEqual(['common', 'uncommon']);
       expect(config.rarities).not.toContain('rare');
     });
 
@@ -89,6 +89,46 @@ describe('Pool Scaling', () => {
     it('returns first matching entry when ranges are checked in order', () => {
       const config = getPoolConfigForRound(1);
       expect(config.roundRange).toEqual([1, 3]);
+    });
+  });
+
+  describe('getPoolConfigForRound with balance.json scaling', () => {
+    // balance.json uses different brackets than DEFAULT_SCALING:
+    // [1,2], [3,4], [5,6], [7,8], [9,10], [11,999]
+    const balanceScaling: PoolScalingEntry[] = [
+      { roundRange: [1, 2], tiers: [1, 2], rarities: ['common', 'uncommon'], poolSize: 20 },
+      { roundRange: [3, 4], tiers: [1, 3], rarities: ['common', 'uncommon', 'magic'], poolSize: 18 },
+      { roundRange: [5, 6], tiers: [2, 3], rarities: ['uncommon', 'magic', 'rare'], poolSize: 16 },
+      { roundRange: [7, 8], tiers: [2, 4], rarities: ['magic', 'rare'], poolSize: 14 },
+      { roundRange: [9, 10], tiers: [3, 4], rarities: ['magic', 'rare', 'epic'], poolSize: 12 },
+      { roundRange: [11, 999], tiers: [3, 5], rarities: ['rare', 'epic'], poolSize: 10 },
+    ];
+
+    it('round 3 falls into [3,4] bracket with poolSize 18', () => {
+      const config = getPoolConfigForRound(3, balanceScaling);
+      expect(config.poolSize).toBe(18);
+      expect(config.tiers).toEqual([1, 3]);
+      expect(config.rarities).toContain('magic');
+    });
+
+    it('round 9 falls into [9,10] bracket with poolSize 12', () => {
+      const config = getPoolConfigForRound(9, balanceScaling);
+      expect(config.poolSize).toBe(12);
+      expect(config.tiers).toEqual([3, 4]);
+      expect(config.rarities).toContain('epic');
+    });
+
+    it('round 5 falls into [5,6] bracket with poolSize 16', () => {
+      const config = getPoolConfigForRound(5, balanceScaling);
+      expect(config.poolSize).toBe(16);
+      expect(config.tiers).toEqual([2, 3]);
+      expect(config.rarities).toContain('rare');
+    });
+
+    it('round 11 falls into endless bracket [11,999] with poolSize 10', () => {
+      const config = getPoolConfigForRound(11, balanceScaling);
+      expect(config.poolSize).toBe(10);
+      expect(config.tiers).toEqual([3, 5]);
     });
   });
 
