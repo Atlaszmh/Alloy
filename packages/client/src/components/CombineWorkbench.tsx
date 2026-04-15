@@ -25,6 +25,7 @@ interface CombineWorkbenchProps {
   onSlotClick: (index: number) => void;
   onCombine: () => void;
   onClearAll: () => void;
+  onPointerDown?: (uid: string, e: React.PointerEvent) => void;
 }
 
 function getOrbElement(orb: GemInstance, registry: DataRegistry) {
@@ -69,6 +70,7 @@ export function CombineWorkbench({
   onSlotClick,
   onCombine,
   onClearAll,
+  onPointerDown,
 }: CombineWorkbenchProps) {
   const glowSignal = useMemo(
     () => computeGlowSignal(comboSlots, registry),
@@ -106,6 +108,7 @@ export function CombineWorkbench({
               glowSignal={glowSignal}
               isDragging={isDragging}
               onClick={() => onSlotClick(idx)}
+              onPointerDown={onPointerDown}
             />
           </div>
         ))}
@@ -158,6 +161,7 @@ function Slot({
   glowSignal,
   isDragging,
   onClick,
+  onPointerDown,
 }: {
   index: number;
   orb: GemInstance | null;
@@ -165,6 +169,7 @@ function Slot({
   glowSignal: GlowSignal;
   isDragging?: boolean;
   onClick: () => void;
+  onPointerDown?: (uid: string, e: React.PointerEvent) => void;
 }) {
   if (!orb) {
     const dropGlow = isDragging
@@ -219,7 +224,9 @@ function Slot({
   return (
     <button
       data-combo-slot={index}
+      data-gem-uid={orb.uid}
       onClick={onClick}
+      onPointerDown={(e) => onPointerDown?.(orb.uid, e)}
       className="flex flex-col items-center justify-center cursor-pointer overflow-hidden"
       style={{
         width: 'var(--gem-size)',

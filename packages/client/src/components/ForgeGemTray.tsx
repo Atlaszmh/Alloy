@@ -86,6 +86,7 @@ export function ForgeGemTray({
   return (
     <div
       ref={trayRef}
+      data-gem-tray
       onContextMenu={(e) => e.preventDefault()}
       style={{
         ...(localGemSize ? { '--gem-size': `${localGemSize}px`, '--gem-radius': `${localGemSize * 0.16}px` } as React.CSSProperties : {}),

@@ -12,6 +12,7 @@ interface ItemSocketViewProps {
   isDragging?: boolean;
   onSocketClick: (slotIndex: number) => void;
   onSocketRemove: (slotIndex: number) => void;
+  onGemPointerDown?: (uid: string, e: React.PointerEvent) => void;
 }
 
 const ELEMENTS = ['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos'] as const;
@@ -33,6 +34,7 @@ export function ItemSocketView({
   isDragging,
   onSocketClick,
   onSocketRemove,
+  onGemPointerDown,
 }: ItemSocketViewProps) {
   const baseItem = registry.getBaseItem(item.baseItemId);
   const cols = Math.ceil(item.slots.length / 2);
@@ -218,7 +220,14 @@ export function ItemSocketView({
           }
 
           return (
-            <button key={index} onClick={() => onSocketRemove(index)} style={socketStyle}>
+            <button
+              key={index}
+              data-gem-uid={orb.uid}
+              data-forge-socket={index}
+              onClick={() => onSocketRemove(index)}
+              onPointerDown={(e) => onGemPointerDown?.(orb.uid, e)}
+              style={socketStyle}
+            >
               {socketContent}
             </button>
           );

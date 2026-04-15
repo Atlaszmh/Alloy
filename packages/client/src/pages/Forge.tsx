@@ -88,6 +88,12 @@ export function Forge() {
   const hasDraggedRef = useRef(false);
   const draggedElRef = useRef<HTMLElement | null>(null);
   const dragUidRef = useRef<string | null>(null);
+  const dragSourceRef = useRef<
+    | { type: 'stockpile' }
+    | { type: 'combo'; slotIndex: number }
+    | { type: 'socket'; target: 'weapon' | 'armor'; slotIndex: number }
+    | null
+  >(null);
   const selectedOrbUidRef = useRef(selectedOrbUid);
   useEffect(() => { selectedOrbUidRef.current = selectedOrbUid; }, [selectedOrbUid]);
 
@@ -215,6 +221,7 @@ export function Forge() {
   function findDropTarget(x: number, y: number):
     | { type: 'combo'; slotIndex: number }
     | { type: 'socket'; slotIndex: number; cardId: 'weapon' | 'armor' }
+    | { type: 'tray' }
     | null {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
@@ -231,6 +238,11 @@ export function Forge() {
       const cardEl = (socketEl as HTMLElement).closest('[data-item-card]');
       const cardId = (cardEl?.getAttribute('data-item-card') ?? 'weapon') as 'weapon' | 'armor';
       return { type: 'socket', slotIndex: index, cardId };
+    }
+
+    const trayEl = (el as HTMLElement).closest('[data-gem-tray]');
+    if (trayEl) {
+      return { type: 'tray' };
     }
 
     return null;
@@ -257,6 +269,33 @@ export function Forge() {
         hasDraggedRef.current = true;
         dragUidRef.current = start.uid;
         playSound('dragStart');
+
+        // Detect drag source
+        const comboSlotsCurrent = useForgeStore.getState().comboSlots;
+        const comboIdx = comboSlotsCurrent.findIndex(s => s?.uid === start.uid);
+        if (comboIdx !== -1) {
+          dragSourceRef.current = { type: 'combo', slotIndex: comboIdx };
+        } else {
+          const planCurrent = useForgeStore.getState().plan;
+          let foundSocket = false;
+          if (planCurrent) {
+            for (const target of ['weapon', 'armor'] as const) {
+              const item = planCurrent.loadout[target];
+              for (let si = 0; si < item.slots.length; si++) {
+                const slot = item.slots[si];
+                if (slot && slot.gem.uid === start.uid) {
+                  dragSourceRef.current = { type: 'socket', target, slotIndex: si };
+                  foundSocket = true;
+                  break;
+                }
+              }
+              if (foundSocket) break;
+            }
+          }
+          if (!foundSocket) {
+            dragSourceRef.current = { type: 'stockpile' };
+          }
+        }
 
         // Grab the wrapper element (data-gem-uid is on the wrapper, matching Draft pattern)
         const el = document.querySelector(`[data-gem-uid="${start.uid}"]`) as HTMLElement | null;
@@ -307,46 +346,105 @@ export function Forge() {
         // Was a drag — check drop target
         const target = findDropTarget(e.clientX, e.clientY);
         const draggedUid = start.uid;
+        const source = dragSourceRef.current;
+
+        let handled = false;
 
         if (target && target.type === 'combo') {
-          const orb = useForgeStore.getState().plan?.stockpile.find(o => o.uid === draggedUid);
-          const slots = useForgeStore.getState().comboSlots;
-          if (orb && !slots[target.slotIndex]) {
-            setComboSlotByIndex(target.slotIndex, orb);
-            playSound('orbSelect');
-            const el = draggedElRef.current;
-            if (el) {
-              el.style.opacity = '0';
-              el.style.pointerEvents = '';
-            }
-            draggedElRef.current = null;
-          } else {
+          // Check if dropping onto the same combo slot it came from
+          const isSameSlot = source?.type === 'combo' && source.slotIndex === target.slotIndex;
+          if (isSameSlot) {
             resetDraggedEl();
+            handled = true;
+          } else {
+            const slots = useForgeStore.getState().comboSlots;
+            if (!slots[target.slotIndex]) {
+              // Remove from source first
+              if (source?.type === 'combo') {
+                setComboSlotByIndex(source.slotIndex, null);
+              } else if (source?.type === 'socket') {
+                applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
+              }
+              // Find the gem in stockpile to place in combo slot
+              const orb = useForgeStore.getState().plan?.stockpile.find(o => o.uid === draggedUid);
+              if (orb) {
+                setComboSlotByIndex(target.slotIndex, orb);
+                playSound('orbSelect');
+                const el = draggedElRef.current;
+                if (el) {
+                  el.style.opacity = '0';
+                  el.style.pointerEvents = '';
+                }
+                draggedElRef.current = null;
+                handled = true;
+              }
+            }
+            if (!handled) {
+              resetDraggedEl();
+              handled = true;
+            }
           }
         } else if (target && target.type === 'socket') {
-          const result = applyAction(
-            { kind: 'socket_gem', gemUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
-            registry,
-          );
-          if (result.ok) {
-            playSound('orbPlace');
-            const el = draggedElRef.current;
-            if (el) {
-              el.style.opacity = '0';
-              el.style.pointerEvents = '';
-            }
-            draggedElRef.current = null;
-          } else {
-            playSound('combineFail');
+          // Check if dropping onto the same socket it came from
+          const isSameSlot = source?.type === 'socket'
+            && source.target === target.cardId
+            && source.slotIndex === target.slotIndex;
+          if (isSameSlot) {
             resetDraggedEl();
+            handled = true;
+          } else {
+            // Remove from source first
+            if (source?.type === 'combo') {
+              setComboSlotByIndex(source.slotIndex, null);
+            } else if (source?.type === 'socket') {
+              applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
+            }
+            // Now socket the gem at the target
+            const result = applyAction(
+              { kind: 'socket_gem', gemUid: draggedUid, target: target.cardId, slotIndex: target.slotIndex },
+              registry,
+            );
+            if (result.ok) {
+              playSound('orbPlace');
+              const el = draggedElRef.current;
+              if (el) {
+                el.style.opacity = '0';
+                el.style.pointerEvents = '';
+              }
+              draggedElRef.current = null;
+            } else {
+              playSound('combineFail');
+              resetDraggedEl();
+            }
+            handled = true;
           }
-        } else {
+        } else if (target && target.type === 'tray') {
+          // Dropped on tray — return gem to stockpile
+          if (source?.type === 'combo') {
+            setComboSlotByIndex(source.slotIndex, null);
+            playSound('orbRemove');
+            resetDraggedEl();
+            handled = true;
+          } else if (source?.type === 'socket') {
+            applyAction({ kind: 'unsocket_gem', target: source.target, slotIndex: source.slotIndex }, registry);
+            playSound('orbRemove');
+            resetDraggedEl();
+            handled = true;
+          } else {
+            // Dragged from stockpile to tray — no-op, snap back
+            resetDraggedEl();
+            handled = true;
+          }
+        }
+
+        if (!handled) {
           // No valid target — snap back
           resetDraggedEl();
         }
 
         // Clean up drag state
         dragUidRef.current = null;
+        dragSourceRef.current = null;
         // Unlock pointer events on all gems
         document.querySelectorAll('[data-gem-uid]').forEach(gem => {
           (gem as HTMLElement).style.pointerEvents = '';
@@ -554,6 +652,7 @@ export function Forge() {
               selectedOrbUid={selectedOrbUid}
               onSocketClick={(slotIndex) => handleSocketClick('weapon', slotIndex)}
               onSocketRemove={(slotIndex) => handleSocketRemove('weapon', slotIndex)}
+              onGemPointerDown={handlePointerDown}
             />
           </div>
           <div style={{
@@ -571,6 +670,7 @@ export function Forge() {
               selectedOrbUid={selectedOrbUid}
               onSocketClick={(slotIndex) => handleSocketClick('armor', slotIndex)}
               onSocketRemove={(slotIndex) => handleSocketRemove('armor', slotIndex)}
+              onGemPointerDown={handlePointerDown}
             />
           </div>
         </div>
@@ -586,6 +686,7 @@ export function Forge() {
           onSlotClick={handleComboSlotClick}
           onCombine={handleCombine}
           onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
+          onPointerDown={handlePointerDown}
         />
       </div>
 
