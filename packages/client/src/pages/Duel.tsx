@@ -7,6 +7,7 @@ import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
+import { RunRoundInterstitial } from '@/components/RunRoundInterstitial';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { Application } from 'pixi.js';
@@ -118,6 +119,7 @@ export function Duel() {
 
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showInterstitial, setShowInterstitial] = useState(false);
 
   // HP state driven by DuelScene callbacks
   const [hpState, setHpState] = useState<{ hp: [number, number]; maxHp: [number, number] } | null>(null);
@@ -242,9 +244,10 @@ export function Duel() {
     }
   }, [scene, currentLog, playback]);
 
-  // Reset auto-start flag when combat log changes (new round)
+  // Reset auto-start flag and interstitial when combat log changes (new round)
   useEffect(() => {
     hasAutoStarted.current = false;
+    setShowInterstitial(false);
   }, [currentLog]);
 
   // Handle playback completion — show breakdown when playback ends
@@ -274,6 +277,17 @@ export function Duel() {
   useDuelSounds(visibleEvents, playback.isPlaying, showBreakdown, currentResult);
 
   const handleContinue = () => {
+    if (isRunMode) {
+      setShowInterstitial(true);
+    } else {
+      gateway.dispatch({ kind: 'duel_continue' });
+    }
+  };
+
+  const handleInterstitialContinue = () => {
+    setShowInterstitial(false);
+    setShowBreakdown(false);
+    setShowCelebration(false);
     gateway.dispatch({ kind: 'duel_continue' });
   };
 
@@ -311,6 +325,15 @@ export function Duel() {
     <div className="page-enter flex h-full flex-col" style={{ minHeight: 0 }}>
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
+
+      {/* Between-round interstitial (run mode only) */}
+      {showInterstitial && currentResult && (
+        <RunRoundInterstitial
+          roundNumber={round}
+          won={currentResult.winner === 0}
+          onContinue={handleInterstitialContinue}
+        />
+      )}
 
       {/* ═══ TOP BAR (~5%): Round pips + Enemy HP + Timer ═══ */}
       <div className="shrink-0 border-b border-surface-700 px-3 py-1.5">
