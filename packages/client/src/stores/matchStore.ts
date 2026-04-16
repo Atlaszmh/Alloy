@@ -8,7 +8,14 @@ let registry: DataRegistry | null = null;
 function getRegistry(): DataRegistry {
   if (!registry) {
     const data = loadAndValidateData();
-    registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+    registry = new DataRegistry(
+      data.affixes,
+      data.combinations,
+      data.synergies,
+      data.baseItems,
+      data.balance,
+      data.recipes,
+    );
   }
   return registry;
 }

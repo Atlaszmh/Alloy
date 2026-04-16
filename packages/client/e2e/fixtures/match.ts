@@ -74,8 +74,11 @@ export async function waitForPhase(
 ): Promise<void> {
   switch (phase) {
     case 'draft':
+      // Match draft-specific headers: "YOUR PICK" / "OPPONENT PICKING" (versus modes)
+      // or "PICK YOUR GEMS" (run mode). Deliberately avoid a bare /OPPONENT/ which
+      // collides with "searching for an opponent" on the matchmaking screen.
       await expect(
-        page.getByText(/YOUR PICK|AI PICKING|OPPONENT/i).first()
+        page.getByText(/YOUR PICK|OPPONENT PICKING|AI PICKING|PICK YOUR GEMS/i).first()
       ).toBeVisible({ timeout: 30_000 });
       break;
     case 'forge':
@@ -108,24 +111,37 @@ export async function getCurrentPhase(page: Page): Promise<string> {
   if (await page.getByText(/FORGE PHASE/i).isVisible().catch(() => false)) return 'forge';
   if (await page.getByRole('button', { name: 'Skip' }).isVisible().catch(() => false)) return 'duel';
   if (await page.getByText(/VICTORY|DEFEAT|DRAW/i).isVisible().catch(() => false)) return 'result';
-  if (await page.getByText(/YOUR PICK|AI PICKING|OPPONENT/i).first().isVisible().catch(() => false)) return 'draft';
+  if (await page.getByText(/YOUR PICK|OPPONENT PICKING|AI PICKING|PICK YOUR GEMS/i).first().isVisible().catch(() => false)) return 'draft';
   if (await page.getByText(/Adapt Phase/i).isVisible().catch(() => false)) return 'adapt';
   return 'unknown';
 }
 
 export async function pickGem(page: Page): Promise<void> {
-  // GemCards have data-gem attribute. Find any in the pool.
   const gems = page.locator('[data-gem]');
   const count = await gems.count();
+  if (count === 0) return;
 
-  if (count > 0) {
-    // Double-click: first tap selects, second tap confirms
-    await gems.first().click();
-    await page.waitForTimeout(300);
-    await gems.first().click();
-    await page.waitForTimeout(300);
+  // First tap: select. Catch detachments (some modes confirm on single tap and
+  // the gem starts swooping out mid-click).
+  try {
+    await gems.first().click({ timeout: 2_000 });
+  } catch {
     return;
   }
+  await page.waitForTimeout(300);
+
+  // If the pool already shrank, the first tap was sufficient (single-tap pick path).
+  const afterFirst = await gems.count();
+  if (afterFirst < count) return;
+
+  // Otherwise second tap confirms the pick. Still swallow detachment errors —
+  // the swoop animation begins immediately after pointerup.
+  try {
+    await gems.first().click({ timeout: 2_000 });
+  } catch {
+    return;
+  }
+  await page.waitForTimeout(300);
 }
 
 /** @deprecated Use pickGem instead */
@@ -137,7 +153,9 @@ export async function completeDraft(page: Page): Promise<void> {
     const currentPhase = await getCurrentPhase(page);
     if (currentPhase !== 'draft') return;
 
-    const isOurTurn = await page.getByText(/YOUR PICK|Your Turn/i).isVisible({ timeout: 1000 }).catch(() => false);
+    // Run mode drafts show "PICK YOUR GEMS" and there's no opponent turn —
+    // the player picks every gem. Non-run modes show "YOUR PICK" on the player turn.
+    const isOurTurn = await page.getByText(/YOUR PICK|Your Turn|PICK YOUR GEMS/i).isVisible({ timeout: 1000 }).catch(() => false);
     if (isOurTurn) {
       await pickGem(page);
     }

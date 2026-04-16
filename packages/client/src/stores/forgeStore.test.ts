@@ -4,7 +4,14 @@ import { createForgeState, loadAndValidateData, DataRegistry } from '@alloy/engi
 import type { GemInstance } from '@alloy/engine';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(
+  data.affixes,
+  data.combinations,
+  data.synergies,
+  data.baseItems,
+  data.balance,
+  data.recipes,
+);
 
 function makeGem(uid: string, affixId: string, tier: 1 | 2 | 3 | 4 | 5 = 1): GemInstance {
   return { uid, affixId, tier, rarity: 'common', recipeDepth: 0, combinable: true, tags: [affixId] };

@@ -4,6 +4,8 @@ import type { GemInstance } from '../types/gem.js';
 import type { Loadout, ForgedItem } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
 import { calculateStats, type StatsResult } from './stat-calculator.js';
+import { CombinationEngine } from '../combine/combination-engine.js';
+import { DiscoveryState } from '../combine/discovery-state.js';
 
 export interface ForgePlan {
   stockpile: GemInstance[];
@@ -146,8 +148,26 @@ function planCombine(
   const gem1 = plan.stockpile[gemIdx1];
   const gem2 = plan.stockpile[gemIdx2];
 
-  const combination = registry.getCombination(gem1.affixId, gem2.affixId);
-  if (!combination) return { ok: false, error: 'No valid combination exists for these gems' };
+  if (!gem1.combinable) return { ok: false, error: 'First gem is not combinable' };
+  if (!gem2.combinable) return { ok: false, error: 'Second gem is not combinable' };
+
+  // Use the real 3-layer combine engine so plan preview matches the commit-time result.
+  // A fresh DiscoveryState keeps this preview independent of the run's actual discoveries;
+  // the commit path re-runs through the authoritative state and records any new recipe finds.
+  const recipeRegistry = registry.getRecipeRegistry();
+  const categoryMap: Record<string, string> = {};
+  for (const affix of registry.getAllAffixes()) {
+    categoryMap[affix.id] = affix.category;
+  }
+  const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), categoryMap);
+
+  const outputUid = `combined_${action.gemUid1}_${action.gemUid2}`;
+  let result;
+  try {
+    result = engine.combine(gem1, gem2, outputUid, action.keepGemUid);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 
   const next = clonePlan(plan);
 
@@ -157,17 +177,9 @@ function planCombine(
   const idx2 = next.stockpile.findIndex(g => g.uid === action.gemUid2);
   next.stockpile.splice(idx2, 1);
 
-  // Create combined gem in stockpile (simplified for planning purposes)
-  const combinedGem: GemInstance = {
-    uid: `combined_${action.gemUid1}_${action.gemUid2}`,
-    affixId: gem1.affixId,
-    tier: gem1.tier,
-    rarity: gem1.rarity,
-    recipeDepth: Math.max(gem1.recipeDepth, gem2.recipeDepth) + 1,
-    combinable: true,
-    tags: [...new Set([...gem1.tags, ...gem2.tags])],
-  };
-  next.stockpile.push(combinedGem);
+  // Add the real engine output so the preview reflects rarity/tier bumps,
+  // signature outputs, category combos, and generic upgrades.
+  next.stockpile.push(result.gem);
 
   // Lock source gems
   next.lockedGemUids.add(action.gemUid1);
