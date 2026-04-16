@@ -123,3 +123,9 @@ export const useForgeStore = create<ForgeStoreState>((set, get) => ({
       selectedArmorId: null,
     }),
 }));
+
+// Expose store for E2E testing
+if (import.meta.env.DEV) {
+  (window as any).__ZUSTAND_STORES__ = (window as any).__ZUSTAND_STORES__ ?? {};
+  (window as any).__ZUSTAND_STORES__.forgeStore = useForgeStore;
+}
