@@ -210,7 +210,6 @@ function Slot({
         category={category}
         tags={tags}
         statLabel={statLabel}
-        compact
         onClick={onClick}
         onPointerDown={(e) => onPointerDown?.(orb.uid, e)}
       />

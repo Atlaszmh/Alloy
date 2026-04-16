@@ -169,7 +169,6 @@ export function ItemSocketView({
                   category={affix.category}
                   tags={affix.tags}
                   statLabel={statLabel}
-                  compact
                 />
               </div>
             );
@@ -186,7 +185,6 @@ export function ItemSocketView({
                 category={affix.category}
                 tags={affix.tags}
                 statLabel={statLabel}
-                compact
                 onClick={() => onSocketRemove(index)}
                 onPointerDown={(e) => onGemPointerDown?.(orb.uid, e)}
               />
