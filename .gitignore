@@ -31,6 +31,7 @@ coverage/
 packages/client/screenshots/
 packages/client/playwright-report/
 packages/client/test-results/
+.playwright-mcp/
 
 # Supabase
 packages/supabase/.temp/
