@@ -112,14 +112,16 @@ export function ItemSocketView({
         )}
       </div>
 
-      {/* Socket grid — sockets fill available width.
+      {/* Socket grid — fixed-size slots matching GemCard dimensions so
+          empty and filled sockets stay the same size.
           Pulse animation lives on the grid container so all empty sockets
           stay in sync regardless of when they become empty. */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateColumns: `repeat(${cols}, var(--gem-size))`,
           gap: 'var(--gap-sm)',
+          justifyContent: 'center',
           animation: (selectedOrbUid !== null || isDragging) ? 'orb-glow 1.5s ease-in-out infinite' : 'none',
         }}
       >
@@ -132,9 +134,9 @@ export function ItemSocketView({
                 data-forge-socket={index}
                 onClick={() => onSocketClick(index)}
                 style={{
-                  width: '100%',
-                  aspectRatio: '1',
-                  borderRadius: 'var(--socket-radius)',
+                  width: 'var(--gem-size)',
+                  height: 'var(--gem-size)',
+                  borderRadius: 'var(--gem-radius)',
                   background: 'var(--color-surface-800)',
                   border: isDragging ? '1.5px dashed var(--color-bronze-light)' : '1.5px dashed var(--color-empty-socket)',
                   boxShadow: isDragging
