@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import type { DataRegistry, GemInstance, CombinePreview } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
+import { GemCard } from '@/components/GemCard';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
 import { getGemArt } from '@/shared/utils/art-registry';
+import { getStatLabel } from '@/shared/utils/stat-label';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}',
@@ -26,13 +28,6 @@ interface CombineWorkbenchProps {
   onCombine: () => void;
   onClearAll: () => void;
   onPointerDown?: (uid: string, e: React.PointerEvent) => void;
-}
-
-function getOrbElement(orb: GemInstance, registry: DataRegistry) {
-  const affix = registry.getAffix(orb.affixId);
-  if (!affix) return null;
-  const elementTag = affix.tags.find((t: string) => ELEMENT_TAGS.has(t));
-  return elementTag ?? null;
 }
 
 type GlowSignal = 'none' | 'white' | 'gold';
@@ -105,7 +100,6 @@ export function CombineWorkbench({
               index={idx}
               orb={orb}
               registry={registry}
-              glowSignal={glowSignal}
               isDragging={isDragging}
               onClick={() => onSlotClick(idx)}
               onPointerDown={onPointerDown}
@@ -158,7 +152,6 @@ function Slot({
   index,
   orb,
   registry,
-  glowSignal,
   isDragging,
   onClick,
   onPointerDown,
@@ -166,7 +159,6 @@ function Slot({
   index: number;
   orb: GemInstance | null;
   registry: DataRegistry;
-  glowSignal: GlowSignal;
   isDragging?: boolean;
   onClick: () => void;
   onPointerDown?: (uid: string, e: React.PointerEvent) => void;
@@ -201,63 +193,28 @@ function Slot({
     );
   }
 
-  const element = getOrbElement(orb, registry);
-  const emoji = element ? ELEMENT_SYMBOLS[element] : '?';
-  const gradient = element ? ELEMENT_GRADIENTS[element] : null;
-  const borderColor = gradient?.border ?? 'var(--color-surface-500)';
-
-  const filledShadow =
-    glowSignal === 'gold'
-      ? '0 0 16px rgba(212,168,52,0.5)'
-      : glowSignal === 'white'
-        ? '0 0 12px rgba(255,255,255,0.3)'
-        : 'none';
-
-  const filledBorder =
-    glowSignal === 'gold' ? 'var(--color-compound)' : borderColor;
-
-  const artUrl = getGemArt(orb.affixId);
-  const bgGradient = gradient
-    ? `linear-gradient(135deg, ${gradient.bg})`
-    : 'var(--color-surface-800)';
+  const affix = registry.findAffix(orb.affixId);
+  const affixName = affix?.name ?? orb.affixId;
+  const tags = affix?.tags ?? [];
+  const category = affix?.category ?? 'offensive';
+  const statLabel = affix ? getStatLabel(affix, orb) : '';
 
   return (
-    <button
-      data-combo-slot={index}
-      data-gem-uid={orb.uid}
-      onClick={onClick}
-      onPointerDown={(e) => onPointerDown?.(orb.uid, e)}
-      className="flex flex-col items-center justify-center cursor-pointer overflow-hidden"
-      style={{
-        width: 'var(--gem-size)',
-        height: 'var(--gem-size)',
-        borderRadius: 'var(--gem-radius)',
-        border: `2px solid ${filledBorder}`,
-        background: bgGradient,
-        boxShadow: filledShadow,
-        position: 'relative',
-      }}
-      aria-label={`Combo slot: ${element ?? 'unknown'} orb`}
-    >
-      {/* Specular highlight */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%)',
-          pointerEvents: 'none',
-        }}
+    <div data-combo-slot={index} style={{ position: 'relative' }}>
+      <GemCard
+        uid={orb.uid}
+        affixId={orb.affixId}
+        affixName={affixName}
+        tier={orb.tier}
+        rarity={orb.rarity}
+        category={category}
+        tags={tags}
+        statLabel={statLabel}
+        compact
+        onClick={onClick}
+        onPointerDown={(e) => onPointerDown?.(orb.uid, e)}
       />
-      {artUrl ? (
-        <img
-          src={artUrl}
-          alt={orb.affixId}
-          style={{ width: '70%', height: '70%', objectFit: 'contain', position: 'relative', zIndex: 1 }}
-        />
-      ) : (
-        <span style={{ fontSize: 'var(--icon-md)', lineHeight: 1, position: 'relative', zIndex: 1 }}>{emoji}</span>
-      )}
-    </button>
+    </div>
   );
 }
 

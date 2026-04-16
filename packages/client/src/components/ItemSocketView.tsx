@@ -1,6 +1,6 @@
 import type { AffixDef, DataRegistry, EquippedSlot, ForgedItem, ForgePlan, GemInstance } from '@alloy/engine';
-import { ELEMENT_GRADIENTS, ELEMENT_EMOJIS } from '@/shared/utils/element-theme';
-import { getGemArt } from '@/shared/utils/art-registry';
+import { ELEMENT_EMOJIS } from '@/shared/utils/element-theme';
+import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 interface ItemSocketViewProps {
@@ -154,84 +154,43 @@ export function ItemSocketView({
 
           const orb = getSlotGem(slot);
           const affix = registry.getAffix(orb.affixId);
-          const tag = getElementTag(affix);
-          const gradient = ELEMENT_GRADIENTS[tag];
           const isLocked = plan.lockedGemUids.has(orb.uid);
-          const emoji = ELEMENT_EMOJIS[tag] ?? '\u2694';
-          const gemArt = getGemArt(orb.affixId);
-
-          // Shared socket styles — Option B gem card layout
-          const socketStyle: React.CSSProperties = {
-            width: '100%',
-            aspectRatio: '1',
-            borderRadius: 'var(--socket-radius)',
-            background: `linear-gradient(135deg, ${gradient.bg})`,
-            border: isLocked ? '2px solid var(--color-locked)' : `2px solid ${gradient.border}`,
-            position: 'relative',
-            overflow: 'hidden',
-            cursor: isLocked ? 'default' : 'pointer',
-            touchAction: 'none',
-            padding: 0,
-          };
-
-          const socketContent = (
-            <>
-              {/* Full gem art or emoji */}
-              {gemArt ? (
-                <img src={gemArt} alt={affix.name} style={{
-                  position: 'absolute', inset: 0, width: '100%', height: '100%',
-                  objectFit: 'cover', zIndex: 1,
-                }} />
-              ) : (
-                <span style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  fontSize: 'var(--icon-md)', zIndex: 1,
-                }}>{emoji}</span>
-              )}
-              {/* Specular highlight */}
-              <div style={{
-                position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
-                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), transparent 55%)',
-              }} />
-              {/* Name in bottom gradient band */}
-              <div style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)',
-                padding: '4px 4px 3px', textAlign: 'center',
-              }}>
-                <div style={{
-                  fontFamily: 'var(--font-family-display)', fontWeight: 700,
-                  fontSize: 'var(--text-2xs)', color: 'white', lineHeight: 1.15,
-                  textShadow: '0 1px 3px rgba(0,0,0,0.95)',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>{affix.name}</div>
-              </div>
-              {/* Lock icon overlay */}
-              {isLocked && (
-                <div style={{
-                  position: 'absolute', top: 4, right: 4, zIndex: 3,
-                  fontSize: 'var(--text-xs)',
-                }}>{'\uD83D\uDD12'}</div>
-              )}
-            </>
-          );
+          const statLabel = getStatLabel(affix, orb, cardId);
 
           if (isLocked) {
-            return <div key={index} style={socketStyle}>{socketContent}</div>;
+            return (
+              <div key={index} data-forge-socket={index} style={{ display: 'flex', justifyContent: 'center' }}>
+                <GemCard
+                  uid={orb.uid}
+                  affixId={orb.affixId}
+                  affixName={affix.name}
+                  tier={orb.tier}
+                  rarity={orb.rarity}
+                  category={affix.category}
+                  tags={affix.tags}
+                  statLabel={statLabel}
+                  compact
+                />
+              </div>
+            );
           }
 
           return (
-            <button
-              key={index}
-              data-gem-uid={orb.uid}
-              data-forge-socket={index}
-              onClick={() => onSocketRemove(index)}
-              onPointerDown={(e) => onGemPointerDown?.(orb.uid, e)}
-              style={socketStyle}
-            >
-              {socketContent}
-            </button>
+            <div key={index} data-forge-socket={index} style={{ display: 'flex', justifyContent: 'center' }}>
+              <GemCard
+                uid={orb.uid}
+                affixId={orb.affixId}
+                affixName={affix.name}
+                tier={orb.tier}
+                rarity={orb.rarity}
+                category={affix.category}
+                tags={affix.tags}
+                statLabel={statLabel}
+                compact
+                onClick={() => onSocketRemove(index)}
+                onPointerDown={(e) => onGemPointerDown?.(orb.uid, e)}
+              />
+            </div>
           );
         })}
       </div>
