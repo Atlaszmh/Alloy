@@ -313,6 +313,12 @@ export function Forge() {
           ghost.style.filter = 'drop-shadow(0 0 16px rgba(212, 168, 52, 0.5))';
           ghost.style.pointerEvents = 'none';
           ghost.style.margin = '0';
+          // Disable transitions on the ghost AND all descendants so position
+          // updates snap instantly to the pointer (GemCard has transition-all).
+          ghost.style.transition = 'none';
+          ghost.querySelectorAll<HTMLElement>('*').forEach((child) => {
+            child.style.transition = 'none';
+          });
           ghost.dataset.origLeft = String(rect.left);
           ghost.dataset.origTop = String(rect.top);
           document.body.appendChild(ghost);
