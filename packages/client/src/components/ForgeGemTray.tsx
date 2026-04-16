@@ -175,6 +175,9 @@ export function ForgeGemTray({
               <div
                 key={orb.uid}
                 data-gem-uid={orb.uid}
+                data-gem-rarity={orb.rarity}
+                data-combinable={orb.combinable ? 'true' : 'false'}
+                data-gem-source-recipe={orb.sourceRecipe ?? ''}
                 style={{
                   opacity: dimmed ? 0.35 : 1,
                   pointerEvents: dragUid && dragUid !== orb.uid ? 'none' : undefined,

@@ -36,22 +36,15 @@ function computeGlowSignal(
   slots: [GemInstance | null, GemInstance | null, GemInstance | null],
   registry: DataRegistry,
 ): GlowSignal {
-  const filled = slots.filter((s): s is GemInstance => s !== null);
-  if (filled.length < 2) return 'none';
+  // Slot 0 (KEEP) must be filled for a valid combine; check only pairs involving slot 0.
+  const keep = slots[0];
+  if (!keep) return 'none';
+  const others = [slots[1], slots[2]].filter((s): s is GemInstance => s !== null);
+  if (others.length === 0) return 'none';
 
-  // Check all 2-pair permutations from the 3 slots
-  const pairs: [number, number][] = [
-    [0, 1],
-    [0, 2],
-    [1, 2],
-  ];
-  for (const [i, j] of pairs) {
-    const a = slots[i];
-    const b = slots[j];
-    if (a && b) {
-      const result = registry.getCombination(a.affixId, b.affixId);
-      if (result) return 'gold';
-    }
+  for (const other of others) {
+    const result = registry.getCombination(keep.affixId, other.affixId);
+    if (result) return 'gold';
   }
   return 'white';
 }
@@ -73,6 +66,8 @@ export function CombineWorkbench({
   );
 
   const filledCount = comboSlots.filter(Boolean).length;
+  const keepFilled = comboSlots[0] !== null;
+  const canCombine = keepFilled && filledCount >= 2 && canAfford;
 
   return (
     <div
@@ -91,19 +86,51 @@ export function CombineWorkbench({
                   color: 'var(--color-surface-300)',
                   fontFamily: 'var(--font-family-display)',
                   fontWeight: 700,
+                  alignSelf: 'flex-end',
+                  marginBottom: 'calc(var(--gem-size) * 0.5 - var(--text-sm) * 0.5)',
                 }}
               >
                 +
               </span>
             )}
-            <Slot
-              index={idx}
-              orb={orb}
-              registry={registry}
-              isDragging={isDragging}
-              onClick={() => onSlotClick(idx)}
-              onPointerDown={onPointerDown}
-            />
+            <div className="flex flex-col items-center" style={{ gap: '2px' }}>
+              {/* Label area — KEEP caption for slot 0, blank spacer for slots 1 & 2 to keep vertical alignment */}
+              {idx === 0 ? (
+                <div className="flex flex-col items-center leading-none" style={{ gap: '1px' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-family-display)',
+                      fontSize: 'var(--text-2xs)',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      color: 'var(--color-bronze-light)',
+                    }}
+                  >
+                    KEEP
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      color: 'var(--color-surface-400)',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    ↓ upgraded on mismatch
+                  </span>
+                </div>
+              ) : (
+                <div aria-hidden="true" style={{ height: 'calc(var(--text-2xs) + 9px + 1px)' }} />
+              )}
+              <Slot
+                index={idx}
+                orb={orb}
+                registry={registry}
+                isDragging={isDragging}
+                isKeepSlot={idx === 0}
+                onClick={() => onSlotClick(idx)}
+                onPointerDown={onPointerDown}
+              />
+            </div>
           </div>
         ))}
 
@@ -114,21 +141,27 @@ export function CombineWorkbench({
             color: 'var(--color-surface-300)',
             marginLeft: 'var(--gap-xs)',
             marginRight: 'var(--gap-xs)',
+            alignSelf: 'flex-end',
+            marginBottom: 'calc(var(--gem-size) * 0.5 - var(--text-sm) * 0.5)',
           }}
         >
           {'\u25B6'}
         </span>
 
         {/* Result box */}
-        <ResultBox glowSignal={glowSignal} preview={preview ?? null} registry={registry} />
+        <div className="flex flex-col items-center" style={{ gap: '2px' }}>
+          <div aria-hidden="true" style={{ height: 'calc(var(--text-2xs) + 9px + 1px)' }} />
+          <ResultBox glowSignal={glowSignal} preview={preview ?? null} registry={registry} />
+        </div>
 
         {/* Buttons inline */}
-        <div className="flex gap-1.5" style={{ marginLeft: 'var(--gap-md)' }}>
+        <div className="flex gap-1.5" style={{ marginLeft: 'var(--gap-md)', alignSelf: 'flex-end', marginBottom: 'calc(var(--gem-size) * 0.5 - var(--text-sm))' }}>
           <HapticButton
             variant="primary"
             size="sm"
-            disabled={filledCount < 2 || !canAfford}
+            disabled={!canCombine}
             onClick={onCombine}
+            data-combine-btn
           >
             COMBINE
           </HapticButton>
@@ -153,6 +186,7 @@ function Slot({
   orb,
   registry,
   isDragging,
+  isKeepSlot,
   onClick,
   onPointerDown,
 }: {
@@ -160,19 +194,30 @@ function Slot({
   orb: GemInstance | null;
   registry: DataRegistry;
   isDragging?: boolean;
+  isKeepSlot?: boolean;
   onClick: () => void;
   onPointerDown?: (uid: string, e: React.PointerEvent) => void;
 }) {
+  const keepAttrs = isKeepSlot ? { 'data-combo-slot-keep': 'true' } : {};
+
   if (!orb) {
     const dropGlow = isDragging
       ? '0 0 12px rgba(212,168,52,0.4)'
-      : 'none';
+      : isKeepSlot
+        ? '0 0 8px rgba(212,168,52,0.18)'
+        : 'none';
     const dropBorder = isDragging
       ? '2px dashed var(--color-bronze-light)'
-      : '2px dashed var(--color-surface-500)';
+      : isKeepSlot
+        ? '2px dashed var(--color-bronze-light)'
+        : '2px dashed var(--color-surface-500)';
+    const bg = isKeepSlot
+      ? 'linear-gradient(180deg, rgba(212,168,52,0.08), var(--color-surface-800))'
+      : 'var(--color-surface-800)';
     return (
       <button
         data-combo-slot={index}
+        {...keepAttrs}
         onClick={onClick}
         className="flex items-center justify-center cursor-pointer"
         style={{
@@ -180,13 +225,13 @@ function Slot({
           height: 'var(--gem-size)',
           borderRadius: 'var(--gem-radius)',
           border: dropBorder,
-          background: 'var(--color-surface-800)',
-          color: 'var(--color-surface-300)',
+          background: bg,
+          color: isKeepSlot ? 'var(--color-bronze-light)' : 'var(--color-surface-300)',
           fontSize: 'var(--icon-md)',
           boxShadow: dropGlow,
           transition: 'box-shadow 0.2s, border-color 0.2s',
         }}
-        aria-label="Empty combo slot"
+        aria-label={isKeepSlot ? 'KEEP slot (empty) — this gem is the one upgraded' : 'Empty combo slot'}
       >
         ?
       </button>
@@ -199,8 +244,21 @@ function Slot({
   const category = affix?.category ?? 'offensive';
   const statLabel = affix ? getStatLabel(affix, orb) : '';
 
+  const filledKeepWrap: React.CSSProperties = isKeepSlot
+    ? {
+        borderRadius: 'var(--gem-radius)',
+        boxShadow: '0 0 10px rgba(212,168,52,0.35)',
+        outline: '2px solid var(--color-bronze-light)',
+        outlineOffset: '-2px',
+      }
+    : {};
+
   return (
-    <div data-combo-slot={index} style={{ width: 'var(--gem-size)', height: 'var(--gem-size)' }}>
+    <div
+      data-combo-slot={index}
+      {...keepAttrs}
+      style={{ width: 'var(--gem-size)', height: 'var(--gem-size)', ...filledKeepWrap }}
+    >
       <GemCard
         uid={orb.uid}
         affixId={orb.affixId}
@@ -255,6 +313,10 @@ function ResultBox({
 
     return (
       <div
+        data-combine-result
+        data-glow={glowSignal}
+        data-combine-result-known="true"
+        data-combine-result-layer={preview.layer ?? ''}
         className="flex flex-col items-center justify-center overflow-hidden"
         style={{
           width: 'var(--gem-size)',
@@ -316,6 +378,10 @@ function ResultBox({
 
   return (
     <div
+      data-combine-result
+      data-glow={glowSignal}
+      data-combine-result-known={preview?.known ? 'true' : 'false'}
+      data-combine-result-layer={preview?.layer ?? ''}
       className="flex items-center justify-center"
       style={{
         width: 'var(--gem-size)',

@@ -5,7 +5,7 @@ export function RunLivesDisplay() {
   const maxDisplay = Math.max(lives, 5);
 
   return (
-    <div className="flex items-center gap-1">
+    <div data-testid="run-lives-display" className="flex items-center gap-1">
       {Array.from({ length: maxDisplay }, (_, i) => {
         const isFilled = i < lives;
         return (
@@ -23,6 +23,8 @@ export function RunLivesDisplay() {
         );
       })}
       <span
+        data-testid="run-lives-count"
+        data-lives={lives}
         style={{
           fontFamily: 'var(--font-family-display)',
           fontSize: 'var(--text-xs)',

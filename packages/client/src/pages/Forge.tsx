@@ -500,11 +500,18 @@ export function Forge() {
   }, [comboSlots, selectedOrbUid, plan, setComboSlotByIndex, selectOrb]);
 
   // ── Combine handler ──
+  // Slot 0 is the KEEP slot: its gem is the one preserved/upgraded in mismatched combines.
+  // Ingredients come from slots 1 or 2.
   const handleCombine = useCallback(() => {
     if (!plan) return;
-    const filled = comboSlots.filter((s): s is GemInstance => s !== null);
-    if (filled.length < 2) return;
-    const result = applyAction({ kind: 'combine', gemUid1: filled[0].uid, gemUid2: filled[1].uid }, registry);
+    const keep = comboSlots[0];
+    if (!keep) return;
+    const other = comboSlots[1] ?? comboSlots[2];
+    if (!other) return;
+    const result = applyAction(
+      { kind: 'combine', gemUid1: keep.uid, gemUid2: other.uid, keepGemUid: keep.uid },
+      registry,
+    );
     if (result.ok) {
       playSound('combineMerge');
       clearComboSlots();

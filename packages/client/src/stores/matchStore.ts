@@ -122,6 +122,12 @@ export const useMatchStore = create<MatchStore>((set, get) => ({
   },
 }));
 
+// Expose store for E2E testing
+if (import.meta.env.DEV) {
+  (window as any).__ZUSTAND_STORES__ = (window as any).__ZUSTAND_STORES__ ?? {};
+  (window as any).__ZUSTAND_STORES__.matchStore = useMatchStore;
+}
+
 // Stable empty arrays to avoid infinite re-render loops with Zustand selectors
 const EMPTY_POOL: GemInstance[] = [];
 const EMPTY_RESULTS: DuelResult[] = [];

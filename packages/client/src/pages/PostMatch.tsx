@@ -146,6 +146,7 @@ export function PostMatch() {
       {isVictory && <CelebrationOverlay />}
 
       <h2
+        data-testid={isRunMode && isVictory ? 'run-won-heading' : undefined}
         className={`text-4xl font-bold ${
           isDraw ? 'text-surface-400' : isVictory ? 'text-accent-400' : 'text-danger'
         }`}

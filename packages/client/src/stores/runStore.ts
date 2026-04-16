@@ -68,3 +68,9 @@ export const useRunStore = create<RunStoreState>((set, get) => ({
 export const selectIsRunOver = (s: RunStoreState) => s.status === 'lost';
 export const selectIsGoalReached = (s: RunStoreState) => s.status === 'won';
 export const selectIsEndless = (s: RunStoreState) => s.goal === null;
+
+// Expose store for E2E testing
+if (import.meta.env.DEV) {
+  (window as any).__ZUSTAND_STORES__ = (window as any).__ZUSTAND_STORES__ ?? {};
+  (window as any).__ZUSTAND_STORES__.runStore = useRunStore;
+}

@@ -8,7 +8,12 @@ export function RunRoundCounter() {
   const progress = goal ? Math.min((round / goal) * 100, 100) : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}>
+    <div
+      data-testid="run-round-counter"
+      data-round={round}
+      data-endless={isEndless ? 'true' : 'false'}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}
+    >
       <div
         style={{
           fontFamily: 'var(--font-family-display)',
@@ -19,6 +24,9 @@ export function RunRoundCounter() {
       >
         Round {round}{isEndless ? '' : ` / ${goal}`}
       </div>
+      {isEndless && (
+        <span data-testid="run-endless-indicator" aria-hidden="true" style={{ display: 'none' }} />
+      )}
 
       {!isEndless && (
         <div
