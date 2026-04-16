@@ -202,9 +202,11 @@ function Slot({
 
   if (!orb) {
     const dropGlow = isDragging
-      ? '0 0 12px rgba(212,168,52,0.4)'
+      ? isKeepSlot
+        ? '0 0 22px rgba(212,168,52,0.7), 0 0 44px rgba(212,168,52,0.3)'
+        : '0 0 12px rgba(212,168,52,0.4)'
       : isKeepSlot
-        ? '0 0 8px rgba(212,168,52,0.18)'
+        ? '0 0 16px rgba(212,168,52,0.5), 0 0 32px rgba(212,168,52,0.2)'
         : 'none';
     const dropBorder = isDragging
       ? '2px dashed var(--color-bronze-light)'
@@ -212,7 +214,7 @@ function Slot({
         ? '2px dashed var(--color-bronze-light)'
         : '2px dashed var(--color-surface-500)';
     const bg = isKeepSlot
-      ? 'linear-gradient(180deg, rgba(212,168,52,0.08), var(--color-surface-800))'
+      ? 'linear-gradient(180deg, rgba(212,168,52,0.14), var(--color-surface-800))'
       : 'var(--color-surface-800)';
     return (
       <button
@@ -247,7 +249,7 @@ function Slot({
   const filledKeepWrap: React.CSSProperties = isKeepSlot
     ? {
         borderRadius: 'var(--gem-radius)',
-        boxShadow: '0 0 10px rgba(212,168,52,0.35)',
+        boxShadow: '0 0 18px rgba(212,168,52,0.6), 0 0 36px rgba(212,168,52,0.25)',
         outline: '2px solid var(--color-bronze-light)',
         outlineOffset: '-2px',
       }
