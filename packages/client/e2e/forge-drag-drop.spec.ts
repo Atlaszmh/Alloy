@@ -176,7 +176,7 @@ test.describe('Forge Drag & Drop', () => {
     await tapGemToComboSlot(page, 0);
 
     // Verify gem is placed
-    const filledSlot = page.locator('[data-combo-slot="0"][data-gem-uid]');
+    const filledSlot = page.locator('[data-combo-slot="0"] [data-gem-uid]');
     await expect(filledSlot).toBeVisible({ timeout: 3000 });
 
     // Size should be unchanged
@@ -191,7 +191,7 @@ test.describe('Forge Drag & Drop', () => {
 
     // Place gem in slot 0 via tap
     await tapGemToComboSlot(page, 0);
-    await expect(page.locator('[data-combo-slot="0"][data-gem-uid]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('[data-combo-slot="0"] [data-gem-uid]')).toBeVisible({ timeout: 3000 });
 
     // Click the filled slot to remove gem
     await pointerTap(page, '[data-combo-slot="0"]');
@@ -216,7 +216,7 @@ test.describe('Forge Drag & Drop', () => {
     // All slots should be empty and consistent
     await assertConsistentSlotSizes(page);
     // No gems in combo slots
-    const filledCount = await page.locator('[data-combo-slot][data-gem-uid]').count();
+    const filledCount = await page.locator('[data-combo-slot] [data-gem-uid]').count();
     expect(filledCount).toBe(0);
   });
 
@@ -232,7 +232,7 @@ test.describe('Forge Drag & Drop', () => {
     await dragBetween(page, gemSrc, slotTgt);
 
     // Slot should now have a gem
-    const filledSlot = page.locator('[data-combo-slot="0"][data-gem-uid]');
+    const filledSlot = page.locator('[data-combo-slot="0"] [data-gem-uid]');
     const hasGem = await filledSlot.isVisible({ timeout: 3000 }).catch(() => false);
 
     if (hasGem) {

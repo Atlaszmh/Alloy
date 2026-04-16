@@ -200,7 +200,7 @@ function Slot({
   const statLabel = affix ? getStatLabel(affix, orb) : '';
 
   return (
-    <div data-combo-slot={index} style={{ position: 'relative' }}>
+    <div data-combo-slot={index} style={{ width: 'var(--gem-size)', height: 'var(--gem-size)' }}>
       <GemCard
         uid={orb.uid}
         affixId={orb.affixId}
