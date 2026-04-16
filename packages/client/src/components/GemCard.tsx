@@ -11,14 +11,16 @@ const ELEMENT_SYMBOLS: Record<string, string> = {
 
 const RARITY_COLORS: Record<GemRarity, string> = {
   common: '#9ca3af',
+  uncommon: '#2dd4bf',
   magic: '#3b82f6',
-  rare: '#eab308',
+  rare: '#facc15',
   epic: '#a855f7',
-  legendary: '#f59e0b',
+  legendary: '#c2410c',
 };
 
 const RARITY_LABELS: Record<GemRarity, string> = {
   common: 'Common',
+  uncommon: 'Uncommon',
   magic: 'Magic',
   rare: 'Rare',
   epic: 'Epic',
@@ -83,6 +85,7 @@ export function GemCard({
 
   const rarityAnimation: Record<GemRarity, string | undefined> = {
     common: undefined,
+    uncommon: 'shimmer-magic 4s ease-in-out infinite',
     magic: 'shimmer-magic 3s ease-in-out infinite',
     rare: 'shimmer-rare 2.5s ease-in-out infinite',
     epic: 'pulse-epic 2s ease-in-out infinite',

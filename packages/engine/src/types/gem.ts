@@ -1,11 +1,12 @@
 import type { StatModifier } from './affix.js';
 
-export type GemRarity = 'common' | 'magic' | 'rare' | 'epic' | 'legendary';
+export type GemRarity = 'common' | 'uncommon' | 'magic' | 'rare' | 'epic' | 'legendary';
 
-export const RARITY_ORDER: GemRarity[] = ['common', 'magic', 'rare', 'epic', 'legendary'];
+export const RARITY_ORDER: GemRarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary'];
 
 export const RARITY_MULTIPLIERS: Record<GemRarity, number> = {
   common: 1.0,
+  uncommon: 1.1,
   magic: 1.25,
   rare: 1.5,
   epic: 2.0,

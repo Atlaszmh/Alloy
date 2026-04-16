@@ -103,12 +103,12 @@ describe('run_async mode integration', () => {
     const config1 = getPoolConfigForRound(1);
     expect(config1.tiers).toEqual([1, 2]);
     expect(config1.rarities).toContain('common');
-    expect(config1.rarities).toContain('magic');
+    expect(config1.rarities).toContain('uncommon');
     expect(config1.rarities).not.toContain('epic');
     for (const gem of pool1) {
       expect(gem.tier).toBeGreaterThanOrEqual(1);
       expect(gem.tier).toBeLessThanOrEqual(2);
-      expect(['common', 'magic']).toContain(gem.rarity);
+      expect(['common', 'uncommon']).toContain(gem.rarity);
     }
 
     // Round 7: tiers 2-4, includes epic
@@ -119,7 +119,7 @@ describe('run_async mode integration', () => {
     for (const gem of pool7) {
       expect(gem.tier).toBeGreaterThanOrEqual(2);
       expect(gem.tier).toBeLessThanOrEqual(4);
-      expect(['common', 'magic', 'rare', 'epic']).toContain(gem.rarity);
+      expect(['uncommon', 'magic', 'rare', 'epic']).toContain(gem.rarity);
     }
 
     // Round 10+: tiers 2-5, includes legendary

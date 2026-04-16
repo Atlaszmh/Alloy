@@ -8,10 +8,11 @@ const ELEMENT_SYMBOLS: Record<string, string> = {
 
 const RARITY_BORDER_COLORS: Record<GemRarity, string> = {
   common: 'var(--color-surface-500)',
+  uncommon: '#2dd4bf',
   magic: '#3b82f6',
-  rare: '#eab308',
+  rare: '#facc15',
   epic: '#a855f7',
-  legendary: '#f59e0b',
+  legendary: '#c2410c',
 };
 
 const CHIP_BG: Record<string, string> = {

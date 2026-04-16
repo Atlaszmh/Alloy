@@ -255,7 +255,7 @@ describe('CombinationEngine', () => {
 
       expect(result.layer).toBe('generic');
       expect(result.gem.affixId).toBe('attack_speed');
-      expect(result.gem.rarity).toBe('magic'); // common + common -> magic
+      expect(result.gem.rarity).toBe('uncommon'); // common + common -> uncommon
     });
 
     it('same-type legendary rarity -> tier upgrade instead', () => {

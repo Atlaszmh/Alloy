@@ -60,6 +60,7 @@ describe('GemInstance', () => {
 
     it('all rarity multipliers', () => {
       expect(calculateEffectiveValue(1, 'common')).toBe(1.0);
+      expect(calculateEffectiveValue(1, 'uncommon')).toBe(1.1);
       expect(calculateEffectiveValue(1, 'magic')).toBe(1.25);
       expect(calculateEffectiveValue(1, 'rare')).toBe(1.5);
       expect(calculateEffectiveValue(1, 'epic')).toBe(2.0);
@@ -101,7 +102,8 @@ describe('GemInstance', () => {
 
   describe('nextRarity', () => {
     it('advances through rarity tiers', () => {
-      expect(nextRarity('common')).toBe('magic');
+      expect(nextRarity('common')).toBe('uncommon');
+      expect(nextRarity('uncommon')).toBe('magic');
       expect(nextRarity('magic')).toBe('rare');
       expect(nextRarity('rare')).toBe('epic');
       expect(nextRarity('epic')).toBe('legendary');
@@ -112,10 +114,11 @@ describe('GemInstance', () => {
   describe('rarityIndex', () => {
     it('returns correct indices', () => {
       expect(rarityIndex('common')).toBe(0);
-      expect(rarityIndex('magic')).toBe(1);
-      expect(rarityIndex('rare')).toBe(2);
-      expect(rarityIndex('epic')).toBe(3);
-      expect(rarityIndex('legendary')).toBe(4);
+      expect(rarityIndex('uncommon')).toBe(1);
+      expect(rarityIndex('magic')).toBe(2);
+      expect(rarityIndex('rare')).toBe(3);
+      expect(rarityIndex('epic')).toBe(4);
+      expect(rarityIndex('legendary')).toBe(5);
     });
   });
 });

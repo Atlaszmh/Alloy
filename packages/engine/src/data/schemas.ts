@@ -108,7 +108,7 @@ const FluxCostsSchema = z.object({
   removeOrb: z.number().int().nonnegative(),
 });
 
-const GemRaritySchema = z.enum(['common', 'magic', 'rare', 'epic', 'legendary']);
+const GemRaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 
 const PoolScalingEntrySchema = z.object({
   roundRange: z.tuple([z.number().int(), z.number().int()]),

@@ -66,7 +66,7 @@ const mockPercentAffix: AffixDef = {
   },
 };
 
-function makeGem(tier: 1 | 2 | 3 | 4, rarity: 'common' | 'magic' | 'rare' | 'epic' | 'legendary'): GemInstance {
+function makeGem(tier: 1 | 2 | 3 | 4, rarity: 'common' | 'uncommon' | 'magic' | 'rare' | 'epic' | 'legendary'): GemInstance {
   return { uid: 'test', affixId: 'fire_damage', tier, rarity, recipeDepth: 0, combinable: true, tags: [] };
 }
 

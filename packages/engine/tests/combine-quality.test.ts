@@ -36,10 +36,10 @@ describe('combine-quality', () => {
   });
 
   describe('determineOutputTierRarity', () => {
-    it('low quality produces low tier common', () => {
+    it('low quality produces low tier uncommon', () => {
       const result = determineOutputTierRarity(1.0);
       expect(result.tier).toBe(1);
-      expect(result.rarity).toBe('common');
+      expect(result.rarity).toBe('uncommon');
     });
 
     it('medium quality produces mid results', () => {
@@ -68,7 +68,7 @@ describe('combine-quality', () => {
     });
 
     it('accepts custom thresholds', () => {
-      const custom = { common: 0, magic: 1, rare: 2, epic: 3, legendary: 4 };
+      const custom = { common: 0, uncommon: 0.5, magic: 1, rare: 2, epic: 3, legendary: 4 };
       const result = determineOutputTierRarity(3.5, custom);
       expect(result.rarity).toBe('epic');
     });

@@ -298,7 +298,7 @@ export class CombinationEngine {
   }
 
   private rarityIdx(rarity: string): number {
-    const order = ['common', 'magic', 'rare', 'epic', 'legendary'];
+    const order = ['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary'];
     return order.indexOf(rarity);
   }
 }

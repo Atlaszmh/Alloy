@@ -8,6 +8,7 @@ import {
 // Default thresholds — configurable via balance.json
 const DEFAULT_RARITY_THRESHOLDS: Record<GemRarity, number> = {
   common: 0,
+  uncommon: 1.0,
   magic: 2.0,
   rare: 3.5,
   epic: 5.5,

@@ -22,31 +22,31 @@ export const DEFAULT_SCALING: PoolScalingEntry[] = [
   {
     roundRange: [1, 3],
     tiers: [1, 2],
-    rarities: ['common', 'magic'],
+    rarities: ['common', 'uncommon'],
     poolSize: 20,
   },
   {
     roundRange: [4, 6],
     tiers: [1, 3],
-    rarities: ['common', 'magic', 'rare'],
+    rarities: ['common', 'uncommon', 'magic', 'rare'],
     poolSize: 16,
   },
   {
     roundRange: [7, 9],
     tiers: [2, 4],
-    rarities: ['common', 'magic', 'rare', 'epic'],
+    rarities: ['uncommon', 'magic', 'rare', 'epic'],
     poolSize: 14,
   },
   {
     roundRange: [10, 14],
     tiers: [2, 5],
-    rarities: ['common', 'magic', 'rare', 'epic', 'legendary'],
+    rarities: ['magic', 'rare', 'epic', 'legendary'],
     poolSize: 12,
   },
   {
     roundRange: [15, Infinity],
     tiers: [3, 5],
-    rarities: ['common', 'magic', 'rare', 'epic', 'legendary'],
+    rarities: ['rare', 'epic', 'legendary'],
     poolSize: 10,
   },
 ];
