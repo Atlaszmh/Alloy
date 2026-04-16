@@ -140,6 +140,7 @@ export function Draft() {
   const getRegistry = useMatchStore((s) => s.getRegistry);
 
   const isRunMode = useMatchStore(selectIsRunMode);
+  const isOnlineRun = isRunMode && !code?.startsWith('ai-');
 
   const selectedOrbUid = useDraftStore((s) => s.selectedOrbUid);
   const selectOrb = useDraftStore((s) => s.selectOrb);
@@ -591,18 +592,20 @@ export function Draft() {
         </div>
       </div>
 
-      {/* ═══ Timer bar — full width, fixed height ═══ */}
-      <div className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
-        {(isPlayerTurn || isRunMode) ? (
-          <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-surface-500)' }}>
-              Waiting for opponent...
-            </p>
-          </div>
-        )}
-      </div>
+      {/* ═══ Timer bar — full width, fixed height (hidden in online run since it's async) ═══ */}
+      {!isOnlineRun && (
+        <div className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
+          {(isPlayerTurn || isRunMode) ? (
+            <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-[10px] tracking-wide" style={{ color: 'var(--color-surface-500)' }}>
+                Waiting for opponent...
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══ BOTTOM: Player drop zone (fixed height) ═══ */}
       <div ref={dropZoneRef} style={{ flexShrink: 0 }}>

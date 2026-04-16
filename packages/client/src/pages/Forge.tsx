@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
-import { useMatchStore } from '@/stores/matchStore';
+import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
 import { ForgeHeader } from '@/components/ForgeHeader';
@@ -28,6 +28,8 @@ const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
 export function Forge() {
   const { code } = useParams();
   const isAiMatch = code?.startsWith('ai-') ?? false;
+  const isRunMode = useMatchStore(selectIsRunMode);
+  const isOnlineRun = isRunMode && !isAiMatch;
 
   // ── Gateway subscription ──
   const gateway = useGateway();
@@ -623,8 +625,8 @@ export function Forge() {
         flux={currentFlux}
         maxFlux={maxFlux}
         stats={derivedStats}
-        timerDurationMs={FORGE_TIMER_MS}
-        onTimerExpire={handleTimerExpire}
+        timerDurationMs={isOnlineRun ? undefined : FORGE_TIMER_MS}
+        onTimerExpire={isOnlineRun ? undefined : handleTimerExpire}
         onDone={openConfirmModal}
         baseStatSelectors={baseStatSelectorJSX}
       />

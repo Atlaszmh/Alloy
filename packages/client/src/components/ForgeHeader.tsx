@@ -9,8 +9,8 @@ interface ForgeHeaderProps {
   flux: number;
   maxFlux: number;
   stats: DerivedStats | null;
-  timerDurationMs: number;
-  onTimerExpire: () => void;
+  timerDurationMs?: number;
+  onTimerExpire?: () => void;
   onDone: () => void;
   baseStatSelectors?: ReactNode;
 }
@@ -27,6 +27,7 @@ export function ForgeHeader({
   onDone,
   baseStatSelectors,
 }: ForgeHeaderProps) {
+  const showTimer = timerDurationMs !== undefined && onTimerExpire !== undefined;
   const navigate = useNavigate();
   const fluxEmpty = flux === 0;
   const fluxLow = flux > 0 && flux <= 2;
@@ -68,15 +69,17 @@ export function ForgeHeader({
           R{round}
         </span>
 
-        {/* Timer — push to the right side */}
-        <div className="ml-auto">
-          <Timer durationMs={timerDurationMs} onExpire={onTimerExpire} />
-        </div>
+        {/* Timer — push to the right side (omitted in online run since it's async) */}
+        {showTimer && (
+          <div className="ml-auto">
+            <Timer durationMs={timerDurationMs} onExpire={onTimerExpire} />
+          </div>
+        )}
 
         {/* Gem Library shortcut */}
         <button
           onClick={() => navigate('/gems')}
-          className="text-xs text-surface-400 hover:text-accent-400"
+          className={`text-xs text-surface-400 hover:text-accent-400 ${showTimer ? '' : 'ml-auto'}`}
           style={{ fontFamily: 'var(--font-family-body)' }}
         >
           Gem Library
