@@ -140,7 +140,6 @@ export function Draft() {
   const getRegistry = useMatchStore((s) => s.getRegistry);
 
   const isRunMode = useMatchStore(selectIsRunMode);
-  const isOnlineRun = isRunMode && !code?.startsWith('ai-');
 
   const selectedOrbUid = useDraftStore((s) => s.selectedOrbUid);
   const selectOrb = useDraftStore((s) => s.selectOrb);
@@ -592,10 +591,10 @@ export function Draft() {
         </div>
       </div>
 
-      {/* ═══ Timer bar — full width, fixed height (hidden in online run since it's async) ═══ */}
-      {!isOnlineRun && (
-        <div className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
-          {(isPlayerTurn || isRunMode) ? (
+      {/* ═══ Timer bar — hidden in run mode since runs are async (paced by the player) ═══ */}
+      {!isRunMode && (
+        <div data-testid="draft-timer-bar" className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
+          {isPlayerTurn ? (
             <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
           ) : (
             <div className="flex items-center justify-center h-full">

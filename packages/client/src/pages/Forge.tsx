@@ -29,7 +29,6 @@ export function Forge() {
   const { code } = useParams();
   const isAiMatch = code?.startsWith('ai-') ?? false;
   const isRunMode = useMatchStore(selectIsRunMode);
-  const isOnlineRun = isRunMode && !isAiMatch;
 
   // ── Gateway subscription ──
   const gateway = useGateway();
@@ -625,8 +624,8 @@ export function Forge() {
         flux={currentFlux}
         maxFlux={maxFlux}
         stats={derivedStats}
-        timerDurationMs={isOnlineRun ? undefined : FORGE_TIMER_MS}
-        onTimerExpire={isOnlineRun ? undefined : handleTimerExpire}
+        timerDurationMs={isRunMode ? undefined : FORGE_TIMER_MS}
+        onTimerExpire={isRunMode ? undefined : handleTimerExpire}
         onDone={openConfirmModal}
         baseStatSelectors={baseStatSelectorJSX}
       />

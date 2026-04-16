@@ -499,4 +499,22 @@ describe('Forge page', () => {
     expect(screen.getByText('Chainmail')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'COMBINE' })).toBeTruthy();
   });
+
+  it('renders forge timer in non-run match modes', () => {
+    setupStores({ mode: 'quick' } as Partial<MatchState>);
+    renderForge();
+    expect(screen.queryByTestId('timer')).not.toBeNull();
+  });
+
+  it('hides forge timer in run_async mode (including AI runs)', () => {
+    setupStores({ mode: 'run_async' } as Partial<MatchState>);
+    renderForge();
+    expect(screen.queryByTestId('timer')).toBeNull();
+  });
+
+  it('hides forge timer in run_live mode', () => {
+    setupStores({ mode: 'run_live' } as Partial<MatchState>);
+    renderForge();
+    expect(screen.queryByTestId('timer')).toBeNull();
+  });
 });

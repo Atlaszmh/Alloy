@@ -46,7 +46,7 @@ export function Timer({ durationMs, onExpire, paused = false, className = '' }: 
       : '';
 
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div data-testid="timer" className={`flex flex-col gap-1 ${className}`}>
       {/* Label + countdown */}
       <div className="flex items-center justify-between px-1">
         <span className="text-[10px] tracking-wide" style={{ color: 'var(--color-bronze-400)' }}>
