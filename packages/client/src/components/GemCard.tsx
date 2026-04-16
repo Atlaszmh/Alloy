@@ -96,6 +96,8 @@ export function GemCard({
     <div
       data-gem={affixId}
       data-gem-uid={uid}
+      data-gem-rarity={rarity}
+      data-gem-tier={tier}
       className="flex flex-col items-center cursor-pointer transition-all duration-150 hover:scale-[1.08] hover:brightness-110 active:scale-[0.93]"
       style={{
         touchAction: 'none',
