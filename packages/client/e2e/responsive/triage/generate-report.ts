@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readReport } from '../probes/report';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readReport, reportPath } from '../probes/report';
 import type { Finding } from '../probes/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +68,15 @@ function buildTopFindings(findings: Finding[]): string {
 }
 
 export function generateTriage(): string {
+  // Surface a clear error when the report file is missing — readReport() swallows
+  // file-not-found and returns [], which would otherwise produce a misleading
+  // "0 findings" green report when nobody has run the matrix yet.
+  const reportFile = reportPath();
+  if (!fs.existsSync(reportFile)) {
+    throw new Error(
+      `responsive-report.json not found at ${reportFile}. Run "pnpm test:responsive" first.`,
+    );
+  }
   const findings = readReport();
   const fails = findings.filter((f) => f.severity === 'fail').length;
   const warns = findings.filter((f) => f.severity === 'warn').length;
@@ -90,8 +99,10 @@ export function generateTriage(): string {
   return TRIAGE_PATH;
 }
 
-const isCli = import.meta.url === `file://${process.argv[1]}` ||
-              process.argv[1]?.endsWith('generate-report.ts');
+// Portable CLI detection: pathToFileURL handles Windows backslashes correctly,
+// unlike a manual `file://` + argv[1] concat.
+const entry = process.argv[1];
+const isCli = entry ? import.meta.url === pathToFileURL(entry).href : false;
 if (isCli) {
   const outPath = generateTriage();
   console.log(`Triage report written to: ${outPath}`);
