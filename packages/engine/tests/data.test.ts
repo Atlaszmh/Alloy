@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import { RecipesSchema } from '../src/data/schemas.js';
 
 describe('Data Loading & Validation', () => {
   it('should load and validate all data files without errors', () => {
@@ -189,6 +190,39 @@ describe('DataRegistry', () => {
       expect(balance.baseHP).toBe(200);
       expect(balance.fluxCosts.assignOrb).toBe(1);
       expect(balance.fluxCosts.combineOrbs).toBe(2);
+    });
+  });
+
+  describe('RecipesSchema — signature3', () => {
+    it('RecipesSchema accepts signature3 with 3 components', () => {
+      const ternary = [{
+        id: 'test_triple',
+        name: 'Test Triple',
+        type: 'signature3',
+        components: [
+          { kind: 'affix', id: 'fire_damage' },
+          { kind: 'affix', id: 'cold_damage' },
+          { kind: 'affix', id: 'lightning_damage' },
+        ],
+        outputAffixId: 'test_triple',
+        outputBonusEffects: [],
+        maxDepthContribution: 1,
+        tags: [],
+      }];
+      expect(() => RecipesSchema.parse(ternary)).not.toThrow();
+    });
+
+    it('RecipesSchema rejects signature3 with only 2 components', () => {
+      const bad = [{
+        id: 'bad', name: 'Bad', type: 'signature3',
+        components: [
+          { kind: 'affix', id: 'fire_damage' },
+          { kind: 'affix', id: 'cold_damage' },
+        ],
+        outputAffixId: 'bad', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      }];
+      expect(() => RecipesSchema.parse(bad)).toThrow();
     });
   });
 
