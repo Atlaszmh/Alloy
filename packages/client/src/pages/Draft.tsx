@@ -485,7 +485,7 @@ export function Draft() {
 
       {/* ═══ TOP: Opponent zone (hidden in run mode — no opponent drafting) ═══ */}
       {!isRunMode && (
-        <div ref={opponentZoneRef} style={{ flexShrink: 0 }}>
+        <div ref={opponentZoneRef} style={{ flexShrink: 0 }} data-screen-section="draft-opponent">
         <StockpileZone
           label="Opponent"
           orbs={filteredOpponentStockpile}
@@ -499,7 +499,7 @@ export function Draft() {
       )}
 
       {/* ═══ CENTER: Status bar (fixed height) ═══ */}
-      <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1" style={{ flexShrink: 0 }}>
+      <div className="my-1 flex flex-wrap items-center justify-between gap-1 px-1" style={{ flexShrink: 0 }} data-screen-section="draft-status">
         <div className="flex items-center gap-2">
           <div
             className={`rounded-lg px-3 py-1 text-xs font-bold ${
@@ -523,6 +523,8 @@ export function Draft() {
       {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
       <div
         ref={poolContainerRef}
+        data-primary-action="gem-pool"
+        data-screen-section="draft-pool"
         className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
         style={{
           boxShadow: 'var(--shadow-inset)',
@@ -593,7 +595,7 @@ export function Draft() {
 
       {/* ═══ Timer bar — hidden in run mode since runs are async (paced by the player) ═══ */}
       {!isRunMode && (
-        <div data-testid="draft-timer-bar" className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
+        <div data-testid="draft-timer-bar" data-screen-section="draft-timer" className="mx-1 my-0.5" style={{ height: 'clamp(28px, calc(var(--frame-h, 812px) * 0.04), 36px)', flexShrink: 0 }}>
           {isPlayerTurn ? (
             <Timer durationMs={DRAFT_TIMER_MS} onExpire={handleTimerExpire} className="w-full" />
           ) : (
@@ -607,7 +609,7 @@ export function Draft() {
       )}
 
       {/* ═══ BOTTOM: Player drop zone (fixed height) ═══ */}
-      <div ref={dropZoneRef} style={{ flexShrink: 0 }}>
+      <div ref={dropZoneRef} style={{ flexShrink: 0 }} data-screen-section="draft-drop-zone">
         <StockpileZone
           label="Your Gems"
           orbs={player0?.stockpile ?? []}
