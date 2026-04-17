@@ -336,7 +336,7 @@ export function Duel() {
       )}
 
       {/* ═══ TOP BAR (~5%): Round pips + Enemy HP + Timer ═══ */}
-      <div className="shrink-0 border-b border-surface-700 px-3 py-1.5">
+      <div className="shrink-0 border-b border-surface-700 px-3 py-1.5" data-screen-section="duel-enemy-hp">
         <div className="flex items-center gap-2">
           {/* Round pips */}
           <div className="flex items-center gap-1">
@@ -368,7 +368,7 @@ export function Duel() {
       </div>
 
       {/* ═══ ARENA (~50%): PixiJS canvas + playback controls overlay ═══ */}
-      <div className="relative" style={{ flex: '5 1 0%', minHeight: 120 }}>
+      <div className="relative" style={{ flex: '5 1 0%', minHeight: 120 }} data-screen-section="duel-arena">
         <div
           ref={canvasContainerRef}
           className="mx-auto h-full w-full overflow-hidden rounded-lg border border-surface-600"
@@ -384,6 +384,7 @@ export function Duel() {
             {playback.isPlaying ? 'Pause' : 'Play'}
           </button>
           <button
+            data-primary-action="skip"
             onClick={handleSkip}
             className="rounded bg-surface-600/80 px-3 py-1 text-sm text-surface-400 backdrop-blur-sm hover:bg-surface-500/80"
             style={{ fontFamily: 'var(--font-family-display)' }}
@@ -394,18 +395,18 @@ export function Duel() {
       </div>
 
       {/* ═══ PLAYER HP BAR (~5%) ═══ */}
-      <div className="shrink-0 border-t border-surface-700 px-3 py-1.5">
+      <div className="shrink-0 border-t border-surface-700 px-3 py-1.5" data-screen-section="duel-player-hp">
         <HPBar current={effectiveHpState.hp[0]} max={effectiveHpState.maxHp[0]} label="You" />
       </div>
 
       {/* ═══ COMBAT LOG (~40%) ═══ */}
-      <div style={{ flex: '4 1 0%', minHeight: 0 }} className="overflow-hidden">
+      <div style={{ flex: '4 1 0%', minHeight: 0 }} className="overflow-hidden" data-screen-section="duel-log">
         <CombatLogPanel events={visibleEvents} />
       </div>
 
       {/* Post-duel breakdown */}
       {showBreakdown && currentResult && (
-        <div style={{ animation: 'slide-up 0.2s ease-out' }} className="shrink-0 space-y-3 p-3">
+        <div style={{ animation: 'slide-up 0.2s ease-out' }} className="shrink-0 space-y-3 p-3" data-screen-section="duel-breakdown">
           <PostDuelBreakdown result={currentResult} combatLog={currentLog} />
           <button
             onClick={handleContinue}
