@@ -491,6 +491,25 @@
   },
 
   {
+    "id": "combustion",
+    "name": "Combustion",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_crit" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "combustion",
+    "outputBonusEffects": [
+      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 },
+      { "stat": "compound.combustion.critBurnStacks", "op": "flat", "value": 3 },
+      { "stat": "compound.combustion.fireDotBonus", "op": "flat", "value": 0.30 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "crit", "trigger"]
+  },
+
+  {
     "id": "cat_off_off",
     "name": "Offensive Fusion",
     "type": "category",
