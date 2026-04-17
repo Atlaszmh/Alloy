@@ -90,6 +90,8 @@ export function applyForgeAction(
       return applyUnsocketGem(state, action);
     case 'combine':
       return applyCombine(state, action, registry, combinationEngine);
+    case 'combine3':
+      return applyCombine3(state, action, registry, combinationEngine);
     case 'select_base_item':
       return applySelectBaseItem(state, action);
     case 'set_base_stats':
@@ -227,6 +229,44 @@ function applyCombine(
     ...state,
     stockpile: newStockpile,
   });
+}
+
+function applyCombine3(
+  state: ForgeState,
+  action: Extract<ForgeAction, { kind: 'combine3' }>,
+  _registry: DataRegistry,
+  combinationEngine?: CombinationEngine,
+): ForgeResult {
+  const idx1 = findGemIndex(state.stockpile, action.gemUid1);
+  if (idx1 === -1) return fail('First gem not found in stockpile');
+  const idx2 = findGemIndex(state.stockpile, action.gemUid2);
+  if (idx2 === -1) return fail('Second gem not found in stockpile');
+  const idx3 = findGemIndex(state.stockpile, action.gemUid3);
+  if (idx3 === -1) return fail('Third gem not found in stockpile');
+
+  const gem1 = state.stockpile[idx1];
+  const gem2 = state.stockpile[idx2];
+  const gem3 = state.stockpile[idx3];
+
+  if (!combinationEngine) {
+    return fail('combine3 requires a CombinationEngine');
+  }
+
+  try {
+    const outputUid = `combined3_${action.gemUid1}_${action.gemUid2}_${action.gemUid3}`;
+    const result = combinationEngine.combine3(gem1, gem2, gem3, outputUid, action.keepGemUid);
+
+    // Remove only consumed uids; ejected gem stays in stockpile.
+    let newStockpile = state.stockpile;
+    for (const uid of result.consumedUids) {
+      newStockpile = removeFromStockpile(newStockpile, uid);
+    }
+    newStockpile = [...newStockpile, result.gem];
+
+    return ok({ ...state, stockpile: newStockpile });
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 
 function applySelectBaseItem(
