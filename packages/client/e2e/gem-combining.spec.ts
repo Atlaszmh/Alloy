@@ -39,6 +39,23 @@ async function placeInSlots(page: Page, uidA: string, uidB: string) {
   await page.waitForTimeout(300);
 }
 
+async function placeInSlots3(page: Page, uidA: string, uidB: string, uidC: string) {
+  await page.evaluate(
+    ({ uidA, uidB, uidC }) => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const state = stores.forgeStore.getState();
+      const a = state.plan.stockpile.find((g: any) => g.uid === uidA);
+      const b = state.plan.stockpile.find((g: any) => g.uid === uidB);
+      const c = state.plan.stockpile.find((g: any) => g.uid === uidC);
+      state.setComboSlotByIndex(0, a);
+      state.setComboSlotByIndex(1, b);
+      state.setComboSlotByIndex(2, c);
+    },
+    { uidA, uidB, uidC },
+  );
+  await page.waitForTimeout(300);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Gem Combining E2E tests                                            */
 /*                                                                     */
@@ -237,20 +254,7 @@ test.describe('Gem Combining', () => {
       () => ((window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[]).map(g => g.uid),
     );
 
-    await page.evaluate(
-      ({ uidA, uidB, uidC }) => {
-        const stores = (window as any).__ZUSTAND_STORES__;
-        const state = stores.forgeStore.getState();
-        const a = state.plan.stockpile.find((g: any) => g.uid === uidA);
-        const b = state.plan.stockpile.find((g: any) => g.uid === uidB);
-        const c = state.plan.stockpile.find((g: any) => g.uid === uidC);
-        state.setComboSlotByIndex(0, a);
-        state.setComboSlotByIndex(1, b);
-        state.setComboSlotByIndex(2, c);
-      },
-      { uidA: 'c09-keep', uidB: 'c09-pair', uidC: 'c09-eject' },
-    );
-    await page.waitForTimeout(300);
+    await placeInSlots3(page, 'c09-keep', 'c09-pair', 'c09-eject');
 
     await expect(page.locator('[data-combine-btn]')).toBeEnabled();
     await page.locator('[data-combine-btn]').click();
