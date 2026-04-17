@@ -132,6 +132,21 @@ describe('DataRegistry', () => {
       expect(registry.getAllCombinations().length).toBeGreaterThanOrEqual(29);
     });
 
+    it('resolves Combustion via getCombination(chance_on_crit, fire_damage)', () => {
+      const combo = registry.getCombination('chance_on_crit', 'fire_damage');
+      expect(combo?.id).toBe('combustion');
+    });
+
+    it('resolves Thornfrost via getCombination(retribution_aura, cold_damage)', () => {
+      const combo = registry.getCombination('retribution_aura', 'cold_damage');
+      expect(combo?.id).toBe('thornfrost');
+    });
+
+    it('resolves Soul Eclipse via getCombination(soul_rend, soul_siphon)', () => {
+      const combo = registry.getCombination('soul_rend', 'soul_siphon');
+      expect(combo?.id).toBe('soul_eclipse');
+    });
+
     it('should have description fields on all combinations', () => {
       for (const combo of registry.getAllCombinations()) {
         expect(typeof combo.description).toBe('string');
