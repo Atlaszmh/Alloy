@@ -10,7 +10,7 @@ Extend the combine engine to support **3-gem combines** alongside the existing 2
 
 ## Architecture Decisions (approved)
 
-1. **Keep binary alongside ternary.** Binary combines remain the early-game/tutorial path; ternary is where the combinatorial depth lives. All 31 existing binary recipes continue to work unchanged.
+1. **Keep binary alongside ternary.** Binary combines remain the early-game/tutorial path; ternary is where the combinatorial depth lives. All 29 existing binary signature recipes (plus 6 category recipes) continue to work unchanged.
 2. **~15 new recipes in this pass**: 3 binary (ported from the superseded spec) + ~12 ternary spanning all shapes.
 3. **Precedence when the workbench has 3 gems:** ternary signature match wins if present; otherwise fall back to a binary signature/category match on the best pair and eject the third gem back to the stockpile (not consumed).
 4. **UI model:** the existing 3-slot workbench stays as-is. No new layouts.
@@ -48,7 +48,9 @@ const RecipeDefinitionSchema = z.object({
 });
 ```
 
-Existing 31 recipes keep `type: "signature"` with 2 components — no data migration. New ternary recipes use `type: "signature3"` with 3 components.
+Existing 29 signature recipes keep `type: "signature"` with 2 components — no data migration. New ternary recipes use `type: "signature3"` with 3 components.
+
+**TS interface mirror** (`packages/engine/src/combine/recipe-registry.ts`, lines 10–20) updated in lock-step: `type: 'signature' | 'signature3' | 'category'` and `components?: [RecipeComponent, RecipeComponent] | [RecipeComponent, RecipeComponent, RecipeComponent]`.
 
 ### 2. RecipeRegistry — ternary keyspace + lookup
 
@@ -86,21 +88,37 @@ combine3(
 
 Algorithm:
 
-1. Reject if any gem is non-combinable (parallel to binary).
+1. Reject if any gem is non-combinable (parallel to binary). **UI-level invariant:** non-combinable gems should never enter the workbench in the first place — the forge gates gem placement on the same `combinable` flag used by the binary engine. `combine3` mirrors binary's throw-on-violation for defensive purposes.
 2. Record a ternary discovery attempt: `discovery.recordAttempt3(a.affixId, b.affixId, c.affixId)`.
 3. **Try ternary signature match** via `registry.findTernaryRecipe(a, b, c)`. If hit:
    - Average quality over 3 gems: `(Q(a) + Q(b) + Q(c)) / 3`.
-   - Matching-rarity bonus applies only if **all three** rarities match (unanimous). Use the existing `matchingRarityBonus` from `CombineConfig`.
-   - `recipeDepth = max(a, b, c).recipeDepth + recipe.maxDepthContribution`.
+   - Matching-rarity bonus applies only if **all three rarities are strictly equal** (e.g., all `rare`; tier differences are irrelevant — only rarity level matters, matching the binary engine's convention). Use the existing `matchingRarityBonus` from `CombineConfig`.
+   - `recipeDepth = Math.max(a.recipeDepth, b.recipeDepth, c.recipeDepth) + recipe.maxDepthContribution`.
    - Merge tags from recipe + all three gems, dedup.
    - Emit `{ gem, layer: 'signature', recipeId, isNewDiscovery }`.
-4. **If no ternary match → delegate to "best binary pair + eject":**
-   - Enumerate the 3 pairs: (A,B), (A,C), (B,C).
-   - For each pair, call the existing binary `combine()` logic **without committing discovery attempts** — use a cloned `DiscoveryState` for the probe.
-   - Pick the pair that yields the highest-layer result: prefer `signature` > `category` > `generic`. Break ties by the pair's sum of effective values.
-   - Re-run the real binary `combine()` on the chosen pair against the actual discovery state (records the discovery attempt for that pair, consumes those 2 gems).
-   - The third gem is not consumed — it stays in the stockpile. The plan-layer (`planCombine3`) is responsible for eject bookkeeping.
-5. If even the fallback can't produce anything (e.g., all 3 gems are at max tier/rarity and same affix), throw — parallel to the binary engine's edge case.
+4. **If no ternary match → "KEEP-anchored binary fallback + eject":**
+   - The KEEP gem (slot 0 at the UI level; surfaced by `keepGemUid` at the engine level) must participate in the combined pair — user intent says the KEEP gem is preserved/upgraded. This rules out the non-KEEP pair (B, C).
+   - Enumerate only the 2 pairs involving KEEP: `(KEEP, other₁)` and `(KEEP, other₂)`. If `keepGemUid` is unset, default to `gemA` as KEEP (matches binary engine convention).
+   - For each pair, probe via `previewCombine()` (which already uses a cloned `DiscoveryState` internally) to rank without recording attempts.
+   - Rank by layer preference `signature` > `category` > `generic`; break ties by pair's sum of `calculateEffectiveValue`.
+   - Re-run the real binary `combine()` on the winning pair against the authoritative `DiscoveryState` — this consumes those 2 gems and records the pair's discovery attempt.
+   - The third gem (the one not in the winning pair) is ejected: not consumed, not locked, remains in stockpile. The plan-layer (`planCombine3`) records the ejected uid in the action log.
+5. If the KEEP gem itself is non-combinable or both probe pairs throw (e.g., all 3 gems are at max tier/rarity and same affix), throw — parallel to the binary engine's edge case.
+
+**`CombineResult` extension (additive):**
+
+```ts
+export interface CombineResult {
+  gem: GemInstance;
+  layer: CombineLayer;
+  recipeId?: string;
+  isNewDiscovery: boolean;
+  consumedUids: string[];  // NEW — uids the caller should remove from stockpile
+  ejectedUid?: string;     // NEW — uid to leave in stockpile (combine3 fallback only)
+}
+```
+
+For `combine()` (binary), `consumedUids = [gemA.uid, gemB.uid]` and `ejectedUid` is undefined. For `combine3()`, `consumedUids` has all 3 uids on ternary match, or 2 on fallback with the third reported via `ejectedUid`. This keeps the plan layer a thin projection — it doesn't re-derive consumption from `layer`.
 
 **New preview method:**
 
@@ -118,10 +136,12 @@ export interface CombinePreview {
   layer: CombineLayer;
   gem: GemInstance | null;
   recipeId?: string;
-  fallbackPair?: [string, string]; // NEW — populated only by previewCombineTriple
-  ejectedUid?: string;              // NEW — gem that would be returned to stockpile
+  fallbackPair?: [string, string]; // NEW — populated only by previewCombineTriple, and only when the ternary recipe did NOT match (i.e., fallback path would fire)
+  ejectedUid?: string;              // NEW — gem that would be returned to stockpile. Undefined when a ternary signature match consumes all 3 gems; defined only when fallbackPair is also defined.
 }
 ```
+
+Binary preview callers do not see either new field (they continue to call `previewCombine`, which never sets them).
 
 ### 4. Quality calculation generalization
 
@@ -135,7 +155,7 @@ export interface CombinePreview {
 
 `packages/engine/src/combine/discovery-state.ts`:
 
-- Add `recordAttempt3(idA, idB, idC)` and `hasAttempted3(idA, idB, idC)`. Key = `[idA, idB, idC].sort().join('+')` — same namespace as binary (a 3-element key can't collide with a 2-element key because `+` separator count differs).
+- Add `recordAttempt3(idA, idB, idC)` and `hasAttempted3(idA, idB, idC)`. Key = `[idA, idB, idC].sort().join('+')` — same namespace as binary (a 3-element key can't collide with a 2-element key because `+` separator count differs). **Assumes no `+` in affix/recipe IDs** — verified against current `affixes.json` and `recipes.json` at spec time; enforce with a test that walks both files and asserts absence.
 - Serialize/deserialize: include 3-tuple attempts in the same `attemptedCombos` array (format is just strings, existing data round-trips).
 
 ### 6. ForgeAction — new variant
@@ -155,10 +175,11 @@ export type ForgeAction =
 `packages/engine/src/forge/forge-plan.ts`:
 
 - Mirror `planCombine`. Find all 3 gems in stockpile, verify combinable, call `engine.combine3(...)`.
+- The engine distinguishes the two outcomes via a new field on `CombineResult`: `consumedUids: string[]` — the uids that should be removed from stockpile. `combine3` populates it with all 3 when a ternary signature matches, or with the 2 members of the winning pair when fallback fires. (This avoids the plan layer having to re-derive consumption from `layer`.)
 - **Consumption rules:**
-  - If `result.layer !== 'generic'` from a ternary signature: consume all 3 gems, push the output gem.
-  - If fallback fired (binary pair + eject): consume only the 2 gems the binary combine used; the third remains in stockpile unchanged. Record the ejected uid in the action log for UI feedback.
-- Lock all 3 source uids? **No** — only lock the uids actually consumed. The ejected gem is untouched and can still participate in subsequent combines.
+  - Ternary signature matched (`findTernaryRecipe` hit): `consumedUids` has all 3 uids; push output gem, lock all 3 source uids.
+  - Fallback fired: `consumedUids` has the 2 uids of the winning pair; push output gem, lock only those 2; the third uid remains in stockpile unchanged.
+  - In both cases: `next.actionLog.push(action)` including the ejected uid when present (UI reads this to show an eject toast).
 
 `packages/engine/src/forge/forge-state.ts`:
 
@@ -168,20 +189,23 @@ export type ForgeAction =
 
 `packages/client/src/pages/Forge.tsx handleCombine`:
 
+**Invariant:** slot 0 must be filled for any combine to fire. If `keep` is null, the handler returns early regardless of other slot state (matches current behavior).
+
 ```ts
-const filled = comboSlots.filter((s): s is GemInstance => s !== null);
 const keep = comboSlots[0];
 if (!keep) return;
+const filled = comboSlots.filter((s): s is GemInstance => s !== null);
 
 if (filled.length >= 3) {
-  const [, b, c] = comboSlots;
+  const b = comboSlots[1]!;
+  const c = comboSlots[2]!;
   const result = applyAction(
-    { kind: 'combine3', gemUid1: keep.uid, gemUid2: b!.uid, gemUid3: c!.uid, keepGemUid: keep.uid },
+    { kind: 'combine3', gemUid1: keep.uid, gemUid2: b.uid, gemUid3: c.uid, keepGemUid: keep.uid },
     registry,
   );
   // ...
 } else if (filled.length === 2) {
-  // existing binary path
+  // existing binary path (unchanged)
 }
 ```
 
@@ -195,7 +219,7 @@ if (filled.length >= 3) {
 
 `ResultBox` preview rendering already accepts a `CombinePreview`; no changes needed beyond reading optional `ejectedUid` / `fallbackPair` to surface a subtle "will eject gem X" hint when fallback fires. That hint is a nice-to-have — if deferred, the UI still behaves correctly (the user just doesn't get the warning until commit-time).
 
-### 9. AI strategies — triple-aware evaluation
+### 9. AI strategies — deferred
 
 Call sites that currently use `registry.getCombination(a, b)` for evaluating combo potential:
 
@@ -203,9 +227,9 @@ Call sites that currently use `registry.getCombination(a, b)` for evaluating com
 - `packages/engine/src/ai/strategies/forge-strategy.ts:159, 436, 584, 760`
 - `packages/engine/src/ai/strategies/draft-strategy.ts:288`
 
-**Approach:** add a parallel `registry.getTernaryCombination(a, b, c)` helper and, at each call site that iterates stockpile pairs, add a triple loop for eligible 3-gem combinations. To bound the search, only consider triples where each gem is distinct by uid and at least one gem is part of a promising pair (i.e., don't evaluate every C(n,3) — prune by existing pair signal).
+**Decision: not in this spec.** Extending these 8 call sites to evaluate ternary triples requires pruning heuristics (combinatorial blow-up: `C(n, 3)` vs. `C(n, 2)` over a stockpile of 10–20 gems) and is the most novel part of the work. Graceful degradation applies — an AI that only considers binary combos misses ternary opportunities but doesn't break; player-facing ternary combines work fully without AI awareness.
 
-This is the most finicky part of the implementation. The spec's position: **each call site is a small local edit**, and the AI impact is graceful degradation — if we miss a triple, the AI just doesn't see that opportunity; it doesn't break. An implementation plan can batch these changes.
+This is listed as a follow-up spec in Non-Goals. The implementation plan for *this* spec will leave AI call sites untouched; a separate spec (`ai-ternary-evaluation-design.md`) drives the AI extension.
 
 ### 10. DataRegistry helpers
 
@@ -370,9 +394,10 @@ Each ternary recipe also needs a `CompoundAffixDef` entry in `combinations.json`
 
 ## Pre-existing limitations (inherited, out of scope)
 
-1. **`registry.getAffix(compoundId)` throws.** Compounds aren't in `affixes.json`; any socketed compound gem crashes `stat-calculator.applyEquippedSlots` at line 328. Affects all 31 existing compounds equally; fixing is a separate workstream.
+1. **`registry.getAffix(compoundId)` throws.** Compounds aren't in `affixes.json`; any socketed compound gem crashes `stat-calculator.applyEquippedSlots` at line 328. Affects all 29 existing compounds equally; fixing is a separate workstream.
 2. **`compound.*` stat keys are inert at runtime.** No duel code reads them to produce procs. All 15 new recipes' effects will be equally inert until the compound-procs wiring lands.
 3. **Flux cost.** Ternary combines use the existing `fluxCosts.combineOrbs`. Separate cost key deferred.
+4. **`forge-state.ts` legacy non-engine fallback** (lines 203–224) uses `registry.getCombination` when no `CombinationEngine` is passed. In production this path is dead (the engine is always threaded in). `combine3` intentionally does not implement a matching legacy fallback. If a future caller omits the engine on a `combine3` action, it fails — acceptable, mirrors the dead-path convention.
 
 ## Testing Strategy
 
@@ -382,9 +407,12 @@ New file: `packages/engine/tests/combination-engine-ternary.test.ts`
 
 - **Ternary signature hit (each shape):** BBB, BBC, BCC, CCC — for each, build the right gem trio, call `combine3`, assert `layer === 'signature'`, correct `outputAffixId`, correct `outputBonusEffects`, correct tags merge, `recipeDepth = max(parents) + maxDepthContribution`.
 - **Ordering invariance:** combine the same trio in all 6 permutations; all yield the same result.
-- **Fallback to binary pair:** build a trio with no ternary match but a binary hit for 2 of the 3 gems; assert `combine3` returns the binary result, the ejected uid is the third gem, plan layer leaves it in stockpile.
-- **Fallback with no recipe anywhere:** build a trio that can only generic-upgrade; assert sensible generic fallback on the best pair (typically KEEP + highest-EV other), third ejected.
-- **Unanimous rarity bonus:** 3 gems all rare → quality × (1 + bonus); 2 rare + 1 magic → no bonus applied.
+- **Fallback to binary pair (KEEP-anchored):** build a trio with no ternary match but a binary hit on `(KEEP, other₁)`; assert `combine3` returns that binary result, `consumedUids` has the pair, `ejectedUid = other₂.uid`, plan layer leaves other₂ in stockpile.
+- **Fallback prefers higher layer when both KEEP pairs hit:** trio where `(KEEP, other₁)` has a category match and `(KEEP, other₂)` has a signature match; assert signature wins.
+- **Fallback EV tie-break:** trio where both KEEP pairs hit the same layer; assert higher sum-of-EV wins.
+- **Fallback non-KEEP pair is never chosen:** trio where only `(other₁, other₂)` has a signature match; KEEP has no match with either other; assert the engine falls through to a generic KEEP-anchored combine (not the non-KEEP pair).
+- **Fallback with no recipe anywhere:** build a trio that can only generic-upgrade; assert sensible generic fallback on the KEEP-anchored pair with higher EV; third gem ejected.
+- **Unanimous rarity bonus:** 3 gems all `rare` rarity → quality × (1 + bonus). Mixed rarities (e.g., 2 rare + 1 magic) → no bonus. **Tiers are irrelevant** to the bonus — only rarity level matters (matches binary convention). Tests include a case "3 rare gems at tiers 1, 3, 4 → bonus applies" to pin this invariant.
 - **Non-combinable rejection:** any gem with `combinable: false` throws.
 - **Discovery attempt recording:** ternary attempt key written; repeated combine records same key (no dup).
 
@@ -425,11 +453,12 @@ All 23 existing tests in `combination-engine.test.ts` continue to pass untouched
 2. Engine combine3 path (`combination-engine.ts`, `combine-quality.ts`).
 3. Plan + action layer (`forge-plan.ts`, `forge-state.ts`, `types/forge-action.ts`).
 4. UI wiring (`Forge.tsx handleCombine`, `CombineWorkbench.tsx computeGlowSignal`).
-5. AI triple-aware evaluators (one file at a time; incremental).
-6. Content authoring: 3 binary + 12 ternary recipes in `recipes.json` + matching `combinations.json` entries.
-7. Tests along the way (TDD) + full suite regression pass.
+5. Content authoring: 3 binary + 12 ternary recipes in `recipes.json` + matching `combinations.json` entries. The 11 ternary recipes without full JSON in this spec get authored here, balance-iterated via the simulation tool.
+6. Tests along the way (TDD) + full suite regression pass.
 
 Each step lands behind the existing binary path without breaking it — the new code is additive. A feature flag is unnecessary because `type: "signature3"` only activates new behavior when data is present.
+
+AI triple-aware evaluation is a separate spec; this implementation does not touch AI call sites.
 
 ## Non-Goals
 
@@ -439,8 +468,11 @@ Each step lands behind the existing binary path without breaking it — the new 
 - New category recipes or category rules.
 - Rebalancing existing compounds.
 - UI redesign of the forge screen — the current 3-slot workbench is sufficient.
+- **AI triple-aware evaluation** — deferred to a follow-up spec (`ai-ternary-evaluation-design.md`). Graceful degradation applies: binary-only AI still works, just misses ternary opportunities.
 - **Capstone visual treatment** — the `"capstone"` tag is written into data but the UI doesn't distinguish it. Follow-up.
 - **Ejected-gem UI hint** — `CombinePreview.ejectedUid` is exposed but not required to surface visually in this pass; a commit-time toast is sufficient.
+- **Authoring the final 11 ternary recipe JSONs.** Only 4 exemplars are fully specified in this doc; the remaining 11 named recipes are component-specified but need stat-modifier JSON authored during the implementation plan. The plan should treat "author remaining 11 ternary recipe JSONs + matching combinations.json entries" as a distinct milestone, with balance iteration driven by the simulation tool in `packages/tools/`.
+- **Telemetry/logging parity.** Binary combines play sound effects on merge/fail and emit an action-log entry. Ternary combines reuse the same sound hooks (`playSound('combineMerge')` / `'combineFail'`) and log entries; no new telemetry surface added in this spec.
 
 ## Open Questions
 
