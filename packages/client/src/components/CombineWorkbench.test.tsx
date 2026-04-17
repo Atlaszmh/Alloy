@@ -57,4 +57,27 @@ describe('computeGlowSignal', () => {
     const slots: any = [{ affixId: 'fire_damage' }, null, null];
     expect(computeGlowSignal(slots, registry)).toBe('none');
   });
+
+  it('ternary wins when both ternary and binary pair would match', () => {
+    // Pins the precedence invariant: ternary is checked first; a matching binary
+    // pair must not override it. Regressions that reorder the checks get caught.
+    const registry = makeRegistry({
+      ternary: { 'cold_damage,fire_damage,lightning_damage': { id: 'meltdown' } },
+      binary: { 'cold_damage,fire_damage': { id: 'some_binary' } },
+    });
+    const slots: any = [
+      { affixId: 'fire_damage' }, { affixId: 'cold_damage' }, { affixId: 'lightning_damage' },
+    ];
+    expect(computeGlowSignal(slots, registry)).toBe('gold');
+  });
+
+  it('handles duplicate affix IDs across slots without crashing', () => {
+    // Defensive: if the UI ever lets two slots carry gems of the same affix,
+    // the signal function must not throw. Lookup returns null → white.
+    const registry = makeRegistry({});
+    const slots: any = [
+      { affixId: 'fire_damage' }, { affixId: 'fire_damage' }, { affixId: 'fire_damage' },
+    ];
+    expect(computeGlowSignal(slots, registry)).toBe('white');
+  });
 });
