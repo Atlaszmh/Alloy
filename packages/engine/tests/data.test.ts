@@ -284,6 +284,24 @@ describe('DataRegistry', () => {
       }
     });
 
+    it('all recipe components reference valid affix or recipe IDs', () => {
+      // recipes.json uses typed components ({kind:"affix"|"recipe", id}). This test
+      // guards the kind:"recipe" path that combinations.json referential test can't see.
+      const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      const recipeRegistry = registry.getRecipeRegistry();
+      const recipeIds = new Set(recipeRegistry.getAll().map(r => r.id));
+      for (const recipe of recipeRegistry.getAll()) {
+        if (!recipe.components) continue;
+        for (const comp of recipe.components) {
+          const validSet = comp.kind === 'affix' ? affixIds : recipeIds;
+          expect(
+            validSet.has(comp.id),
+            `Recipe "${recipe.id}" references unknown ${comp.kind} component "${comp.id}"`
+          ).toBe(true);
+        }
+      }
+    });
+
     it('all synergy required affixes reference valid affix IDs', () => {
       const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
       const synergies = registry.getAllSynergies();
