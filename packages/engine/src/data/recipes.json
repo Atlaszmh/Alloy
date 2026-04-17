@@ -630,8 +630,8 @@
     "type": "signature3",
     "components": [
       { "kind": "recipe", "id": "ignite" },
-      { "kind": "affix",  "id": "chance_on_crit" },
-      { "kind": "affix",  "id": "fire_damage" }
+      { "kind": "affix", "id": "chance_on_crit" },
+      { "kind": "affix", "id": "fire_damage" }
     ],
     "outputAffixId": "detonator",
     "outputBonusEffects": [
@@ -649,8 +649,8 @@
     "type": "signature3",
     "components": [
       { "kind": "recipe", "id": "frostbite" },
-      { "kind": "affix",  "id": "chance_on_block" },
-      { "kind": "affix",  "id": "cold_damage" }
+      { "kind": "affix", "id": "chance_on_block" },
+      { "kind": "affix", "id": "cold_damage" }
     ],
     "outputAffixId": "frost_nova",
     "outputBonusEffects": [
@@ -669,8 +669,8 @@
     "type": "signature3",
     "components": [
       { "kind": "recipe", "id": "static_discharge" },
-      { "kind": "affix",  "id": "attack_speed" },
-      { "kind": "affix",  "id": "lightning_damage" }
+      { "kind": "affix", "id": "attack_speed" },
+      { "kind": "affix", "id": "lightning_damage" }
     ],
     "outputAffixId": "thunderbrand",
     "outputBonusEffects": [
@@ -688,8 +688,8 @@
     "type": "signature3",
     "components": [
       { "kind": "recipe", "id": "envenom" },
-      { "kind": "affix",  "id": "poison_damage" },
-      { "kind": "affix",  "id": "chance_on_hit" }
+      { "kind": "affix", "id": "poison_damage" },
+      { "kind": "affix", "id": "chance_on_hit" }
     ],
     "outputAffixId": "plague_carrier",
     "outputBonusEffects": [
@@ -708,7 +708,7 @@
     "components": [
       { "kind": "recipe", "id": "desperation" },
       { "kind": "recipe", "id": "blood_frenzy" },
-      { "kind": "affix",  "id": "attack_speed" }
+      { "kind": "affix", "id": "attack_speed" }
     ],
     "outputAffixId": "oathbound_fury",
     "outputBonusEffects": [
@@ -729,7 +729,7 @@
     "components": [
       { "kind": "recipe", "id": "immolation" },
       { "kind": "recipe", "id": "reactive_shield" },
-      { "kind": "affix",  "id": "fire_damage" }
+      { "kind": "affix", "id": "fire_damage" }
     ],
     "outputAffixId": "phoenix_embers",
     "outputBonusEffects": [
@@ -748,7 +748,7 @@
     "components": [
       { "kind": "recipe", "id": "frostbite" },
       { "kind": "recipe", "id": "fortress" },
-      { "kind": "affix",  "id": "cold_damage" }
+      { "kind": "affix", "id": "cold_damage" }
     ],
     "outputAffixId": "crystal_aegis",
     "outputBonusEffects": [
