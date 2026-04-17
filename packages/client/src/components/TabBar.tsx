@@ -27,6 +27,7 @@ export function TabBar({ onSettingsOpen, onDevOpen, onConfirmLeave, isInActiveGa
 
   return (
     <div
+      data-tabbar
       style={{
         height: 'var(--tabbar-h)',
         flexShrink: 0,
