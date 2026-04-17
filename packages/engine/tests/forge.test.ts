@@ -10,7 +10,7 @@ import { CombinationEngine } from '../src/combine/combination-engine.js';
 import { DiscoveryState } from '../src/combine/discovery-state.js';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance, data.recipes);
 const balance = data.balance;
 
 /** Helper: creates mock gems for testing. */
