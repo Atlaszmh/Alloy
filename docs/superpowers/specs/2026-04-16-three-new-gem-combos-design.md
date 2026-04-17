@@ -186,6 +186,12 @@ Append 3 `CompoundAffixDef` entries (metadata — flavor text, `fluxCost`, `slot
 
 Note on the `components` field: the schema is `[string, string]` with no `kind` discriminator. For `Thornfrost` and `Soul Eclipse`, we list the parent recipe IDs as strings (`"retribution_aura"`, `"soul_rend"`, `"soul_siphon"`). The field is documentation/UI-only — the authoritative input identity lives in `recipes.json`. `registry.getCombination(affixId1, affixId2)` is used for UI metadata lookup from two gem affixIds; because a compound gem's `affixId` equals the recipe's `outputAffixId`, `getCombination('retribution_aura', 'cold_damage')` correctly resolves to the Thornfrost entry.
 
+**Lookup key formats** (sorted, `+`-joined, per `DataRegistry.combinationKey`):
+
+- Combustion: `"chance_on_crit+fire_damage"`
+- Thornfrost: `"cold_damage+retribution_aura"`
+- Soul Eclipse: `"soul_eclipse"` is looked up by `id` via `getCombinationById`; the pair key is `"soul_rend+soul_siphon"`
+
 ```json
 {
   "id": "combustion",
@@ -260,7 +266,7 @@ Note on the `components` field: the schema is `[string, string]` with no `kind` 
 
 ### Higher `fluxCost` / `slotCost` on Soul Eclipse
 
-Soul Eclipse is a depth-3 capstone and demands more investment. Bumping its `fluxCost` from 2 → 3 and `slotCost` from 2 → 3 reflects that in the forge economy without requiring new balance machinery.
+Soul Eclipse is a depth-3 capstone and demands more investment. It uses `fluxCost: 3` / `slotCost: 3` (vs. the 2/2 standard on existing compounds), reflecting its capstone position in the forge economy without requiring new balance machinery.
 
 ## Implementation Sequence
 
@@ -281,7 +287,11 @@ Soul Eclipse is a depth-3 capstone and demands more investment. Bumping its `flu
 - **Thornfrost:** Build a Retribution Aura gem (mark `sourceRecipe: 'retribution_aura'`); combine with a `cold_damage` gem; assert signature match on `recipe:retribution_aura` + `affix:cold_damage`. Verify `recipeDepth = retribution_aura.recipeDepth + 1` and tag merge.
 - **Soul Eclipse:** Build Soul Rend and Soul Siphon gems; combine; assert recipe match on both `recipe:` components; `recipeDepth = max(parents) + 2`; capstone tag present.
 - **Asymmetry / ordering:** For each, swap arg order; verify `findSignatureRecipe` still resolves.
-- **No incorrect matches:** `combine(retribution_aura gem, fire_damage gem)` must NOT trigger Thornfrost; falls through to generic/category.
+- **No incorrect matches (one per combo):**
+  - `combine(chance_on_crit gem, cold_damage gem)` must NOT trigger Combustion.
+  - `combine(retribution_aura gem, fire_damage gem)` must NOT trigger Thornfrost.
+  - `combine(soul_rend gem, fire_damage gem)` must NOT trigger Soul Eclipse.
+  - Each falls through to generic/category as appropriate.
 
 **Existing 23 tests in `combination-engine.test.ts` must still pass** — none of the changes touch engine code paths.
 
@@ -302,8 +312,9 @@ These are *starting* values. Balance iteration should happen after combat hook-u
 - Adding new category recipes (`cat_*`) or category rules.
 - Rebalancing existing compounds.
 - UI work beyond what the existing combine workbench already does (compound + basic combines are already expressible in the UI today; Soul Eclipse relies on the user dragging two compound gems together, which the forge already supports).
+- **Capstone UI badge for Soul Eclipse** — the `"capstone"` tag is written into the data but the UI treats all tags uniformly today. A distinct capstone badge is a trivial follow-up and not required for this spec to land.
+- **Discovery-reward participation** — discovery bonuses (flux, life recovery) already apply uniformly through `DiscoveryState`. No combo-specific wiring required; these three combos participate automatically.
 
 ## Open Questions
 
-1. **Soul Eclipse is a true capstone** — do we want to signal that to the player somehow (e.g., special "capstone" tag rendered differently in the inspect panel)? The `"capstone"` tag is included in the spec, but the UI currently treats all tags the same. If desired, a follow-up can add a capstone badge — this is trivial and deferred.
-2. **Discovery rewards** — the discovery system exists (`DiscoveryState`); should first-time discoveries of these specific combos grant extra flux / life recovery per `lifeRecovery.discoveryThreshold` in balance config? This is existing infrastructure applying uniformly; no change needed for the combos to participate.
+None. Earlier drafts surfaced two potential follow-ups (a capstone UI badge for Soul Eclipse, and whether these combos should participate in discovery-based life recovery); both resolved as "no change needed for this spec" and are listed under Non-Goals.
