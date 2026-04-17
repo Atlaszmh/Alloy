@@ -10,9 +10,9 @@ export interface RecipeComponent {
 export interface RecipeDefinition {
   id: string;
   name: string;
-  type: 'signature' | 'category';
-  components?: [RecipeComponent, RecipeComponent]; // For signature recipes
-  categoryRule?: { inputA: string; inputB: string }; // For category recipes
+  type: 'signature' | 'signature3' | 'category';
+  components?: [RecipeComponent, RecipeComponent] | [RecipeComponent, RecipeComponent, RecipeComponent];
+  categoryRule?: { inputA: string; inputB: string };
   outputAffixId: string;
   outputBonusEffects: StatModifier[];
   maxDepthContribution: number;
