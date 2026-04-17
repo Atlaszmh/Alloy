@@ -74,3 +74,34 @@ describe('DiscoveryState', () => {
     expect(ds.totalDiscoveryCount()).toBe(4);
   });
 });
+
+describe('DiscoveryState — ternary attempts', () => {
+  it('records a ternary attempt with a sorted-triple key', () => {
+    const ds = new DiscoveryState();
+    ds.recordAttempt3('fire_damage', 'cold_damage', 'lightning_damage');
+    expect(ds.hasAttempted3('fire_damage', 'cold_damage', 'lightning_damage')).toBe(true);
+  });
+
+  it('ternary attempt is order-invariant', () => {
+    const ds = new DiscoveryState();
+    ds.recordAttempt3('c', 'a', 'b');
+    expect(ds.hasAttempted3('a', 'b', 'c')).toBe(true);
+    expect(ds.hasAttempted3('b', 'c', 'a')).toBe(true);
+  });
+
+  it('ternary and binary attempt namespaces do not collide', () => {
+    const ds = new DiscoveryState();
+    ds.recordAttempt('a', 'b');
+    ds.recordAttempt3('a', 'b', 'c');
+    expect(ds.hasAttempted('a', 'b')).toBe(true);
+    expect(ds.hasAttempted3('a', 'b', 'c')).toBe(true);
+    expect(ds.hasAttempted3('a', 'b', 'b')).toBe(false);
+  });
+
+  it('serialize/deserialize round-trips ternary attempts', () => {
+    const ds = new DiscoveryState();
+    ds.recordAttempt3('x', 'y', 'z');
+    const restored = DiscoveryState.deserialize(ds.serialize());
+    expect(restored.hasAttempted3('x', 'y', 'z')).toBe(true);
+  });
+});
