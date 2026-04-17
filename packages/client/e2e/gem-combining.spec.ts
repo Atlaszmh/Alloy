@@ -223,4 +223,56 @@ test.describe('Gem Combining', () => {
     // short-circuit tryCategory when gemA.affixId === gemB.affixId, or
     // genericSameType needs to run before category fusion for same-affix pairs.
   });
+
+  test('C09: 3-gem fallback consumes winning pair, leaves third in stockpile', async ({ page }) => {
+    // (chance_on_hit + fire_damage) forms Ignite; cold_damage is unrelated → ejected.
+    await startRunViaStore(page, { round: 1, phase: 'forge' });
+    await setupForgeWithGems(page, [
+      makeGem('c09-keep', 'chance_on_hit'),
+      makeGem('c09-pair', 'fire_damage'),
+      makeGem('c09-eject', 'cold_damage'),
+    ]);
+
+    const uidsBefore = await page.evaluate(
+      () => ((window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[]).map(g => g.uid),
+    );
+
+    await page.evaluate(
+      ({ uidA, uidB, uidC }) => {
+        const stores = (window as any).__ZUSTAND_STORES__;
+        const state = stores.forgeStore.getState();
+        const a = state.plan.stockpile.find((g: any) => g.uid === uidA);
+        const b = state.plan.stockpile.find((g: any) => g.uid === uidB);
+        const c = state.plan.stockpile.find((g: any) => g.uid === uidC);
+        state.setComboSlotByIndex(0, a);
+        state.setComboSlotByIndex(1, b);
+        state.setComboSlotByIndex(2, c);
+      },
+      { uidA: 'c09-keep', uidB: 'c09-pair', uidC: 'c09-eject' },
+    );
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('[data-combine-btn]')).toBeEnabled();
+    await page.locator('[data-combine-btn]').click();
+    await page.waitForTimeout(500);
+
+    const output = await page.evaluate((prev) => {
+      const stockpile = (window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[];
+      return stockpile.find(g => !prev.includes(g.uid)) ?? null;
+    }, uidsBefore);
+    expect(output).not.toBeNull();
+    expect(output.affixId).toBe('ignite');
+
+    const state = await page.evaluate(() => {
+      const stockpile = (window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[];
+      return {
+        hasKeep: stockpile.some(g => g.uid === 'c09-keep'),
+        hasPair: stockpile.some(g => g.uid === 'c09-pair'),
+        hasEject: stockpile.some(g => g.uid === 'c09-eject'),
+      };
+    });
+    expect(state.hasKeep).toBe(false);
+    expect(state.hasPair).toBe(false);
+    expect(state.hasEject).toBe(true);
+  });
 });
