@@ -123,7 +123,6 @@ export class CombinationEngine {
     gemA: GemInstance,
     gemB: GemInstance,
     gemC: GemInstance,
-    keepGemUid?: string,
   ): CombinePreview | null {
     if (!gemA.combinable || !gemB.combinable || !gemC.combinable) return null;
 
@@ -138,7 +137,7 @@ export class CombinationEngine {
     );
 
     try {
-      const result = tempEngine.combine3(gemA, gemB, gemC, '__preview__', keepGemUid);
+      const result = tempEngine.combine3(gemA, gemB, gemC, '__preview__');
       const preview: CombinePreview = {
         known: ternaryRecipe ? ternaryKnown : false,
         layer: result.layer,
