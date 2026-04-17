@@ -1,7 +1,7 @@
 # Three New Gem Combos — Design Spec
 
 **Date:** 2026-04-16
-**Status:** Draft, pending review
+**Status:** ⚠️ Superseded 2026-04-17 by `2026-04-17-ternary-combine-system-design.md`. The three binary recipes defined here (Combustion, Thornfrost, Soul Eclipse) are ported verbatim into the ternary-system spec's content roster; implementation should follow the new spec, not this one.
 
 ## Purpose
 
