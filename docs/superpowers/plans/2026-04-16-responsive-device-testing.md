@@ -428,11 +428,13 @@ git commit -m "test(client): add data-tabbar hook for responsive probes"
 
 ---
 
-### Task 8: Add `globalSetup` to Playwright config
+### Task 8: Wire globalSetup + dedicated `responsive` Playwright project
 
 **Files:**
 - Create: `packages/client/e2e/responsive/global-setup.ts`
 - Modify: `packages/client/playwright.config.ts`
+
+The existing config has 4 device projects (iphone-se, iphone-15-pro, pixel-7, desktop). Without scoping, every responsive spec would run 4× (once per project) and duplicate-append findings to the report — same `(screen, viewport, probe)` tuple appearing 4 times. The fix is two-part: add a single dedicated `responsive` project that runs only the responsive directory, and exclude the responsive directory from the 4 device projects.
 
 - [ ] **Step 1: Write the global-setup script**
 
@@ -445,31 +447,127 @@ export default async function globalSetup(): Promise<void> {
 }
 ```
 
-- [ ] **Step 2: Wire it into `playwright.config.ts`**
+- [ ] **Step 2: Edit `playwright.config.ts`**
 
-Add a `globalSetup` field and a new `responsive` test directory entry. Open `packages/client/playwright.config.ts` and add the `globalSetup` field at the top of the `defineConfig` object:
+Open `packages/client/playwright.config.ts`. Make three changes:
+
+1. Add `globalSetup: './e2e/responsive/global-setup.ts'` near the top of `defineConfig`.
+2. Add `testIgnore: ['responsive/**']` to each of the 4 existing projects (iphone-se, iphone-15-pro, pixel-7, desktop).
+3. Append a new project at the end of the `projects` array:
 
 ```ts
+{
+  name: 'responsive',
+  testMatch: /responsive\/.*\.spec\.ts$/,
+  use: {
+    browserName: 'chromium',
+    // Viewport overridden per-test via page.setViewportSize.
+    // Probes care about layout, not touch/DPR semantics.
+    viewport: { width: 1280, height: 800 },
+  },
+},
+```
+
+The full edited config should look like:
+
+```ts
+import { defineConfig } from '@playwright/test';
+
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/responsive/global-setup.ts',
-  // ... rest unchanged
+  timeout: 120_000,
+  expect: { timeout: 10_000 },
+  fullyParallel: false,
+  retries: 0,
+  reporter: [['html', { open: 'never' }], ['list']],
+
+  projects: [
+    {
+      name: 'iphone-se',
+      testIgnore: ['responsive/**'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 667 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 2,
+      },
+    },
+    {
+      name: 'iphone-15-pro',
+      testIgnore: ['responsive/**'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 393, height: 852 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 3,
+      },
+    },
+    {
+      name: 'pixel-7',
+      testIgnore: ['responsive/**'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 412, height: 915 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 2.625,
+      },
+    },
+    {
+      name: 'desktop',
+      testIgnore: ['responsive/**'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+      },
+    },
+    {
+      name: 'responsive',
+      testMatch: /responsive\/.*\.spec\.ts$/,
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+      },
+    },
+  ],
+
+  webServer: {
+    command: 'npx vite --port 5199',
+    url: 'http://localhost:5199',
+    reuseExistingServer: false,
+    timeout: 30_000,
+  },
+  use: {
+    baseURL: 'http://localhost:5199',
+  },
 });
 ```
 
-- [ ] **Step 3: Verify Playwright still loads the config without errors**
+- [ ] **Step 3: Verify project lists without error**
 
 ```bash
 pnpm --filter @alloy/client exec playwright test --list
 ```
 
-Expected: lists all existing tests; no error about globalSetup.
+Expected: lists existing tests under their device projects, plus responsive specs (will be empty until Chunk 4) under the `responsive` project.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Verify the responsive project is the only one that picks up `e2e/responsive/`**
+
+```bash
+pnpm --filter @alloy/client exec playwright test --list --project=iphone-se 2>&1 | grep -c responsive || echo "0 (expected)"
+pnpm --filter @alloy/client exec playwright test --list --project=responsive 2>&1 | grep -c responsive || echo "0 for now (specs land in Chunk 1 task 9 + Chunk 4)"
+```
+
+Expected: `0 (expected)` from iphone-se. Responsive project may show 0 until Task 9 lands.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 git add packages/client/e2e/responsive/global-setup.ts packages/client/playwright.config.ts
-git commit -m "test(responsive): truncate report JSON via Playwright globalSetup"
+git commit -m "test(responsive): dedicated playwright project + globalSetup, exclude from device projects"
 ```
 
 ---
@@ -512,7 +610,7 @@ test('contract: stubbed probes produce no findings, fixture writes empty report'
 - [ ] **Step 2: Run it**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/contract.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/contract.spec.ts
 ```
 
 Expected: 1 passed.
@@ -607,7 +705,7 @@ test.describe('overflowX', () => {
 - [ ] **Step 2: Run the test, watch it fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/overflow.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/overflow.spec.ts
 ```
 
 Expected: "detects element wider than viewport" fails (stub returns `[]`).
@@ -661,7 +759,7 @@ export const overflowY: Probe = async () => []; // implemented in next task
 - [ ] **Step 4: Re-run the test, watch it pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/overflow.spec.ts -g overflowX
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/overflow.spec.ts -g overflowX
 ```
 
 Expected: 2 passed.
@@ -724,7 +822,7 @@ test.describe('overflowY', () => {
 - [ ] **Step 2: Run, watch the new tests fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/overflow.spec.ts -g overflowY
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/overflow.spec.ts -g overflowY
 ```
 
 Expected: clean passes, descendant test fails.
@@ -770,7 +868,7 @@ export const overflowY: Probe = async (page, ctx) => {
 - [ ] **Step 4: Re-run, watch it pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/overflow.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/overflow.spec.ts
 ```
 
 Expected: 4 passed (overflowX clean+bad, overflowY clean+bad).
@@ -845,7 +943,7 @@ test('fail: primary action overlaps tab bar', async ({ page }) => {
 - [ ] **Step 2: Run, watch fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/tabbar.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/tabbar.spec.ts
 ```
 
 Expected: stub returns `[]`, the two fail-cases fail.
@@ -921,7 +1019,7 @@ export const tabBarVisibility: Probe = async (page, ctx) => {
 - [ ] **Step 4: Re-run, watch all pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/tabbar.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/tabbar.spec.ts
 ```
 
 Expected: 3 passed.
@@ -1007,7 +1105,7 @@ test('fail: action off-screen', async ({ page }) => {
 - [ ] **Step 2: Run, watch fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/reachability.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/reachability.spec.ts
 ```
 
 - [ ] **Step 3: Implement**
@@ -1075,7 +1173,7 @@ export const primaryActionReachable: Probe = async (page, ctx) => {
 - [ ] **Step 4: Re-run, all pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/reachability.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/reachability.spec.ts
 ```
 
 Expected: 4 passed.
@@ -1161,7 +1259,7 @@ test('warns when no [data-screen-section] markers present', async ({ page }) => 
 - [ ] **Step 2: Run, watch fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/dead-space.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/dead-space.spec.ts
 ```
 
 - [ ] **Step 3: Implement**
@@ -1222,7 +1320,7 @@ export const deadSpaceDefault: Probe = deadSpace();
 - [ ] **Step 4: Re-run, all pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/dead-space.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/dead-space.spec.ts
 ```
 
 Expected: 4 passed.
@@ -1313,7 +1411,7 @@ test('fail: text below 8px floor inside [data-screen-section]', async ({ page })
 - [ ] **Step 2: Run, watch fail**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/min-size.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/min-size.spec.ts
 ```
 
 - [ ] **Step 3: Implement**
@@ -1401,7 +1499,7 @@ export const minSize: Probe = async (page, ctx) => {
 - [ ] **Step 4: Re-run, all pass**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/min-size.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/min-size.spec.ts
 ```
 
 Expected: 4 passed.
@@ -1421,7 +1519,7 @@ git commit -m "test(responsive): implement minSize probe"
 - [ ] **Step 1: Run**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/contract.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/contract.spec.ts
 ```
 
 Expected: still passes (clean fixture has no violations across any of the 6 real probes — the warn for "no primary action" in reachability is a `warn`, not a `fail`, and the warn for "no screen-section markers" in dead-space is also a `warn`; both are appended to the report but do not throw).
@@ -1452,7 +1550,7 @@ git commit -m "test(responsive): contract spec asserts on fail-severity only"
 - [ ] **Step 1: Run all probe self-tests + contract**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/
 ```
 
 Expected: every spec passes.
@@ -1579,13 +1677,7 @@ if (isCli) {
 
 - [ ] **Step 2: Quick sanity check the formatter**
 
-```bash
-node --experimental-strip-types packages/client/e2e/responsive/triage/generate-report.ts
-```
-
-Expected: writes `packages/client/test-results/responsive-triage.md` with `_(no findings recorded)_` if no report exists yet, or formats the current report.
-
-If the `--experimental-strip-types` flag isn't available, the file will still be exercised by the npm script in Task 20.
+The script will be runnable after Task 20 adds `tsx` as a devDep. Skip the standalone invocation here; Task 21 verifies it end-to-end via the npm script.
 
 - [ ] **Step 3: Commit**
 
@@ -1596,35 +1688,33 @@ git commit -m "test(responsive): triage report generator (matrix + top findings)
 
 ---
 
-### Task 20: Add convenience npm script
+### Task 20: Add convenience npm scripts (and `tsx` devDep)
 
 **Files:**
 - Modify: `packages/client/package.json`
 
-- [ ] **Step 1: Read current scripts**
+The triage report generator is TypeScript and needs to run as a Node script. The repo's engines pin is `node >=20`, which predates stable `--experimental-strip-types`, so add `tsx` as a devDep.
+
+- [ ] **Step 1: Add `tsx` to devDependencies**
 
 ```bash
-grep -A 30 '"scripts"' packages/client/package.json | head -40
+pnpm --filter @alloy/client add -D tsx
 ```
+
+Expected: `tsx` (latest 4.x) added to `packages/client/package.json` devDependencies. The lockfile is updated automatically.
 
 - [ ] **Step 2: Add two new scripts**
 
-Inside the `"scripts"` object, add:
+Open `packages/client/package.json`. Inside the `"scripts"` object, add:
 
 ```json
-"test:responsive": "playwright test e2e/responsive/specs/",
+"test:responsive": "playwright test --project=responsive",
 "test:responsive:report": "tsx e2e/responsive/triage/generate-report.ts"
 ```
 
-If `tsx` isn't already a devDep, check first:
+`--project=responsive` ensures the responsive specs run **once** (in the dedicated project added in Task 8), not 4× across all device projects.
 
-```bash
-grep '"tsx"' packages/client/package.json
-```
-
-If absent, swap the second script to use `node --experimental-strip-types e2e/responsive/triage/generate-report.ts`. Either is acceptable.
-
-- [ ] **Step 3: Verify the script lists**
+- [ ] **Step 3: Verify**
 
 ```bash
 pnpm --filter @alloy/client run | grep responsive
@@ -1635,8 +1725,8 @@ Expected: both scripts listed.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/client/package.json
-git commit -m "test(responsive): add test:responsive and triage npm scripts"
+git add packages/client/package.json pnpm-lock.yaml
+git commit -m "test(responsive): add tsx devDep + test:responsive npm scripts"
 ```
 
 ---
@@ -1646,7 +1736,7 @@ git commit -m "test(responsive): add test:responsive and triage npm scripts"
 - [ ] **Step 1: Run probe self-tests + invoke triage generator end-to-end**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/
 pnpm --filter @alloy/client run test:responsive:report
 cat packages/client/test-results/responsive-triage.md
 ```
@@ -1726,7 +1816,7 @@ for (const vp of VIEWPORTS) {
 - [ ] **Step 2: Run it**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/main-menu.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/main-menu.spec.ts
 ```
 
 Expected: tests run across all 13 viewports. Some may fail with real findings — that is the desired signal. Do not "fix" the underlying screen here; record what failed and continue.
@@ -1807,7 +1897,7 @@ for (const vp of VIEWPORTS) {
 - [ ] **Step 2: Run it**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/draft.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/draft.spec.ts
 ```
 
 Expect: viewports may fail with findings. Record, don't fix.
@@ -1877,7 +1967,7 @@ for (const vp of VIEWPORTS) {
 - [ ] **Step 2: Run**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/forge-equip.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/forge-equip.spec.ts
 ```
 
 - [ ] **Step 3: Commit**
@@ -1930,7 +2020,7 @@ for (const vp of VIEWPORTS) {
 - [ ] **Step 2: Run**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/forge-combine.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/forge-combine.spec.ts
 ```
 
 If the tab-switch selector is wrong, the test will time out. Inspect existing combine tests for the right selector and update accordingly.
@@ -2000,7 +2090,7 @@ for (const vp of VIEWPORTS) {
 - [ ] **Step 2: Run**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/duel.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/duel.spec.ts
 ```
 
 The duel spec is the slowest (full draft + forge + duel start). Expect ~2-4 min for all 13 viewports.
@@ -2060,7 +2150,7 @@ for (const vp of TRANSITION_PROFILES) {
 - [ ] **Step 2: Run**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/specs/phase-transitions.spec.ts
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/specs/phase-transitions.spec.ts
 ```
 
 - [ ] **Step 3: Commit**
@@ -2209,7 +2299,7 @@ Expected: 5 chunk-completion markers plus all task commits.
 - [ ] **Step 2: Verify the harness is invokable end-to-end one more time**
 
 ```bash
-pnpm --filter @alloy/client exec playwright test e2e/responsive/probes/__tests__/
+pnpm --filter @alloy/client exec playwright test --project=responsive e2e/responsive/probes/__tests__/
 ```
 
 Expected: every probe self-test passes.
