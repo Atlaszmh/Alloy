@@ -68,6 +68,7 @@ export function applyPlanAction(
     case 'unsocket_gem': return planUnsocketGem(plan, action);
     case 'set_base_stats': return planSetBaseStats(plan, action);
     case 'combine': return planCombine(plan, action, registry);
+    case 'combine3': return planCombine3(plan, action, registry);
     case 'select_base_item': return planSelectBaseItem(plan, action);
     default: return { ok: false, error: `Unsupported plan action: ${(action as ForgeAction).kind}` };
   }
@@ -184,6 +185,52 @@ function planCombine(
   // Lock source gems
   next.lockedGemUids.add(action.gemUid1);
   next.lockedGemUids.add(action.gemUid2);
+
+  next.actionLog.push(action);
+  return { ok: true, plan: next };
+}
+
+function planCombine3(
+  plan: ForgePlan,
+  action: Extract<ForgeAction, { kind: 'combine3' }>,
+  registry: DataRegistry,
+): PlanResult {
+  const find = (uid: string) => plan.stockpile.find(g => g.uid === uid);
+  const g1 = find(action.gemUid1);
+  if (!g1) return { ok: false, error: 'First gem not found in stockpile' };
+  const g2 = find(action.gemUid2);
+  if (!g2) return { ok: false, error: 'Second gem not found in stockpile' };
+  const g3 = find(action.gemUid3);
+  if (!g3) return { ok: false, error: 'Third gem not found in stockpile' };
+
+  if (!g1.combinable) return { ok: false, error: 'First gem is not combinable' };
+  if (!g2.combinable) return { ok: false, error: 'Second gem is not combinable' };
+  if (!g3.combinable) return { ok: false, error: 'Third gem is not combinable' };
+
+  const recipeRegistry = registry.getRecipeRegistry();
+  const categoryMap: Record<string, string> = {};
+  for (const affix of registry.getAllAffixes()) categoryMap[affix.id] = affix.category;
+  const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), categoryMap);
+
+  const outputUid = `combined3_${action.gemUid1}_${action.gemUid2}_${action.gemUid3}`;
+  let result;
+  try {
+    result = engine.combine3(g1, g2, g3, outputUid, action.keepGemUid);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const next = clonePlan(plan);
+
+  // Remove consumed uids from stockpile
+  for (const uid of result.consumedUids) {
+    const idx = next.stockpile.findIndex(g => g.uid === uid);
+    if (idx !== -1) next.stockpile.splice(idx, 1);
+  }
+  // Add the output gem
+  next.stockpile.push(result.gem);
+  // Lock only consumed uids (ejected gem stays unlocked and can combine again)
+  for (const uid of result.consumedUids) next.lockedGemUids.add(uid);
 
   next.actionLog.push(action);
   return { ok: true, plan: next };
