@@ -9,6 +9,7 @@ import { RecipeRegistry } from './recipe-registry.js';
 import { DiscoveryState } from './discovery-state.js';
 import {
   computeAverageQuality,
+  computeAverageQualityN,
   applyMatchingRarityBonus,
   determineOutputTierRarity,
 } from './combine-quality.js';
@@ -116,6 +117,59 @@ export class CombinationEngine {
     } catch {
       return null;
     }
+  }
+
+  combine3(
+    gemA: GemInstance,
+    gemB: GemInstance,
+    gemC: GemInstance,
+    outputUid: string,
+    keepGemUid?: string,
+  ): CombineResult {
+    for (const g of [gemA, gemB, gemC]) {
+      if (!g.combinable) throw new Error(`Gem ${g.uid} is not combinable`);
+    }
+
+    this.discovery.recordAttempt3(gemA.affixId, gemB.affixId, gemC.affixId);
+
+    const recipe = this.registry.findTernaryRecipe(gemA, gemB, gemC);
+    if (recipe) {
+      const avgQ = computeAverageQualityN(gemA, gemB, gemC);
+      const unanimousRarity =
+        gemA.rarity === gemB.rarity && gemB.rarity === gemC.rarity;
+      const boosted = applyMatchingRarityBonus(
+        avgQ, unanimousRarity, this.config.matchingRarityBonus,
+      );
+      const { tier, rarity } = determineOutputTierRarity(boosted);
+
+      const recipeDepth =
+        Math.max(gemA.recipeDepth, gemB.recipeDepth, gemC.recipeDepth)
+        + recipe.maxDepthContribution;
+      const tags = [...new Set([
+        ...recipe.tags, ...gemA.tags, ...gemB.tags, ...gemC.tags,
+      ])];
+
+      const isNewDiscovery = !this.discovery.isDiscovered(recipe.id);
+      this.discovery.recordDiscovery(recipe.id);
+
+      const gem = createGem(outputUid, recipe.outputAffixId, tier, rarity, {
+        sourceRecipe: recipe.id,
+        recipeDepth,
+        tags,
+        outputBonusEffects: recipe.outputBonusEffects,
+      });
+
+      return {
+        gem,
+        layer: 'signature',
+        recipeId: recipe.id,
+        isNewDiscovery,
+        consumedUids: [gemA.uid, gemB.uid, gemC.uid],
+      };
+    }
+
+    // Fallback implemented in Task 2.4
+    throw new Error('combine3 fallback not yet implemented');
   }
 
   private trySignature(
