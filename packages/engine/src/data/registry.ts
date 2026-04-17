@@ -9,6 +9,10 @@ function combinationKey(id1: string, id2: string): string {
   return [id1, id2].sort().join('+');
 }
 
+function ternaryKey(id1: string, id2: string, id3: string): string {
+  return [id1, id2, id3].sort().join('+');
+}
+
 export class DataRegistry {
   private affixMap: Map<string, AffixDef>;
   private affixByTag: Map<AffixTag, AffixDef[]>;
@@ -52,7 +56,7 @@ export class DataRegistry {
         this.combinationMap.set(key, combo);
       } else if (combo.components.length === 3) {
         const [a, b, c] = combo.components;
-        const key = [a, b, c].sort().join('+');
+        const key = ternaryKey(a, b, c);
         this.ternaryCombinationMap.set(key, combo);
       }
     }
@@ -109,7 +113,7 @@ export class DataRegistry {
     affixId2: string,
     affixId3: string,
   ): CompoundAffixDef | null {
-    const key = [affixId1, affixId2, affixId3].sort().join('+');
+    const key = ternaryKey(affixId1, affixId2, affixId3);
     return this.ternaryCombinationMap.get(key) ?? null;
   }
 
