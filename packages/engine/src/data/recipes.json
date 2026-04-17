@@ -491,6 +491,26 @@
   },
 
   {
+    "id": "soul_eclipse",
+    "name": "Soul Eclipse",
+    "type": "signature",
+    "components": [
+      { "kind": "recipe", "id": "soul_rend" },
+      { "kind": "recipe", "id": "soul_siphon" }
+    ],
+    "outputAffixId": "soul_eclipse",
+    "outputBonusEffects": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+      { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+      { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 },
+      { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+  },
+
+  {
     "id": "thornfrost",
     "name": "Thornfrost",
     "type": "signature",

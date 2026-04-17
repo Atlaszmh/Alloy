@@ -555,6 +555,28 @@
     "tags": ["compound", "hp", "armor", "utility"]
   },
   {
+    "id": "soul_eclipse",
+    "name": "Soul Eclipse",
+    "description": "Soul Rend and Soul Siphon fused — drain life while destroying it; overheal bursts as shadow.",
+    "weaponFlavorText": "Soul-rend procs heal you for 10% of damage dealt. Lifesteal hits have a 20% chance to apply Soul Rend. While both buffs are active, each strike deals an additional 2% of the target's current HP as bonus damage.",
+    "armorFlavorText": "Overhealing past max HP bursts outward as shadow AoE damage — 50% of the excess, converted to a shockwave. Standing near you during a heal spike is unsurvivable.",
+    "components": ["soul_rend", "soul_siphon"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+      { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+      { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 }
+    ],
+    "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+  },
+
+  {
     "id": "thornfrost",
     "name": "Thornfrost",
     "description": "Retaliation thorns gain cold damage and slow attackers who hit you.",
