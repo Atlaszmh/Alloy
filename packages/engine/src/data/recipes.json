@@ -550,6 +550,25 @@
   },
 
   {
+    "id": "meltdown",
+    "name": "Meltdown",
+    "type": "signature3",
+    "components": [
+      { "kind": "affix", "id": "fire_damage" },
+      { "kind": "affix", "id": "cold_damage" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "meltdown",
+    "outputBonusEffects": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 },
+      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
+  },
+
+  {
     "id": "cat_off_off",
     "name": "Offensive Fusion",
     "type": "category",

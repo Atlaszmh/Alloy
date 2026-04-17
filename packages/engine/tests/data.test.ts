@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { RecipesSchema } from '../src/data/schemas.js';
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
+import { createGem } from '../src/types/gem.js';
 
 describe('Data Loading & Validation', () => {
   it('should load and validate all data files without errors', () => {
@@ -256,13 +259,32 @@ describe('DataRegistry', () => {
   });
 
   describe('DataRegistry — ternary compound lookup', () => {
+    const ternaryData = loadAndValidateData();
+    const ternaryRegistry = new DataRegistry(
+      ternaryData.affixes, ternaryData.combinations, ternaryData.synergies,
+      ternaryData.baseItems, ternaryData.balance, ternaryData.recipes,
+    );
+
     it('getTernaryCombination returns null when no matching 3-component compound exists', () => {
-      const data = loadAndValidateData();
-      const registry = new DataRegistry(
-        data.affixes, data.combinations, data.synergies,
-        data.baseItems, data.balance, data.recipes,
-      );
-      expect(registry.getTernaryCombination('x', 'y', 'z')).toBeNull();
+      expect(ternaryRegistry.getTernaryCombination('x', 'y', 'z')).toBeNull();
+    });
+
+    it('combine3 with live data resolves Meltdown', () => {
+      const a = createGem('a', 'fire_damage', 2, 'rare');
+      const b = createGem('b', 'cold_damage', 2, 'rare');
+      const c = createGem('c', 'lightning_damage', 2, 'rare');
+      const recipeRegistry = ternaryRegistry.getRecipeRegistry();
+      const map: Record<string, string> = {};
+      for (const affix of ternaryRegistry.getAllAffixes()) map[affix.id] = affix.category;
+      const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), map);
+      const result = engine.combine3(a, b, c, 'out', 'a');
+      expect(result.recipeId).toBe('meltdown');
+      expect(result.gem.affixId).toBe('meltdown');
+    });
+
+    it('getTernaryCombination resolves Meltdown metadata', () => {
+      const combo = ternaryRegistry.getTernaryCombination('fire_damage', 'cold_damage', 'lightning_damage');
+      expect(combo?.id).toBe('meltdown');
     });
   });
 

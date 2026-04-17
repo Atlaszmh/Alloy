@@ -638,5 +638,25 @@
       { "stat": "compound.sanguine_endurance.overhealCap", "op": "flat", "value": 1.20 }
     ],
     "tags": ["compound", "lifesteal", "hp", "utility"]
+  },
+
+  {
+    "id": "meltdown",
+    "name": "Meltdown",
+    "description": "Three elements in chorus. Each elemental proc has a chance to trigger one of the other two.",
+    "weaponFlavorText": "Fire, cold, and lightning align. Every proc of one element rolls 25% to trigger another; overlapping statuses get +15% damage. Mixed-element builds become greater than the sum of their parts.",
+    "armorFlavorText": "Your armor resonates across the elemental spectrum. Absorbed energy from any element is redistributed — making hybrid builds disproportionately survivable.",
+    "components": ["fire_damage", "cold_damage", "lightning_damage"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+    ],
+    "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
   }
 ]
