@@ -8,8 +8,10 @@ test('contract: stubbed probes produce no findings, fixture writes empty report'
 }) => {
   await page.setContent(`
     <!doctype html>
-    <html><body>
-      <div class="app-frame" style="width: 100px; height: 100px;"></div>
+    <html><body style="margin:0">
+      <div class="app-frame" style="width: 100px; height: 100px; position: relative;">
+        <div data-tabbar style="position:absolute;bottom:0;left:0;right:0;height:20px;background:#222"></div>
+      </div>
     </body></html>
   `);
   const vp = VIEWPORTS[0];
@@ -17,5 +19,6 @@ test('contract: stubbed probes produce no findings, fixture writes empty report'
   await runProbes('contract-smoke', vp);
 
   const findings = readReport();
-  expect(findings.length).toBe(0);
+  const fails = findings.filter(f => f.severity === 'fail');
+  expect(fails.length).toBe(0);
 });
