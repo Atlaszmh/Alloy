@@ -22,7 +22,7 @@ The existing Playwright suite covers functional flows across 4 device profiles b
 - Automate layout-integrity assertions for the 5 gameplay-critical screens across a broad viewport matrix
 - Provide a structured, parseable report of findings (screen × viewport × probe) to feed into a follow-up implementation plan
 - Establish reusable probe infrastructure that future screens and additional assertions can plug into without rework
-- Keep the suite fast enough to run frequently (target: full matrix completes in under 5 minutes locally)
+- Keep the suite fast enough to run frequently (aspiration: full matrix completes in under 5 minutes locally on a single worker. The current `playwright.config.ts` sets `fullyParallel: false`; if the responsive suite exceeds the budget, raising `workers` and enabling parallelism for this directory only is an acceptable mitigation since findings are written to a shared JSON report keyed on screen+viewport, with concurrent appends serialized via a small file-locking helper in `report.ts`)
 
 ## Non-Goals
 
@@ -61,7 +61,8 @@ packages/client/e2e/
 │   │   ├── dead-space.ts         # probe 5
 │   │   ├── min-size.ts           # probe 6
 │   │   ├── run-all.ts            # runs every probe, aggregates findings
-│   │   └── report.ts             # writes/reads responsive-report.json
+│   │   ├── report.ts             # writes/reads responsive-report.json
+│   │   └── __tests__/            # Playwright self-tests for each probe
 │   ├── fixtures/
 │   │   └── responsive-fixture.ts # extends Playwright test with probe helpers
 │   ├── triage/
@@ -77,10 +78,6 @@ packages/client/e2e/
 
 test-results/
 └── responsive-report.json        # aggregated findings, one object per (screen, viewport, probe)
-
-packages/client/src/test-utils/
-└── probe-fixtures/
-    └── *.html                    # tiny HTML fixtures used by probe unit tests
 ```
 
 Existing e2e specs are untouched. The new responsive suite lives under `e2e/responsive/` so it can be run, excluded, or iterated independently.
@@ -96,7 +93,7 @@ The 13-profile set is chosen to exercise every branch of the responsive system:
 | `iphone-15-pro` | 393 × 852 | Standard modern phone (existing) |
 | `pixel-7` | 412 × 915 | Large Android (existing) |
 | `iphone-14-pro-max` | 430 × 932 | Largest-tier phone |
-| `iphone-landscape` | 852 × 393 | Phone landscape — flips `@media (max-aspect-ratio: 9/16)` branch |
+| `iphone-landscape` | 852 × 393 | Phone landscape — exercises `@media (min-aspect-ratio: 9/16)` letterboxed branch at low height |
 | `ipad-portrait` | 768 × 1024 | Tablet portrait |
 | `ipad-landscape` | 1024 × 768 | Tablet landscape |
 | `desktop-1280` | 1280 × 800 | Small laptop (existing) |
@@ -147,27 +144,38 @@ Each probe is a small pure function that takes the Playwright `Page` plus a cont
 - `overflowX`: fails if `document.documentElement.scrollWidth > viewport.width`. Detail includes the overflowing element (queried via `document.querySelectorAll('*')` filtered to those whose `getBoundingClientRect().right > viewport.width`).
 - `overflowY`: fails if any descendant of `.app-frame` has a bounding rect bottom exceeding the frame's bottom. Detail includes the element's selector.
 
-**`tabbar.ts`** — `tabBarVisibility`: locates `.tab-bar` (or equivalent test hook), asserts it is visible (`opacity > 0`, `display !== 'none'`, rect within viewport). Then asserts no element marked with `data-primary-cta` has a rect overlapping the tab bar's rect.
+**`tabbar.ts`** — `tabBarVisibility`: locates `[data-tabbar]`, asserts it is visible (`opacity > 0`, `display !== 'none'`, rect within viewport). Then asserts no element marked with `data-primary-action` has a rect overlapping the tab bar's rect. (TabBar component currently has no test hook — adding `data-tabbar` is part of Harness step 1, see Section 9.)
 
 **`reachability.ts`** — `primaryActionReachable`: each spec tags the screen's primary action with `data-primary-action`. Probe asserts it is on-screen (rect fully within viewport), and that its rendered size ≥ 36 × 36 px.
 
 **`dead-space.ts`** — `deadSpace`: measures the frame's `getBoundingClientRect()` as the container, then sums the vertical extent of direct-descendant content regions (matched via `[data-screen-section]` attributes that specs add). Computes `contentHeight / frameHeight`. Fails if < 0.80 by default; per-screen overrides allowed via options parameter.
 
-**`min-size.ts`** — `minSize`: queries elements with responsive tokens applied (`[data-gem]`, `.forge-socket`, elements with `data-size-token` attribute) and asserts computed width/height ≥ the token's min-clamp value. Text size probe checks computed `font-size` against the `--text-*` min floors. Uses `window.getComputedStyle()` and reads CSS custom-property values directly.
+**`min-size.ts`** — `minSize`: queries elements with responsive tokens applied (`[data-gem]`, `.forge-socket`) and asserts computed width/height ≥ the token's min-clamp value. Text size probe checks computed `font-size` against the `--text-*` min floors by walking `[data-screen-section]` descendants. Uses `window.getComputedStyle()` and reads CSS custom-property values directly. The min-clamp floors come from `index.css` constants and are duplicated as a typed table in `min-size.ts` (single source: the spec table; if `index.css` clamps change, update the probe table in the same commit).
 
 ### 5. Fixture and Spec Pattern
 
 ```ts
 // packages/client/e2e/responsive/fixtures/responsive-fixture.ts
-import { test as base } from '@playwright/test';
-import { runAllProbes } from '../probes/run-all';
+import { test as base, type Page } from '@playwright/test';
+import { runAllProbes, type ProbeOverrides } from '../probes/run-all';
 import { appendFinding } from '../probes/report';
+import type { Viewport } from '../viewports';
 
-export const test = base.extend<{ runProbes: (screen: string) => Promise<void> }>({
-  runProbes: async ({ page }, use, testInfo) => {
-    await use(async (screen: string) => {
-      const vp = testInfo.project.metadata.viewport;
-      const findings = await runAllProbes(page, { screen, viewport: vp });
+export interface RunProbesOptions {
+  /** Per-probe threshold overrides (e.g., { deadSpace: { minRatio: 0.6 } }). */
+  overrides?: ProbeOverrides;
+}
+
+export type RunProbes = (
+  screen: string,
+  vp: Viewport,
+  options?: RunProbesOptions,
+) => Promise<void>;
+
+export const test = base.extend<{ runProbes: RunProbes }>({
+  runProbes: async ({ page }, use) => {
+    await use(async (screen, vp, options) => {
+      const findings = await runAllProbes(page, { screen, viewport: vp }, options?.overrides);
       findings.forEach(appendFinding);
       const failures = findings.filter(f => f.severity === 'fail');
       if (failures.length > 0) {
@@ -181,6 +189,8 @@ export const test = base.extend<{ runProbes: (screen: string) => Promise<void> }
 });
 ```
 
+The fixture takes `vp` as an explicit argument rather than reading from `testInfo.project.metadata` — viewports are iterated inside the spec file (per the Decisions table), so the spec already has `vp` in scope. Passing it explicitly keeps the fixture honest and removes the contradiction.
+
 ```ts
 // packages/client/e2e/responsive/specs/draft.spec.ts
 import { test } from '../fixtures/responsive-fixture';
@@ -192,7 +202,7 @@ for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await startMatch(page);
     await waitForPhase(page, 'draft');
-    await runProbes('draft');
+    await runProbes('draft', vp);
   });
 }
 ```
@@ -211,9 +221,11 @@ test-results/responsive-triage.md
 
 Format: a severity matrix (screen × viewport, cells show probe failure counts), followed by a per-finding breakdown sorted by severity and frequency. The top issues become the direct input to the follow-up implementation plan.
 
-### 7. Probe Unit Tests
+### 7. Probe Self-Tests
 
-Each probe has a vitest unit test in `packages/client/src/test-utils/probe-fixtures/` that uses a minimal HTML fixture (served from a string via `page.setContent()`) to verify the probe detects a planted violation and passes on a clean fixture. These unit tests run in the main vitest suite, not in Playwright, keeping feedback fast for probe development.
+Each probe ships with a Playwright-based self-test under `packages/client/e2e/responsive/probes/__tests__/`. The probes use Playwright APIs (`page.evaluate`, `page.locator`), so they cannot run under jsdom/vitest — the self-tests run in the same Playwright environment as the matrix specs, but use `page.setContent()` with a minimal inline HTML fixture instead of starting the full game.
+
+Each probe gets two cases: a clean fixture (expect zero findings) and a planted-violation fixture (expect ≥1 finding with the right `probe` and `severity` fields). These run as their own Playwright test file and execute in well under a second per probe — fast enough for tight iteration during probe development.
 
 ### 8. Build Sequence
 
@@ -221,9 +233,9 @@ The two-agent team operates across these steps. Steps 1–3 block step 4+; withi
 
 | Step | Owner | Deliverable | Blocks |
 |------|-------|-------------|--------|
-| 1 | Harness | `viewports.ts`, `probes/types.ts`, empty probe stubs, `responsive-fixture.ts` skeleton | 4, 5 |
-| 2 | Harness | Full implementation of all 6 probes + vitest unit tests for each | 6 |
-| 3 | Harness | `report.ts` (JSON append), `triage/generate-report.ts` | 7 |
+| 1 | Harness | `viewports.ts`, `probes/types.ts`, empty probe stubs, `responsive-fixture.ts` skeleton, `data-tabbar` attribute on `TabBar.tsx`, `globalSetup` entry in `playwright.config.ts` that truncates `responsive-report.json` | 4, 5 |
+| 2 | Harness | Full implementation of all 6 probes + Playwright-based probe self-tests (see Section 7) | 6 |
+| 3 | Harness | `report.ts` (JSON append + truncation hook), `triage/generate-report.ts` | 7 |
 | 4 | Screens | `main-menu.spec.ts`, `draft.spec.ts` (no runtime state needed beyond existing `startMatch`) | 6 |
 | 5 | Screens | `forge-equip.spec.ts`, `forge-combine.spec.ts`, `duel.spec.ts`, `phase-transitions.spec.ts` | 6 |
 | 6 | Single | Run full matrix end-to-end, confirm report generation works | 7 |
@@ -233,11 +245,16 @@ The two-agent team operates across these steps. Steps 1–3 block step 4+; withi
 
 To prevent the Screens agent from blocking on a moving target, the Harness agent publishes the following up front (step 1), and treats changes to them as breaking:
 
-- `VIEWPORTS` array shape and field names
-- `Finding` interface
-- `ProbeCtx` interface
-- `runProbes(screen: string)` fixture signature
-- Required data attributes each spec must add (`data-primary-action`, `data-screen-section`)
+- `VIEWPORTS` array shape, `Viewport` type, and field names
+- `Finding`, `Severity`, `ProbeCtx` interfaces
+- `RunProbes` fixture signature, including the optional `RunProbesOptions.overrides` shape
+- The set of test-hook attributes that screens and shared components must carry, listed in the table below
+
+| Attribute | Where it goes | Added by | Purpose |
+|-----------|---------------|----------|---------|
+| `data-tabbar` | Root `<div>` of `TabBar.tsx` | Harness step 1 | Probe target for `tabBarVisibility` |
+| `data-primary-action` | Each gameplay screen's main CTA element | Screens (per-spec setup) | Used by `reachability` and `tabbar` probes |
+| `data-screen-section` | Each top-level layout region (header, content, tray, etc.) | Screens (per-spec setup) | Used by `deadSpace` and `minSize` probes |
 
 The Screens agent writes specs against this published surface even before the probes are fully implemented (they will pass trivially with empty `findings` arrays until probes are filled in, which is fine — no false negatives, and the skeleton is exercised).
 
@@ -245,14 +262,15 @@ The Screens agent writes specs against this published surface even before the pr
 
 - **Probe throws unexpectedly** (e.g., selector not found): caught by `run-all`, converted to a `fail`-severity finding with probe='<probe-name>-error'. The suite continues.
 - **Screen never reaches ready state** (timeout): the spec itself fails with a normal Playwright timeout. Recorded as a separate error in the triage report but does not block other viewports in the matrix (Playwright runs subsequent tests regardless).
-- **Report JSON already exists from prior run**: `report.ts` truncates on first write each run (keyed on a Playwright `globalSetup`).
+- **Report JSON already exists from prior run**: a Playwright `globalSetup` script (added to `playwright.config.ts` in Harness step 1) truncates `responsive-report.json` at the start of every run.
+- **`.app-frame` does not render** (route mismatch, error boundary, mount failure): the probe-fixture asserts `.app-frame` exists before invoking probes, and on absence emits a single `fail`-severity finding with probe='frame-missing' and a normal Playwright timeout from the spec's `waitForPhase` will likely fire first regardless. Either way, downstream viewports continue to run.
 
 ### 11. Testing the Tests
 
 Probe correctness is the only thing in this system that can silently lie — if a probe always returns `[]`, every test passes. Mitigations:
 
-1. Each probe ships with vitest unit tests covering: a clean fixture (expect zero findings), a planted-violation fixture (expect ≥1 finding), edge cases (zero elements, viewport boundary conditions).
-2. A smoke spec (`probe-smoke.spec.ts`) deliberately renders broken HTML via `page.setContent()` and asserts the aggregated probes detect ≥1 failure — catches "probe wiring" bugs where unit tests pass but the fixture doesn't actually invoke them.
+1. Each probe ships with Playwright-based self-tests (see Section 7) covering: a clean fixture (expect zero findings), a planted-violation fixture (expect ≥1 finding), edge cases (zero elements, viewport boundary conditions).
+2. A smoke spec (`probe-smoke.spec.ts`) deliberately renders broken HTML via `page.setContent()` and asserts the aggregated probes detect ≥1 failure — catches "probe wiring" bugs where individual probe self-tests pass but the fixture doesn't actually invoke them.
 
 ## How to Build a New Screen Responsive Spec (for future use)
 
