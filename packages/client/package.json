@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:responsive": "playwright test --project=responsive",
+    "test:responsive:report": "tsx e2e/responsive/triage/generate-report.ts"
   },
   "dependencies": {
     "@alloy/engine": "workspace:*",
@@ -35,6 +37,7 @@
     "@vitejs/plugin-react": "^4.0.0",
     "jsdom": "^29.0.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
