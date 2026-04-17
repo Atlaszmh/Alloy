@@ -121,3 +121,93 @@ describe('combine3 — ternary signature match', () => {
     }
   });
 });
+
+describe('combine3 — KEEP-anchored fallback', () => {
+  const binarySignatures: RecipeDefinition[] = [
+    {
+      id: 'ignite', name: 'Ignite', type: 'signature',
+      components: [
+        { kind: 'affix', id: 'chance_on_hit' },
+        { kind: 'affix', id: 'fire_damage' },
+      ],
+      outputAffixId: 'ignite',
+      outputBonusEffects: [{ stat: 'compound.ignite.chance', op: 'flat', value: 0.15 }],
+      maxDepthContribution: 1,
+      tags: ['compound', 'fire', 'trigger'],
+    },
+  ];
+
+  function makeEngine(recipes: RecipeDefinition[], catMap: Record<string, string> = categoryMap) {
+    const registry = new RecipeRegistry(recipes);
+    const discovery = new DiscoveryState();
+    const engine = new CombinationEngine(registry, discovery, catMap);
+    return { engine, discovery };
+  }
+
+  it('falls back to a KEEP-anchored binary signature; ejects third gem', () => {
+    const { engine, discovery } = makeEngine(binarySignatures);
+    const keep = createGem('keep', 'chance_on_hit', 1, 'common');
+    const other1 = createGem('o1', 'fire_damage', 1, 'common');
+    const other2 = createGem('o2', 'lightning_damage', 1, 'common');
+
+    const result = engine.combine3(keep, other1, other2, 'out', 'keep');
+
+    expect(result.layer).toBe('signature');
+    expect(result.recipeId).toBe('ignite');
+    expect(result.consumedUids.sort()).toEqual(['keep', 'o1'].sort());
+    expect(result.ejectedUid).toBe('o2');
+    expect(discovery.hasAttempted3('chance_on_hit', 'fire_damage', 'lightning_damage')).toBe(true);
+    expect(discovery.hasAttempted('chance_on_hit', 'fire_damage')).toBe(true);
+  });
+
+  it('non-KEEP pair is NOT chosen even if it would produce a signature', () => {
+    const { engine } = makeEngine(binarySignatures);
+    const keep = createGem('keep', 'flat_hp', 1, 'common');
+    const other1 = createGem('o1', 'chance_on_hit', 1, 'common');
+    const other2 = createGem('o2', 'fire_damage', 1, 'common');
+
+    const result = engine.combine3(keep, other1, other2, 'out', 'keep');
+
+    expect(result.recipeId).toBeUndefined();
+    expect(result.consumedUids).toContain('keep');
+  });
+
+  it('higher-layer KEEP pair wins over lower-layer KEEP pair', () => {
+    const signatures: RecipeDefinition[] = [
+      ...binarySignatures,
+      {
+        id: 'cat_trigger_any', name: 'Trigger Fusion', type: 'category',
+        categoryRule: { inputA: 'trigger', inputB: 'defensive' },
+        outputAffixId: '__trigger_def__',
+        outputBonusEffects: [{ stat: 'armor', op: 'flat', value: 1 }],
+        maxDepthContribution: 1, tags: [],
+      },
+    ];
+    const mapExt = { ...categoryMap, fire_damage: 'offensive', armor_rating: 'defensive' };
+    const { engine } = makeEngine(signatures, mapExt);
+
+    const keep = createGem('keep', 'chance_on_hit', 1, 'common');
+    const other1 = createGem('o1', 'fire_damage', 1, 'common');
+    const other2 = createGem('o2', 'armor_rating', 1, 'common');
+
+    const result = engine.combine3(keep, other1, other2, 'out', 'keep');
+
+    expect(result.recipeId).toBe('ignite');
+    expect(result.ejectedUid).toBe('o2');
+  });
+
+  it('ternary match short-circuits: binary discovery is NOT recorded', () => {
+    const recipes = [...ternaryRecipes, ...binarySignatures];
+    const { engine, discovery } = makeEngine(recipes);
+    const a = createGem('a', 'fire_damage', 1, 'common');
+    const b = createGem('b', 'cold_damage', 1, 'common');
+    const c = createGem('c', 'lightning_damage', 1, 'common');
+
+    engine.combine3(a, b, c, 'out');
+
+    expect(discovery.hasAttempted3('fire_damage', 'cold_damage', 'lightning_damage')).toBe(true);
+    expect(discovery.hasAttempted('fire_damage', 'cold_damage')).toBe(false);
+    expect(discovery.hasAttempted('fire_damage', 'lightning_damage')).toBe(false);
+    expect(discovery.hasAttempted('cold_damage', 'lightning_damage')).toBe(false);
+  });
+});

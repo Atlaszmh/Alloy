@@ -168,8 +168,48 @@ export class CombinationEngine {
       };
     }
 
-    // Fallback implemented in Task 2.4
-    throw new Error('combine3 fallback not yet implemented');
+    // 4. Fallback: KEEP-anchored pair + eject third
+    const keep = keepGemUid
+      ? [gemA, gemB, gemC].find(g => g.uid === keepGemUid) ?? gemA
+      : gemA;
+    const others = [gemA, gemB, gemC].filter(g => g.uid !== keep.uid);
+    if (others.length !== 2) {
+      throw new Error('combine3 fallback: expected exactly 2 non-KEEP gems');
+    }
+    const [o1, o2] = others;
+
+    const layerRank: Record<CombineLayer, number> = {
+      signature: 3, category: 2, generic: 1,
+    };
+
+    const probe1 = this.previewCombine(keep, o1);
+    const probe2 = this.previewCombine(keep, o2);
+
+    const cand: Array<{ other: GemInstance; preview: CombinePreview | null }> = [
+      { other: o1, preview: probe1 },
+      { other: o2, preview: probe2 },
+    ];
+    cand.sort((a, b) => {
+      const la = a.preview ? layerRank[a.preview.layer] : 0;
+      const lb = b.preview ? layerRank[b.preview.layer] : 0;
+      if (la !== lb) return lb - la;
+      const eva = calculateEffectiveValue(keep.tier, keep.rarity)
+        + calculateEffectiveValue(a.other.tier, a.other.rarity);
+      const evb = calculateEffectiveValue(keep.tier, keep.rarity)
+        + calculateEffectiveValue(b.other.tier, b.other.rarity);
+      return evb - eva;
+    });
+
+    const winner = cand[0];
+    const ejected = cand[1].other;
+
+    const binaryResult = this.combine(keep, winner.other, outputUid, keep.uid);
+
+    return {
+      ...binaryResult,
+      consumedUids: [keep.uid, winner.other.uid],
+      ejectedUid: ejected.uid,
+    };
   }
 
   private trySignature(
