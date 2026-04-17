@@ -6,9 +6,12 @@ export function MainMenu() {
   const { devMode, toggleDevMode } = useUIStore();
 
   return (
-    <div className="page-enter flex h-full flex-col items-center justify-center gap-10 p-6">
+    <div
+      className="page-enter flex h-full flex-col items-center justify-center gap-10 p-6"
+      data-screen-section="main-menu-root"
+    >
       {/* Title with atmospheric glow */}
-      <div className="relative text-center">
+      <div className="relative text-center" data-screen-section="main-menu-title">
         <div
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 blur-3xl"
           style={{
@@ -37,8 +40,9 @@ export function MainMenu() {
       </div>
 
       {/* Buttons — vertical stack */}
-      <div className="flex w-full max-w-xs flex-col gap-3">
+      <div className="flex w-full max-w-xs flex-col gap-3" data-screen-section="main-menu-actions">
         <button
+          data-primary-action="play"
           onClick={() => navigate('/queue')}
           className="rounded-lg bg-gradient-to-b from-accent-400 to-accent-500 px-6 py-4 text-lg font-bold tracking-wide text-surface-900 active:translate-y-px active:scale-[0.98]"
           style={{
