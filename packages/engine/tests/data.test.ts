@@ -252,14 +252,18 @@ describe('DataRegistry', () => {
   });
 
   describe('Referential Integrity', () => {
-    it('all combination component IDs reference valid affix IDs', () => {
+    it('all combination component IDs reference valid affix or compound IDs', () => {
       const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      // Compound outputs (e.g. retribution_aura, soul_rend) are valid component IDs
+      // for higher-order recipes like Thornfrost and Soul Eclipse.
+      const compoundIds = new Set(registry.getAllCombinations().map(c => c.id));
+      const validIds = new Set([...affixIds, ...compoundIds]);
       const combinations = registry.getAllCombinations();
       for (const combo of combinations) {
         for (const componentId of combo.components) {
           expect(
-            affixIds.has(componentId),
-            `Combination "${combo.id}" references unknown affix "${componentId}"`
+            validIds.has(componentId),
+            `Combination "${combo.id}" references unknown affix or compound "${componentId}"`
           ).toBe(true);
         }
       }

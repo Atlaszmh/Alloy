@@ -491,6 +491,26 @@
   },
 
   {
+    "id": "thornfrost",
+    "name": "Thornfrost",
+    "type": "signature",
+    "components": [
+      { "kind": "recipe", "id": "retribution_aura" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "thornfrost",
+    "outputBonusEffects": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+      { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 },
+      { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+  },
+
+  {
     "id": "combustion",
     "name": "Combustion",
     "type": "signature",

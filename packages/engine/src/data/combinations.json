@@ -555,6 +555,28 @@
     "tags": ["compound", "hp", "armor", "utility"]
   },
   {
+    "id": "thornfrost",
+    "name": "Thornfrost",
+    "description": "Retaliation thorns gain cold damage and slow attackers who hit you.",
+    "weaponFlavorText": "Your thorns aren't just spikes — they're needles of frost. Each retaliation tick deals +50% of its damage as cold, and has a 20% chance to apply a chill stack.",
+    "armorFlavorText": "Whenever thorns fire, the attacker is slowed by 40% for 30 seconds. The more they hit you, the slower they get.",
+    "components": ["retribution_aura", "cold_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+      { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 }
+    ],
+    "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+  },
+
+  {
     "id": "combustion",
     "name": "Combustion",
     "description": "Crits detonate fire at the target; wearer radiates flame when struck critically.",
