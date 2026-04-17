@@ -243,6 +243,35 @@ describe('ForgePlan', () => {
       }, registry);
       expect(result.ok).toBe(false);
     });
+
+    it('ternary match: consumes all 3 gems, locks all 3, adds output', () => {
+      // Meltdown: fire_damage + cold_damage + lightning_damage
+      const gems = [
+        createGem('a', 'fire_damage', 2, 'rare'),
+        createGem('b', 'cold_damage', 2, 'rare'),
+        createGem('c', 'lightning_damage', 2, 'rare'),
+      ];
+      const state = createForgeState(gems, 'iron_sword', 'iron_armor', 1, data.balance, false);
+      const plan = createForgePlan(state, registry);
+      const result = applyPlanAction(plan, {
+        kind: 'combine3',
+        gemUid1: 'a', gemUid2: 'b', gemUid3: 'c',
+        keepGemUid: 'a',
+      }, registry);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // All 3 gems consumed
+      expect(result.plan.stockpile.find(g => g.uid === 'a')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'b')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'c')).toBeUndefined();
+      // Meltdown output present
+      expect(result.plan.stockpile.some(g => g.sourceRecipe === 'meltdown')).toBe(true);
+      // All 3 source uids locked
+      expect(result.plan.lockedGemUids.has('a')).toBe(true);
+      expect(result.plan.lockedGemUids.has('b')).toBe(true);
+      expect(result.plan.lockedGemUids.has('c')).toBe(true);
+    });
   });
 
   describe('canUnsocketGem', () => {

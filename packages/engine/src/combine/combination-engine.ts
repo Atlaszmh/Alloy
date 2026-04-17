@@ -138,17 +138,30 @@ export class CombinationEngine {
 
     try {
       const result = tempEngine.combine3(gemA, gemB, gemC, '__preview__');
-      const preview: CombinePreview = {
-        known: ternaryRecipe ? ternaryKnown : false,
-        layer: result.layer,
-        gem: ternaryRecipe ? (ternaryKnown ? result.gem : null) : result.gem,
-        recipeId: ternaryRecipe ? (ternaryKnown ? result.recipeId : undefined) : result.recipeId,
-      };
-      if (!ternaryRecipe) {
-        preview.fallbackPair = [result.consumedUids[0], result.consumedUids[1]];
-        preview.ejectedUid = result.ejectedUid;
+
+      if (ternaryRecipe) {
+        return {
+          known: ternaryKnown,
+          layer: result.layer,
+          gem: ternaryKnown ? result.gem : null,
+          recipeId: ternaryKnown ? result.recipeId : undefined,
+        };
       }
-      return preview;
+
+      // Fallback path: look up the winning pair's binary attempt history so the
+      // preview reflects what the player will actually see after the combine.
+      const [pairA, pairB] = result.consumedUids as [string, string];
+      const gems = [gemA, gemB, gemC];
+      const lookupAffix = (uid: string) => gems.find(g => g.uid === uid)?.affixId ?? '';
+      const binaryKnown = this.discovery.hasAttempted(lookupAffix(pairA), lookupAffix(pairB));
+      return {
+        known: binaryKnown,
+        layer: result.layer,
+        gem: binaryKnown ? result.gem : null,
+        recipeId: binaryKnown ? result.recipeId : undefined,
+        fallbackPair: [pairA, pairB],
+        ejectedUid: result.ejectedUid,
+      };
     } catch {
       return null;
     }

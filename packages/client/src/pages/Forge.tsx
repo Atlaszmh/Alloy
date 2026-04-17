@@ -150,6 +150,9 @@ export function Forge() {
       const engine = new CombinationEngine(recipeRegistry, discovery, categoryMap, {
         matchingRarityBonus: registry.getBalance().gem.matchingRarityBonus,
       });
+      if (filled.length === 3) {
+        return engine.previewCombineTriple(filled[0], filled[1], filled[2]);
+      }
       return engine.previewCombine(filled[0], filled[1]);
     } catch {
       return null;
@@ -508,7 +511,7 @@ export function Forge() {
     if (!keep) return;
     const filled = comboSlots.filter((s): s is GemInstance => s !== null);
 
-    if (filled.length >= 3) {
+    if (filled.length === 3) {
       const b = comboSlots[1]!;
       const c = comboSlots[2]!;
       const result = applyAction(
