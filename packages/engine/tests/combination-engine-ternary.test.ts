@@ -210,6 +210,45 @@ describe('combine3 — KEEP-anchored fallback', () => {
     expect(discovery.hasAttempted('fire_damage', 'lightning_damage')).toBe(false);
     expect(discovery.hasAttempted('cold_damage', 'lightning_damage')).toBe(false);
   });
+
+  it('EV tie-break: when both KEEP pairs hit same layer, higher EV sum wins', () => {
+    // Only a category rule exists. Both (keep, o1) and (keep, o2) produce category-layer
+    // results. o1 has higher tier/rarity than o2 → (keep, o1) wins by EV sum.
+    const categoryRecipes: RecipeDefinition[] = [
+      {
+        id: 'cat_off_off', name: 'Offensive Fusion', type: 'category',
+        categoryRule: { inputA: 'offensive', inputB: 'offensive' },
+        outputAffixId: '__off_fusion__',
+        outputBonusEffects: [{ stat: 'damage', op: 'percent', value: 0.05 }],
+        maxDepthContribution: 1, tags: [],
+      },
+    ];
+    const { engine } = makeEngine(categoryRecipes);
+    const keep = createGem('keep', 'fire_damage', 1, 'common');
+    const o1 = createGem('o1', 'cold_damage', 3, 'rare');
+    const o2 = createGem('o2', 'lightning_damage', 1, 'common');
+
+    const result = engine.combine3(keep, o1, o2, 'out', 'keep');
+
+    expect(result.layer).toBe('category');
+    expect(result.consumedUids.sort()).toEqual(['keep', 'o1'].sort());
+    expect(result.ejectedUid).toBe('o2');
+  });
+
+  it('falls back to generic when neither KEEP pair matches a recipe', () => {
+    // No recipes at all. Both (keep, o1) and (keep, o2) can only generic-upgrade.
+    // o1 has higher EV than o2 → (keep, o1) wins; o2 ejected.
+    const { engine } = makeEngine([]);
+    const keep = createGem('keep', 'fire_damage', 1, 'common');
+    const o1 = createGem('o1', 'cold_damage', 2, 'rare');
+    const o2 = createGem('o2', 'lightning_damage', 1, 'common');
+
+    const result = engine.combine3(keep, o1, o2, 'out', 'keep');
+
+    expect(result.layer).toBe('generic');
+    expect(result.consumedUids.sort()).toEqual(['keep', 'o1'].sort());
+    expect(result.ejectedUid).toBe('o2');
+  });
 });
 
 describe('previewCombineTriple', () => {
