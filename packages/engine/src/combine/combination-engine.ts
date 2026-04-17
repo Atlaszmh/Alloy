@@ -22,6 +22,8 @@ export interface CombineResult {
   layer: CombineLayer;
   recipeId?: string;
   isNewDiscovery: boolean;
+  consumedUids: string[];  // NEW — uids to remove from stockpile
+  ejectedUid?: string;     // NEW — combine3 fallback only
 }
 
 export interface CombineConfig {
@@ -37,6 +39,10 @@ export interface CombinePreview {
   gem: GemInstance | null;
   /** recipe ID if signature layer and known */
   recipeId?: string;
+  /** only set by previewCombineTriple on fallback */
+  fallbackPair?: [string, string];
+  /** gem that would remain in stockpile */
+  ejectedUid?: string;
 }
 
 const DEFAULT_CONFIG: CombineConfig = {
@@ -152,6 +158,7 @@ export class CombinationEngine {
       layer: 'signature',
       recipeId: recipe.id,
       isNewDiscovery,
+      consumedUids: [gemA.uid, gemB.uid],
     };
   }
 
@@ -189,6 +196,7 @@ export class CombinationEngine {
       layer: 'category',
       recipeId: recipe.id,
       isNewDiscovery: false,
+      consumedUids: [gemA.uid, gemB.uid],
     };
   }
 
@@ -233,7 +241,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Already legendary -> try tier upgrade
@@ -245,7 +253,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Both maxed -- this shouldn't happen because combinable check should prevent it,
@@ -280,7 +288,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // At max tier -> rarity upgrade instead
@@ -290,7 +298,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Both maxed
