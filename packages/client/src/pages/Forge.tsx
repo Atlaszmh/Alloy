@@ -640,6 +640,7 @@ export function Forge() {
       {/* 2. Items area — scrollable middle */}
       <div
         className="overflow-y-auto"
+        data-screen-section="forge-items"
         style={{ flex: 1, minHeight: 0, padding: 'var(--gap-sm) var(--gap-md)' }}
       >
         <div style={{ display: 'flex', gap: 0 }}>
@@ -677,7 +678,7 @@ export function Forge() {
       </div>
 
       {/* 3. Combine workbench — pinned above stockpile */}
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flexShrink: 0 }} data-screen-section="forge-combine">
         <CombineWorkbench
           comboSlots={comboSlots}
           registry={registry}
@@ -692,7 +693,7 @@ export function Forge() {
 
       {/* 3b. Flux spend actions */}
       {runState && (
-        <div style={{
+        <div data-screen-section="forge-flux" style={{
           flexShrink: 0,
           padding: 'var(--gap-md)',
           borderTop: '1px solid var(--color-surface-600)',
@@ -764,7 +765,7 @@ export function Forge() {
       )}
 
       {/* 4. Gem tray — pinned at bottom */}
-      <div style={{ flexShrink: 0, padding: '0 var(--gap-md) var(--gap-sm)' }}>
+      <div style={{ flexShrink: 0, padding: '0 var(--gap-md) var(--gap-sm)' }} data-screen-section="forge-tray">
         <ForgeGemTray
           stockpile={plan.stockpile}
           registry={registry}

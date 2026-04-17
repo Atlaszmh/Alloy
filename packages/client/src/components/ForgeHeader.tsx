@@ -35,6 +35,7 @@ export function ForgeHeader({
   return (
     <div
       className="shrink-0"
+      data-screen-section="forge-header"
       style={{
         backgroundColor: 'var(--color-surface-900)',
         borderBottom: '1px solid var(--color-surface-600)',
@@ -86,7 +87,12 @@ export function ForgeHeader({
         </button>
 
         {/* Done button */}
-        <HapticButton variant="primary" size="sm" onClick={onDone}>
+        <HapticButton
+          variant="primary"
+          size="sm"
+          onClick={onDone}
+          data-primary-action="done-forging"
+        >
           DONE
         </HapticButton>
       </div>
