@@ -286,6 +286,30 @@ describe('DataRegistry', () => {
       const combo = ternaryRegistry.getTernaryCombination('fire_damage', 'cold_damage', 'lightning_damage');
       expect(combo?.id).toBe('meltdown');
     });
+
+    const EXPECTED_TERNARIES: Array<[string, string, string, string]> = [
+      ['fire_damage', 'cold_damage', 'lightning_damage', 'meltdown'],
+      ['crit_chance', 'crit_damage', 'attack_speed', 'warriors_edge'],
+      ['armor_rating', 'block_chance', 'flat_hp', 'bastion'],
+      ['lifesteal', 'hp_regen', 'flat_hp', 'blood_pact'],
+      ['ignite', 'chance_on_crit', 'fire_damage', 'detonator'],
+      ['frostbite', 'chance_on_block', 'cold_damage', 'frost_nova'],
+      ['static_discharge', 'attack_speed', 'lightning_damage', 'thunderbrand'],
+      ['envenom', 'poison_damage', 'chance_on_hit', 'plague_carrier'],
+      ['desperation', 'blood_frenzy', 'attack_speed', 'oathbound_fury'],
+      ['immolation', 'reactive_shield', 'fire_damage', 'phoenix_embers'],
+      ['frostbite', 'fortress', 'cold_damage', 'crystal_aegis'],
+      ['ignite', 'storm_of_flames', 'thermal_shock', 'worldfire'],
+    ];
+
+    describe.each(EXPECTED_TERNARIES)(
+      'ternary combination %s + %s + %s → %s',
+      (a, b, c, expectedId) => {
+        it('resolves via getTernaryCombination', () => {
+          expect(ternaryRegistry.getTernaryCombination(a, b, c)?.id).toBe(expectedId);
+        });
+      },
+    );
   });
 
   describe('Referential Integrity', () => {
