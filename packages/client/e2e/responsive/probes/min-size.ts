@@ -20,16 +20,27 @@ export const minSize: Probe = async (page, ctx) => {
         };
       });
     };
+    // Walk text nodes (not elements) so we only check elements that directly
+    // contain visible text. Walking descendants by `textContent` flooded reports
+    // because every ancestor reports its children's text recursively.
     const texts: { id: string; size: number }[] = [];
+    const seen = new Set<HTMLElement>();
     document.querySelectorAll<HTMLElement>('[data-screen-section]').forEach((section) => {
-      section.querySelectorAll<HTMLElement>('*').forEach((el) => {
-        if (el.textContent && el.textContent.trim().length > 0) {
-          const fs = parseFloat(window.getComputedStyle(el).fontSize);
-          if (Number.isFinite(fs)) {
-            texts.push({ id: el.id || el.tagName.toLowerCase(), size: fs });
+      const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+      let node: Node | null = walker.nextNode();
+      while (node) {
+        if (node.textContent && node.textContent.trim().length > 0) {
+          const parent = node.parentElement;
+          if (parent && !seen.has(parent)) {
+            seen.add(parent);
+            const fs = parseFloat(window.getComputedStyle(parent).fontSize);
+            if (Number.isFinite(fs)) {
+              texts.push({ id: parent.id || parent.tagName.toLowerCase(), size: fs });
+            }
           }
         }
-      });
+        node = walker.nextNode();
+      }
     });
     return {
       gems: elementMin('[data-gem]'),
