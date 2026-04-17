@@ -9,6 +9,7 @@ import { RecipeRegistry } from './recipe-registry.js';
 import { DiscoveryState } from './discovery-state.js';
 import {
   computeAverageQuality,
+  computeAverageQualityN,
   applyMatchingRarityBonus,
   determineOutputTierRarity,
 } from './combine-quality.js';
@@ -22,6 +23,8 @@ export interface CombineResult {
   layer: CombineLayer;
   recipeId?: string;
   isNewDiscovery: boolean;
+  consumedUids: string[];  // NEW — uids to remove from stockpile
+  ejectedUid?: string;     // NEW — combine3 fallback only
 }
 
 export interface CombineConfig {
@@ -37,6 +40,10 @@ export interface CombinePreview {
   gem: GemInstance | null;
   /** recipe ID if signature layer and known */
   recipeId?: string;
+  /** only set by previewCombineTriple on fallback */
+  fallbackPair?: [string, string];
+  /** gem that would remain in stockpile */
+  ejectedUid?: string;
 }
 
 const DEFAULT_CONFIG: CombineConfig = {
@@ -112,6 +119,147 @@ export class CombinationEngine {
     }
   }
 
+  previewCombineTriple(
+    gemA: GemInstance,
+    gemB: GemInstance,
+    gemC: GemInstance,
+  ): CombinePreview | null {
+    if (!gemA.combinable || !gemB.combinable || !gemC.combinable) return null;
+
+    const tempDiscovery = this.discovery.clone();
+    const tempEngine = new CombinationEngine(
+      this.registry, tempDiscovery, this.categoryMap, this.config,
+    );
+
+    const ternaryRecipe = this.registry.findTernaryRecipe(gemA, gemB, gemC);
+    const ternaryKnown = this.discovery.hasAttempted3(
+      gemA.affixId, gemB.affixId, gemC.affixId,
+    );
+
+    try {
+      const result = tempEngine.combine3(gemA, gemB, gemC, '__preview__');
+
+      if (ternaryRecipe) {
+        return {
+          known: ternaryKnown,
+          layer: result.layer,
+          gem: ternaryKnown ? result.gem : null,
+          recipeId: ternaryKnown ? result.recipeId : undefined,
+        };
+      }
+
+      // Fallback path: look up the winning pair's binary attempt history so the
+      // preview reflects what the player will actually see after the combine.
+      const [pairA, pairB] = result.consumedUids as [string, string];
+      const gems = [gemA, gemB, gemC];
+      const lookupAffix = (uid: string) => gems.find(g => g.uid === uid)?.affixId ?? '';
+      const binaryKnown = this.discovery.hasAttempted(lookupAffix(pairA), lookupAffix(pairB));
+      return {
+        known: binaryKnown,
+        layer: result.layer,
+        gem: binaryKnown ? result.gem : null,
+        recipeId: binaryKnown ? result.recipeId : undefined,
+        fallbackPair: [pairA, pairB],
+        ejectedUid: result.ejectedUid,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  combine3(
+    gemA: GemInstance,
+    gemB: GemInstance,
+    gemC: GemInstance,
+    outputUid: string,
+    keepGemUid?: string,
+  ): CombineResult {
+    for (const g of [gemA, gemB, gemC]) {
+      if (!g.combinable) throw new Error(`Gem ${g.uid} is not combinable`);
+    }
+
+    this.discovery.recordAttempt3(gemA.affixId, gemB.affixId, gemC.affixId);
+
+    const recipe = this.registry.findTernaryRecipe(gemA, gemB, gemC);
+    if (recipe) {
+      const avgQ = computeAverageQualityN(gemA, gemB, gemC);
+      const unanimousRarity =
+        gemA.rarity === gemB.rarity && gemB.rarity === gemC.rarity;
+      const boosted = applyMatchingRarityBonus(
+        avgQ, unanimousRarity, this.config.matchingRarityBonus,
+      );
+      const { tier, rarity } = determineOutputTierRarity(boosted);
+
+      const recipeDepth =
+        Math.max(gemA.recipeDepth, gemB.recipeDepth, gemC.recipeDepth)
+        + recipe.maxDepthContribution;
+      const tags = [...new Set([
+        ...recipe.tags, ...gemA.tags, ...gemB.tags, ...gemC.tags,
+      ])];
+
+      const isNewDiscovery = !this.discovery.isDiscovered(recipe.id);
+      this.discovery.recordDiscovery(recipe.id);
+
+      const gem = createGem(outputUid, recipe.outputAffixId, tier, rarity, {
+        sourceRecipe: recipe.id,
+        recipeDepth,
+        tags,
+        outputBonusEffects: recipe.outputBonusEffects,
+      });
+
+      return {
+        gem,
+        layer: 'signature',
+        recipeId: recipe.id,
+        isNewDiscovery,
+        consumedUids: [gemA.uid, gemB.uid, gemC.uid],
+      };
+    }
+
+    // 4. Fallback: KEEP-anchored pair + eject third
+    const keep = keepGemUid
+      ? [gemA, gemB, gemC].find(g => g.uid === keepGemUid) ?? gemA
+      : gemA;
+    const others = [gemA, gemB, gemC].filter(g => g.uid !== keep.uid);
+    if (others.length !== 2) {
+      throw new Error('combine3 fallback: expected exactly 2 non-KEEP gems');
+    }
+    const [o1, o2] = others;
+
+    const layerRank: Record<CombineLayer, number> = {
+      signature: 3, category: 2, generic: 1,
+    };
+
+    const probe1 = this.previewCombine(keep, o1);
+    const probe2 = this.previewCombine(keep, o2);
+
+    const cand: Array<{ other: GemInstance; preview: CombinePreview | null }> = [
+      { other: o1, preview: probe1 },
+      { other: o2, preview: probe2 },
+    ];
+    cand.sort((a, b) => {
+      const la = a.preview ? layerRank[a.preview.layer] : 0;
+      const lb = b.preview ? layerRank[b.preview.layer] : 0;
+      if (la !== lb) return lb - la;
+      const eva = calculateEffectiveValue(keep.tier, keep.rarity)
+        + calculateEffectiveValue(a.other.tier, a.other.rarity);
+      const evb = calculateEffectiveValue(keep.tier, keep.rarity)
+        + calculateEffectiveValue(b.other.tier, b.other.rarity);
+      return evb - eva;
+    });
+
+    const winner = cand[0];
+    const ejected = cand[1].other;
+
+    const binaryResult = this.combine(keep, winner.other, outputUid, keep.uid);
+
+    return {
+      ...binaryResult,
+      consumedUids: [keep.uid, winner.other.uid],
+      ejectedUid: ejected.uid,
+    };
+  }
+
   private trySignature(
     gemA: GemInstance,
     gemB: GemInstance,
@@ -152,6 +300,7 @@ export class CombinationEngine {
       layer: 'signature',
       recipeId: recipe.id,
       isNewDiscovery,
+      consumedUids: [gemA.uid, gemB.uid],
     };
   }
 
@@ -189,6 +338,7 @@ export class CombinationEngine {
       layer: 'category',
       recipeId: recipe.id,
       isNewDiscovery: false,
+      consumedUids: [gemA.uid, gemB.uid],
     };
   }
 
@@ -233,7 +383,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Already legendary -> try tier upgrade
@@ -245,7 +395,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Both maxed -- this shouldn't happen because combinable check should prevent it,
@@ -280,7 +430,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // At max tier -> rarity upgrade instead
@@ -290,7 +440,7 @@ export class CombinationEngine {
         recipeDepth,
         tags,
       });
-      return { gem, layer: 'generic', isNewDiscovery: false };
+      return { gem, layer: 'generic', isNewDiscovery: false, consumedUids: [gemA.uid, gemB.uid] };
     }
 
     // Both maxed

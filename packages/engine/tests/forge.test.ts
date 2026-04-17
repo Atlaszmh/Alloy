@@ -6,9 +6,11 @@ import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
 import type { BalanceConfig } from '../src/types/balance.js';
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance, data.recipes);
 const balance = data.balance;
 
 /** Helper: creates mock gems for testing. */
@@ -253,6 +255,44 @@ describe('Forge System', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.state.loadout.weapon.baseStats).toEqual({ stat1: 'DEX', stat2: 'DEX' });
+  });
+
+  // --- combine3 ---
+
+  function makeEngineForForgeTest(): CombinationEngine {
+    const recipeRegistry = registry.getRecipeRegistry();
+    const categoryMap: Record<string, string> = {};
+    for (const affix of registry.getAllAffixes()) categoryMap[affix.id] = affix.category;
+    return new CombinationEngine(recipeRegistry, new DiscoveryState(), categoryMap);
+  }
+
+  it('applyForgeAction — combine3 with engine dispatches and produces a result', () => {
+    const state = makeState();
+    const engine = makeEngineForForgeTest();
+    // makeMockGems in forge.test.ts: gem1=fire_damage, gem2=chance_on_hit, gem3=cold_damage
+    // (gem2, gem1) → Ignite; gem3 ejected.
+    const action: ForgeAction = {
+      kind: 'combine3',
+      gemUid1: 'gem2', gemUid2: 'gem1', gemUid3: 'gem3',
+      keepGemUid: 'gem2',
+    };
+    const result = applyForgeAction(state, action, registry, engine);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.stockpile.find(g => g.uid === 'gem3')).toBeDefined();
+    expect(result.state.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
+    expect(result.state.stockpile.find(g => g.uid === 'gem2')).toBeUndefined();
+  });
+
+  it('applyForgeAction — combine3 without engine fails gracefully', () => {
+    const state = makeState();
+    const action: ForgeAction = {
+      kind: 'combine3',
+      gemUid1: 'gem2', gemUid2: 'gem1', gemUid3: 'gem3',
+      keepGemUid: 'gem2',
+    };
+    const result = applyForgeAction(state, action, registry);
+    expect(result.ok).toBe(false);
   });
 
   // --- Socket/unsocket round-trip ---

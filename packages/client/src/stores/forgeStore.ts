@@ -7,7 +7,7 @@ interface ForgeStoreState {
   selectedOrbUid: string | null;
   confirmModalOpen: boolean;
 
-  /** 3-slot combine workbench (engine only uses first 2 currently) */
+  /** 3-slot combine workbench — all 3 slots are active (slot 0 = KEEP) */
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
 
   /** Item selection phase — weapon first, then armor, then done */

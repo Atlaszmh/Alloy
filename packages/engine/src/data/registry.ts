@@ -9,11 +9,16 @@ function combinationKey(id1: string, id2: string): string {
   return [id1, id2].sort().join('+');
 }
 
+function ternaryKey(id1: string, id2: string, id3: string): string {
+  return [id1, id2, id3].sort().join('+');
+}
+
 export class DataRegistry {
   private affixMap: Map<string, AffixDef>;
   private affixByTag: Map<AffixTag, AffixDef[]>;
   private combinationMap: Map<string, CompoundAffixDef>;
   private combinationById: Map<string, CompoundAffixDef>;
+  private ternaryCombinationMap: Map<string, CompoundAffixDef>;
   private synergyMap: Map<string, SynergyDef>;
   private baseItemMap: Map<string, BaseItemDef>;
   private baseItemsByType: Map<string, BaseItemDef[]>;
@@ -42,10 +47,18 @@ export class DataRegistry {
     // Build combination maps (order-independent key)
     this.combinationMap = new Map();
     this.combinationById = new Map();
+    this.ternaryCombinationMap = new Map();
     for (const combo of combinations) {
-      const key = combinationKey(combo.components[0], combo.components[1]);
-      this.combinationMap.set(key, combo);
       this.combinationById.set(combo.id, combo);
+      if (combo.components.length === 2) {
+        const [a, b] = combo.components;
+        const key = combinationKey(a, b);
+        this.combinationMap.set(key, combo);
+      } else if (combo.components.length === 3) {
+        const [a, b, c] = combo.components;
+        const key = ternaryKey(a, b, c);
+        this.ternaryCombinationMap.set(key, combo);
+      }
     }
 
     // Build synergy map
@@ -93,6 +106,15 @@ export class DataRegistry {
   getCombination(affixId1: string, affixId2: string): CompoundAffixDef | null {
     const key = combinationKey(affixId1, affixId2);
     return this.combinationMap.get(key) ?? null;
+  }
+
+  getTernaryCombination(
+    affixId1: string,
+    affixId2: string,
+    affixId3: string,
+  ): CompoundAffixDef | null {
+    const key = ternaryKey(affixId1, affixId2, affixId3);
+    return this.ternaryCombinationMap.get(key) ?? null;
   }
 
   getCombinationById(id: string): CompoundAffixDef | null {

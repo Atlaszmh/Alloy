@@ -10,9 +10,9 @@ export interface RecipeComponent {
 export interface RecipeDefinition {
   id: string;
   name: string;
-  type: 'signature' | 'category';
-  components?: [RecipeComponent, RecipeComponent]; // For signature recipes
-  categoryRule?: { inputA: string; inputB: string }; // For category recipes
+  type: 'signature' | 'signature3' | 'category';
+  components?: [RecipeComponent, RecipeComponent] | [RecipeComponent, RecipeComponent, RecipeComponent];
+  categoryRule?: { inputA: string; inputB: string };
   outputAffixId: string;
   outputBonusEffects: StatModifier[];
   maxDepthContribution: number;
@@ -25,9 +25,14 @@ function signatureKey(a: string, b: string): string {
   return [a, b].sort().join('+');
 }
 
+function ternaryKey(a: string, b: string, c: string): string {
+  return [a, b, c].sort().join('+');
+}
+
 export class RecipeRegistry {
   private byId: Map<string, RecipeDefinition>;
   private signatureMap: Map<string, RecipeDefinition>;
+  private ternaryMap: Map<string, RecipeDefinition>;
   private categoryRecipes: RecipeDefinition[];
   private all: RecipeDefinition[];
 
@@ -42,6 +47,18 @@ export class RecipeRegistry {
         const keyA = `${recipe.components[0].kind}:${recipe.components[0].id}`;
         const keyB = `${recipe.components[1].kind}:${recipe.components[1].id}`;
         this.signatureMap.set(signatureKey(keyA, keyB), recipe);
+      }
+    }
+
+    // Build ternary lookup: key by sorted triple of component identifiers
+    this.ternaryMap = new Map();
+    for (const recipe of recipes) {
+      if (recipe.type === 'signature3' && recipe.components && recipe.components.length === 3) {
+        const [c1, c2, c3] = recipe.components;
+        const keyA = `${c1.kind}:${c1.id}`;
+        const keyB = `${c2.kind}:${c2.id}`;
+        const keyC = `${c3.kind}:${c3.id}`;
+        this.ternaryMap.set(ternaryKey(keyA, keyB, keyC), recipe);
       }
     }
 
@@ -75,6 +92,33 @@ export class RecipeRegistry {
       }
     }
 
+    return null;
+  }
+
+  /**
+   * Find a signature3 recipe matching three gems.
+   * For each gem, we check both:
+   *   - kind:'affix' match on gem.affixId
+   *   - kind:'recipe' match on gem.sourceRecipe
+   */
+  findTernaryRecipe(
+    gemA: { affixId: string; sourceRecipe?: string },
+    gemB: { affixId: string; sourceRecipe?: string },
+    gemC: { affixId: string; sourceRecipe?: string },
+  ): RecipeDefinition | null {
+    const idsFor = (g: { affixId: string; sourceRecipe?: string }) => {
+      const ids = [`affix:${g.affixId}`];
+      if (g.sourceRecipe) ids.push(`recipe:${g.sourceRecipe}`);
+      return ids;
+    };
+    const idsA = idsFor(gemA);
+    const idsB = idsFor(gemB);
+    const idsC = idsFor(gemC);
+
+    for (const a of idsA) for (const b of idsB) for (const c of idsC) {
+      const hit = this.ternaryMap.get(ternaryKey(a, b, c));
+      if (hit) return hit;
+    }
     return null;
   }
 

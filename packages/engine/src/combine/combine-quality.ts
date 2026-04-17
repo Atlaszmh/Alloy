@@ -21,6 +21,15 @@ export function computeAverageQuality(a: GemInstance, b: GemInstance): number {
   return (qa + qb) / 2;
 }
 
+export function computeAverageQualityN(...gems: GemInstance[]): number {
+  if (gems.length === 0) return 0;
+  const sum = gems.reduce(
+    (acc, g) => acc + calculateEffectiveValue(g.tier, g.rarity),
+    0,
+  );
+  return sum / gems.length;
+}
+
 export function applyMatchingRarityBonus(
   avgQuality: number,
   raritiesMatch: boolean,

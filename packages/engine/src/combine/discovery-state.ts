@@ -27,6 +27,14 @@ export class DiscoveryState {
     return this.attempted.has(DiscoveryState.comboKey(idA, idB));
   }
 
+  recordAttempt3(idA: string, idB: string, idC: string): void {
+    this.attempted.add(DiscoveryState.comboKey3(idA, idB, idC));
+  }
+
+  hasAttempted3(idA: string, idB: string, idC: string): boolean {
+    return this.attempted.has(DiscoveryState.comboKey3(idA, idB, idC));
+  }
+
   recordSynergyDiscovery(synergyId: string): void {
     this.discoveredSynergies.add(synergyId);
   }
@@ -71,5 +79,9 @@ export class DiscoveryState {
 
   static comboKey(idA: string, idB: string): string {
     return [idA, idB].sort().join('+');
+  }
+
+  static comboKey3(idA: string, idB: string, idC: string): string {
+    return [idA, idB, idC].sort().join('+');
   }
 }

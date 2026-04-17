@@ -7,7 +7,7 @@ import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance, data.recipes);
 
 function makeMockGems(): GemInstance[] {
   return [
@@ -185,6 +185,92 @@ describe('ForgePlan', () => {
       const result = getPlannedStats(plan, registry);
       expect(result.stats.maxHP).toBeGreaterThan(0);
       expect(typeof result.stats.physicalDamage).toBe('number');
+    });
+  });
+
+  describe('applyPlanAction — combine3', () => {
+    it('fallback: consumes winning pair, leaves third in stockpile', () => {
+      const state = makeForgeState();
+      const plan = createForgePlan(state, registry);
+      // makeMockGems in forge-plan.test.ts: gem1=fire_damage, gem5=chance_on_hit, gem3=flat_hp
+      // (gem5, gem1) form Ignite; gem3 is ejected.
+      const result = applyPlanAction(plan, {
+        kind: 'combine3',
+        gemUid1: 'gem5', gemUid2: 'gem1', gemUid3: 'gem3',
+        keepGemUid: 'gem5',
+      }, registry);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // gem5 and gem1 consumed, gem3 remains
+      expect(result.plan.stockpile.find(g => g.uid === 'gem5')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'gem3')).toBeDefined();
+      // Output gem added with the Ignite source recipe
+      expect(result.plan.stockpile.some(g => g.sourceRecipe === 'ignite')).toBe(true);
+      // Only consumed uids are locked
+      expect(result.plan.lockedGemUids.has('gem5')).toBe(true);
+      expect(result.plan.lockedGemUids.has('gem1')).toBe(true);
+      expect(result.plan.lockedGemUids.has('gem3')).toBe(false);
+      // Action logged
+      const lastAction = result.plan.actionLog[result.plan.actionLog.length - 1];
+      expect(lastAction.kind).toBe('combine3');
+    });
+
+    it('fails when a gem uid is not in stockpile', () => {
+      const state = makeForgeState();
+      const plan = createForgePlan(state, registry);
+      const result = applyPlanAction(plan, {
+        kind: 'combine3',
+        gemUid1: 'gem1', gemUid2: 'gem5', gemUid3: 'nonexistent',
+        keepGemUid: 'gem1',
+      }, registry);
+      expect(result.ok).toBe(false);
+    });
+
+    it('fails when a gem is non-combinable', () => {
+      const gems = [
+        createGem('a', 'fire_damage', 1, 'common'),
+        createGem('b', 'chance_on_hit', 1, 'common'),
+        createGem('c', 'flat_hp', 1, 'common', { recipeDepth: 3 }), // MAX_RECIPE_DEPTH → not combinable
+      ];
+      const state = createForgeState(gems, 'iron_sword', 'iron_armor', 1, data.balance, false);
+      const plan = createForgePlan(state, registry);
+      const result = applyPlanAction(plan, {
+        kind: 'combine3',
+        gemUid1: 'a', gemUid2: 'b', gemUid3: 'c',
+        keepGemUid: 'a',
+      }, registry);
+      expect(result.ok).toBe(false);
+    });
+
+    it('ternary match: consumes all 3 gems, locks all 3, adds output', () => {
+      // Meltdown: fire_damage + cold_damage + lightning_damage
+      const gems = [
+        createGem('a', 'fire_damage', 2, 'rare'),
+        createGem('b', 'cold_damage', 2, 'rare'),
+        createGem('c', 'lightning_damage', 2, 'rare'),
+      ];
+      const state = createForgeState(gems, 'iron_sword', 'iron_armor', 1, data.balance, false);
+      const plan = createForgePlan(state, registry);
+      const result = applyPlanAction(plan, {
+        kind: 'combine3',
+        gemUid1: 'a', gemUid2: 'b', gemUid3: 'c',
+        keepGemUid: 'a',
+      }, registry);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // All 3 gems consumed
+      expect(result.plan.stockpile.find(g => g.uid === 'a')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'b')).toBeUndefined();
+      expect(result.plan.stockpile.find(g => g.uid === 'c')).toBeUndefined();
+      // Meltdown output present
+      expect(result.plan.stockpile.some(g => g.sourceRecipe === 'meltdown')).toBe(true);
+      // All 3 source uids locked
+      expect(result.plan.lockedGemUids.has('a')).toBe(true);
+      expect(result.plan.lockedGemUids.has('b')).toBe(true);
+      expect(result.plan.lockedGemUids.has('c')).toBe(true);
     });
   });
 

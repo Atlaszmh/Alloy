@@ -150,6 +150,9 @@ export function Forge() {
       const engine = new CombinationEngine(recipeRegistry, discovery, categoryMap, {
         matchingRarityBonus: registry.getBalance().gem.matchingRarityBonus,
       });
+      if (filled.length === 3) {
+        return engine.previewCombineTriple(filled[0], filled[1], filled[2]);
+      }
       return engine.previewCombine(filled[0], filled[1]);
     } catch {
       return null;
@@ -506,18 +509,33 @@ export function Forge() {
     if (!plan) return;
     const keep = comboSlots[0];
     if (!keep) return;
+    const filled = comboSlots.filter((s): s is GemInstance => s !== null);
+
+    if (filled.length === 3) {
+      const b = comboSlots[1]!;
+      const c = comboSlots[2]!;
+      const result = applyAction(
+        {
+          kind: 'combine3',
+          gemUid1: keep.uid, gemUid2: b.uid, gemUid3: c.uid,
+          keepGemUid: keep.uid,
+        },
+        registry,
+      );
+      if (result.ok) { playSound('combineMerge'); clearComboSlots(); }
+      else { playSound('combineFail'); }
+      return;
+    }
+
+    // Binary path (unchanged)
     const other = comboSlots[1] ?? comboSlots[2];
     if (!other) return;
     const result = applyAction(
       { kind: 'combine', gemUid1: keep.uid, gemUid2: other.uid, keepGemUid: keep.uid },
       registry,
     );
-    if (result.ok) {
-      playSound('combineMerge');
-      clearComboSlots();
-    } else {
-      playSound('combineFail');
-    }
+    if (result.ok) { playSound('combineMerge'); clearComboSlots(); }
+    else { playSound('combineFail'); }
   }, [plan, comboSlots, applyAction, registry, clearComboSlots]);
 
   // ── Socket click (equip tab) ──

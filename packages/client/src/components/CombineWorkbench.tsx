@@ -32,7 +32,7 @@ interface CombineWorkbenchProps {
 
 type GlowSignal = 'none' | 'white' | 'gold';
 
-function computeGlowSignal(
+export function computeGlowSignal(
   slots: [GemInstance | null, GemInstance | null, GemInstance | null],
   registry: DataRegistry,
 ): GlowSignal {
@@ -42,6 +42,13 @@ function computeGlowSignal(
   const others = [slots[1], slots[2]].filter((s): s is GemInstance => s !== null);
   if (others.length === 0) return 'none';
 
+  // If 3 slots filled, check ternary first.
+  if (others.length === 2) {
+    const ternary = registry.getTernaryCombination(keep.affixId, others[0].affixId, others[1].affixId);
+    if (ternary) return 'gold';
+  }
+
+  // Fall back to any KEEP-anchored pair hitting a binary recipe.
   for (const other of others) {
     const result = registry.getCombination(keep.affixId, other.affixId);
     if (result) return 'gold';

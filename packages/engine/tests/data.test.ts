@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import { RecipesSchema } from '../src/data/schemas.js';
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
+import { createGem } from '../src/types/gem.js';
 
 describe('Data Loading & Validation', () => {
   it('should load and validate all data files without errors', () => {
@@ -131,6 +135,21 @@ describe('DataRegistry', () => {
       expect(registry.getAllCombinations().length).toBeGreaterThanOrEqual(29);
     });
 
+    it('resolves Combustion via getCombination(chance_on_crit, fire_damage)', () => {
+      const combo = registry.getCombination('chance_on_crit', 'fire_damage');
+      expect(combo?.id).toBe('combustion');
+    });
+
+    it('resolves Thornfrost via getCombination(retribution_aura, cold_damage)', () => {
+      const combo = registry.getCombination('retribution_aura', 'cold_damage');
+      expect(combo?.id).toBe('thornfrost');
+    });
+
+    it('resolves Soul Eclipse via getCombination(soul_rend, soul_siphon)', () => {
+      const combo = registry.getCombination('soul_rend', 'soul_siphon');
+      expect(combo?.id).toBe('soul_eclipse');
+    });
+
     it('should have description fields on all combinations', () => {
       for (const combo of registry.getAllCombinations()) {
         expect(typeof combo.description).toBe('string');
@@ -192,15 +211,138 @@ describe('DataRegistry', () => {
     });
   });
 
+  describe('RecipesSchema — signature3', () => {
+    it('RecipesSchema accepts signature3 with 3 components', () => {
+      const ternary = [{
+        id: 'test_triple',
+        name: 'Test Triple',
+        type: 'signature3',
+        components: [
+          { kind: 'affix', id: 'fire_damage' },
+          { kind: 'affix', id: 'cold_damage' },
+          { kind: 'affix', id: 'lightning_damage' },
+        ],
+        outputAffixId: 'test_triple',
+        outputBonusEffects: [],
+        maxDepthContribution: 1,
+        tags: [],
+      }];
+      expect(() => RecipesSchema.parse(ternary)).not.toThrow();
+    });
+
+    it('RecipesSchema rejects signature3 with only 2 components', () => {
+      const bad = [{
+        id: 'bad', name: 'Bad', type: 'signature3',
+        components: [
+          { kind: 'affix', id: 'fire_damage' },
+          { kind: 'affix', id: 'cold_damage' },
+        ],
+        outputAffixId: 'bad', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      }];
+      expect(() => RecipesSchema.parse(bad)).toThrow();
+    });
+
+    it('RecipesSchema rejects signature with 3 components', () => {
+      const bad = [{
+        id: 'bad', name: 'Bad', type: 'signature',
+        components: [
+          { kind: 'affix', id: 'a' },
+          { kind: 'affix', id: 'b' },
+          { kind: 'affix', id: 'c' },
+        ],
+        outputAffixId: 'bad', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      }];
+      expect(() => RecipesSchema.parse(bad)).toThrow();
+    });
+  });
+
+  describe('DataRegistry — ternary compound lookup', () => {
+    const ternaryData = loadAndValidateData();
+    const ternaryRegistry = new DataRegistry(
+      ternaryData.affixes, ternaryData.combinations, ternaryData.synergies,
+      ternaryData.baseItems, ternaryData.balance, ternaryData.recipes,
+    );
+
+    it('getTernaryCombination returns null when no matching 3-component compound exists', () => {
+      expect(ternaryRegistry.getTernaryCombination('x', 'y', 'z')).toBeNull();
+    });
+
+    it('combine3 with live data resolves Meltdown', () => {
+      const a = createGem('a', 'fire_damage', 2, 'rare');
+      const b = createGem('b', 'cold_damage', 2, 'rare');
+      const c = createGem('c', 'lightning_damage', 2, 'rare');
+      const recipeRegistry = ternaryRegistry.getRecipeRegistry();
+      const map: Record<string, string> = {};
+      for (const affix of ternaryRegistry.getAllAffixes()) map[affix.id] = affix.category;
+      const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), map);
+      const result = engine.combine3(a, b, c, 'out', 'a');
+      expect(result.recipeId).toBe('meltdown');
+      expect(result.gem.affixId).toBe('meltdown');
+    });
+
+    it('getTernaryCombination resolves Meltdown metadata', () => {
+      const combo = ternaryRegistry.getTernaryCombination('fire_damage', 'cold_damage', 'lightning_damage');
+      expect(combo?.id).toBe('meltdown');
+    });
+
+    const EXPECTED_TERNARIES: Array<[string, string, string, string]> = [
+      ['fire_damage', 'cold_damage', 'lightning_damage', 'meltdown'],
+      ['crit_chance', 'crit_damage', 'attack_speed', 'warriors_edge'],
+      ['armor_rating', 'block_chance', 'flat_hp', 'bastion'],
+      ['lifesteal', 'hp_regen', 'flat_hp', 'blood_pact'],
+      ['ignite', 'chance_on_crit', 'fire_damage', 'detonator'],
+      ['frostbite', 'chance_on_block', 'cold_damage', 'frost_nova'],
+      ['static_discharge', 'attack_speed', 'lightning_damage', 'thunderbrand'],
+      ['envenom', 'poison_damage', 'chance_on_hit', 'plague_carrier'],
+      ['desperation', 'blood_frenzy', 'attack_speed', 'oathbound_fury'],
+      ['immolation', 'reactive_shield', 'fire_damage', 'phoenix_embers'],
+      ['frostbite', 'fortress', 'cold_damage', 'crystal_aegis'],
+      ['ignite', 'storm_of_flames', 'thermal_shock', 'worldfire'],
+    ];
+
+    describe.each(EXPECTED_TERNARIES)(
+      'ternary combination %s + %s + %s → %s',
+      (a, b, c, expectedId) => {
+        it('resolves via getTernaryCombination', () => {
+          expect(ternaryRegistry.getTernaryCombination(a, b, c)?.id).toBe(expectedId);
+        });
+      },
+    );
+  });
+
   describe('Referential Integrity', () => {
-    it('all combination component IDs reference valid affix IDs', () => {
+    it('all combination component IDs reference valid affix or compound IDs', () => {
       const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      // Compound outputs (e.g. retribution_aura, soul_rend) are valid component IDs
+      // for higher-order recipes like Thornfrost and Soul Eclipse.
+      const compoundIds = new Set(registry.getAllCombinations().map(c => c.id));
+      const validIds = new Set([...affixIds, ...compoundIds]);
       const combinations = registry.getAllCombinations();
       for (const combo of combinations) {
         for (const componentId of combo.components) {
           expect(
-            affixIds.has(componentId),
-            `Combination "${combo.id}" references unknown affix "${componentId}"`
+            validIds.has(componentId),
+            `Combination "${combo.id}" references unknown affix or compound "${componentId}"`
+          ).toBe(true);
+        }
+      }
+    });
+
+    it('all recipe components reference valid affix or recipe IDs', () => {
+      // recipes.json uses typed components ({kind:"affix"|"recipe", id}). This test
+      // guards the kind:"recipe" path that combinations.json referential test can't see.
+      const affixIds = new Set(registry.getAllAffixes().map(a => a.id));
+      const recipeRegistry = registry.getRecipeRegistry();
+      const recipeIds = new Set(recipeRegistry.getAll().map(r => r.id));
+      for (const recipe of recipeRegistry.getAll()) {
+        if (!recipe.components) continue;
+        for (const comp of recipe.components) {
+          const validSet = comp.kind === 'affix' ? affixIds : recipeIds;
+          expect(
+            validSet.has(comp.id),
+            `Recipe "${recipe.id}" references unknown ${comp.kind} component "${comp.id}"`
           ).toBe(true);
         }
       }

@@ -491,6 +491,296 @@
   },
 
   {
+    "id": "soul_eclipse",
+    "name": "Soul Eclipse",
+    "type": "signature",
+    "components": [
+      { "kind": "recipe", "id": "soul_rend" },
+      { "kind": "recipe", "id": "soul_siphon" }
+    ],
+    "outputAffixId": "soul_eclipse",
+    "outputBonusEffects": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+      { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+      { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 },
+      { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+  },
+
+  {
+    "id": "thornfrost",
+    "name": "Thornfrost",
+    "type": "signature",
+    "components": [
+      { "kind": "recipe", "id": "retribution_aura" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "thornfrost",
+    "outputBonusEffects": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+      { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 },
+      { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+  },
+
+  {
+    "id": "combustion",
+    "name": "Combustion",
+    "type": "signature",
+    "components": [
+      { "kind": "affix", "id": "chance_on_crit" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "combustion",
+    "outputBonusEffects": [
+      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 },
+      { "stat": "compound.combustion.critBurnStacks", "op": "flat", "value": 3 },
+      { "stat": "compound.combustion.fireDotBonus", "op": "flat", "value": 0.30 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "crit", "trigger"]
+  },
+
+  {
+    "id": "meltdown",
+    "name": "Meltdown",
+    "type": "signature3",
+    "components": [
+      { "kind": "affix", "id": "fire_damage" },
+      { "kind": "affix", "id": "cold_damage" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "meltdown",
+    "outputBonusEffects": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 },
+      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
+  },
+
+  {
+    "id": "warriors_edge",
+    "name": "Warrior's Edge",
+    "type": "signature3",
+    "components": [
+      { "kind": "affix", "id": "crit_chance" },
+      { "kind": "affix", "id": "crit_damage" },
+      { "kind": "affix", "id": "attack_speed" }
+    ],
+    "outputAffixId": "warriors_edge",
+    "outputBonusEffects": [
+      { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
+      { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
+      { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "crit", "attack_speed", "capstone"]
+  },
+
+  {
+    "id": "bastion",
+    "name": "Bastion",
+    "type": "signature3",
+    "components": [
+      { "kind": "affix", "id": "armor_rating" },
+      { "kind": "affix", "id": "block_chance" },
+      { "kind": "affix", "id": "flat_hp" }
+    ],
+    "outputAffixId": "bastion",
+    "outputBonusEffects": [
+      { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
+      { "stat": "compound.bastion.shieldOnBlockPercent", "op": "flat", "value": 0.10 },
+      { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "armor", "block", "hp", "capstone"]
+  },
+
+  {
+    "id": "blood_pact",
+    "name": "Blood Pact",
+    "type": "signature3",
+    "components": [
+      { "kind": "affix", "id": "lifesteal" },
+      { "kind": "affix", "id": "hp_regen" },
+      { "kind": "affix", "id": "flat_hp" }
+    ],
+    "outputAffixId": "blood_pact",
+    "outputBonusEffects": [
+      { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "lifesteal", "hp_regen", "hp", "capstone"]
+  },
+
+  {
+    "id": "detonator",
+    "name": "Detonator",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "ignite" },
+      { "kind": "affix", "id": "chance_on_crit" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "detonator",
+    "outputBonusEffects": [
+      { "stat": "compound.detonator.active", "op": "flat", "value": 1 },
+      { "stat": "compound.detonator.stackConsumeChance", "op": "flat", "value": 0.40 },
+      { "stat": "compound.detonator.burstMultiplier", "op": "flat", "value": 2.5 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "fire", "crit", "trigger"]
+  },
+
+  {
+    "id": "frost_nova",
+    "name": "Frost Nova",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "frostbite" },
+      { "kind": "affix", "id": "chance_on_block" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "frost_nova",
+    "outputBonusEffects": [
+      { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 },
+      { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "cold", "block", "defensive_trigger"]
+  },
+
+  {
+    "id": "thunderbrand",
+    "name": "Thunderbrand",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "static_discharge" },
+      { "kind": "affix", "id": "attack_speed" },
+      { "kind": "affix", "id": "lightning_damage" }
+    ],
+    "outputAffixId": "thunderbrand",
+    "outputBonusEffects": [
+      { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
+      { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "lightning", "attack_speed", "trigger"]
+  },
+
+  {
+    "id": "plague_carrier",
+    "name": "Plague Carrier",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "envenom" },
+      { "kind": "affix", "id": "poison_damage" },
+      { "kind": "affix", "id": "chance_on_hit" }
+    ],
+    "outputAffixId": "plague_carrier",
+    "outputBonusEffects": [
+      { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
+      { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
+      { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
+    ],
+    "maxDepthContribution": 1,
+    "tags": ["compound", "poison", "trigger"]
+  },
+
+  {
+    "id": "oathbound_fury",
+    "name": "Oathbound Fury",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "desperation" },
+      { "kind": "recipe", "id": "blood_frenzy" },
+      { "kind": "affix", "id": "attack_speed" }
+    ],
+    "outputAffixId": "oathbound_fury",
+    "outputBonusEffects": [
+      { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
+      { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
+      { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
+      { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "attack_speed", "lifesteal", "low_hp_trigger", "capstone"]
+  },
+
+  {
+    "id": "phoenix_embers",
+    "name": "Phoenix Embers",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "immolation" },
+      { "kind": "recipe", "id": "reactive_shield" },
+      { "kind": "affix", "id": "fire_damage" }
+    ],
+    "outputAffixId": "phoenix_embers",
+    "outputBonusEffects": [
+      { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+      { "stat": "compound.phoenix_embers.aoeBurnOnHit", "op": "flat", "value": 1.5 },
+      { "stat": "compound.phoenix_embers.killHealPercent", "op": "flat", "value": 0.10 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "fire", "barrier", "defensive_trigger", "capstone"]
+  },
+
+  {
+    "id": "crystal_aegis",
+    "name": "Crystal Aegis",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "frostbite" },
+      { "kind": "recipe", "id": "fortress" },
+      { "kind": "affix", "id": "cold_damage" }
+    ],
+    "outputAffixId": "crystal_aegis",
+    "outputBonusEffects": [
+      { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
+      { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
+      { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
+    ],
+    "maxDepthContribution": 2,
+    "tags": ["compound", "cold", "armor", "defensive", "capstone"]
+  },
+
+  {
+    "id": "worldfire",
+    "name": "Worldfire",
+    "type": "signature3",
+    "components": [
+      { "kind": "recipe", "id": "ignite" },
+      { "kind": "recipe", "id": "storm_of_flames" },
+      { "kind": "recipe", "id": "thermal_shock" }
+    ],
+    "outputAffixId": "worldfire",
+    "outputBonusEffects": [
+      { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+      { "stat": "compound.worldfire.fireDamageBonus", "op": "percent", "value": 0.50 },
+      { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 },
+      { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 }
+    ],
+    "maxDepthContribution": 3,
+    "tags": ["compound", "fire", "lightning", "cold", "elemental", "capstone"]
+  },
+
+  {
     "id": "cat_off_off",
     "name": "Offensive Fusion",
     "type": "category",

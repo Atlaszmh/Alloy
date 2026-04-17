@@ -200,4 +200,90 @@ describe('RecipeRegistry', () => {
     expect(result2).not.toBeNull();
     expect(result2!.id).toBe('cat_off_def');
   });
+
+  describe('findTernaryRecipe', () => {
+    const ternaryRecipes: RecipeDefinition[] = [
+      {
+        id: 'meltdown', name: 'Meltdown', type: 'signature3',
+        components: [
+          { kind: 'affix', id: 'fire_damage' },
+          { kind: 'affix', id: 'cold_damage' },
+          { kind: 'affix', id: 'lightning_damage' },
+        ],
+        outputAffixId: 'meltdown', outputBonusEffects: [],
+        maxDepthContribution: 2, tags: [],
+      },
+      {
+        id: 'mixed', name: 'Mixed', type: 'signature3',
+        components: [
+          { kind: 'recipe', id: 'ignite' },
+          { kind: 'affix', id: 'chance_on_crit' },
+          { kind: 'affix', id: 'fire_damage' },
+        ],
+        outputAffixId: 'mixed', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      },
+    ];
+
+    const registry = new RecipeRegistry(ternaryRecipes);
+
+    it('resolves all-basic ternary by affixId', () => {
+      const result = registry.findTernaryRecipe(
+        { affixId: 'fire_damage' },
+        { affixId: 'cold_damage' },
+        { affixId: 'lightning_damage' },
+      );
+      expect(result?.id).toBe('meltdown');
+    });
+
+    it('is order-invariant (all 6 permutations hit)', () => {
+      const gems = [
+        { affixId: 'fire_damage' },
+        { affixId: 'cold_damage' },
+        { affixId: 'lightning_damage' },
+      ];
+      const perms = [
+        [0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0],
+      ];
+      for (const [i,j,k] of perms) {
+        expect(registry.findTernaryRecipe(gems[i], gems[j], gems[k])?.id).toBe('meltdown');
+      }
+    });
+
+    it('resolves mixed-kind ternary using sourceRecipe', () => {
+      const result = registry.findTernaryRecipe(
+        { affixId: 'ignite', sourceRecipe: 'ignite' },
+        { affixId: 'chance_on_crit' },
+        { affixId: 'fire_damage' },
+      );
+      expect(result?.id).toBe('mixed');
+    });
+
+    it('returns null when no recipe matches', () => {
+      const result = registry.findTernaryRecipe(
+        { affixId: 'fire_damage' },
+        { affixId: 'cold_damage' },
+        { affixId: 'thorns' },
+      );
+      expect(result).toBeNull();
+    });
+
+    it('does not match binary signature recipes', () => {
+      const binary: RecipeDefinition[] = [{
+        id: 'ignite', name: 'Ignite', type: 'signature',
+        components: [
+          { kind: 'affix', id: 'chance_on_hit' },
+          { kind: 'affix', id: 'fire_damage' },
+        ],
+        outputAffixId: 'ignite', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      }];
+      const r = new RecipeRegistry(binary);
+      expect(r.findTernaryRecipe(
+        { affixId: 'chance_on_hit' },
+        { affixId: 'fire_damage' },
+        { affixId: 'anything' },
+      )).toBeNull();
+    });
+  });
 });

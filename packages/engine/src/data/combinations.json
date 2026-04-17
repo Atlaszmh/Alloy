@@ -555,6 +555,72 @@
     "tags": ["compound", "hp", "armor", "utility"]
   },
   {
+    "id": "soul_eclipse",
+    "name": "Soul Eclipse",
+    "description": "Soul Rend and Soul Siphon fused — drain life while destroying it; overheal bursts as shadow.",
+    "weaponFlavorText": "Soul-rend procs heal you for 10% of damage dealt. Lifesteal hits have a 20% chance to apply Soul Rend. While both buffs are active, each strike deals an additional 2% of the target's current HP as bonus damage.",
+    "armorFlavorText": "Overhealing past max HP bursts outward as shadow AoE damage — 50% of the excess, converted to a shockwave. Standing near you during a heal spike is unsurvivable.",
+    "components": ["soul_rend", "soul_siphon"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+      { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+      { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+      { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 }
+    ],
+    "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+  },
+
+  {
+    "id": "thornfrost",
+    "name": "Thornfrost",
+    "description": "Retaliation thorns gain cold damage and slow attackers who hit you.",
+    "weaponFlavorText": "Your thorns aren't just spikes — they're needles of frost. Each retaliation tick deals +50% of its damage as cold, and has a 20% chance to apply a chill stack.",
+    "armorFlavorText": "Whenever thorns fire, the attacker is slowed by 40% for 30 seconds. The more they hit you, the slower they get.",
+    "components": ["retribution_aura", "cold_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+      { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 }
+    ],
+    "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+  },
+
+  {
+    "id": "combustion",
+    "name": "Combustion",
+    "description": "Crits detonate fire at the target; wearer radiates flame when struck critically.",
+    "weaponFlavorText": "Every crit becomes an ignition point. Fire bursts outward from the target, stamping burn stacks on everything within the blast. Crit-heavy builds finally get a fire payoff that doesn't gate on chance_on_hit.",
+    "armorFlavorText": "When enemies crit you, they catch fire. Your armor radiates heat under pressure — the harder they hit, the more they burn for it.",
+    "components": ["chance_on_crit", "fire_damage"],
+    "fluxCost": 2,
+    "slotCost": 2,
+    "weaponEffect": [
+      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 },
+      { "stat": "compound.combustion.critBurnStacks", "op": "flat", "value": 3 },
+      { "stat": "compound.combustion.fireDotBonus", "op": "flat", "value": 0.30 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 }
+    ],
+    "tags": ["compound", "fire", "crit", "trigger"]
+  },
+
+  {
     "id": "sanguine_endurance",
     "name": "Sanguine Endurance",
     "description": "Allows lifesteal to overheal up to 120% max health creating permanent shields on weapons; increases health pool and heals from enemy damage on armor.",
@@ -572,5 +638,250 @@
       { "stat": "compound.sanguine_endurance.overhealCap", "op": "flat", "value": 1.20 }
     ],
     "tags": ["compound", "lifesteal", "hp", "utility"]
+  },
+
+  {
+    "id": "meltdown",
+    "name": "Meltdown",
+    "description": "Three elements in chorus. Each elemental proc has a chance to trigger one of the other two.",
+    "weaponFlavorText": "Fire, cold, and lightning align. Every proc of one element rolls 25% to trigger another; overlapping statuses get +15% damage. Mixed-element builds become greater than the sum of their parts.",
+    "armorFlavorText": "Your armor resonates across the elemental spectrum. Absorbed energy from any element is redistributed — making hybrid builds disproportionately survivable.",
+    "components": ["fire_damage", "cold_damage", "lightning_damage"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+    ],
+    "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
+  },
+
+  {
+    "id": "warriors_edge",
+    "name": "Warrior's Edge",
+    "description": "Crits stack attack speed; a sustained DPS spiral.",
+    "weaponFlavorText": "Every crit adds a stacking +10% attack speed buff (up to 5 stacks). The more you hit, the more you hit.",
+    "armorFlavorText": "Your armor lets your hands move faster after each precise strike lands.",
+    "components": ["crit_chance", "crit_damage", "attack_speed"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
+      { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
+      { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "crit", "attack_speed", "capstone"]
+  },
+
+  {
+    "id": "bastion",
+    "name": "Bastion",
+    "description": "Blocks refresh a small HP shield.",
+    "weaponFlavorText": "Even your offense benefits — blocks grant a fleeting 10% HP shield that soaks the next hit.",
+    "armorFlavorText": "Every block refreshes a 10%-max-HP shield for 30s. Reliable blockers become nearly unkillable in extended fights.",
+    "components": ["armor_rating", "block_chance", "flat_hp"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.bastion.active", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
+      { "stat": "compound.bastion.shieldOnBlockPercent", "op": "flat", "value": 0.10 },
+      { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
+    ],
+    "tags": ["compound", "armor", "block", "hp", "capstone"]
+  },
+
+  {
+    "id": "blood_pact",
+    "name": "Blood Pact",
+    "description": "Overheal permanently raises max HP for the round.",
+    "weaponFlavorText": "Overheal (lifesteal + regen past max) converts 20% into a temporary max-HP buff that lasts the round. The longer you fight, the tankier you become.",
+    "armorFlavorText": "Your armor catches excess vitality and binds it into your frame for the duration of the round.",
+    "components": ["lifesteal", "hp_regen", "flat_hp"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
+    ],
+    "tags": ["compound", "lifesteal", "hp_regen", "hp", "capstone"]
+  },
+
+  {
+    "id": "detonator",
+    "name": "Detonator",
+    "description": "Crits consume Ignite stacks for a burst detonation.",
+    "weaponFlavorText": "On crit, 40% chance to consume all Ignite stacks on the target for a 2.5x burst. Stack Ignite patiently, then unload.",
+    "armorFlavorText": "Critical hits against you release a reactive fire burst scaled by your own burn gear.",
+    "components": ["ignite", "chance_on_crit", "fire_damage"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.detonator.active", "op": "flat", "value": 1 },
+      { "stat": "compound.detonator.stackConsumeChance", "op": "flat", "value": 0.40 },
+      { "stat": "compound.detonator.burstMultiplier", "op": "flat", "value": 2.5 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.detonator.active", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "fire", "crit", "trigger"]
+  },
+
+  {
+    "id": "frost_nova",
+    "name": "Frost Nova",
+    "description": "Blocks release a chill cone; Frostbite-slowed enemies take bonus cold.",
+    "weaponFlavorText": "Enemies already slowed by your Frostbite take +30% cold damage from everything.",
+    "armorFlavorText": "On successful block, 50% chance to release a cone of chill that slows and damages nearby attackers.",
+    "components": ["frostbite", "chance_on_block", "cold_damage"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+      { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
+      { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 }
+    ],
+    "tags": ["compound", "cold", "block", "defensive_trigger"]
+  },
+
+  {
+    "id": "thunderbrand",
+    "name": "Thunderbrand",
+    "description": "Faster attacks grow the chain; each segment adds lightning damage.",
+    "weaponFlavorText": "Static Discharge chains now extend by 2 extra targets; each segment deals +10% lightning damage over the previous one.",
+    "armorFlavorText": "Incoming lightning energy builds in your armor; it discharges back along attackers on the next proc.",
+    "components": ["static_discharge", "attack_speed", "lightning_damage"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
+      { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
+      { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "lightning", "attack_speed", "trigger"]
+  },
+
+  {
+    "id": "plague_carrier",
+    "name": "Plague Carrier",
+    "description": "Poison spreads to nearby enemies; stacks transfer with the spread.",
+    "weaponFlavorText": "On Envenom proc, 50% of the target's poison stacks spread to enemies within 3 radius.",
+    "armorFlavorText": "Enemies poisoned by your retaliation aura spread contagion to their allies.",
+    "components": ["envenom", "poison_damage", "chance_on_hit"],
+    "fluxCost": 3,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
+      { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
+      { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 }
+    ],
+    "tags": ["compound", "poison", "trigger"]
+  },
+
+  {
+    "id": "oathbound_fury",
+    "name": "Oathbound Fury",
+    "description": "Low-HP triggers compound: massive AS stacked with massive lifesteal, once per fight.",
+    "weaponFlavorText": "Below 30% HP, for 90s: +300% attack speed stacked with +400% lifesteal. Once per fight. Live or die here.",
+    "armorFlavorText": "Your armor itself seems to rage when the wearer is near death.",
+    "components": ["desperation", "blood_frenzy", "attack_speed"],
+    "fluxCost": 4,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
+      { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
+      { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
+      { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+      { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 }
+    ],
+    "tags": ["compound", "attack_speed", "lifesteal", "low_hp_trigger", "capstone"]
+  },
+
+  {
+    "id": "phoenix_embers",
+    "name": "Phoenix Embers",
+    "description": "Taking damage re-ignites you and grants a barrier; kills while ignited heal.",
+    "weaponFlavorText": "Every kill while you're ignited heals 10% max HP. Rebirth through combat.",
+    "armorFlavorText": "On damage, both Immolation's AoE burn (1.5x) AND Reactive Shield's barrier fire simultaneously. You become the fire.",
+    "components": ["immolation", "reactive_shield", "fire_damage"],
+    "fluxCost": 4,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+      { "stat": "compound.phoenix_embers.killHealPercent", "op": "flat", "value": 0.10 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+      { "stat": "compound.phoenix_embers.aoeBurnOnHit", "op": "flat", "value": 1.5 }
+    ],
+    "tags": ["compound", "fire", "barrier", "defensive_trigger", "capstone"]
+  },
+
+  {
+    "id": "crystal_aegis",
+    "name": "Crystal Aegis",
+    "description": "Fortress (<80% HP) also applies AoE chill; attackers slow while you hold.",
+    "weaponFlavorText": "While Fortress is active, an aura of 30% chill blankets enemies within 3 radius.",
+    "armorFlavorText": "Your Fortress state now radiates outward — attackers approaching become slower and weaker.",
+    "components": ["frostbite", "fortress", "cold_damage"],
+    "fluxCost": 4,
+    "slotCost": 3,
+    "weaponEffect": [
+      { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
+      { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
+      { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
+    ],
+    "tags": ["compound", "cold", "armor", "defensive", "capstone"]
+  },
+
+  {
+    "id": "worldfire",
+    "name": "Worldfire",
+    "description": "Ultimate fire capstone. Burns, cross-element procs, and thermal stuns unified.",
+    "weaponFlavorText": "+50% fire damage globally. Ignite stacks spread in a 3-radius AoE. Burning enemies have a 20% chance to thermal-stun on every tick. Commit to fire; become fire.",
+    "armorFlavorText": "You are the fire. Everything within 3 radius of you lives at your mercy — burns leap from target to target, and the flames stun as they consume.",
+    "components": ["ignite", "storm_of_flames", "thermal_shock"],
+    "fluxCost": 5,
+    "slotCost": 4,
+    "weaponEffect": [
+      { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+      { "stat": "compound.worldfire.fireDamageBonus", "op": "percent", "value": 0.50 },
+      { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 },
+      { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 }
+    ],
+    "armorEffect": [
+      { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+      { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 }
+    ],
+    "tags": ["compound", "fire", "lightning", "cold", "elemental", "capstone"]
   }
 ]

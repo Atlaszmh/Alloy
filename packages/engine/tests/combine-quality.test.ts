@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeAverageQuality,
+  computeAverageQualityN,
   determineOutputTierRarity,
   applyMatchingRarityBonus,
 } from '../src/combine/combine-quality.js';
@@ -32,6 +33,21 @@ describe('combine-quality', () => {
 
     it('works with zero bonus', () => {
       expect(applyMatchingRarityBonus(4.0, true, 0)).toBe(4.0);
+    });
+  });
+
+  describe('computeAverageQualityN', () => {
+    it('averages effective values over N gems', () => {
+      const a = createGem('a', 'fire_damage', 1, 'common');
+      const b = createGem('b', 'cold_damage', 2, 'common');
+      const c = createGem('c', 'lightning_damage', 3, 'common');
+      expect(computeAverageQualityN(a, b, c)).toBeCloseTo(2.0);
+    });
+
+    it('works for binary too (parity with computeAverageQuality)', () => {
+      const a = createGem('a', 'fire_damage', 1, 'common');
+      const b = createGem('b', 'cold_damage', 3, 'common');
+      expect(computeAverageQualityN(a, b)).toBeCloseTo(computeAverageQuality(a, b));
     });
   });
 

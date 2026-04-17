@@ -37,7 +37,10 @@ const CompoundAffixDefSchema = z.object({
   description: z.string(),
   weaponFlavorText: z.string(),
   armorFlavorText: z.string(),
-  components: z.tuple([z.string(), z.string()]),
+  components: z.union([
+    z.tuple([z.string(), z.string()]),
+    z.tuple([z.string(), z.string(), z.string()]),
+  ]),
   fluxCost: z.number().int().positive(),
   slotCost: z.number().int().positive(),
   weaponEffect: z.array(StatModifierSchema),
@@ -62,13 +65,35 @@ const CategoryRuleSchema = z.object({
 const RecipeDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(['signature', 'category']),
-  components: z.tuple([RecipeComponentSchema, RecipeComponentSchema]).optional(),
+  type: z.enum(['signature', 'signature3', 'category']),
+  components: z.union([
+    z.tuple([RecipeComponentSchema, RecipeComponentSchema]),
+    z.tuple([RecipeComponentSchema, RecipeComponentSchema, RecipeComponentSchema]),
+  ]).optional(),
   categoryRule: CategoryRuleSchema.optional(),
   outputAffixId: z.string(),
   outputBonusEffects: z.array(StatModifierSchema),
   maxDepthContribution: z.number().int().nonnegative(),
   tags: z.array(z.string()),
+}).superRefine((recipe, ctx) => {
+  if (recipe.type === 'signature') {
+    if (!recipe.components || recipe.components.length !== 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'signature recipes must have exactly 2 components',
+        path: ['components'],
+      });
+    }
+  }
+  if (recipe.type === 'signature3') {
+    if (!recipe.components || recipe.components.length !== 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'signature3 recipes must have exactly 3 components',
+        path: ['components'],
+      });
+    }
+  }
 });
 
 export const RecipesSchema = z.array(RecipeDefinitionSchema);
