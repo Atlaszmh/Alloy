@@ -224,10 +224,24 @@ describe('DataRegistry', () => {
       }];
       expect(() => RecipesSchema.parse(bad)).toThrow();
     });
+
+    it('RecipesSchema rejects signature with 3 components', () => {
+      const bad = [{
+        id: 'bad', name: 'Bad', type: 'signature',
+        components: [
+          { kind: 'affix', id: 'a' },
+          { kind: 'affix', id: 'b' },
+          { kind: 'affix', id: 'c' },
+        ],
+        outputAffixId: 'bad', outputBonusEffects: [],
+        maxDepthContribution: 1, tags: [],
+      }];
+      expect(() => RecipesSchema.parse(bad)).toThrow();
+    });
   });
 
   describe('DataRegistry — ternary compound lookup', () => {
-    it('getTernaryCombination resolves a 3-component compound (once data is added)', () => {
+    it('getTernaryCombination returns null when no matching 3-component compound exists', () => {
       const data = loadAndValidateData();
       const registry = new DataRegistry(
         data.affixes, data.combinations, data.synergies,

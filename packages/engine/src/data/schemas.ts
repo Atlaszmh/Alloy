@@ -76,6 +76,15 @@ const RecipeDefinitionSchema = z.object({
   maxDepthContribution: z.number().int().nonnegative(),
   tags: z.array(z.string()),
 }).superRefine((recipe, ctx) => {
+  if (recipe.type === 'signature') {
+    if (!recipe.components || recipe.components.length !== 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'signature recipes must have exactly 2 components',
+        path: ['components'],
+      });
+    }
+  }
   if (recipe.type === 'signature3') {
     if (!recipe.components || recipe.components.length !== 3) {
       ctx.addIssue({
