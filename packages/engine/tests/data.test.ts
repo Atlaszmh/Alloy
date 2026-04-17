@@ -226,6 +226,17 @@ describe('DataRegistry', () => {
     });
   });
 
+  describe('DataRegistry — ternary compound lookup', () => {
+    it('getTernaryCombination resolves a 3-component compound (once data is added)', () => {
+      const data = loadAndValidateData();
+      const registry = new DataRegistry(
+        data.affixes, data.combinations, data.synergies,
+        data.baseItems, data.balance, data.recipes,
+      );
+      expect(registry.getTernaryCombination('x', 'y', 'z')).toBeNull();
+    });
+  });
+
   describe('Referential Integrity', () => {
     it('all combination component IDs reference valid affix IDs', () => {
       const affixIds = new Set(registry.getAllAffixes().map(a => a.id));

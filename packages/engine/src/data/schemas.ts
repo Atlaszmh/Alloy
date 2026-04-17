@@ -37,7 +37,10 @@ const CompoundAffixDefSchema = z.object({
   description: z.string(),
   weaponFlavorText: z.string(),
   armorFlavorText: z.string(),
-  components: z.tuple([z.string(), z.string()]),
+  components: z.union([
+    z.tuple([z.string(), z.string()]),
+    z.tuple([z.string(), z.string(), z.string()]),
+  ]),
   fluxCost: z.number().int().positive(),
   slotCost: z.number().int().positive(),
   weaponEffect: z.array(StatModifierSchema),
