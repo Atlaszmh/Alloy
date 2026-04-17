@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/responsive/global-setup.ts',
   timeout: 120_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
@@ -9,12 +10,12 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
 
   projects: [
-    // ── Real mobile devices ──
     {
       name: 'iphone-se',
+      testIgnore: ['responsive/**'],
       use: {
         browserName: 'chromium',
-        viewport: { width: 375, height: 667 },  // iPhone SE / 8 — small phone
+        viewport: { width: 375, height: 667 },
         isMobile: true,
         hasTouch: true,
         deviceScaleFactor: 2,
@@ -22,9 +23,10 @@ export default defineConfig({
     },
     {
       name: 'iphone-15-pro',
+      testIgnore: ['responsive/**'],
       use: {
         browserName: 'chromium',
-        viewport: { width: 393, height: 852 },  // iPhone 15 Pro — standard modern phone
+        viewport: { width: 393, height: 852 },
         isMobile: true,
         hasTouch: true,
         deviceScaleFactor: 3,
@@ -32,19 +34,29 @@ export default defineConfig({
     },
     {
       name: 'pixel-7',
+      testIgnore: ['responsive/**'],
       use: {
         browserName: 'chromium',
-        viewport: { width: 412, height: 915 },  // Pixel 7 — large Android
+        viewport: { width: 412, height: 915 },
         isMobile: true,
         hasTouch: true,
         deviceScaleFactor: 2.625,
       },
     },
-    // ── Desktop (9:16 framed view) ──
     {
       name: 'desktop',
+      testIgnore: ['responsive/**'],
       use: {
         browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+      },
+    },
+    {
+      name: 'responsive',
+      testMatch: /responsive\/.*\.spec\.ts$/,
+      use: {
+        browserName: 'chromium',
+        // Default only; probes call page.setViewportSize per test.
         viewport: { width: 1280, height: 800 },
       },
     },
