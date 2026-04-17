@@ -1945,7 +1945,27 @@ Add (before the category recipes block):
 
 - [ ] **Step 2: Append the compound entry to `combinations.json`**
 
-(Full JSON per the spec — see `docs/superpowers/specs/2026-04-16-three-new-gem-combos-design.md` for the flavor text.)
+```json
+{
+  "id": "combustion", "name": "Combustion",
+  "description": "Crits detonate fire at the target; wearer radiates flame when struck critically.",
+  "weaponFlavorText": "Every crit becomes an ignition point. Fire bursts outward from the target, stamping burn stacks on everything within the blast. Crit-heavy builds finally get a fire payoff that doesn't gate on chance_on_hit.",
+  "armorFlavorText": "When enemies crit you, they catch fire. Your armor radiates heat under pressure — the harder they hit, the more they burn for it.",
+  "components": ["chance_on_crit", "fire_damage"],
+  "fluxCost": 2, "slotCost": 2,
+  "weaponEffect": [
+    { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+    { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 },
+    { "stat": "compound.combustion.critBurnStacks", "op": "flat", "value": 3 },
+    { "stat": "compound.combustion.fireDotBonus", "op": "flat", "value": 0.30 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
+    { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 }
+  ],
+  "tags": ["compound", "fire", "crit", "trigger"]
+}
+```
 
 - [ ] **Step 3: Run the engine data tests**
 
