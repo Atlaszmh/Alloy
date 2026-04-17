@@ -750,7 +750,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { CombinationEngine } from '../src/combine/combination-engine.js';
 import { RecipeRegistry, type RecipeDefinition } from '../src/combine/recipe-registry.js';
 import { DiscoveryState } from '../src/combine/discovery-state.js';
-import { createGem } from '../src/types/gem.js';
+import { createGem, calculateEffectiveValue } from '../src/types/gem.js';
 
 const ternaryRecipes: RecipeDefinition[] = [
   {
@@ -844,10 +844,10 @@ describe('combine3 — ternary signature match', () => {
     const c2 = createGem('c', 'lightning_damage', 2, 'magic');
     const r2 = engine2.combine3(a2, b2, c2, 'out2');
 
-    // Unanimous quality should be >= mixed quality
-    const q1 = r1.gem.tier * (r1.gem.rarity === 'epic' ? 2 : 1.5);
-    const q2 = r2.gem.tier * (r2.gem.rarity === 'epic' ? 2 : 1.5);
-    expect(q1).toBeGreaterThanOrEqual(q2);
+    // Use the engine's own quality function — don't hand-roll the formula.
+    const ev1 = calculateEffectiveValue(r1.gem.tier, r1.gem.rarity);
+    const ev2 = calculateEffectiveValue(r2.gem.tier, r2.gem.rarity);
+    expect(ev1).toBeGreaterThanOrEqual(ev2);
   });
 
   it('non-combinable gem throws', () => {
@@ -1244,7 +1244,7 @@ previewCombineTriple(
     };
     // If fallback fired, populate fallbackPair + ejectedUid
     if (!ternaryRecipe) {
-      preview.fallbackPair = result.consumedUids as [string, string];
+      preview.fallbackPair = [result.consumedUids[0], result.consumedUids[1]];
       preview.ejectedUid = result.ejectedUid;
     }
     return preview;
@@ -1288,33 +1288,25 @@ Wires the ternary combine into the forge-plan layer so the UI can dispatch it.
 
 - [ ] **Step 1: Edit the type**
 
-Add the new variant to the union:
+Insert the new variant into the union between the existing `combine` and `boost_combine` lines. Preserve order and formatting of other variants exactly:
 
 ```ts
-export type ForgeAction =
-  | { kind: 'socket_gem'; gemUid: string; target: 'weapon' | 'armor'; slotIndex: number }
-  | { kind: 'unsocket_gem'; gemUid: string }
   | { kind: 'combine'; gemUid1: string; gemUid2: string; keepGemUid?: string }
   | { kind: 'combine3'; gemUid1: string; gemUid2: string; gemUid3: string; keepGemUid?: string }
   | { kind: 'boost_combine' }
-  | ...; // rest unchanged
 ```
-
-Match the exact shape of the existing union — preserve order and formatting.
 
 - [ ] **Step 2: Type-check**
 
 Run: `pnpm -r exec tsc --noEmit`
-Expected: new type errors will flag any switch statements missing a case for `'combine3'`. Fix minimal things to satisfy the compiler (add fall-through `case 'combine3':` cases that throw `not implemented` — real handlers come in the next task).
+Expected: clean. The `applyForgeAction` switch in `forge-state.ts:80` has a `default: return fail('Unknown action kind')` branch that catches unmapped kinds, so adding the union variant does NOT produce a compile error — real handlers land in Task 3.3. Similarly the plan-layer `applyPlanAction` in `forge-plan.ts:61` uses a default. No stubs needed.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add packages/engine/src/types/forge-action.ts packages/engine/src/forge/forge-plan.ts packages/engine/src/forge/forge-state.ts
-git commit -m "feat(engine): add combine3 variant to ForgeAction (handlers stubbed)"
+git add packages/engine/src/types/forge-action.ts
+git commit -m "feat(engine): add combine3 variant to ForgeAction"
 ```
-
-(If the stubs touched more files than expected, add them. A common site is exhaustiveness-asserting `default` branches.)
 
 ---
 
@@ -1472,53 +1464,109 @@ git commit -m "feat(engine): planCombine3 consumes winning pair, leaves ejected 
 - Modify: `packages/engine/src/forge/forge-state.ts`
 - Modify: `packages/engine/tests/forge.test.ts`
 
+The real `applyCombine` (lines 164–220 of `forge-state.ts`) takes `combinationEngine?` as a 4th positional arg and, when present, calls `combinationEngine.combine(gem1, gem2, ...)` directly against `state.stockpile` — no plan layer, no `createForgePlan`. `applyCombine3` mirrors this exactly.
+
 - [ ] **Step 1: Write failing test**
 
-Append to `forge.test.ts`:
+Append to `forge.test.ts`. Note: tests that exercise the engine path need to build a `CombinationEngine` and pass it as the 4th arg to `applyForgeAction`:
 
 ```ts
-it('applyForgeAction — combine3 dispatches correctly', () => {
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
+
+function makeEngine(): CombinationEngine {
+  const recipeRegistry = registry.getRecipeRegistry();
+  const categoryMap: Record<string, string> = {};
+  for (const affix of registry.getAllAffixes()) categoryMap[affix.id] = affix.category;
+  return new CombinationEngine(recipeRegistry, new DiscoveryState(), categoryMap);
+}
+
+it('applyForgeAction — combine3 with engine dispatches and produces a result', () => {
+  const state = makeState();
+  const engine = makeEngine();
+  const action: ForgeAction = {
+    kind: 'combine3',
+    gemUid1: 'gem2', gemUid2: 'gem1', gemUid3: 'gem3',
+    keepGemUid: 'gem2',
+  };
+  const result = applyForgeAction(state, action, registry, engine);
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  // gem2 (chance_on_hit) + gem1 (fire_damage) form Ignite; gem3 (cold_damage) ejected
+  expect(result.state.stockpile.find(g => g.uid === 'gem3')).toBeDefined();
+  expect(result.state.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
+  expect(result.state.stockpile.find(g => g.uid === 'gem2')).toBeUndefined();
+});
+
+it('applyForgeAction — combine3 without engine fails gracefully', () => {
   const state = makeState();
   const action: ForgeAction = {
     kind: 'combine3',
     gemUid1: 'gem2', gemUid2: 'gem1', gemUid3: 'gem3',
     keepGemUid: 'gem2',
   };
-  const result = applyForgeAction(state, action, registry);
-  expect(result.ok).toBe(true);
+  const result = applyForgeAction(state, action, registry);  // no engine
+  expect(result.ok).toBe(false);
 });
 ```
+
+(Note: `makeMockGems` in `forge.test.ts` has `gem1=fire_damage`, `gem2=chance_on_hit`, `gem3=cold_damage` — confirm at the top of the test file and adjust uids if the fixtures have changed.)
 
 - [ ] **Step 2: Run test — verify FAIL**
 
 Run: `cd packages/engine && pnpm vitest run tests/forge.test.ts -t combine3`
-Expected: FAIL — unhandled action kind.
+Expected: FAIL — switch default returns "Unknown action kind".
 
 - [ ] **Step 3: Implement**
 
-Edit `packages/engine/src/forge/forge-state.ts`. In the `applyForgeAction` switch, add:
+Edit `packages/engine/src/forge/forge-state.ts`. In the `applyForgeAction` switch (around line 91), add a new case below `combine`:
 
 ```ts
 case 'combine3':
-  return applyCombine3(state, action, registry);
+  return applyCombine3(state, action, registry, combinationEngine);
 ```
 
-And implement `applyCombine3` mirroring the existing `applyCombine`:
+Below the existing `applyCombine` function, add `applyCombine3` mirroring it exactly:
 
 ```ts
 function applyCombine3(
   state: ForgeState,
   action: Extract<ForgeAction, { kind: 'combine3' }>,
   registry: DataRegistry,
-): ApplyResult {
-  const plan = createForgePlan(state, registry);
-  const planResult = applyPlanAction(plan, action, registry);
-  if (!planResult.ok) return { ok: false, error: planResult.error };
-  return { ok: true, state: commitPlan(planResult.plan, state) };
+  combinationEngine?: CombinationEngine,
+): ForgeResult {
+  const idx1 = findGemIndex(state.stockpile, action.gemUid1);
+  if (idx1 === -1) return fail('First gem not found in stockpile');
+  const idx2 = findGemIndex(state.stockpile, action.gemUid2);
+  if (idx2 === -1) return fail('Second gem not found in stockpile');
+  const idx3 = findGemIndex(state.stockpile, action.gemUid3);
+  if (idx3 === -1) return fail('Third gem not found in stockpile');
+
+  const gem1 = state.stockpile[idx1];
+  const gem2 = state.stockpile[idx2];
+  const gem3 = state.stockpile[idx3];
+
+  if (!combinationEngine) {
+    return fail('combine3 requires a CombinationEngine');
+  }
+
+  try {
+    const outputUid = `combined3_${action.gemUid1}_${action.gemUid2}_${action.gemUid3}`;
+    const result = combinationEngine.combine3(gem1, gem2, gem3, outputUid, action.keepGemUid);
+
+    // Remove only consumed uids; ejected gem stays in stockpile.
+    let newStockpile = state.stockpile;
+    for (const uid of result.consumedUids) {
+      newStockpile = removeFromStockpile(newStockpile, uid);
+    }
+    newStockpile = [...newStockpile, result.gem];
+
+    return ok({ ...state, stockpile: newStockpile });
+  } catch (e) {
+    return fail((e as Error).message);
+  }
 }
 ```
-
-(Use the existing commit/projection helpers; don't re-invent the plan→state conversion. If the binary `applyCombine` doesn't use this exact idiom, mirror whatever it does instead.)
 
 - [ ] **Step 4: Run tests — verify PASS**
 
@@ -1529,7 +1577,7 @@ Expected: all PASS.
 
 ```bash
 git add packages/engine/src/forge/forge-state.ts packages/engine/tests/forge.test.ts
-git commit -m "feat(engine): applyForgeAction dispatches combine3"
+git commit -m "feat(engine): applyForgeAction dispatches combine3 via CombinationEngine"
 ```
 
 ---
@@ -1570,22 +1618,68 @@ A simpler approach: test `computeGlowSignal` directly by exporting it.
 
 - [ ] **Step 2: Export + test `computeGlowSignal`**
 
-In `CombineWorkbench.tsx`, add `export` to the `computeGlowSignal` function so it can be imported by the test. Write the test:
+In `CombineWorkbench.tsx`, add `export` to the `computeGlowSignal` function so it can be imported by the test. Write the test file:
 
 ```ts
+import { describe, it, expect } from 'vitest';
 import { computeGlowSignal } from './CombineWorkbench';
-// Mock registry with getCombination + getTernaryCombination
-it('returns gold for a ternary recipe match', () => {
-  const fakeRegistry = {
-    getCombination: () => null,
-    getTernaryCombination: (a: string, b: string, c: string) =>
-      ([a,b,c].sort().join(',') === ['fire_damage','cold_damage','lightning_damage'].sort().join(','))
-        ? { id: 'meltdown' } as any : null,
+
+function makeRegistry(opts: {
+  ternary?: Record<string, any>;
+  binary?: Record<string, any>;
+}) {
+  return {
+    getTernaryCombination: (a: string, b: string, c: string) => {
+      const key = [a, b, c].sort().join(',');
+      return opts.ternary?.[key] ?? null;
+    },
+    getCombination: (a: string, b: string) => {
+      const key = [a, b].sort().join(',');
+      return opts.binary?.[key] ?? null;
+    },
   } as any;
-  const slots: any = [
-    { affixId: 'fire_damage' }, { affixId: 'cold_damage' }, { affixId: 'lightning_damage' },
-  ];
-  expect(computeGlowSignal(slots, fakeRegistry)).toBe('gold');
+}
+
+describe('computeGlowSignal', () => {
+  it('returns "gold" for a ternary recipe match', () => {
+    const registry = makeRegistry({
+      ternary: { 'cold_damage,fire_damage,lightning_damage': { id: 'meltdown' } },
+    });
+    const slots: any = [
+      { affixId: 'fire_damage' }, { affixId: 'cold_damage' }, { affixId: 'lightning_damage' },
+    ];
+    expect(computeGlowSignal(slots, registry)).toBe('gold');
+  });
+
+  it('returns "gold" when no ternary matches but a KEEP-anchored binary matches', () => {
+    const registry = makeRegistry({
+      binary: { 'chance_on_hit,fire_damage': { id: 'ignite' } },
+    });
+    const slots: any = [
+      { affixId: 'chance_on_hit' }, { affixId: 'fire_damage' }, { affixId: 'flat_hp' },
+    ];
+    expect(computeGlowSignal(slots, registry)).toBe('gold');
+  });
+
+  it('returns "white" when no recipe matches but slots are filled', () => {
+    const registry = makeRegistry({});
+    const slots: any = [
+      { affixId: 'flat_hp' }, { affixId: 'armor_rating' }, { affixId: 'dodge_chance' },
+    ];
+    expect(computeGlowSignal(slots, registry)).toBe('white');
+  });
+
+  it('returns "none" when slot 0 is empty', () => {
+    const registry = makeRegistry({});
+    const slots: any = [null, { affixId: 'fire_damage' }, { affixId: 'cold_damage' }];
+    expect(computeGlowSignal(slots, registry)).toBe('none');
+  });
+
+  it('returns "none" when only slot 0 is filled', () => {
+    const registry = makeRegistry({});
+    const slots: any = [{ affixId: 'fire_damage' }, null, null];
+    expect(computeGlowSignal(slots, registry)).toBe('none');
+  });
 });
 ```
 
@@ -1704,40 +1798,98 @@ git commit -m "feat(client): Forge.handleCombine branches on filled-slot count (
 
 ---
 
-### Task 4.3: E2E test — 3-gem combine
+### Task 4.3: E2E test — 3-gem combine fallback
 
 **Files:**
 - Modify: `packages/client/e2e/gem-combining.spec.ts`
 
-- [ ] **Step 1: Write the E2E test**
+Existing helpers in the file (verified by reading lines 1–100):
+- `makeGem(uid, affixId, opts?)` — builds a gem object
+- `startRunViaStore(page, { round, phase })` — enters a match at the forge phase
+- `setupForgeWithGems(page, gems)` — seeds the forge stockpile
+- `placeInSlots(page, uidA, uidB)` — puts 2 gems into combine slots 0 and 1. Add a 3-slot variant below.
 
-Append a test case:
+- [ ] **Step 1: Add a 3-slot helper**
+
+At the top of the file alongside `placeInSlots`, add:
 
 ```ts
-test('3-gem fallback combine consumes 2, leaves 1 in stockpile', async ({ page }) => {
-  // Scenario setup: seed match state with Ignite-forming gems + a third unrelated gem.
-  // (Consult the existing gem-combining.spec.ts helpers for how state is seeded.)
+async function placeInSlots3(page: Page, uidA: string, uidB: string, uidC: string) {
+  await page.evaluate(
+    ({ uidA, uidB, uidC }) => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const state = stores.forgeStore.getState();
+      const a = state.plan.stockpile.find((g: any) => g.uid === uidA);
+      const b = state.plan.stockpile.find((g: any) => g.uid === uidB);
+      const c = state.plan.stockpile.find((g: any) => g.uid === uidC);
+      state.setComboSlotByIndex(0, a);
+      state.setComboSlotByIndex(1, b);
+      state.setComboSlotByIndex(2, c);
+    },
+    { uidA, uidB, uidC },
+  );
+  await page.waitForTimeout(300);
+}
+```
 
-  // Drag chance_on_hit to slot 0 (KEEP), fire_damage to slot 1, flat_hp to slot 2.
-  // Click Combine. Assert:
-  //  - A new gem with affixId "ignite" appears in stockpile.
-  //  - chance_on_hit and fire_damage gems are gone.
-  //  - flat_hp gem is still in stockpile.
+- [ ] **Step 2: Write the E2E test**
+
+Append to the `test.describe('Gem Combining', ...)` block:
+
+```ts
+test('C08: 3-gem fallback consumes winning pair, leaves third in stockpile', async ({ page }) => {
+  // (chance_on_hit + fire_damage) forms Ignite; cold_damage is unrelated → ejected.
+  await startRunViaStore(page, { round: 1, phase: 'forge' });
+  await setupForgeWithGems(page, [
+    makeGem('c08-keep', 'chance_on_hit'),
+    makeGem('c08-pair', 'fire_damage'),
+    makeGem('c08-eject', 'cold_damage'),
+  ]);
+
+  const uidsBefore = await page.evaluate(
+    () => ((window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[]).map(g => g.uid),
+  );
+
+  await placeInSlots3(page, 'c08-keep', 'c08-pair', 'c08-eject');
+  await expect(page.locator('[data-combine-btn]')).toBeEnabled();
+  await page.locator('[data-combine-btn]').click();
+  await page.waitForTimeout(500);
+
+  // Ignite output should have appeared
+  const output = await page.evaluate((prev) => {
+    const stockpile = (window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[];
+    return stockpile.find(g => !prev.includes(g.uid)) ?? null;
+  }, uidsBefore);
+  expect(output).not.toBeNull();
+  expect(output.affixId).toBe('ignite');
+
+  // c08-keep and c08-pair consumed; c08-eject remains
+  const state = await page.evaluate(() => {
+    const stockpile = (window as any).__ZUSTAND_STORES__.forgeStore.getState().plan.stockpile as any[];
+    return {
+      hasKeep: stockpile.some(g => g.uid === 'c08-keep'),
+      hasPair: stockpile.some(g => g.uid === 'c08-pair'),
+      hasEject: stockpile.some(g => g.uid === 'c08-eject'),
+    };
+  });
+  expect(state.hasKeep).toBe(false);
+  expect(state.hasPair).toBe(false);
+  expect(state.hasEject).toBe(true);
 });
 ```
 
-(Look at the existing tests in the same file for drag/click/assert idioms. Keep this test small — its purpose is to prove wiring, not to re-test engine behavior.)
+- [ ] **Step 3: Run**
 
-- [ ] **Step 2: Run**
+Run: `cd packages/client && pnpm playwright test e2e/gem-combining.spec.ts -g C08`
+Expected: PASS.
 
-Run: `cd packages/client && pnpm playwright test e2e/gem-combining.spec.ts`
-Expected: PASS. If the test needs fixture data that doesn't exist yet (because Chunk 5 hasn't run), either skip this specific test with a clear comment, or push it into Task 5.4 after binary recipes are added.
+(Note: this test depends on engine changes through Chunk 3 being live. If the binary recipe data for Ignite is already present in `recipes.json`, which it is, no Chunk 5/6 dependency. The test does not depend on any of the NEW recipes — it exercises the ternary fallback path using an existing binary recipe.)
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add packages/client/e2e/gem-combining.spec.ts
-git commit -m "test(client): E2E — 3-gem fallback combine leaves ejected gem in stockpile"
+git commit -m "test(client): E2E — 3-gem fallback leaves ejected gem in stockpile"
 ```
 
 ---
@@ -1820,13 +1972,51 @@ git commit -m "content(combos): add Combustion (chance_on_crit + fire_damage)"
 - Modify: `packages/engine/src/data/recipes.json`
 - Modify: `packages/engine/src/data/combinations.json`
 
-- [ ] **Step 1: Append the recipe entry**
+- [ ] **Step 1: Append recipe to `recipes.json`**
 
-Full JSON per the superseded spec (uses `{ "kind": "recipe", "id": "retribution_aura" }` as one component).
+```json
+{
+  "id": "thornfrost", "name": "Thornfrost", "type": "signature",
+  "components": [
+    { "kind": "recipe", "id": "retribution_aura" },
+    { "kind": "affix", "id": "cold_damage" }
+  ],
+  "outputAffixId": "thornfrost",
+  "outputBonusEffects": [
+    { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+    { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+    { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 },
+    { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+    { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+  ],
+  "maxDepthContribution": 1,
+  "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+}
+```
 
-- [ ] **Step 2: Append the compound metadata entry**
+- [ ] **Step 2: Append compound to `combinations.json`**
 
-`combinations.json` — `components: ["retribution_aura", "cold_damage"]`.
+```json
+{
+  "id": "thornfrost", "name": "Thornfrost",
+  "description": "Retaliation thorns gain cold damage and slow attackers who hit you.",
+  "weaponFlavorText": "Your thorns aren't just spikes — they're needles of frost. Each retaliation tick deals +50% of its damage as cold, and has a 20% chance to apply a chill stack.",
+  "armorFlavorText": "Whenever thorns fire, the attacker is slowed by 40% for 30 seconds. The more they hit you, the slower they get.",
+  "components": ["retribution_aura", "cold_damage"],
+  "fluxCost": 2, "slotCost": 2,
+  "weaponEffect": [
+    { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+    { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
+    { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.thornfrost.active", "op": "flat", "value": 1 },
+    { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
+    { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 }
+  ],
+  "tags": ["compound", "thorns", "cold", "defensive_trigger"]
+}
+```
 
 - [ ] **Step 3: Verify schema validation and combine lookups**
 
@@ -1848,13 +2038,51 @@ git commit -m "content(combos): add Thornfrost (retribution_aura + cold_damage)"
 - Modify: `packages/engine/src/data/recipes.json`
 - Modify: `packages/engine/src/data/combinations.json`
 
-- [ ] **Step 1: Append the recipe**
+- [ ] **Step 1: Append recipe to `recipes.json`**
 
-Full JSON per the superseded spec. Note `fluxCost: 3`, `slotCost: 3`, `maxDepthContribution: 2`, capstone tag.
+```json
+{
+  "id": "soul_eclipse", "name": "Soul Eclipse", "type": "signature",
+  "components": [
+    { "kind": "recipe", "id": "soul_rend" },
+    { "kind": "recipe", "id": "soul_siphon" }
+  ],
+  "outputAffixId": "soul_eclipse",
+  "outputBonusEffects": [
+    { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+    { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+    { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+    { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 },
+    { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+}
+```
 
-- [ ] **Step 2: Append the compound metadata**
+- [ ] **Step 2: Append compound to `combinations.json`**
 
-`combinations.json` — `components: ["soul_rend", "soul_siphon"]`, `fluxCost: 3`, `slotCost: 3`.
+```json
+{
+  "id": "soul_eclipse", "name": "Soul Eclipse",
+  "description": "Soul Rend and Soul Siphon fused — drain life while destroying it; overheal bursts as shadow.",
+  "weaponFlavorText": "Soul-rend procs heal you for 10% of damage dealt. Lifesteal hits have a 20% chance to apply Soul Rend. While both buffs are active, each strike deals an additional 2% of the target's current HP as bonus damage.",
+  "armorFlavorText": "Overhealing past max HP bursts outward as shadow AoE damage — 50% of the excess, converted to a shockwave. Standing near you during a heal spike is unsurvivable.",
+  "components": ["soul_rend", "soul_siphon"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+    { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
+    { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
+    { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
+    { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 }
+  ],
+  "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
+}
+```
 
 - [ ] **Step 3: Verify**
 
@@ -1911,158 +2139,72 @@ git commit -m "test(engine): verify new binary compound lookups resolve"
 
 ## Chunk 6: Content — Ternary Recipe Additions
 
-Adds the 12 ternary recipes. One subtask per recipe for clean commit history and easy balance iteration.
+Adds 12 ternary recipes. Structure:
+- **Task 6.1** — Meltdown, the BBB exemplar, with full JSON and an end-to-end combine3 test landing in the same commit.
+- **Task 6.2** — The remaining 11 recipes batched. All 11 are fully specified with JSON for both `recipes.json` and `combinations.json`; balance iteration with `packages/tools/` happens after landing (separate workstream — stats below are starting points with comments on what to tune).
 
-For each recipe: append to `recipes.json` (`type: "signature3"`) + append to `combinations.json` (`components` tuple of length 3). Full stat-modifier JSON for the 4 exemplars is specified in the spec; the remaining 8 follow the same shape pattern — author stats using the balance notes in the spec as starting points, then balance-iterate with `packages/tools/` before locking numbers.
-
-### Task 6.1: Meltdown (BBB) — fully specified in spec
-
-- [ ] **Step 1: Append recipe + compound entries using the exemplar JSON in the spec.**
-- [ ] **Step 2: `cd packages/engine && pnpm vitest run tests/data.test.ts`**
-- [ ] **Step 3: Commit `"content(combos): add Meltdown (BBB — fire + cold + lightning)"`**
-
-### Task 6.2: Warrior's Edge (BBB) — `crit_chance + crit_damage + attack_speed`
-
-Stat sketch (refine via sim tool):
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
-  { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
-  { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
-]
-```
-
-- [ ] Append recipe + compound.
-- [ ] Test + commit `"content(combos): add Warrior's Edge (BBB — crit/AS capstone)"`.
-
-### Task 6.3: Bastion (BBB) — `armor_rating + block_chance + flat_hp`
-
-Stat sketch:
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
-  { "stat": "compound.bastion.shieldOnBlock", "op": "flat", "value": 0.10 },
-  { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
-]
-```
-
-- [ ] Append recipe + compound.
-- [ ] Test + commit `"content(combos): add Bastion (BBB — tank capstone)"`.
-
-### Task 6.4: Blood Pact (BBB) — `lifesteal + hp_regen + flat_hp`
-
-Stat sketch:
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
-  { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
-]
-```
-
-- [ ] Append recipe + compound.
-- [ ] Test + commit `"content(combos): add Blood Pact (BBB — sustain capstone)"`.
-
-### Task 6.5: Detonator (BBC) — fully specified in spec
-
-- [ ] Append recipe + compound using the exemplar JSON.
-- [ ] Test + commit `"content(combos): add Detonator (BBC — ignite + crit + fire)"`.
-
-### Task 6.6: Frost Nova (BBC) — `recipe:frostbite + chance_on_block + cold_damage`
-
-Stat sketch:
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
-  { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
-  { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 },
-  { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
-]
-```
-
-- [ ] Append + test + commit.
-
-### Task 6.7: Thunderbrand (BBC) — `recipe:static_discharge + attack_speed + lightning_damage`
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
-  { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
-  { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
-]
-```
-
-- [ ] Append + test + commit.
-
-### Task 6.8: Plague Carrier (BBC) — `recipe:envenom + poison_damage + chance_on_hit`
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
-  { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
-  { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
-]
-```
-
-- [ ] Append + test + commit.
-
-### Task 6.9: Oathbound Fury (BCC) — `recipe:desperation + recipe:blood_frenzy + attack_speed`
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
-  { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
-  { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
-  { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
-  { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
-]
-```
-
-- [ ] Append + test + commit.
-
-### Task 6.10: Phoenix Embers (BCC) — fully specified in spec
-
-- [ ] Append + test + commit.
-
-### Task 6.11: Crystal Aegis (BCC) — `recipe:frostbite + recipe:fortress + cold_damage`
-
-```json
-"outputBonusEffects": [
-  { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
-  { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
-  { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
-]
-```
-
-- [ ] Append + test + commit.
-
-### Task 6.12: Worldfire (CCC) — fully specified in spec
-
-- [ ] Append + test + commit using the CCC exemplar JSON.
-
-### Task 6.13: Chunk 6 integration tests
+### Task 6.1: Add Meltdown (BBB exemplar) + end-to-end combine3 test
 
 **Files:**
+- Modify: `packages/engine/src/data/recipes.json`
+- Modify: `packages/engine/src/data/combinations.json`
 - Modify: `packages/engine/tests/data.test.ts`
 
-- [ ] **Step 1: Add ternary lookup tests for all 12 new recipes**
+- [ ] **Step 1: Append recipe to `recipes.json`**
 
-For each recipe, add a test along these lines:
+Insert after the last signature recipe (before the first `"type": "category"` entry — `recipes.json` is a flat array ordered signature-first then category):
 
-```ts
-it('resolves Meltdown via getTernaryCombination', () => {
-  const combo = registry.getTernaryCombination('fire_damage', 'cold_damage', 'lightning_damage');
-  expect(combo?.id).toBe('meltdown');
-});
-// ...repeat for the other 11
+```json
+{
+  "id": "meltdown",
+  "name": "Meltdown",
+  "type": "signature3",
+  "components": [
+    { "kind": "affix", "id": "fire_damage" },
+    { "kind": "affix", "id": "cold_damage" },
+    { "kind": "affix", "id": "lightning_damage" }
+  ],
+  "outputAffixId": "meltdown",
+  "outputBonusEffects": [
+    { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+    { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 },
+    { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
+}
 ```
 
-Also add **one end-to-end combine test** that goes through the real engine:
+- [ ] **Step 2: Append compound to `combinations.json`**
+
+```json
+{
+  "id": "meltdown",
+  "name": "Meltdown",
+  "description": "Three elements in chorus. Each elemental proc has a chance to trigger one of the other two.",
+  "weaponFlavorText": "Fire, cold, and lightning align. Every proc of one element rolls 25% to trigger another; overlapping statuses get +15% damage. Mixed-element builds become greater than the sum of their parts.",
+  "armorFlavorText": "Your armor resonates across the elemental spectrum. Absorbed energy from any element is redistributed — making hybrid builds disproportionately survivable.",
+  "components": ["fire_damage", "cold_damage", "lightning_damage"],
+  "fluxCost": 3,
+  "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+    { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
+    { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+  ],
+  "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
+}
+```
+
+- [ ] **Step 3: Add end-to-end test to `data.test.ts`**
 
 ```ts
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
+
 it('combine3 with live data resolves Meltdown', () => {
   const a = createGem('a', 'fire_damage', 2, 'rare');
   const b = createGem('b', 'cold_damage', 2, 'rare');
@@ -2073,19 +2215,598 @@ it('combine3 with live data resolves Meltdown', () => {
   const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), map);
   const result = engine.combine3(a, b, c, 'out', 'a');
   expect(result.recipeId).toBe('meltdown');
+  expect(result.gem.affixId).toBe('meltdown');
 });
+
+it('getTernaryCombination resolves Meltdown metadata', () => {
+  const combo = registry.getTernaryCombination('fire_damage', 'cold_damage', 'lightning_damage');
+  expect(combo?.id).toBe('meltdown');
+});
+```
+
+(`createGem` and `registry` are already imported in `data.test.ts`; only `CombinationEngine` and `DiscoveryState` need new imports.)
+
+- [ ] **Step 4: Run the full engine suite**
+
+Run: `cd packages/engine && pnpm vitest run`
+Expected: all PASS including the two new Meltdown tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/engine/src/data/recipes.json packages/engine/src/data/combinations.json packages/engine/tests/data.test.ts
+git commit -m "content(combos): add Meltdown BBB ternary + end-to-end combine3 test"
+```
+
+---
+
+### Task 6.2: Add the remaining 11 ternary recipes
+
+Batch this task because each recipe has the same authoring pattern: append recipe entry + compound entry + integration test. Commit message per recipe keeps history clean; testing runs once at the end.
+
+Starting stats below reflect the spec's "Archetype / Hook" notes. Balance iteration happens in a follow-up PR after running the simulation tool in `packages/tools/` — **don't block landing on balance**.
+
+For each recipe:
+1. Append the recipe JSON to `recipes.json` (before category recipes).
+2. Append the compound JSON to `combinations.json`.
+3. Append a `getTernaryCombination` lookup test to `data.test.ts`.
+4. `cd packages/engine && pnpm vitest run tests/data.test.ts` — PASS.
+5. Commit with message `content(combos): add <Name> (<shape>)`.
+
+#### 6.2.1 — Warrior's Edge (BBB)
+
+`recipes.json` (use the same envelope as Meltdown — only the unique fields differ; `fluxCost`/`slotCost` only appear in `combinations.json`):
+
+```json
+{
+  "id": "warriors_edge", "name": "Warrior's Edge", "type": "signature3",
+  "components": [
+    { "kind": "affix", "id": "crit_chance" },
+    { "kind": "affix", "id": "crit_damage" },
+    { "kind": "affix", "id": "attack_speed" }
+  ],
+  "outputAffixId": "warriors_edge",
+  "outputBonusEffects": [
+    { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
+    { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
+    { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "crit", "attack_speed", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "warriors_edge", "name": "Warrior's Edge",
+  "description": "Crits stack attack speed; a sustained DPS spiral.",
+  "weaponFlavorText": "Every crit adds a stacking +10% attack speed buff (up to 5 stacks). The more you hit, the more you hit.",
+  "armorFlavorText": "Your armor lets your hands move faster after each precise strike lands.",
+  "components": ["crit_chance", "crit_damage", "attack_speed"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
+    { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
+    { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 }
+  ],
+  "tags": ["compound", "crit", "attack_speed", "capstone"]
+}
+```
+
+Lookup test:
+```ts
+it('resolves Warrior\'s Edge', () => {
+  expect(registry.getTernaryCombination('crit_chance', 'crit_damage', 'attack_speed')?.id)
+    .toBe('warriors_edge');
+});
+```
+
+Commit: `content(combos): add Warrior's Edge (BBB — crit/AS capstone)`
+
+#### 6.2.2 — Bastion (BBB)
+
+```json
+{
+  "id": "bastion", "name": "Bastion", "type": "signature3",
+  "components": [
+    { "kind": "affix", "id": "armor_rating" },
+    { "kind": "affix", "id": "block_chance" },
+    { "kind": "affix", "id": "flat_hp" }
+  ],
+  "outputAffixId": "bastion",
+  "outputBonusEffects": [
+    { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
+    { "stat": "compound.bastion.shieldOnBlockPercent", "op": "flat", "value": 0.10 },
+    { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "armor", "block", "hp", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "bastion", "name": "Bastion",
+  "description": "Blocks refresh a small HP shield.",
+  "weaponFlavorText": "Even your offense benefits — blocks grant a fleeting 10% HP shield that soaks the next hit.",
+  "armorFlavorText": "Every block refreshes a 10%-max-HP shield for 30s. Reliable blockers become nearly unkillable in extended fights.",
+  "components": ["armor_rating", "block_chance", "flat_hp"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [ { "stat": "compound.bastion.active", "op": "flat", "value": 1 } ],
+  "armorEffect": [
+    { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
+    { "stat": "compound.bastion.shieldOnBlockPercent", "op": "flat", "value": 0.10 },
+    { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
+  ],
+  "tags": ["compound", "armor", "block", "hp", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Bastion (BBB — tank capstone)`.
+
+#### 6.2.3 — Blood Pact (BBB)
+
+```json
+{
+  "id": "blood_pact", "name": "Blood Pact", "type": "signature3",
+  "components": [
+    { "kind": "affix", "id": "lifesteal" },
+    { "kind": "affix", "id": "hp_regen" },
+    { "kind": "affix", "id": "flat_hp" }
+  ],
+  "outputAffixId": "blood_pact",
+  "outputBonusEffects": [
+    { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
+    { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "lifesteal", "hp_regen", "hp", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "blood_pact", "name": "Blood Pact",
+  "description": "Overheal permanently raises max HP for the round.",
+  "weaponFlavorText": "Overheal (lifesteal + regen past max) converts 20% into a temporary max-HP buff that lasts the round. The longer you fight, the tankier you become.",
+  "armorFlavorText": "Your armor catches excess vitality and binds it into your frame for the duration of the round.",
+  "components": ["lifesteal", "hp_regen", "flat_hp"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [ { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 } ],
+  "armorEffect": [
+    { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
+    { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
+  ],
+  "tags": ["compound", "lifesteal", "hp_regen", "hp", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Blood Pact (BBB — sustain capstone)`.
+
+#### 6.2.4 — Detonator (BBC)
+
+```json
+{
+  "id": "detonator", "name": "Detonator", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "ignite" },
+    { "kind": "affix",  "id": "chance_on_crit" },
+    { "kind": "affix",  "id": "fire_damage" }
+  ],
+  "outputAffixId": "detonator",
+  "outputBonusEffects": [
+    { "stat": "compound.detonator.active", "op": "flat", "value": 1 },
+    { "stat": "compound.detonator.stackConsumeChance", "op": "flat", "value": 0.40 },
+    { "stat": "compound.detonator.burstMultiplier", "op": "flat", "value": 2.5 }
+  ],
+  "maxDepthContribution": 1,
+  "tags": ["compound", "fire", "crit", "trigger"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "detonator", "name": "Detonator",
+  "description": "Crits consume Ignite stacks for a burst detonation.",
+  "weaponFlavorText": "On crit, 40% chance to consume all Ignite stacks on the target for a 2.5x burst. Stack Ignite patiently, then unload.",
+  "armorFlavorText": "Critical hits against you release a reactive fire burst scaled by your own burn gear.",
+  "components": ["ignite", "chance_on_crit", "fire_damage"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.detonator.active", "op": "flat", "value": 1 },
+    { "stat": "compound.detonator.stackConsumeChance", "op": "flat", "value": 0.40 },
+    { "stat": "compound.detonator.burstMultiplier", "op": "flat", "value": 2.5 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.detonator.active", "op": "flat", "value": 1 }
+  ],
+  "tags": ["compound", "fire", "crit", "trigger"]
+}
+```
+
+Test + commit `content(combos): add Detonator (BBC — ignite + crit + fire)`.
+
+#### 6.2.5 — Frost Nova (BBC)
+
+```json
+{
+  "id": "frost_nova", "name": "Frost Nova", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "frostbite" },
+    { "kind": "affix",  "id": "chance_on_block" },
+    { "kind": "affix",  "id": "cold_damage" }
+  ],
+  "outputAffixId": "frost_nova",
+  "outputBonusEffects": [
+    { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+    { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
+    { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 },
+    { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
+  ],
+  "maxDepthContribution": 1,
+  "tags": ["compound", "cold", "block", "defensive_trigger"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "frost_nova", "name": "Frost Nova",
+  "description": "Blocks release a chill cone; Frostbite-slowed enemies take bonus cold.",
+  "weaponFlavorText": "Enemies already slowed by your Frostbite take +30% cold damage from everything.",
+  "armorFlavorText": "On successful block, 50% chance to release a cone of chill that slows and damages nearby attackers.",
+  "components": ["frostbite", "chance_on_block", "cold_damage"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+    { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
+    { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
+    { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 }
+  ],
+  "tags": ["compound", "cold", "block", "defensive_trigger"]
+}
+```
+
+Test + commit `content(combos): add Frost Nova (BBC — frostbite + block + cold)`.
+
+#### 6.2.6 — Thunderbrand (BBC)
+
+```json
+{
+  "id": "thunderbrand", "name": "Thunderbrand", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "static_discharge" },
+    { "kind": "affix",  "id": "attack_speed" },
+    { "kind": "affix",  "id": "lightning_damage" }
+  ],
+  "outputAffixId": "thunderbrand",
+  "outputBonusEffects": [
+    { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
+    { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
+    { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
+  ],
+  "maxDepthContribution": 1,
+  "tags": ["compound", "lightning", "attack_speed", "trigger"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "thunderbrand", "name": "Thunderbrand",
+  "description": "Faster attacks grow the chain; each segment adds lightning damage.",
+  "weaponFlavorText": "Static Discharge chains now extend by 2 extra targets; each segment deals +10% lightning damage over the previous one.",
+  "armorFlavorText": "Incoming lightning energy builds in your armor; it discharges back along attackers on the next proc.",
+  "components": ["static_discharge", "attack_speed", "lightning_damage"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
+    { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
+    { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 }
+  ],
+  "tags": ["compound", "lightning", "attack_speed", "trigger"]
+}
+```
+
+Test + commit `content(combos): add Thunderbrand (BBC — static + AS + lightning)`.
+
+#### 6.2.7 — Plague Carrier (BBC)
+
+```json
+{
+  "id": "plague_carrier", "name": "Plague Carrier", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "envenom" },
+    { "kind": "affix",  "id": "poison_damage" },
+    { "kind": "affix",  "id": "chance_on_hit" }
+  ],
+  "outputAffixId": "plague_carrier",
+  "outputBonusEffects": [
+    { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
+    { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
+    { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
+  ],
+  "maxDepthContribution": 1,
+  "tags": ["compound", "poison", "trigger"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "plague_carrier", "name": "Plague Carrier",
+  "description": "Poison spreads to nearby enemies; stacks transfer with the spread.",
+  "weaponFlavorText": "On Envenom proc, 50% of the target's poison stacks spread to enemies within 3 radius.",
+  "armorFlavorText": "Enemies poisoned by your retaliation aura spread contagion to their allies.",
+  "components": ["envenom", "poison_damage", "chance_on_hit"],
+  "fluxCost": 3, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
+    { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
+    { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 }
+  ],
+  "tags": ["compound", "poison", "trigger"]
+}
+```
+
+Test + commit `content(combos): add Plague Carrier (BBC — envenom + poison + on-hit)`.
+
+#### 6.2.8 — Oathbound Fury (BCC)
+
+```json
+{
+  "id": "oathbound_fury", "name": "Oathbound Fury", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "desperation" },
+    { "kind": "recipe", "id": "blood_frenzy" },
+    { "kind": "affix",  "id": "attack_speed" }
+  ],
+  "outputAffixId": "oathbound_fury",
+  "outputBonusEffects": [
+    { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+    { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
+    { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
+    { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
+    { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "attack_speed", "lifesteal", "low_hp_trigger", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "oathbound_fury", "name": "Oathbound Fury",
+  "description": "Low-HP triggers compound: massive AS stacked with massive lifesteal, once per fight.",
+  "weaponFlavorText": "Below 30% HP, for 90s: +300% attack speed stacked with +400% lifesteal. Once per fight. Live or die here.",
+  "armorFlavorText": "Your armor itself seems to rage when the wearer is near death.",
+  "components": ["desperation", "blood_frenzy", "attack_speed"],
+  "fluxCost": 4, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+    { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
+    { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
+    { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
+    { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
+    { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 }
+  ],
+  "tags": ["compound", "attack_speed", "lifesteal", "low_hp_trigger", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Oathbound Fury (BCC — desperation + blood frenzy capstone)`.
+
+#### 6.2.9 — Phoenix Embers (BCC)
+
+```json
+{
+  "id": "phoenix_embers", "name": "Phoenix Embers", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "immolation" },
+    { "kind": "recipe", "id": "reactive_shield" },
+    { "kind": "affix",  "id": "fire_damage" }
+  ],
+  "outputAffixId": "phoenix_embers",
+  "outputBonusEffects": [
+    { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+    { "stat": "compound.phoenix_embers.aoeBurnOnHit", "op": "flat", "value": 1.5 },
+    { "stat": "compound.phoenix_embers.killHealPercent", "op": "flat", "value": 0.10 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "fire", "barrier", "defensive_trigger", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "phoenix_embers", "name": "Phoenix Embers",
+  "description": "Taking damage re-ignites you and grants a barrier; kills while ignited heal.",
+  "weaponFlavorText": "Every kill while you're ignited heals 10% max HP. Rebirth through combat.",
+  "armorFlavorText": "On damage, both Immolation's AoE burn (1.5x) AND Reactive Shield's barrier fire simultaneously. You become the fire.",
+  "components": ["immolation", "reactive_shield", "fire_damage"],
+  "fluxCost": 4, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+    { "stat": "compound.phoenix_embers.killHealPercent", "op": "flat", "value": 0.10 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
+    { "stat": "compound.phoenix_embers.aoeBurnOnHit", "op": "flat", "value": 1.5 }
+  ],
+  "tags": ["compound", "fire", "barrier", "defensive_trigger", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Phoenix Embers (BCC — immolation + reactive + fire)`.
+
+#### 6.2.10 — Crystal Aegis (BCC)
+
+```json
+{
+  "id": "crystal_aegis", "name": "Crystal Aegis", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "frostbite" },
+    { "kind": "recipe", "id": "fortress" },
+    { "kind": "affix",  "id": "cold_damage" }
+  ],
+  "outputAffixId": "crystal_aegis",
+  "outputBonusEffects": [
+    { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
+    { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
+    { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
+  ],
+  "maxDepthContribution": 2,
+  "tags": ["compound", "cold", "armor", "defensive", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "crystal_aegis", "name": "Crystal Aegis",
+  "description": "Fortress (<80% HP) also applies AoE chill; attackers slow while you hold.",
+  "weaponFlavorText": "While Fortress is active, an aura of 30% chill blankets enemies within 3 radius.",
+  "armorFlavorText": "Your Fortress state now radiates outward — attackers approaching become slower and weaker.",
+  "components": ["frostbite", "fortress", "cold_damage"],
+  "fluxCost": 4, "slotCost": 3,
+  "weaponEffect": [
+    { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
+    { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
+    { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
+  ],
+  "tags": ["compound", "cold", "armor", "defensive", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Crystal Aegis (BCC — frostbite + fortress + cold)`.
+
+#### 6.2.11 — Worldfire (CCC)
+
+```json
+{
+  "id": "worldfire", "name": "Worldfire", "type": "signature3",
+  "components": [
+    { "kind": "recipe", "id": "ignite" },
+    { "kind": "recipe", "id": "storm_of_flames" },
+    { "kind": "recipe", "id": "thermal_shock" }
+  ],
+  "outputAffixId": "worldfire",
+  "outputBonusEffects": [
+    { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+    { "stat": "compound.worldfire.fireDamageBonus", "op": "percent", "value": 0.50 },
+    { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 },
+    { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 }
+  ],
+  "maxDepthContribution": 3,
+  "tags": ["compound", "fire", "lightning", "cold", "elemental", "capstone"]
+}
+```
+
+`combinations.json`:
+
+```json
+{
+  "id": "worldfire", "name": "Worldfire",
+  "description": "Ultimate fire capstone. Burns, cross-element procs, and thermal stuns unified.",
+  "weaponFlavorText": "+50% fire damage globally. Ignite stacks spread in a 3-radius AoE. Burning enemies have a 20% chance to thermal-stun on every tick. Commit to fire; become fire.",
+  "armorFlavorText": "You are the fire. Everything within 3 radius of you lives at your mercy — burns leap from target to target, and the flames stun as they consume.",
+  "components": ["ignite", "storm_of_flames", "thermal_shock"],
+  "fluxCost": 5, "slotCost": 4,
+  "weaponEffect": [
+    { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+    { "stat": "compound.worldfire.fireDamageBonus", "op": "percent", "value": 0.50 },
+    { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 },
+    { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 }
+  ],
+  "armorEffect": [
+    { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
+    { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 }
+  ],
+  "tags": ["compound", "fire", "lightning", "cold", "elemental", "capstone"]
+}
+```
+
+Test + commit `content(combos): add Worldfire (CCC — triple-fire capstone)`.
+
+---
+
+### Task 6.3: Batch lookup regression test
+
+**Files:**
+- Modify: `packages/engine/tests/data.test.ts`
+
+- [ ] **Step 1: Add a single parameterized test verifying all 12 ternary recipes resolve**
+
+```ts
+const EXPECTED_TERNARIES: Array<[string, string, string, string]> = [
+  ['fire_damage', 'cold_damage', 'lightning_damage', 'meltdown'],
+  ['crit_chance', 'crit_damage', 'attack_speed', 'warriors_edge'],
+  ['armor_rating', 'block_chance', 'flat_hp', 'bastion'],
+  ['lifesteal', 'hp_regen', 'flat_hp', 'blood_pact'],
+  ['ignite', 'chance_on_crit', 'fire_damage', 'detonator'],
+  ['frostbite', 'chance_on_block', 'cold_damage', 'frost_nova'],
+  ['static_discharge', 'attack_speed', 'lightning_damage', 'thunderbrand'],
+  ['envenom', 'poison_damage', 'chance_on_hit', 'plague_carrier'],
+  ['desperation', 'blood_frenzy', 'attack_speed', 'oathbound_fury'],
+  ['immolation', 'reactive_shield', 'fire_damage', 'phoenix_embers'],
+  ['frostbite', 'fortress', 'cold_damage', 'crystal_aegis'],
+  ['ignite', 'storm_of_flames', 'thermal_shock', 'worldfire'],
+];
+
+describe.each(EXPECTED_TERNARIES)(
+  'ternary combination %s + %s + %s → %s',
+  (a, b, c, expectedId) => {
+    it('resolves via getTernaryCombination', () => {
+      expect(registry.getTernaryCombination(a, b, c)?.id).toBe(expectedId);
+    });
+  },
+);
 ```
 
 - [ ] **Step 2: Run and verify**
 
 Run: `cd packages/engine && pnpm vitest run tests/data.test.ts`
-Expected: 100% green.
+Expected: 100% green. 12 new ternary lookup tests.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add packages/engine/tests/data.test.ts
-git commit -m "test(engine): verify all 12 ternary compounds resolve + end-to-end combine3"
+git commit -m "test(engine): parameterized lookup test for all 12 ternary compounds"
 ```
 
 ---
