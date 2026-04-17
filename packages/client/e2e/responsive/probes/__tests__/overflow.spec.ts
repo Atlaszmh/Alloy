@@ -34,3 +34,36 @@ test.describe('overflowX', () => {
     expect(findings[0].detail).toContain('#bad');
   });
 });
+
+test.describe('overflowY', () => {
+  test('clean fixture produces no findings', async ({ page }) => {
+    await page.setViewportSize({ width: VP.width, height: VP.height });
+    await page.setContent(`
+      <html><body style="margin:0">
+        <div class="app-frame" style="width: 375px; height: 667px; position: relative;">
+          <div id="ok" style="width: 100px; height: 50px; background: green;"></div>
+        </div>
+      </body></html>
+    `);
+    const findings = await overflowY(page, CTX);
+    expect(findings).toEqual([]);
+  });
+
+  test('detects descendant spilling past .app-frame bottom', async ({ page }) => {
+    await page.setViewportSize({ width: VP.width, height: VP.height });
+    await page.setContent(`
+      <html><body style="margin:0">
+        <div class="app-frame" style="width: 375px; height: 667px; position: relative; overflow: visible;">
+          <div id="bad" style="position: absolute; top: 700px; width: 100px; height: 50px; background: red;"></div>
+        </div>
+      </body></html>
+    `);
+    const findings = await overflowY(page, CTX);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings[0]).toMatchObject({
+      probe: 'overflow-y',
+      severity: 'fail',
+    });
+    expect(findings[0].detail).toContain('#bad');
+  });
+});

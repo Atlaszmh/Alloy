@@ -35,4 +35,34 @@ export const overflowX: Probe = async (page, ctx) => {
   return [finding];
 };
 
-export const overflowY: Probe = async () => []; // implemented in next task
+export const overflowY: Probe = async (page, ctx) => {
+  const data = await page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('.app-frame');
+    if (!frame) return null;
+    const frameBottom = frame.getBoundingClientRect().bottom;
+    const offenders: { selector: string; bottom: number }[] = [];
+    frame.querySelectorAll<HTMLElement>('*').forEach((el) => {
+      if (offenders.length >= 5) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom > frameBottom + 0.5) {
+        const id = el.id ? `#${el.id}` : '';
+        const cls = el.className && typeof el.className === 'string'
+          ? `.${el.className.split(/\s+/).slice(0, 2).join('.')}`
+          : '';
+        offenders.push({ selector: `${el.tagName.toLowerCase()}${id}${cls}`, bottom: r.bottom });
+      }
+    });
+    return { frameBottom, offenders };
+  });
+
+  if (!data || data.offenders.length === 0) return [];
+  return [{
+    screen: ctx.screen,
+    viewport: ctx.viewport.name,
+    probe: PROBE_Y,
+    severity: 'fail',
+    detail: `descendants spill past .app-frame bottom (${data.frameBottom.toFixed(1)}): ${data.offenders.map(o => `${o.selector}@${o.bottom.toFixed(1)}`).join(', ')}`,
+    measured: Math.max(...data.offenders.map(o => o.bottom)),
+    expected: data.frameBottom,
+  }];
+};
