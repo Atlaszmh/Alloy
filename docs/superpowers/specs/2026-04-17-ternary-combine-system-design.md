@@ -102,8 +102,9 @@ Algorithm:
    - For each pair, probe via `previewCombine()` (which already uses a cloned `DiscoveryState` internally) to rank without recording attempts.
    - Rank by layer preference `signature` > `category` > `generic`; break ties by pair's sum of `calculateEffectiveValue`.
    - Re-run the real binary `combine()` on the winning pair against the authoritative `DiscoveryState` — this consumes those 2 gems and records the pair's discovery attempt.
+   - **Dual discovery recording in the fallback case is intentional:** the ternary attempt key was recorded in step 2, and the binary attempt key for the winning pair is recorded here in step 4. Both combinations were genuinely attempted from the player's perspective; a discovery-history audit will show both entries. The ternary-match path (step 3) records only the ternary key.
    - The third gem (the one not in the winning pair) is ejected: not consumed, not locked, remains in stockpile. The plan-layer (`planCombine3`) records the ejected uid in the action log.
-5. If the KEEP gem itself is non-combinable or both probe pairs throw (e.g., all 3 gems are at max tier/rarity and same affix), throw — parallel to the binary engine's edge case.
+5. If both probe pairs throw (e.g., all 3 gems are at max tier/rarity and same affix, so neither KEEP-anchored pair can even generic-upgrade), throw — parallel to the binary engine's edge case. (Non-combinable KEEP is already rejected by step 1.)
 
 **`CombineResult` extension (additive):**
 
@@ -255,7 +256,7 @@ Full JSON lives in `2026-04-16-three-new-gem-combos-design.md`. Summaries:
 | Thornfrost | `recipe:retribution_aura + cold_damage` | compound + basic | defensive_trigger |
 | Soul Eclipse | `recipe:soul_rend + recipe:soul_siphon` | compound + compound | trigger (capstone) |
 
-These land in `recipes.json` as `type: "signature"` (binary) alongside the existing 31.
+These land in `recipes.json` as `type: "signature"` (binary) alongside the existing 29 signature recipes.
 
 ### Ternary additions — 12 recipes
 
@@ -415,6 +416,8 @@ New file: `packages/engine/tests/combination-engine-ternary.test.ts`
 - **Unanimous rarity bonus:** 3 gems all `rare` rarity → quality × (1 + bonus). Mixed rarities (e.g., 2 rare + 1 magic) → no bonus. **Tiers are irrelevant** to the bonus — only rarity level matters (matches binary convention). Tests include a case "3 rare gems at tiers 1, 3, 4 → bonus applies" to pin this invariant.
 - **Non-combinable rejection:** any gem with `combinable: false` throws.
 - **Discovery attempt recording:** ternary attempt key written; repeated combine records same key (no dup).
+- **Ternary match short-circuits fallback:** when `findTernaryRecipe` hits, no binary `combine()` is called internally (assert via spy/mock on the binary path) and only the ternary discovery key is recorded.
+- **Fallback dual-recording:** when the fallback fires, both the ternary attempt key and the winning-pair binary attempt key are present in `DiscoveryState`.
 
 Extended `recipe-registry.test.ts`:
 
