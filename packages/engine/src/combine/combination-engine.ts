@@ -119,6 +119,42 @@ export class CombinationEngine {
     }
   }
 
+  previewCombineTriple(
+    gemA: GemInstance,
+    gemB: GemInstance,
+    gemC: GemInstance,
+    keepGemUid?: string,
+  ): CombinePreview | null {
+    if (!gemA.combinable || !gemB.combinable || !gemC.combinable) return null;
+
+    const tempDiscovery = this.discovery.clone();
+    const tempEngine = new CombinationEngine(
+      this.registry, tempDiscovery, this.categoryMap, this.config,
+    );
+
+    const ternaryRecipe = this.registry.findTernaryRecipe(gemA, gemB, gemC);
+    const ternaryKnown = this.discovery.hasAttempted3(
+      gemA.affixId, gemB.affixId, gemC.affixId,
+    );
+
+    try {
+      const result = tempEngine.combine3(gemA, gemB, gemC, '__preview__', keepGemUid);
+      const preview: CombinePreview = {
+        known: ternaryRecipe ? ternaryKnown : false,
+        layer: result.layer,
+        gem: ternaryRecipe ? (ternaryKnown ? result.gem : null) : result.gem,
+        recipeId: ternaryRecipe ? (ternaryKnown ? result.recipeId : undefined) : result.recipeId,
+      };
+      if (!ternaryRecipe) {
+        preview.fallbackPair = [result.consumedUids[0], result.consumedUids[1]];
+        preview.ejectedUid = result.ejectedUid;
+      }
+      return preview;
+    } catch {
+      return null;
+    }
+  }
+
   combine3(
     gemA: GemInstance,
     gemB: GemInstance,

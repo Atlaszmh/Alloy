@@ -211,3 +211,64 @@ describe('combine3 — KEEP-anchored fallback', () => {
     expect(discovery.hasAttempted('cold_damage', 'lightning_damage')).toBe(false);
   });
 });
+
+describe('previewCombineTriple', () => {
+  function makeEngine(recipes: RecipeDefinition[]) {
+    const registry = new RecipeRegistry(recipes);
+    const discovery = new DiscoveryState();
+    const engine = new CombinationEngine(registry, discovery, categoryMap);
+    return { engine, discovery };
+  }
+
+  const binarySignatures: RecipeDefinition[] = [
+    {
+      id: 'ignite', name: 'Ignite', type: 'signature',
+      components: [
+        { kind: 'affix', id: 'chance_on_hit' },
+        { kind: 'affix', id: 'fire_damage' },
+      ],
+      outputAffixId: 'ignite',
+      outputBonusEffects: [{ stat: 'compound.ignite.chance', op: 'flat', value: 0.15 }],
+      maxDepthContribution: 1,
+      tags: ['compound', 'fire', 'trigger'],
+    },
+  ];
+
+  it('returns a preview for a known ternary recipe', () => {
+    const { engine } = makeEngine(ternaryRecipes);
+    const a = createGem('a', 'fire_damage', 1, 'common');
+    const b = createGem('b', 'cold_damage', 1, 'common');
+    const c = createGem('c', 'lightning_damage', 1, 'common');
+
+    let preview = engine.previewCombineTriple(a, b, c);
+    expect(preview?.known).toBe(false);
+    expect(preview?.layer).toBe('signature');
+    expect(preview?.fallbackPair).toBeUndefined();
+
+    engine.combine3(a, b, c, 'out');
+    preview = engine.previewCombineTriple(a, b, c);
+    expect(preview?.known).toBe(true);
+    expect(preview?.gem?.affixId).toBe('meltdown');
+  });
+
+  it('returns fallback preview when no ternary match', () => {
+    const { engine } = makeEngine(binarySignatures);
+    const keep = createGem('keep', 'chance_on_hit', 1, 'common');
+    const o1 = createGem('o1', 'fire_damage', 1, 'common');
+    const o2 = createGem('o2', 'lightning_damage', 1, 'common');
+
+    const preview = engine.previewCombineTriple(keep, o1, o2);
+    expect(preview?.fallbackPair).toBeDefined();
+    expect(preview?.fallbackPair?.sort()).toEqual(['keep', 'o1'].sort());
+    expect(preview?.ejectedUid).toBe('o2');
+  });
+
+  it('previewCombineTriple does NOT record an attempt', () => {
+    const { engine, discovery } = makeEngine(ternaryRecipes);
+    const a = createGem('a', 'fire_damage', 1, 'common');
+    const b = createGem('b', 'cold_damage', 1, 'common');
+    const c = createGem('c', 'lightning_damage', 1, 'common');
+    engine.previewCombineTriple(a, b, c);
+    expect(discovery.hasAttempted3('fire_damage', 'cold_damage', 'lightning_damage')).toBe(false);
+  });
+});
