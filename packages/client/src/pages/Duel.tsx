@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useGateway } from '@/gateway';
 import type { CombatLog, CombatEvent, DuelResult, DerivedStats } from '@alloy/engine';
-import { calculateStats } from '@alloy/engine';
+import { calculateStats, previewRoundResult } from '@alloy/engine';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
@@ -258,6 +258,22 @@ export function Duel() {
     setShowInterstitial(false);
   }, [currentLog]);
 
+  // Snapshot cumulative discovery count at round-start so the interstitial can
+  // show "discoveries THIS round" (delta vs. snapshot). Keyed by the round
+  // number of the current duel log so it updates once per round.
+  const discoverySnapshotRef = useRef<{ round: number; count: number } | null>(null);
+  const currentRoundNumber = currentLog?.result.round ?? null;
+  useEffect(() => {
+    if (currentRoundNumber == null) return;
+    const cumulative = matchState?.discoveryState?.totalDiscoveryCount() ?? 0;
+    if (
+      discoverySnapshotRef.current === null ||
+      discoverySnapshotRef.current.round !== currentRoundNumber
+    ) {
+      discoverySnapshotRef.current = { round: currentRoundNumber, count: cumulative };
+    }
+  }, [currentRoundNumber, matchState?.discoveryState]);
+
   // Handle playback completion — show breakdown when playback ends
   useEffect(() => {
     if (!currentLog || playback.isPlaying) return;
@@ -335,13 +351,37 @@ export function Duel() {
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
 
       {/* Between-round interstitial (run mode only) */}
-      {showInterstitial && currentResult && (
-        <RunRoundInterstitial
-          roundNumber={round}
-          won={currentResult.winner === 0}
-          onContinue={handleInterstitialContinue}
-        />
-      )}
+      {showInterstitial && currentResult && matchState?.runState && (() => {
+        const runStateBefore = matchState.runState;
+        const registry = getRegistry();
+        const balance = registry.getBalance();
+        const cumulativeDiscoveries = matchState.discoveryState?.totalDiscoveryCount() ?? 0;
+        const snapshot = discoverySnapshotRef.current;
+        const discoveriesThisRound =
+          snapshot && snapshot.round === currentResult.round
+            ? Math.max(0, cumulativeDiscoveries - snapshot.count)
+            : 0;
+        const won = currentResult.winner === 0;
+        const preview = previewRoundResult(
+          runStateBefore,
+          cumulativeDiscoveries,
+          won,
+          balance,
+        );
+        return (
+          <RunRoundInterstitial
+            roundNumber={round}
+            won={won}
+            before={runStateBefore}
+            after={preview.afterRunState}
+            fluxEarned={preview.fluxEarned}
+            discoveriesThisRound={discoveriesThisRound}
+            streakJustTriggered={preview.streakJustTriggered}
+            milestoneJustHit={preview.milestoneJustHit}
+            onContinue={handleInterstitialContinue}
+          />
+        );
+      })()}
 
       {/* ═══ TOP BAR (~5%): Round pips + Enemy HP + Timer ═══ */}
       <div className="shrink-0 border-b border-surface-700 px-3 py-1.5" data-screen-section="duel-enemy-hp">
