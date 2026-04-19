@@ -47,6 +47,7 @@
   /* Forge — affix & socket semantic colors */
   --color-affix: #1eff00;
   --color-compound: #ecd06a;
+  --color-compound-rgb: 236 208 106;
   --color-inherent: #2dd4bf;
   --color-base-stat: #b89868;
   --color-empty-socket: #4a4a68;

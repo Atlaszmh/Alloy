@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DiscoveryCounter } from '../PhaseRouter';
+import { DiscoveryCounter } from '@/components/DiscoveryCounter';
 
 describe('DiscoveryCounter', () => {
   it('renders "★ 0" initially when no discoveries have been recorded', () => {

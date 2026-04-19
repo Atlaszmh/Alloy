@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { DiscoveryCounter } from '@/components/DiscoveryCounter';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
 import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
 import { RunLivesDisplay } from '@/components/RunLivesDisplay';
@@ -12,49 +13,6 @@ import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
 import { PostMatch } from './PostMatch';
-
-/**
- * Small gold chip in the run header showing total discoveries.
- * Replays a pop animation whenever the count increments.
- * Exported for direct unit testing.
- */
-export function DiscoveryCounter({ count }: { count: number }) {
-  const chipRef = useRef<HTMLSpanElement | null>(null);
-  const prevCountRef = useRef(count);
-
-  useEffect(() => {
-    if (count > prevCountRef.current && chipRef.current) {
-      // Re-trigger the CSS keyframe by removing and re-adding the class
-      const el = chipRef.current;
-      el.classList.remove('discovery-pop');
-      // Force reflow so the class removal takes effect before re-adding
-      void el.offsetWidth;
-      el.classList.add('discovery-pop');
-    }
-    prevCountRef.current = count;
-  }, [count]);
-
-  return (
-    <span
-      ref={chipRef}
-      data-testid="discovery-counter"
-      data-count={count}
-      className="flex items-center gap-1 rounded-full px-2 py-0.5"
-      style={{
-        background: 'rgba(212,168,52,0.12)',
-        border: '1px solid rgba(212,168,52,0.3)',
-        fontFamily: 'var(--font-family-display)',
-        fontSize: '11px',
-        fontWeight: 700,
-        color: 'var(--color-compound)',
-        letterSpacing: '0.04em',
-        display: 'inline-flex',
-      }}
-    >
-      ★ {count}
-    </span>
-  );
-}
 
 // How long to keep Draft mounted for the forge slam animation before sliding out
 const DRAFT_EXIT_DELAY_MS = 5500;

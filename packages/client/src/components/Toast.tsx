@@ -46,15 +46,15 @@ export function ToastContainer() {
             letterSpacing: msg.variant === 'discovery' ? '0.04em' : '0.02em',
             background:
               msg.variant === 'discovery'
-                ? 'linear-gradient(180deg, rgba(212,168,52,0.2), rgba(212,168,52,0.1))'
+                ? 'linear-gradient(180deg, rgb(var(--color-compound-rgb) / 0.2), rgb(var(--color-compound-rgb) / 0.1))'
                 : 'var(--color-surface-800)',
             border:
               msg.variant === 'discovery'
                 ? '1px solid var(--color-compound)'
-                : '1px solid rgba(var(--color-accent-500-rgb, 212, 168, 52), 0.3)',
+                : '1px solid rgba(212, 168, 52, 0.3)',
             boxShadow:
               msg.variant === 'discovery'
-                ? '0 0 24px rgba(212,168,52,0.4), var(--shadow-card)'
+                ? '0 0 24px rgb(var(--color-compound-rgb) / 0.4), var(--shadow-card)'
                 : 'var(--shadow-card)',
             animation: 'slide-up 0.2s ease-out, fade-out 0.3s ease-in 1.7s forwards',
           }}
