@@ -128,13 +128,17 @@ export class GladiatorSprite {
   playHit(onComplete?: () => void): void {
     this.state = 'hit';
     this.animTimer = 0;
-    this.animDuration = 8;
+    this.animDuration = 10;
 
-    // Flash white
-    this.container.alpha = 0.5;
+    // Squash-stretch: compress vertically, stretch horizontally at hit peak.
+    // Scale is interpolated back to (1, 1) by updateHit() over animDuration.
+    this.container.scale.set(1.15, 0.85);
+    // Brief red tint on the body Graphics (Pixi 8: tint is a number).
+    this.body.tint = 0xff6666;
 
     this.animCallback = () => {
-      this.container.alpha = 1;
+      this.container.scale.set(1, 1);
+      this.body.tint = 0xffffff;
       this.state = 'idle';
       onComplete?.();
     };
@@ -167,10 +171,12 @@ export class GladiatorSprite {
       case 'attack':
         this.updateAttack(dt);
         break;
+      case 'hit':
+        this.updateHit();
+        break;
       case 'death':
         this.updateDeath(dt);
         break;
-      // 'hit' is handled by the timer above
     }
 
     // Update cooldown ring
@@ -194,6 +200,8 @@ export class GladiatorSprite {
     this.container.y = this.baseY;
     this.container.alpha = 1;
     this.container.rotation = 0;
+    this.container.scale.set(1, 1);
+    this.body.tint = 0xffffff;
     this.cooldownRing?.setProgress(0);
   }
 
@@ -212,6 +220,13 @@ export class GladiatorSprite {
     // Attack jolt is instant; weapon swoosh via rotation
     const progress = this.animTimer / this.animDuration;
     this.weapon.rotation = this.facing * Math.sin(progress * Math.PI) * 0.5;
+  }
+
+  private updateHit(): void {
+    // Linear interpolation of scale back to (1, 1) over animDuration frames.
+    const progress = Math.min(1, this.animTimer / this.animDuration);
+    this.container.scale.x = 1.15 - 0.15 * progress;
+    this.container.scale.y = 0.85 + 0.15 * progress;
   }
 
   private updateDeath(_dt: number): void {
