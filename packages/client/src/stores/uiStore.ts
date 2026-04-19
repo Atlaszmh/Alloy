@@ -12,6 +12,8 @@ function loadVolume(key: string, fallback: number): number {
   }
 }
 
+export type DuelSpeed = 1 | 2 | 3;
+
 interface UIStore {
   modalOpen: string | null;
   toastMessage: string | null;
@@ -24,6 +26,7 @@ interface UIStore {
   devMode: boolean;
   colorblindMode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
   hapticEnabled: boolean;
+  duelSpeed: DuelSpeed;
 
   openModal: (id: string) => void;
   closeModal: () => void;
@@ -35,6 +38,17 @@ interface UIStore {
   toggleDevMode: () => void;
   setColorblindMode: (mode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia') => void;
   setHapticEnabled: (enabled: boolean) => void;
+  setDuelSpeed: (speed: DuelSpeed) => void;
+}
+
+function loadDuelSpeed(): DuelSpeed {
+  try {
+    const raw = Number(localStorage.getItem('alloy:duelSpeed'));
+    if (raw === 1 || raw === 2 || raw === 3) return raw;
+  } catch {
+    /* noop */
+  }
+  return 1;
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -49,6 +63,7 @@ export const useUIStore = create<UIStore>((set) => ({
   devMode: (() => { try { return localStorage.getItem('alloy:devMode') === 'true'; } catch { return false; } })(),
   colorblindMode: (() => { try { return (localStorage.getItem('alloy:colorblindMode') as UIStore['colorblindMode']) ?? 'none'; } catch { return 'none' as const; } })(),
   hapticEnabled: (() => { try { return localStorage.getItem('alloy:hapticEnabled') !== 'false'; } catch { return true; } })(),
+  duelSpeed: loadDuelSpeed(),
 
   openModal: (id) => set({ modalOpen: id }),
   closeModal: () => set({ modalOpen: null }),
@@ -87,5 +102,11 @@ export const useUIStore = create<UIStore>((set) => ({
   setHapticEnabled: (enabled) => {
     try { localStorage.setItem('alloy:hapticEnabled', String(enabled)); } catch { /* noop */ }
     set({ hapticEnabled: enabled });
+  },
+  setDuelSpeed: (speed) => {
+    // Runtime clamp — types enforce 1|2|3 but guard defensively.
+    const clamped: DuelSpeed = speed === 1 || speed === 2 || speed === 3 ? speed : 1;
+    try { localStorage.setItem('alloy:duelSpeed', String(clamped)); } catch { /* noop */ }
+    set({ duelSpeed: clamped });
   },
 }));
