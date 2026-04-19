@@ -524,18 +524,12 @@ describe('duel integration: Ignite compound applies fire DOT', () => {
     loadout.weapon.slots[0] = { gem };
   }
 
-  function findWorkingSeed(seed = 7): number {
-    // Sanity helper — not strictly needed because we test many swings below,
-    // but kept so that future regressions can pick a fresh seed.
-    return seed;
-  }
-
   it('adds a fire DOT and emits compound_trigger when Ignite fires', () => {
     const attacker = makeStats({ maxHP: 2000, physicalDamage: 5, attackSpeed: 0.2 });
     const defender = makeStats({ maxHP: 5000 });
     const [loadoutA, loadoutB] = makeLoadouts();
     socketIgnite(loadoutA, 3);
-    const rng = new SeededRNG(findWorkingSeed());
+    const rng = new SeededRNG(7);
 
     const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
 
@@ -565,7 +559,7 @@ describe('duel integration: Ignite compound applies fire DOT', () => {
     const [loadoutA, loadoutB] = makeLoadouts();
     // Player 1 sockets Ignite this time.
     socketIgnite(loadoutB, 3);
-    const rng = new SeededRNG(findWorkingSeed());
+    const rng = new SeededRNG(7);
 
     const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
 
@@ -585,7 +579,7 @@ describe('duel integration: Ignite compound applies fire DOT', () => {
     const defender = makeStats({ maxHP: 5000 });
     const [loadoutA, loadoutB] = makeLoadouts();
     socketIgnite(loadoutA, 3);
-    const rng = new SeededRNG(findWorkingSeed());
+    const rng = new SeededRNG(7);
 
     const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
 
@@ -611,14 +605,14 @@ describe('duel integration: Ignite compound applies fire DOT', () => {
       [attacker, defender],
       [loadoutA, loadoutB],
       registry,
-      new SeededRNG(findWorkingSeed()),
+      new SeededRNG(7),
       1,
     );
     const log2 = simulate(
       [{ ...attacker }, { ...defender }],
       [loadoutA, loadoutB],
       registry,
-      new SeededRNG(findWorkingSeed()),
+      new SeededRNG(7),
       1,
     );
 

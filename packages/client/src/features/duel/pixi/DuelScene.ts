@@ -5,6 +5,7 @@ import { GladiatorSprite } from './GladiatorSprite.js';
 import { VFXManager } from './VFXManager.js';
 import { DamageNumbers } from './DamageNumbers.js';
 import { StatusIcons } from './StatusIcons.js';
+import { PIXI_COLORS } from '../colors.js';
 
 export type HPChangeCallback = (hp: [number, number], maxHp: [number, number]) => void;
 
@@ -258,7 +259,7 @@ export class DuelScene {
           attackerX,
           GLADIATOR_Y - 90,
           event.displayName,
-          0xfbbf24, // gold — matches the combat log's compound accent
+          PIXI_COLORS.compound,
         );
         break;
       }

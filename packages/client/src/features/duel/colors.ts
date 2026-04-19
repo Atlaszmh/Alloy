@@ -17,8 +17,10 @@ export const UI_COLORS = {
   playerHP: '#22c55e', enemyHP: '#ef4444',
   playerAccent: '#3b82f6', enemyAccent: '#ef4444',
   muted: '#64748b', separator: '#334155',
+  compound: '#fbbf24', // gold — named compound payoff (matches --color-warning)
 } as const;
 
 export const PIXI_COLORS = {
   crit: 0xfbbf24, healing: 0x34d399, blocked: 0x94a3b8, dodged: 0x60a5fa,
+  compound: 0xfbbf24, // gold — named compound payoff (matches --color-warning)
 } as const;

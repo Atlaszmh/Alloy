@@ -6,6 +6,13 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GemInstance } from '../types/gem.js';
 import type { RecipeDefinition } from '../combine/recipe-registry.js';
 
+/**
+ * Placeholder DPS scaling for compound effects. Move to balance.json when
+ * the other 12 compounds are wired in P1 so per-compound tuning is
+ * data-driven.
+ */
+const COMPOUND_BASE_DPS_PER_TIER = 3;
+
 /** Map affix IDs to their trigger conditions */
 const CONDITION_MAP: Record<string, TriggerCondition> = {
   chance_on_hit: 'on_hit',
@@ -133,14 +140,13 @@ function buildCompoundEffect(
 ): TriggerEffect | null {
   if (recipe.id === 'ignite') {
     const params = readCompoundParams(recipe);
-    // Placeholder damage-per-second scaling: 3 DPS * gem tier. The recipe's
-    // dotMultiplier is applied downstream in the duel engine when the DOT
-    // is pushed onto the defender, and the attacker's stats.dotMultiplier
-    // (scale-100) layers on top in calculateDOTBreakdown.
-    const damagePerSecond = 3 * (gem.tier ?? 1);
-    // duration is declared in recipes.json as 120; interpret as deciseconds
-    // so that 120 -> 12 seconds of burn, which fits inside a typical duel.
-    const durationSeconds = (params.duration ?? 120) / 10;
+    // Placeholder damage-per-second scaling (see COMPOUND_BASE_DPS_PER_TIER).
+    // The recipe's dotMultiplier is applied downstream in the duel engine
+    // when the DOT is pushed onto the defender, and the attacker's
+    // stats.dotMultiplier (scale-100) layers on top in calculateDOTBreakdown.
+    const damagePerSecond = COMPOUND_BASE_DPS_PER_TIER * (gem.tier ?? 1);
+    // duration in seconds.
+    const durationSeconds = params.duration ?? 12;
     return {
       kind: 'compound_dot',
       compoundId: 'ignite',

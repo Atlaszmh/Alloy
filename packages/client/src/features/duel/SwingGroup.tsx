@@ -324,7 +324,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
             key={`compound-${i}`}
             style={{
               paddingLeft: 8,
-              color: '#fbbf24',
+              color: UI_COLORS.compound,
               fontWeight: 700,
               letterSpacing: '0.06em',
               fontSize: 14,

@@ -11,7 +11,7 @@
     "outputBonusEffects": [
       { "stat": "compound.ignite.chance", "op": "flat", "value": 0.15 },
       { "stat": "compound.ignite.dotMultiplier", "op": "flat", "value": 2.0 },
-      { "stat": "compound.ignite.duration", "op": "flat", "value": 120 },
+      { "stat": "compound.ignite.duration", "op": "flat", "value": 12 },
       { "stat": "compound.ignite.absorbChance", "op": "flat", "value": 0.10 }
     ],
     "maxDepthContribution": 1,
