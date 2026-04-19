@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import type { GemInstance } from '@alloy/engine';
+import { createHmrStore } from './hmr-store';
 
 interface CombineStoreState {
   selectedGemUids: string[];
@@ -14,7 +14,7 @@ interface CombineStoreState {
 
 const MAX_SELECTION = 2;
 
-export const useCombineStore = create<CombineStoreState>((set, get) => ({
+export const useCombineStore = createHmrStore<CombineStoreState>('combineStore', (set, get) => ({
   selectedGemUids: [],
   previewResult: null,
 

@@ -1,7 +1,7 @@
-import { create } from 'zustand';
 import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, GemInstance, DebugPhaseTarget } from '@alloy/engine';
 import { createMatch, applyAction, createDebugMatch, DataRegistry, loadAndValidateData, AIController, SeededRNG } from '@alloy/engine';
 import { useRunStore } from './runStore';
+import { createHmrStore } from './hmr-store';
 
 let registry: DataRegistry | null = null;
 
@@ -60,7 +60,7 @@ interface MatchStore {
   reset: () => void;
 }
 
-export const useMatchStore = create<MatchStore>((set, get) => ({
+export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get) => ({
   state: null,
   aiController: null,
   error: null,

@@ -2,13 +2,50 @@ import type { Probe, Finding } from './types';
 
 const PROBE = 'min-size';
 
-// Mirrors clamp() floors in packages/client/src/index.css.
-// If those clamps change, update this table in the same commit.
-const MIN_GEM_SIZE = 90;
+// Mirrors clamp() floors in packages/client/src/index.css plus the explicit
+// 80px floor in ForgeGemTray.computeTrayGemSize() (see
+// packages/client/src/components/ForgeGemTray.tsx). If those floors change,
+// update this table in the same commit.
+//
+// NOTE: the forge stockpile tray computes its own local --gem-size via
+// ResizeObserver (5 gems per row, clamped to [80, 140]), so gems there can
+// render at 80px even when the root --gem-size clamp would give ≥90px. 80px
+// is still comfortably above WCAG 44×44 and Google 48×48 tap-target floors.
+const MIN_GEM_SIZE = 80;
 const MIN_SOCKET_SIZE = 40;
 const MIN_TEXT_PX = 8;
 
 export const minSize: Probe = async (page, ctx) => {
+  // Wait for any in-flight CSS/Web animations (e.g., Framer Motion entrance
+  // transitions, rarity shimmers are infinite so we filter them) so the probe
+  // doesn't catch mid-animation transforms (scale 0.7 → 1.0) and report them
+  // as undersized elements.
+  try {
+    await page.evaluate(async () => {
+      const deadline = performance.now() + 1200;
+      while (performance.now() < deadline) {
+        const running = document.getAnimations().filter((a) => {
+          // Skip infinite loops (rarity shimmers, pulse-glow, etc.) — those
+          // never "finish" but they don't change transforms drastically.
+          const effect = a.effect as KeyframeEffect | null;
+          const timing = effect?.getComputedTiming();
+          const iter = timing?.iterations;
+          if (iter === Infinity) return false;
+          return a.playState === 'running';
+        });
+        if (running.length === 0) break;
+        await Promise.race([
+          Promise.all(running.map((a) => a.finished.catch(() => {}))),
+          new Promise((r) => setTimeout(r, 100)),
+        ]);
+      }
+    });
+  } catch {
+    // Navigation or context destruction during settle — safe to continue;
+    // subsequent probe evaluate will either succeed in the new context or
+    // surface its own error.
+  }
+
   const data = await page.evaluate(() => {
     const elementMin = (selector: string) => {
       return Array.from(document.querySelectorAll<HTMLElement>(selector)).map((el) => {

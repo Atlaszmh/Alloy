@@ -84,6 +84,29 @@ export function Forge() {
     affixDef: AffixDef | CompoundAffixDef;
   } | null>(null);
 
+  // ── Shared gem size — measure the Forge page and set --gem-size so that
+  // combine workbench slots, equip sockets, and stockpile gems all render at
+  // the same size. Target: 5 gems per row in the stockpile.
+  // Uses a state-based callback ref because the main UI is conditionally
+  // rendered after item selection — a plain useRef + useEffect([]) wouldn't
+  // see the element on first mount. ──
+  const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
+  const [sharedGemSize, setSharedGemSize] = useState<number | null>(null);
+  useEffect(() => {
+    if (!pageEl) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width } = entry.contentRect;
+      // The tray/workbench have var(--gap-md) padding on each side (~10-15px).
+      const effectiveWidth = Math.max(0, width - 32);
+      const gap = 10;
+      const maxForFive = Math.floor((effectiveWidth - 4 * gap) / 5);
+      const size = Math.max(80, Math.min(maxForFive, 140));
+      setSharedGemSize(size);
+    });
+    ro.observe(pageEl);
+    return () => ro.disconnect();
+  }, [pageEl]);
+
   // ── Drag state — ALL refs, ZERO React state during drag to avoid re-render fighting ──
   const pointerStartRef = useRef<{ x: number; y: number; uid: string; time: number } | null>(null);
   const hasDraggedRef = useRef(false);
@@ -638,16 +661,25 @@ export function Forge() {
     </div>
   ) : undefined;
 
+  const sharedGemStyle: React.CSSProperties = sharedGemSize
+    ? ({
+        '--gem-size': `${sharedGemSize}px`,
+        '--gem-radius': `${sharedGemSize * 0.16}px`,
+      } as React.CSSProperties)
+    : {};
+
   return (
-    <div className="page-enter flex h-full flex-col" style={{ background: 'var(--color-surface-950)' }}>
+    <div
+      ref={setPageEl}
+      className="page-enter flex h-full flex-col"
+      style={{ background: 'var(--color-surface-950)', ...sharedGemStyle }}
+    >
       {/* PvP disconnect overlay */}
       {!isAiMatch && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
 
-      {/* 1. Header with flux bar and stats */}
+      {/* 1. Header — stats only (flux tracker lives inline with flux actions) */}
       <ForgeHeader
         round={round}
-        flux={currentFlux}
-        maxFlux={maxFlux}
         stats={derivedStats}
         timerDurationMs={isRunMode ? undefined : FORGE_TIMER_MS}
         onTimerExpire={isRunMode ? undefined : handleTimerExpire}
@@ -709,18 +741,67 @@ export function Forge() {
         />
       </div>
 
-      {/* 3b. Flux spend actions */}
+      {/* 3b. Flux spend actions — inline flux tracker + 3 actions in one row */}
       {runState && (
         <div data-screen-section="forge-flux" style={{
           flexShrink: 0,
-          padding: 'var(--gap-md)',
+          padding: 'var(--gap-sm) var(--gap-md)',
           borderTop: '1px solid var(--color-surface-600)',
           backgroundColor: 'var(--color-surface-900)',
         }}>
-          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 'var(--gap-sm)' }}>
-            Flux Actions (Costs from balance)
+          {/* Compact flux tracker: pip bar + count, inline with the label */}
+          <div
+            className="flex items-center"
+            style={{ gap: 'var(--gap-sm)', marginBottom: 'var(--gap-xs)' }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-family-display)',
+                fontWeight: 700,
+                fontSize: 'var(--text-2xs)',
+                letterSpacing: '0.04em',
+                color: 'var(--color-bronze-light)',
+                textTransform: 'uppercase',
+              }}
+            >
+              Flux
+            </span>
+            <div
+              className="flex items-stretch"
+              style={{ flex: 1, gap: '2px', height: 'calc(var(--text-2xs) * 0.9)' }}
+              role="meter"
+              aria-valuenow={currentFlux}
+              aria-valuemin={0}
+              aria-valuemax={maxFlux}
+              aria-label={`${currentFlux} of ${maxFlux} flux`}
+            >
+              {Array.from({ length: maxFlux }, (_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: '1 1 0',
+                    minWidth: 0,
+                    borderRadius: '1px',
+                    background: i < currentFlux ? 'var(--color-warning)' : 'var(--color-surface-600)',
+                    boxShadow: i < currentFlux ? '0 0 4px var(--color-warning)' : undefined,
+                  }}
+                />
+              ))}
+            </div>
+            <span
+              style={{
+                fontFamily: 'var(--font-family-display)',
+                fontWeight: 700,
+                fontSize: 'var(--text-2xs)',
+                color: currentFlux === 0 ? 'var(--color-danger)' : 'var(--color-surface-300)',
+                minWidth: '3ch',
+                textAlign: 'right',
+              }}
+            >
+              {currentFlux}/{maxFlux}
+            </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-sm)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap-xs)' }}>
             <HapticButton
               onClick={() => {
                 const result = applyAction({ kind: 'boost_combine' }, registry);
@@ -733,12 +814,12 @@ export function Forge() {
               }}
               disabled={currentFlux < 3}
               style={{
-                padding: 'var(--gap-sm)',
-                fontSize: 'var(--text-xs)',
+                padding: 'var(--gap-xs) var(--gap-sm)',
+                fontSize: 'var(--text-2xs)',
                 opacity: currentFlux < 3 ? 0.5 : 1,
               }}
             >
-              Boost Combine (3)
+              Boost (3)
             </HapticButton>
             <HapticButton
               onClick={() => {
@@ -752,12 +833,12 @@ export function Forge() {
               }}
               disabled={currentFlux < 5}
               style={{
-                padding: 'var(--gap-sm)',
-                fontSize: 'var(--text-xs)',
+                padding: 'var(--gap-xs) var(--gap-sm)',
+                fontSize: 'var(--text-2xs)',
                 opacity: currentFlux < 5 ? 0.5 : 1,
               }}
             >
-              Reroll Pool (5)
+              Reroll (5)
             </HapticButton>
             <HapticButton
               onClick={() => {
@@ -771,12 +852,12 @@ export function Forge() {
               }}
               disabled={currentFlux < 4}
               style={{
-                padding: 'var(--gap-sm)',
-                fontSize: 'var(--text-xs)',
+                padding: 'var(--gap-xs) var(--gap-sm)',
+                fontSize: 'var(--text-2xs)',
                 opacity: currentFlux < 4 ? 0.5 : 1,
               }}
             >
-              Guarantee Rarity (4)
+              Rarity (4)
             </HapticButton>
           </div>
         </div>

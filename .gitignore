@@ -47,3 +47,11 @@ dist-types/
 
 # Screenshots (local test artifacts)
 packages/screenshots/
+
+# Dev screenshot artifacts at repo root
+/forge-*.png
+/menu-*.png
+/main-menu-*.png
+
+# Claude scheduled-task lock
+.claude/scheduled_tasks.lock

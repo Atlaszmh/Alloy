@@ -83,9 +83,17 @@ export function CombineWorkbench({
         borderTop: '1px solid var(--color-surface-700)',
       }}
     >
-      <div className="flex items-center justify-center gap-1.5">
+      {/* Top row: slots + separators + arrow + result box */}
+      <div
+        className="flex items-center justify-center"
+        style={{ gap: 'var(--gap-sm)' }}
+      >
         {comboSlots.map((orb, idx) => (
-          <div key={idx} className="flex items-center gap-1.5">
+          <div
+            key={idx}
+            className="flex items-center"
+            style={{ gap: 'var(--gap-sm)' }}
+          >
             {idx > 0 && (
               <span
                 style={{
@@ -160,27 +168,30 @@ export function CombineWorkbench({
           <div aria-hidden="true" style={{ height: 'calc(var(--text-2xs) + 9px + 1px)' }} />
           <ResultBox glowSignal={glowSignal} preview={preview ?? null} registry={registry} />
         </div>
+      </div>
 
-        {/* Buttons inline */}
-        <div className="flex gap-1.5" style={{ marginLeft: 'var(--gap-md)', alignSelf: 'flex-end', marginBottom: 'calc(var(--gem-size) * 0.5 - var(--text-sm))' }}>
-          <HapticButton
-            variant="primary"
-            size="sm"
-            disabled={!canCombine}
-            onClick={onCombine}
-            data-combine-btn
-          >
-            COMBINE
-          </HapticButton>
-          <HapticButton
-            variant="secondary"
-            size="sm"
-            disabled={filledCount === 0}
-            onClick={onClearAll}
-          >
-            CLEAR
-          </HapticButton>
-        </div>
+      {/* Bottom row: buttons centered beneath */}
+      <div
+        className="flex items-center justify-center"
+        style={{ gap: 'var(--gap-sm)', marginTop: 'var(--gap-sm)' }}
+      >
+        <HapticButton
+          variant="primary"
+          size="sm"
+          disabled={!canCombine}
+          onClick={onCombine}
+          data-combine-btn
+        >
+          COMBINE
+        </HapticButton>
+        <HapticButton
+          variant="secondary"
+          size="sm"
+          disabled={filledCount === 0}
+          onClick={onClearAll}
+        >
+          CLEAR
+        </HapticButton>
       </div>
     </div>
   );

@@ -82,8 +82,13 @@ export async function waitForPhase(
       ).toBeVisible({ timeout: 30_000 });
       break;
     case 'forge':
+      // "FORGE PHASE" shows in ForgeHeader AFTER item selection. The
+      // BaseItemSelector modal ("Choose your weapon/armor") renders instead
+      // while itemSelectionPhase !== 'done' and hides the header entirely.
+      // Treat either state as "forge phase reached" so callers can then
+      // invoke completeForgeItemSelection() to dismiss the modal.
       await expect(
-        page.getByText(/FORGE PHASE/i)
+        page.getByText(/FORGE PHASE|Choose your (weapon|armor)/i).first()
       ).toBeVisible({ timeout: 30_000 });
       break;
     case 'duel':
@@ -109,6 +114,8 @@ export async function waitForPhase(
  */
 export async function getCurrentPhase(page: Page): Promise<string> {
   if (await page.getByText(/FORGE PHASE/i).isVisible().catch(() => false)) return 'forge';
+  // BaseItemSelector renders in place of the forge UI at the start of the forge phase.
+  if (await page.getByText(/Choose your (weapon|armor)/i).isVisible().catch(() => false)) return 'forge';
   if (await page.getByRole('button', { name: 'Skip' }).isVisible().catch(() => false)) return 'duel';
   if (await page.getByText(/VICTORY|DEFEAT|DRAW/i).isVisible().catch(() => false)) return 'result';
   if (await page.getByText(/YOUR PICK|OPPONENT PICKING|AI PICKING|PICK YOUR GEMS/i).first().isVisible().catch(() => false)) return 'draft';
@@ -195,8 +202,31 @@ export async function placeGems(page: Page): Promise<void> {
 /** @deprecated Use placeGems instead */
 export const placeOrbs = placeGems;
 
+/**
+ * Dismiss the BaseItemSelector modal (weapon → armor) that appears at the
+ * start of the first forge phase in run mode. Uses the "Random" button so
+ * the helper always picks a valid item without needing to know which base
+ * items exist. Idempotent: no-ops if the modal is already dismissed.
+ */
+export async function completeForgeItemSelection(page: Page): Promise<void> {
+  for (const itemType of ['weapon', 'armor'] as const) {
+    const heading = page.getByText(new RegExp(`Choose your ${itemType}`, 'i'));
+    const isVisible = await heading.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (!isVisible) continue;
+
+    const randomBtn = page.getByRole('button', { name: /^Random$/i });
+    await expect(randomBtn).toBeVisible({ timeout: 3_000 });
+    await randomBtn.click();
+    // Wait for the heading to disappear before checking the next item type.
+    await expect(heading).toBeHidden({ timeout: 5_000 });
+  }
+  // Forge content ("COMBINATION WORKBENCH", sockets, etc.) renders behind the
+  // modal; give React a tick to settle after the overlay unmounts.
+  await page.waitForTimeout(200);
+}
+
 export async function completeForge(page: Page): Promise<void> {
-  const doneBtn = page.getByRole('button', { name: 'Done Forging' });
+  const doneBtn = page.getByRole('button', { name: /^DONE$/i });
   await expect(doneBtn).toBeVisible({ timeout: 5000 });
   await doneBtn.click();
 

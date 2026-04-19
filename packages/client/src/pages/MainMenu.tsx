@@ -7,7 +7,8 @@ export function MainMenu() {
 
   return (
     <div
-      className="page-enter flex h-full flex-col items-center justify-center gap-10 p-6"
+      className="page-enter flex h-full min-h-0 flex-col items-center gap-10 overflow-y-auto p-6"
+      style={{ justifyContent: 'safe center' }}
       data-screen-section="main-menu-root"
     >
       {/* Title with atmospheric glow */}

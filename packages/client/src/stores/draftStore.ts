@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createHmrStore } from './hmr-store';
 
 interface DraftStore {
   /** @deprecated Use selectedGemUid — kept as alias for backward compat */
@@ -11,7 +11,7 @@ interface DraftStore {
   reset: () => void;
 }
 
-export const useDraftStore = create<DraftStore>((set) => ({
+export const useDraftStore = createHmrStore<DraftStore>('draftStore', (set) => ({
   selectedOrbUid: null,
   get selectedGemUid() { return this.selectedOrbUid; },
 

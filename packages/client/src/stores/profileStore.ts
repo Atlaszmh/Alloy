@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createHmrStore } from './hmr-store';
 
 interface ProfileStore {
   elo: number;
@@ -10,7 +10,7 @@ interface ProfileStore {
   reset: () => void;
 }
 
-export const useProfileStore = create<ProfileStore>((set) => ({
+export const useProfileStore = createHmrStore<ProfileStore>('profileStore', (set) => ({
   elo: 1000,
   wins: 0,
   losses: 0,

@@ -25,16 +25,26 @@ export function AppShell() {
 
   const confirmVariant = isInQueue ? 'queue' : 'match';
 
-  // Measure app-frame height and set --frame-h for responsive tokens
+  // Measure app-frame height and set --frame-h on :root.
+  // Why :root and not .app-frame: the responsive tokens (--gem-size, etc.)
+  // are declared in @theme which emits to :root. var() substitution inside
+  // a custom property resolves against the cascade of the element where
+  // the property is declared — so --frame-h must live on :root for tokens
+  // there to see it. Setting it on .app-frame only would leave every token
+  // frozen at the 812px fallback.
   const frameRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
+    const root = document.documentElement;
     const ro = new ResizeObserver(([entry]) => {
-      frame.style.setProperty('--frame-h', `${entry.contentRect.height}px`);
+      root.style.setProperty('--frame-h', `${entry.contentRect.height}px`);
     });
     ro.observe(frame);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty('--frame-h');
+    };
   }, []);
 
   // Close drawers on route change

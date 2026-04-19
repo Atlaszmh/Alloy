@@ -98,8 +98,15 @@ function TabButton({ label, icon, active, onClick, color }: {
     <button
       aria-label={label}
       onClick={onClick}
-      className="flex flex-col items-center border-0 bg-transparent"
-      style={{ gap: 'var(--gap-xs)', padding: 'var(--gap-sm) var(--gap-md)', position: 'relative', cursor: 'pointer' }}
+      className="flex flex-col items-center justify-center border-0 bg-transparent"
+      style={{
+        gap: 'var(--gap-xs)',
+        padding: '0 var(--gap-md)',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative',
+        cursor: 'pointer',
+      }}
     >
       {active && (
         <div

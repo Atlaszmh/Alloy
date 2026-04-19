@@ -9,11 +9,11 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: VP.width, height: VP.height });
 });
 
-test('clean: gem at 90px, socket at 40px, text at 12px → no findings', async ({ page }) => {
+test('clean: gem at 80px, socket at 40px, text at 12px → no findings', async ({ page }) => {
   await page.setContent(`
     <html><body style="margin:0">
       <div class="app-frame" style="width:375px;height:667px">
-        <div data-gem style="width:90px;height:90px"></div>
+        <div data-gem style="width:80px;height:80px"></div>
         <div class="forge-socket" style="width:40px;height:40px"></div>
         <div data-screen-section><span style="font-size:12px">hi</span></div>
       </div>
@@ -22,7 +22,7 @@ test('clean: gem at 90px, socket at 40px, text at 12px → no findings', async (
   expect(await minSize(page, CTX)).toEqual([]);
 });
 
-test('fail: gem below 90px floor', async ({ page }) => {
+test('fail: gem below 80px floor', async ({ page }) => {
   await page.setContent(`
     <html><body style="margin:0">
       <div class="app-frame" style="width:375px;height:667px">

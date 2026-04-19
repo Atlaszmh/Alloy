@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createHmrStore } from './hmr-store';
 
 interface RunStoreState {
   lives: number;
@@ -14,7 +14,7 @@ interface RunStoreState {
   resetRun: () => void;
 }
 
-export const useRunStore = create<RunStoreState>((set, get) => ({
+export const useRunStore = createHmrStore<RunStoreState>('runStore', (set, get) => ({
   lives: 3,
   round: 1,
   goal: null,

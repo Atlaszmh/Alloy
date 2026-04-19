@@ -6,8 +6,6 @@ import { Timer } from '@/components/Timer';
 
 interface ForgeHeaderProps {
   round: number;
-  flux: number;
-  maxFlux: number;
   stats: DerivedStats | null;
   timerDurationMs?: number;
   onTimerExpire?: () => void;
@@ -19,8 +17,6 @@ const DISPLAY_FONT = 'var(--font-family-display)';
 
 export function ForgeHeader({
   round,
-  flux,
-  maxFlux,
   stats,
   timerDurationMs,
   onTimerExpire,
@@ -29,8 +25,6 @@ export function ForgeHeader({
 }: ForgeHeaderProps) {
   const showTimer = timerDurationMs !== undefined && onTimerExpire !== undefined;
   const navigate = useNavigate();
-  const fluxEmpty = flux === 0;
-  const fluxLow = flux > 0 && flux <= 2;
 
   return (
     <div
@@ -92,50 +86,13 @@ export function ForgeHeader({
           size="sm"
           onClick={onDone}
           data-primary-action="done-forging"
+          className="min-h-[36px]"
         >
           DONE
         </HapticButton>
       </div>
 
-      {/* Row 2: Flux bar */}
-      <div
-        className={`flex flex-col items-center py-1 ${fluxEmpty ? 'animate-[timer-pulse_0.8s_ease-in-out_infinite]' : ''}`}
-      >
-        {/* Lightning bolts */}
-        <div className="flex items-center gap-1">
-          {Array.from({ length: maxFlux }, (_, i) => {
-            const filled = i < flux;
-            const shouldPulse = fluxLow && filled;
-            return (
-              <span
-                key={i}
-                className={shouldPulse ? 'animate-[timer-pulse_1.2s_ease-in-out_infinite]' : ''}
-                style={{
-                  fontSize: 'var(--text-lg)',
-                  color: filled ? 'var(--color-warning)' : 'var(--color-surface-600)',
-                  textShadow: filled ? '0 0 6px var(--color-warning)' : undefined,
-                }}
-              >
-                ⚡
-              </span>
-            );
-          })}
-        </div>
-
-        {/* Flux label */}
-        <span
-          style={{
-            fontFamily: DISPLAY_FONT,
-            fontWeight: 700,
-            fontSize: 'var(--text-sm)',
-            color: fluxEmpty ? 'var(--color-danger)' : 'var(--color-surface-300)',
-          }}
-        >
-          {flux} / {maxFlux} FLUX
-        </span>
-      </div>
-
-      {/* Row 3: Stats row */}
+      {/* Row 2: Stats row (flux moved inline into the Flux Actions block) */}
       <div
         className="flex items-center justify-center gap-3 px-3 py-1"
       >
@@ -153,7 +110,7 @@ export function ForgeHeader({
         />
       </div>
 
-      {/* Row 4: Optional base stat selectors */}
+      {/* Row 3: Optional base stat selectors */}
       {baseStatSelectors}
     </div>
   );

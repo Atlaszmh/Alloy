@@ -386,7 +386,7 @@ export function Duel() {
           <button
             data-primary-action="skip"
             onClick={handleSkip}
-            className="rounded bg-surface-600/80 px-3 py-1 text-sm text-surface-400 backdrop-blur-sm hover:bg-surface-500/80"
+            className="min-h-[36px] min-w-[36px] rounded bg-surface-600/80 px-3 py-1 text-sm text-surface-400 backdrop-blur-sm hover:bg-surface-500/80"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
             Skip

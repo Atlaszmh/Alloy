@@ -319,12 +319,17 @@ describe('Forge page', () => {
     expect(screen.getByText('R1')).toBeTruthy();
   });
 
-  it('shows flux counter in header', () => {
-    setupStores();
+  it('shows flux counter inline with flux actions when in run mode', () => {
+    // Flux tracker was moved out of ForgeHeader into the flux-actions block,
+    // which only renders when matchState.runState is present (run modes).
+    setupStores({
+      mode: 'run_async',
+      runState: { flux: 0, lives: 3, currentRound: 1, goalRound: 10, consecutiveWins: 0 },
+    } as Partial<MatchState>);
     renderForge();
 
-    // ForgeHeader renders flux as "{tentative} / {max} FLUX"
-    expect(screen.getByText(/FLUX/)).toBeTruthy();
+    expect(screen.getByText('Flux')).toBeTruthy();
+    expect(screen.getByRole('meter')).toBeTruthy();
   });
 
   it('renders stockpile with orb count', () => {

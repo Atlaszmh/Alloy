@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import { getSupabase } from '@/shared/utils/supabase';
+import { createHmrStore } from './hmr-store';
 
 interface AuthState {
   playerId: string;
@@ -11,7 +11,7 @@ interface AuthState {
   initAuth: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = createHmrStore<AuthState>('authStore', (set, get) => ({
   playerId: '',
   displayName: '',
   isGuest: true,

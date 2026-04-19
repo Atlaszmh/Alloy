@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createHmrStore } from './hmr-store';
 
 interface DiscoveryStoreState {
   discoveredRecipes: Set<string>;
@@ -9,7 +9,7 @@ interface DiscoveryStoreState {
   resetDiscoveries: () => void;
 }
 
-export const useDiscoveryStore = create<DiscoveryStoreState>((set, get) => ({
+export const useDiscoveryStore = createHmrStore<DiscoveryStoreState>('discoveryStore', (set, get) => ({
   discoveredRecipes: new Set(),
   recentDiscovery: null,
 

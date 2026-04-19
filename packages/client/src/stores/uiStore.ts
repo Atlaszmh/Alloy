@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { createHmrStore } from './hmr-store';
 
 type SoundCategory = 'sfx' | 'ui';
 
@@ -37,7 +37,7 @@ interface UIStore {
   setHapticEnabled: (enabled: boolean) => void;
 }
 
-export const useUIStore = create<UIStore>((set) => ({
+export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
   modalOpen: null,
   toastMessage: null,
   toastType: 'info',

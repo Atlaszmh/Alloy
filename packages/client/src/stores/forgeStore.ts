@@ -1,6 +1,6 @@
-import { create } from 'zustand';
 import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, GemInstance, StatsResult } from '@alloy/engine';
 import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from '@alloy/engine';
+import { createHmrStore } from './hmr-store';
 
 interface ForgeStoreState {
   plan: ForgePlan | null;
@@ -31,7 +31,7 @@ interface ForgeStoreState {
 
 const EMPTY_COMBO: [GemInstance | null, GemInstance | null, GemInstance | null] = [null, null, null];
 
-export const useForgeStore = create<ForgeStoreState>((set, get) => ({
+export const useForgeStore = createHmrStore<ForgeStoreState>('forgeStore', (set, get) => ({
   plan: null,
   selectedOrbUid: null,
   confirmModalOpen: false,

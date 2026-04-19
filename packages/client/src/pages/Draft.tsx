@@ -523,7 +523,6 @@ export function Draft() {
       {/* ═══ Pool grid — auto-scaling GemCards (hidden during end animation) ═══ */}
       <div
         ref={poolContainerRef}
-        data-primary-action="gem-pool"
         data-screen-section="draft-pool"
         className="flex-1 overflow-y-auto rounded-xl border border-surface-600 bg-surface-800"
         style={{
@@ -553,6 +552,10 @@ export function Draft() {
                 <motion.div
                   key={orb.uid}
                   data-gem-uid={orb.uid}
+                  // Mark the first gem as the primary actionable target so the
+                  // reachability probe has a real, in-frame CTA to measure.
+                  // Tapping any gem is the primary draft action.
+                  {...(index === 0 ? { 'data-primary-action': 'pool-gem' } : {})}
                   initial={{ scale: 0.7, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{
