@@ -54,7 +54,9 @@
 
   /* Feedback */
   --color-success: #34d399;
+  --color-success-rgb: 52 211 153;
   --color-warning: #fbbf24;
+  --color-warning-rgb: 251 191 36;
   --color-danger: #f87171;
   --color-info: #60a5fa;
 

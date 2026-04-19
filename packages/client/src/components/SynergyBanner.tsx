@@ -41,10 +41,10 @@ export function SynergyBanner({ synergies, registry }: SynergyBannerProps) {
             style={{
               fontFamily: 'var(--font-family-display)',
               letterSpacing: '0.06em',
-              background: 'rgba(74, 222, 128, 0.15)',
+              background: 'rgb(var(--color-success-rgb) / 0.15)',
               color: 'var(--color-success)',
-              border: '1px solid rgba(74, 222, 128, 0.4)',
-              boxShadow: '0 0 8px rgba(74, 222, 128, 0.25)',
+              border: '1px solid rgb(var(--color-success-rgb) / 0.4)',
+              boxShadow: '0 0 8px rgb(var(--color-success-rgb) / 0.25)',
             }}
             title={def?.description ?? ''}
           >
@@ -63,9 +63,9 @@ export function SynergyBanner({ synergies, registry }: SynergyBannerProps) {
             style={{
               fontFamily: 'var(--font-family-display)',
               letterSpacing: '0.06em',
-              background: 'rgba(252, 211, 77, 0.08)',
+              background: 'rgb(var(--color-warning-rgb) / 0.08)',
               color: 'var(--color-warning)',
-              border: '1px dashed rgba(252, 211, 77, 0.3)',
+              border: '1px dashed rgb(var(--color-warning-rgb) / 0.3)',
             }}
             title={def?.description ?? ''}
           >
