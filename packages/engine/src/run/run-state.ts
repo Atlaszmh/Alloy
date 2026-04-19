@@ -181,18 +181,36 @@ export function previewRoundResult(
   const afterRunState = roundWon ? checkLifeRecovery(mid, discoveryCount) : mid;
 
   // Step 3: flux breakdown
+  //
+  // Milestone flux mirrors match-controller.ts handleDuelContinue, which awards
+  // it AFTER advanceRound — so the trigger is "about to enter a milestone
+  // round" (post-advance round), not "just finished a milestone round"
+  // (pre-advance round). The engine awards it regardless of win/loss, but
+  // only if the round actually advances (i.e. the run didn't just end on a
+  // fatal loss, since isRunOver returns before advanceRound).
   const rewards = balance.gem.flux.rewards;
   const winFlux = roundWon ? (rewards.win ?? 0) : 0;
+  const runEnded = afterRunState.lives <= 0;
+  const postAdvanceRound = runEnded ? afterRunState.round : afterRunState.round + 1;
   const milestoneRounds = before.lifeRecovery.milestoneRounds;
-  const milestoneFlux = milestoneRounds.includes(before.round)
-    ? (rewards.milestone ?? 0)
-    : 0;
+  const milestoneFlux =
+    !runEnded && milestoneRounds.includes(postAdvanceRound)
+      ? (rewards.milestone ?? 0)
+      : 0;
   // Per-round discovery flux is tracked separately in the engine; leave as 0.
   const discoveryFlux = 0;
   const total = winFlux + discoveryFlux + milestoneFlux;
 
   // Step 4: recovery-reason flags. Only true when a life was actually granted
   // (afterRunState.lives > mid.lives) AND the corresponding condition held.
+  //
+  // NOTE ON MILESTONE TIMING: milestone LIFE recovery (checkLifeRecovery) keys
+  // off the pre-advance round (`before.round`), because the engine runs
+  // checkLifeRecovery BEFORE advanceRound. Milestone FLUX, above, keys off the
+  // post-advance round. These are two different rounds by design (or at least
+  // by current engine behavior) — the life-recovery callout fires when you
+  // FINISH a milestone round; the flux reward fires when you ENTER one. We
+  // mirror the engine rather than try to reconcile the two.
   const lifeWasGranted = afterRunState.lives > mid.lives;
   const streakMet = mid.consecutiveWins >= before.lifeRecovery.winStreak;
   const milestoneMet = before.lifeRecovery.milestoneRounds.includes(before.round);

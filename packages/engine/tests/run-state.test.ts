@@ -311,7 +311,11 @@ describe('RunState', () => {
       expect(preview.milestoneJustHit).toBe(false);
     });
 
-    it('win on milestone round triggers milestone recovery', () => {
+    it('finishing a milestone round triggers milestone LIFE recovery (pre-advance)', () => {
+      // Engine: checkLifeRecovery runs before advanceRound and keys on the
+      // current (pre-advance) round. So finishing round 5 with milestoneRounds=[5]
+      // grants a life. Flux is awarded separately after advanceRound, so it
+      // fires on entering (not finishing) a milestone round — see next test.
       let before = createRunState({
         startingLives: 3,
         lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 999 },
@@ -324,7 +328,28 @@ describe('RunState', () => {
       expect(preview.afterRunState.lives).toBe(3);
       expect(preview.milestoneJustHit).toBe(true);
       expect(preview.streakJustTriggered).toBe(false);
+      // Post-advance round is 6, not a milestone → no milestone flux here.
+      expect(preview.fluxEarned.milestone).toBe(0);
+    });
+
+    it('entering a milestone round triggers milestone FLUX (post-advance)', () => {
+      // Engine: milestone flux is awarded after advanceRound and keys on the
+      // post-advance round. Finishing round 4 → advancing to milestone round 5
+      // → awards milestone flux. This is different from the round that grants
+      // milestone LIFE recovery (see previous test).
+      const before = {
+        ...createRunState({
+          startingLives: 3,
+          lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 999 },
+        }),
+        round: 4,
+      };
+
+      const preview = previewRoundResult(before, 0, true, balance);
+
       expect(preview.fluxEarned.milestone).toBe(balance.gem.flux.rewards.milestone);
+      // Life recovery keys on pre-advance round (4, not a milestone) → no life gain.
+      expect(preview.milestoneJustHit).toBe(false);
     });
 
     it('loss: no flux, lives -1, no recovery flags', () => {
@@ -401,7 +426,7 @@ describe('RunState', () => {
         startingLives: 3,
         lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
       });
-      // At cap (3/3), round 5 is a milestone — recovery caps → no life granted
+      // At cap (3/3), finishing round 5 — life recovery caps, no life granted.
       const onMilestone = { ...before, round: 5 };
 
       const preview = previewRoundResult(onMilestone, 0, true, balance);
@@ -409,8 +434,74 @@ describe('RunState', () => {
       expect(preview.afterRunState.lives).toBe(3);
       // Life was NOT actually granted (already at cap), so flag should be false
       expect(preview.milestoneJustHit).toBe(false);
-      // But milestone flux is still awarded (plan: flux depends on round, not on life gain)
+    });
+
+    it('milestone flux is awarded independently of life gain (post-advance round)', () => {
+      const before = {
+        ...createRunState({
+          startingLives: 3,
+          lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
+        }),
+        round: 4,
+      };
+      // At cap (3/3), finishing round 4 → advancing to milestone round 5.
+      // Flux fires regardless of whether a life would be granted.
+      const preview = previewRoundResult(before, 0, true, balance);
+
       expect(preview.fluxEarned.milestone).toBe(balance.gem.flux.rewards.milestone);
+    });
+
+    it('milestone flux aligns with match-controller.ts handleDuelContinue (awarded on post-advance round)', () => {
+      // Contract: the preview MUST match the engine's real path. Engine
+      // (match-controller.ts:466-471) awards milestone flux keyed on the
+      // post-advance round. This test pins that alignment.
+      const makeState = (round: number) => ({
+        ...createRunState({
+          startingLives: 3,
+          lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
+        }),
+        round,
+      });
+
+      // Finishing round 4 → post-advance round 5 is in milestoneRounds → flux.
+      const preview4 = previewRoundResult(makeState(4), 0, true, balance);
+      expect(preview4.fluxEarned.milestone).toBeGreaterThan(0);
+
+      // Finishing round 5 → post-advance round 6 is NOT in milestoneRounds → no flux.
+      const preview5 = previewRoundResult(makeState(5), 0, true, balance);
+      expect(preview5.fluxEarned.milestone).toBe(0);
+    });
+
+    it('milestone flux is awarded on a losing round that still advances', () => {
+      // Engine: advanceRound runs after checkLifeRecovery, regardless of
+      // win/loss, as long as the run is not over. So a loss on round 4 that
+      // leaves lives > 0 still advances to round 5 and earns milestone flux.
+      const before = {
+        ...createRunState({
+          startingLives: 3,
+          lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
+        }),
+        round: 4,
+      };
+      const preview = previewRoundResult(before, 0, false, balance);
+      expect(preview.afterRunState.lives).toBe(2);
+      expect(preview.fluxEarned.win).toBe(0);
+      expect(preview.fluxEarned.milestone).toBe(balance.gem.flux.rewards.milestone);
+    });
+
+    it('milestone flux is NOT awarded when the run ends (lives hit 0)', () => {
+      // Engine: if isRunOver, handleDuelContinue returns before advanceRound,
+      // so no milestone flux. Mirror that here.
+      const before = {
+        ...createRunState({
+          startingLives: 1,
+          lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
+        }),
+        round: 4,
+      };
+      const preview = previewRoundResult(before, 0, false, balance);
+      expect(preview.afterRunState.lives).toBe(0);
+      expect(preview.fluxEarned.milestone).toBe(0);
     });
   });
 

@@ -164,8 +164,7 @@ export function RunRoundInterstitial({
               animation: 'slide-up 0.25s ease-out 0.4s both',
             }}
           >
-            {'\uD83D\uDD25'} {streakShown}-win streak — {roundsToStreak}{' '}
-            {roundsToStreak === 1 ? 'more for a life' : 'more for a life'}
+            {'\uD83D\uDD25'} {streakShown}-win streak — {roundsToStreak} more for a life
           </p>
         )}
 
