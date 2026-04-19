@@ -69,7 +69,7 @@ function shouldSkipKey(key: string): boolean {
 // meaning "physical + all elemental", etc.). Map them before expansion.
 const SYNERGY_BARE_KEY_ALIASES: Record<string, string> = {
   maxHp: 'maxHP',
-  weaponDamage: '__weaponDamageAll', // expanded by expandSpecialKey
+  weaponDamage: 'allWeaponDamage', // expanded by expandSpecialKey
   elementalDamage: 'allElementalDamage',
   elementalResist: 'allResistances',
 };
@@ -98,7 +98,7 @@ function addToBucket(buckets: ModifierBuckets, mod: StatModifier): void {
 }
 
 /** Resolve aliases, return null if the key should be skipped. */
-function resolveStatKey(stat: string): string | null {
+export function resolveStatKey(stat: string): string | null {
   if (shouldSkipKey(stat)) return null;
 
   // Synergy-style bare keys map to canonical DerivedStats fields or
@@ -117,7 +117,7 @@ function resolveStatKey(stat: string): string | null {
   return stat;
 }
 
-/** Expand allElementalDamage / allResistances / __weaponDamageAll to individual keys. */
+/** Expand allElementalDamage / allResistances / allWeaponDamage to individual keys. */
 function expandSpecialKey(key: string): string[] {
   if (key === 'allElementalDamage') {
     return ALL_ELEMENTS.map((e) => `elementalDamage.${e}`);
@@ -125,7 +125,7 @@ function expandSpecialKey(key: string): string[] {
   if (key === 'allResistances') {
     return ALL_ELEMENTS.map((e) => `resistances.${e}`);
   }
-  if (key === '__weaponDamageAll') {
+  if (key === 'allWeaponDamage') {
     // "+X weapon damage" = +X physical + +X to each elemental element.
     return ['physicalDamage', ...ALL_ELEMENTS.map((e) => `elementalDamage.${e}`)];
   }

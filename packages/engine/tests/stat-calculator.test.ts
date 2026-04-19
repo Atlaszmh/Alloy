@@ -1,7 +1,7 @@
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { createEmptyLoadout } from '../src/types/item.js';
-import { calculateStats } from '../src/forge/stat-calculator.js';
+import { calculateStats, resolveStatKey } from '../src/forge/stat-calculator.js';
 import type { Loadout, EquippedSlot } from '../src/types/item.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
@@ -428,23 +428,25 @@ describe('Synergy: Glass Cannon (weaponDamage / maxHp bare keys resolve)', () =>
   });
 });
 
-describe('Synergy: behavior-style keys remain filtered', () => {
-  it('synergy.* keys are not written onto DerivedStats', () => {
-    // Berserker requires lifesteal + crit_chance and declares
-    // synergy.berserker.critHealDouble. We must make it active and then
-    // verify no property with a synergy.* or compound.* name leaks onto stats.
-    const loadout = createEmptyLoadout('sword', 'chainmail');
-    loadout.weapon.slots[0] = gemSlot('lifesteal', 1);
-    loadout.weapon.slots[1] = gemSlot('crit_chance', 1);
+describe('resolveStatKey — skip behavior', () => {
+  it('returns null for behavior-style compound keys', () => {
+    expect(resolveStatKey('compound.ignite.dotMultiplier')).toBeNull();
+    expect(resolveStatKey('compound.frostbite.chance')).toBeNull();
+  });
 
-    const { stats, activeSynergies } = calculateStats(loadout, registry);
-    expect(activeSynergies.find((s) => s.synergyId === 'berserker')?.isActive).toBe(true);
+  it('returns null for behavior-style synergy keys', () => {
+    expect(resolveStatKey('synergy.berserker.critHealDouble')).toBeNull();
+    expect(resolveStatKey('synergy.fortress.damageReductionAbove80')).toBeNull();
+  });
 
-    // No `synergy.X.Y` or `compound.X.Y` properties should appear on stats.
-    const statsRecord = stats as unknown as Record<string, unknown>;
-    for (const key of Object.keys(statsRecord)) {
-      expect(key.startsWith('synergy.')).toBe(false);
-      expect(key.startsWith('compound.')).toBe(false);
-    }
+  it('resolves bare synergy-generated keys to canonical fields', () => {
+    expect(resolveStatKey('maxHp')).toBe('maxHP');
+    expect(resolveStatKey('elementalDamage')).toBe('allElementalDamage');
+    expect(resolveStatKey('elementalResist')).toBe('allResistances');
+  });
+
+  it('returns null for duel-engine keys', () => {
+    expect(resolveStatKey('procDamage')).toBeNull();
+    expect(resolveStatKey('dotDamage')).toBeNull();
   });
 });
