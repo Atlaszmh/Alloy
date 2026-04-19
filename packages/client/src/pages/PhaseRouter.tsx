@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { DiscoveryCounter } from '@/components/DiscoveryCounter';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
 import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
 import { RunLivesDisplay } from '@/components/RunLivesDisplay';
 import { RunRoundCounter } from '@/components/RunRoundCounter';
 import { RunStatusOverlay } from '@/components/RunStatusOverlay';
+import { ToastContainer } from '@/components/Toast';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
@@ -102,7 +104,14 @@ export function PhaseRouter() {
             }}
           >
             <RunLivesDisplay />
-            <RunRoundCounter />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-sm)' }}>
+              <RunRoundCounter />
+              {matchState.runState && (
+                <DiscoveryCounter
+                  count={matchState.discoveryState?.totalDiscoveryCount() ?? 0}
+                />
+              )}
+            </div>
           </div>
         )}
 
@@ -118,6 +127,9 @@ export function PhaseRouter() {
 
       {/* Run status overlay (shown when run ends) */}
       {isRunMode && <RunStatusOverlay />}
+
+      {/* Global toast container (discovery + default toasts) */}
+      <ToastContainer />
     </GatewayProvider>
   );
 }

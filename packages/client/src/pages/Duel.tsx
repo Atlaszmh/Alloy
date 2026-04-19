@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useGateway } from '@/gateway';
 import type { CombatLog, CombatEvent, DuelResult, DerivedStats } from '@alloy/engine';
-import { calculateStats } from '@alloy/engine';
+import { calculateStats, previewRoundResult } from '@alloy/engine';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { useDuelSounds } from '@/hooks/useDuelSounds';
@@ -10,6 +10,7 @@ import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { RunRoundInterstitial } from '@/components/RunRoundInterstitial';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { useUIStore } from '@/stores/uiStore';
 import { Application } from 'pixi.js';
 import { useDuelPlayback } from '@/features/duel/hooks/useDuelPlayback.js';
 import { DuelScene, STAGE_WIDTH, STAGE_HEIGHT } from '@/features/duel/pixi/DuelScene.js';
@@ -235,6 +236,13 @@ export function Duel() {
   // ── Playback (driven by useDuelPlayback) ──
   const playback = useDuelPlayback(currentLog, scene);
 
+  // Speed preference (persisted in uiStore). Wire into playback via effect.
+  const duelSpeed = useUIStore((s) => s.duelSpeed);
+  const setDuelSpeed = useUIStore((s) => s.setDuelSpeed);
+  useEffect(() => {
+    playback.setSpeed(duelSpeed);
+  }, [duelSpeed, playback.setSpeed]);
+
   // Auto-start playback once scene and combat log are both ready
   const hasAutoStarted = useRef(false);
   useEffect(() => {
@@ -249,6 +257,22 @@ export function Duel() {
     hasAutoStarted.current = false;
     setShowInterstitial(false);
   }, [currentLog]);
+
+  // Snapshot cumulative discovery count at round-start so the interstitial can
+  // show "discoveries THIS round" (delta vs. snapshot). Keyed by the round
+  // number of the current duel log so it updates once per round.
+  const discoverySnapshotRef = useRef<{ round: number; count: number } | null>(null);
+  const currentRoundNumber = currentLog?.result.round ?? null;
+  useEffect(() => {
+    if (currentRoundNumber == null) return;
+    const cumulative = matchState?.discoveryState?.totalDiscoveryCount() ?? 0;
+    if (
+      discoverySnapshotRef.current === null ||
+      discoverySnapshotRef.current.round !== currentRoundNumber
+    ) {
+      discoverySnapshotRef.current = { round: currentRoundNumber, count: cumulative };
+    }
+  }, [currentRoundNumber, matchState?.discoveryState]);
 
   // Handle playback completion — show breakdown when playback ends
   useEffect(() => {
@@ -327,13 +351,37 @@ export function Duel() {
       {showCelebration && <CelebrationOverlay onComplete={() => setShowCelebration(false)} />}
 
       {/* Between-round interstitial (run mode only) */}
-      {showInterstitial && currentResult && (
-        <RunRoundInterstitial
-          roundNumber={round}
-          won={currentResult.winner === 0}
-          onContinue={handleInterstitialContinue}
-        />
-      )}
+      {showInterstitial && currentResult && matchState?.runState && (() => {
+        const runStateBefore = matchState.runState;
+        const registry = getRegistry();
+        const balance = registry.getBalance();
+        const cumulativeDiscoveries = matchState.discoveryState?.totalDiscoveryCount() ?? 0;
+        const snapshot = discoverySnapshotRef.current;
+        const discoveriesThisRound =
+          snapshot && snapshot.round === currentResult.round
+            ? Math.max(0, cumulativeDiscoveries - snapshot.count)
+            : 0;
+        const won = currentResult.winner === 0;
+        const preview = previewRoundResult(
+          runStateBefore,
+          cumulativeDiscoveries,
+          won,
+          balance,
+        );
+        return (
+          <RunRoundInterstitial
+            roundNumber={round}
+            won={won}
+            before={runStateBefore}
+            after={preview.afterRunState}
+            fluxEarned={preview.fluxEarned}
+            discoveriesThisRound={discoveriesThisRound}
+            streakJustTriggered={preview.streakJustTriggered}
+            milestoneJustHit={preview.milestoneJustHit}
+            onContinue={handleInterstitialContinue}
+          />
+        );
+      })()}
 
       {/* ═══ TOP BAR (~5%): Round pips + Enemy HP + Timer ═══ */}
       <div className="shrink-0 border-b border-surface-700 px-3 py-1.5" data-screen-section="duel-enemy-hp">
@@ -375,7 +423,7 @@ export function Duel() {
         />
 
         {/* Playback controls overlay — bottom of arena */}
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5">
           <button
             onClick={handlePlayPause}
             className="rounded bg-surface-600/80 px-3 py-1 text-sm text-white backdrop-blur-sm hover:bg-surface-500/80"
@@ -383,6 +431,22 @@ export function Duel() {
           >
             {playback.isPlaying ? 'Pause' : 'Play'}
           </button>
+          {([1, 2, 3] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setDuelSpeed(s)}
+              data-testid={`speed-${s}x`}
+              aria-pressed={duelSpeed === s}
+              className={`rounded px-2 py-1 text-xs backdrop-blur-sm ${
+                duelSpeed === s
+                  ? 'bg-accent-500 text-surface-900'
+                  : 'bg-surface-600/80 text-surface-300 hover:bg-surface-500/80'
+              }`}
+              style={{ fontFamily: 'var(--font-family-display)', fontWeight: 700 }}
+            >
+              {s}×
+            </button>
+          ))}
           <button
             data-primary-action="skip"
             onClick={handleSkip}

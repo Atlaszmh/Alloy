@@ -13,6 +13,7 @@ import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
+import { showToast } from '@/components/Toast';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
 import type { AffixDef, BaseStat, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
@@ -534,6 +535,24 @@ export function Forge() {
     if (!keep) return;
     const filled = comboSlots.filter((s): s is GemInstance => s !== null);
 
+    // Snapshot state for discovery-toast detection:
+    //   • known recipes (from authoritative match-level DiscoveryState)
+    //   • UIDs already in the stockpile (to diff the output gem after)
+    const knownRecipes = new Set(
+      matchState?.discoveryState?.serialize().discoveredRecipes ?? [],
+    );
+    const beforeUids = new Set(plan.stockpile.map((g) => g.uid));
+
+    const fireDiscoveryToast = (nextPlan: typeof plan) => {
+      const newGem = nextPlan.stockpile.find((g) => !beforeUids.has(g.uid));
+      const recipeId = newGem?.sourceRecipe;
+      if (!recipeId || knownRecipes.has(recipeId)) return;
+      const recipeDef = registry.getRecipeRegistry().get(recipeId);
+      showToast(`New Recipe: ${recipeDef?.name ?? recipeId}`, {
+        variant: 'discovery',
+      });
+    };
+
     if (filled.length === 3) {
       const b = comboSlots[1]!;
       const c = comboSlots[2]!;
@@ -545,21 +564,31 @@ export function Forge() {
         },
         registry,
       );
-      if (result.ok) { playSound('combineMerge'); clearComboSlots(); }
-      else { playSound('combineFail'); }
+      if (result.ok) {
+        playSound('combineMerge');
+        fireDiscoveryToast(result.plan);
+        clearComboSlots();
+      } else {
+        playSound('combineFail');
+      }
       return;
     }
 
-    // Binary path (unchanged)
+    // Binary path
     const other = comboSlots[1] ?? comboSlots[2];
     if (!other) return;
     const result = applyAction(
       { kind: 'combine', gemUid1: keep.uid, gemUid2: other.uid, keepGemUid: keep.uid },
       registry,
     );
-    if (result.ok) { playSound('combineMerge'); clearComboSlots(); }
-    else { playSound('combineFail'); }
-  }, [plan, comboSlots, applyAction, registry, clearComboSlots]);
+    if (result.ok) {
+      playSound('combineMerge');
+      fireDiscoveryToast(result.plan);
+      clearComboSlots();
+    } else {
+      playSound('combineFail');
+    }
+  }, [plan, comboSlots, applyAction, registry, clearComboSlots, matchState?.discoveryState]);
 
   // ── Socket click (equip tab) ──
   const handleSocketClick = useCallback((cardId: 'weapon' | 'armor', slotIndex: number) => {
@@ -681,6 +710,8 @@ export function Forge() {
       <ForgeHeader
         round={round}
         stats={derivedStats}
+        activeSynergies={statsResult?.activeSynergies ?? []}
+        registry={registry}
         timerDurationMs={isRunMode ? undefined : FORGE_TIMER_MS}
         onTimerExpire={isRunMode ? undefined : handleTimerExpire}
         onDone={openConfirmModal}

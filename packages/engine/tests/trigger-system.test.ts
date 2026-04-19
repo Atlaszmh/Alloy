@@ -5,17 +5,44 @@ import { DataRegistry } from '../src/data/registry.js';
 import { createGem } from '../src/types/gem.js';
 import type { Loadout } from '../src/types/item.js';
 import type { AffixTier } from '../src/types/affix.js';
+import type { GemRarity } from '../src/types/gem.js';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(
+  data.affixes,
+  data.combinations,
+  data.synergies,
+  data.baseItems,
+  data.balance,
+  data.recipes,
+);
+
+interface SlotSpec {
+  affixId: string;
+  tier: AffixTier;
+  rarity?: GemRarity;
+  sourceRecipe?: string;
+  recipeDepth?: number;
+}
 
 function makeLoadout(
-  weaponSlots: Array<{ affixId: string; tier: AffixTier } | null> = [],
-  armorSlots: Array<{ affixId: string; tier: AffixTier } | null> = [],
+  weaponSlots: Array<SlotSpec | null> = [],
+  armorSlots: Array<SlotSpec | null> = [],
 ): Loadout {
-  const toSlot = (s: { affixId: string; tier: AffixTier } | null) =>
+  const toSlot = (s: SlotSpec | null) =>
     s
-      ? { gem: createGem(`uid_${s.affixId}_${s.tier}`, s.affixId, s.tier as 1|2|3|4|5, 'common') }
+      ? {
+          gem: createGem(
+            `uid_${s.affixId}_${s.tier}`,
+            s.affixId,
+            s.tier as 1 | 2 | 3 | 4 | 5,
+            s.rarity ?? 'common',
+            {
+              sourceRecipe: s.sourceRecipe,
+              recipeDepth: s.recipeDepth,
+            },
+          ),
+        }
       : null;
 
   return {
@@ -106,5 +133,79 @@ describe('extractTriggers', () => {
     );
     const triggers = extractTriggers(loadout, registry);
     expect(triggers).toEqual([]);
+  });
+});
+
+describe('extractTriggers — compound gems', () => {
+  it('extracts an Ignite compound trigger from a socketed ignite gem', () => {
+    // An ignite gem is the output of the Ignite recipe: its affixId == 'ignite'
+    // and its sourceRecipe == 'ignite'. The trigger system should detect it and
+    // emit a compound_dot TriggerEffect.
+    const loadout = makeLoadout([
+      {
+        affixId: 'ignite',
+        tier: 1,
+        rarity: 'common',
+        sourceRecipe: 'ignite',
+        recipeDepth: 1,
+      },
+    ]);
+
+    const triggers = extractTriggers(loadout, registry);
+    const ignite = triggers.find(
+      (t) => t.effect.kind === 'compound_dot' && t.effect.compoundId === 'ignite',
+    );
+    expect(ignite).toBeDefined();
+    expect(ignite?.condition).toBe('on_hit');
+    expect(ignite?.chance).toBeGreaterThan(0);
+    if (ignite?.effect.kind === 'compound_dot') {
+      expect(ignite.effect.element).toBe('fire');
+      expect(ignite.effect.dotMultiplier).toBeCloseTo(2.0);
+      expect(ignite.effect.duration).toBeGreaterThan(0);
+      expect(ignite.effect.damagePerSecond).toBeGreaterThan(0);
+    }
+  });
+
+  it('non-ignite compound returns null (other compounds deferred to P1)', () => {
+    // Socket a frostbite compound gem. Because only Ignite is wired end-to-end
+    // in P0, extractTriggers should NOT produce a compound_dot trigger for it.
+    const loadout = makeLoadout([
+      {
+        affixId: 'frostbite',
+        tier: 1,
+        rarity: 'common',
+        sourceRecipe: 'frostbite',
+        recipeDepth: 1,
+      },
+    ]);
+
+    const triggers = extractTriggers(loadout, registry);
+    const compoundDots = triggers.filter(
+      (t) => t.effect.kind === 'compound_dot',
+    );
+    expect(compoundDots).toEqual([]);
+  });
+
+  it('base-affix triggers still extract alongside compound pathway', () => {
+    // Plain chance_on_hit gem (not a compound) must still yield a bonus_damage
+    // TriggerEffect — locks the existing pathway against regression.
+    const loadout = makeLoadout([{ affixId: 'chance_on_hit', tier: 2 }]);
+    const triggers = extractTriggers(loadout, registry);
+
+    expect(triggers).toHaveLength(1);
+    expect(triggers[0].affixId).toBe('chance_on_hit');
+    expect(triggers[0].condition).toBe('on_hit');
+    expect(triggers[0].effect.kind).toBe('bonus_damage');
+  });
+
+  it('compound lookup does not match plain affixes that share an id prefix', () => {
+    // fire_damage is a base affix, not a compound. Its id is not a recipe
+    // outputAffixId, so no compound_dot trigger should be extracted.
+    const loadout = makeLoadout([{ affixId: 'fire_damage', tier: 1 }]);
+    const triggers = extractTriggers(loadout, registry);
+    const compoundDots = triggers.filter(
+      (t) => t.effect.kind === 'compound_dot',
+    );
+    expect(compoundDots).toEqual([]);
   });
 });

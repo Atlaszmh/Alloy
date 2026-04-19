@@ -58,6 +58,7 @@ export type CombatEvent =
   | { type: 'barrier_absorb'; player: 0 | 1; absorbed: number; remaining: number }
   | { type: 'trigger_proc'; player: 0 | 1; triggerId: string; effectDescription: string }
   | { type: 'synergy_proc'; player: 0 | 1; synergyId: string; effectDescription: string }
+  | { type: 'compound_trigger'; player: 0 | 1; compoundId: string; displayName: string }
   | { type: 'stun'; target: 0 | 1; duration: number }
   | { type: 'hp_change'; player: 0 | 1; oldHP: number; newHP: number; maxHP: number }
   | { type: 'death'; player: 0 | 1 };
@@ -102,7 +103,16 @@ export type TriggerEffect =
       value: number;
       duration: number;
     }
-  | { kind: 'reflect_damage'; multiplier: number; duration: number };
+  | { kind: 'reflect_damage'; multiplier: number; duration: number }
+  | {
+      kind: 'compound_dot';
+      compoundId: string;         // e.g. 'ignite'
+      element: Element;
+      damagePerSecond: number;
+      duration: number;           // seconds
+      tickInterval: number;       // seconds
+      dotMultiplier: number;      // recipe-declared damage multiplier (scale-1, e.g. 2.0 = 2x)
+    };
 
 export interface TriggerDef {
   affixId: string;

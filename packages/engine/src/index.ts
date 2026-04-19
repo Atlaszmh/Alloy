@@ -61,7 +61,8 @@ export {
   isRunOver,
   isGoalReached,
   advanceRound,
+  previewRoundResult,
 } from './run/run-state.js';
-export type { RunState, CreateRunOpts, LifeRecoveryConfig } from './run/run-state.js';
+export type { RunState, CreateRunOpts, LifeRecoveryConfig, RoundPreview } from './run/run-state.js';
 export { getPoolConfigForRound, DEFAULT_SCALING } from './run/pool-scaling.js';
 export type { PoolScalingEntry } from './run/pool-scaling.js';

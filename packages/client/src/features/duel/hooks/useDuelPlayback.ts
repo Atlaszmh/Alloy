@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CombatLog } from '@alloy/engine';
 import { DuelScene } from '../pixi/DuelScene.js';
 
+const CRIT_HIT_PAUSE_MS = 80;
+
 export interface PlaybackControls {
   currentTime: number;
   isPlaying: boolean;
@@ -29,6 +31,8 @@ export function useDuelPlayback(
     lastTimestamp: 0,
     accumulator: 0,
     rafId: 0,
+    /** Timestamp (ms, `performance.now()` clock) until which time advancement is paused. */
+    pauseUntil: 0,
   });
 
   const maxTime = combatLog
@@ -70,6 +74,15 @@ export function useDuelPlayback(
         state.lastTimestamp = timestamp;
       }
 
+      // Hit-pause: hold world still while still ticking visual animations.
+      if (state.pauseUntil > timestamp) {
+        const deltaMs = timestamp - state.lastTimestamp;
+        state.lastTimestamp = timestamp;
+        scene?.update(deltaMs / 16.67);
+        state.rafId = requestAnimationFrame(step);
+        return;
+      }
+
       const deltaMs = timestamp - state.lastTimestamp;
       state.lastTimestamp = timestamp;
 
@@ -83,6 +96,19 @@ export function useDuelPlayback(
         processTimeRange(prevTime, newTime);
         scene?.update(deltaMs / 16.67);
         setCurrentTime(newTime);
+
+        // Scan events just processed — a crit triggers an 80ms hit-pause.
+        for (const frame of combatLog.frames) {
+          if (frame.time <= prevTime) continue;
+          if (frame.time > newTime) break;
+          for (const event of frame.events) {
+            if (event.type === 'attack' && event.breakdown.isCrit) {
+              // Hit-pause is wall-clock (not compressed by playback speed) so a crit
+              // always reads as a punctuated beat, even at 3×.
+              state.pauseUntil = timestamp + CRIT_HIT_PAUSE_MS;
+            }
+          }
+        }
 
         if (newTime >= maxTime) {
           state.isPlaying = false;
@@ -138,6 +164,7 @@ export function useDuelPlayback(
       scene?.reset();
       setCurrentTime(-1);
     }
+    state.pauseUntil = 0;
     state.isPlaying = true;
     setIsPlaying(true);
   }, [maxTime, scene]);

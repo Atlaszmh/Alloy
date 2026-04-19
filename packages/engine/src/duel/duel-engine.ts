@@ -576,6 +576,45 @@ function applyTriggerEffect(
       owner.reflectRemaining = effect.duration;
       break;
     }
+    case 'compound_dot': {
+      // Compound reference implementation (Ignite).
+      // Emit a compound_trigger event so the UI can surface a named callout
+      // ("IGNITE!") distinct from the generic trigger_proc row, then push a
+      // DOT onto the defender in the same shape as apply_dot.
+      //
+      // Scale convention:
+      //   effect.damagePerSecond — raw DPS from buildCompoundEffect (scale-1)
+      //   effect.dotMultiplier   — recipe param (scale-1, e.g. 2.0 = 2x)
+      //   stats.dotMultiplier    — gladiator-level, scale-100 (100 = 1.0x),
+      //                            applied later inside calculateDOTBreakdown.
+      // We pre-multiply DPS by the recipe multiplier here so the stored DOT
+      // reflects the compound's intrinsic potency.
+      const dps = effect.damagePerSecond * effect.dotMultiplier;
+      log.addEvent(time, {
+        type: 'compound_trigger',
+        player: owner.playerId,
+        compoundId: effect.compoundId,
+        displayName: `${effect.compoundId.toUpperCase()}!`,
+      });
+      opponent.activeDOTs.push({
+        element: effect.element,
+        damagePerSecond: dps,
+        remaining: effect.duration,
+        tickInterval: effect.tickInterval,
+        accumulator: 0,
+        sourceAffixId: `compound:${effect.compoundId}`,
+        stacks: 1,
+        sourcePlayerId: owner.playerId,
+      });
+      log.addEvent(time, {
+        type: 'dot_apply',
+        target: opponent.playerId,
+        element: effect.element,
+        dps,
+        duration: effect.duration,
+      });
+      break;
+    }
   }
 }
 

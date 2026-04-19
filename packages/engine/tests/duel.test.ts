@@ -3,12 +3,20 @@ import { createGladiator } from '../src/duel/gladiator.js';
 import { createEmptyDerivedStats } from '../src/types/derived-stats.js';
 import type { DerivedStats } from '../src/types/derived-stats.js';
 import { createEmptyLoadout } from '../src/types/item.js';
+import { createGem } from '../src/types/gem.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
 const data = loadAndValidateData();
-const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
+const registry = new DataRegistry(
+  data.affixes,
+  data.combinations,
+  data.synergies,
+  data.baseItems,
+  data.balance,
+  data.recipes,
+);
 
 function makeStats(overrides: Partial<DerivedStats> = {}): DerivedStats {
   const base = createEmptyDerivedStats();
@@ -498,5 +506,117 @@ describe('Duel Engine', () => {
 
       expect(g.attackTimer).toBeCloseTo(0.5); // 1.0 * (1 - 50/100) = 0.5
     });
+  });
+});
+
+// ---------- Compound trigger integration (Ignite reference) ----------
+
+describe('duel integration: Ignite compound applies fire DOT', () => {
+  function socketIgnite(
+    loadout: ReturnType<typeof createEmptyLoadout>,
+    tier: 1 | 2 | 3 | 4 | 5 = 3,
+  ) {
+    const gem = createGem('uid_ignite_0', 'ignite', tier, 'rare', {
+      sourceRecipe: 'ignite',
+      recipeDepth: 1,
+      tags: ['ignite', 'chance_on_hit', 'fire_damage'],
+    });
+    loadout.weapon.slots[0] = { gem };
+  }
+
+  it('adds a fire DOT and emits compound_trigger when Ignite fires', () => {
+    const attacker = makeStats({ maxHP: 2000, physicalDamage: 5, attackSpeed: 0.2 });
+    const defender = makeStats({ maxHP: 5000 });
+    const [loadoutA, loadoutB] = makeLoadouts();
+    socketIgnite(loadoutA, 3);
+    const rng = new SeededRNG(7);
+
+    const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
+
+    const compoundTriggers = log.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === 'compound_trigger' && e.compoundId === 'ignite');
+    expect(compoundTriggers.length).toBeGreaterThan(0);
+
+    // Every compound_trigger we emit here is from player 0 (the only socketer).
+    for (const ev of compoundTriggers) {
+      if (ev.type === 'compound_trigger') {
+        expect(ev.player).toBe(0);
+        expect(ev.displayName).toBe('IGNITE!');
+      }
+    }
+
+    // Subsequent fire dot_ticks on the defender
+    const fireDots = log.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === 'dot_tick' && e.target === 1 && e.breakdown.element === 'fire');
+    expect(fireDots.length).toBeGreaterThan(0);
+  });
+
+  it('compound_trigger.player tracks the socketer (player 1 version)', () => {
+    const attacker = makeStats({ maxHP: 5000 });
+    const defender = makeStats({ maxHP: 2000, physicalDamage: 5, attackSpeed: 0.2 });
+    const [loadoutA, loadoutB] = makeLoadouts();
+    // Player 1 sockets Ignite this time.
+    socketIgnite(loadoutB, 3);
+    const rng = new SeededRNG(7);
+
+    const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
+
+    const compoundTriggers = log.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === 'compound_trigger' && e.compoundId === 'ignite');
+    expect(compoundTriggers.length).toBeGreaterThan(0);
+    for (const ev of compoundTriggers) {
+      if (ev.type === 'compound_trigger') {
+        expect(ev.player).toBe(1);
+      }
+    }
+  });
+
+  it('Ignite DOT applies the fire element (not physical or another element)', () => {
+    const attacker = makeStats({ maxHP: 2000, physicalDamage: 5, attackSpeed: 0.2 });
+    const defender = makeStats({ maxHP: 5000 });
+    const [loadoutA, loadoutB] = makeLoadouts();
+    socketIgnite(loadoutA, 3);
+    const rng = new SeededRNG(7);
+
+    const log = simulate([attacker, defender], [loadoutA, loadoutB], registry, rng, 1);
+
+    const dotTicks = log.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === 'dot_tick');
+    expect(dotTicks.length).toBeGreaterThan(0);
+    // Every DOT tick that resulted from Ignite must be fire.
+    for (const ev of dotTicks) {
+      if (ev.type === 'dot_tick') {
+        expect(ev.breakdown.element).toBe('fire');
+      }
+    }
+  });
+
+  it('mirror Ignite duel with same seed is deterministic', () => {
+    const attacker = makeStats({ maxHP: 2000, physicalDamage: 5, attackSpeed: 0.2 });
+    const defender = makeStats({ maxHP: 5000 });
+    const [loadoutA, loadoutB] = makeLoadouts();
+    socketIgnite(loadoutA, 3);
+
+    const log1 = simulate(
+      [attacker, defender],
+      [loadoutA, loadoutB],
+      registry,
+      new SeededRNG(7),
+      1,
+    );
+    const log2 = simulate(
+      [{ ...attacker }, { ...defender }],
+      [loadoutA, loadoutB],
+      registry,
+      new SeededRNG(7),
+      1,
+    );
+
+    expect(log1.result).toEqual(log2.result);
+    expect(log1.frames.length).toBe(log2.frames.length);
   });
 });

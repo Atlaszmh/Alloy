@@ -278,6 +278,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
   const healEvents = group.events.filter((e) => e.event.type === 'heal');
   const hpEvents = group.events.filter((e) => e.event.type === 'hp_change');
   const triggerEvents = group.events.filter((e) => e.event.type === 'trigger_proc' || e.event.type === 'synergy_proc');
+  const compoundTriggers = group.events.filter((e) => e.event.type === 'compound_trigger');
 
   if (!attackEvent || attackEvent.event.type !== 'attack') {
     return (
@@ -312,6 +313,25 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
         return (
           <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
             {'\u2728'} {e.event.effectDescription}
+          </div>
+        );
+      })}
+      {compoundTriggers.map((e, i) => {
+        if (e.event.type !== 'compound_trigger') return null;
+        const who = e.event.player === 0 ? 'You' : 'Enemy';
+        return (
+          <div
+            key={`compound-${i}`}
+            style={{
+              paddingLeft: 8,
+              color: UI_COLORS.compound,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              fontSize: 14,
+              textShadow: '0 0 4px rgba(251, 191, 36, 0.35)',
+            }}
+          >
+            {'\u2605'} {who} triggered {e.event.displayName}
           </div>
         );
       })}

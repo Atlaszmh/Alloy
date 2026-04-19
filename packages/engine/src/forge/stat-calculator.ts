@@ -32,12 +32,19 @@ const STAT_KEY_ALIASES: Record<string, string> = {
   dotDamageMultiplier: 'dotMultiplier',
 };
 
-// Keys that are handled by the duel engine, not stat calc
+// Keys that legitimately have no DerivedStats home (applied elsewhere).
+// Behavior-style synergy/compound keys stay skipped until the duel engine
+// consumes them (compound.* is Chunk 3; remaining synergy.* is a P1
+// follow-up that requires duel-engine integration).
 function shouldSkipKey(key: string): boolean {
+  // Behavior-style compound params are consumed by the trigger system
+  // reading gem.outputBonusEffects directly — skip them here.
   if (key.startsWith('compound.')) return true;
+  // Behavior-style synergy effects (firstHitCrit, critHealDouble, stunImmune,
+  // etc.) are not yet wired into combat. P1 work.
   if (key.startsWith('synergy.')) return true;
-  // Keys that don't map to any DerivedStats field
-  const skipKeys = [
+  // Scaling/behavior keys that the duel engine applies, not the stat calc.
+  const duelEngineKeys = [
     'procDamage',
     'flatDamageEffectiveness',
     'damageReduction',
@@ -52,13 +59,20 @@ function shouldSkipKey(key: string): boolean {
     'physicalDamageReduction',
     'dotDamageTakenReduction',
     'dodge',
-    'weaponDamage',
-    'maxHp',
-    'elementalDamage', // bare elementalDamage without dot notation (from synergies)
-    'elementalResist',
+    'dotDamage',
   ];
-  return skipKeys.includes(key);
+  return duelEngineKeys.includes(key);
 }
+
+// Synergy-style bare keys → canonical DerivedStats fields / expansion tokens.
+// synergies.json uses non-canonical names (maxHp vs maxHP, bare weaponDamage
+// meaning "physical + all elemental", etc.). Map them before expansion.
+const SYNERGY_BARE_KEY_ALIASES: Record<string, string> = {
+  maxHp: 'maxHP',
+  weaponDamage: 'allWeaponDamage', // expanded by expandSpecialKey
+  elementalDamage: 'allElementalDamage',
+  elementalResist: 'allResistances',
+};
 
 // ---- Helpers ----
 
@@ -84,10 +98,16 @@ function addToBucket(buckets: ModifierBuckets, mod: StatModifier): void {
 }
 
 /** Resolve aliases, return null if the key should be skipped. */
-function resolveStatKey(stat: string): string | null {
+export function resolveStatKey(stat: string): string | null {
   if (shouldSkipKey(stat)) return null;
 
-  // Check aliases for top-level keys
+  // Synergy-style bare keys map to canonical DerivedStats fields or
+  // expansion tokens (see expandSpecialKey below).
+  if (SYNERGY_BARE_KEY_ALIASES[stat]) {
+    return SYNERGY_BARE_KEY_ALIASES[stat];
+  }
+
+  // Check aliases for top-level keys (existing behavior for dotted keys).
   const topKey = stat.split('.')[0];
   if (STAT_KEY_ALIASES[topKey]) {
     const rest = stat.includes('.') ? '.' + stat.split('.').slice(1).join('.') : '';
@@ -97,13 +117,17 @@ function resolveStatKey(stat: string): string | null {
   return stat;
 }
 
-/** Expand allElementalDamage / allResistances to individual element keys. */
+/** Expand allElementalDamage / allResistances / allWeaponDamage to individual keys. */
 function expandSpecialKey(key: string): string[] {
   if (key === 'allElementalDamage') {
     return ALL_ELEMENTS.map((e) => `elementalDamage.${e}`);
   }
   if (key === 'allResistances') {
     return ALL_ELEMENTS.map((e) => `resistances.${e}`);
+  }
+  if (key === 'allWeaponDamage') {
+    // "+X weapon damage" = +X physical + +X to each elemental element.
+    return ['physicalDamage', ...ALL_ELEMENTS.map((e) => `elementalDamage.${e}`)];
   }
   return [key];
 }

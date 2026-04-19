@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import type { DerivedStats } from '@alloy/engine';
+import type { ActiveSynergy, DataRegistry, DerivedStats } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
+import { SynergyBanner } from '@/components/SynergyBanner';
 import { Timer } from '@/components/Timer';
 
 interface ForgeHeaderProps {
   round: number;
   stats: DerivedStats | null;
+  activeSynergies?: ActiveSynergy[];
+  registry?: DataRegistry;
   timerDurationMs?: number;
   onTimerExpire?: () => void;
   onDone: () => void;
@@ -18,6 +21,8 @@ const DISPLAY_FONT = 'var(--font-family-display)';
 export function ForgeHeader({
   round,
   stats,
+  activeSynergies,
+  registry,
   timerDurationMs,
   onTimerExpire,
   onDone,
@@ -110,7 +115,12 @@ export function ForgeHeader({
         />
       </div>
 
-      {/* Row 3: Optional base stat selectors */}
+      {/* Row 3: Active/pending synergy chips */}
+      {registry && activeSynergies && activeSynergies.length > 0 && (
+        <SynergyBanner synergies={activeSynergies} registry={registry} />
+      )}
+
+      {/* Row 4: Optional base stat selectors */}
       {baseStatSelectors}
     </div>
   );

@@ -5,6 +5,7 @@ import { GladiatorSprite } from './GladiatorSprite.js';
 import { VFXManager } from './VFXManager.js';
 import { DamageNumbers } from './DamageNumbers.js';
 import { StatusIcons } from './StatusIcons.js';
+import { PIXI_COLORS } from '../colors.js';
 
 export type HPChangeCallback = (hp: [number, number], maxHp: [number, number]) => void;
 
@@ -41,6 +42,14 @@ export class DuelScene {
 
   // Track pending timeouts to clear on destroy/reset
   private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
+  // Screen shake (applied to the Pixi stage)
+  private shakeTarget: Container | null = null;
+  private shakeOrigX = 0;
+  private shakeOrigY = 0;
+  private shakeFrames = 0;
+  private shakePeakFrames = 0;
+  private shakeIntensity = 0;
 
   // External callback for HP changes (so React can render HP bars)
   onHPChange: HPChangeCallback | null = null;
@@ -102,6 +111,11 @@ export class DuelScene {
     this.vfx = new VFXManager(vfxContainer);
     this.vfx.setStage(app.stage);
 
+    // Register the stage as shake target
+    this.shakeTarget = app.stage;
+    this.shakeOrigX = app.stage.x;
+    this.shakeOrigY = app.stage.y;
+
     // Damage numbers layer (on top)
     const dmgContainer = new Container();
     app.stage.addChild(dmgContainer);
@@ -132,28 +146,42 @@ export class DuelScene {
         // Gladiator attack animation
         this.gladiators[event.attacker].playAttack();
 
-        // Hit flash on target
-        this.gladiators[target].playHit();
+        // Dodged attacks skip the hit reaction, damage number, and shake.
+        if (!event.breakdown.dodged) {
+          // Hit flash / squash on target
+          this.gladiators[target].playHit();
 
-        // VFX: element effect
-        const dmgType = getDominantDamageType(event.breakdown);
-        this.vfx.spawnEffect(
-          dmgType,
-          playerPos(event.attacker),
-          playerPos(target),
-        );
+          // VFX: element effect
+          const dmgType = getDominantDamageType(event.breakdown);
+          this.vfx.spawnEffect(
+            dmgType,
+            playerPos(event.attacker),
+            playerPos(target),
+          );
 
-        // Crit effect
-        if (event.breakdown.isCrit) {
-          this.vfx.spawnEffect('crit', playerPos(target), playerPos(target));
+          // Crit effect
+          if (event.breakdown.isCrit) {
+            this.vfx.spawnEffect('crit', playerPos(target), playerPos(target));
+          }
+
+          // Damage number
+          const color = ELEMENT_COLORS[dmgType] ?? 0xffffff;
+          const label = `${event.breakdown.isCrit ? 'CRIT ' : ''}${Math.round(event.breakdown.totalNet)}`;
+          this.damageNumbers.spawn(label, playerX(target), GLADIATOR_Y - 70, color, {
+            isCrit: event.breakdown.isCrit,
+          });
+
+          // Scaled screen shake on big hits.
+          // Crits always shake; non-crits shake only when >=8% of defender max HP.
+          if (event.breakdown.totalNet > 0 && this.maxHp[target] > 0) {
+            const ratio = event.breakdown.totalNet / this.maxHp[target];
+            if (event.breakdown.isCrit) {
+              this.applyShake(5, 8);
+            } else if (ratio >= 0.08) {
+              this.applyShake(2 + ratio * 6, 6);
+            }
+          }
         }
-
-        // Damage number
-        const color = ELEMENT_COLORS[dmgType] ?? 0xffffff;
-        const label = `${event.breakdown.isCrit ? 'CRIT ' : ''}${Math.round(event.breakdown.totalNet)}`;
-        this.damageNumbers.spawn(label, playerX(target), GLADIATOR_Y - 70, color, {
-          isCrit: event.breakdown.isCrit,
-        });
         break;
       }
 
@@ -250,6 +278,19 @@ export class DuelScene {
         break;
       }
 
+      case 'compound_trigger': {
+        // Float the compound name (e.g. "IGNITE!") above the attacker so
+        // the player sees the named payoff of their discovered compound.
+        const attackerX = playerX(event.player);
+        this.damageNumbers.showCallout(
+          attackerX,
+          GLADIATOR_Y - 90,
+          event.displayName,
+          PIXI_COLORS.compound,
+        );
+        break;
+      }
+
       case 'synergy_proc': {
         this.statusIcons.addStatus(event.player, 'buff');
         this.safeTimeout(() => {
@@ -307,6 +348,46 @@ export class DuelScene {
     this.vfx?.update(dt);
     this.damageNumbers?.update(dt);
     this.statusIcons?.update(dt);
+    this.updateShake(dt);
+  }
+
+  /**
+   * Trigger a screen shake by nudging the stage's x/y randomly each frame
+   * for `durationFrames`. Scaled by `intensity` (pixels of max offset).
+   * Overlapping calls take the max intensity/duration so a crit landing
+   * during a preceding shake still reads.
+   */
+  applyShake(intensity: number, durationFrames: number): void {
+    if (!this.shakeTarget) return;
+    // Snapshot origin on first shake to avoid drift from prior partial shakes.
+    if (this.shakeFrames <= 0) {
+      this.shakeOrigX = this.shakeTarget.x;
+      this.shakeOrigY = this.shakeTarget.y;
+    }
+    const newFrames = Math.max(this.shakeFrames, durationFrames);
+    this.shakeFrames = newFrames;
+    // Track peak frame count so decay is normalized to this burst's own
+    // duration — otherwise a hardcoded divisor makes shorter shakes start
+    // below full intensity (e.g. a 6-frame shake with /8 starts at 0.75x).
+    this.shakePeakFrames = newFrames;
+    this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+  }
+
+  private updateShake(dt: number): void {
+    if (!this.shakeTarget || this.shakeFrames <= 0 || this.shakePeakFrames <= 0) return;
+    const t = this.shakeTarget;
+    // Linear fade of magnitude with remaining frames for a natural decay.
+    const magnitude = this.shakeIntensity * Math.max(0, this.shakeFrames / this.shakePeakFrames);
+    t.x = this.shakeOrigX + (Math.random() - 0.5) * magnitude;
+    t.y = this.shakeOrigY + (Math.random() - 0.5) * magnitude;
+    this.shakeFrames -= dt;
+    if (this.shakeFrames <= 0) {
+      t.x = this.shakeOrigX;
+      t.y = this.shakeOrigY;
+      this.shakeFrames = 0;
+      this.shakePeakFrames = 0;
+      this.shakeIntensity = 0;
+    }
   }
 
   getHP(): { hp: [number, number]; maxHp: [number, number] } {
@@ -336,6 +417,15 @@ export class DuelScene {
     this.vfx?.clear();
     this.damageNumbers?.clear();
     this.statusIcons?.clear();
+
+    // Clear any in-flight screen shake
+    if (this.shakeTarget && this.shakeFrames > 0) {
+      this.shakeTarget.x = this.shakeOrigX;
+      this.shakeTarget.y = this.shakeOrigY;
+    }
+    this.shakeFrames = 0;
+    this.shakePeakFrames = 0;
+    this.shakeIntensity = 0;
 
     this.drawHPBars();
   }
