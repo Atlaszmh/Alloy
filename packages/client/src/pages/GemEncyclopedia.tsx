@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { useMatchStore } from '@/stores/matchStore';
 import { GemCard } from '@/components/GemCard';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
-import type { AffixCategory, GemRarity } from '@alloy/engine';
+import type { AffixCategory, GemRarity, StatModifier } from '@alloy/engine';
 
 type FilterTab = 'all' | AffixCategory | 'compound';
 
@@ -16,11 +16,13 @@ interface EncyclopediaEntry {
   tags: string[];
   category: AffixCategory | 'combined';
   isCompound: boolean;
-  weaponEffect?: Array<{ stat: string; op: string; value: number }>;
-  armorEffect?: Array<{ stat: string; op: string; value: number }>;
+  // Note: op is narrowed to StatModifier['op'] at the engine data boundary
+  // via Zod (see packages/engine/src/data/schemas.ts StatModifierSchema).
+  weaponEffect?: StatModifier[];
+  armorEffect?: StatModifier[];
   tiers?: Record<string, {
-    weaponEffect: Array<{ stat: string; op: string; value: number }>;
-    armorEffect: Array<{ stat: string; op: string; value: number }>;
+    weaponEffect: StatModifier[];
+    armorEffect: StatModifier[];
   }>;
   /** Compound gems: input affix IDs */
   components?: [string, string];
