@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router';
 import { useUIStore } from '@/stores/uiStore';
+import { version as APP_VERSION } from '../../package.json';
 
 interface TabBarProps {
   onSettingsOpen: () => void;
@@ -100,7 +101,7 @@ export function TabBar({ onSettingsOpen, onDevOpen, onConfirmLeave, isInActiveGa
           userSelect: 'none',
         }}
       >
-        v{__APP_VERSION__}
+        v{APP_VERSION}
       </span>
     </div>
   );
