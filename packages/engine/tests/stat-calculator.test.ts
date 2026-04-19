@@ -285,3 +285,166 @@ describe('Stat Calculator', () => {
     expect(stats.resistances.fire).toBe(8);
   });
 });
+
+// ---- Chunk 1: Synergy stat-key wiring (P0.1a) ----
+//
+// These tests lock in the expected behavior of the synergy stat pipeline.
+// Previously `shouldSkipKey` filtered bare stat keys (weaponDamage, maxHp,
+// elementalDamage, elementalResist) used by synergies.json, so their
+// bonusEffects never affected combat. The fix narrows the skip list to
+// behavior-style `synergy.*` / `compound.*` keys only, and aliases the bare
+// keys to canonical DerivedStats fields (or expansions).
+describe('Synergy: Elementalist (+20 elementalDamage, +10 elementalResist)', () => {
+  // Note: synergies.json declares Elementalist with requiredAffixes of all 5
+  // elements and condition "any_3_elemental", but the current isSynergyActive
+  // implementation only checks requiredAffixes — it does not evaluate the
+  // condition field. Wiring the condition evaluator is out of scope for
+  // Chunk 1 (see FUN_REVIEW.md P1). For now the test exercises the fully
+  // required form (all 5 elements) to isolate the stat-key pipeline fix.
+  function makeElementalistLoadout() {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('fire_damage', 1);
+    loadout.weapon.slots[1] = gemSlot('cold_damage', 1);
+    loadout.weapon.slots[2] = gemSlot('lightning_damage', 1);
+    loadout.weapon.slots[3] = gemSlot('poison_damage', 1);
+    loadout.weapon.slots[4] = gemSlot('shadow_damage', 1);
+    return loadout;
+  }
+
+  it('applies +20 to every element when all 5 elements are present', () => {
+    const { stats, activeSynergies } = calculateStats(makeElementalistLoadout(), registry);
+
+    const elementalist = activeSynergies.find((s) => s.synergyId === 'elementalist');
+    expect(elementalist?.isActive).toBe(true);
+
+    // fire/cold/lightning T1 weapon = +3 elementalDamage.{element}; Elementalist adds +20.
+    expect(stats.elementalDamage.fire).toBe(3 + 20);
+    expect(stats.elementalDamage.cold).toBe(3 + 20);
+    expect(stats.elementalDamage.lightning).toBe(3 + 20);
+    // poison_damage weaponEffect targets dotDamage.poison (not elementalDamage),
+    // and shadow_damage targets shadowDamage.percentHP — neither contributes
+    // to elementalDamage.{poison,shadow}. Only the synergy +20 lands there.
+    expect(stats.elementalDamage.poison).toBe(20);
+    expect(stats.elementalDamage.shadow).toBe(20);
+    // chaos has no gem and no base item contribution.
+    expect(stats.elementalDamage.chaos).toBe(20);
+  });
+
+  it('bare elementalResist expands to all 6 elements', () => {
+    // Regression: elementalResist (no dot notation) must expand to
+    // resistances.{fire,cold,lightning,poison,shadow,chaos}. Chainmail
+    // baseStats provide no elemental resistance, and none of the gems are
+    // on armor, so any non-zero resistance comes solely from the synergy.
+    const { stats, activeSynergies } = calculateStats(makeElementalistLoadout(), registry);
+    expect(activeSynergies.find((s) => s.synergyId === 'elementalist')?.isActive).toBe(true);
+
+    expect(stats.resistances.fire).toBe(10);
+    expect(stats.resistances.cold).toBe(10);
+    expect(stats.resistances.lightning).toBe(10);
+    expect(stats.resistances.poison).toBe(10);
+    expect(stats.resistances.shadow).toBe(10);
+    expect(stats.resistances.chaos).toBe(10);
+  });
+
+  it('synergy not active (missing required affixes) = no bonus applied', () => {
+    // Regression: if only 2 elements are slotted, Elementalist must NOT fire
+    // (condition-field support aside, requiredAffixes is still not satisfied).
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('fire_damage', 1);
+    loadout.weapon.slots[1] = gemSlot('cold_damage', 1);
+
+    const { stats, activeSynergies } = calculateStats(loadout, registry);
+    const elementalist = activeSynergies.find((s) => s.synergyId === 'elementalist');
+    expect(elementalist?.isActive).toBe(false);
+
+    // No synergy fired, so elements without a gem stay 0.
+    expect(stats.elementalDamage.poison).toBe(0);
+    expect(stats.elementalDamage.shadow).toBe(0);
+    expect(stats.elementalDamage.chaos).toBe(0);
+    // Resistances should remain baseline 0 (chainmail provides none and no
+    // armor gem fired).
+    expect(stats.resistances.poison).toBe(0);
+  });
+});
+
+describe('Synergy: Glass Cannon (weaponDamage / maxHp bare keys resolve)', () => {
+  it('weaponDamage bare key expands to physical + all elemental damage', () => {
+    // Glass Cannon bonusEffects: weaponDamage flat +30, maxHp flat -25.
+    // weaponDamage must be a compound key expanding to physicalDamage +
+    // elementalDamage.{all}. With value 30 flat, physical goes up by 30
+    // and every element goes up by 30. Baseline sword physicalDamage=10.
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('crit_chance', 1);
+    loadout.weapon.slots[1] = gemSlot('crit_damage', 1);
+    loadout.weapon.slots[2] = gemSlot('attack_speed', 1);
+
+    const { stats, activeSynergies } = calculateStats(loadout, registry);
+    const glassCannon = activeSynergies.find((s) => s.synergyId === 'glass_cannon');
+
+    // Both assassin and glass_cannon share (crit_chance, crit_damage, attack_speed)
+    // and should both be active by simple requiredAffixes check.
+    expect(glassCannon?.isActive).toBe(true);
+
+    // physicalDamage: sword base 10 + 30 (glass cannon weaponDamage flat) = 40
+    expect(stats.physicalDamage).toBe(40);
+    // Every element gets +30 from weaponDamage expansion (no gems on those elements)
+    expect(stats.elementalDamage.fire).toBe(30);
+    expect(stats.elementalDamage.cold).toBe(30);
+    expect(stats.elementalDamage.lightning).toBe(30);
+    expect(stats.elementalDamage.poison).toBe(30);
+    expect(stats.elementalDamage.shadow).toBe(30);
+    expect(stats.elementalDamage.chaos).toBe(30);
+  });
+
+  it('maxHp bare key reduces maxHP when glass cannon active', () => {
+    // maxHp in synergies.json uses op:'flat' value:-25. The canonical field
+    // is maxHP (capital HP). This asserts the alias resolves. baseHP=200,
+    // chainmail+20=220, glass_cannon -25 flat = 195.
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('crit_chance', 1);
+    loadout.weapon.slots[1] = gemSlot('crit_damage', 1);
+    loadout.weapon.slots[2] = gemSlot('attack_speed', 1);
+
+    const { stats, activeSynergies } = calculateStats(loadout, registry);
+    expect(activeSynergies.find((s) => s.synergyId === 'glass_cannon')?.isActive).toBe(true);
+
+    // Strictly less than the baseline (220) confirms the -25 flat resolved.
+    expect(stats.maxHP).toBeLessThan(balance.baseHP + 20);
+    // Exact expected value: 200 base + 20 chainmail - 25 synergy = 195
+    expect(stats.maxHP).toBe(195);
+  });
+
+  it('Glass Cannon maxHp synergy modifier uses flat op (data check)', () => {
+    // Regression/data integrity: the synergies.json entry declares maxHp as
+    // op:'flat'. If design intent shifts to op:'percent' later, this test
+    // should be updated alongside the data change so the wiring behavior is
+    // intentional rather than accidental.
+    const glassCannonDef = registry.getAllSynergies().find((s) => s.id === 'glass_cannon');
+    expect(glassCannonDef).toBeDefined();
+    const maxHpEffect = glassCannonDef!.bonusEffects.find((e) => e.stat === 'maxHp');
+    expect(maxHpEffect).toBeDefined();
+    expect(maxHpEffect!.op).toBe('flat');
+    expect(maxHpEffect!.value).toBe(-25);
+  });
+});
+
+describe('Synergy: behavior-style keys remain filtered', () => {
+  it('synergy.* keys are not written onto DerivedStats', () => {
+    // Berserker requires lifesteal + crit_chance and declares
+    // synergy.berserker.critHealDouble. We must make it active and then
+    // verify no property with a synergy.* or compound.* name leaks onto stats.
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('lifesteal', 1);
+    loadout.weapon.slots[1] = gemSlot('crit_chance', 1);
+
+    const { stats, activeSynergies } = calculateStats(loadout, registry);
+    expect(activeSynergies.find((s) => s.synergyId === 'berserker')?.isActive).toBe(true);
+
+    // No `synergy.X.Y` or `compound.X.Y` properties should appear on stats.
+    const statsRecord = stats as unknown as Record<string, unknown>;
+    for (const key of Object.keys(statsRecord)) {
+      expect(key.startsWith('synergy.')).toBe(false);
+      expect(key.startsWith('compound.')).toBe(false);
+    }
+  });
+});
