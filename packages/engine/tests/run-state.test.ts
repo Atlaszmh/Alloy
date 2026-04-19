@@ -7,7 +7,9 @@ import {
   isRunOver,
   isGoalReached,
   advanceRound,
+  previewRoundResult,
 } from '../src/run/run-state.js';
+import { loadAndValidateData } from '../src/data/loader.js';
 
 describe('RunState', () => {
   describe('createRunState', () => {
@@ -266,6 +268,149 @@ describe('RunState', () => {
       let state = createRunState({ goalRound: 10 });
       state = advanceRound(state);
       expect(state.status).toBe('active');
+    });
+  });
+
+  describe('previewRoundResult', () => {
+    const balance = loadAndValidateData().balance;
+
+    it('win without recovery: +1 flux, no life gained, streak +1', () => {
+      const before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5, 10], discoveryThreshold: 5 },
+      });
+      const preview = previewRoundResult(before, 0, true, balance);
+
+      expect(preview.afterRunState.lives).toBe(3); // already at cap, no gain
+      expect(preview.afterRunState.consecutiveWins).toBe(1);
+      expect(preview.fluxEarned.win).toBe(balance.gem.flux.rewards.win);
+      expect(preview.fluxEarned.milestone).toBe(0);
+      expect(preview.fluxEarned.total).toBe(balance.gem.flux.rewards.win);
+      expect(preview.streakJustTriggered).toBe(false);
+      expect(preview.milestoneJustHit).toBe(false);
+    });
+
+    it('win with 3-streak triggers streak recovery', () => {
+      let before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5, 10], discoveryThreshold: 5 },
+      });
+      // Lose one life so recovery is observable
+      before = loseLife(before);
+      // Build up a 2-win streak so this round's win makes it 3
+      before = winRound(before);
+      before = winRound(before);
+      expect(before.lives).toBe(2);
+      expect(before.consecutiveWins).toBe(2);
+
+      const preview = previewRoundResult(before, 0, true, balance);
+
+      expect(preview.afterRunState.lives).toBe(3); // +1 recovered
+      expect(preview.afterRunState.consecutiveWins).toBe(0); // streak reset
+      expect(preview.streakJustTriggered).toBe(true);
+      expect(preview.milestoneJustHit).toBe(false);
+    });
+
+    it('win on milestone round triggers milestone recovery', () => {
+      let before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 999 },
+      });
+      before = loseLife(before);
+      before = { ...before, round: 5 };
+
+      const preview = previewRoundResult(before, 0, true, balance);
+
+      expect(preview.afterRunState.lives).toBe(3);
+      expect(preview.milestoneJustHit).toBe(true);
+      expect(preview.streakJustTriggered).toBe(false);
+      expect(preview.fluxEarned.milestone).toBe(balance.gem.flux.rewards.milestone);
+    });
+
+    it('loss: no flux, lives -1, no recovery flags', () => {
+      const before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 5 },
+      });
+      const preview = previewRoundResult(before, 0, false, balance);
+
+      expect(preview.afterRunState.lives).toBe(2);
+      expect(preview.fluxEarned.total).toBe(0);
+      expect(preview.fluxEarned.win).toBe(0);
+      expect(preview.streakJustTriggered).toBe(false);
+      expect(preview.milestoneJustHit).toBe(false);
+    });
+
+    it('win with both streak and milestone still caps at startingLives', () => {
+      let before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 999 },
+      });
+      // Drop to 1 life so there's room to gain
+      before = loseLife(before);
+      before = loseLife(before);
+      // Build a 2-win streak so this win makes 3
+      before = winRound(before);
+      before = winRound(before);
+      before = { ...before, round: 5 };
+      expect(before.lives).toBe(1);
+
+      const preview = previewRoundResult(before, 0, true, balance);
+
+      // Both sources triggered but capped at startingLives
+      expect(preview.afterRunState.lives).toBe(3);
+      expect(preview.streakJustTriggered).toBe(true);
+      expect(preview.milestoneJustHit).toBe(true);
+    });
+
+    it('discovery-threshold + streak + milestone does not multi-recover past cap', () => {
+      let before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 5 },
+      });
+      // Drop to 1 life
+      before = loseLife(before);
+      before = loseLife(before);
+      // Build 2-win streak → this win makes 3
+      before = winRound(before);
+      before = winRound(before);
+      before = { ...before, round: 5 };
+
+      const preview = previewRoundResult(before, 5, true, balance);
+
+      // All three sources would trigger, but cap holds
+      expect(preview.afterRunState.lives).toBeLessThanOrEqual(before.startingLives);
+      expect(preview.afterRunState.lives).toBe(3);
+    });
+
+    it('does not mutate input RunState', () => {
+      const before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [5], discoveryThreshold: 5 },
+      });
+      const snapshot = JSON.parse(JSON.stringify(before));
+
+      previewRoundResult(before, 10, true, balance);
+      previewRoundResult(before, 0, false, balance);
+
+      expect(before).toEqual(snapshot);
+    });
+
+    it('milestoneJustHit=false when lives already at cap', () => {
+      const before = createRunState({
+        startingLives: 3,
+        lifeRecovery: { winStreak: 999, milestoneRounds: [5], discoveryThreshold: 999 },
+      });
+      // At cap (3/3), round 5 is a milestone — recovery caps → no life granted
+      const onMilestone = { ...before, round: 5 };
+
+      const preview = previewRoundResult(onMilestone, 0, true, balance);
+
+      expect(preview.afterRunState.lives).toBe(3);
+      // Life was NOT actually granted (already at cap), so flag should be false
+      expect(preview.milestoneJustHit).toBe(false);
+      // But milestone flux is still awarded (plan: flux depends on round, not on life gain)
+      expect(preview.fluxEarned.milestone).toBe(balance.gem.flux.rewards.milestone);
     });
   });
 

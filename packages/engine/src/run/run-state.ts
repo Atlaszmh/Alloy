@@ -5,6 +5,8 @@
  * and life recovery mechanics (win streaks, milestone rounds, discovery threshold).
  */
 
+import type { BalanceConfig } from '../types/balance.js';
+
 export interface LifeRecoveryConfig {
   /** Consecutive wins needed to recover a life */
   winStreak: number;
@@ -143,5 +145,70 @@ export function advanceRound(state: RunState): RunState {
     ...state,
     round: newRound,
     status: newRound >= state.goalRound ? 'won' : state.status,
+  };
+}
+
+export interface RoundPreview {
+  /** Updated run state after applying win/loss + life recovery (no round advance). */
+  afterRunState: RunState;
+  /** Flux earned this round, broken out by source plus total. */
+  fluxEarned: { win: number; discovery: number; milestone: number; total: number };
+  /** True iff a life was just recovered AND the win-streak threshold was met. */
+  streakJustTriggered: boolean;
+  /** True iff a life was just recovered AND the current round is a milestone. */
+  milestoneJustHit: boolean;
+}
+
+/**
+ * Preview the result of a round without mutating the input state. Mirrors the
+ * engine's duel_continue flow (winRound/loseLife → checkLifeRecovery) so the
+ * client can show flux, lives, and recovery reasons on the between-round
+ * interstitial before the real action is dispatched.
+ *
+ * Returns a fresh RunState; the input `before` object is not modified.
+ */
+export function previewRoundResult(
+  before: RunState,
+  discoveryCount: number,
+  roundWon: boolean,
+  balance: BalanceConfig,
+): RoundPreview {
+  // Step 1: apply win or loss
+  const mid = roundWon ? winRound(before) : loseLife(before);
+
+  // Step 2: apply life recovery (only meaningful after a win, but the engine
+  // runs it unconditionally — match that behavior here)
+  const afterRunState = roundWon ? checkLifeRecovery(mid, discoveryCount) : mid;
+
+  // Step 3: flux breakdown
+  const rewards = balance.gem.flux.rewards;
+  const winFlux = roundWon ? (rewards.win ?? 0) : 0;
+  const milestoneRounds = before.lifeRecovery.milestoneRounds;
+  const milestoneFlux = milestoneRounds.includes(before.round)
+    ? (rewards.milestone ?? 0)
+    : 0;
+  // Per-round discovery flux is tracked separately in the engine; leave as 0.
+  const discoveryFlux = 0;
+  const total = winFlux + discoveryFlux + milestoneFlux;
+
+  // Step 4: recovery-reason flags. Only true when a life was actually granted
+  // (afterRunState.lives > mid.lives) AND the corresponding condition held.
+  const lifeWasGranted = afterRunState.lives > mid.lives;
+  const streakMet = mid.consecutiveWins >= before.lifeRecovery.winStreak;
+  const milestoneMet = before.lifeRecovery.milestoneRounds.includes(before.round);
+
+  const streakJustTriggered = lifeWasGranted && streakMet;
+  const milestoneJustHit = lifeWasGranted && milestoneMet;
+
+  return {
+    afterRunState,
+    fluxEarned: {
+      win: winFlux,
+      discovery: discoveryFlux,
+      milestone: milestoneFlux,
+      total,
+    },
+    streakJustTriggered,
+    milestoneJustHit,
   };
 }
