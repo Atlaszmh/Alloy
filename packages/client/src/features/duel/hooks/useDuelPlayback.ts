@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CombatLog } from '@alloy/engine';
 import { DuelScene } from '../pixi/DuelScene.js';
 
+const CRIT_HIT_PAUSE_MS = 80;
+
 export interface PlaybackControls {
   currentTime: number;
   isPlaying: boolean;
@@ -101,7 +103,9 @@ export function useDuelPlayback(
           if (frame.time > newTime) break;
           for (const event of frame.events) {
             if (event.type === 'attack' && event.breakdown.isCrit) {
-              state.pauseUntil = timestamp + 80;
+              // Hit-pause is wall-clock (not compressed by playback speed) so a crit
+              // always reads as a punctuated beat, even at 3×.
+              state.pauseUntil = timestamp + CRIT_HIT_PAUSE_MS;
             }
           }
         }

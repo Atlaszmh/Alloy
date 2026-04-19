@@ -48,6 +48,7 @@ export class DuelScene {
   private shakeOrigX = 0;
   private shakeOrigY = 0;
   private shakeFrames = 0;
+  private shakePeakFrames = 0;
   private shakeIntensity = 0;
 
   // External callback for HP changes (so React can render HP bars)
@@ -176,7 +177,7 @@ export class DuelScene {
             const ratio = event.breakdown.totalNet / this.maxHp[target];
             if (event.breakdown.isCrit) {
               this.applyShake(5, 8);
-            } else if (ratio > 0.08) {
+            } else if (ratio >= 0.08) {
               this.applyShake(2 + ratio * 6, 6);
             }
           }
@@ -363,15 +364,20 @@ export class DuelScene {
       this.shakeOrigX = this.shakeTarget.x;
       this.shakeOrigY = this.shakeTarget.y;
     }
-    this.shakeFrames = Math.max(this.shakeFrames, durationFrames);
+    const newFrames = Math.max(this.shakeFrames, durationFrames);
+    this.shakeFrames = newFrames;
+    // Track peak frame count so decay is normalized to this burst's own
+    // duration — otherwise a hardcoded divisor makes shorter shakes start
+    // below full intensity (e.g. a 6-frame shake with /8 starts at 0.75x).
+    this.shakePeakFrames = newFrames;
     this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
   }
 
   private updateShake(dt: number): void {
-    if (!this.shakeTarget || this.shakeFrames <= 0) return;
+    if (!this.shakeTarget || this.shakeFrames <= 0 || this.shakePeakFrames <= 0) return;
     const t = this.shakeTarget;
     // Linear fade of magnitude with remaining frames for a natural decay.
-    const magnitude = this.shakeIntensity * Math.max(0, this.shakeFrames / 8);
+    const magnitude = this.shakeIntensity * Math.max(0, this.shakeFrames / this.shakePeakFrames);
     t.x = this.shakeOrigX + (Math.random() - 0.5) * magnitude;
     t.y = this.shakeOrigY + (Math.random() - 0.5) * magnitude;
     this.shakeFrames -= dt;
@@ -379,6 +385,7 @@ export class DuelScene {
       t.x = this.shakeOrigX;
       t.y = this.shakeOrigY;
       this.shakeFrames = 0;
+      this.shakePeakFrames = 0;
       this.shakeIntensity = 0;
     }
   }
@@ -417,6 +424,7 @@ export class DuelScene {
       this.shakeTarget.y = this.shakeOrigY;
     }
     this.shakeFrames = 0;
+    this.shakePeakFrames = 0;
     this.shakeIntensity = 0;
 
     this.drawHPBars();
