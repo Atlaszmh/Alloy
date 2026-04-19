@@ -317,10 +317,10 @@ describe('Synergy: Elementalist (+20 elementalDamage, +10 elementalResist)', () 
     const elementalist = activeSynergies.find((s) => s.synergyId === 'elementalist');
     expect(elementalist?.isActive).toBe(true);
 
-    // fire/cold/lightning T1 weapon = +3 elementalDamage.{element}; Elementalist adds +20.
+    // T1 weapon values per affixes.json: fire=3, cold=2, lightning=4. Elementalist adds +20 to each.
     expect(stats.elementalDamage.fire).toBe(3 + 20);
-    expect(stats.elementalDamage.cold).toBe(3 + 20);
-    expect(stats.elementalDamage.lightning).toBe(3 + 20);
+    expect(stats.elementalDamage.cold).toBe(2 + 20);
+    expect(stats.elementalDamage.lightning).toBe(4 + 20);
     // poison_damage weaponEffect targets dotDamage.poison (not elementalDamage),
     // and shadow_damage targets shadowDamage.percentHP — neither contributes
     // to elementalDamage.{poison,shadow}. Only the synergy +20 lands there.
