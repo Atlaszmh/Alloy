@@ -253,6 +253,50 @@ export class DamageNumbers {
   }
 
   /**
+   * Spawn a named callout (e.g. "IGNITE!") that floats upward above the
+   * attacker. Used for compound-trigger events so the player sees the named
+   * payoff of socketing a discovered compound.
+   */
+  showCallout(x: number, y: number, text: string, color: number): void {
+    const t = new Text({
+      text,
+      style: {
+        fontFamily: 'sans-serif',
+        fontSize: 18,
+        fontWeight: 'bold',
+        fill: color,
+        stroke: { color: 0x000000, width: 3 },
+        dropShadow: {
+          alpha: 0.9,
+          angle: 0,
+          blur: 6,
+          color,
+          distance: 0,
+        },
+      },
+    });
+    t.anchor.set(0.5, 0.5);
+    t.x = x;
+    t.y = y;
+    t.scale.set(1.2);
+    this.container.addChild(t);
+
+    // Float up and fade over a longer lifespan than damage numbers so the
+    // name is readable. Lifespan is expressed in the same "frame" units as
+    // other entries in this.active so it is managed by the shared update()
+    // loop; vy is slightly slower and we let the shared scale-down handle
+    // the visual punch.
+    this.active.push({
+      text: t,
+      vx: 0,
+      vy: -1.0,
+      life: 90,
+      maxLife: 90,
+      scaleStart: 1.2,
+    });
+  }
+
+  /**
    * Spawn a grey "BLOCK" floating text with the blocked amount.
    */
   spawnBlock(amount: number, x: number, y: number): void {

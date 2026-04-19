@@ -250,6 +250,19 @@ export class DuelScene {
         break;
       }
 
+      case 'compound_trigger': {
+        // Float the compound name (e.g. "IGNITE!") above the attacker so
+        // the player sees the named payoff of their discovered compound.
+        const attackerX = playerX(event.player);
+        this.damageNumbers.showCallout(
+          attackerX,
+          GLADIATOR_Y - 90,
+          event.displayName,
+          0xfbbf24, // gold — matches the combat log's compound accent
+        );
+        break;
+      }
+
       case 'synergy_proc': {
         this.statusIcons.addStatus(event.player, 'buff');
         this.safeTimeout(() => {

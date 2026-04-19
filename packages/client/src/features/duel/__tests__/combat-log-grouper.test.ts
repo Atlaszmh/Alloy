@@ -73,4 +73,20 @@ describe('groupEventsIntoSwings', () => {
     expect(groups[0].attacker).toBe(0);
     expect(groups[1].attacker).toBe(1);
   });
+
+  it('attaches compound_trigger events to the same-time attack group', () => {
+    const events = [
+      { time: 1.0, event: { type: 'attack', attacker: 0, breakdown: { dodged: false, physical: { raw: 10, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 10 }, elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 10, totalMitigated: 0, totalNet: 10, isCrit: false } } },
+      { time: 1.0, event: { type: 'compound_trigger', player: 0, compoundId: 'ignite', displayName: 'IGNITE!' } },
+      { time: 1.0, event: { type: 'dot_apply', target: 1, element: 'fire', dps: 6, duration: 12 } },
+    ];
+    const groups = groupEventsIntoSwings(events as any);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].type).toBe('attack');
+    expect(groups[0].events).toHaveLength(3);
+    const compoundEvent = groups[0].events.find(
+      (e) => e.event.type === 'compound_trigger',
+    );
+    expect(compoundEvent).toBeDefined();
+  });
 });
