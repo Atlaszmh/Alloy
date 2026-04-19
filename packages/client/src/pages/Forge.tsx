@@ -649,6 +649,8 @@ export function Forge() {
         flux={currentFlux}
         maxFlux={maxFlux}
         stats={derivedStats}
+        activeSynergies={statsResult?.activeSynergies ?? []}
+        registry={registry}
         timerDurationMs={isRunMode ? undefined : FORGE_TIMER_MS}
         onTimerExpire={isRunMode ? undefined : handleTimerExpire}
         onDone={openConfirmModal}
