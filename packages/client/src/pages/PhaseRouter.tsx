@@ -7,6 +7,7 @@ import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
 import { RunLivesDisplay } from '@/components/RunLivesDisplay';
 import { RunRoundCounter } from '@/components/RunRoundCounter';
 import { RunStatusOverlay } from '@/components/RunStatusOverlay';
+import { ToastContainer } from '@/components/Toast';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
@@ -118,6 +119,9 @@ export function PhaseRouter() {
 
       {/* Run status overlay (shown when run ends) */}
       {isRunMode && <RunStatusOverlay />}
+
+      {/* Global toast container (discovery + default toasts) */}
+      <ToastContainer />
     </GatewayProvider>
   );
 }
