@@ -1,26 +1,24 @@
 import { Container, Graphics } from 'pixi.js';
 import { BaseEffect, type EffectOptions } from './BaseEffect.js';
 
+/**
+ * Crit VFX: an expanding white flash plus gold particle burst.
+ *
+ * Screen shake used to live here; it has moved to {@link DuelScene.applyShake}
+ * so crits and big non-crit hits share a single shake mechanism with scaled
+ * intensity. {@link setShakeTarget} is retained as a no-op for API stability
+ * with {@link VFXManager}.
+ */
 export class CritEffect extends BaseEffect {
   private flash: Graphics | null = null;
-  private shakeTarget: Container | null = null;
-  private shakeOrigX = 0;
-  private shakeOrigY = 0;
-  private shakeFrames = 0;
 
   constructor(parent: Container, options?: EffectOptions) {
     super(parent, { duration: 20, ...options });
   }
 
-  /**
-   * For crit, `origin` is the impact point, and `target` should be
-   * `{ x: 0, y: 0 }` (not used for positioning).
-   * Call setShakeTarget() before play() to enable screen shake on the stage.
-   */
-  setShakeTarget(stage: Container): void {
-    this.shakeTarget = stage;
-    this.shakeOrigX = stage.x;
-    this.shakeOrigY = stage.y;
+  /** Retained for VFXManager compatibility; shake now lives on DuelScene. */
+  setShakeTarget(_stage: Container): void {
+    // Intentionally no-op. See class docstring.
   }
 
   play(
@@ -48,8 +46,6 @@ export class CritEffect extends BaseEffect {
         12 + Math.random() * 10,
       );
     }
-
-    this.shakeFrames = 8;
   }
 
   override update(dt: number): void {
@@ -65,30 +61,12 @@ export class CritEffect extends BaseEffect {
         this.flash = null;
       }
     }
-
-    // Screen shake
-    if (this.shakeTarget && this.shakeFrames > 0) {
-      this.shakeFrames -= dt;
-      const magnitude = 3 * (this.shakeFrames / 8);
-      this.shakeTarget.x = this.shakeOrigX + (Math.random() - 0.5) * magnitude;
-      this.shakeTarget.y = this.shakeOrigY + (Math.random() - 0.5) * magnitude;
-
-      if (this.shakeFrames <= 0) {
-        this.shakeTarget.x = this.shakeOrigX;
-        this.shakeTarget.y = this.shakeOrigY;
-      }
-    }
   }
 
   override destroy(): void {
     if (this.flash) {
       this.flash.destroy();
       this.flash = null;
-    }
-    if (this.shakeTarget) {
-      this.shakeTarget.x = this.shakeOrigX;
-      this.shakeTarget.y = this.shakeOrigY;
-      this.shakeTarget = null;
     }
     super.destroy();
   }
