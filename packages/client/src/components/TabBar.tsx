@@ -82,6 +82,26 @@ export function TabBar({ onSettingsOpen, onDevOpen, onConfirmLeave, isInActiveGa
           color="#22c55e"
         />
       )}
+
+      {/* Version label — corner, muted, non-interactive. Bumped in
+          packages/client/package.json and injected via vite.config.ts define. */}
+      <span
+        data-testid="app-version"
+        style={{
+          position: 'absolute',
+          right: 6,
+          bottom: 2,
+          fontSize: 9,
+          lineHeight: 1,
+          color: 'var(--color-surface-500)',
+          fontFamily: 'var(--font-family-display)',
+          letterSpacing: '0.04em',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        v{__APP_VERSION__}
+      </span>
     </div>
   );
 }

@@ -69,4 +69,13 @@ describe('TabBar', () => {
     await userEvent.click(screen.getByLabelText('Home'));
     expect(onConfirmLeave).toHaveBeenCalledWith('/');
   });
+
+  it('renders the app version label from __APP_VERSION__', () => {
+    renderTabBar();
+    const el = screen.getByTestId('app-version');
+    // __APP_VERSION__ is injected by vite.config.ts define from package.json.
+    // Assert the shape (v<semver>) rather than a specific version so bumps
+    // don't churn the test.
+    expect(el.textContent).toMatch(/^v\d+\.\d+\.\d+/);
+  });
 });

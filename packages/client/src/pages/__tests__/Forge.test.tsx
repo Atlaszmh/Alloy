@@ -324,7 +324,19 @@ describe('Forge page', () => {
     // which only renders when matchState.runState is present (run modes).
     setupStores({
       mode: 'run_async',
-      runState: { flux: 0, lives: 3, currentRound: 1, goalRound: 10, consecutiveWins: 0 },
+      runState: {
+        lives: 3,
+        startingLives: 3,
+        round: 1,
+        status: 'active',
+        consecutiveWins: 0,
+        totalWins: 0,
+        totalLosses: 0,
+        goalRound: 10,
+        lifeRecovery: { winStreak: 3, milestoneRounds: [6, 10], discoveryThreshold: 5 },
+        flux: 0,
+        rerollNextDraft: false,
+      },
     } as Partial<MatchState>);
     renderForge();
 

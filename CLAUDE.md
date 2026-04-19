@@ -20,6 +20,12 @@ Engine is the single source of truth for all game rules. No game logic in the cl
 - Supabase (PostgreSQL + Deno Edge Functions + Realtime)
 - Zod 3 for data validation
 
+## Versioning
+
+The client surfaces its version in the bottom TabBar as `v{version}`. Source of truth is `packages/client/package.json#version`, injected at build time via a `define` in both `vite.config.ts` and `vitest.config.ts`.
+
+**Bump the version whenever you ship user-visible changes** (UI tweaks, balance tweaks, new features, bug fixes that affect play). Follow semver: patch for fixes, minor for features, major for breaking. A one-liner in the relevant commit: `chore(client): bump version to 0.X.Y`.
+
 ## Testing
 
 - **Engine tests**: `packages/engine/tests/*.test.ts` — Vitest, Node environment
