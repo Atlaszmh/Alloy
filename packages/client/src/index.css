@@ -221,6 +221,16 @@
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes discovery-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.discovery-pop {
+  animation: discovery-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Rarity glow animations — progressive intensity */
 @keyframes shimmer-magic {
   0%, 100% { box-shadow: 0 0 6px rgba(59, 130, 246, 0.3); }
