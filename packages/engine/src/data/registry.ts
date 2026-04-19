@@ -155,6 +155,18 @@ export class DataRegistry {
     return this.recipeRegistry;
   }
 
+  /**
+   * Find a recipe whose outputAffixId matches the given id.
+   * Used by the trigger system to detect socketed compound gems
+   * (e.g. a gem with affixId='ignite' is the output of the Ignite recipe).
+   */
+  getRecipeByOutputAffix(outputAffixId: string): RecipeDefinition | null {
+    for (const recipe of this.recipeRegistry.getAll()) {
+      if (recipe.outputAffixId === outputAffixId) return recipe;
+    }
+    return null;
+  }
+
   // --- Balance ---
 
   getBalance(): BalanceConfig {
