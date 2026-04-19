@@ -10,6 +10,7 @@ import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { RunRoundInterstitial } from '@/components/RunRoundInterstitial';
 import { CombatLogPanel } from '@/features/duel/CombatLogPanel.js';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { useUIStore } from '@/stores/uiStore';
 import { Application } from 'pixi.js';
 import { useDuelPlayback } from '@/features/duel/hooks/useDuelPlayback.js';
 import { DuelScene, STAGE_WIDTH, STAGE_HEIGHT } from '@/features/duel/pixi/DuelScene.js';
@@ -235,6 +236,13 @@ export function Duel() {
   // ── Playback (driven by useDuelPlayback) ──
   const playback = useDuelPlayback(currentLog, scene);
 
+  // Speed preference (persisted in uiStore). Wire into playback via effect.
+  const duelSpeed = useUIStore((s) => s.duelSpeed);
+  const setDuelSpeed = useUIStore((s) => s.setDuelSpeed);
+  useEffect(() => {
+    playback.setSpeed(duelSpeed);
+  }, [duelSpeed, playback.setSpeed]);
+
   // Auto-start playback once scene and combat log are both ready
   const hasAutoStarted = useRef(false);
   useEffect(() => {
@@ -375,7 +383,7 @@ export function Duel() {
         />
 
         {/* Playback controls overlay — bottom of arena */}
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1.5">
           <button
             onClick={handlePlayPause}
             className="rounded bg-surface-600/80 px-3 py-1 text-sm text-white backdrop-blur-sm hover:bg-surface-500/80"
@@ -383,6 +391,22 @@ export function Duel() {
           >
             {playback.isPlaying ? 'Pause' : 'Play'}
           </button>
+          {([1, 2, 3] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setDuelSpeed(s)}
+              data-testid={`speed-${s}x`}
+              aria-pressed={duelSpeed === s}
+              className={`rounded px-2 py-1 text-xs backdrop-blur-sm ${
+                duelSpeed === s
+                  ? 'bg-accent-500 text-surface-900'
+                  : 'bg-surface-600/80 text-surface-300 hover:bg-surface-500/80'
+              }`}
+              style={{ fontFamily: 'var(--font-family-display)', fontWeight: 700 }}
+            >
+              {s}×
+            </button>
+          ))}
           <button
             data-primary-action="skip"
             onClick={handleSkip}
