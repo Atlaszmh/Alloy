@@ -30,7 +30,7 @@ export interface Recipe {
   inputs: string[] // affix IDs (2 per recipe)
   output: string // affix ID
   depth: 0 | 1 | 2 | 3
-  type: 'signature' | 'category' | 'generic'
+  type: 'signature' | 'signature3' | 'category' | 'generic'
   weight: number // 0.5 to 2.0
   notes: string
 }
