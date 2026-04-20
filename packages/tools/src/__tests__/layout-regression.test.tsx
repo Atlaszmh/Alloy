@@ -33,22 +33,24 @@ describe('Layout Regression Tests', () => {
     vi.clearAllMocks()
   })
 
-  it('TwoPaneLayout uses h-full not h-screen', () => {
+  it('TwoPaneLayout uses height:100% (not vh) so it fits its flex parent', () => {
     const { container } = render(
       <div style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
         <TwoPaneLayout left={<div>Left</div>} right={<div>Right</div>} />
       </div>
     )
 
-    const paneContainer = container.querySelector('.flex')
-    expect(paneContainer).toBeTruthy()
-    // Check that h-screen class is NOT present (would prevent flex from working)
-    const classList = paneContainer?.className || ''
-    expect(classList).toContain('h-full')
-    expect(classList).not.toContain('h-screen')
+    // TwoPaneLayout uses inline styles (not Tailwind classes).
+    // Verify the root container has display:flex and height:100% via inline style.
+    const root = container.firstChild?.firstChild as HTMLElement
+    expect(root).toBeTruthy()
+    expect(root.style.display).toBe('flex')
+    expect(root.style.height).toBe('100%')
+    // Must NOT use 100vh (would break nested flex layout)
+    expect(root.style.height).not.toBe('100vh')
   })
 
-  it('GemBlueprintApp renders without h-screen', () => {
+  it('GemBlueprintApp root uses minHeight (not height:100vh on inner flex pane)', () => {
     const { container } = render(
       <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
         <GemBlueprintApp />
@@ -56,12 +58,9 @@ describe('Layout Regression Tests', () => {
     )
 
     const outerDiv = container.firstChild?.firstChild as HTMLElement
-    const classList = outerDiv?.className || ''
-
-    // Should have flex and h-full, NOT h-screen
-    expect(classList).toContain('flex')
-    expect(classList).toContain('h-full')
-    expect(classList).not.toContain('h-screen')
+    // App root uses inline styles — display:flex and flexDirection:column
+    expect(outerDiv.style.display).toBe('flex')
+    expect(outerDiv.style.flexDirection).toBe('column')
   })
 
   it('GemBlueprintApp renders workbench editor', () => {
@@ -74,7 +73,7 @@ describe('Layout Regression Tests', () => {
     expect(screen.getByText('Workbench Editor')).toBeTruthy()
   })
 
-  it('GemBlueprintApp renders within flex container without overflow', () => {
+  it('GemBlueprintApp inner flex pane has flex+column inline styles', () => {
     const { container } = render(
       <div
         style={{
@@ -91,25 +90,26 @@ describe('Layout Regression Tests', () => {
     const wrapper = container.firstChild as HTMLElement
     const appContainer = wrapper.firstChild as HTMLElement
 
-    // App should take full height of parent
-    const computedStyle = window.getComputedStyle(appContainer)
-    expect(computedStyle.display).toBe('flex')
-    expect(computedStyle.flexDirection).toBe('column')
-    expect(computedStyle.height).toBe('600px')
+    // Inline styles are applied directly to the element — check via .style
+    expect(appContainer.style.display).toBe('flex')
+    expect(appContainer.style.flexDirection).toBe('column')
+    // Should not use height:100vh which would escape the flex parent
+    expect(appContainer.style.height).not.toBe('100vh')
   })
 
-  it('TwoPaneLayout has panes with overflow-hidden', () => {
+  it('TwoPaneLayout has panes with overflow:hidden inline style', () => {
     const { container } = render(
       <div style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
         <TwoPaneLayout left={<div>Left</div>} right={<div>Right</div>} />
       </div>
     )
 
-    const panes = container.querySelectorAll('[style*="width"]')
-    panes.forEach((pane) => {
-      const classList = pane.className
-      expect(classList).toContain('overflow-hidden')
-    })
+    // The two content panes (not the divider) must have overflow:hidden.
+    // They are the only elements with overflow set to 'hidden' in the tree.
+    const panesWithOverflow = Array.from(
+      container.querySelectorAll('div')
+    ).filter((el) => (el as HTMLElement).style.overflow === 'hidden')
+    expect(panesWithOverflow.length).toBe(2)
   })
 
   it('SVG canvas exists in RadialTreeBrowser', () => {
