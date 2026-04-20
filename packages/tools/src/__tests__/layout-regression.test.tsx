@@ -4,26 +4,29 @@ import { GemBlueprintApp } from '../gem-blueprint-app'
 import { TwoPaneLayout } from '../components/two-pane-layout'
 
 // Mock D3
-vi.mock('d3', () => ({
-  select: vi.fn(() => ({
-    attr: vi.fn(function () { return this }),
-    selectAll: vi.fn(function () { return this }),
-    data: vi.fn(function () { return this }),
-    join: vi.fn(function () { return this }),
-    append: vi.fn(function () { return this }),
-    on: vi.fn(function () { return this }),
-    style: vi.fn(function () { return this }),
-    text: vi.fn(function () { return this }),
-  })),
-  hierarchy: vi.fn((data) => ({
-    ...data,
-    descendants: () => [],
-    links: () => [],
-  })),
-  tree: vi.fn(() => ({
-    size: vi.fn(() => (data: any) => data),
-  })),
-}))
+vi.mock('d3', () => {
+  const chain: any = {};
+  const chainFn = () => chain;
+  chain.attr = vi.fn(chainFn);
+  chain.selectAll = vi.fn(chainFn);
+  chain.data = vi.fn(chainFn);
+  chain.join = vi.fn(chainFn);
+  chain.append = vi.fn(chainFn);
+  chain.on = vi.fn(chainFn);
+  chain.style = vi.fn(chainFn);
+  chain.text = vi.fn(chainFn);
+  return {
+    select: vi.fn(() => chain),
+    hierarchy: vi.fn((data) => ({
+      ...data,
+      descendants: () => [],
+      links: () => [],
+    })),
+    tree: vi.fn(() => ({
+      size: vi.fn(() => (data: any) => data),
+    })),
+  };
+})
 
 describe('Layout Regression Tests', () => {
   beforeEach(() => {
