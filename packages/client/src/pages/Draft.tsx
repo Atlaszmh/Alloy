@@ -13,6 +13,8 @@ import { calcAiDelay } from './ai-delay';
 import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
+import { OnboardingOverlay } from '@/components/OnboardingOverlay';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { DRAG_THRESHOLD, HOLD_THRESHOLD } from './draft-gestures';
 import { useOpponentPickAnimation } from '@/animation/hooks/useOpponentPickAnimation';
@@ -151,6 +153,8 @@ export function Draft() {
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
+  const onboardingSeen = useOnboardingStore((s) => s.seen);
+  const markOnboardingSeen = useOnboardingStore((s) => s.markSeen);
 
   useEffect(() => {
     if (isDisconnected) {
@@ -481,6 +485,7 @@ export function Draft() {
   return (
     <div className="page-enter flex h-full flex-col p-2" style={{ overflow: 'hidden' }}>
       {!code?.startsWith('ai-') && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
+      {!onboardingSeen && <OnboardingOverlay onDismiss={markOnboardingSeen} />}
       {/* Drag moves the actual gem element via direct DOM manipulation */}
 
       {/* ═══ TOP: Opponent zone (hidden in run mode — no opponent drafting) ═══ */}
