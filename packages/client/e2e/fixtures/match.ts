@@ -31,7 +31,22 @@ export function getViewport(testInfo: { project: { name: string } }): string {
   return testInfo.project.name;
 }
 
+/**
+ * Skip the first-visit onboarding overlay unless a spec explicitly opts in.
+ * The overlay mounts on Draft with position:fixed + z-index:50, so any E2E
+ * that starts from the main menu and navigates into a draft will otherwise
+ * be blocked from interacting with the underlying UI.
+ *
+ * `onboarding.spec.ts` overrides localStorage itself, so this default is safe.
+ */
+async function skipOnboardingOverlay(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('alloy.onboarding.seen', 'true');
+  });
+}
+
 export async function startMatch(page: Page): Promise<void> {
+  await skipOnboardingOverlay(page);
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
   await page.getByRole('button', { name: 'Play' }).click();
@@ -257,6 +272,7 @@ export async function continuePastDuel(page: Page): Promise<void> {
  * Lands on the draft phase of round 1 with an `ai-run-*` match code.
  */
 export async function startRun(page: Page, tier: 1 | 2 | 3 | 4 | 5 = 1): Promise<void> {
+  await skipOnboardingOverlay(page);
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
   await page.getByRole('button', { name: 'Play' }).click();
@@ -303,6 +319,7 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
     seedFlux,
   } = opts;
 
+  await skipOnboardingOverlay(page);
   // Navigate first so the React tree mounts the gateway + stores.
   await page.goto('/match/ai-run-e2e');
 
