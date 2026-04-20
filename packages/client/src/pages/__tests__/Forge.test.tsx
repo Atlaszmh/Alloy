@@ -538,4 +538,86 @@ describe('Forge page', () => {
     renderForge();
     expect(screen.queryByTestId('timer')).toBeNull();
   });
+
+  /* ------------------------------------------------------------------ */
+  /*  Flux button gateway dispatch (regression guard for silent-rejection */
+  /*  bug where applyAction rejected flux actions via plan-level handler) */
+  /* ------------------------------------------------------------------ */
+
+  const RUN_STATE_WITH_FLUX = {
+    lives: 3,
+    startingLives: 3,
+    round: 1,
+    status: 'active' as const,
+    consecutiveWins: 0,
+    totalWins: 0,
+    totalLosses: 0,
+    goalRound: 10,
+    lifeRecovery: { winStreak: 3, milestoneRounds: [6, 10], discoveryThreshold: 5 },
+    flux: 10, // enough for all three actions (reroll=5, guarantee=4, boost=3)
+    rerollNextDraft: false,
+  };
+
+  it('flux: Reroll Pool button dispatches forge_action/reroll_pool via gateway', async () => {
+    const { dispatchFn } = setupStores({
+      mode: 'run_async',
+      runState: RUN_STATE_WITH_FLUX,
+    } as Partial<MatchState>);
+    renderForge();
+
+    const rerollBtn = screen.getByRole('button', { name: /Reroll/i });
+    fireEvent.click(rerollBtn);
+
+    await waitFor(() => {
+      expect(dispatchFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'forge_action',
+          player: 0,
+          action: { kind: 'reroll_pool' },
+        }),
+      );
+    });
+  });
+
+  it('flux: Boost Combine button dispatches forge_action/boost_combine via gateway', async () => {
+    const { dispatchFn } = setupStores({
+      mode: 'run_async',
+      runState: RUN_STATE_WITH_FLUX,
+    } as Partial<MatchState>);
+    renderForge();
+
+    const boostBtn = screen.getByRole('button', { name: /Boost/i });
+    fireEvent.click(boostBtn);
+
+    await waitFor(() => {
+      expect(dispatchFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'forge_action',
+          player: 0,
+          action: { kind: 'boost_combine' },
+        }),
+      );
+    });
+  });
+
+  it('flux: Guarantee Rarity button dispatches forge_action/guarantee_rarity via gateway', async () => {
+    const { dispatchFn } = setupStores({
+      mode: 'run_async',
+      runState: RUN_STATE_WITH_FLUX,
+    } as Partial<MatchState>);
+    renderForge();
+
+    const rarityBtn = screen.getByRole('button', { name: /Rarity/i });
+    fireEvent.click(rarityBtn);
+
+    await waitFor(() => {
+      expect(dispatchFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'forge_action',
+          player: 0,
+          action: { kind: 'guarantee_rarity' },
+        }),
+      );
+    });
+  });
 });
