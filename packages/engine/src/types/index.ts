@@ -2,7 +2,6 @@
 export * from './base-stats.js';
 export * from './derived-stats.js';
 export * from './affix.js';
-export * from './orb.js';
 export * from './gem.js';
 export * from './item.js';
 export * from './combination.js';
