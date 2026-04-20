@@ -246,7 +246,6 @@ export const WorkbenchEditor: React.FC = () => {
                       const inputAffixes = recipe.inputs.map((id) => affixes.find((a) => a.id === id)).filter(Boolean)
                       const outputAffix = affixes.find((a) => a.id === recipe.output)
                       const isProducer = recipe.output === selectedNode
-                      const isIngredient = recipe.inputs.includes(selectedNode)
 
                       return (
                         <div

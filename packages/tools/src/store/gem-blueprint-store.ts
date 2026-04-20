@@ -3,7 +3,6 @@ import { devtools } from 'zustand/middleware'
 import {
   GemBlueprintState,
   GemBlueprintActions,
-  Affix,
   Recipe,
   Synergy,
   FilterState,

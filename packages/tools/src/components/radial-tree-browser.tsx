@@ -4,7 +4,6 @@ import { useGemBlueprintStore } from '../store/gem-blueprint-store'
 import { getRarityColor, getNodeRadius } from '../utils/d3-tree-renderer'
 import { Affix, Recipe } from '../store/types'
 
-const CENTER = 450
 
 /**
  * Get related gems for a selected gem:
