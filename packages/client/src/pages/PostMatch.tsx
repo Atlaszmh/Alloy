@@ -4,6 +4,7 @@ import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { useRunStore } from '@/stores/runStore';
 import { useGateway } from '@/gateway';
 import { CelebrationOverlay } from '@/components/CelebrationOverlay';
+import { GoalReachedOverlay } from '@/components/GoalReachedOverlay';
 import type { CombatLog, MatchState } from '@alloy/engine';
 
 function MatchStatistics({ duelLogs }: { duelLogs: CombatLog[] }) {
@@ -125,6 +126,7 @@ export function PostMatch() {
   const isRunMode = useMatchStore(selectIsRunMode);
   const runStatus = useRunStore((s) => s.status);
   const runRound = useRunStore((s) => s.round);
+  const runGoal = useRunStore((s) => s.goal);
 
   const winner = phase?.kind === 'complete' ? phase.winner : null;
   const scores = phase?.kind === 'complete' ? phase.scores : [0, 0];
@@ -144,6 +146,12 @@ export function PostMatch() {
   return (
     <div className="page-enter flex h-full flex-col items-center justify-center gap-6 p-6">
       {isVictory && <CelebrationOverlay />}
+      {isRunMode && runStatus === 'won' && runGoal !== null && (
+        <GoalReachedOverlay
+          roundReached={runRound}
+          goalRound={runGoal}
+        />
+      )}
 
       <h2
         data-testid={isRunMode && isVictory ? 'run-won-heading' : undefined}
