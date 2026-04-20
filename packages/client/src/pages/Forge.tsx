@@ -811,7 +811,7 @@ export function Forge() {
 
       {/* 3b. Flux spend actions — inline flux tracker + 3 actions in one row */}
       {runState && (
-        <div data-screen-section="forge-flux" style={{
+        <div data-screen-section="forge-flux" data-run-flux={currentFlux} style={{
           flexShrink: 0,
           padding: 'var(--gap-sm) var(--gap-md)',
           borderTop: '1px solid var(--color-surface-600)',

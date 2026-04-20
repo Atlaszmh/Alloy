@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { useMatchStore, selectPool, selectRoundResults, selectDuelLogs, selectPhase, selectPlayer } from './matchStore';
+import { useMatchStore, selectPool, selectRoundResults, selectDuelLogs, selectPhase, selectPlayer, selectAiOpponentTier } from './matchStore';
 
 describe('matchStore selectors — referential stability', () => {
   // Bug regression: selectors returning `?? []` created a new array reference
@@ -42,5 +42,25 @@ describe('matchStore selectors — referential stability', () => {
     const pool = selectPool(useMatchStore.getState());
     expect(Array.isArray(pool)).toBe(true);
     expect(pool.length).toBe(0);
+  });
+});
+
+describe('matchStore — aiOpponentTier slice', () => {
+  it('defaults to null', () => {
+    useMatchStore.setState({ state: null, aiController: null, error: null, aiOpponentTier: null });
+    expect(selectAiOpponentTier(useMatchStore.getState())).toBeNull();
+  });
+
+  it('startDebugMatch with run_async mode sets aiOpponentTier to the given tier', () => {
+    const store = useMatchStore.getState();
+    // Use tier 3 as a distinguishable value
+    store.startDebugMatch(42, 'run_async', 3, 'forge', 'sword', 'chainmail', 1, { startingLives: 3, goalRound: 10 });
+    expect(selectAiOpponentTier(useMatchStore.getState())).toBe(3);
+  });
+
+  it('reset clears aiOpponentTier back to null', () => {
+    useMatchStore.setState({ aiOpponentTier: 2 });
+    useMatchStore.getState().reset();
+    expect(selectAiOpponentTier(useMatchStore.getState())).toBeNull();
   });
 });

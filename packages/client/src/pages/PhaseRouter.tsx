@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { useMatchGateway, GatewayProvider } from '@/gateway';
-import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
+import { useMatchStore, selectIsRunMode, selectAiOpponentTier } from '@/stores/matchStore';
 import { DiscoveryCounter } from '@/components/DiscoveryCounter';
 import { PhaseErrorBoundary } from '@/components/PhaseErrorBoundary';
 import { PhaseTransitionWrapper } from '@/animation/PhaseTransitionWrapper';
@@ -21,6 +21,7 @@ export function PhaseRouter() {
   const { code } = useParams<{ code: string }>();
   const [, forceUpdate] = useState(0);
   const isRunMode = useMatchStore(selectIsRunMode);
+  const aiOpponentTier = useMatchStore(selectAiOpponentTier);
 
   const gateway = useMatchGateway(code ?? '');
 
@@ -105,6 +106,20 @@ export function PhaseRouter() {
           >
             <RunLivesDisplay />
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-sm)' }}>
+              {aiOpponentTier != null && (
+                <span
+                  data-testid="opponent-tier-chip"
+                  style={{
+                    fontFamily: 'var(--font-family-display)',
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--color-surface-300)',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  vs AI T{aiOpponentTier}
+                </span>
+              )}
               <RunRoundCounter />
               {matchState.runState && (
                 <DiscoveryCounter

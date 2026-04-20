@@ -52,6 +52,7 @@ interface MatchStore {
   state: MatchState | null;
   aiController: AIController | null;
   error: string | null;
+  aiOpponentTier: number | null;
 
   startLocalMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, weaponId?: string, armorId?: string, runConfig?: RunConfig) => void;
   startDebugMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, targetPhase: DebugPhaseTarget, weaponId?: string, armorId?: string, targetRound?: number, runConfig?: RunConfig) => void;
@@ -64,6 +65,7 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
   state: null,
   aiController: null,
   error: null,
+  aiOpponentTier: null,
 
   startLocalMatch: (seed, mode, aiTier, weaponId = 'sword', armorId = 'chainmail', runConfig) => {
     const reg = getRegistry();
@@ -78,7 +80,8 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
       runConfig,
     );
     const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
-    set({ state, aiController: ai, error: null });
+    const isRunMode = mode === 'run_async' || mode === 'run_live';
+    set({ state, aiController: ai, error: null, aiOpponentTier: isRunMode ? aiTier : null });
 
     // Initialize runStore for run modes
     syncRunStore(state);
@@ -99,7 +102,8 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
       runConfig,
     );
     const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
-    set({ state, aiController: ai, error: null });
+    const isRunMode = mode === 'run_async' || mode === 'run_live';
+    set({ state, aiController: ai, error: null, aiOpponentTier: isRunMode ? aiTier : null });
 
     // Sync runStore for run modes
     syncRunStore(state);
@@ -124,7 +128,7 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
   getRegistry,
 
   reset: () => {
-    set({ state: null, aiController: null, error: null });
+    set({ state: null, aiController: null, error: null, aiOpponentTier: null });
     useRunStore.getState().resetRun();
   },
 }));
@@ -150,3 +154,4 @@ export const selectIsRunMode = (s: MatchStore) => {
   const mode = s.state?.mode;
   return mode === 'run_async' || mode === 'run_live';
 };
+export const selectAiOpponentTier = (s: MatchStore) => s.aiOpponentTier;
