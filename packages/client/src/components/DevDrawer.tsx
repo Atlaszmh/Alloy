@@ -33,7 +33,7 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
   const jumpToPhase = (target: DebugPhaseTarget) => {
     try {
       const seed = 42; // Fixed seed for reproducibility
-      startDebugMatch(seed, 'ranked', 3, target);
+      startDebugMatch({ seed, mode: 'ranked', aiTier: 3, targetPhase: target });
 
       // Skip the BaseItemSelector for phases that already have items set
       if (target !== 'draft') {
@@ -55,16 +55,16 @@ export function DevDrawer({ open, onClose }: DevDrawerProps) {
   const jumpToRunPhase = () => {
     try {
       const seed = 42;
-      startDebugMatch(
+      startDebugMatch({
         seed,
-        'run_async',
-        selectedAiTier,
-        selectedRunPhase === 'duel' ? 'duel' : selectedRunPhase === 'forge' ? 'forge' : 'draft',
-        'sword',
-        'chainmail',
-        selectedRunRound,
-        { startingLives: 3, goalRound: 10 },
-      );
+        mode: 'run_async',
+        aiTier: selectedAiTier,
+        targetPhase: selectedRunPhase === 'duel' ? 'duel' : selectedRunPhase === 'forge' ? 'forge' : 'draft',
+        weaponId: 'sword',
+        armorId: 'chainmail',
+        targetRound: selectedRunRound,
+        runConfig: { startingLives: 3, goalRound: 10 },
+      });
 
       // Skip the BaseItemSelector
       useForgeStore.setState({

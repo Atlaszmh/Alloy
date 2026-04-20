@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test';
+import type { RunState } from '@alloy/engine';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -300,6 +301,10 @@ interface RunViaStoreOpts {
   aiTier?: 1 | 2 | 3 | 4 | 5;
   /** Seed the run's flux to this value after match init (forge phase only). */
   seedFlux?: number;
+  /** Shallow-merged into runState after createDebugMatch. Applied by matchStore.startDebugMatch. */
+  runStateOverride?: Partial<RunState>;
+  /** Seed discoveryState with N fake discoveries. */
+  discoveryStateOverride?: { count?: number };
 }
 
 /**
@@ -317,6 +322,8 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
     seed = 42,
     aiTier = 1,
     seedFlux,
+    runStateOverride,
+    discoveryStateOverride,
   } = opts;
 
   await skipOnboardingOverlay(page);
@@ -325,20 +332,22 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
 
   // Kick off the debug match from inside the page.
   await page.evaluate(
-    ({ round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux }) => {
+    ({ round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux, runStateOverride, discoveryStateOverride }) => {
       const stores = (window as { __ZUSTAND_STORES__?: Record<string, { getState: () => unknown; setState: (s: unknown) => void }> }).__ZUSTAND_STORES__;
       if (!stores?.matchStore) throw new Error('matchStore not exposed on window');
-      const match = stores.matchStore.getState() as { startDebugMatch: (...args: unknown[]) => void };
-      match.startDebugMatch(
+      const match = stores.matchStore.getState() as { startDebugMatch: (opts: Record<string, unknown>) => void };
+      match.startDebugMatch({
         seed,
-        'run_async',
+        mode: 'run_async',
         aiTier,
-        phase,
-        'sword',
-        'chainmail',
-        round,
-        { startingLives, goalRound },
-      );
+        targetPhase: phase,
+        weaponId: 'sword',
+        armorId: 'chainmail',
+        targetRound: round,
+        runConfig: { startingLives, goalRound },
+        runStateOverride,
+        discoveryStateOverride,
+      });
       if (consecutiveWins > 0 && stores.runStore) {
         stores.runStore.setState({ consecutiveWins });
       }
@@ -364,7 +373,7 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
         }
       }
     },
-    { round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux },
+    { round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux, runStateOverride, discoveryStateOverride },
   );
 
   if (phase === 'draft') await waitForPhase(page, 'draft');

@@ -1,5 +1,5 @@
-import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, GemInstance, DebugPhaseTarget } from '@alloy/engine';
-import { createMatch, applyAction, createDebugMatch, DataRegistry, loadAndValidateData, AIController, SeededRNG } from '@alloy/engine';
+import type { MatchState, MatchMode, GameAction, ActionResult, DuelResult, CombatLog, GemInstance, DebugPhaseTarget, RunState } from '@alloy/engine';
+import { createMatch, applyAction, createDebugMatch, DataRegistry, loadAndValidateData, AIController, SeededRNG, DiscoveryState } from '@alloy/engine';
 import { useRunStore } from './runStore';
 import { createHmrStore } from './hmr-store';
 
@@ -48,6 +48,21 @@ export interface RunConfig {
   goalRound?: number;
 }
 
+export interface StartDebugMatchOpts {
+  seed?: number;
+  mode?: MatchMode;
+  aiTier?: 1 | 2 | 3 | 4 | 5;
+  targetPhase?: DebugPhaseTarget;
+  weaponId?: string;
+  armorId?: string;
+  targetRound?: number;
+  runConfig?: RunConfig;
+  /** Shallow-merged into runState after createDebugMatch. Run-mode only. */
+  runStateOverride?: Partial<RunState>;
+  /** Seed discoveryState with N fake discoveries. Run-mode only. */
+  discoveryStateOverride?: { count?: number };
+}
+
 interface MatchStore {
   state: MatchState | null;
   aiController: AIController | null;
@@ -55,7 +70,14 @@ interface MatchStore {
   aiOpponentTier: number | null;
 
   startLocalMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, weaponId?: string, armorId?: string, runConfig?: RunConfig) => void;
-  startDebugMatch: (seed: number, mode: MatchMode, aiTier: 1 | 2 | 3 | 4 | 5, targetPhase: DebugPhaseTarget, weaponId?: string, armorId?: string, targetRound?: number, runConfig?: RunConfig) => void;
+  /** New object-opts overload — supersedes the old positional-arg form. */
+  startDebugMatch: (opts: StartDebugMatchOpts) => void;
+  /**
+   * Append a synthetic DuelResult to matchState.roundResults (winner = player
+   * `winner`) then dispatch `duel_continue` so the engine applies life
+   * recovery, flux rewards, and round advancement. Dev/test helper only.
+   */
+  forceRunResult: (winner: 0 | 1) => void;
   dispatch: (action: GameAction) => ActionResult;
   getRegistry: () => DataRegistry;
   reset: () => void;
@@ -87,9 +109,21 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
     syncRunStore(state);
   },
 
-  startDebugMatch: (seed, mode, aiTier, targetPhase, weaponId = 'sword', armorId = 'chainmail', targetRound = 1, runConfig) => {
+  startDebugMatch: (opts: StartDebugMatchOpts) => {
+    const {
+      seed = 42,
+      mode = 'run_async',
+      aiTier = 1,
+      targetPhase = 'draft',
+      weaponId = 'sword',
+      armorId = 'chainmail',
+      targetRound = 1,
+      runConfig,
+      runStateOverride,
+      discoveryStateOverride,
+    } = opts;
     const reg = getRegistry();
-    const state = createDebugMatch(
+    let state = createDebugMatch(
       `debug_${Date.now()}`,
       seed,
       mode,
@@ -101,12 +135,61 @@ export const useMatchStore = createHmrStore<MatchStore>('matchStore', (set, get)
       targetRound,
       runConfig,
     );
+
+    // Apply run-state override (shallow merge) after engine creates the state
+    if (runStateOverride && state.runState) {
+      state = { ...state, runState: { ...state.runState, ...runStateOverride } };
+    }
+
+    // Seed discovery state with N fake discoveries so totalDiscoveryCount() === N
+    if (discoveryStateOverride?.count !== undefined) {
+      const ds = new DiscoveryState();
+      for (let i = 0; i < discoveryStateOverride.count; i++) {
+        ds.recordDiscovery(`fake_recipe_${i}`);
+      }
+      state = { ...state, discoveryState: ds };
+    }
+
     const ai = new AIController(aiTier, reg, new SeededRNG(seed).fork('ai'));
     const isRunMode = mode === 'run_async' || mode === 'run_live';
     set({ state, aiController: ai, error: null, aiOpponentTier: isRunMode ? aiTier : null });
 
     // Sync runStore for run modes
     syncRunStore(state);
+  },
+
+  forceRunResult: (winner: 0 | 1) => {
+    const { state } = get();
+    if (!state) return;
+    if (state.phase.kind !== 'duel') return;
+
+    const round = state.phase.round;
+    const syntheticResult: DuelResult = {
+      round,
+      winner,
+      finalHP: winner === 0 ? [100, 0] : [0, 100],
+      duration: 10,
+      wasTiebreak: false,
+      p0DamageDealt: winner === 0 ? 100 : 0,
+      p1DamageDealt: winner === 1 ? 100 : 0,
+    };
+
+    // Patch the round results so duel_continue sees the correct winner
+    const patchedState: MatchState = {
+      ...state,
+      roundResults: [...state.roundResults, syntheticResult],
+    };
+    set({ state: patchedState });
+
+    // Now dispatch duel_continue — the engine will apply life recovery, flux, etc.
+    const reg = getRegistry();
+    const result = applyAction(patchedState, { kind: 'duel_continue' }, reg);
+    if (result.ok) {
+      set({ state: result.state, error: null });
+      syncRunStore(result.state);
+    } else {
+      set({ error: result.error });
+    }
   },
 
   dispatch: (action) => {
