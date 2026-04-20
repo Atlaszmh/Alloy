@@ -168,7 +168,7 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
             gemUid1: stockpile[i].uid,
             gemUid2: stockpile[j].uid,
           });
-          const compoundUid = `compound_${stockpile[i].uid}_${stockpile[j].uid}`;
+          const compoundUid = `combined_${stockpile[i].uid}_${stockpile[j].uid}`;
           actions.push({
             kind: 'socket_gem',
             gemUid: compoundUid,
@@ -451,7 +451,7 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
           gemUid1: sortedStockpile[i].uid,
           gemUid2: sortedStockpile[j].uid,
         });
-        const compoundUid = `compound_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
+        const compoundUid = `combined_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
         actions.push({
           kind: 'socket_gem',
           gemUid: compoundUid,
@@ -612,7 +612,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
         gemUid1: stockpile[cand.i].uid,
         gemUid2: stockpile[cand.j].uid,
       });
-      const compoundUid = `compound_${stockpile[cand.i].uid}_${stockpile[cand.j].uid}`;
+      const compoundUid = `combined_${stockpile[cand.i].uid}_${stockpile[cand.j].uid}`;
       actions.push({
         kind: 'socket_gem',
         gemUid: compoundUid,
@@ -797,7 +797,7 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
         gemUid1: stockpile[cand.idx1].uid,
         gemUid2: stockpile[cand.idx2].uid,
       });
-      const compoundUid = `compound_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`;
+      const compoundUid = `combined_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`;
       actions.push({
         kind: 'socket_gem',
         gemUid: compoundUid,

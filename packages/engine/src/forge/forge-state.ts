@@ -202,6 +202,26 @@ function applyCombine(
     }
   }
 
+  // Generic combine: when keepGemUid is set, promote the kept gem +1 tier
+  if (action.keepGemUid) {
+    const keptGem = action.keepGemUid === action.gemUid1 ? gem1 : gem2;
+    const newTier = Math.min(keptGem.tier + 1, 5) as 1 | 2 | 3 | 4 | 5;
+    const resultGem = createGem(
+      `combined_${action.gemUid1}_${action.gemUid2}`,
+      keptGem.affixId,
+      newTier,
+      keptGem.rarity,
+      {
+        tags: [...new Set([...gem1.tags, ...gem2.tags])],
+        recipeDepth: Math.max(gem1.recipeDepth, gem2.recipeDepth) + 1,
+      },
+    );
+    let newStockpile = removeFromStockpile(state.stockpile, action.gemUid1);
+    newStockpile = removeFromStockpile(newStockpile, action.gemUid2);
+    newStockpile = [...newStockpile, resultGem];
+    return ok({ ...state, stockpile: newStockpile });
+  }
+
   // Fallback: legacy combine using registry's compound affix lookup
   const combination = registry.getCombination(gem1.affixId, gem2.affixId);
   if (!combination) {
