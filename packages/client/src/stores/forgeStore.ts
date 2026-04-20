@@ -15,6 +15,11 @@ interface ForgeStoreState {
   selectedWeaponId: string | null;
   selectedArmorId: string | null;
 
+  /** Per-match flag tracking whether the player has completed base item selection */
+  hasSelectedBaseItemsMap: Record<string, boolean>;
+  setHasSelectedBaseItems: (matchId: string, value: boolean) => void;
+  hasSelectedBaseItems: (matchId: string) => boolean;
+
   initPlan: (state: ForgeState, registry: DataRegistry) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
@@ -39,6 +44,12 @@ export const useForgeStore = createHmrStore<ForgeStoreState>('forgeStore', (set,
   itemSelectionPhase: 'weapon',
   selectedWeaponId: null,
   selectedArmorId: null,
+  hasSelectedBaseItemsMap: {},
+
+  setHasSelectedBaseItems: (matchId, value) =>
+    set((s) => ({ hasSelectedBaseItemsMap: { ...s.hasSelectedBaseItemsMap, [matchId]: value } })),
+
+  hasSelectedBaseItems: (matchId) => get().hasSelectedBaseItemsMap[matchId] ?? false,
 
   initPlan: (state, registry) => {
     const plan = createForgePlan(state, registry);
@@ -121,6 +132,7 @@ export const useForgeStore = createHmrStore<ForgeStoreState>('forgeStore', (set,
       itemSelectionPhase: 'weapon',
       selectedWeaponId: null,
       selectedArmorId: null,
+      hasSelectedBaseItemsMap: {},
     }),
 }));
 

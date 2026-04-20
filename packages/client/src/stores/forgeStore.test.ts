@@ -233,4 +233,28 @@ describe('forgeStore', () => {
       expect(useForgeStore.getState().selectedArmorId).toBeNull();
     });
   });
+
+  describe('hasSelectedBaseItems per-match flag', () => {
+    it('returns false by default for any matchId', () => {
+      expect(useForgeStore.getState().hasSelectedBaseItems('match-A')).toBe(false);
+    });
+
+    it('setHasSelectedBaseItems sets the flag for the given match only', () => {
+      useForgeStore.getState().setHasSelectedBaseItems('match-A', true);
+      expect(useForgeStore.getState().hasSelectedBaseItems('match-A')).toBe(true);
+      expect(useForgeStore.getState().hasSelectedBaseItems('match-B')).toBe(false);
+    });
+
+    it('can set false after true', () => {
+      useForgeStore.getState().setHasSelectedBaseItems('match-A', true);
+      useForgeStore.getState().setHasSelectedBaseItems('match-A', false);
+      expect(useForgeStore.getState().hasSelectedBaseItems('match-A')).toBe(false);
+    });
+
+    it('reset clears the hasSelectedBaseItemsMap', () => {
+      useForgeStore.getState().setHasSelectedBaseItems('match-A', true);
+      useForgeStore.getState().reset();
+      expect(useForgeStore.getState().hasSelectedBaseItems('match-A')).toBe(false);
+    });
+  });
 });
