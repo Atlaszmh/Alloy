@@ -10,7 +10,8 @@ import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js'
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 import { combinationPotential } from '../src/ai/evaluation.js';
-import type { OrbInstance } from '../src/types/orb.js';
+import type { GemInstance } from '../src/types/gem.js';
+import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
 import type { CombatLog } from '../src/types/combat.js';
 import type { ForgeState } from '../src/forge/forge-state.js';
@@ -20,7 +21,7 @@ const registry = new DataRegistry(data.affixes, data.combinations, data.synergie
 const balance = data.balance;
 const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
-function makePool(seed: number): OrbInstance[] {
+function makePool(seed: number): GemInstance[] {
   return generatePool(seed, 'ranked', registry);
 }
 
@@ -88,7 +89,7 @@ describe('AI Draft Strategies', () => {
     const strategy = new Tier2DraftStrategy();
 
     // Make several picks, tracking the archetype consistency
-    const picks: OrbInstance[] = [];
+    const picks: GemInstance[] = [];
     let remainingPool = [...pool];
 
     for (let i = 0; i < Math.min(6, pool.length); i++) {
@@ -128,13 +129,13 @@ describe('AI Forge Strategies', () => {
 
   it('Tier 2 forge tries combinations when possible', () => {
     // Create a stockpile with known combinable orbs
-    const stockpile: OrbInstance[] = [
-      { uid: 'test_orb_1', affixId: 'chance_on_hit', tier: 1 },
-      { uid: 'test_orb_2', affixId: 'fire_damage', tier: 1 },
-      { uid: 'test_orb_3', affixId: 'cold_damage', tier: 1 },
-      { uid: 'test_orb_4', affixId: 'crit_chance', tier: 2 },
-      { uid: 'test_orb_5', affixId: 'attack_speed', tier: 1 },
-      { uid: 'test_orb_6', affixId: 'block', tier: 1 },
+    const stockpile: GemInstance[] = [
+      createGem('test_orb_1', 'chance_on_hit', 1, 'common'),
+      createGem('test_orb_2', 'fire_damage', 1, 'common'),
+      createGem('test_orb_3', 'cold_damage', 1, 'common'),
+      createGem('test_orb_4', 'crit_chance', 2, 'common'),
+      createGem('test_orb_5', 'attack_speed', 1, 'common'),
+      createGem('test_orb_6', 'block', 1, 'common'),
     ];
     const loadout = createEmptyLoadout('sword', 'chainmail');
     const rng = new SeededRNG(400);
@@ -169,10 +170,10 @@ describe('AI Forge Strategies', () => {
   });
 
   it('T2 forge uses generic combine on leftover orbs', () => {
-    const stockpile: OrbInstance[] = [
-      { uid: 'g1', affixId: 'cold_damage', tier: 1 },
-      { uid: 'g2', affixId: 'armor_rating', tier: 1 },
-      { uid: 'g3', affixId: 'crit_damage', tier: 2 },
+    const stockpile: GemInstance[] = [
+      createGem('g1', 'cold_damage', 1, 'common'),
+      createGem('g2', 'armor_rating', 1, 'common'),
+      createGem('g3', 'crit_damage', 2, 'common'),
     ];
     const ai = new AIController(2, registry, new SeededRNG(42).fork('ai'));
     const actions = ai.planForge(stockpile, emptyLoadout, 10, 1, []);
@@ -222,8 +223,8 @@ describe('AIController', () => {
     const ai = new AIController(1, registry, rng);
 
     let draftState = createDraftState(pool);
-    const myStockpile: OrbInstance[] = [];
-    const opponentStockpile: OrbInstance[] = [];
+    const myStockpile: GemInstance[] = [];
+    const opponentStockpile: GemInstance[] = [];
 
     // Simulate the AI picking every other orb (alternating with a dummy opponent)
     while (!draftState.isComplete) {
@@ -326,22 +327,22 @@ describe('adapt strategy player identification', () => {
 
 describe('combinationPotential — generic awareness', () => {
   it('counts generic upgrade potential for non-recipe pairs', () => {
-    const stockpile: OrbInstance[] = [
-      { uid: 'a', affixId: 'cold_damage', tier: 1 },
-      { uid: 'b', affixId: 'armor_rating', tier: 1 },
+    const stockpile: GemInstance[] = [
+      createGem('a', 'cold_damage', 1, 'common'),
+      createGem('b', 'armor_rating', 1, 'common'),
     ];
     const potential = combinationPotential(stockpile, registry);
     expect(potential).toBeGreaterThan(0);
   });
 
   it('values same-affix pairs higher than cross-affix pairs', () => {
-    const sameAffix: OrbInstance[] = [
-      { uid: 'a', affixId: 'fire_damage', tier: 1 },
-      { uid: 'b', affixId: 'fire_damage', tier: 2 },
+    const sameAffix: GemInstance[] = [
+      createGem('a', 'fire_damage', 1, 'common'),
+      createGem('b', 'fire_damage', 2, 'common'),
     ];
-    const crossAffix: OrbInstance[] = [
-      { uid: 'c', affixId: 'cold_damage', tier: 1 },
-      { uid: 'd', affixId: 'armor_rating', tier: 1 },
+    const crossAffix: GemInstance[] = [
+      createGem('c', 'cold_damage', 1, 'common'),
+      createGem('d', 'armor_rating', 1, 'common'),
     ];
     expect(combinationPotential(sameAffix, registry))
       .toBeGreaterThan(combinationPotential(crossAffix, registry));
