@@ -1,5 +1,7 @@
 import { useUIStore } from '@/stores/uiStore';
+import { useOnboardingStore } from '@/stores/onboardingStore';
 import { playSound } from '@/shared/utils/sound-manager';
+import { showToast } from '@/components/Toast';
 
 export function SettingsContent() {
   const {
@@ -8,6 +10,8 @@ export function SettingsContent() {
     colorblindMode, setColorblindMode,
     hapticEnabled, setHapticEnabled,
   } = useUIStore();
+
+  const resetOnboarding = useOnboardingStore((s) => s.reset);
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,6 +90,24 @@ export function SettingsContent() {
               onToggle={toggleMute}
             />
           </div>
+        </div>
+      </section>
+
+      {/* Tips */}
+      <section>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-surface-300">
+          Tips
+        </h3>
+        <div className="rounded-lg border border-surface-600 bg-surface-800 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.4)]">
+          <button
+            onClick={() => {
+              resetOnboarding();
+              showToast('Onboarding tips will show on your next draft.');
+            }}
+            className="rounded border border-surface-500 bg-surface-700 px-4 py-2 text-sm text-white"
+          >
+            Show onboarding tips again
+          </button>
         </div>
       </section>
 
