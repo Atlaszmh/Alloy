@@ -70,7 +70,7 @@ export async function startMatch(page: Page): Promise<void> {
  */
 export async function waitForPhase(
   page: Page,
-  phase: 'draft' | 'forge' | 'duel' | 'adapt' | 'result',
+  phase: 'draft' | 'forge' | 'duel' | 'result',
 ): Promise<void> {
   switch (phase) {
     case 'draft':
@@ -96,11 +96,6 @@ export async function waitForPhase(
         page.getByRole('button', { name: 'Skip' })
       ).toBeVisible({ timeout: 30_000 });
       break;
-    case 'adapt':
-      await expect(
-        page.getByText(/Adapt Phase/i)
-      ).toBeVisible({ timeout: 30_000 });
-      break;
     case 'result':
       await expect(
         page.getByText(/VICTORY|DEFEAT|DRAW|Victory|Defeat|Draw/)
@@ -119,7 +114,6 @@ export async function getCurrentPhase(page: Page): Promise<string> {
   if (await page.getByRole('button', { name: 'Skip' }).isVisible().catch(() => false)) return 'duel';
   if (await page.getByText(/VICTORY|DEFEAT|DRAW/i).isVisible().catch(() => false)) return 'result';
   if (await page.getByText(/YOUR PICK|OPPONENT PICKING|AI PICKING|PICK YOUR GEMS/i).first().isVisible().catch(() => false)) return 'draft';
-  if (await page.getByText(/Adapt Phase/i).isVisible().catch(() => false)) return 'adapt';
   return 'unknown';
 }
 
