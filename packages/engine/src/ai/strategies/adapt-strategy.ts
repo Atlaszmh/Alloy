@@ -1,3 +1,9 @@
+// NOTE (2026-04-19): The adapt phase is not wired into the phase machine
+// (see phase-machine.ts — no 'adapt' case). AIController.planAdapt and these
+// strategies are currently unreachable. Kept for future wiring; see
+// ALPHA_READINESS.md for context. If you need to remove them, also remove
+// planAdapt in ai-controller.ts and the `AdaptStrategy` export.
+
 import type { CombatLog } from '../../types/combat.js';
 import type { ForgeAction } from '../../types/forge-action.js';
 import type { EquippedSlot, Loadout } from '../../types/item.js';
