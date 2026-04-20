@@ -1,3 +1,4 @@
+import { fetchProfile } from '@/shared/utils/profile-api';
 import { getSupabase } from '@/shared/utils/supabase';
 import { createHmrStore } from './hmr-store';
 
@@ -44,6 +45,11 @@ export const useAuthStore = createHmrStore<AuthState>('authStore', (set, get) =>
           isGuest: session.user.is_anonymous ?? false,
           supabaseUserId: session.user.id,
         });
+        const remoteStats = await fetchProfile(session.user.id);
+        if (remoteStats) {
+          const { useProfileStore } = await import('./profileStore');
+          useProfileStore.getState().hydrateFromRemote(remoteStats);
+        }
         return;
       }
 
@@ -62,6 +68,11 @@ export const useAuthStore = createHmrStore<AuthState>('authStore', (set, get) =>
         isGuest: true,
         supabaseUserId: data.user.id,
       });
+      const remoteStats = await fetchProfile(data.user.id);
+      if (remoteStats) {
+        const { useProfileStore } = await import('./profileStore');
+        useProfileStore.getState().hydrateFromRemote(remoteStats);
+      }
     } catch (err) {
       console.warn('[Auth] Auth initialization failed, falling back to guest:', err);
       get().loginAsGuest();
