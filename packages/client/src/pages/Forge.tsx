@@ -16,7 +16,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { showToast } from '@/components/Toast';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
-import type { AffixDef, BaseStat, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
+import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
 import { createForgeState, CombinationEngine, DiscoveryState } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
@@ -50,7 +50,6 @@ export function Forge() {
   const selectedOrbUid = useForgeStore(s => s.selectedOrbUid);
   const confirmModalOpen = useForgeStore(s => s.confirmModalOpen);
   const comboSlots = useForgeStore(s => s.comboSlots);
-  const itemSelectionPhase = useForgeStore(s => s.itemSelectionPhase);
   const selectedWeaponId = useForgeStore(s => s.selectedWeaponId);
   const selectedArmorId = useForgeStore(s => s.selectedArmorId);
   const {
@@ -63,11 +62,49 @@ export function Forge() {
     clearComboSlots,
     openConfirmModal,
     closeConfirmModal,
+    setHasSelectedBaseItems,
   } = useForgeStore();
 
   const { isDisconnected, secondsLeft } = useDisconnectTimer(gateway);
 
   const round = phase?.kind === 'forge' ? phase.round : (1 as 1 | 2 | 3);
+
+  // ── Per-match base item selection flag (run mode only) ──
+  const matchId = matchState?.matchId ?? '';
+  const hasSelectedBaseItems = useForgeStore(s => s.hasSelectedBaseItems(matchId));
+
+  // Two-step selector flow: weapon → armor → done
+  const [selectorStep, setSelectorStep] = useState<'weapon' | 'armor' | 'done'>(
+    hasSelectedBaseItems ? 'done' : 'weapon',
+  );
+
+  // Show selector only in run mode, round 1, and not yet completed
+  const showBaseItemSelector =
+    isRunMode && round === 1 && !hasSelectedBaseItems && selectorStep !== 'done';
+
+  const weaponRoster = useMemo(() => registry.getBaseItemsByType('weapon'), [registry]);
+  const armorRoster = useMemo(() => registry.getBaseItemsByType('armor'), [registry]);
+
+  const handleWeaponSelect = useCallback((item: BaseItemDef) => {
+    const result = applyAction({ kind: 'select_base_item', target: 'weapon', baseItemId: item.id }, registry);
+    if (result.ok) {
+      selectBaseItem('weapon', item.id);
+      setSelectorStep('armor');
+    } else {
+      showToast(result.error ?? 'Could not select weapon');
+    }
+  }, [applyAction, registry, selectBaseItem]);
+
+  const handleArmorSelect = useCallback((item: BaseItemDef) => {
+    const result = applyAction({ kind: 'select_base_item', target: 'armor', baseItemId: item.id }, registry);
+    if (result.ok) {
+      selectBaseItem('armor', item.id);
+      setHasSelectedBaseItems(matchId, true);
+      setSelectorStep('done');
+    } else {
+      showToast(result.error ?? 'Could not select armor');
+    }
+  }, [applyAction, registry, selectBaseItem, setHasSelectedBaseItems, matchId]);
 
   // ── Extract flux from RunState ──
   const runState = matchState?.runState;
@@ -645,16 +682,16 @@ export function Forge() {
     return uids;
   }, [comboSlots]);
 
-  // ── Item selection phase (before forge UI) ──
-  if (itemSelectionPhase !== 'done') {
-    const itemType = itemSelectionPhase;
-    const items = registry.getBaseItemsByType(itemType);
+  // ── Base item selector (run mode, round 1, before main forge UI) ──
+  if (showBaseItemSelector) {
     return (
-      <BaseItemSelector
-        itemType={itemType}
-        items={items}
-        onSelect={(item) => selectBaseItem(itemType, item.id)}
-      />
+      <div className="flex h-full w-full items-center justify-center">
+        <BaseItemSelector
+          itemType={selectorStep === 'weapon' ? 'weapon' : 'armor'}
+          items={selectorStep === 'weapon' ? weaponRoster : armorRoster}
+          onSelect={selectorStep === 'weapon' ? handleWeaponSelect : handleArmorSelect}
+        />
+      </div>
     );
   }
 

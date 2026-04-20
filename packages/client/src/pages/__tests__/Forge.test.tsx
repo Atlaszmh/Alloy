@@ -276,7 +276,10 @@ function setupStores(
     ...planOverrides,
   });
 
-  // Set forgeStore with the plan directly, bypassing initPlan
+  // Set forgeStore with the plan directly, bypassing initPlan.
+  // hasSelectedBaseItemsMap uses matchState.matchId as key; the mock state
+  // omits matchId so the Forge component derives '' — mark '' as done so
+  // showBaseItemSelector evaluates to false and the normal forge UI renders.
   useForgeStore.setState({
     plan,
     selectedOrbUid: null,
@@ -285,6 +288,7 @@ function setupStores(
     itemSelectionPhase: 'done',
     selectedWeaponId: 'sword',
     selectedArmorId: 'chainmail',
+    hasSelectedBaseItemsMap: { '': true },
   });
 
   return { mockState, mockRegistry, dispatchFn: mockGatewayDispatch, plan };

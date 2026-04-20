@@ -24,6 +24,7 @@ export function BaseItemCard({ item, isSelected, onClick }: BaseItemCardProps) {
   return (
     <button
       onClick={onClick}
+      data-base-item-card="true"
       style={{
         display: 'flex',
         flexDirection: 'column',

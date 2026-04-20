@@ -323,8 +323,15 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
         stores.runStore.setState({ consecutiveWins });
       }
       // Skip weapon/armor modal if we're landing on forge.
+      // Mark hasSelectedBaseItems for the active matchId so showBaseItemSelector
+      // evaluates to false and the main forge UI renders immediately.
       if (phase === 'forge' && stores.forgeStore) {
-        stores.forgeStore.setState({ itemSelectionPhase: 'done' });
+        const matchState = stores.matchStore?.getState() as { state?: { matchId?: string } } | undefined;
+        const matchId = matchState?.state?.matchId ?? '';
+        stores.forgeStore.setState({
+          itemSelectionPhase: 'done',
+          hasSelectedBaseItemsMap: { [matchId]: true },
+        });
       }
     },
     { round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier },
