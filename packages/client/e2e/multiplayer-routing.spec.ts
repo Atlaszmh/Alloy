@@ -9,7 +9,7 @@ test.describe('Multiplayer Routing', () => {
   test('AI match generates ai- prefixed URL and loads draft', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Choose Opponent')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play vs AI' })).toBeVisible();
 
     // Click "Play vs AI" to go to tier selection
     await page.getByText('Play vs AI').click();
@@ -36,7 +36,7 @@ test.describe('Multiplayer Routing', () => {
   test('PvP buttons hidden when offline', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Choose Opponent')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play vs AI' })).toBeVisible();
 
     // In offline mode (no VITE_SUPABASE_URL), PvP buttons should not appear
     await expect(page.getByText('Create Match')).not.toBeVisible();
@@ -82,6 +82,6 @@ test.describe('Multiplayer Routing', () => {
 
     // Navigate back to queue
     await page.goto('/queue');
-    await expect(page.getByText('Choose Opponent')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play vs AI' })).toBeVisible();
   });
 });

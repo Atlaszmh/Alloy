@@ -25,7 +25,7 @@ test.describe('Match Flow', () => {
 
     // ── 02: Matchmaking ──
     await page.getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Choose Opponent')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play vs AI' })).toBeVisible();
     await screenshotFlow(page, vp, 'match-flow', '02-matchmaking');
 
     // Go back and use startMatch for seed injection
