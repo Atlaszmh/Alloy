@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
+import fs from 'fs';
+import path from 'path';
 
 // ---- Supabase mock ----
 // We mock the supabase module so routes never hit a real database.
@@ -302,10 +304,13 @@ describe('Reports routes', () => {
 });
 
 describe('No hardcoded port references', () => {
-  it('frontend client.ts uses VITE_API_URL env var with correct fallback', async () => {
-    const fs = await import('fs');
+  // Use process.cwd() to locate source files — new URL(import.meta.url) fails
+  // in Vitest's jsdom env where import.meta.url is not a file:// URL.
+  const srcDir = path.resolve(process.cwd(), 'src');
+
+  it('frontend client.ts uses VITE_API_URL env var with correct fallback', () => {
     const clientSrc = fs.readFileSync(
-      new URL('../src/api/client.ts', import.meta.url),
+      path.join(srcDir, 'api/client.ts'),
       'utf-8',
     );
     // Should not reference old port 3001
@@ -314,20 +319,18 @@ describe('No hardcoded port references', () => {
     expect(clientSrc).toContain('VITE_API_URL');
   });
 
-  it('frontend sse.ts uses VITE_API_URL env var with correct fallback', async () => {
-    const fs = await import('fs');
+  it('frontend sse.ts uses VITE_API_URL env var with correct fallback', () => {
     const sseSrc = fs.readFileSync(
-      new URL('../src/api/sse.ts', import.meta.url),
+      path.join(srcDir, 'api/sse.ts'),
       'utf-8',
     );
     expect(sseSrc).not.toContain('localhost:3001');
     expect(sseSrc).toContain('VITE_API_URL');
   });
 
-  it('GlobalFilters uses shared api client, not raw fetch with hardcoded URL', async () => {
-    const fs = await import('fs');
+  it('GlobalFilters uses shared api client, not raw fetch with hardcoded URL', () => {
     const filtersSrc = fs.readFileSync(
-      new URL('../src/components/GlobalFilters.tsx', import.meta.url),
+      path.join(srcDir, 'components/GlobalFilters.tsx'),
       'utf-8',
     );
     expect(filtersSrc).not.toContain('localhost:3001');

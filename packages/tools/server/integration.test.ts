@@ -14,7 +14,17 @@
 import { describe, it, expect } from 'vitest';
 import { defaultConfig } from '@alloy/engine';
 
-describe('End-to-end simulation flow', () => {
+// These tests require a running simulation server + Supabase instance.
+// They are skipped in normal CI. To run:
+//   TEST_API_URL=http://localhost:3001 pnpm vitest run server/integration.test.ts
+// Prerequisites:
+//   1. Supabase running locally: `cd packages/supabase && supabase start`
+//   2. Migration 007 applied: `supabase db reset`
+//   3. Server running: `cd packages/tools && pnpm server`
+//   4. .env configured with local Supabase URL and service role key
+const describeIntegration = process.env.TEST_API_URL ? describe : describe.skip;
+
+describeIntegration('End-to-end simulation flow', () => {
   const BASE_URL = process.env.TEST_API_URL || 'http://localhost:3001';
 
   it('creates a config, runs a small simulation, and queries results', async () => {
