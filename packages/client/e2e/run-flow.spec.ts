@@ -233,8 +233,16 @@ test.describe('Run Flow', () => {
   });
 
   test.skip('R09: round 11 enters endless mode', async () => {
-    // Blocked: phase-machine.ts:97-102 currently completes the run at goal.
-    // Needs engine path for post-goal endless + "Continue Endless" UI.
+    // Deferred feature. Engine path does not exist:
+    //   packages/engine/src/match/phase-machine.ts marks the run
+    //   'complete' the moment runState.status === 'won' (goal reached).
+    // Enabling endless requires:
+    //   (1) a new RunState flag (e.g., `continueEndless: boolean`)
+    //   (2) phase-machine branch that, if continueEndless, skips the complete
+    //       transition and returns a fresh draft phase at round+1 instead
+    //   (3) client UI: a "Continue Endless" prompt on the goal-reached
+    //       overlay, wired to set continueEndless=true
+    // See ALPHA_READINESS.md "endless mode" section. Not alpha-blocking.
   });
 
   test('R10: later rounds show higher quality gems in draft', async ({ page }) => {
@@ -258,40 +266,140 @@ test.describe('Run Flow', () => {
   /*  UI/flux affordances are ready.                                    */
   /* ---------------------------------------------------------------- */
 
-  test.skip('R07b: milestone round 6 restores a life', async () => {
-    // balance.json lifeRecovery.milestoneRounds = [6, 10].
-    // To test: seed matchState.runState { round: 6, lives: 2 } via matchStore.setState,
-    // then dispatch duel_continue with a win result so the engine runs
-    // checkLifeRecovery and applies the +1 life. Requires engine-level state
-    // injection (not just runStore mutation) because applyAction reads from
-    // matchState, not runStore. The startRunViaStore fixture does not yet support
-    // runStateOverride. Add { runStateOverride: { round, lives } } to the fixture
-    // and mutate matchStore.state.runState before calling waitForPhase.
+  test('R07b: milestone round 5 restores a life', async ({ page }) => {
+    // Engine default milestoneRounds = [5, 10] (from createRunState DEFAULT_LIFE_RECOVERY).
+    // Seed a duel at round 5 with 1 life; a win at round 5 triggers milestone recovery → 2 lives.
+    await startRunViaStore(page, {
+      round: 5,
+      phase: 'duel',
+      startingLives: 3,
+      runStateOverride: { lives: 1, round: 5, totalWins: 4, totalLosses: 2, consecutiveWins: 0 },
+    });
+
+    const livesBefore = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesBefore).toBe(1);
+
+    // Trigger engine duel_continue with a player-0 win.
+    await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      stores?.matchStore?.getState()?.forceRunResult(0);
+    });
+
+    // Engine checkLifeRecovery: round 5 is a milestone → +1 life
+    await page.waitForFunction(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const lives = stores?.matchStore?.getState()?.state?.runState?.lives;
+      return lives >= 2;
+    }, undefined, { timeout: 5_000 });
+
+    const livesAfter = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesAfter).toBe(2);
   });
 
-  test.skip('R07c: milestone round 10 restores a life', async () => {
-    // Same mechanic as R07b but round=10. Note: round 10 is also the goalRound,
-    // so advanceRound fires and may also set status='won'. The test should verify
-    // that BOTH life recovery AND run-won overlay appear (or clarify priority).
-    // Same fixture requirements as R07b: runStateOverride seeding.
+  test('R07c: milestone round 10 restores a life', async ({ page }) => {
+    // Round 10 is the second milestone. Use goalRound=15 so the run doesn't end at round 10.
+    // Seed a duel at round 10 with 1 life; win → milestone recovery → 2 lives.
+    await startRunViaStore(page, {
+      round: 10,
+      phase: 'duel',
+      startingLives: 3,
+      goalRound: 15,
+      runStateOverride: { lives: 1, round: 10, totalWins: 9, totalLosses: 1, consecutiveWins: 0, goalRound: 15 },
+    });
+
+    const livesBefore = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesBefore).toBe(1);
+
+    await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      stores?.matchStore?.getState()?.forceRunResult(0);
+    });
+
+    // Engine checkLifeRecovery: round 10 is a milestone → +1 life
+    await page.waitForFunction(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const lives = stores?.matchStore?.getState()?.state?.runState?.lives;
+      return lives >= 2;
+    }, undefined, { timeout: 5_000 });
+
+    const livesAfter = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesAfter).toBe(2);
   });
 
-  test.skip('R07d: 5th discovery restores a life', async () => {
-    // balance.json lifeRecovery.discoveryThreshold = 5.
-    // Requires seeding discoveryState.totalDiscoveryCount() === 5 before a win.
-    // The engine reads discoveryState from matchState — needs matchState.discoveryState
-    // injection via matchStore.setState({ state: { ...current, discoveryState: ... } }).
-    // Once discovery seeding is in place, dispatch duel_continue with a win,
-    // then assert lives +1 in runStore.
+  test('R07d: 5th discovery restores a life', async ({ page }) => {
+    // Engine DEFAULT_LIFE_RECOVERY.discoveryThreshold = 5.
+    // Seed 5 fake discoveries in discoveryState; win the duel → recovery triggers.
+    await startRunViaStore(page, {
+      round: 3,
+      phase: 'duel',
+      startingLives: 3,
+      runStateOverride: { lives: 1, totalWins: 2, totalLosses: 0, consecutiveWins: 0 },
+      discoveryStateOverride: { count: 5 },
+    });
+
+    const livesBefore = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesBefore).toBe(1);
+
+    await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      stores?.matchStore?.getState()?.forceRunResult(0);
+    });
+
+    // Engine checkLifeRecovery: discoveryCount(5) >= discoveryThreshold(5) → +1 life
+    await page.waitForFunction(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const lives = stores?.matchStore?.getState()?.state?.runState?.lives;
+      return lives >= 2;
+    }, undefined, { timeout: 5_000 });
+
+    const livesAfter = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.lives;
+    });
+    expect(livesAfter).toBe(2);
   });
 
-  test.skip('F01: winning a duel earns flux', async () => {
-    // Needs: a completed forge+duel flow where the engine awards win flux (+1 per
-    // balance.json gem.flux.rewards.win). The forceRunResult helper only mutates
-    // runStore (lives/streak), not the engine-side runState.flux. A real test
-    // requires either: (a) a completeForgeAndWinDuel helper that drives the duel
-    // simulation to completion, or (b) an engine-level fixture that injects a
-    // post-duel-win MatchState. Both are out of scope for Chunk 6.
+  test('F01: winning a duel earns flux', async ({ page }) => {
+    // Engine awards +1 flux per balance.json gem.flux.rewards.win on duel_continue win.
+    await startRunViaStore(page, { round: 1, phase: 'duel' });
+
+    const fluxBefore = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.flux ?? 0;
+    });
+
+    await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      stores?.matchStore?.getState()?.forceRunResult(0);
+    });
+
+    // flux should increase after a win
+    await page.waitForFunction((before: number) => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      const flux = stores?.matchStore?.getState()?.state?.runState?.flux ?? 0;
+      return flux > before;
+    }, fluxBefore, { timeout: 5_000 });
+
+    const fluxAfter = await page.evaluate(() => {
+      const stores = (window as any).__ZUSTAND_STORES__;
+      return stores?.matchStore?.getState()?.state?.runState?.flux ?? 0;
+    });
+    expect(fluxAfter).toBeGreaterThan(fluxBefore);
   });
 
   test.skip('F02: discovering a recipe earns flux', async () => {
