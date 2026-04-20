@@ -258,24 +258,40 @@ test.describe('Run Flow', () => {
   /*  UI/flux affordances are ready.                                    */
   /* ---------------------------------------------------------------- */
 
-  test.skip('R07b: milestone round 5 restores a life', async () => {
-    // run-state.ts checkLifeRecovery: milestoneRounds [5, 10] recover 1 life.
-    // Needs a deterministic way to reach round 5 with reduced lives.
+  test.skip('R07b: milestone round 6 restores a life', async () => {
+    // balance.json lifeRecovery.milestoneRounds = [6, 10].
+    // To test: seed matchState.runState { round: 6, lives: 2 } via matchStore.setState,
+    // then dispatch duel_continue with a win result so the engine runs
+    // checkLifeRecovery and applies the +1 life. Requires engine-level state
+    // injection (not just runStore mutation) because applyAction reads from
+    // matchState, not runStore. The startRunViaStore fixture does not yet support
+    // runStateOverride. Add { runStateOverride: { round, lives } } to the fixture
+    // and mutate matchStore.state.runState before calling waitForPhase.
   });
 
   test.skip('R07c: milestone round 10 restores a life', async () => {
-    // Same mechanic, round 10. Overlaps with R08 (goal) — consider whether
-    // both should fire or only one.
+    // Same mechanic as R07b but round=10. Note: round 10 is also the goalRound,
+    // so advanceRound fires and may also set status='won'. The test should verify
+    // that BOTH life recovery AND run-won overlay appear (or clarify priority).
+    // Same fixture requirements as R07b: runStateOverride seeding.
   });
 
   test.skip('R07d: 5th discovery restores a life', async () => {
-    // run-state.ts checkLifeRecovery: discoveryThreshold=5. Requires seeding
-    // discoveryState with 5 recipes via matchStore, then triggering recovery.
+    // balance.json lifeRecovery.discoveryThreshold = 5.
+    // Requires seeding discoveryState.totalDiscoveryCount() === 5 before a win.
+    // The engine reads discoveryState from matchState — needs matchState.discoveryState
+    // injection via matchStore.setState({ state: { ...current, discoveryState: ... } }).
+    // Once discovery seeding is in place, dispatch duel_continue with a win,
+    // then assert lives +1 in runStore.
   });
 
   test.skip('F01: winning a duel earns flux', async () => {
-    // balance.json gem.flux.rewards.win +1. Needs ForgeHeader flux display
-    // hook (data-run-flux) to read the value without evaluate.
+    // Needs: a completed forge+duel flow where the engine awards win flux (+1 per
+    // balance.json gem.flux.rewards.win). The forceRunResult helper only mutates
+    // runStore (lives/streak), not the engine-side runState.flux. A real test
+    // requires either: (a) a completeForgeAndWinDuel helper that drives the duel
+    // simulation to completion, or (b) an engine-level fixture that injects a
+    // post-duel-win MatchState. Both are out of scope for Chunk 6.
   });
 
   test.skip('F02: discovering a recipe earns flux', async () => {
@@ -286,16 +302,53 @@ test.describe('Run Flow', () => {
     // balance.json gem.flux.rewards.milestone.
   });
 
-  test.skip('F04: reroll_pool button spends flux and generates new draft pool', async () => {
-    // Blocked: no reroll UI yet. Engine action exists.
+  test('F04: reroll_pool button spends flux and generates new draft pool', async ({ page }) => {
+    // Flux costs from balance.json: reroll_pool = 5
+    await startRunViaStore(page, { round: 2, phase: 'forge', seedFlux: 10 });
+
+    // Wait for forge-flux section to appear (only shown in run modes with runState).
+    await page.locator('[data-run-flux]').waitFor({ timeout: 10_000 });
+
+    const fluxBefore = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxBefore).toBe(10);
+
+    await page.getByRole('button', { name: /Reroll/i }).click();
+    await page.waitForTimeout(300);
+
+    const fluxAfter = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxAfter).toBe(fluxBefore - 5);
   });
 
-  test.skip('F05: guarantee_rarity button spends flux and seeds rare+ gem', async () => {
-    // Blocked: no guarantee_rarity UI yet. Engine action exists.
+  test('F05: guarantee_rarity button spends flux', async ({ page }) => {
+    // Flux costs from balance.json: guarantee_rarity = 4
+    await startRunViaStore(page, { round: 2, phase: 'forge', seedFlux: 10 });
+
+    await page.locator('[data-run-flux]').waitFor({ timeout: 10_000 });
+
+    const fluxBefore = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxBefore).toBe(10);
+
+    await page.getByRole('button', { name: /Rarity/i }).click();
+    await page.waitForTimeout(300);
+
+    const fluxAfter = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxAfter).toBe(fluxBefore - 4);
   });
 
-  test.skip('F06: boost_combine button spends flux and upgrades next combine', async () => {
-    // Blocked: no boost_combine UI yet. Engine action exists.
+  test('F06: boost_combine button spends flux', async ({ page }) => {
+    // Flux costs from balance.json: boost_combine = 3
+    await startRunViaStore(page, { round: 2, phase: 'forge', seedFlux: 10 });
+
+    await page.locator('[data-run-flux]').waitFor({ timeout: 10_000 });
+
+    const fluxBefore = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxBefore).toBe(10);
+
+    await page.getByRole('button', { name: /Boost/i }).click();
+    await page.waitForTimeout(300);
+
+    const fluxAfter = Number(await page.locator('[data-run-flux]').getAttribute('data-run-flux'));
+    expect(fluxAfter).toBe(fluxBefore - 3);
   });
 
 });

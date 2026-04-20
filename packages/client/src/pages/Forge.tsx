@@ -872,13 +872,14 @@ export function Forge() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap-xs)' }}>
             <HapticButton
               onClick={() => {
-                const result = applyAction({ kind: 'boost_combine' }, registry);
-                if (result.ok) {
-                  setFluxToast('Boost applied to next combine!');
-                  playSound('buttonClick');
-                } else {
-                  setFluxToast(result.error ?? 'Cannot boost combine');
-                }
+                gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } }).then(result => {
+                  if (result.ok) {
+                    setFluxToast('Boost applied to next combine!');
+                    playSound('buttonClick');
+                  } else {
+                    setFluxToast(result.error ?? 'Cannot boost combine');
+                  }
+                });
               }}
               disabled={currentFlux < 3}
               style={{
@@ -891,13 +892,14 @@ export function Forge() {
             </HapticButton>
             <HapticButton
               onClick={() => {
-                const result = applyAction({ kind: 'reroll_pool' }, registry);
-                if (result.ok) {
-                  setFluxToast('Pool will reroll next draft!');
-                  playSound('buttonClick');
-                } else {
-                  setFluxToast(result.error ?? 'Cannot reroll pool');
-                }
+                gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'reroll_pool' } }).then(result => {
+                  if (result.ok) {
+                    setFluxToast('Pool will reroll next draft!');
+                    playSound('buttonClick');
+                  } else {
+                    setFluxToast(result.error ?? 'Cannot reroll pool');
+                  }
+                });
               }}
               disabled={currentFlux < 5}
               style={{
@@ -910,13 +912,14 @@ export function Forge() {
             </HapticButton>
             <HapticButton
               onClick={() => {
-                const result = applyAction({ kind: 'guarantee_rarity' }, registry);
-                if (result.ok) {
-                  setFluxToast('Next draft gem guaranteed Rare!');
-                  playSound('buttonClick');
-                } else {
-                  setFluxToast(result.error ?? 'Cannot guarantee rarity');
-                }
+                gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'guarantee_rarity' } }).then(result => {
+                  if (result.ok) {
+                    setFluxToast('Next draft gem guaranteed Rare!');
+                    playSound('buttonClick');
+                  } else {
+                    setFluxToast(result.error ?? 'Cannot guarantee rarity');
+                  }
+                });
               }}
               disabled={currentFlux < 4}
               style={{

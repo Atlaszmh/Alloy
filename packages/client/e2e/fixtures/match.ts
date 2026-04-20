@@ -282,6 +282,8 @@ interface RunViaStoreOpts {
   consecutiveWins?: number;
   seed?: number;
   aiTier?: 1 | 2 | 3 | 4 | 5;
+  /** Seed the run's flux to this value after match init (forge phase only). */
+  seedFlux?: number;
 }
 
 /**
@@ -298,6 +300,7 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
     consecutiveWins = 0,
     seed = 42,
     aiTier = 1,
+    seedFlux,
   } = opts;
 
   // Navigate first so the React tree mounts the gateway + stores.
@@ -305,7 +308,7 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
 
   // Kick off the debug match from inside the page.
   await page.evaluate(
-    ({ round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier }) => {
+    ({ round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux }) => {
       const stores = (window as { __ZUSTAND_STORES__?: Record<string, { getState: () => unknown; setState: (s: unknown) => void }> }).__ZUSTAND_STORES__;
       if (!stores?.matchStore) throw new Error('matchStore not exposed on window');
       const match = stores.matchStore.getState() as { startDebugMatch: (...args: unknown[]) => void };
@@ -333,8 +336,18 @@ export async function startRunViaStore(page: Page, opts: RunViaStoreOpts = {}): 
           hasSelectedBaseItemsMap: { [matchId]: true },
         });
       }
+      // Seed flux directly into the engine's runState so the ForgeHeader
+      // flux display (data-run-flux) reflects the injected value.
+      if (seedFlux !== undefined && stores.matchStore) {
+        const ms = stores.matchStore.getState() as { state: { runState?: { flux: number } } | null };
+        if (ms.state?.runState) {
+          ms.state.runState.flux = seedFlux;
+          // Trigger a re-render by calling setState with the same state object reference.
+          (stores.matchStore as { setState: (s: unknown) => void }).setState({ state: { ...ms.state } });
+        }
+      }
     },
-    { round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier },
+    { round, phase, startingLives, goalRound, consecutiveWins, seed, aiTier, seedFlux },
   );
 
   if (phase === 'draft') await waitForPhase(page, 'draft');
