@@ -1,13 +1,14 @@
 import type { AffixTier } from '../types/affix.js';
 import type { CombatLog } from '../types/combat.js';
-import type { OrbInstance } from '../types/orb.js';
+import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import { ARCHETYPE_TAGS } from '../pool/archetype-validator.js';
 import type { ArchetypeId } from '../pool/archetype-validator.js';
 
 /**
- * Tier value multipliers for scoring orbs.
- * Higher tier orbs are disproportionately more valuable.
+ * Tier value multipliers for scoring gems.
+ * Higher tier gems are disproportionately more valuable.
+ * Tier 5 combined gems bucket to T4 for affix-tier lookups (AffixTier max is 4).
  */
 const TIER_VALUES: Record<AffixTier, number> = {
   1: 1,
@@ -17,38 +18,47 @@ const TIER_VALUES: Record<AffixTier, number> = {
 };
 
 /**
- * Score an individual orb based on its tier and the average value range of the affix.
+ * Clamp a gem tier to the AffixTier range (1–4).
+ * Tier 5 combined gems use T4 affix effects.
  */
-export function orbValueScore(orb: OrbInstance, registry: DataRegistry): number {
-  const affix = registry.findAffix(orb.affixId);
-  if (!affix) return 0;
-
-  const tierData = affix.tiers[orb.tier];
-  const baseValue = (tierData.valueRange[0] + tierData.valueRange[1]) / 2;
-  return TIER_VALUES[orb.tier] * baseValue;
+function clampTier(tier: number): AffixTier {
+  return Math.min(tier, 4) as AffixTier;
 }
 
 /**
- * Check whether an orb's affix tags overlap with a given archetype's tags.
+ * Score an individual gem based on its tier and the average value range of the affix.
+ */
+export function orbValueScore(gem: GemInstance, registry: DataRegistry): number {
+  const affix = registry.findAffix(gem.affixId);
+  if (!affix) return 0;
+
+  const t = clampTier(gem.tier);
+  const tierData = affix.tiers[t];
+  const baseValue = (tierData.valueRange[0] + tierData.valueRange[1]) / 2;
+  return TIER_VALUES[t] * baseValue;
+}
+
+/**
+ * Check whether a gem's affix tags overlap with a given archetype's tags.
  */
 export function archetypeMatch(
-  orb: OrbInstance,
+  gem: GemInstance,
   archetype: ArchetypeId,
   registry: DataRegistry,
 ): boolean {
-  const affix = registry.findAffix(orb.affixId);
+  const affix = registry.findAffix(gem.affixId);
   if (!affix) return false;
 
   const archetypeTags = ARCHETYPE_TAGS[archetype];
-  const orbTags = new Set(affix.tags);
-  return archetypeTags.some((t) => orbTags.has(t));
+  const gemTags = new Set(affix.tags);
+  return archetypeTags.some((t) => gemTags.has(t));
 }
 
 /**
  * Measure how focused a stockpile is on a single archetype.
- * Returns a value from 0 to 1 where 1 means all orbs match one archetype.
+ * Returns a value from 0 to 1 where 1 means all gems match one archetype.
  */
-export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry): number {
+export function buildCoherence(stockpile: GemInstance[], registry: DataRegistry): number {
   if (stockpile.length === 0) return 0;
 
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
@@ -56,8 +66,8 @@ export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry)
 
   for (const arch of archetypes) {
     let matchCount = 0;
-    for (const orb of stockpile) {
-      if (archetypeMatch(orb, arch, registry)) {
+    for (const gem of stockpile) {
+      if (archetypeMatch(gem, arch, registry)) {
         matchCount++;
       }
     }
@@ -72,20 +82,22 @@ export function buildCoherence(stockpile: OrbInstance[], registry: DataRegistry)
 /**
  * Count how many valid pairwise combinations could be formed from the stockpile.
  */
-export function combinationPotential(stockpile: OrbInstance[], registry: DataRegistry): number {
+export function combinationPotential(stockpile: GemInstance[], registry: DataRegistry): number {
   let score = 0;
   for (let i = 0; i < stockpile.length; i++) {
     for (let j = i + 1; j < stockpile.length; j++) {
+      const ti = clampTier(stockpile[i].tier);
+      const tj = clampTier(stockpile[j].tier);
       const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
       if (combo) {
         // Recipe match: highest value
-        score += TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier];
+        score += TIER_VALUES[ti] + TIER_VALUES[tj];
       } else if (stockpile[i].affixId === stockpile[j].affixId) {
         // Same affix generic upgrade: medium value
-        score += (TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier]) * 0.6;
+        score += (TIER_VALUES[ti] + TIER_VALUES[tj]) * 0.6;
       } else {
         // Cross-affix generic: low but nonzero value
-        score += (TIER_VALUES[stockpile[i].tier] + TIER_VALUES[stockpile[j].tier]) * 0.2;
+        score += (TIER_VALUES[ti] + TIER_VALUES[tj]) * 0.2;
       }
     }
   }
@@ -93,69 +105,71 @@ export function combinationPotential(stockpile: OrbInstance[], registry: DataReg
 }
 
 /**
- * Compute the denial value of taking a particular orb: how much does it
- * hurt the opponent? Checks whether the orb enables combinations in
+ * Compute the denial value of taking a particular gem: how much does it
+ * hurt the opponent? Checks whether the gem enables combinations in
  * the opponent's stockpile.
  */
 export function denialValue(
-  orb: OrbInstance,
-  opponentStockpile: OrbInstance[],
+  gem: GemInstance,
+  opponentStockpile: GemInstance[],
   registry: DataRegistry,
 ): number {
   let value = 0;
-  // Check if this orb forms a combination with any of the opponent's orbs
-  for (const oppOrb of opponentStockpile) {
-    const combo = registry.getCombination(orb.affixId, oppOrb.affixId);
+  const t = clampTier(gem.tier);
+  // Check if this gem forms a combination with any of the opponent's gems
+  for (const oppGem of opponentStockpile) {
+    const combo = registry.getCombination(gem.affixId, oppGem.affixId);
     if (combo) {
-      value += TIER_VALUES[orb.tier] * 3; // Combinations are high-value
+      value += TIER_VALUES[t] * 3; // Combinations are high-value
     }
   }
   // Check if opponent has matching affixes (denying upgrade potential)
-  for (const oppOrb of opponentStockpile) {
-    if (oppOrb.affixId === orb.affixId) {
-      value += TIER_VALUES[orb.tier] * 2;
+  for (const oppGem of opponentStockpile) {
+    if (oppGem.affixId === gem.affixId) {
+      value += TIER_VALUES[t] * 2;
     }
   }
-  // Also add base orb value as denial (denying a good orb is worth something)
-  value += orbValueScore(orb, registry) * 0.3;
+  // Also add base gem value as denial (denying a good gem is worth something)
+  value += orbValueScore(gem, registry) * 0.3;
   return value;
 }
 
 /**
- * Score an orb's synergy potential with an existing stockpile.
+ * Score a gem's synergy potential with an existing stockpile.
  * Checks how many archetypes it reinforces and how many combinations it enables.
  */
 export function synergyPotential(
-  orb: OrbInstance,
-  myStockpile: OrbInstance[],
+  gem: GemInstance,
+  myStockpile: GemInstance[],
   registry: DataRegistry,
 ): number {
   let score = 0;
+  const t = clampTier(gem.tier);
 
   // Check combination potential with existing stockpile
   for (const existing of myStockpile) {
-    const combo = registry.getCombination(orb.affixId, existing.affixId);
+    const combo = registry.getCombination(gem.affixId, existing.affixId);
     if (combo) {
-      score += TIER_VALUES[orb.tier] * 4; // Combinations are very valuable
+      score += TIER_VALUES[t] * 4; // Combinations are very valuable
     }
   }
 
   // Check upgrade potential (same affix)
   for (const existing of myStockpile) {
-    if (existing.affixId === orb.affixId && orb.tier < 4) {
-      score += TIER_VALUES[orb.tier] * 2;
+    if (existing.affixId === gem.affixId && gem.tier < 4) {
+      score += TIER_VALUES[t] * 2;
     }
   }
 
   // Check archetype coherence bonus
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
-  const orbAffix = registry.findAffix(orb.affixId);
-  if (orbAffix) {
-    const orbTags = new Set(orbAffix.tags);
+  const gemAffix = registry.findAffix(gem.affixId);
+  if (gemAffix) {
+    const gemTags = new Set(gemAffix.tags);
     for (const arch of archetypes) {
       const archTags = ARCHETYPE_TAGS[arch];
-      if (!archTags.some((t) => orbTags.has(t))) continue;
-      // Count how many existing orbs match this archetype
+      if (!archTags.some((tag) => gemTags.has(tag))) continue;
+      // Count how many existing gems match this archetype
       let matchCount = 0;
       for (const existing of myStockpile) {
         if (archetypeMatch(existing, arch, registry)) matchCount++;
@@ -168,33 +182,34 @@ export function synergyPotential(
 }
 
 /**
- * Compute a counter-value score for an orb based on damage patterns
- * observed in a combat log. Higher score means the orb better counters
+ * Compute a counter-value score for a gem based on damage patterns
+ * observed in a combat log. Higher score means the gem better counters
  * the opponent's damage.
  */
 export function counterValue(
-  orb: OrbInstance,
+  gem: GemInstance,
   damageProfile: DamageProfile,
   registry: DataRegistry,
 ): number {
-  const affix = registry.findAffix(orb.affixId);
+  const affix = registry.findAffix(gem.affixId);
   if (!affix) return 0;
 
   let score = 0;
+  const t = clampTier(gem.tier);
   const tags = new Set(affix.tags);
 
   // If opponent deals lots of physical damage, defensive/physical tags help
   if (damageProfile.physical > 0.3) {
     if (tags.has('defensive') || tags.has('block') || tags.has('physical')) {
-      score += damageProfile.physical * TIER_VALUES[orb.tier] * 5;
+      score += damageProfile.physical * TIER_VALUES[t] * 5;
     }
   }
 
   // Check elemental damage patterns
   for (const [element, fraction] of Object.entries(damageProfile.elemental)) {
     if (fraction > 0.1 && tags.has(element)) {
-      // Orbs with the same element tag on armor give resistance
-      score += fraction * TIER_VALUES[orb.tier] * 5;
+      // Gems with the same element tag on armor give resistance
+      score += fraction * TIER_VALUES[t] * 5;
     }
   }
 
@@ -202,7 +217,7 @@ export function counterValue(
   if (tags.has('evasion') || tags.has('barrier')) {
     const totalDamage = damageProfile.physical +
       Object.values(damageProfile.elemental).reduce((s, v) => s + v, 0);
-    score += totalDamage * TIER_VALUES[orb.tier] * 2;
+    score += totalDamage * TIER_VALUES[t] * 2;
   }
 
   return score;
@@ -262,10 +277,10 @@ export function extractDamageProfile(
 }
 
 /**
- * Find the best archetype for a stockpile (most matching orbs).
+ * Find the best archetype for a stockpile (most matching gems).
  */
 export function bestArchetype(
-  stockpile: OrbInstance[],
+  stockpile: GemInstance[],
   registry: DataRegistry,
 ): ArchetypeId {
   const archetypes = Object.keys(ARCHETYPE_TAGS) as ArchetypeId[];
@@ -274,8 +289,8 @@ export function bestArchetype(
 
   for (const arch of archetypes) {
     let count = 0;
-    for (const orb of stockpile) {
-      if (archetypeMatch(orb, arch, registry)) count++;
+    for (const gem of stockpile) {
+      if (archetypeMatch(gem, arch, registry)) count++;
     }
     if (count > bestCount) {
       bestCount = count;

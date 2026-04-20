@@ -73,7 +73,7 @@ export class Tier1ForgeStrategy implements ForgeStrategy {
       [emptySlots[i], emptySlots[j]] = [emptySlots[j], emptySlots[i]];
     }
 
-    // Assign orbs to random empty slots up to flux budget
+    // Socket gems into random empty slots up to flux budget
     const assignCost = balance.fluxCosts.assignOrb;
     let orbIdx = 0;
     let slotIdx = 0;
@@ -81,8 +81,8 @@ export class Tier1ForgeStrategy implements ForgeStrategy {
     while (orbIdx < stockpile.length && slotIdx < emptySlots.length && flux >= assignCost) {
       const slot = emptySlots[slotIdx];
       actions.push({
-        kind: 'assign_orb',
-        orbUid: stockpile[orbIdx].uid,
+        kind: 'socket_gem',
+        gemUid: stockpile[orbIdx].uid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
@@ -165,13 +165,13 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
 
           actions.push({
             kind: 'combine',
-            orbUid1: stockpile[i].uid,
-            orbUid2: stockpile[j].uid,
+            gemUid1: stockpile[i].uid,
+            gemUid2: stockpile[j].uid,
           });
           const compoundUid = `compound_${stockpile[i].uid}_${stockpile[j].uid}`;
           actions.push({
-            kind: 'assign_orb',
-            orbUid: compoundUid,
+            kind: 'socket_gem',
+            gemUid: compoundUid,
             target: slot.target,
             slotIndex: slot.slotIndex,
           });
@@ -180,7 +180,7 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
           occupiedSlots[slot.target][slot.slotIndex] = true;
           occupiedSlots[slot.target][slot.slotIndex + 1] = true;
           flux -= combineCost + assignCostForCombine;
-          break; // orb i is used, move to next i
+          break; // gem i is used, move to next i
         }
       }
     }
@@ -191,14 +191,14 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
     flux -= genericResult.fluxSpent;
     pushGenericResults(stockpile, genericResult.actions);
 
-    // Assign remaining orbs to empty slots
+    // Socket remaining gems into empty slots
     const assignCost = balance.fluxCosts.assignOrb;
-    for (const orb of stockpile) {
-      if (usedOrbUids.has(orb.uid)) continue;
+    for (const gem of stockpile) {
+      if (usedOrbUids.has(gem.uid)) continue;
       if (flux < assignCost) break;
 
-      // Prefer placing on weapon for offensive orbs, armor for defensive
-      const affix = registry.findAffix(orb.affixId);
+      // Prefer placing on weapon for offensive gems, armor for defensive
+      const affix = registry.findAffix(gem.affixId);
       const preferredTarget: 'weapon' | 'armor' =
         affix && (affix.category === 'offensive' || affix.category === 'trigger')
           ? 'weapon'
@@ -208,12 +208,12 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
       if (!slot) continue;
 
       actions.push({
-        kind: 'assign_orb',
-        orbUid: orb.uid,
+        kind: 'socket_gem',
+        gemUid: gem.uid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(orb.uid);
+      usedOrbUids.add(gem.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= assignCost;
     }
@@ -349,8 +349,8 @@ function tryGenericCombines(
     if (keepOrb.tier >= 4) { left++; continue; }
     actions.push({
       kind: 'combine',
-      orbUid1: keepOrb.uid,
-      orbUid2: sacrificeOrb.uid,
+      gemUid1: keepOrb.uid,
+      gemUid2: sacrificeOrb.uid,
       keepGemUid: keepOrb.uid,
     });
     usedOrbUids.add(keepOrb.uid);
@@ -363,7 +363,7 @@ function tryGenericCombines(
 }
 
 /**
- * Push synthetic upgraded orbs into the stockpile so downstream assignment
+ * Push synthetic upgraded gems into the stockpile so downstream assignment
  * can see the results of generic combines.
  */
 function pushGenericResults(
@@ -372,12 +372,18 @@ function pushGenericResults(
 ): void {
   for (const action of genericActions) {
     if (action.kind === 'combine' && action.keepGemUid) {
-      const keptOrb = stockpile.find(o => o.uid === action.keepGemUid);
-      if (!keptOrb) continue;
+      const keptGem = stockpile.find(g => g.uid === action.keepGemUid);
+      if (!keptGem) continue;
+      const newTier = Math.min(keptGem.tier + 1, 5) as 1 | 2 | 3 | 4 | 5;
       stockpile.push({
-        uid: `generic_${action.orbUid1}_${action.orbUid2}`,
-        affixId: keptOrb.affixId,
-        tier: Math.min(keptOrb.tier + 1, 4) as 1 | 2 | 3 | 4,
+        uid: `generic_${action.gemUid1}_${action.gemUid2}`,
+        affixId: keptGem.affixId,
+        tier: newTier,
+        rarity: keptGem.rarity ?? 'common',
+        recipeDepth: (keptGem.recipeDepth ?? 0) + 1,
+        combinable: newTier < 5,
+        // keptGem.tags may be absent on test stubs built before the rarity/tags fields were required
+        tags: keptGem.tags ? [...keptGem.tags] : [keptGem.affixId],
       });
     }
   }
@@ -442,13 +448,13 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
 
         actions.push({
           kind: 'combine',
-          orbUid1: sortedStockpile[i].uid,
-          orbUid2: sortedStockpile[j].uid,
+          gemUid1: sortedStockpile[i].uid,
+          gemUid2: sortedStockpile[j].uid,
         });
         const compoundUid = `compound_${sortedStockpile[i].uid}_${sortedStockpile[j].uid}`;
         actions.push({
-          kind: 'assign_orb',
-          orbUid: compoundUid,
+          kind: 'socket_gem',
+          gemUid: compoundUid,
           target: slot.target,
           slotIndex: slot.slotIndex,
         });
@@ -457,11 +463,11 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
         occupiedSlots[slot.target][slot.slotIndex] = true;
         occupiedSlots[slot.target][slot.slotIndex + 1] = true;
         flux -= combineCost + assignCostForCombine;
-        break; // i orb is consumed, move to next i
+        break; // gem i is consumed, move to next i
       }
     }
 
-    // Try upgrades (same affix, different orbs)
+    // Try upgrades (same affix, different gems) — upgrade_tier is retired; use combine with keepGemUid
     const upgradeCost = balance.fluxCosts.upgradeTier;
     for (let i = 0; i < sortedStockpile.length && flux >= upgradeCost; i++) {
       if (usedOrbUids.has(sortedStockpile[i].uid)) continue;
@@ -480,34 +486,34 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
         const slot = findEmptySlot(occupiedSlots, preferredTarget, rng);
         if (!slot) continue;
 
+        // Emit a generic combine (keepGemUid = higher-tier gem); socket_gem follows in pushGenericResults
         actions.push({
-          kind: 'upgrade_tier',
-          orbUid1: sortedStockpile[i].uid,
-          orbUid2: sortedStockpile[j].uid,
-          target: slot.target,
-          slotIndex: slot.slotIndex,
+          kind: 'combine',
+          gemUid1: sortedStockpile[i].uid,
+          gemUid2: sortedStockpile[j].uid,
+          keepGemUid: sortedStockpile[i].uid,
         });
         usedOrbUids.add(sortedStockpile[i].uid);
         usedOrbUids.add(sortedStockpile[j].uid);
         occupiedSlots[slot.target][slot.slotIndex] = true;
         flux -= upgradeCost;
-        break; // i orb is consumed, move to next i
+        break; // gem i is consumed, move to next i
       }
     }
 
-    // Try generic combines on leftover orbs
+    // Try generic combines on leftover gems
     const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
     actions.push(...genericResult.actions);
     flux -= genericResult.fluxSpent;
     pushGenericResults(stockpile, genericResult.actions);
 
-    // Assign remaining orbs with balanced weapon/armor split
+    // Socket remaining gems with balanced weapon/armor split
     const assignCost = balance.fluxCosts.assignOrb;
-    for (const orb of sortedStockpile) {
-      if (usedOrbUids.has(orb.uid)) continue;
+    for (const gem of sortedStockpile) {
+      if (usedOrbUids.has(gem.uid)) continue;
       if (flux < assignCost) break;
 
-      const affix = registry.findAffix(orb.affixId);
+      const affix = registry.findAffix(gem.affixId);
       const preferredTarget: 'weapon' | 'armor' =
         affix && (affix.category === 'offensive' || affix.category === 'trigger')
           ? 'weapon'
@@ -517,12 +523,12 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
       if (!slot) continue;
 
       actions.push({
-        kind: 'assign_orb',
-        orbUid: orb.uid,
+        kind: 'socket_gem',
+        gemUid: gem.uid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(orb.uid);
+      usedOrbUids.add(gem.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= assignCost;
     }
@@ -603,13 +609,13 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
 
       actions.push({
         kind: 'combine',
-        orbUid1: stockpile[cand.i].uid,
-        orbUid2: stockpile[cand.j].uid,
+        gemUid1: stockpile[cand.i].uid,
+        gemUid2: stockpile[cand.j].uid,
       });
       const compoundUid = `compound_${stockpile[cand.i].uid}_${stockpile[cand.j].uid}`;
       actions.push({
-        kind: 'assign_orb',
-        orbUid: compoundUid,
+        kind: 'socket_gem',
+        gemUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
@@ -620,7 +626,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       flux -= combineCost + assignCostForCombine;
     }
 
-    // Try upgrades
+    // Try upgrades (same affix) — upgrade_tier is retired; use combine with keepGemUid
     const upgradeCost = balance.fluxCosts.upgradeTier;
     const upgradeCandidates: { i: number; j: number; score: number }[] = [];
     for (let i = 0; i < stockpile.length; i++) {
@@ -648,12 +654,12 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       const slot = findEmptySlot(occupiedSlots, preferredTarget, rng);
       if (!slot) continue;
 
+      // Generic upgrade: emit combine with keepGemUid (the higher-tier input gem is kept)
       actions.push({
-        kind: 'upgrade_tier',
-        orbUid1: stockpile[cand.i].uid,
-        orbUid2: stockpile[cand.j].uid,
-        target: slot.target,
-        slotIndex: slot.slotIndex,
+        kind: 'combine',
+        gemUid1: stockpile[cand.i].uid,
+        gemUid2: stockpile[cand.j].uid,
+        keepGemUid: stockpile[cand.i].uid,
       });
       usedOrbUids.add(stockpile[cand.i].uid);
       usedOrbUids.add(stockpile[cand.j].uid);
@@ -661,22 +667,22 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       flux -= upgradeCost;
     }
 
-    // Try generic combines on leftover orbs
+    // Try generic combines on leftover gems
     const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
     actions.push(...genericResult.actions);
     flux -= genericResult.fluxSpent;
     pushGenericResults(stockpile, genericResult.actions);
 
-    // Assign remaining orbs sorted by value
+    // Socket remaining gems sorted by value
     const assignCost = balance.fluxCosts.assignOrb;
     const remaining = stockpile
       .filter((o) => !usedOrbUids.has(o.uid))
       .sort((a, b) => orbValueScore(b, registry) - orbValueScore(a, registry));
 
-    for (const orb of remaining) {
+    for (const gem of remaining) {
       if (flux < assignCost) break;
 
-      const affix = registry.findAffix(orb.affixId);
+      const affix = registry.findAffix(gem.affixId);
       const preferredTarget: 'weapon' | 'armor' =
         affix && (affix.category === 'offensive' || affix.category === 'trigger')
           ? 'weapon'
@@ -686,12 +692,12 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       if (!slot) continue;
 
       actions.push({
-        kind: 'assign_orb',
-        orbUid: orb.uid,
+        kind: 'socket_gem',
+        gemUid: gem.uid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(orb.uid);
+      usedOrbUids.add(gem.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= assignCost;
     }
@@ -788,13 +794,13 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
 
       actions.push({
         kind: 'combine',
-        orbUid1: stockpile[cand.idx1].uid,
-        orbUid2: stockpile[cand.idx2].uid,
+        gemUid1: stockpile[cand.idx1].uid,
+        gemUid2: stockpile[cand.idx2].uid,
       });
       const compoundUid = `compound_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`;
       actions.push({
-        kind: 'assign_orb',
-        orbUid: compoundUid,
+        kind: 'socket_gem',
+        gemUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
@@ -805,7 +811,7 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       flux -= combineCost + assignCostForCombine;
     }
 
-    // Try upgrades (highest value pairs first)
+    // Try upgrades (highest value pairs first) — upgrade_tier is retired; use combine with keepGemUid
     const upgradeCost = balance.fluxCosts.upgradeTier;
     const upgradeCandidates: { i: number; j: number; score: number }[] = [];
     for (let i = 0; i < stockpile.length; i++) {
@@ -815,8 +821,8 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
         if (usedOrbUids.has(stockpile[j].uid)) continue;
         if (stockpile[j].tier >= 4) continue;
         if (stockpile[i].affixId !== stockpile[j].affixId) continue;
-        // Upgraded tier is higher, so the score should reflect the upgrade value
-        const upgradedScore = orbValueScore({ ...stockpile[i], tier: Math.min(stockpile[i].tier + 1, 4) as 1 | 2 | 3 | 4 }, registry);
+        // Score reflects the promoted tier value
+        const upgradedScore = orbValueScore({ ...stockpile[i], tier: Math.min(stockpile[i].tier + 1, 5) as 1 | 2 | 3 | 4 | 5 }, registry);
         upgradeCandidates.push({ i, j, score: upgradedScore });
       }
     }
@@ -834,12 +840,12 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       const slot = findEmptySlot(occupiedSlots, preferredTarget, rng);
       if (!slot) continue;
 
+      // Generic upgrade: emit combine with keepGemUid
       actions.push({
-        kind: 'upgrade_tier',
-        orbUid1: stockpile[cand.i].uid,
-        orbUid2: stockpile[cand.j].uid,
-        target: slot.target,
-        slotIndex: slot.slotIndex,
+        kind: 'combine',
+        gemUid1: stockpile[cand.i].uid,
+        gemUid2: stockpile[cand.j].uid,
+        keepGemUid: stockpile[cand.i].uid,
       });
       usedOrbUids.add(stockpile[cand.i].uid);
       usedOrbUids.add(stockpile[cand.j].uid);
@@ -847,22 +853,22 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       flux -= upgradeCost;
     }
 
-    // Try generic combines on leftover orbs
+    // Try generic combines on leftover gems
     const genericResult = tryGenericCombines(stockpile, usedOrbUids, flux, balance, registry);
     actions.push(...genericResult.actions);
     flux -= genericResult.fluxSpent;
     pushGenericResults(stockpile, genericResult.actions);
 
-    // Assign remaining orbs sorted by value, placing highest value first
+    // Socket remaining gems sorted by value, placing highest value first
     const assignCost = balance.fluxCosts.assignOrb;
     const remaining = stockpile
       .filter((o) => !usedOrbUids.has(o.uid))
       .sort((a, b) => orbValueScore(b, registry) - orbValueScore(a, registry));
 
-    for (const orb of remaining) {
+    for (const gem of remaining) {
       if (flux < assignCost) break;
 
-      const affix = registry.findAffix(orb.affixId);
+      const affix = registry.findAffix(gem.affixId);
       const preferredTarget: 'weapon' | 'armor' =
         affix && (affix.category === 'offensive' || affix.category === 'trigger')
           ? 'weapon'
@@ -872,12 +878,12 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       if (!slot) continue;
 
       actions.push({
-        kind: 'assign_orb',
-        orbUid: orb.uid,
+        kind: 'socket_gem',
+        gemUid: gem.uid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(orb.uid);
+      usedOrbUids.add(gem.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= assignCost;
     }
