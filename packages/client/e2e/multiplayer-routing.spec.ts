@@ -18,20 +18,19 @@ test.describe('Multiplayer Routing', () => {
     // Click any tier
     await page.getByText(/Tier 1/).first().click();
 
-    // URL should have ai- prefix
-    await expect(page).toHaveURL(/\/match\/ai-[a-z0-9]+\/draft/);
+    // URL should be /match/ai-<hex> (no phase suffix — PhaseRouter uses a single URL)
+    await expect(page).toHaveURL(/\/match\/ai-[a-z0-9]+$/, { timeout: 10_000 });
 
-    // Draft page should load (heading should appear)
-    await expect(page.getByRole('heading', { name: 'Opponent' })).toBeVisible({ timeout: 10_000 });
+    // Draft phase should render (PhaseRouter switches phase components internally)
+    await waitForPhase(page, 'draft');
   });
 
-  test('direct navigation to /match/ai-xxx/draft without state redirects to /queue', async ({ page }) => {
-    // Navigate directly to a draft URL without having started a match
-    await page.goto('/match/ai-fake123/draft');
-
-    // Should redirect to queue since there's no match state
-    await expect(page).toHaveURL(/\/queue/, { timeout: 10_000 });
-  });
+  // Removed: /match/:code/:phase deep-link paths no longer exist.
+  // MatchRedirect silently strips sub-paths to /match/:code and PhaseRouter
+  // handles any phase from that single URL. The "can't deep-link without state"
+  // check no longer applies — navigating to /match/ai-fake123/draft redirects
+  // to /match/ai-fake123 and PhaseRouter shows a loading spinner, not /queue.
+  // test('direct navigation to /match/ai-xxx/draft without state redirects to /queue')
 
   test('PvP buttons hidden when offline', async ({ page }) => {
     await page.goto('/');
@@ -49,36 +48,29 @@ test.describe('Multiplayer Routing', () => {
   test('full AI match flow starts correctly: menu → matchmaking → draft', async ({ page }) => {
     await startMatch(page);
 
-    // Should be on draft page
-    await expect(page).toHaveURL(/\/match\/ai-.*\/draft/);
+    // Should be on the single match URL (no phase suffix)
+    await expect(page).toHaveURL(/\/match\/ai-[a-z0-9]+$/);
 
-    // Wait for draft UI to render (opponent heading should be visible)
-    await expect(page.getByRole('heading', { name: 'Opponent' })).toBeVisible({ timeout: 10_000 });
+    // Draft phase should be visible (PhaseRouter switches components internally)
+    await waitForPhase(page, 'draft');
 
     // Pool should be visible (grid of gems)
     await expect(page.locator('[data-gem]').first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('match entry page redirects AI codes to draft', async ({ page }) => {
-    // Start a real match first so state exists
-    await startMatch(page);
-    const draftUrl = page.url();
-
-    // Extract the match code from the URL
-    const match = draftUrl.match(/\/match\/(ai-[a-z0-9]+)\/draft/);
-    expect(match).toBeTruthy();
-    const code = match![1];
-
-    // Navigate to the match entry URL (without /draft)
-    await page.goto(`/match/${code}`);
-
-    // Should redirect to draft
-    await expect(page).toHaveURL(new RegExp(`/match/${code}/draft`), { timeout: 10_000 });
-  });
+  // Removed: "match entry page redirects AI codes to draft"
+  // The old test navigated to /match/:code (without /draft) and expected a redirect
+  // to /match/:code/draft. That sub-path no longer exists — PhaseRouter serves all
+  // phases from /match/:code directly, so there is no redirect to assert.
+  // Additionally, the LocalGateway is in-memory: navigating away and back loses all
+  // match state, making a "re-navigate and see draft" check impossible without a
+  // persistent gateway. The essential intent (AI match lands on draft) is covered
+  // by "full AI match flow starts correctly" above.
 
   test('navigating back from draft returns to queue', async ({ page }) => {
     await startMatch(page);
-    await expect(page).toHaveURL(/\/match\/ai-.*\/draft/);
+    // Confirm we are on the single match URL (PhaseRouter, no phase suffix)
+    await expect(page).toHaveURL(/\/match\/ai-[a-z0-9]+$/);
 
     // Navigate back to queue
     await page.goto('/queue');
