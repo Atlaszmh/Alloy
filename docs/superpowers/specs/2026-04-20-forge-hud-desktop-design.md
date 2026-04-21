@@ -81,15 +81,21 @@ Ambient backdrop (anvil silhouette + embers) sits behind all panels, dimmed enou
 
 ### Responsive Strategy
 
-Two aspect-ratio thresholds, applied in `AppShell` / `.app-frame`:
+Two CSS thresholds, one JS signal, applied in `AppShell` / `.app-frame`:
 
-| Viewport aspect | Frame treatment | Layout mode | Notes |
-|-----------------|-----------------|-------------|-------|
-| `< 9/16` (portrait-ish) | Full-bleed frame, no letterbox | Mobile portrait (existing) | Unchanged |
-| `9/16` ≤ aspect `< 4/3` | Letterboxed 9:16 | Mobile portrait (existing) | Unchanged |
-| `≥ 4/3` (desktop landscape) | Full-bleed frame, no letterbox | **Desktop HUD (new)** | This spec |
+| Viewport aspect | Frame treatment (CSS) | Layout mode (JS signal) | Notes |
+|-----------------|----------------------|-------------------------|-------|
+| `< 9/16` (portrait-ish) | Full-bleed, no letterbox | `portrait` | Existing mobile layout, unchanged |
+| `9/16` ≤ aspect `< 3/2` | Letterboxed 9:16 | `portrait` | Existing letterbox + mobile layout, unchanged |
+| `≥ 3/2` (desktop landscape) | Full-bleed, no letterbox | `desktop` | **New** — this spec |
 
-The desktop HUD layout is implemented as a conditional branch inside `Forge.tsx`, selected by a `useFrameMode()` hook that reads the current aspect-ratio bucket (derived from the existing `--frame-h` ResizeObserver infrastructure — extended to also publish frame width and a `frame-mode: 'portrait' | 'desktop'` signal on the root element). Mobile-portrait path keeps today's vertical-stack layout.
+The two CSS thresholds are independent knobs: the 9:16 letterbox media query already exists and keeps doing what it does today. The new `(min-aspect-ratio: 3/2)` rule releases the letterbox for desktop. The JS signal (`frame-mode: 'portrait' | 'desktop'`) is binary and drives the component-level branch.
+
+**Threshold rationale:** `3/2` (1.5) was chosen over `4/3` (1.333) so iPad landscape (1024×768 = exactly 4:3) stays on portrait. The HUD layout needs ≥1100px horizontal to fit comfortably and tablets don't hit that even in landscape.
+
+The desktop HUD layout is implemented as a conditional branch inside `Forge.tsx`, selected by a `useFrameMode()` hook. The hook reads the signal that AppShell publishes: today's ResizeObserver already writes `--frame-h` on `:root`; it will be extended to also write `--frame-w` and `data-frame-mode="portrait" | "desktop"` based on the width/height ratio.
+
+**Sizing token convention:** HUD layout tokens (rail widths, stockpile height, etc.) are defined in terms of `--frame-h`, not `--frame-w`. This is intentional and aspect-locked — scaling everything off one reference keeps proportions consistent, and desktop HUDs at any width look balanced relative to their height. Width-proportional sizing would make ultrawide monitors produce unreasonably wide rails.
 
 ### Component Changes
 
@@ -107,8 +113,8 @@ New components (all under `packages/client/src/components/forge-desktop/`):
 Touched existing components (light prop additions only, no logic changes):
 
 - `Forge.tsx` — reads frame mode, branches to desktop vs portrait tree. Stockpile size computation moves into `StockpileStrip`.
-- `ItemSocketView.tsx` — exports its inner socket grid as a `<SocketGrid>` subcomponent so the desktop `GearWorkspace` can consume the grid without the card chrome. Existing behavior preserved for portrait.
-- `CombineWorkbench.tsx` — accepts an optional `variant: 'portrait' | 'desktop-dock'` prop to adjust padding/spacing. Logic unchanged.
+- `ItemSocketView.tsx` — exports its inner socket grid as a `<SocketGrid>` subcomponent so the desktop `GearWorkspace` can consume the grid without the card chrome. The existing ResizeObserver logic that computes the local `--gem-size` for socket fit (added 2026-04-20) moves into `<SocketGrid>` so both the portrait `ItemSocketView` and the desktop `GearWorkspace` get adaptive sockets without duplicating the observer. Existing portrait behavior preserved.
+- `CombineWorkbench.tsx` — accepts an optional `layout: 'portrait' | 'desktop-dock'` prop to adjust padding/spacing. Prop name deliberately avoids `variant` because `HapticButton` inside already owns a `variant` prop for its color scheme and overloading terms gets confusing. Logic unchanged.
 - `AppShell` — extends the ResizeObserver to publish `data-frame-mode` on `:root`. Media queries in `index.css` release the letterbox at `(min-aspect-ratio: 4/3)`.
 
 ### Design Tokens
@@ -139,15 +145,15 @@ Unchanged. The desktop tree consumes the same selectors from `forgeStore` and `m
 
 - Unit tests: the new layout components are pure-composition — snapshot tests are low value; skip. Existing unit tests for `ItemSocketView`, `CombineWorkbench`, `ForgeGemTray`, and the stores cover logic already.
 - Responsive harness: add two desktop-HUD specs to `packages/client/e2e/responsive/specs/` — `forge-desktop-equip.spec.ts` and `forge-desktop-combine.spec.ts`. Both run the full probe matrix across the 13-viewport set. The existing portrait specs keep running for viewports below the 4:3 aspect threshold.
-- New probe (cheap to add): a `forge-desktop-all-visible` probe that asserts both socket grids, both affix lists, the combine workbench, the flux meter, and the stockpile first row are all rendered inside the frame without their `scrollHeight > clientHeight`.
+- New probe (cheap to add): a `forge-desktop-all-visible` probe that asserts both socket grids, both affix lists, the combine workbench, the flux meter, and **both stockpile rows** (the whole 2-row grid, including empty-placeholder cells) are rendered inside the frame without `scrollHeight > clientHeight`. Asserting both rows rather than just the first catches regressions where the panel collapses back to one row under tight conditions.
 - E2E smoke: one Playwright test that lands in the desktop HUD, socks a gem into a weapon slot, and verifies the affix list updates — confirms the desktop tree dispatches gateway actions identically to the portrait tree.
 - Visual check (manual): verify empty and fully-socketed states at 1280×800, 1920×1080, 2560×1440, ultrawide 2560×1080.
 
 ## Open Questions
 
 - **Real art swap timing** — this spec ships with CSS placeholder backdrop/silhouettes. When real art is ready, does it land alongside this spec's implementation or as a follow-up commit? Defaulting to follow-up so we can land the layout first and iterate on art separately. Flag for the implementation plan.
-- **Tablet viewports** (1024×768 landscape, iPad landscape) — these cross the `(min-aspect-ratio: 4/3)` threshold (4:3 exactly) and would enter desktop HUD mode. They're not Steam targets but are web-reachable. The HUD should degrade acceptably at 1024px wide; if it doesn't, we raise the aspect threshold to `3:2` to keep iPad landscape on portrait. Decide during implementation based on measured fit.
 - **Gem Library panel** — still accessed via the top-right link. Behavior unchanged in this spec; it opens over the HUD. If it needs its own desktop layout that's a separate spec.
+- **Keyboard / focus flow** — the HUD introduces new tab-order surface area (left rail dials, right rail flux actions, docked combine, stockpile strip). Today's portrait Forge relies on pointer interaction almost exclusively; no explicit tab order spec exists. This spec keeps the focus model simple (natural DOM order top-left → bottom-right, no roving tab index, no arrow-key grid nav), and a full keyboard/controller pass is deferred to a follow-up spec. Flag for the implementation plan: ensure all interactive elements are focusable and hit the natural DOM-order path, nothing more.
 
 ## References
 
