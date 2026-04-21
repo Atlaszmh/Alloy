@@ -109,6 +109,19 @@
   --socket-radius: calc(var(--socket-size) * 0.17);
   --tabbar-h: clamp(40px, calc(var(--frame-h, 812px) * 0.055), 70px);
 
+  /* Desktop HUD layout tokens — aspect-locked to --frame-h so proportions stay
+     consistent across ultrawide/4K monitors. Rationale in 2026-04-20 spec. */
+  --hud-rail-w:        clamp(140px, calc(var(--frame-h, 812px) * 0.20), 220px);
+  --hud-workbench-h:   clamp(100px, calc(var(--frame-h, 812px) * 0.14), 150px);
+  --hud-stockpile-h:   clamp(180px, calc(var(--frame-h, 812px) * 0.26), 280px);
+  --hud-topbar-h:      clamp(44px,  calc(var(--frame-h, 812px) * 0.06), 70px);
+
+  /* Tighter gem gap for HUD stockpile + any other dense grid */
+  --gem-gap-tight:     clamp(4px, calc(var(--frame-h, 812px) * 0.006), 8px);
+
+  /* Socket gem size — smaller clamp than the stockpile --gem-size */
+  --socket-gem-size:   clamp(52px, calc(var(--frame-h, 812px) * 0.085), 88px);
+
   /* Animations */
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
   --animate-slide-up: slide-up 0.2s ease-out;
@@ -311,6 +324,19 @@
     aspect-ratio: auto;
     width: 100%;
     height: 100%;
+  }
+}
+
+/* Desktop landscape (aspect ≥ 3/2) — release the letterbox, fill viewport */
+@media (min-aspect-ratio: 3/2) {
+  .app-frame {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 100%;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    box-shadow: none;
   }
 }
 
