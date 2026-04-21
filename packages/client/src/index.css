@@ -113,7 +113,13 @@
      consistent across ultrawide/4K monitors. Rationale in 2026-04-20 spec. */
   --hud-rail-w:        clamp(140px, calc(var(--frame-h, 812px) * 0.20), 220px);
   --hud-workbench-h:   clamp(100px, calc(var(--frame-h, 812px) * 0.20), 220px);
-  --hud-stockpile-h:   clamp(220px, calc(var(--frame-h, 812px) * 0.34), 368px);
+  /* Stockpile section must fit 2 rows of non-compact GemCards. Each cell is
+     taller than --gem-size because the affix-name label hangs below the gem
+     body (~28px extra). At frame-h=800 cells measure 140×140; 2 rows + gap +
+     header ≈ 330px. At frame-h=1080 cells measure ~170×170; 2 rows + gap +
+     header ≈ 390px. Clamp min raised to 340 (headroom for 1280×800), max
+     kept at 400 to cap on 1440p+ displays. */
+  --hud-stockpile-h:   clamp(340px, calc(var(--frame-h, 812px) * 0.36), 400px);
   --hud-topbar-h:      clamp(44px,  calc(var(--frame-h, 812px) * 0.06), 70px);
 
   /* Tighter gem gap for HUD stockpile + any other dense grid */

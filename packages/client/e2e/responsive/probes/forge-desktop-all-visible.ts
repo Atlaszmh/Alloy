@@ -56,7 +56,54 @@ export const forgeDesktopAllVisible: Probe = async (page, ctx) => {
     // Also verify the full 2-row stockpile grid is laid out (not collapsed to 1 row)
     const stockpile = frame.querySelector<HTMLElement>('[data-screen-section="forge-tray"]');
     const stockpileCells = stockpile?.querySelectorAll('[data-stockpile-cell]').length ?? 0;
-    return { missing, clipped, scrollbars, stockpileCells, frameBottom: frameRect.bottom };
+    const stockRect = stockpile?.getBoundingClientRect() ?? null;
+
+    // Placement contract: weapon panel is left of armor panel, NOT stacked above.
+    // Regression guard — the pre-0.6.1 build accidentally stacked them vertically
+    // and the probe passed because both panels still existed inside forge-gear.
+    const weapon = frame.querySelector<HTMLElement>('[data-item-card="weapon"]');
+    const armor = frame.querySelector<HTMLElement>('[data-item-card="armor"]');
+    let placement: null | { reason: string; w: DOMRect; a: DOMRect } = null;
+    if (weapon && armor) {
+      const w = weapon.getBoundingClientRect();
+      const a = armor.getBoundingClientRect();
+      // Allow up to 2px of subpixel overlap; require armor starts at or past
+      // weapon's right edge.
+      if (a.left + 2 < w.right) {
+        placement = { reason: 'armor not to the right of weapon', w, a };
+      }
+      // And the two panels must share roughly the same top — not stacked.
+      if (Math.abs(w.top - a.top) > 20) {
+        placement = { reason: 'weapon/armor stacked vertically (top delta > 20px)', w, a };
+      }
+    } else if (!weapon || !armor) {
+      placement = {
+        reason: `missing gear panel(s): weapon=${!!weapon}, armor=${!!armor}`,
+        w: weapon?.getBoundingClientRect() ?? new DOMRect(),
+        a: armor?.getBoundingClientRect() ?? new DOMRect(),
+      };
+    }
+
+    // Containment contract: stockpile cells must sit entirely inside the
+    // stockpile section. Regression guard — the pre-0.6.1 build let gem rows
+    // extend below the section bottom and visually collide with the tabbar.
+    const overflowingCells: { bottom: number }[] = [];
+    if (stockpile && stockRect) {
+      stockpile.querySelectorAll<HTMLElement>('[data-stockpile-cell]').forEach((cell) => {
+        const cr = cell.getBoundingClientRect();
+        if (cr.bottom > stockRect.bottom + 2) {
+          overflowingCells.push({ bottom: cr.bottom });
+        }
+      });
+    }
+
+    return {
+      missing, clipped, scrollbars, stockpileCells,
+      frameBottom: frameRect.bottom,
+      placement,
+      stockRect: stockRect ? { bottom: stockRect.bottom } : null,
+      overflowingCells,
+    };
   });
 
   if (!data) return [];
@@ -84,8 +131,23 @@ export const forgeDesktopAllVisible: Probe = async (page, ctx) => {
   if (data.stockpileCells < 10) {
     findings.push({
       screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE, severity: 'fail',
-      detail: `stockpile rendered ${data.stockpileCells} cells; expected 10 (5×2 grid)`,
+      detail: `stockpile rendered ${data.stockpileCells} cells; expected at least 10 (5×2 grid minimum)`,
       measured: data.stockpileCells, expected: 10,
+    });
+  }
+  if (data.placement) {
+    const { reason, w, a } = data.placement;
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE, severity: 'fail',
+      detail: `gear placement: ${reason} (weapon=${w.left.toFixed(0)},${w.top.toFixed(0)} ${w.width.toFixed(0)}×${w.height.toFixed(0)}; armor=${a.left.toFixed(0)},${a.top.toFixed(0)} ${a.width.toFixed(0)}×${a.height.toFixed(0)})`,
+    });
+  }
+  if (data.overflowingCells.length > 0 && data.stockRect) {
+    const maxBottom = Math.max(...data.overflowingCells.map(c => c.bottom));
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE, severity: 'fail',
+      detail: `${data.overflowingCells.length} stockpile cell(s) overflow their section (max bottom=${maxBottom.toFixed(1)}, section bottom=${data.stockRect.bottom.toFixed(1)})`,
+      measured: maxBottom, expected: data.stockRect.bottom,
     });
   }
   return findings;

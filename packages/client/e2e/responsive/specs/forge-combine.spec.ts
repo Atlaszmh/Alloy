@@ -11,7 +11,12 @@ import { startRunViaStore, waitForPhase } from '../../fixtures/match';
 // BaseItemSelector already dismissed (itemSelectionPhase: 'done'). Avoids the
 // flaky draft→forge transition path; run mode vs ranked mode renders the same
 // Forge layout so responsive measurements are valid either way.
-for (const vp of VIEWPORTS) {
+//
+// Portrait-tree spec — desktop aspect viewports render the HUD instead and
+// are covered by forge-desktop-combine.spec.ts.
+const PORTRAIT_VIEWPORTS = VIEWPORTS.filter(v => v.width / v.height < 1.5);
+
+for (const vp of PORTRAIT_VIEWPORTS) {
   test(`Forge combine @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page, runProbes }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await startRunViaStore(page, { round: 1, phase: 'forge' });

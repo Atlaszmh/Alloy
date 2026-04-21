@@ -167,7 +167,10 @@ export function StockpileStrip({
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${COLS}, var(--gem-size))`,
-          gridAutoRows: 'var(--gem-size)',
+          // Rows take cell intrinsic height (gem body + name label below).
+          // Previous `var(--gem-size)` under-allocated by ~28px per row, which
+          // spilled cells past the stockpile section at narrow viewports.
+          gridAutoRows: 'auto',
           gap: 'var(--gem-gap-tight)',
           justifyContent: 'center',
           flex: 1,
