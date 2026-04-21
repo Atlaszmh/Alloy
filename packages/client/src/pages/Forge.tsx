@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { useMatchStore, selectIsRunMode } from '@/stores/matchStore';
 import { useGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
@@ -42,6 +42,7 @@ export function Forge() {
 
   // ── Frame mode (drives portrait vs desktop HUD tree) ──
   const frameMode = useFrameMode();
+  const navigate = useNavigate();
 
   const matchState = gateway.getState();
   const phase = matchState?.phase ?? null;
@@ -793,8 +794,9 @@ export function Forge() {
         weaponStats: baseStatWeapon,
         armorStats: baseStatArmor,
         onDone: openConfirmModal,
-        // Wired in Task 4.3 — portrait uses useNavigate('/gems').
-        onOpenGemLibrary: () => { /* TODO(Task 4.3): wire Gem Library trigger */ },
+        // Matches the portrait ForgeHeader's Gem Library shortcut, which
+        // navigates to the /gems route (GemEncyclopedia page).
+        onOpenGemLibrary: () => navigate('/gems'),
         onBoost: () => {
           gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } }).then(result => {
             if (result.ok) {
