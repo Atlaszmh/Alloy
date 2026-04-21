@@ -2,6 +2,7 @@ import type { Probe, Finding } from './types';
 
 const PROBE_X = 'overflow-x';
 const PROBE_X_DOC = 'overflow-x-doc';
+const PROBE_X_INNER = 'overflow-x-inner';
 const PROBE_Y = 'overflow-y';
 
 export const overflowX: Probe = async (page, ctx) => {
@@ -72,6 +73,53 @@ export const overflowX: Probe = async (page, ctx) => {
       detail: `documentElement.scrollWidth=${data.docW} exceeds viewport ${ctx.viewport.width}`,
       measured: data.docW,
       expected: ctx.viewport.width,
+    });
+  }
+
+  // Tertiary: horizontal scrollbars inside the frame. The primary probe skips
+  // elements clipped by an overflow-x auto/scroll/hidden ancestor, so a grid
+  // that overflows its parent column generates a scrollbar inside the ancestor
+  // without tripping the frame-relative check. Flag any scroll ancestor whose
+  // scrollWidth exceeds its clientWidth inside the frame.
+  const inner = await page.evaluate(() => {
+    const frame = document.querySelector<HTMLElement>('.app-frame');
+    if (!frame) return [] as { selector: string; scrollWidth: number; clientWidth: number }[];
+    const offenders: { selector: string; scrollWidth: number; clientWidth: number }[] = [];
+    frame.querySelectorAll<HTMLElement>('*').forEach((el) => {
+      if (offenders.length >= 5) return;
+      const s = getComputedStyle(el);
+      const scrolls =
+        s.overflowX === 'auto' || s.overflowX === 'scroll' ||
+        s.overflow === 'auto' || s.overflow === 'scroll';
+      if (!scrolls) return;
+      // 2px tolerance: subpixel rendering + border/scrollbar widths can push
+      // scrollWidth 1px past clientWidth without a visible scrollbar.
+      if (el.scrollWidth > el.clientWidth + 2) {
+        const id = el.id ? `#${el.id}` : '';
+        const screenSection = el.getAttribute('data-screen-section');
+        const marker = screenSection ? `[data-screen-section="${screenSection}"]` : '';
+        const cls = el.className && typeof el.className === 'string'
+          ? `.${el.className.split(/\s+/).slice(0, 2).join('.')}`
+          : '';
+        offenders.push({
+          selector: `${el.tagName.toLowerCase()}${id}${marker}${cls}`,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        });
+      }
+    });
+    return offenders;
+  });
+
+  for (const off of inner) {
+    findings.push({
+      screen: ctx.screen,
+      viewport: ctx.viewport.name,
+      probe: PROBE_X_INNER,
+      severity: 'fail',
+      detail: `scroll container has horizontal scrollbar: ${off.selector} (scrollWidth=${off.scrollWidth} > clientWidth=${off.clientWidth})`,
+      measured: off.scrollWidth,
+      expected: off.clientWidth,
     });
   }
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { AffixDef, DataRegistry, EquippedSlot, ForgedItem, ForgePlan, GemInstance } from '@alloy/engine';
 import { ELEMENT_EMOJIS } from '@/shared/utils/element-theme';
 import { GemCard } from '@/components/GemCard';
@@ -38,10 +39,55 @@ export function ItemSocketView({
   onGemPointerDown,
 }: ItemSocketViewProps) {
   const baseItem = registry.getBaseItem(item.baseItemId);
-  const cols = Math.ceil(item.slots.length / 2);
+  const maxCols = Math.ceil(item.slots.length / 2);
+
+  // Socket grid uses fixed tracks at `var(--gem-size)` — but `--gem-size` is
+  // sized for 5-per-row in the stockpile (full width). The socket grid lives
+  // in half the page width, so a 3-col grid at the stockpile size overflows
+  // the card column and spills a horizontal scrollbar into the items scroll
+  // ancestor. Scope a smaller --gem-size locally so the grid fits, and drop
+  // to fewer columns on very narrow viewports.
+  const MIN_SOCKET_SIZE = 48;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [socket, setSocket] = useState<{ size: number; cols: number } | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width;
+      const styles = getComputedStyle(el);
+      const parentGem = parseFloat(styles.getPropertyValue('--gem-size')) || 100;
+      const gap = parseFloat(styles.getPropertyValue('--gap-sm')) || 6;
+      // Pick the largest col count that fits at >= MIN_SOCKET_SIZE.
+      let nextCols = 1;
+      let nextSize = Math.max(MIN_SOCKET_SIZE, Math.min(parentGem, width));
+      for (let c = maxCols; c >= 1; c--) {
+        const fit = Math.floor((width - (c - 1) * gap) / c);
+        if (fit >= MIN_SOCKET_SIZE || c === 1) {
+          nextCols = c;
+          nextSize = Math.max(MIN_SOCKET_SIZE, Math.min(parentGem, fit));
+          break;
+        }
+      }
+      setSocket({ size: nextSize, cols: nextCols });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [maxCols]);
+
+  const cols = socket?.cols ?? maxCols;
+  const localGemStyle: React.CSSProperties = socket
+    ? ({
+        '--gem-size': `${socket.size}px`,
+        '--gem-radius': `${socket.size * 0.16}px`,
+      } as React.CSSProperties)
+    : {};
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-md)' }}>
+    <div
+      ref={rootRef}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-md)', ...localGemStyle }}
+    >
       {/* Item info */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-xs)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-sm)' }}>
