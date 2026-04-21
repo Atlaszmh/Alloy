@@ -112,7 +112,7 @@
   /* Desktop HUD layout tokens — aspect-locked to --frame-h so proportions stay
      consistent across ultrawide/4K monitors. Rationale in 2026-04-20 spec. */
   --hud-rail-w:        clamp(140px, calc(var(--frame-h, 812px) * 0.20), 220px);
-  --hud-workbench-h:   clamp(100px, calc(var(--frame-h, 812px) * 0.14), 150px);
+  --hud-workbench-h:   clamp(100px, calc(var(--frame-h, 812px) * 0.20), 220px);
   --hud-stockpile-h:   clamp(220px, calc(var(--frame-h, 812px) * 0.34), 368px);
   --hud-topbar-h:      clamp(44px,  calc(var(--frame-h, 812px) * 0.06), 70px);
 

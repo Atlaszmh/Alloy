@@ -20,6 +20,33 @@ interface SocketedAffixListProps {
  * `data-empty` anchors for the Chunk 5 unit + E2E smoke coverage.
  */
 export function SocketedAffixList({ slots, cardId, registry }: SocketedAffixListProps) {
+  const allEmpty = slots.every((slot) => slot === null);
+
+  if (allEmpty) {
+    return (
+      <div
+        data-socketed-affix-list={cardId}
+        data-all-empty="true"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '10px 0 6px',
+          flex: 1,
+          fontFamily: 'var(--font-family-display)',
+          fontWeight: 500,
+          fontSize: 'var(--text-2xs)',
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          color: 'var(--color-surface-300)',
+          fontStyle: 'italic',
+        }}
+      >
+        — no gems socketed —
+      </div>
+    );
+  }
+
   return (
     <div
       data-socketed-affix-list={cardId}

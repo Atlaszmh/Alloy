@@ -109,7 +109,7 @@ export function CharacterRail({
         width: 'var(--hud-rail-w)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--gap-md)',
+        gap: 'var(--gap-sm)',
       }}
       aria-label="Character readout and base stat tuning"
     >
@@ -117,10 +117,10 @@ export function CharacterRail({
       <Panel title="Character Readout" accent="LIVE">
         <div
           style={{
-            padding: 'var(--gap-md)',
+            padding: 'var(--gap-sm)',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: 'var(--gap-sm)',
+            gap: 'var(--gap-xs)',
           }}
         >
           {STAT_ROWS.map((row) => {
@@ -133,7 +133,7 @@ export function CharacterRail({
                 style={{
                   background: 'var(--color-surface-900)',
                   border: '1px solid var(--color-surface-700)',
-                  padding: '10px 10px 8px',
+                  padding: '6px 8px 5px',
                   position: 'relative',
                 }}
               >
@@ -153,9 +153,9 @@ export function CharacterRail({
                   style={{
                     fontFamily: 'var(--font-family-display)',
                     fontWeight: 700,
-                    fontSize: 'var(--text-lg)',
+                    fontSize: 'var(--text-md)',
                     lineHeight: 1,
-                    marginTop: 4,
+                    marginTop: 2,
                     color: hasValue ? 'var(--color-affix)' : 'white',
                     textShadow: hasValue
                       ? '0 0 6px rgba(30, 255, 0, 0.35)'
@@ -193,8 +193,8 @@ export function CharacterRail({
                 {/* Progress bar */}
                 <div
                   style={{
-                    marginTop: 6,
-                    height: 3,
+                    marginTop: 4,
+                    height: 2,
                     background: 'var(--color-surface-700)',
                     position: 'relative',
                   }}
@@ -226,10 +226,10 @@ export function CharacterRail({
       <Panel title="Forge Tuning" accent="BASE">
         <div
           style={{
-            padding: '10px 12px 12px',
+            padding: '6px 8px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
+            gap: 4,
           }}
         >
           <BaseStatRow
@@ -284,7 +284,7 @@ function Panel({
       />
       <header
         style={{
-          padding: '8px 12px',
+          padding: '6px 10px',
           fontFamily: 'var(--font-family-display)',
           fontWeight: 700,
           fontSize: 'var(--text-2xs)',
@@ -330,47 +330,31 @@ function BaseStatRow({
       style={{
         background: 'var(--color-surface-900)',
         border: '1px solid var(--color-surface-700)',
-        padding: '8px 10px',
+        padding: '5px 6px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
       }}
     >
-      <div
+      <span
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 6,
+          fontFamily: 'var(--font-family-display)',
+          fontWeight: 600,
+          fontSize: 'var(--text-2xs)',
+          color: 'var(--color-bronze-400)',
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          flexShrink: 0,
+          minWidth: 36,
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--font-family-display)',
-            fontWeight: 600,
-            fontSize: 'var(--text-2xs)',
-            color: 'var(--color-bronze-400)',
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {label}
-        </span>
-        <span
-          style={{
-            fontFamily: 'var(--font-family-display)',
-            fontWeight: 700,
-            fontSize: 'var(--text-2xs)',
-            color: 'var(--color-surface-300)',
-            letterSpacing: '0.14em',
-            padding: '2px 6px',
-            background: 'var(--color-surface-700)',
-          }}
-        >
-          DIAL
-        </span>
-      </div>
+        {label}
+      </span>
       <div
         style={{
           display: 'flex',
           gap: 'var(--gap-xs)',
+          flex: 1,
         }}
       >
         {([0, 1] as const).map((idx) => (
@@ -382,7 +366,7 @@ function BaseStatRow({
             aria-label={`${label} base stat slot ${idx + 1}`}
             style={{
               flex: 1,
-              padding: '7px 4px',
+              padding: '5px 4px',
               textAlign: 'center',
               textAlignLast: 'center',
               background: 'var(--color-surface-950)',
