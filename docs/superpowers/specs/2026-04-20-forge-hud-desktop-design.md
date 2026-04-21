@@ -37,7 +37,7 @@ The project is targeting Steam (see `project_steam_target.md`); desktop parity i
 |----------|--------|-----------|
 | Target surface priority | Desktop-first; mobile deferred | Steam target; user explicit (2026-04-20). One-pass density work is higher leverage than trying to serve both surfaces in the same redesign |
 | Layout direction | "HUD" (full-bleed, docked panels) | Selected from 3 mockup directions (Portrait+, Workshop 2-col, HUD). Most Steam-native; leaves the most room for real art to land without layout churn |
-| Desktop breakpoint | Aspect ratio, not width | Current frame clamps to 9:16 via `@media (min-aspect-ratio: 9/16)`. Add a second clamp: at `(min-aspect-ratio: 4/3)` release the frame to full-bleed. Below that, mobile portrait as today |
+| Desktop breakpoint | Aspect ratio, not width | Current frame clamps to 9:16 via `@media (min-aspect-ratio: 9/16)`. Add a second clamp: at `(min-aspect-ratio: 3/2)` release the frame to full-bleed. Below that, mobile portrait as today |
 | Socket layout | Rectangular grid (2×3 weapon, 3×2 armor) | User preference (2026-04-20). Silhouette-with-socket-points was considered but rejected in favor of grid; clearer spatial mapping to the affix list |
 | Stockpile layout | 2-row grid, up to ~5 cols | User preference (2026-04-20) over 1-row hotbar. Reduces scrolling pressure as inventory grows mid-forge |
 | Affix list placement | Below each item's socket grid, in socket reading order | 1:1 spatial mapping (socket position ↔ affix line) — easier to trace what each gem contributes than a free-form list |
@@ -115,7 +115,7 @@ Touched existing components (light prop additions only, no logic changes):
 - `Forge.tsx` — reads frame mode, branches to desktop vs portrait tree. Stockpile size computation moves into `StockpileStrip`.
 - `ItemSocketView.tsx` — exports its inner socket grid as a `<SocketGrid>` subcomponent so the desktop `GearWorkspace` can consume the grid without the card chrome. The existing ResizeObserver logic that computes the local `--gem-size` for socket fit (added 2026-04-20) moves into `<SocketGrid>` so both the portrait `ItemSocketView` and the desktop `GearWorkspace` get adaptive sockets without duplicating the observer. Existing portrait behavior preserved.
 - `CombineWorkbench.tsx` — accepts an optional `layout: 'portrait' | 'desktop-dock'` prop to adjust padding/spacing. Prop name deliberately avoids `variant` because `HapticButton` inside already owns a `variant` prop for its color scheme and overloading terms gets confusing. Logic unchanged.
-- `AppShell` — extends the ResizeObserver to publish `data-frame-mode` on `:root`. Media queries in `index.css` release the letterbox at `(min-aspect-ratio: 4/3)`.
+- `AppShell` — extends the ResizeObserver to publish `data-frame-mode` on `:root`. Media queries in `index.css` release the letterbox at `(min-aspect-ratio: 3/2)`.
 
 ### Design Tokens
 
