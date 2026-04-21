@@ -280,6 +280,18 @@
   border-color: var(--color-bronze-light) !important;
 }
 
+/* ── HUD Ambient Backdrop ──
+   The inner decorative layers live on absolutely-positioned children inside
+   <AmbientBackdrop>; this rule supplies the root stage gradient (anvil glow
+   + top-left highlight) that the mockup applies to the stage container. A
+   follow-up art pass will swap the CSS layers for real painted assets. */
+.hud-ambient-backdrop {
+  background:
+    radial-gradient(ellipse 75% 56% at 50% 76%, rgba(232, 85, 58, 0.12), transparent 60%),
+    radial-gradient(ellipse 50% 44% at 50% 72%, rgba(232, 85, 58, 0.08), transparent 70%),
+    radial-gradient(circle at 20% 20%, var(--color-surface-700) 0%, var(--color-surface-900) 45%, var(--color-surface-950) 100%);
+}
+
 /* ── Portrait App Shell (9:16 aspect ratio) ── */
 
 .app-shell {
