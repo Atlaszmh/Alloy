@@ -518,20 +518,31 @@ export function Forge() {
           el.classList.remove('forge-drop-active');
         });
       } else {
-        // Not a drag — classify as tap, hold, or inspect
+        // Not a drag — classify as tap, hold, or inspect.
+        //
+        // Desktop: single click opens the inspect panel. Socketing on desktop
+        // is drag-and-drop, so tap-to-select has no purpose and the inspect
+        // panel is the expected single-click affordance.
+        //
+        // Portrait: single tap selects/deselects (for the tap-then-socket
+        // flow). Long-press (>=500ms) opens inspect. 300-499ms is a dead zone
+        // to avoid accidental triggers.
         const holdDuration = Date.now() - start.time;
-        if (holdDuration >= INSPECT_THRESHOLD) {
-          // Long-press (>=500ms): open inspect panel
-          const gem = useForgeStore.getState().plan?.stockpile.find(g => g.uid === start.uid);
-          if (gem) {
-            const affixDef = registry.findAffix(gem.affixId)
-              ?? registry.getCombinationById(gem.affixId);
-            if (affixDef) {
-              setInspectGem({ gem, affixDef });
-            }
-          }
+        const gem = useForgeStore.getState().plan?.stockpile.find(g => g.uid === start.uid);
+        const openInspect = () => {
+          if (!gem) return;
+          const affixDef = registry.findAffix(gem.affixId)
+            ?? registry.getCombinationById(gem.affixId);
+          if (affixDef) setInspectGem({ gem, affixDef });
+        };
+        if (frameMode === 'desktop' && holdDuration < INSPECT_THRESHOLD) {
+          // Desktop tap: open inspect immediately for any quick click.
+          openInspect();
+        } else if (holdDuration >= INSPECT_THRESHOLD) {
+          // Portrait long-press (or desktop held-click): open inspect.
+          openInspect();
         } else if (holdDuration < 300) {
-          // Tap: select or deselect
+          // Portrait tap: select or deselect.
           if (selectedOrbUidRef.current === start.uid) {
             selectOrb(null);
           } else {
@@ -539,7 +550,7 @@ export function Forge() {
             playSound('orbSelect');
           }
         }
-        // 300-499ms: no-op (existing behavior)
+        // Portrait 300-499ms: no-op (existing behavior).
       }
 
       pointerStartRef.current = null;
@@ -552,7 +563,7 @@ export function Forge() {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [applyAction, registry, setComboSlotByIndex, selectOrb]);
+  }, [applyAction, registry, setComboSlotByIndex, selectOrb, frameMode]);
 
   // ── Combine slot click ──
   const handleComboSlotClick = useCallback((index: number) => {
