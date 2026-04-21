@@ -51,6 +51,13 @@ export interface ForgeDesktopProps {
   weaponStats: [BaseStat, BaseStat];
   armorStats: [BaseStat, BaseStat];
 
+  /**
+   * Quick-match auto-commit countdown. Omitted in run mode (no timer there);
+   * mirrors the portrait `ForgeHeader` contract so the desktop HUD matches.
+   */
+  timerDurationMs?: number;
+  onTimerExpire?: () => void;
+
   // Callbacks (all existing, already dispatched from Forge.tsx)
   onDone: () => void;
   onOpenGemLibrary: () => void;
@@ -127,6 +134,8 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
           totalRounds={props.totalRounds}
           streak={props.streak}
           round1={props.round === 1}
+          timerDurationMs={props.timerDurationMs}
+          onTimerExpire={props.onTimerExpire}
           onDone={props.onDone}
           onOpenGemLibrary={props.onOpenGemLibrary}
         />

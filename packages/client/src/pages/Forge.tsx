@@ -751,6 +751,7 @@ export function Forge() {
         openConfirmModal, clearComboSlots,
         handleBaseStatChange, handleSocketClick, handleSocketRemove,
         handleComboSlotClick, handleCombine, handleSelectOrb, handlePointerDown,
+        handleTimerExpire,
       })
     : null;
 
@@ -1046,6 +1047,7 @@ function buildForgeDesktopProps(a: {
   handleCombine: () => void;
   handleSelectOrb: ForgeDesktopProps['onSelectOrb'];
   handlePointerDown: ForgeDesktopProps['onGemPointerDown'];
+  handleTimerExpire: () => void;
 }): ForgeDesktopProps {
   const bal = a.registry.getBalance();
   const costs = bal.gem?.flux?.costs;
@@ -1082,6 +1084,10 @@ function buildForgeDesktopProps(a: {
     canAffordCombine: true,
     weaponStats: a.baseStatWeapon,
     armorStats: a.baseStatArmor,
+    // Quick-match 90s auto-commit countdown — mirrors portrait ForgeHeader.
+    // Omitted in run mode (async, no wall-clock timer there).
+    timerDurationMs: a.isRunMode ? undefined : FORGE_TIMER_MS,
+    onTimerExpire: a.isRunMode ? undefined : a.handleTimerExpire,
     onDone: a.openConfirmModal,
     // Matches portrait ForgeHeader's Gem Library shortcut → GemEncyclopedia.
     onOpenGemLibrary: () => a.navigate('/gems'),

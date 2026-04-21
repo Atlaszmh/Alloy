@@ -1,4 +1,5 @@
 import { HapticButton } from '@/components/HapticButton';
+import { Timer } from '@/components/Timer';
 
 interface ForgeTopBarProps {
   lives: number;
@@ -8,6 +9,9 @@ interface ForgeTopBarProps {
   totalRounds: number;
   streak: number;          // star badge
   round1: boolean;         // true when current round === 1 → show "R1" pill
+  /** Quick-match auto-commit timer. Omit in run mode (no countdown there). */
+  timerDurationMs?: number;
+  onTimerExpire?: () => void;
   onDone: () => void;
   onOpenGemLibrary: () => void;
 }
@@ -27,9 +31,12 @@ export function ForgeTopBar({
   totalRounds,
   streak,
   round1,
+  timerDurationMs,
+  onTimerExpire,
   onDone,
   onOpenGemLibrary,
 }: ForgeTopBarProps) {
+  const showTimer = timerDurationMs !== undefined && onTimerExpire !== undefined;
   const hearts = Array.from({ length: maxLives }, (_, i) => i < lives);
 
   return (
@@ -176,6 +183,11 @@ export function ForgeTopBar({
 
       {/* Right cluster */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-md)' }}>
+        {showTimer && (
+          <div style={{ minWidth: 160 }}>
+            <Timer durationMs={timerDurationMs} onExpire={onTimerExpire} />
+          </div>
+        )}
         <button
           type="button"
           onClick={onOpenGemLibrary}
