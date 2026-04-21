@@ -1148,54 +1148,90 @@ Early in the `Forge` function body (after the gateway subscription useEffect), a
 const frameMode = useFrameMode();
 ```
 
-- [ ] **Step 3: Branch the return**
+- [ ] **Step 3: Resolve real field names before writing the branch**
 
-Just before the `return (` block that renders the current portrait tree (around line 738), add the desktop branch:
+Before writing the JSX, confirm these engine-type facts against the real types (`packages/engine/src/run/run-state.ts`, `packages/client/src/stores/matchStore.ts`):
+
+- `runState.lives: number` — current lives
+- `runState.startingLives: number` — max (no separate `maxLives`)
+- `runState.consecutiveWins: number`
+- `runState.goalRound: number` (or null for endless — check the type)
+- `matchStore.aiOpponentTier: number | null` — tier for display (live match; do NOT reach for `matchState.aiTier` — it doesn't exist on `MatchState`)
+
+- [ ] **Step 4: Build a small `useForgeDesktopProps` helper in `Forge.tsx`**
+
+To keep `Forge.tsx` from ballooning past the readable threshold, extract the desktop prop assembly into a local helper (still in the same file — private, not exported). This also gives us one place to resolve ambiguous fields cleanly.
+
+```ts
+// Inside Forge.tsx (above the return block). Uses values already computed
+// higher in the component body. No new store reads, no new effects.
+const aiTier = useMatchStore(s => s.aiOpponentTier);
+const isCurrentlyDragging = false; // Drag state is ref-only (no re-renders);
+                                    // desktop paints `isDragging` the same way
+                                    // portrait does — always false at React-state
+                                    // level. Preserves parity with portrait tree.
+
+const forgeDesktopProps: React.ComponentProps<typeof ForgeDesktop> | null =
+  plan ? {
+    round,
+    lives: runState?.lives ?? 3,
+    maxLives: runState?.startingLives ?? 3,
+    opponentLabel: isAiMatch
+      ? `VS AI T${aiTier ?? 1}`
+      : `VS ${matchState?.players[1]?.displayName ?? 'Player'}`,
+    streak: runState?.consecutiveWins ?? 0,
+    totalRounds: runState?.goalRound ?? 10,
+    derivedStats,
+    plan,
+    registry,
+    currentFlux,
+    maxFlux,
+    comboSlots,
+    combinePreview,
+    // Match portrait tree — CombineWorkbench's own `canCombine` gate is the
+    // only check today (keepFilled && filledCount >= 2). Desktop passes the
+    // same literal `true` portrait uses; do not introduce a new gate here.
+    canAffordCombine: true,
+    weaponStats: baseStatWeapon,
+    armorStats: baseStatArmor,
+    onDone: openConfirmModal,
+    onOpenGemLibrary: () => { /* wired in Task 4.3 */ },
+    onBoost: () => {
+      gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } });
+    },
+    onReroll: () => {
+      gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'reroll_pool' } });
+    },
+    onGuaranteeRarity: () => {
+      gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'guarantee_rarity' } });
+    },
+    onWeaponStatChange: (i, v) => handleBaseStatChange('weapon', i, v),
+    onArmorStatChange: (i, v) => handleBaseStatChange('armor', i, v),
+    onSocketClick: handleSocketClick,
+    onSocketRemove: handleSocketRemove,
+    onComboSlotClick: handleComboSlotClick,
+    onCombine: handleCombine,
+    onClearComboSlots: () => { clearComboSlots(); playSound('buttonClick'); },
+    onSelectOrb: handleSelectOrb,
+    onGemPointerDown: handlePointerDown,
+    selectedOrbUid,
+    isDragging: isCurrentlyDragging,
+    equippedUids,
+    stagedUids,
+  } : null;
+```
+
+- [ ] **Step 5: Branch the return**
+
+Just before the existing portrait `return (` block (around line 738), insert:
 
 ```tsx
-if (frameMode === 'desktop') {
-  return (
-    <ForgeDesktop
-      round={round}
-      lives={runState?.lives ?? 3}
-      maxLives={runState?.maxLives ?? 5}
-      opponentLabel={isAiMatch ? `VS AI T${matchState?.aiTier ?? 1}` : `VS ${matchState?.players[1]?.displayName ?? 'Player'}`}
-      streak={runState?.consecutiveWins ?? 0}
-      totalRounds={runState?.goalRound ?? 10}
-      derivedStats={derivedStats}
-      plan={plan}
-      registry={registry}
-      currentFlux={currentFlux}
-      maxFlux={maxFlux}
-      comboSlots={comboSlots}
-      combinePreview={combinePreview}
-      canAffordCombine={true}
-      weaponStats={baseStatWeapon}
-      armorStats={baseStatArmor}
-      onDone={openConfirmModal}
-      onOpenGemLibrary={() => { /* TODO: surface the existing gem library trigger */ }}
-      onBoost={() => gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } })}
-      onReroll={() => gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'reroll_pool' } })}
-      onGuaranteeRarity={() => gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'guarantee_rarity' } })}
-      onWeaponStatChange={(i, v) => handleBaseStatChange('weapon', i, v)}
-      onArmorStatChange={(i, v) => handleBaseStatChange('armor', i, v)}
-      onSocketClick={handleSocketClick}
-      onSocketRemove={handleSocketRemove}
-      onComboSlotClick={handleComboSlotClick}
-      onCombine={handleCombine}
-      onClearComboSlots={() => { clearComboSlots(); playSound('buttonClick'); }}
-      onSelectOrb={handleSelectOrb}
-      onGemPointerDown={handlePointerDown}
-      selectedOrbUid={selectedOrbUid}
-      isDragging={false /* TODO wire up from drag state refs if needed */}
-      equippedUids={equippedUids}
-      stagedUids={stagedUids}
-    />
-  );
+if (frameMode === 'desktop' && forgeDesktopProps) {
+  return <ForgeDesktop {...forgeDesktopProps} />;
 }
 ```
 
-Leave the existing portrait `return (...)` intact below — it's reached when `frameMode === 'portrait'`.
+The fallback path is the existing portrait tree, reached when `frameMode === 'portrait'` OR when the plan isn't ready yet (the `if (!plan) return null;` guard already above this branch handles the null-plan case).
 
 - [ ] **Step 4: Manual dev verification**
 
@@ -1231,10 +1267,16 @@ git commit -m "feat(client): Forge branches to ForgeDesktop when frame mode is d
 
 - [ ] **Step 1: Find the current Gem Library trigger**
 
-Search the codebase:
+Search the codebase (use the project Grep tool, not shell grep — Windows dev envs don't all have a compatible `grep` on PATH):
 
 ```
-pnpm --filter @alloy/client exec grep -rn 'Gem Library\|GemLibrary' src/
+Grep --pattern "Gem Library|GemLibrary" --path packages/client/src
+```
+
+Or from bash:
+
+```
+git grep -n 'Gem Library\|GemLibrary' -- packages/client/src
 ```
 
 Expected: find the portrait ForgeHeader's link + handler.
@@ -1367,9 +1409,18 @@ import { forgeDesktopAllVisible } from './forge-desktop-all-visible';
 { name: 'forge-desktop-all-visible', fn: forgeDesktopAllVisible },
 ```
 
-- [ ] **Step 3: Add `data-stockpile-cell` attribute**
+- [ ] **Step 3: Add `data-stockpile-cell` attribute and guarantee 10 cells**
 
-In `StockpileStrip.tsx`, attach `data-stockpile-cell` to each grid cell (filled and empty placeholder). This gives the probe a stable selector to count cells.
+In `StockpileStrip.tsx`, attach `data-stockpile-cell` to each grid cell (filled and empty placeholder). **The grid must always render exactly 10 cells** (5 cols × 2 rows) regardless of actual stockpile size. When `stockpile.length < 10`, render filled `<GemCard>` for the available gems and `<div data-stockpile-cell data-stockpile-cell-state="placeholder">` for the remainder. The `forge-desktop-all-visible` probe's `stockpileCells >= 10` check depends on this invariant — add a code comment in `StockpileStrip.tsx` pointing at that probe so the link is discoverable:
+
+```tsx
+// NOTE: The grid always renders exactly 10 cells (5×2). Filled cells hold a
+// GemCard; remaining cells hold a dim placeholder. The forge-desktop-all-visible
+// responsive probe asserts this invariant — don't shrink the cell count for
+// sparse inventories.
+```
+
+Skip staged gems by filling their cell with a placeholder too (staged gems are conceptually "in the combine slots", not in the stockpile view).
 
 - [ ] **Step 4: Commit**
 
@@ -1433,7 +1484,61 @@ git add packages/client/e2e/responsive/specs/forge-desktop-equip.spec.ts package
 git commit -m "test(e2e): responsive specs for desktop HUD forge (5 viewports × 2 specs)"
 ```
 
-### Task 5.3: E2E smoke — socket a gem on desktop
+### Task 5.3: Unit test for `SocketedAffixList`
+
+**Files:**
+- Create: `packages/client/src/components/forge-desktop/SocketedAffixList.test.tsx`
+
+The affix-lookup, element-dot coloring, and empty-row branches have enough logic to warrant one focused test. Other desktop components are thin renderers covered by the E2E smoke + responsive probes.
+
+- [ ] **Step 1: Write the test**
+
+```tsx
+// packages/client/src/components/forge-desktop/SocketedAffixList.test.tsx
+import { render, screen } from '@testing-library/react';
+import { describe, test, expect } from 'vitest';
+import { SocketedAffixList } from './SocketedAffixList';
+import { loadRegistryForTests } from '@/test-utils/registry'; // or existing helper
+// Use whatever existing test-utility the project already uses to construct a
+// DataRegistry in tests — check packages/client/src/test-utils/ or mirror
+// what src/components/ItemSocketView tests do (if they exist).
+
+describe('SocketedAffixList', () => {
+  test('renders an affix row per filled slot in socket order', () => {
+    const registry = loadRegistryForTests();
+    const slots = [
+      { gem: { uid: 'g1', affixId: 'fire_damage', tier: 2, rarity: 'uncommon' } as any },
+      null,
+      { gem: { uid: 'g2', affixId: 'armor_pen', tier: 2, rarity: 'uncommon' } as any },
+    ];
+    render(<SocketedAffixList slots={slots as any} cardId="weapon" registry={registry} />);
+    const rows = screen.getAllByTestId('affix-row');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent(/fire/i);
+    expect(rows[1]).toHaveAttribute('data-empty', 'true');
+    expect(rows[2]).toHaveTextContent(/armor/i);
+  });
+});
+```
+
+Add `data-testid="affix-row"` and `data-empty="true"` where appropriate in `SocketedAffixList.tsx` when wiring this up.
+
+- [ ] **Step 2: Run the test**
+
+```
+pnpm --filter @alloy/client exec vitest run src/components/forge-desktop/SocketedAffixList.test.tsx
+```
+
+Expected: PASS.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/client/src/components/forge-desktop/SocketedAffixList.test.tsx packages/client/src/components/forge-desktop/SocketedAffixList.tsx
+git commit -m "test(client): SocketedAffixList renders affix rows in socket order"
+```
+
+### Task 5.4: E2E smoke — socket a gem on desktop
 
 **Files:**
 - Create: `packages/client/e2e/forge-desktop.spec.ts`
@@ -1474,16 +1579,16 @@ test('desktop HUD: sockets a gem and affix list updates', async ({ page }) => {
 pnpm --filter @alloy/client exec playwright test e2e/forge-desktop.spec.ts --project=desktop
 ```
 
-Expected: PASS.
+The `desktop` Playwright project already exists in `packages/client/playwright.config.ts` (verified 2026-04-20). Expected: PASS.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add packages/client/e2e/forge-desktop.spec.ts packages/client/src/components/forge-desktop/SocketedAffixList.tsx
+git add packages/client/e2e/forge-desktop.spec.ts
 git commit -m "test(e2e): desktop HUD socket-a-gem smoke"
 ```
 
-### Task 5.4: Version bump
+### Task 5.5: Version bump
 
 **Files:**
 - Modify: `packages/client/package.json`
@@ -1502,7 +1607,7 @@ Forge HUD desktop redesign — new layout activated at
 (min-aspect-ratio: 3/2). Portrait mobile layout unchanged."
 ```
 
-### Task 5.5: Final regression pass
+### Task 5.6: Final regression pass
 
 - [ ] **Step 1: Full test suite**
 
