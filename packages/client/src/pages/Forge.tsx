@@ -11,13 +11,15 @@ import { HapticButton } from '@/components/HapticButton';
 import { Modal } from '@/components/Modal';
 import { DisconnectOverlay } from '@/components/DisconnectOverlay';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
+import { useFrameMode } from '@/hooks/useFrameMode';
 import { BaseItemSelector } from '@/features/forge/BaseItemSelector';
 import { playSound } from '@/shared/utils/sound-manager';
 import { showToast } from '@/components/Toast';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
+import { ForgeDesktop } from '@/components/forge-desktop/ForgeDesktop';
 import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
-import { createForgeState, CombinationEngine, DiscoveryState } from '@alloy/engine';
+import { createForgeState, CombinationEngine, DiscoveryState, getPoolConfigForRound } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
@@ -38,10 +40,14 @@ export function Forge() {
     return gateway.subscribe(() => forceUpdate(n => n + 1));
   }, [gateway]);
 
+  // ── Frame mode (drives portrait vs desktop HUD tree) ──
+  const frameMode = useFrameMode();
+
   const matchState = gateway.getState();
   const phase = matchState?.phase ?? null;
   const player = matchState?.players[0] ?? null;
   const aiController = useMatchStore(s => s.aiController);
+  const aiOpponentTier = useMatchStore(s => s.aiOpponentTier);
   const getRegistry = useMatchStore(s => s.getRegistry);
   const registry = getRegistry();
 
@@ -733,6 +739,112 @@ export function Forge() {
         '--gem-radius': `${sharedGemSize * 0.16}px`,
       } as React.CSSProperties)
     : {};
+
+  // ── Desktop HUD prop assembly ──
+  //
+  // Kept adjacent to the existing portrait return so both trees read the same
+  // values. Drag state on Forge.tsx is ref-only (no re-render), so `isDragging`
+  // sent to the desktop HUD matches what portrait would see at React-state
+  // level — always false. Balance-driven flux costs and round-aware pool size
+  // flow down from the engine so tuning happens in one place. All balance
+  // lookups are optional-chained so that unit tests which stub registry with
+  // a minimal BalanceConfig still mount Forge without crashing.
+  const balanceConfig = registry.getBalance();
+  const fluxCostsCfg = balanceConfig.gem?.flux?.costs;
+  const boostCost = fluxCostsCfg?.boostCombine ?? 3;
+  const rerollCost = fluxCostsCfg?.rerollPool ?? 5;
+  const rarityCost = fluxCostsCfg?.guaranteeRarity ?? 4;
+
+  // Pool schedule drives the "Gems Held X / Y" readout. In run mode we read
+  // the engine's current run round; quick mode has no run-round concept, so
+  // fall back to the peak 20 (matches the portrait UX — no Y readout visible
+  // to users at the moment; only consumed by the desktop stockpile).
+  const runRound = runState?.round ?? 1;
+  const poolScaling = balanceConfig.gem?.poolScaling;
+  const maxStockpileCapacity =
+    isRunMode && poolScaling
+      ? getPoolConfigForRound(runRound, poolScaling).poolSize
+      : 20;
+
+  const forgeDesktopProps: React.ComponentProps<typeof ForgeDesktop> | null = plan
+    ? {
+        round,
+        lives: runState?.lives ?? 3,
+        maxLives: runState?.startingLives ?? 3,
+        opponentLabel: isAiMatch
+          ? `AI T${aiOpponentTier ?? 1}`
+          : 'Player',
+        streak: runState?.consecutiveWins ?? 0,
+        totalRounds: runState?.goalRound ?? 10,
+        derivedStats,
+        plan,
+        registry,
+        currentFlux,
+        maxFlux,
+        boostCost,
+        rerollCost,
+        rarityCost,
+        comboSlots,
+        combinePreview,
+        // CombineWorkbench gates combine internally on (keepFilled && filled >= 2);
+        // pass the same literal `true` the portrait tree uses so the dock's
+        // button behaves identically.
+        canAffordCombine: true,
+        weaponStats: baseStatWeapon,
+        armorStats: baseStatArmor,
+        onDone: openConfirmModal,
+        // Wired in Task 4.3 — portrait uses useNavigate('/gems').
+        onOpenGemLibrary: () => { /* TODO(Task 4.3): wire Gem Library trigger */ },
+        onBoost: () => {
+          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } }).then(result => {
+            if (result.ok) {
+              setFluxToast('Boost applied to next combine!');
+              playSound('buttonClick');
+            } else {
+              setFluxToast(result.error ?? 'Cannot boost combine');
+            }
+          });
+        },
+        onReroll: () => {
+          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'reroll_pool' } }).then(result => {
+            if (result.ok) {
+              setFluxToast('Pool will reroll next draft!');
+              playSound('buttonClick');
+            } else {
+              setFluxToast(result.error ?? 'Cannot reroll pool');
+            }
+          });
+        },
+        onGuaranteeRarity: () => {
+          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'guarantee_rarity' } }).then(result => {
+            if (result.ok) {
+              setFluxToast('Next draft gem guaranteed Rare!');
+              playSound('buttonClick');
+            } else {
+              setFluxToast(result.error ?? 'Cannot guarantee rarity');
+            }
+          });
+        },
+        onWeaponStatChange: (i, v) => handleBaseStatChange('weapon', i, v),
+        onArmorStatChange: (i, v) => handleBaseStatChange('armor', i, v),
+        onSocketClick: handleSocketClick,
+        onSocketRemove: handleSocketRemove,
+        onComboSlotClick: handleComboSlotClick,
+        onCombine: handleCombine,
+        onClearComboSlots: () => { clearComboSlots(); playSound('buttonClick'); },
+        onSelectOrb: handleSelectOrb,
+        onGemPointerDown: handlePointerDown,
+        selectedOrbUid,
+        isDragging: false,
+        equippedUids,
+        stagedUids,
+        maxStockpileCapacity,
+      }
+    : null;
+
+  if (frameMode === 'desktop' && forgeDesktopProps) {
+    return <ForgeDesktop {...forgeDesktopProps} />;
+  }
 
   return (
     <div

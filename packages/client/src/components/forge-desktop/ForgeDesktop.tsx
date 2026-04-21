@@ -16,7 +16,11 @@ import { StockpileStrip } from './StockpileStrip';
 
 export interface ForgeDesktopProps {
   // Run + phase state
-  round: 1 | 2 | 3;
+  //
+  // `round` is `number` (not the portrait-era `1 | 2 | 3` union) because run
+  // mode extends well beyond round 3. Round-1-only behavior (e.g. base stat
+  // selectors, "R1" badge) gates on `round === 1` inside the child regions.
+  round: number;
   lives: number;
   maxLives: number;
   opponentLabel: string;
