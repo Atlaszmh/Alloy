@@ -1,4 +1,5 @@
 import type {
+  ActiveSynergy,
   BaseStat,
   CombinePreview,
   DataRegistry,
@@ -29,6 +30,8 @@ export interface ForgeDesktopProps {
 
   // Stats
   derivedStats: DerivedStats | null;
+  /** Active + pending synergies — rendered as chips in the character rail. */
+  activeSynergies: ActiveSynergy[];
 
   // Plan (loadout + stockpile)
   plan: ForgePlan;
@@ -149,6 +152,8 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
           onWeaponStatChange={props.onWeaponStatChange}
           onArmorStatChange={props.onArmorStatChange}
           round={props.round}
+          activeSynergies={props.activeSynergies}
+          registry={props.registry}
         />
       </div>
 

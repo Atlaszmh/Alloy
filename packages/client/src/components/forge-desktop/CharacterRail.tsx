@@ -1,4 +1,5 @@
-import type { BaseStat, DerivedStats } from '@alloy/engine';
+import type { ActiveSynergy, BaseStat, DataRegistry, DerivedStats } from '@alloy/engine';
+import { SynergyBanner } from '@/components/SynergyBanner';
 
 const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
 
@@ -70,6 +71,13 @@ interface CharacterRailProps {
   onArmorStatChange: (index: 0 | 1, stat: BaseStat) => void;
   /** Selectors are only editable in round 1, matching the portrait Forge. */
   round: number;
+  /**
+   * Active + pending synergy chips — mirrors portrait ForgeHeader feature.
+   * Rendered between the character readout and the forge-tuning dials so the
+   * character-level state all sits in one rail.
+   */
+  activeSynergies?: ActiveSynergy[];
+  registry?: DataRegistry;
 }
 
 /**
@@ -88,8 +96,12 @@ export function CharacterRail({
   onWeaponStatChange,
   onArmorStatChange,
   round,
+  activeSynergies,
+  registry,
 }: CharacterRailProps) {
   const disabled = round > 1;
+  const showSynergies =
+    !!registry && !!activeSynergies && activeSynergies.length > 0;
 
   return (
     <aside
@@ -204,6 +216,11 @@ export function CharacterRail({
           })}
         </div>
       </Panel>
+
+      {/* ── Active / pending synergies (mirrors portrait ForgeHeader) ── */}
+      {showSynergies && (
+        <SynergyBanner synergies={activeSynergies!} registry={registry!} />
+      )}
 
       {/* ── Panel 2: Forge Tuning ─────────────────────────────── */}
       <Panel title="Forge Tuning" accent="BASE">

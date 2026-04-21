@@ -752,6 +752,7 @@ export function Forge() {
         handleBaseStatChange, handleSocketClick, handleSocketRemove,
         handleComboSlotClick, handleCombine, handleSelectOrb, handlePointerDown,
         handleTimerExpire,
+        activeSynergies: statsResult?.activeSynergies ?? [],
       })
     : null;
 
@@ -1048,6 +1049,7 @@ function buildForgeDesktopProps(a: {
   handleSelectOrb: ForgeDesktopProps['onSelectOrb'];
   handlePointerDown: ForgeDesktopProps['onGemPointerDown'];
   handleTimerExpire: () => void;
+  activeSynergies: ForgeDesktopProps['activeSynergies'];
 }): ForgeDesktopProps {
   const bal = a.registry.getBalance();
   const costs = bal.gem?.flux?.costs;
@@ -1070,6 +1072,7 @@ function buildForgeDesktopProps(a: {
     streak: a.runState?.consecutiveWins ?? 0,
     totalRounds: a.runState?.goalRound ?? 10,
     derivedStats: a.derivedStats,
+    activeSynergies: a.activeSynergies,
     plan: a.plan,
     registry: a.registry,
     currentFlux: a.currentFlux,
