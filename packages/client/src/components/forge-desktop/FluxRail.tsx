@@ -3,14 +3,16 @@ import { HapticButton } from '@/components/HapticButton';
 interface FluxRailProps {
   currentFlux: number;
   maxFlux: number;
-  onBoost: () => void;            // -3 flux, boosts next combine
-  onReroll: () => void;           // -5 flux, rerolls pool
-  onGuaranteeRarity: () => void;  // -4 flux, guarantees rare
+  /** Flux cost to boost next combine. Sourced from engine balance. */
+  boostCost: number;
+  /** Flux cost to reroll the pool. Sourced from engine balance. */
+  rerollCost: number;
+  /** Flux cost to guarantee rare rarity. Sourced from engine balance. */
+  rarityCost: number;
+  onBoost: () => void;
+  onReroll: () => void;
+  onGuaranteeRarity: () => void;
 }
-
-const BOOST_COST = 3;
-const REROLL_COST = 5;
-const RARITY_COST = 4;
 
 /**
  * Right HUD rail — 20-pip flux meter + three spend CTAs.
@@ -18,10 +20,16 @@ const RARITY_COST = 4;
  * Visual inspiration: `.right-rail` / `.flux-bar` in the v2 mockup, with the
  * horizontal pip bar preserved. Button costs are rendered as inline teal pills
  * matching `.flux-btn .cost`. Width pulled from `--hud-rail-w`.
+ *
+ * Costs are taken as props (never hardcoded) so balance tuning can drive them
+ * from a single source of truth — Chunk 4 sources them from engine balance.
  */
 export function FluxRail({
   currentFlux,
   maxFlux,
+  boostCost,
+  rerollCost,
+  rarityCost,
   onBoost,
   onReroll,
   onGuaranteeRarity,
@@ -177,19 +185,19 @@ export function FluxRail({
         >
           <FluxActionButton
             label="Boost"
-            cost={BOOST_COST}
+            cost={boostCost}
             currentFlux={currentFlux}
             onClick={onBoost}
           />
           <FluxActionButton
             label="Reroll"
-            cost={REROLL_COST}
+            cost={rerollCost}
             currentFlux={currentFlux}
             onClick={onReroll}
           />
           <FluxActionButton
             label="Rarity"
-            cost={RARITY_COST}
+            cost={rarityCost}
             currentFlux={currentFlux}
             onClick={onGuaranteeRarity}
           />
