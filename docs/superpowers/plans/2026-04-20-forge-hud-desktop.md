@@ -1233,7 +1233,7 @@ if (frameMode === 'desktop' && forgeDesktopProps) {
 
 The fallback path is the existing portrait tree, reached when `frameMode === 'portrait'` OR when the plan isn't ready yet (the `if (!plan) return null;` guard already above this branch handles the null-plan case).
 
-- [ ] **Step 4: Manual dev verification**
+- [ ] **Step 6: Manual dev verification**
 
 ```
 pnpm --filter @alloy/client dev
@@ -1243,7 +1243,7 @@ pnpm --filter @alloy/client dev
 - Wide browser (≥ 3:2 aspect) → desktop HUD renders.
 - Toggle between them by resizing — both trees mount cleanly.
 
-- [ ] **Step 5: Run unit tests + responsive harness**
+- [ ] **Step 7: Run unit tests + responsive harness**
 
 ```
 pnpm --filter @alloy/client exec vitest run
@@ -1252,7 +1252,7 @@ pnpm --filter @alloy/client run test:responsive
 
 Expected: all existing tests pass (the desktop branch is inert at portrait viewports, and no responsive spec targets the new desktop mode yet).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add packages/client/src/pages/Forge.tsx
