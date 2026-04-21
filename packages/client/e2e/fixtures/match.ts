@@ -236,7 +236,9 @@ export async function completeForgeItemSelection(page: Page): Promise<void> {
 }
 
 export async function completeForge(page: Page): Promise<void> {
-  const doneBtn = page.getByRole('button', { name: /^DONE$/i });
+  // Portrait header renders "DONE"; desktop topbar renders "Done ▶" (the
+  // trailing ▶ is decorative). Match either label.
+  const doneBtn = page.getByRole('button', { name: /^done(\s*\u25B6)?$/i });
   await expect(doneBtn).toBeVisible({ timeout: 5000 });
   await doneBtn.click();
 

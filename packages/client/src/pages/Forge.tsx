@@ -845,7 +845,82 @@ export function Forge() {
     : null;
 
   if (frameMode === 'desktop' && forgeDesktopProps) {
-    return <ForgeDesktop {...forgeDesktopProps} />;
+    // Desktop branch renders the HUD, but we still need the portrait-shared
+    // overlay surfaces: commit-confirmation modal (triggered by Done), gem
+    // inspect panel (long-press), PvP disconnect overlay, and the transient
+    // flux action toast. Wrapping in a sized container lets the HUD fill the
+    // page while these float on top.
+    return (
+      <div
+        ref={setPageEl}
+        className="page-enter"
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          background: 'var(--color-surface-950)',
+          ...sharedGemStyle,
+        }}
+      >
+        {!isAiMatch && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
+
+        <ForgeDesktop {...forgeDesktopProps} />
+
+        {/* Gem inspect panel (long-press on tray gem) */}
+        {inspectGem && (
+          <GemInspectPanel
+            gem={{
+              name: inspectGem.affixDef.name,
+              description: inspectGem.affixDef.description,
+              weaponFlavorText: inspectGem.affixDef.weaponFlavorText,
+              armorFlavorText: inspectGem.affixDef.armorFlavorText,
+              tags: inspectGem.affixDef.tags,
+              rarity: inspectGem.gem.rarity,
+              tier: inspectGem.gem.tier,
+              tiers: 'tiers' in inspectGem.affixDef
+                ? (inspectGem.affixDef as AffixDef).tiers
+                : undefined,
+              weaponEffect: 'weaponEffect' in inspectGem.affixDef
+                ? inspectGem.affixDef.weaponEffect
+                : undefined,
+              armorEffect: 'armorEffect' in inspectGem.affixDef
+                ? inspectGem.affixDef.armorEffect
+                : undefined,
+            }}
+            context="both"
+            onClose={() => setInspectGem(null)}
+          />
+        )}
+
+        {/* Confirmation modal */}
+        <Modal open={confirmModalOpen} onClose={closeConfirmModal} title="Commit your forge?">
+          <p className="mb-4 text-sm" style={{ color: 'var(--color-surface-300)' }}>
+            Your forged loadout will be locked in for the upcoming duel.
+          </p>
+          <div className="flex justify-end gap-2">
+            <HapticButton variant="secondary" size="sm" onClick={closeConfirmModal}>CANCEL</HapticButton>
+            <HapticButton variant="primary" size="sm" onClick={handleCommit}>CONFIRM</HapticButton>
+          </div>
+        </Modal>
+
+        {/* Flux toast */}
+        {fluxToast && (
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
+            style={{
+              top: 100,
+              color: 'var(--color-danger)',
+              animation: 'fadeInOut 0.8s ease-out forwards',
+              fontFamily: 'var(--font-family-display)',
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {fluxToast}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (

@@ -115,7 +115,10 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
     >
       <AmbientBackdrop />
 
-      <div style={{ gridArea: 'topbar', zIndex: 1 }}>
+      <div
+        style={{ gridArea: 'topbar', zIndex: 1 }}
+        data-screen-section="forge-topbar"
+      >
         <ForgeTopBar
           lives={props.lives}
           maxLives={props.maxLives}
