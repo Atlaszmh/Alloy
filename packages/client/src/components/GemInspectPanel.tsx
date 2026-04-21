@@ -55,7 +55,7 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
         className="absolute inset-0 z-40 bg-black/60"
       />
       {/* Panel */}
-      <div className="absolute right-0 top-0 z-50 flex h-full w-[70%] flex-col overflow-y-auto overflow-x-hidden bg-surface-800 shadow-2xl">
+      <div className="absolute right-0 top-0 z-50 flex h-full w-[70%] max-w-[480px] flex-col overflow-y-auto overflow-x-hidden border-l border-surface-600 bg-surface-800 shadow-2xl">
         {/* Header with gem art */}
         <div className="flex items-center gap-3 border-b border-surface-600 p-4">
           {gem.affixId && (() => {
