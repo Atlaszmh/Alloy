@@ -4,18 +4,20 @@ import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 /**
- * Bottom HUD stockpile strip — always a 5 × 2 grid (10 cells) so the tray
- * shape stays visually stable as gems are socketed or staged. Sparse states
- * fill the remaining cells with dim hatched placeholders per the filled-state
- * mockup (`.gem-empty`).
+ * Bottom HUD stockpile strip — a 5-column grid that is ALWAYS at least 2 rows
+ * (10 cells) so the tray shape stays visually stable as gems are socketed or
+ * staged, and grows in whole rows of 5 when the stockpile exceeds 10. Sparse
+ * states fill the remaining cells with dim hatched placeholders per the
+ * filled-state mockup (`.gem-empty`).
  *
- * NOTE — future `forge-desktop-all-visible` responsive probe: the 10-cell
- * invariant is what that probe asserts to catch the "5×2 collapses to 5×1
- * on narrow frames" regression. Keep this grid exactly 10 cells regardless
- * of stockpile size; don't dynamically trim the row.
+ * NOTE — `forge-desktop-all-visible` responsive probe: the 10-cell minimum is
+ * what that probe asserts to catch the "5×2 collapses to 5×1 on narrow
+ * frames" regression. The cell count may exceed 10 (when the round-1 pool of
+ * 20 gems is held and none are socketed), but must never drop below it.
  */
 
-const GRID_CAPACITY = 10;
+const MIN_GRID_CAPACITY = 10;
+const COLS = 5;
 
 interface StockpileStripProps {
   stockpile: GemInstance[];
@@ -58,8 +60,14 @@ export function StockpileStrip({
     return map;
   }, [registry]);
 
-  // Always render exactly 10 cells so the grid shape is constant.
-  const cells: (GemInstance | null)[] = Array.from({ length: GRID_CAPACITY }, (_, i) =>
+  // At least MIN_GRID_CAPACITY (10, the 5×2 invariant) cells; grow in whole
+  // rows of COLS (5) so every gem stays addressable when the inventory spills
+  // past 10. Round 1's pool cap is 20 so 4 rows is the practical ceiling.
+  const cellCount = Math.max(
+    MIN_GRID_CAPACITY,
+    Math.ceil(visibleGems.length / COLS) * COLS,
+  );
+  const cells: (GemInstance | null)[] = Array.from({ length: cellCount }, (_, i) =>
     visibleGems[i] ?? null,
   );
 
@@ -150,12 +158,13 @@ export function StockpileStrip({
         </span>
       </header>
 
-      {/* Grid — always 10 cells (5 × 2) */}
+      {/* Grid — 5 columns; at least 2 rows, grows in whole rows when the
+          stockpile holds more than 10 gems (round-1 pool caps at 20). */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-          gridTemplateRows: 'repeat(2, 1fr)',
+          gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
+          gridAutoRows: '1fr',
           gap: 'var(--gem-gap-tight)',
           flex: 1,
           minHeight: 0,
