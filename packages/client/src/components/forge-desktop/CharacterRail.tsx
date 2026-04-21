@@ -17,6 +17,11 @@ interface StatRow {
   barGradient: string;
 }
 
+// DISPLAY-ONLY ceilings for the stat-bar fill ratios. These aren't engine
+// caps — they're visual references chosen to make the bar read nicely at
+// mid-progression values (HP ~400, DMG ~25, etc.). Revisit when stat
+// soft-caps land in balance config; lifting into balance.display.statCeilings
+// would be the cleanest promotion.
 const STAT_ROWS: StatRow[] = [
   {
     key: 'maxHP',

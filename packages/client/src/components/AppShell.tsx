@@ -37,7 +37,10 @@ export function AppShell() {
     const frame = frameRef.current;
     if (!frame) return;
     const root = document.documentElement;
-    const DESKTOP_MIN_ASPECT = 1.5; // 3:2 threshold — see 2026-04-20 spec
+    // 3:2 threshold — MUST stay in sync with `@media (min-aspect-ratio: 3/2)`
+    // in index.css (which releases the letterbox at the same ratio). If you
+    // change one, change the other. See 2026-04-20 spec.
+    const DESKTOP_MIN_ASPECT = 1.5;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       root.style.setProperty('--frame-h', `${height}px`);

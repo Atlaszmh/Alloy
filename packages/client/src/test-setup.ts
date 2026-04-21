@@ -33,3 +33,14 @@ class MockAudioContext {
 }
 
 globalThis.AudioContext = MockAudioContext as unknown as typeof AudioContext;
+
+// jsdom doesn't ship ResizeObserver. Several components (SocketGrid, ForgeHud,
+// Draft pool grid) use it to size themselves; stub it once here so individual
+// test files don't each carry their own copy.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof globalThis.ResizeObserver;
+}

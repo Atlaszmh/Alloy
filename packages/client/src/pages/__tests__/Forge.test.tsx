@@ -219,14 +219,7 @@ beforeAll(() => {
     this.removeAttribute('open');
   };
 
-  // Stub ResizeObserver for jsdom
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = class ResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof globalThis.ResizeObserver;
-  }
+  // ResizeObserver is stubbed centrally in src/test-setup.ts
 
   // Stub Element.animate (Web Animations API) for jsdom
   if (!Element.prototype.animate) {

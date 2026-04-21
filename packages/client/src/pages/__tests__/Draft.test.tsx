@@ -112,13 +112,7 @@ function createMockMatchState(mode: MatchState['mode']): MatchState {
 }
 
 beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = class ResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof globalThis.ResizeObserver;
-  }
+  // ResizeObserver is stubbed centrally in src/test-setup.ts
   if (!Element.prototype.animate) {
     Element.prototype.animate = function () {
       return { finished: Promise.resolve(), cancel: () => {}, onfinish: null } as unknown as Animation;

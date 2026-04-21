@@ -1,17 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { beforeAll, describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { SocketGrid } from './SocketGrid';
 
-// jsdom doesn't implement ResizeObserver; stub it so the component mounts.
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    globalThis.ResizeObserver = class ResizeObserver {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof globalThis.ResizeObserver;
-  }
-});
+// ResizeObserver is stubbed centrally in src/test-setup.ts
 
 describe('SocketGrid', () => {
   test('renders N empty socket buttons with data-forge-socket indices', () => {
