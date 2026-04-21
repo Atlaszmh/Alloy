@@ -13,11 +13,16 @@ const PROBE = 'forge-desktop-all-visible';
  * `forge-equip` / `forge-combine` specs.
  */
 export const forgeDesktopAllVisible: Probe = async (page, ctx) => {
-  // Only meaningful on the desktop HUD. Skip on portrait runs.
-  const mode = await page.evaluate(() =>
-    document.documentElement.getAttribute('data-frame-mode'),
-  );
-  if (mode !== 'desktop') return [];
+  // Only meaningful on the desktop HUD forge screen. Skip when the page isn't
+  // rendering the desktop forge tree (other screens at desktop aspect — Draft,
+  // Duel, MainMenu — still report data-frame-mode=desktop but don't have the
+  // forge-specific data-screen-section anchors).
+  const applies = await page.evaluate(() => {
+    const mode = document.documentElement.getAttribute('data-frame-mode');
+    if (mode !== 'desktop') return false;
+    return document.querySelector('[data-screen="forge-desktop"]') !== null;
+  });
+  if (!applies) return [];
 
   const data = await page.evaluate(() => {
     const frame = document.querySelector<HTMLElement>('.app-frame');
