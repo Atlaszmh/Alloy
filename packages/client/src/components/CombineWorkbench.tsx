@@ -28,6 +28,9 @@ interface CombineWorkbenchProps {
   onCombine: () => void;
   onClearAll: () => void;
   onPointerDown?: (uid: string, e: React.PointerEvent) => void;
+  /** Layout variant. Default 'portrait' keeps today's rendering. 'desktop-dock'
+   *  tightens padding and removes the top border (the dock panel provides one). */
+  layout?: 'portrait' | 'desktop-dock';
 }
 
 type GlowSignal = 'none' | 'white' | 'gold';
@@ -66,6 +69,7 @@ export function CombineWorkbench({
   onCombine,
   onClearAll,
   onPointerDown,
+  layout = 'portrait',
 }: CombineWorkbenchProps) {
   const glowSignal = useMemo(
     () => computeGlowSignal(comboSlots, registry),
@@ -75,12 +79,13 @@ export function CombineWorkbench({
   const filledCount = comboSlots.filter(Boolean).length;
   const keepFilled = comboSlots[0] !== null;
   const canCombine = keepFilled && filledCount >= 2 && canAfford;
+  const isDock = layout === 'desktop-dock';
 
   return (
     <div
       style={{
-        padding: 'var(--gap-sm) var(--gap-md)',
-        borderTop: '1px solid var(--color-surface-700)',
+        padding: isDock ? 'var(--gap-xs) var(--gap-sm)' : 'var(--gap-sm) var(--gap-md)',
+        borderTop: isDock ? 'none' : '1px solid var(--color-surface-700)',
       }}
     >
       {/* Top row: slots + separators + arrow + result box */}
