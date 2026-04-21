@@ -5,6 +5,7 @@ import { tabBarVisibility } from './tabbar';
 import { primaryActionReachable } from './reachability';
 import { deadSpace, type DeadSpaceOptions } from './dead-space';
 import { minSize } from './min-size';
+import { forgeDesktopAllVisible } from './forge-desktop-all-visible';
 
 export interface ProbeOverrides {
   deadSpace?: DeadSpaceOptions;
@@ -37,6 +38,7 @@ export async function runAllProbes(
     { name: 'primary-action-reachable', fn: primaryActionReachable },
     { name: 'dead-space', fn: deadSpace(overrides?.deadSpace ?? {}) },
     { name: 'min-size', fn: minSize },
+    { name: 'forge-desktop-all-visible', fn: forgeDesktopAllVisible },
   ];
 
   const all: Finding[] = [];
