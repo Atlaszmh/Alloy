@@ -18,7 +18,7 @@ import { showToast } from '@/components/Toast';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
 import { ForgeDesktop } from '@/components/forge-desktop/ForgeDesktop';
-import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview } from '@alloy/engine';
+import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview, RunState, DataRegistry } from '@alloy/engine';
 import { createForgeState, CombinationEngine, DiscoveryState, getPoolConfigForRound } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
@@ -741,115 +741,35 @@ export function Forge() {
       } as React.CSSProperties)
     : {};
 
-  // ── Desktop HUD prop assembly ──
-  //
-  // Kept adjacent to the existing portrait return so both trees read the same
-  // values. Drag state on Forge.tsx is ref-only (no re-render), so `isDragging`
-  // sent to the desktop HUD matches what portrait would see at React-state
-  // level — always false. Balance-driven flux costs and round-aware pool size
-  // flow down from the engine so tuning happens in one place. All balance
-  // lookups are optional-chained so that unit tests which stub registry with
-  // a minimal BalanceConfig still mount Forge without crashing.
-  const balanceConfig = registry.getBalance();
-  const fluxCostsCfg = balanceConfig.gem?.flux?.costs;
-  const boostCost = fluxCostsCfg?.boostCombine ?? 3;
-  const rerollCost = fluxCostsCfg?.rerollPool ?? 5;
-  const rarityCost = fluxCostsCfg?.guaranteeRarity ?? 4;
-
-  // Pool schedule drives the "Gems Held X / Y" readout. In run mode we read
-  // the engine's current run round; quick mode has no run-round concept, so
-  // fall back to the peak 20 (matches the portrait UX — no Y readout visible
-  // to users at the moment; only consumed by the desktop stockpile).
-  const runRound = runState?.round ?? 1;
-  const poolScaling = balanceConfig.gem?.poolScaling;
-  const maxStockpileCapacity =
-    isRunMode && poolScaling
-      ? getPoolConfigForRound(runRound, poolScaling).poolSize
-      : 20;
-
-  const forgeDesktopProps: React.ComponentProps<typeof ForgeDesktop> | null = plan
-    ? {
-        round,
-        lives: runState?.lives ?? 3,
-        maxLives: runState?.startingLives ?? 3,
-        opponentLabel: isAiMatch
-          ? `AI T${aiOpponentTier ?? 1}`
-          : 'Player',
-        streak: runState?.consecutiveWins ?? 0,
-        totalRounds: runState?.goalRound ?? 10,
-        derivedStats,
-        plan,
-        registry,
-        currentFlux,
-        maxFlux,
-        boostCost,
-        rerollCost,
-        rarityCost,
-        comboSlots,
-        combinePreview,
-        // CombineWorkbench gates combine internally on (keepFilled && filled >= 2);
-        // pass the same literal `true` the portrait tree uses so the dock's
-        // button behaves identically.
-        canAffordCombine: true,
-        weaponStats: baseStatWeapon,
-        armorStats: baseStatArmor,
-        onDone: openConfirmModal,
-        // Matches the portrait ForgeHeader's Gem Library shortcut, which
-        // navigates to the /gems route (GemEncyclopedia page).
-        onOpenGemLibrary: () => navigate('/gems'),
-        onBoost: () => {
-          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'boost_combine' } }).then(result => {
-            if (result.ok) {
-              setFluxToast('Boost applied to next combine!');
-              playSound('buttonClick');
-            } else {
-              setFluxToast(result.error ?? 'Cannot boost combine');
-            }
-          });
-        },
-        onReroll: () => {
-          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'reroll_pool' } }).then(result => {
-            if (result.ok) {
-              setFluxToast('Pool will reroll next draft!');
-              playSound('buttonClick');
-            } else {
-              setFluxToast(result.error ?? 'Cannot reroll pool');
-            }
-          });
-        },
-        onGuaranteeRarity: () => {
-          gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind: 'guarantee_rarity' } }).then(result => {
-            if (result.ok) {
-              setFluxToast('Next draft gem guaranteed Rare!');
-              playSound('buttonClick');
-            } else {
-              setFluxToast(result.error ?? 'Cannot guarantee rarity');
-            }
-          });
-        },
-        onWeaponStatChange: (i, v) => handleBaseStatChange('weapon', i, v),
-        onArmorStatChange: (i, v) => handleBaseStatChange('armor', i, v),
-        onSocketClick: handleSocketClick,
-        onSocketRemove: handleSocketRemove,
-        onComboSlotClick: handleComboSlotClick,
-        onCombine: handleCombine,
-        onClearComboSlots: () => { clearComboSlots(); playSound('buttonClick'); },
-        onSelectOrb: handleSelectOrb,
-        onGemPointerDown: handlePointerDown,
-        selectedOrbUid,
-        isDragging: false,
-        equippedUids,
-        stagedUids,
-        maxStockpileCapacity,
-      }
+  // Desktop HUD prop assembly — see buildForgeDesktopProps at the bottom of this file.
+  const forgeDesktopProps = plan
+    ? buildForgeDesktopProps({
+        plan, registry, runState, isRunMode, isAiMatch, aiOpponentTier,
+        round, derivedStats, currentFlux, maxFlux, comboSlots, combinePreview,
+        baseStatWeapon, baseStatArmor, selectedOrbUid, equippedUids, stagedUids,
+        gateway, navigate, setFluxToast,
+        openConfirmModal, clearComboSlots,
+        handleBaseStatChange, handleSocketClick, handleSocketRemove,
+        handleComboSlotClick, handleCombine, handleSelectOrb, handlePointerDown,
+      })
     : null;
 
+  // Shared overlays for portrait + desktop — see ForgeOverlays at the bottom of this file.
+  const overlays = (
+    <ForgeOverlays
+      isAiMatch={isAiMatch}
+      isDisconnected={isDisconnected}
+      secondsLeft={secondsLeft}
+      inspectGem={inspectGem}
+      setInspectGem={setInspectGem}
+      confirmModalOpen={confirmModalOpen}
+      closeConfirmModal={closeConfirmModal}
+      handleCommit={handleCommit}
+      fluxToast={fluxToast}
+    />
+  );
+
   if (frameMode === 'desktop' && forgeDesktopProps) {
-    // Desktop branch renders the HUD, but we still need the portrait-shared
-    // overlay surfaces: commit-confirmation modal (triggered by Done), gem
-    // inspect panel (long-press), PvP disconnect overlay, and the transient
-    // flux action toast. Wrapping in a sized container lets the HUD fill the
-    // page while these float on top.
     return (
       <div
         ref={setPageEl}
@@ -862,63 +782,8 @@ export function Forge() {
           ...sharedGemStyle,
         }}
       >
-        {!isAiMatch && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
-
         <ForgeDesktop {...forgeDesktopProps} />
-
-        {/* Gem inspect panel (long-press on tray gem) */}
-        {inspectGem && (
-          <GemInspectPanel
-            gem={{
-              name: inspectGem.affixDef.name,
-              description: inspectGem.affixDef.description,
-              weaponFlavorText: inspectGem.affixDef.weaponFlavorText,
-              armorFlavorText: inspectGem.affixDef.armorFlavorText,
-              tags: inspectGem.affixDef.tags,
-              rarity: inspectGem.gem.rarity,
-              tier: inspectGem.gem.tier,
-              tiers: 'tiers' in inspectGem.affixDef
-                ? (inspectGem.affixDef as AffixDef).tiers
-                : undefined,
-              weaponEffect: 'weaponEffect' in inspectGem.affixDef
-                ? inspectGem.affixDef.weaponEffect
-                : undefined,
-              armorEffect: 'armorEffect' in inspectGem.affixDef
-                ? inspectGem.affixDef.armorEffect
-                : undefined,
-            }}
-            context="both"
-            onClose={() => setInspectGem(null)}
-          />
-        )}
-
-        {/* Confirmation modal */}
-        <Modal open={confirmModalOpen} onClose={closeConfirmModal} title="Commit your forge?">
-          <p className="mb-4 text-sm" style={{ color: 'var(--color-surface-300)' }}>
-            Your forged loadout will be locked in for the upcoming duel.
-          </p>
-          <div className="flex justify-end gap-2">
-            <HapticButton variant="secondary" size="sm" onClick={closeConfirmModal}>CANCEL</HapticButton>
-            <HapticButton variant="primary" size="sm" onClick={handleCommit}>CONFIRM</HapticButton>
-          </div>
-        </Modal>
-
-        {/* Flux toast */}
-        {fluxToast && (
-          <div
-            className="pointer-events-none absolute left-1/2 -translate-x-1/2"
-            style={{
-              top: 100,
-              color: 'var(--color-danger)',
-              animation: 'fadeInOut 0.8s ease-out forwards',
-              fontFamily: 'var(--font-family-display)',
-              fontSize: 12,
-              fontWeight: 700,
-            }}
-          >
-            {fluxToast}
-          </div>
-        )}
+        {overlays}
       </div>
     );
   }
@@ -929,9 +794,6 @@ export function Forge() {
       className="page-enter flex h-full flex-col"
       style={{ background: 'var(--color-surface-950)', ...sharedGemStyle }}
     >
-      {/* PvP disconnect overlay */}
-      {!isAiMatch && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
-
       {/* 1. Header — stats only (flux tracker lives inline with flux actions) */}
       <ForgeHeader
         round={round}
@@ -1137,6 +999,142 @@ export function Forge() {
         />
       </div>
 
+      {overlays}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════
+// ── Private helpers (same file, not exported) ──
+// ══════════════════════════════════════════════════
+
+type ForgeDesktopProps = React.ComponentProps<typeof ForgeDesktop>;
+
+/**
+ * Desktop HUD prop assembly. Balance-driven flux costs + round-aware pool size
+ * flow from the engine so tuning happens in one place. Balance lookups use
+ * optional-chain so tests with a minimal stubbed BalanceConfig still mount.
+ * `isDragging: false` matches portrait — Forge drag state is ref-only.
+ */
+function buildForgeDesktopProps(a: {
+  plan: ForgeDesktopProps['plan'];
+  registry: DataRegistry;
+  runState: RunState | undefined;
+  isRunMode: boolean;
+  isAiMatch: boolean;
+  aiOpponentTier: number | null;
+  round: number;
+  derivedStats: ForgeDesktopProps['derivedStats'];
+  currentFlux: number;
+  maxFlux: number;
+  comboSlots: ForgeDesktopProps['comboSlots'];
+  combinePreview: CombinePreview | null;
+  baseStatWeapon: [BaseStat, BaseStat];
+  baseStatArmor: [BaseStat, BaseStat];
+  selectedOrbUid: string | null;
+  equippedUids: Set<string>;
+  stagedUids: Set<string>;
+  gateway: ReturnType<typeof useGateway>;
+  navigate: ReturnType<typeof useNavigate>;
+  setFluxToast: (msg: string | null) => void;
+  openConfirmModal: () => void;
+  clearComboSlots: () => void;
+  handleBaseStatChange: (target: 'weapon' | 'armor', index: 0 | 1, value: BaseStat) => void;
+  handleSocketClick: ForgeDesktopProps['onSocketClick'];
+  handleSocketRemove: ForgeDesktopProps['onSocketRemove'];
+  handleComboSlotClick: ForgeDesktopProps['onComboSlotClick'];
+  handleCombine: () => void;
+  handleSelectOrb: ForgeDesktopProps['onSelectOrb'];
+  handlePointerDown: ForgeDesktopProps['onGemPointerDown'];
+}): ForgeDesktopProps {
+  const bal = a.registry.getBalance();
+  const costs = bal.gem?.flux?.costs;
+  const pool = bal.gem?.poolScaling;
+  const runRound = a.runState?.round ?? 1;
+  const maxStockpileCapacity = a.isRunMode && pool ? getPoolConfigForRound(runRound, pool).poolSize : 20;
+
+  const dispatchFlux = (kind: 'boost_combine' | 'reroll_pool' | 'guarantee_rarity', okMsg: string, errMsg: string) => {
+    a.gateway.dispatch({ kind: 'forge_action', player: 0, action: { kind } }).then(result => {
+      if (result.ok) { a.setFluxToast(okMsg); playSound('buttonClick'); }
+      else { a.setFluxToast(result.error ?? errMsg); }
+    });
+  };
+
+  return {
+    round: a.round,
+    lives: a.runState?.lives ?? 3,
+    maxLives: a.runState?.startingLives ?? 3,
+    opponentLabel: a.isAiMatch ? `AI T${a.aiOpponentTier ?? 1}` : 'Player',
+    streak: a.runState?.consecutiveWins ?? 0,
+    totalRounds: a.runState?.goalRound ?? 10,
+    derivedStats: a.derivedStats,
+    plan: a.plan,
+    registry: a.registry,
+    currentFlux: a.currentFlux,
+    maxFlux: a.maxFlux,
+    boostCost: costs?.boostCombine ?? 3,
+    rerollCost: costs?.rerollPool ?? 5,
+    rarityCost: costs?.guaranteeRarity ?? 4,
+    comboSlots: a.comboSlots,
+    combinePreview: a.combinePreview,
+    // CombineWorkbench gates combine internally; pass the literal `true` the
+    // portrait tree uses so the dock's button behaves identically.
+    canAffordCombine: true,
+    weaponStats: a.baseStatWeapon,
+    armorStats: a.baseStatArmor,
+    onDone: a.openConfirmModal,
+    // Matches portrait ForgeHeader's Gem Library shortcut → GemEncyclopedia.
+    onOpenGemLibrary: () => a.navigate('/gems'),
+    onBoost: () => dispatchFlux('boost_combine', 'Boost applied to next combine!', 'Cannot boost combine'),
+    onReroll: () => dispatchFlux('reroll_pool', 'Pool will reroll next draft!', 'Cannot reroll pool'),
+    onGuaranteeRarity: () => dispatchFlux('guarantee_rarity', 'Next draft gem guaranteed Rare!', 'Cannot guarantee rarity'),
+    onWeaponStatChange: (i, v) => a.handleBaseStatChange('weapon', i, v),
+    onArmorStatChange: (i, v) => a.handleBaseStatChange('armor', i, v),
+    onSocketClick: a.handleSocketClick,
+    onSocketRemove: a.handleSocketRemove,
+    onComboSlotClick: a.handleComboSlotClick,
+    onCombine: a.handleCombine,
+    onClearComboSlots: () => { a.clearComboSlots(); playSound('buttonClick'); },
+    onSelectOrb: a.handleSelectOrb,
+    onGemPointerDown: a.handlePointerDown,
+    selectedOrbUid: a.selectedOrbUid,
+    isDragging: false,
+    equippedUids: a.equippedUids,
+    stagedUids: a.stagedUids,
+    maxStockpileCapacity,
+  };
+}
+
+/**
+ * Shared overlay surfaces rendered by both portrait and desktop branches:
+ * PvP disconnect overlay, gem inspect panel (long-press), commit-confirmation
+ * modal, and the transient flux action toast. Extracted to dedupe the JSX
+ * across the two layout trees.
+ */
+type ForgeOverlaysProps = {
+  isAiMatch: boolean;
+  isDisconnected: boolean;
+  secondsLeft: number;
+  inspectGem: { gem: GemInstance; affixDef: AffixDef | CompoundAffixDef } | null;
+  setInspectGem: (v: { gem: GemInstance; affixDef: AffixDef | CompoundAffixDef } | null) => void;
+  confirmModalOpen: boolean;
+  closeConfirmModal: () => void;
+  handleCommit: () => void;
+  fluxToast: string | null;
+};
+
+function ForgeOverlays(props: ForgeOverlaysProps) {
+  const {
+    isAiMatch, isDisconnected, secondsLeft,
+    inspectGem, setInspectGem,
+    confirmModalOpen, closeConfirmModal, handleCommit,
+    fluxToast,
+  } = props;
+
+  return (
+    <>
+      {!isAiMatch && <DisconnectOverlay isDisconnected={isDisconnected} secondsLeft={secondsLeft} />}
+
       {/* Gem inspect panel (long-press on tray gem) */}
       {inspectGem && (
         <GemInspectPanel
@@ -1190,6 +1188,6 @@ export function Forge() {
           {fluxToast}
         </div>
       )}
-    </div>
+    </>
   );
 }
