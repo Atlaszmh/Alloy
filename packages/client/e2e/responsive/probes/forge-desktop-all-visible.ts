@@ -38,7 +38,13 @@ export const forgeDesktopAllVisible: Probe = async (page, ctx) => {
       if (r.bottom > frameRect.bottom + 1) {
         clipped.push({ selector: sel, bottom: r.bottom, overflow: r.bottom - frameRect.bottom });
       }
-      if (el.scrollHeight > el.clientHeight + 2) {
+      // Only flag a scrollbar when overflow-y is auto/scroll — that's what
+      // actually produces a visible scrollbar. overflow: hidden/visible with
+      // tall content may clip but does not scroll; those cases show up in
+      // the `clipped` check when they spill past the frame.
+      const overflowY = getComputedStyle(el).overflowY;
+      const scrollable = overflowY === 'auto' || overflowY === 'scroll';
+      if (scrollable && el.scrollHeight > el.clientHeight + 2) {
         scrollbars.push({ selector: sel, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight });
       }
     }
