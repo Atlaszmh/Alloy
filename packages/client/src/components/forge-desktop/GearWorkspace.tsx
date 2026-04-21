@@ -213,18 +213,24 @@ function GearPanel({
           onEmptyClick={(slotIndex) => onSocketClick(cardId, slotIndex)}
           renderFilledSocket={(slot, index) => {
             const orb = slot.gem;
-            const affix = registry.getAffix(orb.affixId);
+            // Non-throwing lookup — matches SocketedAffixList/GemCell pattern.
+            // If the affix id is missing from the registry we still render a
+            // safe placeholder row instead of crashing the gear panel tree.
+            const affix = registry.findAffix(orb.affixId);
             const isLocked = plan.lockedGemUids.has(orb.uid);
-            const statLabel = getStatLabel(affix, orb, cardId);
+            const affixName = affix?.name ?? orb.affixId;
+            const category = affix?.category ?? 'offensive';
+            const tags = affix?.tags ?? [];
+            const statLabel = affix ? getStatLabel(affix, orb, cardId) : '?';
             return (
               <GemCard
                 uid={orb.uid}
                 affixId={orb.affixId}
-                affixName={affix.name}
+                affixName={affixName}
                 tier={orb.tier}
                 rarity={orb.rarity}
-                category={affix.category}
-                tags={affix.tags}
+                category={category}
+                tags={tags}
                 statLabel={statLabel}
                 onClick={isLocked ? undefined : () => onSocketRemove(cardId, index)}
                 onPointerDown={
