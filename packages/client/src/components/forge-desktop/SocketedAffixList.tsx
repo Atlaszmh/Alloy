@@ -22,6 +22,7 @@ interface SocketedAffixListProps {
 export function SocketedAffixList({ slots, cardId, registry }: SocketedAffixListProps) {
   return (
     <div
+      data-socketed-affix-list={cardId}
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
