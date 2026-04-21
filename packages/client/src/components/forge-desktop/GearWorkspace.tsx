@@ -15,13 +15,16 @@ interface GearWorkspaceProps {
 }
 
 /**
- * Desktop center stage — weapon panel on top, armor panel below.
+ * Desktop center stage — weapon panel on the left, armor panel on the right.
  *
  * Each panel wraps itself in `data-item-card="weapon"` / `data-item-card="armor"`
  * so the existing `Forge.tsx` drag-drop logic (which walks up from the
  * `[data-forge-socket]` element via `.closest('[data-item-card]')`) keeps
  * working unchanged. The SocketGrid primitive (Chunk 2) handles the actual
  * grid, and SocketedAffixList renders the per-socket readout below.
+ *
+ * Layout matches mockup-c-hud-v2-filled.html `.center-stage` — two equal
+ * columns side-by-side, each panel filling the full height of the gear area.
  */
 export function GearWorkspace({
   plan,
@@ -36,8 +39,9 @@ export function GearWorkspace({
     <div
       style={{
         display: 'grid',
-        gridTemplateRows: '1fr 1fr',
+        gridTemplateColumns: '1fr 1fr',
         gap: 'var(--gap-md)',
+        height: '100%',
         minHeight: 0,
       }}
     >

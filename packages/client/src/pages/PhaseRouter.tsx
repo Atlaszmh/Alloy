@@ -9,6 +9,7 @@ import { RunLivesDisplay } from '@/components/RunLivesDisplay';
 import { RunRoundCounter } from '@/components/RunRoundCounter';
 import { RunStatusOverlay } from '@/components/RunStatusOverlay';
 import { ToastContainer } from '@/components/Toast';
+import { useFrameMode } from '@/hooks/useFrameMode';
 import { Draft } from './Draft';
 import { Forge } from './Forge';
 import { Duel } from './Duel';
@@ -22,6 +23,7 @@ export function PhaseRouter() {
   const [, forceUpdate] = useState(0);
   const isRunMode = useMatchStore(selectIsRunMode);
   const aiOpponentTier = useMatchStore(selectAiOpponentTier);
+  const frameMode = useFrameMode();
 
   const gateway = useMatchGateway(code ?? '');
 
@@ -95,8 +97,16 @@ export function PhaseRouter() {
   return (
     <GatewayProvider value={gateway}>
       <div className="flex h-full flex-col">
-        {/* Run mode header bar */}
-        {isRunMode && phase?.kind !== 'complete' && (
+        {/* Run mode header bar.
+         *
+         * Desktop Forge HUD (ForgeTopBar) already renders lives + round + VS,
+         * so suppress this top banner in desktop frame mode while on the forge
+         * phase to avoid a duplicate "N Lives" heart row stacking above the
+         * HUD. Portrait (and other desktop phases that have not yet been
+         * HUD-ified, e.g. Duel) continue to show this banner. */}
+        {isRunMode &&
+          phase?.kind !== 'complete' &&
+          !(frameMode === 'desktop' && phase?.kind === 'forge') && (
           <div
             className="flex shrink-0 items-center justify-between px-3 py-1.5"
             style={{

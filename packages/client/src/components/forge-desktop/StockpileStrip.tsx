@@ -158,14 +158,18 @@ export function StockpileStrip({
         </span>
       </header>
 
-      {/* Grid — 5 columns; at least 2 rows, grows in whole rows when the
-          stockpile holds more than 10 gems (round-1 pool caps at 20). */}
+      {/* Grid — 5 columns sized to --gem-size (not the wide 1fr cells that
+          left ~250px of dead space per cell at 1920 width); at least 2 rows,
+          grows in whole rows when the stockpile holds more than 10 gems
+          (round-1 pool caps at 20). Centered horizontally so the tight pack
+          sits in the middle of the tray regardless of viewport width. */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
-          gridAutoRows: '1fr',
+          gridTemplateColumns: `repeat(${COLS}, var(--gem-size))`,
+          gridAutoRows: 'var(--gem-size)',
           gap: 'var(--gem-gap-tight)',
+          justifyContent: 'center',
           flex: 1,
           minHeight: 0,
         }}
@@ -266,7 +270,6 @@ function GemCell({
         tags={tags}
         statLabel={statLabel}
         selected={selected}
-        compact
         onClick={onSelect}
         onPointerDown={onPointerDown}
       />
