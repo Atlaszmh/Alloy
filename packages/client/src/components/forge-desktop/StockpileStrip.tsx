@@ -23,6 +23,13 @@ interface StockpileStripProps {
   selectedOrbUid: string | null;
   equippedUids: Set<string>;
   stagedUids: Set<string>;
+  /**
+   * Round-aware pool capacity for the "Gems Held X / Y" readout. The draft
+   * pool schedule runs 20 → 18 → 16 → 14 → 12 → 10 across rounds, so this
+   * must be sourced from the engine (Chunk 4 wires it in). Independent of
+   * the fixed 10-cell display grid shape.
+   */
+  maxCapacity: number;
   onSelectOrb: (uid: string) => void;
   onPointerDown: (uid: string, e: React.PointerEvent) => void;
 }
@@ -33,6 +40,7 @@ export function StockpileStrip({
   selectedOrbUid,
   equippedUids,
   stagedUids,
+  maxCapacity,
   onSelectOrb,
   onPointerDown,
 }: StockpileStripProps) {
@@ -137,7 +145,7 @@ export function StockpileStrip({
         >
           Gems Held{' '}
           <span style={{ color: 'var(--color-bronze-300)' }}>
-            {visibleGems.length} / 20
+            {visibleGems.length} / {maxCapacity}
           </span>
         </span>
       </header>
