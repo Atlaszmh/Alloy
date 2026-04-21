@@ -37,13 +37,29 @@ export function AppShell() {
     const frame = frameRef.current;
     if (!frame) return;
     const root = document.documentElement;
+    const DESKTOP_MIN_ASPECT = 1.5; // 3:2 threshold — see 2026-04-20 spec
     const ro = new ResizeObserver(([entry]) => {
-      root.style.setProperty('--frame-h', `${entry.contentRect.height}px`);
+      const { width, height } = entry.contentRect;
+      root.style.setProperty('--frame-h', `${height}px`);
+      root.style.setProperty('--frame-w', `${width}px`);
+      const viewportAspect = window.innerWidth / window.innerHeight;
+      const mode = viewportAspect >= DESKTOP_MIN_ASPECT ? 'desktop' : 'portrait';
+      root.setAttribute('data-frame-mode', mode);
     });
     ro.observe(frame);
+    const onResize = () => {
+      const viewportAspect = window.innerWidth / window.innerHeight;
+      const mode = viewportAspect >= DESKTOP_MIN_ASPECT ? 'desktop' : 'portrait';
+      root.setAttribute('data-frame-mode', mode);
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
     return () => {
       ro.disconnect();
+      window.removeEventListener('resize', onResize);
       root.style.removeProperty('--frame-h');
+      root.style.removeProperty('--frame-w');
+      root.removeAttribute('data-frame-mode');
     };
   }, []);
 
