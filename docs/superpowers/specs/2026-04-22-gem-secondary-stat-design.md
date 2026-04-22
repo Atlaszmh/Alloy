@@ -107,7 +107,7 @@ After the switch, the existing forge-action path runs and calls `applyForgeActio
    - If source has both and `chosenAffix` is set: player's choice (flux already deducted at match-controller layer).
    - If source has both and `chosenAffix` is not set: RNG picks primary/secondary 50/50, using a deterministic fork: `rng.fork('transplant_<targetUid>_<sourceUid>')`.
 2. Build the `SecondarySlot` record using the chosen affix's ID, plus the source's tier and rarity.
-3. Set `target.secondary = slot`; explicitly set `target.combinable = false` (overrides what `isCombinable()` would compute from tier/rarity alone — filled-secondary gems are a new terminal case). Update `recomputeCombinable(gem)` helper to account for `gem.secondary` so any downstream consumer reading `combinable` stays consistent.
+3. Set `target.secondary = slot`. `target.combinable` is **not** forced — the combine engine itself filters signature/category matches for filled-secondary inputs, so `combinable` continues to reflect tier/rarity/recipeDepth eligibility only (generic-upgrade is still possible).
 4. Append `slot.affixId` to `target.tags` if not already present (explicit pre-dedup at write time; `getGemTags()` dedups on read but we keep the stored array tidy).
 5. Remove the source gem from the stockpile (fully consumed). If source had a filled secondary, that secondary is lost along with the source gem — only the chosen affix survives.
 
@@ -133,12 +133,30 @@ Synergy detection lives in `packages/engine/src/forge/stat-calculator.ts → com
 
 ### Combinability
 
-- A gem with an **open but empty** secondary slot is still `combinable: true`. Combining it follows existing rules; the output's open-slot status recomputes from its new tier/rarity via `hasSecondarySlot(output)`. Combine can produce an output whose threshold is no longer met (e.g., via a generic rarity bump that also resets tier) — that is acceptable; the open-empty state simply disappears on the new gem.
-- A gem with a **filled** secondary slot is `combinable: false` — but is still eligible as a transplant *source* (its primary or, with flux, its secondary may be selected and copied to a new host). "Filled secondary" is terminal only with respect to *combine*; transplant can keep the affix economy flowing. Update `isCombinable()` to also return `false` when `gem.secondary !== undefined`. Verify all current readers of `combinable` (listed below) pick up the new invariant correctly:
-  - `packages/engine/src/forge/forge-plan.ts` (combine + combine3 validation)
-  - `packages/engine/src/combine/combination-engine.ts` (preview + apply paths)
-  - AI strategy `packages/engine/src/ai/strategies/forge-strategy.ts`
-- Client UI greys out the combine affordance and shows a tooltip: "Has secondary affix — cannot combine."
+Combine has three layers today: signature recipes → category combos → generic upgrades. Transplant interacts differently with each:
+
+- A gem with an **open but empty** secondary slot is `combinable: true` for all three layers — unchanged from today. The output's open-slot status recomputes from its new tier/rarity via `hasSecondarySlot(output, threshold)`; if the output no longer meets the threshold, the open-empty state simply disappears.
+- A gem with a **filled** secondary slot is:
+  - **Eligible** for the **generic upgrade** layer (same-affix partner → tier+1 or rarity+1). The surviving gem (specified by `keepGemUid`) retains its filled secondary. The consumed gem's secondary (if any) is discarded alongside the gem itself.
+  - **Not eligible** for **signature recipes** or **category combos** — those produce an entirely new gem and would silently destroy the secondary investment. The combine engine rejects these matches at the recipe-resolution layer.
+  - Still valid as a **transplant source** (the primary, or with flux the secondary, can be copied to a new host). "Filled secondary" is terminal with respect to signature/category combos only; generic upgrade and transplant both keep the affix economy flowing.
+
+**Implementation:**
+
+`isCombinable(gem)` keeps its current behavior (reflects "can participate in any combine" — driven by tier, rarity, recipeDepth). It does **not** flip to false on filled-secondary. The filtering happens inside the combine engine:
+
+- `packages/engine/src/combine/combination-engine.ts` — at recipe resolution, if either input has `gem.secondary !== undefined`, skip the signature and category passes entirely; only the generic-upgrade pass is evaluated. If generic upgrade does not match (different affixes, or both tier and rarity already maxed), the combine fails with a clear reason code (e.g., `"Filled-secondary gems only combine via generic upgrade with a same-affix partner"`).
+- `packages/engine/src/forge/forge-plan.ts` — `planCombine` / `planCombine3` return the new reason code when filled-secondary inputs have no generic-upgrade match. UI reads the reason to render an appropriate tooltip.
+- `packages/engine/src/ai/strategies/forge-strategy.ts` — when scoring combine candidates, the AI skips signature/category matches for filled-secondary inputs (it would have been invalid anyway) and considers generic upgrades normally.
+
+**Output secondary semantics for generic upgrade:**
+
+Combine's existing `keepGemUid` decides which input's identity survives. Extend the rule: whichever gem is kept also keeps its `secondary` slot. If `keepGemUid` is not specified and both inputs have a secondary, the engine deterministically keeps the higher-rarity gem's (tie-broken by tier, then by gem uid lexicographic order) to match the existing deterministic fallback.
+
+**Client UI:**
+
+- Combine button enables when a recipe of any layer matches (same as today). For filled-secondary inputs, only generic-upgrade matches produce an enabled state.
+- When a player drops two gems that would have matched a signature/category recipe but at least one has a filled secondary, the preview panel shows a disabled-state explanation: "Filled-secondary gems only combine for generic tier/rarity upgrades."
 
 ### Extensibility — modifier pipeline
 
@@ -306,7 +324,7 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 
 ### Modified files
 
-- `packages/engine/src/types/gem.ts` — `SecondarySlot`, `SecondaryModifier`, `GemInstance.secondary?`, `hasSecondarySlot(gem, threshold)`, `hasSecondarySlotFromRegistry(gem, registry)`; update `isCombinable()` to return `false` when `gem.secondary` is set. The existing `isCombinable()` takes a structural subset `{ tier, rarity, recipeDepth }` — widen the parameter type to include optional `secondary?: SecondarySlot` so all current callers continue to compile
+- `packages/engine/src/types/gem.ts` — `SecondarySlot`, `SecondaryModifier`, `GemInstance.secondary?`, `hasSecondarySlot(gem, threshold)`, `hasSecondarySlotFromRegistry(gem, registry)`. `isCombinable()` is **unchanged** — filled-secondary filtering lives one layer deeper, in the combine engine.
 - `packages/engine/src/types/forge-action.ts` — new `transplant_gem` variant
 - `packages/engine/src/data/balance.json` — new top-level `transplant` section + new keys added to existing `gem.flux.costs` block (do NOT touch the legacy top-level `fluxCosts` block)
 - `packages/engine/src/data/schemas.ts` — Zod schema updates for the new balance keys
@@ -314,7 +332,7 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 - `packages/engine/src/forge/forge-state.ts` — new switch case in `applyForgeAction` adding `case 'transplant_gem': return applyTransplantGem(...)`; new `applyTransplantGem` function
 - `packages/engine/src/forge/forge-plan.ts` — parallel validation `planTransplantGem` (matches existing `planCombine` pattern)
 - `packages/engine/src/forge/stat-calculator.ts` — new step in the pipeline that iterates `gem.secondary` and emits modifiers per slot type; update `computeActiveSynergies` (or its affix-collecting helper) to read `tags[]` so transplanted affixes participate in synergies
-- `packages/engine/src/combine/combination-engine.ts` — no logic change, but verify that `!gem.combinable` already guards against filled-secondary gems (it will, once `isCombinable()` is updated)
+- `packages/engine/src/combine/combination-engine.ts` — at recipe resolution, when either input has `secondary !== undefined`, skip signature and category recipe passes; only evaluate generic upgrade. Generic upgrade preserves `keepGemUid`'s `secondary` on the output; deterministic fallback for unspecified `keepGemUid` with two filled-secondary inputs goes by higher-rarity → higher-tier → lexicographic uid. New reason code for signature/category rejection of filled-secondary inputs
 - `packages/engine/src/ai/strategies/forge-strategy.ts` — add transplant evaluation: AI considers transplant when it owns a host with open empty slot + a source whose affix scores higher in the target's slot type than leaving the slot empty. Scoring uses existing evaluation heuristics; no new AI framework. v1 is allowed to be simple (only transplants when target has a strictly better source available).
 - `packages/client/src/components/forge-desktop/ForgeDesktop.tsx` — use `WorkbenchDock`, wire new store actions
 - `packages/client/src/components/forge-desktop/StockpileStrip.tsx` — render open/filled secondary pip with the test hooks noted in the UI section
@@ -348,7 +366,7 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 - `transplant-action.test.ts` — valid inputs produce correct output gem state; invalid inputs (closed slot, filled slot, same-uid, missing gems, missing flux for choice) reject cleanly.
 - `transplant-rng.test.ts` — same seed + same uids produces same random affix; different seeds diverge; replay through a match snapshot is deterministic.
 - `transplant-preview.test.ts` — preview function returns the correct `TransplantPreview` object for each variant.
-- `secondary-combinability.test.ts` — filled-secondary gem has `combinable: false`; open-empty-slot gem still combines and the output re-derives slot state.
+- `secondary-combinability.test.ts` — (a) filled-secondary gem rejects signature recipe match with the new reason code; (b) filled-secondary gem rejects category combo match with the new reason code; (c) filled-secondary gem **succeeds** on generic upgrade with a same-affix partner, and the output retains the kept gem's secondary slot; (d) two filled-secondary inputs with no `keepGemUid` resolve deterministically by higher-rarity → higher-tier → uid; (e) the consumed gem's secondary is not preserved on output; (f) open-empty-slot gem still combines normally across all three layers and the output re-derives slot state.
 - `stat-calculator` — extend existing tests: secondary contributes weaponEffect when host is in weapon slot, armorEffect when in armor slot, nothing when the affix lacks an effect for that slot type. Rarity multiplier applies to secondary value. `secondaryValueScalar` applies globally.
 - `synergies` — extend to verify transplanted affixes participate in synergy detection via `tags[]`.
 
