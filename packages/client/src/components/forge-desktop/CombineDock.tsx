@@ -1,7 +1,7 @@
-import type { CombinePreview, DataRegistry, GemInstance, TransplantPreview } from '@alloy/engine';
-import { Workbench } from '@/components/Workbench';
+import type { CombinePreview, DataRegistry, GemInstance } from '@alloy/engine';
+import { CombineWorkbench } from '@/components/CombineWorkbench';
 
-interface WorkbenchDockProps {
+interface CombineDockProps {
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
@@ -11,27 +11,18 @@ interface WorkbenchDockProps {
   onCombine: () => void;
   onClearAll: () => void;
   onPointerDown: (uid: string, e: React.PointerEvent) => void;
-
-  // Transplant passthrough
-  transplantPreview?: TransplantPreview | null;
-  transplantHost?: GemInstance | null;
-  transplantSource?: GemInstance | null;
-  transplantChosenAffix: 'primary' | 'secondary' | null;
-  canAffordTransplantChoice: boolean;
-  onChooseTransplantAffix: (val: 'primary' | 'secondary' | null) => void;
-  onTransplant: () => void;
 }
 
 /**
- * Desktop dock wrapper around `<Workbench layout="desktop-dock" />`.
+ * Desktop dock wrapper around `<CombineWorkbench layout="desktop-dock" />`.
  *
  * The mockup's `.workbench` bar sits between the center stage and the
  * stockpile strip. This dock supplies the chrome (surface gradient, top
- * bronze accent line, height token) while the existing Workbench
+ * bronze accent line, height token) while the existing CombineWorkbench
  * component keeps sole responsibility for the slot interactions, preview,
  * and CTAs.
  */
-export function WorkbenchDock(props: WorkbenchDockProps) {
+export function CombineDock(props: CombineDockProps) {
   return (
     <div
       role="toolbar"
@@ -72,7 +63,7 @@ export function WorkbenchDock(props: WorkbenchDockProps) {
           justifyContent: 'center',
         }}
       >
-        <Workbench layout="desktop-dock" {...props} />
+        <CombineWorkbench layout="desktop-dock" {...props} />
       </div>
     </div>
   );

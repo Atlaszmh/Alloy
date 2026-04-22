@@ -1,3 +1,5 @@
+import '@testing-library/jest-dom';
+
 // Mock AudioContext for jsdom test environment
 class MockAudioContext {
   state = 'running' as AudioContextState;

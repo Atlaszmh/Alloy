@@ -194,6 +194,13 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
           onCombine={props.onCombine}
           onClearAll={props.onClearComboSlots}
           onPointerDown={props.onGemPointerDown}
+          transplantPreview={null}
+          transplantHost={null}
+          transplantSource={null}
+          transplantChosenAffix={null}
+          canAffordTransplantChoice={false}
+          onChooseTransplantAffix={() => {}}
+          onTransplant={() => {}}
         />
       </div>
 

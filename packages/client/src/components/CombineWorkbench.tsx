@@ -1,11 +1,10 @@
 import { useMemo } from 'react';
-import type { DataRegistry, GemInstance, CombinePreview, TransplantPreview } from '@alloy/engine';
+import type { DataRegistry, GemInstance, CombinePreview } from '@alloy/engine';
 import { HapticButton } from '@/components/HapticButton';
 import { GemCard } from '@/components/GemCard';
 import { ELEMENT_GRADIENTS } from '@/shared/utils/element-theme';
 import { getGemArt } from '@/shared/utils/art-registry';
 import { getStatLabel } from '@/shared/utils/stat-label';
-import { TransplantControls } from '@/components/forge-desktop/TransplantControls';
 
 const ELEMENT_SYMBOLS: Record<string, string> = {
   fire: '\u{1F525}',
@@ -19,7 +18,7 @@ const ELEMENT_SYMBOLS: Record<string, string> = {
 
 const ELEMENT_TAGS = new Set(Object.keys(ELEMENT_SYMBOLS));
 
-interface WorkbenchProps {
+interface CombineWorkbenchProps {
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
@@ -32,15 +31,6 @@ interface WorkbenchProps {
   /** Layout variant. Default 'portrait' keeps today's rendering. 'desktop-dock'
    *  tightens padding and removes the top border (the dock panel provides one). */
   layout?: 'portrait' | 'desktop-dock';
-
-  // Transplant props
-  transplantPreview?: TransplantPreview | null;
-  transplantHost?: GemInstance | null;
-  transplantSource?: GemInstance | null;
-  transplantChosenAffix: 'primary' | 'secondary' | null;
-  canAffordTransplantChoice: boolean;
-  onChooseTransplantAffix: (val: 'primary' | 'secondary' | null) => void;
-  onTransplant: () => void;
 }
 
 type GlowSignal = 'none' | 'white' | 'gold';
@@ -69,7 +59,7 @@ export function computeGlowSignal(
   return 'white';
 }
 
-export function Workbench({
+export function CombineWorkbench({
   comboSlots,
   registry,
   canAfford,
@@ -80,14 +70,7 @@ export function Workbench({
   onClearAll,
   onPointerDown,
   layout = 'portrait',
-  transplantPreview,
-  transplantHost,
-  transplantSource,
-  transplantChosenAffix,
-  canAffordTransplantChoice,
-  onChooseTransplantAffix,
-  onTransplant,
-}: WorkbenchProps) {
+}: CombineWorkbenchProps) {
   const glowSignal = useMemo(
     () => computeGlowSignal(comboSlots, registry),
     [comboSlots, registry],
@@ -97,18 +80,6 @@ export function Workbench({
   const keepFilled = comboSlots[0] !== null;
   const canCombine = keepFilled && filledCount >= 2 && canAfford;
   const isDock = layout === 'desktop-dock';
-
-  // Transplant is valid only when exactly slots 0+1 are filled (no slot 2)
-  const transplantEnabled = Boolean(
-    transplantPreview &&
-    comboSlots[0] && comboSlots[1] && !comboSlots[2],
-  );
-  const showTransplantControls =
-    transplantEnabled && transplantPreview && transplantHost && transplantSource;
-  const transplantLabel =
-    transplantChosenAffix !== null && transplantPreview && transplantPreview.fluxCost > 0
-      ? `Transplant (− ${transplantPreview.fluxCost} flux)`
-      : 'Transplant';
 
   return (
     <div
@@ -218,31 +189,6 @@ export function Workbench({
         >
           COMBINE
         </HapticButton>
-        <button
-          type="button"
-          data-testid="workbench-transplant-button"
-          disabled={!transplantEnabled}
-          onClick={onTransplant}
-          style={{
-            padding: '4px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--color-surface-500)',
-            background: transplantEnabled
-              ? 'rgba(212,168,52,0.15)'
-              : 'var(--color-surface-800)',
-            color: transplantEnabled
-              ? 'var(--color-bronze-light)'
-              : 'var(--color-surface-400)',
-            fontFamily: 'var(--font-family-display)',
-            fontWeight: 700,
-            fontSize: 'var(--text-xs)',
-            letterSpacing: '0.06em',
-            cursor: transplantEnabled ? 'pointer' : 'not-allowed',
-            transition: 'background 0.15s, color 0.15s',
-          }}
-        >
-          {transplantLabel}
-        </button>
         <HapticButton
           variant="secondary"
           size="sm"
@@ -252,18 +198,6 @@ export function Workbench({
           CLEAR
         </HapticButton>
       </div>
-
-      {/* Transplant affix picker — shown only when a valid transplant is staged */}
-      {showTransplantControls && (
-        <TransplantControls
-          host={transplantHost!}
-          source={transplantSource!}
-          preview={transplantPreview!}
-          chosenAffix={transplantChosenAffix}
-          onChooseAffix={onChooseTransplantAffix}
-          canAffordFlux={canAffordTransplantChoice}
-        />
-      )}
     </div>
   );
 }

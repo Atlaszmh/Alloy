@@ -850,6 +850,13 @@ export function Forge() {
           onCombine={handleCombine}
           onClearAll={() => { clearComboSlots(); playSound('buttonClick'); }}
           onPointerDown={handlePointerDown}
+          transplantPreview={null}
+          transplantHost={null}
+          transplantSource={null}
+          transplantChosenAffix={null}
+          canAffordTransplantChoice={false}
+          onChooseTransplantAffix={() => {}}
+          onTransplant={() => {}}
         />
       </div>
 
