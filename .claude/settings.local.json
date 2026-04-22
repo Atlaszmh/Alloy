@@ -200,7 +200,8 @@
       "Bash(printf 'n\\\\ny\\\\n')",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
       "PowerShell(Stop-Process -Id 44732 -Force)",
-      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=44732\")"
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=44732\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'vite|alloy|tsup|tsx' } | Select-Object ProcessId, CommandLine | Format-Table -AutoSize -Wrap; Write-Output \"---PORTS---\"; Get-NetTCPConnection -State Listen -LocalPort 5173,5174,5175,9098,4173 -ErrorAction SilentlyContinue | Select-Object LocalPort, OwningProcess)"
     ]
   }
 }
