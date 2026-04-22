@@ -8,6 +8,7 @@ import {
   rarityIndex,
   type GemInstance,
   type GemRarity,
+  type SecondarySlot,
 } from '../src/types/gem.js';
 
 describe('GemInstance', () => {
@@ -120,5 +121,21 @@ describe('GemInstance', () => {
       expect(rarityIndex('epic')).toBe(4);
       expect(rarityIndex('legendary')).toBe(5);
     });
+  });
+});
+
+describe('SecondarySlot', () => {
+  it('GemInstance accepts an optional secondary slot', () => {
+    const base = createGem('g1', 'flat_physical', 5, 'rare');
+    const slot: SecondarySlot = {
+      affixId: 'flat_life',
+      tier: 3,
+      rarity: 'magic',
+      sourceGemUid: 'src-1',
+    };
+    const gem: GemInstance = { ...base, secondary: slot };
+    expect(gem.secondary?.affixId).toBe('flat_life');
+    expect(gem.secondary?.tier).toBe(3);
+    expect(gem.secondary?.rarity).toBe('magic');
   });
 });

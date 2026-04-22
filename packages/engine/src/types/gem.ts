@@ -18,6 +18,19 @@ export const TIER_VALUES = [0, 1.0, 2.0, 3.0, 4.0, 5.0] as const; // index 0 unu
 export const MAX_TIER = 5;
 export const MAX_RECIPE_DEPTH = 3;
 
+export interface SecondaryModifier {
+  kind: string;
+  payload?: unknown;
+}
+
+export interface SecondarySlot {
+  affixId: string;
+  tier: 1 | 2 | 3 | 4 | 5;
+  rarity: GemRarity;
+  sourceGemUid: string;
+  modifiers?: SecondaryModifier[];
+}
+
 export interface GemInstance {
   uid: string;
   affixId: string;
@@ -28,6 +41,7 @@ export interface GemInstance {
   combinable: boolean;
   tags: string[]; // All ancestor affix IDs for synergy detection
   outputBonusEffects?: StatModifier[]; // Bonus effects from signature/category recipes
+  secondary?: SecondarySlot;
 }
 
 export function calculateEffectiveValue(
