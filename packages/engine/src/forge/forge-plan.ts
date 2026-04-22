@@ -1,6 +1,7 @@
 import type { ForgeState } from './forge-state.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { GemInstance } from '../types/gem.js';
+import { hasSecondarySlot, type SecondarySlot } from '../types/gem.js';
 import type { Loadout, ForgedItem } from '../types/item.js';
 import type { SlotArray } from '../types/match.js';
 import {
@@ -14,6 +15,7 @@ import { calculateStats, type StatsResult } from './stat-calculator.js';
 import { CombinationEngine } from '../combine/combination-engine.js';
 import { DiscoveryState } from '../combine/discovery-state.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
+import { resolveTransplant } from './transplant/resolver.js';
 
 export interface ForgePlan {
   /**
@@ -94,6 +96,7 @@ export function applyPlanAction(
     case 'combine': return planCombine(plan, action, registry);
     case 'combine3': return planCombine3(plan, action, registry);
     case 'select_base_item': return planSelectBaseItem(plan, action);
+    case 'transplant_gem': return planTransplantGem(plan, action, registry);
     default: return { ok: false, error: `Unsupported plan action: ${(action as ForgeAction).kind}` };
   }
 }
@@ -270,6 +273,55 @@ function planCombine3(
   }
   // Lock only consumed uids (ejected gem stays unlocked and can combine again)
   for (const uid of result.consumedUids) next.lockedGemUids.add(uid);
+
+  next.actionLog.push(action);
+  return { ok: true, plan: next };
+}
+
+function planTransplantGem(
+  plan: ForgePlan,
+  action: Extract<ForgeAction, { kind: 'transplant_gem' }>,
+  registry: DataRegistry,
+): PlanResult {
+  if (action.targetGemUid === action.sourceGemUid) {
+    return { ok: false, error: 'Target and source must be different gems' };
+  }
+
+  const targetIdx = findSlotIndex(plan.stockpile, g => g.uid === action.targetGemUid);
+  if (targetIdx === -1) return { ok: false, error: 'Target gem not found in stockpile' };
+
+  const sourceIdx = findSlotIndex(plan.stockpile, g => g.uid === action.sourceGemUid);
+  if (sourceIdx === -1) return { ok: false, error: 'Source gem not found in stockpile' };
+
+  const target = plan.stockpile[targetIdx]!;
+  const source = plan.stockpile[sourceIdx]!;
+
+  const threshold = registry.getBalance().transplant.unlockThreshold;
+  if (!hasSecondarySlot(target, threshold)) {
+    return { ok: false, error: 'Target does not have an open secondary slot' };
+  }
+  if (target.secondary) {
+    return { ok: false, error: 'Target secondary slot is already filled' };
+  }
+  if (action.chosenAffix === 'secondary' && !source.secondary) {
+    return { ok: false, error: 'Source has no secondary affix to choose' };
+  }
+
+  const rng = plan.rng.fork(`transplant_${target.uid}_${source.uid}`);
+  const slot: SecondarySlot = resolveTransplant({ target, source, chosenAffix: action.chosenAffix, rng });
+
+  const next = clonePlan(plan);
+  const updatedTarget: GemInstance = {
+    ...target,
+    secondary: slot,
+    tags: target.tags.includes(slot.affixId) ? target.tags : [...target.tags, slot.affixId],
+  };
+
+  next.stockpile = setSlot(next.stockpile, targetIdx, updatedTarget);
+  next.stockpile = clearSlot(next.stockpile, sourceIdx);
+
+  next.lockedGemUids.add(action.targetGemUid);
+  next.lockedGemUids.add(action.sourceGemUid);
 
   next.actionLog.push(action);
   return { ok: true, plan: next };
