@@ -8,6 +8,8 @@ export interface FluxCosts {
   upgradeTier: number;
   swapOrb: number;
   removeOrb: number;
+  transplantGem: number;
+  transplantChooseAffix: number;
 }
 
 export interface PoolScalingEntry {
@@ -62,8 +64,8 @@ export interface BalanceConfig {
 
   gem: GemBalanceConfig;
 
-  // TODO(Task 1.3): Add transplant config with unlockThreshold
-  transplant?: {
+  transplant: {
     unlockThreshold: number;
+    secondaryValueScalar: number;
   };
 }

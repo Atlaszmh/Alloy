@@ -69,7 +69,11 @@
     "lifeRecovery": { "winStreak": 3, "milestoneRounds": [6, 10], "discoveryThreshold": 5 },
     "flux": {
       "rewards": { "win": 1, "discovery": 2, "milestone": 3 },
-      "costs": { "boostCombine": 3, "rerollPool": 5, "guaranteeRarity": 4 }
+      "costs": { "boostCombine": 3, "rerollPool": 5, "guaranteeRarity": 4, "transplantGem": 0, "transplantChooseAffix": 3 }
     }
+  },
+  "transplant": {
+    "unlockThreshold": 6,
+    "secondaryValueScalar": 1.0
   }
 }

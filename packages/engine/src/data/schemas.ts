@@ -168,6 +168,11 @@ const GemBalanceConfigSchema = z.object({
   }),
 });
 
+const TransplantBalanceSchema = z.object({
+  unlockThreshold: z.number().int().positive(),
+  secondaryValueScalar: z.number().positive(),
+});
+
 export const BalanceConfigSchema = z.object({
   baseHP: z.number().positive(),
   maxDuelSeconds: z.number().positive(),
@@ -195,4 +200,5 @@ export const BalanceConfigSchema = z.object({
     z.object({ min: z.number(), max: z.number() }),
   ),
   gem: GemBalanceConfigSchema,
+  transplant: TransplantBalanceSchema,
 });
