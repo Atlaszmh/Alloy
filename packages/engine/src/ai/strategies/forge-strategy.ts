@@ -4,12 +4,55 @@ import type { BaseStat } from '../../types/base-stats.js';
 import type { ForgeAction } from '../../types/forge-action.js';
 import type { Loadout } from '../../types/item.js';
 import type { GemInstance } from '../../types/gem.js';
+import { hasSecondarySlot } from '../../types/gem.js';
 import type { DataRegistry } from '../../data/registry.js';
 import type { SeededRNG } from '../../rng/seeded-rng.js';
 // getActionCost available via flux-tracker if needed
 
 import { orbValueScore, bestArchetype } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
+
+/**
+ * Enumerate transplant candidates: for every gem that has an open (empty)
+ * secondary slot, pair it with every other gem in the stockpile as a source.
+ * Scoring is left to the caller's existing action-selection logic.
+ */
+function enumerateTransplantCandidates(
+  stockpile: GemInstance[],
+  registry: DataRegistry,
+): ForgeAction[] {
+  const threshold = registry.getBalance().transplant.unlockThreshold;
+  const hosts = stockpile.filter(g => hasSecondarySlot(g, threshold) && !g.secondary);
+  const candidates: ForgeAction[] = [];
+  for (const host of hosts) {
+    for (const source of stockpile) {
+      if (source.uid === host.uid) continue;
+      candidates.push({
+        kind: 'transplant_gem',
+        targetGemUid: host.uid,
+        sourceGemUid: source.uid,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Return true when a signature/category combine between two gems would be
+ * rejected at forge-state time because at least one of them has a filled
+ * secondary slot. Generic upgrades (keepGemUid path) are unaffected.
+ */
+function signatureCombineBlockedBySecondary(
+  gemA: GemInstance,
+  gemB: GemInstance,
+  registry: DataRegistry,
+): boolean {
+  // Only signature/category combines (those that produce a CompoundAffixDef
+  // result) are gated by filled secondaries in Task 3.1.
+  const combo = registry.getCombination(gemA.affixId, gemB.affixId);
+  if (!combo) return false; // not a signature/category pair
+  return !!(gemA.secondary || gemB.secondary);
+}
 
 export interface ForgeStrategy {
   plan(
@@ -592,6 +635,9 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       for (let j = i + 1; j < stockpile.length; j++) {
         const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
         if (!combo) continue;
+        // Skip signature/category combines when either input has a filled secondary
+        // (the forge action would reject at apply-time per Task 3.1)
+        if (signatureCombineBlockedBySecondary(stockpile[i], stockpile[j], registry)) continue;
         // Score based on component values + combo tags
         const score = orbValueScore(stockpile[i], registry) + orbValueScore(stockpile[j], registry);
         comboCandidates.push({ i, j, score });
@@ -668,6 +714,23 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       usedOrbUids.add(stockpile[cand.j].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= upgradeCost;
+    }
+
+    // Transplant: evaluate before generic combines so the source gem is reserved
+    // and not consumed by the generic combine phase.
+    // Only consider original stockpile gems (not synthetic combine outputs).
+    const transplants = enumerateTransplantCandidates(stockpile, registry);
+    if (transplants.length > 0) {
+      const bestTransplant = transplants.find(
+        t =>
+          t.kind === 'transplant_gem' &&
+          !usedOrbUids.has(t.sourceGemUid),
+      );
+      if (bestTransplant && bestTransplant.kind === 'transplant_gem') {
+        actions.push(bestTransplant);
+        // Reserve the source so subsequent phases don't also consume it.
+        usedOrbUids.add(bestTransplant.sourceGemUid);
+      }
     }
 
     // Try generic combines on leftover gems
@@ -769,6 +832,10 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
         const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
         if (!combo) continue;
 
+        // Skip signature/category combines when either input has a filled secondary
+        // (the forge action would reject at apply-time per Task 3.1)
+        if (signatureCombineBlockedBySecondary(stockpile[i], stockpile[j], registry)) continue;
+
         // Score: component value + synergy with rest of stockpile
         let score = orbValueScore(stockpile[i], registry) + orbValueScore(stockpile[j], registry);
 
@@ -854,6 +921,22 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       usedOrbUids.add(stockpile[cand.j].uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       flux -= upgradeCost;
+    }
+
+    // Transplant: evaluate before generic combines so the source gem is reserved
+    // and not consumed by the generic combine phase.
+    const transplants = enumerateTransplantCandidates(stockpile, registry);
+    if (transplants.length > 0) {
+      const bestTransplant = transplants.find(
+        t =>
+          t.kind === 'transplant_gem' &&
+          !usedOrbUids.has(t.sourceGemUid),
+      );
+      if (bestTransplant && bestTransplant.kind === 'transplant_gem') {
+        actions.push(bestTransplant);
+        // Reserve the source so subsequent phases don't also consume it.
+        usedOrbUids.add(bestTransplant.sourceGemUid);
+      }
     }
 
     // Try generic combines on leftover gems
