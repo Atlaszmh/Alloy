@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useForgeStore } from './forgeStore';
-import { createForgeState, loadAndValidateData, DataRegistry } from '@alloy/engine';
+import { createForgeState, loadAndValidateData, DataRegistry, SeededRNG } from '@alloy/engine';
 import type { GemInstance } from '@alloy/engine';
 
 const data = loadAndValidateData();
@@ -35,7 +35,7 @@ function makeForgeState(round: number = 1) {
 
 function initStore(round: number = 1) {
   const state = makeForgeState(round);
-  useForgeStore.getState().initPlan(state, registry);
+  useForgeStore.getState().initPlan(state, registry, new SeededRNG(0));
 }
 
 describe('forgeStore', () => {

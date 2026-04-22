@@ -20,7 +20,7 @@ interface ForgeStoreState {
   setHasSelectedBaseItems: (matchId: string, value: boolean) => void;
   hasSelectedBaseItems: (matchId: string) => boolean;
 
-  initPlan: (state: ForgeState, registry: DataRegistry, rng?: SeededRNG) => void;
+  initPlan: (state: ForgeState, registry: DataRegistry, rng: SeededRNG) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => StatsResult | null;
@@ -52,8 +52,7 @@ export const useForgeStore = createHmrStore<ForgeStoreState>('forgeStore', (set,
   hasSelectedBaseItems: (matchId) => get().hasSelectedBaseItemsMap[matchId] ?? false,
 
   initPlan: (state, registry, rng) => {
-    const resolvedRng = rng ?? new SeededRNG(0); // Fallback: Forge.tsx passes match-seed-derived rng when available
-    const plan = createForgePlan(state, registry, resolvedRng);
+    const plan = createForgePlan(state, registry, rng);
     set({
       plan,
       selectedOrbUid: null,

@@ -15,6 +15,7 @@ import type {
   GameAction,
   ActionResult,
 } from '@alloy/engine';
+import { SeededRNG } from '@alloy/engine';
 
 /* ------------------------------------------------------------------ */
 /*  Mock gateway — must be declared before Forge import                 */
@@ -200,6 +201,7 @@ function createMockPlan(overrides: Partial<ForgePlan> = {}): ForgePlan {
     round: 1,
     lockedGemUids: new Set(),
     actionLog: [],
+    rng: new SeededRNG(0),
     ...overrides,
   };
 }
