@@ -18,7 +18,7 @@ const ELEMENT_SYMBOLS: Record<string, string> = {
 
 const ELEMENT_TAGS = new Set(Object.keys(ELEMENT_SYMBOLS));
 
-interface CombineWorkbenchProps {
+interface WorkbenchProps {
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
@@ -59,7 +59,7 @@ export function computeGlowSignal(
   return 'white';
 }
 
-export function CombineWorkbench({
+export function Workbench({
   comboSlots,
   registry,
   canAfford,
@@ -70,7 +70,7 @@ export function CombineWorkbench({
   onClearAll,
   onPointerDown,
   layout = 'portrait',
-}: CombineWorkbenchProps) {
+}: WorkbenchProps) {
   const glowSignal = useMemo(
     () => computeGlowSignal(comboSlots, registry),
     [comboSlots, registry],

@@ -1,7 +1,7 @@
 import type { CombinePreview, DataRegistry, GemInstance } from '@alloy/engine';
-import { CombineWorkbench } from '@/components/CombineWorkbench';
+import { Workbench } from '@/components/Workbench';
 
-interface CombineDockProps {
+interface WorkbenchDockProps {
   comboSlots: [GemInstance | null, GemInstance | null, GemInstance | null];
   registry: DataRegistry;
   canAfford: boolean;
@@ -14,15 +14,15 @@ interface CombineDockProps {
 }
 
 /**
- * Desktop dock wrapper around `<CombineWorkbench layout="desktop-dock" />`.
+ * Desktop dock wrapper around `<Workbench layout="desktop-dock" />`.
  *
  * The mockup's `.workbench` bar sits between the center stage and the
  * stockpile strip. This dock supplies the chrome (surface gradient, top
- * bronze accent line, height token) while the existing CombineWorkbench
+ * bronze accent line, height token) while the existing Workbench
  * component keeps sole responsibility for the slot interactions, preview,
  * and CTAs.
  */
-export function CombineDock(props: CombineDockProps) {
+export function WorkbenchDock(props: WorkbenchDockProps) {
   return (
     <div
       role="toolbar"
@@ -63,7 +63,7 @@ export function CombineDock(props: CombineDockProps) {
           justifyContent: 'center',
         }}
       >
-        <CombineWorkbench layout="desktop-dock" {...props} />
+        <Workbench layout="desktop-dock" {...props} />
       </div>
     </div>
   );

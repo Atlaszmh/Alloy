@@ -5,7 +5,7 @@ import { useGateway } from '@/gateway';
 import { useForgeStore } from '@/stores/forgeStore';
 import { ForgeHeader } from '@/components/ForgeHeader';
 import { ForgeGemTray } from '@/components/ForgeGemTray';
-import { CombineWorkbench } from '@/components/CombineWorkbench';
+import { Workbench } from '@/components/Workbench';
 import { ItemSocketView } from '@/components/ItemSocketView';
 import { HapticButton } from '@/components/HapticButton';
 import { Modal } from '@/components/Modal';
@@ -841,7 +841,7 @@ export function Forge() {
 
       {/* 3. Combine workbench — pinned above stockpile */}
       <div style={{ flexShrink: 0 }} data-screen-section="forge-combine">
-        <CombineWorkbench
+        <Workbench
           comboSlots={comboSlots}
           registry={registry}
           canAfford={true}
@@ -1072,7 +1072,7 @@ function buildForgeDesktopProps(a: {
     rarityCost: costs?.guaranteeRarity ?? 4,
     comboSlots: a.comboSlots,
     combinePreview: a.combinePreview,
-    // CombineWorkbench gates combine internally; pass the literal `true` the
+    // Workbench gates combine internally; pass the literal `true` the
     // portrait tree uses so the dock's button behaves identically.
     canAffordCombine: true,
     // Quick-match 90s auto-commit countdown — mirrors portrait ForgeHeader.

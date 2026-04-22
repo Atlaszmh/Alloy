@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeGlowSignal } from './CombineWorkbench';
+import { computeGlowSignal } from './Workbench';
 
 function makeRegistry(opts: {
   ternary?: Record<string, any>;

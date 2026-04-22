@@ -9,7 +9,7 @@ import type {
 import type { GemDamageContribution } from '@/shared/utils/gem-damage-breakdown';
 import { AmbientBackdrop } from './AmbientBackdrop';
 import { CharacterRail } from './CharacterRail';
-import { CombineDock } from './CombineDock';
+import { WorkbenchDock } from './WorkbenchDock';
 import { FluxRail } from './FluxRail';
 import { ForgeTopBar } from './ForgeTopBar';
 import { GearWorkspace } from './GearWorkspace';
@@ -184,7 +184,7 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
         style={{ gridArea: 'dock', zIndex: 1 }}
         data-screen-section="forge-combine"
       >
-        <CombineDock
+        <WorkbenchDock
           comboSlots={props.comboSlots}
           registry={props.registry}
           canAfford={props.canAffordCombine}

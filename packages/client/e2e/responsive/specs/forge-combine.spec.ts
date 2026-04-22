@@ -23,7 +23,7 @@ for (const vp of PORTRAIT_VIEWPORTS) {
     await waitForPhase(page, 'forge');
 
     // Confirm the combine workbench is part of the screen, then scroll it into view.
-    // CombineWorkbench renders 3 data-combo-slot markers; use the KEEP slot as anchor.
+    // Workbench renders 3 data-combo-slot markers; use the KEEP slot as anchor.
     const workbench = page.locator('[data-combo-slot="0"]');
     await expect(workbench).toBeVisible({ timeout: 10_000 });
     await workbench.scrollIntoViewIfNeeded();
