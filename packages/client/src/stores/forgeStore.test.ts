@@ -83,7 +83,7 @@ describe('forgeStore', () => {
 
       expect(result.ok).toBe(true);
       const after = useForgeStore.getState().plan!;
-      expect(after.stockpile.find(o => o.uid === 'orb1')).toBeUndefined();
+      expect(after.stockpile.find(o => o !== null && o.uid === 'orb1')).toBeUndefined();
       expect(after.loadout.weapon.slots[0]).not.toBeNull();
     });
 

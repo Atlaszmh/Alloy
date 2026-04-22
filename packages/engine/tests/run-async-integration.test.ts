@@ -18,6 +18,7 @@ import { calculateStats } from '../src/forge/stat-calculator.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 import { createGem, RARITY_MULTIPLIERS } from '../src/types/gem.js';
 import { getPoolConfigForRound } from '../src/run/pool-scaling.js';
+import { liveSlots, liveCount } from '../src/types/slot-array.js';
 import type { MatchState } from '../src/types/match.js';
 
 const data = loadAndValidateData();
@@ -85,7 +86,7 @@ describe('run_async mode integration', () => {
     for (let i = 0; i < 3; i++) {
       if (state.phase.kind !== 'draft') break;
       expect(state.phase.activePlayer).toBe(0);
-      const orbUid = state.pool[0].uid;
+      const orbUid = liveSlots(state.pool)[0].uid;
       const result = applyAction(state, { kind: 'draft_pick', player: 0, orbUid }, registry);
       expect(result.ok).toBe(true);
       if (result.ok) state = result.state;
@@ -195,7 +196,7 @@ describe('run_async mode integration', () => {
     while (roundsPlayed < maxRounds && state.phase.kind !== 'complete') {
       // Draft: player 0 picks all their allotment
       while (state.phase.kind === 'draft') {
-        const orbUid = state.pool[0].uid;
+        const orbUid = liveSlots(state.pool)[0].uid;
         const result = applyAction(state, { kind: 'draft_pick', player: 0, orbUid }, registry);
         if (!result.ok) break;
         state = result.state;
@@ -222,11 +223,11 @@ describe('run_async mode integration', () => {
       }
 
       // Socket a gem for player 0 if available
-      if (state.players[0].stockpile.length > 0 && state.phase.kind === 'forge') {
+      if (liveCount(state.players[0].stockpile) > 0 && state.phase.kind === 'forge') {
         // Find an empty weapon slot
         const emptySlot = state.players[0].loadout.weapon.slots.findIndex(s => s === null);
         if (emptySlot >= 0) {
-          const gem = state.players[0].stockpile[0];
+          const gem = liveSlots(state.players[0].stockpile)[0];
           const r = applyAction(state, {
             kind: 'forge_action',
             player: 0,
@@ -290,7 +291,7 @@ describe('run_async mode integration', () => {
     while (state.phase.kind !== 'complete' && iterations < 20) {
       // Draft
       while (state.phase.kind === 'draft') {
-        const orbUid = state.pool[0].uid;
+        const orbUid = liveSlots(state.pool)[0].uid;
         const r = applyAction(state, { kind: 'draft_pick', player: 0, orbUid }, registry);
         if (!r.ok) break;
         state = r.state;
@@ -357,7 +358,7 @@ describe('run_async mode integration', () => {
 
     // Draft all
     while (state.phase.kind === 'draft') {
-      const orbUid = state.pool[0].uid;
+      const orbUid = liveSlots(state.pool)[0].uid;
       const player = state.phase.activePlayer;
       const r = applyAction(state, { kind: 'draft_pick', player, orbUid }, registry);
       if (!r.ok) break;

@@ -1,9 +1,11 @@
-import type { ActiveSynergy, BaseStat, DataRegistry, DerivedStats } from '@alloy/engine';
+import { useState } from 'react';
+import type { ActiveSynergy, DataRegistry, DerivedStats } from '@alloy/engine';
+import { ALL_ELEMENTS } from '@alloy/engine';
 import { SynergyBanner } from '@/components/SynergyBanner';
+import { ELEMENT_COLORS } from '@/shared/utils/element-theme';
+import type { GemDamageContribution } from '@/shared/utils/gem-damage-breakdown';
 
-const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
-
-type StatKey = 'maxHP' | 'physicalDamage' | 'armor' | 'critChance';
+type StatKey = 'maxHP' | 'totalDamage' | 'armor' | 'critChance';
 
 interface StatRow {
   key: StatKey;
@@ -32,9 +34,9 @@ const STAT_ROWS: StatRow[] = [
     barGradient: 'linear-gradient(90deg, var(--color-fire), var(--color-accent-300))',
   },
   {
-    key: 'physicalDamage',
+    key: 'totalDamage',
     label: 'DMG',
-    pct: (v) => clamp01(v / 40),
+    pct: (v) => clamp01(v / 80),
     format: (v) => (Number.isInteger(v) ? `${v}` : v.toFixed(1)),
     barGradient: 'linear-gradient(90deg, #9a9a9a, #e5e5e5)',
   },
@@ -61,16 +63,47 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+/**
+ * Compute the headline DMG. Starts from the engine-derived physical +
+ * elemental totals (which include weapon base, base-stat scaling, and gem
+ * contributions for every element the engine models) and then adds the
+ * gem-sourced poison/shadow values — those use special duel-engine-only keys
+ * (`dotDamage.poison`, `shadowDamage.percentHP`) so they never land on
+ * DerivedStats, but the player still wants to see them counted.
+ */
+function computeTotalDamage(
+  stats: DerivedStats | null,
+  gemDamage: GemDamageContribution[],
+): number {
+  if (!stats) return 0;
+  let total = stats.physicalDamage;
+  for (const el of ALL_ELEMENTS) total += stats.elementalDamage[el];
+  for (const row of gemDamage) {
+    if (row.type === 'poison' || row.type === 'shadow') total += row.value;
+  }
+  return total;
+}
+
+function readStatValue(
+  stats: DerivedStats,
+  key: StatKey,
+  gemDamage: GemDamageContribution[],
+): number {
+  if (key === 'totalDamage') return computeTotalDamage(stats, gemDamage);
+  return stats[key];
+}
+
 interface CharacterRailProps {
   stats: DerivedStats | null;
   /** Optional green +N overlays rendered under the value (mockup .stat-delta). */
   statDeltas?: Partial<Record<StatKey, number>>;
-  weaponStats: [BaseStat, BaseStat];
-  armorStats: [BaseStat, BaseStat];
-  onWeaponStatChange: (index: 0 | 1, stat: BaseStat) => void;
-  onArmorStatChange: (index: 0 | 1, stat: BaseStat) => void;
-  /** Selectors are only editable in round 1, matching the portrait Forge. */
-  round: number;
+  /**
+   * Per-type damage totals sourced from equipped-gem weapon effects — drives
+   * the DMG breakdown tooltip so the player can see exactly what each gem is
+   * adding, including poison/shadow/chaos that the engine aggregates through
+   * non-standard keys.
+   */
+  gemDamage: GemDamageContribution[];
   /**
    * Active + pending synergy chips — mirrors portrait ForgeHeader feature.
    * Rendered between the character readout and the forge-tuning dials so the
@@ -81,25 +114,19 @@ interface CharacterRailProps {
 }
 
 /**
- * Left HUD rail. Two stacked panels:
- *   1. Character Readout — HP/DMG/ARM/CRT cells with value, optional green
- *      +delta, and a colour-graded progress bar.
- *   2. Forge Tuning — weapon + armor base-stat pair selectors (STR/INT/DEX/VIT).
+ * Left HUD rail. Single Character Readout panel (HP/DMG/ARM/CRT) with a
+ * damage-breakdown tooltip on hover over the DMG cell so players can see
+ * where each point of damage is coming from (physical vs. each element).
  *
  * Width pulled from `--hud-rail-w`.
  */
 export function CharacterRail({
   stats,
   statDeltas,
-  weaponStats,
-  armorStats,
-  onWeaponStatChange,
-  onArmorStatChange,
-  round,
+  gemDamage,
   activeSynergies,
   registry,
 }: CharacterRailProps) {
-  const disabled = round > 1;
   const showSynergies =
     !!registry && !!activeSynergies && activeSynergies.length > 0;
 
@@ -111,7 +138,7 @@ export function CharacterRail({
         flexDirection: 'column',
         gap: 'var(--gap-sm)',
       }}
-      aria-label="Character readout and base stat tuning"
+      aria-label="Character readout"
     >
       {/* ── Panel 1: Character Readout ────────────────────────── */}
       <Panel title="Character Readout" accent="LIVE">
@@ -124,19 +151,11 @@ export function CharacterRail({
           }}
         >
           {STAT_ROWS.map((row) => {
-            const rawValue = stats ? stats[row.key] : 0;
+            const rawValue = stats ? readStatValue(stats, row.key, gemDamage) : 0;
             const delta = statDeltas?.[row.key];
             const hasValue = (stats && rawValue > 0) || delta !== undefined;
-            return (
-              <div
-                key={row.key}
-                style={{
-                  background: 'var(--color-surface-900)',
-                  border: '1px solid var(--color-surface-700)',
-                  padding: '6px 8px 5px',
-                  position: 'relative',
-                }}
-              >
+            const tile = (
+              <>
                 <div
                   style={{
                     fontFamily: 'var(--font-family-display)',
@@ -211,6 +230,28 @@ export function CharacterRail({
                     }}
                   />
                 </div>
+              </>
+            );
+
+            if (row.key === 'totalDamage') {
+              return (
+                <DamageTile key={row.key} gemDamage={gemDamage}>
+                  {tile}
+                </DamageTile>
+              );
+            }
+
+            return (
+              <div
+                key={row.key}
+                style={{
+                  background: 'var(--color-surface-900)',
+                  border: '1px solid var(--color-surface-700)',
+                  padding: '6px 8px 5px',
+                  position: 'relative',
+                }}
+              >
+                {tile}
               </div>
             );
           })}
@@ -221,33 +262,118 @@ export function CharacterRail({
       {showSynergies && (
         <SynergyBanner synergies={activeSynergies!} registry={registry!} />
       )}
-
-      {/* ── Panel 2: Forge Tuning ─────────────────────────────── */}
-      <Panel title="Forge Tuning" accent="BASE">
-        <div
-          style={{
-            padding: '6px 8px 8px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-          }}
-        >
-          <BaseStatRow
-            label="Weapon"
-            pair={weaponStats}
-            onChange={onWeaponStatChange}
-            disabled={disabled}
-          />
-          <BaseStatRow
-            label="Armor"
-            pair={armorStats}
-            onChange={onArmorStatChange}
-            disabled={disabled}
-          />
-        </div>
-      </Panel>
     </aside>
   );
+}
+
+/* ── DMG tile — wraps the stat cell with a gem-contribution tooltip ──
+ *
+ * Intentionally shows ONLY the per-type damage each equipped gem adds. The
+ * weapon's base damage and base-stat scaling are already baked into the
+ * headline DMG value next to it — the tooltip's job is to attribute "where
+ * is the +N coming from?" to specific gems.
+ */
+function DamageTile({
+  gemDamage,
+  children,
+}: {
+  gemDamage: GemDamageContribution[];
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      onPointerEnter={() => setOpen(true)}
+      onPointerLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      tabIndex={0}
+      style={{
+        background: 'var(--color-surface-900)',
+        border: '1px solid var(--color-surface-700)',
+        padding: '6px 8px 5px',
+        position: 'relative',
+        cursor: 'help',
+        outline: 'none',
+      }}
+      aria-label="Damage breakdown"
+    >
+      {children}
+      {open && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            zIndex: 20,
+            minWidth: 200,
+            padding: '8px 10px',
+            background: 'var(--color-surface-900)',
+            border: '1px solid var(--color-surface-500)',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+            fontFamily: 'var(--font-family-display)',
+            fontSize: 'var(--text-2xs)',
+            letterSpacing: '0.04em',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 700,
+              color: 'var(--color-bronze-500)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.18em',
+              marginBottom: 6,
+              borderBottom: '1px solid var(--color-surface-700)',
+              paddingBottom: 4,
+            }}
+          >
+            From Equipped Gems
+          </div>
+          {gemDamage.length === 0 ? (
+            <div style={{ color: 'var(--color-surface-400)' }}>
+              No damage gems socketed.
+            </div>
+          ) : (
+            gemDamage.map((r) => (
+              <div
+                key={r.type}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '2px 0',
+                  color: ELEMENT_COLORS[r.type] ?? 'white',
+                }}
+              >
+                <span style={{ textTransform: 'uppercase' }}>{r.type}</span>
+                <span style={{ fontWeight: 700 }}>
+                  +{formatNumber(r.value)}
+                  {r.suffix ? (
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        color: 'var(--color-surface-400)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {r.suffix}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatNumber(v: number): string {
+  return Number.isInteger(v) ? `${v}` : v.toFixed(1);
 }
 
 /* ── Shared rail panel chrome ─────────────────────────────────── */
@@ -310,88 +436,5 @@ function Panel({
       </header>
       {children}
     </section>
-  );
-}
-
-/* ── Weapon/Armor base-stat selector row ──────────────────────── */
-function BaseStatRow({
-  label,
-  pair,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  pair: [BaseStat, BaseStat];
-  onChange: (index: 0 | 1, stat: BaseStat) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: 'var(--color-surface-900)',
-        border: '1px solid var(--color-surface-700)',
-        padding: '5px 6px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-      }}
-    >
-      <span
-        style={{
-          fontFamily: 'var(--font-family-display)',
-          fontWeight: 600,
-          fontSize: 'var(--text-2xs)',
-          color: 'var(--color-bronze-400)',
-          letterSpacing: '0.14em',
-          textTransform: 'uppercase',
-          flexShrink: 0,
-          minWidth: 36,
-        }}
-      >
-        {label}
-      </span>
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--gap-xs)',
-          flex: 1,
-        }}
-      >
-        {([0, 1] as const).map((idx) => (
-          <select
-            key={idx}
-            value={pair[idx]}
-            disabled={disabled}
-            onChange={(e) => onChange(idx, e.target.value as BaseStat)}
-            aria-label={`${label} base stat slot ${idx + 1}`}
-            style={{
-              flex: 1,
-              padding: '5px 4px',
-              textAlign: 'center',
-              textAlignLast: 'center',
-              background: 'var(--color-surface-950)',
-              border: '1px solid var(--color-surface-600)',
-              color: 'var(--color-accent-300)',
-              fontFamily: 'var(--font-family-display)',
-              fontWeight: 700,
-              fontSize: 'var(--text-2xs)',
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              appearance: 'none',
-              WebkitAppearance: 'none',
-              MozAppearance: 'none',
-              opacity: disabled ? 0.5 : 1,
-            }}
-          >
-            {BASE_STATS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        ))}
-      </div>
-    </div>
   );
 }

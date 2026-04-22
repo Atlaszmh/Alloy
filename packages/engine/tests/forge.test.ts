@@ -6,8 +6,15 @@ import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
 import type { BalanceConfig } from '../src/types/balance.js';
+import type { SlotArray } from '../src/types/match.js';
+import { liveCount, liveSlots } from '../src/types/slot-array.js';
 import { CombinationEngine } from '../src/combine/combination-engine.js';
 import { DiscoveryState } from '../src/combine/discovery-state.js';
+
+/** Null-safe find — callback never sees a null entry. */
+function findGem(stockpile: SlotArray<GemInstance>, uid: string): GemInstance | undefined {
+  return liveSlots(stockpile).find((g) => g.uid === uid);
+}
 
 const data = loadAndValidateData();
 const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance, data.recipes);
@@ -60,7 +67,7 @@ describe('Forge System', () => {
     if (!result.ok) return;
     expect(result.state.loadout.weapon.slots[0]).not.toBeNull();
     expect(result.state.loadout.weapon.slots[0]!.gem.uid).toBe('gem1');
-    expect(result.state.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
+    expect(findGem(result.state.stockpile, 'gem1')).toBeUndefined();
   });
 
   it('socket_gem: fails if slot is occupied', () => {
@@ -113,10 +120,10 @@ describe('Forge System', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // Source gems removed from stockpile
-    expect(result.state.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
-    expect(result.state.stockpile.find(g => g.uid === 'gem2')).toBeUndefined();
+    expect(findGem(result.state.stockpile, 'gem1')).toBeUndefined();
+    expect(findGem(result.state.stockpile, 'gem2')).toBeUndefined();
     // Combined gem created in stockpile
-    const combinedGem = result.state.stockpile.find(g => g.uid.startsWith('combined_'));
+    const combinedGem = liveSlots(result.state.stockpile).find(g => g.uid.startsWith('combined_'));
     expect(combinedGem).toBeDefined();
     // Items unchanged
     expect(result.state.loadout.weapon.slots[0]).toBeNull();
@@ -132,7 +139,7 @@ describe('Forge System', () => {
     if (!combineResult.ok) return;
 
     // Find the combined gem
-    const combinedGem = combineResult.state.stockpile.find(g => g.uid.startsWith('combined_'));
+    const combinedGem = liveSlots(combineResult.state.stockpile).find(g => g.uid.startsWith('combined_'));
     expect(combinedGem).toBeDefined();
 
     // Then socket combined gem to weapon slot 0
@@ -142,7 +149,7 @@ describe('Forge System', () => {
     expect(socketResult.ok).toBe(true);
     if (!socketResult.ok) return;
     expect(socketResult.state.loadout.weapon.slots[0]!.gem.uid).toBe(combinedGem!.uid);
-    expect(socketResult.state.stockpile.find(g => g.uid === combinedGem!.uid)).toBeUndefined();
+    expect(findGem(socketResult.state.stockpile, combinedGem!.uid)).toBeUndefined();
   });
 
   it('combine: fails if combination does not exist in registry', () => {
@@ -279,9 +286,9 @@ describe('Forge System', () => {
     const result = applyForgeAction(state, action, registry, engine);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.state.stockpile.find(g => g.uid === 'gem3')).toBeDefined();
-    expect(result.state.stockpile.find(g => g.uid === 'gem1')).toBeUndefined();
-    expect(result.state.stockpile.find(g => g.uid === 'gem2')).toBeUndefined();
+    expect(findGem(result.state.stockpile, 'gem3')).toBeDefined();
+    expect(findGem(result.state.stockpile, 'gem1')).toBeUndefined();
+    expect(findGem(result.state.stockpile, 'gem2')).toBeUndefined();
   });
 
   it('applyForgeAction — combine3 without engine fails gracefully', () => {
@@ -297,9 +304,9 @@ describe('Forge System', () => {
 
   // --- Socket/unsocket round-trip ---
 
-  it('socket then unsocket restores original stockpile count', () => {
+  it('socket then unsocket leaves live gem count down by net sockets (slots preserved)', () => {
     const state = makeState();
-    const startCount = state.stockpile.length;
+    const startCount = liveCount(state.stockpile);
 
     // Socket 3 gems
     let s = state;
@@ -309,7 +316,7 @@ describe('Forge System', () => {
       if (!r.ok) return;
       s = r.state;
     }
-    expect(s.stockpile.length).toBe(startCount - 3);
+    expect(liveCount(s.stockpile)).toBe(startCount - 3);
 
     // Unsocket 2
     for (const slot of [0, 1]) {
@@ -318,6 +325,28 @@ describe('Forge System', () => {
       if (!r.ok) return;
       s = r.state;
     }
-    expect(s.stockpile.length).toBe(startCount - 1);
+    expect(liveCount(s.stockpile)).toBe(startCount - 1);
+  });
+
+  // Regression: sibling stockpile slots must not shift when a gem is socketed.
+  // Before the fixed-slot refactor, splicing gem1 out would move every later
+  // gem one index left — breaking any UI that keyed gems to stockpile position.
+  it('socket preserves sibling positions in the stockpile (no auto-compaction)', () => {
+    const state = makeState();
+    const originalUidBySlot = state.stockpile.map(g => g?.uid ?? null);
+
+    // Socket the first gem; every other slot should retain its original uid.
+    const r = applyForgeAction(
+      state,
+      { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 },
+      registry,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    expect(r.state.stockpile[0]).toBeNull();
+    for (let i = 1; i < originalUidBySlot.length; i++) {
+      expect(r.state.stockpile[i]?.uid ?? null).toBe(originalUidBySlot[i]);
+    }
   });
 });

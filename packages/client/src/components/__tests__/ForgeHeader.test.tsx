@@ -8,6 +8,7 @@ import type { DerivedStats } from '@alloy/engine';
 const STATS: DerivedStats = {
   maxHP: 100,
   physicalDamage: 10,
+  elementalDamage: { fire: 0, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
   armor: 0,
   critChance: 0,
 } as unknown as DerivedStats;
@@ -17,6 +18,7 @@ const defaults = {
   flux: 3,
   maxFlux: 8,
   stats: STATS,
+  gemDamage: [],
   onDone: vi.fn(),
 };
 

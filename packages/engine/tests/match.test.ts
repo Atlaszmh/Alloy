@@ -7,6 +7,7 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { MatchState, MatchPhase } from '../src/types/match.js';
 import type { GameAction } from '../src/types/game-action.js';
 import type { DuelResult } from '../src/types/combat.js';
+import { liveCount, liveSlots } from '../src/types/slot-array.js';
 
 const data = loadAndValidateData();
 const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance);
@@ -135,9 +136,9 @@ describe('Match Controller', () => {
       expect(state.phase.pickIndex).toBe(0);
       expect(state.phase.activePlayer).toBe(0);
     }
-    expect(state.pool.length).toBeGreaterThan(0);
-    expect(state.players[0].stockpile).toEqual([]);
-    expect(state.players[1].stockpile).toEqual([]);
+    expect(liveCount(state.pool)).toBeGreaterThan(0);
+    expect(liveCount(state.players[0].stockpile)).toBe(0);
+    expect(liveCount(state.players[1].stockpile)).toBe(0);
     expect(state.players[0].id).toBe('player1');
     expect(state.players[1].id).toBe('player2');
     expect(state.roundResults).toEqual([]);
@@ -150,22 +151,23 @@ describe('Match Controller', () => {
   // 2. Draft pick works
   it('draft pick moves orb from pool to player stockpile', () => {
     const state = makeMatch();
-    const orbUid = state.pool[0].uid;
+    const orbUid = liveSlots(state.pool)[0].uid;
 
     const result = applyAction(state, { kind: 'draft_pick', player: 0, orbUid }, registry);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.players[0].stockpile.length).toBe(1);
-    expect(result.state.players[0].stockpile[0].uid).toBe(orbUid);
-    expect(result.state.pool.length).toBe(state.pool.length - 1);
-    expect(result.state.pool.find(o => o.uid === orbUid)).toBeUndefined();
+    expect(liveCount(result.state.players[0].stockpile)).toBe(1);
+    expect(liveSlots(result.state.players[0].stockpile)[0].uid).toBe(orbUid);
+    // Pool live count drops by one; array length stays the same (slot nulled).
+    expect(liveCount(result.state.pool)).toBe(liveCount(state.pool) - 1);
+    expect(liveSlots(result.state.pool).find(o => o.uid === orbUid)).toBeUndefined();
   });
 
   // 3. Invalid draft pick returns error
   it('draft pick by wrong player returns error', () => {
     const state = makeMatch();
-    const orbUid = state.pool[0].uid;
+    const orbUid = liveSlots(state.pool)[0].uid;
 
     // Player 0 is active first, so player 1 picking should fail
     const result = applyAction(state, { kind: 'draft_pick', player: 1, orbUid }, registry);
@@ -178,7 +180,7 @@ describe('Match Controller', () => {
   // 4. Full draft completes and transitions to forge
   it('full draft completes and transitions to forge phase', () => {
     let state = makeMatch();
-    const totalOrbs = state.pool.length;
+    const totalOrbs = liveCount(state.pool);
     // Each player picks draftPicksPerPlayer[0] orbs in round 1; pool may have leftovers
     const picksPerPlayer = registry.getBalance().draftPicksPerPlayer[0];
     const totalPicks = picksPerPlayer * 2;
@@ -186,7 +188,7 @@ describe('Match Controller', () => {
     // Draft all picks using alternating picks
     for (let i = 0; i < totalPicks; i++) {
       if (state.phase.kind !== 'draft') break;
-      const orbUid = state.pool[0].uid;
+      const orbUid = liveSlots(state.pool)[0].uid;
       const player = state.phase.activePlayer;
       const result = applyAction(state, { kind: 'draft_pick', player, orbUid }, registry);
       expect(result.ok).toBe(true);
@@ -197,8 +199,8 @@ describe('Match Controller', () => {
     if (state.phase.kind === 'forge') {
       expect(state.phase.round).toBe(1);
     }
-    expect(state.pool.length).toBe(totalOrbs - totalPicks);
-    expect(state.players[0].stockpile.length + state.players[1].stockpile.length).toBe(totalPicks);
+    expect(liveCount(state.pool)).toBe(totalOrbs - totalPicks);
+    expect(liveCount(state.players[0].stockpile) + liveCount(state.players[1].stockpile)).toBe(totalPicks);
     // Forge complete should be initialized
     expect(state.forgeComplete).toEqual([false, false]);
   });
@@ -209,8 +211,8 @@ describe('Match Controller', () => {
     expect(state.phase.kind).toBe('forge');
 
     // Player 0 assigns an orb if they have any
-    if (state.players[0].stockpile.length > 0) {
-      const orb = state.players[0].stockpile[0];
+    if (liveCount(state.players[0].stockpile) > 0) {
+      const orb = liveSlots(state.players[0].stockpile)[0];
       const result = applyAction(state, {
         kind: 'forge_action',
         player: 0,
@@ -221,7 +223,7 @@ describe('Match Controller', () => {
       if (result.ok) {
         state = result.state;
         // Orb should be removed from stockpile and placed in loadout
-        expect(state.players[0].stockpile.find(o => o.uid === orb.uid)).toBeUndefined();
+        expect(liveSlots(state.players[0].stockpile).find(o => o.uid === orb.uid)).toBeUndefined();
         expect(state.players[0].loadout.weapon.slots[0]).not.toBeNull();
       }
     }
@@ -439,12 +441,13 @@ describe('Match Controller', () => {
   // --- Helper functions ---
 
   function draftAll(state: MatchState): MatchState {
-    const totalOrbs = state.pool.length;
+    const totalOrbs = liveCount(state.pool);
     for (let i = 0; i < totalOrbs; i++) {
       if (state.phase.kind !== 'draft') break;
-      const orbUid = state.pool[0].uid;
+      const nextOrb = liveSlots(state.pool)[0];
+      if (!nextOrb) break;
       const player = state.phase.activePlayer;
-      const result = applyAction(state, { kind: 'draft_pick', player, orbUid }, registry);
+      const result = applyAction(state, { kind: 'draft_pick', player, orbUid: nextOrb.uid }, registry);
       if (result.ok) state = result.state;
     }
     return state;
@@ -475,8 +478,8 @@ describe('Match Controller', () => {
     if (result.ok) state = result.state;
 
     // Assign first orb to weapon slot 0 if available
-    if (state.players[player].stockpile.length > 0) {
-      const orb = state.players[player].stockpile[0];
+    if (liveCount(state.players[player].stockpile) > 0) {
+      const orb = liveSlots(state.players[player].stockpile)[0];
       result = applyAction(state, {
         kind: 'forge_action',
         player,

@@ -3,8 +3,10 @@ import type { CombatLog } from '../types/combat.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { BaseItemDef, Loadout } from '../types/item.js';
 import type { GemInstance } from '../types/gem.js';
+import type { SlotArray } from '../types/match.js';
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
+import { liveSlots } from '../types/slot-array.js';
 import { selectAIItems } from './item-selection.js';
 import type { DraftStrategy } from './strategies/draft-strategy.js';
 import type { ForgeStrategy } from './strategies/forge-strategy.js';
@@ -50,26 +52,34 @@ export class AIController {
   }
 
   pickOrb(
-    pool: GemInstance[],
-    myStockpile: GemInstance[],
-    opponentStockpile: GemInstance[],
+    pool: SlotArray<GemInstance>,
+    myStockpile: SlotArray<GemInstance>,
+    opponentStockpile: SlotArray<GemInstance>,
   ): string {
-    return this.draftStrategy.pickOrb(pool, myStockpile, opponentStockpile, this.registry, this.rng);
+    // Strategies operate on flat gem lists — null slots don't help them reason
+    // about picks. We compact here so the strategy code stays simple.
+    return this.draftStrategy.pickOrb(
+      liveSlots(pool),
+      liveSlots(myStockpile),
+      liveSlots(opponentStockpile),
+      this.registry,
+      this.rng,
+    );
   }
 
   planForge(
-    stockpile: GemInstance[],
+    stockpile: SlotArray<GemInstance>,
     loadout: Loadout,
     fluxRemaining: number,
     round: number,
-    opponentStockpile: GemInstance[],
+    opponentStockpile: SlotArray<GemInstance>,
   ): ForgeAction[] {
     return this.forgeStrategy.plan(
-      stockpile,
+      liveSlots(stockpile),
       loadout,
       fluxRemaining,
       round as (1 | 2 | 3),
-      opponentStockpile,
+      liveSlots(opponentStockpile),
       this.registry,
       this.rng,
     );
@@ -85,7 +95,7 @@ export class AIController {
     previousLog: CombatLog,
     opponentLoadout: Loadout,
     myLoadout: Loadout,
-    myStockpile: GemInstance[],
+    myStockpile: SlotArray<GemInstance>,
     fluxRemaining: number,
     myPlayerIdx: 0 | 1,
     round?: number,
@@ -94,7 +104,7 @@ export class AIController {
       previousLog,
       opponentLoadout,
       myLoadout,
-      myStockpile,
+      liveSlots(myStockpile),
       fluxRemaining,
       myPlayerIdx,
       this.registry,

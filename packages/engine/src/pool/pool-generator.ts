@@ -1,5 +1,6 @@
 import type { AffixCategory, AffixDef } from '../types/affix.js';
 import type { GemInstance, GemRarity } from '../types/gem.js';
+import type { SlotArray } from '../types/match.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createGem } from '../types/gem.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
@@ -45,7 +46,7 @@ export function generatePool(
   mode: 'quick' | 'ranked' | 'unranked' | 'run_async' | 'run_live',
   registry: DataRegistry,
   round: number = 1,
-): GemInstance[] {
+): SlotArray<GemInstance> {
   const balance = registry.getBalance();
   let currentSeed = seed;
 

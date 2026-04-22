@@ -30,6 +30,10 @@ const STAT_KEY_ALIASES: Record<string, string> = {
   lifesteal: 'lifestealPercent',
   blockBreak: 'blockBreakChance',
   dotDamageMultiplier: 'dotMultiplier',
+  // affixes.json uses the bare `chaosDamage` key while fire/cold/lightning
+  // use `elementalDamage.{el}`. Align chaos with its sibling elements so it
+  // flows into DerivedStats and actually lands on hit in the duel engine.
+  chaosDamage: 'elementalDamage.chaos',
 };
 
 // Keys that legitimately have no DerivedStats home (applied elsewhere).

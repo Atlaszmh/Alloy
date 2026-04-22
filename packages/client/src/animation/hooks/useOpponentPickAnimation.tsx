@@ -1,12 +1,15 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { GemInstance } from '@alloy/engine';
+import type { GemInstance, SlotArray } from '@alloy/engine';
+import { liveSlots } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
 // ── Types ──
 
 interface UseOpponentPickAnimationOptions {
-  pool: GemInstance[];
-  opponentStockpile: GemInstance[];
+  /** Sparse draft pool — `null` entries are picked slots. */
+  pool: SlotArray<GemInstance>;
+  /** Sparse opponent stockpile. */
+  opponentStockpile: SlotArray<GemInstance>;
   isPlayerTurn: boolean;
   opponentZoneRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -14,8 +17,8 @@ interface UseOpponentPickAnimationOptions {
 interface UseOpponentPickAnimationResult {
   /** Pre-animate a specific orb's swoop (for last AI pick before dispatch) */
   startSwoopAnimation: (orb: GemInstance) => Promise<void>;
-  /** Opponent stockpile with the in-flight orb filtered out */
-  filteredOpponentStockpile: GemInstance[];
+  /** Opponent stockpile with the in-flight orb filtered out (flat list for rendering). */
+  filteredOpponentStockpile: SlotArray<GemInstance>;
   /** Shared position cache — used by useDraftEndSequence */
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;
   /** UID of gem currently animating (used to set long exit hold on AnimatePresence) */
@@ -36,6 +39,7 @@ export function useOpponentPickAnimation({
   useLayoutEffect(() => {
     const positions = gemPositionsRef.current;
     for (const orb of pool) {
+      if (orb === null) continue;
       const el = document.querySelector(`[data-gem-uid="${orb.uid}"] [data-gem]`) ??
                  document.querySelector(`[data-gem-uid="${orb.uid}"]`);
       if (el) {
@@ -45,7 +49,7 @@ export function useOpponentPickAnimation({
     }
   }, [pool]);
 
-  const prevPoolRef = useRef<GemInstance[]>(pool);
+  const prevPoolRef = useRef<SlotArray<GemInstance>>(pool);
   const [swoopingUid, setSwoopingUid] = useState<string | null>(null);
   // Track UIDs that were manually swooped (e.g. last AI pick) so auto-detect skips them
   const manuallySwoopedRef = useRef<Set<string>>(new Set());
@@ -98,23 +102,29 @@ export function useOpponentPickAnimation({
   }, [animateGemToStockpile]);
 
   // Detect opponent picks in useLayoutEffect — fires before paint,
-  // element is still in DOM (AnimatePresence hasn't removed it yet)
+  // element is still in DOM (AnimatePresence hasn't removed it yet). With
+  // the fixed-slot pool, `.length` is stable across picks, so we compare
+  // live-gem counts instead.
   useLayoutEffect(() => {
     const prevPool = prevPoolRef.current;
     prevPoolRef.current = pool;
 
-    if (prevPool.length > 0 && pool.length < prevPool.length) {
-      const removedOrb = prevPool.find((o) => !pool.some((p) => p.uid === o.uid));
-      const inOpponentStockpile = removedOrb && opponentStockpile.some((o) => o.uid === removedOrb.uid);
+    const prevLive = liveSlots(prevPool);
+    const currLive = liveSlots(pool);
+    if (prevLive.length > 0 && currLive.length < prevLive.length) {
+      const removedOrb = prevLive.find((o) => !currLive.some((p) => p.uid === o.uid));
+      const inOpponentStockpile =
+        removedOrb && liveSlots(opponentStockpile).some((o) => o.uid === removedOrb.uid);
       if (removedOrb && inOpponentStockpile && !manuallySwoopedRef.current.has(removedOrb.uid)) {
         animateGemToStockpile(removedOrb.uid);
       }
     }
   });
 
-  // Filter swooping orb from opponent stockpile display
-  const filteredOpponentStockpile = swoopingUid
-    ? opponentStockpile.filter((o) => o.uid !== swoopingUid)
+  // Filter swooping orb from opponent stockpile display. Preserve slot
+  // positions — nulling the swooping slot lets the UI keep its arrangement.
+  const filteredOpponentStockpile: SlotArray<GemInstance> = swoopingUid
+    ? opponentStockpile.map((o) => (o !== null && o.uid === swoopingUid ? null : o))
     : opponentStockpile;
 
   return {

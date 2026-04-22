@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useMatchStore } from '@/stores/matchStore';
+import { liveSlots } from '@alloy/engine';
 import { LocalGateway } from './local-gateway';
 
 describe('LocalGateway', () => {
@@ -32,7 +33,7 @@ describe('LocalGateway', () => {
     useMatchStore.getState().startLocalMatch(42, 'quick', 1);
     const gw = new LocalGateway('ai-test');
     const state = gw.getState()!;
-    const firstOrb = state.pool[0];
+    const firstOrb = liveSlots(state.pool)[0];
 
     const result = await gw.dispatch({
       kind: 'draft_pick',

@@ -7,8 +7,8 @@ import { useDraftStore } from '@/stores/draftStore';
 import { GemCard } from '@/components/GemCard';
 import { GemChip } from '@/components/GemChip';
 import { Timer } from '@/components/Timer';
-import type { AffixDef, GemInstance } from '@alloy/engine';
-import { AI_CONFIGS } from '@alloy/engine';
+import type { AffixDef, GemInstance, SlotArray } from '@alloy/engine';
+import { AI_CONFIGS, liveCount, liveSlots } from '@alloy/engine';
 import { calcAiDelay } from './ai-delay';
 import { getStatLabel } from '@/shared/utils/stat-label';
 import { useDisconnectTimer } from '@/hooks/useDisconnectTimer';
@@ -36,17 +36,19 @@ function StockpileZone({
   side,
 }: {
   label: string;
-  orbs: GemInstance[];
+  /** Sparse slot array — nulls are empty slots preserved in place. */
+  orbs: SlotArray<GemInstance>;
   maxOrbs: number;
   affixMap: Map<string, AffixDef>;
   isActive: boolean;
   isDropTarget: boolean;
   side: 'top' | 'bottom';
 }) {
-  const totalSlots = Math.max(maxOrbs, orbs.length);
-  const emptyCount = Math.max(0, totalSlots - orbs.length);
-  const newestUid = orbs.length > 0 ? orbs[orbs.length - 1].uid : null;
-  const sortedOrbs = [...orbs].sort((a, b) => {
+  const liveOrbs = liveSlots(orbs);
+  const totalSlots = Math.max(maxOrbs, liveOrbs.length);
+  const emptyCount = Math.max(0, totalSlots - liveOrbs.length);
+  const newestUid = liveOrbs.length > 0 ? liveOrbs[liveOrbs.length - 1].uid : null;
+  const sortedOrbs = [...liveOrbs].sort((a, b) => {
     const aAffix = affixMap.get(a.affixId);
     const bAffix = affixMap.get(b.affixId);
     const aEl = aAffix?.tags.find((t) => ELEMENT_ORDER.includes(t)) ?? 'physical';
@@ -174,9 +176,13 @@ export function Draft() {
   // Track each orb's original grid slot so gems don't reflow when others are removed
   const gemGridSlotRef = useRef<Map<string, number>>(new Map());
   useEffect(() => {
-    // Assign grid slots on initial pool load (per round)
-    if (pool.length > 0 && gemGridSlotRef.current.size === 0) {
-      pool.forEach((orb, i) => gemGridSlotRef.current.set(orb.uid, i));
+    // Assign grid slots on initial pool load (per round). Skip empty slots
+    // — the pool is a sparse slot array after picks; only real gems get an
+    // assigned position.
+    if (liveCount(pool) > 0 && gemGridSlotRef.current.size === 0) {
+      pool.forEach((orb, i) => {
+        if (orb !== null) gemGridSlotRef.current.set(orb.uid, i);
+      });
     }
   }, [pool]);
   // Reset grid slots when round changes
@@ -193,10 +199,11 @@ export function Draft() {
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      if (width === 0 || height === 0 || pool.length === 0) return;
+      const poolLive = liveCount(pool);
+      if (width === 0 || height === 0 || poolLive === 0) return;
       let bestSize = 0;
       for (let cols = 2; cols <= 7; cols++) {
-        const rows = Math.ceil(pool.length / cols);
+        const rows = Math.ceil(poolLive / cols);
         const gap = 10;
         const cellW = (width - (cols - 1) * gap) / cols;
         const cellH = (height - (rows - 1) * gap) / rows - 28;
@@ -207,7 +214,7 @@ export function Draft() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [pool.length]);
+  }, [pool]);
 
   // ── Animation hooks ──
   const opponentZoneRef = useRef<HTMLDivElement>(null);
@@ -236,7 +243,11 @@ export function Draft() {
   const balance = registry.getBalance();
   const perRound = balance.draftPicksPerPlayer ?? [8, 4, 4];
   const picksPerPlayer = matchState?.mode === 'quick'
-    ? Math.ceil((pool.length + (player0?.stockpile.length ?? 0) + (player1?.stockpile.length ?? 0)) / 2)
+    ? Math.ceil(
+        (liveCount(pool) +
+          liveCount(player0?.stockpile ?? []) +
+          liveCount(player1?.stockpile ?? [])) / 2,
+      )
     : perRound[draftRound - 1] ?? 8;
 
   // ── Draft action ──
@@ -463,7 +474,7 @@ export function Draft() {
       const isLastPick = currentPickIndex + 1 >= maxPicks;
 
       if (isLastPick) {
-        const pickedOrb = freshState.pool.find((o) => o.uid === orbUid);
+        const pickedOrb = freshState.pool.find((o) => o !== null && o.uid === orbUid) ?? null;
         if (pickedOrb) {
           await startSwoopAnimation(pickedOrb);
         }
@@ -476,9 +487,10 @@ export function Draft() {
 
   const handleTimerExpire = useCallback(() => {
     playSound('timerUrgent');
-    if (!isPlayerTurn || pool.length === 0) return;
-    const randomIndex = Math.floor(Math.random() * pool.length);
-    draftOrb(pool[randomIndex].uid);
+    const live = liveSlots(pool);
+    if (!isPlayerTurn || live.length === 0) return;
+    const randomIndex = Math.floor(Math.random() * live.length);
+    draftOrb(live[randomIndex].uid);
     cancelSelection();
   }, [isPlayerTurn, pool, draftOrb, cancelSelection]);
 
@@ -520,7 +532,7 @@ export function Draft() {
             {isRunMode ? 'PICK YOUR GEMS' : (isPlayerTurn ? 'YOUR PICK' : 'OPPONENT PICKING')}
           </div>
           <span className="text-xs text-surface-300" style={{ fontFamily: 'var(--font-family-display)' }}>
-            ROUND {draftRound} DRAFT · {pool.length} left
+            ROUND {draftRound} DRAFT · {liveCount(pool)} left
           </span>
         </div>
       </div>
@@ -550,6 +562,11 @@ export function Draft() {
         >
           <AnimatePresence>
             {pool.map((orb, index) => {
+              // Skip empty pool slots — the pool is sparse after picks, and
+              // Draft intentionally does not show placeholders for picked
+              // gems (the remaining cards naturally occupy their slots via
+              // the `order` CSS fallback below).
+              if (orb === null) return null;
               const affix = affixMap.get(orb.affixId);
               if (!affix) return null;
               const slot = gemGridSlotRef.current.get(orb.uid) ?? index;

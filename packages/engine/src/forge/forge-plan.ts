@@ -2,13 +2,26 @@ import type { ForgeState } from './forge-state.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { GemInstance } from '../types/gem.js';
 import type { Loadout, ForgedItem } from '../types/item.js';
+import type { SlotArray } from '../types/match.js';
+import {
+  clearSlot,
+  findSlotIndex,
+  placeInFirstEmpty,
+  setSlot,
+} from '../types/slot-array.js';
 import type { DataRegistry } from '../data/registry.js';
 import { calculateStats, type StatsResult } from './stat-calculator.js';
 import { CombinationEngine } from '../combine/combination-engine.js';
 import { DiscoveryState } from '../combine/discovery-state.js';
 
 export interface ForgePlan {
-  stockpile: GemInstance[];
+  /**
+   * Fixed-slot stockpile. `null` entries are empty slots — positions are
+   * preserved across sockets/combines so the player's arrangement never
+   * shifts. Combine output lands in the keep-gem's original slot; unsocket
+   * returns the gem to the first empty slot.
+   */
+  stockpile: SlotArray<GemInstance>;
   loadout: Loadout;
   round: number;
   lockedGemUids: Set<string>;
@@ -30,9 +43,13 @@ function deepCloneItem(item: ForgedItem): ForgedItem {
   };
 }
 
+function cloneStockpile(stockpile: SlotArray<GemInstance>): SlotArray<GemInstance> {
+  return stockpile.map(g => (g === null ? null : { ...g }));
+}
+
 function clonePlan(plan: ForgePlan): ForgePlan {
   return {
-    stockpile: plan.stockpile.map(g => ({ ...g })),
+    stockpile: cloneStockpile(plan.stockpile),
     loadout: {
       weapon: deepCloneItem(plan.loadout.weapon),
       armor: deepCloneItem(plan.loadout.armor),
@@ -47,7 +64,7 @@ function clonePlan(plan: ForgePlan): ForgePlan {
 
 export function createForgePlan(state: ForgeState, _registry: DataRegistry): ForgePlan {
   return {
-    stockpile: state.stockpile.map(g => ({ ...g })),
+    stockpile: cloneStockpile(state.stockpile),
     loadout: {
       weapon: deepCloneItem(state.loadout.weapon),
       armor: deepCloneItem(state.loadout.armor),
@@ -80,7 +97,7 @@ function planSocketGem(
   plan: ForgePlan,
   action: Extract<ForgeAction, { kind: 'socket_gem' }>,
 ): PlanResult {
-  const gemIndex = plan.stockpile.findIndex(g => g.uid === action.gemUid);
+  const gemIndex = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid);
   if (gemIndex === -1) return { ok: false, error: 'Gem not in stockpile' };
 
   const item = plan.loadout[action.target];
@@ -93,7 +110,10 @@ function planSocketGem(
   }
 
   const next = clonePlan(plan);
-  const removedGem = next.stockpile.splice(gemIndex, 1)[0];
+  const removedGem = next.stockpile[gemIndex]!;
+  // Leave the stockpile slot empty rather than compacting — the player's
+  // arrangement stays fixed across sockets.
+  next.stockpile = clearSlot(next.stockpile, gemIndex);
 
   next.loadout[action.target].slots[action.slotIndex] = { gem: removedGem };
   next.actionLog.push(action);
@@ -117,8 +137,9 @@ function planUnsocketGem(
   const removedSlot = next.loadout[action.target].slots[action.slotIndex]!;
   next.loadout[action.target].slots[action.slotIndex] = null;
 
-  // Return gem to stockpile
-  next.stockpile.push(removedSlot.gem);
+  // Return gem to the first empty stockpile slot; if every slot is filled
+  // the helper grows the array by one so the gem is never dropped.
+  next.stockpile = placeInFirstEmpty(next.stockpile, removedSlot.gem);
   next.actionLog.push(action);
   return { ok: true, plan: next };
 }
@@ -140,14 +161,14 @@ function planCombine(
   action: Extract<ForgeAction, { kind: 'combine' }>,
   registry: DataRegistry,
 ): PlanResult {
-  const gemIdx1 = plan.stockpile.findIndex(g => g.uid === action.gemUid1);
+  const gemIdx1 = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid1);
   if (gemIdx1 === -1) return { ok: false, error: 'First gem not found in stockpile' };
 
-  const gemIdx2 = plan.stockpile.findIndex(g => g.uid === action.gemUid2);
+  const gemIdx2 = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid2);
   if (gemIdx2 === -1) return { ok: false, error: 'Second gem not found in stockpile' };
 
-  const gem1 = plan.stockpile[gemIdx1];
-  const gem2 = plan.stockpile[gemIdx2];
+  const gem1 = plan.stockpile[gemIdx1]!;
+  const gem2 = plan.stockpile[gemIdx2]!;
 
   if (!gem1.combinable) return { ok: false, error: 'First gem is not combinable' };
   if (!gem2.combinable) return { ok: false, error: 'Second gem is not combinable' };
@@ -172,15 +193,12 @@ function planCombine(
 
   const next = clonePlan(plan);
 
-  // Remove source gems from stockpile
-  const idx1 = next.stockpile.findIndex(g => g.uid === action.gemUid1);
-  next.stockpile.splice(idx1, 1);
-  const idx2 = next.stockpile.findIndex(g => g.uid === action.gemUid2);
-  next.stockpile.splice(idx2, 1);
-
-  // Add the real engine output so the preview reflects rarity/tier bumps,
-  // signature outputs, category combos, and generic upgrades.
-  next.stockpile.push(result.gem);
+  // Combine output lands in the keep-gem's original slot so the player's
+  // arrangement stays stable; the other ingredient's slot becomes empty.
+  const keepIdx = action.keepGemUid === action.gemUid1 ? gemIdx1 : gemIdx2;
+  const ingredientIdx = keepIdx === gemIdx1 ? gemIdx2 : gemIdx1;
+  next.stockpile = setSlot(next.stockpile, keepIdx, result.gem);
+  next.stockpile = clearSlot(next.stockpile, ingredientIdx);
 
   // Lock source gems
   next.lockedGemUids.add(action.gemUid1);
@@ -195,13 +213,16 @@ function planCombine3(
   action: Extract<ForgeAction, { kind: 'combine3' }>,
   registry: DataRegistry,
 ): PlanResult {
-  const find = (uid: string) => plan.stockpile.find(g => g.uid === uid);
-  const g1 = find(action.gemUid1);
-  if (!g1) return { ok: false, error: 'First gem not found in stockpile' };
-  const g2 = find(action.gemUid2);
-  if (!g2) return { ok: false, error: 'Second gem not found in stockpile' };
-  const g3 = find(action.gemUid3);
-  if (!g3) return { ok: false, error: 'Third gem not found in stockpile' };
+  const idx1 = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid1);
+  if (idx1 === -1) return { ok: false, error: 'First gem not found in stockpile' };
+  const idx2 = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid2);
+  if (idx2 === -1) return { ok: false, error: 'Second gem not found in stockpile' };
+  const idx3 = findSlotIndex(plan.stockpile, g => g.uid === action.gemUid3);
+  if (idx3 === -1) return { ok: false, error: 'Third gem not found in stockpile' };
+
+  const g1 = plan.stockpile[idx1]!;
+  const g2 = plan.stockpile[idx2]!;
+  const g3 = plan.stockpile[idx3]!;
 
   if (!g1.combinable) return { ok: false, error: 'First gem is not combinable' };
   if (!g2.combinable) return { ok: false, error: 'Second gem is not combinable' };
@@ -222,13 +243,24 @@ function planCombine3(
 
   const next = clonePlan(plan);
 
-  // Remove consumed uids from stockpile
+  // Output lands in the keep-gem's slot; consumed ingredients vacate theirs.
+  const slotByUid: Record<string, number> = {
+    [action.gemUid1]: idx1,
+    [action.gemUid2]: idx2,
+    [action.gemUid3]: idx3,
+  };
+  const keepUid = action.keepGemUid ?? action.gemUid1;
+  const keepIdx = slotByUid[keepUid] ?? idx1;
+  next.stockpile = setSlot(next.stockpile, keepIdx, result.gem);
+  // Clear consumed slots, but never the keep-slot — the combination engine
+  // may list the kept gem as "consumed" logically, but its slot now holds
+  // the output and must not be emptied.
   for (const uid of result.consumedUids) {
-    const idx = next.stockpile.findIndex(g => g.uid === uid);
-    if (idx !== -1) next.stockpile.splice(idx, 1);
+    const idx = slotByUid[uid];
+    if (idx !== undefined && idx !== keepIdx) {
+      next.stockpile = clearSlot(next.stockpile, idx);
+    }
   }
-  // Add the output gem
-  next.stockpile.push(result.gem);
   // Lock only consumed uids (ejected gem stays unlocked and can combine again)
   for (const uid of result.consumedUids) next.lockedGemUids.add(uid);
 

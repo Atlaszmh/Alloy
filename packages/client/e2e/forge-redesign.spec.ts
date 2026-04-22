@@ -170,12 +170,10 @@ test.describe('Forge Screen Redesign', () => {
     expect(touchAction).toBe('none');
   });
 
-  // F15: Base stat selectors visible in round 1
-  test('F15: base stat selectors in R1', async ({ page }) => {
+  // F15: Stat selection UI was removed — defaults seed the engine internally.
+  test('F15: no base-stat selectors rendered', async ({ page }) => {
     const selectors = page.locator('select');
-    const count = await selectors.count();
-    // 4 selectors: 2 per item (weapon + armor)
-    expect(count).toBeGreaterThanOrEqual(4);
+    expect(await selectors.count()).toBe(0);
   });
 
   // F16: Both tabs render correctly

@@ -18,11 +18,17 @@ import { showToast } from '@/components/Toast';
 import { DRAG_THRESHOLD, INSPECT_THRESHOLD } from '@/pages/draft-gestures';
 import { GemInspectPanel } from '@/components/GemInspectPanel';
 import { ForgeDesktop } from '@/components/forge-desktop/ForgeDesktop';
+import { buildGemDamageBreakdown } from '@/shared/utils/gem-damage-breakdown';
 import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview, RunState, DataRegistry } from '@alloy/engine';
 import { createForgeState, CombinationEngine, DiscoveryState, getPoolConfigForRound } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
-const BASE_STATS: BaseStat[] = ['STR', 'INT', 'DEX', 'VIT'];
+
+// Fixed default base-stat pairs. Player-facing stat selection was removed —
+// the engine's baseStatScaling pipeline still requires values, so we seed
+// sensible defaults (STR/VIT weapon, VIT/STR armor) on R1 init.
+const DEFAULT_WEAPON_STATS: [BaseStat, BaseStat] = ['STR', 'VIT'];
+const DEFAULT_ARMOR_STATS: [BaseStat, BaseStat] = ['VIT', 'STR'];
 
 // ══════════════════════════════════════════════════
 // ── Forge orchestrator ──
@@ -116,8 +122,6 @@ export function Forge() {
   // ── Local state ──
   const committedRef = useRef(false);
 
-  const [baseStatWeapon, setBaseStatWeapon] = useState<[BaseStat, BaseStat]>(['STR', 'VIT']);
-  const [baseStatArmor, setBaseStatArmor] = useState<[BaseStat, BaseStat]>(['VIT', 'STR']);
   const [fluxToast, setFluxToast] = useState<string | null>(null);
   const [inspectGem, setInspectGem] = useState<{
     gem: GemInstance;
@@ -184,8 +188,8 @@ export function Forge() {
     initPlan(forgeState, registry);
 
     if (round === 1) {
-      applyAction({ kind: 'set_base_stats', target: 'weapon', stat1: baseStatWeapon[0], stat2: baseStatWeapon[1] }, registry);
-      applyAction({ kind: 'set_base_stats', target: 'armor', stat1: baseStatArmor[0], stat2: baseStatArmor[1] }, registry);
+      applyAction({ kind: 'set_base_stats', target: 'weapon', stat1: DEFAULT_WEAPON_STATS[0], stat2: DEFAULT_WEAPON_STATS[1] }, registry);
+      applyAction({ kind: 'set_base_stats', target: 'armor', stat1: DEFAULT_ARMOR_STATS[0], stat2: DEFAULT_ARMOR_STATS[1] }, registry);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase?.kind === 'forge' ? `${round}` : 'none']);
@@ -193,6 +197,12 @@ export function Forge() {
   // ── Derived stats ──
   const statsResult = useForgeStore(s => s.getStats)(registry);
   const derivedStats = statsResult?.stats ?? null;
+
+  // ── Gem-damage breakdown (drives the DMG tooltip + poison/shadow top-up) ──
+  const gemDamage = useMemo(
+    () => (plan ? buildGemDamageBreakdown(plan, registry) : []),
+    [plan, registry],
+  );
 
   // Memoize categoryMap — only changes if registry changes (never during a match)
   const categoryMap = useMemo(() => {
@@ -451,7 +461,7 @@ export function Forge() {
             const slots = useForgeStore.getState().comboSlots;
             if (!slots[target.slotIndex]) {
               removeFromSource();
-              const orb = useForgeStore.getState().plan?.stockpile.find(o => o.uid === draggedUid);
+              const orb = useForgeStore.getState().plan?.stockpile.find(o => o !== null && o.uid === draggedUid);
               if (orb) {
                 setComboSlotByIndex(target.slotIndex, orb);
                 playSound('orbSelect');
@@ -524,7 +534,7 @@ export function Forge() {
         // to avoid accidental triggers.
         const holdDuration = Date.now() - start.time;
         const planNow = useForgeStore.getState().plan;
-        const gem = planNow?.stockpile.find(g => g.uid === start.uid);
+        const gem = planNow?.stockpile.find(g => g !== null && g.uid === start.uid) ?? null;
         // Inspect is a stockpile-only affordance — gems already staged into a
         // combo slot or socketed onto weapon/armor should not surface the
         // tooltip on click. Drag/socket-management remains the intended
@@ -579,7 +589,7 @@ export function Forge() {
       setComboSlotByIndex(index, null);
       playSound('orbRemove');
     } else if (selectedOrbUid) {
-      const orb = plan?.stockpile.find(o => o.uid === selectedOrbUid);
+      const orb = plan?.stockpile.find(o => o !== null && o.uid === selectedOrbUid) ?? null;
       if (orb) {
         setComboSlotByIndex(index, orb);
         selectOrb(null);
@@ -603,10 +613,13 @@ export function Forge() {
     const knownRecipes = new Set(
       matchState?.discoveryState?.serialize().discoveredRecipes ?? [],
     );
-    const beforeUids = new Set(plan.stockpile.map((g) => g.uid));
+    const beforeUids = new Set<string>();
+    for (const g of plan.stockpile) {
+      if (g !== null) beforeUids.add(g.uid);
+    }
 
     const fireDiscoveryToast = (nextPlan: typeof plan) => {
-      const newGem = nextPlan.stockpile.find((g) => !beforeUids.has(g.uid));
+      const newGem = nextPlan.stockpile.find((g) => g !== null && !beforeUids.has(g.uid)) ?? null;
       const recipeId = newGem?.sourceRecipe;
       if (!recipeId || knownRecipes.has(recipeId)) return;
       const recipeDef = registry.getRecipeRegistry().get(recipeId);
@@ -675,17 +688,6 @@ export function Forge() {
     playSound('orbRemove');
   }, [plan, applyAction, registry]);
 
-  // ── Base stat change ──
-  const handleBaseStatChange = useCallback((target: 'weapon' | 'armor', index: 0 | 1, value: BaseStat) => {
-    const setter = target === 'weapon' ? setBaseStatWeapon : setBaseStatArmor;
-    setter(prev => {
-      const next = [...prev] as [BaseStat, BaseStat];
-      next[index] = value;
-      applyAction({ kind: 'set_base_stats', target, stat1: next[0], stat2: next[1] }, registry);
-      return next;
-    });
-  }, [applyAction, registry]);
-
   // ── Computed UID sets for gem tray ──
   const equippedUids = useMemo(() => {
     const uids = new Set<string>();
@@ -723,35 +725,6 @@ export function Forge() {
   // ── Wait for plan ──
   if (!plan) return null;
 
-  // ── Base stat selectors JSX (R1 only) ──
-  const baseStatSelectorJSX = round === 1 ? (
-    <div className="flex flex-wrap gap-2 px-3 py-1" style={{ background: 'var(--color-surface-900)' }}>
-      {(['weapon', 'armor'] as const).map(target => {
-        const statPair = target === 'weapon' ? baseStatWeapon : baseStatArmor;
-        return (
-          <div
-            key={target}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-            style={{ background: 'var(--color-surface-700)', fontFamily: 'var(--font-family-display)' }}
-          >
-            <span className="capitalize" style={{ color: 'var(--color-surface-400)' }}>{target}:</span>
-            {([0, 1] as const).map(i => (
-              <select
-                key={i}
-                value={statPair[i]}
-                onChange={e => handleBaseStatChange(target, i, e.target.value as BaseStat)}
-                className="rounded px-1.5 py-0.5 text-xs text-white"
-                style={{ background: 'var(--color-surface-600)' }}
-              >
-                {BASE_STATS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  ) : undefined;
-
   const sharedGemStyle: React.CSSProperties = sharedGemSize
     ? ({
         '--gem-size': `${sharedGemSize}px`,
@@ -763,11 +736,11 @@ export function Forge() {
   const forgeDesktopProps = plan
     ? buildForgeDesktopProps({
         plan, registry, runState, isRunMode, isAiMatch, aiOpponentTier,
-        round, derivedStats, currentFlux, maxFlux, comboSlots, combinePreview,
-        baseStatWeapon, baseStatArmor, selectedOrbUid, equippedUids, stagedUids,
+        round, derivedStats, gemDamage, currentFlux, maxFlux, comboSlots, combinePreview,
+        selectedOrbUid, equippedUids, stagedUids,
         gateway, navigate, setFluxToast,
         openConfirmModal, clearComboSlots,
-        handleBaseStatChange, handleSocketClick, handleSocketRemove,
+        handleSocketClick, handleSocketRemove,
         handleComboSlotClick, handleCombine, handleSelectOrb, handlePointerDown,
         handleTimerExpire,
         activeSynergies: statsResult?.activeSynergies ?? [],
@@ -818,12 +791,12 @@ export function Forge() {
       <ForgeHeader
         round={round}
         stats={derivedStats}
+        gemDamage={gemDamage}
         activeSynergies={statsResult?.activeSynergies ?? []}
         registry={registry}
         timerDurationMs={isRunMode ? undefined : FORGE_TIMER_MS}
         onTimerExpire={isRunMode ? undefined : handleTimerExpire}
         onDone={openConfirmModal}
-        baseStatSelectors={baseStatSelectorJSX}
       />
 
       {/* 2. Items area — scrollable middle */}
@@ -1045,12 +1018,11 @@ function buildForgeDesktopProps(a: {
   aiOpponentTier: number | null;
   round: number;
   derivedStats: ForgeDesktopProps['derivedStats'];
+  gemDamage: ForgeDesktopProps['gemDamage'];
   currentFlux: number;
   maxFlux: number;
   comboSlots: ForgeDesktopProps['comboSlots'];
   combinePreview: CombinePreview | null;
-  baseStatWeapon: [BaseStat, BaseStat];
-  baseStatArmor: [BaseStat, BaseStat];
   selectedOrbUid: string | null;
   equippedUids: Set<string>;
   stagedUids: Set<string>;
@@ -1059,7 +1031,6 @@ function buildForgeDesktopProps(a: {
   setFluxToast: (msg: string | null) => void;
   openConfirmModal: () => void;
   clearComboSlots: () => void;
-  handleBaseStatChange: (target: 'weapon' | 'armor', index: 0 | 1, value: BaseStat) => void;
   handleSocketClick: ForgeDesktopProps['onSocketClick'];
   handleSocketRemove: ForgeDesktopProps['onSocketRemove'];
   handleComboSlotClick: ForgeDesktopProps['onComboSlotClick'];
@@ -1090,6 +1061,7 @@ function buildForgeDesktopProps(a: {
     streak: a.runState?.consecutiveWins ?? 0,
     totalRounds: a.runState?.goalRound ?? 10,
     derivedStats: a.derivedStats,
+    gemDamage: a.gemDamage,
     activeSynergies: a.activeSynergies,
     plan: a.plan,
     registry: a.registry,
@@ -1103,8 +1075,6 @@ function buildForgeDesktopProps(a: {
     // CombineWorkbench gates combine internally; pass the literal `true` the
     // portrait tree uses so the dock's button behaves identically.
     canAffordCombine: true,
-    weaponStats: a.baseStatWeapon,
-    armorStats: a.baseStatArmor,
     // Quick-match 90s auto-commit countdown — mirrors portrait ForgeHeader.
     // Omitted in run mode (async, no wall-clock timer there).
     timerDurationMs: a.isRunMode ? undefined : FORGE_TIMER_MS,
@@ -1115,8 +1085,6 @@ function buildForgeDesktopProps(a: {
     onBoost: () => dispatchFlux('boost_combine', 'Boost applied to next combine!', 'Cannot boost combine'),
     onReroll: () => dispatchFlux('reroll_pool', 'Pool will reroll next draft!', 'Cannot reroll pool'),
     onGuaranteeRarity: () => dispatchFlux('guarantee_rarity', 'Next draft gem guaranteed Rare!', 'Cannot guarantee rarity'),
-    onWeaponStatChange: (i, v) => a.handleBaseStatChange('weapon', i, v),
-    onArmorStatChange: (i, v) => a.handleBaseStatChange('armor', i, v),
     onSocketClick: a.handleSocketClick,
     onSocketRemove: a.handleSocketRemove,
     onComboSlotClick: a.handleComboSlotClick,

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import type { AffixDef, DataRegistry, GemInstance } from '@alloy/engine';
+import type { AffixDef, DataRegistry, GemInstance, SlotArray } from '@alloy/engine';
+import { liveCount } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
@@ -20,7 +21,13 @@ const MIN_GRID_CAPACITY = 10;
 const COLS = 10;
 
 interface StockpileStripProps {
-  stockpile: GemInstance[];
+  /**
+   * Fixed-slot stockpile — renders at the gem's original slot index so
+   * sibling gems never shift when one is socketed, combined, or otherwise
+   * removed. Null entries render as dim placeholder cells ready to be
+   * filled on unsocket / next-round pickup.
+   */
+  stockpile: SlotArray<GemInstance>;
   registry: DataRegistry;
   selectedOrbUid: string | null;
   equippedUids: Set<string>;
@@ -46,11 +53,15 @@ export function StockpileStrip({
   onSelectOrb,
   onPointerDown,
 }: StockpileStripProps) {
-  // Filter out staged gems (same rule as ForgeGemTray).
-  const visibleGems = useMemo(
-    () => stockpile.filter((g) => !stagedUids.has(g.uid)),
+  // Preserve slot positions — nulls are kept in place, and gems that are
+  // currently staged into the combine workbench are nulled out for display
+  // without collapsing their slot.
+  const visibleSlots = useMemo(
+    () =>
+      stockpile.map((g) => (g !== null && !stagedUids.has(g.uid) ? g : null)),
     [stockpile, stagedUids],
   );
+  const visibleCount = useMemo(() => liveCount(visibleSlots), [visibleSlots]);
 
   const affixMap = useMemo(() => {
     const map = new Map<string, AffixDef>();
@@ -60,16 +71,17 @@ export function StockpileStrip({
     return map;
   }, [registry]);
 
-  // At least MIN_GRID_CAPACITY (10) cells; grow in whole rows of COLS (10) so
-  // every gem stays addressable when the inventory spills past 10. Round 1's
-  // pool cap is 20 so 2 rows is the practical ceiling.
+  // At least MIN_GRID_CAPACITY (10) cells; grow in whole rows of COLS (10)
+  // to accommodate every slot in the fixed-slot stockpile. The slot-count
+  // floor is the array length (not the live-gem count) so empty slots still
+  // get their placeholder.
   const cellCount = Math.max(
     MIN_GRID_CAPACITY,
-    Math.ceil(visibleGems.length / COLS) * COLS,
+    Math.ceil(visibleSlots.length / COLS) * COLS,
   );
   const rows = cellCount / COLS;
   const cells: (GemInstance | null)[] = Array.from({ length: cellCount }, (_, i) =>
-    visibleGems[i] ?? null,
+    visibleSlots[i] ?? null,
   );
 
   return (
@@ -154,7 +166,7 @@ export function StockpileStrip({
         >
           Gems Held{' '}
           <span style={{ color: 'var(--color-bronze-300)' }}>
-            {visibleGems.length} / {maxCapacity}
+            {visibleCount} / {maxCapacity}
           </span>
         </span>
       </header>

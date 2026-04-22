@@ -449,4 +449,73 @@ describe('resolveStatKey — skip behavior', () => {
     expect(resolveStatKey('procDamage')).toBeNull();
     expect(resolveStatKey('dotDamage')).toBeNull();
   });
+
+  // Regression: chaos_damage affix uses the bare `chaosDamage` key (unlike
+  // fire/cold/lightning which already key into elementalDamage.{el}). Without
+  // this alias, chaos gems silently disappear from DerivedStats and never
+  // land on hit in the duel engine.
+  it('aliases chaosDamage → elementalDamage.chaos', () => {
+    expect(resolveStatKey('chaosDamage')).toBe('elementalDamage.chaos');
+  });
+});
+
+describe('Stat Calculator — elemental damage regressions', () => {
+  it('chaos_damage weapon gem flows into elementalDamage.chaos', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('chaos_damage', 1);
+    const stats = calculateStats(loadout, registry).stats;
+
+    // chaos_damage T1 weaponEffect: chaosDamage +2 flat (common = 1.0x).
+    expect(stats.elementalDamage.chaos).toBe(2);
+  });
+
+  it('chaos_damage scales with tier', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('chaos_damage', 4);
+    const stats = calculateStats(loadout, registry).stats;
+
+    // chaos_damage T4 weaponEffect: chaosDamage +4 flat.
+    expect(stats.elementalDamage.chaos).toBe(4);
+  });
+
+  it('chaos_damage on armor applies chaos resistance, not chaos damage', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.armor.slots[0] = gemSlot('chaos_damage', 1);
+    const stats = calculateStats(loadout, registry).stats;
+
+    // Armor slot uses the armorEffect: resistances.chaos +6 flat at T1.
+    // Base chainmail gives +2 chaos resist, so total = 8.
+    expect(stats.resistances.chaos).toBeGreaterThanOrEqual(6);
+    expect(stats.elementalDamage.chaos).toBe(0);
+  });
+
+  it('every damage-element gem of the same family (fire/cold/lightning/chaos) lands on DerivedStats.elementalDamage', () => {
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = gemSlot('fire_damage', 1);
+    loadout.weapon.slots[1] = gemSlot('cold_damage', 1);
+    loadout.weapon.slots[2] = gemSlot('lightning_damage', 1);
+    loadout.weapon.slots[3] = gemSlot('chaos_damage', 1);
+
+    const stats = calculateStats(loadout, registry).stats;
+
+    expect(stats.elementalDamage.fire).toBeGreaterThan(0);
+    expect(stats.elementalDamage.cold).toBeGreaterThan(0);
+    expect(stats.elementalDamage.lightning).toBeGreaterThan(0);
+    // Pre-alias, this was 0 — chaos was silently dropped.
+    expect(stats.elementalDamage.chaos).toBeGreaterThan(0);
+  });
+
+  it('rarity multiplier applies to chaos damage like other elements', () => {
+    // Build a rare chaos gem manually — gemSlot defaults to common.
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const rareChaos: EquippedSlot = {
+      gem: createGem('chaos-rare', 'chaos_damage', 1, 'rare'),
+    };
+    loadout.weapon.slots[0] = rareChaos;
+
+    const stats = calculateStats(loadout, registry).stats;
+
+    // chaos_damage T1 = 2, rare multiplier = 1.5 → 3.
+    expect(stats.elementalDamage.chaos).toBeCloseTo(3, 5);
+  });
 });

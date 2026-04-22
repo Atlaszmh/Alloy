@@ -1,10 +1,12 @@
 import { useRef, useEffect, useMemo } from 'react';
-import type { AffixDef, DataRegistry, GemInstance } from '@alloy/engine';
+import type { AffixDef, DataRegistry, GemInstance, SlotArray } from '@alloy/engine';
+import { liveCount } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 interface ForgeGemTrayProps {
-  stockpile: GemInstance[];
+  /** Fixed-slot stockpile — nulls are empty slots and render as skipped. */
+  stockpile: SlotArray<GemInstance>;
   registry: DataRegistry;
   selectedOrbUid: string | null;
   equippedUids: Set<string>;
@@ -50,6 +52,8 @@ export function ForgeGemTray({
     });
   }, [stockpile.length]);
 
+  const gemCount = useMemo(() => liveCount(stockpile), [stockpile]);
+
   const affixMap = useMemo(() => {
     const map = new Map<string, AffixDef>();
     for (const a of registry.getAllAffixes()) {
@@ -75,11 +79,11 @@ export function ForgeGemTray({
           marginBottom: 'var(--gap-sm)',
         }}
       >
-        STOCKPILE &middot; {stockpile.length} GEMS
+        STOCKPILE &middot; {gemCount} GEMS
       </div>
 
       {/* Empty state */}
-      {stockpile.length === 0 ? (
+      {gemCount === 0 ? (
         <div
           style={{
             display: 'flex',
@@ -105,9 +109,14 @@ export function ForgeGemTray({
             alignContent: 'start',
           }}
         >
-          {stockpile.map((orb) => {
-            // Staged gems are REMOVED from display (not dimmed)
-            if (stagedUids.has(orb.uid)) return null;
+          {stockpile.map((orb, slotIndex) => {
+            // Empty slots and staged gems render as dim placeholders so the
+            // player's arrangement stays visible — when a gem leaves the
+            // tray, its slot holds a "drop-here" affordance rather than
+            // disappearing.
+            if (orb === null || stagedUids.has(orb.uid)) {
+              return <EmptySlot key={`empty-${slotIndex}`} />;
+            }
             const isEquipped = equippedUids.has(orb.uid);
             const dimmed = isEquipped;
 
@@ -200,5 +209,24 @@ export function ForgeGemTray({
         </div>
       )}
     </div>
+  );
+}
+
+/** Dim placeholder rendered for empty or staged slots in the portrait tray. */
+function EmptySlot() {
+  return (
+    <div
+      data-gem-empty="true"
+      aria-hidden="true"
+      style={{
+        width: 'var(--gem-size)',
+        height: 'var(--gem-size)',
+        borderRadius: 'var(--gem-radius)',
+        border: '1px dashed var(--color-surface-700)',
+        opacity: 0.35,
+        background:
+          'repeating-linear-gradient(135deg, rgba(37,37,54,0.22) 0 4px, transparent 4px 10px)',
+      }}
+    />
   );
 }

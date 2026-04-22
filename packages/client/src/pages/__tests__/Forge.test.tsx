@@ -431,19 +431,9 @@ describe('Forge page', () => {
     expect(screen.getByText('CRT')).toBeTruthy();
   });
 
-  it('shows base stat selectors in round 1', () => {
+  it('does not render weapon/armor base-stat selectors', () => {
+    // Stat-selection UI was removed — defaults seed the engine internally.
     setupStores();
-    renderForge();
-
-    expect(screen.getByText('weapon:')).toBeTruthy();
-    expect(screen.getByText('armor:')).toBeTruthy();
-  });
-
-  it('hides base stat selectors after round 1', () => {
-    setupStores(
-      { phase: { kind: 'forge', round: 2 } as MatchState['phase'] },
-      { round: 2 },
-    );
     renderForge();
 
     expect(screen.queryByText('weapon:')).toBeNull();

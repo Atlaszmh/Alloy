@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useMatchStore } from '@/stores/matchStore';
+import { liveSlots } from '@alloy/engine';
 import { LocalGateway } from '../local-gateway';
 
 describe('Phase lifecycle: draft → forge → duel → complete', () => {
@@ -17,7 +18,7 @@ describe('Phase lifecycle: draft → forge → duel → complete', () => {
     let player = 0;
 
     while (state.phase.kind === 'draft') {
-      const orb = state.pool[0];
+      const orb = liveSlots(state.pool)[0];
       if (!orb) break;
 
       const result = await gw.dispatch({

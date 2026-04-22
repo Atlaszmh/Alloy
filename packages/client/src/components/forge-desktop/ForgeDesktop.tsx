@@ -1,12 +1,12 @@
 import type {
   ActiveSynergy,
-  BaseStat,
   CombinePreview,
   DataRegistry,
   DerivedStats,
   ForgePlan,
   GemInstance,
 } from '@alloy/engine';
+import type { GemDamageContribution } from '@/shared/utils/gem-damage-breakdown';
 import { AmbientBackdrop } from './AmbientBackdrop';
 import { CharacterRail } from './CharacterRail';
 import { CombineDock } from './CombineDock';
@@ -19,8 +19,8 @@ export interface ForgeDesktopProps {
   // Run + phase state
   //
   // `round` is `number` (not the portrait-era `1 | 2 | 3` union) because run
-  // mode extends well beyond round 3. Round-1-only behavior (e.g. base stat
-  // selectors, "R1" badge) gates on `round === 1` inside the child regions.
+  // mode extends well beyond round 3. Round-1-only behavior (e.g. "R1" badge)
+  // gates on `round === 1` inside the child regions.
   round: number;
   lives: number;
   maxLives: number;
@@ -32,6 +32,11 @@ export interface ForgeDesktopProps {
   derivedStats: DerivedStats | null;
   /** Active + pending synergies — rendered as chips in the character rail. */
   activeSynergies: ActiveSynergy[];
+  /**
+   * Per-type damage contributions from equipped gems — feeds the DMG tooltip
+   * and the poison/shadow top-up in the character readout.
+   */
+  gemDamage: GemDamageContribution[];
 
   // Plan (loadout + stockpile)
   plan: ForgePlan;
@@ -50,10 +55,6 @@ export interface ForgeDesktopProps {
   combinePreview: CombinePreview | null;
   canAffordCombine: boolean;
 
-  // Base stats
-  weaponStats: [BaseStat, BaseStat];
-  armorStats: [BaseStat, BaseStat];
-
   /**
    * Quick-match auto-commit countdown. Omitted in run mode (no timer there);
    * mirrors the portrait `ForgeHeader` contract so the desktop HUD matches.
@@ -67,8 +68,6 @@ export interface ForgeDesktopProps {
   onBoost: () => void;
   onReroll: () => void;
   onGuaranteeRarity: () => void;
-  onWeaponStatChange: (index: 0 | 1, stat: BaseStat) => void;
-  onArmorStatChange: (index: 0 | 1, stat: BaseStat) => void;
   onSocketClick: (card: 'weapon' | 'armor', slotIndex: number) => void;
   onSocketRemove: (card: 'weapon' | 'armor', slotIndex: number) => void;
   onComboSlotClick: (index: number) => void;
@@ -147,11 +146,7 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
       <div style={{ gridArea: 'left', zIndex: 1, overflow: 'hidden' }}>
         <CharacterRail
           stats={props.derivedStats}
-          weaponStats={props.weaponStats}
-          armorStats={props.armorStats}
-          onWeaponStatChange={props.onWeaponStatChange}
-          onArmorStatChange={props.onArmorStatChange}
-          round={props.round}
+          gemDamage={props.gemDamage}
           activeSynergies={props.activeSynergies}
           registry={props.registry}
         />

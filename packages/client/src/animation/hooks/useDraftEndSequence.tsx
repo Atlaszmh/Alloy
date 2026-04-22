@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { GemInstance } from '@alloy/engine';
+import type { GemInstance, SlotArray } from '@alloy/engine';
+import { liveCount, liveSlots } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 
 // ── Types ──
@@ -26,7 +27,7 @@ interface PhysicsBody {
 }
 
 interface UseDraftEndSequenceOptions {
-  pool: GemInstance[];
+  pool: SlotArray<GemInstance>;
   phase: { kind: string } | null;
   draftRound: number;
   gemPositionsRef: React.RefObject<Map<string, { x: number; y: number }>>;
@@ -74,8 +75,8 @@ export function useDraftEndSequence({
   const rafIdRef = useRef<number | null>(null);
   const bodiesRef = useRef<PhysicsBody[]>([]);
 
-  if (pool.length > 0 && !triggeredRef.current) {
-    lastPoolUidsRef.current = pool.map((o) => o.uid);
+  if (liveCount(pool) > 0 && !triggeredRef.current) {
+    lastPoolUidsRef.current = liveSlots(pool).map((o) => o.uid);
   }
 
   // Pin each remaining gem to its current viewport position and start a physics

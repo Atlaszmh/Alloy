@@ -235,8 +235,11 @@ describe('AIController', () => {
         // AI picks
         orbUid = ai.pickOrb(draftState.pool, myStockpile, opponentStockpile);
       } else {
-        // Opponent picks first available
-        orbUid = draftState.pool[0].uid;
+        // Opponent picks the first remaining live orb (pool is sparse after
+        // picks — slot 0 may already be null).
+        const nextOrb = draftState.pool.find((o) => o !== null);
+        if (!nextOrb) throw new Error('pool exhausted unexpectedly');
+        orbUid = nextOrb.uid;
       }
 
       const result = makePick(draftState, orbUid, currentPlayer);

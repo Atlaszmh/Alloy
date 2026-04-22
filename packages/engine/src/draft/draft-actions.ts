@@ -15,12 +15,13 @@ export function validateActivePlayer(
 
 /**
  * Validates that an orb with the given UID exists in the draft pool.
+ * Skips empty slots — the pool is a sparse slot array after picks are made.
  */
 export function validateOrbInPool(
   state: DraftState,
   orbUid: string,
 ): string | null {
-  const found = state.pool.some((o) => o.uid === orbUid);
+  const found = state.pool.some((o) => o !== null && o.uid === orbUid);
   if (!found) {
     return `Orb "${orbUid}" is not in the draft pool`;
   }

@@ -1,4 +1,12 @@
 import type { GemInstance } from '../types/gem.js';
+import type { SlotArray } from '../types/match.js';
+import {
+  clearSlot,
+  findSlotIndex,
+  liveCount,
+  liveSlots,
+  placeInFirstEmpty,
+} from '../types/slot-array.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import {
   validateActivePlayer,
@@ -10,8 +18,10 @@ import {
 // --- Types ---
 
 export interface DraftState {
-  pool: GemInstance[];
-  stockpiles: [GemInstance[], GemInstance[]];
+  /** Fixed-slot pool — picks null out the slot rather than compacting. */
+  pool: SlotArray<GemInstance>;
+  /** Per-player fixed-slot stockpiles — grow as picks come in. */
+  stockpiles: [SlotArray<GemInstance>, SlotArray<GemInstance>];
   pickIndex: number;
   activePlayer: 0 | 1;
   maxPicks: number;
@@ -26,22 +36,22 @@ export type DraftResult =
 
 /**
  * Create an initial draft state from a pool of orbs.
- * All orbs in the pool will be drafted (maxPicks = pool.length).
+ * All orbs in the pool will be drafted (maxPicks = live gem count).
  */
-export function createDraftState(pool: GemInstance[]): DraftState {
+export function createDraftState(pool: SlotArray<GemInstance>): DraftState {
   return {
     pool: [...pool],
     stockpiles: [[], []],
     pickIndex: 0,
     activePlayer: 0,
-    maxPicks: pool.length,
+    maxPicks: liveCount(pool),
     isComplete: false,
   };
 }
 
 /**
- * Attempt a pick: validate, remove orb from pool, add to player stockpile,
- * advance turn. Returns a new state on success or an error message on failure.
+ * Attempt a pick: validate, null out the pool slot (position preserved),
+ * append to player stockpile, advance turn.
  */
 export function makePick(
   state: DraftState,
@@ -63,16 +73,18 @@ export function makePick(
     return { ok: false, error: poolErr };
   }
 
-  const orbIndex = state.pool.findIndex((o) => o.uid === orbUid);
+  const orbIndex = findSlotIndex(state.pool, (o) => o.uid === orbUid);
   const orb = state.pool[orbIndex]!;
 
-  const newPool = [...state.pool.slice(0, orbIndex), ...state.pool.slice(orbIndex + 1)];
+  // Slot position is preserved — remaining gems in the pool don't shift
+  // when this one is picked.
+  const newPool = clearSlot(state.pool, orbIndex);
 
-  const newStockpiles: [GemInstance[], GemInstance[]] = [
+  const newStockpiles: [SlotArray<GemInstance>, SlotArray<GemInstance>] = [
     [...state.stockpiles[0]],
     [...state.stockpiles[1]],
   ];
-  newStockpiles[player] = [...newStockpiles[player], orb];
+  newStockpiles[player] = placeInFirstEmpty(newStockpiles[player], orb);
 
   const newPickIndex = state.pickIndex + 1;
   const isComplete = newPickIndex >= state.maxPicks;
@@ -102,12 +114,14 @@ export function autoPickRandom(
     return { ok: false, error: 'Draft is already complete' };
   }
 
-  if (state.pool.length === 0) {
+  // Randomise across live entries only — a null slot isn't pickable.
+  const liveOrbs = liveSlots(state.pool);
+  if (liveOrbs.length === 0) {
     return { ok: false, error: 'No orbs remaining in pool' };
   }
 
-  const index = rng.nextInt(0, state.pool.length - 1);
-  const orb = state.pool[index]!;
+  const index = rng.nextInt(0, liveOrbs.length - 1);
+  const orb = liveOrbs[index];
 
   return makePick(state, orb.uid, state.activePlayer);
 }

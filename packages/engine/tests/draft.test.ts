@@ -1,7 +1,7 @@
 import { createDraftState, makePick, autoPickRandom } from '../src/draft/draft-state.js';
-import type { DraftState } from '../src/draft/draft-state.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
+import { liveSlots, liveCount } from '../src/types/slot-array.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
 /** Helper: create a pool of N dummy gems. */
@@ -18,9 +18,9 @@ describe('Draft System', () => {
     const pool = makePool(6);
     const state = createDraftState(pool);
 
-    expect(state.pool).toHaveLength(6);
-    expect(state.stockpiles[0]).toHaveLength(0);
-    expect(state.stockpiles[1]).toHaveLength(0);
+    expect(liveCount(state.pool)).toBe(6);
+    expect(liveCount(state.stockpiles[0])).toBe(0);
+    expect(liveCount(state.stockpiles[1])).toBe(0);
     expect(state.pickIndex).toBe(0);
     expect(state.activePlayer).toBe(0);
     expect(state.maxPicks).toBe(6);
@@ -32,23 +32,44 @@ describe('Draft System', () => {
     const state = createDraftState(pool);
 
     pool.push({ uid: 'extra', affixId: 'affix-0', tier: 1 });
-    expect(state.pool).toHaveLength(4);
+    expect(liveCount(state.pool)).toBe(4);
   });
 
   // --- Valid pick ---
 
-  it('valid pick removes orb from pool and adds to correct stockpile', () => {
+  it('valid pick removes orb from pool (slot emptied, not compacted) and adds to picker\'s stockpile', () => {
     const state = createDraftState(makePool(4));
     const result = makePick(state, 'orb-0', 0);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.pool).toHaveLength(3);
-    expect(result.state.pool.find((o) => o.uid === 'orb-0')).toBeUndefined();
-    expect(result.state.stockpiles[0]).toHaveLength(1);
-    expect(result.state.stockpiles[0][0]!.uid).toBe('orb-0');
-    expect(result.state.stockpiles[1]).toHaveLength(0);
+    // Pool stays the same length — the picked slot is nulled in place.
+    expect(result.state.pool).toHaveLength(4);
+    expect(liveCount(result.state.pool)).toBe(3);
+    expect(result.state.pool[0]).toBeNull();
+    expect(liveSlots(result.state.pool).find((o) => o.uid === 'orb-0')).toBeUndefined();
+    expect(liveCount(result.state.stockpiles[0])).toBe(1);
+    expect(liveSlots(result.state.stockpiles[0])[0].uid).toBe('orb-0');
+    expect(liveCount(result.state.stockpiles[1])).toBe(0);
+  });
+
+  it('slot position is preserved — sibling orbs do not shift when one is picked', () => {
+    const state = createDraftState(makePool(5));
+    // Pick the middle orb; flanking orbs should retain their original slots.
+    const originalSlot0 = state.pool[0]!.uid;
+    const originalSlot2 = state.pool[2]!.uid;
+    const originalSlot4 = state.pool[4]!.uid;
+
+    const result = makePick(state, state.pool[2]!.uid, 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.pool[0]?.uid).toBe(originalSlot0);
+    expect(result.state.pool[2]).toBeNull();
+    expect(result.state.pool[4]?.uid).toBe(originalSlot4);
+    // Safety: confirm we actually removed the middle orb.
+    expect(result.state.pool[2]?.uid).not.toBe(originalSlot2);
   });
 
   // --- Invalid picks ---
@@ -122,7 +143,7 @@ describe('Draft System', () => {
     }
 
     expect(state.isComplete).toBe(true);
-    expect(state.pool).toHaveLength(0);
+    expect(liveCount(state.pool)).toBe(0);
     expect(state.pickIndex).toBe(4);
   });
 
@@ -136,11 +157,11 @@ describe('Draft System', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.pool).toHaveLength(5);
-    expect(result.state.stockpiles[0]).toHaveLength(1);
+    expect(liveCount(result.state.pool)).toBe(5);
+    expect(liveCount(result.state.stockpiles[0])).toBe(1);
     // The picked orb should no longer be in the pool
-    const pickedUid = result.state.stockpiles[0][0]!.uid;
-    expect(result.state.pool.find((o) => o.uid === pickedUid)).toBeUndefined();
+    const pickedUid = liveSlots(result.state.stockpiles[0])[0].uid;
+    expect(liveSlots(result.state.pool).find((o) => o.uid === pickedUid)).toBeUndefined();
   });
 
   it('autoPickRandom is deterministic with same RNG seed', () => {
@@ -157,8 +178,8 @@ describe('Draft System', () => {
     expect(result2.ok).toBe(true);
     if (!result1.ok || !result2.ok) return;
 
-    expect(result1.state.stockpiles[0][0]!.uid).toBe(
-      result2.state.stockpiles[0][0]!.uid,
+    expect(liveSlots(result1.state.stockpiles[0])[0].uid).toBe(
+      liveSlots(result2.state.stockpiles[0])[0].uid,
     );
   });
 
@@ -172,20 +193,22 @@ describe('Draft System', () => {
     for (let i = 0; i < poolSize; i++) {
       expect(state.isComplete).toBe(false);
       const player = (i % 2) as 0 | 1;
-      const orbUid = state.pool[0]!.uid; // always pick the first remaining orb
-      const result = makePick(state, orbUid, player);
+      // Always pick the first live orb remaining — sparse pool means slot 0
+      // may be null once picks have happened.
+      const nextOrb = liveSlots(state.pool)[0];
+      const result = makePick(state, nextOrb.uid, player);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       state = result.state;
     }
 
     expect(state.isComplete).toBe(true);
-    expect(state.pool).toHaveLength(0);
-    expect(state.stockpiles[0]).toHaveLength(poolSize / 2);
-    expect(state.stockpiles[1]).toHaveLength(poolSize / 2);
+    expect(liveCount(state.pool)).toBe(0);
+    expect(liveCount(state.stockpiles[0])).toBe(poolSize / 2);
+    expect(liveCount(state.stockpiles[1])).toBe(poolSize / 2);
 
     // Every original orb should appear exactly once across both stockpiles
-    const allDrafted = [...state.stockpiles[0], ...state.stockpiles[1]];
+    const allDrafted = [...liveSlots(state.stockpiles[0]), ...liveSlots(state.stockpiles[1])];
     const draftedUids = allDrafted.map((o) => o.uid).sort();
     const originalUids = pool.map((o) => o.uid).sort();
     expect(draftedUids).toEqual(originalUids);
@@ -202,7 +225,7 @@ describe('Draft System', () => {
 
     // Original state should be unchanged
     expect(state.pool).toEqual(originalPool);
-    expect(state.stockpiles[0]).toHaveLength(0);
+    expect(liveCount(state.stockpiles[0])).toBe(0);
     expect(state.pickIndex).toBe(0);
   });
 });

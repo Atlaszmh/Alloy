@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { createDraftState, makePick, autoPickRandom } from '../src/draft/draft-state.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
+import { liveSlots, liveCount } from '../src/types/slot-array.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
@@ -46,7 +47,7 @@ describe('AC-D06: autoPickRandom uses random selection', () => {
       const result = autoPickRandom(state, rng);
       expect(result.ok).toBe(true);
       if (!result.ok) continue;
-      pickedUids.add(result.state.stockpiles[0][0]!.uid);
+      pickedUids.add(liveSlots(result.state.stockpiles[0])[0].uid);
     }
 
     // If it always picked pool[0], the set would have size 1
@@ -61,15 +62,15 @@ describe('AC-D06: autoPickRandom uses random selection', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    // Pool shrinks by 1
-    expect(result.state.pool).toHaveLength(9);
+    // Pool stays the same length; live count shrinks by 1.
+    expect(liveCount(result.state.pool)).toBe(9);
 
     // Active player (0) gets the orb
-    expect(result.state.stockpiles[0]).toHaveLength(1);
-    const pickedUid = result.state.stockpiles[0][0]!.uid;
+    expect(liveCount(result.state.stockpiles[0])).toBe(1);
+    const pickedUid = liveSlots(result.state.stockpiles[0])[0].uid;
 
     // Orb no longer in pool
-    expect(result.state.pool.find((o) => o.uid === pickedUid)).toBeUndefined();
+    expect(liveSlots(result.state.pool).find((o) => o.uid === pickedUid)).toBeUndefined();
   });
 });
 
@@ -123,9 +124,9 @@ describe('AC-D08: pick validation rejects invalid picks', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.pool).toHaveLength(5);
-    expect(result.state.stockpiles[0]).toHaveLength(1);
-    expect(result.state.stockpiles[0][0]!.uid).toBe('orb-0');
+    expect(liveCount(result.state.pool)).toBe(5);
+    expect(liveCount(result.state.stockpiles[0])).toBe(1);
+    expect(liveSlots(result.state.stockpiles[0])[0].uid).toBe('orb-0');
   });
 });
 

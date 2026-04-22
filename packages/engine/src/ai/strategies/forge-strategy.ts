@@ -376,7 +376,10 @@ function pushGenericResults(
       if (!keptGem) continue;
       const newTier = Math.min(keptGem.tier + 1, 5) as 1 | 2 | 3 | 4 | 5;
       stockpile.push({
-        uid: `generic_${action.gemUid1}_${action.gemUid2}`,
+        // Must match the uid forge-state/forge-plan will produce when applying
+        // a generic combine — otherwise a downstream socket_gem planned for
+        // this simulated output fails with "Gem not in stockpile".
+        uid: `combined_${action.gemUid1}_${action.gemUid2}`,
         affixId: keptGem.affixId,
         tier: newTier,
         rarity: keptGem.rarity ?? 'common',

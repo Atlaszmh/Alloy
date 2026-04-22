@@ -10,6 +10,7 @@ export * from './combat.js';
 export * from './damage-breakdown.js';
 export * from './forge-action.js';
 export * from './match.js';
+export * from './slot-array.js';
 export * from './game-action.js';
 export * from './ai.js';
 export * from './balance.js';

@@ -2,13 +2,21 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { ForgedItem, Loadout, EquippedSlot } from '../types/item.js';
 import type { GemInstance } from '../types/gem.js';
+import type { SlotArray } from '../types/match.js';
+import {
+  clearSlot,
+  findSlotIndex,
+  placeInFirstEmpty,
+  setSlot as setSlotInSparse,
+} from '../types/slot-array.js';
 import { createGem } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createEmptyLoadout } from '../types/item.js';
 import type { CombinationEngine } from '../combine/combination-engine.js';
 
 export interface ForgeState {
-  stockpile: GemInstance[];
+  /** Fixed-slot stockpile — nulls preserve empty positions (see forge-plan.ts). */
+  stockpile: SlotArray<GemInstance>;
   loadout: Loadout;
   round: number;
   isQuickMatch: boolean;
@@ -24,7 +32,7 @@ export interface ForgeContext {
 }
 
 export function createForgeState(
-  stockpile: GemInstance[],
+  stockpile: SlotArray<GemInstance>,
   weaponBaseId: string,
   armorBaseId: string,
   round: number,
@@ -57,21 +65,11 @@ function setItem(loadout: Loadout, target: 'weapon' | 'armor', item: ForgedItem)
     : { ...loadout, armor: item };
 }
 
-function findGemIndex(stockpile: GemInstance[], uid: string): number {
-  return stockpile.findIndex(g => g.uid === uid);
-}
-
-function removeFromStockpile(stockpile: GemInstance[], uid: string): GemInstance[] {
-  const idx = stockpile.findIndex(g => g.uid === uid);
-  if (idx === -1) return stockpile;
-  return [...stockpile.slice(0, idx), ...stockpile.slice(idx + 1)];
-}
-
 function isValidSlotIndex(index: number): boolean {
   return Number.isInteger(index) && index >= 0 && index <= 5;
 }
 
-function setSlot(item: ForgedItem, index: number, slot: EquippedSlot | null): ForgedItem {
+function setItemSlot(item: ForgedItem, index: number, slot: EquippedSlot | null): ForgedItem {
   const newSlots = [...item.slots];
   newSlots[index] = slot;
   return { ...item, slots: newSlots };
@@ -114,12 +112,12 @@ function applySocketGem(
     return fail('Slot index out of range (must be 0-5)');
   }
 
-  const gemIdx = findGemIndex(state.stockpile, action.gemUid);
+  const gemIdx = findSlotIndex(state.stockpile, g => g.uid === action.gemUid);
   if (gemIdx === -1) {
     return fail('Gem not found in stockpile');
   }
 
-  const gem = state.stockpile[gemIdx];
+  const gem = state.stockpile[gemIdx]!;
   const item = getItem(state.loadout, action.target);
 
   if (item.slots[action.slotIndex] !== null) {
@@ -127,8 +125,9 @@ function applySocketGem(
   }
 
   const newSlot: EquippedSlot = { gem };
-  const newItem = setSlot(item, action.slotIndex, newSlot);
-  const newStockpile = removeFromStockpile(state.stockpile, action.gemUid);
+  const newItem = setItemSlot(item, action.slotIndex, newSlot);
+  // Clear the stockpile slot in place so sibling gems don't shift.
+  const newStockpile = clearSlot(state.stockpile, gemIdx);
 
   return ok({
     ...state,
@@ -151,10 +150,11 @@ function applyUnsocketGem(
     return fail('Cannot unsocket: slot is empty');
   }
 
-  // Return gem to stockpile
+  // Return gem to the first empty stockpile slot (grows array if every slot
+  // is full). Prior gems never shift.
   const removedGem = currentSlot.gem;
-  const newItem = setSlot(item, action.slotIndex, null);
-  const newStockpile = [...state.stockpile, removedGem];
+  const newItem = setItemSlot(item, action.slotIndex, null);
+  const newStockpile = placeInFirstEmpty(state.stockpile, removedGem);
 
   return ok({
     ...state,
@@ -169,34 +169,34 @@ function applyCombine(
   registry: DataRegistry,
   combinationEngine?: CombinationEngine,
 ): ForgeResult {
-  const gemIdx1 = findGemIndex(state.stockpile, action.gemUid1);
+  const gemIdx1 = findSlotIndex(state.stockpile, g => g.uid === action.gemUid1);
   if (gemIdx1 === -1) {
     return fail('First gem not found in stockpile');
   }
 
-  const gemIdx2 = findGemIndex(state.stockpile, action.gemUid2);
+  const gemIdx2 = findSlotIndex(state.stockpile, g => g.uid === action.gemUid2);
   if (gemIdx2 === -1) {
     return fail('Second gem not found in stockpile');
   }
 
-  const gem1 = state.stockpile[gemIdx1];
-  const gem2 = state.stockpile[gemIdx2];
+  const gem1 = state.stockpile[gemIdx1]!;
+  const gem2 = state.stockpile[gemIdx2]!;
+
+  // Helper: drop both ingredients and place the output in the keep-gem's slot.
+  const writeResult = (resultGem: GemInstance): SlotArray<GemInstance> => {
+    const keepIdx = action.keepGemUid === action.gemUid1 ? gemIdx1 : gemIdx2;
+    const otherIdx = keepIdx === gemIdx1 ? gemIdx2 : gemIdx1;
+    let next = setSlotInSparse(state.stockpile, keepIdx, resultGem);
+    next = clearSlot(next, otherIdx);
+    return next;
+  };
 
   // If we have a CombinationEngine, use it for the full combine logic
   if (combinationEngine) {
     try {
       const outputUid = `combined_${action.gemUid1}_${action.gemUid2}`;
       const result = combinationEngine.combine(gem1, gem2, outputUid, action.keepGemUid);
-
-      // Remove source gems and add result to stockpile
-      let newStockpile = removeFromStockpile(state.stockpile, action.gemUid1);
-      newStockpile = removeFromStockpile(newStockpile, action.gemUid2);
-      newStockpile = [...newStockpile, result.gem];
-
-      return ok({
-        ...state,
-        stockpile: newStockpile,
-      });
+      return ok({ ...state, stockpile: writeResult(result.gem) });
     } catch (e) {
       return fail((e as Error).message);
     }
@@ -216,10 +216,7 @@ function applyCombine(
         recipeDepth: Math.max(gem1.recipeDepth, gem2.recipeDepth) + 1,
       },
     );
-    let newStockpile = removeFromStockpile(state.stockpile, action.gemUid1);
-    newStockpile = removeFromStockpile(newStockpile, action.gemUid2);
-    newStockpile = [...newStockpile, resultGem];
-    return ok({ ...state, stockpile: newStockpile });
+    return ok({ ...state, stockpile: writeResult(resultGem) });
   }
 
   // Fallback: legacy combine using registry's compound affix lookup
@@ -227,10 +224,6 @@ function applyCombine(
   if (!combination) {
     return fail('No valid combination exists for these gems');
   }
-
-  // Remove source gems and create result in stockpile
-  let newStockpile = removeFromStockpile(state.stockpile, action.gemUid1);
-  newStockpile = removeFromStockpile(newStockpile, action.gemUid2);
 
   // Create a simple combined gem using the first gem's properties
   const combinedGem: GemInstance = createGem(
@@ -243,12 +236,8 @@ function applyCombine(
       recipeDepth: Math.max(gem1.recipeDepth, gem2.recipeDepth) + 1,
     },
   );
-  newStockpile = [...newStockpile, combinedGem];
 
-  return ok({
-    ...state,
-    stockpile: newStockpile,
-  });
+  return ok({ ...state, stockpile: writeResult(combinedGem) });
 }
 
 function applyCombine3(
@@ -257,16 +246,16 @@ function applyCombine3(
   _registry: DataRegistry,
   combinationEngine?: CombinationEngine,
 ): ForgeResult {
-  const idx1 = findGemIndex(state.stockpile, action.gemUid1);
+  const idx1 = findSlotIndex(state.stockpile, g => g.uid === action.gemUid1);
   if (idx1 === -1) return fail('First gem not found in stockpile');
-  const idx2 = findGemIndex(state.stockpile, action.gemUid2);
+  const idx2 = findSlotIndex(state.stockpile, g => g.uid === action.gemUid2);
   if (idx2 === -1) return fail('Second gem not found in stockpile');
-  const idx3 = findGemIndex(state.stockpile, action.gemUid3);
+  const idx3 = findSlotIndex(state.stockpile, g => g.uid === action.gemUid3);
   if (idx3 === -1) return fail('Third gem not found in stockpile');
 
-  const gem1 = state.stockpile[idx1];
-  const gem2 = state.stockpile[idx2];
-  const gem3 = state.stockpile[idx3];
+  const gem1 = state.stockpile[idx1]!;
+  const gem2 = state.stockpile[idx2]!;
+  const gem3 = state.stockpile[idx3]!;
 
   if (!combinationEngine) {
     return fail('combine3 requires a CombinationEngine');
@@ -276,12 +265,23 @@ function applyCombine3(
     const outputUid = `combined3_${action.gemUid1}_${action.gemUid2}_${action.gemUid3}`;
     const result = combinationEngine.combine3(gem1, gem2, gem3, outputUid, action.keepGemUid);
 
-    // Remove only consumed uids; ejected gem stays in stockpile.
-    let newStockpile = state.stockpile;
+    const slotByUid: Record<string, number> = {
+      [action.gemUid1]: idx1,
+      [action.gemUid2]: idx2,
+      [action.gemUid3]: idx3,
+    };
+    const keepUid = action.keepGemUid ?? action.gemUid1;
+    const keepIdx = slotByUid[keepUid] ?? idx1;
+
+    let newStockpile = setSlotInSparse(state.stockpile, keepIdx, result.gem);
+    // Only consumed uids vacate their slots; the ejected (non-kept, non-consumed)
+    // gem stays put.
     for (const uid of result.consumedUids) {
-      newStockpile = removeFromStockpile(newStockpile, uid);
+      const idx = slotByUid[uid];
+      if (idx !== undefined && idx !== keepIdx) {
+        newStockpile = clearSlot(newStockpile, idx);
+      }
     }
-    newStockpile = [...newStockpile, result.gem];
 
     return ok({ ...state, stockpile: newStockpile });
   } catch (e) {

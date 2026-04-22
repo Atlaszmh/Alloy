@@ -16,9 +16,16 @@ export type MatchMode = 'quick' | 'unranked' | 'ranked' | 'run_async' | 'run_liv
 
 // --- Player State ---
 
+/**
+ * Sparse slot array — positions are stable across picks/sockets/combines so
+ * gems never auto-shift when one is removed. `null` means "empty slot,
+ * available for the player to place a gem or for the game to auto-fill".
+ */
+export type SlotArray<T> = (T | null)[];
+
 export interface PlayerState {
   id: string;
-  stockpile: GemInstance[]; // All drafted orbs
+  stockpile: SlotArray<GemInstance>; // Fixed-slot stockpile; nulls = empty slots
   loadout: Loadout;
 }
 
@@ -31,7 +38,7 @@ export interface MatchState {
   baseWeaponId: string;
   baseArmorId: string;
   phase: MatchPhase;
-  pool: GemInstance[]; // Shared draft pool (shrinks as picks happen)
+  pool: SlotArray<GemInstance>; // Draft pool; nulls where picks have been made
   players: [PlayerState, PlayerState];
   roundResults: DuelResult[];
   duelLogs: CombatLog[];

@@ -1,4 +1,4 @@
-import type { MatchState, MatchMode, PlayerState, MatchPhase } from '../types/match.js';
+import type { MatchState, MatchMode, PlayerState, MatchPhase, SlotArray } from '../types/match.js';
 import type { GameAction, ActionResult } from '../types/game-action.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { Loadout, ForgedItem } from '../types/item.js';
@@ -6,6 +6,7 @@ import type { DerivedStats } from '../types/derived-stats.js';
 import type { GemInstance } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createEmptyLoadout } from '../types/item.js';
+import { liveCount, liveSlots, placeInFirstEmpty, clearSlot } from '../types/slot-array.js';
 import { generatePool } from '../pool/pool-generator.js';
 import { createDraftState, makePick } from '../draft/draft-state.js';
 import { applyForgeAction as applyForge } from '../forge/forge-state.js';
@@ -120,16 +121,19 @@ function handleDraftPick(
   const draftRound = state.phase.round;
   const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
 
-  // For quick mode, draft all gems. Use total gems (pool + stockpiles) so
-  // maxPicks doesn't shrink as the pool empties.
-  const totalGems = state.pool.length + state.players[0].stockpile.length + state.players[1].stockpile.length;
+  // For quick mode, draft all gems. Use live gem count (pool + stockpiles) —
+  // `.length` now includes null slots since pool is sparse after picks.
+  const totalGems =
+    liveCount(state.pool) +
+    liveCount(state.players[0].stockpile) +
+    liveCount(state.players[1].stockpile);
 
   let maxPicks: number;
   if (state.mode === 'quick') {
     maxPicks = totalGems;
   } else if (isRunMode) {
     // In run modes, player 0 picks all — poolSize / 2 allotment
-    maxPicks = Math.ceil(state.pool.length / 2) + state.players[0].stockpile.length;
+    maxPicks = Math.ceil(liveCount(state.pool) / 2) + liveCount(state.players[0].stockpile);
     // But also account for gems already picked — use total pool
     maxPicks = Math.ceil(totalGems / 2);
   } else {
@@ -173,9 +177,9 @@ function handleDraftPick(
   // or pool is exhausted
   let isComplete = newDraft.isComplete;
   if (state.mode === 'run_async' && !isComplete) {
-    const p0Picks = newDraft.stockpiles[0].length;
+    const p0Picks = liveCount(newDraft.stockpiles[0]);
     const maxPlayerPicks = Math.ceil(totalGems / 2);
-    isComplete = p0Picks >= maxPlayerPicks || newDraft.pool.length === 0;
+    isComplete = p0Picks >= maxPlayerPicks || liveCount(newDraft.pool) === 0;
   }
 
   let newPhase: MatchPhase;
@@ -588,13 +592,13 @@ function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry)
 
   const rng = new SeededRNG(seed).fork('debug_draft');
   const balance = registry.getBalance();
-  const pool = [...state.pool];
-  const stockpiles: [GemInstance[], GemInstance[]] = [
+  let pool: SlotArray<GemInstance> = [...state.pool];
+  let stockpiles: [SlotArray<GemInstance>, SlotArray<GemInstance>] = [
     [...state.players[0].stockpile],
     [...state.players[1].stockpile],
   ];
 
-  const totalGems = pool.length + stockpiles[0].length + stockpiles[1].length;
+  const totalGems = liveCount(pool) + liveCount(stockpiles[0]) + liveCount(stockpiles[1]);
 
   let maxPicks: number;
   if (state.mode === 'quick') {
@@ -608,12 +612,16 @@ function debugAutoDraft(state: MatchState, seed: number, registry: DataRegistry)
   }
 
   let picked = 0;
-  while (picked < maxPicks && pool.length > 0) {
-    const idx = rng.nextInt(0, pool.length - 1);
-    const gem = pool.splice(idx, 1)[0];
+  while (picked < maxPicks && liveCount(pool) > 0) {
+    // Pick a random *live* entry, skipping nulls so the sparse pool doesn't
+    // feed a null into the stockpile.
+    const live = liveSlots(pool);
+    const gem = live[rng.nextInt(0, live.length - 1)];
+    const poolIdx = pool.findIndex((g) => g !== null && g.uid === gem.uid);
+    pool = clearSlot(pool, poolIdx);
     // In run_async mode, all picks go to player 0
     const player: 0 | 1 = state.mode === 'run_async' ? 0 : (picked % 2) as 0 | 1;
-    stockpiles[player].push(gem);
+    stockpiles[player] = placeInFirstEmpty(stockpiles[player], gem);
     picked++;
   }
 
@@ -643,7 +651,17 @@ function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState 
 
   for (const p of [0, 1] as const) {
     const player = state.players[p];
-    const remaining = [...player.stockpile];
+    // Pull a flat view of live gems — the sparse stockpile has nulls after
+    // any cross-round recycling.
+    const liveGems = liveSlots(player.stockpile);
+    let cursor = 0;
+    const consumedUids = new Set<string>();
+    const takeNext = (): GemInstance | null => {
+      if (cursor >= liveGems.length) return null;
+      const gem = liveGems[cursor++];
+      consumedUids.add(gem.uid);
+      return gem;
+    };
     let weapon: ForgedItem = { ...player.loadout.weapon, slots: [...player.loadout.weapon.slots] };
     let armor: ForgedItem = { ...player.loadout.armor, slots: [...player.loadout.armor.slots] };
 
@@ -657,9 +675,10 @@ function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState 
 
     // Socket gems into empty weapon slots (up to 3)
     let socketed = 0;
-    for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
+    for (let slot = 0; slot < 6 && socketed < 3; slot++) {
       if (weapon.slots[slot] === null) {
-        const gem = remaining.shift()!;
+        const gem = takeNext();
+        if (!gem) break;
         weapon.slots[slot] = { gem };
         socketed++;
       }
@@ -667,13 +686,20 @@ function debugAutoForge(state: MatchState, _registry: DataRegistry): MatchState 
 
     // Socket gems into empty armor slots (up to 3)
     socketed = 0;
-    for (let slot = 0; slot < 6 && socketed < 3 && remaining.length > 0; slot++) {
+    for (let slot = 0; slot < 6 && socketed < 3; slot++) {
       if (armor.slots[slot] === null) {
-        const gem = remaining.shift()!;
+        const gem = takeNext();
+        if (!gem) break;
         armor.slots[slot] = { gem };
         socketed++;
       }
     }
+
+    // Clear socketed gems from the sparse stockpile, leaving remaining live
+    // gems at their original slot positions.
+    const remaining: SlotArray<GemInstance> = player.stockpile.map((entry) =>
+      entry !== null && consumedUids.has(entry.uid) ? null : entry,
+    );
 
     newPlayers[p] = {
       ...player,
