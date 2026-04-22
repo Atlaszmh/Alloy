@@ -80,37 +80,32 @@ export function Forge() {
   const matchId = matchState?.matchId ?? '';
   const hasSelectedBaseItems = useForgeStore(s => s.hasSelectedBaseItems(matchId));
 
-  // Two-step selector flow: weapon → armor → done
-  const [selectorStep, setSelectorStep] = useState<'weapon' | 'armor' | 'done'>(
-    hasSelectedBaseItems ? 'done' : 'weapon',
-  );
-
   // Show selector only in run mode, round 1, and not yet completed
-  const showBaseItemSelector =
-    isRunMode && round === 1 && !hasSelectedBaseItems && selectorStep !== 'done';
+  const showBaseItemSelector = isRunMode && round === 1 && !hasSelectedBaseItems;
 
   const weaponRoster = useMemo(() => registry.getBaseItemsByType('weapon'), [registry]);
   const armorRoster = useMemo(() => registry.getBaseItemsByType('armor'), [registry]);
 
-  const handleWeaponSelect = useCallback((item: BaseItemDef) => {
-    const result = applyAction({ kind: 'select_base_item', target: 'weapon', baseItemId: item.id }, registry);
-    if (result.ok) {
-      selectBaseItem('weapon', item.id);
-      setSelectorStep('armor');
-    } else {
-      showToast(result.error ?? 'Could not select weapon');
+  const handleLoadoutSelect = useCallback((weapon: BaseItemDef, armor: BaseItemDef) => {
+    const weaponResult = applyAction(
+      { kind: 'select_base_item', target: 'weapon', baseItemId: weapon.id },
+      registry,
+    );
+    if (!weaponResult.ok) {
+      showToast(weaponResult.error ?? 'Could not select weapon');
+      return;
     }
-  }, [applyAction, registry, selectBaseItem]);
-
-  const handleArmorSelect = useCallback((item: BaseItemDef) => {
-    const result = applyAction({ kind: 'select_base_item', target: 'armor', baseItemId: item.id }, registry);
-    if (result.ok) {
-      selectBaseItem('armor', item.id);
-      setHasSelectedBaseItems(matchId, true);
-      setSelectorStep('done');
-    } else {
-      showToast(result.error ?? 'Could not select armor');
+    const armorResult = applyAction(
+      { kind: 'select_base_item', target: 'armor', baseItemId: armor.id },
+      registry,
+    );
+    if (!armorResult.ok) {
+      showToast(armorResult.error ?? 'Could not select armor');
+      return;
     }
+    selectBaseItem('weapon', weapon.id);
+    selectBaseItem('armor', armor.id);
+    setHasSelectedBaseItems(matchId, true);
   }, [applyAction, registry, selectBaseItem, setHasSelectedBaseItems, matchId]);
 
   // ── Extract flux from RunState ──
@@ -703,11 +698,11 @@ export function Forge() {
   // ── Base item selector (run mode, round 1, before main forge UI) ──
   if (showBaseItemSelector) {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div className="flex h-full w-full items-center justify-center overflow-auto">
         <BaseItemSelector
-          itemType={selectorStep === 'weapon' ? 'weapon' : 'armor'}
-          items={selectorStep === 'weapon' ? weaponRoster : armorRoster}
-          onSelect={selectorStep === 'weapon' ? handleWeaponSelect : handleArmorSelect}
+          weapons={weaponRoster}
+          armors={armorRoster}
+          onSelect={handleLoadoutSelect}
         />
       </div>
     );

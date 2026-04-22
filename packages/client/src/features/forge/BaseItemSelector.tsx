@@ -3,64 +3,81 @@ import type { BaseItemDef } from '@alloy/engine';
 import { BaseItemCard } from './BaseItemCard.js';
 
 interface BaseItemSelectorProps {
-  itemType: 'weapon' | 'armor';
-  items: BaseItemDef[];
-  onSelect: (item: BaseItemDef) => void;
+  weapons: BaseItemDef[];
+  armors: BaseItemDef[];
+  onSelect: (weapon: BaseItemDef, armor: BaseItemDef) => void;
 }
 
-export function BaseItemSelector({ itemType, items, onSelect }: BaseItemSelectorProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function BaseItemSelector({ weapons, armors, onSelect }: BaseItemSelectorProps) {
+  const [selectedWeaponId, setSelectedWeaponId] = useState<string | null>(null);
+  const [selectedArmorId, setSelectedArmorId] = useState<string | null>(null);
 
-  const selectedItem = items.find((i) => i.id === selectedId) ?? null;
+  const selectedWeapon = weapons.find((i) => i.id === selectedWeaponId) ?? null;
+  const selectedArmor = armors.find((i) => i.id === selectedArmorId) ?? null;
+  const canConfirm = selectedWeapon !== null && selectedArmor !== null;
 
   function handleConfirm() {
-    if (selectedItem) {
-      onSelect(selectedItem);
+    if (selectedWeapon && selectedArmor) {
+      onSelect(selectedWeapon, selectedArmor);
     }
   }
 
   function handleRandom() {
-    const pick = items[Math.floor(Math.random() * items.length)];
-    if (pick) {
-      onSelect(pick);
+    const w = weapons[Math.floor(Math.random() * weapons.length)];
+    const a = armors[Math.floor(Math.random() * armors.length)];
+    if (w && a) {
+      onSelect(w, a);
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 16 }}>
-      <h2 style={{ margin: 0, color: '#e0e0e0', fontSize: 20 }}>
-        Choose your {itemType}
-      </h2>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 20,
+        padding: 16,
+        width: '100%',
+        maxWidth: 960,
+      }}
+    >
+      <h2 style={{ margin: 0, color: '#e0e0e0', fontSize: 22 }}>Choose your loadout</h2>
 
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 12,
+          gap: 24,
           justifyContent: 'center',
+          width: '100%',
         }}
       >
-        {items.map((item) => (
-          <BaseItemCard
-            key={item.id}
-            item={item}
-            isSelected={item.id === selectedId}
-            onClick={() => setSelectedId(item.id)}
-          />
-        ))}
+        <Section
+          title="Weapon"
+          items={weapons}
+          selectedId={selectedWeaponId}
+          onSelect={setSelectedWeaponId}
+        />
+        <Section
+          title="Armor"
+          items={armors}
+          selectedId={selectedArmorId}
+          onSelect={setSelectedArmorId}
+        />
       </div>
 
       <div style={{ display: 'flex', gap: 12 }}>
         <button
           onClick={handleConfirm}
-          disabled={!selectedItem}
+          disabled={!canConfirm}
           style={{
             padding: '8px 24px',
             borderRadius: 6,
             border: 'none',
-            background: selectedItem ? '#4a9eff' : '#555',
-            color: selectedItem ? '#fff' : '#888',
-            cursor: selectedItem ? 'pointer' : 'default',
+            background: canConfirm ? '#4a9eff' : '#555',
+            color: canConfirm ? '#fff' : '#888',
+            cursor: canConfirm ? 'pointer' : 'default',
             fontWeight: 600,
             fontSize: 14,
           }}
@@ -84,5 +101,61 @@ export function BaseItemSelector({ itemType, items, onSelect }: BaseItemSelector
         </button>
       </div>
     </div>
+  );
+}
+
+function Section({
+  title,
+  items,
+  selectedId,
+  onSelect,
+}: {
+  title: string;
+  items: BaseItemDef[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const itemType = title.toLowerCase();
+  return (
+    <section
+      data-base-item-section={itemType}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10,
+        flex: '1 1 320px',
+        minWidth: 280,
+      }}
+    >
+      <h3
+        style={{
+          margin: 0,
+          color: '#e0e0e0',
+          fontSize: 16,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}
+      >
+        Choose your {itemType}
+      </h3>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          justifyContent: 'center',
+        }}
+      >
+        {items.map((item) => (
+          <BaseItemCard
+            key={item.id}
+            item={item}
+            isSelected={item.id === selectedId}
+            onClick={() => onSelect(item.id)}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
