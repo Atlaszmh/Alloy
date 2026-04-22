@@ -100,3 +100,7 @@ export function nextRarity(rarity: GemRarity): GemRarity | null {
 export function rarityIndex(rarity: GemRarity): number {
   return RARITY_ORDER.indexOf(rarity);
 }
+
+export function hasSecondarySlot(gem: GemInstance, threshold: number): boolean {
+  return gem.tier + rarityIndex(gem.rarity) >= threshold;
+}

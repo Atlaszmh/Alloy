@@ -61,4 +61,9 @@ export interface BalanceConfig {
   statCaps: Record<string, { min: number; max: number }>;
 
   gem: GemBalanceConfig;
+
+  // TODO(Task 1.3): Add transplant config with unlockThreshold
+  transplant?: {
+    unlockThreshold: number;
+  };
 }
