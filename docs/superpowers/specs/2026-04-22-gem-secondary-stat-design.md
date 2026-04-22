@@ -129,7 +129,7 @@ No compound rule between primary and secondary. They are two independent contrib
 
 ### Synergy interaction
 
-Synergy detection lives in `packages/engine/src/forge/stat-calculator.ts → computeActiveSynergies`. It reads affix IDs from gems in weapon + armor loadouts. Because the host's `tags[]` is the natural place for transplanted affix IDs to propagate, a small adjustment in `computeActiveSynergies` (or its helper that collects affix IDs) to include `tags[]` contents — not just `affixId` — is enough to make transplanted affixes participate in synergies. Verify via a new test (`secondary-synergy.test.ts`) that a synergy keyed on affix X fires when X appears only as a secondary on the weapon or armor.
+Synergy detection lives in `packages/engine/src/forge/stat-calculator.ts → computeActiveSynergies` and its affix-collecting helper `collectAffixIds` (same file, ~line 195). The helper currently reads `affixId` from each socketed gem; update it to also include entries from `gem.tags[]`. Because transplant appends the secondary's `affixId` to the host's `tags[]`, this one change makes transplanted affixes participate in synergies alongside primaries. Verify via a new test (`secondary-synergy.test.ts`) that a synergy keyed on affix X fires when X appears only as a secondary on the weapon or armor.
 
 ### Combinability
 
@@ -306,12 +306,12 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 
 ### Modified files
 
-- `packages/engine/src/types/gem.ts` — `SecondarySlot`, `SecondaryModifier`, `GemInstance.secondary?`, `hasSecondarySlot(gem, threshold)`; update `isCombinable()` to return `false` when `gem.secondary` is set
+- `packages/engine/src/types/gem.ts` — `SecondarySlot`, `SecondaryModifier`, `GemInstance.secondary?`, `hasSecondarySlot(gem, threshold)`, `hasSecondarySlotFromRegistry(gem, registry)`; update `isCombinable()` to return `false` when `gem.secondary` is set. The existing `isCombinable()` takes a structural subset `{ tier, rarity, recipeDepth }` — widen the parameter type to include optional `secondary?: SecondarySlot` so all current callers continue to compile
 - `packages/engine/src/types/forge-action.ts` — new `transplant_gem` variant
-- `packages/engine/src/data/balance.json` — `transplant` section + `fluxCosts` entries
+- `packages/engine/src/data/balance.json` — new top-level `transplant` section + new keys added to existing `gem.flux.costs` block (do NOT touch the legacy top-level `fluxCosts` block)
 - `packages/engine/src/data/schemas.ts` — Zod schema updates for the new balance keys
 - `packages/engine/src/match/match-controller.ts` — add `transplant_gem` case inside the existing flux-spend switch (around line 248) that deducts `chooseAffix` flux when applicable, then falls through to the forge-action path
-- `packages/engine/src/forge/forge-state.ts` — new switch case in `applyAction` adding `case 'transplant_gem': return applyTransplantGem(...)`; new `applyTransplantGem` function
+- `packages/engine/src/forge/forge-state.ts` — new switch case in `applyForgeAction` adding `case 'transplant_gem': return applyTransplantGem(...)`; new `applyTransplantGem` function
 - `packages/engine/src/forge/forge-plan.ts` — parallel validation `planTransplantGem` (matches existing `planCombine` pattern)
 - `packages/engine/src/forge/stat-calculator.ts` — new step in the pipeline that iterates `gem.secondary` and emits modifiers per slot type; update `computeActiveSynergies` (or its affix-collecting helper) to read `tags[]` so transplanted affixes participate in synergies
 - `packages/engine/src/combine/combination-engine.ts` — no logic change, but verify that `!gem.combinable` already guards against filled-secondary gems (it will, once `isCombinable()` is updated)
