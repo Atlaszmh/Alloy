@@ -305,7 +305,11 @@ git commit -m "feat(engine): add transplant balance section + gem.flux.costs ent
 **Files:**
 - Modify: `packages/engine/src/types/forge-action.ts`
 
-- [ ] **Step 1: Add the variant**
+- [ ] **Step 1: Inventory existing `switch (action.kind)` sites**
+
+Run: `pnpm dlx ripgrep --type=ts "switch \\(action\\.kind\\)" packages/engine/src` (or use Grep tool). Note every location. Each must either (a) return `fail(...)` for unknown kind via a `default:` clause, or (b) be updated in this task to add a transparent pass-through / TODO case. List the hits before touching code.
+
+- [ ] **Step 2: Add the variant**
 
 Append to the `ForgeAction` union in `packages/engine/src/types/forge-action.ts`:
 
@@ -318,17 +322,93 @@ Append to the `ForgeAction` union in `packages/engine/src/types/forge-action.ts`
   };
 ```
 
-- [ ] **Step 2: Run typecheck**
+- [ ] **Step 3: Run typecheck and patch non-exhaustive switches**
 
-Run: `pnpm --filter @alloy/engine typecheck` (or `pnpm -r typecheck`) — expect errors from every `switch (action.kind)` that does not yet handle `transplant_gem`. That is expected; later tasks add the cases.
+Run: `pnpm --filter @alloy/engine typecheck`. For any site flagged by the inventory in Step 1:
 
-Temporary mitigation: the existing switches end with a `default:` that returns `fail`. This means the new variant type-narrows to never inside the default clauses; compile should still pass as long as the switches are *exhaustive fall-through* to default. If TS complains about a specific `never` assignment, leave a `// TODO(transplant)` comment on that line for Task 2.x to resolve cleanly.
+- If the switch has a `default:` that returns an error (e.g., `forge-state.ts` line ~101 uses `return fail(\`Unknown action kind\`)`), leave it — the new variant routes through default at runtime until Task 2.5 adds the real case.
+- If the switch uses an exhaustive-check pattern (`const _exhaustive: never = action`), add a temporary `case 'transplant_gem': return fail('transplant_gem handled elsewhere');` above the exhaustive check so typecheck passes. Task 2.5 replaces this with the real handler.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Run typecheck again**
+
+Run: `pnpm --filter @alloy/engine typecheck` — expect zero errors.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add packages/engine/src/types/forge-action.ts
+git add packages/engine/src/types/forge-action.ts packages/engine/src/forge/forge-state.ts packages/engine/src/forge/forge-plan.ts
 git commit -m "feat(engine): add transplant_gem variant to ForgeAction"
+```
+
+---
+
+### Task 1.5: Thread `SeededRNG` through `ForgePlan`
+
+**Why:** `planTransplantGem` needs a deterministic RNG fork and `ForgePlan` currently has no `rng` field. Rather than reach into match state or re-seed on the fly, add `rng` to `ForgePlan` and require `createForgePlan` callers to supply it. Match-controller has the match's root RNG already; engine tests use a fixed seed.
+
+**Files:**
+- Modify: `packages/engine/src/forge/forge-plan.ts`
+- Modify: `packages/engine/src/forge/forge-state.ts` (if `createForgePlan` or related helpers live there too)
+- Modify: every `createForgePlan(` call site in engine + client + tests
+
+- [ ] **Step 1: Locate call sites**
+
+Grep: `createForgePlan` across the repo. Expected hits:
+- `packages/engine/src/index.ts` (re-export)
+- `packages/client/src/stores/forgeStore.ts` (client call)
+- `packages/engine/tests/forge-plan.test.ts` and related tests
+- Possibly `packages/engine/src/ai/strategies/forge-strategy.ts` or `packages/engine/src/match/match-controller.ts`
+
+- [ ] **Step 2: Write the failing test**
+
+Add to `packages/engine/tests/forge-plan.test.ts`:
+
+```ts
+it('createForgePlan stores an rng on the plan', () => {
+  const plan = createForgePlan(makeForgeState(), makeRegistry(), new SeededRNG(42));
+  expect(plan.rng).toBeInstanceOf(SeededRNG);
+  const forked = plan.rng.fork('test');
+  expect(forked.next()).toBeGreaterThanOrEqual(0);
+});
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `pnpm --filter @alloy/engine test forge-plan` — expect FAIL.
+
+- [ ] **Step 4: Update the type and the factory**
+
+```ts
+import { SeededRNG } from '../rng/seeded-rng.js';
+
+export interface ForgePlan {
+  // ...existing fields...
+  rng: SeededRNG;
+}
+
+export function createForgePlan(state: ForgeState, registry: DataRegistry, rng: SeededRNG): ForgePlan {
+  // existing body, set rng on the returned object
+}
+```
+
+`clonePlan` does not clone the rng (sharing it is fine — forks give independent streams; cloning would duplicate state). Verify by reading `clonePlan` at line ~50.
+
+- [ ] **Step 5: Update every call site**
+
+For each `createForgePlan(` hit:
+- **Match-controller** and production engine paths: pass the match's rng via `state.rng` or equivalent (inspect to match existing access).
+- **Client store** (`forgeStore.ts`): the match state already includes an rng; extract it. If the client doesn't have access to a match-level rng, seed with `new SeededRNG(matchId_hash)` so replay determinism is preserved per match. Worst-case fallback: seed from `Date.now()` with a code comment — only acceptable for non-run modes.
+- **Tests:** pass `new SeededRNG(0)` everywhere.
+
+- [ ] **Step 6: Run full typecheck + tests**
+
+Run: `pnpm -r typecheck` and `pnpm -r test` — expect PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/engine/src/forge/forge-plan.ts packages/engine/src/forge/forge-state.ts packages/engine/tests/ packages/client/src/stores/forgeStore.ts
+git commit -m "refactor(engine): thread SeededRNG through ForgePlan for deterministic plan-time RNG"
 ```
 
 ---
@@ -414,7 +494,7 @@ import { createGem } from '../src/types/gem.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
 function makeCtx(partial: Partial<TransplantContext> = {}): TransplantContext {
-  const rng = new SeededRNG('t');
+  const rng = new SeededRNG(7);
   return {
     target: createGem('tgt', 'flat_physical', 5, 'rare'),
     source: createGem('src', 'flat_life', 4, 'epic'),
@@ -503,13 +583,14 @@ import { resolveTransplant } from '../src/forge/transplant/resolver.js';
 import { createGem, type SecondarySlot } from '../src/types/gem.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
-const rng = () => new SeededRNG('test-seed');
+// SeededRNG takes a numeric seed. Use a fresh RNG per case.
+const makeRng = (seed = 42) => new SeededRNG(seed);
 
 describe('resolveTransplant', () => {
   it('source with no secondary → primary transplants; slot records source tier/rarity', () => {
     const target = createGem('t', 'flat_physical', 5, 'rare');
     const source = createGem('s', 'flat_life', 3, 'magic');
-    const slot = resolveTransplant({ target, source, rng: rng() });
+    const slot = resolveTransplant({ target, source, rng: makeRng() });
     expect(slot.affixId).toBe('flat_life');
     expect(slot.tier).toBe(3);
     expect(slot.rarity).toBe('magic');
@@ -520,7 +601,7 @@ describe('resolveTransplant', () => {
     const sourceSecondary: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
     const source = { ...createGem('s', 'flat_life', 4, 'epic'), secondary: sourceSecondary };
     const target = createGem('t', 'flat_physical', 5, 'rare');
-    const slot = resolveTransplant({ target, source, chosenAffix: 'primary', rng: rng() });
+    const slot = resolveTransplant({ target, source, chosenAffix: 'primary', rng: makeRng() });
     expect(slot.affixId).toBe('flat_life');
     expect(slot.tier).toBe(4);
     expect(slot.rarity).toBe('epic');
@@ -530,7 +611,7 @@ describe('resolveTransplant', () => {
     const sourceSecondary: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
     const source = { ...createGem('s', 'flat_life', 4, 'epic'), secondary: sourceSecondary };
     const target = createGem('t', 'flat_physical', 5, 'rare');
-    const slot = resolveTransplant({ target, source, chosenAffix: 'secondary', rng: rng() });
+    const slot = resolveTransplant({ target, source, chosenAffix: 'secondary', rng: makeRng() });
     expect(slot.affixId).toBe('flat_armor');
     expect(slot.tier).toBe(2);
     expect(slot.rarity).toBe('magic');
@@ -540,8 +621,7 @@ describe('resolveTransplant', () => {
     const sourceSecondary: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
     const source = { ...createGem('s', 'flat_life', 4, 'epic'), secondary: sourceSecondary };
     const target = createGem('t', 'flat_physical', 5, 'rare');
-    // Deterministic: SeededRNG('test-seed').next() is predictable
-    const slot = resolveTransplant({ target, source, rng: rng() });
+    const slot = resolveTransplant({ target, source, rng: makeRng() });
     expect(['flat_life', 'flat_armor']).toContain(slot.affixId);
   });
 });
@@ -556,29 +636,27 @@ import { createGem, type SecondarySlot } from '../src/types/gem.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 
 describe('transplant RNG determinism', () => {
-  it('same seed + same uids = same random result', () => {
-    const sourceSecondary: SecondarySlot = { affixId: 'A', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
-    const sourceA = { ...createGem('s', 'flat_life', 3, 'epic'), secondary: sourceSecondary };
-    const sourceB = { ...createGem('s', 'flat_life', 3, 'epic'), secondary: sourceSecondary };
+  it('same seed + same fork label = same random result', () => {
+    const sourceSecondary: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const source = { ...createGem('s', 'flat_life', 3, 'epic'), secondary: sourceSecondary };
     const target = createGem('t', 'flat_physical', 5, 'rare');
 
-    const r1 = resolveTransplant({ target, source: sourceA, rng: new SeededRNG('seed-1').fork('transplant_t_s') });
-    const r2 = resolveTransplant({ target, source: sourceB, rng: new SeededRNG('seed-1').fork('transplant_t_s') });
-
+    const r1 = resolveTransplant({ target, source, rng: new SeededRNG(1001).fork('transplant_t_s') });
+    const r2 = resolveTransplant({ target, source, rng: new SeededRNG(1001).fork('transplant_t_s') });
     expect(r1.affixId).toBe(r2.affixId);
   });
 
-  it('different seeds can produce different results', () => {
-    const sourceSecondary: SecondarySlot = { affixId: 'A', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+  it('different seeds can produce different results over many trials', () => {
+    const sourceSecondary: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
     const source = { ...createGem('s', 'flat_life', 3, 'epic'), secondary: sourceSecondary };
     const target = createGem('t', 'flat_physical', 5, 'rare');
 
     const results = new Set<string>();
-    for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']) {
+    for (let seed = 1; seed <= 32; seed++) {
       const slot = resolveTransplant({ target, source, rng: new SeededRNG(seed).fork('transplant_t_s') });
       results.add(slot.affixId);
     }
-    expect(results.size).toBeGreaterThan(1);
+    expect(results.size).toBeGreaterThan(1); // not all 32 seeds should collapse to one outcome
   });
 });
 ```
@@ -736,8 +814,7 @@ function planTransplantGem(
     return { ok: false, error: 'Source has no secondary affix to choose' };
   }
 
-  // Deterministic RNG fork — planTransplantGem runs at commit, so this must use the same
-  // rng the match-controller seeded. Pass it in via plan if available; else use a stable fork.
+  // Deterministic RNG fork — plan.rng is threaded in by createForgePlan (Task 1.5).
   const rng = plan.rng.fork(`transplant_${target.uid}_${source.uid}`);
   const slot: SecondarySlot = resolveTransplant({ target, source, chosenAffix: action.chosenAffix, rng });
 
@@ -759,9 +836,7 @@ function planTransplantGem(
 }
 ```
 
-**Adjust the RNG access path.** Read `forge-plan.ts` to see how `plan.rng` (or equivalent) is seeded. If there is no rng on `ForgePlan`, the resolver must accept one threaded from the match-controller; in that case add an optional `rng?` field to `ForgePlan` (seeded during `createForgePlan`) or pull from a helper like `plan.matchSeed`. Read the existing file to decide — don't invent API.
-
-Also extend the top-level `applyPlanAction` switch to route `transplant_gem` to `planTransplantGem`.
+Extend the top-level `applyPlanAction` switch (in the same file) to route `transplant_gem` to `planTransplantGem`.
 
 - [ ] **Step 4: Create `preview.ts`**
 
@@ -896,71 +971,174 @@ git commit -m "feat(engine): applyTransplantGem forge action handler"
 - Modify: `packages/engine/src/combine/combination-engine.ts`
 - Test: `packages/engine/tests/secondary-combinability.test.ts` (new)
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Identify real affix IDs used in signature and category recipes**
+
+Read `packages/engine/src/data/recipes.json`. Pick one concrete signature recipe pair (two affix IDs that together produce a named gem) and one concrete category pair (two affixes of compatible categories). Record these exact IDs for the test — example (verify against actual file contents):
+
+- Signature pair: e.g., `flat_physical` + `flat_fire` → `ember_strike` (use whatever real recipe exists)
+- Category pair: e.g., two "offensive" category affixes that hit the category combo
+- Same-affix pair (generic): `flat_physical` + `flat_physical`
+
+If recipes.json's signature recipe IDs are ambiguous, read `packages/engine/tests/combination-engine.test.ts` to copy the real IDs it tests against.
+
+- [ ] **Step 2: Write the failing test**
 
 ```ts
 import { describe, it, expect } from 'vitest';
 import { CombinationEngine } from '../src/combine/combination-engine.js';
-// Reuse test fixtures for recipe/discovery/category-map (see combination-engine.test.ts)
+import { RecipeRegistry } from '../src/combine/recipe-registry.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
 import { createGem, type SecondarySlot } from '../src/types/gem.js';
+// Reuse the exact test-fixture factory used by combination-engine.test.ts
+// (makeRecipeRegistry / makeCategoryMap or equivalent) — do NOT rebuild from scratch.
+
+const REAL_SIGNATURE_AFFIX_A = 'flat_physical';   // replace with verified ID from Step 1
+const REAL_SIGNATURE_AFFIX_B = 'flat_fire';       // replace with verified ID
+const REAL_CATEGORY_AFFIX_A  = 'flat_physical';   // replace if different
+const REAL_CATEGORY_AFFIX_B  = 'flat_lightning';  // replace with verified category-compatible ID
+
+function makeEngine(): CombinationEngine {
+  // Copy construction from combination-engine.test.ts
+  // e.g. new CombinationEngine(registry, new DiscoveryState(), categoryMap)
+}
 
 describe('combine with filled-secondary inputs', () => {
   it('rejects signature recipe match when either input has filled secondary', () => {
-    // Build a pair of gems whose affix pair hits a known signature recipe.
-    // Give one of them a filled secondary. Combine must reject.
-    const sec: SecondarySlot = { affixId: 'X', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
-    const g1 = { ...createGem('a', 'SIGNATURE_AFFIX_1', 2, 'rare'), secondary: sec };
-    const g2 = createGem('b', 'SIGNATURE_AFFIX_2', 2, 'rare');
-    // ... expect engine.combine(g1, g2, ...) to throw or return a reason
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const g1 = { ...createGem('a', REAL_SIGNATURE_AFFIX_A, 2, 'rare'), secondary: sec };
+    const g2 = createGem('b', REAL_SIGNATURE_AFFIX_B, 2, 'rare');
+    const engine = makeEngine();
+    expect(() => engine.combine(g1, g2, 'out')).toThrow(/filled-secondary.*generic/i);
   });
 
-  it('rejects category combo match when either input has filled secondary', () => { /* similar */ });
+  it('rejects category combo match when either input has filled secondary', () => {
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const g1 = { ...createGem('a', REAL_CATEGORY_AFFIX_A, 2, 'rare'), secondary: sec };
+    const g2 = createGem('b', REAL_CATEGORY_AFFIX_B, 2, 'rare');
+    const engine = makeEngine();
+    expect(() => engine.combine(g1, g2, 'out')).toThrow(/filled-secondary.*generic/i);
+  });
 
-  it('succeeds on generic upgrade when both inputs share affix', () => {
-    // Same-affix pair, one with filled secondary → output with surviving gem's secondary
-    const sec: SecondarySlot = { affixId: 'X', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+  it('succeeds on generic upgrade when both inputs share affix; keeps surviving gems secondary', () => {
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
     const g1 = { ...createGem('a', 'flat_physical', 3, 'rare'), secondary: sec };
     const g2 = createGem('b', 'flat_physical', 3, 'rare');
-    // With keepGemUid=a → output has g1's secondary; with keepGemUid=b → output has no secondary
+    const engine = makeEngine();
+    const result = engine.combine(g1, g2, 'out', /* keepGemUid */ 'a');
+    expect(result.layer).toBe('generic');
+    expect(result.gem.secondary?.affixId).toBe('flat_armor');
   });
 
-  it('preserves keepGemUid gems secondary, discards the other', () => { /* ... */ });
+  it('when keepGemUid selects the non-filled gem, no secondary on output', () => {
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const g1 = { ...createGem('a', 'flat_physical', 3, 'rare'), secondary: sec };
+    const g2 = createGem('b', 'flat_physical', 3, 'rare');
+    const engine = makeEngine();
+    const result = engine.combine(g1, g2, 'out', /* keepGemUid */ 'b');
+    expect(result.gem.secondary).toBeUndefined();
+  });
 
-  it('deterministic fallback when both filled and no keepGemUid: higher rarity → higher tier → uid', () => {
-    const secA: SecondarySlot = { affixId: 'A', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
-    const secB: SecondarySlot = { affixId: 'B', tier: 2, rarity: 'magic', sourceGemUid: 'y' };
-    const g1 = { ...createGem('a', 'flat_physical', 3, 'rare'), secondary: secA };
-    const g2 = { ...createGem('b', 'flat_physical', 3, 'epic'), secondary: secB }; // higher rarity → g2 wins
-    // Output secondary = secB
+  it('deterministic fallback when both filled and no keepGemUid: higher rarity wins', () => {
+    const secA: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const secB: SecondarySlot = { affixId: 'flat_life', tier: 2, rarity: 'magic', sourceGemUid: 'y' };
+    const g1 = { ...createGem('a', 'flat_physical', 3, 'rare'),    secondary: secA };
+    const g2 = { ...createGem('b', 'flat_physical', 3, 'epic'),    secondary: secB }; // epic > rare
+    const engine = makeEngine();
+    const result = engine.combine(g1, g2, 'out'); // no keepGemUid
+    expect(result.gem.secondary?.affixId).toBe('flat_life'); // g2 wins by rarity
+  });
+
+  it('tie-break: same rarity → higher tier wins; same tier → lower uid wins', () => {
+    // Build two same-rarity, differing-tier pairs, assert expected secondary carries through
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Run test to verify it fails**
 
 Run: `pnpm --filter @alloy/engine test secondary-combinability` — FAIL.
 
-- [ ] **Step 3: Update `combination-engine.ts`**
+- [ ] **Step 4: Update `combination-engine.ts`**
 
-Locate the recipe-resolution entry point (probably `combine()` around line 80). Add a filter: if either input has `secondary !== undefined`, bypass signature + category recipe lookup and route directly to the generic-upgrade path. If generic upgrade does not match (different affixIds, or tier/rarity already maxed), return a specific error code:
+Current shape (verified): `CombinationEngine.combine()` at line 73 has these existing layers — `trySignature` (line 91), `tryCategory` (line 95), `genericUpgrade` (line 99, private method at line 345). `genericUpgrade` currently **always returns** (it's the fallback, never null — it returns a rarity-upgrade output even if affixes differ). That must change for filled-secondary inputs: when either input has a filled secondary, differing affixes should REJECT (only same-affix generic upgrade is valid).
+
+Changes inside the class:
 
 ```ts
 const REASON_FILLED_SECONDARY_NOT_GENERIC =
   'Filled-secondary gems can only combine via generic tier/rarity upgrade with a same-affix partner';
 
-// inside combine(…):
-const eitherFilled = gemA.secondary !== undefined || gemB.secondary !== undefined;
-if (eitherFilled) {
-  const genericResult = this.tryGenericUpgrade(gemA, gemB, outputUid, keepGemUid);
-  if (!genericResult) {
-    throw new Error(REASON_FILLED_SECONDARY_NOT_GENERIC);
+// Modify `combine(gemA, gemB, outputUid, keepGemUid?)` at line 73:
+combine(gemA: GemInstance, gemB: GemInstance, outputUid: string, keepGemUid?: string): CombineResult {
+  if (!gemA.combinable) throw new Error(`Gem ${gemA.uid} is not combinable`);
+  if (!gemB.combinable) throw new Error(`Gem ${gemB.uid} is not combinable`);
+  this.discovery.recordAttempt(gemA.affixId, gemB.affixId);
+
+  const eitherFilled = gemA.secondary !== undefined || gemB.secondary !== undefined;
+
+  if (eitherFilled) {
+    // Filled-secondary gems skip signature + category; require same-affix generic upgrade.
+    if (gemA.affixId !== gemB.affixId) {
+      throw new Error(REASON_FILLED_SECONDARY_NOT_GENERIC);
+    }
+    const result = this.genericUpgrade(gemA, gemB, outputUid, keepGemUid);
+    return this.attachSecondaryToOutput(result, gemA, gemB, keepGemUid);
   }
-  return this.carryOverSecondary(genericResult, gemA, gemB, keepGemUid);
+
+  // Unchanged path for non-filled inputs:
+  const signatureResult = this.trySignature(gemA, gemB, outputUid);
+  if (signatureResult) return signatureResult;
+  const categoryResult = this.tryCategory(gemA, gemB, outputUid);
+  if (categoryResult) return categoryResult;
+  return this.genericUpgrade(gemA, gemB, outputUid, keepGemUid);
 }
-// existing signature → category → generic pass continues for non-filled inputs
 ```
 
-`carryOverSecondary` is a new helper: decide which input survives (`keepGemUid` if set; otherwise higher-rarity → higher-tier → lexicographic uid fallback). Copy that input's `secondary` onto the output gem.
+Add a new private helper `attachSecondaryToOutput(result, gemA, gemB, keepGemUid?): CombineResult`:
+
+```ts
+private attachSecondaryToOutput(
+  result: CombineResult,
+  gemA: GemInstance,
+  gemB: GemInstance,
+  keepGemUid?: string,
+): CombineResult {
+  // Decide which input's secondary survives:
+  // 1. keepGemUid explicitly names an input → that input's secondary wins (may be undefined).
+  // 2. No keepGemUid and both filled → higher rarityIndex → higher tier → lexicographic uid.
+  // 3. Only one is filled → that one's secondary carries.
+  let survivor: GemInstance;
+  if (keepGemUid === gemA.uid) survivor = gemA;
+  else if (keepGemUid === gemB.uid) survivor = gemB;
+  else if (gemA.secondary && !gemB.secondary) survivor = gemA;
+  else if (!gemA.secondary && gemB.secondary) survivor = gemB;
+  else {
+    const ai = rarityIndex(gemA.rarity);
+    const bi = rarityIndex(gemB.rarity);
+    if (ai !== bi) survivor = ai > bi ? gemA : gemB;
+    else if (gemA.tier !== gemB.tier) survivor = gemA.tier > gemB.tier ? gemA : gemB;
+    else survivor = gemA.uid < gemB.uid ? gemA : gemB;
+  }
+
+  const survivingSecondary = survivor.secondary;
+  const tagsWithSecondary = survivingSecondary
+    ? Array.from(new Set([...result.gem.tags, survivingSecondary.affixId]))
+    : result.gem.tags;
+
+  return {
+    ...result,
+    gem: {
+      ...result.gem,
+      secondary: survivingSecondary,
+      tags: tagsWithSecondary,
+    },
+  };
+}
+```
+
+Add `import { rarityIndex } from '../types/gem.js';` at the top if not present.
+
+Note: this does not require changing the existing `genericUpgrade` method signature — we run it normally and then post-attach the secondary. The rejection only triggers when affixes differ *and* at least one secondary is filled.
 
 - [ ] **Step 4: Run tests**
 
@@ -1012,9 +1190,15 @@ git commit -m "test(engine): verify plan-level error surfacing for filled-second
 - Modify: `packages/engine/src/forge/stat-calculator.ts`
 - Test: extend `packages/engine/tests/stat-calculator.test.ts`
 
-- [ ] **Step 1: Locate the affix-iteration loop**
+- [ ] **Step 1: Locate the loadout-iteration sites**
 
-Read `stat-calculator.ts`. Find where per-socketed-gem effects are emitted — a loop over weapon sockets emitting `weaponEffect[]` from the gem's affix, and a parallel loop for armor sockets. Mark the insertion point.
+Read `packages/engine/src/forge/stat-calculator.ts`. The pipeline iterates `loadout.weapon.slots` and `loadout.armor.slots` (each slot is `{ gem } | null`) to emit effects. Identify:
+
+1. The function that emits **weapon affix effects** for each socketed gem (reads `tierDef.weaponEffect[]`, applies rarity multiplier, feeds into the accumulator).
+2. The parallel function/loop for **armor affix effects** (reads `tierDef.armorEffect[]`).
+3. The `collectAffixIds` helper around line 195 used by `computeActiveSynergies`.
+
+Write down the exact function names and line numbers before editing — do not assume the insertion sites match a generic "per-gem loop" pattern. The real code may fan these across multiple helpers.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1053,28 +1237,29 @@ Run: `pnpm --filter @alloy/engine test stat-calculator` — FAIL.
 
 - [ ] **Step 4: Implement secondary emission**
 
-Inside `stat-calculator.ts`, for each socketed gem iteration, after emitting primary effects, check `gem.secondary`. If present:
+For **each site identified in Step 1** (weapon-effect emitter and armor-effect emitter), mirror whatever pattern the primary path uses — do NOT invent an `emitModifier` call if the real code pushes into an array or spreads into an accumulator object.
+
+Pattern (conceptual; adapt to real site signature):
 
 ```ts
+// After the primary emit block for this gem in the weapon pipeline:
 if (gem.secondary) {
   const sec = gem.secondary;
-  const affix = registry.getAffix(sec.affixId);
-  const tierDef = affix.tiers[sec.tier];
-  const effectList = slotType === 'weapon' ? tierDef.weaponEffect : tierDef.armorEffect;
-  if (effectList && effectList.length > 0) {
-    const rarityMult = RARITY_MULTIPLIERS[sec.rarity];
+  const affixDef = registry.getAffix(sec.affixId);
+  const tierDef  = affixDef.tiers[sec.tier];
+  const effects  = tierDef.weaponEffect; // swap to tierDef.armorEffect in the armor emitter
+  if (effects && effects.length > 0) {
+    const rarityMult   = RARITY_MULTIPLIERS[sec.rarity];
     const globalScalar = registry.getBalance().transplant.secondaryValueScalar;
-    for (const mod of effectList) {
-      emitModifier({
-        ...mod,
-        value: mod.value * rarityMult * globalScalar,
-      });
+    for (const mod of effects) {
+      // Use the same push/accumulator call the primary site uses for `mod`.
+      accumulate({ ...mod, value: mod.value * rarityMult * globalScalar });
     }
   }
 }
 ```
 
-Adjust `emitModifier` / `slotType` / registry accessor names to match actual file shape — this sketch captures the logic, not the literal API.
+If the primary path's API is unclear, find an existing test that exercises it and copy the invocation shape. Do not hand-roll a new modifier accumulator.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -1190,25 +1375,34 @@ Run: `pnpm --filter @alloy/engine test match-controller-transplant` — FAIL.
 
 - [ ] **Step 3: Update `match-controller.ts`**
 
-Inside the flux-switch (~line 248), add after `guarantee_rarity`:
+Existing flux-switch cases (`boost_combine`, `reroll_pool`, `guarantee_rarity`) `return ok(...)` because their entire effect is a flag/flux mutation. Transplant is different: it both deducts flux and mutates forge state via `applyForgeAction`. **Use a pre-switch flux step rather than retrofitting the existing switch** — it's the lowest-impact change and keeps the existing return-based cases untouched.
+
+Exact change: BEFORE the existing `if (isRunMode && player === 0) { ... switch (action.kind) { ... } }` block, add:
 
 ```ts
-case 'transplant_gem': {
-  if (action.chosenAffix && state.runState) {
-    const cost = fluxCosts.transplantChooseAffix ?? 3;
-    if (!canSpendFlux(state.runState.flux, cost)) {
-      return fail(`Insufficient flux for transplant_gem chooseAffix (need ${cost}, have ${state.runState.flux})`);
-    }
-    state = { ...state, runState: { ...state.runState, flux: spendFlux(state.runState.flux, cost) } };
+// Deduct flux for transplant chooseAffix path before letting the action flow into applyForgeAction.
+if (
+  isRunMode &&
+  player === 0 &&
+  action.kind === 'transplant_gem' &&
+  action.chosenAffix &&
+  state.runState
+) {
+  const balance = registry.getBalance();
+  const cost = balance.gem.flux.costs.transplantChooseAffix ?? 3;
+  if (!canSpendFlux(state.runState.flux, cost)) {
+    return fail(`Insufficient flux for transplant_gem chooseAffix (need ${cost}, have ${state.runState.flux})`);
   }
-  // intentional break — falls through to forge-action apply path
-  break;
+  state = {
+    ...state,
+    runState: { ...state.runState, flux: spendFlux(state.runState.flux, cost) },
+  };
 }
 ```
 
-**Careful:** the existing flux-switch cases use `return ok(...)` to short-circuit (they don't need a subsequent forge-apply step). Transplant is different — we need the state mutation. Refactor slightly: bind the potentially-updated `state` to a mutable `let` at the top of the dispatch, then let the switch re-assign it on flux success and fall through; after the switch, the forge-apply pathway uses the (possibly updated) `state`. Inspect the existing function shape and adopt the minimal-impact variant.
+Then the existing `isRunMode` switch proceeds unchanged (it won't match `transplant_gem` because the switch only has cases for `boost_combine`/`reroll_pool`/`guarantee_rarity`), and the code after the switch (the `applyForge(...)` path) runs with the possibly-updated `state`. This places the flux deduction upstream without disturbing the existing three cases or requiring a `let state` refactor of the whole function.
 
-If that refactor is too invasive, an alternative: handle transplant flux *after* the existing flux-switch (as a separate check) using the same pattern but returning `ok({ ...state, runState: updatedRunState })` wrapped around a recursive call or explicit forge-apply invocation. Pick whichever pattern reads cleanest against the current match-controller.
+If the enclosing function parameter `state` is `const`, either rename it to `state_` and introduce `let state = state_` at the top, or use a fresh variable name (`let adjustedState = ...`) in the mutation and thread it into the subsequent forge-apply call. Pick the lower-churn option after reading the surrounding lines (~235–300).
 
 - [ ] **Step 4: Run tests**
 
@@ -1810,27 +2004,31 @@ git commit -m "feat(client): first-unlock transplant tutorial tooltip"
 **Files:**
 - Create: `packages/client/e2e/forge-transplant.spec.ts`
 
-- [ ] **Step 1: Scaffold the spec**
+- [ ] **Step 1: Inspect existing e2e fixtures**
+
+List `packages/client/e2e/fixtures/` (this is the existing directory — NOT `helpers/`). Read `gem-combining.spec.ts` and `forge-redesign.spec.ts` to find the established pattern for seeding stockpile state + navigating to forge. Reuse that pattern; do not reinvent.
+
+- [ ] **Step 2: Scaffold the spec**
 
 ```ts
 import { test, expect } from '@playwright/test';
-import { startRunWithStockpile } from './helpers/run-fixtures'; // pre-existing helper pattern; adjust if named differently
+// Import the fixture helper name you identified in Step 1 — e.g.:
+// import { seedStockpileAndEnterForge } from './fixtures/forge-setup';
 
 test.describe('Forge — transplant happy path', () => {
   test('unlock secondary slot, transplant, verify resulting stats', async ({ page }) => {
     // 1. Start a run in a state where the player owns a T5 Rare gem + a T3 Magic donor
+    //    (Use the fixture helper identified in Step 1.)
     // 2. Navigate to forge; drop both gems into Workbench slots 0 and 1
     // 3. Verify the Transplant button enables
+    //    await expect(page.getByRole('button', { name: /transplant/i })).toBeEnabled();
     // 4. Click Transplant (random mode, no flux)
-    // 5. Verify the source gem is removed, host now shows filled-secondary pip (data-testid="gem-secondary-slot-filled")
+    // 5. Verify the source gem is removed, host now shows filled-secondary pip:
+    //    await expect(page.getByTestId('gem-secondary-slot-filled')).toBeVisible();
     // 6. Open stats panel; verify secondary affix's contribution appears in the stat breakdown
   });
 });
 ```
-
-- [ ] **Step 2: Inspect existing e2e fixtures**
-
-Read `packages/client/e2e/helpers/` (if present) or any existing `forge-*.spec.ts` to understand the preferred fixture pattern. Reuse; do not reinvent.
 
 - [ ] **Step 3: Run the spec**
 
@@ -1860,11 +2058,17 @@ git commit -m "test(client): E2E happy-path for gem transplant"
 
 `pnpm --filter @alloy/client pkg get version`
 
-- [ ] **Step 2: Bump to 0.(minor+1).0** (this is a feature, not a fix)
+Record the current `0.X.Y` value.
+
+- [ ] **Step 2: Bump to `0.(X+1).0`**
+
+Per the user's memory note: feature/refactor → **minor bump**, preserving the leading `0.` (no major bump). Run:
 
 ```bash
 pnpm --filter @alloy/client version minor --no-git-tag-version
 ```
+
+Verify the resulting `0.X.Y` value in `packages/client/package.json`. If the project was on (e.g.) `0.14.3`, expect `0.15.0`. Do NOT let `pnpm version` auto-bump to `1.0.0` from a `0.999.x` edge case — if that happens, revert and set the version manually.
 
 - [ ] **Step 3: Run typecheck + tests (full)**
 
