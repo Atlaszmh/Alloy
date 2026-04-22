@@ -3,6 +3,12 @@ import { CombinationEngine } from '../src/combine/combination-engine.js';
 import { RecipeRegistry, type RecipeDefinition } from '../src/combine/recipe-registry.js';
 import { DiscoveryState } from '../src/combine/discovery-state.js';
 import { createGem, type SecondarySlot } from '../src/types/gem.js';
+import { applyPlanAction, createForgePlan } from '../src/forge/forge-plan.js';
+import { createForgeState } from '../src/forge/forge-state.js';
+import { DataRegistry } from '../src/data/registry.js';
+import { loadAndValidateData } from '../src/data/loader.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
+import { liveSlots } from '../src/types/slot-array.js';
 
 // --- Fixtures (mirroring combination-engine.test.ts) ---
 
@@ -127,5 +133,74 @@ describe('combine with filled-secondary inputs', () => {
     const engine = makeEngine();
     const result = engine.combine(g1, g2, 'out');
     expect(result.gem.secondary?.affixId).toBe('flat_armor'); // 'a' < 'b'
+  });
+});
+
+describe('plan-level combine rejection for filled-secondary inputs', () => {
+  const data = loadAndValidateData();
+  const registry = new DataRegistry(data.affixes, data.combinations, data.synergies, data.baseItems, data.balance, data.recipes);
+
+  it('applyPlanAction returns ok:false with filled-secondary error when signature match blocked', () => {
+    // Build a ForgePlan with two gems where one has a filled secondary
+    // AND the pair would normally match a signature recipe (chance_on_hit + fire_damage)
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const sigGem1 = { ...createGem('sig1', 'chance_on_hit', 2, 'rare'), secondary: sec };
+    const sigGem2 = createGem('sig2', 'fire_damage', 2, 'rare');
+
+    const state = createForgeState(
+      [sigGem1, sigGem2],
+      'iron_sword',
+      'iron_armor',
+      1,
+      data.balance,
+      false
+    );
+    const plan = createForgePlan(state, registry, new SeededRNG(0));
+
+    // Try to combine the signature pair
+    const result = applyPlanAction(plan, {
+      kind: 'combine',
+      gemUid1: 'sig1',
+      gemUid2: 'sig2',
+    }, registry);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/filled-secondary.*generic/i);
+  });
+
+  it('applyPlanAction returns ok:true for same-affix generic upgrade with filled-secondary input', () => {
+    // Two same-affix gems, one with filled secondary
+    const sec: SecondarySlot = { affixId: 'flat_armor', tier: 2, rarity: 'magic', sourceGemUid: 'x' };
+    const g1 = { ...createGem('gen1', 'flat_physical', 3, 'rare'), secondary: sec };
+    const g2 = createGem('gen2', 'flat_physical', 3, 'rare');
+
+    const state = createForgeState(
+      [g1, g2],
+      'iron_sword',
+      'iron_armor',
+      1,
+      data.balance,
+      false
+    );
+    const plan = createForgePlan(state, registry, new SeededRNG(0));
+
+    // Combine the generic upgrade pair
+    const result = applyPlanAction(plan, {
+      kind: 'combine',
+      gemUid1: 'gen1',
+      gemUid2: 'gen2',
+      keepGemUid: 'gen1', // Keep the one with secondary
+    }, registry);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Verify the combined gem landed in the stockpile
+    const combinedGem = liveSlots(result.plan.stockpile).find(g => g.uid.startsWith('combined_'));
+    expect(combinedGem).toBeDefined();
+
+    // Verify secondary was preserved on the output
+    expect(combinedGem?.secondary?.affixId).toBe('flat_armor');
   });
 });
