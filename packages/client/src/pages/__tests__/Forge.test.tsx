@@ -112,6 +112,21 @@ const MOCK_BALANCE = {
   },
   caps: {},
   statCaps: {} as Record<string, { min: number; max: number }>,
+  gem: {
+    flux: {
+      costs: {
+        boostCombine: 3,
+        rerollPool: 5,
+        guaranteeRarity: 4,
+        transplantGem: 0,
+        transplantChooseAffix: 3,
+      },
+    },
+  },
+  transplant: {
+    unlockThreshold: 6,
+    secondaryValueScalar: 1.0,
+  },
 };
 
 const MOCK_BASE_ITEMS: Record<string, BaseItemDef> = {
