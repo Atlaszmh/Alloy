@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { AffixDef, DataRegistry, GemInstance, SlotArray } from '@alloy/engine';
-import { liveCount } from '@alloy/engine';
+import { liveCount, hasSecondarySlotFromRegistry } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
@@ -261,6 +261,9 @@ function GemCell({
     statLabel = affix ? getStatLabel(affix, gem) : '';
   }
 
+  const hasSlot = hasSecondarySlotFromRegistry(gem, registry);
+  const filled = gem.secondary !== undefined;
+
   return (
     <div
       data-stockpile-cell
@@ -269,6 +272,7 @@ function GemCell({
       data-combinable={gem.combinable ? 'true' : 'false'}
       data-gem-source-recipe={gem.sourceRecipe ?? ''}
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -289,6 +293,50 @@ function GemCell({
         onClick={onSelect}
         onPointerDown={onPointerDown}
       />
+      {hasSlot && !filled && (
+        <div
+          data-testid="gem-secondary-slot-open"
+          data-gem-uid={gem.uid}
+          aria-label="Open secondary slot"
+          style={{
+            position: 'absolute',
+            bottom: 2,
+            right: 2,
+            width: 14,
+            height: 14,
+            borderRadius: 3,
+            border: '1.5px dashed rgba(250,204,21,0.7)',
+            background: 'transparent',
+            pointerEvents: 'none',
+            zIndex: 10,
+          }}
+        />
+      )}
+      {hasSlot && filled && gem.secondary && (
+        <div
+          data-testid="gem-secondary-slot-filled"
+          data-gem-uid={gem.uid}
+          data-secondary-affix={gem.secondary.affixId}
+          aria-label={`Secondary affix: ${gem.secondary.affixId}`}
+          style={{
+            position: 'absolute',
+            bottom: 2,
+            right: 2,
+            width: 14,
+            height: 14,
+            borderRadius: 3,
+            background: 'rgba(250,204,21,0.85)',
+            border: '1.5px solid rgba(255,255,255,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 10,
+            fontSize: 8,
+            lineHeight: 1,
+          }}
+        />
+      )}
     </div>
   );
 }
