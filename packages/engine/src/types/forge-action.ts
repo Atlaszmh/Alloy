@@ -9,4 +9,10 @@ export type ForgeAction =
   | { kind: 'set_base_stats'; target: 'weapon' | 'armor'; stat1: BaseStat; stat2: BaseStat }
   | { kind: 'boost_combine' }
   | { kind: 'reroll_pool' }
-  | { kind: 'guarantee_rarity' };
+  | { kind: 'guarantee_rarity' }
+  | {
+      kind: 'transplant_gem';
+      targetGemUid: string;
+      sourceGemUid: string;
+      chosenAffix?: 'primary' | 'secondary';
+    };
