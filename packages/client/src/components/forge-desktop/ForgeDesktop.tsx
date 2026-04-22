@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type {
   ActiveSynergy,
   CombinePreview,
@@ -7,6 +8,7 @@ import type {
   GemInstance,
 } from '@alloy/engine';
 import type { GemDamageContribution } from '@/shared/utils/gem-damage-breakdown';
+import { useForgeStore } from '@/stores/forgeStore';
 import { AmbientBackdrop } from './AmbientBackdrop';
 import { CharacterRail } from './CharacterRail';
 import { WorkbenchDock } from './WorkbenchDock';
@@ -100,6 +102,65 @@ export interface ForgeDesktopProps {
  * `--hud-rail-w`, `--hud-workbench-h`, `--hud-stockpile-h`.
  */
 export function ForgeDesktop(props: ForgeDesktopProps) {
+  const {
+    comboSlots,
+    transplantHostUid,
+    transplantChosenAffix,
+    transplantPreview,
+    applyAction,
+    setTransplantChosenAffix,
+    computeTransplantPreview,
+    clearTransplantState,
+    clearComboSlots,
+  } = useForgeStore();
+
+  const { registry, currentFlux } = props;
+
+  // Recompute transplant preview whenever combo slots or transplant state changes.
+  useEffect(() => {
+    computeTransplantPreview(registry);
+  }, [comboSlots, transplantHostUid, transplantChosenAffix, registry, computeTransplantPreview]);
+
+  // Derive host / source from the store's deterministic host-picker logic.
+  // Mirrors the logic in forgeStore.computeTransplantPreview so the UI stays
+  // consistent with what the preview was computed for.
+  const [slotA, slotB] = comboSlots;
+  const transplantHost: GemInstance | null =
+    slotA && slotB
+      ? transplantHostUid === slotA.uid
+        ? slotA
+        : transplantHostUid === slotB.uid
+          ? slotB
+          : slotA // default: first-placed gem (mirrors pickHostDeterministic fallback)
+      : null;
+  const transplantSource: GemInstance | null =
+    transplantHost && slotA && slotB
+      ? transplantHost.uid === slotA.uid
+        ? slotB
+        : slotA
+      : null;
+
+  // Flux affordability for the "choose affix" path.
+  const transplantFluxCost = transplantPreview?.fluxCost ?? 0;
+  const canAffordTransplantChoice = currentFlux >= transplantFluxCost;
+
+  const handleTransplant = () => {
+    if (!transplantHost || !transplantSource) return;
+    const result = applyAction(
+      {
+        kind: 'transplant_gem',
+        targetGemUid: transplantHost.uid,
+        sourceGemUid: transplantSource.uid,
+        chosenAffix: transplantChosenAffix ?? undefined,
+      },
+      registry,
+    );
+    if (result.ok) {
+      clearComboSlots();
+      clearTransplantState();
+    }
+  };
+
   return (
     <div
       data-screen="forge-desktop"
@@ -194,13 +255,13 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
           onCombine={props.onCombine}
           onClearAll={props.onClearComboSlots}
           onPointerDown={props.onGemPointerDown}
-          transplantPreview={null}
-          transplantHost={null}
-          transplantSource={null}
-          transplantChosenAffix={null}
-          canAffordTransplantChoice={false}
-          onChooseTransplantAffix={() => {}}
-          onTransplant={() => {}}
+          transplantPreview={transplantPreview}
+          transplantHost={transplantHost}
+          transplantSource={transplantSource}
+          transplantChosenAffix={transplantChosenAffix}
+          canAffordTransplantChoice={canAffordTransplantChoice}
+          onChooseTransplantAffix={setTransplantChosenAffix}
+          onTransplant={handleTransplant}
         />
       </div>
 
