@@ -20,7 +20,7 @@ import { GemInspectPanel } from '@/components/GemInspectPanel';
 import { ForgeDesktop } from '@/components/forge-desktop/ForgeDesktop';
 import { buildGemDamageBreakdown } from '@/shared/utils/gem-damage-breakdown';
 import type { AffixDef, BaseStat, BaseItemDef, CompoundAffixDef, GemInstance, CombinePreview, RunState, DataRegistry } from '@alloy/engine';
-import { createForgeState, CombinationEngine, DiscoveryState, getPoolConfigForRound } from '@alloy/engine';
+import { createForgeState, CombinationEngine, DiscoveryState, getPoolConfigForRound, SeededRNG } from '@alloy/engine';
 
 const FORGE_TIMER_MS = 90_000;
 
@@ -185,7 +185,7 @@ export function Forge() {
       armor: { ...player.loadout.armor, slots: [...player.loadout.armor.slots] },
     };
 
-    initPlan(forgeState, registry);
+    initPlan(forgeState, registry, new SeededRNG(matchState.seed).fork(`forge_${round}`));
 
     if (round === 1) {
       applyAction({ kind: 'set_base_stats', target: 'weapon', stat1: DEFAULT_WEAPON_STATS[0], stat2: DEFAULT_WEAPON_STATS[1] }, registry);

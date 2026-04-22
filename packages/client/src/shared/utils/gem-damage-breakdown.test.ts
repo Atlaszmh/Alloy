@@ -5,6 +5,7 @@ import {
   applyPlanAction,
   DataRegistry,
   loadAndValidateData,
+  SeededRNG,
 } from '@alloy/engine';
 import type { ForgePlan, GemInstance } from '@alloy/engine';
 import {
@@ -34,7 +35,7 @@ function makeGem(
 /** Build a ForgePlan with `gems` pre-socketed into the weapon (slot 0, 1, …). */
 function planWithWeaponGems(gems: GemInstance[]): ForgePlan {
   const state = createForgeState(gems, 'sword', 'chainmail', 1, data.balance, false);
-  let plan = createForgePlan(state, registry);
+  let plan = createForgePlan(state, registry, new SeededRNG(0));
   gems.forEach((gem, idx) => {
     const result = applyPlanAction(
       plan,
@@ -51,7 +52,7 @@ function planWithWeaponGems(gems: GemInstance[]): ForgePlan {
  *  ignores armor gems (they contribute defenses, not damage). */
 function planWithArmorGems(gems: GemInstance[]): ForgePlan {
   const state = createForgeState(gems, 'sword', 'chainmail', 1, data.balance, false);
-  let plan = createForgePlan(state, registry);
+  let plan = createForgePlan(state, registry, new SeededRNG(0));
   gems.forEach((gem, idx) => {
     const result = applyPlanAction(
       plan,
@@ -67,7 +68,7 @@ function planWithArmorGems(gems: GemInstance[]): ForgePlan {
 describe('buildGemDamageBreakdown', () => {
   it('returns empty array when nothing is socketed', () => {
     const state = createForgeState([], 'sword', 'chainmail', 1, data.balance, false);
-    const plan = createForgePlan(state, registry);
+    const plan = createForgePlan(state, registry, new SeededRNG(0));
     expect(buildGemDamageBreakdown(plan, registry)).toEqual([]);
   });
 

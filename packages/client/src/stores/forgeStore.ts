@@ -1,5 +1,5 @@
 import type { ForgeAction, ForgeState, ForgePlan, PlanResult, DataRegistry, GemInstance, StatsResult } from '@alloy/engine';
-import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from '@alloy/engine';
+import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem, SeededRNG } from '@alloy/engine';
 import { createHmrStore } from './hmr-store';
 
 interface ForgeStoreState {
@@ -20,7 +20,7 @@ interface ForgeStoreState {
   setHasSelectedBaseItems: (matchId: string, value: boolean) => void;
   hasSelectedBaseItems: (matchId: string) => boolean;
 
-  initPlan: (state: ForgeState, registry: DataRegistry) => void;
+  initPlan: (state: ForgeState, registry: DataRegistry, rng?: SeededRNG) => void;
   applyAction: (action: ForgeAction, registry: DataRegistry) => PlanResult;
   getCommitActions: () => ForgeAction[];
   getStats: (registry: DataRegistry) => StatsResult | null;
@@ -51,8 +51,9 @@ export const useForgeStore = createHmrStore<ForgeStoreState>('forgeStore', (set,
 
   hasSelectedBaseItems: (matchId) => get().hasSelectedBaseItemsMap[matchId] ?? false,
 
-  initPlan: (state, registry) => {
-    const plan = createForgePlan(state, registry);
+  initPlan: (state, registry, rng) => {
+    const resolvedRng = rng ?? new SeededRNG(0); // Fallback: Forge.tsx passes match-seed-derived rng when available
+    const plan = createForgePlan(state, registry, resolvedRng);
     set({
       plan,
       selectedOrbUid: null,

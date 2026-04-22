@@ -13,6 +13,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { calculateStats, type StatsResult } from './stat-calculator.js';
 import { CombinationEngine } from '../combine/combination-engine.js';
 import { DiscoveryState } from '../combine/discovery-state.js';
+import { SeededRNG } from '../rng/seeded-rng.js';
 
 export interface ForgePlan {
   /**
@@ -26,6 +27,8 @@ export interface ForgePlan {
   round: number;
   lockedGemUids: Set<string>;
   actionLog: ForgeAction[];
+  /** Deterministic RNG for plan-time operations (e.g. transplant_gem). Shared (not cloned) across plan snapshots. */
+  rng: SeededRNG;
 }
 
 export type PlanResult = { ok: true; plan: ForgePlan } | { ok: false; error: string };
@@ -57,12 +60,15 @@ function clonePlan(plan: ForgePlan): ForgePlan {
     round: plan.round,
     lockedGemUids: new Set(plan.lockedGemUids),
     actionLog: [...plan.actionLog],
+    // Share the rng reference — forks give independent streams;
+    // cloning the state would break determinism.
+    rng: plan.rng,
   };
 }
 
 // ---- Public API ----
 
-export function createForgePlan(state: ForgeState, _registry: DataRegistry): ForgePlan {
+export function createForgePlan(state: ForgeState, _registry: DataRegistry, rng: SeededRNG): ForgePlan {
   return {
     stockpile: cloneStockpile(state.stockpile),
     loadout: {
@@ -72,6 +78,7 @@ export function createForgePlan(state: ForgeState, _registry: DataRegistry): For
     round: state.round,
     lockedGemUids: new Set(),
     actionLog: [],
+    rng,
   };
 }
 

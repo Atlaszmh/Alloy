@@ -3,6 +3,7 @@ import { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsoc
 import { createForgeState } from '../src/forge/forge-state.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { SlotArray } from '../src/types/match.js';
@@ -35,7 +36,7 @@ describe('ForgePlan', () => {
   describe('createForgePlan', () => {
     it('snapshots stockpile and loadout', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       expect(liveCount(plan.stockpile)).toBe(liveCount(state.stockpile));
       expect(plan.round).toBe(1);
       expect(plan.lockedGemUids.size).toBe(0);
@@ -45,16 +46,24 @@ describe('ForgePlan', () => {
     it('deep clones -- mutations to plan do not affect original state', () => {
       const state = makeForgeState();
       const originalLive = liveCount(state.stockpile);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       plan.stockpile.push(createGem('extra', 'thorns', 1, 'common'));
       expect(liveCount(state.stockpile)).toBe(originalLive);
+    });
+
+    it('createForgePlan stores an rng on the plan', () => {
+      const state = makeForgeState();
+      const plan = createForgePlan(state, registry, new SeededRNG(42));
+      expect(plan.rng).toBeInstanceOf(SeededRNG);
+      const forked = plan.rng.fork('test');
+      expect(typeof forked.next()).toBe('number');
     });
   });
 
   describe('applyPlanAction -- socket_gem', () => {
     it('moves gem from stockpile to loadout', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const result = applyPlanAction(plan, {
         kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
@@ -67,7 +76,7 @@ describe('ForgePlan', () => {
 
     it('fails when slot occupied', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const r1 = applyPlanAction(plan, {
         kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
@@ -83,7 +92,7 @@ describe('ForgePlan', () => {
   describe('applyPlanAction -- unsocket_gem', () => {
     it('moves gem back to stockpile', () => {
       const state = makeForgeState(1);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const r1 = applyPlanAction(plan, {
         kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
@@ -99,7 +108,7 @@ describe('ForgePlan', () => {
 
     it('is blocked for locked gems', () => {
       const state = makeForgeState(1);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const r1 = applyPlanAction(plan, {
         kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0,
       }, registry);
@@ -114,7 +123,7 @@ describe('ForgePlan', () => {
 
     it('fails on empty slot', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const r = applyPlanAction(plan, {
         kind: 'unsocket_gem', target: 'weapon', slotIndex: 0,
       }, registry);
@@ -125,7 +134,7 @@ describe('ForgePlan', () => {
   describe('applyPlanAction -- set_base_stats', () => {
     it('is reversible -- can change stats multiple times', () => {
       const state = makeForgeState(1);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       let r = applyPlanAction(plan, {
         kind: 'set_base_stats', target: 'weapon', stat1: 'STR', stat2: 'VIT',
       }, registry);
@@ -140,7 +149,7 @@ describe('ForgePlan', () => {
 
     it('is blocked in round 2+', () => {
       const state = makeForgeState(2);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const r = applyPlanAction(plan, {
         kind: 'set_base_stats', target: 'weapon', stat1: 'STR', stat2: 'VIT',
       }, registry);
@@ -151,7 +160,7 @@ describe('ForgePlan', () => {
   describe('applyPlanAction -- combine', () => {
     it('creates combined gem in stockpile and locks source gems', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       // Combine fire_damage + chance_on_hit
       const r = applyPlanAction(plan, {
         kind: 'combine', gemUid1: 'gem1', gemUid2: 'gem5',
@@ -171,7 +180,7 @@ describe('ForgePlan', () => {
   describe('commitPlan', () => {
     it('produces correct ForgeAction replay log', () => {
       const state = makeForgeState();
-      let plan = createForgePlan(state, registry);
+      let plan = createForgePlan(state, registry, new SeededRNG(0));
       let r = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(r.ok).toBe(true); if (!r.ok) return;
       r = applyPlanAction(r.plan, { kind: 'socket_gem', gemUid: 'gem3', target: 'armor', slotIndex: 0 }, registry);
@@ -187,7 +196,7 @@ describe('ForgePlan', () => {
     it('returns StatsResult from plan loadout', () => {
       // Use real base item IDs that exist in the data registry
       const state = createForgeState(makeMockGems(), 'sword', 'chainmail', 1, data.balance, false);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const result = getPlannedStats(plan, registry);
       expect(result.stats.maxHP).toBeGreaterThan(0);
       expect(typeof result.stats.physicalDamage).toBe('number');
@@ -197,7 +206,7 @@ describe('ForgePlan', () => {
   describe('applyPlanAction — combine3', () => {
     it('fallback: consumes winning pair, leaves third in stockpile', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       // makeMockGems in forge-plan.test.ts: gem1=fire_damage, gem5=chance_on_hit, gem3=flat_hp
       // (gem5, gem1) form Ignite; gem3 is ejected.
       const result = applyPlanAction(plan, {
@@ -225,7 +234,7 @@ describe('ForgePlan', () => {
 
     it('fails when a gem uid is not in stockpile', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const result = applyPlanAction(plan, {
         kind: 'combine3',
         gemUid1: 'gem1', gemUid2: 'gem5', gemUid3: 'nonexistent',
@@ -241,7 +250,7 @@ describe('ForgePlan', () => {
         createGem('c', 'flat_hp', 1, 'common', { recipeDepth: 3 }), // MAX_RECIPE_DEPTH → not combinable
       ];
       const state = createForgeState(gems, 'iron_sword', 'iron_armor', 1, data.balance, false);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const result = applyPlanAction(plan, {
         kind: 'combine3',
         gemUid1: 'a', gemUid2: 'b', gemUid3: 'c',
@@ -258,7 +267,7 @@ describe('ForgePlan', () => {
         createGem('c', 'lightning_damage', 2, 'rare'),
       ];
       const state = createForgeState(gems, 'iron_sword', 'iron_armor', 1, data.balance, false);
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const result = applyPlanAction(plan, {
         kind: 'combine3',
         gemUid1: 'a', gemUid2: 'b', gemUid3: 'c',
@@ -288,7 +297,7 @@ describe('ForgePlan', () => {
   describe('fixed-slot stockpile invariants', () => {
     it('socket_gem nulls the source slot in place; sibling slots do not shift', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       const originalUidBySlot = plan.stockpile.map((g) => g?.uid ?? null);
 
       const result = applyPlanAction(
@@ -311,7 +320,7 @@ describe('ForgePlan', () => {
     });
 
     it('unsocket_gem returns the gem to the first empty slot (not the end of the array)', () => {
-      let plan = createForgePlan(makeForgeState(), registry);
+      let plan = createForgePlan(makeForgeState(), registry, new SeededRNG(0));
       // Socket gem1 (slot 0) first so the stockpile now has slot 0 = null.
       let r = applyPlanAction(
         plan,
@@ -339,7 +348,7 @@ describe('ForgePlan', () => {
 
     it('combine lands the output in the keep-gem\'s original slot and nulls the ingredient slot', () => {
       const state = makeForgeState();
-      const plan = createForgePlan(state, registry);
+      const plan = createForgePlan(state, registry, new SeededRNG(0));
       // gem1 is at slot 0, gem5 at slot 4 — Ignite recipe (fire + chance_on_hit).
       const gem1Slot = plan.stockpile.findIndex((g) => g?.uid === 'gem1');
       const gem5Slot = plan.stockpile.findIndex((g) => g?.uid === 'gem5');
@@ -367,7 +376,7 @@ describe('ForgePlan', () => {
 
   describe('canUnsocketGem', () => {
     it('returns true for socketed gem', () => {
-      const plan = createForgePlan(makeForgeState(), registry);
+      const plan = createForgePlan(makeForgeState(), registry, new SeededRNG(0));
       const result = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -375,12 +384,12 @@ describe('ForgePlan', () => {
     });
 
     it('returns false for empty slot', () => {
-      const plan = createForgePlan(makeForgeState(), registry);
+      const plan = createForgePlan(makeForgeState(), registry, new SeededRNG(0));
       expect(canUnsocketGem(plan, 'weapon', 0)).toBe(false);
     });
 
     it('returns false for locked gems', () => {
-      const plan = createForgePlan(makeForgeState(), registry);
+      const plan = createForgePlan(makeForgeState(), registry, new SeededRNG(0));
       const result = applyPlanAction(plan, { kind: 'socket_gem', gemUid: 'gem1', target: 'weapon', slotIndex: 0 }, registry);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
