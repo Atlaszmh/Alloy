@@ -31,4 +31,22 @@ describe('onboardingStore', () => {
     expect(useOnboardingStore.getState().seen).toBe(false);
     expect(localStorage.getItem('alloy.onboarding.seen')).toBeNull();
   });
+
+  it('hasSeenTransplantTutorial starts false and flips true on mark', () => {
+    expect(useOnboardingStore.getState().hasSeenTransplantTutorial).toBe(false);
+    useOnboardingStore.getState().markTransplantTutorialSeen();
+    expect(useOnboardingStore.getState().hasSeenTransplantTutorial).toBe(true);
+  });
+
+  it('markTransplantTutorialSeen persists to localStorage', () => {
+    useOnboardingStore.getState().markTransplantTutorialSeen();
+    expect(localStorage.getItem('alloy.onboarding.transplant-tutorial-seen')).toBe('true');
+  });
+
+  it('reset clears hasSeenTransplantTutorial and its localStorage key', () => {
+    useOnboardingStore.getState().markTransplantTutorialSeen();
+    useOnboardingStore.getState().reset();
+    expect(useOnboardingStore.getState().hasSeenTransplantTutorial).toBe(false);
+    expect(localStorage.getItem('alloy.onboarding.transplant-tutorial-seen')).toBeNull();
+  });
 });

@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DataRegistry, GemInstance } from '@alloy/engine';
 import { createGem } from '@alloy/engine';
 import { StockpileStrip } from './StockpileStrip';
+import { useOnboardingStore } from '@/stores/onboardingStore';
+
+// forgeStore is used inside StockpileStrip; mock it to keep tests isolated
+vi.mock('@/stores/forgeStore', () => ({
+  useForgeStore: (selector: (s: { plan: null }) => unknown) => selector({ plan: null }),
+}));
 
 /* -------------------------------------------------------------------------- */
 /*  Mock registry                                                              */
@@ -73,6 +79,11 @@ function makeProps(stockpile: (GemInstance | null)[]) {
 /*  Tests                                                                      */
 /* -------------------------------------------------------------------------- */
 
+beforeEach(() => {
+  localStorage.clear();
+  useOnboardingStore.getState().reset();
+});
+
 describe('StockpileStrip secondary pip', () => {
   it('renders dashed-outline pip for gem with open-empty secondary slot', () => {
     // Rare T5: tier=5, rarityIndex(rare)=3 → 5+3=8 >= 6 → has slot, no secondary
@@ -108,5 +119,56 @@ describe('StockpileStrip secondary pip', () => {
 
     expect(screen.queryByTestId('gem-secondary-slot-open')).toBeNull();
     expect(screen.queryByTestId('gem-secondary-slot-filled')).toBeNull();
+  });
+});
+
+describe('TransplantTutorialTooltip', () => {
+  it('renders tutorial on first eligible gem when onboarding flag is false', () => {
+    // onboardingStore reset to hasSeenTransplantTutorial=false in beforeEach
+    // Rare T5: tier=5, rarityIndex(rare)=3 → 5+3=8 >= 6 → has slot, no secondary
+    const gem = createGem('g1', 'flat_physical', 5, 'rare');
+    render(<StockpileStrip {...makeProps([gem])} />);
+
+    const tooltip = screen.getByTestId('transplant-tutorial-tooltip');
+    expect(tooltip).toBeTruthy();
+    expect(tooltip.getAttribute('data-anchor-uid')).toBe('g1');
+  });
+
+  it('attaches to the FIRST eligible gem when multiple candidates exist', () => {
+    const gem1 = createGem('g1', 'flat_physical', 5, 'rare');
+    const gem2 = createGem('g2', 'flat_life', 5, 'rare');
+    render(<StockpileStrip {...makeProps([gem1, gem2])} />);
+
+    const tooltip = screen.getByTestId('transplant-tutorial-tooltip');
+    expect(tooltip.getAttribute('data-anchor-uid')).toBe('g1');
+  });
+
+  it('does not render when onboarding flag is true', () => {
+    useOnboardingStore.getState().markTransplantTutorialSeen();
+    const gem = createGem('g1', 'flat_physical', 5, 'rare');
+    render(<StockpileStrip {...makeProps([gem])} />);
+
+    expect(screen.queryByTestId('transplant-tutorial-tooltip')).toBeNull();
+  });
+
+  it('does not render when no gem has an open empty secondary slot', () => {
+    // Common T3: no secondary slot
+    const gem = createGem('g1', 'flat_physical', 3, 'common');
+    render(<StockpileStrip {...makeProps([gem])} />);
+
+    expect(screen.queryByTestId('transplant-tutorial-tooltip')).toBeNull();
+  });
+
+  it('does not render when eligible gem already has secondary filled', () => {
+    const secondary = {
+      affixId: 'flat_life',
+      tier: 3 as const,
+      rarity: 'magic' as const,
+      sourceGemUid: 'src',
+    };
+    const gem: GemInstance = { ...createGem('g1', 'flat_physical', 5, 'rare'), secondary };
+    render(<StockpileStrip {...makeProps([gem])} />);
+
+    expect(screen.queryByTestId('transplant-tutorial-tooltip')).toBeNull();
   });
 });

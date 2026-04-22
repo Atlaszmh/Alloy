@@ -1,8 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { AffixDef, DataRegistry, GemInstance, SlotArray } from '@alloy/engine';
 import { liveCount, hasSecondarySlotFromRegistry } from '@alloy/engine';
 import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
+import { useOnboardingStore } from '@/stores/onboardingStore';
+import { useForgeStore } from '@/stores/forgeStore';
+import { TransplantTutorialTooltip } from './TransplantTutorialTooltip';
 
 /**
  * Bottom HUD stockpile strip — a 10-column grid that is ALWAYS at least 1 row
@@ -53,6 +56,31 @@ export function StockpileStrip({
   onSelectOrb,
   onPointerDown,
 }: StockpileStripProps) {
+  // ── Transplant tutorial onboarding ───────────────────────────────────────
+  const hasSeen = useOnboardingStore((s) => s.hasSeenTransplantTutorial);
+  const markSeen = useOnboardingStore((s) => s.markTransplantTutorialSeen);
+  const plan = useForgeStore((s) => s.plan);
+  const actionCount = plan?.actionLog?.length ?? 0;
+  const [initialActionCount] = useState(actionCount);
+
+  useEffect(() => {
+    if (!hasSeen && actionCount > initialActionCount) {
+      markSeen();
+    }
+  }, [hasSeen, actionCount, initialActionCount, markSeen]);
+
+  // Find first stockpile gem with an open empty secondary slot
+  let firstEligibleUid: string | null = null;
+  if (!hasSeen) {
+    for (const gem of stockpile) {
+      if (gem && hasSecondarySlotFromRegistry(gem, registry) && gem.secondary === undefined) {
+        firstEligibleUid = gem.uid;
+        break;
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Preserve slot positions — nulls are kept in place, and gems that are
   // currently staged into the combine workbench are nulled out for display
   // without collapsing their slot.
@@ -202,6 +230,7 @@ export function StockpileStrip({
               affixMap={affixMap}
               selected={gem.uid === selectedOrbUid}
               dimmed={equippedUids.has(gem.uid)}
+              showTutorialTooltip={gem.uid === firstEligibleUid}
               onSelect={() => onSelectOrb(gem.uid)}
               onPointerDown={(e) => onPointerDown(gem.uid, e)}
             />
@@ -219,6 +248,7 @@ function GemCell({
   affixMap,
   selected,
   dimmed,
+  showTutorialTooltip,
   onSelect,
   onPointerDown,
 }: {
@@ -227,6 +257,7 @@ function GemCell({
   affixMap: Map<string, AffixDef>;
   selected: boolean;
   dimmed: boolean;
+  showTutorialTooltip: boolean;
   onSelect: () => void;
   onPointerDown: (e: React.PointerEvent) => void;
 }) {
@@ -337,6 +368,7 @@ function GemCell({
           }}
         />
       )}
+      {showTutorialTooltip && <TransplantTutorialTooltip targetGemUid={gem.uid} />}
     </div>
   );
 }
