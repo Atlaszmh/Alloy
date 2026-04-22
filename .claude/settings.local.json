@@ -197,7 +197,10 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:9098/)",
       "Bash(git reset:*)",
       "Bash(printf 'y\\\\ny\\\\nn\\\\n')",
-      "Bash(printf 'n\\\\ny\\\\n')"
+      "Bash(printf 'n\\\\ny\\\\n')",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
+      "PowerShell(Stop-Process -Id 44732 -Force)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=44732\")"
     ]
   }
 }
