@@ -375,3 +375,83 @@ describe('Workbench dual CTAs', () => {
     expect(btn.textContent).toMatch(/3/);
   });
 });
+
+describe('Workbench combine tooltip for filled-secondary inputs', () => {
+  it('shows helpful tooltip when combine is disabled because of filled-secondary inputs', () => {
+    const props = defaultWorkbenchProps();
+    // Two DIFFERENT-affix gems, one with a filled secondary
+    const gem1 = makeGem({ uid: 'g0', affixId: 'fire_damage', tier: 3, rarity: 'magic' });
+    const gem2 = makeGem({
+      uid: 'g1',
+      affixId: 'cold_damage',
+      tier: 3,
+      rarity: 'magic',
+      secondary: {
+        affixId: 'lightning_damage',
+        tier: 2,
+        rarity: 'common',
+        sourceGemUid: 'g2',
+      },
+    });
+    props.comboSlots[0] = gem1;
+    props.comboSlots[1] = gem2;
+    props.preview = null; // No valid recipe match
+
+    render(<Workbench {...props} />);
+
+    const btn = screen.getByTestId('workbench-combine-button');
+    // Button is enabled (slots filled + canAfford), but has a title explaining the restriction
+    expect(btn).not.toBeDisabled();
+    expect(btn).toHaveAttribute('title', expect.stringMatching(/filled-secondary|generic upgrade/i));
+  });
+
+  it('does NOT show filled-secondary tooltip when inputs have no filled secondaries', () => {
+    const props = defaultWorkbenchProps();
+    // Two plain gems with no secondaries
+    const gem1 = makeGem({ uid: 'g0', affixId: 'fire_damage', tier: 3, rarity: 'common' });
+    const gem2 = makeGem({ uid: 'g1', affixId: 'cold_damage', tier: 3, rarity: 'common' });
+    props.comboSlots[0] = gem1;
+    props.comboSlots[1] = gem2;
+    props.preview = null;
+
+    render(<Workbench {...props} />);
+
+    const btn = screen.getByTestId('workbench-combine-button');
+    // Button is enabled (slots filled + canAfford), should have no title attribute or not the filled-secondary message
+    expect(btn).not.toBeDisabled();
+    const title = btn.getAttribute('title') || '';
+    expect(title).not.toMatch(/filled-secondary/i);
+  });
+
+  it('does NOT show the tooltip when inputs share affix (generic upgrade would succeed)', () => {
+    const props = defaultWorkbenchProps();
+    // Same-affix pair, one with filled secondary → generic upgrade should succeed
+    const gem1 = makeGem({ uid: 'g0', affixId: 'fire_damage', tier: 3, rarity: 'common' });
+    const gem2 = makeGem({
+      uid: 'g1',
+      affixId: 'fire_damage',
+      tier: 3,
+      rarity: 'uncommon',
+      secondary: {
+        affixId: 'lightning_damage',
+        tier: 2,
+        rarity: 'common',
+        sourceGemUid: 'g2',
+      },
+    });
+    props.comboSlots[0] = gem1;
+    props.comboSlots[1] = gem2;
+    // combinePreview shows generic upgrade match
+    props.preview = {
+      known: true,
+      gem: makeGem({ uid: 'result', affixId: 'fire_damage', tier: 4, rarity: 'uncommon' }),
+      layer: 'generic',
+    } as any;
+
+    render(<Workbench {...props} />);
+
+    const btn = screen.getByTestId('workbench-combine-button');
+    const title = btn.getAttribute('title') || '';
+    expect(title).not.toMatch(/filled-secondary/i);
+  });
+});

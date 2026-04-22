@@ -98,6 +98,19 @@ export function Workbench({
   const canCombine = keepFilled && filledCount >= 2 && canAfford;
   const isDock = layout === 'desktop-dock';
 
+  // Tooltip for filled-secondary restriction
+  const hasFilledSecondaryInput = comboSlots.some(slot => slot?.secondary !== undefined);
+  const isGenericUpgradeMatch = preview?.layer === 'generic';
+  const combineBlockedByFilledSecondary =
+    hasFilledSecondaryInput &&
+    comboSlots[0] && comboSlots[1] &&
+    !isGenericUpgradeMatch &&
+    comboSlots[0].affixId !== comboSlots[1].affixId;
+
+  const combineBlockedReason = combineBlockedByFilledSecondary
+    ? 'Filled-secondary gems only combine for generic tier/rarity upgrades with a same-affix partner.'
+    : null;
+
   // Transplant is valid only when exactly slots 0+1 are filled (no slot 2)
   const transplantEnabled = Boolean(
     transplantPreview &&
@@ -215,6 +228,9 @@ export function Workbench({
           disabled={!canCombine}
           onClick={onCombine}
           data-combine-btn
+          data-testid="workbench-combine-button"
+          title={combineBlockedReason ?? undefined}
+          aria-label={combineBlockedReason ? `Combine (disabled: ${combineBlockedReason})` : undefined}
         >
           COMBINE
         </HapticButton>
