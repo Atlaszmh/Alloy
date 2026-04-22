@@ -225,11 +225,13 @@ function handleDraftPick(
 }
 
 function handleForgeAction(
-  state: MatchState,
+  state_: MatchState,
   player: 0 | 1,
   action: ForgeAction,
   registry: DataRegistry,
 ): ActionResult {
+  let state = state_;
+
   if (state.phase.kind !== 'forge') {
     return fail('Not in forge phase');
   }
@@ -240,6 +242,28 @@ function handleForgeAction(
 
   // Handle flux spend actions (run mode only, player 0 only)
   const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
+
+  // Deduct flux for transplant chooseAffix path before letting the action flow into applyForge.
+  // (Unlike boost_combine/reroll_pool/guarantee_rarity, transplant is a hybrid: it both
+  // spends flux AND mutates forge state. The mutation runs via applyForge after this block.)
+  if (
+    isRunMode &&
+    player === 0 &&
+    action.kind === 'transplant_gem' &&
+    action.chosenAffix &&
+    state.runState
+  ) {
+    const balance = registry.getBalance();
+    const cost = (balance.gem.flux.costs as Record<string, number>).transplantChooseAffix ?? 3;
+    if (!canSpendFlux(state.runState.flux, cost)) {
+      return fail(`Insufficient flux for transplant_gem chooseAffix (need ${cost}, have ${state.runState.flux})`);
+    }
+    state = {
+      ...state,
+      runState: { ...state.runState, flux: spendFlux(state.runState.flux, cost) },
+    };
+  }
+
   if (isRunMode && player === 0) {
     const balance = registry.getBalance();
     const fluxCosts = balance.gem.flux.costs;
@@ -285,11 +309,15 @@ function handleForgeAction(
   // Build a ForgeState from player state (no flux needed)
   // Clamp round to 1-3 for ForgeState type compat
   const forgeRound = Math.min(round, 3) as 1 | 2 | 3;
+  // Provide an rng seeded per (match, round, player) so transplant_gem and any future
+  // randomised forge actions are deterministic without sharing state across calls.
+  const forgeRng = new SeededRNG(state.seed ^ (round * 1000) ^ (player * 100));
   const forgeState = {
     stockpile: [...playerState.stockpile],
     loadout: playerState.loadout,
     round: forgeRound,
     isQuickMatch: state.mode === 'quick',
+    rng: forgeRng,
   };
 
   const result = applyForge(forgeState, action, registry);
