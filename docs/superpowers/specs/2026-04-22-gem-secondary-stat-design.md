@@ -151,7 +151,14 @@ Combine has three layers today: signature recipes → category combos → generi
 
 **Output secondary semantics for generic upgrade:**
 
-Combine's existing `keepGemUid` decides which input's identity survives. Extend the rule: whichever gem is kept also keeps its `secondary` slot. If `keepGemUid` is not specified and both inputs have a secondary, the engine deterministically keeps the higher-rarity gem's (tie-broken by tier, then by gem uid lexicographic order) to match the existing deterministic fallback.
+Combine's existing `keepGemUid` decides which input's identity survives. Extend the rule: whichever gem is kept also keeps its `secondary` slot.
+
+**Tie-break order** when `keepGemUid` is not supplied and both inputs have a secondary:
+1. Higher `rarityIndex` wins.
+2. If rarityIndex is equal, higher `tier` wins.
+3. If tier is equal, lexicographically smaller `uid` wins.
+
+This is a gameplay-visible rule (it determines which secondary persists) so the order is part of the spec, not buried in implementation. When only one input has a secondary, that one's secondary always carries (no tie-break needed). When neither has a secondary, the output has no secondary.
 
 **Client UI:**
 

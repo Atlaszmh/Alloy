@@ -397,7 +397,7 @@ export function createForgePlan(state: ForgeState, registry: DataRegistry, rng: 
 
 For each `createForgePlan(` hit:
 - **Match-controller** and production engine paths: pass the match's rng via `state.rng` or equivalent (inspect to match existing access).
-- **Client store** (`forgeStore.ts`): the match state already includes an rng; extract it. If the client doesn't have access to a match-level rng, seed with `new SeededRNG(matchId_hash)` so replay determinism is preserved per match. Worst-case fallback: seed from `Date.now()` with a code comment — only acceptable for non-run modes.
+- **Client store** (`forgeStore.ts`): the client receives `ForgeState` which is derived from match state — check whether `state.rng` or `state.matchSeed` is already present. If present, reuse. If not present, hash the current match id to a numeric seed (`hashString(matchId) | 0`) so replay-for-the-same-match is deterministic. Do NOT seed from `Date.now()` — that breaks replay and makes bug reproduction impossible.
 - **Tests:** pass `new SeededRNG(0)` everywhere.
 
 - [ ] **Step 6: Run full typecheck + tests**
@@ -939,16 +939,32 @@ git commit -m "feat(engine): planTransplantGem + previewTransplant"
 
 Run: `pnpm --filter @alloy/engine test transplant-action` — FAIL.
 
-- [ ] **Step 3: Add the case to `applyForgeAction`**
+- [ ] **Step 3: Add the case to `applyForgeAction` — factor shared logic with planTransplantGem**
 
-Around line 84 of `packages/engine/src/forge/forge-state.ts`:
+To avoid duplication drift between `planTransplantGem` (Task 2.4) and `applyTransplantGem`, pull the shared validation + mutation into a private helper in `forge-plan.ts`:
+
+```ts
+// In forge-plan.ts — not exported, used by both plan and state paths:
+function computeTransplantMutation(
+  stockpile: SlotArray<GemInstance>,
+  action: Extract<ForgeAction, { kind: 'transplant_gem' }>,
+  registry: DataRegistry,
+  rng: SeededRNG,
+): { ok: true; targetIdx: number; sourceIdx: number; updatedTarget: GemInstance } | { ok: false; error: string } {
+  // All the validation + slot resolution + resolveTransplant call from Task 2.4 lives here.
+}
+```
+
+`planTransplantGem` calls this to produce the updated target, then applies it to its cloned stockpile.
+
+`applyTransplantGem` (in `forge-state.ts`) uses the same helper against `ForgeState.stockpile` — no logic duplication. Around `forge-state.ts` line 84 add:
 
 ```ts
 case 'transplant_gem':
   return applyTransplantGem(state, action, registry);
 ```
 
-Add the function below the existing `applyCombine` / `applyCombine3` pattern — the shape is parallel to `planTransplantGem` but works on `ForgeState` instead of `ForgePlan`. Read `forge-state.ts` to see the exact state shape and helper functions available (`findSlotIndex`, `setSlot`, `clearSlot`, etc. — match `forge-plan.ts` naming).
+Where `applyTransplantGem` forks rng from `state.rng` (threaded through `ForgeState`; add the field in Task 1.5 if not already done), calls `computeTransplantMutation`, and mirrors the `setSlot` / `clearSlot` update pattern from `applyCombine`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2041,7 +2057,7 @@ Expect PASS. If fixtures need extension (e.g., to seed a specific gem pair), add
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/client/e2e/forge-transplant.spec.ts packages/client/e2e/helpers/
+git add packages/client/e2e/forge-transplant.spec.ts packages/client/e2e/fixtures/
 git commit -m "test(client): E2E happy-path for gem transplant"
 ```
 
