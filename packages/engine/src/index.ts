@@ -52,6 +52,10 @@ export {
   determineOutputTierRarity,
 } from './combine/combine-quality.js';
 
+// Transplant system
+export { previewTransplant } from './forge/transplant/preview.js';
+export type { TransplantPreview, TransplantContext, TransplantModifier } from './forge/transplant/types.js';
+
 // Run system
 export {
   createRunState,

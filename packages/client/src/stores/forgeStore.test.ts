@@ -257,4 +257,104 @@ describe('forgeStore', () => {
       expect(useForgeStore.getState().hasSelectedBaseItems('match-A')).toBe(false);
     });
   });
+
+  describe('forgeStore transplant', () => {
+    // Rare T5: tier(5) + rarityIndex('rare'=3) = 8 >= unlockThreshold(6) → has secondary slot
+    // No existing secondary → valid host
+    function makeRareT5(uid: string): GemInstance {
+      return { uid, affixId: 'fire_damage', tier: 5, rarity: 'rare', recipeDepth: 0, combinable: true, tags: ['fire_damage'] };
+    }
+
+    // Magic T3: tier(3) + rarityIndex('magic'=2) = 5 < 6 → no secondary slot → valid source (no secondary)
+    function makeMagicT3(uid: string): GemInstance {
+      return { uid, affixId: 'cold_damage', tier: 3, rarity: 'magic', recipeDepth: 0, combinable: true, tags: ['cold_damage'] };
+    }
+
+    it('initial transplant state is empty', () => {
+      const store = useForgeStore.getState();
+      expect(store.transplantChosenAffix).toBe(null);
+      expect(store.transplantHostUid).toBe(null);
+      expect(store.transplantPreview).toBe(null);
+    });
+
+    it('setTransplantChosenAffix updates the pick', () => {
+      useForgeStore.getState().setTransplantChosenAffix('primary');
+      expect(useForgeStore.getState().transplantChosenAffix).toBe('primary');
+      useForgeStore.getState().setTransplantChosenAffix(null);
+      expect(useForgeStore.getState().transplantChosenAffix).toBe(null);
+    });
+
+    it('setTransplantHostUid updates host', () => {
+      useForgeStore.getState().setTransplantHostUid('gem-1');
+      expect(useForgeStore.getState().transplantHostUid).toBe('gem-1');
+    });
+
+    it('computeTransplantPreview returns null when fewer than 2 slots filled', () => {
+      const host = makeRareT5('host-1');
+      useForgeStore.getState().setComboSlotByIndex(0, host);
+      // slot 1 is still null
+      const result = useForgeStore.getState().computeTransplantPreview(registry);
+      expect(result).toBeNull();
+      expect(useForgeStore.getState().transplantPreview).toBeNull();
+    });
+
+    it('computeTransplantPreview returns preview when host + source are valid', () => {
+      const host = makeRareT5('host-1');
+      const source = makeMagicT3('source-1');
+      useForgeStore.getState().setComboSlotByIndex(0, host);
+      useForgeStore.getState().setComboSlotByIndex(1, source);
+      useForgeStore.getState().setTransplantHostUid('host-1');
+
+      const result = useForgeStore.getState().computeTransplantPreview(registry);
+      expect(result).not.toBeNull();
+      expect(result!.targetUid).toBe('host-1');
+      expect(result!.sourceUid).toBe('source-1');
+      expect(useForgeStore.getState().transplantPreview).toEqual(result);
+    });
+
+    it('computeTransplantPreview picks host deterministically when no explicit host uid set', () => {
+      // Higher tier wins: Rare T5 should be host over Magic T3
+      const rareT5 = makeRareT5('host-auto');
+      const magicT3 = makeMagicT3('source-auto');
+      useForgeStore.getState().setComboSlotByIndex(0, rareT5);
+      useForgeStore.getState().setComboSlotByIndex(1, magicT3);
+      // No explicit host uid set
+
+      const result = useForgeStore.getState().computeTransplantPreview(registry);
+      expect(result).not.toBeNull();
+      expect(result!.targetUid).toBe('host-auto');
+      expect(result!.sourceUid).toBe('source-auto');
+    });
+
+    it('clearComboSlots also clears transplant state', () => {
+      useForgeStore.getState().setTransplantChosenAffix('primary');
+      useForgeStore.getState().setTransplantHostUid('gem-1');
+      const host = makeRareT5('host-1');
+      const source = makeMagicT3('source-1');
+      useForgeStore.getState().setComboSlotByIndex(0, host);
+      useForgeStore.getState().setComboSlotByIndex(1, source);
+      useForgeStore.getState().setTransplantHostUid('host-1');
+      useForgeStore.getState().computeTransplantPreview(registry);
+
+      useForgeStore.getState().clearComboSlots();
+
+      const s = useForgeStore.getState();
+      expect(s.transplantChosenAffix).toBeNull();
+      expect(s.transplantHostUid).toBeNull();
+      expect(s.transplantPreview).toBeNull();
+      expect(s.comboSlots).toEqual([null, null, null]);
+    });
+
+    it('reset also clears transplant state', () => {
+      useForgeStore.getState().setTransplantChosenAffix('secondary');
+      useForgeStore.getState().setTransplantHostUid('gem-2');
+
+      useForgeStore.getState().reset();
+
+      const s = useForgeStore.getState();
+      expect(s.transplantChosenAffix).toBeNull();
+      expect(s.transplantHostUid).toBeNull();
+      expect(s.transplantPreview).toBeNull();
+    });
+  });
 });
