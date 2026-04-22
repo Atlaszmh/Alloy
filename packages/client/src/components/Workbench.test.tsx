@@ -132,12 +132,21 @@ function defaultWorkbenchProps() {
 }
 
 describe('Workbench dual CTAs', () => {
+  it('Transplant button is not rendered when supportsTransplant is false (default)', () => {
+    const props = defaultWorkbenchProps();
+    props.comboSlots[0] = makeGem({ uid: 'g0', affixId: 'fire_damage', tier: 5, rarity: 'rare' });
+
+    render(<Workbench {...props} />);
+
+    expect(screen.queryByTestId('workbench-transplant-button')).toBeNull();
+  });
+
   it('Transplant button renders disabled when fewer than 2 slots filled', () => {
     const props = defaultWorkbenchProps();
     // Only slot 0 filled, no transplantPreview
     props.comboSlots[0] = makeGem({ uid: 'g0', affixId: 'fire_damage', tier: 5, rarity: 'rare' });
 
-    render(<Workbench {...props} />);
+    render(<Workbench {...props} supportsTransplant={true} />);
 
     const btn = screen.getByTestId('workbench-transplant-button');
     expect(btn).toBeDisabled();
@@ -158,7 +167,7 @@ describe('Workbench dual CTAs', () => {
       resolvedSlot: null,
       fluxCost: 0,
     };
-    render(<Workbench {...props} transplantPreview={preview} />);
+    render(<Workbench {...props} supportsTransplant={true} transplantPreview={preview} />);
 
     const btn = screen.getByTestId('workbench-transplant-button');
     expect(btn).toBeDisabled();
@@ -171,7 +180,7 @@ describe('Workbench dual CTAs', () => {
     props.comboSlots[1] = makeGem({ uid: 'g1', affixId: 'cold_damage', tier: 3, rarity: 'common' });
     // transplantPreview is null (engine returned null)
 
-    render(<Workbench {...props} transplantPreview={null} />);
+    render(<Workbench {...props} supportsTransplant={true} transplantPreview={null} />);
 
     const btn = screen.getByTestId('workbench-transplant-button');
     expect(btn).toBeDisabled();
@@ -196,6 +205,7 @@ describe('Workbench dual CTAs', () => {
     render(
       <Workbench
         {...props}
+        supportsTransplant={true}
         transplantPreview={preview}
         transplantHost={host}
         transplantSource={source}
@@ -239,6 +249,7 @@ describe('Workbench dual CTAs', () => {
     render(
       <Workbench
         {...props}
+        supportsTransplant={true}
         transplantPreview={preview}
         transplantHost={host}
         transplantSource={source}
@@ -285,6 +296,7 @@ describe('Workbench dual CTAs', () => {
     render(
       <Workbench
         {...props}
+        supportsTransplant={true}
         transplantPreview={preview}
         transplantHost={host}
         transplantSource={source}
@@ -323,6 +335,7 @@ describe('Workbench dual CTAs', () => {
     render(
       <Workbench
         {...props}
+        supportsTransplant={true}
         transplantPreview={preview}
         transplantHost={host}
         transplantSource={source}
@@ -364,6 +377,7 @@ describe('Workbench dual CTAs', () => {
     render(
       <Workbench
         {...props}
+        supportsTransplant={true}
         transplantPreview={preview}
         transplantHost={host}
         transplantSource={source}

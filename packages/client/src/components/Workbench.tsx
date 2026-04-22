@@ -33,6 +33,13 @@ interface WorkbenchProps {
    *  tightens padding and removes the top border (the dock panel provides one). */
   layout?: 'portrait' | 'desktop-dock';
 
+  /**
+   * Whether to render the Transplant button and controls.
+   * Desktop passes `true`; portrait omits it (defaults to `false`) to avoid
+   * showing a permanently-disabled button with no explanation.
+   */
+  supportsTransplant?: boolean;
+
   // Transplant props
   transplantPreview?: TransplantPreview | null;
   transplantHost?: GemInstance | null;
@@ -80,6 +87,7 @@ export function Workbench({
   onClearAll,
   onPointerDown,
   layout = 'portrait',
+  supportsTransplant = false,
   transplantPreview,
   transplantHost,
   transplantSource,
@@ -234,31 +242,33 @@ export function Workbench({
         >
           COMBINE
         </HapticButton>
-        <button
-          type="button"
-          data-testid="workbench-transplant-button"
-          disabled={!transplantEnabled}
-          onClick={onTransplant}
-          style={{
-            padding: '4px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--color-surface-500)',
-            background: transplantEnabled
-              ? 'rgba(212,168,52,0.15)'
-              : 'var(--color-surface-800)',
-            color: transplantEnabled
-              ? 'var(--color-bronze-light)'
-              : 'var(--color-surface-400)',
-            fontFamily: 'var(--font-family-display)',
-            fontWeight: 700,
-            fontSize: 'var(--text-xs)',
-            letterSpacing: '0.06em',
-            cursor: transplantEnabled ? 'pointer' : 'not-allowed',
-            transition: 'background 0.15s, color 0.15s',
-          }}
-        >
-          {transplantLabel}
-        </button>
+        {supportsTransplant && (
+          <button
+            type="button"
+            data-testid="workbench-transplant-button"
+            disabled={!transplantEnabled}
+            onClick={onTransplant}
+            style={{
+              padding: '4px 12px',
+              borderRadius: '6px',
+              border: '1px solid var(--color-surface-500)',
+              background: transplantEnabled
+                ? 'rgba(212,168,52,0.15)'
+                : 'var(--color-surface-800)',
+              color: transplantEnabled
+                ? 'var(--color-bronze-light)'
+                : 'var(--color-surface-400)',
+              fontFamily: 'var(--font-family-display)',
+              fontWeight: 700,
+              fontSize: 'var(--text-xs)',
+              letterSpacing: '0.06em',
+              cursor: transplantEnabled ? 'pointer' : 'not-allowed',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+          >
+            {transplantLabel}
+          </button>
+        )}
         <HapticButton
           variant="secondary"
           size="sm"
@@ -270,11 +280,12 @@ export function Workbench({
       </div>
 
       {/* Transplant affix picker — shown only when a valid transplant is staged */}
-      {showTransplantControls && (
+      {supportsTransplant && showTransplantControls && (
         <TransplantControls
           host={transplantHost!}
           source={transplantSource!}
           preview={transplantPreview!}
+          registry={registry}
           chosenAffix={transplantChosenAffix}
           onChooseAffix={onChooseTransplantAffix}
           canAffordFlux={canAffordTransplantChoice}

@@ -1,9 +1,10 @@
-import type { GemInstance, TransplantPreview } from '@alloy/engine';
+import type { DataRegistry, GemInstance, TransplantPreview } from '@alloy/engine';
 
 interface TransplantControlsProps {
   host: GemInstance;
   source: GemInstance;
   preview: TransplantPreview;
+  registry: DataRegistry;
   chosenAffix: 'primary' | 'secondary' | null;
   onChooseAffix: (val: 'primary' | 'secondary' | null) => void;
   canAffordFlux: boolean;
@@ -12,6 +13,7 @@ interface TransplantControlsProps {
 export function TransplantControls({
   source,
   preview,
+  registry,
   chosenAffix,
   onChooseAffix,
   canAffordFlux,
@@ -75,7 +77,7 @@ export function TransplantControls({
           disabled={!canAffordFlux && chosenAffix !== 'primary'}
           onClick={() => onChooseAffix('primary')}
         >
-          {source.affixId}
+          {registry.findAffix(source.affixId)?.name ?? source.affixId}
         </button>
 
         {sourceHasSecondary && (
@@ -87,7 +89,7 @@ export function TransplantControls({
             disabled={!canAffordFlux && chosenAffix !== 'secondary'}
             onClick={() => onChooseAffix('secondary')}
           >
-            {source.secondary!.affixId}
+            {registry.findAffix(source.secondary!.affixId)?.name ?? source.secondary!.affixId}
           </button>
         )}
       </div>

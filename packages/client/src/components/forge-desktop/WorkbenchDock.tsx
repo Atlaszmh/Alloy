@@ -72,7 +72,7 @@ export function WorkbenchDock(props: WorkbenchDockProps) {
           justifyContent: 'center',
         }}
       >
-        <Workbench layout="desktop-dock" {...props} />
+        <Workbench layout="desktop-dock" supportsTransplant={true} {...props} />
       </div>
     </div>
   );
