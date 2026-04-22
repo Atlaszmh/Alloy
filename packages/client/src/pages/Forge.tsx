@@ -523,9 +523,21 @@ export function Forge() {
         // flow). Long-press (>=500ms) opens inspect. 300-499ms is a dead zone
         // to avoid accidental triggers.
         const holdDuration = Date.now() - start.time;
-        const gem = useForgeStore.getState().plan?.stockpile.find(g => g.uid === start.uid);
+        const planNow = useForgeStore.getState().plan;
+        const gem = planNow?.stockpile.find(g => g.uid === start.uid);
+        // Inspect is a stockpile-only affordance — gems already staged into a
+        // combo slot or socketed onto weapon/armor should not surface the
+        // tooltip on click. Drag/socket-management remains the intended
+        // interaction in those zones.
+        const isStaged = useForgeStore.getState().comboSlots.some(s => s?.uid === start.uid);
+        const isSocketed = planNow
+          ? (['weapon', 'armor'] as const).some(target =>
+              planNow.loadout[target].slots.some(slot => slot?.gem.uid === start.uid),
+            )
+          : false;
+        const inStockpileOnly = !isStaged && !isSocketed;
         const openInspect = () => {
-          if (!gem) return;
+          if (!gem || !inStockpileOnly) return;
           const affixDef = registry.findAffix(gem.affixId)
             ?? registry.getCombinationById(gem.affixId);
           if (affixDef) setInspectGem({ gem, affixDef });

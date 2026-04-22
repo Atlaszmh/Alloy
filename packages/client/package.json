@@ -1,6 +1,6 @@
 {
   "name": "@alloy/client",
-  "version": "0.7.0-alpha",
+  "version": "0.7.3-alpha",
   "private": true,
   "type": "module",
   "scripts": {

@@ -111,7 +111,7 @@ export function ForgeDesktop(props: ForgeDesktopProps) {
         display: 'grid',
         gridTemplateColumns: 'var(--hud-rail-w) 1fr var(--hud-rail-w)',
         gridTemplateRows:
-          'var(--hud-topbar-h) 1fr var(--hud-workbench-h) var(--hud-stockpile-h)',
+          'var(--hud-topbar-h) 1fr var(--hud-workbench-h) minmax(var(--hud-stockpile-h), auto)',
         gridTemplateAreas: `
           "topbar  topbar  topbar"
           "left    center  right"

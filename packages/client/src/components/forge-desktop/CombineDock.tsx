@@ -54,7 +54,17 @@ export function CombineDock(props: CombineDockProps) {
           pointerEvents: 'none',
         }}
       />
-      <CombineWorkbench layout="desktop-dock" {...props} />
+      <div
+        style={{
+          transform: 'scale(0.82)',
+          transformOrigin: 'center center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <CombineWorkbench layout="desktop-dock" {...props} />
+      </div>
     </div>
   );
 }

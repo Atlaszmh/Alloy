@@ -4,20 +4,20 @@ import { GemCard } from '@/components/GemCard';
 import { getStatLabel } from '@/shared/utils/stat-label';
 
 /**
- * Bottom HUD stockpile strip — a 5-column grid that is ALWAYS at least 2 rows
+ * Bottom HUD stockpile strip — a 10-column grid that is ALWAYS at least 1 row
  * (10 cells) so the tray shape stays visually stable as gems are socketed or
- * staged, and grows in whole rows of 5 when the stockpile exceeds 10. Sparse
+ * staged, and grows in whole rows of 10 when the stockpile exceeds 10. Sparse
  * states fill the remaining cells with dim hatched placeholders per the
  * filled-state mockup (`.gem-empty`).
  *
  * NOTE — `forge-desktop-all-visible` responsive probe: the 10-cell minimum is
- * what that probe asserts to catch the "5×2 collapses to 5×1 on narrow
- * frames" regression. The cell count may exceed 10 (when the round-1 pool of
- * 20 gems is held and none are socketed), but must never drop below it.
+ * what that probe asserts. The cell count may exceed 10 (when the round-1
+ * pool of 20 gems is held and none are socketed), but must never drop below
+ * it. Round 1's pool cap is 20 so 2 rows is the practical ceiling.
  */
 
 const MIN_GRID_CAPACITY = 10;
-const COLS = 5;
+const COLS = 10;
 
 interface StockpileStripProps {
   stockpile: GemInstance[];
@@ -60,13 +60,14 @@ export function StockpileStrip({
     return map;
   }, [registry]);
 
-  // At least MIN_GRID_CAPACITY (10, the 5×2 invariant) cells; grow in whole
-  // rows of COLS (5) so every gem stays addressable when the inventory spills
-  // past 10. Round 1's pool cap is 20 so 4 rows is the practical ceiling.
+  // At least MIN_GRID_CAPACITY (10) cells; grow in whole rows of COLS (10) so
+  // every gem stays addressable when the inventory spills past 10. Round 1's
+  // pool cap is 20 so 2 rows is the practical ceiling.
   const cellCount = Math.max(
     MIN_GRID_CAPACITY,
     Math.ceil(visibleGems.length / COLS) * COLS,
   );
+  const rows = cellCount / COLS;
   const cells: (GemInstance | null)[] = Array.from({ length: cellCount }, (_, i) =>
     visibleGems[i] ?? null,
   );
@@ -77,7 +78,7 @@ export function StockpileStrip({
       aria-label="Gem stockpile"
       style={{
         position: 'relative',
-        height: 'var(--hud-stockpile-h)',
+        minHeight: 'var(--hud-stockpile-h)',
         padding: '14px 20px 16px',
         background:
           'linear-gradient(180deg, rgba(6,6,8,0.3) 0%, var(--color-surface-900) 12%, var(--color-surface-950) 100%)',
@@ -138,7 +139,7 @@ export function StockpileStrip({
               background: 'var(--color-surface-900)',
             }}
           >
-            5 × 2
+            {COLS} × {rows}
           </span>
         </span>
         <span
@@ -158,11 +159,11 @@ export function StockpileStrip({
         </span>
       </header>
 
-      {/* Grid — 5 columns sized to --gem-size (not the wide 1fr cells that
-          left ~250px of dead space per cell at 1920 width); at least 2 rows,
-          grows in whole rows when the stockpile holds more than 10 gems
-          (round-1 pool caps at 20). Centered horizontally so the tight pack
-          sits in the middle of the tray regardless of viewport width. */}
+      {/* Grid — 10 columns sized to --gem-size (not the wide 1fr cells that
+          left ~250px of dead space per cell at 1920 width); at least 1 row,
+          grows to 2 rows when the stockpile holds more than 10 gems (round-1
+          pool caps at 20). Centered horizontally so the pack sits in the
+          middle of the tray regardless of viewport width. */}
       <div
         style={{
           display: 'grid',
