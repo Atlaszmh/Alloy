@@ -520,6 +520,42 @@ describe('Stat Calculator — elemental damage regressions', () => {
   });
 });
 
+describe('recipe-output gem (virtual affixId not in affixes.json)', () => {
+  it('does not crash when gem.affixId is a recipe output absent from affixes.json', () => {
+    // blood_mirror is a signature recipe output whose affixId is not in
+    // affixes.json — its contribution lives entirely in outputBonusEffects.
+    const bloodMirrorGem = createGem('g-blood-mirror', 'blood_mirror', 3, 'rare', {
+      recipeDepth: 1,
+      tags: ['blood_mirror', 'lifesteal', 'thorns'],
+      outputBonusEffects: [
+        { stat: 'compound.blood_mirror.active', op: 'flat', value: 1 },
+      ],
+    });
+
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = { gem: bloodMirrorGem };
+
+    // Must not throw
+    expect(() => calculateStats(loadout, registry)).not.toThrow();
+
+    // The compound key is skipped (resolveStatKey returns null for compound.*),
+    // so base sword stats remain unchanged.
+    const { stats } = calculateStats(loadout, registry);
+    expect(stats.physicalDamage).toBe(10); // sword base only
+  });
+
+  it('throws a clear error when affixId is missing AND there are no outputBonusEffects', () => {
+    const badGem = createGem('g-bad', 'does_not_exist_anywhere', 1, 'common');
+
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    loadout.weapon.slots[0] = { gem: badGem };
+
+    expect(() => calculateStats(loadout, registry)).toThrow(
+      'Affix not found: does_not_exist_anywhere (and no outputBonusEffects fallback)',
+    );
+  });
+});
+
 describe('secondary affix stat contribution', () => {
   // flat_physical T1 weaponEffect: physicalDamage +4 flat
   // flat_physical T3 weaponEffect: physicalDamage +8 flat

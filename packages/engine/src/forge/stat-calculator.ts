@@ -354,21 +354,26 @@ function applyEquippedSlots(
     if (!slot) continue;
 
     const gem = slot.gem;
-    const affixDef = registry.getAffix(gem.affixId);
-    // Clamp tier to valid AffixTier range (1-4) for legacy data lookup
-    const lookupTier = Math.min(gem.tier, 4) as 1 | 2 | 3 | 4;
-    const tierData = affixDef.tiers[lookupTier];
+    const affixDef = registry.findAffix(gem.affixId);
 
     // Rarity multiplier: common = 1.0, magic = 1.25, rare = 1.5, epic = 2.0, legendary = 3.0
     const rarityMult = RARITY_MULTIPLIERS[gem.rarity];
 
-    // Apply base affix effects scaled by rarity multiplier
-    for (const mod of tierData[effectKey]) {
-      addToBucket(buckets, {
-        stat: mod.stat,
-        op: mod.op,
-        value: mod.value * rarityMult,
-      });
+    if (affixDef) {
+      // Clamp tier to valid AffixTier range (1-4) for legacy data lookup
+      const lookupTier = Math.min(gem.tier, 4) as 1 | 2 | 3 | 4;
+      const tierData = affixDef.tiers[lookupTier];
+
+      // Apply base affix effects scaled by rarity multiplier
+      for (const mod of tierData[effectKey]) {
+        addToBucket(buckets, {
+          stat: mod.stat,
+          op: mod.op,
+          value: mod.value * rarityMult,
+        });
+      }
+    } else if (!gem.outputBonusEffects) {
+      throw new Error(`Affix not found: ${gem.affixId} (and no outputBonusEffects fallback)`);
     }
 
     // Apply outputBonusEffects if present (recipe bonus), also scaled by rarity
@@ -386,7 +391,8 @@ function applyEquippedSlots(
     // and by the global secondaryValueScalar. Socket type follows the host item.
     if (gem.secondary) {
       const secondary = gem.secondary;
-      const secondaryAffixDef = registry.getAffix(secondary.affixId);
+      const secondaryAffixDef = registry.findAffix(secondary.affixId);
+      if (!secondaryAffixDef) continue;
       const secondaryLookupTier = Math.min(secondary.tier, 4) as 1 | 2 | 3 | 4;
       const secondaryTierData = secondaryAffixDef.tiers[secondaryLookupTier];
       const secondaryEffects = secondaryTierData[effectKey];

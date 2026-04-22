@@ -1,8 +1,21 @@
-import type { AffixDef, DataRegistry, EquippedSlot, ForgedItem, ForgePlan, GemInstance } from '@alloy/engine';
+import type { DataRegistry, EquippedSlot, ForgedItem, ForgePlan, GemInstance } from '@alloy/engine';
 import { ELEMENT_EMOJIS } from '@/shared/utils/element-theme';
 import { GemCard } from '@/components/GemCard';
 import { SocketGrid } from '@/components/SocketGrid';
 import { getStatLabel } from '@/shared/utils/stat-label';
+
+/**
+ * Returns the display name for a gem's affix. For recipe-output gems whose
+ * affixId is not in affixes.json, falls back to the recipe name (via
+ * getRecipeByOutputAffix) or a titlecased version of the affixId.
+ */
+function getAffixDisplayName(gem: GemInstance, registry: DataRegistry): string {
+  const affix = registry.findAffix(gem.affixId);
+  if (affix) return affix.name;
+  const recipe = registry.getRecipeByOutputAffix(gem.affixId);
+  if (recipe?.name) return recipe.name;
+  return gem.affixId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 interface ItemSocketViewProps {
   item: ForgedItem;
@@ -21,10 +34,6 @@ const ELEMENTS = ['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos'] as c
 
 function getSlotGem(slot: EquippedSlot): GemInstance {
   return slot.gem;
-}
-
-function getElementTag(affix: AffixDef): string {
-  return affix.tags.find(t => (ELEMENTS as readonly string[]).includes(t)) ?? 'physical';
 }
 
 export function ItemSocketView({
@@ -122,18 +131,21 @@ export function ItemSocketView({
         onEmptyClick={onSocketClick}
         renderFilledSocket={(slot, index) => {
           const orb = getSlotGem(slot);
-          const affix = registry.getAffix(orb.affixId);
+          const affix = registry.findAffix(orb.affixId);
+          const affixName = affix ? affix.name : getAffixDisplayName(orb, registry);
+          const category = affix?.category ?? 'utility';
+          const tags = affix?.tags ?? orb.tags ?? [];
           const isLocked = plan.lockedGemUids.has(orb.uid);
-          const statLabel = getStatLabel(affix, orb, cardId);
+          const statLabel = affix ? getStatLabel(affix, orb, cardId) : '';
           return (
             <GemCard
               uid={orb.uid}
               affixId={orb.affixId}
-              affixName={affix.name}
+              affixName={affixName}
               tier={orb.tier}
               rarity={orb.rarity}
-              category={affix.category}
-              tags={affix.tags}
+              category={category}
+              tags={tags}
               statLabel={statLabel}
               onClick={isLocked ? undefined : () => onSocketRemove(index)}
               onPointerDown={isLocked ? undefined : (e) => onGemPointerDown?.(orb.uid, e)}
@@ -147,11 +159,13 @@ export function ItemSocketView({
         {item.slots.map((slot, index) => {
           if (!slot) return null;
           const orb = getSlotGem(slot);
-          const affix = registry.getAffix(orb.affixId);
-          const tag = getElementTag(affix);
+          const affix = registry.findAffix(orb.affixId);
+          const affixDisplayName = affix ? affix.name : getAffixDisplayName(orb, registry);
+          const affixTags: string[] = affix?.tags ?? orb.tags ?? [];
+          const tag = affixTags.find(t => (ELEMENTS as readonly string[]).includes(t)) ?? 'physical';
           const emoji = ELEMENT_EMOJIS[tag] ?? '\u2694';
           const isLocked = plan.lockedGemUids.has(orb.uid);
-          const statValue = getStatLabel(affix, orb, cardId);
+          const statValue = affix ? getStatLabel(affix, orb, cardId) : '';
 
           return (
             <div
@@ -166,7 +180,7 @@ export function ItemSocketView({
               }}
             >
               <span>{emoji}</span>
-              <span style={{ fontWeight: 600 }}>{affix.name}</span>
+              <span style={{ fontWeight: 600 }}>{affixDisplayName}</span>
               {statValue && (
                 <span style={{ color: 'var(--color-surface-300)', fontSize: 'var(--text-xs)' }}>{statValue}</span>
               )}
