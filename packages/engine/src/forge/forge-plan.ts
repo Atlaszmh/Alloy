@@ -278,23 +278,28 @@ function planCombine3(
   return { ok: true, plan: next };
 }
 
-function planTransplantGem(
-  plan: ForgePlan,
+/** Shared validation + resolution for transplant, used by both plan and state paths.
+ *  Returns the updated target gem + both slot indices, OR an error string. */
+export function resolveTransplantMutation(
+  stockpile: SlotArray<GemInstance>,
   action: Extract<ForgeAction, { kind: 'transplant_gem' }>,
   registry: DataRegistry,
-): PlanResult {
+  rng: SeededRNG,
+):
+  | { ok: true; targetIdx: number; sourceIdx: number; updatedTarget: GemInstance }
+  | { ok: false; error: string } {
   if (action.targetGemUid === action.sourceGemUid) {
     return { ok: false, error: 'Target and source must be different gems' };
   }
 
-  const targetIdx = findSlotIndex(plan.stockpile, g => g.uid === action.targetGemUid);
+  const targetIdx = findSlotIndex(stockpile, g => g.uid === action.targetGemUid);
   if (targetIdx === -1) return { ok: false, error: 'Target gem not found in stockpile' };
 
-  const sourceIdx = findSlotIndex(plan.stockpile, g => g.uid === action.sourceGemUid);
+  const sourceIdx = findSlotIndex(stockpile, g => g.uid === action.sourceGemUid);
   if (sourceIdx === -1) return { ok: false, error: 'Source gem not found in stockpile' };
 
-  const target = plan.stockpile[targetIdx]!;
-  const source = plan.stockpile[sourceIdx]!;
+  const target = stockpile[targetIdx]!;
+  const source = stockpile[sourceIdx]!;
 
   const threshold = registry.getBalance().transplant.unlockThreshold;
   if (!hasSecondarySlot(target, threshold)) {
@@ -307,18 +312,27 @@ function planTransplantGem(
     return { ok: false, error: 'Source has no secondary affix to choose' };
   }
 
-  const rng = plan.rng.fork(`transplant_${target.uid}_${source.uid}`);
   const slot: SecondarySlot = resolveTransplant({ target, source, chosenAffix: action.chosenAffix, rng });
-
-  const next = clonePlan(plan);
   const updatedTarget: GemInstance = {
     ...target,
     secondary: slot,
     tags: target.tags.includes(slot.affixId) ? target.tags : [...target.tags, slot.affixId],
   };
+  return { ok: true, targetIdx, sourceIdx, updatedTarget };
+}
 
-  next.stockpile = setSlot(next.stockpile, targetIdx, updatedTarget);
-  next.stockpile = clearSlot(next.stockpile, sourceIdx);
+function planTransplantGem(
+  plan: ForgePlan,
+  action: Extract<ForgeAction, { kind: 'transplant_gem' }>,
+  registry: DataRegistry,
+): PlanResult {
+  const rng = plan.rng.fork(`transplant_${action.targetGemUid}_${action.sourceGemUid}`);
+  const res = resolveTransplantMutation(plan.stockpile, action, registry, rng);
+  if (!res.ok) return { ok: false, error: res.error };
+
+  const next = clonePlan(plan);
+  next.stockpile = setSlot(next.stockpile, res.targetIdx, res.updatedTarget);
+  next.stockpile = clearSlot(next.stockpile, res.sourceIdx);
 
   next.lockedGemUids.add(action.targetGemUid);
   next.lockedGemUids.add(action.sourceGemUid);

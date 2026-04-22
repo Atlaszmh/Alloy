@@ -13,6 +13,8 @@ import { createGem } from '../types/gem.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createEmptyLoadout } from '../types/item.js';
 import type { CombinationEngine } from '../combine/combination-engine.js';
+import type { SeededRNG } from '../rng/seeded-rng.js';
+import { resolveTransplantMutation } from './forge-plan.js';
 
 export interface ForgeState {
   /** Fixed-slot stockpile — nulls preserve empty positions (see forge-plan.ts). */
@@ -20,6 +22,8 @@ export interface ForgeState {
   loadout: Loadout;
   round: number;
   isQuickMatch: boolean;
+  /** Deterministic RNG — required for actions that need randomness (e.g. transplant_gem). */
+  rng?: SeededRNG;
 }
 
 export type ForgeResult =
@@ -94,6 +98,8 @@ export function applyForgeAction(
       return applySelectBaseItem(state, action);
     case 'set_base_stats':
       return applySetBaseStats(state, action);
+    case 'transplant_gem':
+      return applyTransplantGem(state, action, registry);
     case 'boost_combine':
     case 'reroll_pool':
     case 'guarantee_rarity':
@@ -102,6 +108,23 @@ export function applyForgeAction(
     default:
       return fail(`Unknown action kind`);
   }
+}
+
+function applyTransplantGem(
+  state: ForgeState,
+  action: Extract<ForgeAction, { kind: 'transplant_gem' }>,
+  registry: DataRegistry,
+): ForgeResult {
+  if (!state.rng) {
+    return fail('ForgeState is missing rng — required for transplant_gem');
+  }
+  const rng = state.rng.fork(`transplant_${action.targetGemUid}_${action.sourceGemUid}`);
+  const res = resolveTransplantMutation(state.stockpile, action, registry, rng);
+  if (!res.ok) return fail(res.error);
+
+  const newStockpile1 = setSlotInSparse(state.stockpile, res.targetIdx, res.updatedTarget);
+  const newStockpile2 = clearSlot(newStockpile1, res.sourceIdx);
+  return ok({ ...state, stockpile: newStockpile2 });
 }
 
 function applySocketGem(
