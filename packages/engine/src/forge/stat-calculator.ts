@@ -348,6 +348,7 @@ function applyEquippedSlots(
   registry: DataRegistry,
 ): void {
   const effectKey = itemType === 'weapon' ? 'weaponEffect' : 'armorEffect';
+  const secondaryValueScalar = registry.getBalance().transplant.secondaryValueScalar;
 
   for (const slot of item.slots) {
     if (!slot) continue;
@@ -378,6 +379,26 @@ function applyEquippedSlots(
           op: mod.op,
           value: mod.value * rarityMult,
         });
+      }
+    }
+
+    // Apply secondary affix effects scaled by the secondary's own tier + rarity,
+    // and by the global secondaryValueScalar. Socket type follows the host item.
+    if (gem.secondary) {
+      const secondary = gem.secondary;
+      const secondaryAffixDef = registry.getAffix(secondary.affixId);
+      const secondaryLookupTier = Math.min(secondary.tier, 4) as 1 | 2 | 3 | 4;
+      const secondaryTierData = secondaryAffixDef.tiers[secondaryLookupTier];
+      const secondaryEffects = secondaryTierData[effectKey];
+      if (secondaryEffects && secondaryEffects.length > 0) {
+        const secondaryRarityMult = RARITY_MULTIPLIERS[secondary.rarity];
+        for (const mod of secondaryEffects) {
+          addToBucket(buckets, {
+            stat: mod.stat,
+            op: mod.op,
+            value: mod.value * secondaryRarityMult * secondaryValueScalar,
+          });
+        }
       }
     }
   }

@@ -3,7 +3,7 @@ import { DataRegistry } from '../src/data/registry.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 import { calculateStats, resolveStatKey } from '../src/forge/stat-calculator.js';
 import type { Loadout, EquippedSlot } from '../src/types/item.js';
-import type { GemInstance } from '../src/types/gem.js';
+import type { GemInstance, SecondarySlot } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { AffixTier } from '../src/types/affix.js';
 
@@ -517,5 +517,116 @@ describe('Stat Calculator — elemental damage regressions', () => {
 
     // chaos_damage T1 = 2, rare multiplier = 1.5 → 3.
     expect(stats.elementalDamage.chaos).toBeCloseTo(3, 5);
+  });
+});
+
+describe('secondary affix stat contribution', () => {
+  // flat_physical T1 weaponEffect: physicalDamage +4 flat
+  // flat_physical T3 weaponEffect: physicalDamage +8 flat
+  // flat_physical T1 armorEffect:  armor +15 flat
+  // flat_physical T3 armorEffect:  armor +33 flat
+  //
+  // fire_damage T1 weaponEffect:  elementalDamage.fire +3 flat
+  // fire_damage T1 armorEffect:   resistances.fire +8 flat
+  //
+  // RARITY_MULTIPLIERS: common=1.0, magic=1.25, rare=1.5
+  // balance.transplant.secondaryValueScalar = 1.0 (production value)
+
+  function makeSecondary(
+    affixId: string,
+    tier: 1 | 2 | 3 | 4 | 5,
+    rarity: SecondarySlot['rarity'],
+  ): SecondarySlot {
+    return { affixId, tier, rarity, sourceGemUid: 'src-gem' };
+  }
+
+  it('adds secondary weaponEffect when host is in weapon slot', () => {
+    // Host: flat_hp T1 common in weapon slot 0 (primary: maxHP +45)
+    // Secondary: flat_physical T3 magic  →  weaponEffect physicalDamage +8 * 1.25 * 1.0 = +10
+    // Sword base physicalDamage = 10; expected = 10 + 10 = 20
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const host = createGem('host-1', 'flat_hp', 1, 'common');
+    (host as GemInstance).secondary = makeSecondary('flat_physical', 3, 'magic');
+    loadout.weapon.slots[0] = { gem: host };
+
+    const { stats } = calculateStats(loadout, registry);
+
+    // Secondary flat_physical T3 weaponEffect = 8, magic mult = 1.25, scalar = 1.0 → +10
+    expect(stats.physicalDamage).toBeCloseTo(10 + 8 * 1.25 * 1.0, 5);
+    // Primary flat_hp T1 weaponEffect = maxHP +45
+    expect(stats.maxHP).toBe(200 + 20 + 45); // baseHP + chainmail + flat_hp T1
+  });
+
+  it('adds secondary armorEffect when host is in armor slot', () => {
+    // Host: flat_hp T1 common in armor slot 0 (primary: maxHP +45)
+    // Secondary: flat_physical T3 magic  →  armorEffect armor +33 * 1.25 * 1.0 = 41.25
+    // Chainmail base armor = 20; expected armor ≈ 20 + 41.25 = 61.25
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const host = createGem('host-2', 'flat_hp', 1, 'common');
+    (host as GemInstance).secondary = makeSecondary('flat_physical', 3, 'magic');
+    loadout.armor.slots[0] = { gem: host };
+
+    const { stats } = calculateStats(loadout, registry);
+
+    // Secondary flat_physical T3 armorEffect = 33, magic mult = 1.25, scalar = 1.0 → +41.25
+    expect(stats.armor).toBeCloseTo(20 + 33 * 1.25 * 1.0, 5);
+    // No secondary physicalDamage on armor slot
+    expect(stats.physicalDamage).toBe(10); // sword base only
+  });
+
+  it('uses weaponEffect (not armorEffect) for weapon-slot host', () => {
+    // Ensure the correct effect list is picked by checking the stat being contributed.
+    // flat_physical weaponEffect → physicalDamage; armorEffect → armor.
+    // Host in weapon slot: only physicalDamage should be boosted.
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const host = createGem('host-3', 'fire_damage', 1, 'common');
+    (host as GemInstance).secondary = makeSecondary('flat_physical', 1, 'common');
+    loadout.weapon.slots[0] = { gem: host };
+
+    const { stats } = calculateStats(loadout, registry);
+
+    // Secondary flat_physical T1 weaponEffect = 4, common = 1.0, scalar = 1.0 → +4
+    // Sword base 10 + 4 = 14
+    expect(stats.physicalDamage).toBeCloseTo(10 + 4, 5);
+    // armor should be unchanged from chainmail base = 20
+    expect(stats.armor).toBe(20);
+  });
+
+  it('applies secondaryValueScalar from balance.transplant', () => {
+    // Build a custom registry where secondaryValueScalar = 0.5
+    const halvedBalance = {
+      ...data.balance,
+      transplant: { ...data.balance.transplant, secondaryValueScalar: 0.5 },
+    };
+    const halvedRegistry = new DataRegistry(
+      data.affixes,
+      data.combinations,
+      data.synergies,
+      data.baseItems,
+      halvedBalance,
+    );
+
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const host = createGem('host-4', 'flat_hp', 1, 'common');
+    (host as GemInstance).secondary = makeSecondary('flat_physical', 3, 'common');
+    loadout.weapon.slots[0] = { gem: host };
+
+    const { stats } = calculateStats(loadout, halvedRegistry);
+
+    // Secondary flat_physical T3 weaponEffect = 8, common = 1.0, scalar = 0.5 → +4
+    // Sword base 10 + 4 = 14
+    expect(stats.physicalDamage).toBeCloseTo(10 + 8 * 1.0 * 0.5, 5);
+  });
+
+  it('contributes nothing when gem has no secondary', () => {
+    // Baseline: no secondary slot set — physicalDamage should be sword base only
+    const loadout = createEmptyLoadout('sword', 'chainmail');
+    const host = createGem('host-5', 'fire_damage', 1, 'common');
+    // No .secondary assigned
+    loadout.weapon.slots[0] = { gem: host };
+
+    const { stats } = calculateStats(loadout, registry);
+
+    expect(stats.physicalDamage).toBe(10); // sword base, no secondary bonus
   });
 });
