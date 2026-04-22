@@ -3,6 +3,7 @@ import {
   createGem,
   calculateEffectiveValue,
   nextRarity,
+  rarityIndex,
   MAX_TIER,
 } from '../types/gem.js';
 import { RecipeRegistry } from './recipe-registry.js';
@@ -50,6 +51,9 @@ const DEFAULT_CONFIG: CombineConfig = {
   matchingRarityBonus: 0.15,
 };
 
+const REASON_FILLED_SECONDARY_NOT_GENERIC =
+  'Filled-secondary gems can only combine via generic tier/rarity upgrade with a same-affix partner';
+
 // --- CombinationEngine ---
 
 export class CombinationEngine {
@@ -86,6 +90,16 @@ export class CombinationEngine {
 
     // Record the attempt
     this.discovery.recordAttempt(gemA.affixId, gemB.affixId);
+
+    // Filled-secondary path: skip signature + category; require same-affix generic upgrade.
+    const eitherFilled = gemA.secondary !== undefined || gemB.secondary !== undefined;
+    if (eitherFilled) {
+      if (gemA.affixId !== gemB.affixId) {
+        throw new Error(REASON_FILLED_SECONDARY_NOT_GENERIC);
+      }
+      const result = this.genericUpgrade(gemA, gemB, outputUid, keepGemUid);
+      return this.attachSecondaryToOutput(result, gemA, gemB, keepGemUid);
+    }
 
     // Layer 1: Signature recipes
     const signatureResult = this.trySignature(gemA, gemB, outputUid);
@@ -450,5 +464,49 @@ export class CombinationEngine {
   private rarityIdx(rarity: string): number {
     const order = ['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary'];
     return order.indexOf(rarity);
+  }
+
+  private attachSecondaryToOutput(
+    result: CombineResult,
+    gemA: GemInstance,
+    gemB: GemInstance,
+    keepGemUid?: string,
+  ): CombineResult {
+    let survivor: GemInstance;
+
+    if (keepGemUid === gemA.uid) {
+      survivor = gemA;
+    } else if (keepGemUid === gemB.uid) {
+      survivor = gemB;
+    } else if (gemA.secondary && !gemB.secondary) {
+      survivor = gemA;
+    } else if (!gemA.secondary && gemB.secondary) {
+      survivor = gemB;
+    } else {
+      // Both filled, no keepGemUid: rarity → tier → lexicographic uid
+      const ai = rarityIndex(gemA.rarity);
+      const bi = rarityIndex(gemB.rarity);
+      if (ai !== bi) {
+        survivor = ai > bi ? gemA : gemB;
+      } else if (gemA.tier !== gemB.tier) {
+        survivor = gemA.tier > gemB.tier ? gemA : gemB;
+      } else {
+        survivor = gemA.uid < gemB.uid ? gemA : gemB;
+      }
+    }
+
+    const survivingSecondary = survivor.secondary;
+    if (!survivingSecondary) return result;
+
+    const tagsWithSecondary = Array.from(new Set([...result.gem.tags, survivingSecondary.affixId]));
+
+    return {
+      ...result,
+      gem: {
+        ...result.gem,
+        secondary: survivingSecondary,
+        tags: tagsWithSecondary,
+      },
+    };
   }
 }
