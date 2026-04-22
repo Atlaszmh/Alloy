@@ -47,26 +47,50 @@ Common gems can never unlock a secondary slot — they must be upgraded to at le
 
 ### Transplant action
 
-A new forge action, following the existing `ForgeAction` discriminator pattern (`kind:`, not `type:`). Flux is **not** a payload field — it is handled externally via the existing `flux-tracker.ts` + `balance.json → fluxCosts` pattern, consistent with every other flux-spending action.
+A new forge action, following the existing `ForgeAction` discriminator pattern (`kind:`, not `type:`). Flux is **not** a payload field — it is handled externally following the active gem-era pattern: costs at `balance.gem.flux.costs`, deduction via `canSpendFlux`/`spendFlux` from `packages/engine/src/run/flux-state.ts`, dispatch in `packages/engine/src/match/match-controller.ts`. (`flux-tracker.ts` is a deprecated stub from the orb era — do not use.)
 
 ```ts
 | { kind: 'transplant_gem';
     targetGemUid: string;       // host — keeps identity, gains secondary
     sourceGemUid: string;       // consumed
-    chosenAffix?: 'primary' | 'secondary'  // optional; when set, requires flux per balance.json
+    chosenAffix?: 'primary' | 'secondary'  // optional; when set, costs extra flux
   }
 ```
 
-New `fluxCosts` entries in `balance.json`:
+New entries under `balance.json → gem.flux.costs`, alongside existing `boostCombine` / `rerollPool` / `guaranteeRarity`:
 
 ```json
-"fluxCosts": {
-  "transplantGem": 0,           // base transplant (random if applicable)
-  "transplantChooseAffix": 3    // extra cost to pick which affix transplants
+"gem": {
+  "flux": {
+    "costs": {
+      "boostCombine": 3,
+      "rerollPool": 5,
+      "guaranteeRarity": 4,
+      "transplantGem": 0,
+      "transplantChooseAffix": 3
+    }
+  }
 }
 ```
 
-At match-controller level, the dispatcher looks up cost by action kind + `chosenAffix` presence, deducts flux, then forwards to `forge-state.applyAction`.
+Unlike `boost_combine` / `reroll_pool` / `guarantee_rarity` (which are flag-setting actions fully handled at match-controller level and never reach `applyForgeAction`), transplant is a **hybrid**: it both spends flux (conditionally) and mutates forge state. The match-controller dispatch adds a new case that handles the flux half, then forwards the same action into `applyForgeAction` for the mutation:
+
+```ts
+// in match-controller.ts, inside the existing `switch (action.kind)` around line 248:
+case 'transplant_gem': {
+  if (action.chosenAffix && state.runState) {
+    const cost = fluxCosts.transplantChooseAffix ?? 3;
+    if (!canSpendFlux(state.runState.flux, cost)) {
+      return fail(`Insufficient flux for transplant_gem chooseAffix (need ${cost})`);
+    }
+    state = { ...state, runState: { ...state.runState, flux: spendFlux(state.runState.flux, cost) } };
+  }
+  // fall through to the forge-action path below — do NOT return here
+  break;
+}
+```
+
+After the switch, the existing forge-action path runs and calls `applyForgeAction` which dispatches to `applyTransplantGem` in `forge-state.ts`. Non-run modes skip the flux half entirely (transplant still works, but `chosenAffix` without flux is rejected at validation).
 
 **Validation (in `forge-plan.ts` and `forge-state.ts`):**
 
@@ -110,7 +134,7 @@ Synergy detection lives in `packages/engine/src/forge/stat-calculator.ts → com
 ### Combinability
 
 - A gem with an **open but empty** secondary slot is still `combinable: true`. Combining it follows existing rules; the output's open-slot status recomputes from its new tier/rarity via `hasSecondarySlot(output)`. Combine can produce an output whose threshold is no longer met (e.g., via a generic rarity bump that also resets tier) — that is acceptable; the open-empty state simply disappears on the new gem.
-- A gem with a **filled** secondary slot is `combinable: false`. This is a new terminal case that `isCombinable()` does not currently capture — update it to also return `false` when `gem.secondary !== undefined`. Verify all current readers of `combinable` (listed below) pick up the new invariant correctly:
+- A gem with a **filled** secondary slot is `combinable: false` — but is still eligible as a transplant *source* (its primary or, with flux, its secondary may be selected and copied to a new host). "Filled secondary" is terminal only with respect to *combine*; transplant can keep the affix economy flowing. Update `isCombinable()` to also return `false` when `gem.secondary !== undefined`. Verify all current readers of `combinable` (listed below) pick up the new invariant correctly:
   - `packages/engine/src/forge/forge-plan.ts` (combine + combine3 validation)
   - `packages/engine/src/combine/combination-engine.ts` (preview + apply paths)
   - AI strategy `packages/engine/src/ai/strategies/forge-strategy.ts`
@@ -185,7 +209,7 @@ export function hasSecondarySlot(gem: GemInstance, threshold: number): boolean {
 }
 ```
 
-The threshold is a single source of truth — `balance.json → transplant.unlockThreshold` — and callers read it via `registry.getBalance().transplant.unlockThreshold`. No duplicate const in `gem.ts`. Engine call sites that need the slot check pass the threshold in; client code gets it from `registry` already available in props.
+The threshold is the single source of truth at `balance.json → transplant.unlockThreshold`, read by callers via `registry.getBalance().transplant.unlockThreshold`. The signature takes `threshold` explicitly (not `gem` alone) because `gem.ts` has no access to the registry and we want the helper to stay pure — this differs slightly from `isCombinable(gem)` which uses hard-coded constants, but is deliberate: threshold is a balance knob, not a hard-coded constant, so it belongs out of the pure type helpers. A thin convenience wrapper `hasSecondarySlotFromRegistry(gem, registry)` lives next to it for UI callers that already hold a registry.
 
 `secondary` is optional so existing saved gems round-trip without migration. All engine tests currently creating gems continue to pass; new logic is additive.
 
@@ -199,17 +223,19 @@ Add the new action variant (matching existing `kind:` discriminator):
 
 ### `packages/engine/src/data/balance.json`
 
-Two new sections. `fluxCosts` gets new entries following the existing pattern (legacy keys like `combineOrbs` are left alone; new keys use current vocabulary):
+Two edits. (a) Extend the existing `gem.flux.costs` block with two new keys (leave `boostCombine` / `rerollPool` / `guaranteeRarity` untouched); (b) add a new top-level `transplant` section:
 
 ```json
-"fluxCosts": {
-  "assignOrb": 1,
-  "combineOrbs": 2,
-  "upgradeTier": 1,
-  "swapOrb": 1,
-  "removeOrb": 1,
-  "transplantGem": 0,
-  "transplantChooseAffix": 3
+"gem": {
+  "flux": {
+    "costs": {
+      "boostCombine": 3,
+      "rerollPool": 5,
+      "guaranteeRarity": 4,
+      "transplantGem": 0,
+      "transplantChooseAffix": 3
+    }
+  }
 },
 "transplant": {
   "unlockThreshold": 6,
@@ -217,7 +243,7 @@ Two new sections. `fluxCosts` gets new entries following the existing pattern (l
 }
 ```
 
-Data schema in `packages/engine/src/data/schemas.ts` needs a Zod update to validate the new keys.
+Do **not** touch the top-level legacy `fluxCosts` block (orb-era, kept for backward compat). Data schema in `packages/engine/src/data/schemas.ts` (and `types/balance.ts` if the shape is typed there) needs a Zod/type update to validate the new keys.
 
 ## UI changes
 
@@ -284,12 +310,12 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 - `packages/engine/src/types/forge-action.ts` — new `transplant_gem` variant
 - `packages/engine/src/data/balance.json` — `transplant` section + `fluxCosts` entries
 - `packages/engine/src/data/schemas.ts` — Zod schema updates for the new balance keys
-- `packages/engine/src/forge/forge-state.ts` — switch case in `applyAction` adding `case 'transplant_gem': return applyTransplantGem(...)`; new `applyTransplantGem` function
+- `packages/engine/src/match/match-controller.ts` — add `transplant_gem` case inside the existing flux-spend switch (around line 248) that deducts `chooseAffix` flux when applicable, then falls through to the forge-action path
+- `packages/engine/src/forge/forge-state.ts` — new switch case in `applyAction` adding `case 'transplant_gem': return applyTransplantGem(...)`; new `applyTransplantGem` function
 - `packages/engine/src/forge/forge-plan.ts` — parallel validation `planTransplantGem` (matches existing `planCombine` pattern)
 - `packages/engine/src/forge/stat-calculator.ts` — new step in the pipeline that iterates `gem.secondary` and emits modifiers per slot type; update `computeActiveSynergies` (or its affix-collecting helper) to read `tags[]` so transplanted affixes participate in synergies
 - `packages/engine/src/combine/combination-engine.ts` — no logic change, but verify that `!gem.combinable` already guards against filled-secondary gems (it will, once `isCombinable()` is updated)
 - `packages/engine/src/ai/strategies/forge-strategy.ts` — add transplant evaluation: AI considers transplant when it owns a host with open empty slot + a source whose affix scores higher in the target's slot type than leaving the slot empty. Scoring uses existing evaluation heuristics; no new AI framework. v1 is allowed to be simple (only transplants when target has a strictly better source available).
-- `packages/client/src/components/forge-desktop/CombineDock.tsx` — deleted; replaced by `WorkbenchDock.tsx`
 - `packages/client/src/components/forge-desktop/ForgeDesktop.tsx` — use `WorkbenchDock`, wire new store actions
 - `packages/client/src/components/forge-desktop/StockpileStrip.tsx` — render open/filled secondary pip with the test hooks noted in the UI section
 - `packages/client/src/stores/forgeStore.ts` — add `transplantPreview`, `transplantChosenAffix`, `transplantHostUid`, dispatcher method
@@ -310,8 +336,8 @@ The first time a player owns a gem with an open empty slot in a run, surface a o
 | Knob | Location | Default | Purpose |
 |---|---|---|---|
 | `unlockThreshold` | `balance.transplant.unlockThreshold` | 6 | Tier + rarityIndex needed to open the slot |
-| `transplantGem` cost | `balance.fluxCosts.transplantGem` | 0 | Base flux cost for the action (random affix path) |
-| `transplantChooseAffix` cost | `balance.fluxCosts.transplantChooseAffix` | 3 | Extra flux cost when `chosenAffix` is provided |
+| `transplantGem` cost | `balance.gem.flux.costs.transplantGem` | 0 | Base flux cost for the action (random affix path) |
+| `transplantChooseAffix` cost | `balance.gem.flux.costs.transplantChooseAffix` | 3 | Extra flux cost when `chosenAffix` is provided |
 | `secondaryValueScalar` | `balance.transplant.secondaryValueScalar` | 1.0 | Global multiplier on secondary effect magnitudes |
 
 ## Testing strategy
