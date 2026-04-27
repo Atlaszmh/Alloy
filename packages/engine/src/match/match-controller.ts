@@ -240,6 +240,8 @@ function handleForgeAction(
     return fail('Player has already completed forging this round');
   }
 
+  const round = state.phase.round;
+
   // Handle flux spend actions (run mode only, player 0 only)
   const isRunMode = state.mode === 'run_async' || state.mode === 'run_live';
 
@@ -303,7 +305,6 @@ function handleForgeAction(
     }
   }
 
-  const round = state.phase.round;
   const playerState = state.players[player];
 
   // Build a ForgeState from player state (no flux needed)
