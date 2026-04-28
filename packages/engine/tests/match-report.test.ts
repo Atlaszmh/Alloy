@@ -65,8 +65,6 @@ describe('extractMatchReport', () => {
         if (!cont.ok) throw new Error(`Duel continue failed: ${cont.error}`);
         state = cont.state;
       }
-
-      // (adapt phase was removed)
     }
 
     expect(state.phase.kind).toBe('complete');

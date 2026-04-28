@@ -13,11 +13,6 @@ import {
   Tier4ForgeStrategy,
   Tier5ForgeStrategy,
 } from '../src/ai/strategies/forge-strategy.js';
-import {
-  Tier3AdaptStrategy,
-  Tier4AdaptStrategy,
-  Tier5AdaptStrategy,
-} from '../src/ai/strategies/adapt-strategy.js';
 import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js';
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
@@ -26,7 +21,6 @@ import type { AITier } from '../src/types/ai.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
-import type { CombatLog } from '../src/types/combat.js';
 import type { ForgeState } from '../src/forge/forge-state.js';
 import type { MatchState } from '../src/types/match.js';
 import type { Loadout } from '../src/types/item.js';
@@ -44,68 +38,6 @@ const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
 function makePool(seed: number): GemInstance[] {
   return generatePool(seed, 'ranked', registry);
-}
-
-function makePhysicalBreakdown(raw: number, net: number) {
-  return { raw, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: raw - net, net };
-}
-
-function makeAttackBreakdown(physNet: number, isCrit: boolean, elemNet?: { element: string; net: number }) {
-  const physical = makePhysicalBreakdown(physNet, physNet);
-  const elemental: Record<string, { raw: number; resistPoints: number; elementalPenetration: number; effectiveResist: number; reductionPct: number; mitigated: number; net: number }> = {};
-  let totalNet = physNet;
-  if (elemNet) {
-    elemental[elemNet.element] = { raw: elemNet.net, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, mitigated: 0, net: elemNet.net };
-    totalNet += elemNet.net;
-  }
-  return {
-    dodged: false,
-    physical,
-    elemental,
-    blocked: 0,
-    barrierAbsorbed: 0,
-    totalRaw: totalNet,
-    totalMitigated: 0,
-    totalNet,
-    isCrit,
-  };
-}
-
-function makeCombatLogWithDamage(): CombatLog {
-  return {
-    seed: 42,
-    frames: [
-      {
-        time: 0.1,
-        events: [
-          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(25, false) },
-          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(0, false, { element: 'fire', net: 15 }) },
-        ],
-      },
-      {
-        time: 0.2,
-        events: [
-          { type: 'attack', attacker: 0, breakdown: makeAttackBreakdown(20, true) },
-          { type: 'dot_tick', target: 1, breakdown: { element: 'fire', damagePerSecond: 10, stacks: 1, rawTotal: 10, resistPoints: 0, elementalPenetration: 0, effectiveResist: 0, reductionPct: 0, netDamage: 10 } },
-        ],
-      },
-      {
-        time: 0.3,
-        events: [
-          { type: 'attack', attacker: 1, breakdown: makeAttackBreakdown(30, false) },
-        ],
-      },
-    ],
-    result: {
-      round: 1,
-      winner: 0,
-      finalHP: [50, 0],
-      duration: 10,
-      wasTiebreak: false,
-      p0DamageDealt: 0,
-      p1DamageDealt: 0,
-    },
-  };
 }
 
 /**
@@ -254,56 +186,6 @@ describe('Tier 5 Forge Strategy', () => {
     // All actions should be valid
     const forgeState = createForgeState(stockpile, 'sword', 'chainmail', 1, balance, false);
     applyAllActions(forgeState, actions);
-  });
-});
-
-// ---- Adapt Strategies ----
-
-describe('Tier 3 Adapt Strategy', () => {
-  it('produces valid swap actions when given a combat log', () => {
-    const pool = makePool(42);
-    // Build a loadout with some orbs in it
-    const stockpileForForge = pool.slice(0, 6);
-    const loadout = createEmptyLoadout('sword', 'chainmail');
-    const forgeRng = new SeededRNG(700);
-    const forgeStrategy = new Tier3ForgeStrategy();
-    const forgeActions = forgeStrategy.plan(stockpileForForge, loadout, 8, 1, [], registry, forgeRng);
-    const forgeState = createForgeState(stockpileForForge, 'sword', 'chainmail', 1, balance, false);
-    const resultState = applyAllActions(forgeState, forgeActions);
-
-    // Now test adaptation
-    const adaptStockpile = pool.slice(6, 12); // Leftover orbs for swapping
-    const combatLog = makeCombatLogWithDamage();
-    const adaptRng = new SeededRNG(800);
-    const strategy = new Tier3AdaptStrategy();
-
-    const adaptActions = strategy.adapt(
-      combatLog,
-      resultState.loadout,
-      resultState.loadout,
-      adaptStockpile,
-      4,
-      1,
-      registry,
-      adaptRng,
-      2,
-    );
-
-    // Validate actions (may be empty if no good swaps available, that's fine)
-    if (adaptActions.length > 0) {
-      // Adapt now produces unsocket_gem + socket_gem pairs
-      for (const action of adaptActions) {
-        expect(['unsocket_gem', 'socket_gem']).toContain(action.kind);
-      }
-      // Apply them through forge system (round 2)
-      const adaptForgeState: ForgeState = {
-        stockpile: adaptStockpile,
-        loadout: resultState.loadout,
-        round: 2,
-        isQuickMatch: false,
-      };
-      applyAllActions(adaptForgeState, adaptActions);
-    }
   });
 });
 

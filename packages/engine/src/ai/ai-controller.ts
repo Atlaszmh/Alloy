@@ -1,5 +1,4 @@
 import type { AITier } from '../types/ai.js';
-import type { CombatLog } from '../types/combat.js';
 import type { ForgeAction } from '../types/forge-action.js';
 import type { BaseItemDef, Loadout } from '../types/item.js';
 import type { GemInstance } from '../types/gem.js';
@@ -10,7 +9,6 @@ import { liveSlots } from '../types/slot-array.js';
 import { selectAIItems } from './item-selection.js';
 import type { DraftStrategy } from './strategies/draft-strategy.js';
 import type { ForgeStrategy } from './strategies/forge-strategy.js';
-import type { AdaptStrategy } from './strategies/adapt-strategy.js';
 import {
   Tier1DraftStrategy,
   Tier2DraftStrategy,
@@ -25,21 +23,13 @@ import {
   Tier4ForgeStrategy,
   Tier5ForgeStrategy,
 } from './strategies/forge-strategy.js';
-import {
-  Tier1AdaptStrategy,
-  Tier2AdaptStrategy,
-  Tier3AdaptStrategy,
-  Tier4AdaptStrategy,
-  Tier5AdaptStrategy,
-} from './strategies/adapt-strategy.js';
 
 /**
- * AIController dispatches to tier-appropriate strategies for draft, forge, and adapt phases.
+ * AIController dispatches to tier-appropriate strategies for draft and forge phases.
  */
 export class AIController {
   private readonly draftStrategy: DraftStrategy;
   private readonly forgeStrategy: ForgeStrategy;
-  private readonly adaptStrategy: AdaptStrategy;
 
   constructor(
     public readonly tier: AITier,
@@ -48,7 +38,6 @@ export class AIController {
   ) {
     this.draftStrategy = createDraftStrategy(tier);
     this.forgeStrategy = createForgeStrategy(tier);
-    this.adaptStrategy = createAdaptStrategy(tier);
   }
 
   pickOrb(
@@ -90,28 +79,6 @@ export class AIController {
   ): { weapon: BaseItemDef; armor: BaseItemDef } {
     return selectAIItems(this.tier, playerDraftedGems, this.registry, this.rng);
   }
-
-  planAdapt(
-    previousLog: CombatLog,
-    opponentLoadout: Loadout,
-    myLoadout: Loadout,
-    myStockpile: SlotArray<GemInstance>,
-    fluxRemaining: number,
-    myPlayerIdx: 0 | 1,
-    round?: number,
-  ): ForgeAction[] {
-    return this.adaptStrategy.adapt(
-      previousLog,
-      opponentLoadout,
-      myLoadout,
-      liveSlots(myStockpile),
-      fluxRemaining,
-      myPlayerIdx,
-      this.registry,
-      this.rng,
-      round,
-    );
-  }
 }
 
 function createDraftStrategy(tier: AITier): DraftStrategy {
@@ -141,20 +108,5 @@ function createForgeStrategy(tier: AITier): ForgeStrategy {
       return new Tier4ForgeStrategy();
     case 5:
       return new Tier5ForgeStrategy();
-  }
-}
-
-function createAdaptStrategy(tier: AITier): AdaptStrategy {
-  switch (tier) {
-    case 1:
-      return new Tier1AdaptStrategy();
-    case 2:
-      return new Tier2AdaptStrategy();
-    case 3:
-      return new Tier3AdaptStrategy();
-    case 4:
-      return new Tier4AdaptStrategy();
-    case 5:
-      return new Tier5AdaptStrategy();
   }
 }

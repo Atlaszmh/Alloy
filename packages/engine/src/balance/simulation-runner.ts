@@ -326,8 +326,6 @@ function runAIMatch(
       if (!cont.ok) throw new Error(`Duel continue failed: ${cont.error}`);
       state = cont.state;
     }
-
-    // (adapt phase was removed — no longer needed)
   }
 
   return extractMatchReport(state, 'simulation', seed, registry);

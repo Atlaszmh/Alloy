@@ -5,7 +5,6 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { AIController } from '../src/ai/ai-controller.js';
 import { Tier1DraftStrategy, Tier2DraftStrategy } from '../src/ai/strategies/draft-strategy.js';
 import { Tier1ForgeStrategy, Tier2ForgeStrategy } from '../src/ai/strategies/forge-strategy.js';
-import { Tier1AdaptStrategy, Tier2AdaptStrategy } from '../src/ai/strategies/adapt-strategy.js';
 import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js';
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
@@ -13,7 +12,6 @@ import { combinationPotential } from '../src/ai/evaluation.js';
 import type { GemInstance } from '../src/types/gem.js';
 import { createGem } from '../src/types/gem.js';
 import type { ForgeAction } from '../src/types/forge-action.js';
-import type { CombatLog } from '../src/types/combat.js';
 import type { ForgeState } from '../src/forge/forge-state.js';
 
 const data = loadAndValidateData();
@@ -23,22 +21,6 @@ const emptyLoadout = createEmptyLoadout('iron_sword', 'iron_armor');
 
 function makePool(seed: number): GemInstance[] {
   return generatePool(seed, 'ranked', registry);
-}
-
-function makeDummyCombatLog(): CombatLog {
-  return {
-    seed: 42,
-    frames: [],
-    result: {
-      round: 1,
-      winner: 0,
-      finalHP: [100, 0],
-      duration: 10,
-      wasTiebreak: false,
-      p0DamageDealt: 0,
-      p1DamageDealt: 0,
-    },
-  };
 }
 
 /**
@@ -184,20 +166,6 @@ describe('AI Forge Strategies', () => {
   });
 });
 
-describe('AI Adapt Strategies', () => {
-  it('Tier 1 and Tier 2 adapt strategies return empty actions', () => {
-    const log = makeDummyCombatLog();
-    const loadout = createEmptyLoadout('sword', 'chainmail');
-    const rng = new SeededRNG(600);
-
-    const tier1 = new Tier1AdaptStrategy();
-    const tier2 = new Tier2AdaptStrategy();
-
-    expect(tier1.adapt(log, loadout, loadout, [], 4, 0, registry, rng)).toEqual([]);
-    expect(tier2.adapt(log, loadout, loadout, [], 4, 0, registry, rng)).toEqual([]);
-  });
-});
-
 describe('AIController', () => {
   it('dispatches to correct strategy based on tier', () => {
     const rng1 = new SeededRNG(700);
@@ -287,45 +255,6 @@ describe('AIController', () => {
     applyAllActions(forgeState, actions);
   });
 
-  it('adapt returns empty actions for Tier 1 and 2', () => {
-    const log = makeDummyCombatLog();
-    const loadout = createEmptyLoadout('sword', 'chainmail');
-
-    const ai1 = new AIController(1, registry, new SeededRNG(1000));
-    const ai2 = new AIController(2, registry, new SeededRNG(1001));
-
-    expect(ai1.planAdapt(log, loadout, loadout, [], 4, 0)).toEqual([]);
-    expect(ai2.planAdapt(log, loadout, loadout, [], 4, 0)).toEqual([]);
-  });
-});
-
-describe('adapt strategy player identification', () => {
-  it('accepts myPlayerIdx parameter and does not error when AI is the winner', () => {
-    const ai = new AIController(3, registry, new SeededRNG(42).fork('ai'));
-    const emptyLoadout = createEmptyLoadout('sword', 'chainmail');
-
-    const mockDuelLog = {
-      seed: 42,
-      frames: [],
-      result: {
-        round: 1,
-        winner: 0 as 0 | 1,
-        finalHP: [50, 0] as [number, number],
-        duration: 10,
-        wasTiebreak: false,
-        p0DamageDealt: 0,
-        p1DamageDealt: 0,
-      },
-    };
-
-    // AI is player 0 (the winner) — should not error
-    const actions = ai.planAdapt(mockDuelLog, emptyLoadout, emptyLoadout, [], 0, 0);
-    expect(actions).toEqual([]);
-
-    // AI is player 1 (the loser) — should not error
-    const actions2 = ai.planAdapt(mockDuelLog, emptyLoadout, emptyLoadout, [], 0, 1);
-    expect(actions2).toEqual([]);
-  });
 });
 
 describe('combinationPotential — generic awareness', () => {
