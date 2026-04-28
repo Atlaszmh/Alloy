@@ -11,7 +11,7 @@ export const AFFIX_DISPLAY_ORDER: string[] = [
   'flat_hp', 'armor_rating', 'block_chance', 'dodge_chance',
   'barrier', 'hp_regen', 'damage_reduction', 'fortify',
   // Sustain
-  'lifesteal', 'thorns', 'life_on_kill',
+  'lifesteal', 'thorns',
   // Utility
   'initiative', 'dot_multiplier', 'stun_chance', 'slow_on_hit',
   // Trigger

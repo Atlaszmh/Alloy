@@ -37,7 +37,6 @@ const GEM_ART: Record<string, string> = {
   // ── Sustain (use round style) ─────────────────────────────────────────
   lifesteal:        '/assets/gems/round/round_00_01.png',       // blood red
   thorns:           '/assets/gems/round/round_02_01.png',       // orange (reactive)
-  life_on_kill:     '/assets/gems/round/round_00_00.png',       // dark red
 
   // ── Utility (use teardrop style) ──────────────────────────────────────
   initiative:       '/assets/gems/teardrop/teardrop_00_02.png', // amber/yellow

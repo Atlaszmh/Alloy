@@ -13,7 +13,7 @@ describe('Data Loading & Validation', () => {
 
   it('should load the correct number of affixes', () => {
     const data = loadAndValidateData();
-    expect(data.affixes.length).toBeGreaterThanOrEqual(32);
+    expect(data.affixes.length).toBeGreaterThanOrEqual(31);
   });
 
   it('should load the correct number of combinations', () => {
@@ -82,7 +82,7 @@ describe('DataRegistry', () => {
     });
 
     it('should return all affixes', () => {
-      expect(registry.getAllAffixes().length).toBeGreaterThanOrEqual(32);
+      expect(registry.getAllAffixes().length).toBeGreaterThanOrEqual(31);
     });
 
     it('should have description fields on all affixes', () => {
