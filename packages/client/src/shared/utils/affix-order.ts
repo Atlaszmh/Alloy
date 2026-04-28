@@ -16,7 +16,7 @@ export const AFFIX_DISPLAY_ORDER: string[] = [
   'initiative', 'dot_multiplier', 'stun_chance', 'slow_on_hit',
   // Trigger
   'chance_on_hit', 'chance_on_taking_damage', 'chance_on_crit',
-  'chance_on_block', 'chance_on_kill', 'chance_on_low_hp',
+  'chance_on_block', 'chance_on_low_hp',
 ];
 
 export function getAffixDisplayIndex(affixId: string): number {

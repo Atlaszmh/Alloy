@@ -88,8 +88,7 @@ export type TriggerCondition =
   | 'on_crit'
   | 'on_block'
   | 'on_taking_damage'
-  | 'on_low_hp'
-  | 'on_kill';
+  | 'on_low_hp';
 
 export type TriggerEffect =
   | { kind: 'apply_dot'; element: Element; dps: number; duration: number }

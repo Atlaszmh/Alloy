@@ -19,7 +19,6 @@ const CONDITION_MAP: Record<string, TriggerCondition> = {
   chance_on_crit: 'on_crit',
   chance_on_block: 'on_block',
   chance_on_taking_damage: 'on_taking_damage',
-  chance_on_kill: 'on_kill',
   chance_on_low_hp: 'on_low_hp',
 };
 

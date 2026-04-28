@@ -50,7 +50,6 @@ const GEM_ART: Record<string, string> = {
   chance_on_taking_damage: '/assets/gems/faceted/faceted_06_07.png', // gray
   chance_on_crit:       '/assets/gems/round/round_05_03.png',    // yellow-green
   chance_on_block:      '/assets/gems/square/square_03_04.png',  // teal green
-  chance_on_kill:       '/assets/gems/teardrop/teardrop_01_05.png', // dark pink
   chance_on_low_hp:     '/assets/gems/teardrop/teardrop_00_06.png', // magenta
 };
 
