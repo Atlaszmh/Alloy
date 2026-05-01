@@ -270,8 +270,21 @@ export class DuelScene {
       }
 
       case 'trigger_proc': {
+        // Map specific effect kinds to dedicated status icons; everything
+        // else falls back to the generic 'buff' badge.
+        const opponent: 0 | 1 = event.player === 0 ? 1 : 0;
+        if (event.effectDescription === 'apply_slow') {
+          this.statusIcons.addStatus(opponent, 'slow');
+          this.safeTimeout(() => this.statusIcons?.removeStatus(opponent, 'slow'), 4000);
+          break;
+        }
+        if (event.effectDescription === 'reduce_max_hp') {
+          this.statusIcons.addStatus(opponent, 'fragile');
+          this.safeTimeout(() => this.statusIcons?.removeStatus(opponent, 'fragile'), 10000);
+          break;
+        }
+        // Generic buff for anything else (heal/stat_buff_*/etc.)
         this.statusIcons.addStatus(event.player, 'buff');
-        // Auto-remove buff icon after some time (simple approach)
         this.safeTimeout(() => {
           this.statusIcons?.removeStatus(event.player, 'buff');
         }, 1500);
