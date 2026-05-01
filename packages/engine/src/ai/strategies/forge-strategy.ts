@@ -172,6 +172,26 @@ function stockpileIsRarityPoor(gems: GemInstance[]): boolean {
   return lowRarityCount / gems.length >= 0.7;
 }
 
+/**
+ * Score how well an affix fits a host gem — used by transplant chooseAffix
+ * heuristic. Returns the count of tag overlap between the affix's tags and
+ * the host gem's tags. Higher = better fit.
+ */
+function scoreAffixForHost(
+  affixId: string,
+  hostGem: GemInstance,
+  registry: DataRegistry,
+): number {
+  const affix = registry.findAffix(affixId);
+  if (!affix) return 0;
+  const hostTags = new Set(hostGem.tags ?? []);
+  let score = 0;
+  for (const tag of affix.tags ?? []) {
+    if (hostTags.has(tag)) score++;
+  }
+  return score;
+}
+
 export interface ForgeStrategy {
   plan(
     stockpile: GemInstance[],
@@ -907,12 +927,29 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     // Only consider original stockpile gems (not synthetic combine outputs).
     const transplants = enumerateTransplantCandidates(stockpile, registry);
     if (transplants.length > 0) {
-      const bestTransplant = transplants.find(
+      const transplantCandidate = transplants.find(
         t =>
           t.kind === 'transplant_gem' &&
           !usedOrbUids.has(t.sourceGemUid),
       );
-      if (bestTransplant && bestTransplant.kind === 'transplant_gem') {
+      if (transplantCandidate && transplantCandidate.kind === 'transplant_gem') {
+        // chooseAffix upgrade: if source's secondary affix fits the host better
+        // than the primary, spend flux to lock it in. Cost is transplantChooseAffix (3).
+        let bestTransplant: Extract<ForgeAction, { kind: 'transplant_gem' }> = transplantCandidate;
+        const chooseAffixCost = (registry.getBalance().gem.flux.costs as Record<string, number>).transplantChooseAffix ?? 3;
+        const sourceGem = stockpile.find(g => g.uid === transplantCandidate.sourceGemUid);
+        const hostGem = stockpile.find(g => g.uid === transplantCandidate.targetGemUid);
+        if (
+          sourceGem?.secondary &&
+          hostGem &&
+          (runStateFlux ?? 0) >= chooseAffixCost
+        ) {
+          const primaryScore = scoreAffixForHost(sourceGem.affixId, hostGem, registry);
+          const secondaryScore = scoreAffixForHost(sourceGem.secondary.affixId, hostGem, registry);
+          if (secondaryScore > primaryScore) {
+            bestTransplant = { ...transplantCandidate, chosenAffix: 'secondary' };
+          }
+        }
         actions.push(bestTransplant);
         // Reserve the source so subsequent phases don't also consume it.
         usedOrbUids.add(bestTransplant.sourceGemUid);
@@ -1262,12 +1299,29 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     // and not consumed by the generic combine phase.
     const transplants = enumerateTransplantCandidates(stockpile, registry);
     if (transplants.length > 0) {
-      const bestTransplant = transplants.find(
+      const transplantCandidate = transplants.find(
         t =>
           t.kind === 'transplant_gem' &&
           !usedOrbUids.has(t.sourceGemUid),
       );
-      if (bestTransplant && bestTransplant.kind === 'transplant_gem') {
+      if (transplantCandidate && transplantCandidate.kind === 'transplant_gem') {
+        // chooseAffix upgrade: if source's secondary affix fits the host better
+        // than the primary, spend flux to lock it in. Cost is transplantChooseAffix (3).
+        let bestTransplant: Extract<ForgeAction, { kind: 'transplant_gem' }> = transplantCandidate;
+        const chooseAffixCost = (registry.getBalance().gem.flux.costs as Record<string, number>).transplantChooseAffix ?? 3;
+        const sourceGem = stockpile.find(g => g.uid === transplantCandidate.sourceGemUid);
+        const hostGem = stockpile.find(g => g.uid === transplantCandidate.targetGemUid);
+        if (
+          sourceGem?.secondary &&
+          hostGem &&
+          (runStateFlux ?? 0) >= chooseAffixCost
+        ) {
+          const primaryScore = scoreAffixForHost(sourceGem.affixId, hostGem, registry);
+          const secondaryScore = scoreAffixForHost(sourceGem.secondary.affixId, hostGem, registry);
+          if (secondaryScore > primaryScore) {
+            bestTransplant = { ...transplantCandidate, chosenAffix: 'secondary' };
+          }
+        }
         actions.push(bestTransplant);
         // Reserve the source so subsequent phases don't also consume it.
         usedOrbUids.add(bestTransplant.sourceGemUid);

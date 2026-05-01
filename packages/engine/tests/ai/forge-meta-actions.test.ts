@@ -425,3 +425,155 @@ describe('Tier 4 meta-action planning — guarantee_rarity', () => {
     expect(actions.some(a => a.kind === 'guarantee_rarity')).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Transplant chooseAffix tests
+// ---------------------------------------------------------------------------
+// Fixture design:
+//   host gem: tier=4, rarity='epic' → tier + rarityIndex(epic=4) = 8 >= threshold(6) ✓
+//             host.tags = ['elemental', 'fire'] — overlaps with fire_damage affix
+//   source gem: primary affix = 'flat_physical' (tags: ['physical','base'])
+//               secondary affix = { affixId: 'fire_damage' } (tags: ['elemental','fire','dot'])
+//
+//   scoreAffixForHost('flat_physical', host) = 0  (no overlap with ['elemental','fire'])
+//   scoreAffixForHost('fire_damage',   host) = 2  (['elemental','fire'] ∩ ['elemental','fire','dot'])
+//   → secondary wins → AI should plan chosenAffix: 'secondary' when flux >= 3
+
+function makeTransplantStockpile(): GemInstance[] {
+  return [
+    {
+      // Host: needs hasSecondarySlot → tier + rarityIndex(epic=4) = 4+4 = 8 >= 6
+      // tags match fire_damage's tags (elemental, fire) better than flat_physical (physical, base)
+      uid: 'host',
+      affixId: 'fire_damage',
+      tier: 4,
+      rarity: 'epic',
+      recipeDepth: 0,
+      combinable: false,
+      tags: ['elemental', 'fire'],
+      secondary: undefined,
+    },
+    {
+      // Source: primary = flat_physical (tags: physical, base)
+      //         secondary = fire_damage (tags: elemental, fire, dot)
+      uid: 'source',
+      affixId: 'flat_physical',
+      tier: 2,
+      rarity: 'common',
+      recipeDepth: 0,
+      combinable: true,
+      tags: ['flat_physical'],
+      secondary: {
+        affixId: 'fire_damage',
+        tier: 2,
+        rarity: 'common',
+        sourceGemUid: 'other',
+      },
+    },
+  ];
+}
+
+describe('Tier 5 meta-action planning — transplant chooseAffix', () => {
+  it('plans chosenAffix: secondary when source secondary outscores primary AND flux >= 3', () => {
+    const stockpile = makeTransplantStockpile();
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      2, // round 2: skip base stats
+      [],
+      registry,
+      new SeededRNG(1),
+      5, // runStateFlux >= transplantChooseAffix cost (3)
+    );
+    const transplant = actions.find(a => a.kind === 'transplant_gem');
+    expect(transplant).toBeDefined();
+    expect((transplant as Extract<typeof transplant, { kind: 'transplant_gem' }>)?.chosenAffix).toBe('secondary');
+  });
+
+  it('does NOT plan chosenAffix when secondary does NOT outscore primary', () => {
+    // Swap: host tags match flat_physical better than fire_damage
+    const stockpile: GemInstance[] = [
+      {
+        uid: 'host',
+        affixId: 'flat_physical',
+        tier: 4,
+        rarity: 'epic',
+        recipeDepth: 0,
+        combinable: false,
+        tags: ['physical', 'base'], // overlaps with flat_physical (2), not fire_damage (0)
+        secondary: undefined,
+      },
+      {
+        uid: 'source',
+        affixId: 'flat_physical',
+        tier: 2,
+        rarity: 'common',
+        recipeDepth: 0,
+        combinable: true,
+        tags: ['flat_physical'],
+        secondary: {
+          affixId: 'fire_damage',
+          tier: 2,
+          rarity: 'common',
+          sourceGemUid: 'other',
+        },
+      },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      2,
+      [],
+      registry,
+      new SeededRNG(1),
+      5,
+    );
+    const transplant = actions.find(a => a.kind === 'transplant_gem');
+    expect(transplant).toBeDefined();
+    // secondary (fire_damage: elemental,fire,dot) has 0 overlap with host tags (physical,base)
+    // primary (flat_physical: physical,base) has 2 overlap → primary wins → no chosenAffix
+    expect((transplant as Extract<typeof transplant, { kind: 'transplant_gem' }>)?.chosenAffix).toBeUndefined();
+  });
+
+  it('does NOT plan chosenAffix when flux < 3 (even if secondary is better)', () => {
+    const stockpile = makeTransplantStockpile();
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      2,
+      [],
+      registry,
+      new SeededRNG(1),
+      2, // runStateFlux < 3 — cannot afford chooseAffix
+    );
+    const transplant = actions.find(a => a.kind === 'transplant_gem');
+    expect(transplant).toBeDefined();
+    expect((transplant as Extract<typeof transplant, { kind: 'transplant_gem' }>)?.chosenAffix).toBeUndefined();
+  });
+});
+
+describe('Tier 4 meta-action planning — transplant chooseAffix', () => {
+  it('plans chosenAffix: secondary when source secondary outscores primary AND flux >= 3', () => {
+    const stockpile = makeTransplantStockpile();
+    const strategy = new Tier4ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      2,
+      [],
+      registry,
+      new SeededRNG(1),
+      5,
+    );
+    const transplant = actions.find(a => a.kind === 'transplant_gem');
+    expect(transplant).toBeDefined();
+    expect((transplant as Extract<typeof transplant, { kind: 'transplant_gem' }>)?.chosenAffix).toBe('secondary');
+  });
+});
