@@ -863,7 +863,22 @@
     "outputBonusEffects": [
       { "stat": "compound.meltdown.active", "op": "flat", "value": 1 },
       { "stat": "compound.meltdown.crossElementChance", "op": "flat", "value": 0.25 },
-      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 }
+      { "stat": "compound.meltdown.allElementBonus", "op": "percent", "value": 0.15 },
+      { "stat": "compound.meltdown.chance", "op": "flat", "value": 0.25 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_dot", "element": "fire", "dpsPerTier": 2, "duration": 4 }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_dot", "element": "cold", "dpsPerTier": 2, "duration": 4 }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 4 }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
