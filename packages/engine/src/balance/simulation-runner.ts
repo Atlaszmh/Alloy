@@ -3,6 +3,7 @@ import type { MatchMode, MatchState } from '../types/match.js';
 import type { MatchReport } from '../types/match-report.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createMatch, applyAction } from '../match/match-controller.js';
+import { generatePool } from '../pool/pool-generator.js';
 import { AIController } from '../ai/ai-controller.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import { computeAggregateStats, type AggregateStats } from './stats-collector.js';
@@ -375,6 +376,11 @@ export interface RunSimulationConfigV2 {
   goalRound: number;
   baseWeaponId: string;
   baseArmorId: string;
+  /**
+   * Hard cap on rounds simulated. Defaults to goalRound + 5 (matches old
+   * safety cap). Set higher (e.g. 30 or 50) for endless-mode batches.
+   */
+  maxRounds?: number;
 }
 
 export interface RunSimulationResultV2 {
@@ -435,13 +441,13 @@ function simulateSingleRunV2(
     transplantChooseAffix: 0,
   };
 
-  // Loop until run ends (lives = 0 or goal reached) or safety cap exceeded
-  const ROUND_SAFETY_CAP = config.goalRound + 5; // allow up to 5 endless rounds
+  // Loop until run ends (lives = 0 or goal reached) or max rounds exceeded
+  const maxRounds = config.maxRounds ?? config.goalRound + 5;
   let roundsReached = 0;
 
   while (state.phase.kind !== 'complete') {
     const currentRound = state.runState?.round ?? 1;
-    if (currentRound > ROUND_SAFETY_CAP) break;
+    if (currentRound > maxRounds) break;
 
     // --- Draft phase ---
     while (state.phase.kind === 'draft') {
@@ -558,6 +564,29 @@ function simulateSingleRunV2(
       last.won = lastResult?.winner === 0;
     }
     prevFlux = newFlux;
+
+    // Endless mode: if the run completed due to goal-win (status==='won') but we
+    // haven't hit maxRounds, reset the phase to draft so the loop continues.
+    // This simulates the client's "endless mode" where the player keeps playing
+    // past the goal round until they run out of lives or choose to stop.
+    if (
+      state.phase.kind === 'complete' &&
+      state.runState?.status === 'won' &&
+      currentRound < maxRounds
+    ) {
+      const nextRound = currentRound + 1;
+      const newPool = generatePool(state.seed, state.mode, registry, nextRound);
+      state = {
+        ...state,
+        phase: { kind: 'draft', round: nextRound, pickIndex: 0, activePlayer: 0 },
+        pool: newPool,
+        forgeComplete: undefined,
+        // Reset status to 'active' so the engine doesn't short-circuit back to complete
+        runState: state.runState
+          ? { ...state.runState, status: 'active' as const, round: nextRound }
+          : state.runState,
+      };
+    }
   }
 
   const goalReached = (state.runState?.status === 'won') ||
@@ -588,6 +617,7 @@ function simulateSingleRunV2(
     seed: runSeed,
     roundsReached,
     goalReached,
+    goalRound: config.goalRound,
     finalLives: state.runState?.lives ?? 0,
     perRound,
     compoundFirstAppearance,
