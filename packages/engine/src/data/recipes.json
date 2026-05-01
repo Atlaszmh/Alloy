@@ -424,7 +424,18 @@
     "outputBonusEffects": [
       { "stat": "compound.storm_of_flames.active", "op": "flat", "value": 1 },
       { "stat": "compound.storm_of_flames.lightningOnFire", "op": "flat", "value": 0.25 },
-      { "stat": "compound.storm_of_flames.igniteOnLightning", "op": "flat", "value": 0.25 }
+      { "stat": "compound.storm_of_flames.igniteOnLightning", "op": "flat", "value": 0.25 },
+      { "stat": "compound.storm_of_flames.chance", "op": "flat", "value": 0.25 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_dot", "element": "fire", "dpsPerTier": 3, "duration": 4 }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 6 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "lightning", "elemental"]
