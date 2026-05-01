@@ -690,7 +690,7 @@
           "kind": "gain_barrier",
           "amount": 0.05,
           "isPercent": true,
-          "duration": 30
+          "duration": 15
         }
       }
     ],
