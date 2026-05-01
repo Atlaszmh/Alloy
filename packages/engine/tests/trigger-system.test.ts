@@ -167,22 +167,21 @@ describe('extractTriggers — compound gems', () => {
   });
 
   it('compound recipe with no compoundEffects produces no triggers', () => {
-    // Envenom is intentionally not wired — its stack-mutation semantics
-    // (poison stacks count double) need a real DOT-rule mutation system,
-    // deferred to a future tier. extractTriggers must produce zero triggers
-    // for it.
+    // Thermal Shock is a passive-only compound (active: 1 style) with no
+    // compoundEffects block — it grants stat bonuses, not triggers.
+    // extractTriggers must produce zero triggers for it.
     const loadout = makeLoadout([
       {
-        affixId: 'envenom',
+        affixId: 'thermal_shock',
         tier: 1,
         rarity: 'common',
-        sourceRecipe: 'envenom',
+        sourceRecipe: 'thermal_shock',
         recipeDepth: 1,
       },
     ]);
 
     const triggers = extractTriggers(loadout, registry);
-    const fromIt = triggers.filter((t) => t.affixId === 'envenom');
+    const fromIt = triggers.filter((t) => t.affixId === 'thermal_shock');
     expect(fromIt).toEqual([]);
   });
 

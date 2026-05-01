@@ -495,6 +495,7 @@ describe('Parameterized: every wired compound fires correctly', () => {
     compound_dot: (_o, opp) => opp.activeDOTs.length > 0,
     damage_current_hp: (_o, opp) => opp.currentHP < 1000,
     reduce_max_hp: (_o, opp) => opp.maxHpDebuffMultiplier < 1,
+    amplify_dot_element: (_o, opp) => Object.keys(opp.elementAmplifiers).length > 0,
   };
 
   // Pull the wired compound IDs straight from recipes.json so this test

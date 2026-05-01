@@ -95,10 +95,18 @@
     ],
     "outputAffixId": "envenom",
     "outputBonusEffects": [
-      { "stat": "compound.envenom.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.envenom.stackMultiplier", "op": "flat", "value": 2.0 },
-      { "stat": "compound.envenom.dotSpeedBonus", "op": "flat", "value": 0.50 },
-      { "stat": "compound.envenom.poisonAttacker", "op": "flat", "value": 1 }
+      { "stat": "compound.envenom.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "amplify_dot_element",
+          "element": "poison",
+          "stackMultiplier": 2.0,
+          "tickMultiplier": 1.5,
+          "duration": 8
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "poison", "trigger"]
@@ -876,8 +884,18 @@
     "outputAffixId": "plague_carrier",
     "outputBonusEffects": [
       { "stat": "compound.plague_carrier.active", "op": "flat", "value": 1 },
-      { "stat": "compound.plague_carrier.spreadRadius", "op": "flat", "value": 3 },
-      { "stat": "compound.plague_carrier.stackTransferPercent", "op": "flat", "value": 0.50 }
+      { "stat": "compound.plague_carrier.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "amplify_dot_element",
+          "element": "poison",
+          "stackMultiplier": 3.0,
+          "tickMultiplier": 2.0,
+          "duration": 12
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "poison", "trigger"]
