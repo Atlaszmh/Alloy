@@ -269,6 +269,24 @@ describe('RunState', () => {
       state = advanceRound(state);
       expect(state.status).toBe('active');
     });
+
+    it('endlessMode keeps status active past goalRound', () => {
+      let state = createRunState({ goalRound: 10, endlessMode: true });
+      state = { ...state, round: 9 };
+      state = advanceRound(state); // → round 10
+      expect(state.round).toBe(10);
+      expect(state.status).toBe('active'); // NOT 'won'
+      state = advanceRound(state); // → round 11
+      expect(state.round).toBe(11);
+      expect(state.status).toBe('active');
+    });
+
+    it('default (non-endless) still sets won at goalRound', () => {
+      let state = createRunState({ goalRound: 10 });
+      state = { ...state, round: 9 };
+      state = advanceRound(state);
+      expect(state.status).toBe('won');
+    });
   });
 
   describe('previewRoundResult', () => {

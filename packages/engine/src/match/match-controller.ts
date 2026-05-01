@@ -45,7 +45,7 @@ export function createMatch(
   baseWeaponId: string,
   baseArmorId: string,
   registry: DataRegistry,
-  runConfig?: { startingLives?: number; goalRound?: number },
+  runConfig?: { startingLives?: number; goalRound?: number; endlessMode?: boolean },
 ): MatchState {
   const poolMode = mode === 'run_async' || mode === 'run_live' ? mode : mode;
   const pool = generatePool(seed, poolMode, registry, 1);
@@ -79,6 +79,7 @@ export function createMatch(
     state.runState = createRunState({
       startingLives: runConfig?.startingLives ?? 3,
       goalRound: runConfig?.goalRound ?? 10,
+      endlessMode: runConfig?.endlessMode ?? false,
     });
     state.discoveryState = new DiscoveryState();
   }
@@ -585,7 +586,7 @@ export function createDebugMatch(
   registry: DataRegistry,
   targetPhase: DebugPhaseTarget,
   targetRound: number = 1,
-  runConfig?: { startingLives?: number; goalRound?: number },
+  runConfig?: { startingLives?: number; goalRound?: number; endlessMode?: boolean },
 ): MatchState {
   let state = createMatch(matchId, seed, mode, playerIds, baseWeaponId, baseArmorId, registry, runConfig);
 

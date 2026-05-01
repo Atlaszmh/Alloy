@@ -28,12 +28,19 @@ export interface RunState {
   lifeRecovery: LifeRecoveryConfig;
   flux: number;
   rerollNextDraft: boolean;
+  /**
+   * When true, reaching goalRound does NOT set status='won'. The run continues
+   * until lives are depleted. Default false (legacy: terminates at goal).
+   */
+  endlessMode: boolean;
 }
 
 export interface CreateRunOpts {
   startingLives?: number;
   goalRound?: number;
   lifeRecovery?: Partial<LifeRecoveryConfig>;
+  /** When true, reaching goalRound does NOT terminate the run. Default false. */
+  endlessMode?: boolean;
 }
 
 const DEFAULT_LIFE_RECOVERY: LifeRecoveryConfig = {
@@ -59,6 +66,7 @@ export function createRunState(opts: CreateRunOpts = {}): RunState {
     },
     flux: 0,
     rerollNextDraft: false,
+    endlessMode: opts.endlessMode ?? false,
   };
 }
 
@@ -144,7 +152,7 @@ export function advanceRound(state: RunState): RunState {
   return {
     ...state,
     round: newRound,
-    status: newRound >= state.goalRound ? 'won' : state.status,
+    status: (newRound >= state.goalRound && !state.endlessMode) ? 'won' : state.status,
   };
 }
 
