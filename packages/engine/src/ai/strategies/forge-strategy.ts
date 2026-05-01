@@ -92,6 +92,21 @@ export function findCombinable3(
   return null;
 }
 
+/**
+ * Flatten all socketed gems across both weapon and armor slots into a single
+ * array. Order: weapon slot 0..5, then armor slot 0..5.
+ */
+export function socketedGems(loadout: Loadout): GemInstance[] {
+  const result: GemInstance[] = [];
+  for (const slot of loadout.weapon.slots) {
+    if (slot) result.push(slot.gem);
+  }
+  for (const slot of loadout.armor.slots) {
+    if (slot) result.push(slot.gem);
+  }
+  return result;
+}
+
 export interface ForgeStrategy {
   plan(
     stockpile: GemInstance[],
