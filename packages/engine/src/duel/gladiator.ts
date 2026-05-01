@@ -33,6 +33,11 @@ export function createGladiator(playerId: 0 | 1, stats: DerivedStats): Gladiator
     maxHpDebuffRemaining: 0,
     elementAmplifiers: {},
     passiveDamageModifiers: [],
+    hitsSinceCrit: 0,
+    sanguineOverhealMultiplier: 1.0,
+    bloodPactGainCapFraction: 0,
+    bloodPactBaseMaxHP: stats.maxHP,
+    bloodPactMaxHpGained: 0,
   };
 }
 

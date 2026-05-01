@@ -135,6 +135,28 @@ export interface GladiatorRuntime {
    * by extractPassiveModifiers; immutable for the duel's duration.
    */
   passiveDamageModifiers: PassiveDamageModifier[];
+  /**
+   * Hits landed since the last crit. Used by flicker_strike's bespoke
+   * mechanic: at threshold (compound.flicker_strike.hitInterval, default 5),
+   * the next attack is forced to crit and the counter resets.
+   */
+  hitsSinceCrit: number;
+  /**
+   * sanguine_endurance bespoke state. When > 1, allows currentHP to exceed
+   * effectiveMaxHP up to effectiveMaxHP * sanguineOverhealMultiplier. 1.0
+   * (default) disables the lift. Set once at duel start.
+   */
+  sanguineOverhealMultiplier: number;
+  /**
+   * blood_pact bespoke state. When > 0, the maxHP gain cap (as a fraction of
+   * baseMaxHP). 0 (default) disables maxHP growth from overheal. Set once at
+   * duel start.
+   */
+  bloodPactGainCapFraction: number;
+  /** baseMaxHP at duel start, captured for blood_pact cap math. */
+  bloodPactBaseMaxHP: number;
+  /** Running total of blood_pact maxHP gain so we don't exceed the cap. */
+  bloodPactMaxHpGained: number;
 }
 
 // --- Combat Events (discriminated union for combat log) ---

@@ -864,3 +864,113 @@ describe('PassiveDamageModifier — conditional damage bonus', () => {
     expect(bd.physical.net).toBe(150); // 100 × 1.5
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Group E bespoke compound mechanics (Chunk 6)                              */
+/* -------------------------------------------------------------------------- */
+
+function makeBareLoadout(): Loadout {
+  return {
+    weapon: { baseItemId: 'sword', baseStats: null, slots: Array(6).fill(null) },
+    armor: { baseItemId: 'chainmail', baseStats: null, slots: Array(6).fill(null) },
+  };
+}
+
+function makeLoadoutWithCompound(compoundId: string): Loadout {
+  const gem = createGem(`${compoundId}_uid`, compoundId, 1, 'common', { sourceRecipe: compoundId });
+  const slot: EquippedSlot = { gem };
+  return {
+    weapon: {
+      baseItemId: 'sword',
+      baseStats: null,
+      slots: [slot, null, null, null, null, null],
+    },
+    armor: { baseItemId: 'chainmail', baseStats: null, slots: Array(6).fill(null) },
+  };
+}
+
+describe('flicker_strike bespoke mechanic', () => {
+  it('forces crit at threshold even when natural crit chance is 0', () => {
+    const attackerLoadout = makeLoadoutWithCompound('flicker_strike');
+    const defenderLoadout = makeBareLoadout();
+    const stats: [DerivedStats, DerivedStats] = [
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 30, attackSpeed: 0.5, critChance: 0 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 30, attackSpeed: 0.5, critChance: 0 },
+    ];
+    const log = simulate(stats, [attackerLoadout, defenderLoadout], registry, new SeededRNG(42), 1);
+    const events = log.frames.flatMap((f) => f.events);
+    const playerAttacks = events.filter(
+      (e): e is Extract<typeof e, { type: 'attack' }> =>
+        e.type === 'attack' && e.attacker === 0 && !e.breakdown.dodged,
+    );
+    const crits = playerAttacks.filter((e) => e.breakdown.isCrit);
+    // Counter starts at 0 and increments after each non-crit; force-crit fires
+    // once the counter reaches threshold (= 5). So a crit lands on every 6th
+    // attack: floor(N / (interval + 1)) is the lower bound.
+    const expectedMinCrits = Math.max(1, Math.floor(playerAttacks.length / 6));
+    expect(crits.length).toBeGreaterThanOrEqual(expectedMinCrits);
+  });
+
+  it('does NOT force crits when flicker_strike is NOT equipped (baseline)', () => {
+    const stats: [DerivedStats, DerivedStats] = [
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 30, attackSpeed: 0.5, critChance: 0 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 30, attackSpeed: 0.5, critChance: 0 },
+    ];
+    const log = simulate(stats, [makeBareLoadout(), makeBareLoadout()], registry, new SeededRNG(42), 1);
+    const events = log.frames.flatMap((f) => f.events);
+    const crits = events.filter(
+      (e) => e.type === 'attack' && !e.breakdown.dodged && e.breakdown.isCrit,
+    );
+    expect(crits.length).toBe(0);
+  });
+});
+
+describe('sanguine_endurance bespoke mechanic', () => {
+  it('allows currentHP to exceed maxHP up to overheal cap when equipped', () => {
+    const attackerLoadout = makeLoadoutWithCompound('sanguine_endurance');
+    const defenderLoadout = makeBareLoadout();
+    const stats: [DerivedStats, DerivedStats] = [
+      // 200% lifesteal + soft target ⇒ many overheal events
+      { ...createEmptyDerivedStats(), maxHP: 1000, physicalDamage: 50, attackSpeed: 0.5, lifestealPercent: 200 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 0, attackSpeed: 1.0 },
+    ];
+    const log = simulate(stats, [attackerLoadout, defenderLoadout], registry, new SeededRNG(42), 1);
+    // After many lifesteal hits, attacker's final HP can exceed 1000 base maxHP
+    // up to the 1.20 cap = 1200.
+    expect(log.result.finalHP[0]).toBeGreaterThan(1000);
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1200);
+  });
+
+  it('does NOT allow overheal when sanguine_endurance is NOT equipped', () => {
+    const stats: [DerivedStats, DerivedStats] = [
+      { ...createEmptyDerivedStats(), maxHP: 1000, physicalDamage: 50, attackSpeed: 0.5, lifestealPercent: 200 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 0, attackSpeed: 1.0 },
+    ];
+    const log = simulate(stats, [makeBareLoadout(), makeBareLoadout()], registry, new SeededRNG(42), 1);
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe('blood_pact bespoke mechanic', () => {
+  it('overheal converts to permanent maxHP gain capped at 20% when equipped', () => {
+    const attackerLoadout = makeLoadoutWithCompound('blood_pact');
+    const defenderLoadout = makeBareLoadout();
+    const stats: [DerivedStats, DerivedStats] = [
+      { ...createEmptyDerivedStats(), maxHP: 1000, physicalDamage: 50, attackSpeed: 0.5, lifestealPercent: 200 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 0, attackSpeed: 1.0 },
+    ];
+    const log = simulate(stats, [attackerLoadout, defenderLoadout], registry, new SeededRNG(42), 1);
+    // With blood_pact, attacker's effective maxHP can grow up to 1000 + 200 = 1200.
+    // Final currentHP can't exceed the new effective max.
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1200);
+  });
+
+  it('does NOT raise maxHP when blood_pact is NOT equipped', () => {
+    const stats: [DerivedStats, DerivedStats] = [
+      { ...createEmptyDerivedStats(), maxHP: 1000, physicalDamage: 50, attackSpeed: 0.5, lifestealPercent: 200 },
+      { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 0, attackSpeed: 1.0 },
+    ];
+    const log = simulate(stats, [makeBareLoadout(), makeBareLoadout()], registry, new SeededRNG(42), 1);
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1000);
+  });
+});

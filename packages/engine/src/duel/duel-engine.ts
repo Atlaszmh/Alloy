@@ -34,6 +34,77 @@ function isCompoundTrigger(affixId: string): boolean {
 }
 
 /**
+ * Check whether a compound recipe is equipped on either weapon or armor.
+ * Walks slots, matches by gem.affixId === recipeId. Used by bespoke
+ * compound mechanics (flicker_strike, sanguine_endurance, blood_pact)
+ * that need a yes/no presence check.
+ */
+function hasCompoundEquipped(loadout: Loadout, recipeId: string): boolean {
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (slot && slot.gem.affixId === recipeId) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Read a compound.<id>.<key> param from a recipe's outputBonusEffects.
+ * Returns the value (scale-1 float) or `defaultValue` if the recipe or param
+ * isn't found.
+ */
+function readCompoundParam(
+  registry: DataRegistry,
+  recipeId: string,
+  key: string,
+  defaultValue: number,
+): number {
+  const recipe = registry.getRecipeByOutputAffix(recipeId);
+  if (!recipe) return defaultValue;
+  const stat = `compound.${recipeId}.${key}`;
+  const param = recipe.outputBonusEffects.find((e) => e.stat === stat);
+  return param?.value ?? defaultValue;
+}
+
+/**
+ * Apply a heal to a gladiator, respecting bespoke compound caps:
+ *   - blood_pact (bloodPactGainCapFraction > 0): overheal converts to permanent
+ *     maxHP gain, capped at bloodPactBaseMaxHP * bloodPactGainCapFraction.
+ *     Processed first so subsequent caps see the new effective max.
+ *   - sanguine_endurance (sanguineOverhealMultiplier > 1): allows currentHP to
+ *     exceed effectiveMaxHP up to effectiveMaxHP * sanguineOverhealMultiplier.
+ * Returns the actual amount healed (clamped by the relevant cap).
+ *
+ * Exported so applyTriggerEffect's heal case can route through the same logic.
+ */
+export function applyHealWithBespokeCaps(g: GladiatorRuntime, healAmount: number): number {
+  if (healAmount <= 0) return 0;
+
+  // Step 1: blood_pact — convert overheal to permanent maxHP gain.
+  if (g.bloodPactGainCapFraction > 0) {
+    const currentEffMax = effectiveMaxHP(g);
+    const overheal = Math.max(0, (g.currentHP + healAmount) - currentEffMax);
+    if (overheal > 0) {
+      const maxAllowedGain = g.bloodPactBaseMaxHP * g.bloodPactGainCapFraction;
+      const remainingGain = Math.max(0, maxAllowedGain - g.bloodPactMaxHpGained);
+      const gain = Math.min(overheal, remainingGain);
+      if (gain > 0) {
+        g.maxHP += gain;
+        g.bloodPactMaxHpGained += gain;
+      }
+    }
+  }
+
+  // Step 2: compute final cap. sanguine_endurance lifts ceiling above effectiveMaxHP.
+  const cap = g.sanguineOverhealMultiplier > 1
+    ? effectiveMaxHP(g) * g.sanguineOverhealMultiplier
+    : effectiveMaxHP(g);
+  const oldHP = g.currentHP;
+  g.currentHP = Math.min(cap, g.currentHP + healAmount);
+  return g.currentHP - oldHP;
+}
+
+/**
  * Run a full duel simulation between two gladiators.
  * All randomness is driven by the provided SeededRNG for determinism.
  */
@@ -62,6 +133,36 @@ export function simulate(
   // Extract passive damage modifiers from loadouts (immutable for the duel)
   gladiators[0].passiveDamageModifiers = extractPassiveModifiers(loadouts[0], registry);
   gladiators[1].passiveDamageModifiers = extractPassiveModifiers(loadouts[1], registry);
+
+  // --- Bespoke compound state (Group E) ---
+  // Cache "is compound X equipped" lookups once per duel for hot-path checks.
+  const flickerStrikeEquipped: [boolean, boolean] = [
+    hasCompoundEquipped(loadouts[0], 'flicker_strike'),
+    hasCompoundEquipped(loadouts[1], 'flicker_strike'),
+  ];
+
+  // flicker_strike: hits-without-crit threshold; default 5.
+  const flickerHitInterval = readCompoundParam(registry, 'flicker_strike', 'hitInterval', 5);
+
+  // sanguine_endurance: install per-gladiator overheal cap multiplier on the
+  // runtime so applyHeal (and applyTriggerEffect's heal case) can read it
+  // without re-walking loadouts each tick. Recipe stores 1.20 as absolute
+  // multiplier; values <= 1 are treated as fractional additions.
+  const sanguineRaw = readCompoundParam(registry, 'sanguine_endurance', 'overhealCap', 1.20);
+  const sanguineMul = sanguineRaw > 1 ? sanguineRaw : 1 + sanguineRaw;
+  for (let p = 0; p < 2; p++) {
+    if (hasCompoundEquipped(loadouts[p], 'sanguine_endurance')) {
+      gladiators[p].sanguineOverhealMultiplier = sanguineMul;
+    }
+  }
+
+  // blood_pact: install per-gladiator max-HP gain cap fraction on the runtime.
+  const bloodPactCap = readCompoundParam(registry, 'blood_pact', 'overhealToHpCap', 0.20);
+  for (let p = 0; p < 2; p++) {
+    if (hasCompoundEquipped(loadouts[p], 'blood_pact')) {
+      gladiators[p].bloodPactGainCapFraction = bloodPactCap;
+    }
+  }
 
   const log = createCombatLog(rng.getState());
 
@@ -166,16 +267,20 @@ export function simulate(
     // 2. HP regeneration for both gladiators
     for (let p = 0; p < 2; p++) {
       const g = gladiators[p] as GladiatorRuntime;
-      if (g.stats.hpRegen > 0 && g.currentHP < effectiveMaxHP(g) && g.currentHP > 0) {
+      // Allow regen to keep ticking when bespoke overheal compounds are
+      // equipped — sanguine_endurance and blood_pact intentionally lift the
+      // cap. applyHealWithBespokeCaps clamps to the right ceiling internally.
+      const bespokeOverhealActive = g.sanguineOverhealMultiplier > 1 || g.bloodPactGainCapFraction > 0;
+      const hasHeadroom = g.currentHP < effectiveMaxHP(g) || bespokeOverhealActive;
+      if (g.stats.hpRegen > 0 && hasHeadroom && g.currentHP > 0) {
         g.regenAccumulator = Math.round((g.regenAccumulator + STEP_DURATION) * 10) / 10;
         if (g.regenAccumulator >= g.regenInterval) {
           g.regenAccumulator = 0;
           const rawHeal = g.stats.hpRegen;
-          const effectiveHeal = Math.min(rawHeal, effectiveMaxHP(g) - g.currentHP);
+          const oldHP = g.currentHP;
+          const effectiveHeal = applyHealWithBespokeCaps(g, rawHeal);
           const overheal = rawHeal - effectiveHeal;
-          g.currentHP += effectiveHeal;
           if (effectiveHeal > 0) {
-            const oldHP = g.currentHP - effectiveHeal;
             log.addEvent(time, {
               type: 'heal',
               player: g.playerId,
@@ -239,9 +344,15 @@ export function simulate(
         const isBlocked = !isDodged && rng.nextBool(effectiveBlockChance / 100);
         const blockAmt = isBlocked ? defender.stats.blockAmount : 0;
 
-        // Roll crit (integer percentages -> fractions)
-        const effectiveCritChance = Math.max(0, getBuffedStat(attacker, 'critChance') - getBuffedStat(defender, 'critAvoidance'));
-        const isCrit = !isDodged && rng.nextBool(effectiveCritChance / 100);
+        // Roll crit (integer percentages -> fractions). flicker_strike forces
+        // a crit when the hits-without-crit counter reaches threshold.
+        let isCrit: boolean;
+        if (!isDodged && flickerStrikeEquipped[attackerIdx] && attacker.hitsSinceCrit >= flickerHitInterval) {
+          isCrit = true;
+        } else {
+          const effectiveCritChance = Math.max(0, getBuffedStat(attacker, 'critChance') - getBuffedStat(defender, 'critAvoidance'));
+          isCrit = !isDodged && rng.nextBool(effectiveCritChance / 100);
+        }
 
         // Calculate full attack breakdown
         const breakdown = calculateAttackBreakdown(
@@ -268,6 +379,17 @@ export function simulate(
         if (isBlocked) {
           // Process on_block triggers for defender (damageContext = blocked amount)
           fireTriggers(triggers[defenderIdx], 'on_block', defender, attacker, rng, log, time, breakdown.blocked);
+        }
+
+        // flicker_strike bookkeeping: any landed attack updates the
+        // hits-since-crit counter (reset on crit, increment otherwise).
+        // Only tracked when flicker_strike is equipped to avoid noise.
+        if (flickerStrikeEquipped[attackerIdx]) {
+          if (isCrit) {
+            attacker.hitsSinceCrit = 0;
+          } else {
+            attacker.hitsSinceCrit += 1;
+          }
         }
 
         // Emit single attack event with breakdown
@@ -348,15 +470,15 @@ export function simulate(
           if (defenderIdx === 0) p0Damage += atkDmg; else p1Damage += atkDmg;
         }
 
-        // Apply lifesteal (integer percentage -> fraction)
+        // Apply lifesteal (integer percentage -> fraction). Uses
+        // applyHealWithBespokeCaps so sanguine_endurance / blood_pact apply.
         const lifesteal = getBuffedStat(attacker, 'lifestealPercent');
         if (lifesteal > 0 && damageToHP > 0) {
           const rawHeal = Math.round(damageToHP * lifesteal / 100);
           if (rawHeal > 0) {
-            const effectiveHeal = Math.min(rawHeal, effectiveMaxHP(attacker) - attacker.currentHP);
-            const overheal = rawHeal - effectiveHeal;
             const oldHP = attacker.currentHP;
-            attacker.currentHP += effectiveHeal;
+            const effectiveHeal = applyHealWithBespokeCaps(attacker, rawHeal);
+            const overheal = rawHeal - effectiveHeal;
             log.addEvent(time, {
               type: 'heal',
               player: attacker.playerId,
@@ -738,7 +860,9 @@ export function applyTriggerEffect(
     case 'heal': {
       const healAmount = effect.isPercent ? effectiveMaxHP(owner) * effect.amount : effect.amount;
       const oldHP = owner.currentHP;
-      owner.currentHP = Math.min(effectiveMaxHP(owner), owner.currentHP + healAmount);
+      // Route through bespoke-caps helper so sanguine_endurance / blood_pact
+      // apply uniformly to triggered heals as well as lifesteal/regen.
+      applyHealWithBespokeCaps(owner, healAmount);
       log.addEvent(time, {
         type: 'hp_change',
         player: owner.playerId,
