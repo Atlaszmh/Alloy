@@ -279,6 +279,12 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
   const hpEvents = group.events.filter((e) => e.event.type === 'hp_change');
   const triggerEvents = group.events.filter((e) => e.event.type === 'trigger_proc' || e.event.type === 'synergy_proc');
   const compoundTriggers = group.events.filter((e) => e.event.type === 'compound_trigger');
+  const suppressedTriggerIds = new Set<string>();
+  for (const e of compoundTriggers) {
+    if (e.event.type === 'compound_trigger') {
+      suppressedTriggerIds.add(e.event.compoundId);
+    }
+  }
 
   if (!attackEvent || attackEvent.event.type !== 'attack') {
     return (
@@ -310,6 +316,8 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
       })}
       {triggerEvents.map((e, i) => {
         if (e.event.type !== 'trigger_proc' && e.event.type !== 'synergy_proc') return null;
+        // Suppress trigger_proc rows whose triggerId already has a named compound_trigger banner above
+        if (e.event.type === 'trigger_proc' && suppressedTriggerIds.has(e.event.triggerId)) return null;
         return (
           <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
             {'\u2728'} {e.event.effectDescription}

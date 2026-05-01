@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
+import { render } from '@testing-library/react';
 import { groupEventsIntoSwings } from '../combat-log-grouper.js';
+import { SwingGroupComponent } from '../SwingGroup.js';
+import type { SwingGroup } from '../combat-log-grouper.js';
 
 describe('combat-log-grouper - compound triggers', () => {
   it('groups compound_trigger + same-frame trigger_proc/dot_apply under a single banner group', () => {
@@ -18,5 +21,48 @@ describe('combat-log-grouper - compound triggers', () => {
     expect(groups[0].events.some((e) => e.event.type === 'compound_trigger')).toBe(true);
     expect(groups[0].events.some((e) => e.event.type === 'dot_apply')).toBe(true);
     expect(groups[0].events.some((e) => e.event.type === 'trigger_proc')).toBe(true);
+  });
+});
+
+describe('SwingGroupComponent - compound suppression', () => {
+  it('does not render redundant trigger_proc rows when a matching compound_trigger banner exists', () => {
+    const group: SwingGroup = {
+      type: 'attack',
+      time: 1,
+      attacker: 0,
+      target: 1,
+      events: [
+        { time: 1, event: { type: 'attack', attacker: 0, breakdown: {
+          dodged: false, physical: { raw: 50, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 50 },
+          elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 50, totalMitigated: 0, totalNet: 50, isCrit: false,
+        } } },
+        { time: 1, event: { type: 'compound_trigger', player: 0, compoundId: 'ignite', displayName: 'IGNITE!' } },
+        { time: 1, event: { type: 'trigger_proc', player: 0, triggerId: 'ignite', effectDescription: 'compound_dot' } },
+      ],
+    };
+    const { container } = render(<SwingGroupComponent group={group} />);
+    const text = container.textContent ?? '';
+    // Compound banner present
+    expect(text).toContain('IGNITE!');
+    // Redundant trigger_proc row absent (its effectDescription would say "compound_dot")
+    expect(text).not.toContain('compound_dot');
+  });
+
+  it('still renders trigger_proc rows that have NO matching compound_trigger', () => {
+    const group: SwingGroup = {
+      type: 'attack',
+      time: 1,
+      attacker: 0,
+      target: 1,
+      events: [
+        { time: 1, event: { type: 'attack', attacker: 0, breakdown: {
+          dodged: false, physical: { raw: 50, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 50 },
+          elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 50, totalMitigated: 0, totalNet: 50, isCrit: false,
+        } } },
+        { time: 1, event: { type: 'trigger_proc', player: 0, triggerId: 'chance_on_hit', effectDescription: 'bonus_damage' } },
+      ],
+    };
+    const { container } = render(<SwingGroupComponent group={group} />);
+    expect(container.textContent ?? '').toContain('bonus_damage');
   });
 });
