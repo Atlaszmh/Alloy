@@ -7,11 +7,14 @@ import type {
   CompoundEffectBlueprint,
   CompoundEffectShape,
   GladiatorRuntime,
+  PassiveDamageModifier,
+  PassiveModifierCondition,
 } from '../types/combat.js';
 import type { AffixDef, AffixTier } from '../types/affix.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GemInstance } from '../types/gem.js';
 import type { RecipeDefinition } from '../combine/recipe-registry.js';
+import { effectiveMaxHP } from './gladiator.js';
 
 /** Map affix IDs to their trigger conditions */
 const CONDITION_MAP: Record<string, TriggerCondition> = {
@@ -274,6 +277,59 @@ function buildTriggerEffect(modifiers: AffixDef['tiers'][1]['weaponEffect']): Tr
     }
   }
   return null;
+}
+
+/**
+ * Walk equipped slots and extract all passive damage modifiers from compound
+ * gem recipes. Built once per duel; immutable thereafter.
+ */
+export function extractPassiveModifiers(
+  loadout: Loadout,
+  registry: DataRegistry,
+): PassiveDamageModifier[] {
+  const out: PassiveDamageModifier[] = [];
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (!slot) continue;
+      const recipe = registry.getRecipeByOutputAffix(slot.gem.affixId);
+      if (!recipe?.passiveDamageModifiers) continue;
+      for (const blueprint of recipe.passiveDamageModifiers) {
+        out.push({
+          sourceCompoundId: recipe.id,
+          damageType: blueprint.damageType,
+          multiplier: blueprint.multiplier,
+          condition: blueprint.condition,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Evaluate a passive modifier condition against current gladiator state.
+ * Each kind reads exactly the runtime fields it needs — keeps damage-calc
+ * free of state-walking logic.
+ */
+export function evaluatePassiveModifierCondition(
+  condition: PassiveModifierCondition,
+  attacker: GladiatorRuntime,
+  defender: GladiatorRuntime,
+): boolean {
+  switch (condition.kind) {
+    case 'always':
+      return true;
+    case 'target_has_dot_element':
+      return defender.activeDOTs.some((dot) => dot.element === condition.element);
+    case 'target_slowed':
+      return defender.slowDebuffMultiplier > 1;
+    case 'target_below_hp_pct':
+      return defender.currentHP < effectiveMaxHP(defender) * condition.pct;
+    case 'self_above_hp_pct':
+      return attacker.currentHP > effectiveMaxHP(attacker) * condition.pct;
+    case 'self_has_barrier':
+      return attacker.barrier > 0 || attacker.temporaryBarriers.length > 0;
+  }
 }
 
 /**

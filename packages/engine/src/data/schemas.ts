@@ -166,6 +166,23 @@ const CompoundEffectBlueprintSchema = z.object({
   effect: CompoundEffectShapeSchema,
 });
 
+const ElementSchemaForCondition = z.enum(['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos']);
+
+const PassiveModifierConditionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('always') }),
+  z.object({ kind: z.literal('target_has_dot_element'), element: ElementSchemaForCondition }),
+  z.object({ kind: z.literal('target_slowed') }),
+  z.object({ kind: z.literal('target_below_hp_pct'), pct: z.number().min(0).max(1) }),
+  z.object({ kind: z.literal('self_above_hp_pct'), pct: z.number().min(0).max(1) }),
+  z.object({ kind: z.literal('self_has_barrier') }),
+]);
+
+const PassiveDamageModifierBlueprintSchema = z.object({
+  damageType: z.union([z.literal('physical'), ElementSchemaForCondition]),
+  multiplier: z.number().nonnegative(),
+  condition: PassiveModifierConditionSchema,
+});
+
 const RecipeDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -178,6 +195,7 @@ const RecipeDefinitionSchema = z.object({
   outputAffixId: z.string(),
   outputBonusEffects: z.array(StatModifierSchema),
   compoundEffects: z.array(CompoundEffectBlueprintSchema).optional(),
+  passiveDamageModifiers: z.array(PassiveDamageModifierBlueprintSchema).optional(),
   maxDepthContribution: z.number().int().nonnegative(),
   tags: z.array(z.string()),
 }).superRefine((recipe, ctx) => {

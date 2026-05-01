@@ -8,6 +8,26 @@ export interface RecipeComponent {
   id: string;
 }
 
+/**
+ * Declarative passive damage modifier on a compound recipe. Materialized into
+ * a runtime PassiveDamageModifier (see types/combat.ts) by
+ * extractPassiveModifiers at duel start. Conditions are evaluated at hit time.
+ */
+export interface PassiveDamageModifierBlueprint {
+  damageType: 'physical' | 'fire' | 'cold' | 'lightning' | 'poison' | 'shadow' | 'chaos';
+  multiplier: number;
+  condition: PassiveModifierConditionBlueprint;
+}
+
+/** Mirrors PassiveModifierCondition in combat.ts (kept loose to avoid circular import). */
+export type PassiveModifierConditionBlueprint =
+  | { kind: 'always' }
+  | { kind: 'target_has_dot_element'; element: 'fire' | 'cold' | 'lightning' | 'poison' | 'shadow' | 'chaos' }
+  | { kind: 'target_slowed' }
+  | { kind: 'target_below_hp_pct'; pct: number }
+  | { kind: 'self_above_hp_pct'; pct: number }
+  | { kind: 'self_has_barrier' };
+
 export interface RecipeDefinition {
   id: string;
   name: string;
@@ -23,6 +43,12 @@ export interface RecipeDefinition {
    * behavior wired yet).
    */
   compoundEffects?: CompoundEffectBlueprint[];
+  /**
+   * Optional passive damage modifiers contributed while this compound is
+   * equipped. Read at attack-time by damage-calc to apply conditional
+   * multipliers (e.g. blight's "+30% poison on burning targets").
+   */
+  passiveDamageModifiers?: PassiveDamageModifierBlueprint[];
   maxDepthContribution: number;
   tags: string[];
 }
