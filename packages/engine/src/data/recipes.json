@@ -526,7 +526,19 @@
     "outputAffixId": "vampiric_fury",
     "outputBonusEffects": [
       { "stat": "compound.vampiric_fury.active", "op": "flat", "value": 1 },
-      { "stat": "compound.vampiric_fury.critLifestealMultiplier", "op": "flat", "value": 3.0 }
+      { "stat": "compound.vampiric_fury.critLifestealMultiplier", "op": "flat", "value": 3.0 },
+      { "stat": "compound.vampiric_fury.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_crit",
+        "effect": {
+          "kind": "stat_buff_mul",
+          "stat": "lifestealPercent",
+          "multiplier": 3.0,
+          "duration": 4
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lifesteal", "crit", "utility"]
