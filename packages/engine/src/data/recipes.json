@@ -480,7 +480,24 @@
     "outputBonusEffects": [
       { "stat": "compound.frostplague.active", "op": "flat", "value": 1 },
       { "stat": "compound.frostplague.poisonSpeedOnSlow", "op": "flat", "value": 0.50 },
-      { "stat": "compound.frostplague.extraSlowOnPoison", "op": "flat", "value": 0.10 }
+      { "stat": "compound.frostplague.extraSlowOnPoison", "op": "flat", "value": 0.10 },
+      { "stat": "compound.frostplague.chance", "op": "flat", "value": 0.25 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": {
+          "kind": "amplify_dot_element",
+          "element": "poison",
+          "stackMultiplier": 1.5,
+          "tickMultiplier": 1.5,
+          "duration": 6
+        }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_slow", "multiplier": 1.1, "duration": 4 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "poison", "elemental"]
