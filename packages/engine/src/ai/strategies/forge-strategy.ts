@@ -107,6 +107,23 @@ export function socketedGems(loadout: Loadout): GemInstance[] {
   return result;
 }
 
+/**
+ * Find which slot a gem is currently socketed in (if any). Returns null if the
+ * gem is not currently socketed.
+ */
+function findSocketLocation(
+  uid: string,
+  loadout: Loadout,
+): { target: 'weapon' | 'armor'; slotIndex: number } | null {
+  for (let i = 0; i < loadout.weapon.slots.length; i++) {
+    if (loadout.weapon.slots[i]?.gem.uid === uid) return { target: 'weapon', slotIndex: i };
+  }
+  for (let i = 0; i < loadout.armor.slots.length; i++) {
+    if (loadout.armor.slots[i]?.gem.uid === uid) return { target: 'armor', slotIndex: i };
+  }
+  return null;
+}
+
 export interface ForgeStrategy {
   plan(
     stockpile: GemInstance[],
@@ -870,6 +887,12 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       armor: loadout.armor.slots.map((s) => s !== null),
     };
 
+    // Build unified candidate pool: stockpile + currently-socketed gems.
+    // T5 can recognize already-socketed gems as combine partners, unsocketing
+    // them first before applying the combine.
+    const socketed = socketedGems(loadout);
+    const candidates = [...stockpile, ...socketed];
+
     // Exhaustive combination search: find ALL valid combo pairs
     const combineCost = balance.fluxCosts.combineOrbs;
     interface ComboPlan {
@@ -880,24 +903,25 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     }
     const allCombos: ComboPlan[] = [];
 
-    for (let i = 0; i < stockpile.length; i++) {
-      for (let j = i + 1; j < stockpile.length; j++) {
-        // Recipe-aware so compound stockpile gems (e.g. ignite) can combine
-        // back into higher-tier capstones if a signature recipe references
-        // them. registry.getCombination only does affix→affix lookups.
-        const combo = findCombinableSignature(stockpile[i], stockpile[j], registry);
+    // Archetype is computed from stockpile only (socketed gems already committed)
+    const arch = bestArchetype(stockpile, registry);
+    const archTags = ARCHETYPE_TAGS[arch];
+
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        // Recipe-aware so compound gems (e.g. ignite) can combine back into
+        // higher-tier capstones if a signature recipe references them.
+        const combo = findCombinableSignature(candidates[i], candidates[j], registry);
         if (!combo) continue;
 
         // Skip signature/category combines when either input has a filled secondary
         // (the forge action would reject at apply-time per Task 3.1)
-        if (signatureCombineBlockedBySecondary(stockpile[i], stockpile[j], registry)) continue;
+        if (signatureCombineBlockedBySecondary(candidates[i], candidates[j], registry)) continue;
 
         // Score: component value + synergy with rest of stockpile
-        let score = orbValueScore(stockpile[i], registry) + orbValueScore(stockpile[j], registry);
+        let score = orbValueScore(candidates[i], registry) + orbValueScore(candidates[j], registry);
 
         // Bonus for combo tags that match our archetype
-        const arch = bestArchetype(stockpile, registry);
-        const archTags = ARCHETYPE_TAGS[arch];
         for (const tag of combo.tags) {
           if (archTags.includes(tag)) score += 5;
         }
@@ -922,19 +946,17 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       comboId: string;
     }
     const allCombos3: Combo3Plan[] = [];
-    const arch = bestArchetype(stockpile, registry);
-    const archTags = ARCHETYPE_TAGS[arch];
-    for (let i = 0; i < stockpile.length; i++) {
-      for (let j = i + 1; j < stockpile.length; j++) {
-        for (let k = j + 1; k < stockpile.length; k++) {
-          const combo3 = findCombinable3(stockpile[i], stockpile[j], stockpile[k], registry);
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        for (let k = j + 1; k < candidates.length; k++) {
+          const combo3 = findCombinable3(candidates[i], candidates[j], candidates[k], registry);
           if (!combo3) continue;
           if (
-            stockpile[i].secondary || stockpile[j].secondary || stockpile[k].secondary
+            candidates[i].secondary || candidates[j].secondary || candidates[k].secondary
           ) continue;
-          let score = orbValueScore(stockpile[i], registry)
-            + orbValueScore(stockpile[j], registry)
-            + orbValueScore(stockpile[k], registry);
+          let score = orbValueScore(candidates[i], registry)
+            + orbValueScore(candidates[j], registry)
+            + orbValueScore(candidates[k], registry);
           for (const tag of combo3.tags) {
             if (archTags.includes(tag)) score += 8;
           }
@@ -951,31 +973,41 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     const assignCostForCombine = balance.fluxCosts.assignOrb;
     for (const cand of allCombos3) {
       if (flux < combineCost + assignCostForCombine) break;
+      const g1 = candidates[cand.idx1], g2 = candidates[cand.idx2], g3 = candidates[cand.idx3];
       if (
-        usedOrbUids.has(stockpile[cand.idx1].uid)
-        || usedOrbUids.has(stockpile[cand.idx2].uid)
-        || usedOrbUids.has(stockpile[cand.idx3].uid)
+        usedOrbUids.has(g1.uid)
+        || usedOrbUids.has(g2.uid)
+        || usedOrbUids.has(g3.uid)
       ) continue;
+
+      // Unsocket any of the three that are currently socketed, freeing their slots
+      for (const g of [g1, g2, g3]) {
+        const loc = findSocketLocation(g.uid, loadout);
+        if (loc) {
+          actions.push({ kind: 'unsocket_gem', target: loc.target, slotIndex: loc.slotIndex });
+          occupiedSlots[loc.target][loc.slotIndex] = false;
+        }
+      }
 
       const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
       if (!slot) break;
 
       actions.push({
         kind: 'combine3',
-        gemUid1: stockpile[cand.idx1].uid,
-        gemUid2: stockpile[cand.idx2].uid,
-        gemUid3: stockpile[cand.idx3].uid,
+        gemUid1: g1.uid,
+        gemUid2: g2.uid,
+        gemUid3: g3.uid,
       });
-      const capstoneUid = `combined3_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}_${stockpile[cand.idx3].uid}`;
+      const capstoneUid = `combined3_${g1.uid}_${g2.uid}_${g3.uid}`;
       actions.push({
         kind: 'socket_gem',
         gemUid: capstoneUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(stockpile[cand.idx1].uid);
-      usedOrbUids.add(stockpile[cand.idx2].uid);
-      usedOrbUids.add(stockpile[cand.idx3].uid);
+      usedOrbUids.add(g1.uid);
+      usedOrbUids.add(g2.uid);
+      usedOrbUids.add(g3.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       occupiedSlots[slot.target][slot.slotIndex + 1] = true;
       flux -= combineCost + assignCostForCombine;
@@ -984,25 +1016,35 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     // Greedily select non-conflicting binary combinations (after capstones)
     for (const cand of allCombos) {
       if (flux < combineCost + assignCostForCombine) break;
-      if (usedOrbUids.has(stockpile[cand.idx1].uid) || usedOrbUids.has(stockpile[cand.idx2].uid)) continue;
+      const g1 = candidates[cand.idx1], g2 = candidates[cand.idx2];
+      if (usedOrbUids.has(g1.uid) || usedOrbUids.has(g2.uid)) continue;
+
+      // Unsocket any of the two that are currently socketed, freeing their slots
+      for (const g of [g1, g2]) {
+        const loc = findSocketLocation(g.uid, loadout);
+        if (loc) {
+          actions.push({ kind: 'unsocket_gem', target: loc.target, slotIndex: loc.slotIndex });
+          occupiedSlots[loc.target][loc.slotIndex] = false;
+        }
+      }
 
       const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
       if (!slot) break;
 
       actions.push({
         kind: 'combine',
-        gemUid1: stockpile[cand.idx1].uid,
-        gemUid2: stockpile[cand.idx2].uid,
+        gemUid1: g1.uid,
+        gemUid2: g2.uid,
       });
-      const compoundUid = `combined_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}`;
+      const compoundUid = `combined_${g1.uid}_${g2.uid}`;
       actions.push({
         kind: 'socket_gem',
         gemUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(stockpile[cand.idx1].uid);
-      usedOrbUids.add(stockpile[cand.idx2].uid);
+      usedOrbUids.add(g1.uid);
+      usedOrbUids.add(g2.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       occupiedSlots[slot.target][slot.slotIndex + 1] = true;
       flux -= combineCost + assignCostForCombine;
