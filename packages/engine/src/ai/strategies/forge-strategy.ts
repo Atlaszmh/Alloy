@@ -547,6 +547,10 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
       (a, b) => orbValueScore(b, registry) - orbValueScore(a, registry),
     );
 
+    // T3 deliberately does NOT enumerate combines against socketed gems —
+    // missing those is part of what defines a T3 player's skill ceiling.
+    // Compare to T4/T5 which do.
+
     // Try combinations first
     const combineCost = balance.fluxCosts.combineOrbs;
     const assignCostForCombine = balance.fluxCosts.assignOrb;
@@ -692,7 +696,15 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
       armor: loadout.armor.slots.map((s) => s !== null),
     };
 
-    // Find ALL valid combinations, score them, and pick the best ones
+    // Build unified candidate pool: stockpile + currently-socketed gems.
+    // T4 can recognize already-socketed gems as binary combine partners,
+    // unsocketing them first before applying the combine.
+    // (T4 does NOT enumerate capstones — that's T5-exclusive behaviour.)
+    const socketed = socketedGems(loadout);
+    const candidates = [...stockpile, ...socketed];
+
+    // Find ALL valid binary combinations across the unified pool, score them,
+    // and pick the best ones.
     const combineCost = balance.fluxCosts.combineOrbs;
     interface ComboPlan {
       i: number;
@@ -701,15 +713,15 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     }
     const comboCandidates: ComboPlan[] = [];
 
-    for (let i = 0; i < stockpile.length; i++) {
-      for (let j = i + 1; j < stockpile.length; j++) {
-        const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const combo = registry.getCombination(candidates[i].affixId, candidates[j].affixId);
         if (!combo) continue;
         // Skip signature/category combines when either input has a filled secondary
         // (the forge action would reject at apply-time per Task 3.1)
-        if (signatureCombineBlockedBySecondary(stockpile[i], stockpile[j], registry)) continue;
+        if (signatureCombineBlockedBySecondary(candidates[i], candidates[j], registry)) continue;
         // Score based on component values + combo tags
-        const score = orbValueScore(stockpile[i], registry) + orbValueScore(stockpile[j], registry);
+        const score = orbValueScore(candidates[i], registry) + orbValueScore(candidates[j], registry);
         comboCandidates.push({ i, j, score });
       }
     }
@@ -721,25 +733,35 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     const assignCostForCombine = balance.fluxCosts.assignOrb;
     for (const cand of comboCandidates) {
       if (flux < combineCost + assignCostForCombine) break;
-      if (usedOrbUids.has(stockpile[cand.i].uid) || usedOrbUids.has(stockpile[cand.j].uid)) continue;
+      const g1 = candidates[cand.i], g2 = candidates[cand.j];
+      if (usedOrbUids.has(g1.uid) || usedOrbUids.has(g2.uid)) continue;
+
+      // Unsocket any of the two that are currently socketed, freeing their slots
+      for (const g of [g1, g2]) {
+        const loc = findSocketLocation(g.uid, loadout);
+        if (loc) {
+          actions.push({ kind: 'unsocket_gem', target: loc.target, slotIndex: loc.slotIndex });
+          occupiedSlots[loc.target][loc.slotIndex] = false;
+        }
+      }
 
       const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
       if (!slot) break;
 
       actions.push({
         kind: 'combine',
-        gemUid1: stockpile[cand.i].uid,
-        gemUid2: stockpile[cand.j].uid,
+        gemUid1: g1.uid,
+        gemUid2: g2.uid,
       });
-      const compoundUid = `combined_${stockpile[cand.i].uid}_${stockpile[cand.j].uid}`;
+      const compoundUid = `combined_${g1.uid}_${g2.uid}`;
       actions.push({
         kind: 'socket_gem',
         gemUid: compoundUid,
         target: slot.target,
         slotIndex: slot.slotIndex,
       });
-      usedOrbUids.add(stockpile[cand.i].uid);
-      usedOrbUids.add(stockpile[cand.j].uid);
+      usedOrbUids.add(g1.uid);
+      usedOrbUids.add(g2.uid);
       occupiedSlots[slot.target][slot.slotIndex] = true;
       occupiedSlots[slot.target][slot.slotIndex + 1] = true;
       flux -= combineCost + assignCostForCombine;
