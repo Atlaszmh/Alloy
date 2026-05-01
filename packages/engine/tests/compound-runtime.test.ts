@@ -3,6 +3,7 @@ import { applyTriggerEffect, fireTriggers, simulate } from '../src/duel/duel-eng
 import { createGladiator, effectiveMaxHP } from '../src/duel/gladiator.js';
 import { createCombatLog } from '../src/duel/combat-log.js';
 import { extractTriggers } from '../src/duel/trigger-system.js';
+import { calculateAttackBreakdown } from '../src/duel/damage-calc.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { DataRegistry } from '../src/data/registry.js';
 import { createGem } from '../src/types/gem.js';
@@ -759,5 +760,107 @@ describe('fireTriggers — on_dodge condition', () => {
     // wired recipes. So this end-to-end test is deferred to Chunk 4 once
     // riposte is wired.
     expect(true).toBe(true); // placeholder — real coverage in Chunk 4
+  });
+});
+
+describe('PassiveDamageModifier — conditional damage bonus', () => {
+  it('applies multiplier when condition holds (target_has_dot_element)', () => {
+    function runOnce(seedFireDot: boolean): number {
+      const attacker = makeGladiator({
+        elementalDamage: { fire: 0, cold: 0, lightning: 0, poison: 100, shadow: 0, chaos: 0 },
+      });
+      const defender = makeOpponent({ maxHP: 5000 });
+      defender.currentHP = 5000;
+      attacker.passiveDamageModifiers = [
+        {
+          sourceCompoundId: 'test_blight',
+          damageType: 'poison',
+          multiplier: 1.30,
+          condition: { kind: 'target_has_dot_element', element: 'fire' },
+        },
+      ];
+      if (seedFireDot) {
+        defender.activeDOTs.push({
+          element: 'fire',
+          damagePerSecond: 1,
+          remaining: 100,
+          tickInterval: 100,
+          accumulator: 0,
+          sourceAffixId: 'test',
+          stacks: 1,
+          sourcePlayerId: 0,
+        });
+      }
+      const bd = calculateAttackBreakdown(
+        attacker.stats,
+        defender.stats,
+        false,
+        false,
+        0,
+        attacker.passiveDamageModifiers,
+        attacker,
+        defender,
+      );
+      return bd.elemental.poison?.net ?? 0;
+    }
+
+    const baseline = runOnce(false);
+    const amplified = runOnce(true);
+    expect(amplified).toBeGreaterThan(baseline);
+    expect(amplified / baseline).toBeCloseTo(1.30, 1); // ±0.1 tolerance
+  });
+
+  it('does NOT apply multiplier when condition is false', () => {
+    const attacker = makeGladiator({
+      elementalDamage: { fire: 0, cold: 0, lightning: 0, poison: 100, shadow: 0, chaos: 0 },
+    });
+    const defender = makeOpponent();
+    attacker.passiveDamageModifiers = [
+      {
+        sourceCompoundId: 'test',
+        damageType: 'poison',
+        multiplier: 2.0,
+        condition: { kind: 'target_has_dot_element', element: 'fire' },
+      },
+    ];
+    // No fire DOT → condition false → no bonus
+    const bd = calculateAttackBreakdown(
+      attacker.stats,
+      defender.stats,
+      false,
+      false,
+      0,
+      attacker.passiveDamageModifiers,
+      attacker,
+      defender,
+    );
+    expect(bd.elemental.poison?.net).toBe(100); // baseline, no multiplier
+  });
+
+  it('always condition applies unconditionally', () => {
+    const attacker = makeGladiator({
+      elementalDamage: { fire: 0, cold: 0, lightning: 0, poison: 0, shadow: 0, chaos: 0 },
+    });
+    attacker.stats.physicalDamage = 100;
+    const defender = makeOpponent();
+    attacker.passiveDamageModifiers = [
+      {
+        sourceCompoundId: 'test',
+        damageType: 'physical',
+        multiplier: 1.5,
+        condition: { kind: 'always' },
+      },
+    ];
+    const bd = calculateAttackBreakdown(
+      attacker.stats,
+      defender.stats,
+      false,
+      false,
+      0,
+      attacker.passiveDamageModifiers,
+      attacker,
+      defender,
+    );
+    expect(bd.physical.net).toBe(150); // 100 × 1.5
   });
 });

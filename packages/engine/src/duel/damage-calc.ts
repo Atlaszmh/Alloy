@@ -5,7 +5,9 @@ import type {
   ElementalBreakdown,
   DotTickBreakdown,
 } from '../types/damage-breakdown.js';
+import type { PassiveDamageModifier, GladiatorRuntime } from '../types/combat.js';
 import { ALL_ELEMENTS } from '../types/derived-stats.js';
+import { evaluatePassiveModifierCondition } from './trigger-system.js';
 
 /**
  * Build a PhysicalBreakdown for a given raw physical damage value.
@@ -40,6 +42,12 @@ function buildElementalBreakdown(
 /**
  * Calculate a full attack breakdown including physical, elemental, crit,
  * dodge, and block.
+ *
+ * `attackerModifiers` are conditional damage multipliers contributed by the
+ * attacker's equipped compounds (built once at duel start by
+ * extractPassiveModifiers). When `attackerRuntime` and `defenderRuntime` are
+ * both supplied, each modifier's condition is evaluated against current state
+ * and the multiplier is applied to the matching damage type.
  */
 export function calculateAttackBreakdown(
   attacker: DerivedStats,
@@ -47,6 +55,9 @@ export function calculateAttackBreakdown(
   isCrit: boolean,
   isDodged: boolean,
   blockAmount: number,
+  attackerModifiers: PassiveDamageModifier[] = [],
+  attackerRuntime?: GladiatorRuntime,
+  defenderRuntime?: GladiatorRuntime,
 ): DamageBreakdown {
   // Dodge → zero everything
   if (isDodged) {
@@ -67,7 +78,15 @@ export function calculateAttackBreakdown(
   const critMult = isCrit ? attacker.critMultiplier / 100 : 1;
 
   // Physical
-  const rawPhysical = Math.round(attacker.physicalDamage * critMult);
+  let rawPhysical = Math.round(attacker.physicalDamage * critMult);
+  if (attackerRuntime && defenderRuntime) {
+    for (const mod of attackerModifiers) {
+      if (mod.damageType !== 'physical') continue;
+      if (evaluatePassiveModifierCondition(mod.condition, attackerRuntime, defenderRuntime)) {
+        rawPhysical = Math.round(rawPhysical * mod.multiplier);
+      }
+    }
+  }
   const physical = buildPhysicalBreakdown(rawPhysical, defender.armor, attacker.armorPenetration);
 
   // Elemental
@@ -79,7 +98,16 @@ export function calculateAttackBreakdown(
   for (const el of ALL_ELEMENTS) {
     const baseDmg = attacker.elementalDamage[el];
     if (baseDmg <= 0) continue;
-    const rawElem = Math.round(baseDmg * critMult);
+    let rawElem = Math.round(baseDmg * critMult);
+    // Apply passive damage modifiers for this element if their conditions hold
+    if (attackerRuntime && defenderRuntime) {
+      for (const mod of attackerModifiers) {
+        if (mod.damageType !== el) continue;
+        if (evaluatePassiveModifierCondition(mod.condition, attackerRuntime, defenderRuntime)) {
+          rawElem = Math.round(rawElem * mod.multiplier);
+        }
+      }
+    }
     const eb = buildElementalBreakdown(rawElem, defender.resistances[el], attacker.elementalPenetration);
     elemental[el] = eb;
     elemTotalRaw += eb.raw;

@@ -11,7 +11,7 @@ import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import { createGladiator, effectiveMaxHP } from './gladiator.js';
 import { calculateAttackBreakdown, calculateDOTBreakdown } from './damage-calc.js';
-import { extractTriggers, evaluateTrigger } from './trigger-system.js';
+import { extractTriggers, evaluateTrigger, extractPassiveModifiers } from './trigger-system.js';
 import { createCombatLog } from './combat-log.js';
 
 const STEPS_PER_SECOND = 10;
@@ -58,6 +58,10 @@ export function simulate(
     extractTriggers(loadouts[0], registry),
     extractTriggers(loadouts[1], registry),
   ];
+
+  // Extract passive damage modifiers from loadouts (immutable for the duel)
+  gladiators[0].passiveDamageModifiers = extractPassiveModifiers(loadouts[0], registry);
+  gladiators[1].passiveDamageModifiers = extractPassiveModifiers(loadouts[1], registry);
 
   const log = createCombatLog(rng.getState());
 
@@ -240,7 +244,16 @@ export function simulate(
         const isCrit = !isDodged && rng.nextBool(effectiveCritChance / 100);
 
         // Calculate full attack breakdown
-        const breakdown = calculateAttackBreakdown(attacker.stats, defender.stats, isCrit, isDodged, blockAmt);
+        const breakdown = calculateAttackBreakdown(
+          attacker.stats,
+          defender.stats,
+          isCrit,
+          isDodged,
+          blockAmt,
+          attacker.passiveDamageModifiers,
+          attacker,
+          defender,
+        );
 
         if (isDodged) {
           // Emit attack event with dodged breakdown + legacy dodge event
