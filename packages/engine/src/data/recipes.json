@@ -443,6 +443,9 @@
         "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 6 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "lightning", "multiplier": 1.20, "condition": { "kind": "target_has_dot_element", "element": "fire" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "lightning", "elemental"]
   },
