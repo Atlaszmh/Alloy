@@ -798,7 +798,25 @@
       { "stat": "compound.thornfrost.slowOnThornHit", "op": "flat", "value": 0.40 },
       { "stat": "compound.thornfrost.slowDuration", "op": "flat", "value": 30 },
       { "stat": "compound.thornfrost.coldThornDamageBonus", "op": "flat", "value": 0.50 },
-      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 }
+      { "stat": "compound.thornfrost.chillStackChance", "op": "flat", "value": 0.20 },
+      { "stat": "compound.thornfrost.chance", "op": "flat", "value": 0.40 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": { "kind": "apply_slow", "multiplier": 1.4, "duration": 8 }
+      },
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "compound_dot",
+          "element": "cold",
+          "dpsPerTier": 2,
+          "duration": 6,
+          "tickInterval": 1,
+          "dotMultiplier": 1.0
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "thorns", "cold", "defensive_trigger"]
