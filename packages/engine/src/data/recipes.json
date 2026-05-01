@@ -904,6 +904,11 @@
         "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 4 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "fire", "multiplier": 1.15, "condition": { "kind": "always" } },
+      { "damageType": "cold", "multiplier": 1.15, "condition": { "kind": "always" } },
+      { "damageType": "lightning", "multiplier": 1.15, "condition": { "kind": "always" } }
+    ],
     "maxDepthContribution": 2,
     "tags": ["compound", "fire", "cold", "lightning", "elemental", "capstone"]
   },
