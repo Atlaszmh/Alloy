@@ -32,6 +32,7 @@ export function createGladiator(playerId: 0 | 1, stats: DerivedStats): Gladiator
     maxHpDebuffMultiplier: 1.0,
     maxHpDebuffRemaining: 0,
     elementAmplifiers: {},
+    passiveDamageModifiers: [],
   };
 }
 

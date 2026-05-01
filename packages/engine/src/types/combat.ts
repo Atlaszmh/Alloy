@@ -38,6 +38,37 @@ export interface ElementAmplifier {
   remaining: number;        // seconds
 }
 
+/**
+ * A conditional damage modifier that fires while the source compound is
+ * equipped. Read by damage-calc at hit time: if the condition predicate
+ * evaluates true against attacker/defender state, the multiplier applies
+ * to the matching damage type's contribution.
+ *
+ * Example: blight's "+30% poison damage when target has fire DOT" becomes
+ * { sourceCompoundId: 'blight', damageType: 'poison', multiplier: 1.30,
+ *   condition: { kind: 'target_has_dot_element', element: 'fire' } }
+ */
+export interface PassiveDamageModifier {
+  sourceCompoundId: string;
+  damageType: 'physical' | Element;
+  multiplier: number;
+  condition: PassiveModifierCondition;
+}
+
+/**
+ * Serializable condition predicates used by passive damage modifiers.
+ * Materialized into an actual function at modifier-extract time. Adding a
+ * new condition kind requires both a discriminator entry here and a case in
+ * `evaluatePassiveModifierCondition` in trigger-system.ts.
+ */
+export type PassiveModifierCondition =
+  | { kind: 'always' }
+  | { kind: 'target_has_dot_element'; element: Element }
+  | { kind: 'target_slowed' }
+  | { kind: 'target_below_hp_pct'; pct: number }   // pct in [0,1]: target.currentHP / effectiveMaxHP < pct
+  | { kind: 'self_above_hp_pct'; pct: number }     // pct in [0,1]: self.currentHP / effectiveMaxHP > pct
+  | { kind: 'self_has_barrier' };
+
 export type ActiveBuff =
   | {
       kind: 'add';
@@ -98,6 +129,12 @@ export interface GladiatorRuntime {
    * loop reads it when computing effective tickInterval.
    */
   elementAmplifiers: Partial<Record<Element, ElementAmplifier>>;
+  /**
+   * Conditional damage modifiers contributed by equipped compounds. Read
+   * at attack-time by calculateAttackBreakdown. Built once at duel start
+   * by extractPassiveModifiers; immutable for the duel's duration.
+   */
+  passiveDamageModifiers: PassiveDamageModifier[];
 }
 
 // --- Combat Events (discriminated union for combat log) ---
