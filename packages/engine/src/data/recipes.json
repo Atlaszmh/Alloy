@@ -385,6 +385,9 @@
         "effect": { "kind": "stun", "duration": 1.5 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "fire", "multiplier": 1.25, "condition": { "kind": "target_has_dot_element", "element": "cold" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "cold", "elemental"]
   },
