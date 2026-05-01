@@ -171,6 +171,34 @@ describe('buildGemDamageBreakdown', () => {
   });
 });
 
+describe('buildGemDamageBreakdown — compound contributions', () => {
+  it('socketed Ignite gem contributes a fire-DPS row attributed to the compound', () => {
+    const igniteGem: GemInstance = {
+      uid: 'ignite_uid',
+      affixId: 'ignite',
+      tier: 2,
+      rarity: 'common',
+      recipeDepth: 1,
+      combinable: true,
+      tags: ['ignite', 'compound', 'fire'],
+      sourceRecipe: 'ignite',
+    };
+    const plan = planWithWeaponGems([igniteGem]);
+    const breakdown = buildGemDamageBreakdown(plan, registry);
+    const fireRow = breakdown.find((r) => r.type === 'fire' && r.source === 'ignite');
+    expect(fireRow).toBeDefined();
+    expect(fireRow!.value).toBeGreaterThan(0);
+  });
+
+  it('socketed non-compound gem (fire_damage) does NOT have a source field', () => {
+    const plan = planWithWeaponGems([makeGem('fire_uid', 'fire_damage', 2)]);
+    const breakdown = buildGemDamageBreakdown(plan, registry);
+    const fireRow = breakdown.find((r) => r.type === 'fire');
+    expect(fireRow).toBeDefined();
+    expect(fireRow?.source).toBeUndefined();
+  });
+});
+
 describe('sumGemDamage', () => {
   it('returns 0 for empty breakdown', () => {
     expect(sumGemDamage([])).toBe(0);
