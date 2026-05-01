@@ -62,6 +62,109 @@ const CategoryRuleSchema = z.object({
   inputB: z.string(),
 });
 
+const TriggerConditionSchema = z.enum([
+  'on_hit',
+  'on_crit',
+  'on_block',
+  'on_taking_damage',
+  'on_low_hp',
+]);
+
+const ElementSchema = z.enum(['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos']);
+const PhysicalOrElementSchema = z.union([z.literal('physical'), ElementSchema]);
+
+const CompoundEffectShapeSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('compound_dot'),
+    element: ElementSchema,
+    dpsPerTier: z.number().nonnegative(),
+    duration: z.number().nonnegative(),
+    tickInterval: z.number().positive(),
+    dotMultiplier: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('apply_dot'),
+    element: ElementSchema,
+    dpsPerTier: z.number().nonnegative(),
+    duration: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('gain_barrier'),
+    amount: z.number().nonnegative().optional(),
+    amountPerTier: z.number().nonnegative().optional(),
+    isPercent: z.boolean().optional(),
+    duration: z.number().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('stun'),
+    duration: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('reflect_damage'),
+    multiplier: z.number().nonnegative(),
+    duration: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('apply_slow'),
+    multiplier: z.number().positive(),
+    duration: z.number().positive(),
+  }),
+  z.object({
+    kind: z.literal('amplify_dot_element'),
+    element: ElementSchema,
+    stackMultiplier: z.number().positive(),
+    tickMultiplier: z.number().positive(),
+    duration: z.number().positive(),
+  }),
+  z.object({
+    kind: z.literal('heal'),
+    amount: z.number().optional(),
+    amountPerTier: z.number().optional(),
+    isPercent: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal('bonus_damage'),
+    damageType: PhysicalOrElementSchema,
+    amount: z.number().nonnegative().optional(),
+    amountPerTier: z.number().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('bonus_damage_scaled'),
+    damageType: PhysicalOrElementSchema,
+    multiplier: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('damage_current_hp'),
+    fraction: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('reduce_max_hp'),
+    // Cap < 1 so a recipe entry never zeroes out maxHP and instakills the
+    // target via the currentHP clamp. 0.95 is a generous ceiling — designers
+    // should rarely exceed 0.5.
+    fraction: z.number().min(0).max(0.95),
+    duration: z.number().positive(),
+  }),
+  z.object({
+    kind: z.literal('stat_buff_add'),
+    stat: z.string(),
+    value: z.number().optional(),
+    valuePerTier: z.number().optional(),
+    duration: z.number().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('stat_buff_mul'),
+    stat: z.string(),
+    multiplier: z.number(),
+    duration: z.number().nonnegative(),
+  }),
+]);
+
+const CompoundEffectBlueprintSchema = z.object({
+  condition: TriggerConditionSchema.optional(),
+  effect: CompoundEffectShapeSchema,
+});
+
 const RecipeDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -73,6 +176,7 @@ const RecipeDefinitionSchema = z.object({
   categoryRule: CategoryRuleSchema.optional(),
   outputAffixId: z.string(),
   outputBonusEffects: z.array(StatModifierSchema),
+  compoundEffects: z.array(CompoundEffectBlueprintSchema).optional(),
   maxDepthContribution: z.number().int().nonnegative(),
   tags: z.array(z.string()),
 }).superRefine((recipe, ctx) => {
