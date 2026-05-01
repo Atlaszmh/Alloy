@@ -25,14 +25,43 @@ export interface Affix {
   tierEffects?: Record<string, TierEffects>
 }
 
+/**
+ * Component reference inside a recipe — distinguishes raw affix inputs from
+ * other recipes (capstones consume previously-combined gems).
+ */
+export interface RecipeComponentRef {
+  kind: 'affix' | 'recipe'
+  id: string
+}
+
+/**
+ * Mirror of the engine's CompoundEffectShape (kept loose here so the tools
+ * UI can render new effect kinds without locking to engine type churn).
+ * The `kind` discriminator is the source of truth; any other fields are
+ * shape-specific.
+ */
+export interface RecipeCompoundEffectBlueprint {
+  condition?: string // TriggerCondition
+  effect: { kind: string;[key: string]: unknown }
+}
+
 export interface Recipe {
   id: string
-  inputs: string[] // affix IDs (2 per recipe)
+  inputs: string[] // legacy — flat list of input ids (lossy: drops kind:'recipe' vs 'affix')
   output: string // affix ID
   depth: 0 | 1 | 2 | 3
   type: 'signature' | 'signature3' | 'category' | 'generic'
   weight: number // 0.5 to 2.0
   notes: string
+  // --- Engine-shape fields (additive, optional for backward compat). ---
+  /** Structured component references — supersedes `inputs` for new code. */
+  components?: RecipeComponentRef[]
+  /** Data-driven trigger blueprints (Tier 1-5 trigger system). */
+  compoundEffects?: RecipeCompoundEffectBlueprint[]
+  /** All output bonus effects (chance, duration params, +%damage on category recipes, etc). */
+  outputBonusEffects?: { stat: string; op: 'flat' | 'percent' | 'override'; value: number }[]
+  /** Recipe tags as authored in recipes.json. */
+  tags?: string[]
 }
 
 export interface Synergy {

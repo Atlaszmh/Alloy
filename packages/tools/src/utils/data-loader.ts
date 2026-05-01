@@ -83,10 +83,18 @@ export async function loadDataFromJSON(): Promise<LoadedData> {
     // Combine all affixes
     const affixes: Affix[] = [...baseAffixes, ...compoundAffixes]
 
-    // Transform recipes
+    // Transform recipes — preserve full engine shape via additive fields so
+    // downstream UI components can read compoundEffects, recipe-component
+    // edges, and output bonus params without re-querying the engine.
     const recipes: Recipe[] = engineRecipes.map((engineRecipe) => {
-      // Extract input affix IDs from components
-      const inputs = engineRecipe.components ? engineRecipe.components.map((c) => c.id) : []
+      const components = engineRecipe.components
+        ? engineRecipe.components.map((c) => ({ kind: c.kind, id: c.id }))
+        : undefined
+      const inputs = components ? components.map((c) => c.id) : []
+      // Cast through unknown — engine emits CompoundEffectBlueprint with stricter
+      // typing; here we just pass-through the structure for UI consumption.
+      const compoundEffects = (engineRecipe as { compoundEffects?: unknown[] }).compoundEffects as
+        Recipe['compoundEffects']
 
       return {
         id: engineRecipe.id,
@@ -96,6 +104,10 @@ export async function loadDataFromJSON(): Promise<LoadedData> {
         type: engineRecipe.type,
         weight: 1,
         notes: `Tags: ${engineRecipe.tags.join(', ')}`,
+        components,
+        compoundEffects,
+        outputBonusEffects: engineRecipe.outputBonusEffects as Recipe['outputBonusEffects'],
+        tags: engineRecipe.tags,
       }
     })
 
