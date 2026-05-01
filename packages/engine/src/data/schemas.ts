@@ -66,6 +66,7 @@ const TriggerConditionSchema = z.enum([
   'on_hit',
   'on_crit',
   'on_block',
+  'on_dodge',
   'on_taking_damage',
   'on_low_hp',
 ]);

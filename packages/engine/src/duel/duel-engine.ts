@@ -246,6 +246,8 @@ export function simulate(
           // Emit attack event with dodged breakdown + legacy dodge event
           log.addEvent(time, { type: 'attack', attacker: attacker.playerId, breakdown });
           log.addEvent(time, { type: 'dodge', dodger: defender.playerId });
+          // Fire on_dodge triggers on the defender side (e.g. riposte)
+          fireTriggers(triggers[defenderIdx], 'on_dodge', defender, attacker, rng, log, time);
           attacker.attackTimer = getBuffedStat(attacker, 'attackSpeed') * attacker.slowDebuffMultiplier;
           continue;
         }

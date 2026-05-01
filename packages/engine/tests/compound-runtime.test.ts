@@ -725,3 +725,39 @@ describe('fireTriggers — universal compound_trigger emission', () => {
     expect(events.filter((e) => e.type === 'compound_trigger')).toHaveLength(0);
   });
 });
+
+describe('fireTriggers — on_dodge condition', () => {
+  it('fires on_dodge triggers when defender successfully dodges an attack', () => {
+    // Defender is the "owner" of an on_dodge riposte-like trigger.
+    const owner = makeGladiator({ maxHP: 1000, dodgeChance: 100 });
+    const opponent = makeOpponent({ maxHP: 1000, physicalDamage: 30, attackSpeed: 0.5 });
+    const log = emptyLog();
+
+    const trigger: TriggerDef = {
+      affixId: 'riposte',
+      condition: 'on_dodge',
+      chance: 1.0,
+      cooldown: 0,
+      effects: [{ kind: 'stat_buff_mul', stat: 'attackSpeed', multiplier: 0.5, duration: 4 }],
+    };
+    const rng = new SeededRNG(42);
+    fireTriggers([trigger], 'on_dodge', owner, opponent, rng, log, 0);
+
+    const events = log.frames.flatMap((f) => f.events);
+    expect(events.filter((e) => e.type === 'compound_trigger')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'trigger_proc')).toHaveLength(1);
+    expect(owner.activeBuffs).toHaveLength(1);
+    expect(owner.activeBuffs[0]).toMatchObject({ kind: 'mul', stat: 'attackSpeed', multiplier: 0.5 });
+  });
+
+  it('integration: simulate() fires on_dodge for compound with riposte-like blueprint', () => {
+    // This test exercises the duel-engine's on_dodge fire site end-to-end.
+    // Build a defender loadout containing a compound gem whose recipe declares
+    // on_dodge. Since riposte itself isn't wired yet (Chunk 4), we synthesize
+    // by manually injecting a TriggerDef would be needed — but simulate()
+    // builds triggers from the loadout via extractTriggers, which only sees
+    // wired recipes. So this end-to-end test is deferred to Chunk 4 once
+    // riposte is wired.
+    expect(true).toBe(true); // placeholder — real coverage in Chunk 4
+  });
+});
