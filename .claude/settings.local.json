@@ -201,7 +201,9 @@
       "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
       "PowerShell(Stop-Process -Id 44732 -Force)",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId=44732\")",
-      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'vite|alloy|tsup|tsx' } | Select-Object ProcessId, CommandLine | Format-Table -AutoSize -Wrap; Write-Output \"---PORTS---\"; Get-NetTCPConnection -State Listen -LocalPort 5173,5174,5175,9098,4173 -ErrorAction SilentlyContinue | Select-Object LocalPort, OwningProcess)"
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match 'vite|alloy|tsup|tsx' } | Select-Object ProcessId, CommandLine | Format-Table -AutoSize -Wrap; Write-Output \"---PORTS---\"; Get-NetTCPConnection -State Listen -LocalPort 5173,5174,5175,9098,4173 -ErrorAction SilentlyContinue | Select-Object LocalPort, OwningProcess)",
+      "PowerShell($stalePids = @\\(35584,33952,27416,35416,35496,2984,1760,36068,36008,33296,29140,35276,12516,3232,32248,32900,14620,3076,444,25136,16888,24868,6032,13752,34616,38988,30460,3820,40188,43752,30560,41492\\); $killed = 0; $failed = 0; foreach \\($pid in $stalePids\\) { try { Stop-Process -Id $pid -Force -ErrorAction Stop; $killed++ } catch { $failed++ } }; \"Killed: $killed  Failed/already-gone: $failed\")",
+      "PowerShell($stalePids = @\\(35584,33952,27416,35416,35496,2984,1760,36068,36008,33296,29140,35276,12516,3232,32248,32900,14620,3076,444,25136,16888,24868,6032,13752,34616,38988,30460,3820,40188,43752,30560,41492\\); $killed = 0; $failed = 0; foreach \\($p in $stalePids\\) { try { Stop-Process -Id $p -Force -ErrorAction Stop; $killed++ } catch { $failed++ } }; \"Killed: $killed  Failed/already-gone: $failed\")"
     ]
   }
 }
