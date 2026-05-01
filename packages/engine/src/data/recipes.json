@@ -282,7 +282,7 @@
         "effect": {
           "kind": "bonus_damage_scaled",
           "damageType": "physical",
-          "multiplier": 1.5
+          "multiplier": 2.5
         }
       }
     ],
