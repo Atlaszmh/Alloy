@@ -564,7 +564,14 @@
     "outputAffixId": "blood_mirror",
     "outputBonusEffects": [
       { "stat": "compound.blood_mirror.active", "op": "flat", "value": 1 },
-      { "stat": "compound.blood_mirror.healFromThorns", "op": "flat", "value": 1 }
+      { "stat": "compound.blood_mirror.healFromThorns", "op": "flat", "value": 1 },
+      { "stat": "compound.blood_mirror.chance", "op": "flat", "value": 0.5 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": { "kind": "heal", "amountPerTier": 6, "isPercent": false }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lifesteal", "thorns", "utility"]
