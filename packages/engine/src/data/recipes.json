@@ -688,7 +688,7 @@
         "condition": "on_taking_damage",
         "effect": {
           "kind": "gain_barrier",
-          "amount": 0.05,
+          "amount": 0.04,
           "isPercent": true,
           "duration": 15
         }
