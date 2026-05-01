@@ -609,7 +609,19 @@
     "outputAffixId": "riposte",
     "outputBonusEffects": [
       { "stat": "compound.riposte.active", "op": "flat", "value": 1 },
-      { "stat": "compound.riposte.attackSpeedOnDodge", "op": "flat", "value": 0.50 }
+      { "stat": "compound.riposte.attackSpeedOnDodge", "op": "flat", "value": 0.50 },
+      { "stat": "compound.riposte.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_dodge",
+        "effect": {
+          "kind": "stat_buff_mul",
+          "stat": "attackSpeed",
+          "multiplier": 0.5,
+          "duration": 4
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "dodge", "attack_speed", "utility"]
