@@ -513,7 +513,14 @@
     "outputAffixId": "void_shock",
     "outputBonusEffects": [
       { "stat": "compound.void_shock.active", "op": "flat", "value": 1 },
-      { "stat": "compound.void_shock.shadowChanceOnLightning", "op": "flat", "value": 0.20 }
+      { "stat": "compound.void_shock.shadowChanceOnLightning", "op": "flat", "value": 0.20 },
+      { "stat": "compound.void_shock.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "bonus_damage", "damageType": "shadow", "amountPerTier": 8 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lightning", "shadow", "elemental"]
