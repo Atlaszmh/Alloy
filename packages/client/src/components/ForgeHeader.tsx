@@ -269,9 +269,9 @@ function DamageStatItem({
               No damage gems socketed.
             </div>
           ) : (
-            gemDamage.map((r) => (
+            gemDamage.map((r, idx) => (
               <div
-                key={r.type}
+                key={r.source ? `${r.type}:${r.source}` : `${r.type}:${idx}`}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -280,7 +280,21 @@ function DamageStatItem({
                   color: ELEMENT_COLORS[r.type] ?? 'white',
                 }}
               >
-                <span style={{ textTransform: 'uppercase' }}>{r.type}</span>
+                <span style={{ textTransform: 'uppercase' }}>
+                  {r.type}
+                  {r.source ? (
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        color: 'var(--color-surface-400)',
+                        textTransform: 'none',
+                        fontWeight: 500,
+                      }}
+                    >
+                      from {formatCompoundName(r.source)}
+                    </span>
+                  ) : null}
+                </span>
                 <span style={{ fontWeight: 700 }}>
                   +{formatNumber(r.value)}
                   {r.suffix ? (
@@ -306,4 +320,12 @@ function DamageStatItem({
 
 function formatNumber(v: number): string {
   return Number.isInteger(v) ? `${v}` : v.toFixed(1);
+}
+
+/** Title-case a recipe id like "ignite" or "soul_rend" → "Ignite" / "Soul Rend". */
+function formatCompoundName(id: string): string {
+  return id
+    .split('_')
+    .map((word) => (word.length > 0 ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(' ');
 }
