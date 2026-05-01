@@ -1,5 +1,5 @@
 import type { AITier } from '../types/ai.js';
-import type { MatchMode } from '../types/match.js';
+import type { MatchMode, MatchState } from '../types/match.js';
 import type { MatchReport } from '../types/match-report.js';
 import type { DataRegistry } from '../data/registry.js';
 import { createMatch, applyAction } from '../match/match-controller.js';
@@ -17,6 +17,14 @@ import {
   isRunOver,
   isGoalReached,
 } from '../run/run-state.js';
+import { generateOpponentBuild } from './synthetic-opponent-build.js';
+import {
+  computeRunAggregateStats,
+  type RunReportV2,
+  type PerRoundSnapshot,
+  type RunAggregateStats,
+} from './run-stats-collector.js';
+import { calculateStats } from '../forge/stat-calculator.js';
 // Pool scaling is now integrated into generatePool
 
 export interface SimulationConfig {
@@ -334,5 +342,231 @@ function runAIMatch(
   }
 
   return extractMatchReport(state, 'simulation', seed, registry);
+}
+
+// ---------------------------------------------------------------------------
+// V2: Real run_async simulation harness
+// ---------------------------------------------------------------------------
+
+export interface RunSimulationConfigV2 {
+  runCount: number;
+  seed: number;
+  aiTier: AITier;
+  /** Opponent tier per round. Could escalate with round in a future tweak. */
+  opponentTier: AITier;
+  startingLives: number;
+  goalRound: number;
+  baseWeaponId: string;
+  baseArmorId: string;
+}
+
+export interface RunSimulationResultV2 {
+  config: RunSimulationConfigV2;
+  runs: RunReportV2[];
+  aggregateStats: RunAggregateStats;
+  duration: number;
+}
+
+/**
+ * Simulate multiple full runs through the shipped `run_async` 10-round loop.
+ * Each run drives a single `MatchState` via `applyAction`, including drafting,
+ * forging, and dueling. Synthetic opponents are generated per round.
+ */
+export function runRunSimulationV2(
+  config: RunSimulationConfigV2,
+  registry: DataRegistry,
+): RunSimulationResultV2 {
+  const t0 = Date.now();
+  const runs: RunReportV2[] = [];
+  for (let r = 0; r < config.runCount; r++) {
+    const runSeed = config.seed + r * 10000;
+    runs.push(simulateSingleRunV2(runSeed, config, registry));
+  }
+  const aggregateStats = computeRunAggregateStats(runs);
+  return { config, runs, aggregateStats, duration: Date.now() - t0 };
+}
+
+function simulateSingleRunV2(
+  runSeed: number,
+  config: RunSimulationConfigV2,
+  registry: DataRegistry,
+): RunReportV2 {
+  // 1. createMatch in run_async mode
+  let state = createMatch(
+    `runsim_${runSeed}`,
+    runSeed,
+    'run_async',
+    [`p0_${runSeed}`, `p1_${runSeed}`],
+    config.baseWeaponId,
+    config.baseArmorId,
+    registry,
+    { startingLives: config.startingLives, goalRound: config.goalRound },
+  );
+
+  const playerRng = new SeededRNG(runSeed).fork('player');
+  const ai = new AIController(config.aiTier, registry, playerRng);
+
+  const perRound: PerRoundSnapshot[] = [];
+  const compoundFirstAppearance = new Map<string, number>();
+  let totalFluxEarned = 0;
+  let totalFluxSpent = 0;
+  let prevFlux = state.runState?.flux ?? 0;
+
+  // Loop until run ends (lives = 0 or goal reached) or safety cap exceeded
+  const ROUND_SAFETY_CAP = config.goalRound + 5; // allow up to 5 endless rounds
+  let roundsReached = 0;
+
+  while (state.phase.kind !== 'complete') {
+    const currentRound = state.runState?.round ?? 1;
+    if (currentRound > ROUND_SAFETY_CAP) break;
+
+    // --- Draft phase ---
+    while (state.phase.kind === 'draft') {
+      const orbUid = ai.pickOrb(
+        state.pool,
+        state.players[0].stockpile,
+        state.players[1].stockpile,
+      );
+      const result = applyAction(state, { kind: 'draft_pick', player: 0, orbUid }, registry);
+      if (!result.ok) throw new Error(`Draft failed at round ${currentRound}: ${result.error}`);
+      state = result.state;
+    }
+
+    // --- Forge phase ---
+    if (state.phase.kind === 'forge') {
+      const forgeRound = state.phase.round;
+
+      // In run_async, forge_complete for player 0 auto-marks player 1 complete too.
+      // So we must inject the synthetic opponent loadout BEFORE completing player 0.
+      // Generate the opponent loadout first:
+      const opponent = generateOpponentBuild(
+        {
+          seed: runSeed + currentRound * 31,
+          round: currentRound,
+          tier: config.opponentTier,
+          baseWeaponId: config.baseWeaponId,
+          baseArmorId: config.baseArmorId,
+        },
+        registry,
+      );
+      // Inject opponent loadout into player 1 before forge phase completes:
+      state = {
+        ...state,
+        players: [state.players[0], { ...state.players[1], loadout: opponent.loadout }],
+      };
+
+      // Plan and apply player 0 forge actions (use 1000 budget; Task 2.4 will fix to real flux)
+      const actions = ai.planForge(
+        state.players[0].stockpile,
+        state.players[0].loadout,
+        1000,
+        forgeRound,
+        state.players[1].stockpile,
+      );
+      for (const action of actions) {
+        const r = applyAction(state, { kind: 'forge_action', player: 0, action }, registry);
+        if (r.ok) state = r.state;
+        // Invalid actions are skipped silently
+      }
+
+      // Complete forge for player 0 (also auto-marks player 1 in run_async mode)
+      const completeP0 = applyAction(state, { kind: 'forge_complete', player: 0 }, registry);
+      if (completeP0.ok) state = completeP0.state;
+
+      // Snapshot the build at end of forge, before duel
+      const snapshot = snapshotBuild(state, currentRound, registry);
+      perRound.push(snapshot);
+
+      // Track first-appearance round for each compound gem
+      for (const item of [state.players[0].loadout.weapon, state.players[0].loadout.armor]) {
+        for (const slot of item.slots) {
+          if (!slot || !slot.gem.sourceRecipe) continue;
+          const id = slot.gem.affixId;
+          if (!compoundFirstAppearance.has(id)) compoundFirstAppearance.set(id, currentRound);
+        }
+      }
+    }
+
+    // --- Duel phase ---
+    if (state.phase.kind === 'duel') {
+      const advance = applyAction(state, { kind: 'advance_phase' }, registry);
+      if (!advance.ok) throw new Error(`Duel advance failed at round ${currentRound}: ${advance.error}`);
+      state = advance.state;
+      const cont = applyAction(state, { kind: 'duel_continue' }, registry);
+      if (!cont.ok) throw new Error(`Duel continue failed at round ${currentRound}: ${cont.error}`);
+      state = cont.state;
+    }
+
+    roundsReached = currentRound;
+
+    // Update flux accounting after the round
+    const newFlux = state.runState?.flux ?? 0;
+    if (newFlux > prevFlux) {
+      totalFluxEarned += (newFlux - prevFlux);
+    } else if (newFlux < prevFlux) {
+      totalFluxSpent += (prevFlux - newFlux);
+    }
+    // Populate the last per-round snapshot with post-duel info
+    if (perRound.length > 0) {
+      const last = perRound[perRound.length - 1];
+      last.fluxEarnedThisRound = Math.max(0, newFlux - prevFlux);
+      last.fluxSpentThisRound = Math.max(0, prevFlux - newFlux);
+      last.livesAfter = state.runState?.lives ?? 0;
+      const lastResult = state.roundResults[state.roundResults.length - 1];
+      last.won = lastResult?.winner === 0;
+    }
+    prevFlux = newFlux;
+  }
+
+  return {
+    seed: runSeed,
+    roundsReached,
+    goalReached: (state.runState?.status === 'won') ||
+      ((state.runState?.round ?? 0) >= config.goalRound && state.phase.kind === 'complete'),
+    finalLives: state.runState?.lives ?? 0,
+    perRound,
+    compoundFirstAppearance,
+    totalFluxEarned,
+    totalFluxSpent,
+  };
+}
+
+function snapshotBuild(state: MatchState, round: number, registry: DataRegistry): PerRoundSnapshot {
+  const loadout = state.players[0].loadout;
+  let socketedGemCount = 0;
+  let compoundCount = 0;
+  let capstoneCount = 0;
+  let totalGemTier = 0;
+
+  // Build a quick id→recipe map for capstone check
+  const recipeAll = registry.getRecipeRegistry().getAll();
+  const recipeById = new Map(recipeAll.map(r => [r.id, r]));
+
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (!slot) continue;
+      socketedGemCount++;
+      totalGemTier += slot.gem.tier;
+      if (slot.gem.sourceRecipe) {
+        compoundCount++;
+        const recipe = recipeById.get(slot.gem.sourceRecipe);
+        if (recipe?.type === 'signature3') capstoneCount++;
+      }
+    }
+  }
+
+  const statsResult = calculateStats(loadout, registry);
+  return {
+    round,
+    won: false,               // populated after duel
+    livesAfter: state.runState?.lives ?? 0,
+    fluxEarnedThisRound: 0,  // populated after duel
+    fluxSpentThisRound: 0,   // populated after duel
+    socketedGemCount,
+    compoundCount,
+    capstoneCount,
+    totalGemTier,
+    activeSynergyCount: statsResult.activeSynergies.filter(s => s.isActive).length,
+  };
 }
 
