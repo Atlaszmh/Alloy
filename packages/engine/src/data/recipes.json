@@ -985,7 +985,7 @@
     "outputAffixId": "blood_pact",
     "outputBonusEffects": [
       { "stat": "compound.blood_pact.active", "op": "flat", "value": 1 },
-      { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.20 }
+      { "stat": "compound.blood_pact.overhealToHpCap", "op": "flat", "value": 0.30 }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "lifesteal", "hp_regen", "hp", "capstone"]
