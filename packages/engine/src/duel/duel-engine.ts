@@ -1,4 +1,4 @@
-import type { DerivedStats } from '../types/derived-stats.js';
+import type { DerivedStats, Element } from '../types/derived-stats.js';
 import type {
   GladiatorRuntime,
   CombatLog,
@@ -440,6 +440,18 @@ export function simulate(
       }
     }
 
+    // Tick down element amplifiers; remove expired entries
+    for (const g of gladiators) {
+      for (const elem of Object.keys(g.elementAmplifiers) as Element[]) {
+        const amp = g.elementAmplifiers[elem];
+        if (!amp) continue;
+        amp.remaining = Math.round((amp.remaining - STEP_DURATION) * 10) / 10;
+        if (amp.remaining <= 0) {
+          delete g.elementAmplifiers[elem];
+        }
+      }
+    }
+
     // Tick down temporary barriers; sweep expired entries
     for (const g of gladiators) {
       if (g.temporaryBarriers.length === 0) continue;
@@ -754,6 +766,15 @@ export function applyTriggerEffect(
       // refreshes duration. Avoids unbounded slow stacking from spam triggers.
       opponent.slowDebuffMultiplier = effect.multiplier;
       opponent.slowDebuffRemaining = effect.duration;
+      break;
+    }
+    case 'amplify_dot_element': {
+      // Stack-by-replacement: a fresh amplifier overwrites prior values.
+      opponent.elementAmplifiers[effect.element] = {
+        stackMultiplier: effect.stackMultiplier,
+        tickMultiplier: effect.tickMultiplier,
+        remaining: effect.duration,
+      };
       break;
     }
     case 'compound_dot': {

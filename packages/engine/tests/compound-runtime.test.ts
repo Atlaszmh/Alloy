@@ -567,3 +567,44 @@ describe('Parameterized: every wired compound fires correctly', () => {
     });
   }
 });
+
+describe('applyTriggerEffect — amplify_dot_element', () => {
+  it('sets elementAmplifiers[element] on opponent (replacement semantics)', () => {
+    const owner = makeGladiator();
+    const opponent = makeOpponent();
+    const log = emptyLog();
+
+    applyTriggerEffect(
+      { kind: 'amplify_dot_element', element: 'poison', stackMultiplier: 2.0, tickMultiplier: 1.5, duration: 8 },
+      owner, opponent, log, 0,
+    );
+    expect(opponent.elementAmplifiers.poison).toMatchObject({
+      stackMultiplier: 2.0,
+      tickMultiplier: 1.5,
+      remaining: 8,
+    });
+
+    // Replacement: a fresh apply overwrites magnitude AND refreshes duration
+    applyTriggerEffect(
+      { kind: 'amplify_dot_element', element: 'poison', stackMultiplier: 3.0, tickMultiplier: 2.0, duration: 12 },
+      owner, opponent, log, 0,
+    );
+    expect(opponent.elementAmplifiers.poison).toMatchObject({
+      stackMultiplier: 3.0,
+      tickMultiplier: 2.0,
+      remaining: 12,
+    });
+  });
+
+  it('does NOT affect amplifiers for other elements', () => {
+    const owner = makeGladiator();
+    const opponent = makeOpponent();
+    const log = emptyLog();
+    applyTriggerEffect(
+      { kind: 'amplify_dot_element', element: 'poison', stackMultiplier: 2.0, tickMultiplier: 1.5, duration: 8 },
+      owner, opponent, log, 0,
+    );
+    expect(opponent.elementAmplifiers.fire).toBeUndefined();
+    expect(opponent.elementAmplifiers.cold).toBeUndefined();
+  });
+});
