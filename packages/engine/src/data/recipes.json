@@ -505,6 +505,9 @@
         "effect": { "kind": "apply_slow", "multiplier": 1.1, "duration": 4 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "poison", "multiplier": 1.20, "condition": { "kind": "target_slowed" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "poison", "elemental"]
   },
