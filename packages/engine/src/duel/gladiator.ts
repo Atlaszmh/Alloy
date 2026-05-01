@@ -26,5 +26,21 @@ export function createGladiator(playerId: 0 | 1, stats: DerivedStats): Gladiator
     reflectRemaining: 0,
     regenAccumulator: 0,
     regenInterval: 1.0,
+    slowDebuffMultiplier: 1.0,
+    slowDebuffRemaining: 0,
+    temporaryBarriers: [],
+    maxHpDebuffMultiplier: 1.0,
+    maxHpDebuffRemaining: 0,
+    elementAmplifiers: {},
   };
+}
+
+/**
+ * Effective max HP including any active reduce_max_hp debuff.
+ * Use this everywhere maxHP feeds a mechanic (regen/heal cap, low-HP threshold,
+ * %-of-maxHP heals/barriers, tiebreak HP%). Display events should also use
+ * this so the UI reflects the shrunken HP pool.
+ */
+export function effectiveMaxHP(g: GladiatorRuntime): number {
+  return g.maxHP * g.maxHpDebuffMultiplier;
 }
