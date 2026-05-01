@@ -559,6 +559,9 @@
         "effect": { "kind": "apply_dot", "element": "poison", "dpsPerTier": 2, "duration": 6 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "shadow", "multiplier": 1.25, "condition": { "kind": "target_has_dot_element", "element": "poison" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "poison", "shadow", "elemental"]
   },
