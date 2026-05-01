@@ -762,7 +762,19 @@
     "outputBonusEffects": [
       { "stat": "compound.warriors_edge.active", "op": "flat", "value": 1 },
       { "stat": "compound.warriors_edge.critAttackSpeedStack", "op": "flat", "value": 0.10 },
-      { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 }
+      { "stat": "compound.warriors_edge.maxStacks", "op": "flat", "value": 5 },
+      { "stat": "compound.warriors_edge.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_crit",
+        "effect": {
+          "kind": "stat_buff_mul",
+          "stat": "attackSpeed",
+          "multiplier": 0.1,
+          "duration": 6
+        }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "crit", "attack_speed", "capstone"]
