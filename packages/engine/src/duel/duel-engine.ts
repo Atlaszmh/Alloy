@@ -64,11 +64,19 @@ export function simulate(
       for (let d = g.activeDOTs.length - 1; d >= 0; d--) {
         const dot = g.activeDOTs[d];
 
+        // Read element amplifier on the DOT's target (this gladiator).
+        // Amplifier accelerates ticks (tickMultiplier > 1 → shorter effective
+        // interval) and scales per-tick damage (stackMultiplier > 1).
+        const amp = g.elementAmplifiers[dot.element];
+        const stackMul = amp?.stackMultiplier ?? 1.0;
+        const tickMul = amp?.tickMultiplier ?? 1.0;
+        const effectiveTickInterval = dot.tickInterval / tickMul;
+
         // Advance accumulator
         dot.accumulator = Math.round((dot.accumulator + STEP_DURATION) * 10) / 10;
 
-        // Fire DOT when accumulator reaches tickInterval
-        if (dot.accumulator >= dot.tickInterval) {
+        // Fire DOT when accumulator reaches the (amplifier-adjusted) interval
+        if (dot.accumulator >= effectiveTickInterval) {
           dot.accumulator = 0;
 
           const sourcePlayer = gladiators[dot.sourcePlayerId];
@@ -79,6 +87,7 @@ export function simulate(
             g.stats,
             sourcePlayer.stats.elementalPenetration,
             sourcePlayer.stats.dotMultiplier,
+            stackMul,
           );
           const damage = breakdown.netDamage;
           if (damage > 0) {

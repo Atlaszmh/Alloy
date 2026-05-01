@@ -113,6 +113,10 @@ export function calculateAttackBreakdown(
  * Calculate a DOT tick breakdown after resistance and DOT multiplier.
  * attackerDotMultiplier is integer scale (100 = 1.0x).
  * attackerElemPen is integer points.
+ *
+ * stackMultiplier is a per-target element-amplifier scalar applied to
+ * effective stacks (default 1.0 — no amplification). Set by the duel
+ * loop when the defender has an active elementAmplifier for this element.
  */
 export function calculateDOTBreakdown(
   element: Element,
@@ -121,8 +125,9 @@ export function calculateDOTBreakdown(
   defender: DerivedStats,
   attackerElemPen: number,
   attackerDotMultiplier: number,
+  stackMultiplier: number = 1.0,
 ): DotTickBreakdown {
-  const rawTotal = Math.round(damagePerSecond * stacks * (attackerDotMultiplier / 100));
+  const rawTotal = Math.round(damagePerSecond * stacks * stackMultiplier * (attackerDotMultiplier / 100));
   const resistPoints = defender.resistances[element];
   const effectiveResist = Math.max(0, resistPoints - attackerElemPen);
   const reductionPct = Math.min(effectiveResist, 90);
