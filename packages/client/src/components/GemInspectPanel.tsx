@@ -2,6 +2,7 @@ import type { CompoundEffectShape, GemRarity, StatModifier } from '@alloy/engine
 import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
 import { describeCompoundEffect } from '@/shared/utils/describe-compound-effect';
+import { statKeyLabel } from '@/shared/utils/stat-key-labels';
 
 type InspectContext = 'weapon' | 'armor' | 'both';
 
@@ -294,7 +295,7 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
                     <tbody>
                       {axis.effects!.map((e, i) => (
                         <tr key={i} className="text-surface-300">
-                          <td className="px-2 py-0.5 font-medium">{e.stat}</td>
+                          <td className="px-2 py-0.5 font-medium">{statKeyLabel(e.stat)}</td>
                           <td className="px-2 py-0.5 text-right">{formatVal(e.value, e.op, 1)}</td>
                           {mult !== 1 && (
                             <td className="px-2 py-0.5 text-right" style={{ color: rarityColor }}>
