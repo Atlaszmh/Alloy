@@ -305,6 +305,7 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
   const hpEvents = group.events.filter((e) => e.event.type === 'hp_change');
   const triggerEvents = group.events.filter((e) => e.event.type === 'trigger_proc' || e.event.type === 'synergy_proc');
   const compoundTriggers = group.events.filter((e) => e.event.type === 'compound_trigger');
+  const dotApplyEvents = group.events.filter((e) => e.event.type === 'dot_apply');
   const suppressedTriggerIds = new Set<string>();
   for (const e of compoundTriggers) {
     if (e.event.type === 'compound_trigger') {
@@ -335,24 +336,6 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
         time={group.time}
         attacker={group.attacker}
       />
-      <DamageRows breakdown={bd} />
-      {healEvents.map((e, i) => {
-        if (e.event.type !== 'heal') return null;
-        return <HealRow key={`heal-${i}`} breakdown={e.event.breakdown} />;
-      })}
-      {triggerEvents.map((e, i) => {
-        if (e.event.type !== 'trigger_proc' && e.event.type !== 'synergy_proc') return null;
-        // Suppress trigger_proc rows whose triggerId already has a named compound_trigger banner above
-        if (e.event.type === 'trigger_proc' && suppressedTriggerIds.has(e.event.triggerId)) return null;
-        const label = e.event.type === 'trigger_proc'
-          ? humanEffectLabel(e.event.triggerId, e.event.effectDescription)
-          : e.event.effectDescription;
-        return (
-          <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
-            {'\u2728'} {label}
-          </div>
-        );
-      })}
       {compoundTriggers.map((e, i) => {
         if (e.event.type !== 'compound_trigger') return null;
         const who = e.event.player === 0 ? 'You' : 'Enemy';
@@ -369,6 +352,41 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
             }}
           >
             {'\u2605'} {who} triggered {e.event.displayName}
+          </div>
+        );
+      })}
+      {dotApplyEvents.map((e, i) => {
+        if (e.event.type !== 'dot_apply') return null;
+        const elem = e.event.element;
+        return (
+          <div
+            key={`dotapply-${i}`}
+            style={{
+              paddingLeft: 24, // deeper indent = visual child of banner
+              color: DAMAGE_CSS_COLORS[elem],
+              fontSize: 12,
+              opacity: 0.85,
+            }}
+          >
+            {ELEMENT_EMOJI[elem]} Apply {elem} DOT — {Math.round(e.event.dps)} dps × {e.event.duration}s
+          </div>
+        );
+      })}
+      <DamageRows breakdown={bd} />
+      {healEvents.map((e, i) => {
+        if (e.event.type !== 'heal') return null;
+        return <HealRow key={`heal-${i}`} breakdown={e.event.breakdown} />;
+      })}
+      {triggerEvents.map((e, i) => {
+        if (e.event.type !== 'trigger_proc' && e.event.type !== 'synergy_proc') return null;
+        // Suppress trigger_proc rows whose triggerId already has a named compound_trigger banner above
+        if (e.event.type === 'trigger_proc' && suppressedTriggerIds.has(e.event.triggerId)) return null;
+        const label = e.event.type === 'trigger_proc'
+          ? humanEffectLabel(e.event.triggerId, e.event.effectDescription)
+          : e.event.effectDescription;
+        return (
+          <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
+            {'\u2728'} {label}
           </div>
         );
       })}

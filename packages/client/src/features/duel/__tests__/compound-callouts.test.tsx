@@ -88,3 +88,33 @@ describe('SwingGroupComponent — human-readable trigger labels', () => {
     expect(text).not.toContain('bonus_damage_scaled');
   });
 });
+
+describe('SwingGroupComponent — compound banner + child rendering order', () => {
+  it('renders compound_trigger banner BEFORE damage rows + dot_apply as indented child', () => {
+    const group: SwingGroup = {
+      type: 'attack',
+      time: 1,
+      attacker: 0,
+      target: 1,
+      events: [
+        { time: 1, event: { type: 'attack', attacker: 0, breakdown: {
+          dodged: false, physical: { raw: 50, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 50 },
+          elemental: {}, blocked: 0, barrierAbsorbed: 0, totalRaw: 50, totalMitigated: 0, totalNet: 50, isCrit: false,
+        } } },
+        { time: 1, event: { type: 'compound_trigger', player: 0, compoundId: 'ignite', displayName: 'IGNITE!' } },
+        { time: 1, event: { type: 'dot_apply', target: 1, element: 'fire', dps: 15, duration: 12 } },
+      ],
+    };
+    const { container } = render(<SwingGroupComponent group={group} />);
+    const text = container.textContent ?? '';
+    expect(text).toContain('IGNITE!');
+    // dot_apply row should render with the dps + duration
+    expect(text).toMatch(/15.*dps|dps.*15/);
+    expect(text).toMatch(/12s/);
+    // banner appears before damage rows: find indices
+    const bannerIdx = text.indexOf('IGNITE!');
+    const damageIdx = text.indexOf('50 physical');
+    expect(bannerIdx).toBeGreaterThanOrEqual(0);
+    expect(damageIdx).toBeGreaterThan(bannerIdx); // banner first, then damage
+  });
+});
