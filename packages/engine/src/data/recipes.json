@@ -400,7 +400,14 @@
     "outputBonusEffects": [
       { "stat": "compound.blight.active", "op": "flat", "value": 1 },
       { "stat": "compound.blight.poisonBonusOnBurn", "op": "flat", "value": 0.30 },
-      { "stat": "compound.blight.fireBonusOnPoison", "op": "flat", "value": 0.20 }
+      { "stat": "compound.blight.fireBonusOnPoison", "op": "flat", "value": 0.20 },
+      { "stat": "compound.blight.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_dot", "element": "poison", "dpsPerTier": 3, "duration": 4 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "poison", "elemental"]
