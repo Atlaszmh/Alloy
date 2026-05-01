@@ -468,6 +468,9 @@
         "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 5 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "lightning", "multiplier": 1.30, "condition": { "kind": "target_slowed" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "lightning", "elemental"]
   },
