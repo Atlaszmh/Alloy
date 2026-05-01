@@ -752,7 +752,7 @@
       }
     ],
     "passiveDamageModifiers": [
-      { "damageType": "physical", "multiplier": 1.15, "condition": { "kind": "self_above_hp_pct", "pct": 0.80 } }
+      { "damageType": "physical", "multiplier": 1.05, "condition": { "kind": "self_above_hp_pct", "pct": 0.80 } }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "hp", "armor", "utility"]
