@@ -24,6 +24,7 @@ export interface RunReportV2 {
   seed: number;
   roundsReached: number;             // how many rounds were actually played
   goalReached: boolean;              // round >= goalRound at end
+  goalRound: number;                 // the goal that was configured for this run
   finalLives: number;
   perRound: PerRoundSnapshot[];
   /** Map<compoundAffixId, round-of-first-appearance>. */
@@ -57,6 +58,10 @@ export interface RunAggregateStats {
     guaranteeRarity: number;
     transplantChooseAffix: number;
   };
+  /** Average rounds reached PAST the goal (0 if no run exceeded goalRound). */
+  avgEndlessRoundsPastGoal: number;
+  /** Highest round reached by any run in the batch. */
+  maxRoundReached: number;
 }
 
 export interface BuildShape {
@@ -83,6 +88,8 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
   let totalRerollPool = 0;
   let totalGuaranteeRarity = 0;
   let totalTransplantChooseAffix = 0;
+  let totalEndlessRoundsPastGoal = 0;
+  let maxRoundReached = 0;
   const deathRoundHistogram = new Map<number, number>();
   // Map<round, accumulator>
   const buildAccum = new Map<number, BuildAccumulator>();
@@ -97,6 +104,8 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
     totalRerollPool += r.metaActionCounts.rerollPool;
     totalGuaranteeRarity += r.metaActionCounts.guaranteeRarity;
     totalTransplantChooseAffix += r.metaActionCounts.transplantChooseAffix;
+    totalEndlessRoundsPastGoal += Math.max(0, r.roundsReached - r.goalRound);
+    if (r.roundsReached > maxRoundReached) maxRoundReached = r.roundsReached;
     if (r.goalReached) {
       goalReachedCount++;
     } else {
@@ -156,6 +165,8 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
       guaranteeRarity: totalGuaranteeRarity / runCount,
       transplantChooseAffix: totalTransplantChooseAffix / runCount,
     },
+    avgEndlessRoundsPastGoal: totalEndlessRoundsPastGoal / runCount,
+    maxRoundReached,
   };
 }
 
@@ -196,5 +207,7 @@ function emptyStats(): RunAggregateStats {
       guaranteeRarity: 0,
       transplantChooseAffix: 0,
     },
+    avgEndlessRoundsPastGoal: 0,
+    maxRoundReached: 0,
   };
 }
