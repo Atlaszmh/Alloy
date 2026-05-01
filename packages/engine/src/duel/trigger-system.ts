@@ -1,17 +1,17 @@
 import type { Loadout, EquippedSlot } from '../types/item.js';
 import type { DataRegistry } from '../data/registry.js';
-import type { TriggerDef, TriggerCondition, TriggerEffect, GladiatorRuntime } from '../types/combat.js';
+import type {
+  TriggerDef,
+  TriggerCondition,
+  TriggerEffect,
+  CompoundEffectBlueprint,
+  CompoundEffectShape,
+  GladiatorRuntime,
+} from '../types/combat.js';
 import type { AffixDef, AffixTier } from '../types/affix.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GemInstance } from '../types/gem.js';
 import type { RecipeDefinition } from '../combine/recipe-registry.js';
-
-/**
- * Placeholder DPS scaling for compound effects. Move to balance.json when
- * the other 12 compounds are wired in P1 so per-compound tuning is
- * data-driven.
- */
-const COMPOUND_BASE_DPS_PER_TIER = 3;
 
 /** Map affix IDs to their trigger conditions */
 const CONDITION_MAP: Record<string, TriggerCondition> = {
@@ -43,7 +43,7 @@ export function extractTriggers(loadout: Loadout, registry: DataRegistry): Trigg
       const affixId = gem.affixId;
       const tier: AffixTier = gem.tier as AffixTier;
 
-      // Path A: base trigger affix (existing behavior).
+      // Path A: base trigger affix.
       // Use findAffix to avoid throwing for compound gems, whose affixId
       // (e.g. 'ignite') is not a registered AffixDef.
       const affix = registry.findAffix(affixId);
@@ -64,21 +64,18 @@ export function extractTriggers(loadout: Loadout, registry: DataRegistry): Trigg
         const effect = buildTriggerEffect(modifiers);
         if (!effect) continue;
 
-        triggers.push({ affixId, condition, chance, cooldown, effect });
+        triggers.push({ affixId, condition, chance, cooldown, effects: [effect] });
         continue;
       }
 
       // Path B: compound gem (e.g. affixId='ignite').
-      // A gem whose affixId matches a signature recipe's outputAffixId is a
-      // compound; its trigger effect and condition are derived from the
-      // recipe's chance_* component + compound.* params.
+      // A gem whose affixId matches a recipe's outputAffixId is a compound.
+      // Its triggers are declared data-driven on the recipe via
+      // `compoundEffects`. Recipes without that field produce no triggers.
       const recipe = registry.getRecipeByOutputAffix(affixId);
-      if (!recipe || recipe.type !== 'signature') continue;
+      if (!recipe) continue;
 
-      const compoundTrigger = buildCompoundTrigger(recipe, gem);
-      if (compoundTrigger) {
-        triggers.push(compoundTrigger);
-      }
+      triggers.push(...buildCompoundTriggers(recipe, gem));
     }
   }
 
@@ -86,78 +83,164 @@ export function extractTriggers(loadout: Loadout, registry: DataRegistry): Trigg
 }
 
 /**
- * Construct a TriggerDef for a compound gem's recipe.
+ * Build TriggerDefs from a compound recipe's `compoundEffects` blueprints.
  *
- * Only Ignite is wired end-to-end in P0; other compounds return null with a
- * TODO marker so they stay inert. The returned trigger's condition is
- * inherited from the chance_* component of the recipe.
+ * Blueprints are grouped by their resolved condition into a single TriggerDef
+ * per (compound, condition). Multi-effect compounds (e.g. frostbite = DOT +
+ * slow on the same on_hit condition) thus get a single chance roll that fires
+ * every effect together — keeps proc semantics intuitive. The compound's
+ * chance is shared across all blueprints (read from
+ * `compound.<recipeId>.chance`, defaults to 0.15).
  */
-function buildCompoundTrigger(
+function buildCompoundTriggers(
   recipe: RecipeDefinition,
   gem: GemInstance,
-): TriggerDef | null {
-  const effect = buildCompoundEffect(recipe, gem);
-  if (!effect) return null;
+): TriggerDef[] {
+  const blueprints = recipe.compoundEffects;
+  if (!blueprints || blueprints.length === 0) return [];
 
-  // The trigger condition is inherited from the chance_* component.
+  const params = readCompoundParams(recipe);
+  // Compound params are scale-1 fractions (0.15 = 15%). Default to 0.15 to
+  // match the original Ignite tuning if a recipe omits an explicit chance.
+  const chance = params.chance ?? 0.15;
+  const inferredCondition = inferConditionFromComponents(recipe);
+
+  // Group blueprints by their resolved condition into a single TriggerDef per
+  // (affixId, condition). Preserve declaration order using an array+lookup.
+  const byCondition = new Map<TriggerCondition, TriggerEffect[]>();
+  const order: TriggerCondition[] = [];
+  for (const blueprint of blueprints) {
+    const condition = blueprint.condition ?? inferredCondition;
+    if (!condition) continue;
+    const effect = materializeBlueprint(blueprint, recipe, gem);
+    if (!effect) continue;
+    if (!byCondition.has(condition)) {
+      byCondition.set(condition, []);
+      order.push(condition);
+    }
+    byCondition.get(condition)!.push(effect);
+  }
+
+  return order.map((condition) => ({
+    affixId: gem.affixId,
+    condition,
+    chance,
+    // Per-compound cooldowns are deferred; default to 0 so DOT-style
+    // compounds can stack-fire under the engine's existing stacking rules.
+    cooldown: 0,
+    effects: byCondition.get(condition)!,
+  }));
+}
+
+/**
+ * Derive a TriggerCondition from a recipe's chance_<x> component (e.g.
+ * chance_on_hit → 'on_hit'). Capstone compounds without a chance_* component
+ * must declare `condition` explicitly on each blueprint.
+ */
+function inferConditionFromComponents(recipe: RecipeDefinition): TriggerCondition | null {
   const chanceComponent = recipe.components?.find(
     (c) => c.kind === 'affix' && /^chance_/.test(c.id),
   );
   if (!chanceComponent || chanceComponent.kind !== 'affix') return null;
-  const condition = CONDITION_MAP[chanceComponent.id];
-  if (!condition) return null;
-
-  const params = readCompoundParams(recipe);
-  // Compound params are scale-1 fractions (0.15 = 15%), unlike base-affix
-  // valueRange[0] which is percent integers. Default to 0.15 if missing.
-  const chance = params.chance ?? 0.15;
-
-  return {
-    affixId: gem.affixId,
-    condition,
-    chance,
-    // Per-compound cooldowns are a P1 concern; default to 0 so ignite can
-    // stack-fire up to the DOT stacking rules the engine already enforces.
-    cooldown: 0,
-    effect,
-  };
+  return CONDITION_MAP[chanceComponent.id] ?? null;
 }
 
 /**
- * Map a recipe to a concrete TriggerEffect. Ignite is the reference case.
- *
- * TODO(P1): Extend this switch for the other 12 compounds:
- *   frostbite, static_discharge, envenom, soulrend, pact_of_madness,
- *   bastion, aegis, sanctum, absorption_core, warriors_edge, bloodpact,
- *   resolute_strike.
- * Each compound will declare its own TriggerEffect shape (DOT / buff /
- * shield / etc.) derived from its outputBonusEffects params.
+ * Materialize a CompoundEffectBlueprint into a concrete TriggerEffect by
+ * applying gem-tier scaling. `compoundId` is auto-derived from `recipe.id`
+ * for `compound_dot` so JSON declarations stay non-redundant.
  */
-function buildCompoundEffect(
+function materializeBlueprint(
+  blueprint: CompoundEffectBlueprint,
   recipe: RecipeDefinition,
   gem: GemInstance,
 ): TriggerEffect | null {
-  if (recipe.id === 'ignite') {
-    const params = readCompoundParams(recipe);
-    // Placeholder damage-per-second scaling (see COMPOUND_BASE_DPS_PER_TIER).
-    // The recipe's dotMultiplier is applied downstream in the duel engine
-    // when the DOT is pushed onto the defender, and the attacker's
-    // stats.dotMultiplier (scale-100) layers on top in calculateDOTBreakdown.
-    const damagePerSecond = COMPOUND_BASE_DPS_PER_TIER * (gem.tier ?? 1);
-    // duration in seconds.
-    const durationSeconds = params.duration ?? 12;
-    return {
-      kind: 'compound_dot',
-      compoundId: 'ignite',
-      element: 'fire',
-      damagePerSecond,
-      duration: durationSeconds,
-      tickInterval: 1.0,
-      dotMultiplier: params.dotMultiplier ?? 1.0,
-    };
+  const tier = gem.tier ?? 1;
+  const shape: CompoundEffectShape = blueprint.effect;
+  switch (shape.kind) {
+    case 'compound_dot':
+      return {
+        kind: 'compound_dot',
+        compoundId: recipe.id,
+        element: shape.element,
+        damagePerSecond: shape.dpsPerTier * tier,
+        duration: shape.duration,
+        tickInterval: shape.tickInterval,
+        dotMultiplier: shape.dotMultiplier,
+      };
+    case 'apply_dot':
+      return {
+        kind: 'apply_dot',
+        element: shape.element,
+        dps: shape.dpsPerTier * tier,
+        duration: shape.duration,
+      };
+    case 'gain_barrier':
+      return {
+        kind: 'gain_barrier',
+        amount: (shape.amount ?? 0) + (shape.amountPerTier ?? 0) * tier,
+        isPercent: shape.isPercent ?? false,
+        duration: shape.duration,
+      };
+    case 'stun':
+      return { kind: 'stun', duration: shape.duration };
+    case 'reflect_damage':
+      return {
+        kind: 'reflect_damage',
+        multiplier: shape.multiplier,
+        duration: shape.duration,
+      };
+    case 'apply_slow':
+      return {
+        kind: 'apply_slow',
+        multiplier: shape.multiplier,
+        duration: shape.duration,
+      };
+    case 'amplify_dot_element':
+      return {
+        kind: 'amplify_dot_element',
+        element: shape.element,
+        stackMultiplier: shape.stackMultiplier,
+        tickMultiplier: shape.tickMultiplier,
+        duration: shape.duration,
+      };
+    case 'heal':
+      return {
+        kind: 'heal',
+        amount: (shape.amount ?? 0) + (shape.amountPerTier ?? 0) * tier,
+        isPercent: shape.isPercent,
+      };
+    case 'bonus_damage':
+      return {
+        kind: 'bonus_damage',
+        damageType: shape.damageType,
+        amount: (shape.amount ?? 0) + (shape.amountPerTier ?? 0) * tier,
+      };
+    case 'bonus_damage_scaled':
+      return {
+        kind: 'bonus_damage_scaled',
+        damageType: shape.damageType,
+        multiplier: shape.multiplier,
+      };
+    case 'damage_current_hp':
+      return { kind: 'damage_current_hp', fraction: shape.fraction };
+    case 'reduce_max_hp':
+      return { kind: 'reduce_max_hp', fraction: shape.fraction, duration: shape.duration };
+    case 'stat_buff_add':
+      return {
+        kind: 'stat_buff_add',
+        stat: shape.stat,
+        value: (shape.value ?? 0) + (shape.valuePerTier ?? 0) * tier,
+        duration: shape.duration,
+      };
+    case 'stat_buff_mul':
+      return {
+        kind: 'stat_buff_mul',
+        stat: shape.stat,
+        multiplier: shape.multiplier,
+        duration: shape.duration,
+      };
   }
-  // All other compounds are inert until P1 wires them individually.
-  return null;
 }
 
 /**
@@ -195,20 +278,23 @@ function buildTriggerEffect(modifiers: AffixDef['tiers'][1]['weaponEffect']): Tr
 
 /**
  * Evaluate whether a trigger should fire given a condition.
- * Checks cooldown, rolls chance, and returns the effect if it procs.
- * Returns null if the trigger doesn't fire.
+ * Checks cooldown, rolls chance once, and returns all bundled effects on a
+ * successful proc. Returns null if the trigger doesn't fire.
  */
 export function evaluateTrigger(
   trigger: TriggerDef,
   condition: TriggerCondition,
   gladiator: GladiatorRuntime,
   rng: SeededRNG,
-): TriggerEffect | null {
+): TriggerEffect[] | null {
   // Condition must match
   if (trigger.condition !== condition) return null;
 
-  // Check cooldown
-  const cooldownRemaining = gladiator.cooldowns.get(trigger.affixId) ?? 0;
+  // Cooldown key includes the condition so a compound that emits TriggerDefs
+  // for multiple conditions (e.g. a future on_hit + on_block compound) gets
+  // independent cooldowns rather than sharing a single slot keyed by affixId.
+  const cdKey = `${trigger.affixId}:${trigger.condition}`;
+  const cooldownRemaining = gladiator.cooldowns.get(cdKey) ?? 0;
   if (cooldownRemaining > 0) return null;
 
   // Roll chance
@@ -216,8 +302,8 @@ export function evaluateTrigger(
 
   // Set cooldown
   if (trigger.cooldown > 0) {
-    gladiator.cooldowns.set(trigger.affixId, trigger.cooldown);
+    gladiator.cooldowns.set(cdKey, trigger.cooldown);
   }
 
-  return trigger.effect;
+  return trigger.effects;
 }
