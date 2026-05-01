@@ -101,6 +101,20 @@ const RUN_BATCHES: { label: string; config: RunSimulationConfigV2 }[] = [
       baseArmorId: 'chainmail',
     },
   },
+  {
+    label: 'Tier 5 player vs Tier 4 opponent — endless (50 runs, max 30 rounds)',
+    config: {
+      runCount: 50,
+      seed: 8000,
+      aiTier: 5,
+      opponentTier: 4,
+      startingLives: 3,
+      goalRound: 10,
+      maxRounds: 30,
+      baseWeaponId: 'sword',
+      baseArmorId: 'chainmail',
+    },
+  },
 ];
 
 // -----------------------------------------------------------------------------
@@ -278,6 +292,9 @@ function printRunBatch(label: string, config: RunSimulationConfigV2, registry: D
   console.log(`    reroll_pool: ${s.avgMetaActions.rerollPool.toFixed(2)}`);
   console.log(`    guarantee_rarity: ${s.avgMetaActions.guaranteeRarity.toFixed(2)}`);
   console.log(`    transplant_chooseAffix: ${s.avgMetaActions.transplantChooseAffix.toFixed(2)}`);
+
+  console.log('');
+  console.log(`  Endless: avg rounds past goal: ${s.avgEndlessRoundsPastGoal.toFixed(2)}  max round: ${s.maxRoundReached}`);
 }
 
 // -----------------------------------------------------------------------------
