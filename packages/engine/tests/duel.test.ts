@@ -542,7 +542,7 @@ describe('duel integration: Ignite compound applies fire DOT', () => {
     for (const ev of compoundTriggers) {
       if (ev.type === 'compound_trigger') {
         expect(ev.player).toBe(0);
-        expect(ev.displayName).toBe('IGNITE!');
+        expect(ev.displayName).toBe('Ignite!');
       }
     }
 

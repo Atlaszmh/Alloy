@@ -17,6 +17,22 @@ import { createCombatLog } from './combat-log.js';
 const STEPS_PER_SECOND = 10;
 const STEP_DURATION = 0.1;
 
+/** Format an affix ID as a player-readable display name with trailing `!`. */
+function compoundDisplayName(affixId: string): string {
+  return affixId
+    .split('_')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ') + '!';
+}
+
+/**
+ * Detect compound triggers (whose affixId matches a recipe's outputAffixId)
+ * vs base trigger affixes (chance_on_*). Compounds always have non-prefixed IDs.
+ */
+function isCompoundTrigger(affixId: string): boolean {
+  return !affixId.startsWith('chance_');
+}
+
 /**
  * Run a full duel simulation between two gladiators.
  * All randomness is driven by the provided SeededRNG for determinism.
@@ -572,7 +588,7 @@ function getBuffedStat(gladiator: GladiatorRuntime, stat: keyof DerivedStats): n
  * - on_low_hp → undefined (no in-flight attack)
  * Effects without scaled-damage semantics ignore the value.
  */
-function fireTriggers(
+export function fireTriggers(
   triggerDefs: TriggerDef[],
   condition: TriggerCondition,
   owner: GladiatorRuntime,
@@ -585,6 +601,14 @@ function fireTriggers(
   for (const trigger of triggerDefs) {
     const effects = evaluateTrigger(trigger, condition, owner, rng);
     if (!effects) continue;
+    if (isCompoundTrigger(trigger.affixId)) {
+      log.addEvent(time, {
+        type: 'compound_trigger',
+        player: owner.playerId,
+        compoundId: trigger.affixId,
+        displayName: compoundDisplayName(trigger.affixId),
+      });
+    }
     for (const effect of effects) {
       applyTriggerEffect(effect, owner, _opponent, log, time, damageContext);
       log.addEvent(time, {
@@ -787,10 +811,10 @@ export function applyTriggerEffect(
       break;
     }
     case 'compound_dot': {
-      // Compound reference implementation (Ignite).
-      // Emit a compound_trigger event so the UI can surface a named callout
-      // ("IGNITE!") distinct from the generic trigger_proc row, then push a
-      // DOT onto the defender in the same shape as apply_dot.
+      // Compound reference implementation (Ignite). Pushes a DOT onto the
+      // defender in the same shape as apply_dot. The named callout banner
+      // ("IGNITE!") is emitted by `fireTriggers` for ALL compound triggers,
+      // not here — keeps applyTriggerEffect agnostic to compound vs base.
       //
       // Scale convention:
       //   effect.damagePerSecond — raw DPS from buildCompoundEffect (scale-1)
@@ -800,12 +824,6 @@ export function applyTriggerEffect(
       // We pre-multiply DPS by the recipe multiplier here so the stored DOT
       // reflects the compound's intrinsic potency.
       const dps = effect.damagePerSecond * effect.dotMultiplier;
-      log.addEvent(time, {
-        type: 'compound_trigger',
-        player: owner.playerId,
-        compoundId: effect.compoundId,
-        displayName: `${effect.compoundId.toUpperCase()}!`,
-      });
       opponent.activeDOTs.push({
         element: effect.element,
         damagePerSecond: dps,

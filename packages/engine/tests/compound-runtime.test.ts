@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyTriggerEffect, simulate } from '../src/duel/duel-engine.js';
+import { applyTriggerEffect, fireTriggers, simulate } from '../src/duel/duel-engine.js';
 import { createGladiator, effectiveMaxHP } from '../src/duel/gladiator.js';
 import { createCombatLog } from '../src/duel/combat-log.js';
 import { extractTriggers } from '../src/duel/trigger-system.js';
@@ -9,7 +9,7 @@ import { createGem } from '../src/types/gem.js';
 import { createEmptyDerivedStats } from '../src/types/derived-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { Loadout, EquippedSlot } from '../src/types/item.js';
-import type { GladiatorRuntime, TriggerEffect } from '../src/types/combat.js';
+import type { GladiatorRuntime, TriggerEffect, TriggerDef } from '../src/types/combat.js';
 import type { DerivedStats } from '../src/types/derived-stats.js';
 
 const data = loadAndValidateData();
@@ -249,7 +249,7 @@ describe('applyTriggerEffect — apply_slow', () => {
 });
 
 describe('applyTriggerEffect — compound_dot', () => {
-  it('emits compound_trigger callout AND pushes a DOT', () => {
+  it('pushes a DOT and emits dot_apply (compound_trigger banner is fireTriggers responsibility)', () => {
     const owner = makeGladiator();
     const opponent = makeOpponent();
     const log = emptyLog();
@@ -275,7 +275,11 @@ describe('applyTriggerEffect — compound_dot', () => {
     });
 
     const events = log.frames.flatMap((f) => f.events);
-    expect(events.some((e) => e.type === 'compound_trigger')).toBe(true);
+    // applyTriggerEffect alone does NOT emit the compound_trigger banner anymore;
+    // that's `fireTriggers`' job (see "fireTriggers — universal compound_trigger
+    // emission" describe-block below). The DOT push + dot_apply event is what
+    // remains the responsibility of this case.
+    expect(events.some((e) => e.type === 'compound_trigger')).toBe(false);
     expect(events.some((e) => e.type === 'dot_apply')).toBe(true);
   });
 });
@@ -655,5 +659,69 @@ describe('applyTriggerEffect — amplify_dot_element', () => {
     // lock for the amplifier wiring; this test is a deliberate placeholder
     // that documents the integration gap for future follow-up.
     expect(true).toBe(true);
+  });
+});
+
+describe('fireTriggers — universal compound_trigger emission', () => {
+  it('emits compound_trigger once per proc for non-compound_dot effects (counter_strike)', () => {
+    const owner = makeGladiator();
+    const opponent = makeOpponent({ maxHP: 1000 });
+    opponent.currentHP = 1000;
+    const log = emptyLog();
+    const trigger: TriggerDef = {
+      affixId: 'counter_strike',
+      condition: 'on_block',
+      chance: 1.0,
+      cooldown: 0,
+      effects: [{ kind: 'bonus_damage_scaled', damageType: 'physical', multiplier: 1.5 }],
+    };
+    const rng = new SeededRNG(42);
+    fireTriggers([trigger], 'on_block', owner, opponent, rng, log, 0, 50);
+    const events = log.frames.flatMap((f) => f.events);
+    const compoundTriggers = events.filter((e) => e.type === 'compound_trigger');
+    expect(compoundTriggers).toHaveLength(1);
+    if (compoundTriggers[0].type === 'compound_trigger') {
+      expect(compoundTriggers[0].compoundId).toBe('counter_strike');
+      expect(compoundTriggers[0].displayName).toBe('Counter Strike!');
+    }
+  });
+
+  it('emits compound_trigger only ONCE for multi-effect compounds (frostbite = DOT + slow)', () => {
+    const owner = makeGladiator();
+    const opponent = makeOpponent();
+    const log = emptyLog();
+    const trigger: TriggerDef = {
+      affixId: 'frostbite',
+      condition: 'on_hit',
+      chance: 1.0,
+      cooldown: 0,
+      effects: [
+        { kind: 'compound_dot', compoundId: 'frostbite', element: 'cold', damagePerSecond: 6, duration: 6, tickInterval: 1, dotMultiplier: 1 },
+        { kind: 'apply_slow', multiplier: 1.5, duration: 4 },
+      ],
+    };
+    const rng = new SeededRNG(42);
+    fireTriggers([trigger], 'on_hit', owner, opponent, rng, log, 0);
+    const events = log.frames.flatMap((f) => f.events);
+    const compoundTriggers = events.filter((e) => e.type === 'compound_trigger');
+    expect(compoundTriggers).toHaveLength(1);
+  });
+
+  it('does NOT emit compound_trigger for base trigger affixes (chance_on_hit)', () => {
+    const owner = makeGladiator();
+    const opponent = makeOpponent({ maxHP: 1000 });
+    opponent.currentHP = 1000;
+    const log = emptyLog();
+    const trigger: TriggerDef = {
+      affixId: 'chance_on_hit',
+      condition: 'on_hit',
+      chance: 1.0,
+      cooldown: 0,
+      effects: [{ kind: 'bonus_damage', damageType: 'physical', amount: 50 }],
+    };
+    const rng = new SeededRNG(42);
+    fireTriggers([trigger], 'on_hit', owner, opponent, rng, log, 0);
+    const events = log.frames.flatMap((f) => f.events);
+    expect(events.filter((e) => e.type === 'compound_trigger')).toHaveLength(0);
   });
 });
