@@ -537,6 +537,9 @@
         "effect": { "kind": "bonus_damage", "damageType": "shadow", "amountPerTier": 8 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "shadow", "multiplier": 1.30, "condition": { "kind": "target_has_dot_element", "element": "lightning" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lightning", "shadow", "elemental"]
   },
