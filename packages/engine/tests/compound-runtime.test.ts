@@ -372,8 +372,8 @@ describe('Live recipe runtime: each wired compound applies its declared effects'
       applyTriggerEffect(effect, owner, opponent, log, 0, blockedDamage);
     }
 
-    // Counter Strike's multiplier is 1.5; opponent should lose ~120 HP.
-    expect(opponent.currentHP).toBeCloseTo(1000 - 120);
+    // Counter Strike's multiplier is 3.5; opponent should lose ~280 HP.
+    expect(opponent.currentHP).toBeCloseTo(1000 - 280);
   });
 });
 
@@ -952,7 +952,7 @@ describe('sanguine_endurance bespoke mechanic', () => {
 });
 
 describe('blood_pact bespoke mechanic', () => {
-  it('overheal converts to permanent maxHP gain capped at 20% when equipped', () => {
+  it('overheal converts to permanent maxHP gain capped at 30% when equipped', () => {
     const attackerLoadout = makeLoadoutWithCompound('blood_pact');
     const defenderLoadout = makeBareLoadout();
     const stats: [DerivedStats, DerivedStats] = [
@@ -960,9 +960,9 @@ describe('blood_pact bespoke mechanic', () => {
       { ...createEmptyDerivedStats(), maxHP: 5000, physicalDamage: 0, attackSpeed: 1.0 },
     ];
     const log = simulate(stats, [attackerLoadout, defenderLoadout], registry, new SeededRNG(42), 1);
-    // With blood_pact, attacker's effective maxHP can grow up to 1000 + 200 = 1200.
+    // With blood_pact, attacker's effective maxHP can grow up to 1000 + 300 = 1300.
     // Final currentHP can't exceed the new effective max.
-    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1200);
+    expect(log.result.finalHP[0]).toBeLessThanOrEqual(1300);
   });
 
   it('does NOT raise maxHP when blood_pact is NOT equipped', () => {
