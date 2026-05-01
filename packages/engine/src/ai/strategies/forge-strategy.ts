@@ -9,8 +9,9 @@ import type { DataRegistry } from '../../data/registry.js';
 import type { SeededRNG } from '../../rng/seeded-rng.js';
 // getActionCost available via flux-tracker if needed
 
-import { orbValueScore, bestArchetype } from '../evaluation.js';
+import { orbValueScore, bestArchetype, archetypeMatch } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
+import type { ArchetypeId } from '../../pool/archetype-validator.js';
 
 /**
  * Forge strategy cost model — IMPORTANT to understand before changing budgets:
@@ -141,6 +142,34 @@ function findSocketLocation(
     if (loadout.armor.slots[i]?.gem.uid === uid) return { target: 'armor', slotIndex: i };
   }
   return null;
+}
+
+/**
+ * Count how many gems in the given list match the archetype's tag set.
+ * Used by meta-action heuristics to assess stockpile-archetype fit.
+ */
+function archetypeFitCount(
+  gems: GemInstance[],
+  archetype: ArchetypeId,
+  registry: DataRegistry,
+): number {
+  let count = 0;
+  for (const gem of gems) {
+    if (archetypeMatch(gem, archetype, registry)) count++;
+  }
+  return count;
+}
+
+/**
+ * True when most of the stockpile is low-rarity (common/uncommon). Used as
+ * a guarantee_rarity trigger heuristic.
+ */
+function stockpileIsRarityPoor(gems: GemInstance[]): boolean {
+  if (gems.length < 3) return false; // not enough sample
+  const lowRarityCount = gems.filter(
+    g => g.rarity === 'common' || g.rarity === 'uncommon',
+  ).length;
+  return lowRarityCount / gems.length >= 0.7;
 }
 
 export interface ForgeStrategy {
@@ -700,9 +729,12 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     const balance = registry.getBalance();
     let flux = fluxRemaining;
 
+    // Compute archetype once — used for base stats (round 1) and meta-action
+    // heuristics (all rounds).
+    const arch = bestArchetype(stockpile, registry);
+
     // Set base stats in round 1 based on archetype
     if (round === 1) {
-      const arch = bestArchetype(stockpile, registry);
       const weaponStats = archetypeToStats(arch);
       // Armor: VIT for HP + complement the weapon build
       const armorStats: [BaseStat, BaseStat] =
@@ -761,6 +793,34 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     const flux0 = runStateFlux ?? 0;
     if (flux0 >= boostCost && comboCandidates.length > 0) {
       actions.push({ kind: 'boost_combine' });
+    }
+
+    // reroll_pool meta-action: heuristic — reroll when current stockpile is
+    // archetype-poor (fewer than 2 matching gems) AND we haven't already spent
+    // flux this round AND we have ≥5 flux.
+    const rerollCost = registry.getBalance().gem.flux.costs.rerollPool ?? 5;
+    const alreadyPlannedFluxSpend = actions.some(a => a.kind === 'boost_combine');
+    if (
+      flux0 >= rerollCost &&
+      !alreadyPlannedFluxSpend &&
+      archetypeFitCount(stockpile, arch, registry) < 2
+    ) {
+      actions.push({ kind: 'reroll_pool' });
+    }
+
+    // guarantee_rarity meta-action: heuristic — guarantee when stockpile is
+    // rarity-poor (3+ gems and most are common/uncommon) AND we haven't
+    // already planned any meta this round AND we have ≥4 flux.
+    const guaranteeCost = registry.getBalance().gem.flux.costs.guaranteeRarity ?? 4;
+    const alreadyPlannedAnyMeta = actions.some(a =>
+      a.kind === 'boost_combine' || a.kind === 'reroll_pool',
+    );
+    if (
+      (runStateFlux ?? 0) >= guaranteeCost &&
+      !alreadyPlannedAnyMeta &&
+      stockpileIsRarityPoor(stockpile)
+    ) {
+      actions.push({ kind: 'guarantee_rarity' });
     }
 
     // Apply the best non-conflicting combinations
@@ -1043,6 +1103,36 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     const flux0 = runStateFlux ?? 0;
     if (flux0 >= boostCost && allCombos3.length > 0) {
       actions.push({ kind: 'boost_combine' });
+    }
+
+    // reroll_pool meta-action: heuristic — reroll when current stockpile is
+    // archetype-poor (fewer than 2 matching gems) AND we haven't already spent
+    // flux this round AND we have ≥5 flux. Reroll affects the NEXT draft, so
+    // its value is highest mid-run when the build is committed but the pool is
+    // thin for our archetype.
+    const rerollCost = registry.getBalance().gem.flux.costs.rerollPool ?? 5;
+    const alreadyPlannedFluxSpend = actions.some(a => a.kind === 'boost_combine');
+    if (
+      flux0 >= rerollCost &&
+      !alreadyPlannedFluxSpend &&
+      archetypeFitCount(stockpile, arch, registry) < 2
+    ) {
+      actions.push({ kind: 'reroll_pool' });
+    }
+
+    // guarantee_rarity meta-action: heuristic — guarantee when stockpile is
+    // rarity-poor (3+ gems and most are common/uncommon) AND we haven't
+    // already planned any meta this round AND we have ≥4 flux.
+    const guaranteeCost = registry.getBalance().gem.flux.costs.guaranteeRarity ?? 4;
+    const alreadyPlannedAnyMeta = actions.some(a =>
+      a.kind === 'boost_combine' || a.kind === 'reroll_pool',
+    );
+    if (
+      (runStateFlux ?? 0) >= guaranteeCost &&
+      !alreadyPlannedAnyMeta &&
+      stockpileIsRarityPoor(stockpile)
+    ) {
+      actions.push({ kind: 'guarantee_rarity' });
     }
 
     // Greedily select non-conflicting capstones first

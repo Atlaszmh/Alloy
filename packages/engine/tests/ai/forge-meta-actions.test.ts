@@ -231,3 +231,197 @@ describe('Tier 4 meta-action planning — boost_combine', () => {
     expect(actions.some(a => a.kind === 'boost_combine')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stockpile helpers for meta-action tests
+// ---------------------------------------------------------------------------
+// fortify: category=defensive, tags=["defensive","conditional"] — not physical/crit
+// hp_regen: category=defensive, tags=["sustain"] — not physical/crit
+// These two gems together will NOT form 2+ matches for any single archetype,
+// so archetypeFitCount < 2 is satisfied for the reroll heuristic.
+
+describe('Tier 5 meta-action planning — reroll_pool', () => {
+  it('plans reroll_pool when stockpile is archetype-poor and flux >= 5', () => {
+    // fortify + hp_regen: neither matches physical_burst (needs physical/crit)
+    // or any archetype with 2+ matches — so archetypeFitCount(bestArch) < 2
+    const stockpile: GemInstance[] = [
+      {
+        uid: 'a',
+        affixId: 'fortify',
+        tier: 2,
+        rarity: 'common',
+        recipeDepth: 0,
+        combinable: true,
+        tags: ['defensive', 'conditional'],
+      },
+      {
+        uid: 'b',
+        affixId: 'hp_regen',
+        tier: 2,
+        rarity: 'common',
+        recipeDepth: 0,
+        combinable: true,
+        tags: ['sustain'],
+      },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      6, // runStateFlux >= rerollPool cost (5)
+    );
+    expect(actions.some(a => a.kind === 'reroll_pool')).toBe(true);
+  });
+
+  it('does NOT plan reroll_pool when flux < 5 (below cost)', () => {
+    const stockpile: GemInstance[] = [
+      {
+        uid: 'a',
+        affixId: 'fortify',
+        tier: 2,
+        rarity: 'common',
+        recipeDepth: 0,
+        combinable: true,
+        tags: ['defensive', 'conditional'],
+      },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      4, // runStateFlux < 5 — not enough for reroll
+    );
+    expect(actions.some(a => a.kind === 'reroll_pool')).toBe(false);
+  });
+});
+
+describe('Tier 5 meta-action planning — guarantee_rarity', () => {
+  it('plans guarantee_rarity when stockpile is rarity-poor and flux >= 4', () => {
+    // 4 common gems and 0 rare → lowRarityCount/total = 1.0 >= 0.7
+    const stockpile: GemInstance[] = [
+      { uid: 'a', affixId: 'fortify', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+      { uid: 'b', affixId: 'hp_regen', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['sustain'] },
+      { uid: 'c', affixId: 'armor_rating', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+      { uid: 'd', affixId: 'block_chance', tier: 2, rarity: 'uncommon', recipeDepth: 0, combinable: true, tags: ['block', 'defensive'] },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      5, // runStateFlux >= guaranteeRarity cost (4), no capstone available so no boost
+    );
+    expect(actions.some(a => a.kind === 'guarantee_rarity')).toBe(true);
+  });
+
+  it('does NOT plan guarantee_rarity when flux < 4 (below cost)', () => {
+    const stockpile: GemInstance[] = [
+      { uid: 'a', affixId: 'fortify', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+      { uid: 'b', affixId: 'hp_regen', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['sustain'] },
+      { uid: 'c', affixId: 'armor_rating', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      3, // runStateFlux < 4 — not enough for guarantee
+    );
+    expect(actions.some(a => a.kind === 'guarantee_rarity')).toBe(false);
+  });
+});
+
+describe('Tier 5 meta-action planning — mutex (one meta per round)', () => {
+  it('does NOT plan reroll_pool or guarantee_rarity when boost_combine is planned', () => {
+    // Three fire/cold/lightning gems form a capstone → boost_combine fires
+    // Stockpile is also archetype-poor AND rarity-poor so both heuristics would
+    // trigger if not for the mutex gate.
+    const stockpile: GemInstance[] = [
+      { uid: 'fire', affixId: 'fire_damage', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['fire', 'elemental'] },
+      { uid: 'cold', affixId: 'cold_damage', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['cold', 'elemental'] },
+      { uid: 'lightning', affixId: 'lightning_damage', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['lightning', 'elemental'] },
+    ];
+    const strategy = new Tier5ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      10, // plenty of flux for any meta-action
+    );
+    // boost_combine should be planned (capstone available + flux >= 3)
+    expect(actions.some(a => a.kind === 'boost_combine')).toBe(true);
+    // neither reroll nor guarantee should fire (boost already planned)
+    expect(actions.some(a => a.kind === 'reroll_pool')).toBe(false);
+    expect(actions.some(a => a.kind === 'guarantee_rarity')).toBe(false);
+  });
+});
+
+describe('Tier 4 meta-action planning — reroll_pool', () => {
+  it('plans reroll_pool when stockpile is archetype-poor and flux >= 5', () => {
+    const stockpile: GemInstance[] = [
+      { uid: 'a', affixId: 'fortify', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive', 'conditional'] },
+      { uid: 'b', affixId: 'hp_regen', tier: 2, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['sustain'] },
+    ];
+    const strategy = new Tier4ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      1,
+      [],
+      registry,
+      new SeededRNG(1),
+      6, // runStateFlux >= rerollPool cost (5)
+    );
+    expect(actions.some(a => a.kind === 'reroll_pool')).toBe(true);
+  });
+});
+
+describe('Tier 4 meta-action planning — guarantee_rarity', () => {
+  it('plans guarantee_rarity when stockpile is rarity-poor and flux >= 4', () => {
+    // 4 common/uncommon gems, no combos available → no boost, no reroll (fitCount check)
+    // We need to pick affixes that don't form combos and don't match well-fit arch
+    // flat_hp + dodge_chance + damage_reduction + barrier = all defensive/sustain,
+    // scattered across archetypes, so no single arch gets 2+ matches easily.
+    const stockpile: GemInstance[] = [
+      { uid: 'a', affixId: 'flat_hp', tier: 1, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['sustain'] },
+      { uid: 'b', affixId: 'dodge_chance', tier: 1, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+      { uid: 'c', affixId: 'damage_reduction', tier: 1, rarity: 'common', recipeDepth: 0, combinable: true, tags: ['defensive'] },
+      { uid: 'd', affixId: 'initiative', tier: 1, rarity: 'uncommon', recipeDepth: 0, combinable: true, tags: ['utility'] },
+    ];
+    const strategy = new Tier4ForgeStrategy();
+    const actions = strategy.plan(
+      stockpile,
+      emptyLoadout(),
+      Number.MAX_SAFE_INTEGER,
+      2, // round 2 — no set_base_stats to worry about
+      [],
+      registry,
+      new SeededRNG(1),
+      5, // runStateFlux >= guaranteeRarity cost (4); no combos so no boost
+    );
+    expect(actions.some(a => a.kind === 'guarantee_rarity')).toBe(true);
+  });
+});
