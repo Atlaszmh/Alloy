@@ -1209,7 +1209,25 @@
       { "stat": "compound.worldfire.active", "op": "flat", "value": 1 },
       { "stat": "compound.worldfire.fireDamageBonus", "op": "percent", "value": 0.50 },
       { "stat": "compound.worldfire.igniteAoeRadius", "op": "flat", "value": 3 },
-      { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 }
+      { "stat": "compound.worldfire.thermalStunOnBurn", "op": "flat", "value": 0.20 },
+      { "stat": "compound.worldfire.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": {
+          "kind": "compound_dot",
+          "element": "fire",
+          "dpsPerTier": 8,
+          "duration": 8,
+          "tickInterval": 1,
+          "dotMultiplier": 2.0
+        }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "stun", "duration": 1.0 }
+      }
     ],
     "maxDepthContribution": 3,
     "tags": ["compound", "fire", "lightning", "cold", "elemental", "capstone"]
