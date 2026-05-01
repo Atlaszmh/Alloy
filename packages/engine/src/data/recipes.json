@@ -634,7 +634,7 @@
         "effect": {
           "kind": "stat_buff_mul",
           "stat": "lifestealPercent",
-          "multiplier": 3.0,
+          "multiplier": 5.0,
           "duration": 4
         }
       }
