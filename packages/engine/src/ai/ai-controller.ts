@@ -62,6 +62,7 @@ export class AIController {
     fluxRemaining: number,
     round: number,
     opponentStockpile: SlotArray<GemInstance>,
+    runStateFlux?: number, // NEW — real run-mode flux for meta-actions
   ): ForgeAction[] {
     return this.forgeStrategy.plan(
       liveSlots(stockpile),
@@ -71,6 +72,7 @@ export class AIController {
       liveSlots(opponentStockpile),
       this.registry,
       this.rng,
+      runStateFlux,
     );
   }
 

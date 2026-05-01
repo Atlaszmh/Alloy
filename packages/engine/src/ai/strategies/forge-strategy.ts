@@ -152,6 +152,7 @@ export interface ForgeStrategy {
     opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    runStateFlux?: number, // NEW — real run-mode flux for meta-actions
   ): ForgeAction[];
 }
 
@@ -171,6 +172,7 @@ export class Tier1ForgeStrategy implements ForgeStrategy {
     _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    _runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -242,6 +244,7 @@ export class Tier2ForgeStrategy implements ForgeStrategy {
     _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    _runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -538,6 +541,7 @@ export class Tier3ForgeStrategy implements ForgeStrategy {
     _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    _runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -690,6 +694,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    _runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -898,6 +903,7 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
+    _runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();

@@ -490,6 +490,7 @@ function simulateSingleRunV2(
         RUN_MODE_PLANNING_BUDGET,
         forgeRound,
         state.players[1].stockpile,
+        state.runState?.flux ?? 0, // real flux for meta-actions
       );
       for (const action of actions) {
         const r = applyAction(state, { kind: 'forge_action', player: 0, action }, registry);
