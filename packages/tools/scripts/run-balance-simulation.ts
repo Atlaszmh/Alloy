@@ -13,7 +13,9 @@ import {
   DataRegistry,
   loadAndValidateData,
   runSimulation,
+  runRunSimulationV2,
   type SimulationConfig,
+  type RunSimulationConfigV2,
 } from '@alloy/engine';
 
 // -----------------------------------------------------------------------------
@@ -53,6 +55,48 @@ const MATCH_BATCHES: { label: string; config: SimulationConfig }[] = [
       aiTier2: 5,
       seedStart: 3000,
       mode: 'quick',
+      baseWeaponId: 'sword',
+      baseArmorId: 'chainmail',
+    },
+  },
+];
+
+const RUN_BATCHES: { label: string; config: RunSimulationConfigV2 }[] = [
+  {
+    label: 'Tier 5 player vs Tier 3 opponent (100 runs, 10-round goal)',
+    config: {
+      runCount: 100,
+      seed: 5000,
+      aiTier: 5,
+      opponentTier: 3,
+      startingLives: 3,
+      goalRound: 10,
+      baseWeaponId: 'sword',
+      baseArmorId: 'chainmail',
+    },
+  },
+  {
+    label: 'Tier 3 player vs Tier 3 opponent (100 runs, 10-round goal)',
+    config: {
+      runCount: 100,
+      seed: 6000,
+      aiTier: 3,
+      opponentTier: 3,
+      startingLives: 3,
+      goalRound: 10,
+      baseWeaponId: 'sword',
+      baseArmorId: 'chainmail',
+    },
+  },
+  {
+    label: 'Tier 1 player vs Tier 1 opponent (100 runs, 10-round goal)',
+    config: {
+      runCount: 100,
+      seed: 7000,
+      aiTier: 1,
+      opponentTier: 1,
+      startingLives: 3,
+      goalRound: 10,
       baseWeaponId: 'sword',
       baseArmorId: 'chainmail',
     },
@@ -173,6 +217,62 @@ function printBatch(label: string, config: SimulationConfig, registry: DataRegis
   }
 }
 
+function printRunBatch(label: string, config: RunSimulationConfigV2, registry: DataRegistry): void {
+  printSection(label);
+  console.log(`  runCount=${config.runCount}  player=T${config.aiTier}  opponent=T${config.opponentTier}  goal=round ${config.goalRound}  lives=${config.startingLives}`);
+
+  const t0 = Date.now();
+  const result = runRunSimulationV2(config, registry);
+  const elapsed = Date.now() - t0;
+
+  const s = result.aggregateStats;
+  console.log('');
+  console.log(`  Duration: ${elapsed}ms (${(elapsed / config.runCount).toFixed(1)}ms/run)`);
+  console.log(`  Goal-reach rate: ${pct(s.goalReachRate)}`);
+  console.log(`  Avg rounds reached: ${s.avgRoundsReached.toFixed(2)}`);
+  console.log(`  Avg final lives: ${s.avgFinalLives.toFixed(2)}`);
+  console.log(`  Avg flux earned/spent: ${s.avgFluxEarned.toFixed(1)} / ${s.avgFluxSpent.toFixed(1)}`);
+
+  // Death-round histogram
+  if (s.deathRoundHistogram.size > 0) {
+    console.log('');
+    console.log('  Death round histogram (runs that did not reach goal):');
+    const rows = [...s.deathRoundHistogram.entries()].sort((a, b) => a[0] - b[0]);
+    for (const [round, count] of rows) {
+      console.log(`    round ${round.toString().padStart(2)}: ${count} runs`);
+    }
+  }
+
+  // Build shape per round
+  if (s.buildShapeByRound.size > 0) {
+    console.log('');
+    console.log('  Build shape by round (avg across runs that reached the round):');
+    console.log('    round  runs  sockets  compounds  capstones  totalTier  synergies');
+    const rows = [...s.buildShapeByRound.entries()].sort((a, b) => a[0] - b[0]);
+    for (const [round, shape] of rows) {
+      console.log(
+        `    ${round.toString().padStart(5)}  ${shape.runsAtThisRound.toString().padStart(4)}  ` +
+        `${shape.avgSocketedGems.toFixed(1).padStart(7)}  ${shape.avgCompoundCount.toFixed(1).padStart(9)}  ` +
+        `${shape.avgCapstoneCount.toFixed(1).padStart(9)}  ${shape.avgTotalGemTier.toFixed(1).padStart(9)}  ` +
+        `${shape.avgActiveSynergies.toFixed(1).padStart(9)}`,
+      );
+    }
+  }
+
+  // Compound emergence (top 15 by run-coverage)
+  if (s.compoundEmergence.size > 0) {
+    console.log('');
+    console.log('  Compound emergence (when each compound first appears, top 15 by run coverage):');
+    const rows = [...s.compoundEmergence.entries()]
+      .sort((a, b) => b[1].runsThatSawIt - a[1].runsThatSawIt)
+      .slice(0, 15);
+    for (const [id, e] of rows) {
+      const coverage = pct(e.runsThatSawIt / config.runCount);
+      console.log(`    ${id.padEnd(28)}  first-seen-avg=round ${e.firstSeenAvgRound.toFixed(1).padStart(4)}   coverage=${coverage}`);
+    }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Main
 // -----------------------------------------------------------------------------
@@ -186,6 +286,20 @@ const registry = buildRegistry();
 for (const batch of MATCH_BATCHES) {
   try {
     printBatch(batch.label, batch.config, registry);
+  } catch (err) {
+    console.error(`  ERROR running batch "${batch.label}":`, err instanceof Error ? err.message : err);
+    if (err instanceof Error && err.stack) console.error(err.stack);
+  }
+}
+
+console.log('');
+console.log('─'.repeat(72));
+console.log('RUN-MODE SIMULATIONS');
+console.log('─'.repeat(72));
+
+for (const batch of RUN_BATCHES) {
+  try {
+    printRunBatch(batch.label, batch.config, registry);
   } catch (err) {
     console.error(`  ERROR running batch "${batch.label}":`, err instanceof Error ? err.message : err);
     if (err instanceof Error && err.stack) console.error(err.stack);

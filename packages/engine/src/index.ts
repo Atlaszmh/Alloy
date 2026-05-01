@@ -26,7 +26,7 @@ export { generateSyntheticOpponent, getTierName } from './ai/synthetic-opponent.
 export type { SyntheticOpponent } from './ai/synthetic-opponent.js';
 export { defaultConfig, mergeConfig, GameConfigSchema } from './data/game-config.js';
 export { extractMatchReport } from './match/match-report.js';
-export { runSimulation, runRunSimulation } from './balance/simulation-runner.js';
+export { runSimulation, runRunSimulation, runRunSimulationV2 } from './balance/simulation-runner.js';
 export { computeAggregateStats } from './balance/stats-collector.js';
 export { generateBalanceReport } from './balance/balance-report.js';
 export type {
@@ -36,8 +36,16 @@ export type {
   RunSimulationResult,
   RunReport,
   RoundDetail,
+  RunSimulationConfigV2,
+  RunSimulationResultV2,
 } from './balance/simulation-runner.js';
 export type { AggregateStats } from './balance/stats-collector.js';
+export type {
+  RunAggregateStats,
+  RunReportV2,
+  PerRoundSnapshot,
+  BuildShape,
+} from './balance/run-stats-collector.js';
 export type { BalanceIssue } from './balance/balance-report.js';
 
 // Gem combination system
