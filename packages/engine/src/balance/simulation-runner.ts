@@ -428,6 +428,12 @@ function simulateSingleRunV2(
   let totalFluxEarned = 0;
   let totalFluxSpent = 0;
   let prevFlux = state.runState?.flux ?? 0;
+  const metaActionCounts = {
+    boostCombine: 0,
+    rerollPool: 0,
+    guaranteeRarity: 0,
+    transplantChooseAffix: 0,
+  };
 
   // Loop until run ends (lives = 0 or goal reached) or safety cap exceeded
   const ROUND_SAFETY_CAP = config.goalRound + 5; // allow up to 5 endless rounds
@@ -492,6 +498,13 @@ function simulateSingleRunV2(
         state.players[1].stockpile,
         state.runState?.flux ?? 0, // real flux for meta-actions
       );
+      // Count meta-actions BEFORE dispatching (gross counters, not net flux).
+      for (const action of actions) {
+        if (action.kind === 'boost_combine') metaActionCounts.boostCombine++;
+        else if (action.kind === 'reroll_pool') metaActionCounts.rerollPool++;
+        else if (action.kind === 'guarantee_rarity') metaActionCounts.guaranteeRarity++;
+        else if (action.kind === 'transplant_gem' && action.chosenAffix !== undefined) metaActionCounts.transplantChooseAffix++;
+      }
       for (const action of actions) {
         const r = applyAction(state, { kind: 'forge_action', player: 0, action }, registry);
         if (r.ok) state = r.state;
@@ -580,6 +593,7 @@ function simulateSingleRunV2(
     compoundFirstAppearance,
     totalFluxEarned,
     totalFluxSpent,
+    metaActionCounts,
   };
 }
 

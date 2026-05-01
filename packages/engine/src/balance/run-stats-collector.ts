@@ -30,6 +30,12 @@ export interface RunReportV2 {
   compoundFirstAppearance: Map<string, number>;
   totalFluxEarned: number;
   totalFluxSpent: number;
+  metaActionCounts: {
+    boostCombine: number;
+    rerollPool: number;
+    guaranteeRarity: number;
+    transplantChooseAffix: number;
+  };
 }
 
 export interface RunAggregateStats {
@@ -45,6 +51,12 @@ export interface RunAggregateStats {
   avgFluxEarned: number;
   avgFluxSpent: number;
   avgFinalLives: number;
+  avgMetaActions: {
+    boostCombine: number;
+    rerollPool: number;
+    guaranteeRarity: number;
+    transplantChooseAffix: number;
+  };
 }
 
 export interface BuildShape {
@@ -67,6 +79,10 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
   let totalFluxEarned = 0;
   let totalFluxSpent = 0;
   let totalFinalLives = 0;
+  let totalBoostCombine = 0;
+  let totalRerollPool = 0;
+  let totalGuaranteeRarity = 0;
+  let totalTransplantChooseAffix = 0;
   const deathRoundHistogram = new Map<number, number>();
   // Map<round, accumulator>
   const buildAccum = new Map<number, BuildAccumulator>();
@@ -77,6 +93,10 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
     totalFluxEarned += r.totalFluxEarned;
     totalFluxSpent += r.totalFluxSpent;
     totalFinalLives += r.finalLives;
+    totalBoostCombine += r.metaActionCounts.boostCombine;
+    totalRerollPool += r.metaActionCounts.rerollPool;
+    totalGuaranteeRarity += r.metaActionCounts.guaranteeRarity;
+    totalTransplantChooseAffix += r.metaActionCounts.transplantChooseAffix;
     if (r.goalReached) {
       goalReachedCount++;
     } else {
@@ -130,6 +150,12 @@ export function computeRunAggregateStats(reports: RunReportV2[]): RunAggregateSt
     avgFluxEarned: totalFluxEarned / runCount,
     avgFluxSpent: totalFluxSpent / runCount,
     avgFinalLives: totalFinalLives / runCount,
+    avgMetaActions: {
+      boostCombine: totalBoostCombine / runCount,
+      rerollPool: totalRerollPool / runCount,
+      guaranteeRarity: totalGuaranteeRarity / runCount,
+      transplantChooseAffix: totalTransplantChooseAffix / runCount,
+    },
   };
 }
 
@@ -164,5 +190,11 @@ function emptyStats(): RunAggregateStats {
     avgFluxEarned: 0,
     avgFluxSpent: 0,
     avgFinalLives: 0,
+    avgMetaActions: {
+      boostCombine: 0,
+      rerollPool: 0,
+      guaranteeRarity: 0,
+      transplantChooseAffix: 0,
+    },
   };
 }

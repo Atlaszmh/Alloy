@@ -271,6 +271,13 @@ function printRunBatch(label: string, config: RunSimulationConfigV2, registry: D
       console.log(`    ${id.padEnd(28)}  first-seen-avg=round ${e.firstSeenAvgRound.toFixed(1).padStart(4)}   coverage=${coverage}`);
     }
   }
+
+  console.log('');
+  console.log('  Meta-action usage (avg per run):');
+  console.log(`    boost_combine: ${s.avgMetaActions.boostCombine.toFixed(2)}`);
+  console.log(`    reroll_pool: ${s.avgMetaActions.rerollPool.toFixed(2)}`);
+  console.log(`    guarantee_rarity: ${s.avgMetaActions.guaranteeRarity.toFixed(2)}`);
+  console.log(`    transplant_chooseAffix: ${s.avgMetaActions.transplantChooseAffix.toFixed(2)}`);
 }
 
 // -----------------------------------------------------------------------------
