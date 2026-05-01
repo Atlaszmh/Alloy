@@ -304,7 +304,12 @@ function runAIMatch(
         const actions = ai.planForge(
           state.players[player].stockpile,
           state.players[player].loadout,
-          0, // flux is deprecated
+          // Generous flux budget — match-controller no longer gates forge
+          // actions on flux for simulation, but the AI strategies still use
+          // flux as their action budget. Passing a high value lets the AI
+          // exercise its full plan (socket every gem, combine eligible
+          // pairs/triples) without artificial cap.
+          1000,
           forgePhase.round,
           state.players[1 - player as 0 | 1].stockpile,
         );
