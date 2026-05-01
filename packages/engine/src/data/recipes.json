@@ -581,7 +581,19 @@
     "outputAffixId": "regenerative_shield",
     "outputBonusEffects": [
       { "stat": "compound.regenerative_shield.active", "op": "flat", "value": 1 },
-      { "stat": "compound.regenerative_shield.regenMultiplier", "op": "flat", "value": 2.0 }
+      { "stat": "compound.regenerative_shield.regenMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.regenerative_shield.chance", "op": "flat", "value": 0.5 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "gain_barrier",
+          "amount": 0.05,
+          "isPercent": true,
+          "duration": 30
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "barrier", "hp_regen", "utility"]
