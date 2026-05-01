@@ -716,7 +716,19 @@
     "outputBonusEffects": [
       { "stat": "compound.fortress.active", "op": "flat", "value": 1 },
       { "stat": "compound.fortress.hpThreshold", "op": "flat", "value": 0.80 },
-      { "stat": "compound.fortress.damageReduction", "op": "flat", "value": 0.15 }
+      { "stat": "compound.fortress.damageReduction", "op": "flat", "value": 0.15 },
+      { "stat": "compound.fortress.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "gain_barrier",
+          "amount": 0.05,
+          "isPercent": true,
+          "duration": 4
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "hp", "armor", "utility"]
