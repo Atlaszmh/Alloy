@@ -554,7 +554,18 @@
     "outputAffixId": "iron_maiden",
     "outputBonusEffects": [
       { "stat": "compound.iron_maiden.active", "op": "flat", "value": 1 },
-      { "stat": "compound.iron_maiden.blockReflectMultiplier", "op": "flat", "value": 2.0 }
+      { "stat": "compound.iron_maiden.blockReflectMultiplier", "op": "flat", "value": 2.0 },
+      { "stat": "compound.iron_maiden.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_block",
+        "effect": {
+          "kind": "reflect_damage",
+          "multiplier": 2.0,
+          "duration": 4
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "thorns", "block", "utility"]
