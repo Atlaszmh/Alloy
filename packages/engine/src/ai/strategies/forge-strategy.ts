@@ -13,6 +13,25 @@ import { orbValueScore, bestArchetype } from '../evaluation.js';
 import { ARCHETYPE_TAGS } from '../../pool/archetype-validator.js';
 
 /**
+ * Forge strategy cost model — IMPORTANT to understand before changing budgets:
+ *
+ * - In RANKED mode, the engine charges flux for basic forge actions per
+ *   `balance.fluxCosts` (assignOrb=1, combineOrbs=2, etc). The strategy's
+ *   `fluxRemaining` parameter caps total spend.
+ * - In RUN mode, the engine treats basic forge actions as FREE (handleForgeAction
+ *   in match-controller.ts). Flux is only spent on meta-actions
+ *   (boost_combine, reroll_pool, guarantee_rarity, transplant_gem chooseAffix
+ *   — see balance.gem.flux.costs). Run-mode callers (e.g. simulation-runner.ts)
+ *   pass an effectively unlimited budget for basic actions.
+ *
+ * The strategies below use `balance.fluxCosts` for planning regardless of mode.
+ * That's intentional — under run mode the budget never binds, so the legacy
+ * cost arithmetic is harmless. If you ever want to add meta-action planning
+ * (boost/reroll/guarantee), gate that on real `runState.flux` (passed via a
+ * new strategy parameter), not on `fluxRemaining`.
+ */
+
+/**
  * Enumerate transplant candidates: for every gem that has an open (empty)
  * secondary slot, pair it with every other gem in the stockpile as a source.
  * Scoring is left to the caller's existing action-selection logic.
