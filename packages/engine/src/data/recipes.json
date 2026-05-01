@@ -537,7 +537,18 @@
     "outputBonusEffects": [
       { "stat": "compound.necrosis.active", "op": "flat", "value": 1 },
       { "stat": "compound.necrosis.maxHpPerStack", "op": "flat", "value": 0.005 },
-      { "stat": "compound.necrosis.poisonStacksOnShadow", "op": "flat", "value": 2 }
+      { "stat": "compound.necrosis.poisonStacksOnShadow", "op": "flat", "value": 2 },
+      { "stat": "compound.necrosis.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "reduce_max_hp", "fraction": 0.01, "duration": 30 }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_dot", "element": "poison", "dpsPerTier": 2, "duration": 6 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "poison", "shadow", "elemental"]
