@@ -10,9 +10,19 @@
     "outputAffixId": "ignite",
     "outputBonusEffects": [
       { "stat": "compound.ignite.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.ignite.dotMultiplier", "op": "flat", "value": 2.0 },
-      { "stat": "compound.ignite.duration", "op": "flat", "value": 12 },
       { "stat": "compound.ignite.absorbChance", "op": "flat", "value": 0.10 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "compound_dot",
+          "element": "fire",
+          "dpsPerTier": 3,
+          "duration": 12,
+          "tickInterval": 1.0,
+          "dotMultiplier": 2.0
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "trigger"]
@@ -27,12 +37,26 @@
     ],
     "outputAffixId": "frostbite",
     "outputBonusEffects": [
-      { "stat": "compound.frostbite.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.frostbite.slowMultiplier", "op": "flat", "value": 1.0 },
-      { "stat": "compound.frostbite.coldDot", "op": "flat", "value": 1 },
-      { "stat": "compound.frostbite.rootDuration", "op": "flat", "value": 30 },
-      { "stat": "compound.frostbite.armorBonus", "op": "flat", "value": 0.30 },
-      { "stat": "compound.frostbite.armorDuration", "op": "flat", "value": 90 }
+      { "stat": "compound.frostbite.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "compound_dot",
+          "element": "cold",
+          "dpsPerTier": 2,
+          "duration": 6,
+          "tickInterval": 1.0,
+          "dotMultiplier": 1.0
+        }
+      },
+      {
+        "effect": {
+          "kind": "apply_slow",
+          "multiplier": 1.5,
+          "duration": 4
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "trigger"]
@@ -47,9 +71,16 @@
     ],
     "outputAffixId": "static_discharge",
     "outputBonusEffects": [
-      { "stat": "compound.static_discharge.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.static_discharge.chainDamage", "op": "flat", "value": 0.50 },
-      { "stat": "compound.static_discharge.aoeDamage", "op": "flat", "value": 1 }
+      { "stat": "compound.static_discharge.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "bonus_damage_scaled",
+          "damageType": "lightning",
+          "multiplier": 0.5
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lightning", "trigger"]
@@ -82,10 +113,22 @@
     ],
     "outputAffixId": "soul_rend",
     "outputBonusEffects": [
-      { "stat": "compound.soul_rend.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.soul_rend.currentHpDamage", "op": "flat", "value": 0.05 },
-      { "stat": "compound.soul_rend.reduceMaxHp", "op": "flat", "value": 0.03 },
-      { "stat": "compound.soul_rend.reduceDuration", "op": "flat", "value": 150 }
+      { "stat": "compound.soul_rend.chance", "op": "flat", "value": 0.15 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "damage_current_hp",
+          "fraction": 0.05
+        }
+      },
+      {
+        "effect": {
+          "kind": "reduce_max_hp",
+          "fraction": 0.03,
+          "duration": 15
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "shadow", "trigger"]
@@ -100,9 +143,16 @@
     ],
     "outputAffixId": "soul_siphon",
     "outputBonusEffects": [
-      { "stat": "compound.soul_siphon.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.soul_siphon.fullHeal", "op": "flat", "value": 1 },
-      { "stat": "compound.soul_siphon.healOnDamaged", "op": "flat", "value": 0.25 }
+      { "stat": "compound.soul_siphon.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "heal",
+          "amountPerTier": 8,
+          "isPercent": false
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lifesteal", "trigger"]
@@ -118,10 +168,17 @@
     "outputAffixId": "concussion",
     "outputBonusEffects": [
       { "stat": "compound.concussion.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.concussion.stunDuration", "op": "flat", "value": 45 },
       { "stat": "compound.concussion.durationMultiplier", "op": "flat", "value": 3.0 },
       { "stat": "compound.concussion.stunAttacker", "op": "flat", "value": 1 },
       { "stat": "compound.concussion.stunAttackerDuration", "op": "flat", "value": 15 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "stun",
+          "duration": 1.0
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "stun", "trigger"]
@@ -136,9 +193,16 @@
     ],
     "outputAffixId": "retribution_aura",
     "outputBonusEffects": [
-      { "stat": "compound.retribution_aura.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.retribution_aura.thornMultiplier", "op": "flat", "value": 2.0 },
-      { "stat": "compound.retribution_aura.duration", "op": "flat", "value": 60 }
+      { "stat": "compound.retribution_aura.chance", "op": "flat", "value": 0.15 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "reflect_damage",
+          "multiplier": 2.0,
+          "duration": 6.0
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "thorns", "defensive_trigger"]
@@ -153,8 +217,17 @@
     ],
     "outputAffixId": "immolation",
     "outputBonusEffects": [
-      { "stat": "compound.immolation.chance", "op": "flat", "value": 0.15 },
+      { "stat": "compound.immolation.chance", "op": "flat", "value": 0.20 },
       { "stat": "compound.immolation.aoeDamage", "op": "flat", "value": 1 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "bonus_damage",
+          "damageType": "fire",
+          "amountPerTier": 12
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "defensive_trigger"]
@@ -169,8 +242,17 @@
     ],
     "outputAffixId": "reactive_shield",
     "outputBonusEffects": [
-      { "stat": "compound.reactive_shield.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.reactive_shield.barrierPercent", "op": "flat", "value": 0.30 }
+      { "stat": "compound.reactive_shield.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "gain_barrier",
+          "amount": 0.15,
+          "isPercent": true,
+          "duration": 8
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "barrier", "defensive_trigger"]
@@ -185,8 +267,16 @@
     ],
     "outputAffixId": "counter_strike",
     "outputBonusEffects": [
-      { "stat": "compound.counter_strike.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.counter_strike.damageMultiplier", "op": "flat", "value": 1.50 }
+      { "stat": "compound.counter_strike.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "bonus_damage_scaled",
+          "damageType": "physical",
+          "multiplier": 1.5
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "thorns", "block_trigger"]
@@ -201,8 +291,15 @@
     ],
     "outputAffixId": "shield_bash",
     "outputBonusEffects": [
-      { "stat": "compound.shield_bash.chance", "op": "flat", "value": 0.15 },
-      { "stat": "compound.shield_bash.stunDuration", "op": "flat", "value": 30 }
+      { "stat": "compound.shield_bash.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "stun",
+          "duration": 0.8
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "stun", "block_trigger"]
@@ -217,8 +314,18 @@
     ],
     "outputAffixId": "blood_frenzy",
     "outputBonusEffects": [
-      { "stat": "compound.blood_frenzy.hpThreshold", "op": "flat", "value": 0.30 },
-      { "stat": "compound.blood_frenzy.lifestealMultiplier", "op": "flat", "value": 3.0 }
+      { "stat": "compound.blood_frenzy.chance", "op": "flat", "value": 1.0 },
+      { "stat": "compound.blood_frenzy.hpThreshold", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "stat_buff_add",
+          "stat": "lifestealPercent",
+          "valuePerTier": 10,
+          "duration": 12
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lifesteal", "low_hp_trigger"]
@@ -233,10 +340,18 @@
     ],
     "outputAffixId": "desperation",
     "outputBonusEffects": [
-      { "stat": "compound.desperation.hpThreshold", "op": "flat", "value": 0.30 },
-      { "stat": "compound.desperation.attackSpeedMultiplier", "op": "flat", "value": 2.0 },
-      { "stat": "compound.desperation.duration", "op": "flat", "value": 90 },
-      { "stat": "compound.desperation.oncePerFight", "op": "flat", "value": 1 }
+      { "stat": "compound.desperation.chance", "op": "flat", "value": 1.0 },
+      { "stat": "compound.desperation.hpThreshold", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "stat_buff_mul",
+          "stat": "attackSpeed",
+          "multiplier": 0.5,
+          "duration": 8
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "attack_speed", "low_hp_trigger"]
@@ -501,10 +616,24 @@
     "outputAffixId": "soul_eclipse",
     "outputBonusEffects": [
       { "stat": "compound.soul_eclipse.active", "op": "flat", "value": 1 },
-      { "stat": "compound.soul_eclipse.hpStealOnShadowProc", "op": "flat", "value": 0.10 },
-      { "stat": "compound.soul_eclipse.shadowChanceOnLifesteal", "op": "flat", "value": 0.20 },
-      { "stat": "compound.soul_eclipse.overhealBurst", "op": "flat", "value": 0.50 },
-      { "stat": "compound.soul_eclipse.hpDamageBonus", "op": "flat", "value": 0.02 }
+      { "stat": "compound.soul_eclipse.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": {
+          "kind": "damage_current_hp",
+          "fraction": 0.08
+        }
+      },
+      {
+        "condition": "on_hit",
+        "effect": {
+          "kind": "heal",
+          "amountPerTier": 12,
+          "isPercent": false
+        }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "shadow", "lifesteal", "trigger", "capstone"]
@@ -540,10 +669,19 @@
     ],
     "outputAffixId": "combustion",
     "outputBonusEffects": [
-      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 },
-      { "stat": "compound.combustion.aoeRadius", "op": "flat", "value": 2 },
-      { "stat": "compound.combustion.critBurnStacks", "op": "flat", "value": 3 },
-      { "stat": "compound.combustion.fireDotBonus", "op": "flat", "value": 0.30 }
+      { "stat": "compound.combustion.chance", "op": "flat", "value": 0.50 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "compound_dot",
+          "element": "fire",
+          "dpsPerTier": 4,
+          "duration": 8,
+          "tickInterval": 1.0,
+          "dotMultiplier": 1.5
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "crit", "trigger"]
@@ -599,8 +737,18 @@
     "outputAffixId": "bastion",
     "outputBonusEffects": [
       { "stat": "compound.bastion.active", "op": "flat", "value": 1 },
-      { "stat": "compound.bastion.shieldOnBlockPercent", "op": "flat", "value": 0.10 },
-      { "stat": "compound.bastion.shieldDuration", "op": "flat", "value": 30 }
+      { "stat": "compound.bastion.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_block",
+        "effect": {
+          "kind": "gain_barrier",
+          "amount": 0.10,
+          "isPercent": true,
+          "duration": 30
+        }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "armor", "block", "hp", "capstone"]
@@ -636,8 +784,19 @@
     "outputAffixId": "detonator",
     "outputBonusEffects": [
       { "stat": "compound.detonator.active", "op": "flat", "value": 1 },
-      { "stat": "compound.detonator.stackConsumeChance", "op": "flat", "value": 0.40 },
-      { "stat": "compound.detonator.burstMultiplier", "op": "flat", "value": 2.5 }
+      { "stat": "compound.detonator.chance", "op": "flat", "value": 0.40 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "compound_dot",
+          "element": "fire",
+          "dpsPerTier": 6,
+          "duration": 4,
+          "tickInterval": 0.5,
+          "dotMultiplier": 2.5
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "crit", "trigger"]
@@ -655,9 +814,23 @@
     "outputAffixId": "frost_nova",
     "outputBonusEffects": [
       { "stat": "compound.frost_nova.active", "op": "flat", "value": 1 },
-      { "stat": "compound.frost_nova.coneOnBlockChance", "op": "flat", "value": 0.50 },
-      { "stat": "compound.frost_nova.coneDamage", "op": "flat", "value": 2 },
-      { "stat": "compound.frost_nova.bonusColdOnChilled", "op": "flat", "value": 0.30 }
+      { "stat": "compound.frost_nova.chance", "op": "flat", "value": 0.50 }
+    ],
+    "compoundEffects": [
+      {
+        "effect": {
+          "kind": "bonus_damage",
+          "damageType": "cold",
+          "amountPerTier": 8
+        }
+      },
+      {
+        "effect": {
+          "kind": "apply_slow",
+          "multiplier": 1.6,
+          "duration": 5
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "block", "defensive_trigger"]
@@ -675,8 +848,17 @@
     "outputAffixId": "thunderbrand",
     "outputBonusEffects": [
       { "stat": "compound.thunderbrand.active", "op": "flat", "value": 1 },
-      { "stat": "compound.thunderbrand.chainExtension", "op": "flat", "value": 2 },
-      { "stat": "compound.thunderbrand.perSegmentLightningBonus", "op": "flat", "value": 0.10 }
+      { "stat": "compound.thunderbrand.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": {
+          "kind": "bonus_damage_scaled",
+          "damageType": "lightning",
+          "multiplier": 0.8
+        }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "lightning", "attack_speed", "trigger"]
@@ -713,10 +895,27 @@
     "outputAffixId": "oathbound_fury",
     "outputBonusEffects": [
       { "stat": "compound.oathbound_fury.active", "op": "flat", "value": 1 },
-      { "stat": "compound.oathbound_fury.asStack", "op": "flat", "value": 3.0 },
-      { "stat": "compound.oathbound_fury.lifestealStack", "op": "flat", "value": 4.0 },
-      { "stat": "compound.oathbound_fury.duration", "op": "flat", "value": 90 },
-      { "stat": "compound.oathbound_fury.oncePerFight", "op": "flat", "value": 1 }
+      { "stat": "compound.oathbound_fury.chance", "op": "flat", "value": 1.0 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_low_hp",
+        "effect": {
+          "kind": "stat_buff_mul",
+          "stat": "attackSpeed",
+          "multiplier": 0.4,
+          "duration": 10
+        }
+      },
+      {
+        "condition": "on_low_hp",
+        "effect": {
+          "kind": "stat_buff_add",
+          "stat": "lifestealPercent",
+          "valuePerTier": 15,
+          "duration": 10
+        }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "attack_speed", "lifesteal", "low_hp_trigger", "capstone"]
@@ -734,8 +933,26 @@
     "outputAffixId": "phoenix_embers",
     "outputBonusEffects": [
       { "stat": "compound.phoenix_embers.active", "op": "flat", "value": 1 },
-      { "stat": "compound.phoenix_embers.aoeBurnOnHit", "op": "flat", "value": 1.5 },
-      { "stat": "compound.phoenix_embers.killHealPercent", "op": "flat", "value": 0.10 }
+      { "stat": "compound.phoenix_embers.chance", "op": "flat", "value": 0.30 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "bonus_damage",
+          "damageType": "fire",
+          "amountPerTier": 18
+        }
+      },
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "gain_barrier",
+          "amount": 0.20,
+          "isPercent": true,
+          "duration": 8
+        }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "fire", "barrier", "defensive_trigger", "capstone"]

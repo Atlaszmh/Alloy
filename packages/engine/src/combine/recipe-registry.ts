@@ -1,4 +1,5 @@
 import type { StatModifier } from '../types/affix.js';
+import type { CompoundEffectBlueprint } from '../types/combat.js';
 
 // --- Recipe Types ---
 
@@ -15,6 +16,13 @@ export interface RecipeDefinition {
   categoryRule?: { inputA: string; inputB: string };
   outputAffixId: string;
   outputBonusEffects: StatModifier[];
+  /**
+   * Data-driven trigger effects for compound gems. Each blueprint becomes its
+   * own TriggerDef at extraction time. Optional — recipes without this field
+   * produce no triggers (e.g. category recipes, capstones with no runtime
+   * behavior wired yet).
+   */
+  compoundEffects?: CompoundEffectBlueprint[];
   maxDepthContribution: number;
   tags: string[];
 }

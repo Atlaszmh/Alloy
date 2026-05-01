@@ -27,10 +27,11 @@ export function extractMatchReport(
     ? state.roundResults[state.roundResults.length - 1]
     : undefined;
 
+  const recipeRegistry = registry?.getRecipeRegistry();
   const players: PlayerReport[] = ([0, 1] as const).map((playerIndex) => {
     const loadout = state.players[playerIndex].loadout;
     const affixIds = collectAffixIds(loadout);
-    const combinationIds = collectCompoundIds(loadout);
+    const combinationIds = collectCompoundIds(loadout, recipeRegistry);
     const synergyIds = registry ? collectActiveSynergies(loadout, registry) : [];
     const finalHP = lastRound ? lastRound.finalHP[playerIndex] : 0;
 
@@ -83,17 +84,49 @@ export function extractMatchReport(
   };
 }
 
-function collectCompoundIds(_loadout: Loadout): string[] {
-  // TODO: Implement compound/recipe ID collection for gem refactor
-  // In the new system, combined gems have their combination ID in the gem's affixId
-  // This function can be deprecated or reimplemented based on final data model
-  return [];
+/**
+ * Collect compound recipe IDs from a loadout.
+ *
+ * A "compound" is any socketed gem whose `sourceRecipe` matches a real recipe
+ * in the registry. Falls back to checking `affixId` against recipe outputs
+ * for gems that don't carry sourceRecipe metadata. Deduplicated; ordering not
+ * guaranteed.
+ */
+function collectCompoundIds(loadout: Loadout, recipeRegistry?: { get(id: string): unknown; getAll(): { outputAffixId: string; id: string }[] }): string[] {
+  if (!recipeRegistry) return [];
+  const ids = new Set<string>();
+  const recipes = recipeRegistry.getAll();
+  const outputToRecipeId = new Map<string, string>();
+  for (const r of recipes) outputToRecipeId.set(r.outputAffixId, r.id);
+
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (!slot) continue;
+      const gem = slot.gem;
+      if (gem.sourceRecipe && recipeRegistry.get(gem.sourceRecipe)) {
+        ids.add(gem.sourceRecipe);
+      } else if (outputToRecipeId.has(gem.affixId)) {
+        ids.add(outputToRecipeId.get(gem.affixId)!);
+      }
+    }
+  }
+  return Array.from(ids);
 }
 
-function countGenericUpgrades(_loadout: Loadout): number {
-  // TODO: Implement generic upgrade counting for gem refactor
-  // Currently not used in the gem system, returning 0 placeholder
-  return 0;
+/**
+ * Count "generic upgrade" gems — combined gems that bumped a tier without
+ * matching a recipe. Detected via recipeDepth > 0 with no sourceRecipe.
+ */
+function countGenericUpgrades(loadout: Loadout): number {
+  let count = 0;
+  for (const item of [loadout.weapon, loadout.armor]) {
+    for (const slot of item.slots) {
+      if (!slot) continue;
+      const gem = slot.gem;
+      if (gem.recipeDepth > 0 && !gem.sourceRecipe) count++;
+    }
+  }
+  return count;
 }
 
 function collectActiveSynergies(loadout: Loadout, registry: DataRegistry): string[] {

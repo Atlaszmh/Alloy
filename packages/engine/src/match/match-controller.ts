@@ -10,6 +10,7 @@ import { liveCount, liveSlots, placeInFirstEmpty, clearSlot } from '../types/slo
 import { generatePool } from '../pool/pool-generator.js';
 import { createDraftState, makePick } from '../draft/draft-state.js';
 import { applyForgeAction as applyForge } from '../forge/forge-state.js';
+import { CombinationEngine } from '../combine/combination-engine.js';
 import { calculateStats } from '../forge/stat-calculator.js';
 import { simulate } from '../duel/duel-engine.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
@@ -321,7 +322,23 @@ function handleForgeAction(
     rng: forgeRng,
   };
 
-  const result = applyForge(forgeState, action, registry);
+  // Build a CombinationEngine so combine/combine3 actions produce real
+  // compound gems (with `affixId === recipe.outputAffixId`) rather than the
+  // stub fallback path that keeps the input gem's affixId. Without this,
+  // simulated runs produced no compound triggers and balance reports showed
+  // empty `combinationIds`. Mirrors the construction in forge-plan.ts.
+  const recipeRegistry = registry.getRecipeRegistry();
+  const categoryMap: Record<string, string> = {};
+  for (const affix of registry.getAllAffixes()) {
+    categoryMap[affix.id] = affix.category;
+  }
+  const combinationEngine = new CombinationEngine(
+    recipeRegistry,
+    state.discoveryState ?? new DiscoveryState(),
+    categoryMap,
+  );
+
+  const result = applyForge(forgeState, action, registry, combinationEngine);
   if (!result.ok) {
     return fail(result.error);
   }

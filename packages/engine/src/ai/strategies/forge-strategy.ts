@@ -49,9 +49,47 @@ function signatureCombineBlockedBySecondary(
 ): boolean {
   // Only signature/category combines (those that produce a CompoundAffixDef
   // result) are gated by filled secondaries in Task 3.1.
-  const combo = registry.getCombination(gemA.affixId, gemB.affixId);
+  const combo = findCombinableSignature(gemA, gemB, registry);
   if (!combo) return false; // not a signature/category pair
   return !!(gemA.secondary || gemB.secondary);
+}
+
+/**
+ * Find a valid signature combine for two gems. Recipe-aware — recognises
+ * compound gems (`gem.sourceRecipe` set) as recipe-component inputs, which
+ * `registry.getCombination` cannot do because it only matches on raw
+ * `affixId` strings.
+ *
+ * Returns a tag list usable for archetype scoring. Falls back to the legacy
+ * combinations.json lookup so behavior is at least no worse than before.
+ */
+export function findCombinableSignature(
+  gemA: GemInstance,
+  gemB: GemInstance,
+  registry: DataRegistry,
+): { id: string; tags: string[] } | null {
+  const recipe = registry.getRecipeRegistry().findSignatureRecipe(gemA, gemB);
+  if (recipe) return { id: recipe.id, tags: recipe.tags };
+  const combo = registry.getCombination(gemA.affixId, gemB.affixId);
+  if (combo) return { id: combo.id, tags: combo.tags };
+  return null;
+}
+
+/**
+ * Find a valid signature3 (capstone) combine for three gems. Recipe-aware
+ * for the same reason as findCombinableSignature.
+ */
+export function findCombinable3(
+  gemA: GemInstance,
+  gemB: GemInstance,
+  gemC: GemInstance,
+  registry: DataRegistry,
+): { id: string; tags: string[] } | null {
+  const recipe = registry.getRecipeRegistry().findTernaryRecipe(gemA, gemB, gemC);
+  if (recipe) return { id: recipe.id, tags: recipe.tags };
+  const combo = registry.getTernaryCombination(gemA.affixId, gemB.affixId, gemC.affixId);
+  if (combo) return { id: combo.id, tags: combo.tags };
+  return null;
 }
 
 export interface ForgeStrategy {
@@ -829,7 +867,10 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
 
     for (let i = 0; i < stockpile.length; i++) {
       for (let j = i + 1; j < stockpile.length; j++) {
-        const combo = registry.getCombination(stockpile[i].affixId, stockpile[j].affixId);
+        // Recipe-aware so compound stockpile gems (e.g. ignite) can combine
+        // back into higher-tier capstones if a signature recipe references
+        // them. registry.getCombination only does affix→affix lookups.
+        const combo = findCombinableSignature(stockpile[i], stockpile[j], registry);
         if (!combo) continue;
 
         // Skip signature/category combines when either input has a filled secondary
@@ -853,8 +894,79 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     // Sort by score descending
     allCombos.sort((a, b) => b.score - a.score);
 
-    // Greedily select non-conflicting combinations
+    // Capstone (signature3) search: enumerate triples and rank by archetype fit.
+    // Tier 5 prioritizes capstones over binary combines because they're the
+    // strongest endgame artifacts. We score-rank capstones, take the best
+    // available non-conflicting ones first, then fall through to binary
+    // combines below.
+    interface Combo3Plan {
+      idx1: number;
+      idx2: number;
+      idx3: number;
+      score: number;
+      comboId: string;
+    }
+    const allCombos3: Combo3Plan[] = [];
+    const arch = bestArchetype(stockpile, registry);
+    const archTags = ARCHETYPE_TAGS[arch];
+    for (let i = 0; i < stockpile.length; i++) {
+      for (let j = i + 1; j < stockpile.length; j++) {
+        for (let k = j + 1; k < stockpile.length; k++) {
+          const combo3 = findCombinable3(stockpile[i], stockpile[j], stockpile[k], registry);
+          if (!combo3) continue;
+          if (
+            stockpile[i].secondary || stockpile[j].secondary || stockpile[k].secondary
+          ) continue;
+          let score = orbValueScore(stockpile[i], registry)
+            + orbValueScore(stockpile[j], registry)
+            + orbValueScore(stockpile[k], registry);
+          for (const tag of combo3.tags) {
+            if (archTags.includes(tag)) score += 8;
+          }
+          // Capstones are inherently more valuable than binary combos —
+          // bias the score so they're preferred when they fit the archetype.
+          score += 6;
+          allCombos3.push({ idx1: i, idx2: j, idx3: k, score, comboId: combo3.id });
+        }
+      }
+    }
+    allCombos3.sort((a, b) => b.score - a.score);
+
+    // Greedily select non-conflicting capstones first
     const assignCostForCombine = balance.fluxCosts.assignOrb;
+    for (const cand of allCombos3) {
+      if (flux < combineCost + assignCostForCombine) break;
+      if (
+        usedOrbUids.has(stockpile[cand.idx1].uid)
+        || usedOrbUids.has(stockpile[cand.idx2].uid)
+        || usedOrbUids.has(stockpile[cand.idx3].uid)
+      ) continue;
+
+      const slot = findConsecutiveEmptySlotsOn(occupiedSlots, 'weapon');
+      if (!slot) break;
+
+      actions.push({
+        kind: 'combine3',
+        gemUid1: stockpile[cand.idx1].uid,
+        gemUid2: stockpile[cand.idx2].uid,
+        gemUid3: stockpile[cand.idx3].uid,
+      });
+      const capstoneUid = `combined3_${stockpile[cand.idx1].uid}_${stockpile[cand.idx2].uid}_${stockpile[cand.idx3].uid}`;
+      actions.push({
+        kind: 'socket_gem',
+        gemUid: capstoneUid,
+        target: slot.target,
+        slotIndex: slot.slotIndex,
+      });
+      usedOrbUids.add(stockpile[cand.idx1].uid);
+      usedOrbUids.add(stockpile[cand.idx2].uid);
+      usedOrbUids.add(stockpile[cand.idx3].uid);
+      occupiedSlots[slot.target][slot.slotIndex] = true;
+      occupiedSlots[slot.target][slot.slotIndex + 1] = true;
+      flux -= combineCost + assignCostForCombine;
+    }
+
+    // Greedily select non-conflicting binary combinations (after capstones)
     for (const cand of allCombos) {
       if (flux < combineCost + assignCostForCombine) break;
       if (usedOrbUids.has(stockpile[cand.idx1].uid) || usedOrbUids.has(stockpile[cand.idx2].uid)) continue;

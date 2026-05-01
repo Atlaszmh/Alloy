@@ -1,5 +1,20 @@
 import type { MatchReport } from '../types/match-report.js';
 
+/**
+ * Per-compound runtime metrics aggregated from CombatLog events. Distinct from
+ * the build-time `combinationUsageRates` (which counts socketed gems): these
+ * count *trigger procs* and *attributed damage*, the data balance-tuning
+ * actually needs.
+ */
+export interface CompoundRuntimeStats {
+  /** Distinct match-instances where the compound proc'd at least once. */
+  matchesWithProc: number;
+  /** Total trigger fires (compound_trigger event count). */
+  totalProcs: number;
+  /** Sum of net damage attributed to this compound's DOTs (compound:<id> tagged). */
+  attributedDotDamage: number;
+}
+
 export interface AggregateStats {
   totalMatches: number;
   player0Wins: number;
@@ -13,6 +28,19 @@ export interface AggregateStats {
   synergyWinRates: Map<string, number>;       // synergyId -> win% when active
   combinationUsageRates: Map<string, number>; // compoundId -> % of matches where used
   combinationWinRates: Map<string, number>;   // compoundId -> win% when used
+
+  /**
+   * Per-compound runtime metrics — proc counts and attributed damage from
+   * combat logs. The keys are recipe IDs (e.g. 'ignite', 'frostbite').
+   */
+  compoundRuntime: Map<string, CompoundRuntimeStats>;
+
+  /**
+   * Win rate of "compound-heavy" builds (>= 2 compounds socketed).
+   * null when no matches qualify.
+   */
+  compoundHeavyWinRate: number | null;
+  compoundHeavyMatchCount: number;
 
   avgGenericUpgradesPerPlayer: number;
   avgMatchDuration: number;    // average rounds
@@ -34,6 +62,9 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
       synergyWinRates: new Map(),
       combinationUsageRates: new Map(),
       combinationWinRates: new Map(),
+      compoundRuntime: new Map(),
+      compoundHeavyWinRate: null,
+      compoundHeavyMatchCount: 0,
       avgGenericUpgradesPerPlayer: 0,
       avgMatchDuration: 0,
       avgDuelDuration: 0,
@@ -55,6 +86,12 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
   let totalDuration = 0;
   let totalDuels = 0;
   let totalGenericUpgrades = 0;
+
+  // Per-compound runtime: walk combat logs once per match
+  const compoundRuntime = new Map<string, { matchesWithProc: number; totalProcs: number; attributedDotDamage: number }>();
+  // Compound-heavy build slice
+  let compoundHeavyMatches = 0;
+  let compoundHeavyWins = 0;
 
   for (const match of matches) {
     // Win counting
@@ -103,6 +140,40 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
         if (isWinner) entry.wins++;
         combinationStats.set(compoundId, entry);
       }
+
+      // Compound-heavy slice: 2+ socketed compounds counts as "compound-heavy"
+      if (uniqueCombinations.size >= 2) {
+        compoundHeavyMatches++;
+        if (isWinner) compoundHeavyWins++;
+      }
+    }
+
+    // Per-compound runtime metrics from combat logs
+    const matchProcsByCompound = new Map<string, number>();
+    for (const log of match.combatLogs ?? []) {
+      for (const frame of log.frames) {
+        for (const event of frame.events) {
+          if (event.type === 'compound_trigger') {
+            matchProcsByCompound.set(
+              event.compoundId,
+              (matchProcsByCompound.get(event.compoundId) ?? 0) + 1,
+            );
+          } else if (event.type === 'dot_tick' && event.sourceAffixId?.startsWith('compound:')) {
+            const compoundId = event.sourceAffixId.slice('compound:'.length);
+            const entry = compoundRuntime.get(compoundId)
+              ?? { matchesWithProc: 0, totalProcs: 0, attributedDotDamage: 0 };
+            entry.attributedDotDamage += event.breakdown.netDamage;
+            compoundRuntime.set(compoundId, entry);
+          }
+        }
+      }
+    }
+    for (const [compoundId, procCount] of matchProcsByCompound) {
+      const entry = compoundRuntime.get(compoundId)
+        ?? { matchesWithProc: 0, totalProcs: 0, attributedDotDamage: 0 };
+      entry.matchesWithProc += 1;
+      entry.totalProcs += procCount;
+      compoundRuntime.set(compoundId, entry);
     }
   }
 
@@ -148,6 +219,11 @@ export function computeAggregateStats(matches: MatchReport[]): AggregateStats {
     synergyWinRates,
     combinationUsageRates,
     combinationWinRates,
+    compoundRuntime,
+    compoundHeavyWinRate: compoundHeavyMatches > 0
+      ? compoundHeavyWins / compoundHeavyMatches
+      : null,
+    compoundHeavyMatchCount: compoundHeavyMatches,
     avgGenericUpgradesPerPlayer: totalGenericUpgrades / playerInstances,
     avgMatchDuration: totalRounds / totalMatches,
     avgDuelDuration: totalDuels > 0 ? totalDuration / totalDuels : 0,

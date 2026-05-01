@@ -14,6 +14,8 @@ import {
   Tier5ForgeStrategy,
 } from '../src/ai/strategies/forge-strategy.js';
 import { createForgeState, applyForgeAction } from '../src/forge/forge-state.js';
+import { CombinationEngine } from '../src/combine/combination-engine.js';
+import { DiscoveryState } from '../src/combine/discovery-state.js';
 import { createDraftState, makePick } from '../src/draft/draft-state.js';
 import { createEmptyLoadout } from '../src/types/item.js';
 import { createMatch, applyAction } from '../src/match/match-controller.js';
@@ -42,11 +44,20 @@ function makePool(seed: number): GemInstance[] {
 
 /**
  * Apply a list of forge actions to a forge state, asserting all succeed.
+ * Provides a CombinationEngine so signature/signature3 combines produce real
+ * compound gems (mirrors what match-controller does in production).
  */
 function applyAllActions(state: ForgeState, actions: ForgeAction[]): ForgeState {
+  const recipeRegistry = registry.getRecipeRegistry();
+  const categoryMap: Record<string, string> = {};
+  for (const affix of registry.getAllAffixes()) {
+    categoryMap[affix.id] = affix.category;
+  }
+  const engine = new CombinationEngine(recipeRegistry, new DiscoveryState(), categoryMap);
+
   let current = state;
   for (const action of actions) {
-    const result = applyForgeAction(current, action, registry);
+    const result = applyForgeAction(current, action, registry, engine);
     if (!result.ok) {
       throw new Error(`Forge action failed: ${result.error} (action: ${JSON.stringify(action)})`);
     }
