@@ -63,6 +63,28 @@ describe('SwingGroupComponent - compound suppression', () => {
       ],
     };
     const { container } = render(<SwingGroupComponent group={group} />);
-    expect(container.textContent ?? '').toContain('bonus_damage');
+    expect(container.textContent ?? '').toContain('On Hit: bonus damage');
+  });
+});
+
+describe('SwingGroupComponent — human-readable trigger labels', () => {
+  it('renders Counter Strike trigger_proc as "Counter Strike: echo damage" (not raw kind)', () => {
+    const group: SwingGroup = {
+      type: 'attack',
+      time: 1,
+      attacker: 1, // enemy attacks player
+      target: 0,
+      events: [
+        { time: 1, event: { type: 'attack', attacker: 1, breakdown: {
+          dodged: false, physical: { raw: 50, armorPoints: 0, armorPenetration: 0, effectiveArmor: 0, reductionPct: 0, mitigated: 0, net: 50 },
+          elemental: {}, blocked: 50, barrierAbsorbed: 0, totalRaw: 50, totalMitigated: 0, totalNet: 0, isCrit: false,
+        } } },
+        { time: 1, event: { type: 'trigger_proc', player: 0, triggerId: 'counter_strike', effectDescription: 'bonus_damage_scaled' } },
+      ],
+    };
+    const { container } = render(<SwingGroupComponent group={group} />);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Counter Strike: echo damage');
+    expect(text).not.toContain('bonus_damage_scaled');
   });
 });

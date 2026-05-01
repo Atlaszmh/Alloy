@@ -12,6 +12,32 @@ function pct(n: number): string {
   return `${Math.round(n)}%`;
 }
 
+function humanEffectLabel(triggerId: string, effectDescription: string): string {
+  const sourceName = triggerId
+    .replace(/^chance_/, '')
+    .split('_')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+  const effectName: Record<string, string> = {
+    apply_slow: 'slow',
+    reduce_max_hp: 'fragile (max HP reduced)',
+    bonus_damage_scaled: 'echo damage',
+    bonus_damage: 'bonus damage',
+    damage_current_hp: 'HP siphon',
+    apply_dot: 'damage over time',
+    compound_dot: 'compound DOT',
+    heal: 'heal',
+    gain_barrier: 'barrier',
+    stun: 'stun',
+    reflect_damage: 'reflect',
+    stat_buff_add: 'stat buff',
+    stat_buff_mul: 'stat boost',
+    amplify_dot_element: 'DOT amplifier',
+  };
+  const eff = effectName[effectDescription] ?? effectDescription;
+  return `${sourceName}: ${eff}`;
+}
+
 const ELEMENT_EMOJI: Record<Element, string> = {
   fire: '\uD83D\uDD25',
   cold: '\u2744\uFE0F',
@@ -318,9 +344,12 @@ export function SwingGroupComponent({ group }: SwingGroupProps) {
         if (e.event.type !== 'trigger_proc' && e.event.type !== 'synergy_proc') return null;
         // Suppress trigger_proc rows whose triggerId already has a named compound_trigger banner above
         if (e.event.type === 'trigger_proc' && suppressedTriggerIds.has(e.event.triggerId)) return null;
+        const label = e.event.type === 'trigger_proc'
+          ? humanEffectLabel(e.event.triggerId, e.event.effectDescription)
+          : e.event.effectDescription;
         return (
           <div key={`trig-${i}`} style={{ paddingLeft: 16, color: '#a78bfa', fontSize: 13 }}>
-            {'\u2728'} {e.event.effectDescription}
+            {'\u2728'} {label}
           </div>
         );
       })}
