@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { Element } from '@alloy/engine';
 import { DAMAGE_COLORS } from '../colors.js';
 
-export type StatusType = Element | 'stun' | 'barrier' | 'buff' | 'debuff';
+export type StatusType = Element | 'stun' | 'barrier' | 'barrier_temp' | 'buff' | 'debuff' | 'slow' | 'fragile';
 
 interface StatusEntry {
   container: Container;
@@ -151,6 +151,30 @@ export class StatusIcons {
         gfx.lineTo(0, size);
         gfx.closePath();
         gfx.fill({ color, alpha: 0.8 });
+        break;
+      case 'slow':
+        color = 0x60a5fa; // matches barrier blue family
+        label = 'S';
+        // Snowflake-ish: diamond shape
+        gfx.moveTo(0, -size);
+        gfx.lineTo(size, 0);
+        gfx.lineTo(0, size);
+        gfx.lineTo(-size, 0);
+        gfx.closePath();
+        gfx.fill({ color, alpha: 0.85 });
+        break;
+      case 'fragile':
+        color = 0xb91c1c; // dark red
+        label = 'X';
+        // Drop shape: small circle with a notch on top
+        gfx.circle(0, 0, size);
+        gfx.fill({ color, alpha: 0.85 });
+        break;
+      case 'barrier_temp':
+        color = 0xfbbf24; // gold tint to distinguish from blue permanent barrier
+        label = 'T';
+        gfx.roundRect(-size, -size, size * 2, size * 2, 2);
+        gfx.fill({ color, alpha: 0.7 }); // lower alpha = "temporary"
         break;
       default:
         // Element DOT
