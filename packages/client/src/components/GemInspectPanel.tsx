@@ -1,6 +1,7 @@
-import type { GemRarity, StatModifier } from '@alloy/engine';
+import type { CompoundEffectShape, GemRarity, StatModifier } from '@alloy/engine';
 import { RARITY_MULTIPLIERS, RARITY_ORDER } from '@alloy/engine';
 import { getGemArt } from '@/shared/utils/art-registry';
+import { describeCompoundEffect } from '@/shared/utils/describe-compound-effect';
 
 type InspectContext = 'weapon' | 'armor' | 'both';
 
@@ -22,7 +23,16 @@ interface GemInspectPanelProps {
   context: InspectContext;
   onClose: () => void;
   /** Recipe ingredients for compound gems */
-  recipe?: { component1Name: string; component2Name: string };
+  recipe?: {
+    component1Name: string;
+    component2Name: string;
+    /** Resolved condition (inferred or explicit) — e.g. 'on_hit'. */
+    condition?: string;
+    /** Proc chance as a 0-1 fraction. */
+    chance?: number;
+    /** Compound effect blueprints from the recipe. */
+    compoundEffects?: { effect: CompoundEffectShape }[];
+  };
   /** Currently selected rarity — parent owns this state */
   selectedRarity?: GemRarity;
   /** Callback when user switches rarity tab */
@@ -99,6 +109,32 @@ export function GemInspectPanel({ gem, context, onClose, recipe, selectedRarity,
                 <span className="font-medium text-white">{recipe.component2Name}</span>
               </div>
             </div>
+          )}
+
+          {/* Trigger Behavior — compound gems with effect blueprints only */}
+          {recipe?.compoundEffects && recipe.compoundEffects.length > 0 && (
+            <section className="rounded-md border border-amber-700/60 bg-amber-950/30 p-3">
+              <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-300">
+                Trigger Behavior
+              </h4>
+              {recipe.condition && (
+                <div className="mb-1 text-xs">
+                  <span className="font-semibold text-amber-200">
+                    On {recipe.condition.replace('on_', '').replace('_', ' ')}
+                  </span>
+                  {recipe.chance != null && (
+                    <span className="ml-2 text-amber-400">
+                      ({Math.round(recipe.chance * 100)}% chance)
+                    </span>
+                  )}
+                </div>
+              )}
+              {recipe.compoundEffects.map((bp, i) => (
+                <div key={i} className="ml-2 text-xs text-surface-200">
+                  → {describeCompoundEffect(bp.effect, gem.tier ?? 1)}
+                </div>
+              ))}
+            </section>
           )}
 
           {/* Rarity selector tabs — shown when parent provides callbacks */}
