@@ -1036,7 +1036,25 @@
     "outputBonusEffects": [
       { "stat": "compound.crystal_aegis.active", "op": "flat", "value": 1 },
       { "stat": "compound.crystal_aegis.chillOnFortress", "op": "flat", "value": 0.30 },
-      { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 }
+      { "stat": "compound.crystal_aegis.auraRadius", "op": "flat", "value": 3 },
+      { "stat": "compound.crystal_aegis.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_taking_damage",
+        "effect": {
+          "kind": "compound_dot",
+          "element": "cold",
+          "dpsPerTier": 4,
+          "duration": 8,
+          "tickInterval": 1,
+          "dotMultiplier": 1.5
+        }
+      },
+      {
+        "condition": "on_taking_damage",
+        "effect": { "kind": "apply_slow", "multiplier": 1.8, "duration": 6 }
+      }
     ],
     "maxDepthContribution": 2,
     "tags": ["compound", "cold", "armor", "defensive", "capstone"]
