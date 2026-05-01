@@ -409,6 +409,9 @@
         "effect": { "kind": "apply_dot", "element": "poison", "dpsPerTier": 3, "duration": 4 }
       }
     ],
+    "passiveDamageModifiers": [
+      { "damageType": "poison", "multiplier": 1.30, "condition": { "kind": "target_has_dot_element", "element": "fire" } }
+    ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "poison", "elemental"]
   },
