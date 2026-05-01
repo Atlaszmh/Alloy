@@ -452,7 +452,18 @@
     "outputBonusEffects": [
       { "stat": "compound.superconductor.active", "op": "flat", "value": 1 },
       { "stat": "compound.superconductor.lightningBonusOnSlow", "op": "flat", "value": 0.30 },
-      { "stat": "compound.superconductor.extendSlow", "op": "flat", "value": 1 }
+      { "stat": "compound.superconductor.extendSlow", "op": "flat", "value": 1 },
+      { "stat": "compound.superconductor.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "apply_slow", "multiplier": 1.3, "duration": 4 }
+      },
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "bonus_damage", "damageType": "lightning", "amountPerTier": 5 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "cold", "lightning", "elemental"]
