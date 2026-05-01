@@ -694,7 +694,7 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
     _opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
-    _runStateFlux?: number,
+    runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -752,6 +752,16 @@ export class Tier4ForgeStrategy implements ForgeStrategy {
 
     // Sort by score descending
     comboCandidates.sort((a, b) => b.score - a.score);
+
+    // Meta-action planning: boost_combine for the top-ranked binary combo.
+    // T4 doesn't enumerate capstones, so we boost the best binary combo instead.
+    // Must be placed BEFORE the combine it boosts — the engine pairs boost with
+    // the next combine action dispatched.
+    const boostCost = registry.getBalance().gem.flux.costs.boostCombine ?? 3;
+    const flux0 = runStateFlux ?? 0;
+    if (flux0 >= boostCost && comboCandidates.length > 0) {
+      actions.push({ kind: 'boost_combine' });
+    }
 
     // Apply the best non-conflicting combinations
     const assignCostForCombine = balance.fluxCosts.assignOrb;
@@ -903,7 +913,7 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
     opponentStockpile: GemInstance[],
     registry: DataRegistry,
     rng: SeededRNG,
-    _runStateFlux?: number,
+    runStateFlux?: number,
   ): ForgeAction[] {
     const actions: ForgeAction[] = [];
     const balance = registry.getBalance();
@@ -1015,6 +1025,25 @@ export class Tier5ForgeStrategy implements ForgeStrategy {
       }
     }
     allCombos3.sort((a, b) => b.score - a.score);
+
+    // Meta-action planning: boost_combine for the top-ranked capstone.
+    // Strategy: only boost when (a) we have ≥ boostCombine flux, (b) there IS
+    // a capstone available (allCombos3.length > 0), (c) one boost per round.
+    // The boost_combine action must appear BEFORE the combine it boosts — the
+    // engine pairs it with the next combine action dispatched.
+    //
+    // reroll_pool deferred — it's planned in forge but affects the NEXT draft's
+    // pool generation. The forge strategy doesn't have draft-pool quality
+    // visibility, so meaningful reroll planning needs a coordinator that can
+    // see across phases. Future work.
+    //
+    // guarantee_rarity deferred for the same reason as reroll_pool — meaningful
+    // planning needs draft-phase context not available in forge strategy.
+    const boostCost = registry.getBalance().gem.flux.costs.boostCombine ?? 3;
+    const flux0 = runStateFlux ?? 0;
+    if (flux0 >= boostCost && allCombos3.length > 0) {
+      actions.push({ kind: 'boost_combine' });
+    }
 
     // Greedily select non-conflicting capstones first
     const assignCostForCombine = balance.fluxCosts.assignOrb;
