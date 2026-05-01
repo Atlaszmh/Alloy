@@ -591,7 +591,7 @@
     "compoundEffects": [
       {
         "condition": "on_taking_damage",
-        "effect": { "kind": "heal", "amountPerTier": 6, "isPercent": false }
+        "effect": { "kind": "heal", "amountPerTier": 4, "isPercent": false }
       }
     ],
     "maxDepthContribution": 1,
