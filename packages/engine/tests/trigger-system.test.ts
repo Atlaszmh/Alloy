@@ -167,21 +167,22 @@ describe('extractTriggers — compound gems', () => {
   });
 
   it('compound recipe with no compoundEffects produces no triggers', () => {
-    // Thermal Shock is a passive-only compound (active: 1 style) with no
-    // compoundEffects block — it grants stat bonuses, not triggers.
-    // extractTriggers must produce zero triggers for it.
+    // Flicker Strike is a Group-E bespoke compound — its mechanic (forced
+    // crit every Nth hit) needs new engine state that doesn't fit the trigger
+    // pipeline, so it has no compoundEffects block. extractTriggers must
+    // produce zero triggers for it.
     const loadout = makeLoadout([
       {
-        affixId: 'thermal_shock',
+        affixId: 'flicker_strike',
         tier: 1,
         rarity: 'common',
-        sourceRecipe: 'thermal_shock',
+        sourceRecipe: 'flicker_strike',
         recipeDepth: 1,
       },
     ]);
 
     const triggers = extractTriggers(loadout, registry);
-    const fromIt = triggers.filter((t) => t.affixId === 'thermal_shock');
+    const fromIt = triggers.filter((t) => t.affixId === 'flicker_strike');
     expect(fromIt).toEqual([]);
   });
 

@@ -376,7 +376,14 @@
     "outputBonusEffects": [
       { "stat": "compound.thermal_shock.active", "op": "flat", "value": 1 },
       { "stat": "compound.thermal_shock.stunDuration", "op": "flat", "value": 15 },
-      { "stat": "compound.thermal_shock.dotBonus", "op": "flat", "value": 0.25 }
+      { "stat": "compound.thermal_shock.dotBonus", "op": "flat", "value": 0.25 },
+      { "stat": "compound.thermal_shock.chance", "op": "flat", "value": 0.20 }
+    ],
+    "compoundEffects": [
+      {
+        "condition": "on_hit",
+        "effect": { "kind": "stun", "duration": 1.5 }
+      }
     ],
     "maxDepthContribution": 1,
     "tags": ["compound", "fire", "cold", "elemental"]
