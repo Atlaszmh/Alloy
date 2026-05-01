@@ -472,24 +472,22 @@ function simulateSingleRunV2(
         players: [state.players[0], { ...state.players[1], loadout: opponent.loadout }],
       };
 
-      // Use the real flux budget from RunState. createRunState initializes flux to 0,
-      // so round 1 starts flux-poor (correct shipped-game behavior — players must earn
-      // flux before they can forge). balance.json has no startingFlux field; flux is
-      // earned only via win (+1) and milestone (+3) rewards from prior rounds.
+      // Run-mode forge is free per the engine's design. handleForgeAction in
+      // match-controller.ts treats socket/combine/transplant as free in run
+      // mode (line 311: "no flux needed"). Flux is only spent on meta-actions:
+      // boost_combine (3), reroll_pool (5), guarantee_rarity (4), and
+      // transplant_gem with chosenAffix (3) — see balance.gem.flux.costs.
       //
-      // FALLBACK: we use Math.max(realFlux, 1000) because without a startingFlux grant
-      // in the engine the AI has 0 flux on round 1 and cannot socket any gems. That
-      // causes the player build to always lag the synthetic opponent (which uses the old
-      // hardcoded 1000 budget), producing zero-win runs and breaking existing tests
-      // (run-progression.test.ts: "expected at least one run to reach round 5").
-      // The correct long-term fix is to add a startingFlux field to balance.json and
-      // apply it in createRunState / createMatch — tracked as a future engine gap.
-      // Until then, 1000 is the floor so the AI can always exercise its full plan.
-      const fluxBudget = Math.max(state.runState?.flux ?? 0, 1000);
+      // The AI's planForge takes a budget parameter that's a holdover from
+      // legacy ranked-mode planning where socket/combine cost 1-2 flux each.
+      // In run mode that constraint doesn't apply, so we pass a budget large
+      // enough to never gate the plan. The AI's actual flux spending happens
+      // via meta-action planning (Chunk 2 of the flux-parity plan).
+      const RUN_MODE_PLANNING_BUDGET = Number.MAX_SAFE_INTEGER;
       const actions = ai.planForge(
         state.players[0].stockpile,
         state.players[0].loadout,
-        fluxBudget,
+        RUN_MODE_PLANNING_BUDGET,
         forgeRound,
         state.players[1].stockpile,
       );
