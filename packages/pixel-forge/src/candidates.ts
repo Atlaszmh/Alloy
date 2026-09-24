@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { readPng, writePng, type Image } from './image';
 import { bob } from './draw';
@@ -7,7 +7,8 @@ import { contactSheet } from './review';
 
 /**
  * Candidates are cleaned options for one AI asset, kept side by side until a
- * person picks one: `raw-<n>.png` (the model's image) and `<n>.png` (the sprite).
+ * person picks one: `raw-<n>.png` (the model's image), `<n>.png` (the sprite)
+ * and `<n>.json` (where it came from).
  * They come from `generate` (the Gemini API) or `import` (images saved from the
  * Gemini app), and share one numbering so both can feed the same review sheet.
  */
@@ -34,11 +35,20 @@ export function candidateNumbers(dir: string): number[] {
     .sort((a, b) => a - b);
 }
 
+/** Where a candidate came from: `via` is the workflow, `gemini` or `import`. */
+export interface CandidateMeta {
+  via: string;
+  seed?: number;
+  prompt?: string;
+  file?: string;
+}
+
 /** Clean `raw` into the next free candidate slot. */
 export function addCandidate(
   dir: string,
   raw: Image,
   clean: CleanOptions,
+  meta?: CandidateMeta,
 ): CleanResult & { n: number } {
   mkdirSync(dir, { recursive: true });
   const taken = candidateNumbers(dir);
@@ -46,6 +56,7 @@ export function addCandidate(
   const result = cleanSprite(raw, clean);
   writePng(join(dir, `raw-${n}.png`), raw);
   writePng(join(dir, `${n}.png`), result.image);
+  if (meta) writeFileSync(join(dir, `${n}.json`), JSON.stringify(meta, null, 2) + '\n');
   return { ...result, n };
 }
 
@@ -53,7 +64,11 @@ export function addCandidate(
 export function writeCandidateReview(dir: string, id: string): string {
   const items = candidateNumbers(dir).map((n) => {
     const img = readPng(join(dir, `${n}.png`));
-    return { label: `${id} ${n}`, frames: [img, bob(img)] };
+    const metaFile = join(dir, `${n}.json`);
+    const via = existsSync(metaFile)
+      ? ` ${(JSON.parse(readFileSync(metaFile, 'utf8')) as CandidateMeta).via}`
+      : '';
+    return { label: `${id} ${n}${via}`, frames: [img, bob(img)] };
   });
   const path = join(dir, 'review.png');
   writePng(path, contactSheet(items, 8, 3));

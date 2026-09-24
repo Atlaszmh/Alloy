@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import jpeg from 'jpeg-js';
@@ -55,6 +55,13 @@ describe('candidates', () => {
     expect(existsSync(join(dir, 'raw-1.png'))).toBe(true);
     const sprite = readPng(join(dir, '1.png'));
     expect(sprite.width).toBe(16);
+  });
+
+  it('records where a candidate came from', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'forge-'));
+    const meta = { via: 'klein4b-edit', seed: 7, prompt: 'a wolf' };
+    const { n } = addCandidate(dir, modelImage(), clean, meta);
+    expect(JSON.parse(readFileSync(join(dir, `${n}.json`), 'utf8'))).toEqual(meta);
   });
 
   it('writes a review sheet covering every candidate', () => {

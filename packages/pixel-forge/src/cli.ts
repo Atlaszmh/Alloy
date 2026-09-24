@@ -3,9 +3,11 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { randomInt } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -26,7 +28,9 @@ import { packAtlas } from './atlas';
 import { contactSheet } from './review';
 import { buildPrompt, generateImages, REFERENCE_NOTE } from './gemini';
 import { appPromptsDoc } from './app-prompts';
-import { addCandidate, matchAssetId, writeCandidateReview } from './candidates';
+import { addCandidate, matchAssetId, writeCandidateReview, type CandidateMeta } from './candidates';
+import { runWorkflow, uploadImage, DEFAULT_COMFY_URL } from './comfyui';
+import { fillWorkflow, placeholders, type Workflow } from './workflow';
 import { loadProject, type AssetSpec, type Project } from './style';
 
 /**
@@ -34,8 +38,9 @@ import { loadProject, type AssetSpec, type Project } from './style';
  *
  *   list                       asset status (drawn in code, AI pick, missing)
  *   build                      draw code sprites + AI picks → game sprite sheet + review.png
- *   generate <id…> [--count N] [--model M] [--missing]
- *                              ask Gemini for candidates, clean them, write a review sheet
+ *   generate <id…> [--count N] [--missing] [--workflow W [--url U] | --model M]
+ *                              make candidates, clean them, write a review sheet: with a
+ *                              local ComfyUI workflow (workflows/W.json), or with Gemini
  *   prompts [id…]              write app-prompts.md + reference.png for making sprites
  *                              by hand in the Gemini app (default: every missing AI sprite)
  *   import [id] [file…]        clean images saved from the Gemini app into candidates
@@ -45,8 +50,9 @@ import { loadProject, type AssetSpec, type Project } from './style';
  *                              clean any image into a sprite
  *
  * Options: --manifest <path> (default art/alloy/manifest.json).
- * `generate` needs GEMINI_API_KEY (a Google AI Studio key with billing enabled);
- * `prompts` + `import` use the Gemini app instead, which the subscription covers.
+ * `generate --workflow` needs ComfyUI running (default http://127.0.0.1:8188);
+ * `generate` without it needs GEMINI_API_KEY (a Google AI Studio key with billing
+ * enabled); `prompts` + `import` use the Gemini app, which the subscription covers.
  */
 
 type Flags = Record<string, string | boolean>;
@@ -163,26 +169,52 @@ async function referenceSheet(p: Project, exclude?: string): Promise<Buffer | nu
   return encodePng(sheet);
 }
 
+/** `workflows/<name>.json` in this package, or a path to a workflow file. */
+function loadWorkflow(nameOrPath: string): { name: string; wf: Workflow } {
+  const path = nameOrPath.endsWith('.json') ? nameOrPath : join('workflows', `${nameOrPath}.json`);
+  if (!existsSync(path)) {
+    const have = readdirSync('workflows').map((f) => basename(f, '.json'));
+    throw new Error(`No workflow "${nameOrPath}" (have: ${have.join(', ')}).`);
+  }
+  return { name: basename(path, '.json'), wf: JSON.parse(readFileSync(path, 'utf8')) as Workflow };
+}
+
 async function cmdGenerate(p: Project, ids: string[], flags: Flags): Promise<void> {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? '';
   const count = Number(flags.count ?? 3);
   const model = typeof flags.model === 'string' ? flags.model : p.style.model;
+  const local = typeof flags.workflow === 'string' ? loadWorkflow(flags.workflow) : null;
+  const comfy = { url: typeof flags.url === 'string' ? flags.url : DEFAULT_COMFY_URL };
+  const needsRef = local ? placeholders(local.wf).has('reference') : true;
   const targets = flags.missing ? missingAi(p) : ids.map((id) => assetById(p, id));
   if (!targets.length) {
     console.log('Nothing to generate.');
     return;
   }
   for (const asset of targets) {
-    const ref = await referenceSheet(p, asset.id);
+    const ref = needsRef ? await referenceSheet(p, asset.id) : null;
+    if (local && needsRef && !ref) {
+      throw new Error(`${local.name} needs a reference sheet, and there are no sprites yet.`);
+    }
     const prompt = buildPrompt(p.style, asset) + (ref ? ` ${REFERENCE_NOTE}` : '');
+    const reference = local && ref ? await uploadImage(ref, `forge-${asset.id}.png`, comfy) : '';
     const dir = candidateDir(p, asset.id);
-    console.log(`${asset.id}: asking ${model} for ${count} candidate(s)…`);
+    console.log(`${asset.id}: asking ${local?.name ?? model} for ${count} candidate(s)…`);
     for (let i = 0; i < count; i++) {
-      const [raw] = await generateImages(
-        { prompt, references: ref ? [ref] : [], model },
-        { apiKey },
-      );
-      const { n, snapped } = addCandidate(dir, raw, cleanOptions(p, asset, p.background));
+      let raw: Image;
+      let meta: CandidateMeta;
+      if (local) {
+        const seed = randomInt(2 ** 32);
+        const vars = { prompt, subject: asset.subject, size: asset.size, seed, reference };
+        [raw] = await runWorkflow(fillWorkflow(local.wf, vars), comfy);
+        meta = { via: local.name, seed, prompt };
+      } else {
+        [raw] = await generateImages({ prompt, references: ref ? [ref] : [], model }, { apiKey });
+        meta = { via: 'gemini', prompt };
+      }
+      // Local models do not always paint the magenta asked for, so key whatever the border is.
+      const background = local ? 'auto' : p.background;
+      const { n, snapped } = addCandidate(dir, raw, cleanOptions(p, asset, background), meta);
       console.log(
         `  candidate ${n}: ${snapped ? 'snapped to its pixel grid' : 'resampled to fit'}`,
       );
@@ -246,6 +278,7 @@ function cmdImport(p: Project, args: string[]): void {
       candidateDir(p, id),
       raw,
       cleanOptions(p, assetById(p, id), 'auto'),
+      { via: 'import', file: basename(file) },
     );
     // The raw image now lives with the candidates; clear it out of the inbox.
     if (resolve(dirname(file)) === resolve(inbox)) unlinkSync(file);
