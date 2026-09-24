@@ -7,6 +7,7 @@ packages/engine/   — @alloy/engine: Pure game logic, zero UI deps, dual CJS+ES
 packages/client/   — React 19 + Vite SPA, the game UI
 packages/supabase/ — DB migrations (PostgreSQL) + Deno edge functions
 packages/tools/    — React balance/simulation analysis tool
+packages/pixel-forge/ — Node CLI pixel art pipeline (code-drawn + Gemini sprites → sprite sheets)
 ```
 
 Engine is the single source of truth for all game rules. No game logic in the client.
@@ -81,6 +82,8 @@ Real-time top-down ARPG behind the main menu's DELVE button. Loop: fight packs i
 - **Pacing guard rails**: `tests/delve-pacing.test.ts` runs the autopilot bot through the real-time sim. Re-run it after any `balance.json → delve` or `arpg.json` change, and use `runAutopilot()` for tuning sweeps.
 - **Client**: `pages/DelveCamp.tsx` (`/delve`, "The Anvil", with the Spells tab), `pages/DelveRun.tsx` (`/delve/run`, the arena; the TabBar is hidden there), `features/delve/` (the arena lives in `features/delve/arena/`: PixiJS renderer, joystick/mouse/WASD input, HUD, `useArena` hook), and `stores/delveStore.ts` (persisted save under `alloy:delve:v2`, validated with Zod on load).
 - **Pixel floor** (`features/delve/arena/pixel/`): a cosmetic, per-biome pixel simulation under the arena: glowing rivers, lush foliage, fire, frost, craters, weather, lit by what glows. `world.ts` simulates, `render.ts` paints the on-screen window at 2× with lighting, `themes.ts` sets each biome's look, `arena-effects.ts` replays engine events onto it, and `floor-engine.ts` / `floor-worker.ts` run it in a Web Worker (`pixel-floor.ts` is the Pixi sprite, with an in-thread fallback). It never feeds back into gameplay, so it may use `Math.random`.
+- **Sprites** (`features/delve/arena/sprites.ts`): the hero and monsters draw from `public/sprites/delve/atlas.{png,json}` (keyed by hero / monster `defId`, 2+ frames each) at `SPRITE_PIXEL` = 0.1 arena units per sprite pixel, the floor's density. Anything without a sprite falls back to its emoji. Never hand-edit the atlas: it is built by `packages/pixel-forge`.
+- **Pixel art pipeline** (`packages/pixel-forge`): `art/alloy/style.json` fixes the palette (ENDESGA 32), outline and prompt; `art/alloy/manifest.json` lists every asset as `code` (an ASCII sprite in `art/alloy/sprites/*.ts`) or `ai` (Gemini). Commands: `pnpm -F @alloy/pixel-forge forge list | build | generate <id…> [--count N] [--missing] | pick <id> <n> | clean <in> <out>`. `generate` needs `GEMINI_API_KEY` (billing-enabled AI Studio key) and writes candidates plus a review sheet under `art/alloy/candidates/` (git-ignored); `pick` copies one to `art/alloy/ai/`, and `build` rewrites the atlas and `art/alloy/review.png`.
 - **Test hooks**: localStorage `alloy:delve:autopilot = "1"` lets the engine bot play the arena (E2E uses it); `alloy:delve:timescale` speeds up the sim (max 4×).
 - The classic draft → forge → duel mode is still reachable as "Play Arena".
 
