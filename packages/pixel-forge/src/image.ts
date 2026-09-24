@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { PNG } from 'pngjs';
+import jpeg from 'jpeg-js';
 
 /** An RGBA image, row-major, 4 bytes per pixel. */
 export interface Image {
@@ -55,6 +56,23 @@ export function encodePng(img: Image): Buffer {
 
 export function readPng(path: string): Image {
   return decodePng(readFileSync(path));
+}
+
+/** Decode a PNG or JPEG, recognised by its first bytes rather than its name. */
+export function decodeImage(bytes: Buffer): Image {
+  if (bytes[0] === 0x89 && bytes.toString('latin1', 1, 4) === 'PNG') return decodePng(bytes);
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    const raw = jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true });
+    return { width: raw.width, height: raw.height, data: new Uint8ClampedArray(raw.data) };
+  }
+  if (bytes.toString('latin1', 8, 12) === 'WEBP') {
+    throw new Error('WebP images are not supported. Save or export the image as PNG.');
+  }
+  throw new Error('Unrecognised image format. Use PNG or JPEG.');
+}
+
+export function readImage(path: string): Image {
+  return decodeImage(readFileSync(path));
 }
 
 export function writePng(path: string, img: Image): void {

@@ -41,9 +41,8 @@ function rand(seed: number) {
 }
 
 /** Mimic what an image model returns: big soft blocks, noise, off-palette tints, a keyed background. */
-function fakeAiImage(scale: number, offset: number): Image {
+function fakeAiImage(scale: number, offset: number, size = 512): Image {
   const r = rand(7);
-  const size = 512;
   const img = createImage(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -68,6 +67,32 @@ function fakeAiImage(scale: number, offset: number): Image {
     }
   }
   return img;
+}
+
+/** The Gemini app's visible watermark: a pale four-point sparkle near the bottom-right corner. */
+function stampSparkle(img: Image, cx: number, cy: number, radius: number): void {
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      if (Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy)) > Math.sqrt(radius)) continue;
+      const [r, g, b] = getRGBA(img, cx + dx, cy + dy);
+      setRGBA(img, cx + dx, cy + dy, (r + 3 * 255) / 4, (g + 3 * 255) / 4, (b + 3 * 255) / 4, 255);
+    }
+  }
+}
+
+/** Fraction of SPRITE reproduced at (dx, dy) in the output. */
+function matchSprite(image: Image, dx: number, dy: number): number {
+  let match = 0;
+  for (let sy = 0; sy < 10; sy++) {
+    for (let sx = 0; sx < 10; sx++) {
+      const ch = SPRITE[sy][sx];
+      const [r, g, b, a] = getRGBA(image, sx + dx, sy + dy);
+      if (ch === '.') match += a === 0 ? 1 : 0;
+      else if (a === 255 && r === COLORS[ch][0] && g === COLORS[ch][1] && b === COLORS[ch][2])
+        match++;
+    }
+  }
+  return match / 100;
 }
 
 describe('cleanSprite', () => {
@@ -145,6 +170,32 @@ describe('cleanSprite', () => {
         if (a) used.add(`${r},${g},${b}`);
       }
     expect(used.size).toBeLessThanOrEqual(3);
+  });
+
+  it('ignores the Gemini app sparkle watermark in the bottom-right corner', () => {
+    // A small sprite in a big image, so the sparkle is not tiny next to it.
+    const img = fakeAiImage(12, 300, 1024);
+    stampSparkle(img, 980, 980, 26);
+    const { image, snapped } = cleanSprite(img, { size: 12, palette: PALETTE, outline: null });
+    expect(snapped).toBe(true);
+    expect(matchSprite(image, 1, 2)).toBeGreaterThan(0.95);
+  });
+
+  it('reads the background color from the borders when none is given', () => {
+    const img = fakeAiImage(32, 70);
+    // Repaint the magenta backdrop a flat teal.
+    for (let y = 0; y < img.height; y++)
+      for (let x = 0; x < img.width; x++) {
+        const [r, g, b] = getRGBA(img, x, y);
+        if (r > 200 && b > 200 && g < 40) setRGBA(img, x, y, 40, 160, 150, 255);
+      }
+    const { image } = cleanSprite(img, {
+      size: 12,
+      palette: PALETTE,
+      outline: null,
+      background: 'auto',
+    });
+    expect(matchSprite(image, 1, 2)).toBeGreaterThan(0.95);
   });
 
   it('drops stray single pixels', () => {

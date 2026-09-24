@@ -1,5 +1,4 @@
-import jpeg from 'jpeg-js';
-import { decodePng, type Image } from './image';
+import { decodeImage, type Image } from './image';
 import type { AssetSpec, StyleGuide } from './style';
 
 /** Image generation through the Gemini API (Google AI Studio key). */
@@ -32,6 +31,11 @@ export interface GenerateOptions {
   retries?: number;
   retryDelayMs?: number;
 }
+
+/** Appended to the prompt when existing sprites are attached as a style reference. */
+export const REFERENCE_NOTE =
+  'The attached image shows sprites from the same game. Match their pixel art style, palette, ' +
+  'outline weight and scale, but draw only the new creature, alone.';
 
 export function buildPrompt(style: StyleGuide, asset: AssetSpec): string {
   return style.prompt
@@ -66,16 +70,6 @@ function explain(status: number, message: string): GeminiError {
       status,
     );
   return new GeminiError(`Gemini request failed (${status}): ${message}`, status);
-}
-
-function decodeImage(mime: string, data: string): Image {
-  const bytes = Buffer.from(data, 'base64');
-  if (mime.includes('png')) return decodePng(bytes);
-  if (mime.includes('jpeg') || mime.includes('jpg')) {
-    const raw = jpeg.decode(bytes, { useTArray: true, formatAsRGBA: true });
-    return { width: raw.width, height: raw.height, data: new Uint8ClampedArray(raw.data) };
-  }
-  throw new GeminiError(`Unsupported image type from the model: ${mime}`);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -135,8 +129,7 @@ export async function generateImages(
     for (const cand of json?.candidates ?? []) {
       for (const part of cand?.content?.parts ?? []) {
         const inline = part.inlineData ?? part.inline_data;
-        if (inline?.data)
-          images.push(decodeImage(inline.mimeType ?? inline.mime_type ?? 'image/png', inline.data));
+        if (inline?.data) images.push(decodeImage(Buffer.from(inline.data, 'base64')));
         else if (part.text) notes.push(part.text);
       }
     }

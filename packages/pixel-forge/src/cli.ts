@@ -1,21 +1,32 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   createImage,
   encodePng,
   fill,
+  readImage,
   readPng,
   upscale,
   blit,
   writePng,
   type Image,
+  type RGB,
 } from './image';
 import { bob, renderSprite, type CodeSprite } from './draw';
-import { cleanSprite } from './clean';
+import { cleanSprite, type CleanOptions } from './clean';
 import { packAtlas } from './atlas';
 import { contactSheet } from './review';
-import { buildPrompt, generateImages } from './gemini';
+import { buildPrompt, generateImages, REFERENCE_NOTE } from './gemini';
+import { appPromptsDoc } from './app-prompts';
+import { addCandidate, matchAssetId, writeCandidateReview } from './candidates';
 import { loadProject, type AssetSpec, type Project } from './style';
 
 /**
@@ -25,12 +36,17 @@ import { loadProject, type AssetSpec, type Project } from './style';
  *   build                      draw code sprites + AI picks → game sprite sheet + review.png
  *   generate <id…> [--count N] [--model M] [--missing]
  *                              ask Gemini for candidates, clean them, write a review sheet
+ *   prompts [id…]              write app-prompts.md + reference.png for making sprites
+ *                              by hand in the Gemini app (default: every missing AI sprite)
+ *   import [id] [file…]        clean images saved from the Gemini app into candidates
+ *                              (default: everything in inbox/, matched by file name)
  *   pick <id> <n>              promote candidate n to the sprite used by `build`
  *   clean <in.png> <out.png> [--size N] [--no-outline] [--max-colors N]
- *                              clean any image (e.g. from the Gemini app) into a sprite
+ *                              clean any image into a sprite
  *
  * Options: --manifest <path> (default art/alloy/manifest.json).
- * `generate` needs GEMINI_API_KEY (a Google AI Studio key with billing enabled).
+ * `generate` needs GEMINI_API_KEY (a Google AI Studio key with billing enabled);
+ * `prompts` + `import` use the Gemini app instead, which the subscription covers.
  */
 
 type Flags = Record<string, string | boolean>;
@@ -55,6 +71,28 @@ function parse(argv: string[]): { cmd: string; args: string[]; flags: Flags } {
 
 const aiPath = (p: Project, id: string) => join(p.dir, 'ai', `${id}.png`);
 const candidateDir = (p: Project, id: string) => join(p.dir, 'candidates', id);
+const inboxDir = (p: Project) => join(p.dir, 'inbox');
+const IMAGE_FILE = /\.(png|jpe?g|webp)$/i;
+
+function assetById(p: Project, id: string): AssetSpec {
+  const a = p.manifest.assets.find((x) => x.id === id);
+  if (!a) throw new Error(`Unknown asset "${id}". Run "list" to see ids.`);
+  return a;
+}
+
+/** AI assets that have no picked sprite yet. */
+const missingAi = (p: Project) =>
+  p.manifest.assets.filter((a) => a.source === 'ai' && !existsSync(aiPath(p, a.id)));
+
+function cleanOptions(p: Project, asset: AssetSpec, background: RGB | 'auto'): CleanOptions {
+  return {
+    size: asset.size,
+    palette: p.palette,
+    background,
+    outline: p.outline,
+    maxColors: p.style.maxColors,
+  };
+}
 
 async function codeFrames(p: Project, asset: AssetSpec): Promise<Image[]> {
   const mod = (await import(pathToFileURL(resolve(p.dir, asset.file!)).href)) as {
@@ -79,7 +117,7 @@ async function cmdList(p: Project): Promise<void> {
         ? 'drawn in code'
         : existsSync(aiPath(p, a.id))
           ? 'AI sprite picked'
-          : 'missing: run generate';
+          : 'missing: generate or import';
     console.log(`${a.id.padEnd(18)} ${String(a.size).padStart(3)}px  ${status}`);
   }
 }
@@ -107,7 +145,7 @@ async function cmdBuild(p: Project): Promise<void> {
 }
 
 /** Existing sprites, big and chunky on the key color, so the model can match the style. */
-async function referenceSheet(p: Project, exclude: string): Promise<Buffer | null> {
+async function referenceSheet(p: Project, exclude?: string): Promise<Buffer | null> {
   const refs: Image[] = [];
   for (const a of p.manifest.assets) {
     if (a.id === exclude || refs.length >= 4) continue;
@@ -129,56 +167,101 @@ async function cmdGenerate(p: Project, ids: string[], flags: Flags): Promise<voi
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? '';
   const count = Number(flags.count ?? 3);
   const model = typeof flags.model === 'string' ? flags.model : p.style.model;
-  const targets = flags.missing
-    ? p.manifest.assets.filter((a) => a.source === 'ai' && !existsSync(aiPath(p, a.id)))
-    : ids.map((id) => {
-        const a = p.manifest.assets.find((x) => x.id === id);
-        if (!a) throw new Error(`Unknown asset "${id}". Run "list" to see ids.`);
-        return a;
-      });
+  const targets = flags.missing ? missingAi(p) : ids.map((id) => assetById(p, id));
   if (!targets.length) {
     console.log('Nothing to generate.');
     return;
   }
   for (const asset of targets) {
     const ref = await referenceSheet(p, asset.id);
-    let prompt = buildPrompt(p.style, asset);
-    if (ref)
-      prompt +=
-        ' Match the pixel art style, palette, outline weight and scale of the reference sprites shown.';
+    const prompt = buildPrompt(p.style, asset) + (ref ? ` ${REFERENCE_NOTE}` : '');
     const dir = candidateDir(p, asset.id);
-    mkdirSync(dir, { recursive: true });
-    const cleaned: Image[] = [];
     console.log(`${asset.id}: asking ${model} for ${count} candidate(s)…`);
-    for (let n = 0; n < count; n++) {
+    for (let i = 0; i < count; i++) {
       const [raw] = await generateImages(
         { prompt, references: ref ? [ref] : [], model },
         { apiKey },
       );
-      writePng(join(dir, `raw-${n}.png`), raw);
-      const { image, snapped } = cleanSprite(raw, {
-        size: asset.size,
-        palette: p.palette,
-        background: p.background,
-        outline: p.outline,
-        maxColors: p.style.maxColors,
-      });
-      writePng(join(dir, `${n}.png`), image);
-      cleaned.push(image);
+      const { n, snapped } = addCandidate(dir, raw, cleanOptions(p, asset, p.background));
       console.log(
         `  candidate ${n}: ${snapped ? 'snapped to its pixel grid' : 'resampled to fit'}`,
       );
     }
-    const review = join(dir, 'review.png');
-    writePng(
-      review,
-      contactSheet(
-        cleaned.map((img, n) => ({ label: `${asset.id} ${n}`, frames: [img, bob(img)] })),
-        8,
-        3,
-      ),
-    );
+    const review = writeCandidateReview(dir, asset.id);
     console.log(`  review: ${review}\n  keep one with: pick ${asset.id} <n>`);
+  }
+}
+
+async function cmdPrompts(p: Project, ids: string[]): Promise<void> {
+  const targets = ids.length ? ids.map((id) => assetById(p, id)) : missingAi(p);
+  if (!targets.length) {
+    console.log('Every AI sprite has been picked.');
+    return;
+  }
+  const ref = await referenceSheet(p);
+  if (ref) writeFileSync(join(p.dir, 'reference.png'), ref);
+  const doc = join(p.dir, 'app-prompts.md');
+  writeFileSync(doc, appPromptsDoc(p.style, targets, 'reference.png'));
+  mkdirSync(inboxDir(p), { recursive: true });
+  console.log(`Wrote prompts for ${targets.length} sprite(s) → ${doc}`);
+  if (ref) console.log(`Attach ${join(p.dir, 'reference.png')} in each chat.`);
+}
+
+function cmdImport(p: Project, args: string[]): void {
+  const ids = p.manifest.assets.filter((a) => a.source === 'ai').map((a) => a.id);
+  // `import <id> <file…>` takes files for one asset whatever they are called.
+  const forced = args[0] !== undefined && ids.includes(args[0]) ? args[0] : null;
+  const inbox = inboxDir(p);
+  const files = forced
+    ? args.slice(1)
+    : args.length
+      ? args
+      : existsSync(inbox)
+        ? readdirSync(inbox)
+            .filter((f) => IMAGE_FILE.test(f))
+            .sort()
+            .map((f) => join(inbox, f))
+        : [];
+  if (forced && !files.length) throw new Error(`Give the image files for ${forced}.`);
+  if (!files.length) {
+    console.log(`Nothing to import. Put images named after a sprite id in ${inbox}.`);
+    return;
+  }
+  const touched = new Set<string>();
+  const unnamed: string[] = [];
+  for (const file of files) {
+    const id = forced ?? matchAssetId(file, ids);
+    if (!id) {
+      unnamed.push(file);
+      continue;
+    }
+    let raw: Image;
+    try {
+      raw = readImage(file);
+    } catch (err) {
+      console.log(`${basename(file)}: ${(err as Error).message}`);
+      continue;
+    }
+    const { n, snapped } = addCandidate(
+      candidateDir(p, id),
+      raw,
+      cleanOptions(p, assetById(p, id), 'auto'),
+    );
+    // The raw image now lives with the candidates; clear it out of the inbox.
+    if (resolve(dirname(file)) === resolve(inbox)) unlinkSync(file);
+    console.log(
+      `${id}: ${basename(file)} → candidate ${n} (${snapped ? 'snapped to its pixel grid' : 'resampled to fit'})`,
+    );
+    touched.add(id);
+  }
+  for (const id of touched) {
+    console.log(`  review: ${writeCandidateReview(candidateDir(p, id), id)}  (pick ${id} <n>)`);
+  }
+  if (unnamed.length) {
+    console.log(
+      `Not named after a sprite id, so skipped (rename to e.g. ${ids[0]}-2.png, or run "import <id> <file…>"):`,
+    );
+    for (const f of unnamed) console.log(`  ${f}`);
   }
 }
 
@@ -196,7 +279,7 @@ function cmdPick(p: Project, id: string, n: string): void {
 }
 
 function cmdClean(p: Project, input: string, output: string, flags: Flags): void {
-  const { image, snapped, cell } = cleanSprite(readPng(input), {
+  const { image, snapped, cell } = cleanSprite(readImage(input), {
     size: Number(flags.size ?? 16),
     palette: p.palette,
     outline: flags['no-outline'] ? null : p.outline,
@@ -211,7 +294,7 @@ async function main(): Promise<void> {
   const manifest = typeof flags.manifest === 'string' ? flags.manifest : 'art/alloy/manifest.json';
   if (cmd === 'help' || cmd === '--help') {
     console.log(
-      'pixel-forge <list|build|generate|pick|clean> [options]. See src/cli.ts for details.',
+      'pixel-forge <list|build|generate|prompts|import|pick|clean> [options]. See src/cli.ts for details.',
     );
     return;
   }
@@ -223,6 +306,10 @@ async function main(): Promise<void> {
       return cmdBuild(p);
     case 'generate':
       return cmdGenerate(p, args, flags);
+    case 'prompts':
+      return cmdPrompts(p, args);
+    case 'import':
+      return cmdImport(p, args);
     case 'pick':
       return cmdPick(p, args[0], args[1]);
     case 'clean':

@@ -34,6 +34,9 @@ export interface CleanResult {
   snapped: boolean;
 }
 
+/** Pieces lying wholly past this fraction of the width and height count as a corner watermark. */
+const CORNER_MARK = 0.8;
+
 /** The most common border color, bucketed to absorb noise. */
 function borderColor(src: Image): RGB {
   const counts = new Map<number, { n: number; r: number; g: number; b: number }>();
@@ -105,21 +108,26 @@ function foregroundMask(src: Image, key: RGB, tolerance: number): Uint8Array {
   return fg;
 }
 
-/** Remove connected pieces that are tiny next to the main body. */
+/**
+ * Remove connected pieces that are tiny next to the main body, and the Gemini
+ * app's sparkle watermark: a separate small piece near the bottom-right corner.
+ */
 function dropSpecks(fg: Uint8Array, W: number, H: number): void {
   const label = new Int32Array(W * H).fill(-1);
-  const sizes: number[] = [];
+  const pieces: { size: number; x0: number; y0: number }[] = [];
   for (let start = 0; start < W * H; start++) {
     if (!fg[start] || label[start] >= 0) continue;
-    const id = sizes.length;
-    let size = 0;
+    const id = pieces.length;
+    const piece = { size: 0, x0: W, y0: H };
     const stack = [start];
     label[start] = id;
     while (stack.length) {
       const i = stack.pop()!;
-      size++;
       const x = i % W;
       const y = (i / W) | 0;
+      piece.size++;
+      if (x < piece.x0) piece.x0 = x;
+      if (y < piece.y0) piece.y0 = y;
       const nbs = [
         x > 0 ? i - 1 : -1,
         x < W - 1 ? i + 1 : -1,
@@ -133,11 +141,16 @@ function dropSpecks(fg: Uint8Array, W: number, H: number): void {
         }
       }
     }
-    sizes.push(size);
+    pieces.push(piece);
   }
-  const largest = Math.max(0, ...sizes);
+  const largest = Math.max(0, ...pieces.map((p) => p.size));
   const min = Math.max(8, largest * 0.02);
-  for (let i = 0; i < W * H; i++) if (fg[i] && sizes[label[i]] < min) fg[i] = 0;
+  const drop = pieces.map(
+    (p) =>
+      p.size < min ||
+      (p.size < largest * 0.25 && p.x0 >= W * CORNER_MARK && p.y0 >= H * CORNER_MARK),
+  );
+  for (let i = 0; i < W * H; i++) if (fg[i] && drop[label[i]]) fg[i] = 0;
 }
 
 function boundingBox(fg: Uint8Array, W: number, H: number) {
