@@ -20,6 +20,7 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
+import { loadDelveSprites } from './sprites';
 import { attachKeyboard, createArenaInput, moveVector, type ArenaInput } from './input';
 
 /**
@@ -167,6 +168,7 @@ export function useArena(
         resolution: Math.min(2, window.devicePixelRatio || 1),
         autoDensity: true,
       })
+      .then(() => loadDelveSprites())
       .then(() => {
         if (destroyed) {
           app.destroy(true);

@@ -10,6 +10,7 @@ import type {
 } from '@alloy/engine';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
+import { SPRITE_PIXEL, spriteFrames } from './sprites';
 
 /**
  * PixiJS view of an ArpgWorld. It never mutates the world: every frame it
@@ -27,6 +28,8 @@ interface MonsterView {
   sprite: Sprite;
   hp: Graphics;
   baseScale: number;
+  /** Pixel-art frames (idle cycle); null when the creature is drawn as an emoji. */
+  frames: Texture[] | null;
 }
 
 interface DropView {
@@ -126,6 +129,8 @@ export class ArenaRenderer {
   private textLayer = new Container();
 
   private hero = new Container();
+  private heroSprite: Sprite | null = null;
+  private heroFrames: Texture[] | null = null;
   private heroAura = new Graphics();
   private heroBody = new Graphics();
 
@@ -587,6 +592,36 @@ export class ArenaRenderer {
     const pulse = 0.25 + Math.sin(this.time * 4) * 0.08;
     const g = this.heroAura;
     g.clear();
+    if (!this.heroFrames) {
+      this.heroFrames = spriteFrames('hero');
+      if (this.heroFrames) {
+        this.heroSprite = new Sprite(this.heroFrames[0]);
+        this.heroSprite.anchor.set(0.5, 1);
+        this.hero.addChild(this.heroSprite);
+      }
+    }
+    if (this.heroSprite && this.heroFrames) {
+      // A ring on the ground with a notch for facing; the pixel-art hero stands in it.
+      const fx = h.facing.x;
+      const fy = h.facing.y;
+      g.ellipse(0, 0.42, 0.5, 0.2).fill({ color: 0x000000, alpha: 0.45 });
+      g.ellipse(0, 0.42, 0.78, 0.34).stroke({ width: 0.06, color: aura, alpha: 0.45 + pulse });
+      g.poly([
+        fx * 0.98,
+        0.42 + fy * 0.46,
+        fx * 0.7 - fy * 0.16,
+        0.42 + fy * 0.3 + fx * 0.08,
+        fx * 0.7 + fy * 0.16,
+        0.42 + fy * 0.3 - fx * 0.08,
+      ]).fill({ color: aura, alpha: 0.9 });
+      const s = this.heroSprite;
+      s.texture = this.heroFrames[Math.floor(this.time * 3) % this.heroFrames.length];
+      s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
+      s.position.set(0, 0.5);
+      s.tint = this.time < this.heroFlashUntil ? 0xff8a8a : 0xffffff;
+      this.heroBody.clear();
+      return;
+    }
     g.ellipse(0, 0.35, 0.6, 0.25).fill({ color: 0x000000, alpha: 0.45 });
     g.circle(0, 0, 0.85).fill({ color: aura, alpha: pulse * 0.4 });
     g.circle(0, 0, 0.72).stroke({ width: 0.06, color: aura, alpha: 0.8 });
@@ -610,25 +645,40 @@ export class ArenaRenderer {
     });
   }
 
-  private makeCreature(icon: string, radius: number): MonsterView {
+  private makeCreature(
+    icon: string,
+    radius: number,
+    spriteId?: string,
+    sizeScale = 1,
+  ): MonsterView {
     const root = new Container();
     const shadow = new Graphics();
     const ring = new Graphics();
-    const sprite = new Sprite(this.emoji(icon));
-    sprite.anchor.set(0.5, 0.62);
-    const baseScale = (radius * 2.5) / sprite.texture.width;
+    const frames = spriteId ? spriteFrames(spriteId) : null;
+    let sprite: Sprite;
+    let baseScale: number;
+    if (frames) {
+      sprite = new Sprite(frames[0]);
+      // Feet on the shadow; one sprite pixel = one floor pixel.
+      sprite.anchor.set(0.5, 1);
+      baseScale = SPRITE_PIXEL * sizeScale;
+    } else {
+      sprite = new Sprite(this.emoji(icon));
+      sprite.anchor.set(0.5, 0.62);
+      baseScale = (radius * 2.5) / sprite.texture.width;
+    }
     sprite.scale.set(baseScale);
     const hp = new Graphics();
     root.addChild(shadow, ring, sprite, hp);
     this.entities.addChild(root);
-    return { root, shadow, ring, sprite, hp, baseScale };
+    return { root, shadow, ring, sprite, hp, baseScale, frames };
   }
 
   private syncMonsters(w: ArpgWorld): void {
     for (const m of w.monsters) {
       let v = this.monsters.get(m.id);
       if (!v) {
-        v = this.makeCreature(m.icon, m.radius);
+        v = this.makeCreature(m.icon, m.radius, m.defId, m.kind === 'elite' ? 1.2 : 1);
         this.monsters.set(m.id, v);
       }
       this.drawMonster(v, m, w);
@@ -648,7 +698,12 @@ export class ArenaRenderer {
       m.windupUntil > 0 ? (t - m.windupStart) / Math.max(0.01, m.windupUntil - m.windupStart) : 0;
     const scale = v.baseScale * (hit ? 1.12 : 1) * (1 + windup * 0.12);
     v.sprite.scale.set(scale * flip, scale);
-    v.sprite.position.set(0, bob);
+    if (v.frames) {
+      // Idle cycle; frozen creatures hold still. Pixel art stays on the pixel grid (no bob).
+      if (!frozen)
+        v.sprite.texture = v.frames[Math.floor(this.time * 3 + m.id * 0.37) % v.frames.length];
+      v.sprite.position.set(0, m.radius * 0.7);
+    } else v.sprite.position.set(0, bob);
     v.sprite.tint = frozen
       ? 0x9fe8ff
       : hit
