@@ -1,7 +1,8 @@
 import { forwardRef } from 'react';
 import type { GearItem, GearSlot } from '@alloy/engine';
 import { ItemIcon } from './ItemIcon';
-import { RARITY_COLOR, UPGRADE_EPSILON } from './format';
+import { getDelveRegistry } from './registry';
+import { RARITY_COLOR, UPGRADE_EPSILON, manaStyle } from './format';
 
 const EMPTY_BASE: Record<GearSlot, string> = {
   weapon: 'sword',
@@ -38,6 +39,7 @@ export const ItemTile = forwardRef<HTMLButtonElement, ItemTileProps>(function It
   const high = item && (rarity === 'epic' || rarity === 'legendary');
   const up = delta !== undefined && delta !== null && delta > UPGRADE_EPSILON;
   const down = delta !== undefined && delta !== null && delta < -UPGRADE_EPSILON;
+  const mana = item ? manaStyle(getDelveRegistry(), item.mana) : null;
 
   return (
     <button
@@ -84,6 +86,14 @@ export const ItemTile = forwardRef<HTMLButtonElement, ItemTileProps>(function It
       )}
       {isNew && !item?.locked && <span className="delve-tile-new" />}
       {equipped && <span className="delve-tile-equipped">E</span>}
+      {mana && (
+        <span
+          className="delve-tile-mana"
+          data-mana={item?.mana}
+          title={`${mana.name} affinity`}
+          style={{ background: mana.color, boxShadow: `0 0 6px ${mana.color}` }}
+        />
+      )}
       {(up || down) && (
         <span
           className={`delve-tile-delta ${up ? 'up' : 'down'}`}

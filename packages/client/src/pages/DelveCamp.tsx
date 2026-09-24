@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { isDiveActive, profilePower, startDepthOptions } from '@alloy/engine';
+import {
+  MANA_TYPES,
+  computeAttunement,
+  isDiveActive,
+  profilePower,
+  startDepthOptions,
+  unlockedSkills,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -10,12 +17,13 @@ import { PaperDoll } from '@/features/delve/PaperDoll';
 import { BagPanel } from '@/features/delve/BagPanel';
 import { ForgePanel } from '@/features/delve/ForgePanel';
 import { CodexPanel } from '@/features/delve/CodexPanel';
+import { SpellbookPanel } from '@/features/delve/SpellbookPanel';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { useCountUp } from '@/features/delve/useCountUp';
-import { RARITY_COLOR, RARITY_LABEL, formatNumber } from '@/features/delve/format';
+import { RARITY_COLOR, RARITY_LABEL, formatNumber, manaStyle } from '@/features/delve/format';
 import '@/features/delve/delve.css';
 
-type Tab = 'bag' | 'forge' | 'codex';
+type Tab = 'bag' | 'spells' | 'forge' | 'codex';
 
 export function DelveCamp() {
   const navigate = useNavigate();
@@ -39,6 +47,11 @@ export function DelveCamp() {
   const codexFound = Object.keys(profile.codex).length;
   const codexTotal = registry.getDelveData().legendaries.length;
   const firstTime = profile.stats.dives === 0;
+  const attunement = useMemo(
+    () => computeAttunement(profile.equipped, registry),
+    [profile.equipped, registry],
+  );
+  const spellCount = unlockedSkills(attunement, registry).length;
 
   const onDelve = () => {
     playSound('phaseTransition');
@@ -96,12 +109,16 @@ export function DelveCamp() {
                 How to delve
               </div>
               <p>
-                ⚔️ Your hero fights on their own. Tap <b className="text-orange-300">SLAM</b> when
-                it glows.
+                🕹️ Drag (or WASD) to move. Your hero attacks whatever is in reach; tap the spell
+                buttons to cast.
               </p>
               <p>
-                💎 Monsters drop gear. A green <b className="text-green-400">▲</b> means it's an
-                upgrade. Tap it to equip.
+                🔥 Every item carries a <b className="text-violet-300">mana</b>. Equip gear to
+                attune and unlock spells; attune two elements to unlock combo spells.
+              </p>
+              <p>
+                💎 Loot bursts from monsters: walk over it. A green{' '}
+                <b className="text-green-400">▲</b> means it's an upgrade.
               </p>
               <p>
                 🚪 Between depths, push deeper or <b className="text-amber-300">extract</b> to bank
@@ -111,6 +128,25 @@ export function DelveCamp() {
           )}
 
           <PaperDoll onSelect={openItem} />
+
+          <button
+            type="button"
+            className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs"
+            onClick={() => setTab('spells')}
+            data-testid="mana-strip"
+          >
+            {MANA_TYPES.filter((m) => attunement[m] > 0).map((m) => {
+              const style = manaStyle(registry, m);
+              return (
+                <span key={m} className="delve-display font-bold" style={{ color: style.color }}>
+                  {style.icon} {attunement[m]}
+                </span>
+              );
+            })}
+            <span className="text-stone-400">
+              · {spellCount} spell{spellCount === 1 ? '' : 's'} ›
+            </span>
+          </button>
 
           {/* Delve CTA */}
           <div className="flex flex-col gap-2">
@@ -149,8 +185,9 @@ export function DelveCamp() {
             {(
               [
                 ['bag', `Bag${newCount > 0 ? ` •${newCount}` : ''}`],
+                ['spells', 'Spells'],
                 ['forge', 'Forge'],
-                ['codex', `Codex ${codexFound}/${codexTotal}`],
+                ['codex', 'Codex'],
               ] as [Tab, string][]
             ).map(([id, label]) => (
               <button
@@ -161,7 +198,7 @@ export function DelveCamp() {
                   setTab(id);
                   playSound('buttonClick');
                 }}
-                className="delve-display flex-1 rounded-lg py-2 text-sm font-bold uppercase tracking-wider"
+                className="delve-display flex-1 rounded-lg py-2 text-xs font-bold uppercase tracking-wide sm:text-sm"
                 style={{
                   background:
                     tab === id ? 'linear-gradient(180deg,#2c2c3e,#1f1f2c)' : 'transparent',
@@ -175,6 +212,7 @@ export function DelveCamp() {
           </div>
 
           {tab === 'bag' && <BagPanel onSelect={openItem} />}
+          {tab === 'spells' && <SpellbookPanel />}
           {tab === 'forge' && <ForgePanel onSelect={openItem} />}
           {tab === 'codex' && <CodexPanel />}
 

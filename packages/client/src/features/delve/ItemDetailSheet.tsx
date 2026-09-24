@@ -3,11 +3,13 @@ import {
   baseDisplayName,
   compareItem,
   findItem,
+  itemAffinityAttunement,
   itemStatLines,
   referenceDepth,
   reforgeCost,
   salvageValue,
   upgradeCost,
+  type ManaType,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -23,6 +25,7 @@ import {
   formatNumber,
   formatStat,
   legendaryText,
+  manaStyle,
 } from './format';
 
 interface ItemDetailSheetProps {
@@ -81,6 +84,9 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const rfCost = reforgeCost(registry, item);
   const salvage = salvageValue(registry, item);
   const isUpgrade = cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
+  const mana = manaStyle(registry, item.mana);
+  const attuneDelta = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
+  const attack = registry.getDelveData().bases.find((b) => b.id === item.baseId)?.attack;
 
   const flashStats = () => {
     statsRef.current?.animate(
@@ -184,6 +190,18 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
               {SLOT_LABEL[item.slot]}
             </div>
             <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-stone-400">
+              <span
+                className="rounded px-1.5 py-0.5 font-semibold"
+                style={{ background: `${mana.color}22`, color: mana.color }}
+                data-testid="item-mana"
+              >
+                {mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}
+              </span>
+              {attack && (
+                <span className="rounded bg-white/5 px-1.5 py-0.5">
+                  {attack.kind === 'bolt' ? '🎯 Ranged' : '⚔️ Melee'}
+                </span>
+              )}
               <span className="rounded bg-white/5 px-1.5 py-0.5">iLvl {item.ilvl}</span>
               {item.upgrade > 0 && (
                 <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-amber-200">
@@ -222,6 +240,45 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
               <DeltaCell label="Damage" value={cmp.dpsPct} />
               <DeltaCell label="Toughness" value={cmp.ehpPct} />
             </div>
+            {attuneDelta.length > 0 && (
+              <div
+                className="mt-1.5 flex flex-wrap justify-center gap-x-3 text-xs"
+                data-testid="attune-delta"
+              >
+                {attuneDelta.map(([m, d]) => {
+                  const st = manaStyle(registry, m);
+                  return (
+                    <span key={m} style={{ color: d > 0 ? st.color : '#f87171' }}>
+                      {st.icon} {d > 0 ? '+' : '−'}
+                      {Math.abs(d)} {st.name}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {(cmp.skillsGained.length > 0 || cmp.skillsLost.length > 0) && (
+              <div
+                className="mt-1.5 flex flex-col items-center gap-0.5 text-xs"
+                data-testid="skill-delta"
+              >
+                {cmp.skillsGained.length > 0 && (
+                  <span className="font-semibold text-violet-300">
+                    Unlocks:{' '}
+                    {cmp.skillsGained
+                      .map((id) => `${registry.getSkill(id).icon} ${registry.getSkill(id).name}`)
+                      .join(', ')}
+                  </span>
+                )}
+                {cmp.skillsLost.length > 0 && (
+                  <span className="text-red-300">
+                    Loses:{' '}
+                    {cmp.skillsLost
+                      .map((id) => `${registry.getSkill(id).icon} ${registry.getSkill(id).name}`)
+                      .join(', ')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 

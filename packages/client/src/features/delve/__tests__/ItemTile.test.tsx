@@ -37,4 +37,11 @@ describe('ItemTile', () => {
     rerender(<ItemTile item={null} slot="helm" />);
     expect(screen.getByRole('button', { name: /Empty helm slot/ })).toBeInTheDocument();
   });
+
+  it('marks the item mana affinity with a colored pip', () => {
+    const { container } = render(<ItemTile item={{ ...item, mana: 'frost' }} />);
+    const pip = container.querySelector('.delve-tile-mana');
+    expect(pip).toHaveAttribute('data-mana', 'frost');
+    expect(pip).toHaveAttribute('title', 'Frost affinity');
+  });
 });

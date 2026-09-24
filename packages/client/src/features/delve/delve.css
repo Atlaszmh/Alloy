@@ -93,6 +93,17 @@
   color: #d4a834;
 }
 
+.delve-tile-mana {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+  border: 1.5px solid #0c0c12;
+}
+
 .delve-tile-delta {
   position: absolute;
   bottom: -3px;
