@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-24
 **Status:** Implemented. v0.27.0 shipped a first-person auto-battler; v0.28.0 rebuilt combat as a
-real-time top-down ARPG with a mana system.
+real-time top-down ARPG with a mana system; v0.29.0 added the simulated high-fantasy pixel floor.
 **Engine modules:** `packages/engine/src/loot/`, `packages/engine/src/delve/`, `packages/engine/src/arpg/`
 **Client:** `packages/client/src/pages/DelveCamp.tsx`, `DelveRun.tsx`, `packages/client/src/features/delve/` (arena in `features/delve/arena/`)
 
@@ -178,6 +178,35 @@ but rolls fresh drops.
 - The client (`features/delve/arena/`) renders with PixiJS: `useArena` owns the world, steps
   it from Pixi's ticker, banks pickups into the save as they happen (`bankWorld`), and ends
   the floor with `completeFloor` / `failFloor`.
+
+## Pixel Floor (v0.29.0)
+
+The arena floor is a simulated, lit pixel world (`client/src/features/delve/arena/pixel/`),
+five cells per arena unit plus a three-unit cliff border. It is purely visual: engine events
+are replayed onto it, and nothing flows back into the rules.
+
+- **Terrain**: each floor generates a meandering river from a spring at the top, one or two
+  pools, a ruined plaza with a glowing rune circle, meadows and shrubs, and cliffs with
+  glowing crystals and leafy overhangs. The layout is seeded by depth and biome.
+- **Physics**: fluid runs downhill over a height field; fire spreads through grass and
+  shrubs, burns to ash, and regrows; frost freezes water and cools lava to obsidian;
+  lightning conducts through connected water; impacts carve craters that fill with water,
+  and debris bounces then settles as rubble; heroes and monsters part the grass and
+  ripple the water.
+- **Lighting**: `albedo × (ambient + light) + emissive`. Water, lava, fungi, crystals,
+  runes, flowers, fire, sparks and fireflies both glow and cast light into a blurred
+  half-resolution light map. The hero carries a torch; projectiles, rare loot and spell
+  zones add lights.
+- **Biome looks** (`themes.ts`): Sunken Quarry is lush with a turquoise river, cyan fungi,
+  flowers, fireflies and rain. Frostvault has snow, an aqua river and ice crystals. Storm
+  Foundry has thunderstorms with lightning flashes. Cinder Mines and Molten Core run lava
+  rivers with drifting embers. Bone Crypts has a spirit river, violet fungi, wisps and mist.
+- **Gameplay tuning**: fire spreads at 12% of the sandbox rate and burns 3× faster, so
+  blasts leave burning patches instead of torching the arena.
+- **Performance**: only the visible window is painted, at 2 output pixels per cell. The
+  simulation and painting run in a Web Worker (`floor-worker.ts`); pictures come back as
+  transferred buffers that ping-pong between threads. If a repaint costs more than 7 ms it
+  drops to every other step.
 
 ## Power & Comparison
 
