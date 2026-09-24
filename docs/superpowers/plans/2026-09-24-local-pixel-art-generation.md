@@ -45,7 +45,7 @@ Avoid for shipped art: Qwen-Image-2.1 (research-only license) and FLUX.2 klein 9
 |---|---|
 | `src/workflow.ts` | API-format workflows with `{{prompt}}`, `{{subject}}`, `{{size}}`, `{{seed}}`, `{{reference}}` placeholders. An input that is exactly one placeholder keeps the value's type (seeds stay numbers); unknown placeholders are named in the error |
 | `src/comfyui.ts` | `uploadImage` (`POST /upload/image`) and `runWorkflow` (`POST /prompt`, poll `/history/{id}`, fetch `/view`). Errors say what to do: ComfyUI not running, a missing model file (from `node_errors`, which ComfyUI can return with a 200 while still running the valid parts), or a failure mid-run |
-| `workflows/*.json` | `klein4b-pixel` (klein 4B + pixel art LoRA, 512 px, the LoRA's own prompt shape), `klein4b-edit` (klein 4B with our reference sheet through `ReferenceLatent`, 1024 px), `zimage-pixel` (Z-Image Turbo + pixel art LoRA, 1024 px). Outputs use `PreviewImage`, so ComfyUI keeps nothing |
+| `workflows/*.json` | `klein4b-pixel` (klein 4B + pixel art LoRA, 512 px, the LoRA's own prompt shape), `klein4b-edit` (klein 4B with our reference sheet through `ReferenceLatent`, 1024 px; replaced by `klein4b-sheet` in Phase 2), `zimage-pixel` (Z-Image Turbo + pixel art LoRA, 1024 px). Outputs use `PreviewImage`, so ComfyUI keeps nothing |
 | `src/candidates.ts` | `<n>.json` per candidate: `via` (workflow, `gemini` or `import`), seed, prompt. Review sheets label each candidate with its `via` |
 
 Changed from the original plan, simpler:
@@ -64,20 +64,26 @@ Known: ComfyUI loads 166 of the klein pixel art LoRA's 172 keys. The 3 global mo
 - `klein4b-edit` gives a clean, full-body wolf on magenta, but on a grid much finer than 16 px.
 - `zimage-pixel` overlays faint graph-paper lines on the magenta, which stops the background flood fill at the lines.
 
-## Phase 2: Bake-off (you run it, Claude reviews, one evening)
+## Phase 2: Bake-off (done 2026-09-24)
 
-Four monsters that stress different shapes: `frost_wolf` (16 px beast), `storm_hawk` (flier), `living_obelisk` (object), `hollow_king` (32 px boss). Eight candidates each, per setup:
+**Fixes first** (from `frost_wolf` experiments in a scratch copy of the project):
+- `klein4b-pixel`: asking for "full body … plain solid magenta background" instead of the LoRA's "transparent background" gives whole creatures on magenta instead of portraits on white.
+- `zimage-pixel`: generating at 512 px instead of 1024 px removes the graph-paper background and gives chunkier pixels; "no grid lines" alone did not.
+- The cleaner's grid detection never fired on real output: models draw "pixels" of uneven size (an eye's blocks ~14 px, fur 15–60 px on one image) with drifting edges, so no single lattice fits. Every image is resampled to fit, and the real lever is getting the model to draw near the target size.
+- **Sprite-sheet completion** (new `klein4b-sheet`, replaces `klein4b-edit`): the reference is a 3×2 sheet of our sprites at 12× with the last cell empty (`src/sheet.ts`); klein fills the empty cell at the sheet's own size, and pixel-forge cuts that cell back out. klein reproduces the other five sprites almost exactly and draws the new one full-body, on-palette and at about half the reference's pixel size, which is the closest to 16 px any setup got. Asking for a new image with the sheet merely attached gave busts at a much finer grid.
+- Cleanup: a model that paints the magenta as a card on a white page gets the card keyed too, in the shade it used (`card` option); lone pixels whose 3–4 neighbours share a colour less than 0.24 apart in OKLab (a shading step) take that colour, while eyes, sparks and runes (0.35+ apart) stay. `forge reclean` re-runs cleanup on existing raws, so cleanup changes need no GPU time.
 
-| Setup | What it tests |
+**Bake-off:** `frost_wolf`, `storm_hawk`, `living_obelisk`, `hollow_king` × `klein4b-sheet`, `klein4b-pixel`, `zimage-pixel` × 4 candidates = 48 images in 3 minutes. After re-cleaning, all 48 key cleanly.
+
+| Setup | Verdict |
 |---|---|
-| A. klein 4B + pixel art LoRA | Text only |
-| B. klein 4B edit + `reference.png` | Style copied from our sprites |
-| C. Z-Image Turbo + pixel art LoRA | The other model family |
-| D. Gemini (if the key is set) | Baseline |
+| `klein4b-sheet` | Closest to our sprites (palette, outline, accent colours). Best hawks and liches. Busy textures (runes, robes) come out speckled |
+| `klein4b-pixel` | Clearest silhouettes: the best wolf and obelisks. Less of our style; some quadrupeds stand upright |
+| `zimage-pixel` | Flattest, cleanest shapes (a good lich and obelisk), but often off-subject (abstract blue hawks) or off-colour |
 
-- [ ] Run the setups and commit the review sheets (or run the loop in local Claude Code).
-- [ ] Judge after cleanup: grid snapped vs resampled, readable at 1×, silhouette, closeness to the existing sprites.
-- [ ] Pick the default setup and its prompt prefix.
+- [x] Run the setups (Claude, locally).
+- [x] Judge after cleanup.
+- [ ] Owner picks favourites from `art/alloy/candidates/*/review.png`, which settles the default. Claude's recommendation: `klein4b-sheet` as the default, as it is the one that keeps the set consistent and gets better as more sprites are picked (they join the sheet), with `klein4b-pixel` as a second opinion for creatures whose silhouette matters most. Small white creatures (`frost_wolf`) are the weakest case for all three.
 
 ## Phase 3: Fill the roster (a few evenings of picking)
 

@@ -223,12 +223,13 @@ The sheet is built by `packages/pixel-forge`, a Node CLI:
 - **Two sources** (`art/alloy/manifest.json`): `code` sprites are ASCII grids with a
   legend (`art/alloy/sprites/*.ts`), mirrored where symmetric, with an automatic idle bob.
   `ai` sprites are generated with the existing sprites as a style reference: on a local
-  GPU through ComfyUI (`generate --workflow`, with `workflows/*.json`), through the Gemini
+  GPU through ComfyUI (`generate --workflow`, with `workflows/*.json`; the default,
+  `klein4b-sheet`, has the model fill the empty cell of a sheet of our sprites), through the Gemini
   API (`generate`, paid from the AI Pro Cloud credit), or by hand in the Gemini app
   (`prompts` writes the prompts and reference sheet, `import` brings the saved images
   back from `art/alloy/inbox/`).
-- **Cleanup**: key out the magenta background, drop specks and the Gemini app's corner
-  sparkle watermark, find the model's pixel grid
+- **Cleanup**: key out the background (and a magenta card painted on another colour),
+  drop specks and the Gemini app's corner sparkle watermark, smooth low-contrast specks, find the model's pixel grid
   and sample one color per block, lock colors to the palette (OKLab), cap the color
   count, place the sprite bottom-centre on its canvas, and redraw a one-pixel outline.
 - **Review**: `generate` writes several candidates and a contact sheet; a person picks
