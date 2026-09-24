@@ -4,7 +4,7 @@
 
 **Goal:** Generate Alloy's sprites with open models on the owner's RTX 5070 Ti (16 GB VRAM) at no per-image cost, feed them through the existing `pixel-forge` cleanup, and end with a custom Alloy style LoRA so new sprites come out on-style for this and future projects.
 
-**Architecture:** ComfyUI runs the models on the PC and listens on `127.0.0.1:8188`. `pixel-forge` gains a `comfyui` backend that fills a stock ComfyUI workflow (exported in API format) per candidate and fetches the results. Everything after that (cleanup, candidates, review sheets, `pick`, `build`) is unchanged, so local, Gemini API and Gemini app sprites mix freely. `pixel-forge` runs on the PC next to ComfyUI; ComfyUI is never exposed to the internet.
+**Architecture:** ComfyUI runs the models on the PC and listens on `127.0.0.1:8188`. `pixel-forge generate --workflow` fills an API-format workflow file (`packages/pixel-forge/workflows/`) per candidate and fetches the results. Everything after that (cleanup, candidates, review sheets, `pick`, `build`) is unchanged, so local, Gemini API and Gemini app sprites mix freely. `pixel-forge` runs on the PC next to ComfyUI; ComfyUI is never exposed to the internet.
 
 **Tech stack:** ComfyUI (portable, Windows), FLUX.2 [klein] 4B and Z-Image Turbo (both Apache 2.0), Ostris AI Toolkit for LoRA training, Node 20 + pnpm for `pixel-forge`.
 
@@ -37,20 +37,32 @@ Avoid for shipped art: Qwen-Image-2.1 (research-only license) and FLUX.2 klein 9
 
 **First look:** both models draw pixel art on magenta as asked, but finer than 16 px (Z-Image ~30 blocks across, klein finer still), so cleanup resamples and loses faces and legs. Phase 2 has to close that gap: the pixel art LoRAs, prompt wording, and possibly generating at 20/32 px canvases.
 
-## Phase 1: ComfyUI backend in pixel-forge (Claude, TDD)
+## Phase 1: ComfyUI backend in pixel-forge (done 2026-09-24)
 
-| Action | File | Responsibility |
-|---|---|---|
-| Create | `src/comfyui.ts` | HTTP client: `GET /system_stats`, `POST /upload/image`, `POST /prompt`, poll `GET /history/{id}`, fetch `GET /view`. Clear errors ("Is ComfyUI running at …?", missing model files from `node_errors`) |
-| Create | `src/workflow.ts` | Load an API-format workflow and find its slots: prompt, seed, size, reference image, LoRA, output. Nodes titled `forge:prompt`, `forge:seed`, etc. win; otherwise detect by node type so stock templates work unmodified. Fill one copy per candidate |
-| Modify | `src/cli.ts` | `generate … --backend comfyui [--workflow klein4b] [--url …] [--count 8]`, and `comfy-check` (server reachable, GPU and VRAM, workflow slots found) |
-| Modify | `src/style.ts`, `art/alloy/style.json` | `local: { url, workflow, prefix, lora, loraStrength }`: default workflow, trigger words, LoRA name and strength |
-| Modify | `src/candidates.ts` | `meta.json` per candidate: backend, workflow, seed, prompt, so a good one can be re-rolled or varied |
-| Create | `tests/workflow.test.ts`, `tests/comfyui.test.ts` | Slot detection on fixture workflows; the client against a mocked ComfyUI |
+`pnpm -F @alloy/pixel-forge forge generate <id…> --workflow <name> [--count N] [--url U]` runs `workflows/<name>.json` once per candidate on the local ComfyUI, then cleans, numbers and reviews the results like every other source.
 
-- [ ] Seeds are derived from the asset id and candidate number, so reruns reproduce.
-- [ ] With `klein4b-edit`, `reference.png` is uploaded and wired into the reference slot, as the Gemini route does today.
-- [ ] Docs: CLAUDE.md pipeline bullet and the spec.
+| File | What it does |
+|---|---|
+| `src/workflow.ts` | API-format workflows with `{{prompt}}`, `{{subject}}`, `{{size}}`, `{{seed}}`, `{{reference}}` placeholders. An input that is exactly one placeholder keeps the value's type (seeds stay numbers); unknown placeholders are named in the error |
+| `src/comfyui.ts` | `uploadImage` (`POST /upload/image`) and `runWorkflow` (`POST /prompt`, poll `/history/{id}`, fetch `/view`). Errors say what to do: ComfyUI not running, a missing model file (from `node_errors`, which ComfyUI can return with a 200 while still running the valid parts), or a failure mid-run |
+| `workflows/*.json` | `klein4b-pixel` (klein 4B + pixel art LoRA, 512 px, the LoRA's own prompt shape), `klein4b-edit` (klein 4B with our reference sheet through `ReferenceLatent`, 1024 px), `zimage-pixel` (Z-Image Turbo + pixel art LoRA, 1024 px). Outputs use `PreviewImage`, so ComfyUI keeps nothing |
+| `src/candidates.ts` | `<n>.json` per candidate: `via` (workflow, `gemini` or `import`), seed, prompt. Review sheets label each candidate with its `via` |
+
+Changed from the original plan, simpler:
+- Workflows are files Claude writes from the stock templates (reading `/object_info` for node inputs), with placeholders, instead of exported templates plus slot detection. Each file is one complete setup, including its LoRA and trigger words, so there is no `local` block in `style.json`.
+- No `--backend` flag: `--workflow` means ComfyUI. No `comfy-check`: the first request already explains an unreachable server or a missing model.
+- Seeds are random and recorded in `<n>.json`, not derived from the id.
+
+- [x] Tests: `tests/workflow.test.ts` (filling, and every shipped workflow is well-formed), `tests/comfyui.test.ts` (the client against a fake ComfyUI).
+- [x] Real run: 2 `frost_wolf` candidates per workflow on the RTX 5070 Ti in 7 s (klein4b-pixel), 14 s (klein4b-edit) and 19 s (zimage-pixel), including model loads.
+- [x] Docs: CLAUDE.md pipeline bullet and the spec.
+
+Known: ComfyUI loads 166 of the klein pixel art LoRA's 172 keys. The 3 global modulation layers (4.4% of its weights) are skipped with "lora key not loaded" warnings. The Z-Image LoRA loads fully.
+
+**First findings for Phase 2** (`frost_wolf`, 2 each):
+- `klein4b-pixel` draws a head-and-shoulders portrait on white, as its LoRA was trained on "transparent background" sprites. White-on-white then breaks background keying.
+- `klein4b-edit` gives a clean, full-body wolf on magenta, but on a grid much finer than 16 px.
+- `zimage-pixel` overlays faint graph-paper lines on the magenta, which stops the background flood fill at the lines.
 
 ## Phase 2: Bake-off (you run it, Claude reviews, one evening)
 
