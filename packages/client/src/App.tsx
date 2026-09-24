@@ -7,6 +7,8 @@ import { Profile } from './pages/Profile';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 import { GemEncyclopedia } from './pages/GemEncyclopedia';
+import { DelveCamp } from './pages/DelveCamp';
+import { DelveRun } from './pages/DelveRun';
 import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useRouteSound } from './hooks/useRouteSound';
 
@@ -30,6 +32,8 @@ export function App() {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/gems" element={<GemEncyclopedia />} />
+        <Route path="/delve" element={<DelveCamp />} />
+        <Route path="/delve/run" element={<DelveRun />} />
       </Route>
     </Routes>
   );

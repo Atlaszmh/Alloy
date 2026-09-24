@@ -41,7 +41,13 @@ export type SoundName =
   | 'dropSuccess'
   | 'fluxSpend'
   | 'matchFound'
-  | 'roundStart';
+  | 'roundStart'
+  // Delve
+  | 'lootDrop'
+  | 'lootRare'
+  | 'lootLegendary'
+  | 'potion'
+  | 'heroHurt';
 
 interface SoundEntry {
   /** Sprite key within the audio sprite, or individual file path */
@@ -97,6 +103,12 @@ const SOUND_REGISTRY: Record<SoundName, SoundEntry> = {
   fluxSpend:       { sprite: 'flux-spend',        volume: 0.4, category: 'ui', files: ['flux-spend-1.wav', 'flux-spend-2.wav'] },
   matchFound:      { sprite: 'match-found',       volume: 0.7, category: 'sfx' },
   roundStart:      { sprite: 'round-start',       volume: 0.6, category: 'sfx' },
+  // Delve
+  lootDrop:        { sprite: 'loot-drop',         volume: 0.45, category: 'sfx', varyPitch: true, cooldownMs: 60 },
+  lootRare:        { sprite: 'loot-rare',         volume: 0.6, category: 'sfx', cooldownMs: 120 },
+  lootLegendary:   { sprite: 'loot-legendary',    volume: 0.85, category: 'sfx' },
+  potion:          { sprite: 'potion',            volume: 0.6, category: 'sfx' },
+  heroHurt:        { sprite: 'hero-hurt',         volume: 0.5, category: 'sfx', varyPitch: true, cooldownMs: 90 },
 };
 
 // ---------------------------------------------------------------------------
@@ -142,6 +154,64 @@ function createNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
 
 /** Map of synthesized sound generators (used when no audio sprite is loaded) */
 const SYNTH_SOUNDS: Partial<Record<SoundName, (gain: number, rate: number) => void>> = {
+  lootDrop(vol, rate) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator(); const g = ctx.createGain();
+    osc.type = 'triangle'; osc.frequency.setValueAtTime(660 * rate, t);
+    osc.frequency.exponentialRampToValueAtTime(990 * rate, t + 0.08);
+    g.gain.setValueAtTime(vol * 0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.connect(g).connect(ctx.destination); osc.start(t); osc.stop(t + 0.18);
+  },
+  lootRare(vol) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    [1046.5, 1318.5, 1568.0].forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      const s0 = t + i * 0.06;
+      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.45, s0);
+      g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.35);
+      osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.35);
+    });
+  },
+  lootLegendary(vol) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    // Low boom + rising golden arpeggio
+    const boom = ctx.createOscillator(); const bg = ctx.createGain();
+    boom.type = 'sine'; boom.frequency.setValueAtTime(110, t); boom.frequency.exponentialRampToValueAtTime(40, t + 0.6);
+    bg.gain.setValueAtTime(vol, t); bg.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    boom.connect(bg).connect(ctx.destination); boom.start(t); boom.stop(t + 0.6);
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      const s0 = t + 0.08 + i * 0.09;
+      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.4, s0);
+      g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.7);
+      osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.7);
+    });
+  },
+  potion(vol) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    for (let i = 0; i < 4; i++) {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.type = 'sine'; const s0 = t + i * 0.07;
+      osc.frequency.setValueAtTime(300 + i * 90, s0); osc.frequency.exponentialRampToValueAtTime(700 + i * 120, s0 + 0.08);
+      g.gain.setValueAtTime(0.001, t); g.gain.setValueAtTime(vol * 0.4, s0);
+      g.gain.exponentialRampToValueAtTime(0.001, s0 + 0.12);
+      osc.connect(g).connect(ctx.destination); osc.start(s0); osc.stop(s0 + 0.12);
+    }
+  },
+  heroHurt(vol, rate) {
+    const ctx = getAudioContext(); if (!ctx) return;
+    const t = ctx.currentTime;
+    const buf = createNoiseBuffer(ctx, 0.12); const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420 * rate;
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    src.connect(f).connect(g).connect(ctx.destination); src.start(t); src.stop(t + 0.12);
+  },
   orbSelect(vol, rate) {
     const ctx = getAudioContext(); if (!ctx) return;
     const osc = ctx.createOscillator(); const g = ctx.createGain();

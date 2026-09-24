@@ -1,13 +1,25 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
+import { isDiveActive, profilePower } from '@alloy/engine';
 import { useUIStore } from '@/stores/uiStore';
+import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '@/features/delve/registry';
+import { formatNumber } from '@/features/delve/format';
 
 export function MainMenu() {
   const navigate = useNavigate();
   const { devMode, toggleDevMode } = useUIStore();
+  const profile = useDelveStore((s) => s.profile);
+  const registry = getDelveRegistry();
+  const power = useMemo(() => profilePower(registry, profile), [registry, profile]);
+  const legendaries = Object.keys(profile.codex).length;
+  const totalLegendaries = registry.getDelveData().legendaries.length;
+  const active = isDiveActive(profile);
+  const veteran = profile.stats.dives > 0;
 
   return (
     <div
-      className="page-enter flex h-full min-h-0 flex-col items-center gap-10 overflow-y-auto p-6"
+      className="page-enter flex h-full min-h-0 flex-col items-center gap-9 overflow-y-auto p-6"
       style={{ justifyContent: 'safe center' }}
       data-screen-section="main-menu-root"
     >
@@ -36,43 +48,65 @@ export function MainMenu() {
           className="relative mt-2 text-sm tracking-widest"
           style={{ color: 'var(--color-bronze-400)', fontFamily: 'var(--font-family-body)' }}
         >
-          Forge. Fight. Prevail.
+          Delve. Loot. Forge. Repeat.
         </p>
       </div>
 
-      {/* Buttons — vertical stack */}
       <div className="flex w-full max-w-xs flex-col gap-3" data-screen-section="main-menu-actions">
+        {/* Delve — the loot crawler */}
         <button
-          data-primary-action="play"
-          onClick={() => navigate('/queue')}
-          className="rounded-lg bg-gradient-to-b from-accent-400 to-accent-500 px-6 py-4 text-lg font-bold tracking-wide text-surface-900 active:translate-y-px active:scale-[0.98]"
+          data-primary-action="delve"
+          data-testid="menu-delve"
+          onClick={() => navigate(active ? '/delve/run' : '/delve')}
+          className="relative overflow-hidden rounded-lg bg-gradient-to-b from-accent-400 to-accent-500 px-6 py-4 text-surface-900 active:translate-y-px active:scale-[0.98]"
           style={{
             fontFamily: 'var(--font-family-display)',
-            boxShadow: '0 4px 16px rgba(212, 168, 52, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
-            letterSpacing: '0.06em',
+            boxShadow:
+              '0 4px 16px rgba(212, 168, 52, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
           }}
         >
-          PLAY
+          <span className="block text-2xl font-bold tracking-[0.1em]">
+            {active ? 'RESUME DIVE' : 'DELVE'}
+          </span>
+          <span className="block text-xs font-semibold tracking-wide opacity-75">
+            {veteran
+              ? `Deepest ${profile.bestDepth} · Power ${formatNumber(power)} · ★ ${legendaries}/${totalLegendaries}`
+              : 'Fight monsters · hunt legendary gear'}
+          </span>
         </button>
 
-        {[
-          { label: 'Gems', path: '/gems' },
-          { label: 'Leaderboard', path: '/leaderboard' },
-          { label: 'Profile', path: '/profile' },
-        ].map(({ label, path }) => (
-          <button
-            key={path}
-            onClick={() => navigate(path)}
-            className="rounded-lg border border-surface-500 bg-surface-700 px-5 py-3 font-semibold text-white transition-all hover:border-surface-400 hover:bg-surface-600 active:translate-y-px active:scale-[0.98]"
-            style={{
-              fontFamily: 'var(--font-family-display)',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-              letterSpacing: '0.03em',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        {/* Classic mode */}
+        <button
+          onClick={() => navigate('/queue')}
+          className="rounded-lg border border-surface-500 bg-surface-700 px-5 py-3 text-white transition-all hover:border-surface-400 hover:bg-surface-600 active:translate-y-px active:scale-[0.98]"
+          style={{
+            fontFamily: 'var(--font-family-display)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            letterSpacing: '0.03em',
+          }}
+        >
+          <span className="block font-semibold">Play Arena</span>
+          <span className="block text-[11px] text-surface-300">
+            Classic draft &amp; duel · AI or PvP
+          </span>
+        </button>
+
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'Gems', path: '/gems' },
+            { label: 'Ranks', path: '/leaderboard' },
+            { label: 'Profile', path: '/profile' },
+          ].map(({ label, path }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className="rounded-lg border border-surface-600 bg-surface-800 px-2 py-2.5 text-sm font-semibold text-surface-300 transition-all hover:border-surface-500 hover:bg-surface-700 active:translate-y-px active:scale-[0.98]"
+              style={{ fontFamily: 'var(--font-family-display)', letterSpacing: '0.03em' }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {/* Dev Mode toggle */}
         <button
