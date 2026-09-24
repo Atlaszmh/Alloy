@@ -1,7 +1,10 @@
 {
   "1": {
     "class_type": "UNETLoader",
-    "inputs": { "unet_name": "flux-2-klein-4b.safetensors", "weight_dtype": "default" }
+    "inputs": {
+      "unet_name": "flux-2-klein-4b.safetensors",
+      "weight_dtype": "default"
+    }
   },
   "2": {
     "class_type": "LoraLoaderModelOnly",
@@ -13,28 +16,68 @@
   },
   "3": {
     "class_type": "CLIPLoader",
-    "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "flux2", "device": "default" }
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "flux2",
+      "device": "default"
+    }
   },
-  "4": { "class_type": "VAELoader", "inputs": { "vae_name": "flux2-vae.safetensors" } },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    }
+  },
   "5": {
     "class_type": "CLIPTextEncode",
     "inputs": {
       "clip": ["3", 0],
-      "text": "pixel art sprite, {{subject}}, top-down three-quarter view facing the viewer, bold dark 1-pixel outline, flat colors, light from the top-left, game asset, transparent background"
+      "text": "pixel art sprite, {{subject}}, full body, the whole creature standing, centered with empty space around it, bold dark 1-pixel outline, flat colors, game asset, plain solid magenta (#FF00FF) background"
     }
   },
-  "6": { "class_type": "ConditioningZeroOut", "inputs": { "conditioning": ["5", 0] } },
+  "6": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": ["5", 0]
+    }
+  },
   "7": {
     "class_type": "CFGGuider",
-    "inputs": { "model": ["2", 0], "positive": ["5", 0], "negative": ["6", 0], "cfg": 1 }
+    "inputs": {
+      "model": ["2", 0],
+      "positive": ["5", 0],
+      "negative": ["6", 0],
+      "cfg": 1
+    }
   },
   "8": {
     "class_type": "EmptyFlux2LatentImage",
-    "inputs": { "width": 512, "height": 512, "batch_size": 1 }
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    }
   },
-  "9": { "class_type": "Flux2Scheduler", "inputs": { "steps": 4, "width": 512, "height": 512 } },
-  "10": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" } },
-  "11": { "class_type": "RandomNoise", "inputs": { "noise_seed": "{{seed}}" } },
+  "9": {
+    "class_type": "Flux2Scheduler",
+    "inputs": {
+      "steps": 4,
+      "width": 512,
+      "height": 512
+    }
+  },
+  "10": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "11": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": "{{seed}}"
+    }
+  },
   "12": {
     "class_type": "SamplerCustomAdvanced",
     "inputs": {
@@ -45,6 +88,17 @@
       "latent_image": ["8", 0]
     }
   },
-  "13": { "class_type": "VAEDecode", "inputs": { "samples": ["12", 0], "vae": ["4", 0] } },
-  "14": { "class_type": "PreviewImage", "inputs": { "images": ["13", 0] } }
+  "13": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["12", 0],
+      "vae": ["4", 0]
+    }
+  },
+  "14": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": ["13", 0]
+    }
+  }
 }

@@ -198,6 +198,49 @@ describe('cleanSprite', () => {
     expect(matchSprite(image, 1, 2)).toBeGreaterThan(0.95);
   });
 
+  it('keys a magenta-ish card that a model painted on a white page', () => {
+    const img = fakeAiImage(32, 70);
+    for (let y = 0; y < img.height; y++)
+      for (let x = 0; x < img.width; x++) {
+        const [r, g, b] = getRGBA(img, x, y);
+        if (x < 40 || y < 40 || x >= 472 || y >= 472) setRGBA(img, x, y, 255, 255, 255, 255);
+        // A darker magenta than asked for, as models often paint.
+        else if (r > 200 && b > 200 && g < 40) setRGBA(img, x, y, 190, 5, 165, 255);
+      }
+    const { image } = cleanSprite(img, {
+      size: 12,
+      palette: PALETTE,
+      outline: null,
+      card: [255, 0, 255],
+    });
+    expect(matchSprite(image, 1, 2)).toBeGreaterThan(0.95);
+  });
+
+  it('smooths low-contrast specks but keeps high-contrast details', () => {
+    const pal = makePalette('t', ['#181425', '#e43b44', '#be4a2f', '#feae34']);
+    const rows = ['kkkkkkkk', 'krrrrrrk', 'krrdrrrk', 'krrrrryk', 'krrrrrrk', 'kkkkkkkk'];
+    const colors: Record<string, [number, number, number]> = {
+      k: [0x18, 0x14, 0x25],
+      r: [0xe4, 0x3b, 0x44],
+      d: [0xbe, 0x4a, 0x2f],
+      y: [0xfe, 0xae, 0x34],
+    };
+    const img = createImage(240, 240);
+    for (let y = 0; y < 240; y++)
+      for (let x = 0; x < 240; x++) setRGBA(img, x, y, 255, 0, 255, 255);
+    rows.forEach((row, by) =>
+      [...row].forEach((ch, bx) => {
+        for (let y = 0; y < 20; y++)
+          for (let x = 0; x < 20; x++)
+            setRGBA(img, 40 + bx * 20 + x, 40 + by * 20 + y, ...colors[ch], 255);
+      }),
+    );
+    const { image } = cleanSprite(img, { size: 10, palette: pal, outline: null });
+    // 8×6 art sits bottom-centre on the 10×10 canvas, at (1, 4).
+    expect(getRGBA(image, 1 + 3, 4 + 2).slice(0, 3)).toEqual(colors.r);
+    expect(getRGBA(image, 1 + 6, 4 + 3).slice(0, 3)).toEqual(colors.y);
+  });
+
   it('drops stray single pixels', () => {
     const src = createImage(40, 40);
     for (let y = 0; y < 40; y++) for (let x = 0; x < 40; x++) setRGBA(src, x, y, 255, 0, 255, 255);

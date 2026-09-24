@@ -1,7 +1,10 @@
 {
   "1": {
     "class_type": "UNETLoader",
-    "inputs": { "unet_name": "z_image_turbo_bf16.safetensors", "weight_dtype": "default" }
+    "inputs": {
+      "unet_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    }
   },
   "2": {
     "class_type": "LoraLoaderModelOnly",
@@ -11,20 +14,47 @@
       "strength_model": 1.0
     }
   },
-  "3": { "class_type": "ModelSamplingAuraFlow", "inputs": { "model": ["2", 0], "shift": 3 } },
+  "3": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "model": ["2", 0],
+      "shift": 3
+    }
+  },
   "4": {
     "class_type": "CLIPLoader",
-    "inputs": { "clip_name": "qwen_3_4b.safetensors", "type": "lumina2", "device": "default" }
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    }
   },
-  "5": { "class_type": "VAELoader", "inputs": { "vae_name": "ae.safetensors" } },
+  "5": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
   "6": {
     "class_type": "CLIPTextEncode",
-    "inputs": { "clip": ["4", 0], "text": "Pixel art style. {{prompt}}" }
+    "inputs": {
+      "clip": ["4", 0],
+      "text": "Pixel art style. {{prompt}} No grid lines, no graph paper, no pattern: the background is one flat color."
+    }
   },
-  "7": { "class_type": "ConditioningZeroOut", "inputs": { "conditioning": ["6", 0] } },
+  "7": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": ["6", 0]
+    }
+  },
   "8": {
     "class_type": "EmptySD3LatentImage",
-    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    }
   },
   "9": {
     "class_type": "KSampler",
@@ -41,6 +71,17 @@
       "denoise": 1
     }
   },
-  "10": { "class_type": "VAEDecode", "inputs": { "samples": ["9", 0], "vae": ["5", 0] } },
-  "11": { "class_type": "PreviewImage", "inputs": { "images": ["10", 0] } }
+  "10": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["9", 0],
+      "vae": ["5", 0]
+    }
+  },
+  "11": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": ["10", 0]
+    }
+  }
 }

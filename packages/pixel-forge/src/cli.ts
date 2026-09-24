@@ -20,7 +20,6 @@ import {
   blit,
   writePng,
   type Image,
-  type RGB,
 } from './image';
 import { bob, renderSprite, type CodeSprite } from './draw';
 import { cleanSprite, type CleanOptions } from './clean';
@@ -28,9 +27,16 @@ import { packAtlas } from './atlas';
 import { contactSheet } from './review';
 import { buildPrompt, generateImages, REFERENCE_NOTE } from './gemini';
 import { appPromptsDoc } from './app-prompts';
-import { addCandidate, matchAssetId, writeCandidateReview, type CandidateMeta } from './candidates';
+import {
+  addCandidate,
+  matchAssetId,
+  recleanCandidates,
+  writeCandidateReview,
+  type CandidateMeta,
+} from './candidates';
 import { runWorkflow, uploadImage, DEFAULT_COMFY_URL } from './comfyui';
 import { fillWorkflow, placeholders, type Workflow } from './workflow';
+import { completionSheet, cropSlot } from './sheet';
 import { loadProject, type AssetSpec, type Project } from './style';
 
 /**
@@ -45,6 +51,7 @@ import { loadProject, type AssetSpec, type Project } from './style';
  *                              by hand in the Gemini app (default: every missing AI sprite)
  *   import [id] [file…]        clean images saved from the Gemini app into candidates
  *                              (default: everything in inbox/, matched by file name)
+ *   reclean [id…]              re-run the current cleanup on existing candidates' raw images
  *   pick <id> <n>              promote candidate n to the sprite used by `build`
  *   clean <in.png> <out.png> [--size N] [--no-outline] [--max-colors N]
  *                              clean any image into a sprite
@@ -90,11 +97,13 @@ function assetById(p: Project, id: string): AssetSpec {
 const missingAi = (p: Project) =>
   p.manifest.assets.filter((a) => a.source === 'ai' && !existsSync(aiPath(p, a.id)));
 
-function cleanOptions(p: Project, asset: AssetSpec, background: RGB | 'auto'): CleanOptions {
+/** Models do not always paint the magenta asked for: key the border color, and a magenta card on it. */
+function cleanOptions(p: Project, asset: AssetSpec): CleanOptions {
   return {
     size: asset.size,
     palette: p.palette,
-    background,
+    background: 'auto',
+    card: p.background,
     outline: p.outline,
     maxColors: p.style.maxColors,
   };
@@ -150,14 +159,20 @@ async function cmdBuild(p: Project): Promise<void> {
   if (missing.length) console.log(`Not yet drawn: ${missing.join(', ')}`);
 }
 
-/** Existing sprites, big and chunky on the key color, so the model can match the style. */
-async function referenceSheet(p: Project, exclude?: string): Promise<Buffer | null> {
+/** The first frame of every sprite with art, except `exclude`. */
+async function spriteImages(p: Project, exclude?: string): Promise<Image[]> {
   const refs: Image[] = [];
   for (const a of p.manifest.assets) {
-    if (a.id === exclude || refs.length >= 4) continue;
+    if (a.id === exclude) continue;
     const frames = await framesFor(p, a);
     if (frames) refs.push(frames[0]);
   }
+  return refs;
+}
+
+/** Existing sprites, big and chunky on the key color, so the model can match the style. */
+async function referenceSheet(p: Project, exclude?: string): Promise<Buffer | null> {
+  const refs = (await spriteImages(p, exclude)).slice(0, 4);
   if (!refs.length) return null;
   const k = 12;
   const cell = Math.max(...refs.map((r) => r.width)) * k;
@@ -192,12 +207,21 @@ async function cmdGenerate(p: Project, ids: string[], flags: Flags): Promise<voi
     return;
   }
   for (const asset of targets) {
-    const ref = needsRef ? await referenceSheet(p, asset.id) : null;
-    if (local && needsRef && !ref) {
-      throw new Error(`${local.name} needs a reference sheet, and there are no sprites yet.`);
+    // Gemini is shown a row of sprites; local workflows fill the empty cell of a sprite sheet.
+    const ref = !local ? await referenceSheet(p, asset.id) : null;
+    const sheet =
+      local && needsRef
+        ? completionSheet(await spriteImages(p, asset.id), asset.size, p.background)
+        : null;
+    if (sheet && !sheet.placed) {
+      throw new Error(
+        `${local!.name} needs existing sprites to copy, and none fit ${asset.size} px.`,
+      );
     }
     const prompt = buildPrompt(p.style, asset) + (ref ? ` ${REFERENCE_NOTE}` : '');
-    const reference = local && ref ? await uploadImage(ref, `forge-${asset.id}.png`, comfy) : '';
+    const reference = sheet
+      ? await uploadImage(encodePng(sheet.image), `forge-${asset.id}.png`, comfy)
+      : '';
     const dir = candidateDir(p, asset.id);
     console.log(`${asset.id}: asking ${local?.name ?? model} for ${count} candidate(s)…`);
     for (let i = 0; i < count; i++) {
@@ -206,15 +230,14 @@ async function cmdGenerate(p: Project, ids: string[], flags: Flags): Promise<voi
       if (local) {
         const seed = randomInt(2 ** 32);
         const vars = { prompt, subject: asset.subject, size: asset.size, seed, reference };
-        [raw] = await runWorkflow(fillWorkflow(local.wf, vars), comfy);
-        meta = { via: local.name, seed, prompt };
+        const [out] = await runWorkflow(fillWorkflow(local.wf, vars), comfy);
+        raw = sheet ? cropSlot(out, sheet.image, sheet.slot) : out;
+        meta = { via: local.name, seed };
       } else {
         [raw] = await generateImages({ prompt, references: ref ? [ref] : [], model }, { apiKey });
         meta = { via: 'gemini', prompt };
       }
-      // Local models do not always paint the magenta asked for, so key whatever the border is.
-      const background = local ? 'auto' : p.background;
-      const { n, snapped } = addCandidate(dir, raw, cleanOptions(p, asset, background), meta);
+      const { n, snapped } = addCandidate(dir, raw, cleanOptions(p, asset), meta);
       console.log(
         `  candidate ${n}: ${snapped ? 'snapped to its pixel grid' : 'resampled to fit'}`,
       );
@@ -277,7 +300,7 @@ function cmdImport(p: Project, args: string[]): void {
     const { n, snapped } = addCandidate(
       candidateDir(p, id),
       raw,
-      cleanOptions(p, assetById(p, id), 'auto'),
+      cleanOptions(p, assetById(p, id)),
       { via: 'import', file: basename(file) },
     );
     // The raw image now lives with the candidates; clear it out of the inbox.
@@ -311,6 +334,16 @@ function cmdPick(p: Project, id: string, n: string): void {
   console.log(`${id}: using candidate ${n}. Run "build" to update the game's sprite sheet.`);
 }
 
+function cmdReclean(p: Project, ids: string[]): void {
+  const root = join(p.dir, 'candidates');
+  const targets = ids.length ? ids : existsSync(root) ? readdirSync(root) : [];
+  for (const id of targets) {
+    const dir = candidateDir(p, id);
+    const n = recleanCandidates(dir, cleanOptions(p, assetById(p, id)));
+    console.log(`${id}: re-cleaned ${n} candidate(s), review: ${writeCandidateReview(dir, id)}`);
+  }
+}
+
 function cmdClean(p: Project, input: string, output: string, flags: Flags): void {
   const { image, snapped, cell } = cleanSprite(readImage(input), {
     size: Number(flags.size ?? 16),
@@ -327,7 +360,7 @@ async function main(): Promise<void> {
   const manifest = typeof flags.manifest === 'string' ? flags.manifest : 'art/alloy/manifest.json';
   if (cmd === 'help' || cmd === '--help') {
     console.log(
-      'pixel-forge <list|build|generate|prompts|import|pick|clean> [options]. See src/cli.ts for details.',
+      'pixel-forge <list|build|generate|prompts|import|reclean|pick|clean> [options]. See src/cli.ts for details.',
     );
     return;
   }
@@ -343,6 +376,8 @@ async function main(): Promise<void> {
       return cmdPrompts(p, args);
     case 'import':
       return cmdImport(p, args);
+    case 'reclean':
+      return cmdReclean(p, args);
     case 'pick':
       return cmdPick(p, args[0], args[1]);
     case 'clean':

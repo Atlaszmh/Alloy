@@ -7,6 +7,7 @@ import {
   addCandidate,
   candidateNumbers,
   matchAssetId,
+  recleanCandidates,
   writeCandidateReview,
 } from '../src/candidates';
 import { createImage, decodeImage, encodePng, fill, readPng, setRGBA } from '../src/image';
@@ -62,6 +63,14 @@ describe('candidates', () => {
     const meta = { via: 'klein4b-edit', seed: 7, prompt: 'a wolf' };
     const { n } = addCandidate(dir, modelImage(), clean, meta);
     expect(JSON.parse(readFileSync(join(dir, `${n}.json`), 'utf8'))).toEqual(meta);
+  });
+
+  it('re-cleans every candidate from its raw image', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'forge-'));
+    addCandidate(dir, modelImage(), clean);
+    addCandidate(dir, modelImage(), clean);
+    expect(recleanCandidates(dir, { ...clean, size: 24 })).toBe(2);
+    expect(readPng(join(dir, '1.png')).width).toBe(24);
   });
 
   it('writes a review sheet covering every candidate', () => {

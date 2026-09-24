@@ -60,6 +60,15 @@ export function addCandidate(
   return { ...result, n };
 }
 
+/** Clean every candidate again from its raw image (after cleanup changes); returns how many. */
+export function recleanCandidates(dir: string, clean: CleanOptions): number {
+  const numbers = candidateNumbers(dir);
+  for (const n of numbers) {
+    writePng(join(dir, `${n}.png`), cleanSprite(readPng(join(dir, `raw-${n}.png`)), clean).image);
+  }
+  return numbers.length;
+}
+
 /** Contact sheet of every candidate (with its idle frame); returns its path. */
 export function writeCandidateReview(dir: string, id: string): string {
   const items = candidateNumbers(dir).map((n) => {

@@ -1,4 +1,4 @@
-import { createImage, getRGBA, isOpaque, setRGBA, type Image, type RGB } from './image';
+import { createImage, isOpaque, setRGBA, type Image, type RGB } from './image';
 import { labDistance, nearest, oklab, type Palette } from './palette';
 
 /**
@@ -18,6 +18,8 @@ export interface CleanOptions {
   palette: Palette;
   /** Background color in the source, or 'auto' to read it from the borders. */
   background?: RGB | 'auto';
+  /** The background the model was asked for: if it painted it as a card on another page, the card is keyed too. */
+  card?: RGB;
   /** OKLab distance under which a pixel counts as background. */
   tolerance?: number;
   /** Add a 1px outline in this color (null for none). */
@@ -37,12 +39,18 @@ export interface CleanResult {
 /** Pieces lying wholly past this fraction of the width and height count as a corner watermark. */
 const CORNER_MARK = 0.8;
 
-/** The most common border color, bucketed to absorb noise. */
-function borderColor(src: Image): RGB {
+/** OKLab distance under which a lone pixel is shading noise, not a detail (ENDESGA ramp steps are 0.08–0.19). */
+const SPECK = 0.24;
+
+/** How close to the requested background a card must be, and how far the page must be from it. The nearest ENDESGA colour is 0.23 from magenta. */
+const CARD = 0.2;
+
+/** The most common opaque color among `pixels` (indices), bucketed to absorb noise. */
+function commonColor(src: Image, pixels: Iterable<number>): RGB | null {
   const counts = new Map<number, { n: number; r: number; g: number; b: number }>();
-  const add = (x: number, y: number) => {
-    const [r, g, b, a] = getRGBA(src, x, y);
-    if (a < 128) return;
+  for (const i of pixels) {
+    const [r, g, b, a] = src.data.subarray(i * 4, i * 4 + 4);
+    if (a < 128) continue;
     const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
     const e = counts.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
     e.n++;
@@ -50,58 +58,83 @@ function borderColor(src: Image): RGB {
     e.g += g;
     e.b += b;
     counts.set(key, e);
-  };
-  for (let x = 0; x < src.width; x++) {
-    add(x, 0);
-    add(x, src.height - 1);
   }
-  for (let y = 0; y < src.height; y++) {
-    add(0, y);
-    add(src.width - 1, y);
-  }
-  let best = { n: 0, r: 255, g: 0, b: 255 };
+  let best = { n: 0, r: 0, g: 0, b: 0 };
   for (const e of counts.values()) if (e.n > best.n) best = e;
-  return best.n ? [best.r / best.n, best.g / best.n, best.b / best.n] : [255, 0, 255];
+  return best.n ? [best.r / best.n, best.g / best.n, best.b / best.n] : null;
 }
 
-/** Foreground mask: not transparent and not connected to the border through background-colored pixels. */
-function foregroundMask(src: Image, key: RGB, tolerance: number): Uint8Array {
+/** The most common border color. */
+function borderColor(src: Image): RGB {
   const { width: W, height: H } = src;
-  const keyLab = oklab(key[0], key[1], key[2]);
-  const isBg = new Uint8Array(W * H);
+  const border: number[] = [];
+  for (let x = 0; x < W; x++) border.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) border.push(y * W, y * W + W - 1);
+  return commonColor(src, border) ?? [255, 0, 255];
+}
+
+/**
+ * Foreground mask: not transparent and not connected to the border through
+ * background-colored pixels. With `card`, a model that painted the requested
+ * background as a card on some other page gets the card keyed too, in whatever
+ * shade it used: the colour just inside the page, if it is near `card`. White fur
+ * inside the card's outline survives, as the card flood only crosses the card.
+ */
+function foregroundMask(src: Image, key: RGB, tolerance: number, card?: RGB): Uint8Array {
+  const { width: W, height: H } = src;
+  const lab = new Float32Array(W * H * 3);
   for (let i = 0; i < W * H; i++) {
     const o = i * 4;
-    if (
-      src.data[o + 3] < 128 ||
-      labDistance(oklab(src.data[o], src.data[o + 1], src.data[o + 2]), keyLab) < tolerance
-    )
-      isBg[i] = 1;
+    lab.set(oklab(src.data[o], src.data[o + 1], src.data[o + 2]), i * 3);
   }
   const outside = new Uint8Array(W * H);
-  const stack: number[] = [];
-  const seed = (x: number, y: number) => {
-    const i = y * W + x;
-    if (isBg[i] && !outside[i]) {
-      outside[i] = 1;
-      stack.push(i);
+  const flood = (keyLab: number[]) => {
+    const isBg = (i: number) =>
+      src.data[i * 4 + 3] < 128 ||
+      labDistance([lab[i * 3], lab[i * 3 + 1], lab[i * 3 + 2]], keyLab) < tolerance;
+    const stack: number[] = [];
+    for (let i = 0; i < W * H; i++) if (outside[i]) stack.push(i);
+    const seed = (i: number) => {
+      if (!outside[i] && isBg(i)) {
+        outside[i] = 1;
+        stack.push(i);
+      }
+    };
+    for (let x = 0; x < W; x++) {
+      seed(x);
+      seed((H - 1) * W + x);
+    }
+    for (let y = 0; y < H; y++) {
+      seed(y * W);
+      seed(y * W + W - 1);
+    }
+    while (stack.length) {
+      const i = stack.pop()!;
+      const x = i % W;
+      if (x > 0) seed(i - 1);
+      if (x < W - 1) seed(i + 1);
+      if (i >= W) seed(i - W);
+      if (i < W * (H - 1)) seed(i + W);
     }
   };
-  for (let x = 0; x < W; x++) {
-    seed(x, 0);
-    seed(x, H - 1);
-  }
-  for (let y = 0; y < H; y++) {
-    seed(0, y);
-    seed(W - 1, y);
-  }
-  while (stack.length) {
-    const i = stack.pop()!;
-    const x = i % W;
-    const y = (i / W) | 0;
-    if (x > 0) seed(x - 1, y);
-    if (x < W - 1) seed(x + 1, y);
-    if (y > 0) seed(x, y - 1);
-    if (y < H - 1) seed(x, y + 1);
+  flood(oklab(key[0], key[1], key[2]));
+  const cardLab = card && oklab(card[0], card[1], card[2]);
+  if (cardLab && labDistance(oklab(key[0], key[1], key[2]), cardLab) > CARD) {
+    const inside: number[] = [];
+    for (let i = 0; i < W * H; i++) {
+      const x = i % W;
+      const touches =
+        (x > 0 && outside[i - 1]) ||
+        (x < W - 1 && outside[i + 1]) ||
+        (i >= W && outside[i - W]) ||
+        (i < W * (H - 1) && outside[i + W]);
+      if (!outside[i] && touches) inside.push(i);
+    }
+    const edge = commonColor(src, inside);
+    if (edge) {
+      const edgeLab = oklab(edge[0], edge[1], edge[2]);
+      if (labDistance(edgeLab, cardLab) < CARD) flood(edgeLab);
+    }
   }
   const fg = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) fg[i] = outside[i] ? 0 : 1;
@@ -235,7 +268,7 @@ export function cleanSprite(src: Image, opts: CleanOptions): CleanResult {
   const { width: W, height: H } = src;
   const pal = opts.palette;
   const key = !opts.background || opts.background === 'auto' ? borderColor(src) : opts.background;
-  const fg = foregroundMask(src, key, opts.tolerance ?? 0.12);
+  const fg = foregroundMask(src, key, opts.tolerance ?? 0.12, opts.card);
   dropSpecks(fg, W, H);
   const box = boundingBox(fg, W, H);
   const size = opts.size;
@@ -332,6 +365,21 @@ export function cleanSprite(src: Image, opts: CleanOptions): CleanResult {
       }
     }
   }
+
+  // Smooth specks: an inner pixel whose neighbours (3 or 4) share one close color takes that
+  // color. Shading neighbours are under SPECK apart; details (eyes, sparks, runes) are well over.
+  const smoothed = blocks.slice();
+  for (let by = 1; by < ny - 1; by++) {
+    for (let bx = 1; bx < nx - 1; bx++) {
+      const i = by * nx + bx;
+      const k = blocks[i];
+      const nbs = [blocks[i - 1], blocks[i + 1], blocks[i - nx], blocks[i + nx]];
+      if (k < 0 || nbs.includes(-1)) continue;
+      const c = nbs.find((n) => n !== k && nbs.filter((m) => m === n).length >= 3);
+      if (c !== undefined && labDistance(pal.lab[k], pal.lab[c]) < SPECK) smoothed[i] = c;
+    }
+  }
+  blocks.set(smoothed);
 
   // Place bottom-centre.
   const ox = pad + Math.floor((inner - nx) / 2);
