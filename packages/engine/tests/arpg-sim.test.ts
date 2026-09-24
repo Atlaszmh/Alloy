@@ -76,6 +76,16 @@ describe('floor generation', () => {
     expect(boss.bossId).not.toBeNull();
   });
 
+  it('re-entering a floor meets the same monsters but rolls fresh loot', () => {
+    const loot = { pity: 0, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false };
+    const first = world({ loot: { ...loot, nextUid: 100 } });
+    const again = world({ loot: { ...loot, nextUid: 140 } });
+    const layout = (w: ArpgWorld) => w.monsters.map((m) => [m.defId, m.x, m.y, m.hp]);
+    expect(layout(again)).toEqual(layout(first));
+    const rolls = (w: ArpgWorld) => Array.from({ length: 5 }, () => w.lootRng.next());
+    expect(rolls(again)).not.toEqual(rolls(first));
+  });
+
   it('monsters carry the biome element', () => {
     expect(world({ depth: 7 }).monsters.every((m) => m.element === 'frost')).toBe(true);
   });

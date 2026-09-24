@@ -65,7 +65,11 @@ interface MonsterSpawn {
   packId: number;
 }
 
-export function createMonsterEntity(registry: DataRegistry, spawn: MonsterSpawn, rng: SeededRNG): MonsterEntity {
+export function createMonsterEntity(
+  registry: DataRegistry,
+  spawn: MonsterSpawn,
+  rng: SeededRNG,
+): MonsterEntity {
   const bal = registry.getDelveBalance();
   const m = bal.monster;
   const d = Math.max(0, spawn.depth - 1);
@@ -95,7 +99,8 @@ export function createMonsterEntity(registry: DataRegistry, spawn: MonsterSpawn,
       .getDelveData()
       .traits.map((t) => t.id)
       .filter((t) => !traits.includes(t));
-    for (let i = 0; i < extra && pool.length > 0; i++) traits.push(pool.splice(rng.nextInt(0, pool.length - 1), 1)[0]);
+    for (let i = 0; i < extra && pool.length > 0; i++)
+      traits.push(pool.splice(rng.nextInt(0, pool.length - 1), 1)[0]);
   }
   if (traits.includes('swift')) {
     interval *= m.traits.swiftInterval;
@@ -215,7 +220,9 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     t: 0,
     accumulator: 0,
     rng: rng.fork('combat'),
-    lootRng: rng.fork('loot'),
+    // Loot depends on how far the save has progressed, so re-entering a
+    // floor re-fights the same monsters but rolls fresh drops.
+    lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -250,14 +257,26 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
 
   const mods = opts.door?.mods ?? {};
   const boss = isBossFloor(registry, opts.depth);
-  const basePacks = boss ? 2 : Math.min(bal.dive.packsMax, bal.dive.packsBase + opts.depth * bal.dive.packsPerDepth);
+  const basePacks = boss
+    ? 2
+    : Math.min(bal.dive.packsMax, bal.dive.packsBase + opts.depth * bal.dive.packsPerDepth);
   const packs = Math.max(1, Math.round(basePacks * (mods.packs ?? 1)));
   const eliteChance = Math.max(bal.dive.eliteChance, mods.eliteChance ?? 0);
 
   const spawn = (def: MonsterDef, kind: MonsterKind, x: number, y: number, packId: number) => {
     const m = createMonsterEntity(
       registry,
-      { id: world.nextId++, def, kind, depth: opts.depth, door: opts.door, element: biome.mana, x, y, packId },
+      {
+        id: world.nextId++,
+        def,
+        kind,
+        depth: opts.depth,
+        door: opts.door,
+        element: biome.mana,
+        x,
+        y,
+        packId,
+      },
       spawnRng,
     );
     world.monsters.push(m);
@@ -287,7 +306,13 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
       const angle = (Math.PI * 2 * i) / size + spawnRng.next() * 0.6;
       const r = i === 0 && elitePack ? 0 : bal.arena.packSpacing * (0.7 + spawnRng.next() * 0.6);
       const def = biome.monsters[spawnRng.nextInt(0, biome.monsters.length - 1)];
-      spawn(def, i === 0 && elitePack ? 'elite' : 'normal', cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, p + 1);
+      spawn(
+        def,
+        i === 0 && elitePack ? 'elite' : 'normal',
+        cx + Math.cos(angle) * r,
+        cy + Math.sin(angle) * r,
+        p + 1,
+      );
     }
   }
 
