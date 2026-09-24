@@ -51,7 +51,7 @@ All game systems must be deterministic given the same seed. Use `SeededRNG` from
 ### Engine
 
 - Types go in `src/types/` — one file per concept (gem.ts, match.ts, etc.)
-- Game logic modules: `src/draft/`, `src/forge/`, `src/duel/`, `src/combine/`, `src/run/`, `src/pool/`, `src/match/`, `src/loot/`, `src/delve/`
+- Game logic modules: `src/draft/`, `src/forge/`, `src/duel/`, `src/combine/`, `src/run/`, `src/pool/`, `src/match/`, `src/loot/`, `src/delve/`, `src/arpg/`
 - Data files: `src/data/*.json`, loaded and validated via Zod schemas in `src/data/schemas.ts`
 - `DataRegistry` in `src/data/registry.ts` is the single access point for all game data
 - All balance-tunable values go in `balance.json`, accessed via `registry.getBalance()`
@@ -73,13 +73,14 @@ All game systems must be deterministic given the same seed. Use `SeededRNG` from
 
 ## Delve Mode (September 2026) — the headline loop
 
-Loot-crawler mode behind the main menu's DELVE button. Loop: fight, loot drops, equip upgrades, push deeper or extract, forge, repeat.
+Real-time top-down ARPG behind the main menu's DELVE button. Loop: fight packs in an arena, loot bursts onto the floor, walk over it, equip upgrades mid-fight, push deeper or extract, forge, repeat. Gear carries **mana** (fire/frost/storm/earth/shadow): attunement from equipped gear unlocks spells (1 = signature, 3+3 = combo, 10 = mastery), and mixing elements triggers reactions (Melt, Shatter, Overload, Superconduct, Soulfire).
 - **Spec**: `docs/superpowers/specs/2026-09-24-delve-loot-mode-design.md`
-- **Engine**: `src/loot/` (item generation, drops, smithing) and `src/delve/` (hero stats + Power, combat, monsters, dive state machine, profile ops, autopilot)
-- **Data**: `src/data/delve.json` (gear bases, affixes, legendaries, biomes, doors) plus `balance.json → delve`. Read them via `registry.getDelveData()` / `registry.getDelveBalance()`. `createDefaultRegistry()` loads everything, including Delve.
-- **Combat**: event-driven and step-size invariant. Drive it with `stepFight(registry, fight, dt)` at any frame rate and animate the returned `FightEvent`s.
-- **Pacing guard rails**: `tests/delve-pacing.test.ts` runs the autopilot bot. Re-run it after any `balance.json → delve` change, and use `runAutopilot()` for tuning sweeps.
-- **Client**: `pages/DelveCamp.tsx` (`/delve`, "The Anvil"), `pages/DelveRun.tsx` (`/delve/run`), `features/delve/`, and `stores/delveStore.ts` (persisted save under `alloy:delve:v1`, validated with Zod on load).
+- **Engine**: `src/loot/` (item generation, drops, smithing), `src/arpg/` (the real-time sim: `world.ts` floor setup, `step.ts` tick, `combat.ts`, `skills.ts`, `bot.ts`), and `src/delve/` (hero stats, attunement, Power, dive state machine, profile ops, autopilot)
+- **Data**: `src/data/delve.json` (gear bases, affixes, legendaries, biomes, doors), `src/data/arpg.json` (mana, spells, reactions, masteries), plus `balance.json → delve`. Read them via `registry.getDelveData()` / `registry.getArpgData()` / `registry.getDelveBalance()`. `createDefaultRegistry()` loads everything.
+- **Combat**: fixed-step (1/30 s) and deterministic. Build a floor with `beginFloor(registry, profile)`, drive it with `stepWorld(registry, world, input, dt)` at any frame rate, and render the returned `ArpgEvent`s. Bank pickups with `bankWorld`, end floors with `completeFloor` / `failFloor`.
+- **Pacing guard rails**: `tests/delve-pacing.test.ts` runs the autopilot bot through the real-time sim. Re-run it after any `balance.json → delve` or `arpg.json` change, and use `runAutopilot()` for tuning sweeps.
+- **Client**: `pages/DelveCamp.tsx` (`/delve`, "The Anvil", with the Spells tab), `pages/DelveRun.tsx` (`/delve/run`, the arena; the TabBar is hidden there), `features/delve/` (the arena lives in `features/delve/arena/`: PixiJS renderer, joystick/mouse/WASD input, HUD, `useArena` hook), and `stores/delveStore.ts` (persisted save under `alloy:delve:v2`, validated with Zod on load).
+- **Test hooks**: localStorage `alloy:delve:autopilot = "1"` lets the engine bot play the arena (E2E uses it); `alloy:delve:timescale` speeds up the sim (max 4×).
 - The classic draft → forge → duel mode is still reachable as "Play Arena".
 
 ## Active Refactor: Gem System (April 2026)
