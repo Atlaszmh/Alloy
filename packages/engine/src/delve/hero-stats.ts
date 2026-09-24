@@ -101,9 +101,10 @@ export function armorReduction(bal: DelveBalance, armor: number, depth: number):
 export function referenceMonster(registry: DataRegistry, depth: number): { hp: number; damage: number; interval: number } {
   const bal = registry.getDelveBalance();
   const d = Math.max(0, depth - 1);
+  const ramp = bal.monster.earlyRamp[depth - 1] ?? 1;
   return {
-    hp: bal.monster.baseHp * Math.pow(bal.growth.monsterHp, d),
-    damage: bal.monster.baseDmg * Math.pow(bal.growth.monsterDmg, d),
+    hp: bal.monster.baseHp * Math.pow(bal.growth.monsterHp, d) * ramp,
+    damage: bal.monster.baseDmg * Math.pow(bal.growth.monsterDmg, d) * ramp,
     interval: 1.25,
   };
 }

@@ -70,3 +70,79 @@ export {
 export type { RunState, CreateRunOpts, LifeRecoveryConfig, RoundPreview } from './run/run-state.js';
 export { getPoolConfigForRound, DEFAULT_SCALING } from './run/pool-scaling.js';
 export type { PoolScalingEntry } from './run/pool-scaling.js';
+
+// Delve (loot-crawler mode)
+export { createDefaultRegistry } from './data/default-registry.js';
+export {
+  generateItem,
+  rollRarity,
+  rarityWeights,
+  materialName,
+  baseDisplayName,
+  itemLevelScale,
+} from './loot/item-generator.js';
+export type { ItemGenOptions, RarityRollContext } from './loot/item-generator.js';
+export { rollEncounterDrops } from './loot/drops.js';
+export {
+  salvageValue,
+  upgradeCost,
+  reforgeCost,
+  fuseCost,
+  checkFusion,
+} from './loot/smithing.js';
+export {
+  computeHeroStats,
+  estimateCombat,
+  compareItem,
+  heroPower,
+  itemStatLines,
+  upgradeMultiplier,
+  armorReduction,
+} from './delve/hero-stats.js';
+export type { ItemComparison, ItemStatLine, CombatEstimate } from './delve/hero-stats.js';
+export { createMonster, biomeCycle } from './delve/monsters.js';
+export {
+  createFight,
+  stepFight,
+  triggerSlam,
+  isSlamReady,
+  slamChargeMax,
+  isEnraged,
+  refreshFightHero,
+  runFightToEnd,
+} from './delve/combat.js';
+export {
+  isBossDepth,
+  isDiveActive,
+  startDepthOptions,
+  startDive,
+  encounterKind,
+  currentMonster,
+  beginFight,
+  resolveFight,
+  chooseDoor,
+  extractDive,
+  closeDive,
+  drinkPotion,
+} from './delve/dive.js';
+export type { FightOutcome } from './delve/dive.js';
+export {
+  createDelveProfile,
+  parseDelveProfile,
+  referenceDepth,
+  profilePower,
+  findItem,
+  equipItem,
+  unequipSlot,
+  toggleLock,
+  setAutoSalvage,
+  salvageItems,
+  salvageCandidates,
+  equipBest,
+  upgradeGear,
+  reforgeGear,
+  fuseGear,
+} from './delve/profile.js';
+export type { ProfileActionResult } from './delve/profile.js';
+export { runAutopilot } from './delve/autopilot.js';
+export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';

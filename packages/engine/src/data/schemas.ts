@@ -459,6 +459,9 @@ const DelveBalanceSchema = z.object({
   monster: z.object({
     baseHp: z.number().positive(),
     baseDmg: z.number().positive(),
+    earlyRamp: z.array(z.number().positive()),
+    enrageSeconds: z.number().positive(),
+    enrageInterval: z.number().positive(),
     elite: z.object({
       hp: z.number().positive(),
       dmg: z.number().positive(),
@@ -502,6 +505,7 @@ const DelveBalanceSchema = z.object({
     rarityWeights: perRarity(z.number().min(0)),
     luckExponent: z.number().min(0),
     luckPerDepth: z.number().min(0),
+    maxDepthLuck: z.number().min(0),
     eliteLuck: z.number().min(0),
     bossLuck: z.number().min(0),
     pityPerDrop: z.number().min(0),

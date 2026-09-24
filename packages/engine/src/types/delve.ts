@@ -128,6 +128,12 @@ export interface DelveBalance {
   monster: {
     baseHp: number;
     baseDmg: number;
+    /** Softening multipliers for depths 1..n so the first fights are gentle wins. */
+    earlyRamp: number[];
+    /** Fight length (s) after which monster damage starts doubling. */
+    enrageSeconds: number;
+    /** Seconds between each further doubling. */
+    enrageInterval: number;
     elite: { hp: number; dmg: number; minTraits: number; maxTraits: number };
     boss: { hp: number; dmg: number };
     traits: {
@@ -151,7 +157,9 @@ export interface DelveBalance {
     potionHeal: number;
     bossPotionReward: number;
     doorsOffered: number;
+    /** Scrap added per cleared depth (scaled by depth like all scrap). */
     bountyBase: number;
+    /** Compounds per depth cleared in the same dive — the push-your-luck curve. */
     bountyGrowth: number;
   };
   slam: { chargeMax: number; damageMult: number; stunSeconds: number };
@@ -166,6 +174,8 @@ export interface DelveBalance {
     rarityWeights: Record<Rarity, number>;
     luckExponent: number;
     luckPerDepth: number;
+    /** Cap on the luck granted by depth alone. */
+    maxDepthLuck: number;
     eliteLuck: number;
     bossLuck: number;
     pityPerDrop: number;

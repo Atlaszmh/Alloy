@@ -49,7 +49,8 @@ function dropCount(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): nu
 export function dropLuck(registry: DataRegistry, ctx: Pick<DropContext, 'depth' | 'kind' | 'magicFind'>): number {
   const loot = registry.getDelveBalance().loot;
   const kindLuck = ctx.kind === 'boss' ? loot.bossLuck : ctx.kind === 'elite' ? loot.eliteLuck : 0;
-  return ctx.magicFind / 100 + (ctx.depth - 1) * loot.luckPerDepth + kindLuck;
+  const depthLuck = Math.min(loot.maxDepthLuck, (ctx.depth - 1) * loot.luckPerDepth);
+  return ctx.magicFind / 100 + depthLuck + kindLuck;
 }
 
 export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): DropResult {

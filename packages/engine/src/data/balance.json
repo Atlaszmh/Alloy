@@ -81,11 +81,11 @@
       "baseHp": 100, "baseCritChance": 5, "baseCritMultiplier": 150, "unarmedDamage": 3, "unarmedInterval": 1.0,
       "minAttackInterval": 0.25, "critCap": 75, "dodgeCap": 60, "armorK": 25, "armorCap": 80
     },
-    "growth": { "item": 1.12, "monsterHp": 1.16, "monsterDmg": 1.14 },
+    "growth": { "item": 1.13, "monsterHp": 1.18, "monsterDmg": 1.16 },
     "monster": {
-      "baseHp": 26, "baseDmg": 4,
+      "baseHp": 42, "baseDmg": 10, "earlyRamp": [0.6, 0.75, 0.9], "enrageSeconds": 45, "enrageInterval": 10,
       "elite": { "hp": 2.4, "dmg": 1.35, "minTraits": 1, "maxTraits": 2 },
-      "boss": { "hp": 7, "dmg": 1.6 },
+      "boss": { "hp": 8, "dmg": 1.8 },
       "traits": {
         "armoredReduction": 0.35, "swiftInterval": 0.7, "swiftHp": 0.8, "bruteDmg": 1.5, "bruteInterval": 1.25,
         "regenPerSecond": 0.02, "vampiricFraction": 0.5, "spikedFraction": 0.12
@@ -93,13 +93,13 @@
     },
     "dive": {
       "fightsPerDepth": 3, "bossEvery": 5, "eliteChance": 0.12, "healOnDepthClear": 0.25, "potions": 3, "maxPotions": 5,
-      "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 10, "bountyGrowth": 1.2
+      "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 15, "bountyGrowth": 1.1
     },
     "slam": { "chargeMax": 8, "damageMult": 3, "stunSeconds": 1.2 },
     "elements": { "burnFraction": 0.5, "burnDuration": 2, "chillSlow": 15, "chillDuration": 2, "chainChance": 20 },
     "loot": {
-      "rarityWeights": { "common": 52, "uncommon": 27, "magic": 13, "rare": 5.5, "epic": 2, "legendary": 0.4 },
-      "luckExponent": 0.6, "luckPerDepth": 0.03, "eliteLuck": 0.6, "bossLuck": 1.5, "pityPerDrop": 0.012,
+      "rarityWeights": { "common": 55, "uncommon": 28, "magic": 12, "rare": 4, "epic": 1.2, "legendary": 0.25 },
+      "luckExponent": 0.6, "luckPerDepth": 0.015, "maxDepthLuck": 0.75, "eliteLuck": 0.6, "bossLuck": 1.5, "pityPerDrop": 0.012,
       "normalDropChance": 0.7, "extraDropChance": 0.12, "eliteDrops": [2, 3], "bossDrops": [3, 4], "bossMinRarity": "rare",
       "rarityBaseMult": { "common": 1.0, "uncommon": 1.1, "magic": 1.2, "rare": 1.35, "epic": 1.55, "legendary": 1.75 },
       "affixCount": { "common": 0, "uncommon": 1, "magic": 2, "rare": 3, "epic": 4, "legendary": 4 },
