@@ -9,6 +9,7 @@ import type {
   Vec,
 } from '@alloy/engine';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
+import { PixelFloor } from './pixel/pixel-floor';
 
 /**
  * PixiJS view of an ArpgWorld. It never mutates the world: every frame it
@@ -116,6 +117,7 @@ export class ArenaRenderer {
 
   private root = new Container();
   private floor = new Graphics();
+  private pixelFloor: PixelFloor | null = null;
   private decals = new Graphics();
   private dropLayer = new Container();
   private entities = new Container();
@@ -191,6 +193,14 @@ export class ArenaRenderer {
     for (const f of this.floats) this.releaseText(f.text);
     this.floats = [];
     this.drawFloor();
+    this.pixelFloor?.destroy();
+    this.pixelFloor = new PixelFloor({
+      arenaWidth: world.width,
+      arenaHeight: world.height,
+      biomeId: biome.id,
+      depth: world.depth,
+    });
+    this.root.addChildAt(this.pixelFloor.sprite, 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
   }
@@ -206,41 +216,11 @@ export class ArenaRenderer {
     return tex;
   }
 
+  /** Backdrop behind the simulated pixel floor (visible past the cliffs). */
   private drawFloor(): void {
     const w = this.world!;
-    const g = this.floor;
-    const accent = cssToHex(this.biome!.accent);
-    const base = cssToHex(this.biome!.colors[0]);
-    g.clear();
-    g.rect(-6, -6, w.width + 12, w.height + 12).fill({ color: 0x050407 });
-    g.rect(0, 0, w.width, w.height).fill({ color: base });
-    // Flagstones
-    for (let y = 0; y < w.height; y += 2) {
-      const offset = (y / 2) % 2 === 0 ? 0 : 1;
-      for (let x = -offset; x < w.width; x += 2) {
-        const shade = ((x * 7 + y * 13) % 5) / 5;
-        g.rect(x + 0.06, y + 0.06, 1.88, 1.88).fill({ color: 0x000000, alpha: 0.12 + shade * 0.1 });
-      }
-    }
-    // Scattered embers / crystals in the biome accent
-    let seed = w.depth * 9301 + 49297;
-    const rand = () => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
-    for (let i = 0; i < 60; i++) {
-      g.circle(rand() * w.width, rand() * w.height, 0.05 + rand() * 0.12).fill({
-        color: accent,
-        alpha: 0.1 + rand() * 0.25,
-      });
-    }
-    // Walls
-    g.rect(-0.5, -0.5, w.width + 1, w.height + 1).stroke({
-      width: 0.5,
-      color: 0x1a1512,
-      alignment: 1,
-    });
-    g.rect(0, 0, w.width, w.height).stroke({ width: 0.08, color: accent, alpha: 0.35 });
+    this.floor.clear();
+    this.floor.rect(-12, -12, w.width + 24, w.height + 24).fill({ color: 0x050407 });
   }
 
   // ── Floating text ────────────────────────────────────────────────────────
@@ -352,6 +332,7 @@ export class ArenaRenderer {
   handleEvents(events: ArpgEvent[]): void {
     const w = this.world;
     if (!w) return;
+    this.pixelFloor?.handleEvents(events);
     let numbers = 0;
     for (const e of events) {
       switch (e.kind) {
@@ -554,6 +535,16 @@ export class ArenaRenderer {
     this.root.scale.set(u);
     this.root.position.set(width / 2 - cx * u + sx, playTop + playH / 2 - cy * u + sy);
 
+    if (this.pixelFloor) {
+      const left = -this.root.position.x / u;
+      const top = -this.root.position.y / u;
+      this.pixelFloor.update(dt, w, {
+        left,
+        top,
+        right: left + width / u,
+        bottom: top + height / u,
+      });
+    }
     this.syncHero(w);
     this.syncMonsters(w);
     this.syncSummons(w);
@@ -1049,6 +1040,8 @@ export class ArenaRenderer {
   }
 
   destroy(): void {
+    this.pixelFloor?.destroy();
+    this.pixelFloor = null;
     for (const t of this.textures.values()) t.destroy(true);
     this.textures.clear();
     for (const t of this.textPool) t.destroy();
