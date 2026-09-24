@@ -82,9 +82,9 @@
       "minAttackInterval": 0.2, "critCap": 75, "dodgeCap": 60, "armorK": 25, "armorCap": 80,
       "moveSpeed": 5.2, "radius": 0.5, "pickupRadius": 1.3, "magnetRadius": 3.5, "cdrCap": 50
     },
-    "growth": { "item": 1.13, "monsterHp": 1.18, "monsterDmg": 1.16 },
+    "growth": { "item": 1.13, "monsterHp": 1.17, "monsterDmg": 1.15 },
     "monster": {
-      "baseHp": 30, "baseDmg": 7, "earlyRamp": [0.6, 0.75, 0.9], "enrageSeconds": 60, "enrageInterval": 10,
+      "baseHp": 100, "baseDmg": 12, "earlyRamp": [0.5, 0.65, 0.8, 0.9], "enrageSeconds": 60, "enrageInterval": 10,
       "speed": 2.6, "radius": 0.55, "windup": 0.4, "meleeRange": 1.1, "aggroRadius": 8, "resist": 0.4, "weakness": 0.35,
       "elite": { "hp": 3.0, "dmg": 1.4, "minTraits": 1, "maxTraits": 2 },
       "boss": { "hp": 25, "dmg": 1.8 },
@@ -100,9 +100,9 @@
       "healthOrbChance": 0.08, "healthOrbHeal": 0.15
     },
     "loot": {
-      "rarityWeights": { "common": 55, "uncommon": 28, "magic": 12, "rare": 4, "epic": 1.2, "legendary": 0.25 },
+      "rarityWeights": { "common": 55, "uncommon": 28, "magic": 12, "rare": 4, "epic": 1.2, "legendary": 0.1 },
       "luckExponent": 0.6, "luckPerDepth": 0.015, "maxDepthLuck": 0.75, "eliteLuck": 0.6, "bossLuck": 1.5, "pityPerDrop": 0.012,
-      "normalDropChance": 0.3, "extraDropChance": 0.05, "eliteDrops": [2, 3], "bossDrops": [4, 5], "bossMinRarity": "rare",
+      "normalDropChance": 0.22, "extraDropChance": 0.05, "eliteDrops": [2, 3], "bossDrops": [3, 4], "bossMinRarity": "rare",
       "rarityBaseMult": { "common": 1.0, "uncommon": 1.1, "magic": 1.2, "rare": 1.35, "epic": 1.55, "legendary": 1.75 },
       "affixCount": { "common": 0, "uncommon": 1, "magic": 2, "rare": 3, "epic": 4, "legendary": 4 },
       "minRoll": { "common": 0, "uncommon": 0, "magic": 0, "rare": 0.1, "epic": 0.25, "legendary": 0.4 },
