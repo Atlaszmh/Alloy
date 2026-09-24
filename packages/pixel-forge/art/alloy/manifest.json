@@ -1,0 +1,202 @@
+{
+  "style": "style.json",
+  "atlas": {
+    "png": "../../../client/public/sprites/delve/atlas.png",
+    "json": "../../../client/public/sprites/delve/atlas.json"
+  },
+  "review": "review.png",
+  "assets": [
+    {
+      "id": "hero",
+      "size": 16,
+      "source": "code",
+      "file": "sprites/hero.ts",
+      "subject": "a young battle-mage in a violet hood and dark robes holding a staff topped with a glowing cyan orb"
+    },
+    {
+      "id": "mine_rat",
+      "size": 16,
+      "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",
+      "source": "code",
+      "file": "sprites/mine-rat.ts"
+    },
+    {
+      "id": "soot_bat",
+      "size": 16,
+      "subject": "a small soot-black cave bat with wings spread and ember-orange eyes",
+      "source": "code",
+      "file": "sprites/soot-bat.ts"
+    },
+    {
+      "id": "slag_beetle",
+      "size": 16,
+      "subject": "an armored beetle with a dark iron shell cracked with glowing molten orange seams",
+      "source": "code",
+      "file": "sprites/slag-beetle.ts"
+    },
+    {
+      "id": "goblin_digger",
+      "size": 16,
+      "subject": "a scrawny green goblin miner in a leather cap holding a sling and a pouch of glowing coals",
+      "source": "code",
+      "file": "sprites/goblin-digger.ts"
+    },
+    {
+      "id": "foreman_grask",
+      "size": 32,
+      "subject": "a huge hulking cave troll foreman with grey-green skin, a mining helmet with a lantern, and a giant pickaxe",
+      "source": "code",
+      "file": "sprites/foreman-grask.ts"
+    },
+    {
+      "id": "frost_wolf",
+      "size": 16,
+      "subject": "a lean white frost wolf with pale blue fur, icicle hackles and glowing icy blue eyes",
+      "source": "ai"
+    },
+    {
+      "id": "rime_wraith",
+      "size": 16,
+      "subject": "a floating spectral wraith of swirling frost and tattered pale-blue robes with glowing cyan eyes",
+      "source": "ai"
+    },
+    {
+      "id": "tusked_mammoth",
+      "size": 20,
+      "subject": "a shaggy woolly mammoth calf with frosted white fur and big curved ivory tusks",
+      "source": "ai"
+    },
+    {
+      "id": "snow_stalker",
+      "size": 16,
+      "subject": "a sleek white snow leopard with dark rosettes, crouched ready to pounce",
+      "source": "ai"
+    },
+    {
+      "id": "pale_maw",
+      "size": 32,
+      "subject": "a giant armored polar bear with ice crystals growing from its back and a gaping frost-rimmed maw",
+      "source": "ai"
+    },
+    {
+      "id": "clockwork_sentry",
+      "size": 16,
+      "subject": "a squat brass clockwork sentry robot with a glowing yellow lightning core and a crossbow arm",
+      "source": "ai"
+    },
+    {
+      "id": "storm_hawk",
+      "size": 16,
+      "subject": "a storm hawk with slate-blue feathers crackling with yellow electricity, wings raised",
+      "source": "ai"
+    },
+    {
+      "id": "coil_serpent",
+      "size": 16,
+      "subject": "a coiled blue-scaled serpent with glowing yellow electric stripes, hood raised",
+      "source": "ai"
+    },
+    {
+      "id": "arc_imp",
+      "size": 16,
+      "subject": "a tiny mischievous purple imp crackling with yellow sparks, holding a ball of lightning",
+      "source": "ai"
+    },
+    {
+      "id": "voltaic_drake",
+      "size": 32,
+      "subject": "a young wingspread dragon with dark blue scales and glowing yellow lightning veins",
+      "source": "ai"
+    },
+    {
+      "id": "quarry_stalker",
+      "size": 16,
+      "subject": "a sandstone-colored giant scorpion with a glowing turquoise stinger",
+      "source": "ai"
+    },
+    {
+      "id": "boulder_snail",
+      "size": 20,
+      "subject": "a big snail carrying a mossy boulder as its shell",
+      "source": "ai"
+    },
+    {
+      "id": "stonehorn",
+      "size": 20,
+      "subject": "a rhino made of grey stone slabs with a massive stone horn and moss on its back",
+      "source": "ai"
+    },
+    {
+      "id": "mud_toad",
+      "size": 16,
+      "subject": "a fat brown mud toad with warts and a wide mouth dripping mud",
+      "source": "ai"
+    },
+    {
+      "id": "living_obelisk",
+      "size": 32,
+      "subject": "a towering animated stone obelisk golem covered in glowing turquoise runes, with floating rock fists",
+      "source": "ai"
+    },
+    {
+      "id": "skeleton",
+      "size": 16,
+      "subject": "a skeleton warrior with a rusted sword and a cracked round shield",
+      "source": "ai"
+    },
+    {
+      "id": "nightstalker",
+      "size": 16,
+      "subject": "a gaunt pale vampire in a high-collared dark red cloak with glowing red eyes",
+      "source": "ai"
+    },
+    {
+      "id": "crypt_ogre",
+      "size": 20,
+      "subject": "a hulking grey ogre with stitched skin, a bone club and a tattered loincloth",
+      "source": "ai"
+    },
+    {
+      "id": "restless_grave",
+      "size": 16,
+      "subject": "a haunted cracked tombstone with ghostly violet flames and bony hands clawing out of the dirt",
+      "source": "ai"
+    },
+    {
+      "id": "hollow_king",
+      "size": 32,
+      "subject": "an undead lich king in a rotted violet robe and a tarnished gold crown, holding a skull staff with violet fire",
+      "source": "ai"
+    },
+    {
+      "id": "fire_imp",
+      "size": 16,
+      "subject": "a small red fire imp with horns, a pointed tail and a fireball in its hand",
+      "source": "ai"
+    },
+    {
+      "id": "magma_lizard",
+      "size": 16,
+      "subject": "a black-scaled lizard with glowing molten orange cracks along its back",
+      "source": "ai"
+    },
+    {
+      "id": "hellboar",
+      "size": 20,
+      "subject": "a charging wild boar with charred black hide, burning orange tusks and flaming bristles",
+      "source": "ai"
+    },
+    {
+      "id": "flame_spirit",
+      "size": 16,
+      "subject": "a living flame spirit with a bright yellow core and orange-red flickering body and two dark eyes",
+      "source": "ai"
+    },
+    {
+      "id": "magmasaur",
+      "size": 32,
+      "subject": "a huge armored tyrannosaur made of cooled black lava rock with glowing magma between its plates",
+      "source": "ai"
+    }
+  ]
+}

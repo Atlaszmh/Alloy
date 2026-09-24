@@ -1,0 +1,22 @@
+{
+  "name": "@alloy/pixel-forge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel art pipeline: code-drawn sprites, Gemini generation, AI-image cleanup, sprite sheets.",
+  "scripts": {
+    "forge": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/pngjs": "^6.0.5",
+    "tsx": "^4.21.0",
+    "vitest": "^3.0.0"
+  }
+}
