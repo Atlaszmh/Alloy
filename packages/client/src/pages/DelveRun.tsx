@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   chooseDoor,
   computeHeroStats,
   extractDive,
   isBossDepth,
+  profilePower,
   startDepthOptions,
   type FightEvent,
   type FightOutcome,
@@ -24,6 +25,7 @@ import { DiveSummary } from '@/features/delve/DiveSummary';
 import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { RARITY_COLOR, formatNumber } from '@/features/delve/format';
+import { useCountUp } from '@/features/delve/useCountUp';
 import * as fx from '@/features/delve/delve-fx';
 import '@/features/delve/delve.css';
 
@@ -139,6 +141,41 @@ function SlamButton({
         </span>
       </span>
     </button>
+  );
+}
+
+/** Live hero Power that counts up (and flashes) when gear improves mid-dive. */
+function PowerPill() {
+  const registry = getDelveRegistry();
+  const profile = useDelveStore((s) => s.profile);
+  const power = useMemo(() => profilePower(registry, profile), [registry, profile]);
+  const shown = useCountUp(power);
+  const ref = useRef<HTMLDivElement>(null);
+  const prev = useRef(power);
+  useEffect(() => {
+    if (power > prev.current) {
+      ref.current?.animate(
+        [
+          { transform: 'scale(1)', color: '#fde68a' },
+          { transform: 'scale(1.25)', color: '#4ade80', offset: 0.3 },
+          { transform: 'scale(1)', color: '#fde68a' },
+        ],
+        { duration: 700, easing: 'ease-out' },
+      );
+    }
+    prev.current = power;
+  }, [power]);
+  return (
+    <div className="delve-column -mb-1 flex justify-end">
+      <div
+        ref={ref}
+        className="delve-display text-xs font-bold tracking-wider"
+        style={{ color: '#fde68a' }}
+        data-testid="run-power"
+      >
+        ⚡ {formatNumber(shown)} POWER
+      </div>
+    </div>
   );
 }
 
@@ -481,9 +518,13 @@ export function DelveRun() {
   const starts = startDepthOptions(registry, profile);
 
   const onChooseDoor = (doorId: string) => {
-    useDelveStore
-      .getState()
-      .setProfile(chooseDoor(registry, useDelveStore.getState().profile, doorId));
+    const before = useDelveStore.getState().profile;
+    const next = chooseDoor(registry, before, doorId);
+    useDelveStore.getState().setProfile(next);
+    if (next.bestDepth > before.bestDepth && before.bestDepth > 0) {
+      showBanner('NEW RECORD', '#4ade80', `Deepest depth reached: ${next.bestDepth}`);
+      playSound('synergyActivate');
+    }
   };
   const onExtract = () => {
     useDelveStore.getState().setProfile(extractDive(registry, useDelveStore.getState().profile));
@@ -712,6 +753,7 @@ export function DelveRun() {
         </div>
       </div>
 
+      <PowerPill />
       <LootTray originRef={monsterRef} onSelect={openItem} />
 
       {/* FX overlay covers the whole page so numbers can land on HUD and stage alike */}

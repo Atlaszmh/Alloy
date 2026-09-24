@@ -59,6 +59,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const [reforgeIdx, setReforgeIdx] = useState<number | null>(null);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
   const [flashIdx, setFlashIdx] = useState<number | null>(null);
+  const [confirmSalvage, setConfirmSalvage] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
   const found = findItem(profile, uid);
@@ -142,6 +143,12 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   };
 
   const onSalvage = () => {
+    const precious =
+      item.rarity === 'rare' || item.rarity === 'epic' || item.rarity === 'legendary';
+    if (precious && !confirmSalvage) {
+      setConfirmSalvage(true);
+      return;
+    }
     const scrap = store().salvage([item.uid]);
     playSound('orbRemove');
     vibrate('light');
@@ -333,7 +340,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
             disabled={isEquipped || item.locked}
             data-testid="salvage-button"
           >
-            Salvage +{formatNumber(salvage)}
+            {confirmSalvage ? 'Tap again to melt' : `Salvage +${formatNumber(salvage)}`}
           </button>
           <button className="delve-btn" onClick={onLock}>
             {item.locked ? 'Unlock' : 'Lock'}

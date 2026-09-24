@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { compareItem, findItem, referenceDepth, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -15,6 +15,7 @@ interface LootTrayProps {
 }
 
 const TILE = 52;
+const GAP = 8;
 
 export function LootTray({ originRef, onSelect }: LootTrayProps) {
   const registry = getDelveRegistry();
@@ -23,7 +24,21 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   const newUids = useDelveStore((s) => s.newUids);
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
   const animated = useRef<Set<string> | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [capacity, setCapacity] = useState(6);
   const depth = referenceDepth(profile);
+
+  // The row must not scroll: scroll containers clip their children, which
+  // would hide tiles while they fly in from the monster. Show what fits.
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setCapacity(Math.max(1, Math.floor((entry.contentRect.width + GAP) / (TILE + GAP))));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const rows = useMemo(() => {
     const out: { item: GearItem; equipped: boolean; delta: number | null }[] = [];
@@ -43,6 +58,8 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   }, [diveDrops, profile, registry, depth]);
 
   const upgrades = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON).length;
+  const overflow = rows.length > capacity ? rows.length - (capacity - 1) : 0;
+  const visible = overflow > 0 ? rows.slice(0, capacity - 1) : rows;
 
   // Fly freshly dropped tiles in from the monster (FLIP on the real tiles).
   useLayoutEffect(() => {
@@ -88,7 +105,7 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   };
 
   return (
-    <div className="delve-column pb-2" data-testid="loot-tray">
+    <div className="delve-column relative z-[15] pb-2" data-testid="loot-tray">
       <div className="mb-1 flex items-center justify-between">
         <span className="delve-display text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400">
           Loot {rows.length > 0 && <span className="text-stone-500">· {rows.length}</span>}
@@ -103,16 +120,13 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
           </button>
         )}
       </div>
-      <div
-        className="delve-scroll flex gap-2 overflow-x-auto overflow-y-visible py-1"
-        style={{ minHeight: TILE + 8 }}
-      >
+      <div ref={rowRef} className="flex py-1" style={{ minHeight: TILE + 8, gap: GAP }}>
         {rows.length === 0 && (
           <div className="flex h-[52px] items-center text-xs text-stone-500">
             Loot you find this dive lands here.
           </div>
         )}
-        {rows.map(({ item, equipped, delta }) => (
+        {visible.map(({ item, equipped, delta }) => (
           <ItemTile
             key={item.uid}
             ref={(el) => {
@@ -128,6 +142,16 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
             testId="loot-item"
           />
         ))}
+        {overflow > 0 && (
+          <div
+            className="delve-display flex flex-shrink-0 flex-col items-center justify-center rounded-[14%] border border-white/10 bg-white/5 text-stone-300"
+            style={{ width: TILE, height: TILE }}
+            title="Older drops are in your bag"
+          >
+            <span className="text-base font-bold leading-none">+{overflow}</span>
+            <span className="text-[9px] uppercase tracking-wider text-stone-500">in bag</span>
+          </div>
+        )}
       </div>
     </div>
   );
