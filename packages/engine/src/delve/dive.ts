@@ -1,41 +1,16 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
-import type {
-  DelveProfile,
-  DiveState,
-  FightEvent,
-  FightState,
-  MonsterInstance,
-  MonsterKind,
-} from '../types/delve.js';
+import type { ArpgWorld, ReactionId } from '../types/arpg.js';
+import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
-import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
-import { createFight, healHeroInFight } from './combat.js';
+import { createFloorWorld, isBossFloor } from '../arpg/world.js';
 import { computeHeroStats } from './hero-stats.js';
-import { createMonster } from './monsters.js';
 import { addLootToBag } from './profile.js';
 
-export interface FightOutcome {
-  victory: boolean;
-  monster: MonsterInstance;
-  /** Drops that landed in the bag. */
-  drops: GearItem[];
-  /** Drops melted by auto-salvage or a full bag. */
-  salvaged: GearItem[];
-  bagFull: boolean;
-  /** Kill scrap + salvage scrap. */
-  scrap: number;
-  depthCleared: boolean;
-  bossKilled: boolean;
-  bountyAdded: number;
-  /** Legendary ids seen for the first time. */
-  newCodex: string[];
-}
-
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
-  return depth % registry.getDelveBalance().dive.bossEvery === 0;
+  return isBossFloor(registry, depth);
 }
 
 /** Depths a new dive may start from: 1, plus one past every boss you've beaten. */
@@ -57,8 +32,6 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     seed,
     startDepth,
     depth: startDepth,
-    encounterIndex: 0,
-    encountersInDepth: bal.dive.fightsPerDepth,
     heroHpFrac: 1,
     potions: bal.dive.potions,
     phoenixUsed: false,
@@ -81,17 +54,6 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
   };
 }
 
-/** Deterministic per-encounter RNG stream. */
-function encounterRng(dive: DiveState, label: string): SeededRNG {
-  return new SeededRNG(dive.seed).fork(`${label}:${dive.depth}:${dive.encounterIndex}`);
-}
-
-export function encounterKind(registry: DataRegistry, dive: DiveState): MonsterKind {
-  if (isBossDepth(registry, dive.depth) && dive.encounterIndex === dive.encountersInDepth - 1) return 'boss';
-  const chance = Math.max(registry.getDelveBalance().dive.eliteChance, dive.door?.mods.eliteChance ?? 0);
-  return encounterRng(dive, 'kind').next() < chance ? 'elite' : 'normal';
-}
-
 function requireDive(profile: DelveProfile, phase?: DiveState['phase']): DiveState {
   const dive = profile.dive;
   if (!dive) throw new Error('No dive in progress');
@@ -99,33 +61,112 @@ function requireDive(profile: DelveProfile, phase?: DiveState['phase']): DiveSta
   return dive;
 }
 
-export function currentMonster(registry: DataRegistry, profile: DelveProfile): MonsterInstance {
-  const dive = requireDive(profile, 'fighting');
-  return createMonster(
-    registry,
-    { depth: dive.depth, kind: encounterKind(registry, dive), door: dive.door },
-    encounterRng(dive, 'monster'),
-  );
+/** Deterministic seed for the current floor (re-entering a floor replays it). */
+export function floorSeed(dive: DiveState): number {
+  return new SeededRNG(dive.seed).fork(`floor:${dive.depth}`).nextInt(1, 0x7fffffff);
 }
 
-/** Set up the current encounter. Re-calling yields the identical fight. */
-export function beginFight(registry: DataRegistry, profile: DelveProfile): FightState {
+/** Build the arena for the dive's current depth. */
+export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgWorld {
   const dive = requireDive(profile, 'fighting');
-  return createFight(
-    registry,
-    {
-      hero: computeHeroStats(profile.equipped, registry),
-      monster: currentMonster(registry, profile),
-      heroHpFrac: dive.heroHpFrac,
-      depth: dive.depth,
-      phoenixAvailable: !dive.phoenixUsed,
+  const stats = computeHeroStats(profile.equipped, registry);
+  const mods = dive.door?.mods ?? {};
+  return createFloorWorld(registry, {
+    depth: dive.depth,
+    door: dive.door,
+    stats,
+    skillSlots: profile.skillSlots,
+    heroHpFrac: dive.heroHpFrac,
+    potions: dive.potions,
+    phoenixAvailable: !dive.phoenixUsed,
+    seed: floorSeed(dive),
+    loot: {
+      pity: profile.pity,
+      nextUid: profile.nextUid,
+      magicFind: stats.magicFind + (mods.magicFind ?? 0),
+      legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
+      dropMult: mods.dropMult ?? 1,
+      forceLegendary: !profile.firstBossLegendaryGiven,
     },
-    encounterRng(dive, 'fight'),
-  );
+  });
+}
+
+function betterFind(a: GearItem | null, b: GearItem): GearItem {
+  if (!a) return b;
+  const ra = rarityIndex(a.rarity);
+  const rb = rarityIndex(b.rarity);
+  if (rb !== ra) return rb > ra ? b : a;
+  return b.ilvl > a.ilvl ? b : a;
+}
+
+export interface BankResult {
+  profile: DelveProfile;
+  /** Items that went into the bag. */
+  kept: GearItem[];
+  /** Items melted by auto-salvage or a full bag. */
+  salvaged: GearItem[];
+  bagFull: boolean;
+  newCodex: string[];
+  newReactions: ReactionId[];
+  scrap: number;
+}
+
+/**
+ * Move everything the world collected since the last bank (items picked up,
+ * scrap, kills, reactions discovered) into the profile. Call it whenever
+ * pickups happen so new gear can be equipped mid-floor, and at floor end.
+ */
+export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): BankResult {
+  const dive = requireDive(profile);
+  const pending = world.pending;
+  const items = pending.items;
+  const bagged = addLootToBag(registry, { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid }, items);
+  let next = bagged.profile;
+
+  const found = { ...dive.found };
+  let bestFind = dive.bestFind;
+  for (const item of items) {
+    found[item.rarity]++;
+    bestFind = betterFind(bestFind, item);
+  }
+  const newReactions = pending.reactions.filter((r) => !next.reactionsSeen.includes(r));
+  const scrap = pending.scrap;
+
+  next = {
+    ...next,
+    scrap: next.scrap + scrap,
+    firstBossLegendaryGiven: next.firstBossLegendaryGiven || !world.loot.forceLegendary,
+    reactionsSeen: [...next.reactionsSeen, ...newReactions],
+    stats: {
+      ...next.stats,
+      kills: next.stats.kills + pending.kills,
+      scrapEarned: next.stats.scrapEarned + scrap,
+    },
+    dive: {
+      ...dive,
+      kills: dive.kills + pending.kills,
+      scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
+      potions: world.hero.potions,
+      phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
+      found,
+      bestFind,
+    },
+  };
+  world.pending = { items: [], scrap: 0, kills: 0, reactions: [] };
+
+  return {
+    profile: next,
+    kept: bagged.kept,
+    salvaged: bagged.salvaged,
+    bagFull: bagged.bagFull,
+    newCodex: bagged.newCodex,
+    newReactions,
+    scrap: scrap + bagged.scrap,
+  };
 }
 
 function rollDoorChoices(registry: DataRegistry, dive: DiveState): string[] {
-  const rng = encounterRng(dive, 'doors');
+  const rng = new SeededRNG(dive.seed).fork(`doors:${dive.depth}`);
   const pool = registry.getDelveData().doors.slice();
   const count = Math.min(registry.getDelveBalance().dive.doorsOffered, pool.length);
   const picks: string[] = [];
@@ -137,153 +178,62 @@ function rollDoorChoices(registry: DataRegistry, dive: DiveState): string[] {
   return picks;
 }
 
-function betterFind(a: GearItem | null, b: GearItem): GearItem {
-  if (!a) return b;
-  const ra = rarityIndex(a.rarity);
-  const rb = rarityIndex(b.rarity);
-  if (rb !== ra) return rb > ra ? b : a;
-  return b.ilvl > a.ilvl ? b : a;
+export interface FloorResult extends BankResult {
+  bountyAdded: number;
+  bossKilled: boolean;
 }
 
-const KILL_SCRAP_MULT: Record<MonsterKind, number> = { normal: 1, elite: 3, boss: 10 };
-
-/** Apply a finished fight to the profile: loot, scrap, progression, or death. */
-export function resolveFight(
-  registry: DataRegistry,
-  profile: DelveProfile,
-  fight: FightState,
-): { profile: DelveProfile; outcome: FightOutcome } {
-  if (!fight.over) throw new Error('Fight is not over');
+/** The floor is cleared: bank loot, pay the depth bounty, heal, offer doors. */
+export function completeFloor(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): FloorResult {
   const bal = registry.getDelveBalance();
-  const dive = requireDive(profile, 'fighting');
-  const monster = fight.monster;
-  const phoenixUsed = dive.phoenixUsed || fight.phoenixUsed;
-
-  const baseOutcome: FightOutcome = {
-    victory: fight.winner === 'hero',
-    monster,
-    drops: [],
-    salvaged: [],
-    bagFull: false,
-    scrap: 0,
-    depthCleared: false,
-    bossKilled: false,
-    bountyAdded: 0,
-    newCodex: [],
-  };
-
-  if (fight.winner !== 'hero') {
-    return {
-      profile: {
-        ...profile,
-        dive: { ...dive, phase: 'dead', heroHpFrac: 0, phoenixUsed },
-        stats: { ...profile.stats, deaths: profile.stats.deaths + 1 },
-      },
-      outcome: baseOutcome,
-    };
-  }
-
-  const hero = fight.hero;
+  const banked = bankWorld(registry, profile, world);
+  const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
-  const forceLegendary = monster.kind === 'boss' && !profile.firstBossLegendaryGiven;
-  const drops = rollEncounterDrops(
-    registry,
-    {
-      depth: dive.depth,
-      kind: monster.kind,
-      magicFind: hero.magicFind + (mods.magicFind ?? 0),
-      pity: profile.pity,
-      dropMult: mods.dropMult ?? 1,
-      legendaryBoost: hero.legendaries.lucky_charm ? 2 : 1,
-      forceLegendary,
-      nextUid: profile.nextUid,
-    },
-    encounterRng(dive, 'loot'),
-  );
+  const bossKilled = world.bossKilled;
 
-  const killScrap = Math.round(
-    bal.loot.scrapPerKill *
+  const bountyAdded = Math.round(
+    bal.dive.bountyBase *
       scrapLevelFactor(registry, dive.depth) *
-      KILL_SCRAP_MULT[monster.kind] *
-      (1 + hero.scrapFind / 100),
+      Math.pow(bal.dive.bountyGrowth, dive.depthsCleared) *
+      (mods.bountyMult ?? 1),
   );
-
-  const bagged = addLootToBag(registry, { ...profile, pity: drops.pity, nextUid: drops.nextUid }, drops.items);
-  let next = bagged.profile;
-  const scrap = killScrap + bagged.scrap;
-
-  const found = { ...dive.found };
-  let bestFind = dive.bestFind;
-  for (const item of drops.items) {
-    found[item.rarity]++;
-    bestFind = betterFind(bestFind, item);
-  }
-
+  const hpFrac = Math.max(0, Math.min(1, world.hero.hp / world.hero.stats.maxHp));
   let nextDive: DiveState = {
     ...dive,
-    encounterIndex: dive.encounterIndex + 1,
-    kills: dive.kills + 1,
-    heroHpFrac: Math.max(0, Math.min(1, fight.heroHp / hero.maxHp)),
-    phoenixUsed,
-    scrapEarned: dive.scrapEarned + scrap,
-    found,
-    bestFind,
+    bounty: dive.bounty + bountyAdded,
+    depthsCleared: dive.depthsCleared + 1,
+    heroHpFrac: Math.min(1, hpFrac + bal.dive.healOnDepthClear),
+    potions: bossKilled ? Math.min(bal.dive.maxPotions, dive.potions + bal.dive.bossPotionReward) : dive.potions,
+    phase: 'choosing',
   };
+  nextDive = { ...nextDive, doorChoices: rollDoorChoices(registry, nextDive) };
 
-  const bossKilled = monster.kind === 'boss';
-  let checkpoints = next.checkpoints;
-  let bossKills = next.stats.bossKills;
-  if (bossKilled) {
-    if (!checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
-    bossKills++;
-    nextDive = { ...nextDive, potions: Math.min(bal.dive.maxPotions, nextDive.potions + bal.dive.bossPotionReward) };
-  }
-
-  let bountyAdded = 0;
-  const depthCleared = nextDive.encounterIndex >= nextDive.encountersInDepth;
-  if (depthCleared) {
-    bountyAdded = Math.round(
-      bal.dive.bountyBase *
-        scrapLevelFactor(registry, dive.depth) *
-        Math.pow(bal.dive.bountyGrowth, dive.depthsCleared) *
-        (mods.bountyMult ?? 1),
-    );
-    nextDive = {
-      ...nextDive,
-      bounty: nextDive.bounty + bountyAdded,
-      depthsCleared: nextDive.depthsCleared + 1,
-      heroHpFrac: Math.min(1, nextDive.heroHpFrac + bal.dive.healOnDepthClear),
-      phase: 'choosing',
-    };
-    nextDive = { ...nextDive, doorChoices: rollDoorChoices(registry, nextDive) };
-  }
-
-  next = {
-    ...next,
-    scrap: next.scrap + killScrap,
-    checkpoints,
-    firstBossLegendaryGiven: next.firstBossLegendaryGiven || forceLegendary,
-    dive: nextDive,
-    stats: {
-      ...next.stats,
-      kills: next.stats.kills + 1,
-      bossKills,
-      scrapEarned: next.stats.scrapEarned + killScrap,
-    },
-  };
+  let checkpoints = banked.profile.checkpoints;
+  if (bossKilled && !checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
 
   return {
-    profile: next,
-    outcome: {
-      ...baseOutcome,
-      drops: bagged.kept,
-      salvaged: bagged.salvaged,
-      bagFull: bagged.bagFull,
-      scrap,
-      depthCleared,
-      bossKilled,
-      bountyAdded,
-      newCodex: bagged.newCodex,
+    ...banked,
+    profile: {
+      ...banked.profile,
+      checkpoints,
+      dive: nextDive,
+      stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
+    },
+    bountyAdded,
+    bossKilled,
+  };
+}
+
+/** The hero fell: keep whatever was picked up, lose the bounty. */
+export function failFloor(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): BankResult {
+  const banked = bankWorld(registry, profile, world);
+  const dive = banked.profile.dive!;
+  return {
+    ...banked,
+    profile: {
+      ...banked.profile,
+      dive: { ...dive, phase: 'dead', heroHpFrac: 0 },
+      stats: { ...banked.profile.stats, deaths: banked.profile.stats.deaths + 1 },
     },
   };
 }
@@ -301,8 +251,6 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
     dive: {
       ...dive,
       depth,
-      encounterIndex: 0,
-      encountersInDepth: door.mods.fights ?? bal.dive.fightsPerDepth,
       heroHpFrac: door.mods.healFull ? 1 : dive.heroHpFrac,
       potions: Math.min(bal.dive.maxPotions, dive.potions + (door.mods.potions ?? 0)),
       door,
@@ -332,34 +280,15 @@ export function closeDive(profile: DelveProfile): DelveProfile {
   return { ...profile, dive: null };
 }
 
-/**
- * Drink a potion. Mid-fight it heals the live fight (mutating it); between
- * fights it heals the stored life fraction. Returns a null event when there
- * is nothing to heal or no potion left.
- */
-export function drinkPotion(
-  registry: DataRegistry,
-  profile: DelveProfile,
-  fight: FightState | null,
-): { profile: DelveProfile; event: FightEvent | null } {
-  const bal = registry.getDelveBalance();
+/** Drink a potion at the door screen (between floors). Null when nothing to heal. */
+export function drinkPotionBetweenFloors(registry: DataRegistry, profile: DelveProfile): DelveProfile | null {
   const dive = profile.dive;
-  if (!dive || !isDiveActive(profile) || dive.potions <= 0) return { profile, event: null };
+  if (!dive || dive.phase !== 'choosing' || dive.potions <= 0 || dive.heroHpFrac >= 1) return null;
+  const heal = registry.getDelveBalance().dive.potionHeal;
+  return { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: Math.min(1, dive.heroHpFrac + heal) } };
+}
 
-  if (fight && !fight.over) {
-    const event = healHeroInFight(fight, bal.dive.potionHeal);
-    if (!event) return { profile, event: null };
-    return {
-      profile: { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: fight.heroHp / fight.hero.maxHp } },
-      event,
-    };
-  }
-
-  if (dive.heroHpFrac >= 1) return { profile, event: null };
-  const frac = Math.min(1, dive.heroHpFrac + bal.dive.potionHeal);
-  const maxHp = computeHeroStats(profile.equipped, registry).maxHp;
-  return {
-    profile: { ...profile, dive: { ...dive, potions: dive.potions - 1, heroHpFrac: frac } },
-    event: { kind: 'heal', t: 0, target: 'hero', amount: (frac - dive.heroHpFrac) * maxHp, source: 'potion' },
-  };
+/** Life fraction the hero would enter the next floor with. */
+export function heroMaxHp(registry: DataRegistry, profile: DelveProfile): number {
+  return computeHeroStats(profile.equipped, registry).maxHp;
 }

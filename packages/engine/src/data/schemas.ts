@@ -296,15 +296,13 @@ const TransplantBalanceSchema = z.object({
   secondaryValueScalar: z.number().positive(),
 });
 
-// --- Delve (loot-crawler mode) Schemas ---
+// --- Delve (loot-crawler ARPG) Schemas ---
 
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const GearSlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
-const HeroStatKeySchema = z.enum([
+export const ManaTypeSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow']);
+export const HeroStatKeySchema = z.enum([
   'damage',
-  'fireDamage',
-  'coldDamage',
-  'lightningDamage',
   'damagePct',
   'attackSpeedPct',
   'critChance',
@@ -314,14 +312,27 @@ const HeroStatKeySchema = z.enum([
   'armor',
   'dodge',
   'lifesteal',
-  'lifeOnHit',
   'healOnKill',
   'thorns',
   'magicFind',
   'scrapFind',
+  'moveSpeed',
+  'cooldownReduction',
+  'manaRegen',
+  'firePower',
+  'frostPower',
+  'stormPower',
+  'earthPower',
+  'shadowPower',
+  'fireAttune',
+  'frostAttune',
+  'stormAttune',
+  'earthAttune',
+  'shadowAttune',
 ]);
 const MonsterTraitSchema = z.enum(['armored', 'swift', 'brute', 'regenerating', 'vampiric', 'spiked']);
 const StatScalingSchema = z.enum(['flat', 'fixed']);
+const StatusIdSchema = z.enum(['burn', 'chill', 'freeze', 'shock', 'hex', 'stagger', 'blind', 'brand']);
 
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
@@ -346,6 +357,10 @@ function perSlot<T extends z.ZodTypeAny>(schema: T) {
   });
 }
 
+function perMana<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({ fire: schema, frost: schema, storm: schema, earth: schema, shadow: schema });
+}
+
 const MonsterDefSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -354,6 +369,9 @@ const MonsterDefSchema = z.object({
   dmg: z.number().positive(),
   interval: z.number().positive(),
   traits: z.array(MonsterTraitSchema).optional(),
+  ai: z.enum(['melee', 'ranged', 'charger']).optional(),
+  speed: z.number().positive().optional(),
+  size: z.number().positive().optional(),
 });
 
 export const DelveDataSchema = z.object({
@@ -365,6 +383,14 @@ export const DelveDataSchema = z.object({
         slot: GearSlotSchema,
         name: z.string(),
         attackInterval: z.number().positive().optional(),
+        attack: z
+          .object({
+            kind: z.enum(['melee', 'bolt']),
+            range: z.number().positive(),
+            arc: z.number().positive().max(360).optional(),
+            speed: z.number().positive().optional(),
+          })
+          .optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({ stat: HeroStatKeySchema, base: z.number().positive(), scaling: StatScalingSchema }),
@@ -405,6 +431,7 @@ export const DelveDataSchema = z.object({
       z.object({
         id: z.string(),
         name: z.string(),
+        mana: ManaTypeSchema,
         colors: z.tuple([z.string(), z.string()]),
         accent: z.string(),
         monsters: z.array(MonsterDefSchema).min(1),
@@ -430,7 +457,7 @@ export const DelveDataSchema = z.object({
           healFull: z.boolean().optional(),
           potions: z.number().int().optional(),
           skip: z.number().int().min(0).optional(),
-          fights: z.number().int().positive().optional(),
+          packs: z.number().positive().optional(),
         }),
       }),
     )
@@ -440,6 +467,57 @@ export const DelveDataSchema = z.object({
     prefixes: z.array(z.string()).min(1),
     suffixes: perSlot(z.array(z.string()).min(1)),
   }),
+});
+
+export const ArpgDataSchema = z.object({
+  mana: perMana(z.object({ name: z.string(), icon: z.string(), color: z.string() })),
+  weakness: perMana(ManaTypeSchema),
+  skills: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        icon: z.string(),
+        text: z.string(),
+        kind: z.enum(['projectile', 'nova', 'chain', 'dash', 'ground', 'line', 'brand', 'burst', 'summon']),
+        elements: z.array(ManaTypeSchema).min(1).max(2),
+        cost: z.object({
+          fire: z.number().positive().optional(),
+          frost: z.number().positive().optional(),
+          storm: z.number().positive().optional(),
+          earth: z.number().positive().optional(),
+          shadow: z.number().positive().optional(),
+        }),
+        cooldown: z.number().positive(),
+        power: z.number().positive(),
+        range: z.number().positive().optional(),
+        radius: z.number().min(0).optional(),
+        speed: z.number().positive().optional(),
+        pierce: z.boolean().optional(),
+        chains: z.number().int().positive().optional(),
+        chainRange: z.number().positive().optional(),
+        duration: z.number().positive().optional(),
+        tick: z.number().positive().optional(),
+        tickPower: z.number().positive().optional(),
+        applies: z.array(StatusIdSchema).optional(),
+        knockback: z.number().positive().optional(),
+        pull: z.boolean().optional(),
+        execute: z.number().positive().max(1).optional(),
+        teleport: z.boolean().optional(),
+      }),
+    )
+    .min(5),
+  reactions: z
+    .array(
+      z.object({
+        id: z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire']),
+        name: z.string(),
+        icon: z.string(),
+        text: z.string(),
+      }),
+    )
+    .length(5),
+  masteries: z.array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() })).length(5),
 });
 
 const DelveBalanceSchema = z.object({
@@ -454,6 +532,11 @@ const DelveBalanceSchema = z.object({
     dodgeCap: z.number().positive(),
     armorK: z.number().positive(),
     armorCap: z.number().positive(),
+    moveSpeed: z.number().positive(),
+    radius: z.number().positive(),
+    pickupRadius: z.number().positive(),
+    magnetRadius: z.number().positive(),
+    cdrCap: z.number().min(0).max(90),
   }),
   growth: z.object({ item: z.number().positive(), monsterHp: z.number().positive(), monsterDmg: z.number().positive() }),
   monster: z.object({
@@ -462,6 +545,13 @@ const DelveBalanceSchema = z.object({
     earlyRamp: z.array(z.number().positive()),
     enrageSeconds: z.number().positive(),
     enrageInterval: z.number().positive(),
+    speed: z.number().positive(),
+    radius: z.number().positive(),
+    windup: z.number().positive(),
+    meleeRange: z.number().positive(),
+    aggroRadius: z.number().positive(),
+    resist: z.number().min(0).max(1),
+    weakness: z.number().min(0),
     elite: z.object({
       hp: z.number().positive(),
       dmg: z.number().positive(),
@@ -481,7 +571,6 @@ const DelveBalanceSchema = z.object({
     }),
   }),
   dive: z.object({
-    fightsPerDepth: z.number().int().positive(),
     bossEvery: z.number().int().positive(),
     eliteChance: z.number().min(0).max(1),
     healOnDepthClear: z.number().min(0).max(1),
@@ -492,14 +581,12 @@ const DelveBalanceSchema = z.object({
     doorsOffered: z.number().int().positive(),
     bountyBase: z.number().min(0),
     bountyGrowth: z.number().positive(),
-  }),
-  slam: z.object({ chargeMax: z.number().int().positive(), damageMult: z.number().positive(), stunSeconds: z.number().min(0) }),
-  elements: z.object({
-    burnFraction: z.number().min(0),
-    burnDuration: z.number().positive(),
-    chillSlow: z.number().min(0),
-    chillDuration: z.number().positive(),
-    chainChance: z.number().min(0).max(100),
+    packsBase: z.number().positive(),
+    packsPerDepth: z.number().min(0),
+    packsMax: z.number().int().positive(),
+    packSize: z.tuple([z.number().int().positive(), z.number().int().positive()]),
+    healthOrbChance: z.number().min(0).max(1),
+    healthOrbHeal: z.number().min(0).max(1),
   }),
   loot: z.object({
     rarityWeights: perRarity(z.number().min(0)),
@@ -521,6 +608,7 @@ const DelveBalanceSchema = z.object({
     scrapLevelScale: z.number().min(0),
     salvage: perRarity(z.number().min(0)),
     bagSize: z.number().int().positive(),
+    biomeManaBias: z.number().min(0).max(1),
   }),
   forge: z.object({
     upgradeStep: z.number().min(0),
@@ -531,6 +619,50 @@ const DelveBalanceSchema = z.object({
     reforgeBaseCost: z.number().positive(),
     reforgeGrowth: z.number().positive(),
     fuseCost: perRarity(z.number().min(0)),
+  }),
+  mana: z.object({
+    attuneByRarity: perRarity(z.number().int().min(0)),
+    comboThreshold: z.number().int().positive(),
+    masteryThreshold: z.number().int().positive(),
+    powerPerAttune: z.number().min(0),
+    basePool: z.number().positive(),
+    poolPerAttune: z.number().min(0),
+    baseRegen: z.number().min(0),
+    regenPerAttune: z.number().min(0),
+    basicAttackGain: z.number().min(0),
+    moteAmount: z.number().min(0),
+    eliteMote: z.number().min(0),
+    bossMote: z.number().min(0),
+  }),
+  status: z.object({
+    burnDps: z.number().min(0),
+    burnDuration: z.number().positive(),
+    chillSlow: z.number().min(0).max(1),
+    chillDuration: z.number().positive(),
+    chillToFreeze: z.number().int().positive(),
+    freezeDuration: z.number().positive(),
+    shockBonus: z.number().min(0),
+    shockDuration: z.number().positive(),
+    hexBonus: z.number().min(0),
+    hexDuration: z.number().positive(),
+    staggerDuration: z.number().positive(),
+    blindMiss: z.number().min(0).max(1),
+    blindDuration: z.number().positive(),
+  }),
+  reactions: z.object({
+    meltMult: z.number().positive(),
+    shatterMult: z.number().positive(),
+    overloadMult: z.number().positive(),
+    overloadRadius: z.number().positive(),
+    superconductFreeze: z.number().positive(),
+    soulfireHeal: z.number().min(0).max(1),
+  }),
+  arena: z.object({
+    step: z.number().positive(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+    packSpacing: z.number().positive(),
+    minPackDistance: z.number().positive(),
   }),
 });
 

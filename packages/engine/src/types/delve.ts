@@ -1,5 +1,5 @@
-import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
+import type { ManaMap, ManaType } from './mana.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -11,12 +11,26 @@ export interface ImplicitTemplate {
   scaling: StatScaling;
 }
 
+/** How a weapon's basic attack behaves in the arena. */
+export interface WeaponAttackDef {
+  /** melee: instant cleave in an arc; bolt: a projectile. */
+  kind: 'melee' | 'bolt';
+  /** Reach (melee) or max travel distance (bolt), in world units. */
+  range: number;
+  /** Melee cleave arc in degrees (360 = all around). */
+  arc?: number;
+  /** Bolt speed in units per second. */
+  speed?: number;
+}
+
 export interface GearBaseDef {
   id: string;
   slot: GearSlot;
   name: string;
   /** Weapons only: seconds between attacks. */
   attackInterval?: number;
+  /** Weapons only: basic-attack profile. */
+  attack?: WeaponAttackDef;
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -51,6 +65,8 @@ export interface MonsterTraitDef {
   text: string;
 }
 
+export type MonsterAi = 'melee' | 'ranged' | 'charger';
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -59,11 +75,18 @@ export interface MonsterDef {
   dmg: number;
   interval: number;
   traits?: MonsterTrait[];
+  ai?: MonsterAi;
+  /** Movement speed multiplier (1 = normal). */
+  speed?: number;
+  /** Body radius multiplier (1 = normal). */
+  size?: number;
 }
 
 export interface BiomeDef {
   id: string;
   name: string;
+  /** The biome's element: monsters resist it, and gear found here leans toward it. */
+  mana: ManaType;
   colors: [string, string];
   accent: string;
   monsters: MonsterDef[];
@@ -74,13 +97,15 @@ export interface DoorMods {
   magicFind?: number;
   monsterHp?: number;
   monsterDmg?: number;
+  /** Chance each pack is an elite pack (overrides the base chance if higher). */
   eliteChance?: number;
   bountyMult?: number;
   dropMult?: number;
   healFull?: boolean;
   potions?: number;
   skip?: number;
-  fights?: number;
+  /** Multiplier on the number of monster packs. */
+  packs?: number;
 }
 
 export interface DoorDef {
@@ -123,17 +148,37 @@ export interface DelveBalance {
     dodgeCap: number;
     armorK: number;
     armorCap: number;
+    /** World units per second. */
+    moveSpeed: number;
+    radius: number;
+    /** Items within this distance are picked up. */
+    pickupRadius: number;
+    /** Mana motes, health orbs and scrap drift in from this far. */
+    magnetRadius: number;
+    /** Cap on cooldown reduction, in percent. */
+    cdrCap: number;
   };
   growth: { item: number; monsterHp: number; monsterDmg: number };
   monster: {
     baseHp: number;
     baseDmg: number;
-    /** Softening multipliers for depths 1..n so the first fights are gentle wins. */
+    /** Softening multipliers for depths 1..n so the first floors are gentle. */
     earlyRamp: number[];
-    /** Fight length (s) after which monster damage starts doubling. */
+    /** Boss fight length (s) after which boss damage starts doubling. */
     enrageSeconds: number;
     /** Seconds between each further doubling. */
     enrageInterval: number;
+    /** World units per second. */
+    speed: number;
+    radius: number;
+    /** Seconds of telegraph before a melee swing lands. */
+    windup: number;
+    meleeRange: number;
+    aggroRadius: number;
+    /** Damage taken from the monster's own element is multiplied by (1 - resist). */
+    resist: number;
+    /** Damage taken from the element it's weak to is multiplied by (1 + weakness). */
+    weakness: number;
     elite: { hp: number; dmg: number; minTraits: number; maxTraits: number };
     boss: { hp: number; dmg: number };
     traits: {
@@ -148,8 +193,8 @@ export interface DelveBalance {
     };
   };
   dive: {
-    fightsPerDepth: number;
     bossEvery: number;
+    /** Chance each pack is an elite pack. */
     eliteChance: number;
     healOnDepthClear: number;
     potions: number;
@@ -161,14 +206,12 @@ export interface DelveBalance {
     bountyBase: number;
     /** Compounds per depth cleared in the same dive — the push-your-luck curve. */
     bountyGrowth: number;
-  };
-  slam: { chargeMax: number; damageMult: number; stunSeconds: number };
-  elements: {
-    burnFraction: number;
-    burnDuration: number;
-    chillSlow: number;
-    chillDuration: number;
-    chainChance: number;
+    packsBase: number;
+    packsPerDepth: number;
+    packsMax: number;
+    packSize: [number, number];
+    healthOrbChance: number;
+    healthOrbHeal: number;
   };
   loot: {
     rarityWeights: Record<Rarity, number>;
@@ -191,6 +234,8 @@ export interface DelveBalance {
     scrapLevelScale: number;
     salvage: Record<Rarity, number>;
     bagSize: number;
+    /** Chance a drop takes the biome's mana instead of a random one. */
+    biomeManaBias: number;
   };
   forge: {
     upgradeStep: number;
@@ -202,21 +247,80 @@ export interface DelveBalance {
     reforgeGrowth: number;
     fuseCost: Record<Rarity, number>;
   };
+  mana: {
+    /** Attunement an item grants to its own mana type, by rarity. */
+    attuneByRarity: Record<Rarity, number>;
+    /** Both types need this much attunement to unlock a combo spell. */
+    comboThreshold: number;
+    /** A type at this attunement grants its mastery passive. */
+    masteryThreshold: number;
+    /** Spell damage bonus per point of attunement in the spell's type(s). */
+    powerPerAttune: number;
+    basePool: number;
+    poolPerAttune: number;
+    baseRegen: number;
+    regenPerAttune: number;
+    /** Mana gained in the weapon's type per basic-attack hit. */
+    basicAttackGain: number;
+    moteAmount: number;
+    eliteMote: number;
+    bossMote: number;
+  };
+  status: {
+    /** Burn deals this fraction of the igniting hit per second. */
+    burnDps: number;
+    burnDuration: number;
+    chillSlow: number;
+    chillDuration: number;
+    /** Chill stacks needed to freeze. */
+    chillToFreeze: number;
+    freezeDuration: number;
+    shockBonus: number;
+    shockDuration: number;
+    hexBonus: number;
+    hexDuration: number;
+    staggerDuration: number;
+    blindMiss: number;
+    blindDuration: number;
+  };
+  reactions: {
+    meltMult: number;
+    shatterMult: number;
+    overloadMult: number;
+    overloadRadius: number;
+    superconductFreeze: number;
+    soulfireHeal: number;
+  };
+  arena: {
+    /** Fixed simulation step in seconds. */
+    step: number;
+    width: number;
+    height: number;
+    packSpacing: number;
+    minPackDistance: number;
+  };
 }
 
-// ── Hero & monsters at runtime ─────────────────────────────────────────────
+// ── Hero at runtime ────────────────────────────────────────────────────────
+
+export interface HeroWeapon {
+  baseId: string | null;
+  kind: 'melee' | 'bolt';
+  range: number;
+  arc: number;
+  speed: number;
+  /** Element of basic attacks (the weapon's mana), or null when unarmed. */
+  element: ManaType | null;
+}
 
 export interface HeroStats {
   maxHp: number;
   armor: number;
-  /** Physical damage per hit before multipliers. */
+  /** Weapon damage per hit before multipliers. */
   weaponDamage: number;
-  fireDamage: number;
-  coldDamage: number;
-  lightningDamage: number;
   /** 1 + %damage / 100 */
   damageMult: number;
-  /** Seconds between attacks after attack speed. */
+  /** Seconds between basic attacks after attack speed. */
   attackInterval: number;
   /** 0–1 */
   critChance: number;
@@ -226,7 +330,6 @@ export interface HeroStats {
   dodge: number;
   /** 0–1 fraction of damage dealt */
   lifesteal: number;
-  lifeOnHit: number;
   /** 0–1 fraction of max HP */
   healOnKill: number;
   thorns: number;
@@ -234,71 +337,19 @@ export interface HeroStats {
   magicFind: number;
   /** Percentage points */
   scrapFind: number;
+  /** World units per second. */
+  moveSpeed: number;
+  /** Multiply cooldowns by this (1 = no reduction). */
+  cooldownMult: number;
+  /** Multiply mana regen by this. */
+  manaRegenMult: number;
+  weapon: HeroWeapon;
+  /** Total attunement per mana type (item affinities + attunement affixes). */
+  attunement: ManaMap;
+  /** Extra damage fraction per element (0.2 = +20%). */
+  elementPower: ManaMap;
   /** Equipped legendary powers → rolled value (best of duplicates). */
   legendaries: Record<string, number>;
-}
-
-export type MonsterKind = 'normal' | 'elite' | 'boss';
-
-export interface MonsterInstance {
-  id: string;
-  name: string;
-  icon: string;
-  kind: MonsterKind;
-  depth: number;
-  biomeId: string;
-  maxHp: number;
-  damage: number;
-  attackInterval: number;
-  traits: MonsterTrait[];
-}
-
-// ── Fight runtime ──────────────────────────────────────────────────────────
-
-export type FightSide = 'hero' | 'monster';
-
-export type FightEvent =
-  | {
-      kind: 'hit';
-      t: number;
-      source: FightSide;
-      amount: number;
-      crit: boolean;
-      dodged?: boolean;
-      blocked?: boolean;
-      element?: 'fire' | 'cold' | 'lightning';
-      extra?: 'twin' | 'chain' | 'storm';
-    }
-  | { kind: 'burn'; t: number; amount: number }
-  | { kind: 'thorns'; t: number; source: FightSide; amount: number }
-  | { kind: 'heal'; t: number; target: FightSide; amount: number; source: 'lifesteal' | 'potion' | 'kill' | 'regen' | 'vampiric' }
-  | { kind: 'slam'; t: number; amount: number; crit: boolean }
-  | { kind: 'chill'; t: number }
-  | { kind: 'revive'; t: number; amount: number }
-  | { kind: 'death'; t: number; target: FightSide };
-
-export interface FightState {
-  t: number;
-  rng: SeededRNG;
-  depth: number;
-  hero: HeroStats;
-  monster: MonsterInstance;
-  heroHp: number;
-  monsterHp: number;
-  heroNextAttack: number;
-  monsterNextAttack: number;
-  attackCount: number;
-  slamCharge: number;
-  burnDps: number;
-  burnUntil: number;
-  burnNextTick: number;
-  chillUntil: number;
-  regenNextTick: number;
-  bulwarkUsed: boolean;
-  phoenixAvailable: boolean;
-  phoenixUsed: boolean;
-  over: boolean;
-  winner: FightSide | null;
 }
 
 // ── Dive & profile ─────────────────────────────────────────────────────────
@@ -309,9 +360,7 @@ export interface DiveState {
   seed: number;
   startDepth: number;
   depth: number;
-  encounterIndex: number;
-  encountersInDepth: number;
-  /** 0–1 fraction of max HP, so gear swaps between fights never over/under-heal. */
+  /** 0–1 fraction of max HP, so gear swaps between floors never over/under-heal. */
   heroHpFrac: number;
   potions: number;
   phoenixUsed: boolean;
@@ -323,7 +372,7 @@ export interface DiveState {
   depthsCleared: number;
   scrapEarned: number;
   found: Record<Rarity, number>;
-  /** uid of the best (highest rarity, then ilvl) item found this dive. */
+  /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
 }
 
@@ -343,7 +392,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 1;
+  version: 2;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -359,5 +408,9 @@ export interface DelveProfile {
   pity: number;
   firstBossLegendaryGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
+  /** Spells on the action bar (skill ids). */
+  skillSlots: (string | null)[];
+  /** Elemental reactions the player has triggered at least once. */
+  reactionsSeen: string[];
   dive: DiveState | null;
 }

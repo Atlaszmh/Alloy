@@ -1,29 +1,10 @@
 import { z } from 'zod';
+import { HeroStatKeySchema as StatKeySchema, ManaTypeSchema } from '../data/schemas.js';
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
-const StatKeySchema = z.enum([
-  'damage',
-  'fireDamage',
-  'coldDamage',
-  'lightningDamage',
-  'damagePct',
-  'attackSpeedPct',
-  'critChance',
-  'critDamage',
-  'maxHp',
-  'hpPct',
-  'armor',
-  'dodge',
-  'lifesteal',
-  'lifeOnHit',
-  'healOnKill',
-  'thorns',
-  'magicFind',
-  'scrapFind',
-]);
 
 const StatRollSchema = z.object({ stat: StatKeySchema, value: z.number(), roll: z.number() });
 
@@ -32,6 +13,7 @@ export const GearItemSchema = z.object({
   slot: SlotSchema,
   baseId: z.string(),
   rarity: RaritySchema,
+  mana: ManaTypeSchema,
   ilvl: z.number().int().min(1),
   name: z.string(),
   implicits: z.array(StatRollSchema),
@@ -67,7 +49,7 @@ const DoorSchema = z.object({
     healFull: z.boolean().optional(),
     potions: z.number().optional(),
     skip: z.number().optional(),
-    fights: z.number().optional(),
+    packs: z.number().optional(),
   }),
 });
 
@@ -75,8 +57,6 @@ const DiveSchema = z.object({
   seed: z.number().int(),
   startDepth: z.number().int().min(1),
   depth: z.number().int().min(1),
-  encounterIndex: z.number().int().min(0),
-  encountersInDepth: z.number().int().min(1),
   heroHpFrac: z.number().min(0).max(1),
   potions: z.number().int().min(0),
   phoenixUsed: z.boolean(),
@@ -92,7 +72,7 @@ const DiveSchema = z.object({
 });
 
 export const DelveProfileSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
@@ -130,5 +110,7 @@ export const DelveProfileSchema = z.object({
     epic: z.boolean(),
     legendary: z.boolean(),
   }),
+  skillSlots: z.array(z.string().nullable()).length(3),
+  reactionsSeen: z.array(z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire'])),
   dive: DiveSchema.nullable(),
 });

@@ -3,6 +3,7 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GearAffixDef, ImplicitTemplate } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
+import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER } from '../types/gem.js';
 
 export interface ItemGenOptions {
@@ -12,6 +13,10 @@ export interface ItemGenOptions {
   slot?: GearSlot;
   baseId?: string;
   legendaryId?: string;
+  /** Force the mana affinity. */
+  mana?: ManaType;
+  /** The biome's mana: drops lean toward it. */
+  biomeMana?: ManaType;
 }
 
 export interface RarityRollContext {
@@ -116,6 +121,12 @@ function generateRareName(registry: DataRegistry, slot: GearSlot, rng: SeededRNG
   return `${prefix} ${suffix}`;
 }
 
+/** Pick a mana affinity, leaning toward the biome's element. */
+export function rollMana(registry: DataRegistry, biomeMana: ManaType | undefined, rng: SeededRNG): ManaType {
+  if (biomeMana && rng.next() < registry.getDelveBalance().loot.biomeManaBias) return biomeMana;
+  return MANA_TYPES[rng.nextInt(0, MANA_TYPES.length - 1)];
+}
+
 export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: SeededRNG): GearItem {
   const data = registry.getDelveData();
   const loot = registry.getDelveBalance().loot;
@@ -126,6 +137,7 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     ? registry.getGearBase(opts.baseId)
     : weightedPick(registry.getGearBasesForSlot(slot), (b) => b.weight, rng);
 
+  const mana = opts.mana ?? rollMana(registry, opts.biomeMana, rng);
   const implicits = base.implicits.map((t) => rollImplicit(registry, t, ilvl, opts.rarity, rng));
 
   const affixes: StatRoll[] = [];
@@ -165,6 +177,7 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     slot: base.slot,
     baseId: base.id,
     rarity: opts.rarity,
+    mana,
     ilvl,
     name,
     implicits,

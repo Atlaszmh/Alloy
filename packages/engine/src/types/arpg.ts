@@ -1,0 +1,321 @@
+import type { SeededRNG } from '../rng/seeded-rng.js';
+import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
+import type { GearItem, Rarity } from './gear.js';
+import type { ManaMap, ManaType } from './mana.js';
+
+// ── Data definitions (arpg.json) ───────────────────────────────────────────
+
+export type SkillKind = 'projectile' | 'nova' | 'chain' | 'dash' | 'ground' | 'line' | 'brand' | 'burst' | 'summon';
+
+export type StatusId = 'burn' | 'chill' | 'freeze' | 'shock' | 'hex' | 'stagger' | 'blind' | 'brand';
+
+export type ReactionId = 'melt' | 'shatter' | 'overload' | 'superconduct' | 'soulfire';
+
+export interface SkillDef {
+  id: string;
+  name: string;
+  icon: string;
+  text: string;
+  kind: SkillKind;
+  /** One element = signature spell; two = combo spell. */
+  elements: ManaType[];
+  cost: Partial<ManaMap>;
+  cooldown: number;
+  /** Damage as a multiple of weapon damage. */
+  power: number;
+  range?: number;
+  radius?: number;
+  speed?: number;
+  pierce?: boolean;
+  chains?: number;
+  chainRange?: number;
+  /** Lingering effect length (zones, summons, orbs) in seconds. */
+  duration?: number;
+  /** Seconds between lingering ticks. */
+  tick?: number;
+  /** Damage per lingering tick, as a multiple of weapon damage. */
+  tickPower?: number;
+  applies?: StatusId[];
+  knockback?: number;
+  /** Pull enemies toward the impact point before it lands. */
+  pull?: boolean;
+  /** Kill frozen enemies below this life fraction. */
+  execute?: number;
+  /** Teleport the hero to the impact point. */
+  teleport?: boolean;
+}
+
+export interface ReactionDef {
+  id: ReactionId;
+  name: string;
+  icon: string;
+  text: string;
+}
+
+export interface MasteryDef {
+  mana: ManaType;
+  name: string;
+  text: string;
+}
+
+export interface ManaInfo {
+  name: string;
+  icon: string;
+  color: string;
+}
+
+export interface ArpgData {
+  mana: Record<ManaType, ManaInfo>;
+  /** Monsters of the key element take extra damage from the value element. */
+  weakness: Record<ManaType, ManaType>;
+  skills: SkillDef[];
+  reactions: ReactionDef[];
+  masteries: MasteryDef[];
+}
+
+// ── World runtime ──────────────────────────────────────────────────────────
+
+export interface Vec {
+  x: number;
+  y: number;
+}
+
+export type MonsterKind = 'normal' | 'elite' | 'boss';
+
+export interface StatusState {
+  burnDps: number;
+  burnUntil: number;
+  burnTickAt: number;
+  chillStacks: number;
+  chillUntil: number;
+  freezeUntil: number;
+  shockUntil: number;
+  hexUntil: number;
+  staggerUntil: number;
+  blindUntil: number;
+  brandUntil: number;
+}
+
+export interface MonsterEntity {
+  id: number;
+  defId: string;
+  name: string;
+  icon: string;
+  kind: MonsterKind;
+  element: ManaType;
+  ai: MonsterAi;
+  traits: MonsterTrait[];
+  packId: number;
+  x: number;
+  y: number;
+  radius: number;
+  /** World units per second. */
+  speed: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  attackInterval: number;
+  attackRange: number;
+  aggro: boolean;
+  aggroAt: number;
+  nextAttackAt: number;
+  /** While > t the monster is winding up an attack (telegraphed). */
+  windupUntil: number;
+  windupStart: number;
+  /** Charger dash: active while > t. */
+  chargeUntil: number;
+  chargeDir: Vec;
+  chargeHit: boolean;
+  /** Knockback velocity, decays quickly. */
+  kbx: number;
+  kby: number;
+  status: StatusState;
+  lastHitAt: number;
+  /** Boss special-attack clock. */
+  nextSpecialAt: number;
+  dead: boolean;
+}
+
+export interface Projectile {
+  id: number;
+  owner: 'hero' | 'monster';
+  /** Skill id, or null for a basic-attack bolt / monster shot. */
+  skillId: string | null;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  damage: number;
+  element: ManaType | null;
+  pierce: boolean;
+  hitIds: number[];
+  maxDist: number;
+  traveled: number;
+  explodeRadius: number;
+  applies: StatusId[];
+  knockback: number;
+  /** Plasma orb: next zap time. */
+  nextPulse: number;
+  dead: boolean;
+}
+
+export interface Zone {
+  id: number;
+  owner: 'hero' | 'monster';
+  skillId: string | null;
+  x: number;
+  y: number;
+  radius: number;
+  born: number;
+  until: number;
+  /** Lingering damage zones tick; monster telegraphs detonate once. */
+  tick: number;
+  nextTick: number;
+  damage: number;
+  element: ManaType | null;
+  applies: StatusId[];
+  /** Monster telegraph: explodes at this time (0 = lingering zone). */
+  detonateAt: number;
+  dead: boolean;
+}
+
+export interface Summon {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  hp: number;
+  maxHp: number;
+  until: number;
+  damage: number;
+  nextAttackAt: number;
+  dead: boolean;
+}
+
+export type DropKind = 'item' | 'mote' | 'orb' | 'scrap';
+
+export interface Drop {
+  id: number;
+  kind: DropKind;
+  x: number;
+  y: number;
+  item?: GearItem;
+  mana?: ManaType;
+  amount: number;
+  born: number;
+  /** Pulled to the hero regardless of distance (floor cleared). */
+  vacuum: boolean;
+  dead: boolean;
+}
+
+export interface HeroEntity {
+  x: number;
+  y: number;
+  radius: number;
+  facing: Vec;
+  hp: number;
+  stats: HeroStats;
+  mana: ManaMap;
+  manaMax: ManaMap;
+  manaRegen: ManaMap;
+  /** Skill id → time it is ready again. */
+  cooldowns: Record<string, number>;
+  /** The action bar with locked spells removed. */
+  skillSlots: (string | null)[];
+  nextAttackAt: number;
+  attackCount: number;
+  potions: number;
+  invulnUntil: number;
+  phoenixAvailable: boolean;
+  phoenixUsed: boolean;
+  lastHitAt: number;
+  moving: boolean;
+}
+
+export interface ArpgInput {
+  /** Desired direction; length is clamped to 1. Zero = stand still. */
+  move: Vec;
+  /** Skill slot to cast this step (0-based), if any. */
+  cast?: number | null;
+  potion?: boolean;
+}
+
+export type ArpgEvent =
+  | {
+      kind: 'hit';
+      id: number;
+      x: number;
+      y: number;
+      amount: number;
+      crit: boolean;
+      element: ManaType | null;
+      reaction?: ReactionId;
+    }
+  | { kind: 'heroHit'; x: number; y: number; amount: number; dodged: boolean; element: ManaType | null }
+  | { kind: 'heal'; amount: number; source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire' }
+  | { kind: 'cast'; skillId: string; x: number; y: number; tx: number; ty: number }
+  | { kind: 'basic'; x: number; y: number; tx: number; ty: number; element: ManaType | null; melee: boolean }
+  | { kind: 'chain'; points: Vec[]; element: ManaType }
+  | { kind: 'explode'; x: number; y: number; radius: number; element: ManaType | null }
+  | { kind: 'reaction'; reaction: ReactionId; x: number; y: number }
+  | { kind: 'freeze'; id: number }
+  | { kind: 'death'; id: number; x: number; y: number; monsterKind: MonsterKind; scrap: number }
+  | { kind: 'drop'; dropId: number; x: number; y: number; dropKind: DropKind; rarity?: Rarity }
+  | { kind: 'pickup'; dropId: number; dropKind: DropKind; item?: GearItem; amount: number; mana?: ManaType }
+  | { kind: 'dash'; fromX: number; fromY: number; toX: number; toY: number }
+  | { kind: 'noMana'; skillId: string }
+  | { kind: 'summon'; id: number }
+  | { kind: 'cleared' }
+  | { kind: 'revive'; amount: number }
+  | { kind: 'heroDeath' };
+
+export interface LootContext {
+  pity: number;
+  nextUid: number;
+  magicFind: number;
+  legendaryBoost: number;
+  dropMult: number;
+  /** First boss kill ever drops a guaranteed legendary. */
+  forceLegendary: boolean;
+}
+
+export interface WorldPending {
+  items: GearItem[];
+  scrap: number;
+  kills: number;
+  reactions: ReactionId[];
+}
+
+export interface ArpgWorld {
+  t: number;
+  accumulator: number;
+  rng: SeededRNG;
+  lootRng: SeededRNG;
+  depth: number;
+  biomeId: string;
+  element: ManaType;
+  door: DoorDef | null;
+  width: number;
+  height: number;
+  hero: HeroEntity;
+  monsters: MonsterEntity[];
+  projectiles: Projectile[];
+  zones: Zone[];
+  summons: Summon[];
+  drops: Drop[];
+  nextId: number;
+  loot: LootContext;
+  /** Rewards collected since the last bank into the profile. */
+  pending: WorldPending;
+  totalMonsters: number;
+  bossId: number | null;
+  /** One-shot inputs waiting for the next simulation step. */
+  queuedCast: number | null;
+  queuedPotion: boolean;
+  kills: number;
+  bossKilled: boolean;
+  cleared: boolean;
+  clearedAt: number;
+  heroDead: boolean;
+}

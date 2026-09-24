@@ -5,6 +5,7 @@ import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
 import type { BiomeDef, DelveBalance, DelveData, DoorDef, GearAffixDef, GearBaseDef, LegendaryDef } from '../types/delve.js';
 import type { GearSlot, HeroStatKey } from '../types/gear.js';
+import type { ArpgData, ReactionDef, SkillDef } from '../types/arpg.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
@@ -34,6 +35,7 @@ export class DataRegistry {
     private readonly balanceConfig: BalanceConfig,
     recipes: RecipeDefinition[] = [],
     private readonly delveData: DelveData | null = null,
+    private readonly arpgData: ArpgData | null = null,
   ) {
     // Build affix maps
     this.affixMap = new Map(affixes.map((a) => [a.id, a]));
@@ -179,7 +181,28 @@ export class DataRegistry {
   // --- Delve (loot-crawler mode) ---
 
   hasDelve(): boolean {
-    return this.delveData !== null && this.balanceConfig.delve !== undefined;
+    return this.delveData !== null && this.arpgData !== null && this.balanceConfig.delve !== undefined;
+  }
+
+  getArpgData(): ArpgData {
+    if (!this.arpgData) throw new Error('ARPG data not loaded — pass it to DataRegistry');
+    return this.arpgData;
+  }
+
+  getSkill(id: string): SkillDef {
+    const skill = this.getArpgData().skills.find((s) => s.id === id);
+    if (!skill) throw new Error(`Skill not found: ${id}`);
+    return skill;
+  }
+
+  findSkill(id: string): SkillDef | undefined {
+    return this.getArpgData().skills.find((s) => s.id === id);
+  }
+
+  getReaction(id: string): ReactionDef {
+    const reaction = this.getArpgData().reactions.find((r) => r.id === id);
+    if (!reaction) throw new Error(`Reaction not found: ${id}`);
+    return reaction;
   }
 
   getDelveData(): DelveData {

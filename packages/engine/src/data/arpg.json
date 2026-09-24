@@ -1,0 +1,123 @@
+{
+  "mana": {
+    "fire": { "name": "Fire", "icon": "🔥", "color": "#ff6a2b" },
+    "frost": { "name": "Frost", "icon": "❄️", "color": "#6cd4ff" },
+    "storm": { "name": "Storm", "icon": "⚡", "color": "#f5e049" },
+    "earth": { "name": "Earth", "icon": "⛰️", "color": "#d4a35a" },
+    "shadow": { "name": "Shadow", "icon": "🌑", "color": "#b07cff" }
+  },
+  "weakness": { "fire": "frost", "frost": "fire", "storm": "earth", "earth": "storm", "shadow": "storm" },
+  "skills": [
+    {
+      "id": "fireball", "name": "Fireball", "icon": "☄️", "kind": "projectile", "elements": ["fire"],
+      "cost": { "fire": 10 }, "cooldown": 0.6, "power": 1.6, "speed": 12, "range": 9, "radius": 1.8,
+      "applies": ["burn"],
+      "text": "Hurl a fireball that explodes and sets foes ablaze."
+    },
+    {
+      "id": "frost_nova", "name": "Frost Nova", "icon": "💠", "kind": "nova", "elements": ["frost"],
+      "cost": { "frost": 16 }, "cooldown": 5, "power": 1.1, "radius": 3.4,
+      "applies": ["chill"],
+      "text": "Blast ice around you, chilling everything nearby. Chill twice to freeze."
+    },
+    {
+      "id": "chain_lightning", "name": "Chain Lightning", "icon": "🌩️", "kind": "chain", "elements": ["storm"],
+      "cost": { "storm": 12 }, "cooldown": 0.9, "power": 1.0, "range": 7, "chains": 4, "chainRange": 4,
+      "applies": ["shock"],
+      "text": "Lightning arcs between up to 5 foes, shocking them."
+    },
+    {
+      "id": "boulder", "name": "Boulder Toss", "icon": "🪨", "kind": "projectile", "elements": ["earth"],
+      "cost": { "earth": 14 }, "cooldown": 1.8, "power": 1.8, "speed": 9, "range": 10, "radius": 0.75,
+      "pierce": true, "knockback": 3,
+      "text": "Roll a boulder that crushes through every foe in its path."
+    },
+    {
+      "id": "shadow_step", "name": "Shadow Step", "icon": "👤", "kind": "dash", "elements": ["shadow"],
+      "cost": { "shadow": 14 }, "cooldown": 4, "power": 1.6, "range": 7,
+      "applies": ["hex"],
+      "text": "Step through shadow to a foe, striking and hexing it. Briefly untouchable."
+    },
+    {
+      "id": "steam_burst", "name": "Steam Burst", "icon": "♨️", "kind": "nova", "elements": ["fire", "frost"],
+      "cost": { "fire": 10, "frost": 10 }, "cooldown": 6, "power": 1.4, "radius": 3.6,
+      "applies": ["burn", "blind"],
+      "text": "Scalding steam burns everything around you and blinds it: blinded foes miss half their attacks."
+    },
+    {
+      "id": "plasma_orb", "name": "Plasma Orb", "icon": "🔮", "kind": "projectile", "elements": ["fire", "storm"],
+      "cost": { "fire": 12, "storm": 12 }, "cooldown": 3, "power": 1.6, "speed": 4.5, "range": 9, "radius": 2.4,
+      "duration": 2.2, "tick": 0.3, "tickPower": 0.4, "chains": 3, "chainRange": 3.2,
+      "applies": ["burn"],
+      "text": "A slow orb that zaps nearby foes, then detonates in flame."
+    },
+    {
+      "id": "magma_eruption", "name": "Magma Eruption", "icon": "🌋", "kind": "ground", "elements": ["fire", "earth"],
+      "cost": { "fire": 14, "earth": 14 }, "cooldown": 5, "power": 2.0, "range": 8, "radius": 2.4,
+      "duration": 4, "tick": 0.5, "tickPower": 0.35, "knockback": 2,
+      "applies": ["burn"],
+      "text": "The ground erupts under your target, leaving a lava pool that keeps burning."
+    },
+    {
+      "id": "hellfire_brand", "name": "Hellfire Brand", "icon": "🕯️", "kind": "brand", "elements": ["fire", "shadow"],
+      "cost": { "fire": 12, "shadow": 12 }, "cooldown": 4, "power": 0.8, "range": 8, "radius": 2.6,
+      "applies": ["brand", "burn", "hex"],
+      "text": "Brand a group of foes. Branded foes explode on death and brand everything nearby."
+    },
+    {
+      "id": "blizzard", "name": "Blizzard", "icon": "🌨️", "kind": "ground", "elements": ["frost", "storm"],
+      "cost": { "frost": 14, "storm": 14 }, "cooldown": 8, "power": 0.4, "range": 8, "radius": 3.2,
+      "duration": 5, "tick": 0.4, "tickPower": 0.3,
+      "applies": ["chill", "shock"],
+      "text": "A storm of ice and lightning that chills and shocks: a Superconduct engine."
+    },
+    {
+      "id": "glacial_spikes", "name": "Glacial Spikes", "icon": "🧊", "kind": "line", "elements": ["frost", "earth"],
+      "cost": { "frost": 12, "earth": 12 }, "cooldown": 3.5, "power": 2.2, "range": 8, "radius": 0.9,
+      "knockback": 1,
+      "applies": ["freeze"],
+      "text": "A line of ice spikes erupts toward your target, freezing everything it pierces."
+    },
+    {
+      "id": "soul_freeze", "name": "Soul Freeze", "icon": "🧿", "kind": "burst", "elements": ["frost", "shadow"],
+      "cost": { "frost": 13, "shadow": 13 }, "cooldown": 6, "power": 1.2, "range": 8, "radius": 2.8,
+      "execute": 0.25,
+      "applies": ["freeze", "hex"],
+      "text": "Freeze and hex a group of foes. Frozen foes under 25% life shatter instantly."
+    },
+    {
+      "id": "magnet_quake", "name": "Magnet Quake", "icon": "🧲", "kind": "ground", "elements": ["storm", "earth"],
+      "cost": { "storm": 14, "earth": 14 }, "cooldown": 6, "power": 2.4, "range": 8, "radius": 2.6,
+      "pull": true,
+      "applies": ["shock", "stagger"],
+      "text": "Drag every foe nearby into one spot, then slam them, shocked and staggered."
+    },
+    {
+      "id": "void_bolt", "name": "Void Bolt", "icon": "🌌", "kind": "projectile", "elements": ["storm", "shadow"],
+      "cost": { "storm": 11, "shadow": 11 }, "cooldown": 2.5, "power": 1.8, "speed": 18, "range": 10, "radius": 0,
+      "teleport": true, "chains": 3, "chainRange": 4,
+      "applies": ["hex", "shock"],
+      "text": "A bolt that yanks you to whatever it hits, then arcs to 3 more foes."
+    },
+    {
+      "id": "grave_golem", "name": "Grave Golem", "icon": "🧟", "kind": "summon", "elements": ["earth", "shadow"],
+      "cost": { "earth": 18, "shadow": 18 }, "cooldown": 16, "power": 0.9, "radius": 0.9,
+      "duration": 12, "tick": 0.9,
+      "text": "Raise a golem of stone and shadow that draws foes to it and pummels them."
+    }
+  ],
+  "reactions": [
+    { "id": "melt", "name": "Melt", "icon": "🫠", "text": "Fire hits a chilled or frozen foe for double damage." },
+    { "id": "shatter", "name": "Shatter", "icon": "💥", "text": "Earth hits a frozen foe for massive bonus damage." },
+    { "id": "overload", "name": "Overload", "icon": "💢", "text": "Storm hits a burning foe and it explodes, hitting everything nearby." },
+    { "id": "superconduct", "name": "Superconduct", "icon": "🔷", "text": "Frost hits a shocked foe and freezes it solid." },
+    { "id": "soulfire", "name": "Soulfire", "icon": "💜", "text": "Fire hits a hexed foe and part of the damage heals you." }
+  ],
+  "masteries": [
+    { "mana": "fire", "name": "Inferno", "text": "Burning foes spread their flames when they die." },
+    { "mana": "frost", "name": "Permafrost", "text": "Freezes last 50% longer, and frozen foes take 30% more damage." },
+    { "mana": "storm", "name": "Tempest", "text": "Every chain jumps to 2 more foes, and shock's damage bonus doubles." },
+    { "mana": "earth", "name": "Mountain's Heart", "text": "+40% armor and +20% max life." },
+    { "mana": "shadow", "name": "Night's Embrace", "text": "Killing a hexed foe heals you for 4% of your max life." }
+  ]
+}

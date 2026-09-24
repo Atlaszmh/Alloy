@@ -15,7 +15,7 @@ import {
   salvageValue,
   upgradeCost,
 } from '../loot/smithing.js';
-import { compareItem, heroPower } from './hero-stats.js';
+import { compareItem, computeAttunement, heroPower, isSkillUnlocked, unlockedSkills } from './hero-stats.js';
 import { DelveProfileSchema } from './profile-schema.js';
 
 export interface ProfileActionResult {
@@ -31,10 +31,14 @@ function perRarity<T>(value: T): Record<Rarity, T> {
 
 export function createDelveProfile(registry: DataRegistry, seed: number): DelveProfile {
   const rng = new SeededRNG(seed).fork('starter');
-  const weapon = generateItem(registry, { uid: 'g0', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'sword' }, rng);
-  const chest = generateItem(registry, { uid: 'g1', ilvl: 1, rarity: 'common', slot: 'chest' }, rng);
-  return {
-    version: 1,
+  const weapon = generateItem(
+    registry,
+    { uid: 'g0', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+    rng,
+  );
+  const chest = generateItem(registry, { uid: 'g1', ilvl: 1, rarity: 'common', slot: 'chest', mana: 'earth' }, rng);
+  const profile: DelveProfile = {
+    version: 2,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -57,8 +61,63 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
     pity: 0,
     firstBossLegendaryGiven: false,
     autoSalvage: perRarity(false),
+    skillSlots: [null, null, null],
+    reactionsSeen: [],
     dive: null,
   };
+  return autoSlotSkills(registry, profile).profile;
+}
+
+export const SKILL_SLOT_COUNT = 3;
+
+/**
+ * Keep the action bar useful as gear changes: empty or locked slots are
+ * filled with unlocked spells that aren't on the bar yet (combos first).
+ */
+export function autoSlotSkills(
+  registry: DataRegistry,
+  profile: DelveProfile,
+): { profile: DelveProfile; added: string[] } {
+  const attunement = computeAttunement(profile.equipped, registry);
+  const unlocked = unlockedSkills(attunement, registry).sort((a, b) => b.elements.length - a.elements.length);
+  const slots = [...profile.skillSlots];
+  while (slots.length < SKILL_SLOT_COUNT) slots.push(null);
+  const isLive = (id: string | null) => {
+    const skill = id ? registry.findSkill(id) : undefined;
+    return !!skill && isSkillUnlocked(skill, attunement, registry);
+  };
+  const added: string[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    if (isLive(slots[i])) continue;
+    const pick = unlocked.find((s) => !slots.includes(s.id));
+    if (pick) {
+      slots[i] = pick.id;
+      added.push(pick.id);
+    }
+  }
+  const changed = slots.some((id, i) => id !== profile.skillSlots[i]);
+  return { profile: changed ? { ...profile, skillSlots: slots } : profile, added };
+}
+
+/** Put a spell on the action bar (swapping if it's already in another slot). */
+export function setSkillSlot(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  index: number,
+  skillId: string | null,
+): DelveProfile {
+  if (index < 0 || index >= SKILL_SLOT_COUNT) throw new Error(`Bad slot ${index}`);
+  const slots = [...profile.skillSlots];
+  if (skillId) {
+    const skill = registry.getSkill(skillId);
+    if (!isSkillUnlocked(skill, computeAttunement(profile.equipped, registry), registry)) {
+      throw new Error(`Spell is locked: ${skillId}`);
+    }
+    const existing = slots.indexOf(skillId);
+    if (existing >= 0) slots[existing] = slots[index];
+  }
+  slots[index] = skillId;
+  return { ...profile, skillSlots: slots };
 }
 
 /** Validate an unknown JSON blob as a save. Returns null when it doesn't fit. */
@@ -73,7 +132,7 @@ export function referenceDepth(profile: DelveProfile): number {
 }
 
 export function profilePower(registry: DataRegistry, profile: DelveProfile): number {
-  return heroPower(profile.equipped, registry, referenceDepth(profile));
+  return heroPower(profile.equipped, registry, referenceDepth(profile), profile.skillSlots);
 }
 
 export function findItem(profile: DelveProfile, uid: string): { item: GearItem; where: 'bag' | 'equipped' } | null {
@@ -163,13 +222,13 @@ export function addLootToBag(registry: DataRegistry, profile: DelveProfile, item
   };
 }
 
-export function equipItem(_registry: DataRegistry, profile: DelveProfile, uid: string): DelveProfile {
+export function equipItem(registry: DataRegistry, profile: DelveProfile, uid: string): DelveProfile {
   const item = profile.bag.find((i) => i.uid === uid);
   if (!item) throw new Error(`Item not in bag: ${uid}`);
   const previous = profile.equipped[item.slot];
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
-  return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  return autoSlotSkills(registry, { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } }).profile;
 }
 
 export function unequipSlot(registry: DataRegistry, profile: DelveProfile, slot: GearSlot): DelveProfile {
@@ -178,7 +237,7 @@ export function unequipSlot(registry: DataRegistry, profile: DelveProfile, slot:
   if (profile.bag.length >= registry.getDelveBalance().loot.bagSize) throw new Error('Bag is full');
   const equipped = { ...profile.equipped };
   delete equipped[slot];
-  return { ...profile, equipped, bag: [...profile.bag, item] };
+  return autoSlotSkills(registry, { ...profile, equipped, bag: [...profile.bag, item] }).profile;
 }
 
 export function toggleLock(profile: DelveProfile, uid: string): DelveProfile {

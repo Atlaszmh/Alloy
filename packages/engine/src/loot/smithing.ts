@@ -93,6 +93,7 @@ export function fuseItems(registry: DataRegistry, items: GearItem[], uid: string
       rarity,
       slot: template.slot,
       baseId: template.baseId,
+      mana: template.mana,
     },
     rng,
   );

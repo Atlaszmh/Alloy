@@ -92,40 +92,40 @@ export {
 } from './loot/smithing.js';
 export {
   computeHeroStats,
+  computeAttunement,
   estimateCombat,
   compareItem,
   heroPower,
   itemStatLines,
+  itemAffinityAttunement,
   upgradeMultiplier,
   armorReduction,
+  manaPools,
+  isSkillUnlocked,
+  unlockedSkills,
+  skillCost,
+  attunementPower,
+  effectiveSkillSlots,
+  hasMastery,
+  isAttuneStat,
 } from './delve/hero-stats.js';
-export type { ItemComparison, ItemStatLine, CombatEstimate } from './delve/hero-stats.js';
-export { createMonster, biomeCycle } from './delve/monsters.js';
-export {
-  createFight,
-  stepFight,
-  triggerSlam,
-  isSlamReady,
-  slamChargeMax,
-  isEnraged,
-  refreshFightHero,
-  runFightToEnd,
-} from './delve/combat.js';
+export type { ItemComparison, ItemStatLine, CombatEstimate, ManaPools } from './delve/hero-stats.js';
 export {
   isBossDepth,
   isDiveActive,
   startDepthOptions,
   startDive,
-  encounterKind,
-  currentMonster,
-  beginFight,
-  resolveFight,
+  floorSeed,
+  beginFloor,
+  bankWorld,
+  completeFloor,
+  failFloor,
   chooseDoor,
   extractDive,
   closeDive,
-  drinkPotion,
+  drinkPotionBetweenFloors,
 } from './delve/dive.js';
-export type { FightOutcome } from './delve/dive.js';
+export type { BankResult, FloorResult } from './delve/dive.js';
 export {
   createDelveProfile,
   parseDelveProfile,
@@ -142,7 +142,18 @@ export {
   upgradeGear,
   reforgeGear,
   fuseGear,
+  autoSlotSkills,
+  setSkillSlot,
+  SKILL_SLOT_COUNT,
 } from './delve/profile.js';
 export type { ProfileActionResult } from './delve/profile.js';
 export { runAutopilot } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
+
+// ARPG arena simulation
+export { createFloorWorld, refreshWorldHero, createMonsterEntity, biomeCycle, isBossFloor } from './arpg/world.js';
+export type { FloorOptions } from './arpg/world.js';
+export { stepWorld } from './arpg/step.js';
+export { botInput } from './arpg/bot.js';
+export { castSkill, slotReady } from './arpg/skills.js';
+export { makeCtx } from './arpg/combat.js';

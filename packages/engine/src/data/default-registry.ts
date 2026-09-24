@@ -12,5 +12,6 @@ export function createDefaultRegistry(): DataRegistry {
     data.balance,
     data.recipes,
     data.delve,
+    data.arpg,
   );
 }

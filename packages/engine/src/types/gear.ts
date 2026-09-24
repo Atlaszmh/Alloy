@@ -1,4 +1,5 @@
 import type { GemRarity } from './gem.js';
+import type { ManaType } from './mana.js';
 
 // Delve gear reuses the gem rarity ladder so the whole game speaks one
 // rarity language (common → legendary).
@@ -18,13 +19,11 @@ export const GEAR_SLOTS: readonly GearSlot[] = [
 
 /**
  * Every stat a piece of gear can grant. Flat stats scale with item level;
- * percentage stats are stored in percentage points (12 = 12%).
+ * percentage stats are stored in percentage points (12 = 12%). Attunement
+ * stats (`*Attune`) are whole points and never scale with upgrades.
  */
 export type HeroStatKey =
   | 'damage'
-  | 'fireDamage'
-  | 'coldDamage'
-  | 'lightningDamage'
   | 'damagePct'
   | 'attackSpeedPct'
   | 'critChance'
@@ -34,11 +33,53 @@ export type HeroStatKey =
   | 'armor'
   | 'dodge'
   | 'lifesteal'
-  | 'lifeOnHit'
   | 'healOnKill'
   | 'thorns'
   | 'magicFind'
-  | 'scrapFind';
+  | 'scrapFind'
+  | 'moveSpeed'
+  | 'cooldownReduction'
+  | 'manaRegen'
+  | 'firePower'
+  | 'frostPower'
+  | 'stormPower'
+  | 'earthPower'
+  | 'shadowPower'
+  | 'fireAttune'
+  | 'frostAttune'
+  | 'stormAttune'
+  | 'earthAttune'
+  | 'shadowAttune';
+
+export const HERO_STAT_KEYS: readonly HeroStatKey[] = [
+  'damage',
+  'damagePct',
+  'attackSpeedPct',
+  'critChance',
+  'critDamage',
+  'maxHp',
+  'hpPct',
+  'armor',
+  'dodge',
+  'lifesteal',
+  'healOnKill',
+  'thorns',
+  'magicFind',
+  'scrapFind',
+  'moveSpeed',
+  'cooldownReduction',
+  'manaRegen',
+  'firePower',
+  'frostPower',
+  'stormPower',
+  'earthPower',
+  'shadowPower',
+  'fireAttune',
+  'frostAttune',
+  'stormAttune',
+  'earthAttune',
+  'shadowAttune',
+] as const;
 
 /** A rolled stat line. `roll` is the 0–1 quality of the roll within its range. */
 export interface StatRoll {
@@ -58,6 +99,8 @@ export interface GearItem {
   slot: GearSlot;
   baseId: string;
   rarity: Rarity;
+  /** Mana affinity: wearing the item attunes the hero to this mana type. */
+  mana: ManaType;
   ilvl: number;
   /** Display title: legendary power name, generated rare name, or material + base. */
   name: string;

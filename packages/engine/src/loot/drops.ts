@@ -1,7 +1,8 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
-import type { MonsterKind } from '../types/delve.js';
+import type { MonsterKind } from '../types/arpg.js';
 import type { GearItem, Rarity } from '../types/gear.js';
+import type { ManaType } from '../types/mana.js';
 import { generateItem, rollRarity } from './item-generator.js';
 
 export interface DropContext {
@@ -16,6 +17,8 @@ export interface DropContext {
   /** First boss kill ever: guarantee the hook legendary. */
   forceLegendary: boolean;
   nextUid: number;
+  /** The biome's mana; item affinities lean toward it. */
+  biomeMana?: ManaType;
 }
 
 export interface DropResult {
@@ -71,7 +74,7 @@ export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng
       rarity = rollRarity(registry, { luck, pity, minRarity, legendaryBoost: ctx.legendaryBoost }, rng);
     }
     pity = rarity === 'legendary' ? 0 : pity + 1;
-    items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity }, rng));
+    items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana }, rng));
   }
   return { items, pity, nextUid };
 }

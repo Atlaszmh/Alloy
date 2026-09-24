@@ -78,41 +78,58 @@
   },
   "delve": {
     "hero": {
-      "baseHp": 100, "baseCritChance": 5, "baseCritMultiplier": 150, "unarmedDamage": 3, "unarmedInterval": 1.0,
-      "minAttackInterval": 0.25, "critCap": 75, "dodgeCap": 60, "armorK": 25, "armorCap": 80
+      "baseHp": 120, "baseCritChance": 5, "baseCritMultiplier": 150, "unarmedDamage": 3, "unarmedInterval": 0.9,
+      "minAttackInterval": 0.2, "critCap": 75, "dodgeCap": 60, "armorK": 25, "armorCap": 80,
+      "moveSpeed": 5.2, "radius": 0.5, "pickupRadius": 1.3, "magnetRadius": 3.5, "cdrCap": 50
     },
     "growth": { "item": 1.13, "monsterHp": 1.18, "monsterDmg": 1.16 },
     "monster": {
-      "baseHp": 42, "baseDmg": 10, "earlyRamp": [0.6, 0.75, 0.9], "enrageSeconds": 45, "enrageInterval": 10,
-      "elite": { "hp": 2.4, "dmg": 1.35, "minTraits": 1, "maxTraits": 2 },
-      "boss": { "hp": 8, "dmg": 1.8 },
+      "baseHp": 30, "baseDmg": 7, "earlyRamp": [0.6, 0.75, 0.9], "enrageSeconds": 60, "enrageInterval": 10,
+      "speed": 2.6, "radius": 0.55, "windup": 0.4, "meleeRange": 1.1, "aggroRadius": 8, "resist": 0.4, "weakness": 0.35,
+      "elite": { "hp": 3.0, "dmg": 1.4, "minTraits": 1, "maxTraits": 2 },
+      "boss": { "hp": 25, "dmg": 1.8 },
       "traits": {
         "armoredReduction": 0.35, "swiftInterval": 0.7, "swiftHp": 0.8, "bruteDmg": 1.5, "bruteInterval": 1.25,
         "regenPerSecond": 0.02, "vampiricFraction": 0.5, "spikedFraction": 0.12
       }
     },
     "dive": {
-      "fightsPerDepth": 3, "bossEvery": 5, "eliteChance": 0.12, "healOnDepthClear": 0.25, "potions": 3, "maxPotions": 5,
-      "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 15, "bountyGrowth": 1.1
+      "bossEvery": 5, "eliteChance": 0.2, "healOnDepthClear": 0.25, "potions": 3, "maxPotions": 5,
+      "potionHeal": 0.4, "bossPotionReward": 1, "doorsOffered": 3, "bountyBase": 15, "bountyGrowth": 1.1,
+      "packsBase": 4, "packsPerDepth": 0.2, "packsMax": 8, "packSize": [3, 5],
+      "healthOrbChance": 0.08, "healthOrbHeal": 0.15
     },
-    "slam": { "chargeMax": 8, "damageMult": 3, "stunSeconds": 1.2 },
-    "elements": { "burnFraction": 0.5, "burnDuration": 2, "chillSlow": 15, "chillDuration": 2, "chainChance": 20 },
     "loot": {
       "rarityWeights": { "common": 55, "uncommon": 28, "magic": 12, "rare": 4, "epic": 1.2, "legendary": 0.25 },
       "luckExponent": 0.6, "luckPerDepth": 0.015, "maxDepthLuck": 0.75, "eliteLuck": 0.6, "bossLuck": 1.5, "pityPerDrop": 0.012,
-      "normalDropChance": 0.7, "extraDropChance": 0.12, "eliteDrops": [2, 3], "bossDrops": [3, 4], "bossMinRarity": "rare",
+      "normalDropChance": 0.3, "extraDropChance": 0.05, "eliteDrops": [2, 3], "bossDrops": [4, 5], "bossMinRarity": "rare",
       "rarityBaseMult": { "common": 1.0, "uncommon": 1.1, "magic": 1.2, "rare": 1.35, "epic": 1.55, "legendary": 1.75 },
       "affixCount": { "common": 0, "uncommon": 1, "magic": 2, "rare": 3, "epic": 4, "legendary": 4 },
       "minRoll": { "common": 0, "uncommon": 0, "magic": 0, "rare": 0.1, "epic": 0.25, "legendary": 0.4 },
-      "scrapPerKill": 2, "scrapLevelScale": 0.15,
+      "scrapPerKill": 1, "scrapLevelScale": 0.15,
       "salvage": { "common": 2, "uncommon": 4, "magic": 8, "rare": 18, "epic": 45, "legendary": 120 },
-      "bagSize": 40
+      "bagSize": 40, "biomeManaBias": 0.45
     },
     "forge": {
       "upgradeStep": 0.1, "maxUpgrade": 10, "upgradeBaseCost": 10, "upgradeCostExp": 1.5,
       "rarityCostMult": { "common": 1, "uncommon": 1.2, "magic": 1.5, "rare": 2, "epic": 3, "legendary": 4 },
       "reforgeBaseCost": 25, "reforgeGrowth": 1.6,
       "fuseCost": { "common": 5, "uncommon": 15, "magic": 40, "rare": 100, "epic": 300, "legendary": 0 }
-    }
+    },
+    "mana": {
+      "attuneByRarity": { "common": 1, "uncommon": 1, "magic": 1, "rare": 2, "epic": 2, "legendary": 3 },
+      "comboThreshold": 3, "masteryThreshold": 10, "powerPerAttune": 0.05,
+      "basePool": 40, "poolPerAttune": 8, "baseRegen": 3, "regenPerAttune": 0.6, "basicAttackGain": 2,
+      "moteAmount": 6, "eliteMote": 20, "bossMote": 60
+    },
+    "status": {
+      "burnDps": 0.35, "burnDuration": 3, "chillSlow": 0.4, "chillDuration": 3, "chillToFreeze": 2, "freezeDuration": 1.6,
+      "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6,
+      "blindMiss": 0.5, "blindDuration": 4
+    },
+    "reactions": {
+      "meltMult": 2, "shatterMult": 2.5, "overloadMult": 1.2, "overloadRadius": 2.6, "superconductFreeze": 1.5, "soulfireHeal": 0.3
+    },
+    "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8, "minPackDistance": 9 }
   }
 }

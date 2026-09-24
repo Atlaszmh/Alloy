@@ -5,13 +5,14 @@ import { generateItem } from '../src/loot/item-generator.js';
 import {
   startDepthOptions,
   startDive,
-  beginFight,
-  resolveFight,
+  beginFloor,
+  bankWorld,
+  completeFloor,
+  failFloor,
   chooseDoor,
   extractDive,
   closeDive,
-  drinkPotion,
-  encounterKind,
+  drinkPotionBetweenFloors,
   isBossDepth,
 } from '../src/delve/dive.js';
 import {
@@ -28,51 +29,53 @@ import {
   parseDelveProfile,
   findItem,
   salvageCandidates,
+  autoSlotSkills,
+  setSkillSlot,
 } from '../src/delve/profile.js';
-import type { DelveProfile, FightState } from '../src/types/delve.js';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { stepWorld } from '../src/arpg/step.js';
+import type { ArpgWorld } from '../src/types/arpg.js';
+import type { DelveProfile } from '../src/types/delve.js';
+import type { GearItem } from '../src/types/gear.js';
 
 const registry = createDefaultRegistry();
 const bal = registry.getDelveBalance();
 
-function win(fight: FightState): FightState {
-  fight.over = true;
-  fight.winner = 'hero';
-  fight.monsterHp = 0;
-  return fight;
+function items(n: number, rarity: GearItem['rarity'] = 'magic', start = 500): GearItem[] {
+  return Array.from({ length: n }, (_, i) =>
+    generateItem(registry, { uid: `x${start + i}`, ilvl: 2, rarity }, new SeededRNG(start + i)),
+  );
 }
 
-function lose(fight: FightState): FightState {
-  fight.over = true;
-  fight.winner = 'monster';
-  fight.heroHp = 0;
-  return fight;
+/** Kill everything on the floor and let the loot vacuum in. */
+function clearFloor(world: ArpgWorld): void {
+  const ctx = makeCtx(registry, world, []);
+  for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
+  for (let i = 0; i < 150 && world.drops.length > 0; i++) stepWorld(registry, world, { move: { x: 0, y: 0 } }, 1 / 30);
 }
 
-/** Win every encounter in the current depth. */
 function clearDepth(p: DelveProfile): DelveProfile {
-  while (p.dive!.phase === 'fighting') {
-    p = resolveFight(registry, p, win(beginFight(registry, p))).profile;
-  }
-  return p;
+  const world = beginFloor(registry, p);
+  clearFloor(world);
+  return completeFloor(registry, p, world).profile;
 }
 
 describe('profile basics', () => {
-  it('starts with a rusty sword and cuirass', () => {
+  it('starts with a fire sword and an earth cuirass, so Fireball and Boulder Toss are on the bar', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.equipped.weapon?.rarity).toBe('common');
-    expect(p.equipped.weapon?.baseId).toBe('sword');
-    expect(p.equipped.chest?.slot).toBe('chest');
+    expect(p.version).toBe(2);
+    expect(p.equipped.weapon?.mana).toBe('fire');
+    expect(p.equipped.chest?.mana).toBe('earth');
+    expect(p.skillSlots).toEqual(['fireball', 'boulder', null]);
     expect(p.bag).toHaveLength(0);
-    expect(p.scrap).toBe(0);
     expect(p.dive).toBeNull();
   });
 
-  it('round-trips through JSON and rejects garbage', () => {
+  it('round-trips through JSON and rejects garbage and old saves', () => {
     let p = createDelveProfile(registry, 1);
     p = startDive(registry, p, 1);
-    const parsed = parseDelveProfile(JSON.parse(JSON.stringify(p)));
-    expect(parsed).toEqual(p);
-    expect(parseDelveProfile({ version: 1, nonsense: true })).toBeNull();
+    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(parseDelveProfile({ ...p, version: 1 })).toBeNull();
     expect(parseDelveProfile(null)).toBeNull();
   });
 });
@@ -82,50 +85,41 @@ describe('dive lifecycle', () => {
     let p = createDelveProfile(registry, 7);
     expect(startDepthOptions(registry, p)).toEqual([1]);
     p = startDive(registry, p, 1);
-    expect(p.dive).toMatchObject({ depth: 1, encounterIndex: 0, potions: bal.dive.potions, phase: 'fighting', heroHpFrac: 1 });
-    expect(p.diveCount).toBe(1);
+    expect(p.dive).toMatchObject({ depth: 1, potions: bal.dive.potions, phase: 'fighting', heroHpFrac: 1 });
     expect(p.stats.dives).toBe(1);
-    expect(p.bestDepth).toBe(1);
 
     const withCheckpoint = { ...createDelveProfile(registry, 7), checkpoints: [5, 10] };
     expect(startDepthOptions(registry, withCheckpoint)).toEqual([1, 6, 11]);
     expect(() => startDive(registry, withCheckpoint, 3)).toThrow();
-    expect(startDive(registry, withCheckpoint, 11).dive!.depth).toBe(11);
+    expect(() => startDive(registry, startDive(registry, withCheckpoint, 1), 1)).toThrow();
   });
 
-  it('refuses to start a second dive', () => {
-    const p = startDive(registry, createDelveProfile(registry, 7), 1);
-    expect(() => startDive(registry, p, 1)).toThrow();
-  });
-
-  it('creates the same monster for the same dive state', () => {
+  it('builds the same floor for the same dive state', () => {
     const p = startDive(registry, createDelveProfile(registry, 99), 1);
-    expect(beginFight(registry, p).monster).toEqual(beginFight(registry, p).monster);
-  });
-
-  it('puts a boss at the end of every boss depth', () => {
-    const p = startDive(registry, createDelveProfile(registry, 1), 1);
+    const a = beginFloor(registry, p);
+    const b = beginFloor(registry, p);
+    expect(a.monsters.map((m) => [m.defId, m.x, m.y])).toEqual(b.monsters.map((m) => [m.defId, m.x, m.y]));
     expect(isBossDepth(registry, 5)).toBe(true);
-    expect(isBossDepth(registry, 4)).toBe(false);
-    const dive = { ...p.dive!, depth: 5, encounterIndex: bal.dive.fightsPerDepth - 1 };
-    expect(encounterKind(registry, dive)).toBe('boss');
-    expect(encounterKind(registry, { ...dive, encounterIndex: 0 })).not.toBe('boss');
   });
 
-  it('advances encounters, drops loot into the bag, and counts kills', () => {
-    let p = startDive(registry, createDelveProfile(registry, 5), 1);
-    const res = resolveFight(registry, p, win(beginFight(registry, p)));
-    p = res.profile;
-    expect(res.outcome.victory).toBe(true);
-    expect(p.dive!.encounterIndex).toBe(1);
-    expect(p.dive!.kills).toBe(1);
-    expect(p.stats.kills).toBe(1);
-    expect(p.bag.length).toBe(res.outcome.drops.length);
-    expect(res.outcome.scrap).toBeGreaterThan(0);
-    expect(p.scrap).toBe(res.outcome.scrap);
+  it('banking moves pickups, scrap, kills and reactions into the profile', () => {
+    const p = startDive(registry, createDelveProfile(registry, 5), 1);
+    const world = beginFloor(registry, p);
+    world.pending = { items: items(2), scrap: 40, kills: 6, reactions: ['melt'] };
+    const res = bankWorld(registry, p, world);
+    expect(res.kept).toHaveLength(2);
+    expect(res.newReactions).toEqual(['melt']);
+    expect(res.profile.bag).toHaveLength(2);
+    expect(res.profile.scrap).toBe(40);
+    expect(res.profile.stats.kills).toBe(6);
+    expect(res.profile.reactionsSeen).toEqual(['melt']);
+    expect(res.profile.dive!.kills).toBe(6);
+    expect(res.profile.dive!.found.magic).toBe(2);
+    expect(world.pending.items).toHaveLength(0);
+    expect(bankWorld(registry, res.profile, world).newReactions).toEqual([]);
   });
 
-  it('clearing a depth grows the bounty and offers distinct doors', () => {
+  it('completing a floor pays bounty, heals, and offers distinct doors', () => {
     let p = startDive(registry, createDelveProfile(registry, 5), 1);
     p = clearDepth(p);
     expect(p.dive!.phase).toBe('choosing');
@@ -133,126 +127,106 @@ describe('dive lifecycle', () => {
     expect(p.dive!.depthsCleared).toBe(1);
     expect(p.dive!.doorChoices).toHaveLength(bal.dive.doorsOffered);
     expect(new Set(p.dive!.doorChoices).size).toBe(bal.dive.doorsOffered);
+    expect(p.stats.kills).toBeGreaterThan(0);
   });
 
   it('doors move you deeper and apply their modifiers', () => {
-    let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
-    const choosing = p;
+    const choosing = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
+    const offer = (ids: string[]) => ({ ...choosing, dive: { ...choosing.dive!, doorChoices: ids, heroHpFrac: 0.3 } });
 
-    p = chooseDoor(registry, { ...choosing, dive: { ...choosing.dive!, doorChoices: ['winding', 'shrine', 'plunge'], heroHpFrac: 0.3 } }, 'shrine');
-    expect(p.dive).toMatchObject({ depth: 2, encounterIndex: 0, phase: 'fighting', heroHpFrac: 1 });
+    let p = chooseDoor(registry, offer(['winding', 'shrine', 'plunge']), 'shrine');
+    expect(p.dive).toMatchObject({ depth: 2, phase: 'fighting', heroHpFrac: 1 });
     expect(p.dive!.potions).toBe(bal.dive.potions + 1);
-    expect(p.dive!.door?.id).toBe('shrine');
 
-    p = chooseDoor(registry, { ...choosing, dive: { ...choosing.dive!, doorChoices: ['plunge', 'swarm', 'winding'] } }, 'plunge');
+    p = chooseDoor(registry, offer(['plunge', 'swarm', 'winding']), 'plunge');
     expect(p.dive!.depth).toBe(4);
     expect(p.bestDepth).toBe(4);
 
-    p = chooseDoor(registry, { ...choosing, dive: { ...choosing.dive!, doorChoices: ['plunge', 'swarm', 'winding'] } }, 'swarm');
-    expect(p.dive!.encountersInDepth).toBe(5);
+    const swarm = chooseDoor(registry, offer(['plunge', 'swarm', 'winding']), 'swarm');
+    const normal = chooseDoor(registry, offer(['plunge', 'swarm', 'winding']), 'winding');
+    expect(beginFloor(registry, swarm).monsters.length).toBeGreaterThan(beginFloor(registry, normal).monsters.length);
 
-    expect(() => chooseDoor(registry, { ...choosing, dive: { ...choosing.dive!, doorChoices: ['winding'] } }, 'shrine')).toThrow();
+    expect(() => chooseDoor(registry, offer(['winding']), 'shrine')).toThrow();
   });
 
   it('extracting pays the bounty', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     const bounty = p.dive!.bounty;
-    const scrapBefore = p.scrap;
+    const scrap = p.scrap;
     p = extractDive(registry, p);
     expect(p.dive!.phase).toBe('extracted');
-    expect(p.scrap).toBe(scrapBefore + bounty);
+    expect(p.scrap).toBe(scrap + bounty);
     expect(p.stats.extracts).toBe(1);
-    p = closeDive(p);
-    expect(p.dive).toBeNull();
+    expect(closeDive(p).dive).toBeNull();
   });
 
-  it('dying forfeits the bounty but keeps the loot', () => {
+  it('dying forfeits the bounty but keeps what was picked up', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     p = chooseDoor(registry, p, p.dive!.doorChoices[0]);
-    const bag = p.bag.length;
     const scrap = p.scrap;
-    const res = resolveFight(registry, p, lose(beginFight(registry, p)));
-    p = res.profile;
-    expect(res.outcome.victory).toBe(false);
-    expect(p.dive!.phase).toBe('dead');
-    expect(p.scrap).toBe(scrap);
-    expect(p.bag.length).toBe(bag);
-    expect(p.stats.deaths).toBe(1);
+    const world = beginFloor(registry, p);
+    world.pending.items = items(1);
+    world.heroDead = true;
+    const res = failFloor(registry, p, world);
+    expect(res.profile.dive!.phase).toBe('dead');
+    expect(res.profile.scrap).toBe(scrap);
+    expect(res.profile.bag).toHaveLength(p.bag.length + 1);
+    expect(res.profile.stats.deaths).toBe(1);
   });
 
   it('the first boss ever drops a legendary, grants a checkpoint and a potion', () => {
     let p = startDive(registry, createDelveProfile(registry, 3), 1);
-    p = { ...p, dive: { ...p.dive!, depth: 5, encounterIndex: bal.dive.fightsPerDepth - 1, potions: 0 } };
-    const res = resolveFight(registry, p, win(beginFight(registry, p)));
-    p = res.profile;
-    expect(res.outcome.bossKilled).toBe(true);
-    expect(res.outcome.drops.concat(res.outcome.salvaged)[0].rarity).toBe('legendary');
-    expect(res.outcome.newCodex).toHaveLength(1);
-    expect(Object.keys(p.codex)).toHaveLength(1);
-    expect(p.checkpoints).toContain(5);
-    expect(p.firstBossLegendaryGiven).toBe(true);
-    expect(p.dive!.potions).toBe(bal.dive.bossPotionReward);
-    expect(p.stats.bossKills).toBe(1);
+    p = { ...p, dive: { ...p.dive!, depth: 5, potions: 0 } };
+    const world = beginFloor(registry, p);
+    expect(world.monsters.some((m) => m.kind === 'boss')).toBe(true);
+    clearFloor(world);
+    const res = completeFloor(registry, p, world);
+    expect(res.bossKilled).toBe(true);
+    expect([...res.kept, ...res.salvaged].some((i) => i.rarity === 'legendary')).toBe(true);
+    expect(res.newCodex).toHaveLength(1);
+    expect(res.profile.checkpoints).toContain(5);
+    expect(res.profile.firstBossLegendaryGiven).toBe(true);
+    expect(res.profile.dive!.potions).toBe(bal.dive.bossPotionReward);
+    expect(res.profile.stats.bossKills).toBe(1);
   });
 
-  it('auto-salvage turns chosen rarities into scrap', () => {
+  it('auto-salvage and a full bag turn pickups into scrap', () => {
     let p = createDelveProfile(registry, 11);
-    for (const r of ['common', 'uncommon', 'magic', 'rare', 'epic'] as const) p = setAutoSalvage(p, r, true);
+    p = setAutoSalvage(p, 'magic', true);
     p = startDive(registry, p, 1);
-    let salvaged = 0;
-    for (let i = 0; i < 3; i++) {
-      const res = resolveFight(registry, p, win(beginFight(registry, p)));
-      p = res.profile;
-      salvaged += res.outcome.salvaged.length;
-      expect(res.outcome.drops.every((d) => d.rarity === 'legendary')).toBe(true);
-    }
-    expect(p.bag.every((i) => i.rarity === 'legendary')).toBe(true);
-    expect(salvaged).toBeGreaterThanOrEqual(0);
+    const world = beginFloor(registry, p);
+    world.pending.items = items(3, 'magic');
+    const res = bankWorld(registry, p, world);
+    expect(res.salvaged).toHaveLength(3);
+    expect(res.profile.bag).toHaveLength(0);
+
+    const full = { ...startDive(registry, createDelveProfile(registry, 12), 1), bag: items(bal.loot.bagSize, 'common', 900) };
+    const w2 = beginFloor(registry, full);
+    w2.pending.items = items(2, 'rare');
+    const res2 = bankWorld(registry, full, w2);
+    expect(res2.bagFull).toBe(true);
+    expect(res2.profile.bag).toHaveLength(bal.loot.bagSize);
   });
 
-  it('salvages drops when the bag is full', () => {
-    let p = createDelveProfile(registry, 13);
-    const filler = Array.from({ length: bal.loot.bagSize }, (_, i) =>
-      generateItem(registry, { uid: `f${i}`, ilvl: 1, rarity: 'common' }, new SeededRNG(i)),
-    );
-    p = startDive(registry, { ...p, bag: filler }, 1);
-    let bagFull = false;
-    for (let i = 0; i < 3 && p.dive!.phase === 'fighting'; i++) {
-      const res = resolveFight(registry, p, win(beginFight(registry, p)));
-      p = res.profile;
-      if (res.outcome.salvaged.length > 0) bagFull = bagFull || res.outcome.bagFull;
-    }
-    expect(p.bag.length).toBe(bal.loot.bagSize);
-    expect(bagFull).toBe(true);
-  });
-
-  it('potions heal between fights and run out', () => {
-    let p = startDive(registry, createDelveProfile(registry, 2), 1);
+  it('potions heal between floors and run out', () => {
+    let p = clearDepth(startDive(registry, createDelveProfile(registry, 2), 1));
     p = { ...p, dive: { ...p.dive!, heroHpFrac: 0.2, potions: 1 } };
-    let res = drinkPotion(registry, p, null);
-    expect(res.profile.dive!.heroHpFrac).toBeCloseTo(0.2 + bal.dive.potionHeal);
-    expect(res.profile.dive!.potions).toBe(0);
-    res = drinkPotion(registry, res.profile, null);
-    expect(res.event).toBeNull();
-  });
-
-  it('potions heal mid-fight', () => {
-    let p = startDive(registry, createDelveProfile(registry, 2), 1);
-    const fight = beginFight(registry, p);
-    fight.heroHp = 10;
-    const res = drinkPotion(registry, p, fight);
-    p = res.profile;
-    expect(res.event).toMatchObject({ kind: 'heal', source: 'potion' });
-    expect(fight.heroHp).toBeGreaterThan(10);
-    expect(p.dive!.potions).toBe(bal.dive.potions - 1);
+    const healed = drinkPotionBetweenFloors(registry, p)!;
+    expect(healed.dive!.heroHpFrac).toBeCloseTo(0.2 + bal.dive.potionHeal);
+    expect(healed.dive!.potions).toBe(0);
+    expect(drinkPotionBetweenFloors(registry, healed)).toBeNull();
   });
 });
 
 describe('gear management', () => {
-  function withBag(seed: number, rarity: 'common' | 'magic' | 'rare' = 'magic', n = 3): DelveProfile {
+  function withBag(seed: number, rarity: GearItem['rarity'] = 'magic', n = 3): DelveProfile {
     const p = createDelveProfile(registry, seed);
     const bag = Array.from({ length: n }, (_, i) =>
-      generateItem(registry, { uid: `b${i}`, ilvl: 6, rarity, slot: 'weapon', baseId: 'sword' }, new SeededRNG(seed + i)),
+      generateItem(
+        registry,
+        { uid: `b${i}`, ilvl: 6, rarity, slot: 'weapon', baseId: 'sword', mana: 'fire' },
+        new SeededRNG(seed + i),
+      ),
     );
     return { ...p, bag };
   }
@@ -266,17 +240,47 @@ describe('gear management', () => {
     expect(findItem(p, 'b0')?.where).toBe('equipped');
   });
 
-  it('unequip moves the item into the bag', () => {
+  it('equipping new mana fills an empty spell slot automatically', () => {
+    let p = createDelveProfile(registry, 4);
+    const ring = generateItem(registry, { uid: 'fr', ilvl: 1, rarity: 'common', slot: 'ring', mana: 'frost' }, new SeededRNG(1));
+    p = equipItem(registry, { ...p, bag: [ring] }, 'fr');
+    expect(p.skillSlots).toContain('frost_nova');
+  });
+
+  it('reaching the combo threshold puts the combo spell on the bar', () => {
+    const t = bal.mana.comboThreshold;
+    let p = createDelveProfile(registry, 4);
+    const attune = (uid: string, slot: GearItem['slot'], mana: 'fire' | 'earth') =>
+      ({
+        ...generateItem(registry, { uid, ilvl: 1, rarity: 'common', slot, mana }, new SeededRNG(2)),
+        affixes: [{ stat: `${mana}Attune`, value: t, roll: 1 }],
+      }) as GearItem;
+    p = { ...p, bag: [attune('a1', 'amulet', 'fire'), attune('a2', 'ring', 'earth')] };
+    p = equipItem(registry, equipItem(registry, p, 'a1'), 'a2');
+    expect(p.skillSlots).toContain('magma_eruption');
+  });
+
+  it('unequip moves the item into the bag; a now-locked spell stays slotted but inactive', () => {
     let p = createDelveProfile(registry, 1);
     p = unequipSlot(registry, p, 'chest');
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
+    expect(p.skillSlots).toContain('boulder');
+    p = startDive(registry, p, 1);
+    expect(beginFloor(registry, p).hero.skillSlots).toEqual(['fireball', null, null]);
+  });
+
+  it('spells can be rearranged but locked spells cannot be slotted', () => {
+    let p = createDelveProfile(registry, 1);
+    p = setSkillSlot(registry, p, 2, 'fireball');
+    expect(p.skillSlots).toEqual([null, 'boulder', 'fireball']);
+    expect(() => setSkillSlot(registry, p, 0, 'blizzard')).toThrow();
+    expect(autoSlotSkills(registry, p).profile.skillSlots).toEqual([null, 'boulder', 'fireball']);
   });
 
   it('equipBest picks upgrades', () => {
     const r = equipBest(registry, withBag(4));
     expect(r.equipped.length).toBeGreaterThan(0);
-    expect(r.profile.equipped.weapon!.uid).not.toBe(createDelveProfile(registry, 4).equipped.weapon!.uid);
   });
 
   it('salvage grants scrap and skips locked items', () => {
@@ -285,42 +289,37 @@ describe('gear management', () => {
     const r = salvageItems(registry, p, ['b0', 'b1']);
     expect(r.scrap).toBeGreaterThan(0);
     expect(r.profile.bag.map((i) => i.uid)).toEqual(['b1', 'b2']);
-    expect(r.profile.scrap).toBe(r.scrap);
   });
 
-  it('salvageCandidates only lists unlocked non-upgrades up to a rarity', () => {
+  it('salvageCandidates skips locked items', () => {
     const p = toggleLock(withBag(3, 'common'), 'b2');
-    const junk = salvageCandidates(registry, p, 'magic');
-    expect(junk).not.toContain('b2');
+    expect(salvageCandidates(registry, p, 'magic')).not.toContain('b2');
   });
 
   it('upgrading costs scrap and fails when broke', () => {
     let p = createDelveProfile(registry, 3);
     const uid = p.equipped.weapon!.uid;
-    let r = upgradeGear(registry, p, uid);
-    expect(r.ok).toBe(false);
+    expect(upgradeGear(registry, p, uid).ok).toBe(false);
     p = { ...p, scrap: 10_000 };
-    r = upgradeGear(registry, p, uid);
+    const r = upgradeGear(registry, p, uid);
     expect(r.ok).toBe(true);
     expect(r.profile.equipped.weapon!.upgrade).toBe(1);
-    expect(r.profile.scrap).toBeLessThan(10_000);
   });
 
   it('reforging is deterministic per profile and advances the forge counter', () => {
     const p = { ...withBag(8, 'rare'), scrap: 10_000 };
     const a = reforgeGear(registry, p, 'b0', 0);
-    const b = reforgeGear(registry, p, 'b0', 0);
-    expect(a).toEqual(b);
+    expect(a).toEqual(reforgeGear(registry, p, 'b0', 0));
     expect(a.ok).toBe(true);
     expect(a.profile.forgeCount).toBe(p.forgeCount + 1);
   });
 
-  it('fusion consumes three items and yields one of the next rarity', () => {
+  it('fusion consumes three items and yields one of the next rarity, keeping a mana type', () => {
     const p = { ...withBag(9, 'magic'), scrap: 10_000 };
     const r = fuseGear(registry, p, ['b0', 'b1', 'b2']);
     expect(r.ok).toBe(true);
     expect(r.profile.bag).toHaveLength(1);
     expect(r.profile.bag[0].rarity).toBe('rare');
-    expect(r.profile.stats.itemsFound.rare).toBe(1);
+    expect(r.profile.bag[0].mana).toBe('fire');
   });
 });

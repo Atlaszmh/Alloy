@@ -121,6 +121,31 @@ describe('generateItem', () => {
   });
 });
 
+describe('mana affinity', () => {
+  it('every item carries a mana type, and forced mana is honoured', () => {
+    for (let i = 0; i < 30; i++) {
+      const item = generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'magic' }, new SeededRNG(i));
+      expect(['fire', 'frost', 'storm', 'earth', 'shadow']).toContain(item.mana);
+    }
+    expect(generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'rare', mana: 'shadow' }, new SeededRNG(1)).mana).toBe('shadow');
+  });
+
+  it('drops lean toward the biome element', () => {
+    let frost = 0;
+    for (let i = 0; i < 400; i++) {
+      if (generateItem(registry, { uid: 'b', ilvl: 3, rarity: 'common', biomeMana: 'frost' }, new SeededRNG(i)).mana === 'frost') frost++;
+    }
+    const bias = registry.getDelveBalance().loot.biomeManaBias;
+    expect(frost / 400).toBeGreaterThan(bias + (1 - bias) / 5 - 0.08);
+  });
+
+  it('attunement affixes exist for every mana type', () => {
+    for (const m of ['fire', 'frost', 'storm', 'earth', 'shadow']) {
+      expect(registry.getGearAffix(`${m}Attune` as never)).toBeDefined();
+    }
+  });
+});
+
 describe('rollRarity', () => {
   function distribution(luck: number, pity = 0, seed = 1, n = 20000): Record<Rarity, number> {
     const rng = new SeededRNG(seed);
@@ -193,7 +218,9 @@ describe('rollEncounterDrops', () => {
       expect(res.items.length).toBeLessThanOrEqual(2);
       total += res.items.length;
     }
-    expect(total / 200).toBeGreaterThan(0.6);
-    expect(total / 200).toBeLessThan(1.1);
+    const avg = total / 200;
+    const loot = registry.getDelveBalance().loot;
+    expect(avg).toBeGreaterThan((loot.normalDropChance + loot.extraDropChance) * 0.6);
+    expect(avg).toBeLessThan((loot.normalDropChance + loot.extraDropChance) * 1.4);
   });
 });
