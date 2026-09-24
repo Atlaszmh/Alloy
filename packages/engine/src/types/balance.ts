@@ -1,6 +1,7 @@
 import type { AffixTier } from './affix.js';
 import type { BaseStat } from './base-stats.js';
 import type { GemRarity } from './gem.js';
+import type { DelveBalance } from './delve.js';
 
 export interface FluxCosts {
   assignOrb: number;
@@ -68,4 +69,7 @@ export interface BalanceConfig {
     unlockThreshold: number;
     secondaryValueScalar: number;
   };
+
+  /** Delve (loot-crawler) tunables. Optional so hand-built test configs stay valid. */
+  delve?: DelveBalance;
 }

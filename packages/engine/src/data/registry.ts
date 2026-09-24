@@ -3,6 +3,8 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { CompoundAffixDef } from '../types/combination.js';
 import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
+import type { BiomeDef, DelveBalance, DelveData, DoorDef, GearAffixDef, GearBaseDef, LegendaryDef } from '../types/delve.js';
+import type { GearSlot, HeroStatKey } from '../types/gear.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
@@ -31,6 +33,7 @@ export class DataRegistry {
     baseItems: BaseItemDef[],
     private readonly balanceConfig: BalanceConfig,
     recipes: RecipeDefinition[] = [],
+    private readonly delveData: DelveData | null = null,
   ) {
     // Build affix maps
     this.affixMap = new Map(affixes.map((a) => [a.id, a]));
@@ -171,5 +174,56 @@ export class DataRegistry {
 
   getBalance(): BalanceConfig {
     return this.balanceConfig;
+  }
+
+  // --- Delve (loot-crawler mode) ---
+
+  hasDelve(): boolean {
+    return this.delveData !== null && this.balanceConfig.delve !== undefined;
+  }
+
+  getDelveData(): DelveData {
+    if (!this.delveData) throw new Error('Delve data not loaded — pass it to DataRegistry');
+    return this.delveData;
+  }
+
+  getDelveBalance(): DelveBalance {
+    const delve = this.balanceConfig.delve;
+    if (!delve) throw new Error('Delve balance missing from balance config');
+    return delve;
+  }
+
+  getGearBase(id: string): GearBaseDef {
+    const base = this.getDelveData().bases.find((b) => b.id === id);
+    if (!base) throw new Error(`Gear base not found: ${id}`);
+    return base;
+  }
+
+  getGearBasesForSlot(slot: GearSlot): GearBaseDef[] {
+    return this.getDelveData().bases.filter((b) => b.slot === slot);
+  }
+
+  getGearAffix(stat: HeroStatKey): GearAffixDef | undefined {
+    return this.getDelveData().affixes.find((a) => a.stat === stat);
+  }
+
+  getLegendary(id: string): LegendaryDef {
+    const def = this.getDelveData().legendaries.find((l) => l.id === id);
+    if (!def) throw new Error(`Legendary not found: ${id}`);
+    return def;
+  }
+
+  getDoor(id: string): DoorDef {
+    const door = this.getDelveData().doors.find((d) => d.id === id);
+    if (!door) throw new Error(`Door not found: ${id}`);
+    return door;
+  }
+
+  /** Biome for a depth: 5 depths per biome, cycling after the last one. */
+  getBiomeForDepth(depth: number): BiomeDef {
+    const biomes = this.getDelveData().biomes;
+    const every = this.getDelveBalance().dive.bossEvery;
+    const idx = Math.floor((Math.max(1, depth) - 1) / every) % biomes.length;
+    return biomes[idx];
   }
 }

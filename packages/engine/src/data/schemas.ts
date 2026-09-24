@@ -296,6 +296,240 @@ const TransplantBalanceSchema = z.object({
   secondaryValueScalar: z.number().positive(),
 });
 
+// --- Delve (loot-crawler mode) Schemas ---
+
+const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
+const GearSlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
+const HeroStatKeySchema = z.enum([
+  'damage',
+  'fireDamage',
+  'coldDamage',
+  'lightningDamage',
+  'damagePct',
+  'attackSpeedPct',
+  'critChance',
+  'critDamage',
+  'maxHp',
+  'hpPct',
+  'armor',
+  'dodge',
+  'lifesteal',
+  'lifeOnHit',
+  'healOnKill',
+  'thorns',
+  'magicFind',
+  'scrapFind',
+]);
+const MonsterTraitSchema = z.enum(['armored', 'swift', 'brute', 'regenerating', 'vampiric', 'spiked']);
+const StatScalingSchema = z.enum(['flat', 'fixed']);
+
+function perRarity<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({
+    common: schema,
+    uncommon: schema,
+    magic: schema,
+    rare: schema,
+    epic: schema,
+    legendary: schema,
+  });
+}
+
+function perSlot<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({
+    weapon: schema,
+    helm: schema,
+    chest: schema,
+    gloves: schema,
+    boots: schema,
+    amulet: schema,
+    ring: schema,
+  });
+}
+
+const MonsterDefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  icon: z.string(),
+  hp: z.number().positive(),
+  dmg: z.number().positive(),
+  interval: z.number().positive(),
+  traits: z.array(MonsterTraitSchema).optional(),
+});
+
+export const DelveDataSchema = z.object({
+  slotWeights: perSlot(z.number().positive()),
+  bases: z
+    .array(
+      z.object({
+        id: z.string(),
+        slot: GearSlotSchema,
+        name: z.string(),
+        attackInterval: z.number().positive().optional(),
+        weight: z.number().positive(),
+        implicits: z.array(
+          z.object({ stat: HeroStatKeySchema, base: z.number().positive(), scaling: StatScalingSchema }),
+        ),
+      }),
+    )
+    .min(1),
+  affixes: z
+    .array(
+      z.object({
+        stat: HeroStatKeySchema,
+        label: z.string(),
+        unit: z.enum(['flat', 'pct']),
+        min: z.number().positive(),
+        max: z.number().positive(),
+        scaling: StatScalingSchema,
+        decimals: z.number().int().min(0).max(2),
+        weight: z.number().positive(),
+        slots: z.array(GearSlotSchema).min(1),
+      }),
+    )
+    .min(1),
+  legendaries: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        text: z.string(),
+        min: z.number().min(0),
+        max: z.number().min(0),
+        slots: z.array(GearSlotSchema).min(1),
+      }),
+    )
+    .min(1),
+  traits: z.array(z.object({ id: MonsterTraitSchema, name: z.string(), text: z.string() })),
+  biomes: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        colors: z.tuple([z.string(), z.string()]),
+        accent: z.string(),
+        monsters: z.array(MonsterDefSchema).min(1),
+        boss: MonsterDefSchema,
+      }),
+    )
+    .min(1),
+  doors: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        text: z.string(),
+        icon: z.string(),
+        weight: z.number().positive(),
+        mods: z.object({
+          magicFind: z.number().optional(),
+          monsterHp: z.number().optional(),
+          monsterDmg: z.number().optional(),
+          eliteChance: z.number().min(0).max(1).optional(),
+          bountyMult: z.number().positive().optional(),
+          dropMult: z.number().positive().optional(),
+          healFull: z.boolean().optional(),
+          potions: z.number().int().optional(),
+          skip: z.number().int().min(0).optional(),
+          fights: z.number().int().positive().optional(),
+        }),
+      }),
+    )
+    .min(3),
+  materials: z.array(z.object({ minIlvl: z.number().int().positive(), name: z.string() })).min(1),
+  names: z.object({
+    prefixes: z.array(z.string()).min(1),
+    suffixes: perSlot(z.array(z.string()).min(1)),
+  }),
+});
+
+const DelveBalanceSchema = z.object({
+  hero: z.object({
+    baseHp: z.number().positive(),
+    baseCritChance: z.number().min(0),
+    baseCritMultiplier: z.number().positive(),
+    unarmedDamage: z.number().positive(),
+    unarmedInterval: z.number().positive(),
+    minAttackInterval: z.number().positive(),
+    critCap: z.number().positive(),
+    dodgeCap: z.number().positive(),
+    armorK: z.number().positive(),
+    armorCap: z.number().positive(),
+  }),
+  growth: z.object({ item: z.number().positive(), monsterHp: z.number().positive(), monsterDmg: z.number().positive() }),
+  monster: z.object({
+    baseHp: z.number().positive(),
+    baseDmg: z.number().positive(),
+    elite: z.object({
+      hp: z.number().positive(),
+      dmg: z.number().positive(),
+      minTraits: z.number().int().min(0),
+      maxTraits: z.number().int().min(0),
+    }),
+    boss: z.object({ hp: z.number().positive(), dmg: z.number().positive() }),
+    traits: z.object({
+      armoredReduction: z.number().min(0).max(1),
+      swiftInterval: z.number().positive(),
+      swiftHp: z.number().positive(),
+      bruteDmg: z.number().positive(),
+      bruteInterval: z.number().positive(),
+      regenPerSecond: z.number().min(0),
+      vampiricFraction: z.number().min(0),
+      spikedFraction: z.number().min(0),
+    }),
+  }),
+  dive: z.object({
+    fightsPerDepth: z.number().int().positive(),
+    bossEvery: z.number().int().positive(),
+    eliteChance: z.number().min(0).max(1),
+    healOnDepthClear: z.number().min(0).max(1),
+    potions: z.number().int().min(0),
+    maxPotions: z.number().int().min(0),
+    potionHeal: z.number().min(0).max(1),
+    bossPotionReward: z.number().int().min(0),
+    doorsOffered: z.number().int().positive(),
+    bountyBase: z.number().min(0),
+    bountyGrowth: z.number().positive(),
+  }),
+  slam: z.object({ chargeMax: z.number().int().positive(), damageMult: z.number().positive(), stunSeconds: z.number().min(0) }),
+  elements: z.object({
+    burnFraction: z.number().min(0),
+    burnDuration: z.number().positive(),
+    chillSlow: z.number().min(0),
+    chillDuration: z.number().positive(),
+    chainChance: z.number().min(0).max(100),
+  }),
+  loot: z.object({
+    rarityWeights: perRarity(z.number().min(0)),
+    luckExponent: z.number().min(0),
+    luckPerDepth: z.number().min(0),
+    eliteLuck: z.number().min(0),
+    bossLuck: z.number().min(0),
+    pityPerDrop: z.number().min(0),
+    normalDropChance: z.number().min(0).max(1),
+    extraDropChance: z.number().min(0).max(1),
+    eliteDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
+    bossDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
+    bossMinRarity: RaritySchema,
+    rarityBaseMult: perRarity(z.number().positive()),
+    affixCount: perRarity(z.number().int().min(0)),
+    minRoll: perRarity(z.number().min(0).max(1)),
+    scrapPerKill: z.number().min(0),
+    scrapLevelScale: z.number().min(0),
+    salvage: perRarity(z.number().min(0)),
+    bagSize: z.number().int().positive(),
+  }),
+  forge: z.object({
+    upgradeStep: z.number().min(0),
+    maxUpgrade: z.number().int().min(0),
+    upgradeBaseCost: z.number().positive(),
+    upgradeCostExp: z.number().positive(),
+    rarityCostMult: perRarity(z.number().positive()),
+    reforgeBaseCost: z.number().positive(),
+    reforgeGrowth: z.number().positive(),
+    fuseCost: perRarity(z.number().min(0)),
+  }),
+});
+
 export const BalanceConfigSchema = z.object({
   baseHP: z.number().positive(),
   maxDuelSeconds: z.number().positive(),
@@ -324,4 +558,5 @@ export const BalanceConfigSchema = z.object({
   ),
   gem: GemBalanceConfigSchema,
   transplant: TransplantBalanceSchema,
+  delve: DelveBalanceSchema.optional(),
 });

@@ -1,0 +1,195 @@
+{
+  "slotWeights": { "weapon": 18, "helm": 14, "chest": 14, "gloves": 14, "boots": 14, "amulet": 12, "ring": 14 },
+  "bases": [
+    { "id": "dagger", "slot": "weapon", "name": "Dagger", "attackInterval": 0.72, "weight": 1,
+      "implicits": [{ "stat": "damage", "base": 5.2, "scaling": "flat" }, { "stat": "critChance", "base": 5, "scaling": "fixed" }] },
+    { "id": "sword", "slot": "weapon", "name": "Sword", "attackInterval": 1.0, "weight": 1,
+      "implicits": [{ "stat": "damage", "base": 7, "scaling": "flat" }] },
+    { "id": "axe", "slot": "weapon", "name": "Axe", "attackInterval": 1.3, "weight": 1,
+      "implicits": [{ "stat": "damage", "base": 9.5, "scaling": "flat" }, { "stat": "critDamage", "base": 25, "scaling": "fixed" }] },
+    { "id": "maul", "slot": "weapon", "name": "Maul", "attackInterval": 1.7, "weight": 1,
+      "implicits": [{ "stat": "damage", "base": 13.5, "scaling": "flat" }] },
+    { "id": "helm", "slot": "helm", "name": "Helm", "weight": 1,
+      "implicits": [{ "stat": "armor", "base": 5, "scaling": "flat" }, { "stat": "maxHp", "base": 12, "scaling": "flat" }] },
+    { "id": "cuirass", "slot": "chest", "name": "Cuirass", "weight": 1,
+      "implicits": [{ "stat": "armor", "base": 10, "scaling": "flat" }, { "stat": "maxHp", "base": 25, "scaling": "flat" }] },
+    { "id": "gauntlets", "slot": "gloves", "name": "Gauntlets", "weight": 1,
+      "implicits": [{ "stat": "armor", "base": 3, "scaling": "flat" }, { "stat": "attackSpeedPct", "base": 5, "scaling": "fixed" }] },
+    { "id": "greaves", "slot": "boots", "name": "Greaves", "weight": 1,
+      "implicits": [{ "stat": "armor", "base": 3, "scaling": "flat" }, { "stat": "dodge", "base": 3, "scaling": "fixed" }] },
+    { "id": "amulet", "slot": "amulet", "name": "Amulet", "weight": 1,
+      "implicits": [{ "stat": "damagePct", "base": 8, "scaling": "fixed" }, { "stat": "maxHp", "base": 8, "scaling": "flat" }] },
+    { "id": "ring", "slot": "ring", "name": "Ring", "weight": 1,
+      "implicits": [{ "stat": "critChance", "base": 3, "scaling": "fixed" }] }
+  ],
+  "affixes": [
+    { "stat": "damage", "label": "Damage", "unit": "flat", "min": 1, "max": 3, "scaling": "flat", "decimals": 0, "weight": 10,
+      "slots": ["weapon", "gloves", "ring", "amulet"] },
+    { "stat": "fireDamage", "label": "Fire Damage", "unit": "flat", "min": 1, "max": 3, "scaling": "flat", "decimals": 0, "weight": 6,
+      "slots": ["weapon", "gloves", "ring", "amulet"] },
+    { "stat": "coldDamage", "label": "Cold Damage", "unit": "flat", "min": 1, "max": 3, "scaling": "flat", "decimals": 0, "weight": 6,
+      "slots": ["weapon", "gloves", "ring", "amulet", "boots"] },
+    { "stat": "lightningDamage", "label": "Lightning Damage", "unit": "flat", "min": 1, "max": 4, "scaling": "flat", "decimals": 0, "weight": 6,
+      "slots": ["weapon", "gloves", "ring", "amulet", "helm"] },
+    { "stat": "damagePct", "label": "Damage", "unit": "pct", "min": 5, "max": 20, "scaling": "fixed", "decimals": 0, "weight": 8,
+      "slots": ["weapon", "amulet", "ring", "gloves"] },
+    { "stat": "attackSpeedPct", "label": "Attack Speed", "unit": "pct", "min": 3, "max": 10, "scaling": "fixed", "decimals": 0, "weight": 7,
+      "slots": ["weapon", "gloves", "ring", "amulet"] },
+    { "stat": "critChance", "label": "Crit Chance", "unit": "pct", "min": 1, "max": 5, "scaling": "fixed", "decimals": 0, "weight": 7,
+      "slots": ["weapon", "gloves", "ring", "amulet", "helm"] },
+    { "stat": "critDamage", "label": "Crit Damage", "unit": "pct", "min": 10, "max": 40, "scaling": "fixed", "decimals": 0, "weight": 7,
+      "slots": ["weapon", "amulet", "ring", "gloves"] },
+    { "stat": "maxHp", "label": "Max Life", "unit": "flat", "min": 6, "max": 16, "scaling": "flat", "decimals": 0, "weight": 10,
+      "slots": ["helm", "chest", "boots", "amulet", "ring", "gloves"] },
+    { "stat": "hpPct", "label": "Max Life", "unit": "pct", "min": 3, "max": 10, "scaling": "fixed", "decimals": 0, "weight": 6,
+      "slots": ["chest", "helm", "amulet", "boots"] },
+    { "stat": "armor", "label": "Armor", "unit": "flat", "min": 3, "max": 9, "scaling": "flat", "decimals": 0, "weight": 10,
+      "slots": ["helm", "chest", "gloves", "boots"] },
+    { "stat": "dodge", "label": "Dodge", "unit": "pct", "min": 1, "max": 5, "scaling": "fixed", "decimals": 0, "weight": 5,
+      "slots": ["boots", "gloves", "chest", "helm"] },
+    { "stat": "lifesteal", "label": "Lifesteal", "unit": "pct", "min": 1, "max": 4, "scaling": "fixed", "decimals": 1, "weight": 5,
+      "slots": ["weapon", "amulet", "ring", "gloves"] },
+    { "stat": "lifeOnHit", "label": "Life per Hit", "unit": "flat", "min": 1, "max": 2, "scaling": "flat", "decimals": 0, "weight": 5,
+      "slots": ["weapon", "gloves", "ring"] },
+    { "stat": "healOnKill", "label": "Heal on Kill", "unit": "pct", "min": 2, "max": 6, "scaling": "fixed", "decimals": 0, "weight": 5,
+      "slots": ["chest", "helm", "amulet", "boots", "ring"] },
+    { "stat": "thorns", "label": "Thorns", "unit": "flat", "min": 2, "max": 6, "scaling": "flat", "decimals": 0, "weight": 4,
+      "slots": ["chest", "helm", "boots", "gloves"] },
+    { "stat": "magicFind", "label": "Magic Find", "unit": "pct", "min": 5, "max": 25, "scaling": "fixed", "decimals": 0, "weight": 5,
+      "slots": ["helm", "amulet", "ring", "boots", "gloves"] },
+    { "stat": "scrapFind", "label": "Scrap Find", "unit": "pct", "min": 5, "max": 25, "scaling": "fixed", "decimals": 0, "weight": 4,
+      "slots": ["helm", "amulet", "ring", "boots", "gloves", "chest"] }
+  ],
+  "legendaries": [
+    { "id": "twin_fang", "name": "Twin Fang", "text": "Every 3rd attack strikes again for {v}% damage.", "min": 80, "max": 130,
+      "slots": ["weapon", "gloves"] },
+    { "id": "emberheart", "name": "Emberheart", "text": "Hits ignite the enemy, burning for {v}% of hit damage over 3s.", "min": 30, "max": 60,
+      "slots": ["weapon", "amulet", "chest"] },
+    { "id": "stormcaller", "name": "Stormcaller", "text": "{v}% chance on hit to call lightning for 150% weapon damage.", "min": 12, "max": 22,
+      "slots": ["weapon", "ring", "helm"] },
+    { "id": "executioner", "name": "Executioner", "text": "Deal +{v}% damage to enemies below 30% life.", "min": 50, "max": 100,
+      "slots": ["weapon", "gloves", "ring"] },
+    { "id": "glass_cannon", "name": "Glass Cannon", "text": "+{v}% damage, but 20% less max life.", "min": 35, "max": 60,
+      "slots": ["amulet", "ring"] },
+    { "id": "berserker", "name": "Berserker", "text": "Gain up to +{v}% attack speed as your life drops.", "min": 40, "max": 80,
+      "slots": ["gloves", "helm", "boots"] },
+    { "id": "bulwark", "name": "Bulwark", "text": "Block the first hit of every fight. +{v}% armor.", "min": 20, "max": 40,
+      "slots": ["chest", "helm"] },
+    { "id": "phoenix_plume", "name": "Phoenix Plume", "text": "Once per dive, rise again with {v}% life when slain.", "min": 30, "max": 60,
+      "slots": ["chest", "amulet", "helm"] },
+    { "id": "frostbite", "name": "Frostbite", "text": "Hits chill the enemy, slowing its attacks by {v}%.", "min": 15, "max": 30,
+      "slots": ["boots", "weapon", "ring"] },
+    { "id": "thornmail", "name": "Thornmail", "text": "Reflect {v}% of damage taken back at the attacker.", "min": 30, "max": 60,
+      "slots": ["chest", "boots"] },
+    { "id": "lucky_charm", "name": "Lucky Charm", "text": "+{v}% Magic Find. Legendary odds doubled.", "min": 40, "max": 80,
+      "slots": ["ring", "amulet", "boots"] },
+    { "id": "seismic_slam", "name": "Seismic Slam", "text": "Slam charges 50% faster and deals +{v}% damage.", "min": 50, "max": 100,
+      "slots": ["weapon", "gloves"] }
+  ],
+  "traits": [
+    { "id": "armored", "name": "Armored", "text": "Takes 35% less physical damage." },
+    { "id": "swift", "name": "Swift", "text": "Attacks much faster, but frail." },
+    { "id": "brute", "name": "Brute", "text": "Hits 50% harder, but slower." },
+    { "id": "regenerating", "name": "Regenerating", "text": "Regenerates 2% life per second." },
+    { "id": "vampiric", "name": "Vampiric", "text": "Heals for half the damage it deals." },
+    { "id": "spiked", "name": "Spiked", "text": "Reflects 12% of damage taken." }
+  ],
+  "biomes": [
+    {
+      "id": "cinder_mines", "name": "Cinder Mines", "colors": ["#2b1510", "#0d0807"], "accent": "#ff7a3c",
+      "monsters": [
+        { "id": "mine_rat", "name": "Mine Rat", "icon": "🐀", "hp": 0.8, "dmg": 0.8, "interval": 1.1 },
+        { "id": "soot_bat", "name": "Soot Bat", "icon": "🦇", "hp": 0.7, "dmg": 0.9, "interval": 0.9 },
+        { "id": "slag_beetle", "name": "Slag Beetle", "icon": "🪲", "hp": 1.3, "dmg": 0.8, "interval": 1.6, "traits": ["armored"] },
+        { "id": "goblin_digger", "name": "Goblin Digger", "icon": "👺", "hp": 1.0, "dmg": 1.1, "interval": 1.4 }
+      ],
+      "boss": { "id": "foreman_grask", "name": "Foreman Grask", "icon": "🧌", "hp": 1.0, "dmg": 1.0, "interval": 1.7, "traits": ["brute"] }
+    },
+    {
+      "id": "frostvault", "name": "Frostvault", "colors": ["#0f1f2e", "#060a10"], "accent": "#7cc8ff",
+      "monsters": [
+        { "id": "frost_wolf", "name": "Frost Wolf", "icon": "🐺", "hp": 0.9, "dmg": 1.0, "interval": 1.0 },
+        { "id": "rime_wraith", "name": "Rime Wraith", "icon": "👻", "hp": 0.8, "dmg": 1.1, "interval": 1.3 },
+        { "id": "tusked_mammoth", "name": "Tusked Mammoth", "icon": "🦣", "hp": 1.6, "dmg": 1.2, "interval": 2.0 },
+        { "id": "snow_stalker", "name": "Snow Stalker", "icon": "🐆", "hp": 0.9, "dmg": 0.9, "interval": 1.1, "traits": ["swift"] }
+      ],
+      "boss": { "id": "pale_maw", "name": "The Pale Maw", "icon": "🐻‍❄️", "hp": 1.0, "dmg": 1.0, "interval": 1.5, "traits": ["armored"] }
+    },
+    {
+      "id": "storm_foundry", "name": "Storm Foundry", "colors": ["#1c1a33", "#08070f"], "accent": "#e6d44a",
+      "monsters": [
+        { "id": "clockwork_sentry", "name": "Clockwork Sentry", "icon": "🤖", "hp": 1.2, "dmg": 0.9, "interval": 1.3, "traits": ["armored"] },
+        { "id": "storm_hawk", "name": "Storm Hawk", "icon": "🦅", "hp": 0.8, "dmg": 1.0, "interval": 1.0, "traits": ["swift"] },
+        { "id": "coil_serpent", "name": "Coil Serpent", "icon": "🐍", "hp": 0.9, "dmg": 1.1, "interval": 1.2 },
+        { "id": "arc_imp", "name": "Arc Imp", "icon": "👾", "hp": 0.8, "dmg": 1.2, "interval": 1.0 }
+      ],
+      "boss": { "id": "voltaic_drake", "name": "Voltaic Drake", "icon": "🐉", "hp": 1.0, "dmg": 1.0, "interval": 1.4, "traits": ["swift"] }
+    },
+    {
+      "id": "venom_vats", "name": "Venom Vats", "colors": ["#12261a", "#050c07"], "accent": "#56e07a",
+      "monsters": [
+        { "id": "vat_spider", "name": "Vat Spider", "icon": "🕷️", "hp": 0.9, "dmg": 1.0, "interval": 1.0 },
+        { "id": "bog_toad", "name": "Bog Toad", "icon": "🐸", "hp": 1.2, "dmg": 0.9, "interval": 1.3, "traits": ["regenerating"] },
+        { "id": "rotter", "name": "Rotter", "icon": "🧟", "hp": 1.4, "dmg": 1.0, "interval": 1.6 },
+        { "id": "living_ooze", "name": "Living Ooze", "icon": "🦠", "hp": 1.1, "dmg": 0.8, "interval": 1.2, "traits": ["regenerating"] }
+      ],
+      "boss": { "id": "brood_mother", "name": "The Brood Mother", "icon": "🦑", "hp": 1.0, "dmg": 1.0, "interval": 1.5, "traits": ["regenerating"] }
+    },
+    {
+      "id": "bone_crypts", "name": "Bone Crypts", "colors": ["#221a26", "#09070b"], "accent": "#c9b8ff",
+      "monsters": [
+        { "id": "skeleton", "name": "Skeleton Warrior", "icon": "💀", "hp": 0.9, "dmg": 1.1, "interval": 1.1 },
+        { "id": "nightstalker", "name": "Nightstalker", "icon": "🧛", "hp": 1.0, "dmg": 1.0, "interval": 1.0, "traits": ["vampiric"] },
+        { "id": "crypt_ogre", "name": "Crypt Ogre", "icon": "👹", "hp": 1.5, "dmg": 1.2, "interval": 1.8, "traits": ["brute"] },
+        { "id": "restless_grave", "name": "Restless Grave", "icon": "🪦", "hp": 1.3, "dmg": 0.9, "interval": 1.4, "traits": ["spiked"] }
+      ],
+      "boss": { "id": "hollow_king", "name": "The Hollow King", "icon": "🧙", "hp": 1.0, "dmg": 1.0, "interval": 1.4, "traits": ["vampiric"] }
+    },
+    {
+      "id": "molten_core", "name": "Molten Core", "colors": ["#331006", "#0f0402"], "accent": "#ff4d1f",
+      "monsters": [
+        { "id": "fire_imp", "name": "Fire Imp", "icon": "😈", "hp": 0.8, "dmg": 1.2, "interval": 0.9, "traits": ["swift"] },
+        { "id": "magma_lizard", "name": "Magma Lizard", "icon": "🦎", "hp": 1.1, "dmg": 1.0, "interval": 1.2 },
+        { "id": "hellboar", "name": "Hellboar", "icon": "🐗", "hp": 1.3, "dmg": 1.2, "interval": 1.4, "traits": ["brute"] },
+        { "id": "flame_spirit", "name": "Flame Spirit", "icon": "🔥", "hp": 0.9, "dmg": 1.1, "interval": 1.0, "traits": ["spiked"] }
+      ],
+      "boss": { "id": "obsidian_colossus", "name": "Obsidian Colossus", "icon": "🗿", "hp": 1.0, "dmg": 1.0, "interval": 1.8, "traits": ["armored", "brute"] }
+    }
+  ],
+  "doors": [
+    { "id": "winding", "name": "Winding Path", "text": "No surprises. Just the next depth.", "icon": "🚪", "weight": 4, "mods": {} },
+    { "id": "gilded", "name": "Gilded Halls", "text": "+75% Magic Find. Monsters have +25% life.", "icon": "💰", "weight": 3,
+      "mods": { "magicFind": 75, "monsterHp": 0.25 } },
+    { "id": "champions", "name": "Champion's Den", "text": "Every foe is an Elite. Bounty ×1.5.", "icon": "⚔️", "weight": 2,
+      "mods": { "eliteChance": 1, "bountyMult": 1.5 } },
+    { "id": "shrine", "name": "Quiet Shrine", "text": "Heal to full and gain a potion. Half the loot.", "icon": "⛲", "weight": 2,
+      "mods": { "healFull": true, "potions": 1, "dropMult": 0.5 } },
+    { "id": "plunge", "name": "The Plunge", "text": "Drop 2 depths deeper. Bounty ×2.", "icon": "🕳️", "weight": 2,
+      "mods": { "skip": 2, "bountyMult": 2 } },
+    { "id": "swarm", "name": "Swarming Tunnels", "text": "5 weaker foes. 30% more loot.", "icon": "🐜", "weight": 2,
+      "mods": { "fights": 5, "monsterHp": -0.35, "dropMult": 1.3 } },
+    { "id": "cursed", "name": "Cursed Crypt", "text": "Monsters hit 40% harder. +150% Magic Find.", "icon": "🩸", "weight": 2,
+      "mods": { "monsterDmg": 0.4, "magicFind": 150 } }
+  ],
+  "materials": [
+    { "minIlvl": 1, "name": "Rusty" },
+    { "minIlvl": 5, "name": "Iron" },
+    { "minIlvl": 10, "name": "Steel" },
+    { "minIlvl": 16, "name": "Mithril" },
+    { "minIlvl": 24, "name": "Adamant" },
+    { "minIlvl": 34, "name": "Starforged" },
+    { "minIlvl": 48, "name": "Voidforged" }
+  ],
+  "names": {
+    "prefixes": ["Grim", "Dusk", "Storm", "Blood", "Ash", "Dread", "Hollow", "Ember", "Frost", "Rune", "Night", "Doom", "Wraith", "Bone", "Sun", "Gloom", "Iron", "Viper"],
+    "suffixes": {
+      "weapon": ["Bite", "Edge", "Fang", "Reaver", "Song", "Cleaver", "Thirst", "Kiss"],
+      "helm": ["Crown", "Visage", "Brow", "Cowl", "Gaze", "Mask"],
+      "chest": ["Mantle", "Shell", "Heart", "Carapace", "Bulwark", "Hide"],
+      "gloves": ["Grasp", "Fist", "Clutch", "Knuckle", "Grip", "Touch"],
+      "boots": ["Stride", "Tread", "March", "Step", "Path", "Heel"],
+      "amulet": ["Charm", "Locket", "Talisman", "Eye", "Sigil", "Star"],
+      "ring": ["Band", "Loop", "Coil", "Circle", "Seal", "Spiral"]
+    }
+  }
+}
