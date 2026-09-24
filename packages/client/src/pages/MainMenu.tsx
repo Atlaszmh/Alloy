@@ -71,7 +71,7 @@ export function MainMenu() {
           <span className="block text-xs font-semibold tracking-wide opacity-75">
             {veteran
               ? `Deepest ${profile.bestDepth} · Power ${formatNumber(power)} · ★ ${legendaries}/${totalLegendaries}`
-              : 'Fight monsters · hunt legendary gear'}
+              : 'Real-time loot hunt · mana-fueled spells'}
           </span>
         </button>
 

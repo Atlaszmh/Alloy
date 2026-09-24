@@ -22,6 +22,8 @@ export function AppShell() {
   const isInMatch = location.pathname.startsWith('/match/');
   const isInQueue = location.pathname === '/queue';
   const isInActiveGame = isInMatch;
+  // The Delve arena is full-screen: the joystick and spell bar need the space.
+  const hideTabBar = location.pathname === '/delve/run';
 
   const confirmVariant = isInQueue ? 'queue' : 'match';
 
@@ -89,23 +91,25 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        <TabBar
-          onSettingsOpen={() => { setDevOpen(false); setSettingsOpen(true); }}
-          onDevOpen={() => { setSettingsOpen(false); setDevOpen(true); }}
-          onConfirmLeave={handleConfirmLeave}
-          isInActiveGame={isInActiveGame}
-          isInQueue={isInQueue}
-        />
+        {!hideTabBar && (
+          <TabBar
+            onSettingsOpen={() => {
+              setDevOpen(false);
+              setSettingsOpen(true);
+            }}
+            onDevOpen={() => {
+              setSettingsOpen(false);
+              setDevOpen(true);
+            }}
+            onConfirmLeave={handleConfirmLeave}
+            isInActiveGame={isInActiveGame}
+            isInQueue={isInQueue}
+          />
+        )}
 
-        <SettingsDrawer
-          open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-        />
+        <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-        <DevDrawer
-          open={devOpen}
-          onClose={() => setDevOpen(false)}
-        />
+        <DevDrawer open={devOpen} onClose={() => setDevOpen(false)} />
 
         <ConfirmLeaveDialog
           open={confirmOpen}

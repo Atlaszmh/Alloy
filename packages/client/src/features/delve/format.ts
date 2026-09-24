@@ -1,4 +1,5 @@
-import type { DataRegistry, HeroStatKey, Rarity } from '@alloy/engine';
+import type { DataRegistry, HeroStatKey, ManaType, Rarity } from '@alloy/engine';
+import { MANA_TYPES } from '@alloy/engine';
 
 export const RARITY_COLOR: Record<Rarity, string> = {
   common: '#b9b9c4',
@@ -74,3 +75,21 @@ export function formatDelta(frac: number): string {
 
 /** Upgrade threshold for ▲ badges — ignore rounding noise. */
 export const UPGRADE_EPSILON = 0.005;
+
+export interface ManaStyle {
+  name: string;
+  icon: string;
+  color: string;
+}
+
+/** Display info per mana type, from arpg.json. */
+export function manaStyle(registry: DataRegistry, mana: ManaType): ManaStyle {
+  return registry.getArpgData().mana[mana];
+}
+
+export function manaStyles(registry: DataRegistry): Record<ManaType, ManaStyle> {
+  return Object.fromEntries(MANA_TYPES.map((m) => [m, manaStyle(registry, m)])) as Record<
+    ManaType,
+    ManaStyle
+  >;
+}

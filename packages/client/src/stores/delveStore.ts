@@ -12,6 +12,7 @@ import {
   reforgeGear,
   fuseGear,
   setAutoSalvage,
+  setSkillSlot as engineSetSkillSlot,
   type DelveProfile,
   type GearItem,
   type GearSlot,
@@ -26,11 +27,7 @@ import { createHmrStore } from './hmr-store';
  * here delegates to an engine function and persists the resulting profile.
  */
 
-export const DELVE_SAVE_KEY = 'alloy:delve:v1';
-const SPEED_KEY = 'alloy:delve:speed';
-const AUTOSLAM_KEY = 'alloy:delve:autoSlam';
-
-export type DelveSpeed = 1 | 2 | 4;
+export const DELVE_SAVE_KEY = 'alloy:delve:v2';
 
 export function loadDelveProfile(): DelveProfile | null {
   try {
@@ -54,28 +51,8 @@ function freshSeed(): number {
   return (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) | 0;
 }
 
-function loadSpeed(): DelveSpeed {
-  try {
-    const v = Number(localStorage.getItem(SPEED_KEY));
-    if (v === 1 || v === 2 || v === 4) return v;
-  } catch {
-    /* noop */
-  }
-  return 1;
-}
-
-function loadAutoSlam(): boolean {
-  try {
-    return localStorage.getItem(AUTOSLAM_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
 interface DelveStore {
   profile: DelveProfile;
-  speed: DelveSpeed;
-  autoSlam: boolean;
   /** Items the player hasn't looked at yet (pulse dot). */
   newUids: Record<string, true>;
   /** Drops from the current dive, newest first (session only). */
@@ -97,9 +74,8 @@ interface DelveStore {
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
-  setSpeed: (speed: DelveSpeed) => void;
-  cycleSpeed: () => void;
-  toggleAutoSlam: () => void;
+  /** Put an unlocked spell on the action bar (swaps if it is already slotted). */
+  setSkillSlot: (slot: number, skillId: string | null) => void;
 }
 
 function withoutUids(map: Record<string, true>, uids: string[]): Record<string, true> {
@@ -121,8 +97,6 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
   return {
     profile: loadDelveProfile() ?? createDelveProfile(getDelveRegistry(), freshSeed()),
-    speed: loadSpeed(),
-    autoSlam: loadAutoSlam(),
     newUids: {},
     diveDrops: [],
 
@@ -201,28 +175,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ diveDrops: [...uids.slice().reverse(), ...get().diveDrops].slice(0, 60) });
     },
 
-    setSpeed: (speed) => {
-      try {
-        localStorage.setItem(SPEED_KEY, String(speed));
-      } catch {
-        /* noop */
-      }
-      set({ speed });
-    },
-
-    cycleSpeed: () => {
-      const next: DelveSpeed = get().speed === 1 ? 2 : get().speed === 2 ? 4 : 1;
-      get().setSpeed(next);
-    },
-
-    toggleAutoSlam: () => {
-      const next = !get().autoSlam;
-      try {
-        localStorage.setItem(AUTOSLAM_KEY, String(next));
-      } catch {
-        /* noop */
-      }
-      set({ autoSlam: next });
+    setSkillSlot: (slot, skillId) => {
+      commit(engineSetSkillSlot(registry(), get().profile, slot, skillId));
     },
   };
 });

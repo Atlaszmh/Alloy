@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { formatNumber, formatDelta, formatStat, legendaryText } from '../format';
+import {
+  formatNumber,
+  formatDelta,
+  formatStat,
+  legendaryText,
+  manaStyle,
+  manaStyles,
+} from '../format';
 import { getDelveRegistry } from '../registry';
 
 const registry = getDelveRegistry();
@@ -27,8 +34,15 @@ describe('delve format helpers', () => {
   });
 
   it('fills legendary text with the rolled value', () => {
-    expect(legendaryText(registry, 'executioner', 77.4)).toBe(
-      'Deal +77% damage to enemies below 30% life.',
+    expect(legendaryText(registry, 'glass_cannon', 47.6)).toBe(
+      '+48% damage, but 20% less max life.',
     );
+  });
+
+  it('describes every mana type with a name, icon and color', () => {
+    expect(manaStyle(registry, 'fire')).toMatchObject({ name: 'Fire', icon: '🔥' });
+    const all = manaStyles(registry);
+    expect(Object.keys(all)).toEqual(['fire', 'frost', 'storm', 'earth', 'shadow']);
+    for (const style of Object.values(all)) expect(style.color).toMatch(/^#[0-9a-f]{6}$/i);
   });
 });

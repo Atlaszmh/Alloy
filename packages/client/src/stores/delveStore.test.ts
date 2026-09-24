@@ -66,15 +66,16 @@ describe('delveStore', () => {
     expect(res.reason).toMatch(/scrap/i);
   });
 
-  it('cycles playback speed 1 → 2 → 4 → 1 and persists it', () => {
+  it('rearranges the spell bar and persists it', () => {
     const s = useDelveStore.getState();
-    s.setSpeed(1);
-    useDelveStore.getState().cycleSpeed();
-    expect(useDelveStore.getState().speed).toBe(2);
-    useDelveStore.getState().cycleSpeed();
-    expect(useDelveStore.getState().speed).toBe(4);
-    useDelveStore.getState().cycleSpeed();
-    expect(useDelveStore.getState().speed).toBe(1);
-    expect(localStorage.getItem('alloy:delve:speed')).toBe('1');
+    expect(s.profile.skillSlots).toEqual(['fireball', 'boulder', null]);
+    s.setSkillSlot(2, 'fireball');
+    expect(useDelveStore.getState().profile.skillSlots).toEqual([null, 'boulder', 'fireball']);
+    expect(loadDelveProfile()?.skillSlots).toEqual([null, 'boulder', 'fireball']);
+  });
+
+  it('refuses to slot a locked spell', () => {
+    expect(() => useDelveStore.getState().setSkillSlot(0, 'blizzard')).toThrow(/locked/);
+    expect(useDelveStore.getState().profile.skillSlots[0]).toBe('fireball');
   });
 });
