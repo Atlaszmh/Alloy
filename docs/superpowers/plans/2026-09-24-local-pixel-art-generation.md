@@ -24,17 +24,18 @@
 
 Avoid for shipped art: Qwen-Image-2.1 (research-only license) and FLUX.2 klein 9B (check its license first; it is not Apache 2.0). Check each community LoRA's license on its page before shipping art made with it.
 
-## Phase 0: PC setup (you, ~1 hour)
+## Phase 0: PC setup (done 2026-09-24)
 
-- [ ] Update the NVIDIA driver (the 50 series needs a current one).
-- [ ] Install ComfyUI: the current Windows portable build from the ComfyUI GitHub releases. Older guides that install an older PyTorch fail on the 50 series with "sm_120 is not compatible"; current builds ship a PyTorch that supports it.
-- [ ] In ComfyUI, open **Templates → FLUX.2 Klein 4B** (text to image) and let it download the files it asks for (the klein 4B model, the `qwen_3_4b` text encoder, `flux2-vae`). Generate one test image and note the seconds per image.
-- [ ] Do the same with the **Z-Image Turbo** template.
-- [ ] Put the pixel art LoRAs in `ComfyUI/models/loras/`: `Limbicnation/pixel-art-lora` (klein 4B) and `tarn59/pixel_art_style_lora_z_image_turbo` (Z-Image Turbo, Apache 2.0).
-- [ ] For each template, **Workflow → Export (API)** and save it as `packages/pixel-forge/workflows/klein4b.json`, `klein4b-edit.json` (the image-edit template), and `zimage-turbo.json`. Commit and push them.
-- [ ] Install Node 20+, then `corepack enable`, `git clone`, check out this branch, `pnpm install`.
-- [ ] Optional: install Claude Code on the PC, so Claude can run the generate → review → pick loop there and look at the review sheets directly.
-- [ ] Keep ComfyUI bound to `127.0.0.1`, and only install custom nodes you trust (they run arbitrary code).
+- [x] NVIDIA driver 610.88 (current enough for the 50 series).
+- [x] ComfyUI v0.37.0 Windows portable (NVIDIA build: embedded Python 3.13, PyTorch 2.13 + CUDA 13.0, `sm_120` supported) at `C:\AI\ComfyUI_windows_portable`. Start it with `run_nvidia_gpu.bat`; it serves `http://127.0.0.1:8188` only.
+- [x] Models, taken from the stock templates' own download lists (big files checked against Hugging Face's SHA-256): `diffusion_models/flux-2-klein-4b.safetensors` (distilled, bf16), `diffusion_models/z_image_turbo_bf16.safetensors`, `text_encoders/qwen_3_4b.safetensors` (shared by both), `vae/flux2-vae.safetensors`, `vae/ae.safetensors`. Not downloaded until needed: the fp8 klein (bf16 fits) and klein base 4B (LoRA training only).
+- [x] Pixel art LoRAs in `models/loras/`: `limbicnation_pixel_art_klein4b.safetensors` (Limbicnation/pixel-art-lora, Apache 2.0) and `pixel_art_style_z_image_turbo.safetensors` (tarn59, Apache 2.0). Not tried yet.
+- [x] Test generations at 1024×1024, `frost_wolf` prompt, no LoRA: klein 4B ~2.2 s per image (4 steps), Z-Image Turbo ~6.3 s (8 steps), first run +5–7 s for loading. No out-of-memory.
+- [x] ~~Export the templates as API workflows by hand~~: not needed. Claude builds API-format graphs that mirror the templates (klein: `CFGGuider` cfg 1, `Flux2Scheduler` 4 steps, euler, `ConditioningZeroOut` negative; Z-Image: `ModelSamplingAuraFlow` shift 3, `KSampler` 8 steps, cfg 1, `res_multistep` / `simple`) and reads node inputs from `GET /object_info`.
+- [x] Node 24 + pnpm 9 on the PC, `pnpm install` done, pixel-forge tests pass on Windows. Claude Code runs locally.
+- [x] ComfyUI bound to `127.0.0.1`; no custom nodes installed.
+
+**First look:** both models draw pixel art on magenta as asked, but finer than 16 px (Z-Image ~30 blocks across, klein finer still), so cleanup resamples and loses faces and legs. Phase 2 has to close that gap: the pixel art LoRAs, prompt wording, and possibly generating at 20/32 px canvases.
 
 ## Phase 1: ComfyUI backend in pixel-forge (Claude, TDD)
 
