@@ -1,5 +1,5 @@
 import type { ManaType } from './mana.js';
-import type { StatusId, Vec } from './arpg.js';
+import type { FormDef, FusionDef, StatusId, Vec } from './arpg.js';
 
 /**
  * Abilities are built from parts: a form (what it does), one or two elements
@@ -80,4 +80,41 @@ export interface Knobs {
 export interface AbilityCast {
   slot: number;
   aim?: Vec | null;
+}
+
+/** An ability build compiled to plain numbers; the combat code reads only this. */
+export interface ResolvedAbility {
+  slot: AbilitySlot;
+  build: AbilityBuild;
+  form: FormDef;
+  /** "Wildfire Burst", "Frost Ward". */
+  name: string;
+  icon: string;
+  /** The damage element (the first one). */
+  element: ManaType;
+  elements: ManaType[];
+  fusion: FusionDef | null;
+  /** Damage as a multiple of the hero's weapon hit. */
+  power: number;
+  /** Defensive magnitude (see `FormDef.effect`); 0 for offensive forms. */
+  effect: number;
+  /** Mana spent per use (0 when paid by charge). */
+  cost: number;
+  cooldown: number;
+  /** Wind-up seconds (cast payment only). */
+  castTime: number;
+  /** Charge units needed (charge payment only). */
+  chargeNeed: number;
+  range: number;
+  radius: number;
+  speed: number;
+  count: number;
+  duration: number;
+  tick: number;
+  /** Melee arc in degrees. */
+  arc: number;
+  /** Press-combo multipliers; `[1]` when the form has no combo. */
+  combo: number[];
+  comboCount: number[] | null;
+  knobs: Knobs;
 }
