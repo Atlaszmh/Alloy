@@ -208,13 +208,22 @@ are replayed onto it, and nothing flows back into the rules.
   transferred buffers that ping-pong between threads. If a repaint costs more than 7 ms it
   drops to every other step.
 
-## Pixel Sprites (v0.30.0)
+## Pixel Sprites (v0.30.0, sizes v0.31.0)
 
 Creatures are pixel sprites drawn at the floor's density: one sprite pixel is 0.1 arena
 units (the floor paints 5 cells per unit at 2×). The client loads one sprite sheet,
 `client/public/sprites/delve/atlas.{png,json}`, keyed by `hero` and monster `defId`, and
 falls back to the monster's emoji when a sprite is missing. Sprites stand on their
 ground point, flip to face their heading, and cycle their frames at 3 fps (held while frozen).
+
+**One pixel density, many sizes** (after Animal Well): the art stays minimal, 16 px for a
+standard creature, but canvases follow the monster's `size` at 16 px per unit, so every
+pixel in the arena is the same size. Each biome has a tiny critter (size 0.6–0.8, 10–13 px),
+standard monsters (1.0–1.2), a brute (1.4–2.0, 22–32 px) and a giant boss (2.4–3.4, 38–54 px).
+Size also sets the hitbox (radius 0.55 × size): small monsters are harder to hit, big ones
+block space. Elites keep the density too (their hitbox is 1.2× but the sprite is not
+scaled; the gold ring marks them), and hits and wind-ups lift a sprite by whole pixels
+instead of scaling it. A 32 px prototype (twice the density) was tried and set aside.
 
 The sheet is built by `packages/pixel-forge`, a Node CLI:
 
@@ -235,8 +244,10 @@ The sheet is built by `packages/pixel-forge`, a Node CLI:
 - **Review**: `generate` writes several candidates and a contact sheet; a person picks
   one (`pick`) and `build` repacks the atlas and the full review sheet.
 
-The first set covers the hero and all of Cinder Mines (mine rat, soot bat, slag beetle,
-goblin digger, Foreman Grask). The other 25 monsters are queued as `ai` assets.
+The first set covers the hero and all of Cinder Mines: the hero, mine rat (10 px), soot bat
+(11 px), goblin digger (16 px) and slag beetle (22 px) drawn in code, and Foreman Grask
+(45 px) generated with `klein4b-pixel` (sheet completion overflows the cell at boss sizes).
+The other 25 monsters are queued as `ai` assets.
 
 ## Power & Comparison
 

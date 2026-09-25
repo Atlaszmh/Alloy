@@ -85,6 +85,16 @@ Known: ComfyUI loads 166 of the klein pixel art LoRA's 172 keys. The 3 global mo
 - [x] Judge after cleanup.
 - [ ] Owner picks favourites from `art/alloy/candidates/*/review.png`, which settles the default. Claude's recommendation: `klein4b-sheet` as the default, as it is the one that keeps the set consistent and gets better as more sprites are picked (they join the sheet), with `klein4b-pixel` as a second opinion for creatures whose silhouette matters most. Small white creatures (`frost_wolf`) are the weakest case for all three.
 
+## Decision: 16 px density, sizes vary (2026-09-24, v0.31.0)
+
+A 32 px prototype (half-size pixels) made AI art easier but was set aside for a minimal
+look. Instead, every sprite keeps one pixel density (0.1 arena units, the floor's) and its
+canvas follows the monster's size at 16 px per unit, after Animal Well: tiny critters are
+10–13 px, standard monsters 16–19, brutes 22–32, bosses 38–54. Monster sizes in
+`delve.json` were widened to match (autopilot pacing unchanged within its guard rails).
+For boss-sized canvases `klein4b-sheet` overflows its cell (the small reference sprites make
+the model draw a zoomed-in giant); `klein4b-pixel` works well, so generate bosses with it.
+
 ## Phase 3: Fill the roster (a few evenings of picking)
 
 - [ ] Generate 8 candidates for each of the 25 remaining monsters (~200 images; minutes of GPU time).
