@@ -4,7 +4,7 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import {
   computeHeroStats,
-  manaPools,
+  manaPool,
   estimateCombat,
   compareItem,
   itemStatLines,
@@ -138,30 +138,30 @@ describe('attunement & mana', () => {
     expect(s.attunement.fire).toBe(bal.mana.attuneByRarity.legendary + 2);
   });
 
-  it('only attuned mana types get a pool, and more attunement means a bigger, faster pool', () => {
+  it('one mana pool grows with total attunement', () => {
     const one = computeHeroStats({ weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire' }) }, registry);
-    const pools = manaPools(one, registry);
-    expect(pools.max.fire).toBeGreaterThan(0);
-    expect(pools.max.frost).toBe(0);
+    const pool = manaPool(one, registry);
+    expect(pool.max).toBeGreaterThan(0);
     const more = computeHeroStats(
-      { weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire', affixes: [stat('fireAttune', 2)] }) },
+      { weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire', affixes: [stat('frostAttune', 2)] }) },
       registry,
     );
-    expect(manaPools(more, registry).max.fire).toBeGreaterThan(pools.max.fire);
-    expect(manaPools(more, registry).regen.fire).toBeGreaterThan(pools.regen.fire);
+    expect(manaPool(more, registry).max).toBeGreaterThan(pool.max);
+    expect(manaPool(more, registry).regen).toBeGreaterThan(pool.regen);
   });
 });
 
 describe('estimateCombat & compareItem', () => {
-  it('reports spells an item would unlock or lock', () => {
+  it('reports the attunement an item would add', () => {
     const weapon = makeItem({ uid: 'w', slot: 'weapon', baseId: 'sword', mana: 'fire' });
     const frostRing = makeItem({ uid: 'r', slot: 'ring', baseId: 'ring', mana: 'frost' });
-    const cmp = compareItem({ weapon }, frostRing, registry, 1);
-    expect(cmp.skillsGained).toContain('frost_nova');
-    expect(cmp.attunementDelta).toEqual({ frost: 1 });
-    const swap = compareItem({ weapon }, makeItem({ uid: 'w2', slot: 'weapon', baseId: 'sword', mana: 'storm' }), registry, 1);
-    expect(swap.skillsLost).toContain('fireball');
-    expect(swap.skillsGained).toContain('chain_lightning');
+    expect(compareItem({ weapon }, frostRing, registry, 1).attunementDelta).toEqual({ frost: 1 });
+  });
+
+  it('attunement in an ability element raises Power', () => {
+    const weapon = makeItem({ uid: 'w', slot: 'weapon', baseId: 'sword', mana: 'fire', implicits: [stat('damage', 10)] });
+    const fireRing = makeItem({ uid: 'r', slot: 'ring', baseId: 'ring', mana: 'fire', affixes: [stat('fireAttune', 2)] });
+    expect(compareItem({ weapon }, fireRing, registry, 1).dpsPct).toBeGreaterThan(0);
   });
 
   it('a stronger weapon raises DPS and power', () => {

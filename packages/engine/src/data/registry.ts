@@ -5,7 +5,7 @@ import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
 import type { BiomeDef, DelveBalance, DelveData, DoorDef, GearAffixDef, GearBaseDef, LegendaryDef } from '../types/delve.js';
 import type { GearSlot, HeroStatKey } from '../types/gear.js';
-import type { ArpgData, FormDef, FusionDef, ReactionDef, SkillDef } from '../types/arpg.js';
+import type { ArpgData, FormDef, FusionDef, ReactionDef } from '../types/arpg.js';
 import type { FormId } from '../types/ability.js';
 import type { ManaType } from '../types/mana.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
@@ -189,16 +189,6 @@ export class DataRegistry {
   getArpgData(): ArpgData {
     if (!this.arpgData) throw new Error('ARPG data not loaded — pass it to DataRegistry');
     return this.arpgData;
-  }
-
-  getSkill(id: string): SkillDef {
-    const skill = this.getArpgData().skills.find((s) => s.id === id);
-    if (!skill) throw new Error(`Skill not found: ${id}`);
-    return skill;
-  }
-
-  findSkill(id: string): SkillDef | undefined {
-    return this.getArpgData().skills.find((s) => s.id === id);
   }
 
   getForm(id: FormId): FormDef {

@@ -9,16 +9,18 @@ import type {
   StatusState,
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
-import { MANA_TYPES, type ManaType } from '../types/mana.js';
-import { effectiveSkillSlots, manaPools } from '../delve/hero-stats.js';
+import type { ManaType } from '../types/mana.js';
+import { ABILITY_SLOTS, type AbilityBuilds, type ResolvedAbility } from '../types/ability.js';
+import { manaPool } from '../delve/hero-stats.js';
+import { resolveAbility } from './abilities/resolve.js';
 import { dist } from './geometry.js';
 
 export interface FloorOptions {
   depth: number;
   door: DoorDef | null;
   stats: HeroStats;
-  /** The profile's action bar (locked spells are filtered out). */
-  skillSlots: (string | null)[];
+  /** The profile's Primary, Defensive and Ultimate builds. */
+  abilities: AbilityBuilds;
   heroHpFrac: number;
   potions: number;
   phoenixAvailable: boolean;
@@ -162,13 +164,17 @@ export function createMonsterEntity(
   };
 }
 
+function resolveAll(registry: DataRegistry, builds: AbilityBuilds, stats: HeroStats): ResolvedAbility[] {
+  return ABILITY_SLOTS.map((slot) => resolveAbility(registry, slot, builds[slot], stats));
+}
+
 export function createHeroEntity(
   registry: DataRegistry,
   stats: HeroStats,
-  skillSlots: (string | null)[],
+  builds: AbilityBuilds,
   opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
 ): HeroEntity {
-  const pools = manaPools(stats, registry);
+  const pool = manaPool(stats, registry);
   return {
     x: opts.x,
     y: opts.y,
@@ -176,11 +182,17 @@ export function createHeroEntity(
     facing: { x: 0, y: -1 },
     hp: Math.max(1, stats.maxHp * Math.min(1, opts.hpFrac)),
     stats,
-    mana: { ...pools.max },
-    manaMax: pools.max,
-    manaRegen: pools.regen,
-    cooldowns: {},
-    skillSlots: effectiveSkillSlots(skillSlots, stats.attunement, registry),
+    mana: pool.max,
+    manaMax: pool.max,
+    manaRegen: pool.regen,
+    abilities: resolveAll(registry, builds, stats),
+    cooldowns: [0, 0, 0],
+    charge: [0, 0, 0],
+    comboStep: [0, 0, 0],
+    comboAt: [-Infinity, -Infinity, -Infinity],
+    windup: null,
+    defend: null,
+    ward: null,
     nextAttackAt: 0,
     attackCount: 0,
     potions: opts.potions,
@@ -192,26 +204,27 @@ export function createHeroEntity(
   };
 }
 
-/** Swap in new gear stats mid-floor, keeping the life fraction and current mana. */
+/**
+ * Swap in new gear stats mid-floor: abilities re-resolve and the pool
+ * resizes, keeping the life fraction and current mana (clamped). Charge,
+ * buffs, combos and cooldowns carry over.
+ */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
   stats: HeroStats,
-  skillSlots: (string | null)[],
+  builds: AbilityBuilds,
 ): void {
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
-  const pools = manaPools(stats, registry);
-  for (const m of MANA_TYPES) {
-    if (pools.max[m] <= 0) h.mana[m] = 0;
-    else if (h.manaMax[m] <= 0) h.mana[m] = pools.max[m] * 0.5;
-    else h.mana[m] = Math.min(h.mana[m], pools.max[m]);
-  }
+  const pool = manaPool(stats, registry);
   h.stats = stats;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
-  h.manaMax = pools.max;
-  h.manaRegen = pools.regen;
-  h.skillSlots = effectiveSkillSlots(skillSlots, stats.attunement, registry);
+  h.manaMax = pool.max;
+  h.manaRegen = pool.regen;
+  h.mana = Math.min(h.mana, pool.max);
+  h.abilities = resolveAll(registry, builds, stats);
+  h.abilities.forEach((ab, i) => (h.charge[i] = Math.min(h.charge[i], ab.chargeNeed)));
 }
 
 /** Build the arena for one depth: hero at the bottom, monster packs spread above. */
@@ -237,7 +250,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     door: opts.door,
     width,
     height,
-    hero: createHeroEntity(registry, opts.stats, opts.skillSlots, {
+    hero: createHeroEntity(registry, opts.stats, opts.abilities, {
       hpFrac: opts.heroHpFrac,
       potions: opts.potions,
       phoenixAvailable: opts.phoenixAvailable,
@@ -247,7 +260,6 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     monsters: [],
     projectiles: [],
     zones: [],
-    summons: [],
     drops: [],
     nextId: 1,
     loot: { ...opts.loot },

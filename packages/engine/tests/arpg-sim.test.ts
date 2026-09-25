@@ -4,9 +4,9 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { createFloorWorld, createMonsterEntity, type FloorOptions } from '../src/arpg/world.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { applyStatus, hitMonster, makeCtx } from '../src/arpg/combat.js';
-import { castSkill } from '../src/arpg/skills.js';
 import { botInput } from '../src/arpg/bot.js';
-import { computeHeroStats, isSkillUnlocked, unlockedSkills } from '../src/delve/hero-stats.js';
+import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { DEFAULT_BUILDS } from './fixtures/arena.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
@@ -26,7 +26,7 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
     depth: 2,
     door: null,
     stats: computeHeroStats(equipped, registry),
-    skillSlots: ['fireball', 'boulder', null],
+    abilities: DEFAULT_BUILDS,
     heroHpFrac: 1,
     potions: 3,
     phoenixAvailable: true,
@@ -124,13 +124,13 @@ describe('simulation basics', () => {
     expect(w.hero.x).toBeLessThanOrEqual(w.width - w.hero.radius + 1e-9);
   });
 
-  it('auto-attacks foes in reach and builds weapon mana', () => {
+  it('auto-attacks foes in reach and builds mana', () => {
     const w = arena([{ x: 13, y: 34.8, maxHp: 1e6, hp: 1e6, aggro: false }]);
-    w.hero.mana.fire = 0;
+    w.hero.mana = 0;
     const events = run(w, 1);
     expect(events.some((e) => e.kind === 'basic')).toBe(true);
     expect(w.monsters[0].hp).toBeLessThan(1e6);
-    expect(w.hero.mana.fire).toBeGreaterThan(0);
+    expect(w.hero.mana).toBeGreaterThan(0);
   });
 
   it('does not attack foes out of reach', () => {
@@ -139,81 +139,21 @@ describe('simulation basics', () => {
   });
 });
 
-describe('spells', () => {
-  it('casting spends mana, starts the cooldown, and misses nothing when out of mana', () => {
-    const w = arena([{ x: 13, y: 30, maxHp: 1e6, hp: 1e6 }]);
-    const fire0 = w.hero.mana.fire;
-    const events = stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: 0 }, STEP);
-    expect(events.some((e) => e.kind === 'cast' && e.skillId === 'fireball')).toBe(true);
-    expect(w.hero.mana.fire).toBeLessThan(fire0 + 1);
-    expect(w.hero.cooldowns.fireball).toBeGreaterThan(w.t);
-    run(w, 1.5);
-    expect(w.monsters[0].hp).toBeLessThan(1e6);
-    expect(w.monsters[0].status.burnUntil).toBeGreaterThan(0);
-
-    w.hero.mana.fire = 0;
-    w.hero.cooldowns.fireball = 0;
-    const dry = stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: 0 }, STEP);
-    expect(dry.some((e) => e.kind === 'noMana')).toBe(true);
-  });
-
+describe('abilities in the sim', () => {
   it('a cast tap between steps is not lost', () => {
     const w = arena([{ x: 13, y: 30 }]);
-    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: 0 }, STEP / 4);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, STEP / 4);
     const later = stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
     expect(later.some((e) => e.kind === 'cast')).toBe(true);
   });
 
-  it('chain lightning arcs between several foes', () => {
-    const storm = { weapon: gear('storm') };
-    const w = arena(
-      [
-        { x: 13, y: 31, maxHp: 1e6, hp: 1e6 },
-        { x: 15, y: 30, maxHp: 1e6, hp: 1e6 },
-        { x: 17, y: 29, maxHp: 1e6, hp: 1e6 },
-      ],
-      storm,
-    );
-    w.hero.skillSlots = ['chain_lightning', null, null];
-    const ctx = makeCtx(registry, w, []);
-    expect(castSkill(ctx, 0)).toBe(true);
-    const chain = ctx.events.find((e) => e.kind === 'chain');
-    expect(chain && chain.kind === 'chain' && chain.points.length).toBe(4);
-    expect(w.monsters.every((m) => m.hp < 1e6)).toBe(true);
-  });
-
-  it('ground spells need a target in range', () => {
-    const w = arena([{ x: 13, y: 2 }]);
-    w.hero.skillSlots = ['magma_eruption', null, null];
-    w.hero.mana.fire = 100;
-    w.hero.mana.earth = 100;
-    const ctx = makeCtx(registry, w, []);
-    expect(castSkill(ctx, 0)).toBe(false);
-    expect(w.hero.mana.fire).toBe(100);
-  });
-
-  it('frost nova chills twice to freeze', () => {
-    const w = arena([{ x: 13, y: 34, maxHp: 1e6, hp: 1e6 }], { weapon: gear('frost') });
-    w.hero.skillSlots = ['frost_nova', null, null];
-    const ctx = makeCtx(registry, w, []);
-    castSkill(ctx, 0);
-    expect(w.monsters[0].status.chillStacks).toBe(1);
-    w.hero.cooldowns.frost_nova = 0;
-    castSkill(ctx, 0);
-    expect(w.monsters[0].status.freezeUntil).toBeGreaterThan(w.t);
-  });
-
-  it('grave golem fights alongside the hero', () => {
-    const w = arena([{ x: 13, y: 31, maxHp: 1e6, hp: 1e6 }]);
-    w.hero.skillSlots = ['grave_golem', null, null];
-    w.hero.mana.earth = 100;
-    w.hero.mana.shadow = 100;
-    const ctx = makeCtx(registry, w, []);
-    expect(castSkill(ctx, 0)).toBe(true);
-    expect(w.summons).toHaveLength(1);
+  it('a Fire Bolt burns what it hits', () => {
+    const w = arena([{ x: 13, y: 30, maxHp: 1e6, hp: 1e6 }]);
     w.hero.nextAttackAt = 1e9;
-    run(w, 4);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, STEP);
+    run(w, 1.5);
     expect(w.monsters[0].hp).toBeLessThan(1e6);
+    expect(w.monsters[0].status.burnUntil).toBeGreaterThan(0);
   });
 });
 
@@ -327,14 +267,14 @@ describe('monsters', () => {
   it('boss slams hurt only inside the telegraph', () => {
     const w = arena();
     w.zones.push({
-      id: 1, owner: 'monster', skillId: null, x: w.hero.x, y: w.hero.y - 10, radius: 2.6, born: 0, until: 2,
+      id: 1, owner: 'monster', source: null, ability: null, x: w.hero.x, y: w.hero.y - 10, radius: 2.6, born: 0, until: 2,
       tick: 0, nextTick: 0, damage: 50, element: 'fire', applies: [], detonateAt: 0.5, dead: false,
     });
     const hp = w.hero.hp;
     run(w, 1);
     expect(w.hero.hp).toBe(hp);
     w.zones.push({
-      id: 2, owner: 'monster', skillId: null, x: w.hero.x, y: w.hero.y, radius: 2.6, born: w.t, until: w.t + 2,
+      id: 2, owner: 'monster', source: null, ability: null, x: w.hero.x, y: w.hero.y, radius: 2.6, born: w.t, until: w.t + 2,
       tick: 0, nextTick: 0, damage: 50, element: 'fire', applies: [], detonateAt: w.t + 0.5, dead: false,
     });
     run(w, 1);
@@ -365,16 +305,5 @@ describe('hero survival', () => {
     p.hero.nextAttackAt = 1e9;
     const ev = run(p, 1.2);
     expect(ev.some((e) => e.kind === 'revive')).toBe(true);
-  });
-});
-
-describe('spell unlocks from attunement', () => {
-  it('one point unlocks the signature spell; combos need both types at the threshold', () => {
-    const t = bal.mana.comboThreshold;
-    const magma = registry.getSkill('magma_eruption');
-    expect(isSkillUnlocked(magma, { fire: t, frost: 0, storm: 0, earth: t, shadow: 0 }, registry)).toBe(true);
-    expect(isSkillUnlocked(magma, { fire: t, frost: 0, storm: 0, earth: t - 1, shadow: 0 }, registry)).toBe(false);
-    const ids = unlockedSkills({ fire: 1, frost: 0, storm: 0, earth: 1, shadow: 0 }, registry).map((s) => s.id);
-    expect(ids).toEqual(['fireball', 'boulder']);
   });
 });

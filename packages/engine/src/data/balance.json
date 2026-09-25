@@ -118,8 +118,8 @@
     },
     "mana": {
       "attuneByRarity": { "common": 1, "uncommon": 1, "magic": 1, "rare": 2, "epic": 2, "legendary": 3 },
-      "comboThreshold": 3, "masteryThreshold": 10, "powerPerAttune": 0.05,
-      "basePool": 40, "poolPerAttune": 8, "baseRegen": 3, "regenPerAttune": 0.6, "basicAttackGain": 2,
+      "masteryThreshold": 10, "powerPerAttune": 0.05,
+      "basePool": 60, "poolPerAttune": 3, "baseRegen": 4, "regenPerAttune": 0.2, "basicAttackGain": 5,
       "moteAmount": 6, "eliteMote": 20, "bossMote": 60
     },
     "status": {

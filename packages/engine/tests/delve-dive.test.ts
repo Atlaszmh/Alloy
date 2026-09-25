@@ -29,8 +29,6 @@ import {
   parseDelveProfile,
   findItem,
   salvageCandidates,
-  autoSlotSkills,
-  setSkillSlot,
 } from '../src/delve/profile.js';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -61,12 +59,12 @@ function clearDepth(p: DelveProfile): DelveProfile {
 }
 
 describe('profile basics', () => {
-  it('starts with a fire sword and an earth cuirass, so Fireball and Boulder Toss are on the bar', () => {
+  it('starts with a fire sword and an earth cuirass, and Fire abilities', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(2);
+    expect(p.version).toBe(3);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
-    expect(p.skillSlots).toEqual(['fireball', 'boulder', null]);
+    expect(p.abilities.primary.elements).toEqual(['fire']);
     expect(p.bag).toHaveLength(0);
     expect(p.dive).toBeNull();
   });
@@ -240,42 +238,21 @@ describe('gear management', () => {
     expect(findItem(p, 'b0')?.where).toBe('equipped');
   });
 
-  it('equipping new mana fills an empty spell slot automatically', () => {
+  it('attunement from new gear grows the mana pool of the next floor', () => {
     let p = createDelveProfile(registry, 4);
+    const before = beginFloor(registry, startDive(registry, p, 1)).hero.manaMax;
     const ring = generateItem(registry, { uid: 'fr', ilvl: 1, rarity: 'common', slot: 'ring', mana: 'frost' }, new SeededRNG(1));
     p = equipItem(registry, { ...p, bag: [ring] }, 'fr');
-    expect(p.skillSlots).toContain('frost_nova');
+    expect(beginFloor(registry, startDive(registry, p, 1)).hero.manaMax).toBeGreaterThan(before);
   });
 
-  it('reaching the combo threshold puts the combo spell on the bar', () => {
-    const t = bal.mana.comboThreshold;
-    let p = createDelveProfile(registry, 4);
-    const attune = (uid: string, slot: GearItem['slot'], mana: 'fire' | 'earth') =>
-      ({
-        ...generateItem(registry, { uid, ilvl: 1, rarity: 'common', slot, mana }, new SeededRNG(2)),
-        affixes: [{ stat: `${mana}Attune`, value: t, roll: 1 }],
-      }) as GearItem;
-    p = { ...p, bag: [attune('a1', 'amulet', 'fire'), attune('a2', 'ring', 'earth')] };
-    p = equipItem(registry, equipItem(registry, p, 'a1'), 'a2');
-    expect(p.skillSlots).toContain('magma_eruption');
-  });
-
-  it('unequip moves the item into the bag; a now-locked spell stays slotted but inactive', () => {
+  it('unequip moves the item into the bag; the floor still has all three abilities', () => {
     let p = createDelveProfile(registry, 1);
     p = unequipSlot(registry, p, 'chest');
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
-    expect(p.skillSlots).toContain('boulder');
     p = startDive(registry, p, 1);
-    expect(beginFloor(registry, p).hero.skillSlots).toEqual(['fireball', null, null]);
-  });
-
-  it('spells can be rearranged but locked spells cannot be slotted', () => {
-    let p = createDelveProfile(registry, 1);
-    p = setSkillSlot(registry, p, 2, 'fireball');
-    expect(p.skillSlots).toEqual([null, 'boulder', 'fireball']);
-    expect(() => setSkillSlot(registry, p, 0, 'blizzard')).toThrow();
-    expect(autoSlotSkills(registry, p).profile.skillSlots).toEqual([null, 'boulder', 'fireball']);
+    expect(beginFloor(registry, p).hero.abilities.map((a) => a.name)).toEqual(['Fire Bolt', 'Frost Ward', 'Fire Nova']);
   });
 
   it('equipBest picks upgrades', () => {

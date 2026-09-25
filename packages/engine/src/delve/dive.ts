@@ -75,7 +75,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     depth: dive.depth,
     door: dive.door,
     stats,
-    skillSlots: profile.skillSlots,
+    abilities: profile.abilities,
     heroHpFrac: dive.heroHpFrac,
     potions: dive.potions,
     phoenixAvailable: !dive.phoenixUsed,

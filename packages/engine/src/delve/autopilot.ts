@@ -77,7 +77,7 @@ function playFloor(
       const best = equipBest(registry, p);
       if (best.equipped.length > 0) {
         p = best.profile;
-        refreshWorldHero(registry, world, computeHeroStats(p.equipped, registry), p.skillSlots);
+        refreshWorldHero(registry, world, computeHeroStats(p.equipped, registry), p.abilities);
       }
     }
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;

@@ -142,7 +142,7 @@ Only one wind-up at a time; the other buttons wait until it lands.
 | Defensive | 25 | 10 s | 0.5 s |
 | Ultimate | 60 | 18 s | 1.2 s |
 
-- **Mana pool**: 60 + 3 per point of total attunement; regen 4 + 0.2 per point per second × Mana Regen; `basicGain` 4 per basic hit; mana motes add `moteAmount`.
+- **Mana pool**: 60 + 3 per point of total attunement; regen 4 + 0.2 per point per second × Mana Regen; `basicAttackGain` 5 per basic attack; mana motes add `moteAmount`.
 - **Charge**: `chargeRatio` 0.35 (a Balanced Ultimate needs about 21 units), `lullCharge` 1.5 units/s.
 - **Combos**: `comboWindow` 1.2 s.
 - **Element power**: as today, `powerPerAttune` (+5%) per attunement point in the ability's element(s), averaged, times the gear's `<Element> Damage` affixes.
@@ -237,7 +237,7 @@ Nightstalker cuts the Defensive's cooldown by 1 s, or adds 1 charge unit when th
 
 Form base values are listed in `arpg.json → forms` and copied in the plan.
 
-**Balance keys.** Pool numbers stay in `delve.mana` (`basePool` 60, `poolPerAttune` 3, `baseRegen` 4, `regenPerAttune` 0.2, `basicAttackGain` 4); `comboThreshold` is removed. `delve.abilities` holds only the slot, weight, payment and combo numbers.
+**Balance keys.** Pool numbers stay in `delve.mana` (`basePool` 60, `poolPerAttune` 3, `baseRegen` 4, `regenPerAttune` 0.2, `basicAttackGain` 5); `comboThreshold` is removed. `delve.abilities` holds only the slot, weight, payment and combo numbers.
 
 **Legendary scope.**
 - Pyroclasm: impacts of Bolt, Burst and Barrage; not zone ticks or chain jumps.
@@ -250,16 +250,16 @@ Form base values are listed in `arpg.json → forms` and copied in the plan.
   - `abilities`: `ResolvedAbility[3]`;
   - per slot: `cooldowns`, `charge`, `comboStep`, `comboAt` (arrays of 3);
   - `windup: { slot, aim, start, until } | null`;
-  - `defend: { form, elements, until } | null`;
-  - `ward: { hp, max, until } | null`;
-  - `armorUntil`, `surgeUntil`.
+  - `defend: { form, until } | null` (the active Defensive; its elements come from `abilities[1]`);
+  - `ward: { hp, max } | null`.
 - Events:
   - `cast { slot, name, form, element, x, y, tx, ty }`
   - `windup { slot, until }`
   - `noMana { slot }`
   - `buff { form, element, until }`
   - `wardBreak { x, y, element }`
-- `Projectile.skillId` becomes `form` (a `FormId`, `'ember'` or null) and `Zone.skillId` becomes `source` (a fusion or form id). The renderer and pixel floor style by `element` plus these.
+- `beam { x, y, tx, ty, width, element }` (Lance) and `slash { x, y, dir, range, arc, element }` (Strike).
+- `Projectile.skillId` becomes `form` (a `FormId`, `'ember'` or null) plus `ability` and `homingId`; `Zone.skillId` becomes `source` (a fusion or form id) plus `ability`. The renderer and pixel floor style by `element` plus these.
 - **Summons** (the Grave Golem) are removed with the old spells: the `Summon` type, `summonsTick`, golem targeting and their VFX.
 
 **Gear changes and floors.**

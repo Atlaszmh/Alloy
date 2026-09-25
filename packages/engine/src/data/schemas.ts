@@ -505,41 +505,6 @@ const KnobsSchema = z
 export const ArpgDataSchema = z.object({
   mana: perMana(z.object({ name: z.string(), icon: z.string(), color: z.string() })),
   weakness: perMana(ManaTypeSchema),
-  skills: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        icon: z.string(),
-        text: z.string(),
-        kind: z.enum(['projectile', 'nova', 'chain', 'dash', 'ground', 'line', 'brand', 'burst', 'summon']),
-        elements: z.array(ManaTypeSchema).min(1).max(2),
-        cost: z.object({
-          fire: z.number().positive().optional(),
-          frost: z.number().positive().optional(),
-          storm: z.number().positive().optional(),
-          earth: z.number().positive().optional(),
-          shadow: z.number().positive().optional(),
-        }),
-        cooldown: z.number().positive(),
-        power: z.number().positive(),
-        range: z.number().positive().optional(),
-        radius: z.number().min(0).optional(),
-        speed: z.number().positive().optional(),
-        pierce: z.boolean().optional(),
-        chains: z.number().int().positive().optional(),
-        chainRange: z.number().positive().optional(),
-        duration: z.number().positive().optional(),
-        tick: z.number().positive().optional(),
-        tickPower: z.number().positive().optional(),
-        applies: z.array(StatusIdSchema).optional(),
-        knockback: z.number().positive().optional(),
-        pull: z.boolean().optional(),
-        execute: z.number().positive().max(1).optional(),
-        teleport: z.boolean().optional(),
-      }),
-    )
-    .min(5),
   reactions: z
     .array(
       z.object({
@@ -696,7 +661,6 @@ const DelveBalanceSchema = z.object({
   }),
   mana: z.object({
     attuneByRarity: perRarity(z.number().int().min(0)),
-    comboThreshold: z.number().int().positive(),
     masteryThreshold: z.number().int().positive(),
     powerPerAttune: z.number().min(0),
     basePool: z.number().positive(),

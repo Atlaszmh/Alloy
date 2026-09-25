@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot } from './ability.js';
+import type { AbilityBuilds, AbilitySlot } from './ability.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -278,17 +278,16 @@ export interface DelveBalance {
   mana: {
     /** Attunement an item grants to its own mana type, by rarity. */
     attuneByRarity: Record<Rarity, number>;
-    /** Both types need this much attunement to unlock a combo spell. */
-    comboThreshold: number;
     /** A type at this attunement grants its mastery passive. */
     masteryThreshold: number;
-    /** Spell damage bonus per point of attunement in the spell's type(s). */
+    /** Ability damage bonus per point of attunement in its element(s), averaged. */
     powerPerAttune: number;
+    /** Mana pool: basePool + poolPerAttune × total attunement. */
     basePool: number;
     poolPerAttune: number;
     baseRegen: number;
     regenPerAttune: number;
-    /** Mana gained in the weapon's type per basic-attack hit. */
+    /** Mana gained per basic attack. */
     basicAttackGain: number;
     moteAmount: number;
     eliteMote: number;
@@ -436,7 +435,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 2;
+  version: 3;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -452,8 +451,8 @@ export interface DelveProfile {
   pity: number;
   firstBossLegendaryGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
-  /** Spells on the action bar (skill ids). */
-  skillSlots: (string | null)[];
+  /** The Primary, Defensive and Ultimate builds. */
+  abilities: AbilityBuilds;
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

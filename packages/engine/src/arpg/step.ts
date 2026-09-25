@@ -1,18 +1,21 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { ArpgEvent, ArpgInput, ArpgWorld, MonsterEntity, StatusId, Summon, Vec } from '../types/arpg.js';
+import type { ArpgEvent, ArpgInput, ArpgWorld, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
 import type { ManaType } from '../types/mana.js';
-import { MANA_TYPES } from '../types/mana.js';
 import {
   healHero,
   hitMonster,
   hurtHero,
   isChilled,
+  isRooted,
   isStunned,
   makeCtx,
   type SimCtx,
 } from './combat.js';
 import { angleBetween, clamp, clampLen, dirTo, dist } from './geometry.js';
-import { alive, castSkill, chainHits, nearestMonster, spawnProjectile, spellBase } from './skills.js';
+import { castAbility, castTick } from './abilities/cast.js';
+import { defendingAbility, defendTick, gainCharge } from './abilities/defend.js';
+import { impact } from './abilities/impact.js';
+import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 
 const BASIC_STATUS: Record<ManaType, StatusId> = {
@@ -33,7 +36,7 @@ const ITEM_PICKUP_DELAY = 0.35;
  */
 export function stepWorld(registry: DataRegistry, world: ArpgWorld, input: ArpgInput, dt: number): ArpgEvent[] {
   const events: ArpgEvent[] = [];
-  if (input.cast !== undefined && input.cast !== null) world.queuedCast = input.cast;
+  if (input.cast) world.queuedCast = input.cast;
   if (input.potion) world.queuedPotion = true;
   if (world.heroDead) return events;
 
@@ -56,14 +59,12 @@ function tick(ctx: SimCtx, move: Vec, dt: number): void {
   heroTick(ctx, move, dt);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
-  summonsTick(ctx, dt);
   monstersTick(ctx, dt);
   separate(ctx);
   dropsTick(ctx, dt);
 
   world.projectiles = world.projectiles.filter((p) => !p.dead);
   world.zones = world.zones.filter((z) => !z.dead);
-  world.summons = world.summons.filter((s) => !s.dead);
   world.drops = world.drops.filter((d) => !d.dead);
   world.monsters = world.monsters.filter((m) => !m.dead);
 
@@ -89,25 +90,28 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
     }
   }
   if (world.queuedCast !== null) {
-    const slot = world.queuedCast;
+    const cast = world.queuedCast;
     world.queuedCast = null;
-    castSkill(ctx, slot);
+    castAbility(ctx, cast);
   }
+  castTick(ctx);
 
+  const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
-  h.moving = speed > 0.05;
+  h.moving = speed > 0.05 && !h.windup;
   if (h.moving) {
-    h.x = clamp(h.x + v.x * h.stats.moveSpeed * dt, h.radius, world.width - h.radius);
-    h.y = clamp(h.y + v.y * h.stats.moveSpeed * dt, h.radius, world.height - h.radius);
+    const pace = h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1);
+    h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
+    h.y = clamp(h.y + v.y * pace * dt, h.radius, world.height - h.radius);
     h.facing = { x: v.x / speed, y: v.y / speed };
   }
 
-  basicAttack(ctx);
+  if (!h.windup) basicAttack(ctx);
 
-  for (const m of MANA_TYPES) {
-    if (h.manaMax[m] > 0) h.mana[m] = Math.min(h.manaMax[m], h.mana[m] + h.manaRegen[m] * dt);
-  }
+  h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius)) gainCharge(ctx, bal.abilities.lullCharge * dt);
+  defendTick(ctx, dt);
 }
 
 function basicAttack(ctx: SimCtx): void {
@@ -121,22 +125,28 @@ function basicAttack(ctx: SimCtx): void {
   const dir = dirTo(h.x, h.y, target.x, target.y);
   if (!h.moving) h.facing = dir;
   h.attackCount++;
-  const base = h.stats.weaponDamage * h.stats.damageMult;
+  const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+  // Melee weapons swing a three-hit combo: the third is wider and harder, with a shove.
+  const finisher = w.kind === 'melee' && h.attackCount % 3 === 0;
+  const base = h.stats.weaponDamage * h.stats.damageMult * (finisher ? 1.5 : 1);
   const twin = (h.stats.legendaries.twin_fang ?? 0) > 0 && h.attackCount % 3 === 0;
   const element = w.element;
-  const applies: StatusId[] = [];
+  const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
   if (element) {
     const chance = element === 'earth' ? BASIC_STATUS_CHANCE * 0.6 : BASIC_STATUS_CHANCE;
-    if (world.rng.next() < chance) applies.push(BASIC_STATUS[element]);
+    const status = BASIC_STATUS[element];
+    if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
   }
 
   if (w.kind === 'melee') {
     const crit = world.rng.next() < h.stats.critChance;
-    const halfArc = (w.arc * Math.PI) / 360;
+    const arc = finisher ? Math.min(360, w.arc + 60) : w.arc;
+    const halfArc = (arc * Math.PI) / 360;
+    const kb = finisher ? { knockback: 0.5, kbFrom: { x: h.x, y: h.y } } : {};
     for (const m of alive(ctx)) {
       if (dist(h.x, h.y, m.x, m.y) - m.radius > w.range) continue;
-      if (w.arc < 360 && m.id !== target.id && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc) continue;
-      hitMonster(ctx, m, base, element, { source: 'basic', crit, applies });
+      if (arc < 360 && m.id !== target.id && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc) continue;
+      hitMonster(ctx, m, base, element, { source: 'basic', crit, applies, ...kb });
       if (twin) hitMonster(ctx, m, base * (h.stats.legendaries.twin_fang / 100), element, { source: 'basic', crit });
     }
   } else {
@@ -146,7 +156,9 @@ function basicAttack(ctx: SimCtx): void {
       const d = { x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread), y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread) };
       spawnProjectile(ctx, {
         owner: 'hero',
-        skillId: null,
+        form: null,
+        ability: null,
+        homingId: null,
         x: h.x + d.x * 0.5,
         y: h.y + d.y * 0.5,
         vx: d.x * w.speed,
@@ -154,55 +166,38 @@ function basicAttack(ctx: SimCtx): void {
         radius: 0.3,
         damage: i === 0 ? base : base * (h.stats.legendaries.twin_fang / 100),
         element,
-        pierce: false,
+        pierce: w.pierce,
         maxDist: w.range + 1.5,
         explodeRadius: 0,
         applies,
         knockback: 0,
-        nextPulse: 0,
       });
     }
   }
   ctx.events.push({ kind: 'basic', x: h.x, y: h.y, tx: target.x, ty: target.y, element, melee: w.kind === 'melee' });
 
-  if (element && h.manaMax[element] > 0) {
-    h.mana[element] = Math.min(h.manaMax[element], h.mana[element] + bal.mana.basicAttackGain);
-  }
-  h.nextAttackAt = world.t + h.stats.attackInterval;
+  h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+  h.nextAttackAt = world.t + h.stats.attackInterval / (surge ? 1 + surge.effect : 1);
 }
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-function explodeFireball(ctx: SimCtx, x: number, y: number, radius: number, damage: number, split: boolean): void {
-  const { world } = ctx;
-  ctx.events.push({ kind: 'explode', x, y, radius, element: 'fire' });
-  for (const m of alive(ctx)) {
-    if (dist(x, y, m.x, m.y) > radius + m.radius) continue;
-    hitMonster(ctx, m, damage, 'fire', { source: 'skill', canCrit: true, applies: ['burn'] });
+/** Volley darts turn toward their foe (or the next nearest once it dies). */
+function steer(ctx: SimCtx, p: Projectile, dt: number): void {
+  let target = ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead) ?? null;
+  if (!target) {
+    target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
+    p.homingId = target?.id ?? null;
+    if (!target) return;
   }
-  const pyro = world.hero.stats.legendaries.pyroclasm ?? 0;
-  if (split && pyro > 0) {
-    for (let i = 0; i < 3; i++) {
-      const a = (Math.PI * 2 * i) / 3 + world.rng.next();
-      spawnProjectile(ctx, {
-        owner: 'hero',
-        skillId: 'ember',
-        x,
-        y,
-        vx: Math.cos(a) * 8,
-        vy: Math.sin(a) * 8,
-        radius: 0.3,
-        damage: damage * (pyro / 100),
-        element: 'fire',
-        pierce: false,
-        maxDist: 3,
-        explodeRadius: 1.1,
-        applies: ['burn'],
-        knockback: 0,
-        nextPulse: 0,
-      });
-    }
-  }
+  const speed = Math.hypot(p.vx, p.vy);
+  const want = dirTo(p.x, p.y, target.x, target.y);
+  const k = Math.min(1, 7 * dt);
+  const nx = p.vx / speed + (want.x - p.vx / speed) * k;
+  const ny = p.vy / speed + (want.y - p.vy / speed) * k;
+  const len = Math.hypot(nx, ny) || 1;
+  p.vx = (nx / len) * speed;
+  p.vy = (ny / len) * speed;
 }
 
 function projectilesTick(ctx: SimCtx, dt: number): void {
@@ -210,6 +205,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
   const h = world.hero;
   for (const p of world.projectiles) {
     if (p.dead) continue;
+    if (p.homingId !== null) steer(ctx, p, dt);
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.traveled += Math.hypot(p.vx, p.vy) * dt;
@@ -217,84 +213,28 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
-      const golem = world.summons.find((s) => !s.dead && dist(s.x, s.y, p.x, p.y) <= s.radius + p.radius);
-      if (golem) {
-        golem.hp -= p.damage;
-        p.dead = true;
-      } else if (dist(h.x, h.y, p.x, p.y) <= h.radius + p.radius) {
+      if (dist(h.x, h.y, p.x, p.y) <= h.radius + p.radius) {
         hurtHero(ctx, p.damage, p.element, null);
         p.dead = true;
       } else if (expired) p.dead = true;
       continue;
     }
 
-    if (p.skillId === 'plasma_orb') {
-      const skill = ctx.registry.getSkill('plasma_orb');
-      if (world.t >= p.nextPulse) {
-        p.nextPulse += skill.tick ?? 0.3;
-        const zapped = new Set<number>();
-        for (let i = 0; i < (skill.chains ?? 3); i++) {
-          const m = nearestMonster(ctx, p.x, p.y, skill.chainRange ?? 3.2, zapped);
-          if (!m) break;
-          zapped.add(m.id);
-          ctx.events.push({ kind: 'chain', points: [{ x: p.x, y: p.y }, { x: m.x, y: m.y }], element: 'storm' });
-          hitMonster(ctx, m, spellBase(ctx, skill, skill.tickPower ?? 0.4), 'storm', { source: 'skill', applies: ['shock'] });
-        }
-      }
-      if (expired) {
-        p.dead = true;
-        explodeFireball(ctx, p.x, p.y, p.explodeRadius, p.damage, false);
-      }
-      continue;
-    }
-
+    const from = { x: p.x - p.vx, y: p.y - p.vy };
     for (const m of world.monsters) {
       if (p.dead) break;
       if (m.dead || p.hitIds.includes(m.id)) continue;
       if (dist(p.x, p.y, m.x, m.y) > p.radius + m.radius) continue;
       p.hitIds.push(m.id);
-      switch (p.skillId) {
-        case null:
-          hitMonster(ctx, m, p.damage, p.element, { source: 'basic', canCrit: true, applies: p.applies });
-          p.dead = true;
-          break;
-        case 'fireball':
-        case 'ember':
-          p.dead = true;
-          explodeFireball(ctx, p.x, p.y, p.explodeRadius, p.damage, p.skillId === 'fireball');
-          break;
-        case 'boulder':
-          hitMonster(ctx, m, p.damage, 'earth', {
-            source: 'skill',
-            canCrit: true,
-            applies: p.applies,
-            knockback: p.knockback,
-            kbFrom: { x: p.x - p.vx, y: p.y - p.vy },
-          });
-          break;
-        case 'void_bolt': {
-          p.dead = true;
-          const skill = ctx.registry.getSkill('void_bolt');
-          const fromX = h.x;
-          const fromY = h.y;
-          const d = dirTo(h.x, h.y, m.x, m.y);
-          h.x = clamp(m.x - d.x * (m.radius + h.radius + 0.15), h.radius, world.width - h.radius);
-          h.y = clamp(m.y - d.y * (m.radius + h.radius + 0.15), h.radius, world.height - h.radius);
-          h.invulnUntil = Math.max(h.invulnUntil, world.t + 0.3);
-          ctx.events.push({ kind: 'dash', fromX, fromY, toX: h.x, toY: h.y });
-          const points = chainHits(ctx, m, skill.chains ?? 3, skill.chainRange ?? 4, p.damage, 'storm', p.applies, {
-            x: h.x,
-            y: h.y,
-          });
-          ctx.events.push({ kind: 'chain', points, element: 'storm' });
-          break;
-        }
-      }
+      if (p.ability) impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, { from, tick: p.form === 'ember' });
+      else hitMonster(ctx, m, p.damage, p.element, { source: 'basic', canCrit: true, applies: p.applies });
+      if (!p.pierce) p.dead = true;
     }
     if (!p.dead && expired) {
       p.dead = true;
-      if (p.skillId === 'fireball' || p.skillId === 'ember') {
-        explodeFireball(ctx, p.x, p.y, p.explodeRadius, p.damage, p.skillId === 'fireball');
+      // A bolt that reaches the end of its flight bursts on the ground.
+      if (p.ability && !p.pierce && p.form !== 'volley') {
+        impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, { from, tick: p.form === 'ember' });
       }
     }
   }
@@ -315,51 +255,21 @@ function zonesTick(ctx: SimCtx): void {
       }
       continue;
     }
+    // Barrage impacts land once.
+    if (z.detonateAt > 0) {
+      if (world.t >= z.detonateAt) {
+        z.dead = true;
+        if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage);
+      }
+      continue;
+    }
     if (world.t >= z.until) {
       z.dead = true;
       continue;
     }
     if (world.t < z.nextTick) continue;
-    const tickIndex = Math.round((z.nextTick - z.born) / z.tick);
     z.nextTick += z.tick;
-    let element = z.element;
-    let applies = z.applies;
-    if (z.skillId === 'blizzard') {
-      element = tickIndex % 2 === 0 ? 'storm' : 'frost';
-      applies = element === 'frost' ? ['chill'] : ['shock'];
-    }
-    for (const m of alive(ctx)) {
-      if (dist(z.x, z.y, m.x, m.y) > z.radius + m.radius) continue;
-      hitMonster(ctx, m, z.damage, element, { source: 'skill', applies });
-    }
-  }
-}
-
-// ── Summons ────────────────────────────────────────────────────────────────
-
-function summonsTick(ctx: SimCtx, dt: number): void {
-  const { world } = ctx;
-  for (const s of world.summons) {
-    if (s.dead) continue;
-    if (world.t >= s.until || s.hp <= 0) {
-      s.dead = true;
-      continue;
-    }
-    const target = nearestMonster(ctx, s.x, s.y, 12);
-    if (!target) continue;
-    const gap = dist(s.x, s.y, target.x, target.y) - s.radius - target.radius;
-    if (gap > 0.8) {
-      const d = dirTo(s.x, s.y, target.x, target.y);
-      s.x += d.x * 3.8 * dt;
-      s.y += d.y * 3.8 * dt;
-    } else if (world.t >= s.nextAttackAt) {
-      s.nextAttackAt = world.t + (ctx.registry.findSkill('grave_golem')?.tick ?? 0.9);
-      for (const m of alive(ctx)) {
-        if (dist(s.x, s.y, m.x, m.y) - m.radius > 1.8) continue;
-        hitMonster(ctx, m, s.damage, 'earth', { source: 'summon', knockback: 0.6, kbFrom: { x: s.x, y: s.y } });
-      }
-      ctx.events.push({ kind: 'explode', x: target.x, y: target.y, radius: 1.2, element: 'earth' });
-    }
+    if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
   }
 }
 
@@ -371,13 +281,13 @@ function enrageMult(ctx: SimCtx, m: MonsterEntity): number {
   return over < 0 ? 1 : Math.pow(2, 1 + Math.floor(over / ctx.bal.monster.enrageInterval));
 }
 
-function damageTarget(ctx: SimCtx, m: MonsterEntity, target: Summon | null, amount: number, melee: boolean): void {
-  const dmg = amount * enrageMult(ctx, m);
-  if (target) target.hp -= dmg;
-  else hurtHero(ctx, dmg, m.element, m, { melee });
+function damageHero(ctx: SimCtx, m: MonsterEntity, amount: number, melee: boolean): void {
+  hurtHero(ctx, amount * enrageMult(ctx, m), m.element, m, { melee });
 }
 
-function moveMonster(m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
+/** Rooted foes stay put (they can still attack in reach). */
+function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
+  if (isRooted(ctx, m)) return;
   m.x += dir.x * speed * dt;
   m.y += dir.y * speed * dt;
 }
@@ -390,7 +300,8 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
     world.zones.push({
       id: world.nextId++,
       owner: 'monster',
-      skillId: null,
+      source: null,
+      ability: null,
       x: h.x,
       y: h.y,
       radius: 2.6,
@@ -409,7 +320,9 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
       const a = (Math.PI * 2 * i) / 12;
       spawnProjectile(ctx, {
         owner: 'monster',
-        skillId: null,
+        form: null,
+        ability: null,
+        homingId: null,
         x: m.x,
         y: m.y,
         vx: Math.cos(a) * 6,
@@ -422,7 +335,6 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
         explodeRadius: 0,
         applies: [],
         knockback: 0,
-        nextPulse: 0,
       });
     }
   } else if (world.monsters.filter((o) => !o.dead).length < 14) {
@@ -456,7 +368,6 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
 function monstersTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
-  const golem = world.summons.find((s) => !s.dead) ?? null;
 
   for (const m of world.monsters) {
     if (m.dead) continue;
@@ -465,6 +376,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     if (world.t < s.burnUntil && world.t >= s.burnTickAt) {
       s.burnTickAt += 0.5;
       hitMonster(ctx, m, s.burnDps * 0.5, 'fire', { source: 'dot', noReact: true });
+      if (m.dead) continue;
+    }
+    if (world.t < s.poisonUntil && world.t >= s.poisonTickAt) {
+      s.poisonTickAt += 0.5;
+      hitMonster(ctx, m, s.poisonDps * s.poisonStacks * 0.5, 'nature', { source: 'dot', noReact: true });
       if (m.dead) continue;
     }
     if (m.traits.includes('regenerating')) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
@@ -490,12 +406,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     }
     if (isStunned(ctx, m)) continue;
 
-    const target = golem && dist(m.x, m.y, golem.x, golem.y) < 6 ? golem : null;
-    const tx = target ? target.x : h.x;
-    const ty = target ? target.y : h.y;
-    const tr = target ? target.radius : h.radius;
-    const gap = dist(m.x, m.y, tx, ty) - m.radius - tr;
-    const toTarget = dirTo(m.x, m.y, tx, ty);
+    const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
+    const toTarget = dirTo(m.x, m.y, h.x, h.y);
     const slow = isChilled(ctx, m) ? 1 - bal.status.chillSlow : 1;
     const speed = m.speed * slow;
 
@@ -504,11 +416,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     switch (m.ai) {
       case 'charger': {
         if (m.chargeUntil > world.t) {
-          moveMonster(m, m.chargeDir, m.speed * 3.4, dt);
+          moveMonster(ctx, m, m.chargeDir, m.speed * 3.4, dt);
           if (!m.chargeHit && gap <= 0.25) {
             m.chargeHit = true;
             m.chargeUntil = world.t;
-            damageTarget(ctx, m, target, m.damage * 1.4, true);
+            damageHero(ctx, m, m.damage * 1.4, true);
           }
           break;
         }
@@ -521,12 +433,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7.5) moveMonster(m, toTarget, speed, dt);
+        if (gap > 7.5) moveMonster(ctx, m, toTarget, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.75;
           m.chargeDir = toTarget;
-        } else if (gap > m.attackRange) moveMonster(m, toTarget, speed * 0.6, dt);
+        } else if (gap > m.attackRange) moveMonster(ctx, m, toTarget, speed * 0.6, dt);
         break;
       }
       case 'ranged': {
@@ -536,7 +448,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             m.nextAttackAt = world.t + m.attackInterval;
             spawnProjectile(ctx, {
               owner: 'monster',
-              skillId: null,
+              form: null,
+              ability: null,
+              homingId: null,
               x: m.x + toTarget.x * m.radius,
               y: m.y + toTarget.y * m.radius,
               vx: toTarget.x * 8,
@@ -549,13 +463,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
               explodeRadius: 0,
               applies: [],
               knockback: 0,
-              nextPulse: 0,
             });
           }
           break;
         }
-        if (gap > 7) moveMonster(m, toTarget, speed, dt);
-        else if (gap < 3.5) moveMonster(m, toTarget, -speed * 0.7, dt);
+        if (gap > 7) moveMonster(ctx, m, toTarget, speed, dt);
+        else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
         if (gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.5;
@@ -567,11 +480,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           if (world.t >= m.windupUntil) {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
-            if (gap <= m.attackRange + 0.5) damageTarget(ctx, m, target, m.damage, true);
+            if (gap <= m.attackRange + 0.5) damageHero(ctx, m, m.damage, true);
           }
           break;
         }
-        if (gap > m.attackRange) moveMonster(m, toTarget, speed, dt);
+        if (gap > m.attackRange) moveMonster(ctx, m, toTarget, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + bal.monster.windup * (m.kind === 'boss' ? 1.5 : 1);
@@ -642,9 +555,7 @@ function dropsTick(ctx: SimCtx, dt: number): void {
         if (d.item) world.pending.items.push(d.item);
         break;
       case 'mote':
-        for (const m of MANA_TYPES) {
-          if (h.manaMax[m] > 0) h.mana[m] = Math.min(h.manaMax[m], h.mana[m] + d.amount);
-        }
+        h.mana = Math.min(h.manaMax, h.mana + d.amount);
         break;
       case 'orb':
         healHero(ctx, h.stats.maxHp * d.amount, 'orb');

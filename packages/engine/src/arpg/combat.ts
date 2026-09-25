@@ -16,6 +16,7 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
+import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -30,7 +31,7 @@ export function makeCtx(registry: DataRegistry, world: ArpgWorld, events: ArpgEv
   return { registry, bal: registry.getDelveBalance(), data: registry.getArpgData(), world, events };
 }
 
-export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'summon' | 'thorns';
+export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'thorns';
 
 export interface HitOpts {
   source: HitSource;
@@ -41,6 +42,14 @@ export interface HitOpts {
   knockback?: number;
   kbFrom?: Vec;
   noReact?: boolean;
+  /** Extra fraction of the damage healed (ability lifesteal). */
+  leech?: number;
+  /** Frozen foes left below this life fraction shatter. */
+  execute?: number;
+  /** On a kill, the foe's poison and hex spread to its neighbours (Plague). */
+  spread?: boolean;
+  /** The ability slot dealing the hit; it doesn't charge itself. */
+  slot?: number;
 }
 
 const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
@@ -62,6 +71,38 @@ export function isHexed(ctx: SimCtx, m: MonsterEntity): boolean {
 }
 export function isStunned(ctx: SimCtx, m: MonsterEntity): boolean {
   return isFrozen(ctx, m) || ctx.world.t < m.status.staggerUntil;
+}
+export function isPoisoned(ctx: SimCtx, m: MonsterEntity): boolean {
+  return ctx.world.t < m.status.poisonUntil && m.status.poisonStacks > 0;
+}
+export function isRooted(ctx: SimCtx, m: MonsterEntity): boolean {
+  return ctx.world.t < m.status.rootUntil;
+}
+
+/** Poison stack cap (doubled by the Nature mastery). */
+function poisonCap(ctx: SimCtx): number {
+  return ctx.bal.status.poisonMaxStacks * (mastery(ctx, 'nature') ? 2 : 1);
+}
+
+/** Give `m` at least `stacks` poison stacks of `dps` each, refreshing the duration. */
+function poison(ctx: SimCtx, m: MonsterEntity, stacks: number, dps: number): void {
+  const s = m.status;
+  const t = ctx.world.t;
+  const active = isPoisoned(ctx, m);
+  if (!active) s.poisonTickAt = t + 0.5;
+  s.poisonStacks = Math.min(poisonCap(ctx), Math.max(active ? s.poisonStacks : 0, stacks));
+  s.poisonDps = active ? Math.max(s.poisonDps, dps) : dps;
+  s.poisonUntil = t + ctx.bal.status.poisonDuration;
+}
+
+/** Plague: a dying foe's poison and hex pass to its neighbours. */
+function spreadAffliction(ctx: SimCtx, m: MonsterEntity): void {
+  const r = ctx.bal.reactions.blightRadius;
+  for (const o of ctx.world.monsters) {
+    if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r + o.radius) continue;
+    if (isPoisoned(ctx, m)) poison(ctx, o, m.status.poisonStacks, m.status.poisonDps);
+    if (isHexed(ctx, m)) o.status.hexUntil = Math.max(o.status.hexUntil, m.status.hexUntil);
+  }
 }
 
 function mastery(ctx: SimCtx, mana: ManaType): boolean {
@@ -120,8 +161,20 @@ export function applyStatus(ctx: SimCtx, m: MonsterEntity, status: StatusId, hit
       s.hexUntil = t + st.hexDuration;
       break;
     case 'stagger':
+      if (t < s.staggerImmuneUntil) break;
       s.staggerUntil = Math.max(s.staggerUntil, t + st.staggerDuration * ccScale);
+      s.staggerImmuneUntil = s.staggerUntil + st.staggerImmunity;
       m.windupUntil = 0;
+      break;
+    case 'poison': {
+      const active = isPoisoned(ctx, m);
+      poison(ctx, m, active ? s.poisonStacks + 1 : 1, hitAmount * st.poisonDps);
+      break;
+    }
+    case 'root':
+      if (t < s.rootImmuneUntil) break;
+      s.rootUntil = Math.max(s.rootUntil, t + st.rootDuration * (boss ? st.rootBossMult : 1));
+      s.rootImmuneUntil = s.rootUntil + st.rootImmunity;
       break;
     case 'blind':
       s.blindUntil = t + st.blindDuration;
@@ -133,8 +186,11 @@ export function applyStatus(ctx: SimCtx, m: MonsterEntity, status: StatusId, hit
 }
 
 export function freeze(ctx: SimCtx, m: MonsterEntity, seconds: number): void {
+  const t = ctx.world.t;
+  if (t < m.status.freezeImmuneUntil) return;
   const scale = (m.kind === 'boss' ? 0.4 : 1) * (mastery(ctx, 'frost') ? 1.5 : 1);
-  m.status.freezeUntil = Math.max(m.status.freezeUntil, ctx.world.t + seconds * scale);
+  m.status.freezeUntil = Math.max(m.status.freezeUntil, t + seconds * scale);
+  m.status.freezeImmuneUntil = m.status.freezeUntil + ctx.bal.status.freezeImmunity;
   m.windupUntil = 0;
   m.chargeUntil = 0;
   ctx.events.push({ kind: 'freeze', id: m.id });
@@ -205,6 +261,22 @@ export function hitMonster(
       reaction = 'superconduct';
       s.shockUntil = 0;
       freeze(ctx, m, r.superconductFreeze);
+    } else if (element === 'fire' && isPoisoned(ctx, m)) {
+      reaction = 'combust';
+      amount *= r.combustMult * catalyst;
+      s.poisonStacks = 0;
+      s.poisonUntil = 0;
+      ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius: r.combustRadius, element: 'nature' });
+      for (const o of world.monsters) {
+        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.combustRadius + o.radius) continue;
+        hitMonster(ctx, o, amount, 'fire', { source: 'reaction', noReact: true });
+      }
+    } else if (element === 'shadow' && isPoisoned(ctx, m)) {
+      reaction = 'blight';
+      for (const o of world.monsters) {
+        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.blightRadius + o.radius) continue;
+        poison(ctx, o, s.poisonStacks, s.poisonDps);
+      }
     } else if (element === 'fire' && isHexed(ctx, m)) {
       reaction = 'soulfire';
       amount *= catalyst;
@@ -218,11 +290,20 @@ export function hitMonster(
   if (!m.aggro) aggroPack(ctx, m);
   ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount, crit, element, reaction });
 
-  if ((opts.source === 'basic' || opts.source === 'skill') && stats.lifesteal > 0) {
-    healHero(ctx, amount * stats.lifesteal, 'lifesteal');
+  if (opts.source === 'basic' || opts.source === 'skill') {
+    const shadowGuard = defendingAbility(ctx)?.elements.includes('shadow') ? ctx.bal.abilities.defend.shadowLifesteal : 0;
+    const leech = stats.lifesteal + (opts.leech ?? 0) + shadowGuard;
+    if (leech > 0) healHero(ctx, amount * leech, 'lifesteal');
+    addCharge(ctx, amount, opts.slot);
+  }
+
+  if (m.hp > 0 && opts.execute && m.kind !== 'boss' && isFrozen(ctx, m) && m.hp / m.maxHp <= opts.execute) {
+    ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount: m.hp, crit: true, element, reaction: 'shatter' });
+    m.hp = 0;
   }
 
   if (m.hp <= 0) {
+    if (opts.spread) spreadAffliction(ctx, m);
     killMonster(ctx, m);
     return amount;
   }
@@ -268,7 +349,12 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
   if (t < m.status.hexUntil && mastery(ctx, 'shadow')) healHero(ctx, h.stats.maxHp * 0.04, 'kill');
-  if (h.stats.legendaries.nightstalker) h.cooldowns.shadow_step = t;
+  // Nightstalker: kills hurry the Defensive along.
+  const guard = h.abilities[1];
+  if (h.stats.legendaries.nightstalker && guard) {
+    if (guard.build.payment === 'charge') h.charge[1] = Math.min(guard.chargeNeed, h.charge[1] + 1);
+    else h.cooldowns[1] = Math.max(t, h.cooldowns[1] - 1);
+  }
 
   // Fire mastery: flames spread from burning corpses.
   if (t < m.status.burnUntil && mastery(ctx, 'fire')) {
@@ -321,8 +407,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
   if (t < m.status.brandUntil) {
-    const skill = ctx.registry.findSkill('hellfire_brand');
-    const radius = skill?.radius ?? 2.6;
+    const radius = 2.6;
     const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
     ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire' });
     for (const o of world.monsters) {
@@ -359,6 +444,8 @@ export function hurtHero(
   }
   let dmg = raw;
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
+  dmg = shieldHero(ctx, dmg, source, !!opts.melee);
+  if (dmg <= 0) return;
   h.hp -= dmg;
   h.lastHitAt = world.t;
   ctx.events.push({ kind: 'heroHit', x: h.x, y: h.y, amount: dmg, dodged: false, element });

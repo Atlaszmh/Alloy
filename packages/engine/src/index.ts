@@ -100,16 +100,11 @@ export {
   itemAffinityAttunement,
   upgradeMultiplier,
   armorReduction,
-  manaPools,
-  isSkillUnlocked,
-  unlockedSkills,
-  skillCost,
-  attunementPower,
-  effectiveSkillSlots,
+  manaPool,
   hasMastery,
   isAttuneStat,
 } from './delve/hero-stats.js';
-export type { ItemComparison, ItemStatLine, CombatEstimate, ManaPools } from './delve/hero-stats.js';
+export type { ItemComparison, ItemStatLine, CombatEstimate } from './delve/hero-stats.js';
 export {
   isBossDepth,
   isDiveActive,
@@ -142,9 +137,7 @@ export {
   upgradeGear,
   reforgeGear,
   fuseGear,
-  autoSlotSkills,
-  setSkillSlot,
-  SKILL_SLOT_COUNT,
+  setAbility,
 } from './delve/profile.js';
 export type { ProfileActionResult } from './delve/profile.js';
 export { runAutopilot } from './delve/autopilot.js';
@@ -155,5 +148,6 @@ export { createFloorWorld, refreshWorldHero, createMonsterEntity, biomeCycle, is
 export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';
 export { botInput } from './arpg/bot.js';
-export { castSkill, slotReady } from './arpg/skills.js';
+export { castAbility, abilityReady } from './arpg/abilities/cast.js';
+export { resolveAbility, mergeKnobs, defaultAbilities } from './arpg/abilities/resolve.js';
 export { makeCtx } from './arpg/combat.js';

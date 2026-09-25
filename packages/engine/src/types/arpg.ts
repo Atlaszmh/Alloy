@@ -1,12 +1,10 @@
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
-import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, FormId, Knobs } from './ability.js';
+import type { ManaType } from './mana.js';
+import type { AbilityCast, AbilitySlot, FormId, Knobs, ResolvedAbility } from './ability.js';
 
 // ── Data definitions (arpg.json) ───────────────────────────────────────────
-
-export type SkillKind = 'projectile' | 'nova' | 'chain' | 'dash' | 'ground' | 'line' | 'brand' | 'burst' | 'summon';
 
 export type StatusId =
   | 'burn'
@@ -28,40 +26,6 @@ export type ReactionId =
   | 'soulfire'
   | 'combust'
   | 'blight';
-
-export interface SkillDef {
-  id: string;
-  name: string;
-  icon: string;
-  text: string;
-  kind: SkillKind;
-  /** One element = signature spell; two = combo spell. */
-  elements: ManaType[];
-  cost: Partial<ManaMap>;
-  cooldown: number;
-  /** Damage as a multiple of weapon damage. */
-  power: number;
-  range?: number;
-  radius?: number;
-  speed?: number;
-  pierce?: boolean;
-  chains?: number;
-  chainRange?: number;
-  /** Lingering effect length (zones, summons, orbs) in seconds. */
-  duration?: number;
-  /** Seconds between lingering ticks. */
-  tick?: number;
-  /** Damage per lingering tick, as a multiple of weapon damage. */
-  tickPower?: number;
-  applies?: StatusId[];
-  knockback?: number;
-  /** Pull enemies toward the impact point before it lands. */
-  pull?: boolean;
-  /** Kill frozen enemies below this life fraction. */
-  execute?: number;
-  /** Teleport the hero to the impact point. */
-  teleport?: boolean;
-}
 
 /** An ability form: what the ability does. Values are before weight, payment and knobs. */
 export interface FormDef {
@@ -133,7 +97,6 @@ export interface ArpgData {
   mana: Record<ManaType, ManaInfo>;
   /** Monsters of the key element take extra damage from the value element. */
   weakness: Record<ManaType, ManaType>;
-  skills: SkillDef[];
   forms: FormDef[];
   elementTraits: Record<ManaType, ElementTraitDef>;
   fusions: FusionDef[];
@@ -217,8 +180,12 @@ export interface MonsterEntity {
 export interface Projectile {
   id: number;
   owner: 'hero' | 'monster';
-  /** Skill id, or null for a basic-attack bolt / monster shot. */
-  skillId: string | null;
+  /** The ability form that fired it, 'ember' (Pyroclasm), or null for a basic-attack bolt / monster shot. */
+  form: FormId | 'ember' | null;
+  /** The hero ability behind it (its knobs decide what an impact does). */
+  ability: ResolvedAbility | null;
+  /** Volley: the foe this dart homes in on. */
+  homingId: number | null;
   x: number;
   y: number;
   vx: number;
@@ -233,15 +200,16 @@ export interface Projectile {
   explodeRadius: number;
   applies: StatusId[];
   knockback: number;
-  /** Plasma orb: next zap time. */
-  nextPulse: number;
   dead: boolean;
 }
 
 export interface Zone {
   id: number;
   owner: 'hero' | 'monster';
-  skillId: string | null;
+  /** What left it: a form ('maelstrom', 'barrage') or a fusion ('magma', 'rimebloom'…), for VFX. */
+  source: string | null;
+  /** The hero ability behind it; a hero zone with `detonateAt` lands as one impact (Barrage). */
+  ability: ResolvedAbility | null;
   x: number;
   y: number;
   radius: number;
@@ -253,21 +221,8 @@ export interface Zone {
   damage: number;
   element: ManaType | null;
   applies: StatusId[];
-  /** Monster telegraph: explodes at this time (0 = lingering zone). */
+  /** Telegraph / Barrage impact: explodes at this time (0 = lingering zone). */
   detonateAt: number;
-  dead: boolean;
-}
-
-export interface Summon {
-  id: number;
-  x: number;
-  y: number;
-  radius: number;
-  hp: number;
-  maxHp: number;
-  until: number;
-  damage: number;
-  nextAttackAt: number;
   dead: boolean;
 }
 
@@ -294,13 +249,25 @@ export interface HeroEntity {
   facing: Vec;
   hp: number;
   stats: HeroStats;
-  mana: ManaMap;
-  manaMax: ManaMap;
-  manaRegen: ManaMap;
-  /** Skill id → time it is ready again. */
-  cooldowns: Record<string, number>;
-  /** The action bar with locked spells removed. */
-  skillSlots: (string | null)[];
+  /** The one mana pool: basic hits fill it, abilities spend it. */
+  mana: number;
+  manaMax: number;
+  /** Mana per second. */
+  manaRegen: number;
+  /** Primary, Defensive, Ultimate. */
+  abilities: ResolvedAbility[];
+  /** Per slot: time it is ready again. */
+  cooldowns: number[];
+  /** Per slot: charge units banked (charge payment). */
+  charge: number[];
+  /** Per slot: combo step of the last press and when it was pressed. */
+  comboStep: number[];
+  comboAt: number[];
+  /** A cast-paid ability winding up; the hero can't move or attack meanwhile. */
+  windup: { slot: number; aim: Vec | null; start: number; until: number } | null;
+  /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
+  defend: { form: FormId; until: number } | null;
+  ward: { hp: number; max: number } | null;
   nextAttackAt: number;
   attackCount: number;
   potions: number;
@@ -314,8 +281,8 @@ export interface HeroEntity {
 export interface ArpgInput {
   /** Desired direction; length is clamped to 1. Zero = stand still. */
   move: Vec;
-  /** Skill slot to cast this step (0-based), if any. */
-  cast?: number | null;
+  /** Ability to use this step (0 Primary, 1 Defensive, 2 Ultimate), with an optional aim point. */
+  cast?: AbilityCast | null;
   potion?: boolean;
 }
 
@@ -332,7 +299,22 @@ export type ArpgEvent =
     }
   | { kind: 'heroHit'; x: number; y: number; amount: number; dodged: boolean; element: ManaType | null }
   | { kind: 'heal'; amount: number; source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire' }
-  | { kind: 'cast'; skillId: string; x: number; y: number; tx: number; ty: number }
+  | {
+      kind: 'cast';
+      slot: number;
+      name: string;
+      form: FormId;
+      element: ManaType;
+      x: number;
+      y: number;
+      tx: number;
+      ty: number;
+    }
+  | { kind: 'windup'; slot: number; until: number }
+  | { kind: 'buff'; form: FormId; element: ManaType; until: number }
+  | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
+  | { kind: 'beam'; x: number; y: number; tx: number; ty: number; width: number; element: ManaType }
+  | { kind: 'slash'; x: number; y: number; dir: Vec; range: number; arc: number; element: ManaType }
   | { kind: 'basic'; x: number; y: number; tx: number; ty: number; element: ManaType | null; melee: boolean }
   | { kind: 'chain'; points: Vec[]; element: ManaType }
   | { kind: 'explode'; x: number; y: number; radius: number; element: ManaType | null }
@@ -342,8 +324,7 @@ export type ArpgEvent =
   | { kind: 'drop'; dropId: number; x: number; y: number; dropKind: DropKind; rarity?: Rarity }
   | { kind: 'pickup'; dropId: number; dropKind: DropKind; item?: GearItem; amount: number; mana?: ManaType }
   | { kind: 'dash'; fromX: number; fromY: number; toX: number; toY: number }
-  | { kind: 'noMana'; skillId: string }
-  | { kind: 'summon'; id: number }
+  | { kind: 'noMana'; slot: number }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -380,7 +361,6 @@ export interface ArpgWorld {
   monsters: MonsterEntity[];
   projectiles: Projectile[];
   zones: Zone[];
-  summons: Summon[];
   drops: Drop[];
   nextId: number;
   loot: LootContext;
@@ -389,7 +369,7 @@ export interface ArpgWorld {
   totalMonsters: number;
   bossId: number | null;
   /** One-shot inputs waiting for the next simulation step. */
-  queuedCast: number | null;
+  queuedCast: AbilityCast | null;
   queuedPotion: boolean;
   kills: number;
   bossKilled: boolean;

@@ -2,12 +2,15 @@ import type { DataRegistry } from '../data/registry.js';
 import type { ArpgInput, ArpgWorld, Vec } from '../types/arpg.js';
 import { makeCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
-import { nearestMonster, slotReady } from './skills.js';
+import { abilityReady } from './abilities/cast.js';
+import { nearestMonster } from './abilities/targeting.js';
 
 /**
  * A simple arena bot: walks to the nearest foe (keeping range with bolt
  * weapons), steps out of telegraphed slams, drinks at low life, grabs nearby
- * loot and casts whatever spell is ready. Drives the pacing tests.
+ * loot, and uses its abilities: the Ultimate on a crowd or a big foe, the
+ * Defensive when hurt or crowded, the Primary whenever it's ready. Drives the
+ * pacing tests.
  */
 export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   const ctx = makeCtx(registry, world, []);
@@ -52,13 +55,15 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   }
   input.move = move;
 
-  if (gap < 8) {
-    for (let slot = 0; slot < h.skillSlots.length; slot++) {
-      if (slotReady(ctx, slot)) {
-        input.cast = slot;
-        break;
-      }
-    }
-  }
+  const near = world.monsters.filter((m) => !m.dead && Math.hypot(m.x - h.x, m.y - h.y) < 7).length;
+  const big = target.kind !== 'normal' && gap < 8;
+  const crowded = nearestMonster(ctx, h.x, h.y, 2.5) !== null;
+  const wants = [
+    (near >= 3 || big) && abilityReady(ctx, 2) ? 2 : -1,
+    (h.hp < h.stats.maxHp * 0.7 || crowded) && gap < 6 && abilityReady(ctx, 1) ? 1 : -1,
+    gap < h.abilities[0].range && abilityReady(ctx, 0) ? 0 : -1,
+  ];
+  const slot = wants.find((s) => s >= 0);
+  if (slot !== undefined) input.cast = { slot };
   return input;
 }

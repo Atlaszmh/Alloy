@@ -1,5 +1,6 @@
 import type { DataRegistry } from '../../data/registry.js';
-import type { AbilityBuild, AbilitySlot, Knobs, ResolvedAbility } from '../../types/ability.js';
+import type { AbilityBuild, AbilityBuilds, AbilitySlot, Knobs, ResolvedAbility } from '../../types/ability.js';
+import type { ManaType } from '../../types/mana.js';
 import type { HeroStats } from '../../types/delve.js';
 
 const NEUTRAL: Knobs = {
@@ -102,5 +103,14 @@ export function resolveAbility(
     combo: form.combo ?? [1],
     comboCount: form.comboCount ?? null,
     knobs,
+  };
+}
+
+/** Builds for a new (or migrated) profile, `element` being the weapon's. */
+export function defaultAbilities(element: ManaType): AbilityBuilds {
+  return {
+    primary: { form: 'bolt', elements: [element], weight: 0, payment: 'mana' },
+    defensive: { form: 'ward', elements: ['frost'], weight: 0, payment: 'mana' },
+    ultimate: { form: 'nova', elements: [element], weight: 0, payment: 'charge' },
   };
 }

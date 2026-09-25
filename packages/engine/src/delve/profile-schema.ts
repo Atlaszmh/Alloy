@@ -3,6 +3,17 @@ import { HeroStatKeySchema as StatKeySchema, ManaTypeSchema } from '../data/sche
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
+const AbilityBuildSchema = z.object({
+  form: z.enum(['bolt', 'volley', 'lance', 'burst', 'strike', 'ward', 'armor', 'surge', 'blink', 'nova', 'barrage', 'maelstrom']),
+  elements: z
+    .array(ManaTypeSchema)
+    .min(1)
+    .max(2)
+    .refine((e) => new Set(e).size === e.length, 'elements must differ'),
+  weight: z.union([z.literal(-2), z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]),
+  payment: z.enum(['mana', 'charge', 'cast']),
+});
+
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 
@@ -72,7 +83,7 @@ const DiveSchema = z.object({
 });
 
 export const DelveProfileSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
@@ -110,7 +121,17 @@ export const DelveProfileSchema = z.object({
     epic: z.boolean(),
     legendary: z.boolean(),
   }),
-  skillSlots: z.array(z.string().nullable()).length(3),
-  reactionsSeen: z.array(z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire'])),
+  abilities: z.object({
+    primary: AbilityBuildSchema,
+    defensive: AbilityBuildSchema,
+    ultimate: AbilityBuildSchema,
+  }),
+  reactionsSeen: z.array(z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight'])),
   dive: DiveSchema.nullable(),
+});
+
+/** Version 2 saves had a spell bar instead of ability builds; `parseDelveProfile` migrates them. */
+export const DelveProfileV2Schema = DelveProfileSchema.omit({ version: true, abilities: true }).extend({
+  version: z.literal(2),
+  skillSlots: z.array(z.string().nullable()).length(3),
 });

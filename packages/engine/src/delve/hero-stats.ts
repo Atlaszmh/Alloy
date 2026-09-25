@@ -1,5 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { SkillDef } from '../types/arpg.js';
+import { ABILITY_SLOTS, type AbilityBuilds, type ResolvedAbility } from '../types/ability.js';
+import { defaultAbilities, resolveAbility } from '../arpg/abilities/resolve.js';
 import type { DelveBalance, HeroStats, HeroWeapon } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -148,66 +149,16 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
   };
 }
 
-// ── Mana & spells ──────────────────────────────────────────────────────────
+// ── Mana ───────────────────────────────────────────────────────────────────
 
-export interface ManaPools {
-  max: ManaMap;
-  regen: ManaMap;
-}
-
-/** Pool size and regen per mana type. Types with no attunement have no pool. */
-export function manaPools(stats: HeroStats, registry: DataRegistry): ManaPools {
+/** The one mana pool: it grows with total attunement. */
+export function manaPool(stats: HeroStats, registry: DataRegistry): { max: number; regen: number } {
   const m = registry.getDelveBalance().mana;
-  const max = emptyManaMap();
-  const regen = emptyManaMap();
-  for (const t of MANA_TYPES) {
-    const a = stats.attunement[t];
-    if (a <= 0) continue;
-    max[t] = m.basePool + m.poolPerAttune * a;
-    regen[t] = (m.baseRegen + m.regenPerAttune * a) * stats.manaRegenMult;
-  }
-  return { max, regen };
-}
-
-export function isSkillUnlocked(skill: SkillDef, attunement: ManaMap, registry: DataRegistry): boolean {
-  const need = skill.elements.length > 1 ? registry.getDelveBalance().mana.comboThreshold : 1;
-  return skill.elements.every((e) => attunement[e] >= need);
-}
-
-export function unlockedSkills(attunement: ManaMap, registry: DataRegistry): SkillDef[] {
-  return registry.getArpgData().skills.filter((s) => isSkillUnlocked(s, attunement, registry));
-}
-
-/** Mana cost of a spell after Manaweaver. */
-export function skillCost(skill: SkillDef, stats: HeroStats): Partial<ManaMap> {
-  const discount = 1 - (stats.legendaries.manaweaver ?? 0) / 100;
-  const cost: Partial<ManaMap> = {};
-  for (const [k, v] of Object.entries(skill.cost) as [ManaType, number][]) cost[k] = v * discount;
-  return cost;
-}
-
-/** Damage multiplier from attunement in the spell's element(s). */
-export function attunementPower(skill: SkillDef, attunement: ManaMap, registry: DataRegistry): number {
-  const per = registry.getDelveBalance().mana.powerPerAttune;
-  const avg = skill.elements.reduce((s, e) => s + attunement[e], 0) / skill.elements.length;
-  return 1 + per * avg;
-}
-
-/**
- * The spells actually usable on the action bar: slotted spells that are
- * unlocked. When the bar is empty (fresh profile), the strongest unlocked
- * spells fill it.
- */
-export function effectiveSkillSlots(
-  slots: (string | null)[],
-  attunement: ManaMap,
-  registry: DataRegistry,
-): (string | null)[] {
-  return slots.map((id) => {
-    if (!id) return null;
-    const skill = registry.findSkill(id);
-    return skill && isSkillUnlocked(skill, attunement, registry) ? id : null;
-  });
+  const total = MANA_TYPES.reduce((sum, t) => sum + stats.attunement[t], 0);
+  return {
+    max: m.basePool + m.poolPerAttune * total,
+    regen: (m.baseRegen + m.regenPerAttune * total) * stats.manaRegenMult,
+  };
 }
 
 // ── Power estimate ─────────────────────────────────────────────────────────
@@ -240,88 +191,92 @@ export interface CombatEstimate {
   power: number;
 }
 
-const TARGETS: Record<SkillDef['kind'], number> = {
-  projectile: 1.8,
-  nova: 3,
-  chain: 3,
-  dash: 1,
-  ground: 3,
-  line: 2.5,
-  brand: 3,
-  burst: 3,
-  summon: 1,
+/** Rough number of foes an ability's hit lands on. */
+const TARGETS: Record<string, number> = {
+  bolt: 1.6,
+  volley: 1.6,
+  lance: 2.2,
+  burst: 2.5,
+  strike: 2,
+  nova: 3.5,
+  barrage: 3,
+  maelstrom: 3,
+  ward: 2.5,
+  armor: 1,
+  surge: 0,
+  blink: 1.5,
 };
 
-/** Rough damage per second a spell adds when cast as often as mana and cooldown allow. */
-function spellDps(skill: SkillDef, stats: HeroStats, registry: DataRegistry): number {
-  const pools = manaPools(stats, registry);
-  const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
-  const elemPower = skill.elements.reduce((s, e) => s + stats.elementPower[e], 0) / skill.elements.length;
-  const hit =
-    stats.weaponDamage *
-    stats.damageMult *
-    critFactor *
-    (1 + elemPower) *
-    attunementPower(skill, stats.attunement, registry);
-  let perCast = hit * skill.power * TARGETS[skill.kind];
-  if (skill.duration && skill.tick && skill.tickPower) {
-    perCast += hit * skill.tickPower * (skill.duration / skill.tick) * (skill.kind === 'summon' ? 1 : TARGETS[skill.kind]);
-  } else if (skill.kind === 'summon' && skill.duration && skill.tick) {
-    perCast += hit * skill.power * (skill.duration / skill.tick);
-  }
-  const cost = skillCost(skill, stats);
-  let interval = skill.cooldown * stats.cooldownMult;
-  for (const [mana, amount] of Object.entries(cost) as [ManaType, number][]) {
-    const regen = pools.regen[mana];
-    if (regen <= 0) return 0;
-    interval = Math.max(interval, amount / regen);
-  }
-  return perCast / interval;
+/** Damage of one use, counting combos, chains, lingering ground and repeats. */
+function damagePerUse(ab: ResolvedAbility, hit: number, stats: HeroStats, bal: DelveBalance): number {
+  const combo = ab.combo.reduce((a, b) => a + b, 0) / ab.combo.length;
+  const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
+  const repeats = ab.form.id === 'barrage' ? ab.count : ab.form.id === 'maelstrom' ? ab.duration / ab.tick : 1;
+  let chain = 0;
+  for (let i = 1; i <= ab.knobs.chain; i++) chain += Math.pow(bal.abilities.chainPower, i);
+  const zone = ab.knobs.zone ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets : 0;
+  const perHit = hit * ab.power * combo * (1 + stats.elementPower[ab.element]);
+  return perHit * (targets + chain + zone) * repeats;
+}
+
+/** Seconds between uses when the ability is used as often as its payment allows. */
+function useInterval(ab: ResolvedAbility, manaIncome: number, chargeRate: number): number {
+  if (ab.build.payment === 'charge') return Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate));
+  return Math.max(ab.cooldown + ab.castTime, ab.cost / Math.max(0.1, manaIncome));
 }
 
 /**
  * Heuristic DPS / effective-HP estimate against the reference monster, used
- * for Power and item comparisons. Spells on the bar (or the best unlocked
- * ones) count toward DPS, so attunement and mana matter.
+ * for Power and item comparisons. The basic attack, the Primary and the
+ * Ultimate count toward DPS (sharing mana and time); the Defensive counts
+ * toward survival.
  */
 export function estimateCombat(
   stats: HeroStats,
   registry: DataRegistry,
   depth: number,
-  skillSlots?: (string | null)[],
+  builds: AbilityBuilds = defaultAbilities(stats.weapon.element ?? 'fire'),
 ): CombatEstimate {
   const bal = registry.getDelveBalance();
   const ref = referenceMonster(registry, depth);
   const L = stats.legendaries;
 
   const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
+  const hit = stats.weaponDamage * stats.damageMult * critFactor;
   const weaponElem = stats.weapon.element ? stats.elementPower[stats.weapon.element] : 0;
-  const cleave = stats.weapon.kind === 'melee' ? 1 + (stats.weapon.arc / 360) * 1.5 : 1;
-  let dps = (stats.weaponDamage * stats.damageMult * critFactor * (1 + weaponElem) * cleave) / stats.attackInterval;
+  const melee = stats.weapon.kind === 'melee';
+  const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
+  const finisher = melee ? 1 + 0.5 / 3 : 1;
+  let dps = (hit * (1 + weaponElem) * cleave * finisher) / stats.attackInterval;
   if (L.twin_fang) dps *= 1 + L.twin_fang / 100 / 3;
 
-  const unlocked = unlockedSkills(stats.attunement, registry);
-  let spells: SkillDef[];
-  if (skillSlots && skillSlots.some(Boolean)) {
-    spells = effectiveSkillSlots(skillSlots, stats.attunement, registry)
-      .filter((id): id is string => !!id)
-      .map((id) => registry.getSkill(id));
-  } else {
-    spells = unlocked
-      .map((s) => ({ s, d: spellDps(s, stats, registry) }))
-      .sort((a, b) => b.d - a.d)
-      .slice(0, 3)
-      .map((x) => x.s);
-  }
-  // Spells share the hero's time and mana; count them at partial efficiency.
-  for (const s of spells) dps += spellDps(s, stats, registry) * 0.6;
+  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) => resolveAbility(registry, slot, builds[slot], stats));
+  const pool = manaPool(stats, registry);
+  const manaIncome = pool.regen + bal.mana.basicAttackGain / stats.attackInterval;
+  const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
+  const primaryDps = damagePerUse(primary, hit, stats, bal) / useInterval(primary, manaIncome * 0.7, dps / unit);
+  // Abilities share the hero's time and mana; count them at partial efficiency.
+  dps += primaryDps * 0.75;
+  const chargeRate = dps / unit;
+  dps += (damagePerUse(ultimate, hit, stats, bal) / useInterval(ultimate, manaIncome * 0.3, chargeRate)) * 0.8;
 
-  const mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
+  let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
+  let bonusLife = 0;
+  const guardEvery = useInterval(defensive, manaIncome * 0.3, chargeRate);
+  const guardFor = defensive.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : defensive.duration;
+  const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
+  if (defensive.form.id === 'armor') mitigation *= 1 - Math.min(0.75, defensive.effect) * uptime;
+  if (defensive.elements.includes('earth')) mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
+  if (defensive.form.id === 'ward') bonusLife += stats.maxHp * defensive.effect * uptime * 2;
+  if (defensive.form.id === 'surge') dps *= 1 + defensive.effect * uptime;
+  if (defensive.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
+  dps += (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+
   dps += stats.thorns / ref.interval;
   const sustain = dps * stats.lifesteal;
   const phoenix = 1 + ((L.phoenix_plume ?? 0) / 100) * 0.5;
   const ehp =
-    (stats.maxHp * phoenix) / Math.max(0.05, mitigation) + sustain * 8 + stats.healOnKill * stats.maxHp * 3;
+    (stats.maxHp * phoenix + bonusLife) / Math.max(0.05, mitigation) + sustain * 8 + stats.healOnKill * stats.maxHp * 3;
 
   return { dps, ehp, power: Math.round(Math.sqrt(Math.max(0, dps) * Math.max(0, ehp)) * 10) };
 }
@@ -336,9 +291,6 @@ export interface ItemComparison {
   ehpPct: number;
   /** Change in attunement per mana type (only non-zero entries). */
   attunementDelta: Partial<ManaMap>;
-  /** Spell ids this swap would unlock / lock. */
-  skillsGained: string[];
-  skillsLost: string[];
 }
 
 function pct(from: number, to: number): number {
@@ -352,22 +304,20 @@ export function compareItem(
   item: GearItem,
   registry: DataRegistry,
   depth: number,
-  skillSlots?: (string | null)[],
+  builds?: AbilityBuilds,
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
   const beforeStats = computeHeroStats(equipped, registry);
   const afterStats = computeHeroStats(next, registry);
-  const before = estimateCombat(beforeStats, registry, depth, skillSlots);
-  const after = estimateCombat(afterStats, registry, depth, skillSlots);
+  const before = estimateCombat(beforeStats, registry, depth, builds);
+  const after = estimateCombat(afterStats, registry, depth, builds);
 
   const attunementDelta: Partial<ManaMap> = {};
   for (const m of MANA_TYPES) {
     const d = afterStats.attunement[m] - beforeStats.attunement[m];
     if (d !== 0) attunementDelta[m] = d;
   }
-  const had = new Set(unlockedSkills(beforeStats.attunement, registry).map((s) => s.id));
-  const will = new Set(unlockedSkills(afterStats.attunement, registry).map((s) => s.id));
 
   return {
     replaced: replaced && replaced.uid !== item.uid ? replaced : undefined,
@@ -377,8 +327,6 @@ export function compareItem(
     dpsPct: pct(before.dps, after.dps),
     ehpPct: pct(before.ehp, after.ehp),
     attunementDelta,
-    skillsGained: [...will].filter((id) => !had.has(id)),
-    skillsLost: [...had].filter((id) => !will.has(id)),
   };
 }
 
@@ -387,7 +335,7 @@ export function heroPower(
   equipped: EquippedGear,
   registry: DataRegistry,
   depth: number,
-  skillSlots?: (string | null)[],
+  builds?: AbilityBuilds,
 ): number {
-  return estimateCombat(computeHeroStats(equipped, registry), registry, depth, skillSlots).power;
+  return estimateCombat(computeHeroStats(equipped, registry), registry, depth, builds).power;
 }
