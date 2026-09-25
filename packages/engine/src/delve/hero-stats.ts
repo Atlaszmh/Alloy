@@ -15,6 +15,7 @@ const ATTUNE_STATS: Record<string, ManaType> = {
   stormAttune: 'storm',
   earthAttune: 'earth',
   shadowAttune: 'shadow',
+  natureAttune: 'nature',
 };
 
 const POWER_STATS: Record<ManaType, HeroStatKey> = {
@@ -23,6 +24,7 @@ const POWER_STATS: Record<ManaType, HeroStatKey> = {
   storm: 'stormPower',
   earth: 'earthPower',
   shadow: 'shadowPower',
+  nature: 'naturePower',
 };
 
 export function isAttuneStat(stat: HeroStatKey): boolean {
@@ -102,9 +104,10 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
         range: weaponBase.attack.range,
         arc: weaponBase.attack.arc ?? 90,
         speed: weaponBase.attack.speed ?? 12,
+        pierce: weaponBase.attack.pierce ?? false,
         element: weaponItem!.mana,
       }
-    : { baseId: null, kind: 'melee', range: 1.4, arc: 90, speed: 0, element: null };
+    : { baseId: null, kind: 'melee', range: 1.4, arc: 90, speed: 0, pierce: false, element: null };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;
 
   const glass = legendaries.glass_cannon ?? 0;

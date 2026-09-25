@@ -45,11 +45,13 @@ export type HeroStatKey =
   | 'stormPower'
   | 'earthPower'
   | 'shadowPower'
+  | 'naturePower'
   | 'fireAttune'
   | 'frostAttune'
   | 'stormAttune'
   | 'earthAttune'
-  | 'shadowAttune';
+  | 'shadowAttune'
+  | 'natureAttune';
 
 export const HERO_STAT_KEYS: readonly HeroStatKey[] = [
   'damage',
@@ -74,11 +76,13 @@ export const HERO_STAT_KEYS: readonly HeroStatKey[] = [
   'stormPower',
   'earthPower',
   'shadowPower',
+  'naturePower',
   'fireAttune',
   'frostAttune',
   'stormAttune',
   'earthAttune',
   'shadowAttune',
+  'natureAttune',
 ] as const;
 
 /** A rolled stat line. `roll` is the 0–1 quality of the roll within its range. */

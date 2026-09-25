@@ -12,6 +12,7 @@ import { rollEncounterDrops } from '../src/loot/drops.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import { GEAR_SLOTS } from '../src/types/gear.js';
 import type { Rarity } from '../src/types/gear.js';
+import { MANA_TYPES } from '../src/types/mana.js';
 
 const registry = createDefaultRegistry();
 
@@ -125,7 +126,7 @@ describe('mana affinity', () => {
   it('every item carries a mana type, and forced mana is honoured', () => {
     for (let i = 0; i < 30; i++) {
       const item = generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'magic' }, new SeededRNG(i));
-      expect(['fire', 'frost', 'storm', 'earth', 'shadow']).toContain(item.mana);
+      expect(MANA_TYPES).toContain(item.mana);
     }
     expect(generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'rare', mana: 'shadow' }, new SeededRNG(1)).mana).toBe('shadow');
   });
@@ -136,11 +137,11 @@ describe('mana affinity', () => {
       if (generateItem(registry, { uid: 'b', ilvl: 3, rarity: 'common', biomeMana: 'frost' }, new SeededRNG(i)).mana === 'frost') frost++;
     }
     const bias = registry.getDelveBalance().loot.biomeManaBias;
-    expect(frost / 400).toBeGreaterThan(bias + (1 - bias) / 5 - 0.08);
+    expect(frost / 400).toBeGreaterThan(bias + (1 - bias) / MANA_TYPES.length - 0.08);
   });
 
   it('attunement affixes exist for every mana type', () => {
-    for (const m of ['fire', 'frost', 'storm', 'earth', 'shadow']) {
+    for (const m of MANA_TYPES) {
       expect(registry.getGearAffix(`${m}Attune` as never)).toBeDefined();
     }
   });

@@ -1,5 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
+import type { AbilitySlot } from './ability.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -21,6 +22,8 @@ export interface WeaponAttackDef {
   arc?: number;
   /** Bolt speed in units per second. */
   speed?: number;
+  /** Bolts pass through every foe (bows). */
+  pierce?: boolean;
 }
 
 export interface GearBaseDef {
@@ -135,6 +138,31 @@ export interface DelveData {
 }
 
 // ── Balance (balance.json → delve) ─────────────────────────────────────────
+
+/** Numbers that turn an ability build into costs, cooldowns and power. */
+export interface DelveAbilityBalance {
+  slots: Record<AbilitySlot, { cost: number; cooldown: number; castTime: number }>;
+  /** Per weight step (-2..2): each value scales by (1 + k × weight); speed by (1 - k × weight). */
+  weight: { power: number; cost: number; cooldown: number; size: number; speed: number; castTime: number };
+  castManaMult: number;
+  castPowerMult: number;
+  /** A charge-paid ability needs its mana cost × this in charge units. */
+  chargeRatio: number;
+  /** Charge units per second with no foe within `lullRadius`. */
+  lullCharge: number;
+  lullRadius: number;
+  /** Seconds after a charge-paid ability fires before it can charge again. */
+  chargeLockout: number;
+  /** Seconds to press again to continue a combo. */
+  comboWindow: number;
+  chainRange: number;
+  /** Damage kept per chain jump. */
+  chainPower: number;
+  /** Scatter moves impacts up to scatter × radius × this. */
+  scatterReach: number;
+  /** Defensive element effects while a defensive is active. */
+  defend: { earthReduction: number; shadowLifesteal: number; natureRegen: number; surgeMove: number; blinkSeconds: number };
+}
 
 export interface DelveBalance {
   hero: {
@@ -282,6 +310,17 @@ export interface DelveBalance {
     staggerDuration: number;
     blindMiss: number;
     blindDuration: number;
+    /** Each poison stack deals this fraction of the hit per second. */
+    poisonDps: number;
+    poisonDuration: number;
+    poisonMaxStacks: number;
+    rootDuration: number;
+    /** Bosses are rooted for this fraction of `rootDuration`. */
+    rootBossMult: number;
+    /** Seconds a foe can't be staggered / frozen / rooted again after one ends. */
+    staggerImmunity: number;
+    freezeImmunity: number;
+    rootImmunity: number;
   };
   reactions: {
     meltMult: number;
@@ -290,7 +329,11 @@ export interface DelveBalance {
     overloadRadius: number;
     superconductFreeze: number;
     soulfireHeal: number;
+    combustMult: number;
+    combustRadius: number;
+    blightRadius: number;
   };
+  abilities: DelveAbilityBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
@@ -309,6 +352,7 @@ export interface HeroWeapon {
   range: number;
   arc: number;
   speed: number;
+  pierce: boolean;
   /** Element of basic attacks (the weapon's mana), or null when unarmed. */
   element: ManaType | null;
 }

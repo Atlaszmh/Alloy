@@ -21,6 +21,7 @@ const BASIC_STATUS: Record<ManaType, StatusId> = {
   storm: 'shock',
   earth: 'stagger',
   shadow: 'hex',
+  nature: 'poison',
 };
 const BASIC_STATUS_CHANCE = 0.3;
 const ITEM_PICKUP_DELAY = 0.35;

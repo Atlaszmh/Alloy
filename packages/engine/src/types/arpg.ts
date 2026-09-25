@@ -2,14 +2,32 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
+import type { AbilitySlot, FormId, Knobs } from './ability.js';
 
 // ── Data definitions (arpg.json) ───────────────────────────────────────────
 
 export type SkillKind = 'projectile' | 'nova' | 'chain' | 'dash' | 'ground' | 'line' | 'brand' | 'burst' | 'summon';
 
-export type StatusId = 'burn' | 'chill' | 'freeze' | 'shock' | 'hex' | 'stagger' | 'blind' | 'brand';
+export type StatusId =
+  | 'burn'
+  | 'chill'
+  | 'freeze'
+  | 'shock'
+  | 'hex'
+  | 'stagger'
+  | 'blind'
+  | 'brand'
+  | 'poison'
+  | 'root';
 
-export type ReactionId = 'melt' | 'shatter' | 'overload' | 'superconduct' | 'soulfire';
+export type ReactionId =
+  | 'melt'
+  | 'shatter'
+  | 'overload'
+  | 'superconduct'
+  | 'soulfire'
+  | 'combust'
+  | 'blight';
 
 export interface SkillDef {
   id: string;
@@ -45,6 +63,53 @@ export interface SkillDef {
   teleport?: boolean;
 }
 
+/** An ability form: what the ability does. Values are before weight, payment and knobs. */
+export interface FormDef {
+  id: FormId;
+  slot: AbilitySlot;
+  name: string;
+  icon: string;
+  text: string;
+  /** Damage as a multiple of weapon damage (ward burst, armor retaliation, blink trail for defensives). */
+  power: number;
+  /**
+   * A defensive form's magnitude: ward absorb (fraction of max life), armor
+   * reduction, surge attack speed, blink untouchable seconds.
+   */
+  effect?: number;
+  range?: number;
+  radius?: number;
+  speed?: number;
+  count?: number;
+  duration?: number;
+  tick?: number;
+  /** Melee arc in degrees. */
+  arc?: number;
+  /** Press-combo multipliers for power and size (Primary forms). */
+  combo?: number[];
+  /** Press-combo projectile counts (Volley). */
+  comboCount?: number[];
+}
+
+/** What an element adds to any ability built with it. */
+export interface ElementTraitDef {
+  knobs: Partial<Knobs>;
+  /** Player-facing effect on offensive forms. */
+  text: string;
+  /** Player-facing effect on defensive forms. */
+  defensive: string;
+}
+
+/** What a pair of elements adds on top of both elements' traits. */
+export interface FusionDef {
+  id: string;
+  elements: [ManaType, ManaType];
+  name: string;
+  icon: string;
+  text: string;
+  knobs: Partial<Knobs>;
+}
+
 export interface ReactionDef {
   id: ReactionId;
   name: string;
@@ -69,6 +134,9 @@ export interface ArpgData {
   /** Monsters of the key element take extra damage from the value element. */
   weakness: Record<ManaType, ManaType>;
   skills: SkillDef[];
+  forms: FormDef[];
+  elementTraits: Record<ManaType, ElementTraitDef>;
+  fusions: FusionDef[];
   reactions: ReactionDef[];
   masteries: MasteryDef[];
 }
@@ -94,6 +162,16 @@ export interface StatusState {
   staggerUntil: number;
   blindUntil: number;
   brandUntil: number;
+  poisonStacks: number;
+  /** Damage per second per stack. */
+  poisonDps: number;
+  poisonUntil: number;
+  poisonTickAt: number;
+  rootUntil: number;
+  /** Crowd-control immunity after a stagger, freeze or root ends, so spam can't lock a foe. */
+  staggerImmuneUntil: number;
+  freezeImmuneUntil: number;
+  rootImmuneUntil: number;
 }
 
 export interface MonsterEntity {

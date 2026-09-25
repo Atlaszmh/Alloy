@@ -300,7 +300,7 @@ const TransplantBalanceSchema = z.object({
 
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const GearSlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
-export const ManaTypeSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow']);
+export const ManaTypeSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
 export const HeroStatKeySchema = z.enum([
   'damage',
   'damagePct',
@@ -324,15 +324,28 @@ export const HeroStatKeySchema = z.enum([
   'stormPower',
   'earthPower',
   'shadowPower',
+  'naturePower',
   'fireAttune',
   'frostAttune',
   'stormAttune',
   'earthAttune',
   'shadowAttune',
+  'natureAttune',
 ]);
 const MonsterTraitSchema = z.enum(['armored', 'swift', 'brute', 'regenerating', 'vampiric', 'spiked']);
 const StatScalingSchema = z.enum(['flat', 'fixed']);
-const StatusIdSchema = z.enum(['burn', 'chill', 'freeze', 'shock', 'hex', 'stagger', 'blind', 'brand']);
+const StatusIdSchema = z.enum([
+  'burn',
+  'chill',
+  'freeze',
+  'shock',
+  'hex',
+  'stagger',
+  'blind',
+  'brand',
+  'poison',
+  'root',
+]);
 
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
@@ -358,7 +371,7 @@ function perSlot<T extends z.ZodTypeAny>(schema: T) {
 }
 
 function perMana<T extends z.ZodTypeAny>(schema: T) {
-  return z.object({ fire: schema, frost: schema, storm: schema, earth: schema, shadow: schema });
+  return z.object({ fire: schema, frost: schema, storm: schema, earth: schema, shadow: schema, nature: schema });
 }
 
 const MonsterDefSchema = z.object({
@@ -389,6 +402,7 @@ export const DelveDataSchema = z.object({
             range: z.number().positive(),
             arc: z.number().positive().max(360).optional(),
             speed: z.number().positive().optional(),
+            pierce: z.boolean().optional(),
           })
           .optional(),
         weight: z.number().positive(),
@@ -469,6 +483,25 @@ export const DelveDataSchema = z.object({
   }),
 });
 
+/** Partial ability knobs; `.strict()` rejects misspelled knob names. */
+const KnobsSchema = z
+  .object({
+    power: z.number().positive(),
+    area: z.number().positive(),
+    applies: z.array(StatusIdSchema),
+    chain: z.number().int().min(0),
+    pierce: z.boolean(),
+    knockback: z.number().min(0),
+    lifesteal: z.number().min(0),
+    zone: z.object({ seconds: z.number().positive(), tickPower: z.number().positive() }),
+    pull: z.boolean(),
+    execute: z.number().min(0).max(1),
+    scatter: z.number().min(0).max(1),
+    spread: z.boolean(),
+  })
+  .partial()
+  .strict();
+
 export const ArpgDataSchema = z.object({
   mana: perMana(z.object({ name: z.string(), icon: z.string(), color: z.string() })),
   weakness: perMana(ManaTypeSchema),
@@ -510,14 +543,55 @@ export const ArpgDataSchema = z.object({
   reactions: z
     .array(
       z.object({
-        id: z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire']),
+        id: z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight']),
         name: z.string(),
         icon: z.string(),
         text: z.string(),
       }),
     )
-    .length(5),
-  masteries: z.array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() })).length(5),
+    .length(7),
+  masteries: z.array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() })).length(6),
+  forms: z
+    .array(
+      z.object({
+        id: z.enum(['bolt', 'volley', 'lance', 'burst', 'strike', 'ward', 'armor', 'surge', 'blink', 'nova', 'barrage', 'maelstrom']),
+        slot: z.enum(['primary', 'defensive', 'ultimate']),
+        name: z.string(),
+        icon: z.string(),
+        text: z.string(),
+        power: z.number().min(0),
+        effect: z.number().positive().optional(),
+        range: z.number().positive().optional(),
+        radius: z.number().positive().optional(),
+        speed: z.number().positive().optional(),
+        count: z.number().int().positive().optional(),
+        duration: z.number().positive().optional(),
+        tick: z.number().positive().optional(),
+        arc: z.number().positive().max(360).optional(),
+        combo: z.array(z.number().positive()).min(1).optional(),
+        comboCount: z.array(z.number().int().positive()).min(1).optional(),
+      }),
+    )
+    .length(12),
+  elementTraits: perMana(z.object({ knobs: KnobsSchema, text: z.string(), defensive: z.string() })),
+  fusions: z
+    .array(
+      z.object({
+        id: z.string(),
+        elements: z.tuple([ManaTypeSchema, ManaTypeSchema]),
+        name: z.string(),
+        icon: z.string(),
+        text: z.string(),
+        knobs: KnobsSchema,
+      }),
+    )
+    .length(15),
+});
+
+const AbilitySlotBalanceSchema = z.object({
+  cost: z.number().min(0),
+  cooldown: z.number().min(0),
+  castTime: z.number().min(0),
 });
 
 const DelveBalanceSchema = z.object({
@@ -648,6 +722,14 @@ const DelveBalanceSchema = z.object({
     staggerDuration: z.number().positive(),
     blindMiss: z.number().min(0).max(1),
     blindDuration: z.number().positive(),
+    poisonDps: z.number().min(0),
+    poisonDuration: z.number().positive(),
+    poisonMaxStacks: z.number().int().positive(),
+    rootDuration: z.number().positive(),
+    rootBossMult: z.number().min(0).max(1),
+    staggerImmunity: z.number().min(0),
+    freezeImmunity: z.number().min(0),
+    rootImmunity: z.number().min(0),
   }),
   reactions: z.object({
     meltMult: z.number().positive(),
@@ -656,6 +738,37 @@ const DelveBalanceSchema = z.object({
     overloadRadius: z.number().positive(),
     superconductFreeze: z.number().positive(),
     soulfireHeal: z.number().min(0).max(1),
+    combustMult: z.number().positive(),
+    combustRadius: z.number().positive(),
+    blightRadius: z.number().positive(),
+  }),
+  abilities: z.object({
+    slots: z.object({ primary: AbilitySlotBalanceSchema, defensive: AbilitySlotBalanceSchema, ultimate: AbilitySlotBalanceSchema }),
+    weight: z.object({
+      power: z.number().min(0),
+      cost: z.number().min(0),
+      cooldown: z.number().min(0),
+      size: z.number().min(0),
+      speed: z.number().min(0).max(0.4),
+      castTime: z.number().min(0),
+    }),
+    castManaMult: z.number().min(0),
+    castPowerMult: z.number().positive(),
+    chargeRatio: z.number().positive(),
+    lullCharge: z.number().min(0),
+    lullRadius: z.number().positive(),
+    chargeLockout: z.number().min(0),
+    comboWindow: z.number().positive(),
+    chainRange: z.number().positive(),
+    chainPower: z.number().positive(),
+    scatterReach: z.number().min(0),
+    defend: z.object({
+      earthReduction: z.number().min(0).max(1),
+      shadowLifesteal: z.number().min(0),
+      natureRegen: z.number().min(0),
+      surgeMove: z.number().min(0),
+      blinkSeconds: z.number().min(0),
+    }),
   }),
   arena: z.object({
     step: z.number().positive(),

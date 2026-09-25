@@ -4,9 +4,10 @@
     "frost": { "name": "Frost", "icon": "❄️", "color": "#6cd4ff" },
     "storm": { "name": "Storm", "icon": "⚡", "color": "#f5e049" },
     "earth": { "name": "Earth", "icon": "⛰️", "color": "#d4a35a" },
-    "shadow": { "name": "Shadow", "icon": "🌑", "color": "#b07cff" }
+    "shadow": { "name": "Shadow", "icon": "🌑", "color": "#b07cff" },
+    "nature": { "name": "Nature", "icon": "🌿", "color": "#6fcf57" }
   },
-  "weakness": { "fire": "frost", "frost": "fire", "storm": "earth", "earth": "storm", "shadow": "storm" },
+  "weakness": { "fire": "frost", "frost": "fire", "storm": "earth", "earth": "storm", "shadow": "storm", "nature": "fire" },
   "skills": [
     {
       "id": "fireball", "name": "Fireball", "icon": "☄️", "kind": "projectile", "elements": ["fire"],
@@ -106,18 +107,162 @@
       "text": "Raise a golem of stone and shadow that draws foes to it and pummels them."
     }
   ],
+  "forms": [
+    {
+      "id": "bolt", "slot": "primary", "name": "Bolt", "icon": "☄️",
+      "power": 1.3, "range": 9, "radius": 0.9, "speed": 13, "combo": [0.8, 0.8, 1.0, 1.5],
+      "text": "A bolt that bursts on the first foe it hits. Press again to chain: small, small, medium, large."
+    },
+    {
+      "id": "volley", "slot": "primary", "name": "Volley", "icon": "🎯",
+      "power": 0.55, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "combo": [1, 1, 1], "comboCount": [3, 3, 5],
+      "text": "Homing darts that seek out different foes. The third press fires five."
+    },
+    {
+      "id": "lance", "slot": "primary", "name": "Lance", "icon": "🗡️",
+      "power": 1.4, "range": 7.5, "radius": 0.55, "combo": [1, 1, 1.4],
+      "text": "An instant line that hits every foe along it. The third press reaches further and hits harder."
+    },
+    {
+      "id": "burst", "slot": "primary", "name": "Burst", "icon": "💥",
+      "power": 1.5, "range": 8, "radius": 1.6, "combo": [1, 1, 1.5],
+      "text": "An explosion where you aim. The third press is bigger."
+    },
+    {
+      "id": "strike", "slot": "primary", "name": "Strike", "icon": "⚔️",
+      "power": 1.25, "range": 2.4, "arc": 150, "combo": [1, 1, 1.2, 1.8],
+      "text": "An element-infused sweep in front of you. The fourth press slams everything around you."
+    },
+    {
+      "id": "ward", "slot": "defensive", "name": "Ward", "icon": "🛡️",
+      "power": 1.2, "effect": 0.25, "duration": 6, "radius": 2.6,
+      "text": "A bubble that absorbs 25% of your max life for 6 s, then bursts with its element."
+    },
+    {
+      "id": "armor", "slot": "defensive", "name": "Armor", "icon": "🦺",
+      "power": 0.6, "effect": 0.35, "duration": 8,
+      "text": "Take 35% less damage for 8 s. Melee attackers take element damage and its status."
+    },
+    {
+      "id": "surge", "slot": "defensive", "name": "Surge", "icon": "⚡",
+      "power": 0, "effect": 0.3, "duration": 6,
+      "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits always apply the element's status."
+    },
+    {
+      "id": "blink", "slot": "defensive", "name": "Blink", "icon": "💨",
+      "power": 0.8, "effect": 0.4, "range": 5, "radius": 0.9,
+      "text": "Dash 5 units, untouchable for a moment, leaving a trail that hits foes."
+    },
+    {
+      "id": "nova", "slot": "ultimate", "name": "Nova", "icon": "✴️",
+      "power": 3.0, "radius": 5,
+      "text": "A huge blast all around you."
+    },
+    {
+      "id": "barrage", "slot": "ultimate", "name": "Barrage", "icon": "🌠",
+      "power": 1.4, "range": 9, "radius": 1.5, "count": 7, "duration": 1.2,
+      "text": "Seven impacts rain over the target area."
+    },
+    {
+      "id": "maelstrom", "slot": "ultimate", "name": "Maelstrom", "icon": "🌪️",
+      "power": 0.45, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5,
+      "text": "A lingering storm at the target that hits everything inside for 6 s."
+    }
+  ],
+  "elementTraits": {
+    "fire": {
+      "knobs": { "area": 1.3, "applies": ["burn"] },
+      "text": "Burns, and blasts 30% wider.",
+      "defensive": "Burns attackers; Surge hits always burn."
+    },
+    "frost": {
+      "knobs": { "applies": ["chill"] },
+      "text": "Chills; chill twice to freeze.",
+      "defensive": "Chills attackers; Surge hits always chill."
+    },
+    "storm": {
+      "knobs": { "chain": 1, "applies": ["shock"] },
+      "text": "Shocks, and hits jump to 1 more foe.",
+      "defensive": "Shocks attackers; Surge hits always shock."
+    },
+    "earth": {
+      "knobs": { "pierce": true, "knockback": 1, "applies": ["stagger"] },
+      "text": "Staggers, pierces and knocks back.",
+      "defensive": "20% less damage taken on top; staggers attackers."
+    },
+    "shadow": {
+      "knobs": { "lifesteal": 0.08, "applies": ["hex"] },
+      "text": "Hexes, and heals you for 8% of the damage.",
+      "defensive": "Hexes attackers, and +10% lifesteal while active."
+    },
+    "nature": {
+      "knobs": { "applies": ["poison"] },
+      "text": "Poisons; poison stacks up to 5.",
+      "defensive": "Poisons attackers, and regenerates 3% max life per second while active."
+    }
+  },
+  "fusions": [
+    { "id": "steam", "elements": ["fire", "frost"], "name": "Steam", "icon": "♨️",
+      "knobs": { "area": 1.2, "applies": ["blind"] },
+      "text": "Scalding steam: wider, and blinds what it hits." },
+    { "id": "plasma", "elements": ["fire", "storm"], "name": "Plasma", "icon": "🔮",
+      "knobs": { "chain": 2 },
+      "text": "Hits arc to 2 more foes." },
+    { "id": "magma", "elements": ["fire", "earth"], "name": "Magma", "icon": "🌋",
+      "knobs": { "zone": { "seconds": 3, "tickPower": 0.25 }, "knockback": 1 },
+      "text": "Leaves burning ground for 3 s and knocks foes back." },
+    { "id": "hellfire", "elements": ["fire", "shadow"], "name": "Hellfire", "icon": "🕯️",
+      "knobs": { "applies": ["brand"] },
+      "text": "Brands foes: branded foes explode when they die." },
+    { "id": "wildfire", "elements": ["fire", "nature"], "name": "Wildfire", "icon": "🔥",
+      "knobs": { "area": 1.4, "power": 1.15, "scatter": 0.45, "zone": { "seconds": 2, "tickPower": 0.2 } },
+      "text": "Nature feeds the flames: bigger, harsher blasts that land less precisely and leave burning ground." },
+    { "id": "superconductor", "elements": ["frost", "storm"], "name": "Superconductor", "icon": "🔷",
+      "knobs": { "chain": 1 },
+      "text": "Hits arc to 1 more foe; chill and shock together set up Superconduct." },
+    { "id": "glacier", "elements": ["frost", "earth"], "name": "Glacier", "icon": "🧊",
+      "knobs": { "applies": ["freeze"], "pierce": true, "power": 0.9 },
+      "text": "Freezes outright and pierces, for 10% less damage." },
+    { "id": "soulfrost", "elements": ["frost", "shadow"], "name": "Soulfrost", "icon": "🧿",
+      "knobs": { "execute": 0.25 },
+      "text": "Frozen foes under 25% life shatter." },
+    { "id": "rimebloom", "elements": ["frost", "nature"], "name": "Rimebloom", "icon": "❄️",
+      "knobs": { "zone": { "seconds": 3, "tickPower": 0.2 }, "power": 0.95 },
+      "text": "Leaves a chilling, poisoning thicket for 3 s." },
+    { "id": "magnetism", "elements": ["storm", "earth"], "name": "Magnetism", "icon": "🧲",
+      "knobs": { "pull": true },
+      "text": "Pulls foes together before the hit lands." },
+    { "id": "void", "elements": ["storm", "shadow"], "name": "Void", "icon": "🌌",
+      "knobs": { "chain": 2, "lifesteal": 0.05 },
+      "text": "Hits arc to 2 more foes and heal you for 5% of the damage." },
+    { "id": "spore_storm", "elements": ["storm", "nature"], "name": "Spore Storm", "icon": "🍄",
+      "knobs": { "chain": 2, "power": 0.9 },
+      "text": "Poison rides the lightning: hits arc to 2 more foes, for 10% less damage." },
+    { "id": "grave", "elements": ["earth", "shadow"], "name": "Grave", "icon": "🪦",
+      "knobs": { "knockback": 1.5, "lifesteal": 0.06, "power": 1.1 },
+      "text": "Heavier hits that knock foes back and heal you for 6% of the damage." },
+    { "id": "overgrowth", "elements": ["earth", "nature"], "name": "Overgrowth", "icon": "🌱",
+      "knobs": { "applies": ["root"] },
+      "text": "Roots foes in place for 1.5 s." },
+    { "id": "plague", "elements": ["shadow", "nature"], "name": "Plague", "icon": "☣️",
+      "knobs": { "spread": true },
+      "text": "When a foe dies, its poison and hex spread to foes nearby." }
+  ],
   "reactions": [
     { "id": "melt", "name": "Melt", "icon": "🫠", "text": "Fire hits a chilled or frozen foe for double damage." },
     { "id": "shatter", "name": "Shatter", "icon": "💥", "text": "Earth hits a frozen foe for massive bonus damage." },
     { "id": "overload", "name": "Overload", "icon": "💢", "text": "Storm hits a burning foe and it explodes, hitting everything nearby." },
     { "id": "superconduct", "name": "Superconduct", "icon": "🔷", "text": "Frost hits a shocked foe and freezes it solid." },
-    { "id": "soulfire", "name": "Soulfire", "icon": "💜", "text": "Fire hits a hexed foe and part of the damage heals you." }
+    { "id": "soulfire", "name": "Soulfire", "icon": "💜", "text": "Fire hits a hexed foe and part of the damage heals you." },
+    { "id": "combust", "name": "Combust", "icon": "💚", "text": "Fire hits a poisoned foe and the poison detonates around it." },
+    { "id": "blight", "name": "Blight", "icon": "🦠", "text": "Shadow hits a poisoned foe and its poison spreads to its neighbours." }
   ],
   "masteries": [
     { "mana": "fire", "name": "Inferno", "text": "Burning foes spread their flames when they die." },
     { "mana": "frost", "name": "Permafrost", "text": "Freezes last 50% longer, and frozen foes take 30% more damage." },
     { "mana": "storm", "name": "Tempest", "text": "Every chain jumps to 2 more foes, and shock's damage bonus doubles." },
     { "mana": "earth", "name": "Mountain's Heart", "text": "+40% armor and +20% max life." },
-    { "mana": "shadow", "name": "Night's Embrace", "text": "Killing a hexed foe heals you for 4% of your max life." }
+    { "mana": "shadow", "name": "Night's Embrace", "text": "Killing a hexed foe heals you for 4% of your max life." },
+    { "mana": "nature", "name": "Plaguebearer", "text": "Poison stacks up to 10." }
   ]
 }

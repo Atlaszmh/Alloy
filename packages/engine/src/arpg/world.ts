@@ -39,6 +39,14 @@ export function emptyStatus(): StatusState {
     staggerUntil: 0,
     blindUntil: 0,
     brandUntil: 0,
+    poisonStacks: 0,
+    poisonDps: 0,
+    poisonUntil: 0,
+    poisonTickAt: 0,
+    rootUntil: 0,
+    staggerImmuneUntil: 0,
+    freezeImmuneUntil: 0,
+    rootImmuneUntil: 0,
   };
 }
 

@@ -5,7 +5,9 @@ import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
 import type { BiomeDef, DelveBalance, DelveData, DoorDef, GearAffixDef, GearBaseDef, LegendaryDef } from '../types/delve.js';
 import type { GearSlot, HeroStatKey } from '../types/gear.js';
-import type { ArpgData, ReactionDef, SkillDef } from '../types/arpg.js';
+import type { ArpgData, FormDef, FusionDef, ReactionDef, SkillDef } from '../types/arpg.js';
+import type { FormId } from '../types/ability.js';
+import type { ManaType } from '../types/mana.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
 function combinationKey(id1: string, id2: string): string {
@@ -197,6 +199,17 @@ export class DataRegistry {
 
   findSkill(id: string): SkillDef | undefined {
     return this.getArpgData().skills.find((s) => s.id === id);
+  }
+
+  getForm(id: FormId): FormDef {
+    const form = this.getArpgData().forms.find((f) => f.id === id);
+    if (!form) throw new Error(`Form not found: ${id}`);
+    return form;
+  }
+
+  /** The fusion for a pair of distinct elements, in either order. */
+  getFusion(a: ManaType, b: ManaType): FusionDef | undefined {
+    return this.getArpgData().fusions.find((f) => f.elements.includes(a) && f.elements.includes(b) && a !== b);
   }
 
   getReaction(id: string): ReactionDef {

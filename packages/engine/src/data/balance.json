@@ -125,10 +125,26 @@
     "status": {
       "burnDps": 0.35, "burnDuration": 3, "chillSlow": 0.4, "chillDuration": 3, "chillToFreeze": 2, "freezeDuration": 1.6,
       "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6,
-      "blindMiss": 0.5, "blindDuration": 4
+      "blindMiss": 0.5, "blindDuration": 4,
+      "poisonDps": 0.12, "poisonDuration": 4, "poisonMaxStacks": 5, "rootDuration": 1.5, "rootBossMult": 0.4,
+      "staggerImmunity": 1.2, "freezeImmunity": 1.5, "rootImmunity": 2
     },
     "reactions": {
-      "meltMult": 2, "shatterMult": 2.5, "overloadMult": 1.2, "overloadRadius": 2.6, "superconductFreeze": 1.5, "soulfireHeal": 0.3
+      "meltMult": 2, "shatterMult": 2.5, "overloadMult": 1.2, "overloadRadius": 2.6, "superconductFreeze": 1.5, "soulfireHeal": 0.3,
+      "combustMult": 1.6, "combustRadius": 2, "blightRadius": 2.5
+    },
+    "abilities": {
+      "slots": {
+        "primary": { "cost": 8, "cooldown": 0.45, "castTime": 0.35 },
+        "defensive": { "cost": 25, "cooldown": 10, "castTime": 0.5 },
+        "ultimate": { "cost": 60, "cooldown": 18, "castTime": 1.2 }
+      },
+      "weight": { "power": 0.28, "cost": 0.3, "cooldown": 0.25, "size": 0.12, "speed": 0.12, "castTime": 0.25 },
+      "castManaMult": 0.5, "castPowerMult": 1.2,
+      "chargeRatio": 0.35, "lullCharge": 1.5, "lullRadius": 6, "chargeLockout": 1,
+      "comboWindow": 1.2,
+      "chainRange": 4, "chainPower": 0.7, "scatterReach": 1.5,
+      "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "surgeMove": 0.2, "blinkSeconds": 2 }
     },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8, "minPackDistance": 9 }
   }

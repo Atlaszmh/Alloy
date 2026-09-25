@@ -144,6 +144,31 @@
       ]
     },
     {
+      "id": "bow",
+      "slot": "weapon",
+      "name": "Bow",
+      "attackInterval": 0.75,
+      "attack": {
+        "kind": "bolt",
+        "range": 9.5,
+        "speed": 20,
+        "pierce": true
+      },
+      "weight": 1,
+      "implicits": [
+        {
+          "stat": "damage",
+          "base": 5.6,
+          "scaling": "flat"
+        },
+        {
+          "stat": "critChance",
+          "base": 5,
+          "scaling": "fixed"
+        }
+      ]
+    },
+    {
       "id": "helm",
       "slot": "helm",
       "name": "Helm",
@@ -612,6 +637,23 @@
       ]
     },
     {
+      "stat": "naturePower",
+      "label": "Nature Damage",
+      "unit": "pct",
+      "min": 8,
+      "max": 30,
+      "scaling": "fixed",
+      "decimals": 0,
+      "weight": 4,
+      "slots": [
+        "weapon",
+        "amulet",
+        "ring",
+        "gloves",
+        "helm"
+      ]
+    },
+    {
       "stat": "fireAttune",
       "label": "Fire Attunement",
       "unit": "flat",
@@ -705,6 +747,25 @@
         "amulet",
         "ring"
       ]
+    },
+    {
+      "stat": "natureAttune",
+      "label": "Nature Attunement",
+      "unit": "flat",
+      "min": 1,
+      "max": 2,
+      "scaling": "fixed",
+      "decimals": 0,
+      "weight": 4,
+      "slots": [
+        "weapon",
+        "helm",
+        "chest",
+        "gloves",
+        "boots",
+        "amulet",
+        "ring"
+      ]
     }
   ],
   "legendaries": [
@@ -722,7 +783,7 @@
     {
       "id": "pyroclasm",
       "name": "Pyroclasm",
-      "text": "Fireball bursts into 3 embers on impact, each dealing {v}% damage.",
+      "text": "Fire Bolts, Bursts and Barrages burst into 3 embers dealing {v}% damage.",
       "min": 40,
       "max": 70,
       "slots": [
@@ -734,7 +795,7 @@
     {
       "id": "stormcaller",
       "name": "Stormcaller",
-      "text": "Chain Lightning jumps to {v} extra targets.",
+      "text": "Storm abilities chain to {v} extra foes.",
       "min": 2,
       "max": 4,
       "slots": [
@@ -746,7 +807,7 @@
     {
       "id": "rimeheart",
       "name": "Rimeheart",
-      "text": "Frost Nova leaves a freezing field for 3s. +{v}% Frost damage.",
+      "text": "Frost Novas leave a freezing field for 3 s. +{v}% Frost damage.",
       "min": 20,
       "max": 40,
       "slots": [
@@ -757,7 +818,7 @@
     {
       "id": "bedrock",
       "name": "Bedrock",
-      "text": "Boulders are larger and stagger everything they touch. +{v}% armor.",
+      "text": "Earth abilities are 40% larger and stagger what they hit. +{v}% armor.",
       "min": 20,
       "max": 40,
       "slots": [
@@ -769,7 +830,7 @@
     {
       "id": "nightstalker",
       "name": "Nightstalker",
-      "text": "Kills refresh Shadow Step. +{v}% Shadow damage.",
+      "text": "Kills cut your Defensive's cooldown by 1 s. +{v}% Shadow damage.",
       "min": 20,
       "max": 40,
       "slots": [
@@ -838,7 +899,7 @@
     {
       "id": "manaweaver",
       "name": "Manaweaver",
-      "text": "Spells cost {v}% less mana.",
+      "text": "Abilities cost {v}% less mana.",
       "min": 20,
       "max": 35,
       "slots": [
