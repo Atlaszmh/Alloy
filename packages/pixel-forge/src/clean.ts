@@ -366,6 +366,18 @@ export function cleanSprite(src: Image, opts: CleanOptions): CleanResult {
     }
   }
 
+  // The outline colour belongs to the outline: models paint "black" creatures in it, which would
+  // merge them into their own silhouette, so inside the sprite it becomes the nearest other colour.
+  const o = opts.outline;
+  const outlineIdx = o
+    ? pal.colors.findIndex((c) => c[0] === o[0] && c[1] === o[1] && c[2] === o[2])
+    : -1;
+  if (outlineIdx >= 0) {
+    const others = pal.colors.map((_, k) => k).filter((k) => k !== outlineIdx);
+    const dark = nearest(pal, o![0], o![1], o![2], others);
+    for (let i = 0; i < blocks.length; i++) if (blocks[i] === outlineIdx) blocks[i] = dark;
+  }
+
   // Smooth specks: an inner pixel whose neighbours (3 or 4) share one close color takes that
   // color. Shading neighbours are under SPECK apart; details (eyes, sparks, runes) are well over.
   const smoothed = blocks.slice();

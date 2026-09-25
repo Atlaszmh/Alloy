@@ -241,6 +241,51 @@ describe('cleanSprite', () => {
     expect(getRGBA(image, 1 + 6, 4 + 3).slice(0, 3)).toEqual(colors.y);
   });
 
+  it('keeps the outline colour for the outline: dark bodies take the next-darkest colour', () => {
+    const pal = makePalette('t', ['#181425', '#262b44', '#f77622']);
+    // A black lizard with one ember, as models draw "black-scaled" creatures.
+    const rows = ['kkkkkkkk', 'kkkkekkk', 'kkkkkkkk', 'kkkkkkkk'];
+    const colors: Record<string, [number, number, number]> = {
+      k: [0x10, 0x0e, 0x18],
+      e: [0xf7, 0x76, 0x22],
+    };
+    const img = createImage(240, 240);
+    for (let y = 0; y < 240; y++)
+      for (let x = 0; x < 240; x++) setRGBA(img, x, y, 255, 0, 255, 255);
+    rows.forEach((row, by) =>
+      [...row].forEach((ch, bx) => {
+        for (let y = 0; y < 20; y++)
+          for (let x = 0; x < 20; x++)
+            setRGBA(img, 40 + bx * 20 + x, 40 + by * 20 + y, ...colors[ch], 255);
+      }),
+    );
+    const black: [number, number, number] = [0x18, 0x14, 0x25];
+    const { image } = cleanSprite(img, { size: 12, palette: pal, outline: black });
+    const isBlack = (x: number, y: number) => {
+      const [r, g, b, a] = getRGBA(image, x, y);
+      return a === 255 && r === black[0] && g === black[1] && b === black[2];
+    };
+    const opaque = (x: number, y: number) => getRGBA(image, x, y)[3] === 255;
+    let inner = 0;
+    let innerBlack = 0;
+    let ember = 0;
+    for (let y = 0; y < 12; y++)
+      for (let x = 0; x < 12; x++) {
+        if (!opaque(x, y)) continue;
+        if (getRGBA(image, x, y)[0] === 0xf7) ember++;
+        const surrounded =
+          opaque(x - 1, y) && opaque(x + 1, y) && opaque(x, y - 1) && opaque(x, y + 1);
+        if (!surrounded) expect(isBlack(x, y), `edge (${x},${y}) is outline`).toBe(true);
+        else {
+          inner++;
+          if (isBlack(x, y)) innerBlack++;
+        }
+      }
+    expect(inner).toBeGreaterThan(10);
+    expect(innerBlack).toBe(0);
+    expect(ember).toBeGreaterThan(0);
+  });
+
   it('drops stray single pixels', () => {
     const src = createImage(40, 40);
     for (let y = 0; y < 40; y++) for (let x = 0; x < 40; x++) setRGBA(src, x, y, 255, 0, 255, 255);

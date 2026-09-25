@@ -19,7 +19,7 @@
     "inputs": {
       "clip_name": "qwen_3_4b.safetensors",
       "type": "flux2",
-      "device": "default"
+      "device": "cpu"
     }
   },
   "4": {
