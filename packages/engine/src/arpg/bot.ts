@@ -38,10 +38,21 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   if (canDodge) {
     const hurt = h.hp < h.stats.maxHp * 0.5;
     for (const m of world.monsters) {
-      if (m.dead || m.windupUntil <= 0 || m.windupUntil - world.t > 0.15) continue;
-      if (m.kind === 'normal' && !hurt) continue;
+      if (m.dead || (m.kind === 'normal' && !hurt)) continue;
       const gapM = dist(h.x, h.y, m.x, m.y) - m.radius - h.radius;
-      if ((m.ai === 'melee' && gapM <= m.attackRange + 0.5) || (m.ai === 'charger' && gapM < 3)) {
+      const swing =
+        m.ai !== 'charger' &&
+        m.ai !== 'ranged' &&
+        m.windupUntil > 0 &&
+        m.windupUntil - world.t <= 0.15 &&
+        gapM <= m.attackRange + 0.5;
+      // A charge lands when it closes the gap, not when its wind-up ends.
+      const charge =
+        m.ai === 'charger' &&
+        m.chargeUntil > world.t &&
+        !m.chargeHit &&
+        gapM / (m.speed * 3.4) <= 0.15;
+      if (swing || charge) {
         input.move = dirTo(m.x, m.y, h.x, h.y);
         input.dodge = true;
         return input;

@@ -103,6 +103,7 @@ describe('perfect dodge', () => {
     hurtHero(ctx, 50, null, null);
     expect(perfects(events)).toBe(1);
     expect(w.hero.dodgeCharges).toBe(D.charges);
+    expect(w.hero.dodgeRechargeAt).toBe(0);
     expect(w.hero.riposteUntil).toBeGreaterThan(w.t);
     hurtHero(ctx, 50, null, null);
     expect(perfects(events)).toBe(1);
@@ -121,10 +122,12 @@ describe('perfect dodge', () => {
   });
 
   it('dashing away from a melee swing that then misses is still a PERFECT', () => {
-    const w = arena([{ x: 13, y: 34.9, hp: 1e6, maxHp: 1e6, aggro: true, damage: 20 }], {
+    // In reach (gap 1.0) when the dodge starts, out of reach when the swing lands.
+    const w = arena([{ x: 13, y: 20, hp: 1e6, maxHp: 1e6, aggro: true, damage: 20 }], {
       noBasic: true,
     });
     const m = w.monsters[0];
+    m.y = 36 - (1.0 + m.radius + w.hero.radius);
     for (let i = 0; i < 200 && !(m.windupUntil > 0 && m.windupUntil - w.t <= 0.1); i++) {
       stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
     }
@@ -132,6 +135,7 @@ describe('perfect dodge', () => {
     const events = [...dodge(w, { x: 0, y: 1 }), ...run(w, 0.25)];
     expect(perfects(events)).toBe(1);
     expect(w.hero.hp).toBe(hp);
+    expect(w.hero.y - 36).toBeGreaterThan(1.4);
   });
 
   it('leaving a boss slam as it lands is a PERFECT', () => {
@@ -143,7 +147,8 @@ describe('perfect dodge', () => {
       ability: null,
       x: 13,
       y: 36,
-      radius: 2.6,
+      // Small enough that the hero has left it when it lands (only where it began is inside).
+      radius: 0.9,
       born: w.t,
       until: w.t + 1,
       tick: 0,
@@ -151,7 +156,7 @@ describe('perfect dodge', () => {
       damage: 50,
       element: 'fire',
       applies: [],
-      detonateAt: w.t + 0.1,
+      detonateAt: w.t + 0.13,
       dead: false,
     });
     const hp = w.hero.hp;
