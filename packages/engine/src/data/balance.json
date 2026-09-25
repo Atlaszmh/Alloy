@@ -146,6 +146,10 @@
       "chainRange": 4, "chainPower": 0.7, "scatterReach": 1.5,
       "defend": { "earthReduction": 0.2, "shadowLifesteal": 0.1, "natureRegen": 0.03, "surgeMove": 0.2, "blinkSeconds": 2 }
     },
+    "dodge": {
+      "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,
+      "perfectWindow": 0.15, "riposteWindow": 1.5
+    },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8, "minPackDistance": 9 }
   }
 }

@@ -797,6 +797,17 @@ const DelveBalanceSchema = z.object({
       blinkSeconds: z.number().min(0),
     }),
   }),
+  dodge: z
+    .object({
+      charges: z.number().int().positive(),
+      recharge: z.number().positive(),
+      distance: z.number().positive(),
+      duration: z.number().positive(),
+      iframes: z.number().positive(),
+      perfectWindow: z.number().positive(),
+      riposteWindow: z.number().positive(),
+    })
+    .refine((d) => d.perfectWindow <= d.iframes, 'perfectWindow must fit inside iframes'),
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),

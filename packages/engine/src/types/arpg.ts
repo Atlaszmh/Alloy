@@ -275,6 +275,24 @@ export interface HeroEntity {
   /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
   defend: { form: FormId; until: number } | null;
   ward: { hp: number; max: number } | null;
+  dodgeCharges: number;
+  /** When the next dodge charge arrives (0 = full). */
+  dodgeRechargeAt: number;
+  /**
+   * The last dodge, kept after the dash ends so a perfect dodge can be judged
+   * from its start. The hero is dashing while `t < until`.
+   */
+  dodge: {
+    dir: Vec;
+    fromX: number;
+    fromY: number;
+    start: number;
+    until: number;
+    /** This dodge already paid out its perfect dodge. */
+    perfect: boolean;
+  } | null;
+  /** The next real hit before this time crits and staggers. */
+  riposteUntil: number;
   nextAttackAt: number;
   attackCount: number;
   potions: number;
@@ -291,6 +309,8 @@ export interface ArpgInput {
   /** Ability to use this step (0 Primary, 1 Defensive, 2 Ultimate), with an optional aim point. */
   cast?: AbilityCast | null;
   potion?: boolean;
+  /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
+  dodge?: boolean;
 }
 
 export type ArpgEvent =
@@ -354,6 +374,8 @@ export type ArpgEvent =
     }
   | { kind: 'dash'; fromX: number; fromY: number; toX: number; toY: number }
   | { kind: 'noMana'; slot: number }
+  | { kind: 'dodge'; fromX: number; fromY: number; dirX: number; dirY: number }
+  | { kind: 'perfectDodge'; x: number; y: number }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -400,6 +422,7 @@ export interface ArpgWorld {
   /** One-shot inputs waiting for the next simulation step. */
   queuedCast: AbilityCast | null;
   queuedPotion: boolean;
+  queuedDodge: boolean;
   kills: number;
   bossKilled: boolean;
   cleared: boolean;

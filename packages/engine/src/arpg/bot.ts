@@ -7,7 +7,8 @@ import { nearestMonster } from './abilities/targeting.js';
 
 /**
  * A simple arena bot: walks to the nearest foe (keeping range with bolt
- * weapons), steps out of telegraphed slams, drinks at low life, grabs nearby
+ * weapons), steps (or dodges) out of telegraphed slams, dodges blows about to
+ * land, drinks at low life, grabs nearby
  * loot, and uses its abilities: the Ultimate on a crowd or a big foe, the
  * Defensive when hurt or crowded, the Primary whenever it's ready. Drives the
  * pacing tests.
@@ -19,13 +20,32 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
 
   if (h.hp < h.stats.maxHp * 0.4 && h.potions > 0) input.potion = true;
 
-  // Step out of any telegraphed slam.
+  const canDodge = h.dodgeCharges >= 1 && !(h.dodge && world.t < h.dodge.until);
+
+  // Step out of any telegraphed slam, dodging if it's about to land.
   for (const z of world.zones) {
     if (z.owner !== 'monster' || z.dead) continue;
     if (dist(h.x, h.y, z.x, z.y) < z.radius + h.radius + 0.6) {
       const away = dirTo(z.x, z.y, h.x, h.y);
       input.move = away.x === 0 && away.y === 0 ? { x: 1, y: 0 } : away;
+      if (canDodge && z.detonateAt - world.t <= 0.15) input.dodge = true;
       return input;
+    }
+  }
+
+  // Dodge a blow that is about to land, the way a player saves dodges for the
+  // ones that matter: from elites and bosses, or when already hurt.
+  if (canDodge) {
+    const hurt = h.hp < h.stats.maxHp * 0.5;
+    for (const m of world.monsters) {
+      if (m.dead || m.windupUntil <= 0 || m.windupUntil - world.t > 0.15) continue;
+      if (m.kind === 'normal' && !hurt) continue;
+      const gapM = dist(h.x, h.y, m.x, m.y) - m.radius - h.radius;
+      if ((m.ai === 'melee' && gapM <= m.attackRange + 0.5) || (m.ai === 'charger' && gapM < 3)) {
+        input.move = dirTo(m.x, m.y, h.x, h.y);
+        input.dodge = true;
+        return input;
+      }
     }
   }
 

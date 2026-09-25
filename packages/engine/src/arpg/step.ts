@@ -25,6 +25,7 @@ import { defendingAbility, defendTick, gainCharge } from './abilities/defend.js'
 import { impact } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
+import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const BASIC_STATUS: Record<ManaType, StatusId> = {
   fire: 'burn',
@@ -51,6 +52,7 @@ export function stepWorld(
   const events: ArpgEvent[] = [];
   if (input.cast) world.queuedCast = input.cast;
   if (input.potion) world.queuedPotion = true;
+  if (input.dodge) world.queuedDodge = true;
   if (world.heroDead) return events;
 
   const ctx = makeCtx(registry, world, events);
@@ -102,7 +104,14 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
       healHero(ctx, h.stats.maxHp * bal.dive.potionHeal, 'potion');
     }
   }
-  if (world.queuedCast !== null) {
+  // The dash moves first; presses made during it wait for it to end.
+  dodgeTick(ctx, dt);
+  if (world.queuedDodge && !isDashing(ctx)) {
+    world.queuedDodge = false;
+    tryDodge(ctx, move);
+  }
+  const dashing = isDashing(ctx);
+  if (world.queuedCast !== null && !dashing) {
     const cast = world.queuedCast;
     world.queuedCast = null;
     castAbility(ctx, cast);
@@ -112,7 +121,7 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
   const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
-  h.moving = speed > 0.05 && !h.windup;
+  h.moving = speed > 0.05 && !h.windup && !dashing;
   if (h.moving) {
     const pace = h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1);
     h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
@@ -120,7 +129,7 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
     h.facing = { x: v.x / speed, y: v.y / speed };
   }
 
-  if (!h.windup) basicAttack(ctx);
+  if (!h.windup && !dashing) basicAttack(ctx);
 
   h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
@@ -246,7 +255,11 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
       if (dist(h.x, h.y, p.x, p.y) <= h.radius + p.radius) {
         hurtHero(ctx, p.damage, p.element, null);
         p.dead = true;
-      } else if (expired) p.dead = true;
+        continue;
+      }
+      const o = perfectOrigin(ctx);
+      if (o && dist(o.x, o.y, p.x, p.y) <= h.radius + p.radius) notePerfect(ctx);
+      if (expired) p.dead = true;
       continue;
     }
 
@@ -293,8 +306,10 @@ function zonesTick(ctx: SimCtx): void {
       if (world.t >= z.detonateAt) {
         z.dead = true;
         ctx.events.push({ kind: 'explode', x: z.x, y: z.y, radius: z.radius, element: z.element });
+        const o = perfectOrigin(ctx);
         if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius)
           hurtHero(ctx, z.damage, z.element, null);
+        else if (o && dist(o.x, o.y, z.x, z.y) <= z.radius + h.radius) notePerfect(ctx);
       }
       continue;
     }
@@ -327,6 +342,12 @@ function enrageMult(ctx: SimCtx, m: MonsterEntity): number {
 
 function damageHero(ctx: SimCtx, m: MonsterEntity, amount: number, melee: boolean): void {
   hurtHero(ctx, amount * enrageMult(ctx, m), m.element, m, { melee });
+}
+
+/** A monster's gap to where the hero's dodge began, while a perfect dodge is still possible. */
+function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
+  const o = perfectOrigin(ctx);
+  return o ? dist(m.x, m.y, o.x, o.y) - m.radius - ctx.world.hero.radius : Infinity;
 }
 
 /** Rooted foes stay put (they can still attack in reach). */
@@ -469,7 +490,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             m.chargeHit = true;
             m.chargeUntil = world.t;
             damageHero(ctx, m, m.damage * 1.4, true);
-          }
+          } else if (!m.chargeHit && gapFromDodge(ctx, m) <= 0.25) notePerfect(ctx);
           break;
         }
         if (m.windupUntil > 0) {
@@ -529,6 +550,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
             if (gap <= m.attackRange + 0.5) damageHero(ctx, m, m.damage, true);
+            else if (gapFromDodge(ctx, m) <= m.attackRange + 0.5) notePerfect(ctx);
           }
           break;
         }
@@ -547,6 +569,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 function separate(ctx: SimCtx): void {
   const { world } = ctx;
   const h = world.hero;
+  const dashing = isDashing(ctx);
   const ms = world.monsters.filter((m) => !m.dead);
   for (let i = 0; i < ms.length; i++) {
     const a = ms[i];
@@ -562,6 +585,8 @@ function separate(ctx: SimCtx): void {
       b.x += n.x * overlap * (1 - wa);
       b.y += n.y * overlap * (1 - wa);
     }
+    // A dashing hero slips through foes.
+    if (dashing) continue;
     const d = dist(h.x, h.y, a.x, a.y);
     const overlap = a.radius + h.radius - d;
     if (overlap > 0) {

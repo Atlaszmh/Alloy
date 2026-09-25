@@ -406,7 +406,7 @@
     },
     {
       "stat": "dodge",
-      "label": "Dodge",
+      "label": "Evasion",
       "unit": "pct",
       "min": 1,
       "max": 5,

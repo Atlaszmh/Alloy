@@ -17,6 +17,7 @@ import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
+import { notePerfect } from './dodge.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -229,6 +230,15 @@ export function hitMonster(
   let amount = base;
   let crit = opts.crit ?? false;
   if (opts.crit === undefined && opts.canCrit) crit = world.rng.next() < stats.critChance;
+  // Riposte (after a perfect dodge): the next real hit crits and staggers.
+  const real =
+    (opts.source === 'basic' || opts.source === 'skill') &&
+    (opts.crit !== undefined || !!opts.canCrit);
+  const riposte = real && world.t < h.riposteUntil;
+  if (riposte) {
+    crit = true;
+    h.riposteUntil = 0;
+  }
   if (crit) amount *= stats.critMultiplier;
 
   if (element) {
@@ -351,6 +361,7 @@ export function hitMonster(
   }
 
   for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount);
+  if (riposte) applyStatus(ctx, m, 'stagger', amount);
 
   if (opts.knockback && opts.kbFrom) {
     const resist = m.kind === 'boss' ? 0.15 : m.kind === 'elite' ? 0.5 : 1;
@@ -518,7 +529,10 @@ export function hurtHero(
   const h = world.hero;
   if (world.heroDead || raw <= 0) return;
   if (!opts.unavoidable) {
-    if (world.t < h.invulnUntil) return;
+    if (world.t < h.invulnUntil) {
+      notePerfect(ctx);
+      return;
+    }
     const blind =
       source && world.t < source.status.blindUntil && world.rng.next() < bal.status.blindMiss;
     if (blind || world.rng.next() < h.stats.dodge) {

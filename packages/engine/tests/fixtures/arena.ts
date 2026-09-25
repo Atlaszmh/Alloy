@@ -116,3 +116,8 @@ export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }
 export function damaged(m: MonsterEntity): boolean {
   return m.hp < m.maxHp;
 }
+
+/** Press dodge (moving along `move`, or standing still) and advance one step. */
+export function dodge(w: ArpgWorld, move = { x: 0, y: 0 }): ArpgEvent[] {
+  return stepWorld(registry, w, { move, dodge: true }, STEP);
+}

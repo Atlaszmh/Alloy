@@ -346,6 +346,19 @@ export interface DelveBalance {
     blightRadius: number;
   };
   abilities: DelveAbilityBalance;
+  /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
+  dodge: {
+    charges: number;
+    /** Seconds per charge, refilled one at a time. */
+    recharge: number;
+    distance: number;
+    duration: number;
+    iframes: number;
+    /** A hit this soon after the dodge starts is a perfect dodge. */
+    perfectWindow: number;
+    /** How long the riposte (next real hit crits and staggers) stays armed. */
+    riposteWindow: number;
+  };
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
