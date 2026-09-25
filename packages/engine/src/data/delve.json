@@ -900,7 +900,7 @@
           "interval": 1.0,
           "ai": "melee",
           "speed": 1.25,
-          "size": 0.85
+          "size": 0.6
         },
         {
           "id": "soot_bat",
@@ -911,7 +911,7 @@
           "interval": 1.0,
           "ai": "melee",
           "speed": 1.4,
-          "size": 0.85
+          "size": 0.7
         },
         {
           "id": "slag_beetle",
@@ -922,7 +922,7 @@
           "interval": 1.4,
           "ai": "melee",
           "speed": 0.7,
-          "size": 1.15,
+          "size": 1.4,
           "traits": [
             "armored"
           ]
@@ -948,7 +948,7 @@
         "interval": 1.6,
         "ai": "melee",
         "speed": 0.85,
-        "size": 2.0,
+        "size": 2.8,
         "traits": [
           "brute"
         ]
@@ -995,7 +995,7 @@
           "interval": 2.2,
           "ai": "charger",
           "speed": 0.8,
-          "size": 1.4
+          "size": 2.0
         },
         {
           "id": "snow_stalker",
@@ -1006,7 +1006,7 @@
           "interval": 1.0,
           "ai": "melee",
           "speed": 1.35,
-          "size": 1.0,
+          "size": 1.1,
           "traits": [
             "swift"
           ]
@@ -1021,7 +1021,7 @@
         "interval": 1.5,
         "ai": "melee",
         "speed": 0.9,
-        "size": 2.0,
+        "size": 3.2,
         "traits": [
           "armored"
         ]
@@ -1046,7 +1046,7 @@
           "interval": 1.6,
           "ai": "ranged",
           "speed": 0.75,
-          "size": 1.0,
+          "size": 1.4,
           "traits": [
             "armored"
           ]
@@ -1060,7 +1060,7 @@
           "interval": 1.0,
           "ai": "melee",
           "speed": 1.5,
-          "size": 1.0,
+          "size": 0.9,
           "traits": [
             "swift"
           ]
@@ -1074,7 +1074,7 @@
           "interval": 1.2,
           "ai": "melee",
           "speed": 1.1,
-          "size": 1.0
+          "size": 1.2
         },
         {
           "id": "arc_imp",
@@ -1085,7 +1085,7 @@
           "interval": 1.4,
           "ai": "ranged",
           "speed": 1.1,
-          "size": 1.0
+          "size": 0.6
         }
       ],
       "boss": {
@@ -1097,7 +1097,7 @@
         "interval": 1.4,
         "ai": "melee",
         "speed": 1.0,
-        "size": 2.0,
+        "size": 3.0,
         "traits": [
           "swift"
         ]
@@ -1133,7 +1133,7 @@
           "interval": 1.5,
           "ai": "melee",
           "speed": 0.6,
-          "size": 1.2,
+          "size": 1.4,
           "traits": [
             "armored"
           ]
@@ -1147,7 +1147,7 @@
           "interval": 2.2,
           "ai": "charger",
           "speed": 0.85,
-          "size": 1.35
+          "size": 1.8
         },
         {
           "id": "mud_toad",
@@ -1158,7 +1158,7 @@
           "interval": 1.6,
           "ai": "ranged",
           "speed": 0.9,
-          "size": 1.0,
+          "size": 0.7,
           "traits": [
             "regenerating"
           ]
@@ -1173,7 +1173,7 @@
         "interval": 1.8,
         "ai": "melee",
         "speed": 0.7,
-        "size": 2.1,
+        "size": 3.0,
         "traits": [
           "armored"
         ]
@@ -1209,7 +1209,7 @@
           "interval": 1.0,
           "ai": "melee",
           "speed": 1.3,
-          "size": 1.0,
+          "size": 0.8,
           "traits": [
             "vampiric"
           ]
@@ -1223,7 +1223,7 @@
           "interval": 1.9,
           "ai": "melee",
           "speed": 0.8,
-          "size": 1.35,
+          "size": 1.9,
           "traits": [
             "brute"
           ]
@@ -1237,7 +1237,7 @@
           "interval": 1.7,
           "ai": "ranged",
           "speed": 0.5,
-          "size": 1.0,
+          "size": 1.1,
           "traits": [
             "spiked"
           ]
@@ -1252,7 +1252,7 @@
         "interval": 1.4,
         "ai": "melee",
         "speed": 0.95,
-        "size": 1.9,
+        "size": 2.4,
         "traits": [
           "vampiric"
         ]
@@ -1277,7 +1277,7 @@
           "interval": 1.3,
           "ai": "ranged",
           "speed": 1.2,
-          "size": 1.0,
+          "size": 0.6,
           "traits": [
             "swift"
           ]
@@ -1291,7 +1291,7 @@
           "interval": 1.1,
           "ai": "melee",
           "speed": 1.1,
-          "size": 1.0
+          "size": 1.1
         },
         {
           "id": "hellboar",
@@ -1302,7 +1302,7 @@
           "interval": 2.0,
           "ai": "charger",
           "speed": 0.9,
-          "size": 1.3,
+          "size": 1.6,
           "traits": [
             "brute"
           ]
@@ -1316,7 +1316,7 @@
           "interval": 1.1,
           "ai": "melee",
           "speed": 1.2,
-          "size": 1.0,
+          "size": 0.8,
           "traits": [
             "spiked"
           ]
@@ -1331,7 +1331,7 @@
         "interval": 1.6,
         "ai": "melee",
         "speed": 0.9,
-        "size": 2.2,
+        "size": 3.4,
         "traits": [
           "armored",
           "brute"
