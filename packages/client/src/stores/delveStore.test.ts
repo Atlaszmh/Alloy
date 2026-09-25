@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { generateItem, SeededRNG } from '@alloy/engine';
-import { useDelveStore, DELVE_SAVE_KEY, loadDelveProfile } from './delveStore';
+import { useDelveStore, DELVE_SAVE_KEY, MANUAL_ATTACK_KEY, loadDelveProfile } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
 const registry = getDelveRegistry();
@@ -64,6 +64,15 @@ describe('delveStore', () => {
     const res = useDelveStore.getState().upgrade(uid);
     expect(res.ok).toBe(false);
     expect(res.reason).toMatch(/scrap/i);
+  });
+
+  it('remembers the basic attack mode on this device', () => {
+    expect(useDelveStore.getState().manualAttack).toBe(false);
+    useDelveStore.getState().setManualAttack(true);
+    expect(useDelveStore.getState().manualAttack).toBe(true);
+    expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('1');
+    useDelveStore.getState().setManualAttack(false);
+    expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('0');
   });
 
   it('sets an ability build and persists it', () => {

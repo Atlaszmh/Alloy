@@ -19,7 +19,7 @@ import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { LootTray } from '@/features/delve/LootTray';
 import { PickupFeed } from '@/features/delve/arena/PickupFeed';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
-import { BossBar, SkillBar, TopHud, Vitals } from '@/features/delve/arena/ArenaHud';
+import { AttackButton, BossBar, SkillBar, TopHud, Vitals } from '@/features/delve/arena/ArenaHud';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import '@/features/delve/delve.css';
 
@@ -212,7 +212,8 @@ export function DelveRun() {
   const choosing = dive?.phase === 'choosing';
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
   const paused = !!sheetUid || fanfares.length > 0 || menuOpen || choosing || finished;
-  const arena = useArena(hostRef, { paused, insets, onUi });
+  const manualAttack = useDelveStore((s) => s.manualAttack);
+  const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
 
   useEffect(() => {
@@ -264,6 +265,7 @@ export function DelveRun() {
         heroScreen={arena.heroScreen}
         pixelsPerUnit={arena.pixelsPerUnit}
         disabled={paused}
+        manualAttack={manualAttack}
       />
 
       <TopHud
@@ -290,6 +292,11 @@ export function DelveRun() {
       >
         <div className="pointer-events-auto mx-auto flex max-w-[520px] flex-col gap-2">
           <Vitals hud={arena.hud} />
+          {manualAttack && !fineMouse && (
+            <div className="flex justify-end pr-1">
+              <AttackButton hud={arena.hud} onAttack={arena.attack} />
+            </div>
+          )}
           <SkillBar
             hud={arena.hud}
             onCast={arena.cast}
@@ -305,6 +312,13 @@ export function DelveRun() {
 
       {menuOpen && (
         <div className="delve-panel absolute right-3 top-14 z-40 flex w-60 flex-col gap-1.5 p-2 shadow-xl">
+          <button
+            className="delve-btn text-sm"
+            onClick={() => useDelveStore.getState().setManualAttack(!manualAttack)}
+            data-testid="attack-mode-toggle"
+          >
+            Basic attack: {manualAttack ? 'Manual' : 'Auto'} ⇄
+          </button>
           <button className="delve-btn text-sm" onClick={() => navigate('/delve')}>
             Back to the Anvil (floor restarts)
           </button>

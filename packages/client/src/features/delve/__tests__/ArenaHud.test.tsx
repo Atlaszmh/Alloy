@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SkillBar } from '../arena/ArenaHud';
+import { AttackButton, SkillBar } from '../arena/ArenaHud';
 import type { ArenaHud } from '../arena/useArena';
 
 function hud(over: Partial<ArenaHud> = {}): ArenaHud {
@@ -15,6 +15,8 @@ function hud(over: Partial<ArenaHud> = {}): ArenaHud {
     dodgeMax: 2,
     dodgeRefill: 0.4,
     riposte: false,
+    melee: true,
+    basicComboNext: 1,
     potions: 3,
     monstersLeft: 5,
     monstersTotal: 8,
@@ -58,5 +60,19 @@ describe('SkillBar dodge button', () => {
       />,
     );
     expect(screen.getByTestId('dodge-button')).toHaveAttribute('data-riposte', 'true');
+  });
+});
+
+describe('AttackButton', () => {
+  it('holds while pressed and shows the melee combo', () => {
+    const onAttack = vi.fn();
+    render(<AttackButton hud={hud()} onAttack={onAttack} />);
+    const button = screen.getByTestId('attack-button');
+    expect(button.querySelectorAll('[data-combo]')).toHaveLength(3);
+    expect(button.querySelector('[data-combo="next"]')).not.toBeNull();
+    fireEvent.pointerDown(button);
+    expect(onAttack).toHaveBeenLastCalledWith(true);
+    fireEvent.pointerUp(button);
+    expect(onAttack).toHaveBeenLastCalledWith(false);
   });
 });

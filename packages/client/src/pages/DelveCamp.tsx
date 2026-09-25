@@ -107,10 +107,10 @@ export function DelveCamp() {
                 How to delve
               </div>
               <p>
-                🕹️ Drag (or WASD) to move. Your hero attacks whatever is in reach and builds mana;
-                tap an ability to use it, or drag it (hold Q/E/R) to aim. 💨 Dodge (Space) through a
-                blow just as it lands for a <b className="text-yellow-300">PERFECT</b>: your next
-                hit crits and staggers.
+                🕹️ Drag (or WASD) to move. Your hero attacks whatever is in reach and builds mana
+                (or attack by hand: switch it in the dive menu ⋯); tap an ability to use it, or drag
+                it (hold Q/E/R) to aim. 💨 Dodge (Space) through a blow just as it lands for a{' '}
+                <b className="text-yellow-300">PERFECT</b>: your next hit crits and staggers.
               </p>
               <p>
                 🔥 Build your Primary, Defensive and Ultimate in the{' '}

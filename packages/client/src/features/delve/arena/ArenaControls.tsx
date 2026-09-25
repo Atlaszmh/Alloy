@@ -10,16 +10,29 @@ interface ArenaControlsProps {
   heroScreen: () => Vec | null;
   pixelsPerUnit: () => number;
   disabled?: boolean;
+  /** Manual basic attacks: the mouse attacks toward the cursor instead of walking. */
+  manualAttack?: boolean;
 }
 
 /**
  * Movement surface over the arena.
  * - Touch/pen: a floating joystick appears where the finger lands.
- * - Mouse: hold the button and the hero walks toward the cursor.
+ * - Mouse: hold the button and the hero walks toward the cursor, or (manual
+ *   basic attacks) attacks toward it while WASD moves.
  */
-export function ArenaControls({ input, heroScreen, pixelsPerUnit, disabled }: ArenaControlsProps) {
+export function ArenaControls({
+  input,
+  heroScreen,
+  pixelsPerUnit,
+  disabled,
+  manualAttack,
+}: ArenaControlsProps) {
   const surface = useRef<HTMLDivElement>(null);
-  const active = useRef<{ id: number; kind: 'stick' | 'mouse'; origin: Vec } | null>(null);
+  const active = useRef<{
+    id: number;
+    kind: 'stick' | 'mouse' | 'attack';
+    origin: Vec;
+  } | null>(null);
   const [stick, setStick] = useState<{ origin: Vec; knob: Vec } | null>(null);
   const [hint, setHint] = useState(true);
 
@@ -31,6 +44,10 @@ export function ArenaControls({ input, heroScreen, pixelsPerUnit, disabled }: Ar
   const update = (e: ReactPointerEvent) => {
     const a = active.current;
     if (!a || a.id !== e.pointerId) return;
+    if (a.kind === 'attack') {
+      input.attackAim = { x: e.clientX, y: e.clientY };
+      return;
+    }
     const p = local(e);
     if (a.kind === 'stick') {
       const dx = p.x - a.origin.x;
@@ -61,10 +78,16 @@ export function ArenaControls({ input, heroScreen, pixelsPerUnit, disabled }: Ar
     } catch {
       /* pointer already gone */
     }
-    const kind = e.pointerType === 'mouse' ? 'mouse' : 'stick';
+    const kind = e.pointerType !== 'mouse' ? 'stick' : manualAttack ? 'attack' : 'mouse';
     const origin = local(e);
     active.current = { id: e.pointerId, kind, origin };
     setHint(false);
+    if (kind === 'attack') {
+      input.attackHeld = true;
+      input.attackTap = true;
+      input.attackAim = { x: e.clientX, y: e.clientY };
+      return;
+    }
     if (kind === 'stick') setStick({ origin, knob: origin });
     update(e);
   };
@@ -73,6 +96,7 @@ export function ArenaControls({ input, heroScreen, pixelsPerUnit, disabled }: Ar
     if (active.current?.id !== e.pointerId) return;
     active.current = null;
     input.pointer = { x: 0, y: 0 };
+    input.attackHeld = false;
     setStick(null);
   };
 
@@ -110,7 +134,9 @@ export function ArenaControls({ input, heroScreen, pixelsPerUnit, disabled }: Ar
       )}
       {hint && (
         <div className="delve-display pointer-events-none absolute bottom-[34%] left-0 right-0 text-center text-xs uppercase tracking-[0.25em] text-white/40">
-          Drag to move · hold click on desktop · WASD
+          {manualAttack
+            ? 'WASD to move · hold click to attack'
+            : 'Drag to move · hold click on desktop · WASD'}
         </div>
       )}
     </div>

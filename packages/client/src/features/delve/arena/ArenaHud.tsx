@@ -275,6 +275,61 @@ function AbilityButton({
   );
 }
 
+/**
+ * Manual basic attacks on phones: hold to keep attacking, tap for one. Pips
+ * show which hit of the melee combo comes next.
+ */
+export function AttackButton({
+  hud,
+  onAttack,
+}: {
+  hud: ArenaHud | null;
+  onAttack: (held: boolean) => void;
+}) {
+  const release = () => onAttack(false);
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* pointer already gone */
+        }
+        onAttack(true);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      aria-label="Attack"
+      data-testid="attack-button"
+      className="relative h-[76px] w-[76px] rounded-full border-0 p-[3px]"
+      style={{ background: 'linear-gradient(135deg,#e7e5e4,#a8a29e)', touchAction: 'none' }}
+    >
+      <span
+        className="flex h-full w-full items-center justify-center rounded-full text-3xl"
+        style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
+      >
+        ⚔️
+      </span>
+      {hud?.melee && (
+        <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
+          {[0, 1, 2].map((k) => (
+            <span
+              key={k}
+              data-combo={k === hud.basicComboNext ? 'next' : 'step'}
+              className="h-1.5 w-1.5 rounded-full"
+              style={{
+                background: k === hud.basicComboNext ? '#fde047' : 'rgba(255,255,255,0.25)',
+              }}
+            />
+          ))}
+        </span>
+      )}
+    </button>
+  );
+}
+
 /** Dodge: a pip per charge, an arc refilling the next one, a glow while the riposte is armed. */
 function DodgeButton({
   hud,

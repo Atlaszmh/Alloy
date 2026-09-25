@@ -96,6 +96,24 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
   });
 
+  test('D05: basic attacks switch between auto and manual from the dive menu', async ({ page }) => {
+    await seedProfile(page);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    await expect(page.getByTestId('delve-run')).toBeVisible();
+    await page.getByRole('button', { name: 'Dive menu' }).click();
+    const toggle = page.getByTestId('attack-mode-toggle');
+    await expect(toggle).toContainText('Auto');
+    await toggle.click();
+    await expect(toggle).toContainText('Manual');
+    if (test.info().project.name !== 'desktop') {
+      await expect(page.getByTestId('attack-button')).toBeVisible();
+    }
+    await toggle.click();
+    await expect(toggle).toContainText('Auto');
+    await expect(page.getByTestId('attack-button')).toHaveCount(0);
+  });
+
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/delve');

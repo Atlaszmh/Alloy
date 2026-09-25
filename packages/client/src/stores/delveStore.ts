@@ -30,6 +30,16 @@ import { createHmrStore } from './hmr-store';
  */
 
 export const DELVE_SAVE_KEY = 'alloy:delve:v2';
+/** Device preference: basic attacks on a button ("1") instead of automatic. */
+export const MANUAL_ATTACK_KEY = 'alloy:delve:manualAttack';
+
+function loadManualAttack(): boolean {
+  try {
+    return localStorage.getItem(MANUAL_ATTACK_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export function loadDelveProfile(): DelveProfile | null {
   try {
@@ -59,6 +69,8 @@ interface DelveStore {
   newUids: Record<string, true>;
   /** Drops from the current dive, newest first (session only). */
   diveDrops: string[];
+  /** Basic attacks on a button instead of automatic (a device preference). */
+  manualAttack: boolean;
 
   setProfile: (profile: DelveProfile) => void;
   resetProfile: (seed?: number) => void;
@@ -78,6 +90,7 @@ interface DelveStore {
   pushDiveDrops: (uids: string[]) => void;
   /** Set the Primary, Defensive or Ultimate build (throws on an invalid one). */
   setAbility: (slot: AbilitySlot, build: AbilityBuild) => void;
+  setManualAttack: (on: boolean) => void;
 }
 
 function withoutUids(map: Record<string, true>, uids: string[]): Record<string, true> {
@@ -101,6 +114,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     profile: loadDelveProfile() ?? createDelveProfile(getDelveRegistry(), freshSeed()),
     newUids: {},
     diveDrops: [],
+    manualAttack: loadManualAttack(),
 
     setProfile: (profile) => commit(profile),
 
@@ -175,6 +189,15 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     pushDiveDrops: (uids) => {
       if (uids.length === 0) return;
       set({ diveDrops: [...uids.slice().reverse(), ...get().diveDrops].slice(0, 60) });
+    },
+
+    setManualAttack: (on) => {
+      try {
+        localStorage.setItem(MANUAL_ATTACK_KEY, on ? '1' : '0');
+      } catch {
+        /* storage unavailable: keep it for this session */
+      }
+      set({ manualAttack: on });
     },
 
     setAbility: (slot, build) => {

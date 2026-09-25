@@ -73,6 +73,9 @@ export interface ArenaHud {
   dodgeRefill: number;
   /** A perfect dodge armed the riposte: the next real hit crits and staggers. */
   riposte: boolean;
+  melee: boolean;
+  /** Which hit of the 3-hit melee combo comes next (0-based). */
+  basicComboNext: number;
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -159,6 +162,9 @@ function snapshot(world: ArpgWorld): ArenaHud {
     dodgeRefill:
       h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeBal.recharge) : 1,
     riposte: t < h.riposteUntil,
+    melee: h.stats.weapon.kind === 'melee',
+    basicComboNext:
+      t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace ? 0 : h.attackCount % 3,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -173,6 +179,8 @@ export function useArena(
     paused: boolean;
     insets: { top: number; bottom: number };
     onUi: (e: ArenaUiEvent) => void;
+    /** Basic attacks on a button (held or tapped) instead of automatic. */
+    manualAttack: boolean;
   },
 ) {
   const registry = getDelveRegistry();
@@ -189,6 +197,8 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   const insetsRef = useRef(opts.insets);
   const slowUntilRef = useRef(0);
+  const manualRef = useRef(opts.manualAttack);
+  manualRef.current = opts.manualAttack;
   const [hud, setHud] = useState<ArenaHud | null>(null);
   const [ready, setReady] = useState(false);
   pausedRef.current = opts.paused;
@@ -257,12 +267,21 @@ export function useArena(
                     cast: toCast(input.cast),
                     potion: input.potion,
                     dodge: input.dodge,
+                    ...(manualRef.current
+                      ? {
+                          attack: input.attackHeld || input.attackTap,
+                          attackAim: input.attackAim
+                            ? renderer.screenToWorld(input.attackAim.x, input.attackAim.y)
+                            : null,
+                        }
+                      : {}),
                   },
               dt * flags.timescale,
             );
             input.cast = null;
             input.potion = false;
             input.dodge = false;
+            input.attackTap = false;
             if (events.length > 0) {
               renderer.handleEvents(events);
               handleEvents(world, events);
@@ -413,6 +432,15 @@ export function useArena(
         ? null
         : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at };
   }, []);
+  /** The HUD attack button: held or released (it auto-aims). */
+  const attack = useCallback((held: boolean) => {
+    const input = inputRef.current;
+    input.attackHeld = held;
+    if (held) {
+      input.attackTap = true;
+      input.attackAim = null;
+    }
+  }, []);
   const dodge = useCallback(() => {
     inputRef.current.dodge = true;
   }, []);
@@ -428,6 +456,7 @@ export function useArena(
     input: inputRef.current,
     cast,
     aim,
+    attack,
     dodge,
     potion,
     heroScreen,

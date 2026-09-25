@@ -26,6 +26,10 @@ export interface ArenaInput {
   mouse: Vec | null;
   potion: boolean;
   dodge: boolean;
+  /** Manual basic attacks: held now, pressed since the last frame, and the aim (client px, or null to auto-aim). */
+  attackHeld: boolean;
+  attackTap: boolean;
+  attackAim: Vec | null;
 }
 
 export function createArenaInput(): ArenaInput {
@@ -37,6 +41,9 @@ export function createArenaInput(): ArenaInput {
     mouse: null,
     potion: false,
     dodge: false,
+    attackHeld: false,
+    attackTap: false,
+    attackAim: null,
   };
 }
 
