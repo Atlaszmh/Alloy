@@ -645,12 +645,7 @@ export class ArenaRenderer {
     });
   }
 
-  private makeCreature(
-    icon: string,
-    radius: number,
-    spriteId?: string,
-    sizeScale = 1,
-  ): MonsterView {
+  private makeCreature(icon: string, radius: number, spriteId?: string): MonsterView {
     const root = new Container();
     const shadow = new Graphics();
     const ring = new Graphics();
@@ -659,9 +654,9 @@ export class ArenaRenderer {
     let baseScale: number;
     if (frames) {
       sprite = new Sprite(frames[0]);
-      // Feet on the shadow; one sprite pixel = one floor pixel.
+      // Feet on the shadow; one sprite pixel = one floor pixel, for every creature (elites too).
       sprite.anchor.set(0.5, 1);
-      baseScale = SPRITE_PIXEL * sizeScale;
+      baseScale = SPRITE_PIXEL;
     } else {
       sprite = new Sprite(this.emoji(icon));
       sprite.anchor.set(0.5, 0.62);
@@ -678,7 +673,7 @@ export class ArenaRenderer {
     for (const m of w.monsters) {
       let v = this.monsters.get(m.id);
       if (!v) {
-        v = this.makeCreature(m.icon, m.radius, m.defId, m.kind === 'elite' ? 1.2 : 1);
+        v = this.makeCreature(m.icon, m.radius, m.defId);
         this.monsters.set(m.id, v);
       }
       this.drawMonster(v, m, w);
@@ -696,14 +691,19 @@ export class ArenaRenderer {
     const bob = frozen ? 0 : Math.sin(this.time * 6 + m.id) * 0.04;
     const windup =
       m.windupUntil > 0 ? (t - m.windupStart) / Math.max(0.01, m.windupUntil - m.windupStart) : 0;
-    const scale = v.baseScale * (hit ? 1.12 : 1) * (1 + windup * 0.12);
-    v.sprite.scale.set(scale * flip, scale);
     if (v.frames) {
-      // Idle cycle; frozen creatures hold still. Pixel art stays on the pixel grid (no bob).
+      // Pixel art keeps one pixel density: it never scales. Idle cycle (frozen creatures hold
+      // still); a hit hops it up 1 pixel and a wind-up lifts it up to 2 before the strike.
+      v.sprite.scale.set(v.baseScale * flip, v.baseScale);
       if (!frozen)
         v.sprite.texture = v.frames[Math.floor(this.time * 3 + m.id * 0.37) % v.frames.length];
-      v.sprite.position.set(0, m.radius * 0.7);
-    } else v.sprite.position.set(0, bob);
+      const lift = hit ? 1 : Math.round(windup * 2);
+      v.sprite.position.set(0, m.radius * 0.7 - lift * SPRITE_PIXEL);
+    } else {
+      const scale = v.baseScale * (hit ? 1.12 : 1) * (1 + windup * 0.12);
+      v.sprite.scale.set(scale * flip, scale);
+      v.sprite.position.set(0, bob);
+    }
     v.sprite.tint = frozen
       ? 0x9fe8ff
       : hit

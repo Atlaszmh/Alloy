@@ -30,6 +30,25 @@ describe('delve sprite atlas', () => {
     }
   });
 
+  it('keeps one pixel density: every canvas is 16 px per unit of monster size', () => {
+    // A size-1 monster is 16 px, a size-3 giant 48 px, and every sprite pixel is the same
+    // SPRITE_PIXEL in the world. Canvases follow size, so art and hitboxes stay in proportion.
+    const sizes = new Map(
+      registry
+        .getDelveData()
+        .biomes.flatMap((b) => [...b.monsters, b.boss])
+        .map((m) => [m.id, m.size ?? 1]),
+    );
+    sizes.set('hero', 1);
+    for (const [id, names] of Object.entries(atlas.animations)) {
+      const want = Math.round(16 * sizes.get(id)!);
+      for (const n of names) {
+        const { w, h } = atlas.frames[n].frame;
+        expect([w, h], `${n} should be ${want}×${want}`).toEqual([want, want]);
+      }
+    }
+  });
+
   it('points every animation at real frames', () => {
     for (const names of Object.values(atlas.animations))
       for (const n of names) expect(atlas.frames[n]).toBeDefined();
