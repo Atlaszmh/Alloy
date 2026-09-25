@@ -1,28 +1,25 @@
 import type { CodeSprite } from '../../../src/draw';
 
-/** Mine Rat: a mangy grey rat with ember eyes, facing left. */
+/** Mine Rat: a tiny grey rat with an ember eye, facing left. */
 const mineRat: CodeSprite = {
-  size: 16,
+  size: 10,
   legend: {
     k: '#181425',
     g: '#8b9bb4',
     G: '#5a6988',
-    l: '#c0cbdc',
     p: '#f6757a',
     E: '#f77622',
     t: '#b55088',
   },
+  // prettier-ignore
   frames: [
     [
-      '..kk............',
-      '.kpGk..kkkkk....',
-      '.kGGkkkGGllGk...',
-      'kGEGGGGGGGGlGk..',
-      'pGGGGGGGGGGGGk..',
-      'kkGGgGGGGgGGGkkk',
-      '.kkgggggggggkttk',
-      '..kGkkGk.kGkk.kk',
-      '..kk..kk..kk....',
+      '.kk.......',
+      'kGGkkkk...',
+      'kEGGGgGk..',
+      'pGGGGGGkkk',
+      'kkGkkGkktk',
+      '.kk..kk.kk',
     ],
   ],
 };

@@ -336,7 +336,13 @@ function cmdPick(p: Project, id: string, n: string): void {
 
 function cmdReclean(p: Project, ids: string[]): void {
   const root = join(p.dir, 'candidates');
-  const targets = ids.length ? ids : existsSync(root) ? readdirSync(root) : [];
+  // Every candidate folder that belongs to an asset (other folders there are left alone).
+  const known = new Set(p.manifest.assets.map((a) => a.id));
+  const targets = ids.length
+    ? ids
+    : existsSync(root)
+      ? readdirSync(root).filter((id) => known.has(id))
+      : [];
   for (const id of targets) {
     const dir = candidateDir(p, id);
     const n = recleanCandidates(dir, cleanOptions(p, assetById(p, id)));

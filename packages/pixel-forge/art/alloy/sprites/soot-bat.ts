@@ -1,8 +1,8 @@
 import type { CodeSprite } from '../../../src/draw';
 
-/** Soot Bat: wings spread, ember eyes; two flaps. */
+/** Soot Bat: a small bat with plum wings and ember eyes; two flaps. */
 const sootBat: CodeSprite = {
-  size: 16,
+  size: 11,
   legend: {
     k: '#181425',
     b: '#3a4466',
@@ -10,33 +10,27 @@ const sootBat: CodeSprite = {
     m: '#68386c',
     M: '#b55088',
     E: '#f77622',
-    f: '#ffffff',
   },
   mirror: true,
+  // prettier-ignore
   frames: [
     [
-      '.....k..',
-      '....kBk.',
-      'k..kBbbb',
-      'Mk.kbEbb',
-      'kMkkbbbb',
-      'kmMkbbbf',
-      'kmmMkbbb',
-      '.kmmMkbb',
-      '.kmkmkkk',
-      '..k.k...',
+      '...kk',
+      'k.kBb',
+      'MkkbE',
+      'kmMkb',
+      'kmmMk',
+      '.kmkk',
+      '..k..',
     ],
     [
-      '.....k..',
-      '....kBk.',
-      '...kBbbb',
-      '...kbEbb',
-      '..kkbbbb',
-      '.kMkbbbf',
-      'kMmMkbbb',
-      'kmmmMkbb',
-      'kmkmkmkk',
-      '.k.k.k..',
+      '...kk',
+      '..kBb',
+      '..kbE',
+      '.kMkb',
+      'kMmMk',
+      'kmkmk',
+      '.k.k.',
     ],
   ],
 };
