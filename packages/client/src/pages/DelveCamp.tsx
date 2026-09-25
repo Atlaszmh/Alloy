@@ -113,8 +113,9 @@ export function DelveCamp() {
                 <b className="text-yellow-300">PERFECT</b>: your next hit crits and staggers.
               </p>
               <p>
-                🎮 A controller works too: left stick moves, right stick aims, A dodges, X/B/Y use
-                abilities, LB drinks, and the D-pad and A work every menu.
+                🎮 A controller works too: left stick moves, right stick aims, RT Primary, LT dodge,
+                LB Defensive, click the right stick for your Ultimate, and the D-pad and A work
+                every menu.
               </p>
               <p>
                 🔥 Build your Primary, Defensive and Ultimate in the{' '}

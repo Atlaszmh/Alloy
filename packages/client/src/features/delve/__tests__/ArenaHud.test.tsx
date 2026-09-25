@@ -60,7 +60,7 @@ describe('SkillBar dodge button', () => {
       />,
     );
     expect(screen.getByTestId('dodge-button')).toHaveAttribute('data-riposte', 'true');
-    expect(screen.getByTestId('dodge-button')).toHaveTextContent('A');
+    expect(screen.getByTestId('dodge-button')).toHaveTextContent('LT');
   });
 });
 

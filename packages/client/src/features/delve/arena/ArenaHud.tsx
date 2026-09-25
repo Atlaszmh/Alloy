@@ -5,7 +5,7 @@ import { formatNumber, manaStyle } from '../format';
 import { classifyPress, isCancelled } from './aim-gestures';
 import type { AbilityHud, ArenaHud } from './useArena';
 
-/** Button labels for the keyboard or a controller (Hades-style layout). */
+/** Button labels for the keyboard or a controller (thumbs stay on the sticks). */
 export interface ButtonHints {
   abilities: [string, string, string];
   dodge: string;
@@ -19,10 +19,10 @@ export const KEYBOARD_HINTS: ButtonHints = {
   attack: 'Click',
 };
 export const PAD_HINTS: ButtonHints = {
-  abilities: ['X', 'B', 'Y'],
-  dodge: 'A',
-  potion: 'LB',
-  attack: 'RT',
+  abilities: ['RT', 'LB', 'R3'],
+  dodge: 'LT',
+  potion: '▼',
+  attack: 'RB',
 };
 
 function hpGradient(frac: number): string {

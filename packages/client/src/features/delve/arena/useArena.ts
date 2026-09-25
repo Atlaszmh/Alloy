@@ -9,6 +9,8 @@ import {
   failFloor,
   refreshWorldHero,
   stepWorld,
+  abilityReady,
+  makeCtx,
   type AbilityCast,
   type ArpgEvent,
   type ArpgWorld,
@@ -332,8 +334,15 @@ export function useArena(
       const pressed = takeArenaPresses();
       const acts = padToArena(state, pressed);
       if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
-      if (acts.cast !== null) {
-        const ab = world.hero.abilities[acts.cast];
+      // A press always tries (so an unaffordable one still says so); holding RT
+      // casts the Primary again as soon as it's ready.
+      const slot =
+        acts.cast ??
+        (acts.castHeld !== null && abilityReady(makeCtx(registry, world, []), acts.castHeld)
+          ? acts.castHeld
+          : null);
+      if (slot !== null) {
+        const ab = world.hero.abilities[slot];
         const aimWorld =
           acts.aimDir && ab
             ? stickAimPoint(
@@ -344,7 +353,7 @@ export function useArena(
                 aimMarkerFor(ab.form.id) === 'circle',
               )
             : null;
-        inputRef.current.cast = { slot: acts.cast, aim: null, aimWorld };
+        inputRef.current.cast = { slot, aim: null, aimWorld };
       }
       return acts;
     }

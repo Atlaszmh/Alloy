@@ -8,16 +8,20 @@
 
 An Xbox controller (the browser's "standard" gamepad mapping) plays a whole run: fights, doors, the dive summary and the Anvil.
 
-## Arena (Hades-style)
+## Arena (thumbs stay on the sticks)
+
+Revised after play-testing (v0.36.1). With the right stick aiming, pressing a face button meant letting go of the aim, so every fight action is on a shoulder, a stick click or the D-pad.
 
 | Input | Action |
 |---|---|
 | Left stick | move (radial deadzone 0.2, rescaled) |
 | Right stick | aim (deadzone 0.35); centred = auto-aim |
-| A | dodge (along the left stick) |
-| X / B / Y | Primary / Defensive / Ultimate, on press |
-| RT (hold) | basic attack, in manual mode |
-| LB | potion |
+| RT | Primary; holding it casts again whenever it's ready (engine `abilityReady`), so combos chain |
+| LT | dodge (along the left stick) |
+| LB | Defensive |
+| R3 (click the aim stick) | Ultimate |
+| RB (hold) | basic attack, in manual mode |
+| D-pad down | potion |
 | Menu | open / close the dive menu |
 
 - **Aim point** with the right stick tilted: `hero + dir × reach`.
@@ -45,7 +49,7 @@ An Xbox controller (the browser's "standard" gamepad mapping) plays a whole run:
 
 ## Button hints
 
-`inputDeviceStore.device` is `'keyboard' | 'touch' | 'gamepad'`, set by the most recent input. The HUD shows X/B/Y, A, LB and RT for a pad, Q/E/R, Space and F for a keyboard, and nothing for touch.
+`inputDeviceStore.device` is `'keyboard' | 'touch' | 'gamepad'`, set by the most recent input. The HUD shows RT/LB/R3, LT, ▼ and RB for a pad, Q/E/R, Space and F for a keyboard, and nothing for touch.
 
 ## Units
 

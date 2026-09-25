@@ -7,7 +7,7 @@ import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
  * presses by hand.
  */
 
-const BUTTON = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, menu: 9, up: 12, down: 13 } as const;
+const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13 } as const;
 
 async function setup(page: Page, autopilot: boolean): Promise<void> {
   const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), 4242));
@@ -95,15 +95,47 @@ test.describe('Delve with a controller', () => {
     await expect(toggle).toBeHidden();
   });
 
-  test('G02: A dodges, and the hints switch to the controller', async ({ page }) => {
+  test('G02: LT dodges, and the hints switch to the controller', async ({ page }) => {
     await setup(page, false);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const dodge = page.getByTestId('dodge-button');
     await expect(dodge).toHaveAttribute('data-charges', '2');
-    await tap(page, BUTTON.a);
+    await tap(page, BUTTON.lt);
     await expect(dodge).toHaveAttribute('data-charges', '1');
-    await expect(dodge).toContainText('A');
+    await expect(dodge).toContainText('LT');
+  });
+
+  test('G04: holding RT with the right stick aimed keeps casting the Primary', async ({ page }) => {
+    await setup(page, false);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    const bar = page.getByTestId('mana-bar');
+    await expect(bar).toBeVisible();
+    const mana = async () =>
+      Number((await bar.getAttribute('aria-label'))!.match(/Mana (\d+)/)![1]);
+    const before = await mana();
+    await page.evaluate(() => {
+      const pad = (
+        window as unknown as {
+          __pad: { axes: number[]; buttons: { pressed: boolean; value: number }[] };
+        }
+      ).__pad;
+      pad.axes = [0, 0, 0, -1];
+      pad.buttons[7] = { pressed: true, value: 1 };
+    });
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => {
+      const pad = (
+        window as unknown as {
+          __pad: { axes: number[]; buttons: { pressed: boolean; value: number }[] };
+        }
+      ).__pad;
+      pad.axes = [0, 0, 0, 0];
+      pad.buttons[7] = { pressed: false, value: 0 };
+    });
+    // Two or more Primary casts (8 mana each) outpace 1.5 s of regen.
+    await expect.poll(mana).toBeLessThan(before - 6);
   });
 
   test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {

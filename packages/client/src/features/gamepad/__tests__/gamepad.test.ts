@@ -58,20 +58,25 @@ describe('edges', () => {
   });
 });
 
-describe('padToArena (Hades layout)', () => {
-  it('maps the face buttons, bumper, trigger and menu', () => {
+describe('padToArena (triggers fire, bumpers support)', () => {
+  it('keeps both thumbs on the sticks: every action is a shoulder, a stick click or the D-pad', () => {
     const prev = readPad(fakePad());
     const act = (held: number[]) => {
       const next = readPad(fakePad(held));
       return padToArena(next, edges(prev, next));
     };
-    expect(act([0]).dodge).toBe(true);
-    expect(act([2]).cast).toBe(0);
-    expect(act([1]).cast).toBe(1);
-    expect(act([3]).cast).toBe(2);
-    expect(act([4]).potion).toBe(true);
-    expect(act([7]).attackHeld).toBe(true);
+    expect(act([6]).dodge).toBe(true); // LT
+    expect(act([7]).cast).toBe(0); // RT press
+    expect(act([7]).castHeld).toBe(0); // RT held keeps casting
+    expect(act([4]).cast).toBe(1); // LB
+    expect(act([11]).cast).toBe(2); // R3
+    expect(act([5]).attackHeld).toBe(true); // RB
+    expect(act([13]).potion).toBe(true); // D-pad down
     expect(act([9]).menu).toBe(true);
+    for (const face of [0, 1, 2, 3]) {
+      const a = act([face]);
+      expect([a.cast, a.dodge, a.potion, a.attackHeld]).toEqual([null, false, false, false]);
+    }
   });
 
   it('moves with the left stick and aims with the right, centred meaning auto-aim', () => {
