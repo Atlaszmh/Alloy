@@ -51,19 +51,19 @@
 
 ### Task 1: Nature, statuses and data types
 
-- [ ] Add `nature` to `ManaType`/`MANA_TYPES`/`emptyManaMap`; `ManaTypeSchema`; `natureAttune`/`naturePower` stat keys, `ATTUNE_STATS`/`POWER_STATS`; `BASIC_STATUS.nature = 'poison'`.
-- [ ] Add `StatusId` `poison`, `root`; `ReactionId` `combust`, `blight`; `StatusState` fields `poisonStacks`, `poisonDps`, `poisonUntil`, `poisonTickAt`, `rootUntil`; `emptyStatus()`.
-- [ ] Create `types/ability.ts` with the spec's types. `Knobs`: `{ power, area, applies, chain, pierce, knockback, lifesteal, zone: {seconds, tickPower} | null, pull, execute, scatter, spread }`.
-- [ ] Data defs in `types/arpg.ts`: `FormDef { id, slot, name, icon, text, power, range?, radius?, speed?, count?, duration?, combo?: number[], tick? }`, `ElementTraitDef { knobs: Partial<Knobs>, defensive: string }`, `FusionDef { elements: [ManaType, ManaType], id, name, icon, text, knobs: Partial<Knobs> }`.
-- [ ] `arpg.json`: nature mana entry (`#6fcf57`, 🌿); `weakness.nature = 'fire'`; 12 forms, 6 element traits and 15 fusions per the spec; reactions `combust`, `blight`; mastery `Plaguebearer`. Remove `skills`.
-- [ ] `balance.json → delve.abilities`: `slots` (cost/cooldown/castTime per slot), `weight` coefficients, `castManaMult` 0.5, `castPowerMult` 1.2, `chargeRatio` 0.35, `lullCharge` 1.5, `lullRadius` 6, `chargeLockout` 1, `comboWindow` 1.2, `pool` {base 60, perAttune 3, regen 4, regenPerAttune 0.2}, `basicGain` 4. `status`: `poisonDps` 0.12, `poisonDuration` 4, `poisonMaxStacks` 5, `rootDuration` 1.5. `reactions.combustMult` 1.6.
-- [ ] Schemas and registry: validate the new data; `getForm(id)`, `getFusion(a, b)` (order-independent), `getElementTrait(m)`; remove `getSkill`/`findSkill`.
-- [ ] `delve.json`: nature affixes (mirroring the others), legendary texts per the spec.
-- [ ] Test (`tests/ability-data.test.ts`): every slot has its forms (5/4/3); every pair of the six elements has exactly one fusion; every fusion knob name is a known knob; registry loads.
+- [x] Add `nature` to `ManaType`/`MANA_TYPES`/`emptyManaMap`; `ManaTypeSchema`; `natureAttune`/`naturePower` stat keys, `ATTUNE_STATS`/`POWER_STATS`; `BASIC_STATUS.nature = 'poison'`.
+- [x] Add `StatusId` `poison`, `root`; `ReactionId` `combust`, `blight`; `StatusState` fields `poisonStacks`, `poisonDps`, `poisonUntil`, `poisonTickAt`, `rootUntil`; `emptyStatus()`.
+- [x] Create `types/ability.ts` with the spec's types. `Knobs`: `{ power, area, applies, chain, pierce, knockback, lifesteal, zone: {seconds, tickPower} | null, pull, execute, scatter, spread }`.
+- [x] Data defs in `types/arpg.ts`: `FormDef { id, slot, name, icon, text, power, range?, radius?, speed?, count?, duration?, combo?: number[], tick? }`, `ElementTraitDef { knobs: Partial<Knobs>, defensive: string }`, `FusionDef { elements: [ManaType, ManaType], id, name, icon, text, knobs: Partial<Knobs> }`.
+- [x] `arpg.json`: nature mana entry (`#6fcf57`, 🌿); `weakness.nature = 'fire'`; 12 forms, 6 element traits and 15 fusions per the spec; reactions `combust`, `blight`; mastery `Plaguebearer`. Remove `skills`.
+- [x] `balance.json → delve.abilities`: `slots` (cost/cooldown/castTime per slot), `weight` coefficients, `castManaMult` 0.5, `castPowerMult` 1.2, `chargeRatio` 0.35, `lullCharge` 1.5, `lullRadius` 6, `chargeLockout` 1, `comboWindow` 1.2, `pool` {base 60, perAttune 3, regen 4, regenPerAttune 0.2}, `basicGain` 4. `status`: `poisonDps` 0.12, `poisonDuration` 4, `poisonMaxStacks` 5, `rootDuration` 1.5. `reactions.combustMult` 1.6.
+- [x] Schemas and registry: validate the new data; `getForm(id)`, `getFusion(a, b)` (order-independent), `getElementTrait(m)`; remove `getSkill`/`findSkill`.
+- [x] `delve.json`: nature affixes (mirroring the others), legendary texts per the spec.
+- [x] Test (`tests/ability-data.test.ts`): every slot has its forms (5/4/3); every pair of the six elements has exactly one fusion; every fusion knob name is a known knob; registry loads.
 
 ### Task 2: The resolver
 
-- [ ] Test (`tests/ability-resolve.test.ts`):
+- [x] Test (`tests/ability-resolve.test.ts`):
   - a Balanced mana Bolt of Fire costs 8, cooldown 0.45, has the form's power, `area` ×1.3 (fire trait), applies `burn`;
   - weight +2 multiplies power by 1.56, cost by 1.6, cooldown by 1.5, speed by 0.76;
   - cast payment: cost ×0.5, power ×1.2, `castTime` = slot base × weight factor; mana payment has `castTime` 0;
@@ -72,24 +72,24 @@
   - `mergeKnobs` rules (multiply, add, OR, union, longer zone);
   - element power: the average attunement of its elements × `powerPerAttune`, plus the gear's power affixes;
   - Manaweaver reduces cost.
-- [ ] Implement `resolve.ts` to pass.
+- [x] Implement `resolve.ts` to pass.
 
 ## Chunk 2: Combat and casting
 
 ### Task 3: Poison, Root, Combust, Blight
 
-- [ ] Tests (`tests/ability-status.test.ts`), using a small world helper that builds a floor with one monster:
+- [x] Tests (`tests/ability-status.test.ts`), using a small world helper that builds a floor with one monster:
   - poison stacks to 5 and ticks;
   - Plaguebearer allows 10;
   - root stops movement but not attacks;
   - fire on a poisoned foe → a `combust` reaction, area damage, poison cleared;
   - shadow on a poisoned foe → `blight` spreads stacks to a neighbour.
-- [ ] Implement in `combat.ts` (`applyStatus`, reactions) and `step.ts` (poison ticks, root in `monstersTick`).
+- [x] Implement in `combat.ts` (`applyStatus`, reactions) and `step.ts` (poison ticks, root in `monstersTick`).
 
 ### Task 4: Targeting, impact and forms
 
-- [ ] Move targeting helpers to `abilities/targeting.ts`; add `aimPoint(ctx, ability, aim?)` (clamps to range; auto rules per the spec).
-- [ ] Tests (`tests/ability-forms.test.ts`), one per form, each on a scripted floor:
+- [x] Move targeting helpers to `abilities/targeting.ts`; add `aimPoint(ctx, ability, aim?)` (clamps to range; auto rules per the spec).
+- [x] Tests (`tests/ability-forms.test.ts`), one per form, each on a scripted floor:
   - **Bolt** hits the nearest foe, and its combo sizes step 0.8 → 0.8 → 1.0 → 1.5 within the window, then reset;
   - **Volley** darts hit different foes;
   - **Lance** hits every foe on the line;
@@ -103,18 +103,18 @@
   - **Barrage** lands 7 impacts in the area;
   - **Tempest** zone ticks;
   - knobs: chain, pull, execute, spread and scatter each observed once.
-- [ ] Implement `impact.ts` and `forms.ts`.
+- [x] Implement `impact.ts` and `forms.ts`.
 
 ### Task 5: Casting: payment, wind-up, charge, combos
 
-- [ ] Tests (`tests/ability-cast.test.ts`):
+- [x] Tests (`tests/ability-cast.test.ts`):
   - mana payment spends and starts the cooldown;
   - no mana → `noMana` event and nothing spent;
   - a cast payment roots the hero for its wind-up, lands after it, and blocks other casts meanwhile;
   - charge fills from damage dealt and in lulls, can't fire until full, and empties on use;
   - the combo step resets after `comboWindow`;
   - a basic hit adds `basicGain` mana.
-- [ ] Implement `cast.ts`. In `step.ts`:
+- [x] Implement `cast.ts`. In `step.ts`:
   - input `{slot, aim}` queued;
   - single mana pool regen;
   - buffs expire;
@@ -123,58 +123,58 @@
   - the melee 3-hit combo;
   - bow `pierce`;
   - lull charge.
-- [ ] Delete `skills.ts`; fix imports; `pnpm -F @alloy/engine typecheck`.
+- [x] Delete `skills.ts`; fix imports; `pnpm -F @alloy/engine typecheck`.
 
 ## Chunk 3: Save, wiring and balance
 
 ### Task 6: Profile v3
 
-- [ ] Tests (`tests/delve-profile-abilities.test.ts`):
+- [x] Tests (`tests/delve-profile-abilities.test.ts`):
   - a new profile has default abilities (the highest-attunement element);
   - `setAbility` accepts valid builds and rejects wrong-slot forms, 3 elements and duplicate elements;
   - a v2 save (with `skillSlots`) parses into v3 with defaults and keeps its gear and scrap;
   - `reactionsSeen` accepts `combust`.
-- [ ] Implement the schema (version 3, v2 accepted then migrated), `defaultAbilities`, `setAbility`, and `parseDelveProfile` migration. Remove `autoSlotSkills`/`setSkillSlot`/`SKILL_SLOT_COUNT`.
+- [x] Implement the schema (version 3, v2 accepted then migrated), `defaultAbilities`, `setAbility`, and `parseDelveProfile` migration. Remove `autoSlotSkills`/`setSkillSlot`/`SKILL_SLOT_COUNT`.
 
 ### Task 7: Wire the floor, dive, autopilot and bot
 
-- [ ] `FloorOptions.abilities` replaces `skillSlots`; hero state is built with `resolveAbility` for each slot; `refreshWorldHero` re-resolves on gear change; `manaPool(stats)` sizes the one pool; motes add to it.
-- [ ] Update `dive.ts`, `autopilot.ts` and the bot rules (spec).
-- [ ] Update the existing tests (`arpg-sim`, `delve-dive`, `delve-hero-smithing`) that referenced spells or per-element mana.
+- [x] `FloorOptions.abilities` replaces `skillSlots`; hero state is built with `resolveAbility` for each slot; `refreshWorldHero` re-resolves on gear change; `manaPool(stats)` sizes the one pool; motes add to it.
+- [x] Update `dive.ts`, `autopilot.ts` and the bot rules (spec).
+- [x] Update the existing tests (`arpg-sim`, `delve-dive`, `delve-hero-smithing`) that referenced spells or per-element mana.
 
 ### Task 8: Balance pass
 
-- [ ] Run `tests/delve-pacing.test.ts` and the pacing report; tune `delve.abilities` numbers (not the thresholds) until the guard rails pass with a curve close to v0.32 (first dive about depth 5, dive 12 about depth 24).
-- [ ] Commit the engine.
+- [x] Run `tests/delve-pacing.test.ts` and the pacing report; tune `delve.abilities` numbers (not the thresholds) until the guard rails pass with a curve close to v0.32 (first dive about depth 5, dive 12 about depth 24).
+- [x] Commit the engine.
 
 ## Chunk 4: Client
 
 ### Task 9: Store and arena input
 
-- [ ] `delveStore.setAbility(slot, build)` (+ `delveStore.test.ts`).
-- [ ] `aim-gestures.ts`: pure helpers. `classifyPress(durationMs, dragDistPx)` → `'tap' | 'aim'`; `screenToWorld`; `aimMarkerFor(form)` → circle or line. Tested.
-- [ ] `useArena.ts`: HUD snapshot for 3 abilities (cooldown, charge %, combo step, wind-up %, affordable) and one mana bar; `cast(slot, aim?)`; Q/E/R tap vs hold with mouse aim.
+- [x] `delveStore.setAbility(slot, build)` (+ `delveStore.test.ts`).
+- [x] `aim-gestures.ts`: pure helpers. `classifyPress(durationMs, dragDistPx)` → `'tap' | 'aim'`; `screenToWorld`; `aimMarkerFor(form)` → circle or line. Tested.
+- [x] `useArena.ts`: HUD snapshot for 3 abilities (cooldown, charge %, combo step, wind-up %, affordable) and one mana bar; `cast(slot, aim?)`; Q/E/R tap vs hold with mouse aim.
 
 ### Task 10: HUD and renderer
 
-- [ ] `ArenaHud.tsx`:
+- [x] `ArenaHud.tsx`:
   - one mana bar;
   - three ability buttons (icon from the form, element colour ring, cooldown sweep, charge ring, combo pips, wind-up bar);
   - drag-to-aim on buttons.
-- [ ] `ArenaRenderer.ts`:
+- [x] `ArenaRenderer.ts`:
   - projectile and zone styles by element and form;
   - Ward, Armor and Surge auras;
   - the wind-up circle and the aim marker.
-- [ ] `floor-engine.ts`: earth pierce → furrow; zones with fire → lava burst; frost → frost patches.
-- [ ] `DelveRun.tsx`: floating cast labels from the resolved ability's name.
+- [x] `floor-engine.ts`: earth pierce → furrow; zones with fire → lava burst; frost → frost patches.
+- [x] `DelveRun.tsx`: floating cast labels from the resolved ability's name.
 
 ### Task 11: Abilities workshop
 
-- [ ] `AbilitiesPanel.tsx` (+ test): per slot, form chips; element toggles (max 2) showing the fusion; the weight slider; payment radio; the live read-out; a summary line. It replaces the Spells tab in `DelveCamp.tsx`; delete `SpellbookPanel.tsx` and its test.
-- [ ] `ItemDetailSheet.tsx`: replace "Unlocks/Loses" spell lines with the attunement effect.
+- [x] `AbilitiesPanel.tsx` (+ test): per slot, form chips; element toggles (max 2) showing the fusion; the weight slider; payment radio; the live read-out; a summary line. It replaces the Spells tab in `DelveCamp.tsx`; delete `SpellbookPanel.tsx` and its test.
+- [x] `ItemDetailSheet.tsx`: replace "Unlocks/Loses" spell lines with the attunement effect.
 
 ### Task 12: E2E, docs, version
 
-- [ ] `e2e/delve.spec.ts` D04: open Abilities, set the Primary to Fire + Nature, see "Wildfire"; in the arena three ability buttons exist.
-- [ ] Run all engine, client and pixel-forge tests plus the Delve E2E on 4 devices.
-- [ ] Update `CLAUDE.md` (Delve section), the Delve spec's Mana section, and the ability spec's status; bump the client to 0.33.0; commit and push.
+- [x] `e2e/delve.spec.ts` D04: open Abilities, set the Primary to Fire + Nature, see "Wildfire"; in the arena three ability buttons exist.
+- [x] Run all engine, client and pixel-forge tests plus the Delve E2E on 4 devices.
+- [x] Update `CLAUDE.md` (Delve section), the Delve spec's Mana section, and the ability spec's status; bump the client to 0.33.0; commit and push.

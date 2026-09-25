@@ -8,20 +8,27 @@ import {
   computeHeroStats,
   failFloor,
   refreshWorldHero,
-  skillCost,
   stepWorld,
-  unlockedSkills,
+  type AbilityCast,
   type ArpgEvent,
   type ArpgWorld,
+  type FormId,
   type GearItem,
-  type ManaMap,
+  type ManaType,
   type ReactionId,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
 import { loadDelveSprites } from './sprites';
-import { attachKeyboard, createArenaInput, moveVector, type ArenaInput } from './input';
+import {
+  attachKeyboard,
+  createArenaInput,
+  moveVector,
+  type ArenaInput,
+  type CastPress,
+} from './input';
+import { TAP_MS, aimMarkerFor } from './aim-gestures';
 
 /**
  * Runs a floor: owns the ArpgWorld and the Pixi renderer, drives the engine
@@ -30,20 +37,36 @@ import { attachKeyboard, createArenaInput, moveVector, type ArenaInput } from '.
  * engine — this hook only times and routes.
  */
 
-export interface SlotHud {
-  skillId: string | null;
+export interface AbilityHud {
+  name: string;
+  icon: string;
+  form: FormId;
+  element: ManaType;
+  elements: ManaType[];
+  payment: 'mana' | 'charge' | 'cast';
+  cost: number;
   /** Seconds until ready (0 = ready). */
   cooldown: number;
   cooldownTotal: number;
+  /** Charge-paid: 0..1 of the meter; otherwise null. */
+  charge: number | null;
+  /** Press-combo step that the next press makes (0-based), and the combo's length. */
+  comboNext: number;
+  comboLength: number;
+  /** This slot's wind-up progress 0..1, or null. */
+  windup: number | null;
   affordable: boolean;
+  ready: boolean;
 }
 
 export interface ArenaHud {
   hp: number;
   maxHp: number;
-  mana: ManaMap;
-  manaMax: ManaMap;
-  slots: SlotHud[];
+  mana: number;
+  manaMax: number;
+  abilities: AbilityHud[];
+  /** Another ability is winding up: presses are ignored. */
+  busy: boolean;
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -55,10 +78,9 @@ export type ArenaUiEvent =
   | { kind: 'loot'; kept: GearItem[]; salvaged: GearItem[]; bagFull: boolean }
   | { kind: 'legendary'; item: GearItem; firstTime: boolean }
   | { kind: 'reaction'; reaction: ReactionId }
-  | { kind: 'spells'; unlocked: string[] }
   | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean }
   | { kind: 'fell' }
-  | { kind: 'noMana'; skillId: string }
+  | { kind: 'noMana'; slot: number }
   | { kind: 'events'; events: ArpgEvent[] };
 
 const END_DELAY = 1.3;
@@ -82,27 +104,45 @@ function readArenaFlags(): { autopilot: boolean; timescale: number } {
 
 function snapshot(world: ArpgWorld): ArenaHud {
   const h = world.hero;
-  const registry = getDelveRegistry();
+  const t = world.t;
+  const comboWindow = getDelveRegistry().getDelveBalance().abilities.comboWindow;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
-    mana: { ...h.mana },
-    manaMax: { ...h.manaMax },
-    slots: h.skillSlots.map((id) => {
-      if (!id) return { skillId: null, cooldown: 0, cooldownTotal: 1, affordable: false };
-      const skill = registry.getSkill(id);
-      const cost = skillCost(skill, h.stats);
+    mana: h.mana,
+    manaMax: h.manaMax,
+    abilities: h.abilities.map((ab, i) => {
+      const cooldown = Math.max(0, h.cooldowns[i] - t);
+      const charged = ab.build.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
+      const affordable = h.mana >= ab.cost;
+      const chained = t - h.comboAt[i] <= comboWindow;
       return {
-        skillId: id,
-        cooldown: Math.max(0, (h.cooldowns[id] ?? 0) - world.t),
-        cooldownTotal: skill.cooldown * h.stats.cooldownMult,
-        affordable: (Object.entries(cost) as [keyof ManaMap, number][]).every(
-          ([m, c]) => h.mana[m] >= c,
-        ),
+        name: ab.name,
+        icon: ab.icon,
+        form: ab.form.id,
+        element: ab.element,
+        elements: ab.elements,
+        payment: ab.build.payment,
+        cost: ab.cost,
+        cooldown,
+        cooldownTotal: Math.max(0.01, ab.castTime + ab.cooldown),
+        charge:
+          ab.build.payment === 'charge'
+            ? Math.min(1, h.charge[i] / Math.max(1e-9, ab.chargeNeed))
+            : null,
+        comboNext: chained ? (h.comboStep[i] + 1) % ab.combo.length : 0,
+        comboLength: ab.combo.length,
+        windup:
+          h.windup?.slot === i
+            ? Math.min(1, (t - h.windup.start) / Math.max(0.01, h.windup.until - h.windup.start))
+            : null,
+        affordable,
+        ready: cooldown <= 0 && charged && affordable && !h.windup,
       };
     }),
+    busy: !!h.windup,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -194,7 +234,7 @@ export function useArena(
               world,
               flags.autopilot
                 ? botInput(registry, world)
-                : { move: moveVector(input), cast: input.cast, potion: input.potion },
+                : { move: moveVector(input), cast: toCast(input.cast), potion: input.potion },
               dt * flags.timescale,
             );
             input.cast = null;
@@ -206,6 +246,7 @@ export function useArena(
             checkEnd(world);
           }
           renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
+          renderer.setAim(aimView(world));
           renderer.update(paused ? 0 : dt);
           hudClock += dt;
           if (hudClock > 0.08) {
@@ -216,10 +257,37 @@ export function useArena(
         setReady(true);
       });
 
+    /** A press's screen aim point → world units. */
+    function toCast(press: CastPress | null): AbilityCast | null {
+      if (!press) return null;
+      const r = rendererRef.current;
+      return {
+        slot: press.slot,
+        aim: press.aim && r ? r.screenToWorld(press.aim.x, press.aim.y) : null,
+      };
+    }
+
+    /** The marker for a press held long enough to aim (a key follows the mouse). */
+    function aimView(world: ArpgWorld) {
+      const a = inputRef.current.aiming;
+      const r = rendererRef.current;
+      const ab = a ? world.hero.abilities[a.slot] : undefined;
+      if (!a || !r || !ab || performance.now() - a.since < TAP_MS) return null;
+      const at = a.at ?? inputRef.current.mouse;
+      if (!at) return null;
+      return {
+        marker: aimMarkerFor(ab.form.id),
+        point: r.screenToWorld(at.x, at.y),
+        radius: ab.radius,
+        range: ab.range,
+        element: ab.element,
+      };
+    }
+
     function handleEvents(world: ArpgWorld, events: ArpgEvent[]) {
       onUiRef.current({ kind: 'events', events });
       for (const e of events)
-        if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', skillId: e.skillId });
+        if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', slot: e.slot });
       if (world.pending.items.length > 0 || world.pending.reactions.length > 0) bank(world);
     }
 
@@ -298,25 +366,26 @@ export function useArena(
     }
   }, [ready, phase, depth, startFloor]);
 
-  // Gear or spell bar changed mid-floor → hot-swap hero stats and announce unlocks.
-  const lastUnlocked = useRef<string[] | null>(null);
+  // Gear changed mid-floor → hot-swap hero stats (abilities re-resolve).
   useEffect(() => {
     const stats = computeHeroStats(profile.equipped, registry);
-    const unlocked = unlockedSkills(stats.attunement, registry).map((s) => s.id);
-    if (lastUnlocked.current) {
-      const fresh = unlocked.filter((id) => !lastUnlocked.current!.includes(id));
-      if (fresh.length > 0) onUiRef.current({ kind: 'spells', unlocked: fresh });
-    }
-    lastUnlocked.current = unlocked;
     const world = worldRef.current;
     if (world && !world.heroDead && !finishedRef.current) {
-      refreshWorldHero(registry, world, stats, profile.skillSlots);
+      refreshWorldHero(registry, world, stats, profile.abilities);
       setHud(snapshot(world));
     }
-  }, [profile.equipped, profile.skillSlots, registry]);
+  }, [profile.equipped, profile.abilities, registry]);
 
-  const cast = useCallback((slot: number) => {
-    inputRef.current.cast = slot;
+  /** Use an ability; `aim` is a screen point (client px), or omitted to auto-aim. */
+  const cast = useCallback((slot: number, aim?: { x: number; y: number } | null) => {
+    inputRef.current.cast = { slot, aim: aim ?? null };
+  }, []);
+  /** Show the aim marker for a held button at a screen point, or hide it (null). */
+  const aim = useCallback((slot: number | null, at?: { x: number; y: number }) => {
+    inputRef.current.aiming =
+      slot === null || !at
+        ? null
+        : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at };
   }, []);
   const potion = useCallback(() => {
     inputRef.current.potion = true;
@@ -324,5 +393,15 @@ export function useArena(
   const heroScreen = useCallback(() => rendererRef.current?.heroScreen() ?? null, []);
   const pixelsPerUnit = useCallback(() => rendererRef.current?.pixelsPerUnit() ?? 30, []);
 
-  return { hud, ready, input: inputRef.current, cast, potion, heroScreen, pixelsPerUnit, worldRef };
+  return {
+    hud,
+    ready,
+    input: inputRef.current,
+    cast,
+    aim,
+    potion,
+    heroScreen,
+    pixelsPerUnit,
+    worldRef,
+  };
 }

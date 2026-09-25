@@ -8,6 +8,7 @@ import type {
   MonsterEntity,
   Vec,
 } from '@alloy/engine';
+import type { AimMarker } from './aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
@@ -67,6 +68,17 @@ interface Bolt {
   color: number;
 }
 
+interface Beam {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  width: number;
+  element: ManaType;
+  life: number;
+  max: number;
+}
+
 interface Swing {
   x: number;
   y: number;
@@ -100,7 +112,18 @@ const REACTION_LABEL: Record<string, string> = {
   overload: 'OVERLOAD!',
   superconduct: 'SUPERCONDUCT!',
   soulfire: 'SOULFIRE!',
+  combust: 'COMBUST!',
+  blight: 'BLIGHT!',
 };
+
+/** What the player is aiming, in world units (drawn as a circle or a line from the hero). */
+export interface AimView {
+  marker: AimMarker;
+  point: Vec;
+  radius: number;
+  range: number;
+  element: ManaType;
+}
 
 const FONT = 'Rajdhani, "DM Sans", system-ui, sans-serif';
 
@@ -136,17 +159,19 @@ export class ArenaRenderer {
 
   private textures = new Map<string, Texture>();
   private monsters = new Map<number, MonsterView>();
-  private summons = new Map<number, MonsterView>();
   private drops = new Map<number, DropView>();
   private trails = new Map<number, Vec[]>();
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private bolts: Bolt[] = [];
   private swings: Swing[] = [];
+  private beams: Beam[] = [];
   private floats: FloatText[] = [];
   private textPool: Text[] = [];
   private dying: Dying[] = [];
   private heroFlashUntil = 0;
+  private aim: AimView | null = null;
+  private aimG = new Graphics();
 
   constructor(app: Application) {
     this.app = app;
@@ -158,6 +183,7 @@ export class ArenaRenderer {
       this.entities,
       this.projG,
       this.fxG,
+      this.aimG,
     );
     this.hero.addChild(this.heroAura, this.heroBody);
     app.stage.addChild(this.root, this.textLayer);
@@ -180,14 +206,12 @@ export class ArenaRenderer {
     this.world = world;
     this.biome = biome;
     for (const v of this.monsters.values()) v.root.destroy({ children: true });
-    for (const v of this.summons.values()) v.root.destroy({ children: true });
     for (const v of this.drops.values()) {
       v.root.destroy({ children: true });
       v.label?.destroy();
     }
     for (const d of this.dying) d.root.destroy({ children: true });
     this.monsters.clear();
-    this.summons.clear();
     this.drops.clear();
     this.trails.clear();
     this.dying = [];
@@ -195,6 +219,7 @@ export class ArenaRenderer {
     this.rings = [];
     this.bolts = [];
     this.swings = [];
+    this.beams = [];
     for (const f of this.floats) this.releaseText(f.text);
     this.floats = [];
     this.drawFloor();
@@ -409,13 +434,39 @@ export class ArenaRenderer {
             });
           }
           break;
-        case 'cast': {
-          const skill = e.skillId;
-          const color =
-            skill === 'fireball' || skill === 'magma_eruption' ? MANA_HEX.fire : 0xffffff;
-          this.ring(e.x, e.y, 0.9, color, false, 0.2);
+        case 'cast':
+          this.ring(e.x, e.y, 0.9, MANA_HEX[e.element], false, 0.2);
+          if (e.slot > 0)
+            this.floatText(e.x, e.y - 1.4, e.name, lighten(MANA_HEX[e.element]), 15, {
+              life: 1,
+              rise: 0.8,
+            });
           break;
-        }
+        case 'beam':
+          this.beams.push({ ...e, life: 0.22, max: 0.22 });
+          this.burst(e.tx, e.ty, MANA_HEX[e.element], 6, 3);
+          break;
+        case 'slash':
+          this.swings.push({
+            x: e.x,
+            y: e.y,
+            angle: Math.atan2(e.dir.y, e.dir.x),
+            arc: Math.min(360, e.arc) * (Math.PI / 180),
+            range: e.range,
+            life: 0.22,
+            max: 0.22,
+            color: MANA_HEX[e.element],
+          });
+          if (e.arc >= 360) this.addShake(0.12);
+          break;
+        case 'buff':
+          this.ring(w.hero.x, w.hero.y, 1.6, MANA_HEX[e.element], true, 0.4);
+          break;
+        case 'wardBreak':
+          this.ring(e.x, e.y, 2.4, MANA_HEX[e.element], false, 0.5);
+          this.burst(e.x, e.y, 0xffffff, 16, 5);
+          this.addShake(0.15);
+          break;
         case 'chain':
           this.bolts.push({
             points: this.jagged(e.points),
@@ -477,12 +528,9 @@ export class ArenaRenderer {
             ],
             life: 0.3,
             max: 0.3,
-            color: MANA_HEX.shadow,
+            color: this.guardColor(w),
           });
-          this.burst(e.toX, e.toY, MANA_HEX.shadow, 10, 4);
-          break;
-        case 'summon':
-          this.ring(w.hero.x, w.hero.y, 2, MANA_HEX.earth, true, 0.4);
+          this.burst(e.toX, e.toY, this.guardColor(w), 10, 4);
           break;
         case 'revive':
           this.ring(w.hero.x, w.hero.y, 4, 0xfb923c, true, 0.7);
@@ -500,6 +548,25 @@ export class ArenaRenderer {
           break;
       }
     }
+  }
+
+  private guardColor(w: ArpgWorld): number {
+    const guard = w.hero.abilities[1];
+    return guard ? MANA_HEX[guard.element] : MANA_HEX.shadow;
+  }
+
+  /** Show (or hide, with null) the aim marker. */
+  setAim(aim: AimView | null): void {
+    this.aim = aim;
+  }
+
+  /** A point on screen (client px) in world units. */
+  screenToWorld(clientX: number, clientY: number): Vec {
+    const r = this.app.canvas.getBoundingClientRect();
+    return {
+      x: (clientX - r.left - this.root.position.x) / this.unit,
+      y: (clientY - r.top - this.root.position.y) / this.unit,
+    };
   }
 
   private killMonsterView(id: number): void {
@@ -552,11 +619,11 @@ export class ArenaRenderer {
     }
     this.syncHero(w);
     this.syncMonsters(w);
-    this.syncSummons(w);
     this.syncDrops(w);
     this.drawDecals(w);
     this.drawProjectiles(w);
     this.drawFx(dt);
+    this.drawAim(w);
     this.updateTexts(dt);
 
     for (const d of this.dying) {
@@ -592,6 +659,7 @@ export class ArenaRenderer {
     const pulse = 0.25 + Math.sin(this.time * 4) * 0.08;
     const g = this.heroAura;
     g.clear();
+    this.drawGuard(g, w);
     if (!this.heroFrames) {
       this.heroFrames = spriteFrames('hero');
       if (this.heroFrames) {
@@ -643,6 +711,70 @@ export class ArenaRenderer {
     ]).fill({
       color: 0xecd06a,
     });
+  }
+
+  /** Defensive auras and the cast wind-up, around the hero (hero-local units). */
+  private drawGuard(g: Graphics, w: ArpgWorld): void {
+    const h = w.hero;
+    const guard = h.abilities[1];
+    if (h.defend && w.t < h.defend.until && guard) {
+      const color = MANA_HEX[guard.element];
+      const flicker = 0.8 + Math.sin(this.time * 9) * 0.2;
+      if (h.defend.form === 'ward' && h.ward) {
+        const hp = h.ward.hp / Math.max(1, h.ward.max);
+        g.circle(0, -0.2, 1.05).fill({ color, alpha: 0.1 + 0.12 * hp });
+        g.circle(0, -0.2, 1.05).stroke({ width: 0.07, color, alpha: (0.4 + 0.5 * hp) * flicker });
+      } else if (h.defend.form === 'armor') {
+        const pts: number[] = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i + this.time * 0.8;
+          pts.push(Math.cos(a) * 0.95, -0.2 + Math.sin(a) * 0.95);
+        }
+        g.poly(pts).stroke({ width: 0.09, color, alpha: 0.75 * flicker });
+      } else if (h.defend.form === 'surge') {
+        for (let i = 0; i < 3; i++) {
+          const a = this.time * 7 + (i * Math.PI * 2) / 3;
+          g.circle(Math.cos(a) * 0.8, -0.2 + Math.sin(a) * 0.8, 0.1).fill({ color, alpha: 0.9 });
+        }
+      }
+    }
+    if (h.windup) {
+      const ab = h.abilities[h.windup.slot];
+      const p = Math.min(
+        1,
+        (w.t - h.windup.start) / Math.max(0.01, h.windup.until - h.windup.start),
+      );
+      const color = ab ? MANA_HEX[ab.element] : 0xffffff;
+      g.circle(0, 0.42, 1.2).stroke({ width: 0.05, color, alpha: 0.35 });
+      g.moveTo(1.2, 0.42)
+        .arc(0, 0.42, 1.2, 0, Math.PI * 2 * p)
+        .stroke({ width: 0.12, color, alpha: 0.95 });
+    }
+  }
+
+  private drawAim(w: ArpgWorld): void {
+    const g = this.aimG;
+    g.clear();
+    const a = this.aim;
+    if (!a || a.marker === 'none') return;
+    const h = w.hero;
+    const color = MANA_HEX[a.element];
+    const dx = a.point.x - h.x;
+    const dy = a.point.y - h.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const reach = a.range > 0 ? Math.min(d, a.range) : d;
+    const px = h.x + (dx / d) * reach;
+    const py = h.y + (dy / d) * reach;
+    if (a.marker === 'circle') {
+      if (a.range > 0) g.circle(h.x, h.y, a.range).stroke({ width: 0.04, color, alpha: 0.25 });
+      g.circle(px, py, Math.max(0.4, a.radius)).fill({ color, alpha: 0.18 });
+      g.circle(px, py, Math.max(0.4, a.radius)).stroke({ width: 0.07, color, alpha: 0.9 });
+    } else {
+      g.moveTo(h.x, h.y)
+        .lineTo(px, py)
+        .stroke({ width: Math.max(0.12, a.radius * 0.6), color, alpha: 0.3 });
+      g.circle(px, py, 0.25).fill({ color, alpha: 0.9 });
+    }
   }
 
   private makeCreature(icon: string, radius: number, spriteId?: string): MonsterView {
@@ -758,39 +890,6 @@ export class ArenaRenderer {
     }
   }
 
-  private syncSummons(w: ArpgWorld): void {
-    const alive = new Set(w.summons.map((s) => s.id));
-    for (const [id, v] of this.summons) {
-      if (!alive.has(id)) {
-        this.summons.delete(id);
-        this.dying.push({ root: v.root, life: 0.3, max: 0.3 });
-      }
-    }
-    for (const s of w.summons) {
-      let v = this.summons.get(s.id);
-      if (!v) {
-        v = this.makeCreature('🧟', s.radius);
-        this.summons.set(s.id, v);
-      }
-      v.root.position.set(s.x, s.y);
-      v.root.zIndex = s.y;
-      v.shadow.clear();
-      v.shadow
-        .ellipse(0, s.radius * 0.55, s.radius * 0.95, s.radius * 0.35)
-        .fill({ color: 0x000000, alpha: 0.4 });
-      v.ring.clear();
-      v.ring
-        .circle(0, 0, s.radius + 0.12)
-        .stroke({ width: 0.08, color: MANA_HEX.earth, alpha: 0.9 });
-      v.hp.clear();
-      const bw = s.radius * 2;
-      v.hp.rect(-bw / 2, -s.radius * 1.55 - 0.2, bw, 0.12).fill({ color: 0x000000, alpha: 0.7 });
-      v.hp
-        .rect(-bw / 2, -s.radius * 1.55 - 0.2, (bw * Math.max(0, s.hp)) / s.maxHp, 0.12)
-        .fill({ color: 0x86efac });
-    }
-  }
-
   private syncDrops(w: ArpgWorld): void {
     const alive = new Set<number>();
     for (const d of w.drops) {
@@ -892,9 +991,33 @@ export class ArenaRenderer {
         g.circle(z.x, z.y, z.radius).stroke({ width: 0.08, color: 0xff6b6b, alpha: 0.9 });
         continue;
       }
+      if (z.detonateAt > 0) {
+        // Barrage: a falling impact's shadow grows until it lands.
+        const color = elemColor(z.element);
+        const p = Math.min(1, (t - z.born) / Math.max(0.01, z.detonateAt - z.born));
+        g.circle(z.x, z.y, z.radius).stroke({ width: 0.05, color, alpha: 0.35 + p * 0.5 });
+        g.circle(z.x, z.y, z.radius * p).fill({ color, alpha: 0.12 + p * 0.18 });
+        continue;
+      }
       const fade = Math.min(1, (z.until - t) / 0.5, (t - z.born) / 0.2);
       const pulse = 0.8 + Math.sin(this.time * 6) * 0.2;
-      if (z.skillId === 'magma_eruption') {
+      const color = elemColor(z.element);
+      if (z.source === 'maelstrom') {
+        g.circle(z.x, z.y, z.radius).fill({ color, alpha: 0.14 * fade });
+        for (let i = 0; i < 3; i++) {
+          const a0 = this.time * 2.4 + (i * Math.PI * 2) / 3;
+          const r = z.radius * (0.35 + 0.2 * i);
+          g.moveTo(z.x + Math.cos(a0) * r, z.y + Math.sin(a0) * r)
+            .arc(z.x, z.y, r, a0, a0 + 2)
+            .stroke({ width: 0.1, color, alpha: 0.6 * fade });
+        }
+        g.circle(z.x, z.y, z.radius).stroke({ width: 0.06, color, alpha: 0.6 * fade * pulse });
+        if (Math.random() < 0.6) {
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.random() * z.radius;
+          this.burst(z.x + Math.cos(a) * r, z.y + Math.sin(a) * r, color, 1, 1.5);
+        }
+      } else if (z.element === 'fire') {
         g.circle(z.x, z.y, z.radius).fill({ color: 0xff5a1f, alpha: 0.28 * fade * pulse });
         g.circle(z.x, z.y, z.radius * 0.6).fill({ color: 0xffb347, alpha: 0.2 * fade });
         g.circle(z.x, z.y, z.radius).stroke({ width: 0.08, color: 0xff7a3c, alpha: 0.7 * fade });
@@ -906,26 +1029,9 @@ export class ArenaRenderer {
             1,
             1.5,
           );
-      } else if (z.skillId === 'blizzard') {
-        g.circle(z.x, z.y, z.radius).fill({ color: 0x9fdcff, alpha: 0.16 * fade });
-        g.circle(z.x, z.y, z.radius).stroke({ width: 0.06, color: 0xe0f7ff, alpha: 0.7 * fade });
-        for (let i = 0; i < 2; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const r = Math.random() * z.radius;
-          this.particles.push({
-            x: z.x + Math.cos(a) * r,
-            y: z.y + Math.sin(a) * r - 1,
-            vx: 0.5,
-            vy: 2.5,
-            life: 0.4,
-            max: 0.4,
-            color: Math.random() < 0.3 ? MANA_HEX.storm : 0xffffff,
-            size: 0.06,
-          });
-        }
       } else {
-        g.circle(z.x, z.y, z.radius).fill({ color: 0xbfefff, alpha: 0.14 * fade });
-        g.circle(z.x, z.y, z.radius).stroke({ width: 0.05, color: 0xbfefff, alpha: 0.5 * fade });
+        g.circle(z.x, z.y, z.radius).fill({ color, alpha: 0.16 * fade });
+        g.circle(z.x, z.y, z.radius).stroke({ width: 0.05, color, alpha: 0.55 * fade });
       }
     }
 
@@ -983,31 +1089,30 @@ export class ArenaRenderer {
         const a = i / trail.length;
         g.moveTo(trail[i - 1].x, trail[i - 1].y)
           .lineTo(trail[i].x, trail[i].y)
-          .stroke({ width: (p.skillId === 'boulder' ? 0.5 : 0.16) * a, color, alpha: 0.5 * a });
+          .stroke({ width: (p.form === 'bolt' ? p.radius : 0.16) * a, color, alpha: 0.5 * a });
       }
-      switch (p.skillId) {
-        case 'fireball':
-          g.circle(p.x, p.y, 0.5).fill({ color: 0xff6a2b, alpha: 0.3 });
-          g.circle(p.x, p.y, 0.3).fill({ color: 0xffb347 });
-          g.circle(p.x, p.y, 0.14).fill({ color: 0xfff1c1 });
+      const second = p.ability?.elements[1];
+      switch (p.form) {
+        case 'bolt':
+          if (p.pierce && p.element === 'earth') {
+            const spin = this.time * 12;
+            g.circle(p.x, p.y, p.radius).fill({ color: 0x8b6b43 });
+            g.circle(p.x, p.y, p.radius).stroke({ width: 0.08, color: 0x3b2a18 });
+            g.moveTo(p.x + Math.cos(spin) * p.radius * 0.8, p.y + Math.sin(spin) * p.radius * 0.8)
+              .lineTo(p.x - Math.cos(spin) * p.radius * 0.8, p.y - Math.sin(spin) * p.radius * 0.8)
+              .stroke({ width: 0.08, color: 0x5c4630 });
+          } else {
+            g.circle(p.x, p.y, p.radius + 0.2).fill({ color, alpha: 0.3 });
+            g.circle(p.x, p.y, p.radius).fill({
+              color: second ? MANA_HEX[second] : lighten(color),
+            });
+            g.circle(p.x, p.y, p.radius * 0.45).fill({ color: 0xffffff, alpha: 0.9 });
+          }
           break;
-        case 'boulder': {
-          const spin = this.time * 12;
-          g.circle(p.x, p.y, p.radius).fill({ color: 0x8b6b43 });
-          g.circle(p.x, p.y, p.radius).stroke({ width: 0.08, color: 0x3b2a18 });
-          g.moveTo(p.x + Math.cos(spin) * p.radius * 0.8, p.y + Math.sin(spin) * p.radius * 0.8)
-            .lineTo(p.x - Math.cos(spin) * p.radius * 0.8, p.y - Math.sin(spin) * p.radius * 0.8)
-            .stroke({ width: 0.08, color: 0x5c4630 });
-          break;
-        }
-        case 'plasma_orb':
-          g.circle(p.x, p.y, 0.75).fill({ color: 0xb07cff, alpha: 0.2 + Math.random() * 0.1 });
-          g.circle(p.x, p.y, 0.45).fill({ color: 0xf5e049, alpha: 0.5 });
-          g.circle(p.x, p.y, 0.25).fill({ color: 0xffffff });
-          break;
-        case 'void_bolt':
-          g.circle(p.x, p.y, 0.32).fill({ color: 0xb07cff, alpha: 0.5 });
-          g.circle(p.x, p.y, 0.16).fill({ color: 0xf5e049 });
+        case 'volley':
+        case 'ember':
+          g.circle(p.x, p.y, 0.24).fill({ color, alpha: 0.4 });
+          g.circle(p.x, p.y, 0.12).fill({ color: second ? MANA_HEX[second] : 0xffffff });
           break;
         default:
           if (p.owner === 'monster') {
@@ -1076,6 +1181,19 @@ export class ArenaRenderer {
         .stroke({ width: 0.22 * a + 0.04, color: s.color, alpha: 0.85 * a });
     }
     this.swings = this.swings.filter((s) => s.life > 0);
+
+    for (const b of this.beams) {
+      b.life -= dt;
+      const a = Math.max(0, b.life / b.max);
+      const color = MANA_HEX[b.element];
+      g.moveTo(b.x, b.y)
+        .lineTo(b.tx, b.ty)
+        .stroke({ width: b.width * 2 * a, color, alpha: 0.45 * a });
+      g.moveTo(b.x, b.y)
+        .lineTo(b.tx, b.ty)
+        .stroke({ width: 0.1 * a + 0.03, color: 0xffffff, alpha: 0.9 * a });
+    }
+    this.beams = this.beams.filter((b) => b.life > 0);
   }
 
   private updateTexts(dt: number): void {

@@ -143,7 +143,14 @@ export interface DelveData {
 export interface DelveAbilityBalance {
   slots: Record<AbilitySlot, { cost: number; cooldown: number; castTime: number }>;
   /** Per weight step (-2..2): each value scales by (1 + k × weight); speed by (1 - k × weight). */
-  weight: { power: number; cost: number; cooldown: number; size: number; speed: number; castTime: number };
+  weight: {
+    power: number;
+    cost: number;
+    cooldown: number;
+    size: number;
+    speed: number;
+    castTime: number;
+  };
   castManaMult: number;
   castPowerMult: number;
   /** A charge-paid ability needs its mana cost × this in charge units. */
@@ -161,7 +168,13 @@ export interface DelveAbilityBalance {
   /** Scatter moves impacts up to scatter × radius × this. */
   scatterReach: number;
   /** Defensive element effects while a defensive is active. */
-  defend: { earthReduction: number; shadowLifesteal: number; natureRegen: number; surgeMove: number; blinkSeconds: number };
+  defend: {
+    earthReduction: number;
+    shadowLifesteal: number;
+    natureRegen: number;
+    surgeMove: number;
+    blinkSeconds: number;
+  };
 }
 
 export interface DelveBalance {

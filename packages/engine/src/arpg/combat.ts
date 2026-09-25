@@ -109,7 +109,11 @@ function mastery(ctx: SimCtx, mana: ManaType): boolean {
   return hasMastery(ctx.registry, ctx.world.hero.stats.attunement, mana);
 }
 
-export function healHero(ctx: SimCtx, amount: number, source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire'): void {
+export function healHero(
+  ctx: SimCtx,
+  amount: number,
+  source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire',
+): void {
   const h = ctx.world.hero;
   if (ctx.world.heroDead) return;
   const healed = Math.min(h.stats.maxHp - h.hp, amount);
@@ -128,7 +132,12 @@ function aggroPack(ctx: SimCtx, m: MonsterEntity): void {
   }
 }
 
-export function applyStatus(ctx: SimCtx, m: MonsterEntity, status: StatusId, hitAmount: number): void {
+export function applyStatus(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  status: StatusId,
+  hitAmount: number,
+): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
   const boss = m.kind === 'boss';
@@ -227,7 +236,8 @@ export function hitMonster(
     if (element === m.element) amount *= 1 - bal.monster.resist;
     if (element === ctx.data.weakness[m.element]) amount *= 1 + bal.monster.weakness;
   }
-  if (opts.source === 'basic' && m.traits.includes('armored')) amount *= 1 - bal.monster.traits.armoredReduction;
+  if (opts.source === 'basic' && m.traits.includes('armored'))
+    amount *= 1 - bal.monster.traits.armoredReduction;
   if (isShocked(ctx, m)) amount *= 1 + bal.status.shockBonus * (mastery(ctx, 'storm') ? 2 : 1);
   if (isHexed(ctx, m)) amount *= 1 + bal.status.hexBonus;
   if (isFrozen(ctx, m) && mastery(ctx, 'frost')) amount *= 1.3;
@@ -252,9 +262,16 @@ export function hitMonster(
       reaction = 'overload';
       s.burnUntil = 0;
       const blast = amount * r.overloadMult * catalyst;
-      ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius: r.overloadRadius, element: 'storm' });
+      ctx.events.push({
+        kind: 'explode',
+        x: m.x,
+        y: m.y,
+        radius: r.overloadRadius,
+        element: 'storm',
+      });
       for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.overloadRadius + o.radius) continue;
+        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.overloadRadius + o.radius)
+          continue;
         hitMonster(ctx, o, blast, 'storm', { source: 'reaction', noReact: true });
       }
     } else if (element === 'frost' && isShocked(ctx, m)) {
@@ -266,15 +283,23 @@ export function hitMonster(
       amount *= r.combustMult * catalyst;
       s.poisonStacks = 0;
       s.poisonUntil = 0;
-      ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius: r.combustRadius, element: 'nature' });
+      ctx.events.push({
+        kind: 'explode',
+        x: m.x,
+        y: m.y,
+        radius: r.combustRadius,
+        element: 'nature',
+      });
       for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.combustRadius + o.radius) continue;
+        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.combustRadius + o.radius)
+          continue;
         hitMonster(ctx, o, amount, 'fire', { source: 'reaction', noReact: true });
       }
     } else if (element === 'shadow' && isPoisoned(ctx, m)) {
       reaction = 'blight';
       for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.blightRadius + o.radius) continue;
+        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.blightRadius + o.radius)
+          continue;
         poison(ctx, o, s.poisonStacks, s.poisonDps);
       }
     } else if (element === 'fire' && isHexed(ctx, m)) {
@@ -291,14 +316,31 @@ export function hitMonster(
   ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount, crit, element, reaction });
 
   if (opts.source === 'basic' || opts.source === 'skill') {
-    const shadowGuard = defendingAbility(ctx)?.elements.includes('shadow') ? ctx.bal.abilities.defend.shadowLifesteal : 0;
+    const shadowGuard = defendingAbility(ctx)?.elements.includes('shadow')
+      ? ctx.bal.abilities.defend.shadowLifesteal
+      : 0;
     const leech = stats.lifesteal + (opts.leech ?? 0) + shadowGuard;
     if (leech > 0) healHero(ctx, amount * leech, 'lifesteal');
     addCharge(ctx, amount, opts.slot);
   }
 
-  if (m.hp > 0 && opts.execute && m.kind !== 'boss' && isFrozen(ctx, m) && m.hp / m.maxHp <= opts.execute) {
-    ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount: m.hp, crit: true, element, reaction: 'shatter' });
+  if (
+    m.hp > 0 &&
+    opts.execute &&
+    m.kind !== 'boss' &&
+    isFrozen(ctx, m) &&
+    m.hp / m.maxHp <= opts.execute
+  ) {
+    ctx.events.push({
+      kind: 'hit',
+      id: m.id,
+      x: m.x,
+      y: m.y,
+      amount: m.hp,
+      crit: true,
+      element,
+      reaction: 'shatter',
+    });
     m.hp = 0;
   }
 
@@ -318,15 +360,34 @@ export function hitMonster(
   }
 
   if (m.traits.includes('spiked') && opts.source !== 'dot' && opts.source !== 'reaction') {
-    hurtHero(ctx, amount * bal.monster.traits.spikedFraction, m.element, null, { unavoidable: true });
+    hurtHero(ctx, amount * bal.monster.traits.spikedFraction, m.element, null, {
+      unavoidable: true,
+    });
   }
   return amount;
 }
 
-function spawnDrop(ctx: SimCtx, kind: DropKind, x: number, y: number, extra: { item?: GearItem; mana?: ManaType; amount: number }): void {
+function spawnDrop(
+  ctx: SimCtx,
+  kind: DropKind,
+  x: number,
+  y: number,
+  extra: { item?: GearItem; mana?: ManaType; amount: number },
+): void {
   const { world } = ctx;
   const id = world.nextId++;
-  world.drops.push({ id, kind, x, y, item: extra.item, mana: extra.mana, amount: extra.amount, born: world.t, vacuum: world.cleared, dead: false });
+  world.drops.push({
+    id,
+    kind,
+    x,
+    y,
+    item: extra.item,
+    mana: extra.mana,
+    amount: extra.amount,
+    born: world.t,
+    vacuum: world.cleared,
+    dead: false,
+  });
   ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: kind, rarity: extra.item?.rarity });
 }
 
@@ -342,7 +403,10 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.kind === 'boss') world.bossKilled = true;
 
   const scrap = Math.round(
-    bal.loot.scrapPerKill * scrapLevelFactor(registry, world.depth) * KILL_SCRAP_MULT[m.kind] * (1 + h.stats.scrapFind / 100),
+    bal.loot.scrapPerKill *
+      scrapLevelFactor(registry, world.depth) *
+      KILL_SCRAP_MULT[m.kind] *
+      (1 + h.stats.scrapFind / 100),
   );
   world.pending.scrap += scrap;
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
@@ -396,9 +460,24 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     spawnDrop(ctx, 'item', x, y, { item, amount: 1 });
   });
 
-  const mote = m.kind === 'boss' ? bal.mana.bossMote : m.kind === 'elite' ? bal.mana.eliteMote : bal.mana.moteAmount;
-  spawnDrop(ctx, 'mote', m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), { mana: m.element, amount: mote });
-  const orbs = m.kind === 'boss' ? 3 : m.kind === 'elite' ? 1 : lootRng.next() < bal.dive.healthOrbChance ? 1 : 0;
+  const mote =
+    m.kind === 'boss'
+      ? bal.mana.bossMote
+      : m.kind === 'elite'
+        ? bal.mana.eliteMote
+        : bal.mana.moteAmount;
+  spawnDrop(ctx, 'mote', m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), {
+    mana: m.element,
+    amount: mote,
+  });
+  const orbs =
+    m.kind === 'boss'
+      ? 3
+      : m.kind === 'elite'
+        ? 1
+        : lootRng.next() < bal.dive.healthOrbChance
+          ? 1
+          : 0;
   for (let i = 0; i < orbs; i++) {
     spawnDrop(ctx, 'orb', m.x + (lootRng.next() - 0.5) * 2, m.y + (lootRng.next() - 0.5) * 2, {
       amount: bal.dive.healthOrbHeal,
@@ -412,7 +491,11 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire' });
     for (const o of world.monsters) {
       if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
-      hitMonster(ctx, o, blast, 'fire', { source: 'skill', canCrit: true, applies: ['brand', 'burn'] });
+      hitMonster(ctx, o, blast, 'fire', {
+        source: 'skill',
+        canCrit: true,
+        applies: ['brand', 'burn'],
+      });
     }
   }
 }
@@ -436,7 +519,8 @@ export function hurtHero(
   if (world.heroDead || raw <= 0) return;
   if (!opts.unavoidable) {
     if (world.t < h.invulnUntil) return;
-    const blind = source && world.t < source.status.blindUntil && world.rng.next() < bal.status.blindMiss;
+    const blind =
+      source && world.t < source.status.blindUntil && world.rng.next() < bal.status.blindMiss;
     if (blind || world.rng.next() < h.stats.dodge) {
       ctx.events.push({ kind: 'heroHit', x: h.x, y: h.y, amount: 0, dodged: true, element });
       return;

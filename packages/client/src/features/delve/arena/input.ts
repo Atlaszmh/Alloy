@@ -1,4 +1,18 @@
 import type { Vec } from '@alloy/engine';
+import { classifyPress } from './aim-gestures';
+
+/** An ability press. `aim` is a screen point (client px), or null to auto-aim. */
+export interface CastPress {
+  slot: number;
+  aim: Vec | null;
+}
+
+/** A press being held to aim: the marker follows `at` (client px), or the mouse when null. */
+export interface Aiming {
+  slot: number;
+  since: number;
+  at: Vec | null;
+}
 
 /** Live controller state shared between the controls and the game loop. */
 export interface ArenaInput {
@@ -6,12 +20,22 @@ export interface ArenaInput {
   keys: Vec;
   /** Touch joystick or mouse-drag direction. */
   pointer: Vec;
-  cast: number | null;
+  cast: CastPress | null;
+  aiming: Aiming | null;
+  /** Last mouse position (client px), for hold-to-aim on the keyboard. */
+  mouse: Vec | null;
   potion: boolean;
 }
 
 export function createArenaInput(): ArenaInput {
-  return { keys: { x: 0, y: 0 }, pointer: { x: 0, y: 0 }, cast: null, potion: false };
+  return {
+    keys: { x: 0, y: 0 },
+    pointer: { x: 0, y: 0 },
+    cast: null,
+    aiming: null,
+    mouse: null,
+    potion: false,
+  };
 }
 
 /** Combined move vector: keyboard wins when pressed. */
@@ -39,7 +63,11 @@ const CAST_KEYS: Record<string, number> = {
   Digit3: 2,
 };
 
-/** Wire keyboard controls to `input`. Returns a cleanup function. */
+/**
+ * Wire keyboard controls to `input`. Q/E/R: a quick tap auto-aims; holding
+ * shows the aim marker at the mouse and releasing casts there. Returns a
+ * cleanup function.
+ */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();
   const recompute = () => {
@@ -62,7 +90,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       recompute();
       e.preventDefault();
     } else if (e.code in CAST_KEYS && !e.repeat) {
-      input.cast = CAST_KEYS[e.code];
+      input.aiming = { slot: CAST_KEYS[e.code], since: performance.now(), at: null };
     } else if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) {
       input.potion = true;
       e.preventDefault();
@@ -70,17 +98,29 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
   };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
+    const a = input.aiming;
+    if (a && a.at === null && CAST_KEYS[e.code] === a.slot) {
+      input.aiming = null;
+      const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
+      input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
+    }
+  };
+  const move = (e: MouseEvent) => {
+    input.mouse = { x: e.clientX, y: e.clientY };
   };
   const blur = () => {
     held.clear();
     recompute();
+    input.aiming = null;
   };
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);
+  window.addEventListener('mousemove', move);
   window.addEventListener('blur', blur);
   return () => {
     window.removeEventListener('keydown', down);
     window.removeEventListener('keyup', up);
+    window.removeEventListener('mousemove', move);
     window.removeEventListener('blur', blur);
   };
 }

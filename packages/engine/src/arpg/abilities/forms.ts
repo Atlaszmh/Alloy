@@ -20,7 +20,12 @@ function rotate(d: Vec, a: number): Vec {
  * scale their size and power by `combo[step]`). Fails (nothing happens) when
  * there is nothing to aim at.
  */
-export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null, step: number): FormResult {
+export function executeForm(
+  ctx: SimCtx,
+  ab: ResolvedAbility,
+  aim: Vec | null,
+  step: number,
+): FormResult {
   const { world } = ctx;
   const h = world.hero;
   const t = world.t;
@@ -121,9 +126,19 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null, s
       const reach = ab.radius * (slam ? 1.15 : 1);
       const half = (arc * Math.PI) / 360;
       const hits = alive(ctx).filter(
-        (m) => dist(h.x, h.y, m.x, m.y) - m.radius <= reach && (arc >= 360 || angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) <= half),
+        (m) =>
+          dist(h.x, h.y, m.x, m.y) - m.radius <= reach &&
+          (arc >= 360 || angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) <= half),
       );
-      ctx.events.push({ kind: 'slash', x: h.x, y: h.y, dir, range: reach, arc, element: ab.element });
+      ctx.events.push({
+        kind: 'slash',
+        x: h.x,
+        y: h.y,
+        dir,
+        range: reach,
+        arc,
+        element: ab.element,
+      });
       const opts = hitOpts(ab, { x: h.x, y: h.y });
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
       if (hits.length > 0) {
@@ -157,7 +172,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null, s
       ctx.events.push({ kind: 'dash', fromX, fromY, toX: h.x, toY: h.y });
       const opts = hitOpts(ab, { x: fromX, y: fromY });
       for (const m of alive(ctx)) {
-        if (distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius) hitMonster(ctx, m, hit, ab.element, opts);
+        if (distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius)
+          hitMonster(ctx, m, hit, ab.element, opts);
       }
       buff('blink', t + ctx.bal.abilities.defend.blinkSeconds);
       return done(h.x, h.y);

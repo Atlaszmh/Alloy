@@ -62,41 +62,29 @@ monsters, or *Quiet Shrine*: full heal and less loot) **or extract**.
 
 ## Mana
 
-Five mana types: **Fire 🔥, Frost ❄️, Storm ⚡, Earth ⛰️, Shadow 🌑.** Every item rolls a
-mana affinity (biased toward the current biome's element), shown as a colored pip on its tile.
+Six mana types: **Fire 🔥, Frost ❄️, Storm ⚡, Earth ⛰️, Shadow 🌑, Nature 🌿** (Nature
+added with the ability system, v0.33.0). Every item rolls a mana affinity (biased toward the
+current biome's element), shown as a colored pip on its tile.
 
 - **Attunement** per type = sum over equipped gear of the item's affinity bonus
   (`attuneByRarity`: 1 for Common–Magic, 2 for Rare/Epic, 3 for Legendary), plus
   `+N <Mana> Attunement` affixes, plus the Prism legendary (+N to all).
-- Each attuned type has its own **mana pool** (`basePool + poolPerAttune × att`) and
-  regen. Basic attacks and mana motes refill it.
-- **Thresholds**: 1 unlocks that element's signature spell; **3 in two elements** unlocks
-  their combo spell; **10** grants that element's **mastery** passive.
-- Attunement also adds `powerPerAttune` spell damage per point.
+- **One mana pool**: `basePool + poolPerAttune × total attunement`, with regen. Basic
+  attacks and mana motes refill it.
+- Attunement adds `powerPerAttune` damage per point to abilities of that element
+  (averaged over a fusion's two), and **10** grants that element's **mastery**.
 
-So a drop is never judged on stats alone: an off-element Rare can be a downgrade on paper
-and still unlock *Magma Eruption*. The item sheet lists "Unlocks: …" / "Loses: …" and the
-attunement delta for every comparison, and the arena announces **NEW SPELL** when an
-equip unlocks one mid-fight.
+### Abilities (v0.33.0)
 
-### Spells (15)
-
-| | Fire | Frost | Storm | Earth | Shadow |
-|---|---|---|---|---|---|
-| **Fire** | Fireball | Steam Burst | Plasma Orb | Magma Eruption | Hellfire Brand |
-| **Frost** | | Frost Nova | Blizzard | Glacial Spikes | Soul Freeze |
-| **Storm** | | | Chain Lightning | Magnet Quake | Void Bolt |
-| **Earth** | | | | Boulder | Grave Golem |
-| **Shadow** | | | | | Shadow Step |
-
-The diagonal holds the signature spells; every pair has a combo. The bar auto-fills
-(combos first) when a slot is empty. A spell that becomes locked stays on the bar but is
-inactive until it's unlocked again.
+The spell bar and its 15 fixed spells are gone. The hero has a Primary, a Defensive and an
+Ultimate, each built at the Anvil from a form, one or two elements, a weight and a payment;
+see `2026-09-25-delve-ability-system-design.md`. The item sheet shows the attunement delta
+for every comparison.
 
 ### Reactions
 
-Statuses from one element combine with hits from another. Reactions are hidden in the
-Spellbook until you trigger them once.
+Statuses from one element combine with hits from another. Reactions are hidden on the
+Abilities tab until you trigger them once.
 
 | Reaction | Trigger | Effect |
 |---|---|---|
@@ -105,6 +93,8 @@ Spellbook until you trigger them once.
 | Overload | Storm on a burning foe | Explosion around the target |
 | Superconduct | Frost on a shocked foe | Freeze |
 | Soulfire | Fire on a hexed foe | Heals the hero |
+| Combust | Fire on a poisoned foe | The poison detonates around it |
+| Blight | Shadow on a poisoned foe | Its poison spreads to neighbours |
 
 ### Masteries (10 attunement)
 
@@ -113,11 +103,12 @@ Spellbook until you trigger them once.
 - **Tempest** (storm): chains jump to 2 more foes; shock's damage bonus doubles.
 - **Mountain's Heart** (earth): +40% armor and +20% max life.
 - **Night's Embrace** (shadow): killing a hexed foe heals 4% max life.
+- **Plaguebearer** (nature): poison stacks up to 10.
 
 ### Biomes
 
 Each biome has an element. Its monsters **resist** that element (−40%) and are **weak**
-(+35%) to its counter (fire ↔ frost, storm ↔ earth; shadow is weak to storm). The top HUD shows
+(+35%) to its counter (fire ↔ frost, storm ↔ earth; shadow is weak to storm, nature to fire). The top HUD shows
 "Resists 🔥 · weak to ❄️ Frost", which makes a second element worth carrying.
 
 ## Rarity

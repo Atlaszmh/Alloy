@@ -52,7 +52,11 @@ describe('generateItem', () => {
     const counts = registry.getDelveBalance().loot.affixCount;
     for (const rarity of RARITY_ORDER) {
       for (let i = 0; i < 40; i++) {
-        const item = generateItem(registry, { uid: `u${i}`, ilvl: 10, rarity }, new SeededRNG(i * 31 + 7));
+        const item = generateItem(
+          registry,
+          { uid: `u${i}`, ilvl: 10, rarity },
+          new SeededRNG(i * 31 + 7),
+        );
         expect(item.affixes).toHaveLength(counts[rarity]);
         const stats = item.affixes.map((a) => a.stat);
         expect(new Set(stats).size).toBe(stats.length);
@@ -75,7 +79,11 @@ describe('generateItem', () => {
 
   it('gives legendaries a slot-eligible power and names them after it', () => {
     for (let i = 0; i < 40; i++) {
-      const item = generateItem(registry, { uid: 'l', ilvl: 5, rarity: 'legendary' }, new SeededRNG(i));
+      const item = generateItem(
+        registry,
+        { uid: 'l', ilvl: 5, rarity: 'legendary' },
+        new SeededRNG(i),
+      );
       expect(item.legendary).toBeDefined();
       const def = registry.getLegendary(item.legendary!.id);
       expect(def.slots).toContain(item.slot);
@@ -93,7 +101,14 @@ describe('generateItem', () => {
   it('honours a forced slot, base and legendary id', () => {
     const item = generateItem(
       registry,
-      { uid: 'f', ilvl: 3, rarity: 'legendary', slot: 'weapon', baseId: 'maul', legendaryId: 'twin_fang' },
+      {
+        uid: 'f',
+        ilvl: 3,
+        rarity: 'legendary',
+        slot: 'weapon',
+        baseId: 'maul',
+        legendaryId: 'twin_fang',
+      },
       new SeededRNG(9),
     );
     expect(item.slot).toBe('weapon');
@@ -102,21 +117,37 @@ describe('generateItem', () => {
   });
 
   it('scales flat implicits with item level', () => {
-    const low = generateItem(registry, { uid: 'a', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'sword' }, new SeededRNG(5));
-    const high = generateItem(registry, { uid: 'b', ilvl: 20, rarity: 'common', slot: 'weapon', baseId: 'sword' }, new SeededRNG(5));
+    const low = generateItem(
+      registry,
+      { uid: 'a', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'sword' },
+      new SeededRNG(5),
+    );
+    const high = generateItem(
+      registry,
+      { uid: 'b', ilvl: 20, rarity: 'common', slot: 'weapon', baseId: 'sword' },
+      new SeededRNG(5),
+    );
     const dmg = (i: typeof low) => i.implicits.find((s) => s.stat === 'damage')!.value;
     expect(dmg(high)).toBeGreaterThan(dmg(low) * 5);
   });
 
   it('names commons after material and base, and materials progress with ilvl', () => {
-    const item = generateItem(registry, { uid: 'c', ilvl: 1, rarity: 'common', slot: 'helm' }, new SeededRNG(1));
+    const item = generateItem(
+      registry,
+      { uid: 'c', ilvl: 1, rarity: 'common', slot: 'helm' },
+      new SeededRNG(1),
+    );
     expect(item.name).toBe('Rusty Helm');
     expect(materialName(registry, 12)).toBe('Steel');
     expect(baseDisplayName(registry, { ...item, ilvl: 20 })).toBe('Mithril Helm');
   });
 
   it('gives rares a generated two-word name', () => {
-    const item = generateItem(registry, { uid: 'r', ilvl: 4, rarity: 'rare', slot: 'ring' }, new SeededRNG(11));
+    const item = generateItem(
+      registry,
+      { uid: 'r', ilvl: 4, rarity: 'rare', slot: 'ring' },
+      new SeededRNG(11),
+    );
     expect(item.name.split(' ')).toHaveLength(2);
     expect(item.name).not.toContain('Ring');
   });
@@ -128,13 +159,26 @@ describe('mana affinity', () => {
       const item = generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'magic' }, new SeededRNG(i));
       expect(MANA_TYPES).toContain(item.mana);
     }
-    expect(generateItem(registry, { uid: 'm', ilvl: 3, rarity: 'rare', mana: 'shadow' }, new SeededRNG(1)).mana).toBe('shadow');
+    expect(
+      generateItem(
+        registry,
+        { uid: 'm', ilvl: 3, rarity: 'rare', mana: 'shadow' },
+        new SeededRNG(1),
+      ).mana,
+    ).toBe('shadow');
   });
 
   it('drops lean toward the biome element', () => {
     let frost = 0;
     for (let i = 0; i < 400; i++) {
-      if (generateItem(registry, { uid: 'b', ilvl: 3, rarity: 'common', biomeMana: 'frost' }, new SeededRNG(i)).mana === 'frost') frost++;
+      if (
+        generateItem(
+          registry,
+          { uid: 'b', ilvl: 3, rarity: 'common', biomeMana: 'frost' },
+          new SeededRNG(i),
+        ).mana === 'frost'
+      )
+        frost++;
     }
     const bias = registry.getDelveBalance().loot.biomeManaBias;
     expect(frost / 400).toBeGreaterThan(bias + (1 - bias) / MANA_TYPES.length - 0.08);
@@ -186,7 +230,15 @@ describe('rollRarity', () => {
 });
 
 describe('rollEncounterDrops', () => {
-  const base = { depth: 5, magicFind: 0, pity: 0, dropMult: 1, legendaryBoost: 1, forceLegendary: false, nextUid: 1 };
+  const base = {
+    depth: 5,
+    magicFind: 0,
+    pity: 0,
+    dropMult: 1,
+    legendaryBoost: 1,
+    forceLegendary: false,
+    nextUid: 1,
+  };
 
   it('bosses drop several items, the first at least rare, one item level higher', () => {
     for (let s = 0; s < 20; s++) {
@@ -194,19 +246,29 @@ describe('rollEncounterDrops', () => {
       const [min, max] = registry.getDelveBalance().loot.bossDrops;
       expect(res.items.length).toBeGreaterThanOrEqual(min);
       expect(res.items.length).toBeLessThanOrEqual(max);
-      expect(RARITY_ORDER.indexOf(res.items[0].rarity)).toBeGreaterThanOrEqual(RARITY_ORDER.indexOf('rare'));
+      expect(RARITY_ORDER.indexOf(res.items[0].rarity)).toBeGreaterThanOrEqual(
+        RARITY_ORDER.indexOf('rare'),
+      );
       expect(res.items[0].ilvl).toBe(6);
     }
   });
 
   it('forceLegendary makes the first drop legendary and resets pity', () => {
-    const res = rollEncounterDrops(registry, { ...base, kind: 'boss', forceLegendary: true, pity: 50 }, new SeededRNG(1));
+    const res = rollEncounterDrops(
+      registry,
+      { ...base, kind: 'boss', forceLegendary: true, pity: 50 },
+      new SeededRNG(1),
+    );
     expect(res.items[0].rarity).toBe('legendary');
     expect(res.pity).toBeLessThan(50);
   });
 
   it('assigns sequential unique uids', () => {
-    const res = rollEncounterDrops(registry, { ...base, kind: 'elite', nextUid: 10 }, new SeededRNG(2));
+    const res = rollEncounterDrops(
+      registry,
+      { ...base, kind: 'elite', nextUid: 10 },
+      new SeededRNG(2),
+    );
     const uids = res.items.map((i) => i.uid);
     expect(new Set(uids).size).toBe(uids.length);
     expect(res.nextUid).toBe(10 + uids.length);

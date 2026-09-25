@@ -1,5 +1,13 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { ArpgEvent, ArpgInput, ArpgWorld, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
+import type {
+  ArpgEvent,
+  ArpgInput,
+  ArpgWorld,
+  MonsterEntity,
+  Projectile,
+  StatusId,
+  Vec,
+} from '../types/arpg.js';
 import type { ManaType } from '../types/mana.js';
 import {
   healHero,
@@ -34,7 +42,12 @@ const ITEM_PICKUP_DELAY = 0.35;
  * Movement input applies to every step; cast/potion inputs queue for the next
  * step, so a tap is never lost between frames. Returns what happened.
  */
-export function stepWorld(registry: DataRegistry, world: ArpgWorld, input: ArpgInput, dt: number): ArpgEvent[] {
+export function stepWorld(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  input: ArpgInput,
+  dt: number,
+): ArpgEvent[] {
   const events: ArpgEvent[] = [];
   if (input.cast) world.queuedCast = input.cast;
   if (input.potion) world.queuedPotion = true;
@@ -110,7 +123,8 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
   if (!h.windup) basicAttack(ctx);
 
   h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
-  if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius)) gainCharge(ctx, bal.abilities.lullCharge * dt);
+  if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
+    gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);
 }
 
@@ -145,15 +159,23 @@ function basicAttack(ctx: SimCtx): void {
     const kb = finisher ? { knockback: 0.5, kbFrom: { x: h.x, y: h.y } } : {};
     for (const m of alive(ctx)) {
       if (dist(h.x, h.y, m.x, m.y) - m.radius > w.range) continue;
-      if (arc < 360 && m.id !== target.id && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc) continue;
+      if (arc < 360 && m.id !== target.id && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc)
+        continue;
       hitMonster(ctx, m, base, element, { source: 'basic', crit, applies, ...kb });
-      if (twin) hitMonster(ctx, m, base * (h.stats.legendaries.twin_fang / 100), element, { source: 'basic', crit });
+      if (twin)
+        hitMonster(ctx, m, base * (h.stats.legendaries.twin_fang / 100), element, {
+          source: 'basic',
+          crit,
+        });
     }
   } else {
     const shots = twin ? 2 : 1;
     for (let i = 0; i < shots; i++) {
       const spread = i === 0 ? 0 : 0.12;
-      const d = { x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread), y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread) };
+      const d = {
+        x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread),
+        y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread),
+      };
       spawnProjectile(ctx, {
         owner: 'hero',
         form: null,
@@ -174,7 +196,15 @@ function basicAttack(ctx: SimCtx): void {
       });
     }
   }
-  ctx.events.push({ kind: 'basic', x: h.x, y: h.y, tx: target.x, ty: target.y, element, melee: w.kind === 'melee' });
+  ctx.events.push({
+    kind: 'basic',
+    x: h.x,
+    y: h.y,
+    tx: target.x,
+    ty: target.y,
+    element,
+    melee: w.kind === 'melee',
+  });
 
   h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
   h.nextAttackAt = world.t + h.stats.attackInterval / (surge ? 1 + surge.effect : 1);
@@ -226,15 +256,27 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
       if (m.dead || p.hitIds.includes(m.id)) continue;
       if (dist(p.x, p.y, m.x, m.y) > p.radius + m.radius) continue;
       p.hitIds.push(m.id);
-      if (p.ability) impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, { from, tick: p.form === 'ember' });
-      else hitMonster(ctx, m, p.damage, p.element, { source: 'basic', canCrit: true, applies: p.applies });
+      if (p.ability)
+        impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
+          from,
+          tick: p.form === 'ember',
+        });
+      else
+        hitMonster(ctx, m, p.damage, p.element, {
+          source: 'basic',
+          canCrit: true,
+          applies: p.applies,
+        });
       if (!p.pierce) p.dead = true;
     }
     if (!p.dead && expired) {
       p.dead = true;
       // A bolt that reaches the end of its flight bursts on the ground.
       if (p.ability && !p.pierce && p.form !== 'volley') {
-        impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, { from, tick: p.form === 'ember' });
+        impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
+          from,
+          tick: p.form === 'ember',
+        });
       }
     }
   }
@@ -251,7 +293,8 @@ function zonesTick(ctx: SimCtx): void {
       if (world.t >= z.detonateAt) {
         z.dead = true;
         ctx.events.push({ kind: 'explode', x: z.x, y: z.y, radius: z.radius, element: z.element });
-        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius) hurtHero(ctx, z.damage, z.element, null);
+        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius)
+          hurtHero(ctx, z.damage, z.element, null);
       }
       continue;
     }
@@ -269,7 +312,8 @@ function zonesTick(ctx: SimCtx): void {
     }
     if (world.t < z.nextTick) continue;
     z.nextTick += z.tick;
-    if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
+    if (z.ability)
+      impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
   }
 }
 
@@ -380,10 +424,14 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     }
     if (world.t < s.poisonUntil && world.t >= s.poisonTickAt) {
       s.poisonTickAt += 0.5;
-      hitMonster(ctx, m, s.poisonDps * s.poisonStacks * 0.5, 'nature', { source: 'dot', noReact: true });
+      hitMonster(ctx, m, s.poisonDps * s.poisonStacks * 0.5, 'nature', {
+        source: 'dot',
+        noReact: true,
+      });
       if (m.dead) continue;
     }
-    if (m.traits.includes('regenerating')) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
+    if (m.traits.includes('regenerating'))
+      m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
 
     if (m.kbx !== 0 || m.kby !== 0) {
       m.x += m.kbx * dt;
@@ -564,6 +612,13 @@ function dropsTick(ctx: SimCtx, dt: number): void {
         world.pending.scrap += d.amount;
         break;
     }
-    ctx.events.push({ kind: 'pickup', dropId: d.id, dropKind: d.kind, item: d.item, amount: d.amount, mana: d.mana });
+    ctx.events.push({
+      kind: 'pickup',
+      dropId: d.id,
+      dropKind: d.kind,
+      item: d.item,
+      amount: d.amount,
+      mana: d.mana,
+    });
   }
 }

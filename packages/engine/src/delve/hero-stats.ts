@@ -130,7 +130,10 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
     armor: totals.armor * (1 + bedrock / 100) * (earthMastery ? 1.4 : 1),
     weaponDamage: (weaponItem ? 0 : bal.hero.unarmedDamage) + totals.damage,
     damageMult: 1 + (totals.damagePct + glass) / 100,
-    attackInterval: Math.max(bal.hero.minAttackInterval, baseInterval / (1 + totals.attackSpeedPct / 100)),
+    attackInterval: Math.max(
+      bal.hero.minAttackInterval,
+      baseInterval / (1 + totals.attackSpeedPct / 100),
+    ),
     critChance: Math.min(bal.hero.critCap, bal.hero.baseCritChance + totals.critChance) / 100,
     critMultiplier: (bal.hero.baseCritMultiplier + totals.critDamage) / 100,
     dodge: Math.min(bal.hero.dodgeCap, totals.dodge) / 100,
@@ -208,20 +211,29 @@ const TARGETS: Record<string, number> = {
 };
 
 /** Damage of one use, counting combos, chains, lingering ground and repeats. */
-function damagePerUse(ab: ResolvedAbility, hit: number, stats: HeroStats, bal: DelveBalance): number {
+function damagePerUse(
+  ab: ResolvedAbility,
+  hit: number,
+  stats: HeroStats,
+  bal: DelveBalance,
+): number {
   const combo = ab.combo.reduce((a, b) => a + b, 0) / ab.combo.length;
   const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
-  const repeats = ab.form.id === 'barrage' ? ab.count : ab.form.id === 'maelstrom' ? ab.duration / ab.tick : 1;
+  const repeats =
+    ab.form.id === 'barrage' ? ab.count : ab.form.id === 'maelstrom' ? ab.duration / ab.tick : 1;
   let chain = 0;
   for (let i = 1; i <= ab.knobs.chain; i++) chain += Math.pow(bal.abilities.chainPower, i);
-  const zone = ab.knobs.zone ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets : 0;
+  const zone = ab.knobs.zone
+    ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets
+    : 0;
   const perHit = hit * ab.power * combo * (1 + stats.elementPower[ab.element]);
   return perHit * (targets + chain + zone) * repeats;
 }
 
 /** Seconds between uses when the ability is used as often as its payment allows. */
 function useInterval(ab: ResolvedAbility, manaIncome: number, chargeRate: number): number {
-  if (ab.build.payment === 'charge') return Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate));
+  if (ab.build.payment === 'charge')
+    return Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate));
   return Math.max(ab.cooldown + ab.castTime, ab.cost / Math.max(0.1, manaIncome));
 }
 
@@ -250,23 +262,31 @@ export function estimateCombat(
   let dps = (hit * (1 + weaponElem) * cleave * finisher) / stats.attackInterval;
   if (L.twin_fang) dps *= 1 + L.twin_fang / 100 / 3;
 
-  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) => resolveAbility(registry, slot, builds[slot], stats));
+  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
+    resolveAbility(registry, slot, builds[slot], stats),
+  );
   const pool = manaPool(stats, registry);
   const manaIncome = pool.regen + bal.mana.basicAttackGain / stats.attackInterval;
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
-  const primaryDps = damagePerUse(primary, hit, stats, bal) / useInterval(primary, manaIncome * 0.7, dps / unit);
+  const primaryDps =
+    damagePerUse(primary, hit, stats, bal) / useInterval(primary, manaIncome * 0.7, dps / unit);
   // Abilities share the hero's time and mana; count them at partial efficiency.
   dps += primaryDps * 0.75;
   const chargeRate = dps / unit;
-  dps += (damagePerUse(ultimate, hit, stats, bal) / useInterval(ultimate, manaIncome * 0.3, chargeRate)) * 0.8;
+  dps +=
+    (damagePerUse(ultimate, hit, stats, bal) /
+      useInterval(ultimate, manaIncome * 0.3, chargeRate)) *
+    0.8;
 
   let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
   let bonusLife = 0;
   const guardEvery = useInterval(defensive, manaIncome * 0.3, chargeRate);
-  const guardFor = defensive.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : defensive.duration;
+  const guardFor =
+    defensive.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : defensive.duration;
   const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
   if (defensive.form.id === 'armor') mitigation *= 1 - Math.min(0.75, defensive.effect) * uptime;
-  if (defensive.elements.includes('earth')) mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
+  if (defensive.elements.includes('earth'))
+    mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
   if (defensive.form.id === 'ward') bonusLife += stats.maxHp * defensive.effect * uptime * 2;
   if (defensive.form.id === 'surge') dps *= 1 + defensive.effect * uptime;
   if (defensive.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
@@ -276,7 +296,9 @@ export function estimateCombat(
   const sustain = dps * stats.lifesteal;
   const phoenix = 1 + ((L.phoenix_plume ?? 0) / 100) * 0.5;
   const ehp =
-    (stats.maxHp * phoenix + bonusLife) / Math.max(0.05, mitigation) + sustain * 8 + stats.healOnKill * stats.maxHp * 3;
+    (stats.maxHp * phoenix + bonusLife) / Math.max(0.05, mitigation) +
+    sustain * 8 +
+    stats.healOnKill * stats.maxHp * 3;
 
   return { dps, ehp, power: Math.round(Math.sqrt(Math.max(0, dps) * Math.max(0, ehp)) * 10) };
 }

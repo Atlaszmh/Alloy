@@ -3,7 +3,15 @@ import type { BalanceConfig } from '../types/balance.js';
 import type { CompoundAffixDef } from '../types/combination.js';
 import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
-import type { BiomeDef, DelveBalance, DelveData, DoorDef, GearAffixDef, GearBaseDef, LegendaryDef } from '../types/delve.js';
+import type {
+  BiomeDef,
+  DelveBalance,
+  DelveData,
+  DoorDef,
+  GearAffixDef,
+  GearBaseDef,
+  LegendaryDef,
+} from '../types/delve.js';
 import type { GearSlot, HeroStatKey } from '../types/gear.js';
 import type { ArpgData, FormDef, FusionDef, ReactionDef } from '../types/arpg.js';
 import type { FormId } from '../types/ability.js';
@@ -183,7 +191,9 @@ export class DataRegistry {
   // --- Delve (loot-crawler mode) ---
 
   hasDelve(): boolean {
-    return this.delveData !== null && this.arpgData !== null && this.balanceConfig.delve !== undefined;
+    return (
+      this.delveData !== null && this.arpgData !== null && this.balanceConfig.delve !== undefined
+    );
   }
 
   getArpgData(): ArpgData {
@@ -199,7 +209,9 @@ export class DataRegistry {
 
   /** The fusion for a pair of distinct elements, in either order. */
   getFusion(a: ManaType, b: ManaType): FusionDef | undefined {
-    return this.getArpgData().fusions.find((f) => f.elements.includes(a) && f.elements.includes(b) && a !== b);
+    return this.getArpgData().fusions.find(
+      (f) => f.elements.includes(a) && f.elements.includes(b) && a !== b,
+    );
   }
 
   getReaction(id: string): ReactionDef {

@@ -12,7 +12,9 @@ describe('mana payment', () => {
     const mana = w.hero.mana;
     const cost = w.hero.abilities[0].cost;
     const events = press(w, 0);
-    expect(events.some((e) => e.kind === 'cast' && e.slot === 0 && e.name === 'Fire Bolt')).toBe(true);
+    expect(events.some((e) => e.kind === 'cast' && e.slot === 0 && e.name === 'Fire Bolt')).toBe(
+      true,
+    );
     expect(w.hero.mana).toBeCloseTo(mana - cost, 0);
     expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(false);
     run(w, w.hero.abilities[0].cooldown);
@@ -38,7 +40,10 @@ describe('mana payment', () => {
 
 describe('cast payment', () => {
   it('roots the hero through the wind-up, lands after it and blocks other casts', () => {
-    const w = arena([dummy(11, 36), dummy(13, 30)], { noBasic: true, ultimate: { payment: 'cast' } });
+    const w = arena([dummy(11, 36), dummy(13, 30)], {
+      noBasic: true,
+      ultimate: { payment: 'cast' },
+    });
     const castTime = w.hero.abilities[2].castTime;
     expect(castTime).toBeGreaterThan(0);
     const events = press(w, 2);

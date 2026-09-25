@@ -8,9 +8,19 @@ describe('profile abilities (save v3)', () => {
   it('a new profile starts with default builds on its weapon element', () => {
     const p = createDelveProfile(registry, 1);
     expect(p.version).toBe(3);
-    expect(p.abilities.primary).toEqual({ form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' });
+    expect(p.abilities.primary).toEqual({
+      form: 'bolt',
+      elements: ['fire'],
+      weight: 0,
+      payment: 'mana',
+    });
     expect(p.abilities.defensive.form).toBe('ward');
-    expect(p.abilities.ultimate).toEqual({ form: 'nova', elements: ['fire'], weight: 0, payment: 'charge' });
+    expect(p.abilities.ultimate).toEqual({
+      form: 'nova',
+      elements: ['fire'],
+      weight: 0,
+      payment: 'charge',
+    });
   });
 
   it('setAbility accepts valid builds', () => {
@@ -21,15 +31,22 @@ describe('profile abilities (save v3)', () => {
       payment: 'cast',
     });
     expect(p.abilities.primary.form).toBe('burst');
-    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.abilities.primary.elements).toEqual(['fire', 'nature']);
+    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.abilities.primary.elements).toEqual([
+      'fire',
+      'nature',
+    ]);
   });
 
   it('setAbility rejects a form from another slot, 3 elements, repeats and bad numbers', () => {
     const p = createDelveProfile(registry, 1);
     const ok = { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' } as const;
     expect(() => setAbility(registry, p, 'primary', { ...ok, form: 'nova' })).toThrow();
-    expect(() => setAbility(registry, p, 'primary', { ...ok, elements: ['fire', 'frost', 'storm'] })).toThrow();
-    expect(() => setAbility(registry, p, 'primary', { ...ok, elements: ['fire', 'fire'] })).toThrow();
+    expect(() =>
+      setAbility(registry, p, 'primary', { ...ok, elements: ['fire', 'frost', 'storm'] }),
+    ).toThrow();
+    expect(() =>
+      setAbility(registry, p, 'primary', { ...ok, elements: ['fire', 'fire'] }),
+    ).toThrow();
     expect(() => setAbility(registry, p, 'primary', { ...ok, elements: [] })).toThrow();
     expect(() => setAbility(registry, p, 'primary', { ...ok, weight: 3 as never })).toThrow();
     expect(() => setAbility(registry, p, 'primary', { ...ok, payment: 'gold' as never })).toThrow();
@@ -58,6 +75,9 @@ describe('profile abilities (save v3)', () => {
 
   it('remembers the new reactions', () => {
     const p = { ...createDelveProfile(registry, 1), reactionsSeen: ['combust', 'blight'] };
-    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.reactionsSeen).toEqual(['combust', 'blight']);
+    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.reactionsSeen).toEqual([
+      'combust',
+      'blight',
+    ]);
   });
 });

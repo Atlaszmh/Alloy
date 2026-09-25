@@ -164,7 +164,11 @@ export function createMonsterEntity(
   };
 }
 
-function resolveAll(registry: DataRegistry, builds: AbilityBuilds, stats: HeroStats): ResolvedAbility[] {
+function resolveAll(
+  registry: DataRegistry,
+  builds: AbilityBuilds,
+  stats: HeroStats,
+): ResolvedAbility[] {
   return ABILITY_SLOTS.map((slot) => resolveAbility(registry, slot, builds[slot], stats));
 }
 

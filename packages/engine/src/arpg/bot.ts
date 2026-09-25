@@ -50,7 +50,9 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   // Detour for loot when the coast is clear.
   const threat = nearestMonster(ctx, h.x, h.y, 4);
   if (!threat) {
-    const item = world.drops.find((d) => !d.dead && d.kind === 'item' && dist(h.x, h.y, d.x, d.y) < 6);
+    const item = world.drops.find(
+      (d) => !d.dead && d.kind === 'item' && dist(h.x, h.y, d.x, d.y) < 6,
+    );
     if (item) move = dirTo(h.x, h.y, item.x, item.y);
   }
   input.move = move;

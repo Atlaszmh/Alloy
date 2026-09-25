@@ -18,7 +18,12 @@ import {
 import { compareItem, heroPower } from './hero-stats.js';
 import { DelveProfileSchema, DelveProfileV2Schema } from './profile-schema.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
-import { ABILITY_PAYMENTS, ABILITY_WEIGHTS, type AbilityBuild, type AbilitySlot } from '../types/ability.js';
+import {
+  ABILITY_PAYMENTS,
+  ABILITY_WEIGHTS,
+  type AbilityBuild,
+  type AbilitySlot,
+} from '../types/ability.js';
 
 export interface ProfileActionResult {
   ok: boolean;
@@ -38,7 +43,11 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
     { uid: 'g0', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'sword', mana: 'fire' },
     rng,
   );
-  const chest = generateItem(registry, { uid: 'g1', ilvl: 1, rarity: 'common', slot: 'chest', mana: 'earth' }, rng);
+  const chest = generateItem(
+    registry,
+    { uid: 'g1', ilvl: 1, rarity: 'common', slot: 'chest', mana: 'earth' },
+    rng,
+  );
   const profile: DelveProfile = {
     version: 3,
     seed: seed | 0,
@@ -74,15 +83,24 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
  * Set one ability build. Throws on a form from another slot, anything but
  * one or two distinct elements, or an unknown weight or payment.
  */
-export function setAbility(registry: DataRegistry, profile: DelveProfile, slot: AbilitySlot, build: AbilityBuild): DelveProfile {
+export function setAbility(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  slot: AbilitySlot,
+  build: AbilityBuild,
+): DelveProfile {
   const form = registry.getForm(build.form);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
   const els = build.elements;
-  if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length) throw new Error('Pick one or two different elements');
+  if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
+    throw new Error('Pick one or two different elements');
   if (!els.every((e) => e in registry.getArpgData().mana)) throw new Error('Unknown element');
   if (!ABILITY_WEIGHTS.includes(build.weight)) throw new Error(`Bad weight ${build.weight}`);
   if (!ABILITY_PAYMENTS.includes(build.payment)) throw new Error(`Bad payment ${build.payment}`);
-  return { ...profile, abilities: { ...profile.abilities, [slot]: { ...build, elements: [...els] } } };
+  return {
+    ...profile,
+    abilities: { ...profile.abilities, [slot]: { ...build, elements: [...els] } },
+  };
 }
 
 /** Validate an unknown JSON blob as a save. Returns null when it doesn't fit. */
@@ -109,7 +127,10 @@ export function profilePower(registry: DataRegistry, profile: DelveProfile): num
   return heroPower(profile.equipped, registry, referenceDepth(profile), profile.abilities);
 }
 
-export function findItem(profile: DelveProfile, uid: string): { item: GearItem; where: 'bag' | 'equipped' } | null {
+export function findItem(
+  profile: DelveProfile,
+  uid: string,
+): { item: GearItem; where: 'bag' | 'equipped' } | null {
   const inBag = profile.bag.find((i) => i.uid === uid);
   if (inBag) return { item: inBag, where: 'bag' };
   for (const slot of GEAR_SLOTS) {
@@ -134,7 +155,10 @@ function forgeRng(profile: DelveProfile): SeededRNG {
 }
 
 /** Record newly obtained items in stats and the legendary codex. */
-export function recordFinds(profile: DelveProfile, items: GearItem[]): { profile: DelveProfile; newCodex: string[] } {
+export function recordFinds(
+  profile: DelveProfile,
+  items: GearItem[],
+): { profile: DelveProfile; newCodex: string[] } {
   const itemsFound = { ...profile.stats.itemsFound };
   const codex = { ...profile.codex };
   const newCodex: string[] = [];
@@ -162,7 +186,11 @@ export interface BagInsertResult {
 }
 
 /** Put fresh loot in the bag, honouring auto-salvage and bag capacity. */
-export function addLootToBag(registry: DataRegistry, profile: DelveProfile, items: GearItem[]): BagInsertResult {
+export function addLootToBag(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  items: GearItem[],
+): BagInsertResult {
   const bagSize = registry.getDelveBalance().loot.bagSize;
   const recorded = recordFinds(profile, items);
   const bag = recorded.profile.bag.slice();
@@ -196,7 +224,11 @@ export function addLootToBag(registry: DataRegistry, profile: DelveProfile, item
   };
 }
 
-export function equipItem(_registry: DataRegistry, profile: DelveProfile, uid: string): DelveProfile {
+export function equipItem(
+  _registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+): DelveProfile {
   const item = profile.bag.find((i) => i.uid === uid);
   if (!item) throw new Error(`Item not in bag: ${uid}`);
   const previous = profile.equipped[item.slot];
@@ -205,7 +237,11 @@ export function equipItem(_registry: DataRegistry, profile: DelveProfile, uid: s
   return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
 }
 
-export function unequipSlot(registry: DataRegistry, profile: DelveProfile, slot: GearSlot): DelveProfile {
+export function unequipSlot(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  slot: GearSlot,
+): DelveProfile {
   const item = profile.equipped[slot];
   if (!item) return profile;
   if (profile.bag.length >= registry.getDelveBalance().loot.bagSize) throw new Error('Bag is full');
@@ -253,7 +289,11 @@ export function salvageItems(
 }
 
 /** Bag items that are safe to melt: unlocked, not an upgrade, at or below `maxRarity`. */
-export function salvageCandidates(registry: DataRegistry, profile: DelveProfile, maxRarity: Rarity): string[] {
+export function salvageCandidates(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  maxRarity: Rarity,
+): string[] {
   const depth = referenceDepth(profile);
   const cap = rarityIndex(maxRarity);
   return profile.bag
@@ -268,7 +308,10 @@ export function salvageCandidates(registry: DataRegistry, profile: DelveProfile,
 }
 
 /** Greedily equip any bag item that raises Power. */
-export function equipBest(registry: DataRegistry, profile: DelveProfile): { profile: DelveProfile; equipped: GearItem[] } {
+export function equipBest(
+  registry: DataRegistry,
+  profile: DelveProfile,
+): { profile: DelveProfile; equipped: GearItem[] } {
   const depth = referenceDepth(profile);
   let current = profile;
   const changed = new Map<GearSlot, GearItem>();
@@ -293,14 +336,22 @@ export function equipBest(registry: DataRegistry, profile: DelveProfile): { prof
   return { profile: current, equipped: [...changed.values()] };
 }
 
-export function upgradeGear(registry: DataRegistry, profile: DelveProfile, uid: string): ProfileActionResult {
+export function upgradeGear(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+): ProfileActionResult {
   const found = findItem(profile, uid);
   if (!found) return { ok: false, profile, reason: 'Item not found' };
   const cost = upgradeCost(registry, found.item);
   if (cost === null) return { ok: false, profile, reason: 'Already at max upgrade' };
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
   const item = applyUpgrade(registry, found.item);
-  return { ok: true, item, profile: { ...replaceItem(profile, item), scrap: profile.scrap - cost } };
+  return {
+    ok: true,
+    item,
+    profile: { ...replaceItem(profile, item), scrap: profile.scrap - cost },
+  };
 }
 
 export function reforgeGear(
@@ -311,18 +362,27 @@ export function reforgeGear(
 ): ProfileActionResult {
   const found = findItem(profile, uid);
   if (!found) return { ok: false, profile, reason: 'Item not found' };
-  if (affixIndex < 0 || affixIndex >= found.item.affixes.length) return { ok: false, profile, reason: 'No such affix' };
+  if (affixIndex < 0 || affixIndex >= found.item.affixes.length)
+    return { ok: false, profile, reason: 'No such affix' };
   const cost = reforgeCost(registry, found.item);
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
   const item = reforgeAffix(registry, found.item, affixIndex, forgeRng(profile));
   return {
     ok: true,
     item,
-    profile: { ...replaceItem(profile, item), scrap: profile.scrap - cost, forgeCount: profile.forgeCount + 1 },
+    profile: {
+      ...replaceItem(profile, item),
+      scrap: profile.scrap - cost,
+      forgeCount: profile.forgeCount + 1,
+    },
   };
 }
 
-export function fuseGear(registry: DataRegistry, profile: DelveProfile, uids: string[]): ProfileActionResult {
+export function fuseGear(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uids: string[],
+): ProfileActionResult {
   const items = uids.map((uid) => profile.bag.find((i) => i.uid === uid));
   if (items.some((i) => !i)) return { ok: false, profile, reason: 'Fuse items from your bag' };
   const inputs = items as GearItem[];

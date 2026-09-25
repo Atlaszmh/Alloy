@@ -36,7 +36,8 @@ export function bestCluster(ctx: SimCtx, range: number, radius: number): Monster
   let bestScore = -1;
   for (const c of candidates) {
     let score = 0;
-    for (const o of candidates) if (dist(c.x, c.y, o.x, o.y) <= radius + o.radius) score += o.kind === 'normal' ? 1 : 2;
+    for (const o of candidates)
+      if (dist(c.x, c.y, o.x, o.y) <= radius + o.radius) score += o.kind === 'normal' ? 1 : 2;
     score -= dist(h.x, h.y, c.x, c.y) * 0.01;
     if (score > bestScore) {
       best = c;
@@ -46,7 +47,10 @@ export function bestCluster(ctx: SimCtx, range: number, radius: number): Monster
   return best;
 }
 
-export function spawnProjectile(ctx: SimCtx, p: Omit<Projectile, 'id' | 'hitIds' | 'traveled' | 'dead'>): Projectile {
+export function spawnProjectile(
+  ctx: SimCtx,
+  p: Omit<Projectile, 'id' | 'hitIds' | 'traveled' | 'dead'>,
+): Projectile {
   const proj: Projectile = { ...p, id: ctx.world.nextId++, hitIds: [], traveled: 0, dead: false };
   ctx.world.projectiles.push(proj);
   return proj;

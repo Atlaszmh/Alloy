@@ -6,7 +6,6 @@ import {
   isDiveActive,
   profilePower,
   startDepthOptions,
-  unlockedSkills,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -17,13 +16,13 @@ import { PaperDoll } from '@/features/delve/PaperDoll';
 import { BagPanel } from '@/features/delve/BagPanel';
 import { ForgePanel } from '@/features/delve/ForgePanel';
 import { CodexPanel } from '@/features/delve/CodexPanel';
-import { SpellbookPanel } from '@/features/delve/SpellbookPanel';
+import { AbilitiesPanel } from '@/features/delve/AbilitiesPanel';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { useCountUp } from '@/features/delve/useCountUp';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber, manaStyle } from '@/features/delve/format';
 import '@/features/delve/delve.css';
 
-type Tab = 'bag' | 'spells' | 'forge' | 'codex';
+type Tab = 'bag' | 'abilities' | 'forge' | 'codex';
 
 export function DelveCamp() {
   const navigate = useNavigate();
@@ -51,7 +50,6 @@ export function DelveCamp() {
     () => computeAttunement(profile.equipped, registry),
     [profile.equipped, registry],
   );
-  const spellCount = unlockedSkills(attunement, registry).length;
 
   const onDelve = () => {
     playSound('phaseTransition');
@@ -109,12 +107,13 @@ export function DelveCamp() {
                 How to delve
               </div>
               <p>
-                🕹️ Drag (or WASD) to move. Your hero attacks whatever is in reach; tap the spell
-                buttons to cast.
+                🕹️ Drag (or WASD) to move. Your hero attacks whatever is in reach and builds mana;
+                tap an ability to use it, or drag it (hold Q/E/R) to aim.
               </p>
               <p>
-                🔥 Every item carries a <b className="text-violet-300">mana</b>. Equip gear to
-                attune and unlock spells; attune two elements to unlock combo spells.
+                🔥 Build your Primary, Defensive and Ultimate in the{' '}
+                <b className="text-violet-300">Abilities</b> tab: a form, one or two elements, a
+                weight and a payment. Gear attunes you to its element and powers those abilities.
               </p>
               <p>
                 💎 Loot bursts from monsters: walk over it. A green{' '}
@@ -132,7 +131,7 @@ export function DelveCamp() {
           <button
             type="button"
             className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs"
-            onClick={() => setTab('spells')}
+            onClick={() => setTab('abilities')}
             data-testid="mana-strip"
           >
             {MANA_TYPES.filter((m) => attunement[m] > 0).map((m) => {
@@ -143,9 +142,7 @@ export function DelveCamp() {
                 </span>
               );
             })}
-            <span className="text-stone-400">
-              · {spellCount} spell{spellCount === 1 ? '' : 's'} ›
-            </span>
+            <span className="text-stone-400">· Abilities ›</span>
           </button>
 
           {/* Delve CTA */}
@@ -185,7 +182,7 @@ export function DelveCamp() {
             {(
               [
                 ['bag', `Bag${newCount > 0 ? ` •${newCount}` : ''}`],
-                ['spells', 'Spells'],
+                ['abilities', 'Abilities'],
                 ['forge', 'Forge'],
                 ['codex', 'Codex'],
               ] as [Tab, string][]
@@ -212,7 +209,7 @@ export function DelveCamp() {
           </div>
 
           {tab === 'bag' && <BagPanel onSelect={openItem} />}
-          {tab === 'spells' && <SpellbookPanel />}
+          {tab === 'abilities' && <AbilitiesPanel />}
           {tab === 'forge' && <ForgePanel onSelect={openItem} />}
           {tab === 'codex' && <CodexPanel />}
 

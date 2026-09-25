@@ -7,6 +7,7 @@ export const MANA_HEX: Record<ManaType, number> = {
   storm: 0xf5e049,
   earth: 0xd4a35a,
   shadow: 0xb07cff,
+  nature: 0x6fcf57,
 };
 
 export const RARITY_HEX: Record<Rarity, number> = {
@@ -24,6 +25,8 @@ export const REACTION_HEX: Record<ReactionId, number> = {
   overload: 0xffe14d,
   superconduct: 0x7fd6ff,
   soulfire: 0xd08bff,
+  combust: 0x9cf07a,
+  blight: 0x8fb34a,
 };
 
 export const NEUTRAL_HEX = 0xe7e5e4;

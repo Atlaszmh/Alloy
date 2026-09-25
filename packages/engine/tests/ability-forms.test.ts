@@ -30,14 +30,20 @@ describe('primary forms', () => {
   });
 
   it('Volley darts home in on different foes', () => {
-    const w = arena([dummy(9, 30), dummy(13, 29), dummy(17, 30)], { noBasic: true, primary: { form: 'volley' } });
+    const w = arena([dummy(9, 30), dummy(13, 29), dummy(17, 30)], {
+      noBasic: true,
+      primary: { form: 'volley' },
+    });
     press(w, 0);
     run(w, 1.5);
     expect(w.monsters.every(damaged)).toBe(true);
   });
 
   it('Lance hits every foe on its line at once', () => {
-    const w = arena([dummy(13, 33), dummy(13, 31), dummy(13, 29.5), dummy(18, 31)], { noBasic: true, primary: { form: 'lance' } });
+    const w = arena([dummy(13, 33), dummy(13, 31), dummy(13, 29.5), dummy(18, 31)], {
+      noBasic: true,
+      primary: { form: 'lance' },
+    });
     const events = press(w, 0);
     expect(w.monsters.slice(0, 3).every(damaged)).toBe(true);
     expect(damaged(w.monsters[3])).toBe(false);
@@ -45,14 +51,20 @@ describe('primary forms', () => {
   });
 
   it('Burst lands where it is aimed', () => {
-    const w = arena([dummy(13, 29), dummy(13, 34.6)], { noBasic: true, primary: { form: 'burst' } });
+    const w = arena([dummy(13, 29), dummy(13, 34.6)], {
+      noBasic: true,
+      primary: { form: 'burst' },
+    });
     press(w, 0, { x: 13, y: 29 });
     expect(damaged(w.monsters[0])).toBe(true);
     expect(damaged(w.monsters[1])).toBe(false);
   });
 
   it("Strike's fourth press slams everything around the hero", () => {
-    const w = arena([dummy(13, 34.4), dummy(13, 37.8)], { noBasic: true, primary: { form: 'strike' } });
+    const w = arena([dummy(13, 34.4), dummy(13, 37.8)], {
+      noBasic: true,
+      primary: { form: 'strike' },
+    });
     const behind = w.monsters[1];
     for (let i = 0; i < 3; i++) {
       press(w, 0);
@@ -84,7 +96,8 @@ describe('defensive forms', () => {
     const plain = arena([dummy(14, 36)], { noBasic: true, defensive: { form: 'armor' } });
     const armored = arena([dummy(14, 36)], { noBasic: true, defensive: { form: 'armor' } });
     press(armored, 1);
-    for (const w of [plain, armored]) hurtHero(makeCtx(registry, w, []), 50, null, w.monsters[0], { melee: true });
+    for (const w of [plain, armored])
+      hurtHero(makeCtx(registry, w, []), 50, null, w.monsters[0], { melee: true });
     const lost = (w: typeof plain) => w.hero.stats.maxHp - w.hero.hp;
     expect(lost(armored)).toBeLessThan(lost(plain) * 0.7);
     expect(damaged(armored.monsters[0])).toBe(true);
@@ -93,7 +106,10 @@ describe('defensive forms', () => {
 
   it('Surge speeds up basic attacks', () => {
     const count = (surge: boolean) => {
-      const w = arena([dummy(13, 32)], { defensive: { form: 'surge' }, equipped: { weapon: gear('fire', 'weapon', 'staff') } });
+      const w = arena([dummy(13, 32)], {
+        defensive: { form: 'surge' },
+        equipped: { weapon: gear('fire', 'weapon', 'staff') },
+      });
       const events = [...(surge ? press(w, 1) : []), ...run(w, 4)];
       return events.filter((e) => e.kind === 'basic').length;
     };
@@ -111,7 +127,10 @@ describe('defensive forms', () => {
 
 describe('ultimate forms', () => {
   it('Nova blasts everything around the hero', () => {
-    const w = arena([dummy(10, 36), dummy(16, 34), dummy(13, 26)], { noBasic: true, ultimate: { payment: 'mana' } });
+    const w = arena([dummy(10, 36), dummy(16, 34), dummy(13, 26)], {
+      noBasic: true,
+      ultimate: { payment: 'mana' },
+    });
     press(w, 2);
     expect(damaged(w.monsters[0])).toBe(true);
     expect(damaged(w.monsters[1])).toBe(true);
@@ -119,7 +138,10 @@ describe('ultimate forms', () => {
   });
 
   it('Barrage rains its impacts over the target area', () => {
-    const w = arena([dummy(13, 28)], { noBasic: true, ultimate: { form: 'barrage', payment: 'mana' } });
+    const w = arena([dummy(13, 28)], {
+      noBasic: true,
+      ultimate: { form: 'barrage', payment: 'mana' },
+    });
     press(w, 2);
     const events = run(w, 2);
     const count = registry.getForm('barrage').count!;
@@ -128,16 +150,24 @@ describe('ultimate forms', () => {
   });
 
   it('Maelstrom leaves a zone that keeps hitting', () => {
-    const w = arena([dummy(13, 28)], { noBasic: true, ultimate: { form: 'maelstrom', payment: 'mana' } });
+    const w = arena([dummy(13, 28)], {
+      noBasic: true,
+      ultimate: { form: 'maelstrom', payment: 'mana' },
+    });
     press(w, 2);
     const events = run(w, 2);
-    expect(events.filter((e) => e.kind === 'hit' && e.id === w.monsters[0].id).length).toBeGreaterThanOrEqual(3);
+    expect(
+      events.filter((e) => e.kind === 'hit' && e.id === w.monsters[0].id).length,
+    ).toBeGreaterThanOrEqual(3);
   });
 });
 
 describe('knobs', () => {
   it('chain: Storm hits jump to another foe', () => {
-    const w = arena([dummy(13, 30), dummy(16, 30)], { noBasic: true, primary: { elements: ['storm'] } });
+    const w = arena([dummy(13, 30), dummy(16, 30)], {
+      noBasic: true,
+      primary: { elements: ['storm'] },
+    });
     press(w, 0);
     const events = run(w, 1);
     expect(events.some((e) => e.kind === 'chain')).toBe(true);
@@ -145,13 +175,19 @@ describe('knobs', () => {
   });
 
   it('pull: Magnetism drags foes toward the impact', () => {
-    const w = arena([dummy(13, 28), dummy(16, 28)], { noBasic: true, primary: { form: 'burst', elements: ['storm', 'earth'] } });
+    const w = arena([dummy(13, 28), dummy(16, 28)], {
+      noBasic: true,
+      primary: { form: 'burst', elements: ['storm', 'earth'] },
+    });
     press(w, 0, { x: 13, y: 28 });
     expect(w.monsters[1].x).toBeLessThan(16);
   });
 
   it('execute: Soulfrost shatters frozen foes at low life', () => {
-    const w = arena([dummy(13, 29, { hp: 1000, maxHp: 1e6 })], { noBasic: true, primary: { form: 'burst', elements: ['frost', 'shadow'] } });
+    const w = arena([dummy(13, 29, { hp: 1000, maxHp: 1e6 })], {
+      noBasic: true,
+      primary: { form: 'burst', elements: ['frost', 'shadow'] },
+    });
     freeze(makeCtx(registry, w, []), w.monsters[0], 5);
     press(w, 0, { x: 13, y: 29 });
     expect(w.monsters).toHaveLength(0);
@@ -170,9 +206,14 @@ describe('knobs', () => {
   });
 
   it('scatter: Wildfire lands off the aim point', () => {
-    const w = arena([dummy(13, 28)], { noBasic: true, primary: { form: 'burst', elements: ['fire', 'nature'] } });
+    const w = arena([dummy(13, 28)], {
+      noBasic: true,
+      primary: { form: 'burst', elements: ['fire', 'nature'] },
+    });
     const events = press(w, 0, { x: 13, y: 28 });
     const blast = events.find((e) => e.kind === 'explode')!;
-    expect(blast.kind === 'explode' && Math.hypot(blast.x - 13, blast.y - 28)).toBeGreaterThan(0.01);
+    expect(blast.kind === 'explode' && Math.hypot(blast.x - 13, blast.y - 28)).toBeGreaterThan(
+      0.01,
+    );
   });
 });

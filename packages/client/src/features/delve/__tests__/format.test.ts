@@ -42,7 +42,7 @@ describe('delve format helpers', () => {
   it('describes every mana type with a name, icon and color', () => {
     expect(manaStyle(registry, 'fire')).toMatchObject({ name: 'Fire', icon: '🔥' });
     const all = manaStyles(registry);
-    expect(Object.keys(all)).toEqual(['fire', 'frost', 'storm', 'earth', 'shadow']);
+    expect(Object.keys(all)).toEqual(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
     for (const style of Object.values(all)) expect(style.color).toMatch(/^#[0-9a-f]{6}$/i);
   });
 });

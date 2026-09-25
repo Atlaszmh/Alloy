@@ -1,5 +1,11 @@
 import type { DataRegistry } from '../../data/registry.js';
-import type { AbilityBuild, AbilityBuilds, AbilitySlot, Knobs, ResolvedAbility } from '../../types/ability.js';
+import type {
+  AbilityBuild,
+  AbilityBuilds,
+  AbilitySlot,
+  Knobs,
+  ResolvedAbility,
+} from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import type { HeroStats } from '../../types/delve.js';
 
@@ -51,12 +57,15 @@ export function resolveAbility(
   const form = registry.getForm(build.form);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
   const [element, second] = build.elements;
-  const fusion = second && second !== element ? (registry.getFusion(element, second) ?? null) : null;
+  const fusion =
+    second && second !== element ? (registry.getFusion(element, second) ?? null) : null;
   const L = stats.legendaries;
 
   const legendary: Partial<Knobs>[] = [];
-  if (L.stormcaller && build.elements.includes('storm')) legendary.push({ chain: Math.round(L.stormcaller) });
-  if (L.bedrock && build.elements.includes('earth')) legendary.push({ area: 1.4, applies: ['stagger'] });
+  if (L.stormcaller && build.elements.includes('storm'))
+    legendary.push({ chain: Math.round(L.stormcaller) });
+  if (L.bedrock && build.elements.includes('earth'))
+    legendary.push({ area: 1.4, applies: ['stagger'] });
   if (L.rimeheart && build.form === 'nova' && build.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
@@ -71,7 +80,8 @@ export function resolveAbility(
   const s = ab.slots[slot];
   const cast = build.payment === 'cast';
   const payPower = cast ? ab.castPowerMult : 1;
-  const avgAttune = build.elements.reduce((sum, e) => sum + stats.attunement[e], 0) / build.elements.length;
+  const avgAttune =
+    build.elements.reduce((sum, e) => sum + stats.attunement[e], 0) / build.elements.length;
   // Gear `<Element> Damage` applies per hit by damage element (hitMonster), not here.
   const attunePower = 1 + bal.mana.powerPerAttune * avgAttune;
   const manaCost = s.cost * (1 + W.cost * w) * (1 - (L.manaweaver ?? 0) / 100);
@@ -90,7 +100,9 @@ export function resolveAbility(
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
     cost: build.payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
     cooldown:
-      build.payment === 'charge' ? ab.chargeLockout : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
+      build.payment === 'charge'
+        ? ab.chargeLockout
+        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
     castTime: cast ? s.castTime * (1 + W.castTime * w) : 0,
     chargeNeed: build.payment === 'charge' ? s.cost * (1 + W.cost * w) * ab.chargeRatio : 0,
     range: form.range ?? 0,

@@ -66,16 +66,24 @@ describe('delveStore', () => {
     expect(res.reason).toMatch(/scrap/i);
   });
 
-  it('rearranges the spell bar and persists it', () => {
-    const s = useDelveStore.getState();
-    expect(s.profile.skillSlots).toEqual(['fireball', 'boulder', null]);
-    s.setSkillSlot(2, 'fireball');
-    expect(useDelveStore.getState().profile.skillSlots).toEqual([null, 'boulder', 'fireball']);
-    expect(loadDelveProfile()?.skillSlots).toEqual([null, 'boulder', 'fireball']);
+  it('sets an ability build and persists it', () => {
+    const build = {
+      form: 'burst',
+      elements: ['fire', 'nature'],
+      weight: 1,
+      payment: 'cast',
+    } as const;
+    useDelveStore.getState().setAbility('primary', { ...build, elements: [...build.elements] });
+    expect(useDelveStore.getState().profile.abilities.primary.elements).toEqual(['fire', 'nature']);
+    expect(loadDelveProfile()?.abilities.primary.form).toBe('burst');
   });
 
-  it('refuses to slot a locked spell', () => {
-    expect(() => useDelveStore.getState().setSkillSlot(0, 'blizzard')).toThrow(/locked/);
-    expect(useDelveStore.getState().profile.skillSlots[0]).toBe('fireball');
+  it('refuses a form from another slot', () => {
+    expect(() =>
+      useDelveStore
+        .getState()
+        .setAbility('primary', { form: 'nova', elements: ['fire'], weight: 0, payment: 'mana' }),
+    ).toThrow(/primary/);
+    expect(useDelveStore.getState().profile.abilities.primary.form).toBe('bolt');
   });
 });

@@ -47,9 +47,24 @@ describe('resolveAbility', () => {
   });
 
   it('cast payment halves the cost, adds power and a wind-up', () => {
-    const base = resolveAbility(registry, 'ultimate', build({ form: 'nova', payment: 'mana' }), bare);
-    const cast = resolveAbility(registry, 'ultimate', build({ form: 'nova', payment: 'cast', weight: 1 }), bare);
-    const heavyMana = resolveAbility(registry, 'ultimate', build({ form: 'nova', payment: 'mana', weight: 1 }), bare);
+    const base = resolveAbility(
+      registry,
+      'ultimate',
+      build({ form: 'nova', payment: 'mana' }),
+      bare,
+    );
+    const cast = resolveAbility(
+      registry,
+      'ultimate',
+      build({ form: 'nova', payment: 'cast', weight: 1 }),
+      bare,
+    );
+    const heavyMana = resolveAbility(
+      registry,
+      'ultimate',
+      build({ form: 'nova', payment: 'mana', weight: 1 }),
+      bare,
+    );
     expect(cast.cost).toBeCloseTo(heavyMana.cost * ab.castManaMult);
     expect(cast.power).toBeCloseTo(heavyMana.power * ab.castPowerMult);
     expect(cast.castTime).toBeCloseTo(ab.slots.ultimate.castTime * (1 + ab.weight.castTime));
@@ -57,14 +72,24 @@ describe('resolveAbility', () => {
   });
 
   it('charge payment costs no mana and needs a charge meter instead of a cooldown', () => {
-    const r = resolveAbility(registry, 'ultimate', build({ form: 'nova', payment: 'charge' }), bare);
+    const r = resolveAbility(
+      registry,
+      'ultimate',
+      build({ form: 'nova', payment: 'charge' }),
+      bare,
+    );
     expect(r.cost).toBe(0);
     expect(r.chargeNeed).toBeCloseTo(ab.slots.ultimate.cost * ab.chargeRatio);
     expect(r.cooldown).toBeCloseTo(ab.chargeLockout);
   });
 
   it('Fire + Nature is Wildfire: bigger, harsher, scattered, leaves burning ground', () => {
-    const r = resolveAbility(registry, 'primary', build({ form: 'burst', elements: ['fire', 'nature'] }), bare);
+    const r = resolveAbility(
+      registry,
+      'primary',
+      build({ form: 'burst', elements: ['fire', 'nature'] }),
+      bare,
+    );
     const burst = registry.getForm('burst');
     expect(r.name).toBe('Wildfire Burst');
     expect(r.fusion?.id).toBe('wildfire');
@@ -87,29 +112,64 @@ describe('resolveAbility', () => {
     const per = registry.getDelveBalance().mana.powerPerAttune;
     const stats = withStats({ attunement: { ...bare.attunement, fire: 4 } });
     const fire = resolveAbility(registry, 'primary', build(), stats);
-    const fusion = resolveAbility(registry, 'primary', build({ elements: ['fire', 'storm'] }), stats);
+    const fusion = resolveAbility(
+      registry,
+      'primary',
+      build({ elements: ['fire', 'storm'] }),
+      stats,
+    );
     const bolt = registry.getForm('bolt').power;
     expect(fire.power).toBeCloseTo(bolt * (1 + per * 4));
     expect(fusion.power).toBeCloseTo(bolt * (1 + per * 2));
   });
 
   it('Manaweaver cuts mana costs, and cooldown reduction cuts cooldowns', () => {
-    const r = resolveAbility(registry, 'primary', build(), withStats({ legendaries: { manaweaver: 30 }, cooldownMult: 0.8 }));
+    const r = resolveAbility(
+      registry,
+      'primary',
+      build(),
+      withStats({ legendaries: { manaweaver: 30 }, cooldownMult: 0.8 }),
+    );
     expect(r.cost).toBeCloseTo(ab.slots.primary.cost * 0.7);
     expect(r.cooldown).toBeCloseTo(ab.slots.primary.cooldown * 0.8);
   });
 
   it('Stormcaller adds chains to Storm abilities; Bedrock grows and staggers Earth ones', () => {
-    const storm = resolveAbility(registry, 'primary', build({ elements: ['storm'] }), withStats({ legendaries: { stormcaller: 3 } }));
+    const storm = resolveAbility(
+      registry,
+      'primary',
+      build({ elements: ['storm'] }),
+      withStats({ legendaries: { stormcaller: 3 } }),
+    );
     expect(storm.knobs.chain).toBe(4);
-    const earth = resolveAbility(registry, 'primary', build({ form: 'burst', elements: ['frost', 'earth'] }), withStats({ legendaries: { bedrock: 30 } }));
-    const plain = resolveAbility(registry, 'primary', build({ form: 'burst', elements: ['frost', 'earth'] }), bare);
+    const earth = resolveAbility(
+      registry,
+      'primary',
+      build({ form: 'burst', elements: ['frost', 'earth'] }),
+      withStats({ legendaries: { bedrock: 30 } }),
+    );
+    const plain = resolveAbility(
+      registry,
+      'primary',
+      build({ form: 'burst', elements: ['frost', 'earth'] }),
+      bare,
+    );
     expect(earth.radius / plain.radius).toBeCloseTo(1.4);
   });
 
   it('defensive forms scale their effect with weight', () => {
-    const ward = resolveAbility(registry, 'defensive', build({ form: 'ward', elements: ['frost'] }), bare);
-    const heavy = resolveAbility(registry, 'defensive', build({ form: 'ward', elements: ['frost'], weight: 2 }), bare);
+    const ward = resolveAbility(
+      registry,
+      'defensive',
+      build({ form: 'ward', elements: ['frost'] }),
+      bare,
+    );
+    const heavy = resolveAbility(
+      registry,
+      'defensive',
+      build({ form: 'ward', elements: ['frost'], weight: 2 }),
+      bare,
+    );
     expect(ward.effect).toBeCloseTo(registry.getForm('ward').effect!);
     expect(heavy.effect / ward.effect).toBeCloseTo(1 + 2 * ab.weight.power);
   });
@@ -122,8 +182,23 @@ describe('resolveAbility', () => {
 describe('mergeKnobs', () => {
   it('multiplies, adds, ORs, unions and keeps the longer zone', () => {
     const k = mergeKnobs(
-      { power: 1.2, area: 1.5, chain: 1, lifesteal: 0.05, applies: ['burn'], zone: { seconds: 2, tickPower: 0.3 } },
-      { power: 0.5, area: 2, chain: 2, lifesteal: 0.05, pierce: true, applies: ['burn', 'poison'], zone: { seconds: 3, tickPower: 0.1 } },
+      {
+        power: 1.2,
+        area: 1.5,
+        chain: 1,
+        lifesteal: 0.05,
+        applies: ['burn'],
+        zone: { seconds: 2, tickPower: 0.3 },
+      },
+      {
+        power: 0.5,
+        area: 2,
+        chain: 2,
+        lifesteal: 0.05,
+        pierce: true,
+        applies: ['burn', 'poison'],
+        zone: { seconds: 3, tickPower: 0.1 },
+      },
     );
     expect(k.power).toBeCloseTo(0.6);
     expect(k.area).toBeCloseTo(3);
@@ -137,8 +212,18 @@ describe('mergeKnobs', () => {
 
   it('defaults to neutral knobs', () => {
     expect(mergeKnobs()).toEqual({
-      power: 1, area: 1, applies: [], chain: 0, pierce: false, knockback: 0, lifesteal: 0,
-      zone: null, pull: false, execute: 0, scatter: 0, spread: false,
+      power: 1,
+      area: 1,
+      applies: [],
+      chain: 0,
+      pierce: false,
+      knockback: 0,
+      lifesteal: 0,
+      zone: null,
+      pull: false,
+      execute: 0,
+      scatter: 0,
+      spread: false,
     });
   });
 });

@@ -49,7 +49,8 @@ function items(n: number, rarity: GearItem['rarity'] = 'magic', start = 500): Ge
 function clearFloor(world: ArpgWorld): void {
   const ctx = makeCtx(registry, world, []);
   for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
-  for (let i = 0; i < 150 && world.drops.length > 0; i++) stepWorld(registry, world, { move: { x: 0, y: 0 } }, 1 / 30);
+  for (let i = 0; i < 150 && world.drops.length > 0; i++)
+    stepWorld(registry, world, { move: { x: 0, y: 0 } }, 1 / 30);
 }
 
 function clearDepth(p: DelveProfile): DelveProfile {
@@ -83,7 +84,12 @@ describe('dive lifecycle', () => {
     let p = createDelveProfile(registry, 7);
     expect(startDepthOptions(registry, p)).toEqual([1]);
     p = startDive(registry, p, 1);
-    expect(p.dive).toMatchObject({ depth: 1, potions: bal.dive.potions, phase: 'fighting', heroHpFrac: 1 });
+    expect(p.dive).toMatchObject({
+      depth: 1,
+      potions: bal.dive.potions,
+      phase: 'fighting',
+      heroHpFrac: 1,
+    });
     expect(p.stats.dives).toBe(1);
 
     const withCheckpoint = { ...createDelveProfile(registry, 7), checkpoints: [5, 10] };
@@ -96,7 +102,9 @@ describe('dive lifecycle', () => {
     const p = startDive(registry, createDelveProfile(registry, 99), 1);
     const a = beginFloor(registry, p);
     const b = beginFloor(registry, p);
-    expect(a.monsters.map((m) => [m.defId, m.x, m.y])).toEqual(b.monsters.map((m) => [m.defId, m.x, m.y]));
+    expect(a.monsters.map((m) => [m.defId, m.x, m.y])).toEqual(
+      b.monsters.map((m) => [m.defId, m.x, m.y]),
+    );
     expect(isBossDepth(registry, 5)).toBe(true);
   });
 
@@ -130,7 +138,10 @@ describe('dive lifecycle', () => {
 
   it('doors move you deeper and apply their modifiers', () => {
     const choosing = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
-    const offer = (ids: string[]) => ({ ...choosing, dive: { ...choosing.dive!, doorChoices: ids, heroHpFrac: 0.3 } });
+    const offer = (ids: string[]) => ({
+      ...choosing,
+      dive: { ...choosing.dive!, doorChoices: ids, heroHpFrac: 0.3 },
+    });
 
     let p = chooseDoor(registry, offer(['winding', 'shrine', 'plunge']), 'shrine');
     expect(p.dive).toMatchObject({ depth: 2, phase: 'fighting', heroHpFrac: 1 });
@@ -142,7 +153,9 @@ describe('dive lifecycle', () => {
 
     const swarm = chooseDoor(registry, offer(['plunge', 'swarm', 'winding']), 'swarm');
     const normal = chooseDoor(registry, offer(['plunge', 'swarm', 'winding']), 'winding');
-    expect(beginFloor(registry, swarm).monsters.length).toBeGreaterThan(beginFloor(registry, normal).monsters.length);
+    expect(beginFloor(registry, swarm).monsters.length).toBeGreaterThan(
+      beginFloor(registry, normal).monsters.length,
+    );
 
     expect(() => chooseDoor(registry, offer(['winding']), 'shrine')).toThrow();
   });
@@ -198,7 +211,10 @@ describe('dive lifecycle', () => {
     expect(res.salvaged).toHaveLength(3);
     expect(res.profile.bag).toHaveLength(0);
 
-    const full = { ...startDive(registry, createDelveProfile(registry, 12), 1), bag: items(bal.loot.bagSize, 'common', 900) };
+    const full = {
+      ...startDive(registry, createDelveProfile(registry, 12), 1),
+      bag: items(bal.loot.bagSize, 'common', 900),
+    };
     const w2 = beginFloor(registry, full);
     w2.pending.items = items(2, 'rare');
     const res2 = bankWorld(registry, full, w2);
@@ -241,7 +257,11 @@ describe('gear management', () => {
   it('attunement from new gear grows the mana pool of the next floor', () => {
     let p = createDelveProfile(registry, 4);
     const before = beginFloor(registry, startDive(registry, p, 1)).hero.manaMax;
-    const ring = generateItem(registry, { uid: 'fr', ilvl: 1, rarity: 'common', slot: 'ring', mana: 'frost' }, new SeededRNG(1));
+    const ring = generateItem(
+      registry,
+      { uid: 'fr', ilvl: 1, rarity: 'common', slot: 'ring', mana: 'frost' },
+      new SeededRNG(1),
+    );
     p = equipItem(registry, { ...p, bag: [ring] }, 'fr');
     expect(beginFloor(registry, startDive(registry, p, 1)).hero.manaMax).toBeGreaterThan(before);
   });
@@ -252,7 +272,11 @@ describe('gear management', () => {
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
     p = startDive(registry, p, 1);
-    expect(beginFloor(registry, p).hero.abilities.map((a) => a.name)).toEqual(['Fire Bolt', 'Frost Ward', 'Fire Nova']);
+    expect(beginFloor(registry, p).hero.abilities.map((a) => a.name)).toEqual([
+      'Fire Bolt',
+      'Frost Ward',
+      'Fire Nova',
+    ]);
   });
 
   it('equipBest picks upgrades', () => {

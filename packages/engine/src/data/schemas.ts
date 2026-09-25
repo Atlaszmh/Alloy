@@ -24,7 +24,10 @@ const AffixDefSchema = z.object({
   armorFlavorText: z.string(),
   category: z.enum(['offensive', 'defensive', 'sustain', 'utility', 'trigger']),
   tags: z.array(z.string()),
-  tiers: z.record(z.coerce.number().pipe(z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])), AffixTierDataSchema),
+  tiers: z.record(
+    z.coerce.number().pipe(z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])),
+    AffixTierDataSchema,
+  ),
 });
 
 export const AffixesSchema = z.array(AffixDefSchema);
@@ -166,7 +169,14 @@ const CompoundEffectBlueprintSchema = z.object({
   effect: CompoundEffectShapeSchema,
 });
 
-const ElementSchemaForCondition = z.enum(['fire', 'cold', 'lightning', 'poison', 'shadow', 'chaos']);
+const ElementSchemaForCondition = z.enum([
+  'fire',
+  'cold',
+  'lightning',
+  'poison',
+  'shadow',
+  'chaos',
+]);
 
 const PassiveModifierConditionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('always') }),
@@ -183,41 +193,45 @@ const PassiveDamageModifierBlueprintSchema = z.object({
   condition: PassiveModifierConditionSchema,
 });
 
-const RecipeDefinitionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: z.enum(['signature', 'signature3', 'category']),
-  components: z.union([
-    z.tuple([RecipeComponentSchema, RecipeComponentSchema]),
-    z.tuple([RecipeComponentSchema, RecipeComponentSchema, RecipeComponentSchema]),
-  ]).optional(),
-  categoryRule: CategoryRuleSchema.optional(),
-  outputAffixId: z.string(),
-  outputBonusEffects: z.array(StatModifierSchema),
-  compoundEffects: z.array(CompoundEffectBlueprintSchema).optional(),
-  passiveDamageModifiers: z.array(PassiveDamageModifierBlueprintSchema).optional(),
-  maxDepthContribution: z.number().int().nonnegative(),
-  tags: z.array(z.string()),
-}).superRefine((recipe, ctx) => {
-  if (recipe.type === 'signature') {
-    if (!recipe.components || recipe.components.length !== 2) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'signature recipes must have exactly 2 components',
-        path: ['components'],
-      });
+const RecipeDefinitionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.enum(['signature', 'signature3', 'category']),
+    components: z
+      .union([
+        z.tuple([RecipeComponentSchema, RecipeComponentSchema]),
+        z.tuple([RecipeComponentSchema, RecipeComponentSchema, RecipeComponentSchema]),
+      ])
+      .optional(),
+    categoryRule: CategoryRuleSchema.optional(),
+    outputAffixId: z.string(),
+    outputBonusEffects: z.array(StatModifierSchema),
+    compoundEffects: z.array(CompoundEffectBlueprintSchema).optional(),
+    passiveDamageModifiers: z.array(PassiveDamageModifierBlueprintSchema).optional(),
+    maxDepthContribution: z.number().int().nonnegative(),
+    tags: z.array(z.string()),
+  })
+  .superRefine((recipe, ctx) => {
+    if (recipe.type === 'signature') {
+      if (!recipe.components || recipe.components.length !== 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'signature recipes must have exactly 2 components',
+          path: ['components'],
+        });
+      }
     }
-  }
-  if (recipe.type === 'signature3') {
-    if (!recipe.components || recipe.components.length !== 3) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'signature3 recipes must have exactly 3 components',
-        path: ['components'],
-      });
+    if (recipe.type === 'signature3') {
+      if (!recipe.components || recipe.components.length !== 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'signature3 recipes must have exactly 3 components',
+          path: ['components'],
+        });
+      }
     }
-  }
-});
+  });
 
 export const RecipesSchema = z.array(RecipeDefinitionSchema);
 
@@ -332,7 +346,14 @@ export const HeroStatKeySchema = z.enum([
   'shadowAttune',
   'natureAttune',
 ]);
-const MonsterTraitSchema = z.enum(['armored', 'swift', 'brute', 'regenerating', 'vampiric', 'spiked']);
+const MonsterTraitSchema = z.enum([
+  'armored',
+  'swift',
+  'brute',
+  'regenerating',
+  'vampiric',
+  'spiked',
+]);
 const StatScalingSchema = z.enum(['flat', 'fixed']);
 const StatusIdSchema = z.enum([
   'burn',
@@ -371,7 +392,14 @@ function perSlot<T extends z.ZodTypeAny>(schema: T) {
 }
 
 function perMana<T extends z.ZodTypeAny>(schema: T) {
-  return z.object({ fire: schema, frost: schema, storm: schema, earth: schema, shadow: schema, nature: schema });
+  return z.object({
+    fire: schema,
+    frost: schema,
+    storm: schema,
+    earth: schema,
+    shadow: schema,
+    nature: schema,
+  });
 }
 
 const MonsterDefSchema = z.object({
@@ -407,7 +435,11 @@ export const DelveDataSchema = z.object({
           .optional(),
         weight: z.number().positive(),
         implicits: z.array(
-          z.object({ stat: HeroStatKeySchema, base: z.number().positive(), scaling: StatScalingSchema }),
+          z.object({
+            stat: HeroStatKeySchema,
+            base: z.number().positive(),
+            scaling: StatScalingSchema,
+          }),
         ),
       }),
     )
@@ -508,18 +540,41 @@ export const ArpgDataSchema = z.object({
   reactions: z
     .array(
       z.object({
-        id: z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight']),
+        id: z.enum([
+          'melt',
+          'shatter',
+          'overload',
+          'superconduct',
+          'soulfire',
+          'combust',
+          'blight',
+        ]),
         name: z.string(),
         icon: z.string(),
         text: z.string(),
       }),
     )
     .length(7),
-  masteries: z.array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() })).length(6),
+  masteries: z
+    .array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() }))
+    .length(6),
   forms: z
     .array(
       z.object({
-        id: z.enum(['bolt', 'volley', 'lance', 'burst', 'strike', 'ward', 'armor', 'surge', 'blink', 'nova', 'barrage', 'maelstrom']),
+        id: z.enum([
+          'bolt',
+          'volley',
+          'lance',
+          'burst',
+          'strike',
+          'ward',
+          'armor',
+          'surge',
+          'blink',
+          'nova',
+          'barrage',
+          'maelstrom',
+        ]),
         slot: z.enum(['primary', 'defensive', 'ultimate']),
         name: z.string(),
         icon: z.string(),
@@ -577,7 +632,11 @@ const DelveBalanceSchema = z.object({
     magnetRadius: z.number().positive(),
     cdrCap: z.number().min(0).max(90),
   }),
-  growth: z.object({ item: z.number().positive(), monsterHp: z.number().positive(), monsterDmg: z.number().positive() }),
+  growth: z.object({
+    item: z.number().positive(),
+    monsterHp: z.number().positive(),
+    monsterDmg: z.number().positive(),
+  }),
   monster: z.object({
     baseHp: z.number().positive(),
     baseDmg: z.number().positive(),
@@ -707,7 +766,11 @@ const DelveBalanceSchema = z.object({
     blightRadius: z.number().positive(),
   }),
   abilities: z.object({
-    slots: z.object({ primary: AbilitySlotBalanceSchema, defensive: AbilitySlotBalanceSchema, ultimate: AbilitySlotBalanceSchema }),
+    slots: z.object({
+      primary: AbilitySlotBalanceSchema,
+      defensive: AbilitySlotBalanceSchema,
+      ultimate: AbilitySlotBalanceSchema,
+    }),
     weight: z.object({
       power: z.number().min(0),
       cost: z.number().min(0),
@@ -751,9 +814,20 @@ export const BalanceConfigSchema = z.object({
   fluxPerRound: z.tuple([z.number().int(), z.number().int(), z.number().int()]),
   quickMatchFlux: z.number().int().positive(),
   fluxCosts: FluxCostsSchema,
-  draftPoolPerRound: z.tuple([z.number().int().positive(), z.number().int().positive(), z.number().int().positive()]),
-  draftPicksPerPlayer: z.tuple([z.number().int().positive(), z.number().int().positive(), z.number().int().positive()]),
-  draftPoolSizeQuick: z.object({ min: z.number().int().positive(), max: z.number().int().positive() }),
+  draftPoolPerRound: z.tuple([
+    z.number().int().positive(),
+    z.number().int().positive(),
+    z.number().int().positive(),
+  ]),
+  draftPicksPerPlayer: z.tuple([
+    z.number().int().positive(),
+    z.number().int().positive(),
+    z.number().int().positive(),
+  ]),
+  draftPoolSizeQuick: z.object({
+    min: z.number().int().positive(),
+    max: z.number().int().positive(),
+  }),
   tierDistribution: z.record(z.coerce.number(), z.number()),
   draftTimerSeconds: z.number().positive(),
   forgeTimerSeconds: z.object({ round1: z.number().positive(), subsequent: z.number().positive() }),
@@ -765,10 +839,7 @@ export const BalanceConfigSchema = z.object({
       armor: z.record(z.string(), z.number()),
     }),
   ),
-  statCaps: z.record(
-    z.string(),
-    z.object({ min: z.number(), max: z.number() }),
-  ),
+  statCaps: z.record(z.string(), z.object({ min: z.number(), max: z.number() })),
   gem: GemBalanceConfigSchema,
   transplant: TransplantBalanceSchema,
   delve: DelveBalanceSchema.optional(),

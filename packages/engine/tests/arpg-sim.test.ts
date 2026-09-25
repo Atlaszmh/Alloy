@@ -16,8 +16,16 @@ const registry = createDefaultRegistry();
 const bal = registry.getDelveBalance();
 const STEP = bal.arena.step;
 
-function gear(mana: ManaType, slot: 'weapon' | 'chest' = 'weapon', baseId = slot === 'weapon' ? 'sword' : 'cuirass') {
-  return generateItem(registry, { uid: `${mana}-${slot}`, ilvl: 3, rarity: 'common', slot, baseId, mana }, new SeededRNG(1));
+function gear(
+  mana: ManaType,
+  slot: 'weapon' | 'chest' = 'weapon',
+  baseId = slot === 'weapon' ? 'sword' : 'cuirass',
+) {
+  return generateItem(
+    registry,
+    { uid: `${mana}-${slot}`, ilvl: 3, rarity: 'common', slot, baseId, mana },
+    new SeededRNG(1),
+  );
 }
 
 function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): ArpgWorld {
@@ -31,7 +39,14 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
     potions: 3,
     phoenixAvailable: true,
     seed: 77,
-    loot: { pity: 0, nextUid: 100, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false },
+    loot: {
+      pity: 0,
+      nextUid: 100,
+      magicFind: 0,
+      legendaryBoost: 1,
+      dropMult: 1,
+      forceLegendary: false,
+    },
     ...opts,
   });
 }
@@ -43,7 +58,17 @@ function arena(monsters: Partial<MonsterEntity>[] = [], equipped?: EquippedGear)
   w.monsters = monsters.map((m, i) => ({
     ...createMonsterEntity(
       registry,
-      { id: 1000 + i, def: biome.monsters[0], kind: 'normal', depth: 2, door: null, element: 'fire', x: 13, y: 20, packId: 1 },
+      {
+        id: 1000 + i,
+        def: biome.monsters[0],
+        kind: 'normal',
+        depth: 2,
+        door: null,
+        element: 'fire',
+        x: 13,
+        y: 20,
+        packId: 1,
+      },
       new SeededRNG(i),
     ),
     ...m,
@@ -63,7 +88,9 @@ describe('floor generation', () => {
   it('is deterministic per seed', () => {
     const a = world();
     const b = world();
-    expect(a.monsters.map((m) => [m.defId, m.x, m.y, m.hp])).toEqual(b.monsters.map((m) => [m.defId, m.x, m.y, m.hp]));
+    expect(a.monsters.map((m) => [m.defId, m.x, m.y, m.hp])).toEqual(
+      b.monsters.map((m) => [m.defId, m.x, m.y, m.hp]),
+    );
   });
 
   it('spawns packs away from the hero, and a boss on boss depths', () => {
@@ -158,7 +185,11 @@ describe('abilities in the sim', () => {
 });
 
 describe('elemental reactions', () => {
-  function target(element: ManaType = 'shadow'): { ctx: ReturnType<typeof makeCtx>; m: MonsterEntity; w: ArpgWorld } {
+  function target(element: ManaType = 'shadow'): {
+    ctx: ReturnType<typeof makeCtx>;
+    m: MonsterEntity;
+    w: ArpgWorld;
+  } {
     const w = arena([{ x: 13, y: 20, maxHp: 1e6, hp: 1e6, element }]);
     return { ctx: makeCtx(registry, w, []), m: w.monsters[0], w };
   }
@@ -267,15 +298,43 @@ describe('monsters', () => {
   it('boss slams hurt only inside the telegraph', () => {
     const w = arena();
     w.zones.push({
-      id: 1, owner: 'monster', source: null, ability: null, x: w.hero.x, y: w.hero.y - 10, radius: 2.6, born: 0, until: 2,
-      tick: 0, nextTick: 0, damage: 50, element: 'fire', applies: [], detonateAt: 0.5, dead: false,
+      id: 1,
+      owner: 'monster',
+      source: null,
+      ability: null,
+      x: w.hero.x,
+      y: w.hero.y - 10,
+      radius: 2.6,
+      born: 0,
+      until: 2,
+      tick: 0,
+      nextTick: 0,
+      damage: 50,
+      element: 'fire',
+      applies: [],
+      detonateAt: 0.5,
+      dead: false,
     });
     const hp = w.hero.hp;
     run(w, 1);
     expect(w.hero.hp).toBe(hp);
     w.zones.push({
-      id: 2, owner: 'monster', source: null, ability: null, x: w.hero.x, y: w.hero.y, radius: 2.6, born: w.t, until: w.t + 2,
-      tick: 0, nextTick: 0, damage: 50, element: 'fire', applies: [], detonateAt: w.t + 0.5, dead: false,
+      id: 2,
+      owner: 'monster',
+      source: null,
+      ability: null,
+      x: w.hero.x,
+      y: w.hero.y,
+      radius: 2.6,
+      born: w.t,
+      until: w.t + 2,
+      tick: 0,
+      nextTick: 0,
+      damage: 50,
+      element: 'fire',
+      applies: [],
+      detonateAt: w.t + 0.5,
+      dead: false,
     });
     run(w, 1);
     expect(w.hero.hp).toBeLessThan(hp);
@@ -299,7 +358,11 @@ describe('hero survival', () => {
     expect(w.heroDead).toBe(true);
 
     const phoenixGear = {
-      chest: { ...gear('fire', 'chest'), rarity: 'legendary' as const, legendary: { id: 'phoenix_plume', value: 50, roll: 0.5 } },
+      chest: {
+        ...gear('fire', 'chest'),
+        rarity: 'legendary' as const,
+        legendary: { id: 'phoenix_plume', value: 50, roll: 0.5 },
+      },
     };
     const p = arena([{ x: 13, y: 34.8, aggro: true, damage: 1e6 }], phoenixGear);
     p.hero.nextAttackAt = 1e9;

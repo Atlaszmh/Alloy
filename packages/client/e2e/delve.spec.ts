@@ -35,8 +35,16 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible();
     await expect(page.getByTestId('hero-hp')).toBeVisible();
-    await expect(page.getByTestId('skill-0')).toHaveAttribute('aria-label', 'Fireball');
-    await expect(page.locator('[data-testid="mana-pools"] [data-mana="fire"]')).toBeVisible();
+    await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', 'Primary: Fire Bolt');
+    await expect(page.getByTestId('ability-1')).toHaveAttribute(
+      'aria-label',
+      'Defensive: Frost Ward',
+    );
+    await expect(page.getByTestId('ability-2')).toHaveAttribute(
+      'aria-label',
+      'Ultimate: Fire Nova',
+    );
+    await expect(page.getByTestId('mana-bar')).toBeVisible();
 
     const door = page.getByTestId('door-choice');
     const summary = page.getByTestId('dive-summary');
@@ -83,18 +91,17 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
   });
 
-  test('D04: the anvil spells, forge and codex tabs render', async ({ page }) => {
+  test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
     await seedProfile(page);
     await page.goto('/delve');
-    await expect(page.getByTestId('mana-strip')).toContainText('2 spells');
+    await expect(page.getByTestId('mana-strip')).toContainText('Abilities');
     await page.getByTestId('mana-strip').click();
-    await expect(page.getByTestId('spellbook-panel')).toBeVisible();
-    await expect(page.getByTestId('spell-fireball')).toHaveAttribute('data-locked', 'false');
-    await expect(page.getByTestId('spell-blizzard')).toHaveAttribute('data-locked', 'true');
-    await page.getByTestId('spell-slot-0').click();
-    await page.getByTestId('spell-boulder').click();
-    await expect(page.getByTestId('spell-slot-0')).toHaveAttribute('data-skill', 'boulder');
-    await expect(page.getByTestId('reaction-unknown')).toHaveCount(5);
+    await expect(page.getByTestId('abilities-panel')).toBeVisible();
+    await page.getByTestId('form-burst').click();
+    await page.getByTestId('infusion-nature').click();
+    await expect(page.getByTestId('ability-readout')).toContainText('Wildfire Burst');
+    await expect(page.getByTestId('abilities-summary')).toContainText('Wildfire Burst');
+    await expect(page.getByTestId('reaction-unknown')).toHaveCount(7);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
     await expect(page.getByTestId('temper-row')).toHaveCount(2);

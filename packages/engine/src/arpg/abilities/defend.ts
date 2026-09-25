@@ -26,7 +26,12 @@ export function wardBurst(ctx: SimCtx): void {
  * Damage the hero takes after the Defensive: Armor and Earth reduce it, the
  * Ward soaks it up, and melt attackers catch the element (Armor strikes back).
  */
-export function shieldHero(ctx: SimCtx, dmg: number, source: MonsterEntity | null, melee: boolean): number {
+export function shieldHero(
+  ctx: SimCtx,
+  dmg: number,
+  source: MonsterEntity | null,
+  melee: boolean,
+): number {
   const ab = defendingAbility(ctx);
   if (!ab) return dmg;
   const h = ctx.world.hero;
@@ -43,7 +48,8 @@ export function shieldHero(ctx: SimCtx, dmg: number, source: MonsterEntity | nul
         slot: DEFENSIVE,
       });
     } else {
-      for (const s of ab.knobs.applies) if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5);
+      for (const s of ab.knobs.applies)
+        if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5);
     }
   }
 
@@ -72,7 +78,10 @@ export function defendTick(ctx: SimCtx, dt: number): void {
   }
   const ab = h.abilities[DEFENSIVE];
   if (ab?.elements.includes('nature') && h.hp < h.stats.maxHp) {
-    h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * ctx.bal.abilities.defend.natureRegen * dt);
+    h.hp = Math.min(
+      h.stats.maxHp,
+      h.hp + h.stats.maxHp * ctx.bal.abilities.defend.natureRegen * dt,
+    );
   }
 }
 

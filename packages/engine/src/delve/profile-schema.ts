@@ -4,7 +4,20 @@ import { HeroStatKeySchema as StatKeySchema, ManaTypeSchema } from '../data/sche
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
 const AbilityBuildSchema = z.object({
-  form: z.enum(['bolt', 'volley', 'lance', 'burst', 'strike', 'ward', 'armor', 'surge', 'blink', 'nova', 'barrage', 'maelstrom']),
+  form: z.enum([
+    'bolt',
+    'volley',
+    'lance',
+    'burst',
+    'strike',
+    'ward',
+    'armor',
+    'surge',
+    'blink',
+    'nova',
+    'barrage',
+    'maelstrom',
+  ]),
   elements: z
     .array(ManaTypeSchema)
     .min(1)
@@ -126,12 +139,17 @@ export const DelveProfileSchema = z.object({
     defensive: AbilityBuildSchema,
     ultimate: AbilityBuildSchema,
   }),
-  reactionsSeen: z.array(z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight'])),
+  reactionsSeen: z.array(
+    z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight']),
+  ),
   dive: DiveSchema.nullable(),
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; `parseDelveProfile` migrates them. */
-export const DelveProfileV2Schema = DelveProfileSchema.omit({ version: true, abilities: true }).extend({
+export const DelveProfileV2Schema = DelveProfileSchema.omit({
+  version: true,
+  abilities: true,
+}).extend({
   version: z.literal(2),
   skillSlots: z.array(z.string().nullable()).length(3),
 });

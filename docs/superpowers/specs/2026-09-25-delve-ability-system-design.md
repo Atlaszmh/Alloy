@@ -1,7 +1,7 @@
 # Delve Ability System Design
 
 **Date:** 2026-09-25
-**Status:** Approved in conversation (approach A); details below settled by Claude while the owner was away, for review.
+**Status:** Built in v0.33.0 (approach A). Details below were settled by Claude while the owner was away, for review.
 **Replaces:** the 3-slot spell bar and its 15 fixed spells (`arpg.json → skills`), per-element mana pools, and attunement-gated spell unlocks.
 **Engine:** `packages/engine/src/arpg/`, `src/delve/`, `src/data/arpg.json`, `balance.json → delve.abilities`
 **Client:** `packages/client/src/features/delve/` (arena HUD, renderer, camp)

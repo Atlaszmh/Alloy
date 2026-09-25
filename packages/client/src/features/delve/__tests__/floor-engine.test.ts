@@ -87,7 +87,7 @@ describe('snapshotArena', () => {
     ];
     const snap = snapshotArena(world, 0.016, events, { left: 0, top: 0, right: 10, bottom: 10 });
     expect(snap.events.map((e) => e.kind)).toEqual(['explode', 'hit']);
-    expect(snap.bodies).toHaveLength(1 + world.monsters.length + world.summons.length);
+    expect(snap.bodies).toHaveLength(1 + world.monsters.length);
     expect(snap.bodies[0][0]).toBe('hero');
     // Plain data only, so it can be posted to a worker.
     expect(() => structuredClone(snap)).not.toThrow();

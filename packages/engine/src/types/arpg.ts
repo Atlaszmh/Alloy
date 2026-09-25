@@ -297,7 +297,14 @@ export type ArpgEvent =
       element: ManaType | null;
       reaction?: ReactionId;
     }
-  | { kind: 'heroHit'; x: number; y: number; amount: number; dodged: boolean; element: ManaType | null }
+  | {
+      kind: 'heroHit';
+      x: number;
+      y: number;
+      amount: number;
+      dodged: boolean;
+      element: ManaType | null;
+    }
   | { kind: 'heal'; amount: number; source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire' }
   | {
       kind: 'cast';
@@ -315,14 +322,29 @@ export type ArpgEvent =
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
   | { kind: 'beam'; x: number; y: number; tx: number; ty: number; width: number; element: ManaType }
   | { kind: 'slash'; x: number; y: number; dir: Vec; range: number; arc: number; element: ManaType }
-  | { kind: 'basic'; x: number; y: number; tx: number; ty: number; element: ManaType | null; melee: boolean }
+  | {
+      kind: 'basic';
+      x: number;
+      y: number;
+      tx: number;
+      ty: number;
+      element: ManaType | null;
+      melee: boolean;
+    }
   | { kind: 'chain'; points: Vec[]; element: ManaType }
   | { kind: 'explode'; x: number; y: number; radius: number; element: ManaType | null }
   | { kind: 'reaction'; reaction: ReactionId; x: number; y: number }
   | { kind: 'freeze'; id: number }
   | { kind: 'death'; id: number; x: number; y: number; monsterKind: MonsterKind; scrap: number }
   | { kind: 'drop'; dropId: number; x: number; y: number; dropKind: DropKind; rarity?: Rarity }
-  | { kind: 'pickup'; dropId: number; dropKind: DropKind; item?: GearItem; amount: number; mana?: ManaType }
+  | {
+      kind: 'pickup';
+      dropId: number;
+      dropKind: DropKind;
+      item?: GearItem;
+      amount: number;
+      mana?: ManaType;
+    }
   | { kind: 'dash'; fromX: number; fromY: number; toX: number; toY: number }
   | { kind: 'noMana'; slot: number }
   | { kind: 'cleared' }

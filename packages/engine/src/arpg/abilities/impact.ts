@@ -43,7 +43,11 @@ export function chainFrom(
   hit: Set<number>,
   tick = false,
 ): void {
-  const jumps = ab.knobs.chain + (ab.knobs.chain > 0 && hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm') ? 2 : 0);
+  const jumps =
+    ab.knobs.chain +
+    (ab.knobs.chain > 0 && hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm')
+      ? 2
+      : 0);
   if (jumps <= 0) return;
   const { chainRange, chainPower } = ctx.bal.abilities;
   const points: Vec[] = [{ x: first.x, y: first.y }];
@@ -62,7 +66,14 @@ export function chainFrom(
 }
 
 /** Lingering ground (Magma, Rimebloom, Wildfire…) where an ability lands. */
-export function leaveZone(ctx: SimCtx, ab: ResolvedAbility, x: number, y: number, radius: number, damage: number): void {
+export function leaveZone(
+  ctx: SimCtx,
+  ab: ResolvedAbility,
+  x: number,
+  y: number,
+  radius: number,
+  damage: number,
+): void {
   const zone = ab.knobs.zone;
   if (!zone) return;
   const { world } = ctx;

@@ -256,27 +256,12 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
                 })}
               </div>
             )}
-            {(cmp.skillsGained.length > 0 || cmp.skillsLost.length > 0) && (
+            {attuneDelta.length > 0 && (
               <div
-                className="mt-1.5 flex flex-col items-center gap-0.5 text-xs"
-                data-testid="skill-delta"
+                className="mt-1 text-center text-[11px] text-stone-400"
+                data-testid="attune-note"
               >
-                {cmp.skillsGained.length > 0 && (
-                  <span className="font-semibold text-violet-300">
-                    Unlocks:{' '}
-                    {cmp.skillsGained
-                      .map((id) => `${registry.getSkill(id).icon} ${registry.getSkill(id).name}`)
-                      .join(', ')}
-                  </span>
-                )}
-                {cmp.skillsLost.length > 0 && (
-                  <span className="text-red-300">
-                    Loses:{' '}
-                    {cmp.skillsLost
-                      .map((id) => `${registry.getSkill(id).icon} ${registry.getSkill(id).name}`)
-                      .join(', ')}
-                  </span>
-                )}
+                Attunement grows your mana pool and powers abilities of its element.
               </div>
             )}
           </div>

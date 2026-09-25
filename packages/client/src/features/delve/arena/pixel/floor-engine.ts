@@ -40,7 +40,9 @@ export interface FloorFrame {
     x: number;
     y: number;
     radius: number;
-    skillId: string | null;
+    /** The ability form that fired it (null for basic bolts and monster shots). */
+    source: string | null;
+    pierce: boolean;
     element: ManaType | null;
     owner: 'hero' | 'monster';
   }[];
@@ -48,7 +50,7 @@ export interface FloorFrame {
     x: number;
     y: number;
     radius: number;
-    skillId: string | null;
+    source: string | null;
     element: ManaType | null;
     owner: 'hero' | 'monster';
   }[];
@@ -72,6 +74,7 @@ const ELEMENT_LIGHT: Record<ManaType, RGB> = {
   storm: [255, 240, 150],
   earth: [212, 163, 90],
   shadow: [190, 130, 255],
+  nature: [140, 230, 110],
 };
 
 const RARITY_LIGHT: Partial<Record<Rarity, RGB>> = {
@@ -79,6 +82,11 @@ const RARITY_LIGHT: Partial<Record<Rarity, RGB>> = {
   epic: [192, 132, 252],
   legendary: [251, 146, 60],
 };
+
+/** An Earth bolt that pierces rolls like a boulder and ploughs the ground. */
+function isBoulder(p: FloorFrame['projectiles'][number]): boolean {
+  return p.source === 'bolt' && p.pierce && p.element === 'earth';
+}
 
 /** Engine event kinds the floor reacts to; the rest are dropped before crossing threads. */
 const FLOOR_EVENTS = new Set<ArpgEvent['kind']>(['explode', 'chain', 'hit', 'death', 'dash']);
@@ -98,7 +106,6 @@ export function snapshotArena(
 ): FloorFrame {
   const bodies: FloorFrame['bodies'] = [['hero', w.hero.x, w.hero.y, w.hero.radius]];
   for (const m of w.monsters) bodies.push([`m${m.id}`, m.x, m.y, m.radius]);
-  for (const s of w.summons) bodies.push([`s${s.id}`, s.x, s.y, s.radius]);
   const drops: FloorFrame['drops'] = [];
   for (const d of w.drops)
     if (d.item && RARITY_LIGHT[d.item.rarity])
@@ -112,7 +119,8 @@ export function snapshotArena(
       x: p.x,
       y: p.y,
       radius: p.radius,
-      skillId: p.skillId,
+      source: p.form,
+      pierce: p.pierce,
       element: p.element,
       owner: p.owner,
     })),
@@ -122,7 +130,7 @@ export function snapshotArena(
         x: z.x,
         y: z.y,
         radius: z.radius,
-        skillId: z.skillId,
+        source: z.source,
         element: z.element,
         owner: z.owner,
       })),
@@ -211,15 +219,17 @@ export class FloorEngine {
     }
     for (const p of f.projectiles) {
       const c = this.cell(p.x, p.y);
-      if (p.skillId === 'boulder') pw.furrow(c.x, c.y, p.radius * FLOOR_PPU);
-      else if (p.skillId === 'fireball' && Math.random() < 0.5) pw.hitSpark(c.x, c.y, 'fire');
+      if (isBoulder(p)) pw.furrow(c.x, c.y, p.radius * FLOOR_PPU);
+      else if (p.source === 'bolt' && p.element === 'fire' && Math.random() < 0.5)
+        pw.hitSpark(c.x, c.y, 'fire');
     }
     for (const z of f.zones) {
       if (z.owner !== 'hero') continue;
       const c = this.cell(z.x, z.y);
       const r = z.radius * FLOOR_PPU;
-      if (z.skillId === 'magma_eruption') pw.lavaBurst(c.x, c.y, r);
-      else if (z.skillId === 'blizzard' && Math.random() < 0.35) {
+      if (z.source === 'barrage') continue;
+      if (z.element === 'fire') pw.lavaBurst(c.x, c.y, r);
+      else if (z.element === 'frost' && Math.random() < 0.35) {
         const a = Math.random() * Math.PI * 2;
         const d = Math.random() * r;
         pw.frostBlast(c.x + Math.cos(a) * d, c.y + Math.sin(a) * d, 3);
@@ -240,7 +250,7 @@ export class FloorEngine {
       intensity: 0.6,
     });
     for (const p of f.projectiles) {
-      if (!p.element || p.skillId === 'boulder') continue;
+      if (!p.element || isBoulder(p)) continue;
       const c = this.cell(p.x, p.y);
       lights.push({
         x: c.x,

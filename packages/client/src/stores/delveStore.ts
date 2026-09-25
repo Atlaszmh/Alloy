@@ -12,7 +12,9 @@ import {
   reforgeGear,
   fuseGear,
   setAutoSalvage,
-  setSkillSlot as engineSetSkillSlot,
+  setAbility as engineSetAbility,
+  type AbilityBuild,
+  type AbilitySlot,
   type DelveProfile,
   type GearItem,
   type GearSlot,
@@ -74,8 +76,8 @@ interface DelveStore {
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
-  /** Put an unlocked spell on the action bar (swaps if it is already slotted). */
-  setSkillSlot: (slot: number, skillId: string | null) => void;
+  /** Set the Primary, Defensive or Ultimate build (throws on an invalid one). */
+  setAbility: (slot: AbilitySlot, build: AbilityBuild) => void;
 }
 
 function withoutUids(map: Record<string, true>, uids: string[]): Record<string, true> {
@@ -175,8 +177,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ diveDrops: [...uids.slice().reverse(), ...get().diveDrops].slice(0, 60) });
     },
 
-    setSkillSlot: (slot, skillId) => {
-      commit(engineSetSkillSlot(registry(), get().profile, slot, skillId));
+    setAbility: (slot, build) => {
+      commit(engineSetAbility(registry(), get().profile, slot, build));
     },
   };
 });

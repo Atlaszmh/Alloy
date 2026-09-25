@@ -1,8 +1,9 @@
-import { forwardRef } from 'react';
-import { MANA_TYPES, type BiomeDef, type DiveState } from '@alloy/engine';
+import { forwardRef, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
-import type { ArenaHud } from './useArena';
+import { classifyPress, isCancelled } from './aim-gestures';
+import type { AbilityHud, ArenaHud } from './useArena';
 
 const KEY_HINTS = ['Q', 'E', 'R'];
 
@@ -99,10 +100,9 @@ export function BossBar({ hud }: { hud: ArenaHud | null }) {
 }
 
 export function Vitals({ hud }: { hud: ArenaHud | null }) {
-  const registry = getDelveRegistry();
   if (!hud) return null;
   const frac = hud.hp / Math.max(1, hud.maxHp);
-  const pools = MANA_TYPES.filter((m) => hud.manaMax[m] > 0);
+  const mana = hud.mana / Math.max(1, hud.manaMax);
   return (
     <div className="flex flex-col gap-1">
       <div className={`delve-hpbar ${frac < 0.3 ? 'animate-pulse' : ''}`} data-testid="hero-hp">
@@ -111,49 +111,183 @@ export function Vitals({ hud }: { hud: ArenaHud | null }) {
           {formatNumber(Math.max(0, hud.hp))} / {formatNumber(hud.maxHp)}
         </div>
       </div>
-      <div className="flex gap-1" data-testid="mana-pools">
-        {pools.map((m) => {
-          const style = manaStyle(registry, m);
-          const pct = (hud.mana[m] / hud.manaMax[m]) * 100;
-          return (
-            <div key={m} className="flex flex-1 items-center gap-1" data-mana={m}>
-              <span className="text-[11px] leading-none">{style.icon}</span>
-              <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-black/60">
-                <div
-                  className="absolute inset-y-0 left-0 rounded-full"
-                  style={{
-                    width: `${pct}%`,
-                    background: style.color,
-                    boxShadow: `0 0 6px ${style.color}`,
-                    transition: 'width 0.1s linear',
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-        {pools.length === 0 && (
-          <span className="text-[10px] text-stone-500">
-            No mana: equip attuned gear to cast spells
-          </span>
-        )}
+      <div
+        className="relative h-2.5 overflow-hidden rounded-full bg-black/60"
+        data-testid="mana-bar"
+        aria-label={`Mana ${Math.floor(hud.mana)} of ${Math.round(hud.manaMax)}`}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            width: `${mana * 100}%`,
+            background: 'linear-gradient(90deg,#60a5fa,#a78bfa)',
+            boxShadow: '0 0 6px #818cf8',
+            transition: 'width 0.1s linear',
+          }}
+        />
       </div>
     </div>
+  );
+}
+
+const SLOT_LABEL = ['Primary', 'Defensive', 'Ultimate'];
+
+/**
+ * One ability button. A quick tap auto-aims; dragging out shows the aim
+ * marker in the arena and releasing casts there (release back on the button
+ * to cancel).
+ */
+function AbilityButton({
+  slot,
+  ab,
+  busy,
+  showKey,
+  onCast,
+  onAim,
+}: {
+  slot: number;
+  ab: AbilityHud;
+  busy: boolean;
+  showKey: boolean;
+  onCast: (slot: number, aim?: Vec | null) => void;
+  onAim: (slot: number | null, at?: Vec) => void;
+}) {
+  const registry = getDelveRegistry();
+  const press = useRef<{ id: number; t: number; x: number; y: number } | null>(null);
+  const color = manaStyle(registry, ab.elements[0]).color;
+  const color2 = manaStyle(registry, ab.elements[ab.elements.length - 1]).color;
+  const cooling = ab.cooldown > 0.05;
+  const cdFrac = cooling ? Math.min(1, ab.cooldown / ab.cooldownTotal) : 0;
+  const size = slot === 2 ? 76 : 68;
+
+  const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* pointer already gone */
+    }
+    press.current = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
+    onAim(slot, { x: e.clientX, y: e.clientY });
+  };
+  const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (press.current?.id === e.pointerId) onAim(slot, { x: e.clientX, y: e.clientY });
+  };
+  const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = press.current;
+    if (!p || p.id !== e.pointerId) return;
+    press.current = null;
+    onAim(null);
+    const drag = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    if (classifyPress(performance.now() - p.t, drag) === 'tap') return onCast(slot);
+    const r = e.currentTarget.getBoundingClientRect();
+    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    if (!isCancelled({ x: e.clientX, y: e.clientY }, button))
+      onCast(slot, { x: e.clientX, y: e.clientY });
+  };
+  const cancel = () => {
+    press.current = null;
+    onAim(null);
+  };
+
+  return (
+    <button
+      type="button"
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={cancel}
+      aria-label={`${SLOT_LABEL[slot]}: ${ab.name}`}
+      data-testid={`ability-${slot}`}
+      data-ready={ab.ready}
+      className="relative rounded-full border-0 p-[3px]"
+      style={{
+        width: size,
+        height: size,
+        background: `linear-gradient(135deg, ${color}, ${color2})`,
+        boxShadow: ab.ready ? `0 0 16px ${color}aa` : 'none',
+        opacity: busy && ab.windup === null ? 0.5 : ab.affordable ? 1 : 0.55,
+        touchAction: 'none',
+      }}
+    >
+      <span
+        className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-full"
+        style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
+      >
+        <span className="text-2xl leading-none">{ab.icon}</span>
+        {ab.charge !== null && ab.charge < 1 && (
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: `conic-gradient(transparent ${ab.charge * 360}deg, rgba(0,0,0,0.62) 0deg)`,
+            }}
+          />
+        )}
+        {cdFrac > 0 && (
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: `conic-gradient(rgba(0,0,0,0.72) ${cdFrac * 360}deg, transparent 0deg)`,
+            }}
+          />
+        )}
+        {cooling && (
+          <span className="delve-display absolute text-base font-bold text-white">
+            {ab.cooldown >= 10 ? Math.ceil(ab.cooldown) : ab.cooldown.toFixed(1)}
+          </span>
+        )}
+        {!ab.affordable && !cooling && (
+          <span className="absolute bottom-1.5 text-[8px] font-bold uppercase tracking-wide text-red-300">
+            mana
+          </span>
+        )}
+        {ab.charge !== null && ab.charge < 1 && !cooling && (
+          <span className="delve-display absolute bottom-1 text-[10px] font-bold text-stone-200">
+            {Math.floor(ab.charge * 100)}%
+          </span>
+        )}
+      </span>
+      {ab.comboLength > 1 && (
+        <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
+          {Array.from({ length: ab.comboLength }, (_, k) => (
+            <span
+              key={k}
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: k === ab.comboNext ? color : 'rgba(255,255,255,0.25)' }}
+            />
+          ))}
+        </span>
+      )}
+      {ab.windup !== null && (
+        <span className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/70">
+          <span
+            className="block h-full"
+            style={{ width: `${ab.windup * 100}%`, background: color }}
+          />
+        </span>
+      )}
+      {showKey && (
+        <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
+          {KEY_HINTS[slot]}
+        </span>
+      )}
+    </button>
   );
 }
 
 export function SkillBar({
   hud,
   onCast,
+  onAim,
   onPotion,
   showKeys,
 }: {
   hud: ArenaHud | null;
-  onCast: (slot: number) => void;
+  onCast: (slot: number, aim?: Vec | null) => void;
+  onAim: (slot: number | null, at?: Vec) => void;
   onPotion: () => void;
   showKeys: boolean;
 }) {
-  const registry = getDelveRegistry();
   return (
     <div className="flex items-end justify-center gap-2.5">
       <button
@@ -170,75 +304,17 @@ export function SkillBar({
           <span className="absolute -top-1.5 right-0.5 text-[9px] text-stone-400">F</span>
         )}
       </button>
-      {(hud?.slots ?? [null, null, null]).map((slot, i) => {
-        const skill = slot?.skillId ? registry.getSkill(slot.skillId) : null;
-        if (!skill || !slot) {
-          return (
-            <div
-              key={i}
-              className="flex h-[68px] w-[68px] items-center justify-center rounded-full border border-dashed border-white/15 text-[10px] text-stone-600"
-              data-testid={`skill-${i}`}
-            >
-              empty
-            </div>
-          );
-        }
-        const color = manaStyle(registry, skill.elements[0]).color;
-        const color2 = manaStyle(registry, skill.elements[skill.elements.length - 1]).color;
-        const cooling = slot.cooldown > 0.05;
-        const cdFrac = cooling && slot.cooldownTotal > 0 ? slot.cooldown / slot.cooldownTotal : 0;
-        const ready = !cooling && slot.affordable;
-        return (
-          <button
-            key={i}
-            type="button"
-            onPointerDown={(e) => {
-              e.preventDefault();
-              onCast(i);
-            }}
-            aria-label={skill.name}
-            data-testid={`skill-${i}`}
-            data-ready={ready}
-            className="relative h-[68px] w-[68px] rounded-full border-0 p-[3px]"
-            style={{
-              background: `linear-gradient(135deg, ${color}, ${color2})`,
-              boxShadow: ready ? `0 0 16px ${color}aa` : 'none',
-              opacity: slot.affordable ? 1 : 0.55,
-              touchAction: 'none',
-            }}
-          >
-            <span
-              className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-full"
-              style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
-            >
-              <span className="text-2xl leading-none">{skill.icon}</span>
-              {cdFrac > 0 && (
-                <span
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: `conic-gradient(rgba(0,0,0,0.72) ${cdFrac * 360}deg, transparent 0deg)`,
-                  }}
-                />
-              )}
-              {cooling && (
-                <span className="delve-display absolute text-base font-bold text-white">
-                  {slot.cooldown >= 10 ? Math.ceil(slot.cooldown) : slot.cooldown.toFixed(1)}
-                </span>
-              )}
-              {!slot.affordable && !cooling && (
-                <span className="absolute bottom-1.5 text-[8px] font-bold uppercase tracking-wide text-red-300">
-                  mana
-                </span>
-              )}
-            </span>
-            {showKeys && (
-              <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
-                {KEY_HINTS[i]}
-              </span>
-            )}
-          </button>
-        );
-      })}
+      {hud?.abilities.map((ab, i) => (
+        <AbilityButton
+          key={i}
+          slot={i}
+          ab={ab}
+          busy={hud.busy}
+          showKey={showKeys}
+          onCast={onCast}
+          onAim={onAim}
+        />
+      ))}
     </div>
   );
 }

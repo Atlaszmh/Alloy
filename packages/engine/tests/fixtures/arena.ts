@@ -13,8 +13,16 @@ export const registry = createDefaultRegistry();
 export const bal = registry.getDelveBalance();
 export const STEP = bal.arena.step;
 
-export function gear(mana: ManaType, slot: 'weapon' | 'chest' = 'weapon', baseId = slot === 'weapon' ? 'sword' : 'cuirass') {
-  return generateItem(registry, { uid: `${mana}-${slot}`, ilvl: 3, rarity: 'common', slot, baseId, mana }, new SeededRNG(1));
+export function gear(
+  mana: ManaType,
+  slot: 'weapon' | 'chest' = 'weapon',
+  baseId = slot === 'weapon' ? 'sword' : 'cuirass',
+) {
+  return generateItem(
+    registry,
+    { uid: `${mana}-${slot}`, ilvl: 3, rarity: 'common', slot, baseId, mana },
+    new SeededRNG(1),
+  );
 }
 
 export const DEFAULT_BUILDS: AbilityBuilds = {
@@ -50,13 +58,30 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
     potions: 3,
     phoenixAvailable: true,
     seed: 77,
-    loot: { pity: 0, nextUid: 100, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false },
+    loot: {
+      pity: 0,
+      nextUid: 100,
+      magicFind: 0,
+      legendaryBoost: 1,
+      dropMult: 1,
+      forceLegendary: false,
+    },
   });
   const biome = registry.getBiomeForDepth(depth);
   w.monsters = monsters.map((m, i) => ({
     ...createMonsterEntity(
       registry,
-      { id: 1000 + i, def: biome.monsters[0], kind: 'normal', depth, door: null, element: 'fire', x: 13, y: 20, packId: 1 },
+      {
+        id: 1000 + i,
+        def: biome.monsters[0],
+        kind: 'normal',
+        depth,
+        door: null,
+        element: 'fire',
+        x: 13,
+        y: 20,
+        packId: 1,
+      },
       new SeededRNG(i),
     ),
     ...m,
@@ -67,7 +92,11 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
 }
 
 /** A sturdy foe that doesn't fight back, at (x, y). */
-export function dummy(x: number, y: number, extra: Partial<MonsterEntity> = {}): Partial<MonsterEntity> {
+export function dummy(
+  x: number,
+  y: number,
+  extra: Partial<MonsterEntity> = {},
+): Partial<MonsterEntity> {
   return { x, y, hp: 1e6, maxHp: 1e6, damage: 0, speed: 0, ...extra };
 }
 

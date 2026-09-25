@@ -53,7 +53,12 @@ describe('computeHeroStats', () => {
   });
 
   it('derives the basic attack from the weapon base and its mana', () => {
-    const staff = makeItem({ slot: 'weapon', baseId: 'staff', mana: 'frost', implicits: [stat('damage', 9)] });
+    const staff = makeItem({
+      slot: 'weapon',
+      baseId: 'staff',
+      mana: 'frost',
+      implicits: [stat('damage', 9)],
+    });
     const s = computeHeroStats({ weapon: staff }, registry);
     expect(s.weapon.kind).toBe('bolt');
     expect(s.weapon.element).toBe('frost');
@@ -69,14 +74,33 @@ describe('computeHeroStats', () => {
   });
 
   it('attack speed shortens the interval but never below the floor', () => {
-    const weapon = makeItem({ slot: 'weapon', baseId: 'sword', implicits: [stat('damage', 7)], affixes: [stat('attackSpeedPct', 25)] });
-    expect(computeHeroStats({ weapon }, registry).attackInterval).toBeCloseTo(registry.getGearBase('sword').attackInterval! / 1.25);
-    const silly = makeItem({ slot: 'weapon', baseId: 'dagger', implicits: [stat('damage', 7)], affixes: [stat('attackSpeedPct', 900)] });
-    expect(computeHeroStats({ weapon: silly }, registry).attackInterval).toBe(bal.hero.minAttackInterval);
+    const weapon = makeItem({
+      slot: 'weapon',
+      baseId: 'sword',
+      implicits: [stat('damage', 7)],
+      affixes: [stat('attackSpeedPct', 25)],
+    });
+    expect(computeHeroStats({ weapon }, registry).attackInterval).toBeCloseTo(
+      registry.getGearBase('sword').attackInterval! / 1.25,
+    );
+    const silly = makeItem({
+      slot: 'weapon',
+      baseId: 'dagger',
+      implicits: [stat('damage', 7)],
+      affixes: [stat('attackSpeedPct', 900)],
+    });
+    expect(computeHeroStats({ weapon: silly }, registry).attackInterval).toBe(
+      bal.hero.minAttackInterval,
+    );
   });
 
   it('applies %life on top of flat life', () => {
-    const chest = makeItem({ slot: 'chest', baseId: 'cuirass', implicits: [stat('maxHp', 100)], affixes: [stat('hpPct', 10)] });
+    const chest = makeItem({
+      slot: 'chest',
+      baseId: 'cuirass',
+      implicits: [stat('maxHp', 100)],
+      affixes: [stat('hpPct', 10)],
+    });
     expect(computeHeroStats({ chest }, registry).maxHp).toBeCloseTo((bal.hero.baseHp + 100) * 1.1);
   });
 
@@ -89,8 +113,15 @@ describe('computeHeroStats', () => {
   });
 
   it('upgrade levels scale every stat on the item', () => {
-    const helm = makeItem({ slot: 'helm', baseId: 'helm', implicits: [stat('armor', 10)], upgrade: 5 });
-    expect(computeHeroStats({ helm }, registry).armor).toBeCloseTo(10 * (1 + bal.forge.upgradeStep * 5));
+    const helm = makeItem({
+      slot: 'helm',
+      baseId: 'helm',
+      implicits: [stat('armor', 10)],
+      upgrade: 5,
+    });
+    expect(computeHeroStats({ helm }, registry).armor).toBeCloseTo(
+      10 * (1 + bal.forge.upgradeStep * 5),
+    );
   });
 
   it('applies Glass Cannon and Bedrock and records legendary powers', () => {
@@ -115,7 +146,12 @@ describe('computeHeroStats', () => {
   });
 
   it('Lucky Charm adds magic find', () => {
-    const ring = makeItem({ slot: 'ring', baseId: 'ring', rarity: 'legendary', legendary: { id: 'lucky_charm', value: 60, roll: 0.5 } });
+    const ring = makeItem({
+      slot: 'ring',
+      baseId: 'ring',
+      rarity: 'legendary',
+      legendary: { id: 'lucky_charm', value: 60, roll: 0.5 },
+    });
     expect(computeHeroStats({ ring }, registry).magicFind).toBe(60);
   });
 });
@@ -123,7 +159,14 @@ describe('computeHeroStats', () => {
 describe('attunement & mana', () => {
   it('each item attunes its own mana by rarity, plus attunement affixes (never scaled by upgrades)', () => {
     const byRarity = bal.mana.attuneByRarity;
-    const ring = makeItem({ slot: 'ring', baseId: 'ring', mana: 'storm', rarity: 'rare', affixes: [stat('fireAttune', 2)], upgrade: 5 });
+    const ring = makeItem({
+      slot: 'ring',
+      baseId: 'ring',
+      mana: 'storm',
+      rarity: 'rare',
+      affixes: [stat('fireAttune', 2)],
+      upgrade: 5,
+    });
     const helm = makeItem({ slot: 'helm', baseId: 'helm', mana: 'storm' });
     const s = computeHeroStats({ ring, helm }, registry);
     expect(s.attunement.storm).toBe(byRarity.rare + byRarity.common);
@@ -132,18 +175,34 @@ describe('attunement & mana', () => {
   });
 
   it('Prism of Alloy adds to every attunement', () => {
-    const amulet = makeItem({ slot: 'amulet', baseId: 'amulet', mana: 'fire', rarity: 'legendary', legendary: { id: 'prism', value: 2, roll: 1 } });
+    const amulet = makeItem({
+      slot: 'amulet',
+      baseId: 'amulet',
+      mana: 'fire',
+      rarity: 'legendary',
+      legendary: { id: 'prism', value: 2, roll: 1 },
+    });
     const s = computeHeroStats({ amulet }, registry);
     expect(s.attunement.frost).toBe(2);
     expect(s.attunement.fire).toBe(bal.mana.attuneByRarity.legendary + 2);
   });
 
   it('one mana pool grows with total attunement', () => {
-    const one = computeHeroStats({ weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire' }) }, registry);
+    const one = computeHeroStats(
+      { weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire' }) },
+      registry,
+    );
     const pool = manaPool(one, registry);
     expect(pool.max).toBeGreaterThan(0);
     const more = computeHeroStats(
-      { weapon: makeItem({ slot: 'weapon', baseId: 'sword', mana: 'fire', affixes: [stat('frostAttune', 2)] }) },
+      {
+        weapon: makeItem({
+          slot: 'weapon',
+          baseId: 'sword',
+          mana: 'fire',
+          affixes: [stat('frostAttune', 2)],
+        }),
+      },
       registry,
     );
     expect(manaPool(more, registry).max).toBeGreaterThan(pool.max);
@@ -159,14 +218,36 @@ describe('estimateCombat & compareItem', () => {
   });
 
   it('attunement in an ability element raises Power', () => {
-    const weapon = makeItem({ uid: 'w', slot: 'weapon', baseId: 'sword', mana: 'fire', implicits: [stat('damage', 10)] });
-    const fireRing = makeItem({ uid: 'r', slot: 'ring', baseId: 'ring', mana: 'fire', affixes: [stat('fireAttune', 2)] });
+    const weapon = makeItem({
+      uid: 'w',
+      slot: 'weapon',
+      baseId: 'sword',
+      mana: 'fire',
+      implicits: [stat('damage', 10)],
+    });
+    const fireRing = makeItem({
+      uid: 'r',
+      slot: 'ring',
+      baseId: 'ring',
+      mana: 'fire',
+      affixes: [stat('fireAttune', 2)],
+    });
     expect(compareItem({ weapon }, fireRing, registry, 1).dpsPct).toBeGreaterThan(0);
   });
 
   it('a stronger weapon raises DPS and power', () => {
-    const weak = makeItem({ uid: 'w1', slot: 'weapon', baseId: 'sword', implicits: [stat('damage', 7)] });
-    const strong = makeItem({ uid: 'w2', slot: 'weapon', baseId: 'sword', implicits: [stat('damage', 14)] });
+    const weak = makeItem({
+      uid: 'w1',
+      slot: 'weapon',
+      baseId: 'sword',
+      implicits: [stat('damage', 7)],
+    });
+    const strong = makeItem({
+      uid: 'w2',
+      slot: 'weapon',
+      baseId: 'sword',
+      implicits: [stat('damage', 14)],
+    });
     const cmp = compareItem({ weapon: weak }, strong, registry, 3);
     expect(cmp.replaced?.uid).toBe('w1');
     expect(cmp.dpsPct).toBeGreaterThan(0.5);
@@ -175,8 +256,18 @@ describe('estimateCombat & compareItem', () => {
   });
 
   it('armor raises toughness but not DPS', () => {
-    const light = makeItem({ uid: 'h1', slot: 'helm', baseId: 'helm', implicits: [stat('armor', 5)] });
-    const heavy = makeItem({ uid: 'h2', slot: 'helm', baseId: 'helm', implicits: [stat('armor', 30)] });
+    const light = makeItem({
+      uid: 'h1',
+      slot: 'helm',
+      baseId: 'helm',
+      implicits: [stat('armor', 5)],
+    });
+    const heavy = makeItem({
+      uid: 'h2',
+      slot: 'helm',
+      baseId: 'helm',
+      implicits: [stat('armor', 30)],
+    });
     const cmp = compareItem({ helm: light }, heavy, registry, 3);
     expect(cmp.ehpPct).toBeGreaterThan(0);
     expect(cmp.dpsPct).toBe(0);
@@ -191,7 +282,13 @@ describe('estimateCombat & compareItem', () => {
   });
 
   it('itemStatLines reports implicits then affixes with upgrade applied', () => {
-    const item = makeItem({ slot: 'helm', baseId: 'helm', implicits: [stat('armor', 10)], affixes: [stat('maxHp', 20)], upgrade: 2 });
+    const item = makeItem({
+      slot: 'helm',
+      baseId: 'helm',
+      implicits: [stat('armor', 10)],
+      affixes: [stat('maxHp', 20)],
+      upgrade: 2,
+    });
     const lines = itemStatLines(item, registry);
     expect(lines.map((l) => l.source)).toEqual(['implicit', 'affix']);
     expect(lines[0].value).toBeCloseTo(10 * (1 + 2 * bal.forge.upgradeStep));
@@ -199,12 +296,18 @@ describe('estimateCombat & compareItem', () => {
 });
 
 describe('smithing', () => {
-  const rare = generateItem(registry, { uid: 'r1', ilvl: 10, rarity: 'rare', slot: 'gloves' }, new SeededRNG(1));
+  const rare = generateItem(
+    registry,
+    { uid: 'r1', ilvl: 10, rarity: 'rare', slot: 'gloves' },
+    new SeededRNG(1),
+  );
 
   it('salvage value grows with rarity and item level', () => {
     const common = { ...rare, rarity: 'common' as const };
     expect(salvageValue(registry, rare)).toBeGreaterThan(salvageValue(registry, common));
-    expect(salvageValue(registry, { ...rare, ilvl: 30 })).toBeGreaterThan(salvageValue(registry, rare));
+    expect(salvageValue(registry, { ...rare, ilvl: 30 })).toBeGreaterThan(
+      salvageValue(registry, rare),
+    );
   });
 
   it('upgrade cost escalates and stops at the max level', () => {
@@ -227,7 +330,9 @@ describe('smithing', () => {
   });
 
   it('reforge is deterministic', () => {
-    expect(reforgeAffix(registry, rare, 0, new SeededRNG(5))).toEqual(reforgeAffix(registry, rare, 0, new SeededRNG(5)));
+    expect(reforgeAffix(registry, rare, 0, new SeededRNG(5))).toEqual(
+      reforgeAffix(registry, rare, 0, new SeededRNG(5)),
+    );
   });
 
   it('fusion needs three unlocked items of one non-legendary rarity', () => {
@@ -244,7 +349,10 @@ describe('smithing', () => {
 
   it('fusion produces the next rarity at the highest item level, keeping the best upgrade', () => {
     const a = generateItem(registry, { uid: 'a', ilvl: 5, rarity: 'epic' }, new SeededRNG(1));
-    const b = { ...generateItem(registry, { uid: 'b', ilvl: 9, rarity: 'epic' }, new SeededRNG(2)), upgrade: 3 };
+    const b = {
+      ...generateItem(registry, { uid: 'b', ilvl: 9, rarity: 'epic' }, new SeededRNG(2)),
+      upgrade: 3,
+    };
     const c = generateItem(registry, { uid: 'c', ilvl: 7, rarity: 'epic' }, new SeededRNG(3));
     const out = fuseItems(registry, [a, b, c], 'new', new SeededRNG(4));
     expect(out.rarity).toBe('legendary');

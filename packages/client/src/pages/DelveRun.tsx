@@ -21,7 +21,6 @@ import { PickupFeed } from '@/features/delve/arena/PickupFeed';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
 import { BossBar, SkillBar, TopHud, Vitals } from '@/features/delve/arena/ArenaHud';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
-import { manaStyle } from '@/features/delve/format';
 import '@/features/delve/delve.css';
 
 interface BannerState {
@@ -106,6 +105,7 @@ export function DelveRun() {
     return () => ro.disconnect();
   }, []);
 
+  const arenaRef = useRef<ReturnType<typeof useArena> | null>(null);
   const onUi = useCallback(
     (e: ArenaUiEvent) => {
       switch (e.kind) {
@@ -174,15 +174,6 @@ export function DelveRun() {
           );
           break;
         }
-        case 'spells': {
-          const names = e.unlocked
-            .map((id) => registry.getSkill(id))
-            .map((s) => `${s.icon} ${s.name}`);
-          playSound('upgradeTier');
-          vibrate('success');
-          showBanner('NEW SPELL', '#c4b5fd', names.join(' · '));
-          break;
-        }
         case 'cleared': {
           const d = useDelveStore.getState().profile.dive;
           playSound('victory');
@@ -199,11 +190,8 @@ export function DelveRun() {
           const now = performance.now();
           if (now - lastNoMana.current > 1500) {
             lastNoMana.current = now;
-            const skill = registry.getSkill(e.skillId);
-            const need = skill.elements
-              .map((m) => manaStyle(registry, m))
-              .map((m) => `${m.icon} ${m.name}`);
-            showToast(`Not enough ${need.join(' + ')} mana`);
+            const ab = arenaRef.current?.hud?.abilities[e.slot];
+            showToast(ab ? `Not enough mana for ${ab.name}` : 'Not enough mana');
           }
           break;
         }
@@ -218,6 +206,7 @@ export function DelveRun() {
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
   const paused = !!sheetUid || fanfares.length > 0 || menuOpen || choosing || finished;
   const arena = useArena(hostRef, { paused, insets, onUi });
+  arenaRef.current = arena;
 
   useEffect(() => {
     if (!dive) navigate('/delve', { replace: true });
@@ -297,6 +286,7 @@ export function DelveRun() {
           <SkillBar
             hud={arena.hud}
             onCast={arena.cast}
+            onAim={arena.aim}
             onPotion={arena.potion}
             showKeys={!!fineMouse}
           />

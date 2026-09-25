@@ -13,7 +13,7 @@ describe('ItemDetailSheet', () => {
     useDelveStore.getState().resetProfile(1234);
   });
 
-  it('shows the item mana and the spells equipping it would unlock', () => {
+  it('shows the item mana and the attunement equipping it would add', () => {
     const helm = generateItem(
       registry,
       { uid: 'h1', ilvl: 3, rarity: 'magic', slot: 'helm', mana: 'frost' },
@@ -24,6 +24,6 @@ describe('ItemDetailSheet', () => {
     render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
     expect(screen.getByTestId('item-mana')).toHaveTextContent('Frost +1');
     expect(screen.getByTestId('attune-delta')).toHaveTextContent('+1 Frost');
-    expect(screen.getByTestId('skill-delta')).toHaveTextContent('Unlocks: 💠 Frost Nova');
+    expect(screen.getByTestId('attune-note')).toHaveTextContent('powers abilities');
   });
 });
