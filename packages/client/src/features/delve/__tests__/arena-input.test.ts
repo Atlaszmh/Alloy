@@ -31,4 +31,14 @@ describe('ability keys', () => {
     expect(cast()).toBeNull();
     expect(input.aiming).toBeNull();
   });
+
+  it('Space dodges and F drinks a potion', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'Space');
+    expect(input.dodge).toBe(true);
+    expect(input.potion).toBe(false);
+    key('keydown', 'KeyF');
+    expect(input.potion).toBe(true);
+  });
 });

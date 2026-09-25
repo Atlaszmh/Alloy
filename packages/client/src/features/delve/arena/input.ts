@@ -25,6 +25,7 @@ export interface ArenaInput {
   /** Last mouse position (client px), for hold-to-aim on the keyboard. */
   mouse: Vec | null;
   potion: boolean;
+  dodge: boolean;
 }
 
 export function createArenaInput(): ArenaInput {
@@ -35,6 +36,7 @@ export function createArenaInput(): ArenaInput {
     aiming: null,
     mouse: null,
     potion: false,
+    dodge: false,
   };
 }
 
@@ -93,7 +95,10 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       // Another ability key is still held: use it now rather than drop it.
       if (input.aiming?.at === null) release();
       input.aiming = { slot: CAST_KEYS[e.code], since: performance.now(), at: null };
-    } else if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) {
+    } else if (e.code === 'Space' && !e.repeat) {
+      input.dodge = true;
+      e.preventDefault();
+    } else if (e.code === 'KeyF' && !e.repeat) {
       input.potion = true;
       e.preventDefault();
     }

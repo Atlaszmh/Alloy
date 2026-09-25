@@ -45,6 +45,11 @@ test.describe('Delve loot loop', () => {
       'Ultimate: Fire Nova',
     );
     await expect(page.getByTestId('mana-bar')).toBeVisible();
+    await expect(page.getByTestId('dodge-button')).toBeVisible();
+    const bar = await page.getByTestId('skill-bar').boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(bar!.x).toBeGreaterThanOrEqual(0);
+    expect(bar!.x + bar!.width).toBeLessThanOrEqual(viewport.width);
 
     const door = page.getByTestId('door-choice');
     const summary = page.getByTestId('dive-summary');

@@ -158,7 +158,7 @@ function AbilityButton({
   const color2 = manaStyle(registry, ab.elements[ab.elements.length - 1]).color;
   const cooling = ab.cooldown > 0.05;
   const cdFrac = cooling ? Math.min(1, ab.cooldown / ab.cooldownTotal) : 0;
-  const size = slot === 2 ? 76 : 68;
+  const size = slot === 2 ? 72 : 64;
 
   const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -275,24 +275,89 @@ function AbilityButton({
   );
 }
 
+/** Dodge: a pip per charge, an arc refilling the next one, a glow while the riposte is armed. */
+function DodgeButton({
+  hud,
+  showKey,
+  onDodge,
+}: {
+  hud: ArenaHud | null;
+  showKey: boolean;
+  onDodge: () => void;
+}) {
+  const charges = hud?.dodgeCharges ?? 0;
+  const max = hud?.dodgeMax ?? 2;
+  const refilling = charges < max ? (hud?.dodgeRefill ?? 0) : 0;
+  const riposte = !!hud?.riposte;
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        onDodge();
+      }}
+      aria-label="Dodge"
+      data-testid="dodge-button"
+      data-charges={charges}
+      data-riposte={riposte}
+      className="relative h-14 w-14 rounded-full border-0 p-[3px]"
+      style={{
+        background: refilling
+          ? `conic-gradient(#e7e5e4 ${refilling * 360}deg, rgba(255,255,255,0.12) 0deg)`
+          : charges > 0
+            ? '#e7e5e4'
+            : 'rgba(255,255,255,0.12)',
+        boxShadow: riposte ? '0 0 18px #fde047, 0 0 6px #fde047' : 'none',
+        opacity: charges > 0 ? 1 : 0.55,
+        touchAction: 'none',
+      }}
+    >
+      <span
+        className="flex h-full w-full items-center justify-center rounded-full text-xl"
+        style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
+      >
+        💨
+      </span>
+      <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
+        {Array.from({ length: max }, (_, k) => (
+          <span
+            key={k}
+            data-pip={k < charges ? 'full' : 'empty'}
+            className="h-1.5 w-2.5 rounded-full"
+            style={{ background: k < charges ? '#e7e5e4' : 'rgba(255,255,255,0.2)' }}
+          />
+        ))}
+      </span>
+      {showKey && (
+        <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
+          Space
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function SkillBar({
   hud,
   onCast,
   onAim,
   onPotion,
+  onDodge,
   showKeys,
 }: {
   hud: ArenaHud | null;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
   onPotion: () => void;
+  onDodge: () => void;
   showKeys: boolean;
 }) {
   return (
-    <div className="flex items-end justify-center gap-2.5">
+    <div className="flex items-end justify-center gap-2" data-testid="skill-bar">
+      <DodgeButton hud={hud} showKey={showKeys} onDodge={onDodge} />
       <button
         type="button"
-        className="delve-btn relative flex h-14 w-14 flex-col items-center justify-center p-0"
+        className="delve-btn relative flex h-12 w-12 flex-col items-center justify-center p-0"
         onClick={onPotion}
         disabled={!hud || hud.potions <= 0}
         aria-label="Drink potion"

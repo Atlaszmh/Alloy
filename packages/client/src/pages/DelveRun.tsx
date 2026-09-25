@@ -151,6 +151,13 @@ export function DelveRun() {
               case 'cast':
                 playSound('orbPlace');
                 break;
+              case 'dodge':
+                vibrate('light');
+                break;
+              case 'perfectDodge':
+                playSound('synergyActivate');
+                vibrate('success');
+                break;
               default:
                 break;
             }
@@ -288,6 +295,7 @@ export function DelveRun() {
             onCast={arena.cast}
             onAim={arena.aim}
             onPotion={arena.potion}
+            onDodge={arena.dodge}
             showKeys={!!fineMouse}
           />
         </div>

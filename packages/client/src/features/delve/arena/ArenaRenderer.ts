@@ -12,6 +12,7 @@ import type { AimMarker } from './aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
+import { getDelveRegistry } from '../registry';
 
 /**
  * PixiJS view of an ArpgWorld. It never mutates the world: every frame it
@@ -170,6 +171,7 @@ export class ArenaRenderer {
   private textPool: Text[] = [];
   private dying: Dying[] = [];
   private heroFlashUntil = 0;
+  private heroPerfectUntil = 0;
   private aim: AimView | null = null;
   private aimG = new Graphics();
 
@@ -396,7 +398,7 @@ export class ArenaRenderer {
           break;
         }
         case 'heroHit':
-          if (e.dodged) this.floatText(e.x, e.y - 0.5, 'DODGE', 0x67e8f9, 16);
+          if (e.dodged) this.floatText(e.x, e.y - 0.5, 'EVADE', 0x67e8f9, 16);
           else {
             this.floatText(e.x, e.y - 0.3, `-${formatShort(e.amount)}`, 0xf87171, 20);
             this.heroFlashUntil = this.time + 0.12;
@@ -532,6 +534,32 @@ export class ArenaRenderer {
           });
           this.burst(e.toX, e.toY, this.guardColor(w), 10, 4);
           break;
+        case 'dodge': {
+          const reach = getDelveRegistry().getDelveBalance().dodge.distance;
+          this.bolts.push({
+            points: [
+              { x: e.fromX, y: e.fromY },
+              { x: e.fromX + e.dirX * reach, y: e.fromY + e.dirY * reach },
+            ],
+            life: 0.18,
+            max: 0.18,
+            color: 0xe7e5e4,
+          });
+          this.burst(e.fromX, e.fromY + 0.3, 0xd6d3d1, 6, 2.5, 0.08);
+          break;
+        }
+        case 'perfectDodge':
+          this.heroPerfectUntil = this.time + 0.3;
+          this.floatText(e.x, e.y - 1.6, 'PERFECT', 0xfde047, 28, {
+            pop: true,
+            life: 0.9,
+            rise: 0.7,
+          });
+          this.ring(e.x, e.y, 2.6, 0xfde047, false, 0.45);
+          this.ring(e.x, e.y, 1.4, 0xffffff, true, 0.25);
+          this.burst(e.x, e.y, 0xfff7c2, 14, 5);
+          this.addShake(0.18);
+          break;
         case 'revive':
           this.ring(w.hero.x, w.hero.y, 4, 0xfb923c, true, 0.7);
           this.floatText(w.hero.x, w.hero.y - 1.5, 'REBORN!', 0xfb923c, 30, {
@@ -653,6 +681,8 @@ export class ArenaRenderer {
   private syncHero(w: ArpgWorld): void {
     const h = w.hero;
     const aura = h.stats.weapon.element ? MANA_HEX[h.stats.weapon.element] : 0xd4a834;
+    // Dust kicked up along a dodge.
+    if (h.dodge && w.t < h.dodge.until) this.burst(h.x, h.y + 0.35, 0xd6d3d1, 1, 1.2, 0.07);
     this.hero.position.set(h.x, h.y);
     this.hero.zIndex = h.y;
     this.hero.alpha = w.t < h.invulnUntil ? 0.55 : 1;
@@ -686,7 +716,12 @@ export class ArenaRenderer {
       s.texture = this.heroFrames[Math.floor(this.time * 3) % this.heroFrames.length];
       s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
       s.position.set(0, 0.5);
-      s.tint = this.time < this.heroFlashUntil ? 0xff8a8a : 0xffffff;
+      s.tint =
+        this.time < this.heroPerfectUntil
+          ? 0xfff3b0
+          : this.time < this.heroFlashUntil
+            ? 0xff8a8a
+            : 0xffffff;
       this.heroBody.clear();
       return;
     }

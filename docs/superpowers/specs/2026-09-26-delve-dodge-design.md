@@ -1,7 +1,7 @@
 # Delve Dodge Design
 
 **Date:** 2026-09-26
-**Status:** Approved in conversation.
+**Status:** Built in v0.34.0.
 **Engine:** `packages/engine/src/arpg/` (a new `dodge.ts`, `step.ts`, `combat.ts`), `balance.json → delve.dodge`
 **Client:** `packages/client/src/features/delve/arena/` (input, HUD, renderer, `useArena`)
 

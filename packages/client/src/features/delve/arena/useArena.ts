@@ -67,6 +67,12 @@ export interface ArenaHud {
   abilities: AbilityHud[];
   /** Another ability is winding up: presses are ignored. */
   busy: boolean;
+  dodgeCharges: number;
+  dodgeMax: number;
+  /** Progress of the next dodge charge, 0..1 (1 when full). */
+  dodgeRefill: number;
+  /** A perfect dodge armed the riposte: the next real hit crits and staggers. */
+  riposte: boolean;
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -84,6 +90,9 @@ export type ArenaUiEvent =
   | { kind: 'events'; events: ArpgEvent[] };
 
 const END_DELAY = 1.3;
+/** A perfect dodge slows the display (not the rules) for a beat. */
+const SLOWMO_MS = 200;
+const SLOWMO_SCALE = 0.3;
 
 /**
  * Test/tuning hooks, off unless set by hand or by an E2E init script:
@@ -105,7 +114,9 @@ function readArenaFlags(): { autopilot: boolean; timescale: number } {
 function snapshot(world: ArpgWorld): ArenaHud {
   const h = world.hero;
   const t = world.t;
-  const comboWindow = getDelveRegistry().getDelveBalance().abilities.comboWindow;
+  const bal = getDelveRegistry().getDelveBalance();
+  const comboWindow = bal.abilities.comboWindow;
+  const dodgeBal = bal.dodge;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
   return {
@@ -143,6 +154,11 @@ function snapshot(world: ArpgWorld): ArenaHud {
       };
     }),
     busy: !!h.windup,
+    dodgeCharges: h.dodgeCharges,
+    dodgeMax: dodgeBal.charges,
+    dodgeRefill:
+      h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeBal.recharge) : 1,
+    riposte: t < h.riposteUntil,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -172,6 +188,7 @@ export function useArena(
   const pausedRef = useRef(opts.paused);
   const onUiRef = useRef(opts.onUi);
   const insetsRef = useRef(opts.insets);
+  const slowUntilRef = useRef(0);
   const [hud, setHud] = useState<ArenaHud | null>(null);
   const [ready, setReady] = useState(false);
   pausedRef.current = opts.paused;
@@ -224,7 +241,8 @@ export function useArena(
 
         app.ticker.add((ticker) => {
           const world = worldRef.current;
-          const dt = Math.min(0.1, ticker.deltaMS / 1000);
+          const slow = performance.now() < slowUntilRef.current ? SLOWMO_SCALE : 1;
+          const dt = Math.min(0.1, ticker.deltaMS / 1000) * slow;
           if (!world) return;
           const paused = pausedRef.current;
           if (!paused && !finishedRef.current) {
@@ -234,11 +252,17 @@ export function useArena(
               world,
               flags.autopilot
                 ? botInput(registry, world)
-                : { move: moveVector(input), cast: toCast(input.cast), potion: input.potion },
+                : {
+                    move: moveVector(input),
+                    cast: toCast(input.cast),
+                    potion: input.potion,
+                    dodge: input.dodge,
+                  },
               dt * flags.timescale,
             );
             input.cast = null;
             input.potion = false;
+            input.dodge = false;
             if (events.length > 0) {
               renderer.handleEvents(events);
               handleEvents(world, events);
@@ -286,8 +310,10 @@ export function useArena(
 
     function handleEvents(world: ArpgWorld, events: ArpgEvent[]) {
       onUiRef.current({ kind: 'events', events });
-      for (const e of events)
+      for (const e of events) {
         if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', slot: e.slot });
+        if (e.kind === 'perfectDodge') slowUntilRef.current = performance.now() + SLOWMO_MS;
+      }
       if (world.pending.items.length > 0 || world.pending.reactions.length > 0) bank(world);
     }
 
@@ -387,6 +413,9 @@ export function useArena(
         ? null
         : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at };
   }, []);
+  const dodge = useCallback(() => {
+    inputRef.current.dodge = true;
+  }, []);
   const potion = useCallback(() => {
     inputRef.current.potion = true;
   }, []);
@@ -399,6 +428,7 @@ export function useArena(
     input: inputRef.current,
     cast,
     aim,
+    dodge,
     potion,
     heroScreen,
     pixelsPerUnit,
