@@ -294,7 +294,9 @@ export interface HeroEntity {
   /** The next real hit before this time crits and staggers. */
   riposteUntil: number;
   nextAttackAt: number;
+  /** Basic attacks in the current melee combo (resets after a pause). */
   attackCount: number;
+  lastBasicAt: number;
   potions: number;
   invulnUntil: number;
   phoenixAvailable: boolean;
@@ -311,6 +313,13 @@ export interface ArpgInput {
   potion?: boolean;
   /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
   dodge?: boolean;
+  /**
+   * Manual basic attacks: whether the attack is held (or was tapped) this
+   * frame. Leave undefined for automatic basic attacks.
+   */
+  attack?: boolean;
+  /** Manual attacks: aim at this world point (else the nearest foe in reach, else ahead). */
+  attackAim?: Vec | null;
 }
 
 export type ArpgEvent =

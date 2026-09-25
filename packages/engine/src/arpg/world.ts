@@ -203,6 +203,7 @@ export function createHeroEntity(
     riposteUntil: 0,
     nextAttackAt: 0,
     attackCount: 0,
+    lastBasicAt: -1e9,
     potions: opts.potions,
     invulnUntil: 0,
     phoenixAvailable: opts.phoenixAvailable,

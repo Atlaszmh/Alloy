@@ -78,7 +78,7 @@
   },
   "delve": {
     "hero": {
-      "baseHp": 120, "baseCritChance": 5, "baseCritMultiplier": 150, "unarmedDamage": 3, "unarmedInterval": 0.9,
+      "baseHp": 120, "baseCritChance": 5, "baseCritMultiplier": 150, "unarmedDamage": 3, "unarmedInterval": 0.9, "basicComboGrace": 0.8,
       "minAttackInterval": 0.2, "critCap": 75, "dodgeCap": 60, "armorK": 25, "armorCap": 80,
       "moveSpeed": 5.2, "radius": 0.5, "pickupRadius": 1.3, "magnetRadius": 3.5, "cdrCap": 50
     },

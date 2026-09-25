@@ -184,6 +184,8 @@ export interface DelveBalance {
     baseCritMultiplier: number;
     unarmedDamage: number;
     unarmedInterval: number;
+    /** The melee combo resets after a pause longer than the attack interval plus this. */
+    basicComboGrace: number;
     minAttackInterval: number;
     critCap: number;
     dodgeCap: number;

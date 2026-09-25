@@ -621,6 +621,7 @@ const DelveBalanceSchema = z.object({
     baseCritMultiplier: z.number().positive(),
     unarmedDamage: z.number().positive(),
     unarmedInterval: z.number().positive(),
+    basicComboGrace: z.number().min(0),
     minAttackInterval: z.number().positive(),
     critCap: z.number().positive(),
     dodgeCap: z.number().positive(),

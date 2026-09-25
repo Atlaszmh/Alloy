@@ -62,16 +62,16 @@ export function stepWorld(
   while (world.accumulator >= step - 1e-9 && n < 12) {
     world.accumulator -= step;
     n++;
-    tick(ctx, input.move, step);
+    tick(ctx, input, step);
     if (world.heroDead) break;
   }
   return events;
 }
 
-function tick(ctx: SimCtx, move: Vec, dt: number): void {
+function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const { world } = ctx;
   world.t += dt;
-  heroTick(ctx, move, dt);
+  heroTick(ctx, input, dt);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
   monstersTick(ctx, dt);
@@ -93,9 +93,10 @@ function tick(ctx: SimCtx, move: Vec, dt: number): void {
 
 // ── Hero ───────────────────────────────────────────────────────────────────
 
-function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
+function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
+  const move = input.move;
 
   if (world.queuedPotion) {
     world.queuedPotion = false;
@@ -129,7 +130,11 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
     h.facing = { x: v.x / speed, y: v.y / speed };
   }
 
-  if (!h.windup && !dashing) basicAttack(ctx);
+  // Automatic unless the input says whether the attack is held (manual mode).
+  const manual = input.attack !== undefined;
+  if (!h.windup && !dashing && (!manual || input.attack)) {
+    basicAttack(ctx, manual ? (input.attackAim ?? null) : undefined);
+  }
 
   h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
@@ -137,16 +142,32 @@ function heroTick(ctx: SimCtx, move: Vec, dt: number): void {
   defendTick(ctx, dt);
 }
 
-function basicAttack(ctx: SimCtx): void {
+/**
+ * One basic attack when the weapon is ready. Automatic (`aim` undefined):
+ * only at a foe in reach. Manual: toward `aim` if given, else the nearest foe
+ * in reach, else straight ahead; a swing at nothing still uses the timer but
+ * gives no mana.
+ */
+function basicAttack(ctx: SimCtx, aim?: Vec | null): void {
   const { world, bal } = ctx;
   const h = world.hero;
   if (world.t < h.nextAttackAt) return;
   const w = h.stats.weapon;
-  const target = nearestMonster(ctx, h.x, h.y, w.range);
-  if (!target) return;
+  const manual = aim !== undefined;
+  const target = aim ? null : nearestMonster(ctx, h.x, h.y, w.range + (manual ? 1 : 0));
+  if (!target && !manual) return;
 
-  const dir = dirTo(h.x, h.y, target.x, target.y);
-  if (!h.moving) h.facing = dir;
+  let dir = aim
+    ? dirTo(h.x, h.y, aim.x, aim.y)
+    : target
+      ? dirTo(h.x, h.y, target.x, target.y)
+      : h.facing;
+  if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
+  if (manual || !h.moving) h.facing = dir;
+  // The melee combo resets after a pause.
+  if (world.t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace)
+    h.attackCount = 0;
+  h.lastBasicAt = world.t;
   h.attackCount++;
   const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
   // Melee weapons swing a three-hit combo: the third is wider and harder, with a shove.
@@ -161,6 +182,8 @@ function basicAttack(ctx: SimCtx): void {
     if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
   }
 
+  // Mana only for an attack at something: a swing that connects, or a shot with a foe in range.
+  let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
   if (w.kind === 'melee') {
     const crit = world.rng.next() < h.stats.critChance;
     const arc = finisher ? Math.min(360, w.arc + 60) : w.arc;
@@ -168,8 +191,13 @@ function basicAttack(ctx: SimCtx): void {
     const kb = finisher ? { knockback: 0.5, kbFrom: { x: h.x, y: h.y } } : {};
     for (const m of alive(ctx)) {
       if (dist(h.x, h.y, m.x, m.y) - m.radius > w.range) continue;
-      if (arc < 360 && m.id !== target.id && angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc)
+      if (
+        arc < 360 &&
+        m.id !== target?.id &&
+        angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc
+      )
         continue;
+      landed = true;
       hitMonster(ctx, m, base, element, { source: 'basic', crit, applies, ...kb });
       if (twin)
         hitMonster(ctx, m, base * (h.stats.legendaries.twin_fang / 100), element, {
@@ -209,13 +237,13 @@ function basicAttack(ctx: SimCtx): void {
     kind: 'basic',
     x: h.x,
     y: h.y,
-    tx: target.x,
-    ty: target.y,
+    tx: target ? target.x : h.x + dir.x * w.range,
+    ty: target ? target.y : h.y + dir.y * w.range,
     element,
     melee: w.kind === 'melee',
   });
 
-  h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+  if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
   h.nextAttackAt = world.t + h.stats.attackInterval / (surge ? 1 + surge.effect : 1);
 }
 
