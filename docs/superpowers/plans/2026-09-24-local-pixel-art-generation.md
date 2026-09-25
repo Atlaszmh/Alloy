@@ -95,11 +95,12 @@ canvas follows the monster's size at 16 px per unit, after Animal Well: tiny cri
 For boss-sized canvases `klein4b-sheet` overflows its cell (the small reference sprites make
 the model draw a zoomed-in giant); `klein4b-pixel` works well, so generate bosses with it.
 
-## Phase 3: Fill the roster (a few evenings of picking)
+## Phase 3: Fill the roster (done 2026-09-24, v0.32.0)
 
-- [ ] Generate 8 candidates for each of the 25 remaining monsters (~200 images; minutes of GPU time).
-- [ ] Pick, `build`, play-test in the arena, commit.
-- [ ] Target: at least 20 sprites that clearly belong together, which becomes the LoRA training set.
+- [x] 25 monsters generated on the RTX 5070 Ti: bosses 8× `klein4b-pixel`, the rest 4× `klein4b-sheet` + 4× `klein4b-pixel` (about 190 images). With the GPU to itself a monster takes under a minute; with a game running it took 3–7 minutes, as Windows spills VRAM into system RAM instead of failing.
+- [x] Both klein workflows now run the Qwen3-4B text encoder on the CPU (`CLIPLoader` device `cpu`): it encodes once per monster (ComfyUI caches it across candidates) and leaves 7.7 GB of VRAM for the image model.
+- [x] Cleanup reserves the outline colour for the outline, so "black-scaled" creatures (magma lizard, hellboar, Magmasaur) read as dark bodies inside a black edge instead of solid black.
+- [x] Picked by Claude from the review sheets; any can be swapped with `forge pick <id> <n>`. Weakest, to replace first: arc imp, mud toad, fire imp and nightstalker (10–13 px, too small for the models) and the snow stalker (white on white).
 
 ## Phase 4: Alloy style LoRA
 

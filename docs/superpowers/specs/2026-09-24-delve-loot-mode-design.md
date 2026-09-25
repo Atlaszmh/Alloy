@@ -238,16 +238,20 @@ The sheet is built by `packages/pixel-forge`, a Node CLI:
   (`prompts` writes the prompts and reference sheet, `import` brings the saved images
   back from `art/alloy/inbox/`).
 - **Cleanup**: key out the background (and a magenta card painted on another colour),
-  drop specks and the Gemini app's corner sparkle watermark, smooth low-contrast specks, find the model's pixel grid
+  drop specks and the Gemini app's corner sparkle watermark, smooth low-contrast specks,
+  keep the outline colour for the outline (dark bodies take the next-darkest colour, so
+  "black-scaled" creatures stay readable), find the model's pixel grid
   and sample one color per block, lock colors to the palette (OKLab), cap the color
   count, place the sprite bottom-centre on its canvas, and redraw a one-pixel outline.
 - **Review**: `generate` writes several candidates and a contact sheet; a person picks
   one (`pick`) and `build` repacks the atlas and the full review sheet.
 
-The first set covers the hero and all of Cinder Mines: the hero, mine rat (10 px), soot bat
-(11 px), goblin digger (16 px) and slag beetle (22 px) drawn in code, and Foreman Grask
-(45 px) generated with `klein4b-pixel` (sheet completion overflows the cell at boss sizes).
-The other 25 monsters are queued as `ai` assets.
+Every monster has a sprite (v0.32.0). The hero, mine rat (10 px), soot bat (11 px), goblin
+digger (16 px) and slag beetle (22 px) are drawn in code; the other 26 are generated on a local
+GPU (bosses with `klein4b-pixel`, as sheet completion overflows the cell at boss sizes; the rest
+picked from 4 `klein4b-sheet` and 4 `klein4b-pixel` candidates each). The weakest, to replace
+first: the 10–13 px critters (arc imp, mud toad, fire imp, nightstalker), where models cannot
+draw at that size, and the white-on-white snow stalker.
 
 ## Power & Comparison
 
