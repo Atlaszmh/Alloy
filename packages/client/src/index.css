@@ -434,3 +434,9 @@ html, body, #root {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Controller focus ring: shown only while the gamepad is the active input. */
+html[data-input='gamepad'] :focus {
+  outline: 3px solid #fcd34d !important;
+  outline-offset: 2px !important;
+}

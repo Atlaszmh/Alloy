@@ -29,6 +29,9 @@ import {
   type CastPress,
 } from './input';
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
+import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
+import { padToArena, stickAimPoint, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import { rumble } from '@/features/gamepad/rumble';
 
 /**
  * Runs a floor: owns the ArpgWorld and the Pixi renderer, drives the engine
@@ -255,24 +258,32 @@ export function useArena(
           const dt = Math.min(0.1, ticker.deltaMS / 1000) * slow;
           if (!world) return;
           const paused = pausedRef.current;
+          const pad = padFrame(world, paused);
           if (!paused && !finishedRef.current) {
             const input = inputRef.current;
+            const padMove = pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : null;
+            const padAttackAim =
+              pad?.attackHeld && pad.aimDir
+                ? stickAimPoint(world.hero, pad.aimDir, 1, world.hero.stats.weapon.range, false)
+                : null;
             const events = stepWorld(
               registry,
               world,
               flags.autopilot
                 ? botInput(registry, world)
                 : {
-                    move: moveVector(input),
+                    move: padMove ?? moveVector(input),
                     cast: toCast(input.cast),
-                    potion: input.potion,
-                    dodge: input.dodge,
+                    potion: input.potion || !!pad?.potion,
+                    dodge: input.dodge || !!pad?.dodge,
                     ...(manualRef.current
                       ? {
-                          attack: input.attackHeld || input.attackTap,
-                          attackAim: input.attackAim
-                            ? renderer.screenToWorld(input.attackAim.x, input.attackAim.y)
-                            : null,
+                          attack: input.attackHeld || input.attackTap || !!pad?.attackHeld,
+                          attackAim: padAttackAim
+                            ? padAttackAim
+                            : input.attackAim
+                              ? renderer.screenToWorld(input.attackAim.x, input.attackAim.y)
+                              : null,
                         }
                       : {}),
                   },
@@ -289,7 +300,7 @@ export function useArena(
             checkEnd(world);
           }
           renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
-          renderer.setAim(aimView(world));
+          renderer.setAim(aimView(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
           hudClock += dt;
           if (hudClock > 0.08) {
@@ -303,10 +314,55 @@ export function useArena(
     /** A press's screen aim point → world units. */
     function toCast(press: CastPress | null): AbilityCast | null {
       if (!press) return null;
+      if (press.aimWorld) return { slot: press.slot, aim: press.aimWorld };
       const r = rendererRef.current;
       return {
         slot: press.slot,
         aim: press.aim && r ? r.screenToWorld(press.aim.x, press.aim.y) : null,
+      };
+    }
+
+    /**
+     * The controller's part of this frame (see gamepad-hub): Menu opens the
+     * dive menu, and an ability press is queued, aimed by the right stick.
+     */
+    function padFrame(world: ArpgWorld, paused: boolean): ArenaPadActions | null {
+      const state = padState();
+      if (!state || paused) return null;
+      const pressed = takeArenaPresses();
+      const acts = padToArena(state, pressed);
+      if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
+      if (acts.cast !== null) {
+        const ab = world.hero.abilities[acts.cast];
+        const aimWorld =
+          acts.aimDir && ab
+            ? stickAimPoint(
+                world.hero,
+                acts.aimDir,
+                acts.aimTilt,
+                ab.range,
+                aimMarkerFor(ab.form.id) === 'circle',
+              )
+            : null;
+        inputRef.current.cast = { slot: acts.cast, aim: null, aimWorld };
+      }
+      return acts;
+    }
+
+    /** While the right stick is tilted, show where the Primary would go. */
+    function padAimView(world: ArpgWorld) {
+      const state = padState();
+      const ab = world.hero.abilities[0];
+      if (!state || !ab || (state.right.x === 0 && state.right.y === 0)) return null;
+      const tilt = Math.hypot(state.right.x, state.right.y);
+      const dir = { x: state.right.x / tilt, y: state.right.y / tilt };
+      const marker = aimMarkerFor(ab.form.id);
+      return {
+        marker: marker === 'none' ? ('line' as const) : marker,
+        point: stickAimPoint(world.hero, dir, tilt, ab.range, marker === 'circle'),
+        radius: ab.radius,
+        range: ab.range,
+        element: ab.element,
       };
     }
 
@@ -331,7 +387,12 @@ export function useArena(
       onUiRef.current({ kind: 'events', events });
       for (const e of events) {
         if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', slot: e.slot });
-        if (e.kind === 'perfectDodge') slowUntilRef.current = performance.now() + SLOWMO_MS;
+        if (e.kind === 'perfectDodge') {
+          slowUntilRef.current = performance.now() + SLOWMO_MS;
+          rumble('perfect');
+        }
+        if (e.kind === 'dodge') rumble('dodge');
+        if (e.kind === 'heroHit' && e.amount >= world.hero.stats.maxHp * 0.15) rumble('hurt');
       }
       if (world.pending.items.length > 0 || world.pending.reactions.length > 0) bank(world);
     }

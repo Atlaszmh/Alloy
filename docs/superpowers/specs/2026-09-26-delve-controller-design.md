@@ -1,7 +1,7 @@
 # Delve Controller Support Design
 
 **Date:** 2026-09-26
-**Status:** Approved in conversation.
+**Status:** Built in v0.36.0. One addition: `gamepad-hub.ts` reads the pad once per frame and routes each press to one owner (reading it twice let one Menu press close and reopen the dive menu).
 **Client only:** `packages/client/src/features/gamepad/`, `stores/inputDeviceStore.ts`, the arena (`useArena`, `input.ts`, `ArenaHud`), `DelveRun`, `DelveCamp`, `AppShell`. The engine is unchanged: the pad maps onto `ArpgInput` like the keyboard does.
 
 ## Goal

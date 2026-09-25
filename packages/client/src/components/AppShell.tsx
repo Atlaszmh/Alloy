@@ -4,11 +4,13 @@ import { TabBar } from './TabBar';
 import { SettingsDrawer } from './SettingsDrawer';
 import { DevDrawer } from './DevDrawer';
 import { ConfirmLeaveDialog } from './ConfirmLeaveDialog';
+import { useGamepadNav } from '@/features/gamepad/use-gamepad-nav';
 
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  useGamepadNav();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [devOpen, setDevOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);

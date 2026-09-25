@@ -5,7 +5,25 @@ import { formatNumber, manaStyle } from '../format';
 import { classifyPress, isCancelled } from './aim-gestures';
 import type { AbilityHud, ArenaHud } from './useArena';
 
-const KEY_HINTS = ['Q', 'E', 'R'];
+/** Button labels for the keyboard or a controller (Hades-style layout). */
+export interface ButtonHints {
+  abilities: [string, string, string];
+  dodge: string;
+  potion: string;
+  attack: string;
+}
+export const KEYBOARD_HINTS: ButtonHints = {
+  abilities: ['Q', 'E', 'R'],
+  dodge: 'Space',
+  potion: 'F',
+  attack: 'Click',
+};
+export const PAD_HINTS: ButtonHints = {
+  abilities: ['X', 'B', 'Y'],
+  dodge: 'A',
+  potion: 'LB',
+  attack: 'RT',
+};
 
 function hpGradient(frac: number): string {
   if (frac > 0.6) return 'linear-gradient(180deg,#4ade80,#16a34a)';
@@ -61,6 +79,7 @@ export const TopHud = forwardRef<
         <button
           className="delve-btn pointer-events-auto ml-1 px-2.5 py-1.5 text-sm"
           aria-label="Dive menu"
+          data-pad-menu
           onClick={onMenu}
         >
           ⋯
@@ -141,14 +160,14 @@ function AbilityButton({
   slot,
   ab,
   busy,
-  showKey,
+  hint,
   onCast,
   onAim,
 }: {
   slot: number;
   ab: AbilityHud;
   busy: boolean;
-  showKey: boolean;
+  hint?: string;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
 }) {
@@ -266,9 +285,9 @@ function AbilityButton({
           />
         </span>
       )}
-      {showKey && (
+      {hint && (
         <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
-          {KEY_HINTS[slot]}
+          {hint}
         </span>
       )}
     </button>
@@ -282,9 +301,11 @@ function AbilityButton({
 export function AttackButton({
   hud,
   onAttack,
+  hint,
 }: {
   hud: ArenaHud | null;
   onAttack: (held: boolean) => void;
+  hint?: string;
 }) {
   const release = () => onAttack(false);
   return (
@@ -312,6 +333,11 @@ export function AttackButton({
       >
         ⚔️
       </span>
+      {hint && (
+        <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
+          {hint}
+        </span>
+      )}
       {hud?.melee && (
         <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
           {[0, 1, 2].map((k) => (
@@ -333,11 +359,11 @@ export function AttackButton({
 /** Dodge: a pip per charge, an arc refilling the next one, a glow while the riposte is armed. */
 function DodgeButton({
   hud,
-  showKey,
+  hint,
   onDodge,
 }: {
   hud: ArenaHud | null;
-  showKey: boolean;
+  hint?: string;
   onDodge: () => void;
 }) {
   const charges = hud?.dodgeCharges ?? 0;
@@ -383,9 +409,9 @@ function DodgeButton({
           />
         ))}
       </span>
-      {showKey && (
+      {hint && (
         <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
-          Space
+          {hint}
         </span>
       )}
     </button>
@@ -398,18 +424,19 @@ export function SkillBar({
   onAim,
   onPotion,
   onDodge,
-  showKeys,
+  hints,
 }: {
   hud: ArenaHud | null;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
   onPotion: () => void;
   onDodge: () => void;
-  showKeys: boolean;
+  /** Button labels to show, or null (touch). */
+  hints: ButtonHints | null;
 }) {
   return (
     <div className="flex items-end justify-center gap-2" data-testid="skill-bar">
-      <DodgeButton hud={hud} showKey={showKeys} onDodge={onDodge} />
+      <DodgeButton hud={hud} hint={hints?.dodge} onDodge={onDodge} />
       <button
         type="button"
         className="delve-btn relative flex h-12 w-12 flex-col items-center justify-center p-0"
@@ -420,8 +447,10 @@ export function SkillBar({
       >
         <span className="text-xl leading-none">🧪</span>
         <span className="delve-display text-xs">×{hud?.potions ?? 0}</span>
-        {showKeys && (
-          <span className="absolute -top-1.5 right-0.5 text-[9px] text-stone-400">F</span>
+        {hints && (
+          <span className="absolute -top-1.5 right-0.5 text-[9px] text-stone-400">
+            {hints.potion}
+          </span>
         )}
       </button>
       {hud?.abilities.map((ab, i) => (
@@ -430,7 +459,7 @@ export function SkillBar({
           slot={i}
           ab={ab}
           busy={hud.busy}
-          showKey={showKeys}
+          hint={hints?.abilities[i]}
           onCast={onCast}
           onAim={onAim}
         />

@@ -167,7 +167,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   };
 
   return (
-    <div className="delve-sheet-backdrop" onClick={onClose} data-testid="item-sheet">
+    <div className="delve-sheet-backdrop" onClick={onClose} data-testid="item-sheet" data-pad-scope>
       <div
         className="delve-sheet"
         onClick={(e) => e.stopPropagation()}
@@ -215,7 +215,12 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
               )}
             </div>
           </div>
-          <button className="delve-btn px-3 py-1 text-sm" onClick={onClose} aria-label="Close">
+          <button
+            className="delve-btn px-3 py-1 text-sm"
+            onClick={onClose}
+            aria-label="Close"
+            data-pad-back
+          >
             ✕
           </button>
         </div>

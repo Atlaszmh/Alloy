@@ -113,6 +113,10 @@ export function DelveCamp() {
                 <b className="text-yellow-300">PERFECT</b>: your next hit crits and staggers.
               </p>
               <p>
+                🎮 A controller works too: left stick moves, right stick aims, A dodges, X/B/Y use
+                abilities, LB drinks, and the D-pad and A work every menu.
+              </p>
+              <p>
                 🔥 Build your Primary, Defensive and Ultimate in the{' '}
                 <b className="text-violet-300">Abilities</b> tab: a form, one or two elements, a
                 weight and a payment. Gear attunes you to its element and powers those abilities.
@@ -180,7 +184,7 @@ export function DelveCamp() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 rounded-xl bg-black/30 p-1" role="tablist">
+          <div className="flex gap-1 rounded-xl bg-black/30 p-1" role="tablist" data-pad-tabs>
             {(
               [
                 ['bag', `Bag${newCount > 0 ? ` •${newCount}` : ''}`],

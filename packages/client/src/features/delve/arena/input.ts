@@ -5,6 +5,8 @@ import { classifyPress } from './aim-gestures';
 export interface CastPress {
   slot: number;
   aim: Vec | null;
+  /** An aim already in world units (the controller's right stick). */
+  aimWorld?: Vec | null;
 }
 
 /** A press being held to aim: the marker follows `at` (client px), or the mouse when null. */

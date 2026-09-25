@@ -8,6 +8,8 @@ import {
   type GearItem,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer, showToast } from '@/components/Toast';
@@ -19,7 +21,15 @@ import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { LootTray } from '@/features/delve/LootTray';
 import { PickupFeed } from '@/features/delve/arena/PickupFeed';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
-import { AttackButton, BossBar, SkillBar, TopHud, Vitals } from '@/features/delve/arena/ArenaHud';
+import {
+  AttackButton,
+  BossBar,
+  KEYBOARD_HINTS,
+  PAD_HINTS,
+  SkillBar,
+  TopHud,
+  Vitals,
+} from '@/features/delve/arena/ArenaHud';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import '@/features/delve/delve.css';
 
@@ -212,7 +222,14 @@ export function DelveRun() {
   const choosing = dive?.phase === 'choosing';
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
   const paused = !!sheetUid || fanfares.length > 0 || menuOpen || choosing || finished;
+  useEffect(() => {
+    setArenaLive(!paused);
+    return () => setArenaLive(false);
+  }, [paused]);
   const manualAttack = useDelveStore((s) => s.manualAttack);
+  // The controller drives the fight while it's live; menus take it back when paused.
+  const device = useInputDeviceStore((s) => s.device);
+  const hints = device === 'gamepad' ? PAD_HINTS : fineMouse ? KEYBOARD_HINTS : null;
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
 
@@ -292,9 +309,9 @@ export function DelveRun() {
       >
         <div className="pointer-events-auto mx-auto flex max-w-[520px] flex-col gap-2">
           <Vitals hud={arena.hud} />
-          {manualAttack && !fineMouse && (
+          {manualAttack && (!fineMouse || device === 'gamepad') && (
             <div className="flex justify-end pr-1">
-              <AttackButton hud={arena.hud} onAttack={arena.attack} />
+              <AttackButton hud={arena.hud} onAttack={arena.attack} hint={hints?.attack} />
             </div>
           )}
           <SkillBar
@@ -303,7 +320,7 @@ export function DelveRun() {
             onAim={arena.aim}
             onPotion={arena.potion}
             onDodge={arena.dodge}
-            showKeys={!!fineMouse}
+            hints={hints}
           />
         </div>
       </div>
@@ -311,7 +328,10 @@ export function DelveRun() {
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
       {menuOpen && (
-        <div className="delve-panel absolute right-3 top-14 z-40 flex w-60 flex-col gap-1.5 p-2 shadow-xl">
+        <div
+          className="delve-panel absolute right-3 top-14 z-40 flex w-60 flex-col gap-1.5 p-2 shadow-xl"
+          data-pad-scope
+        >
           <button
             className="delve-btn text-sm"
             onClick={() => useDelveStore.getState().setManualAttack(!manualAttack)}
@@ -331,14 +351,14 @@ export function DelveRun() {
           >
             Abandon dive (lose bounty)
           </button>
-          <button className="delve-btn text-sm" onClick={() => setMenuOpen(false)}>
+          <button className="delve-btn text-sm" onClick={() => setMenuOpen(false)} data-pad-back>
             Resume
           </button>
         </div>
       )}
 
       {choosing && (
-        <div className="absolute inset-0 z-40 flex flex-col bg-black/80">
+        <div className="absolute inset-0 z-40 flex flex-col bg-black/80" data-pad-scope>
           <div className="relative min-h-0 flex-1">
             <DoorChoice dive={dive} onChoose={onChooseDoor} onExtract={onExtract} />
           </div>

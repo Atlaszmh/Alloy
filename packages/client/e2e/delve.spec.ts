@@ -4,19 +4,19 @@ import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
 const SAVE_KEY = 'alloy:delve:v2';
 
 /** Seed a deterministic fresh Delve save and let the engine bot play the arena. */
-async function seedProfile(page: Page, seed = 4242): Promise<void> {
+async function seedProfile(page: Page, seed = 4242, autopilot = true): Promise<void> {
   const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), seed));
   await page.addInitScript(
-    ([key, value]) => {
+    ([key, value, bot]) => {
       if (sessionStorage.getItem('delve-e2e')) return;
       localStorage.clear();
       localStorage.setItem(key, value);
-      localStorage.setItem('alloy:delve:autopilot', '1');
+      if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
       localStorage.setItem('alloy:delve:timescale', '2');
       localStorage.setItem('alloy:muted', 'true');
       sessionStorage.setItem('delve-e2e', '1');
     },
-    [SAVE_KEY, save] as const,
+    [SAVE_KEY, save, autopilot] as const,
   );
 }
 
@@ -46,10 +46,6 @@ test.describe('Delve loot loop', () => {
     );
     await expect(page.getByTestId('mana-bar')).toBeVisible();
     await expect(page.getByTestId('dodge-button')).toBeVisible();
-    const bar = await page.getByTestId('skill-bar').boundingBox();
-    const viewport = page.viewportSize()!;
-    expect(bar!.x).toBeGreaterThanOrEqual(0);
-    expect(bar!.x + bar!.width).toBeLessThanOrEqual(viewport.width);
 
     const door = page.getByTestId('door-choice');
     const summary = page.getByTestId('dive-summary');
@@ -94,6 +90,19 @@ test.describe('Delve loot loop', () => {
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
+  });
+
+  test('D06: the ability bar fits on screen', async ({ page }) => {
+    // No bot, so the fight (and the HUD) stays up while we measure.
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    const bar = page.getByTestId('skill-bar');
+    await expect(page.getByTestId('dodge-button')).toBeVisible();
+    const box = (await bar.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
   });
 
   test('D05: basic attacks switch between auto and manual from the dive menu', async ({ page }) => {

@@ -37,6 +37,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
           : 'radial-gradient(ellipse at 50% 35%, rgba(90,70,10,0.8), rgba(0,0,0,0.96))',
       }}
       data-testid="dive-summary"
+      data-pad-scope
     >
       <div
         ref={titleRef}
