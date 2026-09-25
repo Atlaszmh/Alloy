@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   chooseDoor,
@@ -9,6 +9,8 @@ import {
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useControlsStore } from '@/stores/controlsStore';
+import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -24,8 +26,8 @@ import { ArenaControls } from '@/features/delve/arena/ArenaControls';
 import {
   AttackButton,
   BossBar,
-  KEYBOARD_HINTS,
-  PAD_HINTS,
+  keyHints,
+  padHints,
   SkillBar,
   TopHud,
   Vitals,
@@ -93,6 +95,7 @@ export function DelveRun() {
   const [fanfares, setFanfares] = useState<{ item: GearItem; firstTime: boolean }[]>([]);
   const [banners, setBanners] = useState<BannerState[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const bannerId = useRef(0);
   const lastNoMana = useRef(0);
 
@@ -221,15 +224,19 @@ export function DelveRun() {
 
   const choosing = dive?.phase === 'choosing';
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
-  const paused = !!sheetUid || fanfares.length > 0 || menuOpen || choosing || finished;
-  useEffect(() => {
+  const paused =
+    !!sheetUid || fanfares.length > 0 || menuOpen || controlsOpen || choosing || finished;
+  // A layout effect, so the controller switches owner in the same commit as the
+  // pause or resume: a press right after resuming reaches the fight, not the menus.
+  useLayoutEffect(() => {
     setArenaLive(!paused);
     return () => setArenaLive(false);
   }, [paused]);
   const manualAttack = useDelveStore((s) => s.manualAttack);
   // The controller drives the fight while it's live; menus take it back when paused.
   const device = useInputDeviceStore((s) => s.device);
-  const hints = device === 'gamepad' ? PAD_HINTS : fineMouse ? KEYBOARD_HINTS : null;
+  const controls = useControlsStore((s) => s.config);
+  const hints = device === 'gamepad' ? padHints(controls) : fineMouse ? keyHints(controls) : null;
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
 
@@ -339,6 +346,13 @@ export function DelveRun() {
           >
             Basic attack: {manualAttack ? 'Manual' : 'Auto'} ⇄
           </button>
+          <button
+            className="delve-btn text-sm"
+            onClick={() => setControlsOpen(true)}
+            data-testid="open-controls"
+          >
+            🎮 Controls
+          </button>
           <button className="delve-btn text-sm" onClick={() => navigate('/delve')}>
             Back to the Anvil (floor restarts)
           </button>
@@ -356,6 +370,8 @@ export function DelveRun() {
           </button>
         </div>
       )}
+      {/* After the dive menu: the controller's back button and focus go to the topmost panel. */}
+      {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
 
       {choosing && (
         <div className="absolute inset-0 z-40 flex flex-col bg-black/80" data-pad-scope>

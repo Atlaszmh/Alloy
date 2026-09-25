@@ -3,27 +3,37 @@ import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
 import { classifyPress, isCancelled } from './aim-gestures';
+import { keyLabel, padHint, type ControlsConfig } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from './useArena';
 
-/** Button labels for the keyboard or a controller (thumbs stay on the sticks). */
+/** Button labels for the keyboard or a controller. */
 export interface ButtonHints {
   abilities: [string, string, string];
   dodge: string;
   potion: string;
   attack: string;
 }
-export const KEYBOARD_HINTS: ButtonHints = {
-  abilities: ['Q', 'E', 'R'],
-  dodge: 'Space',
-  potion: 'F',
-  attack: 'Click',
-};
-export const PAD_HINTS: ButtonHints = {
-  abilities: ['RT', 'LB', 'R3'],
-  dodge: 'LT',
-  potion: '▼',
-  attack: 'RB',
-};
+/** Hints for the keyboard from the player's bindings (the mouse attacks when no key is bound). */
+export function keyHints(cfg: ControlsConfig): ButtonHints {
+  const k = cfg.keys;
+  return {
+    abilities: [keyLabel(k.primary), keyLabel(k.defensive), keyLabel(k.ultimate)],
+    dodge: keyLabel(k.dodge),
+    potion: keyLabel(k.potion),
+    attack: k.attack ? keyLabel(k.attack) : 'Click',
+  };
+}
+
+/** Hints for the controller from the player's bindings. */
+export function padHints(cfg: ControlsConfig): ButtonHints {
+  const p = cfg.pad;
+  return {
+    abilities: [padHint(p.primary), padHint(p.defensive), padHint(p.ultimate)],
+    dodge: padHint(p.dodge),
+    potion: padHint(p.potion),
+    attack: padHint(p.attack),
+  };
+}
 
 function hpGradient(frac: number): string {
   if (frac > 0.6) return 'linear-gradient(180deg,#4ade80,#16a34a)';

@@ -32,6 +32,7 @@ import {
 } from './input';
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
+import { useControlsStore } from '@/stores/controlsStore';
 import { padToArena, stickAimPoint, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { rumble } from '@/features/gamepad/rumble';
 
@@ -332,7 +333,8 @@ export function useArena(
       const state = padState();
       if (!state || paused) return null;
       const pressed = takeArenaPresses();
-      const acts = padToArena(state, pressed);
+      const controls = useControlsStore.getState().config;
+      const acts = padToArena(state, pressed, controls);
       if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
       // A press always tries (so an unaffordable one still says so); holding RT
       // casts the Primary again as soon as it's ready.
@@ -351,6 +353,7 @@ export function useArena(
                 acts.aimTilt,
                 ab.range,
                 aimMarkerFor(ab.form.id) === 'circle',
+                controls.aimReach,
               )
             : null;
         inputRef.current.cast = { slot, aim: null, aimWorld };
@@ -366,9 +369,10 @@ export function useArena(
       const tilt = Math.hypot(state.right.x, state.right.y);
       const dir = { x: state.right.x / tilt, y: state.right.y / tilt };
       const marker = aimMarkerFor(ab.form.id);
+      const reach = useControlsStore.getState().config.aimReach;
       return {
         marker: marker === 'none' ? ('line' as const) : marker,
-        point: stickAimPoint(world.hero, dir, tilt, ab.range, marker === 'circle'),
+        point: stickAimPoint(world.hero, dir, tilt, ab.range, marker === 'circle', reach),
         radius: ab.radius,
         range: ab.range,
         element: ab.element,

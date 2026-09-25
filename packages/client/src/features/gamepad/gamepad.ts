@@ -55,7 +55,10 @@ export function radialDeadzone(x: number, y: number, deadzone: number): Vec {
   return { x: (x / len) * scaled, y: (y / len) * scaled };
 }
 
-export function readPad(pad: GamepadLike): PadState {
+export function readPad(
+  pad: GamepadLike,
+  deadzone: { left: number; right: number } = { left: LEFT_DEADZONE, right: RIGHT_DEADZONE },
+): PadState {
   const axis = (i: number) => pad.axes[i] ?? 0;
   const buttons = {} as Record<PadButton, boolean>;
   PAD_BUTTONS.forEach((name, i) => {
@@ -64,8 +67,8 @@ export function readPad(pad: GamepadLike): PadState {
     buttons[name] = !!b && (b.pressed || (trigger && b.value > TRIGGER_THRESHOLD));
   });
   return {
-    left: radialDeadzone(axis(0), axis(1), LEFT_DEADZONE),
-    right: radialDeadzone(axis(2), axis(3), RIGHT_DEADZONE),
+    left: radialDeadzone(axis(0), axis(1), deadzone.left),
+    right: radialDeadzone(axis(2), axis(3), deadzone.right),
     buttons,
   };
 }

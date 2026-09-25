@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AttackButton, KEYBOARD_HINTS, PAD_HINTS, SkillBar } from '../arena/ArenaHud';
+import { AttackButton, SkillBar, keyHints, padHints } from '../arena/ArenaHud';
+import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import type { ArenaHud } from '../arena/useArena';
 
 function hud(over: Partial<ArenaHud> = {}): ArenaHud {
@@ -36,7 +37,7 @@ describe('SkillBar dodge button', () => {
         onAim={() => {}}
         onPotion={() => {}}
         onDodge={onDodge}
-        hints={KEYBOARD_HINTS}
+        hints={keyHints(DEFAULT_CONTROLS)}
       />,
     );
     const button = screen.getByTestId('dodge-button');
@@ -56,7 +57,7 @@ describe('SkillBar dodge button', () => {
         onAim={() => {}}
         onPotion={() => {}}
         onDodge={() => {}}
-        hints={PAD_HINTS}
+        hints={padHints(DEFAULT_CONTROLS)}
       />,
     );
     expect(screen.getByTestId('dodge-button')).toHaveAttribute('data-riposte', 'true');

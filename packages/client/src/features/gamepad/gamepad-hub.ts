@@ -1,4 +1,5 @@
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useControlsStore } from '@/stores/controlsStore';
 import { edges, firstPad, isActive, readPad, type PadButton, type PadState } from './gamepad';
 
 /**
@@ -16,7 +17,19 @@ let current: PadState | null = null;
 let arenaLive = false;
 const arenaPresses = new Set<PadButton>();
 let nav: NavHandler | null = null;
+let capture: ((button: PadButton) => void) | null = null;
 let raf = 0;
+
+/**
+ * The next button pressed goes to `onButton` (the Controls editor binding it)
+ * instead of the arena or the menus. Returns a cancel function.
+ */
+export function capturePadButton(onButton: (button: PadButton) => void): () => void {
+  capture = onButton;
+  return () => {
+    if (capture === onButton) capture = null;
+  };
+}
 
 /** The arena owns the controller while a fight is live (not paused). */
 export function setArenaLive(live: boolean): void {
@@ -43,10 +56,16 @@ function frame(now: number): void {
     prev = current = null;
     return;
   }
-  current = readPad(pad);
+  current = readPad(pad, useControlsStore.getState().config.deadzone);
   const pressed = edges(prev, current);
   prev = current;
   if (isActive(current)) useInputDeviceStore.getState().setDevice('gamepad');
+  if (capture && pressed.size > 0) {
+    const onButton = capture;
+    capture = null;
+    onButton([...pressed][0]);
+    return;
+  }
   if (arenaLive) for (const b of pressed) arenaPresses.add(b);
   else nav?.(current, pressed, now);
 }

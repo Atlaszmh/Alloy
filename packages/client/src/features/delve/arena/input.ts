@@ -1,5 +1,7 @@
 import type { Vec } from '@alloy/engine';
 import { classifyPress } from './aim-gestures';
+import { useControlsStore } from '@/stores/controlsStore';
+import type { KeyAction, MoveKey } from '@/features/controls/controls';
 
 /** An ability press. `aim` is a screen point (client px), or null to auto-aim. */
 export interface CastPress {
@@ -54,30 +56,39 @@ export function moveVector(input: ArenaInput): Vec {
   return input.keys.x !== 0 || input.keys.y !== 0 ? input.keys : input.pointer;
 }
 
-const DIRS: Record<string, Vec> = {
-  KeyW: { x: 0, y: -1 },
+/** The arrow keys always move, whatever else is bound. */
+const ARROWS: Record<string, Vec> = {
   ArrowUp: { x: 0, y: -1 },
-  KeyS: { x: 0, y: 1 },
   ArrowDown: { x: 0, y: 1 },
-  KeyA: { x: -1, y: 0 },
   ArrowLeft: { x: -1, y: 0 },
-  KeyD: { x: 1, y: 0 },
   ArrowRight: { x: 1, y: 0 },
 };
 
-const CAST_KEYS: Record<string, number> = {
-  KeyQ: 0,
-  Digit1: 0,
-  KeyE: 1,
-  Digit2: 1,
-  KeyR: 2,
-  Digit3: 2,
+const MOVE_DIRS: Record<MoveKey, Vec> = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
 };
 
+const ABILITY_SLOT: Partial<Record<KeyAction, number>> = { primary: 0, defensive: 1, ultimate: 2 };
+
+/** Which action a key is bound to in the player's setup, if any. */
+function keyAction(code: string): KeyAction | null {
+  const keys = useControlsStore.getState().config.keys;
+  return (Object.keys(keys) as KeyAction[]).find((a) => keys[a] === code) ?? null;
+}
+
+function moveDir(code: string): Vec | null {
+  if (ARROWS[code]) return ARROWS[code];
+  const action = keyAction(code);
+  return action && action in MOVE_DIRS ? MOVE_DIRS[action as MoveKey] : null;
+}
+
 /**
- * Wire keyboard controls to `input`. Q/E/R: a quick tap auto-aims; holding
- * shows the aim marker at the mouse and releasing casts there. Returns a
- * cleanup function.
+ * Wire keyboard controls to `input`, following the player's key bindings.
+ * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
+ * mouse and releasing casts there. Returns a cleanup function.
  */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();
@@ -85,7 +96,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     let x = 0;
     let y = 0;
     for (const code of held) {
-      const d = DIRS[code];
+      const d = moveDir(code);
       if (d) {
         x += d.x;
         y += d.y;
@@ -95,21 +106,36 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     input.keys = len > 0 ? { x: x / len, y: y / len } : { x: 0, y: 0 };
   };
   const down = (e: KeyboardEvent) => {
-    if (!isEnabled() || e.target instanceof HTMLInputElement) return;
-    if (DIRS[e.code]) {
+    if (e.target instanceof HTMLInputElement) return;
+    // The menu key works while paused too, so it can close the dive menu.
+    if (!e.repeat && keyAction(e.code) === 'menu') {
+      (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
+      return;
+    }
+    if (!isEnabled()) return;
+    if (moveDir(e.code)) {
       held.add(e.code);
       recompute();
       e.preventDefault();
-    } else if (e.code in CAST_KEYS && !e.repeat) {
+      return;
+    }
+    const action = keyAction(e.code);
+    if (!action || e.repeat) return;
+    const slot = ABILITY_SLOT[action];
+    if (slot !== undefined) {
       // Another ability key is still held: use it now rather than drop it.
       if (input.aiming?.at === null) release();
-      input.aiming = { slot: CAST_KEYS[e.code], since: performance.now(), at: null };
-    } else if (e.code === 'Space' && !e.repeat) {
+      input.aiming = { slot, since: performance.now(), at: null };
+    } else if (action === 'dodge') {
       input.dodge = true;
       e.preventDefault();
-    } else if (e.code === 'KeyF' && !e.repeat) {
+    } else if (action === 'potion') {
       input.potion = true;
       e.preventDefault();
+    } else if (action === 'attack') {
+      input.attackHeld = true;
+      input.attackTap = true;
+      input.attackAim = input.mouse;
     }
   };
   /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
@@ -122,11 +148,14 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
   };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
+    const action = keyAction(e.code);
+    if (action === 'attack') input.attackHeld = false;
     const a = input.aiming;
-    if (a && a.at === null && CAST_KEYS[e.code] === a.slot) release();
+    if (a && a.at === null && action && ABILITY_SLOT[action] === a.slot) release();
   };
   const move = (e: MouseEvent) => {
     input.mouse = { x: e.clientX, y: e.clientY };
+    if (input.attackHeld) input.attackAim = input.mouse;
   };
   const blur = () => {
     held.clear();

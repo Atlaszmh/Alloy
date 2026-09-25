@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { edges, radialDeadzone, readPad, type GamepadLike } from '../gamepad';
-import { padToArena } from '../arena-pad';
+import { padToArena, stickAimPoint } from '../arena-pad';
+import { DEFAULT_CONTROLS, bindPad } from '@/features/controls/controls';
 import { pickNext, type NavRect } from '../spatial-nav';
 
 /** A standard-mapping pad with the given buttons held and stick axes. */
@@ -87,6 +88,35 @@ describe('padToArena (triggers fire, bumpers support)', () => {
     const aimed = padToArena(readPad(fakePad([], [0, 0, 1, 0])), new Set());
     expect(aimed.aimDir!.x).toBeCloseTo(1);
     expect(aimed.aimTilt).toBeCloseTo(1);
+  });
+});
+
+describe('custom controls', () => {
+  it('follows the bindings and per-ability repeat', () => {
+    let cfg = bindPad(DEFAULT_CONTROLS, 'primary', 'a');
+    cfg = { ...cfg, repeat: { primary: false, defensive: true, ultimate: false } };
+    const prev = readPad(fakePad());
+    const act = (held: number[]) => {
+      const next = readPad(fakePad(held));
+      return padToArena(next, edges(prev, next), cfg);
+    };
+    expect(act([0]).cast).toBe(0); // A is now the Primary
+    expect(act([0]).castHeld).toBeNull(); // with repeat off
+    expect(act([7]).cast).toBeNull(); // RT is unbound now
+    expect(act([4]).castHeld).toBe(1); // LB Defensive repeats
+  });
+
+  it('reads the sticks with the configured deadzones', () => {
+    const pad = fakePad([], [0.3, 0, 0, 0]);
+    expect(readPad(pad).left.x).toBeGreaterThan(0);
+    expect(readPad(pad, { left: 0.4, right: 0.35 }).left.x).toBe(0);
+  });
+
+  it('aim reach scales how far placed abilities land at full tilt', () => {
+    const hero = { x: 0, y: 0 };
+    expect(stickAimPoint(hero, { x: 1, y: 0 }, 1, 8, true).x).toBeCloseTo(8);
+    expect(stickAimPoint(hero, { x: 1, y: 0 }, 1, 8, true, 0.5).x).toBeCloseTo(4);
+    expect(stickAimPoint(hero, { x: 1, y: 0 }, 0.1, 8, true, 0.5).x).toBeCloseTo(2.4);
   });
 });
 

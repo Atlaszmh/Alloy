@@ -7,6 +7,9 @@ import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
  * presses by hand.
  */
 
+/** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
+const ARENA_READY = 30_000;
+
 const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13 } as const;
 
 async function setup(page: Page, autopilot: boolean): Promise<void> {
@@ -74,6 +77,34 @@ async function tap(page: Page, button: number): Promise<void> {
   await frames(page, 2);
 }
 
+/**
+ * Press a button and read the dodge button's charges a few frames later, all
+ * inside the page: with many test browsers the round trips are slow enough
+ * for the charge to refill before a separate check could see it.
+ */
+async function tapAndReadCharges(page: Page, button: number): Promise<string | null> {
+  return page.evaluate(
+    (i) =>
+      new Promise<string | null>((resolve) => {
+        const pad = (
+          window as unknown as { __pad: { buttons: { pressed: boolean; value: number }[] } }
+        ).__pad;
+        pad.buttons[i] = { pressed: true, value: 1 };
+        let frames = 0;
+        const tick = () => {
+          frames++;
+          if (frames === 2) pad.buttons[i] = { pressed: false, value: 0 };
+          if (frames < 10) return void requestAnimationFrame(tick);
+          resolve(
+            document.querySelector('[data-testid="dodge-button"]')!.getAttribute('data-charges'),
+          );
+        };
+        requestAnimationFrame(tick);
+      }),
+    button,
+  );
+}
+
 test.describe('Delve with a controller', () => {
   test('G01: Menu opens the dive menu; D-pad and A toggle a setting; B resumes', async ({
     page,
@@ -81,7 +112,7 @@ test.describe('Delve with a controller', () => {
     await setup(page, true);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
-    await expect(page.getByTestId('delve-run')).toBeVisible();
+    await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     await tap(page, BUTTON.menu);
     const toggle = page.getByTestId('attack-mode-toggle');
@@ -100,9 +131,8 @@ test.describe('Delve with a controller', () => {
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const dodge = page.getByTestId('dodge-button');
-    await expect(dodge).toHaveAttribute('data-charges', '2');
-    await tap(page, BUTTON.lt);
-    await expect(dodge).toHaveAttribute('data-charges', '1');
+    await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
+    expect(await tapAndReadCharges(page, BUTTON.lt)).toBe('1');
     await expect(dodge).toContainText('LT');
   });
 
@@ -111,7 +141,7 @@ test.describe('Delve with a controller', () => {
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const bar = page.getByTestId('mana-bar');
-    await expect(bar).toBeVisible();
+    await expect(bar).toBeVisible({ timeout: ARENA_READY });
     const mana = async () =>
       Number((await bar.getAttribute('aria-label'))!.match(/Mana (\d+)/)![1]);
     const before = await mana();
@@ -124,7 +154,9 @@ test.describe('Delve with a controller', () => {
       pad.axes = [0, 0, 0, -1];
       pad.buttons[7] = { pressed: true, value: 1 };
     });
-    await page.waitForTimeout(1500);
+    // Two or more Primary casts (8 mana each) outpace the regen while RT is held
+    // (polling while held, since game time runs slow when the machine is busy).
+    await expect.poll(mana, { timeout: ARENA_READY }).toBeLessThan(before - 6);
     await page.evaluate(() => {
       const pad = (
         window as unknown as {
@@ -134,8 +166,30 @@ test.describe('Delve with a controller', () => {
       pad.axes = [0, 0, 0, 0];
       pad.buttons[7] = { pressed: false, value: 0 };
     });
-    // Two or more Primary casts (8 mana each) outpace 1.5 s of regen.
-    await expect.poll(mana).toBeLessThan(before - 6);
+  });
+
+  test('G05: rebind the dodge to A from the Controls editor mid-dive, and A dodges', async ({
+    page,
+  }) => {
+    await setup(page, false);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    const dodge = page.getByTestId('dodge-button');
+    await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
+
+    await tap(page, BUTTON.menu);
+    await page.getByTestId('open-controls').click();
+    await page.getByTestId('bind-pad-dodge').click();
+    await expect(page.getByTestId('bind-pad-dodge')).toContainText('Press');
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('bind-pad-dodge')).toHaveText('A');
+    await tap(page, BUTTON.b); // closes the editor
+    await expect(page.getByTestId('controls-panel')).toBeHidden();
+    await tap(page, BUTTON.b); // resumes the dive
+    await expect(page.getByTestId('attack-mode-toggle')).toBeHidden();
+
+    expect(await tapAndReadCharges(page, BUTTON.a)).toBe('1');
+    await expect(dodge).toContainText('A');
   });
 
   test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {

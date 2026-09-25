@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { attachKeyboard, createArenaInput } from '../arena/input';
+import { useControlsStore } from '@/stores/controlsStore';
 
 const key = (type: 'keydown' | 'keyup', code: string) =>
   window.dispatchEvent(new KeyboardEvent(type, { code }));
@@ -40,5 +41,20 @@ describe('ability keys', () => {
     expect(input.potion).toBe(false);
     key('keydown', 'KeyF');
     expect(input.potion).toBe(true);
+  });
+
+  it('follows the player key bindings, and the arrows always move', () => {
+    useControlsStore.getState().setKey('primary', 'KeyJ');
+    useControlsStore.getState().setKey('dodge', 'KeyK');
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'KeyJ');
+    key('keyup', 'KeyJ');
+    expect(input.cast).toEqual({ slot: 0, aim: null });
+    key('keydown', 'KeyK');
+    expect(input.dodge).toBe(true);
+    key('keydown', 'ArrowLeft');
+    expect(input.keys).toEqual({ x: -1, y: 0 });
+    useControlsStore.getState().reset();
   });
 });

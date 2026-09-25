@@ -42,7 +42,26 @@ function focus(el: HTMLElement): void {
   el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
 }
 
+/** Left/right on a focused slider nudges its value (React hears it as an input event). */
+function nudgeRange(el: HTMLInputElement, dir: NavDir): void {
+  const step = Number(el.step) || 1;
+  const next = Math.min(
+    Number(el.max),
+    Math.max(Number(el.min), Number(el.value) + (dir === 'right' ? step : -step)),
+  );
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(el, String(next));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 export function moveFocus(dir: NavDir): void {
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLInputElement &&
+    active.type === 'range' &&
+    (dir === 'left' || dir === 'right')
+  ) {
+    return nudgeRange(active, dir);
+  }
   const els = candidates();
   if (els.length === 0) return;
   const idx = els.indexOf(document.activeElement as HTMLElement);

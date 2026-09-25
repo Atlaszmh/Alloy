@@ -18,6 +18,7 @@ import { ForgePanel } from '@/features/delve/ForgePanel';
 import { CodexPanel } from '@/features/delve/CodexPanel';
 import { AbilitiesPanel } from '@/features/delve/AbilitiesPanel';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
+import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { useCountUp } from '@/features/delve/useCountUp';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber, manaStyle } from '@/features/delve/format';
 import '@/features/delve/delve.css';
@@ -31,6 +32,7 @@ export function DelveCamp() {
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   // A finished dive's summary was shown on the run screen — clear it here.
   useEffect(() => {
@@ -95,6 +97,14 @@ export function DelveCamp() {
               <span style={{ color: '#fb923c' }}>
                 ★ {codexFound}/{codexTotal} legendaries
               </span>
+              <button
+                type="button"
+                className="delve-chip"
+                onClick={() => setControlsOpen(true)}
+                data-testid="open-controls"
+              >
+                🎮 Controls
+              </button>
             </div>
           </header>
 
@@ -254,6 +264,7 @@ export function DelveCamp() {
       </div>
 
       {selected && <ItemDetailSheet uid={selected} onClose={() => setSelected(null)} />}
+      {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
       <ToastContainer />
     </div>
   );

@@ -2,6 +2,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
 
 const SAVE_KEY = 'alloy:delve:v2';
+/** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
+const ARENA_READY = 30_000;
 
 /** Seed a deterministic fresh Delve save and let the engine bot play the arena. */
 async function seedProfile(page: Page, seed = 4242, autopilot = true): Promise<void> {
@@ -31,9 +33,11 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('delve-howto')).toBeVisible();
 
     await page.getByTestId('delve-button').click();
-    await expect(page.getByTestId('delve-run')).toBeVisible();
+    await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
-    await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible();
+    await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
+      timeout: ARENA_READY,
+    });
     await expect(page.getByTestId('hero-hp')).toBeVisible();
     await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', 'Primary: Fire Bolt');
     await expect(page.getByTestId('ability-1')).toHaveAttribute(
@@ -98,7 +102,7 @@ test.describe('Delve loot loop', () => {
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const bar = page.getByTestId('skill-bar');
-    await expect(page.getByTestId('dodge-button')).toBeVisible();
+    await expect(page.getByTestId('dodge-button')).toBeVisible({ timeout: ARENA_READY });
     const box = (await bar.boundingBox())!;
     const viewport = page.viewportSize()!;
     expect(box.x).toBeGreaterThanOrEqual(0);
@@ -109,7 +113,7 @@ test.describe('Delve loot loop', () => {
     await seedProfile(page);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
-    await expect(page.getByTestId('delve-run')).toBeVisible();
+    await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await page.getByRole('button', { name: 'Dive menu' }).click();
     const toggle = page.getByTestId('attack-mode-toggle');
     await expect(toggle).toContainText('Auto');
