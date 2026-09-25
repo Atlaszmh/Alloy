@@ -90,20 +90,26 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       recompute();
       e.preventDefault();
     } else if (e.code in CAST_KEYS && !e.repeat) {
+      // Another ability key is still held: use it now rather than drop it.
+      if (input.aiming?.at === null) release();
       input.aiming = { slot: CAST_KEYS[e.code], since: performance.now(), at: null };
     } else if ((e.code === 'KeyF' || e.code === 'Space') && !e.repeat) {
       input.potion = true;
       e.preventDefault();
     }
   };
+  /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
+  const release = () => {
+    const a = input.aiming;
+    if (!a) return;
+    input.aiming = null;
+    const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
+    input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
+  };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
     const a = input.aiming;
-    if (a && a.at === null && CAST_KEYS[e.code] === a.slot) {
-      input.aiming = null;
-      const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
-      input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
-    }
+    if (a && a.at === null && CAST_KEYS[e.code] === a.slot) release();
   };
   const move = (e: MouseEvent) => {
     input.mouse = { x: e.clientX, y: e.clientY };

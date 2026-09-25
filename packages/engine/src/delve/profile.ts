@@ -89,6 +89,10 @@ export function setAbility(
   slot: AbilitySlot,
   build: AbilityBuild,
 ): DelveProfile {
+  const phase = profile.dive?.phase;
+  if (phase === 'fighting' || phase === 'choosing') {
+    throw new Error('Abilities can only change between dives');
+  }
   const form = registry.getForm(build.form);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
   const els = build.elements;

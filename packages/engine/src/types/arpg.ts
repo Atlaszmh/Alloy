@@ -264,7 +264,14 @@ export interface HeroEntity {
   comboStep: number[];
   comboAt: number[];
   /** A cast-paid ability winding up; the hero can't move or attack meanwhile. */
-  windup: { slot: number; aim: Vec | null; start: number; until: number } | null;
+  windup: {
+    slot: number;
+    aim: Vec | null;
+    /** Where the press aimed (the fallback if auto-aim finds nothing at landing). */
+    at: Vec;
+    start: number;
+    until: number;
+  } | null;
   /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
   defend: { form: FormId; until: number } | null;
   ward: { hp: number; max: number } | null;

@@ -58,4 +58,13 @@ describe('AbilitiesPanel', () => {
     fireEvent.click(screen.getByTestId('weight-2'));
     expect(screen.getByTestId('cost-warning')).toHaveTextContent('your pool holds');
   });
+
+  it('is read-only while a dive is under way', () => {
+    useDelveStore.getState().startDive(1);
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('abilities-locked')).toBeInTheDocument();
+    expect(screen.getByTestId('form-lance')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('form-lance'));
+    expect(abilities().primary.form).toBe('bolt');
+  });
 });

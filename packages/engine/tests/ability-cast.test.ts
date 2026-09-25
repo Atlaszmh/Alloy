@@ -59,6 +59,23 @@ describe('cast payment', () => {
   });
 });
 
+describe('wind-up targets', () => {
+  it('a cast-paid ability still lands where its target was if the target died meanwhile', () => {
+    const w = arena([dummy(13, 29)], {
+      noBasic: true,
+      primary: { form: 'burst', payment: 'cast' },
+    });
+    press(w, 0);
+    expect(w.hero.windup).not.toBeNull();
+    w.monsters = [];
+    const events = run(w, w.hero.abilities[0].castTime + 0.1);
+    const cast = events.find((e) => e.kind === 'cast');
+    expect(cast && cast.kind === 'cast' && Math.hypot(cast.tx - 13, cast.ty - 29)).toBeLessThan(
+      0.01,
+    );
+  });
+});
+
 describe('charge payment', () => {
   it('fills from damage dealt and in lulls, fires only when full, then empties', () => {
     const w = arena([dummy(13, 34.4)], { noBasic: false });

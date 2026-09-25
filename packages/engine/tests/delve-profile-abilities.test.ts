@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { createDelveProfile, parseDelveProfile, setAbility } from '../src/delve/profile.js';
+import { startDive } from '../src/delve/dive.js';
 
 const registry = createDefaultRegistry();
 
@@ -50,6 +51,14 @@ describe('profile abilities (save v3)', () => {
     expect(() => setAbility(registry, p, 'primary', { ...ok, elements: [] })).toThrow();
     expect(() => setAbility(registry, p, 'primary', { ...ok, weight: 3 as never })).toThrow();
     expect(() => setAbility(registry, p, 'primary', { ...ok, payment: 'gold' as never })).toThrow();
+  });
+
+  it('abilities can only change between dives', () => {
+    const diving = startDive(registry, createDelveProfile(registry, 1), 1);
+    const build = { form: 'lance', elements: ['storm'], weight: 0, payment: 'mana' } as const;
+    expect(() =>
+      setAbility(registry, diving, 'primary', { ...build, elements: ['storm'] }),
+    ).toThrow(/dive/);
   });
 
   it('migrates a version 2 save, keeping gear and scrap', () => {

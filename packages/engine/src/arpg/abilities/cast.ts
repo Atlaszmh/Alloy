@@ -64,11 +64,12 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     return false;
   }
   const aim = cast.aim ?? null;
-  if (!aimPoint(ctx, ab, aim)) return false;
+  const at = aimPoint(ctx, ab, aim);
+  if (!at) return false;
   if (ab.castTime > 0) {
     const until = world.t + ab.castTime;
     pay(ctx, slot, until);
-    h.windup = { slot, aim, start: world.t, until };
+    h.windup = { slot, aim, at, start: world.t, until };
     ctx.events.push({ kind: 'windup', slot, until });
     return true;
   }
@@ -77,11 +78,14 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   return true;
 }
 
-/** Land a finished wind-up. Auto-aim is chosen now, so a target that died meanwhile doesn't waste it. */
+/**
+ * Land a finished wind-up. Auto-aim is chosen again now; if nothing is left
+ * to aim at, it lands where the press aimed, so it is never wasted.
+ */
 export function castTick(ctx: SimCtx): void {
   const h = ctx.world.hero;
   if (!h.windup || ctx.world.t < h.windup.until) return;
-  const { slot, aim } = h.windup;
+  const { slot, aim, at } = h.windup;
   h.windup = null;
-  fire(ctx, slot, aim);
+  if (!fire(ctx, slot, aim)) fire(ctx, slot, at);
 }

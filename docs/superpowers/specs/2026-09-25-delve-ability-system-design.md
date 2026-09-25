@@ -211,7 +211,7 @@ Nightstalker cuts the Defensive's cooldown by 1 s, or adds 1 charge unit when th
 **Casting edge cases.**
 - Presses during a wind-up are dropped (the HUD shows the other buttons locked).
 - An explicit aim point is fixed at the press.
-- Auto-aim is resolved when the effect lands, so a target that died during the wind-up doesn't waste it.
+- Auto-aim is resolved again when the effect lands; if nothing is left to aim at, it lands where the press aimed, so a wind-up is never wasted.
 - The basic attack pauses during a wind-up.
 - With auto-aim and nothing in range, directional and placed forms fail and cost nothing, as today. Nova, the defensives, and any cast with an explicit aim always fire.
 - A full charge meter doesn't fire by itself; it only unlocks the button.
@@ -264,7 +264,7 @@ Form base values are listed in `arpg.json → forms` and copied in the plan.
 
 **Gear changes and floors.**
 - **Re-equipping** mid-fight re-resolves the abilities and the pool size, and clamps mana to the new maximum. Charge, buffs, combos and cooldowns carry over.
-- **Changing abilities** is only possible at the Anvil, between dives.
+- **Changing abilities** is only possible at the Anvil, between dives: during a dive the workshop is read-only and `setAbility` refuses.
 - **Each floor** starts with full mana and empty charge meters.
 
 **Migration.** The default element E is the equipped weapon's element (Fire if unarmed), so `parseDelveProfile` still needs no registry.

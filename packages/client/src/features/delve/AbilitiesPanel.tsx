@@ -4,6 +4,7 @@ import {
   MANA_TYPES,
   computeAttunement,
   computeHeroStats,
+  isDiveActive,
   manaPool,
   resolveAbility,
   type AbilityBuild,
@@ -212,7 +213,8 @@ function Readout({
 
 /**
  * The Abilities workshop: build the Primary, Defensive and Ultimate from a
- * form, one or two elements, a weight and a payment. Every part is open.
+ * form, one or two elements, a weight and a payment. Every part is open;
+ * builds only change between dives.
  */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
@@ -234,8 +236,10 @@ export function AbilitiesPanel() {
   );
   const ab = resolved[ABILITY_SLOTS.indexOf(slot)];
   const [main, infusion] = build.elements;
+  const locked = isDiveActive(profile);
 
   const set = (next: Partial<AbilityBuild>) => {
+    if (locked) return;
     playSound('buttonClick');
     useDelveStore.getState().setAbility(slot, { ...build, ...next });
   };
@@ -278,128 +282,142 @@ export function AbilitiesPanel() {
         ))}
       </div>
 
-      <section className="flex flex-col gap-1.5">
-        <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-          Form
+      {locked && (
+        <div
+          className="delve-panel p-2 text-center text-xs text-amber-200"
+          data-testid="abilities-locked"
+        >
+          A dive is under way: abilities can change once you extract or fall.
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {data.forms
-            .filter((f) => f.slot === slot)
-            .map((f) => (
+      )}
+      <fieldset
+        disabled={locked}
+        className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0"
+        style={{ opacity: locked ? 0.55 : 1 }}
+      >
+        <section className="flex flex-col gap-1.5">
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Form
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {data.forms
+              .filter((f) => f.slot === slot)
+              .map((f) => (
+                <Chip
+                  key={f.id}
+                  pressed={build.form === f.id}
+                  onClick={() => set({ form: f.id })}
+                  testId={`form-${f.id}`}
+                >
+                  {f.icon} {f.name}
+                </Chip>
+              ))}
+          </div>
+          <div className="text-xs text-stone-400">{ab.form.text}</div>
+        </section>
+
+        <section className="flex flex-col gap-1.5">
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Element
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {MANA_TYPES.map((m) => (
               <Chip
-                key={f.id}
-                pressed={build.form === f.id}
-                onClick={() => set({ form: f.id })}
-                testId={`form-${f.id}`}
+                key={m}
+                pressed={main === m}
+                onClick={() => setMain(m)}
+                testId={`element-${m}`}
+                title={trait(m).text}
               >
-                {f.icon} {f.name}
+                {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
               </Chip>
             ))}
-        </div>
-        <div className="text-xs text-stone-400">{ab.form.text}</div>
-      </section>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-stone-500">Infuse with</span>
+            <Chip pressed={!infusion} onClick={() => setInfusion(null)} testId="infusion-none">
+              None
+            </Chip>
+            {MANA_TYPES.filter((m) => m !== main).map((m) => (
+              <Chip
+                key={m}
+                pressed={infusion === m}
+                onClick={() => setInfusion(m)}
+                testId={`infusion-${m}`}
+              >
+                {manaStyle(registry, m).icon}
+              </Chip>
+            ))}
+            {infusion && (
+              <button
+                type="button"
+                className="delve-chip"
+                onClick={() => set({ elements: [infusion, main] })}
+                aria-label="Swap the main element and the infusion"
+                data-testid="swap-elements"
+              >
+                ⇄
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-stone-400" data-testid="element-effect">
+            {ab.fusion ? (
+              <>
+                <b className="text-stone-200">
+                  {ab.fusion.icon} {ab.fusion.name}:
+                </b>{' '}
+                {ab.fusion.text} {manaStyle(registry, main).name} sets the damage type.
+              </>
+            ) : slot === 'defensive' ? (
+              trait(main).defensive
+            ) : (
+              trait(main).text
+            )}
+          </div>
+        </section>
 
-      <section className="flex flex-col gap-1.5">
-        <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-          Element
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {MANA_TYPES.map((m) => (
-            <Chip
-              key={m}
-              pressed={main === m}
-              onClick={() => setMain(m)}
-              testId={`element-${m}`}
-              title={trait(m).text}
-            >
-              {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
-            </Chip>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-stone-500">Infuse with</span>
-          <Chip pressed={!infusion} onClick={() => setInfusion(null)} testId="infusion-none">
-            None
-          </Chip>
-          {MANA_TYPES.filter((m) => m !== main).map((m) => (
-            <Chip
-              key={m}
-              pressed={infusion === m}
-              onClick={() => setInfusion(m)}
-              testId={`infusion-${m}`}
-            >
-              {manaStyle(registry, m).icon}
-            </Chip>
-          ))}
-          {infusion && (
-            <button
-              type="button"
-              className="delve-chip"
-              onClick={() => set({ elements: [infusion, main] })}
-              aria-label="Swap the main element and the infusion"
-              data-testid="swap-elements"
-            >
-              ⇄
-            </button>
-          )}
-        </div>
-        <div className="text-xs text-stone-400" data-testid="element-effect">
-          {ab.fusion ? (
-            <>
-              <b className="text-stone-200">
-                {ab.fusion.icon} {ab.fusion.name}:
-              </b>{' '}
-              {ab.fusion.text} {manaStyle(registry, main).name} sets the damage type.
-            </>
-          ) : slot === 'defensive' ? (
-            trait(main).defensive
-          ) : (
-            trait(main).text
-          )}
-        </div>
-      </section>
+        <section className="flex flex-col gap-1.5">
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Weight
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {WEIGHTS.map(([w, label]) => (
+              <Chip
+                key={w}
+                pressed={build.weight === w}
+                onClick={() => set({ weight: w })}
+                testId={`weight-${w}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </div>
+          <div className="text-[11px] text-stone-500">
+            Heavier hits harder and bigger, but costs more and comes slower.
+          </div>
+        </section>
 
-      <section className="flex flex-col gap-1.5">
-        <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-          Weight
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {WEIGHTS.map(([w, label]) => (
-            <Chip
-              key={w}
-              pressed={build.weight === w}
-              onClick={() => set({ weight: w })}
-              testId={`weight-${w}`}
-            >
-              {label}
-            </Chip>
-          ))}
-        </div>
-        <div className="text-[11px] text-stone-500">
-          Heavier hits harder and bigger, but costs more and comes slower.
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-1.5">
-        <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-          Pay with
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PAYMENTS.map(([p, label]) => (
-            <Chip
-              key={p}
-              pressed={build.payment === p}
-              onClick={() => set({ payment: p })}
-              testId={`payment-${p}`}
-            >
-              {label}
-            </Chip>
-          ))}
-        </div>
-        <div className="text-[11px] text-stone-500">
-          {PAYMENTS.find(([p]) => p === build.payment)![2]}
-        </div>
-      </section>
+        <section className="flex flex-col gap-1.5">
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Pay with
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PAYMENTS.map(([p, label]) => (
+              <Chip
+                key={p}
+                pressed={build.payment === p}
+                onClick={() => set({ payment: p })}
+                testId={`payment-${p}`}
+              >
+                {label}
+              </Chip>
+            ))}
+          </div>
+          <div className="text-[11px] text-stone-500">
+            {PAYMENTS.find(([p]) => p === build.payment)![2]}
+          </div>
+        </section>
+      </fieldset>
 
       <Readout
         ab={ab}
