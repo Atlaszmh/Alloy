@@ -608,7 +608,7 @@ In `src/arpg/world.ts` `createHeroEntity`, after `windup: null,` add `swing: nul
 ```ts
 import type { Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { clamp, dist } from './geometry.js';
+import { clamp } from './geometry.js';
 
 /**
  * Motion and cancels for the hero's actions. A push (a lunge, an ability's
@@ -950,7 +950,8 @@ describe('weapon strings', () => {
   });
 
   it('ranged Twin Fang fires a second shot at ×1.0, copying the size but never exploding', () => {
-    const w = arena([dummy(13, 33)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+    // The staff's last blow is the exploding great orb: its twin must not burst.
+    const w = arena([dummy(13, 33)], { equipped: { weapon: gear('fire', 'weapon', 'staff') } });
     w.hero.stats.legendaries.twin_fang = 100;
     w.hero.attackCount = 2;
     w.hero.lastBasicAt = 0;
@@ -1366,7 +1367,7 @@ Update these existing tests:
   - "cancels a cast wind-up" → `pressOnly`;
   - "holds a cast pressed mid-dash" → `pressOnly`, and lengthen its `run(...)` by the ability's `castTime`.
 - `ability-cast.test.ts`:
-  - "roots the hero through the wind-up, lands after it and blocks other casts" → `pressOnly`. The Q pressed during the wind-up is now buffered: instead of `expect(w.hero.windup).toBeNull()` at the end, assert that a `cast` event for slot 0 follows the Nova.
+  - "roots the hero through the wind-up, lands after it and blocks other casts" → `pressOnly`. The Q pressed during the wind-up is now buffered and fires after the Nova, with its own 0.14 s conjure: extend the final run to `run(w, castTime + 0.3)` and, instead of `expect(w.hero.windup).toBeNull()`, assert that the run's events include a `cast` for slot 0 after the Nova's.
   - "a cast-paid ability still lands where its target was…" → `pressOnly` (it checks the wind-up right after the press).
   - "spends mana and starts the cooldown": set `w.hero.manaRegen = 0` at the start, because `press()` now runs through the conjure and regen would shift the mana check.
 
@@ -1957,7 +1958,8 @@ git commit -m "feat(engine): the bot lets its swings land; Power reads the weapo
 
 **Files:**
 - Modify: `packages/client/src/features/gamepad/arena-pad.ts`, `features/delve/arena/useArena.ts`, `features/delve/arena/ArenaHud.tsx`, `features/delve/AbilitiesPanel.tsx`, `features/delve/PaperDoll.tsx`, `features/delve/arena/fx/draw-world.ts`, `features/delve/arena/fx/mana-fx.ts`, `features/delve/arena/fx/mana-pixels.ts`, `features/delve/arena/ArenaRenderer.ts`
-- Test: `features/delve/__tests__/ArenaHud.test.tsx`, `features/gamepad/__tests__/arena-pad.test.ts` (or the existing pad test file), `features/delve/arena/fx/__tests__/mana-pixels.test.ts`
+- Modify: `features/delve/arena/pixel/floor-engine.ts` (skip thrown Bursts)
+- Test: `features/delve/__tests__/ArenaHud.test.tsx`, `features/gamepad/__tests__/gamepad.test.ts`, `features/delve/arena/fx/__tests__/mana-pixels.test.ts`, `features/delve/__tests__/floor-engine.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
 
