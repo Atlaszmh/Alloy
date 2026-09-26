@@ -165,6 +165,7 @@ export function executeForm(
         range: reach,
         arc,
         element: ab.element,
+        heft,
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);

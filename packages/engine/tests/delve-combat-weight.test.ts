@@ -39,6 +39,7 @@ describe('combat weight data', () => {
     }
     expect(bal.hero.defaultCombo.length).toBeGreaterThan(0);
     expect(bal.feel.conjure).toHaveLength(5);
+    expect(bal.feel.lungeHold).toBeCloseTo(0.6);
     expect(registry.getForm('bolt').motion).toBeLessThan(0);
     expect(registry.getForm('strike').motion).toBeGreaterThan(0);
   });
@@ -154,7 +155,9 @@ describe('pushes and buffered input', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.6);
     const y0 = w.hero.y;
-    run(w, 3 * STEP);
+    run(w, STEP);
+    const lunge = w.hero.push!;
+    until(w, () => w.t >= lunge.start + 2 * STEP);
     expect(w.hero.push?.stopId).toBe(w.monsters[0].id);
     const y1 = w.hero.y;
     expect(y0 - y1).toBeGreaterThan(0);
@@ -197,7 +200,11 @@ describe('basic attacks: startup, strike, recovery', () => {
     run(w, STEP);
     const sw = w.hero.swing!;
     expect(sw.committed).toBe(true);
-    run(w, (sw.strikeAt - w.t) * 0.5);
+    // Planted for the first part of the startup (the lunge holds), then it lunges.
+    const half = sw.start + (sw.strikeAt - sw.start) * 0.5;
+    until(w, () => w.t + STEP > half);
+    expect(w.t).toBeGreaterThan(sw.start + (sw.strikeAt - sw.start) * 0.4);
+    expect(w.hero.y).toBe(y0);
     expect(damaged(w.monsters[0])).toBe(false);
     const events = until(w, () => w.hero.swing === null);
     expect(basics(events)).toHaveLength(1);
@@ -216,23 +223,67 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(y0 - w.hero.y).toBeCloseTo(0.25 - bal.feel.contactGap, 3);
   });
 
-  it('ignores movement through a committed startup, then slows it in recovery only', () => {
+  it('a manual swing ignores movement through its startup, then slows it in recovery only', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
-    run(w, STEP);
+    const right = { move: { x: 1, y: 0 }, attack: false };
+    stepWorld(registry, w, { move: still, attack: false, attackTap: true }, STEP);
+    expect(w.hero.swing?.committed).toBe(true);
     const x0 = w.hero.x;
-    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    stepWorld(registry, w, right, STEP);
     expect(w.hero.x).toBe(x0);
-    until(w, () => w.hero.swing === null);
+    until(w, () => w.hero.swing === null, right);
     const x1 = w.hero.x;
-    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    stepWorld(registry, w, right, STEP);
     const pace = w.hero.stats.moveSpeed * STEP;
     expect(w.hero.x - x1).toBeCloseTo(pace * bal.feel.recoveryMove, 4);
-    until(w, () => w.t >= w.hero.recoverUntil);
+    until(w, () => w.t >= w.hero.recoverUntil, right);
     expect(w.t).toBeLessThan(w.hero.nextAttackAt);
     const x2 = w.hero.x;
-    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    stepWorld(registry, w, right, STEP);
     expect(w.hero.x - x2).toBeCloseTo(pace, 4);
+  });
+
+  it('moving releases an automatic swing: full speed, no more lunge, the blow still lands, no recovery', () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 1.6);
+    run(w, STEP);
+    expect(w.hero.swing?.committed).toBe(true);
+    expect(w.hero.push).not.toBeNull();
+    const x0 = w.hero.x;
+    const y0 = w.hero.y;
+    const right = { move: { x: 1, y: 0 } };
+    stepWorld(registry, w, right, STEP);
+    expect(w.hero.swing?.committed).toBe(false);
+    expect(w.hero.push).toBeNull();
+    const pace = w.hero.stats.moveSpeed * STEP;
+    expect(w.hero.x - x0).toBeCloseTo(pace, 4);
+    expect(w.hero.y).toBe(y0);
+    const events = until(w, () => w.hero.swing === null, right);
+    expect(basics(events)).toHaveLength(1);
+    expect(w.hero.recoverUntil).toBeLessThanOrEqual(w.t);
+    const x1 = w.hero.x;
+    stepWorld(registry, w, right, STEP);
+    expect(w.hero.x - x1).toBeCloseTo(pace, 4);
+  });
+
+  it('an automatic swing whose foe dies in the startup is dropped: no root, no whiff, no string step', () => {
+    // A second foe far away keeps the floor from clearing.
+    const w = arena([dummy(13, 0), dummy(3, 5)]);
+    place(w, 1.0);
+    run(w, STEP);
+    const sw = w.hero.swing!;
+    expect(sw.targetId).toBe(w.monsters[0].id);
+    w.monsters[0].dead = true;
+    const events = stepWorld(registry, w, { move: still }, STEP);
+    expect(w.hero.swing).toBeNull();
+    expect(w.hero.push).toBeNull();
+    events.push(...run(w, sw.strikeAt - w.t + 0.1));
+    expect(basics(events)).toHaveLength(0);
+    expect(w.hero.attackCount).toBe(0);
+    const x0 = w.hero.x;
+    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    expect(w.hero.x - x0).toBeCloseTo(w.hero.stats.moveSpeed * STEP, 4);
   });
 
   it('a committed shot roots the hero through its startup, with no push involved', () => {
@@ -631,6 +682,9 @@ describe('casting: conjure, motion, recovery', () => {
     expect(y0 - w.hero.y).toBeCloseTo(0.2, 5);
     const slash = events.find((e) => e.kind === 'slash');
     expect(slash && slash.kind === 'slash' && slash.dir.y).toBeLessThan(0);
+    expect(slash && slash.kind === 'slash' && slash.heft).toBeCloseTo(
+      stepHeft(w.hero.abilities[0], 0),
+    );
     expect(damaged(w.monsters[0])).toBe(true);
   });
 
@@ -657,6 +711,37 @@ describe('casting: conjure, motion, recovery', () => {
     expect(w.hero.windup).not.toBeNull();
     // Its own step-in survives the cancel.
     expect(w.hero.push).not.toBeNull();
+  });
+
+  it('a press made just before the cooldown ends fires when it is ready', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.hero.cooldowns[0] = w.t + 1.5 * STEP;
+    const events = pressOnly(w, 0);
+    expect(w.hero.windup).toBeNull();
+    expect(w.queuedCast).toEqual({ slot: 0, aim: null });
+    events.push(...run(w, 2 * STEP));
+    expect(events.some((e) => e.kind === 'windup' && e.slot === 0)).toBe(true);
+  });
+
+  it('a press made well before the cooldown ends ages out', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.hero.cooldowns[0] = w.t + 0.5;
+    const events = pressOnly(w, 0);
+    events.push(...run(w, 1));
+    expect(events.some((e) => e.kind === 'windup')).toBe(false);
+    expect(w.queuedCast).toBeNull();
+  });
+
+  it("a press queued on cooldown doesn't cancel a swing", () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 1.0);
+    run(w, STEP);
+    const sw = w.hero.swing!;
+    w.hero.cooldowns[0] = sw.strikeAt + STEP;
+    pressOnly(w, 0);
+    expect(w.queuedCast).not.toBeNull();
+    const events = until(w, () => w.hero.swing === null);
+    expect(basics(events)).toHaveLength(1);
   });
 
   it('a dodge out of a wind-up refunds charge; mana stays spent', () => {

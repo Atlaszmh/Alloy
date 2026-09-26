@@ -840,6 +840,7 @@ const DelveBalanceSchema = z.object({
     basicRecovery: z.number().min(0).max(1),
     motionPerWeight: z.number().min(0),
     recoilSeconds: z.number().positive(),
+    lungeHold: z.number().min(0).max(1),
     contactGap: z.number().min(0),
     buffer: z.number().min(0),
     heavyKnockback: z.number().min(0),

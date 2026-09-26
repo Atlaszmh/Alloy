@@ -100,7 +100,9 @@ export function startSwing(
   if (committed) h.recoverUntil = t;
   if (lunge > 0) {
     const foe = target ?? foeAhead(ctx, dir, reach + lunge, s.arc ?? w.arc);
-    startPush(ctx, dir, lunge, startup, foe?.id ?? null);
+    // Planted for the first part of the startup, then the lunge.
+    const hold = startup * bal.feel.lungeHold;
+    startPush(ctx, dir, lunge, startup - hold, foe?.id ?? null, hold);
   }
   return true;
 }

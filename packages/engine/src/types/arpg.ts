@@ -401,7 +401,16 @@ export type ArpgEvent =
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
   | { kind: 'beam'; x: number; y: number; tx: number; ty: number; width: number; element: ManaType }
-  | { kind: 'slash'; x: number; y: number; dir: Vec; range: number; arc: number; element: ManaType }
+  | {
+      kind: 'slash';
+      x: number;
+      y: number;
+      dir: Vec;
+      range: number;
+      arc: number;
+      element: ManaType;
+      heft: number;
+    }
   | {
       kind: 'basic';
       x: number;

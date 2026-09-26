@@ -43,7 +43,7 @@ Every basic attack and every ability runs through three phases.
 
 ### Hero state
 
-- `swing: { step, dir, targetId, start, strikeAt, cycle, committed } | null`: a basic attack in its startup. `committed` is decided when the swing starts (see Automatic mode).
+- `swing: { step, dir, targetId, start, strikeAt, cycle, committed } | null`: a basic attack in its startup. `committed` is decided when the swing starts, and an automatic swing is released when the hero moves (see Automatic mode).
 - `push: { fromX, fromY, dx, dy, start, until, stopId } | null`: motion imposed by an action (a lunge, an ability step-in or a recoil). It replaces move input while `t < until`.
   - **Placement:** the hero is placed by progress along it, as `dodgeTick` places the dash, so even a push shorter than one tick covers its full distance.
   - **Contact stop:** with `stopId` set, the push ends as soon as the gap between the hero and that monster is at most `contactGap` (0.15), so a lunge stops at the foe and never passes through it. A lunge whose foe dies ends at once.
@@ -56,10 +56,10 @@ Every basic attack and every ability runs through three phases.
 
 1. **Potion** (unchanged).
 2. **Dash**, then a **queued dodge** (`tryDodge`, which also cancels: see Cancels).
-3. **Queued cast.** A stale press (past its `queuedCastUntil`, see Input buffer) is dropped. During a wind-up or a dash, a fresh press stays queued. Otherwise, if the cast can go ahead (ready, affordable, something to aim at), any swing in its startup is cancelled **first** (see Cancels), then `castAbility` starts the cast, so the ability's own step-in isn't cleared by the cancel. If it can't (cooldown, no mana with its `noMana` event, nothing to aim at), the press is used up and the swing carries on.
+3. **Queued cast.** A stale press (past its `queuedCastUntil`, see Input buffer) is dropped. During a wind-up or a dash, a fresh press stays queued, and so does a press whose slot is still on cooldown (it ages normally). Otherwise, if the cast can go ahead (affordable, something to aim at), any swing in its startup is cancelled **first** (see Cancels), then `castAbility` starts the cast, so the ability's own step-in isn't cleared by the cancel. If it can't (no mana with its `noMana` event, nothing to aim at), the press is used up and the swing carries on.
 4. **`castTick`**: land a finished wind-up, then apply its recoil push and recovery.
-5. **Movement**:
-   1. an active push moves the hero;
+5. **Movement** (first, in automatic mode, a swing whose target is gone is cancelled, and moving releases a committed one: see Automatic mode):
+   1. an active push moves the hero (a lunge holds it in place until its start);
    2. otherwise, during a wind-up or a committed swing, there is no movement;
    3. otherwise, before `recoverUntil`, the hero moves at `recoveryMove` × speed;
    4. otherwise, normal movement.
@@ -83,7 +83,7 @@ Every basic attack and every ability runs through three phases.
 
 ### Input buffer
 
-A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (for a tap, also a swing, a push or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, and a tap left behind when the input turns automatic is dropped (automatic swings would otherwise hold it forever). Manual attack taps get the same treatment:
+A press is kept `buffer` (0.25 s) seconds. A press whose slot is on cooldown ages normally and fires if the cooldown ends within `buffer`; it never cancels a swing before it can fire. While a wind-up or a dash holds it (for a tap, also a swing, a push or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, and a tap left behind when the input turns automatic is dropped (automatic swings would otherwise hold it forever). Manual attack taps get the same treatment:
 
 - `ArpgInput` gains `attackTap?: boolean`, true on the frame the button was pressed. Mouse and keyboard already track this, and the controller sets it on the press edge of its attack button.
 - In manual mode, `stepWorld` records a tap as `world.queuedAttack = { until, aim }` **before** running any tick, as it does `queuedCast`. So a tap made during a hit-stop freeze (a `dt` of 0 runs no ticks) isn't lost.
@@ -91,7 +91,7 @@ A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (f
 
 ### Automatic mode
 
-Automatic attacks **commit only while the hero stands still**. A swing's `committed` flag is set at its start:
+Automatic attacks **commit only while the hero stands still; moving during the startup releases the swing.** A swing's `committed` flag is set at its start:
 
 | Mode | `committed` |
 |---|---|
@@ -104,7 +104,7 @@ An uncommitted swing:
 - doesn't stop movement during its startup;
 - leaves no recovery slow.
 
-It still strikes at `strikeAt`, from wherever the hero is by then. Automatic mode acquires targets within `range + reach + move` when standing (the lunge closes the gap), and within `range` on the move.
+It still strikes at `strikeAt`, from wherever the hero is by then. A committed automatic swing becomes uncommitted the moment the move input is non-zero (length > 0.05): its lunge ends and it leaves no recovery, but the blow still lands at `strikeAt`, so the player keeps control. An automatic swing whose target dies (or is gone) during the startup is cancelled like a dodge cancels it (no blow, no string step, the weapon ready again), and the same tick may start a swing at a new target. Manual swings stay committed and may whiff. Automatic mode acquires targets within `range + reach + move` when standing (the lunge closes the gap), and within `range` on the move.
 
 So a planted fight gets the full weight, while kiting and running past foes play as they do today. The bot uses automatic mode, and its ranged retreat keeps firing.
 
@@ -118,14 +118,14 @@ The string advances one step at each strike and resets after `attackInterval + b
 |---|---|
 | `time` | This step's share of `attackInterval`. The step's **cycle** is `attackInterval × time`, and attack speed and Surge scale it as they scale the interval today. |
 | `startup` | Share of the cycle before the strike. |
-| `move` | Units of motion. Melee: a lunge over the startup toward the target or aim, contact-stopped on the target. Ranged: recoil (negative) over `recoilSeconds` (0.08) after the release. |
+| `move` | Units of motion. Melee: a lunge toward the target or aim, contact-stopped on the target: the hero stays planted for the first `lungeHold` (0.6) of the startup, then covers the full `move` by the strike. Ranged: recoil (negative) over `recoilSeconds` (0.08) after the release. |
 | `power` | Damage multiplier. Replaces today's fixed 1.5× every third hit. |
 | `heft` | 0–1: how hard the step lands (hit-stop, camera kick, sparks). |
 | `arc`, `reach` | Melee: swing arc (degrees; defaults to the weapon's) and extra range. |
 | `knockback`, `stagger` | Optional shove, and whether the step applies `stagger`. |
 | `size`, `explode`, `speed` | Ranged: projectile size multiplier, burst radius, speed multiplier. |
 
-**Timing.** At the start, `strikeAt = start + cycle × startup` and `nextAttackAt = start + cycle`. At the strike, a committed swing sets `recoverUntil = min(nextAttackAt, strikeAt + cycle × basicRecovery)`, where `basicRecovery` is 0.35. The rest of the cycle is free movement.
+**Timing.** At the start, `strikeAt = start + cycle × startup` and `nextAttackAt = start + cycle`. A committed melee blow's lunge starts at `start + cycle × startup × lungeHold` and ends at the strike. At the strike, a committed swing sets `recoverUntil = min(nextAttackAt, strikeAt + cycle × basicRecovery)`, where `basicRecovery` is 0.35. The rest of the cycle is free movement.
 
 **Direction.** The swing's direction is set when it starts (aim, else the target, else the facing) and doesn't track afterwards. The lunge closes the gap instead.
 
@@ -235,7 +235,7 @@ The ability's heft is `feel.heft[weight + 2]` (0.15 / 0.3 / 0.45 / 0.7 / 1.0), p
 
 - `HitOpts.heft` flows into the `hit` event (`heft`).
 - `basic` gains `heft`, `step`, `dir` and `finisher` (the last step).
-- `cast` and `windup` gain `heft`.
+- `cast`, `windup` and `slash` gain `heft` (the press's step heft).
 
 ### `delve.feel` (balance.json, Zod-validated, `DelveBalance` type updated)
 
@@ -249,6 +249,7 @@ The ability's heft is `feel.heft[weight + 2]` (0.15 / 0.3 / 0.45 / 0.7 / 1.0), p
 | `basicRecovery` | 0.35 |
 | `motionPerWeight` | 0.3 |
 | `recoilSeconds` | 0.08 |
+| `lungeHold` | 0.6 |
 | `contactGap` | 0.15 |
 | `buffer` | 0.25 |
 | `heavyKnockback` | 0.25 |

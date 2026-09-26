@@ -9,23 +9,27 @@ import { clamp } from './geometry.js';
  * the edge of the foe it lunges at.
  */
 
-/** Move the hero `distance` units along `dir` over `seconds`; with `stopId`, stop at that foe. */
+/**
+ * Move the hero `distance` units along `dir` over `seconds`, after holding it
+ * in place for `delay` seconds; with `stopId`, stop at that foe.
+ */
 export function startPush(
   ctx: SimCtx,
   dir: Vec,
   distance: number,
   seconds: number,
   stopId: number | null = null,
+  delay = 0,
 ): void {
   const h = ctx.world.hero;
-  const t = ctx.world.t;
+  const start = ctx.world.t + delay;
   h.push = {
     fromX: h.x,
     fromY: h.y,
     dx: dir.x * distance,
     dy: dir.y * distance,
-    start: t,
-    until: t + Math.max(1e-6, seconds),
+    start,
+    until: start + Math.max(1e-6, seconds),
     stopId,
   };
 }
@@ -72,7 +76,8 @@ export function pushTick(ctx: SimCtx, finish = false): boolean {
     h.push = null;
     return false;
   }
-  const k = finish ? 1 : Math.min(1, (world.t - p.start) / (p.until - p.start));
+  // Before its start (a lunge's hold) it keeps the hero where it began.
+  const k = finish ? 1 : Math.min(1, Math.max(0, (world.t - p.start) / (p.until - p.start)));
   const x = clamp(p.fromX + p.dx * k, h.radius, world.width - h.radius);
   const y = clamp(p.fromY + p.dy * k, h.radius, world.height - h.radius);
   const c = foe

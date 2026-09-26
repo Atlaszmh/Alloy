@@ -225,6 +225,8 @@ export interface FeelBalance {
   motionPerWeight: number;
   /** How long a recoil push takes. */
   recoilSeconds: number;
+  /** Share of a basic blow's startup spent planted before its lunge moves. */
+  lungeHold: number;
   /** A lunge stops when the gap between the hero's and the foe's edges is this small. */
   contactGap: number;
   /** Seconds a press waits past the end of whatever keeps the hero busy. */

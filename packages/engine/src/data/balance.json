@@ -164,6 +164,7 @@
       "basicRecovery": 0.35,
       "motionPerWeight": 0.3,
       "recoilSeconds": 0.08,
+      "lungeHold": 0.6,
       "contactGap": 0.15,
       "buffer": 0.25,
       "heavyKnockback": 0.25,

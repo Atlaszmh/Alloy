@@ -24,7 +24,7 @@ import { impact } from './abilities/impact.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { burstShot, startSwing, strike } from './basic.js';
-import { pushTick } from './action.js';
+import { cancelSwing, pushTick } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
@@ -117,19 +117,37 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (world.queuedCast !== null && (dashing || h.windup))
     world.queuedCastUntil = Math.max(world.queuedCastUntil, t + bal.feel.buffer);
   if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
-  if (world.queuedCast !== null && !dashing && !h.windup) {
+  // A press on cooldown stays queued (ageing) and fires if the cooldown ends in time.
+  if (
+    world.queuedCast !== null &&
+    !dashing &&
+    !h.windup &&
+    t >= h.cooldowns[world.queuedCast.slot]
+  ) {
     const cast = world.queuedCast;
     world.queuedCast = null;
     castAbility(ctx, cast);
   }
   castTick(ctx);
 
+  const v = clampLen(move);
+  const speed = Math.hypot(v.x, v.y);
+  // Automatic swings commit only while the hero stands still: moving releases one (the blow
+  // still lands at its strike, from wherever the hero is), and one whose foe is gone is dropped.
+  if (input.attack === undefined && h.swing) {
+    const target = h.swing.targetId;
+    if (target !== null && !world.monsters.some((m) => m.id === target && !m.dead))
+      cancelSwing(ctx);
+    else if (h.swing.committed && speed > 0.05) {
+      h.swing.committed = false;
+      h.push = null;
+    }
+  }
+
   // Movement: a push carries the hero; a wind-up or a committed swing roots it; a recovery slows it.
   const surge = surging(ctx);
   const pushed = !dashing && pushTick(ctx);
   const rooted = !!h.windup || !!h.swing?.committed;
-  const v = clampLen(move);
-  const speed = Math.hypot(v.x, v.y);
   h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
   if (h.moving) {
     const slow = t < h.recoverUntil ? bal.feel.recoveryMove : 1;
