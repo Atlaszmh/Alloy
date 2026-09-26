@@ -29,14 +29,14 @@ describe('manual basic attacks', () => {
 
   it('a tap between frames still swings once', () => {
     const w = arena([dummy(13, 34.6)]);
+    // The blow lands at the strike, after the tap's frame.
     const once = stepWorld(registry, w, { move: { x: 0, y: 0 }, attack: true }, STEP);
-    expect(basics(once)).toBe(1);
-    expect(basics(hold(w, 1, false))).toBe(0);
+    expect(basics([...once, ...hold(w, 1, false)])).toBe(1);
   });
 
   it('aimed, it swings toward the aim point and misses what is behind', () => {
     const w = arena([dummy(13, 34.6), dummy(13, 37.4)]);
-    hold(w, 0.1, true, { x: 13, y: 30 });
+    hold(w, 0.3, true, { x: 13, y: 30 });
     expect(damaged(w.monsters[0])).toBe(true);
     expect(damaged(w.monsters[1])).toBe(false);
   });
@@ -45,7 +45,7 @@ describe('manual basic attacks', () => {
     const w = arena([dummy(13, 20)]);
     w.hero.mana = 0;
     w.hero.manaRegen = 0;
-    expect(basics(hold(w, 0.1, true, { x: 20, y: 36 }))).toBe(1);
+    expect(basics(hold(w, 0.3, true, { x: 20, y: 36 }))).toBe(1);
     expect(w.hero.nextAttackAt).toBeGreaterThan(w.t);
     expect(w.hero.mana).toBe(0);
   });
@@ -57,8 +57,9 @@ describe('the melee combo', () => {
     hold(w, w.hero.stats.attackInterval * 1.5, true);
     expect(w.hero.attackCount).toBe(2);
     hold(w, w.hero.stats.attackInterval + bal.hero.basicComboGrace + 0.1, false);
+    // The count resets as the next swing starts (it only grows at the strike).
     hold(w, STEP, true);
-    expect(w.hero.attackCount).toBe(1);
+    expect(w.hero.swing!.step).toBe(0);
   });
 
   it('auto mode is unchanged: it attacks by itself', () => {

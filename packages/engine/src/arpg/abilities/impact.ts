@@ -142,6 +142,8 @@ export interface ImpactOpts {
   noScatter?: boolean;
   /** Don't emit an explosion event (zone ticks). */
   silent?: boolean;
+  /** How hard direct hits land (defaults to the ability's). */
+  heft?: number;
 }
 
 /**

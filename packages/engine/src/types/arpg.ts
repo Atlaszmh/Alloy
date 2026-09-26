@@ -402,6 +402,10 @@ export type ArpgEvent =
       ty: number;
       element: ManaType | null;
       melee: boolean;
+      heft: number;
+      step: number;
+      dir: Vec;
+      finisher: boolean;
     }
   | { kind: 'chain'; points: Vec[]; element: ManaType }
   | { kind: 'explode'; x: number; y: number; radius: number; element: ManaType | null }

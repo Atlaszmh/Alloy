@@ -5,10 +5,8 @@ import type {
   ArpgWorld,
   MonsterEntity,
   Projectile,
-  StatusId,
   Vec,
 } from '../types/arpg.js';
-import type { ManaType } from '../types/mana.js';
 import {
   healHero,
   hitMonster,
@@ -19,23 +17,16 @@ import {
   makeCtx,
   type SimCtx,
 } from './combat.js';
-import { angleBetween, clamp, clampLen, dirTo, dist } from './geometry.js';
+import { clamp, clampLen, dirTo, dist } from './geometry.js';
 import { castAbility, castTick } from './abilities/cast.js';
 import { defendingAbility, defendTick, gainCharge } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
-import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
+import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
+import { burstShot, startSwing, strike } from './basic.js';
+import { pushTick } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
-const BASIC_STATUS: Record<ManaType, StatusId> = {
-  fire: 'burn',
-  frost: 'chill',
-  storm: 'shock',
-  earth: 'stagger',
-  shadow: 'hex',
-  nature: 'poison',
-};
-const BASIC_STATUS_CHANCE = 0.3;
 const ITEM_PICKUP_DELAY = 0.35;
 
 /**
@@ -125,139 +116,47 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     tryDodge(ctx, move);
   }
   const dashing = isDashing(ctx);
-  if (world.queuedCast !== null && !dashing) {
+  const t = world.t;
+  // A queued press waits out a wind-up or a dash; anything else lets it through.
+  if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
+  if (world.queuedCast !== null && !dashing && !h.windup) {
     const cast = world.queuedCast;
     world.queuedCast = null;
     castAbility(ctx, cast);
   }
   castTick(ctx);
 
+  // Movement: a push carries the hero; a wind-up or a committed swing roots it; a recovery slows it.
   const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+  const pushed = !dashing && pushTick(ctx);
+  const rooted = !!h.windup || !!h.swing?.committed;
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
-  h.moving = speed > 0.05 && !h.windup && !dashing;
+  h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
   if (h.moving) {
-    const pace = h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1);
+    const slow = t < h.recoverUntil ? bal.feel.recoveryMove : 1;
+    const pace = h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * slow;
     h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
     h.y = clamp(h.y + v.y * pace * dt, h.radius, world.height - h.radius);
     h.facing = { x: v.x / speed, y: v.y / speed };
   }
 
-  // Automatic unless the input says whether the attack is held (manual mode).
-  const manual = input.attack !== undefined;
-  if (!h.windup && !dashing && (!manual || input.attack)) {
-    basicAttack(ctx, manual ? (input.attackAim ?? null) : undefined);
+  if (h.swing && t >= h.swing.strikeAt - 1e-9) strike(ctx);
+  if (!h.swing && !h.windup && !dashing) {
+    // Automatic unless the input says whether the attack is held (manual mode).
+    if (input.attack === undefined) startSwing(ctx, undefined, speed <= 0.05);
+    else {
+      const tap = world.queuedAttack && t <= world.queuedAttack.until ? world.queuedAttack : null;
+      if ((input.attack || tap) && startSwing(ctx, input.attackAim ?? tap?.aim ?? null, true))
+        world.queuedAttack = null;
+    }
   }
+  if (world.queuedAttack && t > world.queuedAttack.until) world.queuedAttack = null;
 
   h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);
-}
-
-/**
- * One basic attack when the weapon is ready. Automatic (`aim` undefined):
- * only at a foe in reach. Manual: toward `aim` if given, else the nearest foe
- * in reach, else straight ahead; a swing at nothing still uses the timer but
- * gives no mana.
- */
-function basicAttack(ctx: SimCtx, aim?: Vec | null): void {
-  const { world, bal } = ctx;
-  const h = world.hero;
-  if (world.t < h.nextAttackAt) return;
-  const w = h.stats.weapon;
-  const manual = aim !== undefined;
-  const target = aim ? null : nearestMonster(ctx, h.x, h.y, w.range + (manual ? 1 : 0));
-  if (!target && !manual) return;
-
-  let dir = aim
-    ? dirTo(h.x, h.y, aim.x, aim.y)
-    : target
-      ? dirTo(h.x, h.y, target.x, target.y)
-      : h.facing;
-  if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
-  if (manual || !h.moving) h.facing = dir;
-  // The melee combo resets after a pause.
-  if (world.t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace)
-    h.attackCount = 0;
-  h.lastBasicAt = world.t;
-  h.attackCount++;
-  const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
-  // Melee weapons swing a three-hit combo: the third is wider and harder, with a shove.
-  const finisher = w.kind === 'melee' && h.attackCount % 3 === 0;
-  const base = h.stats.weaponDamage * h.stats.damageMult * (finisher ? 1.5 : 1);
-  const twin = (h.stats.legendaries.twin_fang ?? 0) > 0 && h.attackCount % 3 === 0;
-  const element = w.element;
-  const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
-  if (element) {
-    const chance = element === 'earth' ? BASIC_STATUS_CHANCE * 0.6 : BASIC_STATUS_CHANCE;
-    const status = BASIC_STATUS[element];
-    if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
-  }
-
-  // Mana only for an attack at something: a swing that connects, or a shot with a foe in range.
-  let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
-  if (w.kind === 'melee') {
-    const crit = world.rng.next() < h.stats.critChance;
-    const arc = finisher ? Math.min(360, w.arc + 60) : w.arc;
-    const halfArc = (arc * Math.PI) / 360;
-    const kb = finisher ? { knockback: 0.5, kbFrom: { x: h.x, y: h.y } } : {};
-    for (const m of alive(ctx)) {
-      if (dist(h.x, h.y, m.x, m.y) - m.radius > w.range) continue;
-      if (
-        arc < 360 &&
-        m.id !== target?.id &&
-        angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc
-      )
-        continue;
-      landed = true;
-      hitMonster(ctx, m, base, element, { source: 'basic', crit, applies, ...kb });
-      if (twin)
-        hitMonster(ctx, m, base * (h.stats.legendaries.twin_fang / 100), element, {
-          source: 'basic',
-          crit,
-        });
-    }
-  } else {
-    const shots = twin ? 2 : 1;
-    for (let i = 0; i < shots; i++) {
-      const spread = i === 0 ? 0 : 0.12;
-      const d = {
-        x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread),
-        y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread),
-      };
-      spawnProjectile(ctx, {
-        owner: 'hero',
-        form: null,
-        ability: null,
-        homingId: null,
-        x: h.x + d.x * 0.5,
-        y: h.y + d.y * 0.5,
-        vx: d.x * w.speed,
-        vy: d.y * w.speed,
-        radius: 0.3,
-        damage: i === 0 ? base : base * (h.stats.legendaries.twin_fang / 100),
-        element,
-        pierce: w.pierce,
-        maxDist: w.range + 1.5,
-        explodeRadius: 0,
-        applies,
-        knockback: 0,
-      });
-    }
-  }
-  ctx.events.push({
-    kind: 'basic',
-    x: h.x,
-    y: h.y,
-    tx: target ? target.x : h.x + dir.x * w.range,
-    ty: target ? target.y : h.y + dir.y * w.range,
-    element,
-    melee: w.kind === 'melee',
-  });
-
-  if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
-  h.nextAttackAt = world.t + h.stats.attackInterval / (surge ? 1 + surge.effect : 1);
 }
 
 // ── Projectiles ────────────────────────────────────────────────────────────
@@ -314,12 +213,17 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',
+          heft: p.heft,
         });
-      else
+      else if (p.explodeRadius > 0) {
+        burstShot(ctx, p);
+        break;
+      } else
         hitMonster(ctx, m, p.damage, p.element, {
           source: 'basic',
           canCrit: true,
           applies: p.applies,
+          heft: p.heft ?? 0,
         });
       if (!p.pierce) p.dead = true;
     }
@@ -330,8 +234,9 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',
+          heft: p.heft,
         });
-      }
+      } else if (!p.ability && p.explodeRadius > 0) burstShot(ctx, p);
     }
   }
 }

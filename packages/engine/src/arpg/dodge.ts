@@ -2,6 +2,7 @@ import type { Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 import { clamp, clampLen, dirTo } from './geometry.js';
 import { nearestMonster } from './abilities/targeting.js';
+import { cancelSwing } from './action.js';
 
 /**
  * The dodge: a short dash with i-frames, paid with charges that refill one at
@@ -31,6 +32,10 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
     if (dir.x === 0 && dir.y === 0) dir = { x: 0, y: -1 };
   }
 
+  // A dodge drops a swing still winding up, and any push or recovery.
+  cancelSwing(ctx);
+  h.push = null;
+  h.recoverUntil = t;
   // Bailing out of a wind-up keeps the mana spent but frees the ability again.
   if (h.windup) {
     h.cooldowns[h.windup.slot] = t;
