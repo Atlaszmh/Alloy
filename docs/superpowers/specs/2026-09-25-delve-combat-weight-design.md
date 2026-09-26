@@ -1,7 +1,7 @@
 # Delve Combat Weight Design
 
 **Date:** 2026-09-25
-**Status:** Built in v0.39.0 (engine) and v0.40.0 (feel).
+**Status:** Built in v0.39.0 (engine), v0.40.0 (feel), v0.40.1 (review fixes).
 **Engine:** `packages/engine/src/arpg/` (`step.ts`, `world.ts`, `dodge.ts`, `combat.ts`, `bot.ts`, `abilities/cast.ts`, `abilities/forms.ts`, `abilities/impact.ts`, `abilities/resolve.ts`), `src/delve/hero-stats.ts`, `src/types/` (`arpg.ts`, `ability.ts`, `delve.ts`), `src/data/schemas.ts`, `balance.json → delve.feel`, `delve.json` (weapon combos, Twin Fang text), `arpg.json` (form motion)
 **Client:** `packages/client/src/features/delve/` (`arena/useArena.ts`, `arena/ArenaRenderer.ts`, `arena/fx/`, `arena/ArenaHud.tsx`, `AbilitiesPanel.tsx`, the paper doll's attack rate)
 
