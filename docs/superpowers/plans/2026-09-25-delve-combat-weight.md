@@ -83,6 +83,10 @@
 - Modify: `packages/engine/src/delve/hero-stats.ts` (weapon `combo`)
 - Test: `packages/engine/tests/delve-combat-weight.test.ts` (new)
 
+- [ ] **Step 0: Record the pacing baseline**
+
+Before any change, record today's curve for Task 10's commit. Temporarily add `console.log(endDepthAt(1), endDepthAt(12))` to `tests/delve-pacing.test.ts`, run `cd packages/engine && npx vitest run tests/delve-pacing.test.ts`, note both numbers, and revert the log line.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `packages/engine/tests/delve-combat-weight.test.ts`:
@@ -304,7 +308,7 @@ In `delve.json`, change Twin Fang's `text` to `"The last blow of each basic-atta
 
 In `arpg.json`, add `motion` to these forms: bolt `-0.15`, volley `-0.1`, lance `-0.3`, burst `0.2`, strike `0.5`, barrage `0.15`, maelstrom `0.2`. Add `"speed": 30` to burst.
 
-Use a Python script written with the Write tool to insert the JSON (load with `encoding='utf-8'`, `json.dump(..., ensure_ascii=False, indent=2)`, then check that `git diff` shows only the intended keys). If the file's existing formatting differs from `indent=2` output (e.g. arrays kept on one line), edit by hand with the Edit tool instead to keep the diff small.
+Make these JSON edits by hand with the Edit tool, matching each file's existing formatting. Re-serialising with `json.dump` reformats hundreds of unrelated lines. Check `git diff --stat` shows only small changes.
 
 - [ ] **Step 6: Give the hero the string**
 
@@ -346,12 +350,10 @@ describe('ability timing from weight', () => {
     const crushing = resolve('primary', { form: 'bolt', weight: 2 });
     expect(crushing.conjure).toBeCloseTo(0.38);
     expect(crushing.channel).toBe(0);
-    expect(crushing.castTime).toBeCloseTo(0.38);
     expect(resolve('defensive', { form: 'ward' }).conjure).toBeCloseTo(0.07);
     expect(resolve('ultimate', { form: 'nova', payment: 'charge' }).conjure).toBeCloseTo(0.224);
     const cast = resolve('primary', { form: 'bolt', payment: 'cast' });
     expect(cast.channel).toBeCloseTo(bal.abilities.slots.primary.castTime);
-    expect(cast.castTime).toBeCloseTo(0.14 + cast.channel);
   });
 
   it('heft and the heavy payoff come from weight', () => {
@@ -386,7 +388,7 @@ Expected: FAIL (`conjure` undefined, `stepHeft` not exported).
 
 - [ ] **Step 3: Implement**
 
-In `src/types/ability.ts`, `ResolvedAbility`: change the `castTime` doc to `/** Wind-up seconds: conjure + channel. */` and add after it:
+In `src/types/ability.ts`, `ResolvedAbility`, add after `castTime` (its doc changes in Task 6, when it becomes conjure + channel):
 
 ```ts
   /** Seconds of anticipation from the weight (every ability). */
@@ -412,10 +414,10 @@ In `src/arpg/abilities/resolve.ts`, inside `resolveAbility` after `const size = 
   const channel = cast ? s.castTime * (1 + W.castTime * w) : 0;
 ```
 
-Replace the `castTime:` line of the returned object with:
+Replace the `castTime:` line of the returned object with the lines below. `castTime` keeps meaning the channel for now, so today's casting code is unchanged until Task 6 gives every ability a wind-up.
 
 ```ts
-    castTime: conjure + channel,
+    castTime: channel,
     conjure,
     channel,
     heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
@@ -438,8 +440,8 @@ In `src/index.ts`, extend the resolve export: `export { resolveAbility, mergeKno
 
 - [ ] **Step 4: Run the tests**
 
-Run: `cd packages/engine && npx vitest run tests/delve-combat-weight.test.ts tests/ability-resolve.test.ts`
-Expected: the new tests PASS. `ability-resolve.test.ts` may fail where it expects `castTime` 0 for mana or charge payment: change those expectations to `ab.channel` 0 (and `castTime` equal to `ab.conjure`).
+Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
+Expected: the whole suite PASSES (nothing reads the new fields yet) and the typecheck is clean.
 
 - [ ] **Step 5: Commit**
 
@@ -482,10 +484,11 @@ describe('pushes and buffered input', () => {
     expect(w.hero.push).toBeNull();
   });
 
-  it('a push toward a foe stops at the contact gap', () => {
+  it('a push toward a foe stops exactly at the contact gap', () => {
     const w = arena([dummy(13, 0)], { noBasic: true });
     const m = w.monsters[0];
-    m.y = w.hero.y - w.hero.radius - m.radius - 0.3;
+    m.y = w.hero.y - w.hero.radius - m.radius - 1;
+    const y0 = w.hero.y;
     const ctx = makeCtx(registry, w, []);
     startPush(ctx, { x: 0, y: -1 }, 2, 0.2, m.id);
     for (let i = 0; i < 10; i++) {
@@ -493,7 +496,8 @@ describe('pushes and buffered input', () => {
       pushTick(ctx);
     }
     const gap = Math.abs(w.hero.y - m.y) - m.radius - w.hero.radius;
-    expect(gap).toBeGreaterThan(bal.feel.contactGap - 1e-9);
+    expect(gap).toBeCloseTo(bal.feel.contactGap, 4);
+    expect(y0 - w.hero.y).toBeCloseTo(1 - bal.feel.contactGap, 4);
     expect(w.hero.push).toBeNull();
   });
 
@@ -501,8 +505,8 @@ describe('pushes and buffered input', () => {
     const w = arena([dummy(13, 34.6)]);
     stepWorld(registry, w, { move: { x: 0, y: 0 }, attack: false, attackTap: true }, 0);
     stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, 0);
-    expect(w.queuedAttack).not.toBeNull();
-    expect(w.queuedCast).not.toBeNull();
+    expect(w.queuedAttack).toMatchObject({ aim: null });
+    expect(w.queuedCast).toEqual({ slot: 0 });
     expect(w.queuedCastUntil).toBeGreaterThan(w.t);
   });
 });
@@ -575,7 +579,7 @@ Change the `attackCount` doc to `/** Blows landed in the current string (resets 
   heft?: number;
 ```
 
-Events: add `heft: number` to `hit`. Add `heft: number; step: number; dir: Vec; finisher: boolean` to `basic`. Add `heft: number` to `cast` and to `windup`. Then fix every `ctx.events.push({ kind: 'hit' …` (the shatter one in `combat.ts` gets `heft: 0`), and add `heft: 0` to the `cast`/`windup` pushes in `cast.ts` for now (Task 6 sets real values).
+Events: add `heft: number` to `hit`, and `heft: number` to `cast` and to `windup` (the `basic` event's new fields come in Task 4, together with the code that fills them). Then fix every `ctx.events.push({ kind: 'hit' …` (the shatter one in `combat.ts` gets `heft: 0`), and add `heft: 0` to the `cast`/`windup` pushes in `cast.ts` for now (Task 6 sets real values).
 
 In `src/arpg/combat.ts`, `HitOpts`, add:
 
@@ -586,13 +590,17 @@ In `src/arpg/combat.ts`, `HitOpts`, add:
 
 and in `hitMonster`'s event push: `ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount, crit, element, reaction, heft: opts.heft ?? 0 });`
 
-In `src/arpg/world.ts` `createHeroEntity`, after `windup: null,` add `swing: null, push: null, recoverUntil: 0,`. In `createFloorWorld`, after `queuedCast: null,` add `queuedCastUntil: 0, queuedAttack: null,`. At the end of `refreshWorldHero` add:
+In `src/arpg/world.ts` `createHeroEntity`, after `windup: null,` add `swing: null, push: null, recoverUntil: 0,`. In `createFloorWorld`, after `queuedCast: null,` add `queuedCastUntil: 0, queuedAttack: null,`. In `refreshWorldHero`, before `h.stats = stats;` add:
 
 ```ts
-  // A new weapon starts its own string.
-  h.swing = null;
-  h.push = null;
-  h.attackCount = 0;
+  // A weapon with a different string starts it over (a blow in progress is dropped and the
+  // weapon is ready); other gear changes leave the swing alone.
+  if (stats.weapon.combo !== h.stats.weapon.combo) {
+    h.swing = null;
+    h.push = null;
+    h.attackCount = 0;
+    h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
+  }
 ```
 
 - [ ] **Step 4: Create `src/arpg/action.ts`**
@@ -630,23 +638,53 @@ export function startPush(
   };
 }
 
-/** Carry the push; true while it moves (or holds) the hero this step. */
-export function pushTick(ctx: SimCtx): boolean {
+/**
+ * How far (0..1) along the move from (ax, ay) to (bx, by) the hero comes
+ * within `reach` of the point (fx, fy); 1 when it never does.
+ */
+function contactAt(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  fx: number,
+  fy: number,
+  reach: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const ox = ax - fx;
+  const oy = ay - fy;
+  const a = dx * dx + dy * dy;
+  const b = 2 * (ox * dx + oy * dy);
+  const c = ox * ox + oy * oy - reach * reach;
+  if (c <= 0) return 0;
+  const disc = b * b - 4 * a * c;
+  if (a < 1e-12 || disc < 0) return 1;
+  const k = (-b - Math.sqrt(disc)) / (2 * a);
+  return k >= 0 && k <= 1 ? k : 1;
+}
+
+/**
+ * Carry the push; true while it moves (or holds) the hero this step.
+ * `finish` jumps to its end (a wind-up landing finishes its step-in first).
+ */
+export function pushTick(ctx: SimCtx, finish = false): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
   const p = h.push;
   if (!p) return false;
-  const k = Math.min(1, (world.t - p.start) / (p.until - p.start));
+  const k = finish ? 1 : Math.min(1, (world.t - p.start) / (p.until - p.start));
   const x = clamp(p.fromX + p.dx * k, h.radius, world.width - h.radius);
   const y = clamp(p.fromY + p.dy * k, h.radius, world.height - h.radius);
   const foe = p.stopId === null ? null : world.monsters.find((m) => m.id === p.stopId && !m.dead);
-  if (foe && dist(x, y, foe.x, foe.y) - foe.radius - h.radius <= bal.feel.contactGap) {
-    h.push = null;
-    return true;
-  }
-  h.x = x;
-  h.y = y;
-  if (k >= 1) h.push = null;
+  const c = foe
+    ? contactAt(h.x, h.y, x, y, foe.x, foe.y, foe.radius + h.radius + bal.feel.contactGap)
+    : 1;
+  // Stop exactly at the contact gap, never inside it.
+  h.x += (x - h.x) * c;
+  h.y += (y - h.y) * c;
+  if (c < 1 || k >= 1) h.push = null;
   return true;
 }
 
@@ -775,6 +813,16 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.x - x2).toBeCloseTo(pace, 4);
   });
 
+  it('a committed shot roots the hero through its startup, with no push involved', () => {
+    const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+    stepWorld(registry, w, { move: still, attack: true }, STEP);
+    expect(w.hero.swing?.committed).toBe(true);
+    expect(w.hero.push).toBeNull();
+    const x0 = w.hero.x;
+    stepWorld(registry, w, { move: { x: 1, y: 0 }, attack: true }, STEP);
+    expect(w.hero.x).toBe(x0);
+  });
+
   it('automatic swings on the move neither root, lunge nor slow', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
@@ -812,6 +860,16 @@ describe('weapon strings', () => {
     expect(thrust.arc).toBeLessThan(w.hero.stats.weapon.arc);
   });
 
+  it('only the thrust knocks the foe back', () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 0.6);
+    const m = w.monsters[0];
+    until(w, () => w.hero.attackCount >= 2);
+    expect(Math.hypot(m.kbx, m.kby)).toBe(0);
+    until(w, () => w.hero.attackCount >= 3);
+    expect(Math.hypot(m.kbx, m.kby)).toBeGreaterThan(0);
+  });
+
   it("the maul's overhead misses what's behind; its slam hits all around and staggers", () => {
     const w = arena([dummy(13, 0), dummy(13, 0)], {
       equipped: { weapon: gear('fire', 'weapon', 'maul') },
@@ -825,19 +883,32 @@ describe('weapon strings', () => {
     expect(w.monsters[1].status.staggerUntil).toBeGreaterThan(w.t);
   });
 
-  it('a string resets after a pause, and on a weapon swap', () => {
+  it('a string resets after a pause', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 0.6);
     until(w, () => w.hero.attackCount >= 1);
-    const far = { ...w.monsters[0] };
+    const foe = { ...w.monsters[0] };
     w.monsters = [];
     run(w, w.hero.stats.attackInterval + bal.hero.basicComboGrace + 0.1);
-    w.monsters = [far];
+    w.monsters = [foe];
     until(w, () => w.hero.swing !== null);
     expect(w.hero.swing!.step).toBe(0);
+  });
+
+  it('a new weapon starts its own string; other gear keeps the swing', () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 0.6);
+    until(w, () => w.hero.attackCount >= 1);
+    until(w, () => w.hero.swing !== null);
+    // Same weapon base (same string): the swing carries on.
+    refreshWorldHero(registry, w, computeHeroStats({ weapon: gear('fire') }, registry), DEFAULT_BUILDS);
+    expect(w.hero.swing).not.toBeNull();
+    expect(w.hero.attackCount).toBe(1);
+    // A maul: the swing is dropped, the string restarts and the weapon is ready.
     refreshWorldHero(registry, w, computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry), DEFAULT_BUILDS);
     expect(w.hero.swing).toBeNull();
     expect(w.hero.attackCount).toBe(0);
+    expect(w.hero.nextAttackAt).toBeLessThanOrEqual(w.t);
   });
 
   it('a committed shot recoils after the release; one on the move does not', () => {
@@ -866,13 +937,31 @@ describe('weapon strings', () => {
     expect(w.monsters.every(damaged)).toBe(true);
   });
 
-  it('Twin Fang strikes again on the last blow of the string', () => {
+  it("Twin Fang strikes again on the string's last blow, at today's value (melee ×1.5)", () => {
     const w = arena([dummy(13, 0)]);
     place(w, 0.6);
     w.hero.stats.legendaries.twin_fang = 100;
     const events = until(w, () => w.hero.attackCount >= 3);
     const blows = events.filter((e) => e.kind === 'hit' && e.heft > 0);
     expect(blows).toHaveLength(4);
+    const [thrust, twin] = blows.slice(2) as Extract<ArpgEvent, { kind: 'hit' }>[];
+    // Same swing, same crit roll and resistances: only the multipliers differ.
+    expect(twin.amount / thrust.amount).toBeCloseTo(1.5 / w.hero.stats.weapon.combo[2].power, 2);
+  });
+
+  it('ranged Twin Fang fires a second shot at ×1.0, copying the size but never exploding', () => {
+    const w = arena([dummy(13, 33)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+    w.hero.stats.legendaries.twin_fang = 100;
+    w.hero.attackCount = 2;
+    w.hero.lastBasicAt = 0;
+    until(w, () => w.projectiles.length > 0);
+    expect(w.projectiles).toHaveLength(2);
+    expect(w.projectiles[1].radius).toBeCloseTo(w.projectiles[0].radius);
+    expect(w.projectiles[1].explodeRadius).toBe(0);
+    expect(w.projectiles[1].damage / w.projectiles[0].damage).toBeCloseTo(
+      1 / w.hero.stats.weapon.combo[2].power,
+      5,
+    );
   });
 
   it('a tap during a swing is kept and starts the next blow', () => {
@@ -892,6 +981,8 @@ Run: `cd packages/engine && npx vitest run tests/delve-combat-weight.test.ts`
 Expected: FAIL (no `swing` is ever set).
 
 - [ ] **Step 3: Create `src/arpg/basic.ts`**
+
+First add the `basic` event's new fields in `src/types/arpg.ts`: `heft: number; step: number; dir: Vec; finisher: boolean` (the old `basicAttack` push in `step.ts` goes away in Step 4, so nothing else needs them).
 
 Move `BASIC_STATUS` and `BASIC_STATUS_CHANCE` from `step.ts` into this file:
 
@@ -1159,7 +1250,7 @@ In `src/arpg/step.ts`: delete `basicAttack`, `BASIC_STATUS` and `BASIC_STATUS_CH
   if (world.queuedAttack && t > world.queuedAttack.until) world.queuedAttack = null;
 ```
 
-Keep the lines after it (mana regen, lull charge, `defendTick`) unchanged. Remove any now-unused imports (`StatusId`, `ManaType`, `angleBetween` if unused) so lint stays clean.
+Keep the lines after it (mana regen, lull charge, `defendTick`) unchanged. Remove the imports that become unused. `tsc` names them (`noUnusedLocals`); expect `alive`, `angleBetween`, `StatusId` and `ManaType`.
 
 In `projectilesTick`, hero branch, replace the hit handling with:
 
@@ -1235,6 +1326,8 @@ For each failing test, decide whether it encodes an old rule the spec replaces o
 
 Don't touch `tests/delve-pacing.test.ts` bands here. If pacing fails, note the numbers and move on: Task 10 re-tunes after the ability changes land.
 
+Leave `ability-cast.test.ts` "roots the hero through the wind-up, lands after it and blocks other casts" to Task 6 if it fails here. A Q pressed during a wind-up is now buffered and fires after it lands, and Task 6 rewrites that assertion. Also expect that until Task 6, a cast pressed during a swing's startup leaves both a wind-up and the swing; Task 6 makes the cast cancel the swing.
+
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -1252,7 +1345,9 @@ git commit -m "test(engine): step past the swing startup where blows used to lan
 - Modify: `packages/engine/src/types/arpg.ts` (`windup` fields), `src/arpg/abilities/cast.ts`, `src/arpg/dodge.ts`, `tests/fixtures/arena.ts`
 - Test: `packages/engine/tests/delve-combat-weight.test.ts`; update `tests/ability-cast.test.ts`, `tests/delve-dodge.test.ts`
 
-- [ ] **Step 1: Split the fixture's press helper**
+- [ ] **Step 1: Every ability winds up, and the fixture's press helper splits**
+
+In `resolve.ts`, change `castTime: channel,` to `castTime: conjure + channel,`, and change the `castTime` doc in `ResolvedAbility` to `/** Wind-up seconds: conjure + channel. */`. In `ability-resolve.test.ts`, expectations of `castTime` for mana, charge or cast payment (around lines 27, 70 and 71) move to `channel`; `castTime` is now `conjure + channel`. In `hero-stats.ts` `useInterval`, replace `ab.cooldown + ab.castTime` with `ab.cooldown + ab.channel` (the conjure overlaps the cooldown).
 
 In `tests/fixtures/arena.ts`, rename the current `press` to `pressOnly` (doc: `/** Press an ability and advance one step (its wind-up is still in progress). */`) and add:
 
@@ -1266,9 +1361,16 @@ export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }
 }
 ```
 
-Switch these three tests to `pressOnly`:
-- `delve-dodge.test.ts`: "cancels a cast wind-up" and "holds a cast pressed mid-dash". In the second, lengthen its `run(...)` by the ability's `castTime`.
-- `ability-cast.test.ts`: "roots the hero through the wind-up".
+Update these existing tests:
+- `delve-dodge.test.ts`:
+  - "cancels a cast wind-up" → `pressOnly`;
+  - "holds a cast pressed mid-dash" → `pressOnly`, and lengthen its `run(...)` by the ability's `castTime`.
+- `ability-cast.test.ts`:
+  - "roots the hero through the wind-up, lands after it and blocks other casts" → `pressOnly`. The Q pressed during the wind-up is now buffered: instead of `expect(w.hero.windup).toBeNull()` at the end, assert that a `cast` event for slot 0 follows the Nova.
+  - "a cast-paid ability still lands where its target was…" → `pressOnly` (it checks the wind-up right after the press).
+  - "spends mana and starts the cooldown": set `w.hero.manaRegen = 0` at the start, because `press()` now runs through the conjure and regen would shift the mana check.
+
+Then run `cd packages/engine && npx vitest run` and move any other test that inspects a wind-up right after pressing to `pressOnly`.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1387,7 +1489,7 @@ Expected: FAIL (`windup.step` undefined, no recoil, etc.).
 
 - [ ] **Step 4: Add the wind-up fields**
 
-In `HeroEntity.windup` (`types/arpg.ts`), add:
+In `HeroEntity.windup` (`types/arpg.ts`), change its doc to `/** An ability winding up (every ability conjures; cast payment channels too); the hero can't move or attack meanwhile. */` and add:
 
 ```ts
     /** The press-combo step, chosen at the press. */
@@ -1406,7 +1508,7 @@ Replace `fire`, `castAbility` and `castTick` (keep `abilityReady` and `pay`):
 import type { AbilityCast } from '../../types/ability.js';
 import type { Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
-import { cancelSwing, startPush } from '../action.js';
+import { cancelSwing, pushTick, startPush } from '../action.js';
 import { dirTo } from '../geometry.js';
 import { executeForm } from './forms.js';
 import { stepHeft } from './resolve.js';
@@ -1505,6 +1607,8 @@ export function castTick(ctx: SimCtx): void {
   if (!h.windup || ctx.world.t < h.windup.until - 1e-9) return;
   const { slot, aim, at, step } = h.windup;
   h.windup = null;
+  // A step-in finishes before the blow lands, so it hits from where the step took the hero.
+  pushTick(ctx, true);
   if (!fire(ctx, slot, aim, step)) fire(ctx, slot, at, step);
 }
 ```
@@ -1522,8 +1626,8 @@ In `src/arpg/dodge.ts`, change the wind-up bail-out to refund charge:
 
 - [ ] **Step 6: Run the tests**
 
-Run: `cd packages/engine && npx vitest run tests/delve-combat-weight.test.ts tests/ability-cast.test.ts tests/delve-dodge.test.ts`
-Expected: PASS. If "a held Balanced primary keeps its cadence" is off by one, check the cadence first. A frame-quantisation drift is acceptable: assert `toBeGreaterThanOrEqual(floor(2 / cooldown) - 1)`. Don't loosen further without data.
+Run: `cd packages/engine && npx vitest run tests/delve-combat-weight.test.ts tests/ability-cast.test.ts tests/delve-dodge.test.ts tests/ability-resolve.test.ts`
+Expected: PASS. "Every ability winds up for its conjure" and "a press during a wind-up fires when it lands; a stale press is dropped" are guard tests: parts of them already pass after Steps 1 and Task 3–4. If "a held Balanced primary keeps its cadence" is off by one, check the cadence first. A frame-quantisation drift is acceptable: assert `toBeGreaterThanOrEqual(floor(2 / cooldown) - 1)`. Don't loosen further without data.
 
 - [ ] **Step 7: Commit**
 
@@ -1555,7 +1659,33 @@ describe('heavy payoff and heft', () => {
     expect(b.monsters[0].status.staggerUntil).toBe(0);
   });
 
-  it("a Crushing Maelstrom's ticks and a Crushing Surge's basic hits never stagger or carry heft", () => {
+  it("a Crushing bolt's chain jump keeps no heavy payoff and no heft", () => {
+    const w = arena([dummy(13, 30), dummy(15, 30)], {
+      noBasic: true,
+      primary: { elements: ['storm'], weight: 2 },
+    });
+    const [first, second] = w.monsters;
+    const events = press(w, 0, { x: 13, y: 30 });
+    events.push(...run(w, 1));
+    const chained = events.filter((e) => e.kind === 'hit' && e.id === second.id);
+    expect(chained.length).toBeGreaterThan(0);
+    expect(chained.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
+    expect(second.status.staggerUntil).toBe(0);
+    expect(first.status.staggerUntil).toBeGreaterThan(0);
+  });
+
+  it('Crushing adds knockback to a direct hit', () => {
+    const heavy = arena([dummy(13, 30)], { noBasic: true, primary: { weight: 2 } });
+    const light = arena([dummy(13, 30)], { noBasic: true });
+    for (const w of [heavy, light]) {
+      press(w, 0);
+      until(w, () => damaged(w.monsters[0]));
+    }
+    const kb = (w: ArpgWorld) => Math.hypot(w.monsters[0].kbx, w.monsters[0].kby);
+    expect(kb(heavy)).toBeGreaterThan(kb(light));
+  });
+
+  it("a Crushing Maelstrom's ticks and a Crushing Surge's basic hits never stagger (guard test)", () => {
     const w = arena([dummy(13, 30)], {
       noBasic: true,
       ultimate: { form: 'maelstrom', weight: 2, payment: 'mana' },
@@ -1629,7 +1759,7 @@ In `forms.ts`, import `stepHeft` from `./resolve.js` and, after `const hit = …
 - `nova`: `impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true, heft });`
 - `barrage`: add `heft: heft * 0.5,` to each zone.
 
-In `step.ts` `zonesTick`, the barrage/burst landing: `if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { heft: z.heft });`
+In `step.ts` `zonesTick`, the barrage/burst landing: `if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { heft: z.heft });`. In `projectilesTick`, the end-of-flight ability burst also passes `heft: p.heft`, so a 4th-press bolt that lands on the ground is as heavy as one that hits.
 
 - [ ] **Step 5: Run the tests**
 
@@ -1751,8 +1881,8 @@ git commit -m "test(engine): cast tests step past the conjure"
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-import { botInput } from '../src/arpg/bot.js';
-import { estimateCombat } from '../src/delve/hero-stats.js';
+// (Add to the file's imports: `botInput` from '../src/arpg/bot.js', and `estimateCombat`
+// merged into the existing '../src/delve/hero-stats.js' import.)
 
 describe('bot and estimates', () => {
   it("the bot doesn't cancel its own swing with the Primary", () => {
@@ -1801,7 +1931,7 @@ Expected: FAIL.
   if (L.twin_fang) dps *= 1 + ((L.twin_fang / 100) * (melee ? 1.5 : 1)) / stringPower;
 ```
 
-and use `strikeInterval` instead of `stats.attackInterval` in `manaIncome`. In `useInterval`, replace `ab.cooldown + ab.castTime` with `ab.cooldown + ab.channel`.
+and use `strikeInterval` instead of `stats.attackInterval` in `manaIncome`. (`useInterval` already uses `channel` since Task 6.)
 
 - [ ] **Step 4: Run the tests and the pacing guard rails**
 
@@ -1811,7 +1941,7 @@ Expected: the new tests PASS. If pacing fails, print `endDepthAt(1)` and `endDep
 2. the `feel` numbers;
 3. monsters, only as a last resort.
 
-Re-run until the bands hold, then record the before and after depths in the commit body.
+Re-run until the bands hold, then record the before (Task 1 Step 0) and after depths in the commit body.
 
 - [ ] **Step 5: Engine suite, build, commit**
 
@@ -1842,7 +1972,18 @@ In `ArenaHud.test.tsx`, add `basicComboLength: 3` to the HUD fixture, and add:
 
 (Adapt `hud(...)` and `render` to the file's existing helper names.)
 
-In the pad mapping tests, add a case: with the attack button in `pressed`, `padToArena(...).attackTap` is true; with it only held, it is false.
+In `features/gamepad/__tests__/gamepad.test.ts` (it already has `fakePad`, `readPad` and `edges`), add:
+
+```ts
+  it('reports a tap of the attack button on its press edge only', () => {
+    const prev = readPad(fakePad());
+    const next = readPad(fakePad([5]));
+    expect(padToArena(next, edges(prev, next)).attackTap).toBe(true);
+    expect(padToArena(next, edges(next, next)).attackTap).toBe(false);
+  });
+```
+
+(Import `padToArena` from `../arena-pad` if the file doesn't already; RB is button 5 and the default attack binding.)
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -1872,6 +2013,10 @@ Expected: FAIL.
 
 - `busy: !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0,`
 - In the manual input object, add `attackTap: input.attackTap || !!pad?.attackTap,`.
+
+`useArena.ts` `ArenaHud` interface: update the `basicComboNext` doc to "the blow of the weapon's string that lands next".
+
+`pixel/floor-engine.ts`: the pixel floor paints every hero zone except Barrage each frame. Add `|| z.source === 'burst'` to that skip, or lava shows at a thrown Burst's target before it lands. In `__tests__/floor-engine.test.ts`, add `heft: 0` to the hand-built `hit` event.
 
 `ArenaHud.tsx`:
 - Update the `busy` prop's doc/comment to "an ability is channelling (presses wait for it)".
@@ -1916,7 +2061,7 @@ Remove the fake lunge. The engine moves the hero now, so:
 - In `mana-pixels.ts`, delete `lungeOffset` and its test in `__tests__/mana-pixels.test.ts`.
 - In `ArenaRenderer.ts`, delete every `this.fx.lunge(...)` call, and in `syncHero` replace the lunge lines with `s.position.set(0, 0.5);`.
 
-In `ArenaRenderer.ts` `case 'basic'`, draw the swing with the blow's own arc and reach:
+In `ArenaRenderer.ts` `case 'basic'`, delete the old `const dir = { x: e.tx - e.x, y: e.ty - e.y };` line (the event carries `dir` now) and draw the swing with the blow's own arc and reach:
 
 ```ts
           if (e.melee) {
@@ -1950,7 +2095,7 @@ git commit -m "feat(client): read weapon strings, channel-only wind-ups and atta
 
 - [ ] **Step 1: Run the Delve E2E**
 
-The dev server is usually already running on port 5288 (`npx vite --port 5288 --strictPort --host`); start it in the background if it isn't. Write a scratch config `packages/client/playwright.scratch.config.ts` that reuses it:
+Restart the dev server on port 5288 after the engine build: stop it if it is running, then run `cd packages/client && npx vite --port 5288 --strictPort --force --host` in the background. Vite can serve a stale bundled engine otherwise. Write a scratch config `packages/client/playwright.scratch.config.ts` that reuses it:
 
 ```ts
 import base from './playwright.config';
@@ -2085,7 +2230,7 @@ export class HitStop {
 
 - [ ] **Step 4: Gate the display clock**
 
-In `useArena.ts`: add `const hitstopRef = useRef(new HitStop());`. In the ticker, replace the `slow`/`dt` lines with:
+In `useArena.ts`: import `{ HitStop }` from `./fx/hitstop` and add `const hitstopRef = useRef(new HitStop());`. In the ticker, replace the `slow`/`dt` lines with:
 
 ```ts
           const now = performance.now();
@@ -2098,7 +2243,7 @@ In `useArena.ts`: add `const hitstopRef = useRef(new HitStop());`. In the ticker
           const dt = Math.min(0.1, ticker.deltaMS / 1000) * scale;
 ```
 
-After `renderer.handleEvents(events);` add `hitstopRef.current.onEvents(events, performance.now());`.
+After `renderer.handleEvents(events);` add `if (!flags.autopilot) hitstopRef.current.onEvents(events, performance.now());` (the bot-driven E2E runs would otherwise spend a large share of wall time frozen).
 
 - [ ] **Step 5: Run the tests**
 
@@ -2149,6 +2294,19 @@ describe('windingUp', () => {
     expect(a.heft).toBeCloseTo(0.8);
     expect(a.progress).toBeCloseTo(0.5);
     expect(a.dir).toEqual({ x: 1, y: 0 });
+  });
+
+  it('reports a wind-up with the press heft, toward where it aims', () => {
+    const a = windingUp(
+      world({
+        facing: { x: 0, y: -1 },
+        abilities: [{ element: 'frost', heft: 0.45, combo: [1] }],
+        windup: { slot: 0, aim: null, at: { x: 5, y: 9 }, start: 0.9, until: 1.3, step: 0, conjureUntil: 1.3, chargePaid: 0 },
+      } as never),
+    )!;
+    expect(a.heft).toBeCloseTo(0.45);
+    expect(a.dir).toEqual({ x: 0, y: 1 });
+    expect(a.progress).toBeCloseTo(0.25);
   });
 
   it('ignores an uncommitted swing and idle heroes', () => {
@@ -2211,23 +2369,28 @@ export function windingUp(w: ArpgWorld): WindingUp | null {
 }
 ```
 
-(Check `MANA_HEX`'s real module: it is imported in `draw-world.ts`. Use the same path.)
-
 - [ ] **Step 4: Gather at a point; draw anticipation**
 
 `mana-fx.ts` `gather(x, y, color, n = 2)`: remove the internal `- 0.3` so pixels converge on exactly `(x, y)`. Callers pass the hand point.
 
-`draw-world.ts`: add
+`draw-world.ts`: import `{ windingUp }` from `./anticipation`, and add
 
 ```ts
 /** Mana gathering at the hand while an action winds up: more with heft; heavy ones spiral in around a growing orb. */
-export function drawAnticipation(air: Graphics, fx: ManaFx, w: ArpgWorld, time: number): void {
+export function drawAnticipation(
+  air: Graphics,
+  fx: ManaFx,
+  w: ArpgWorld,
+  time: number,
+  dt: number,
+): void {
   const a = windingUp(w);
   if (!a) return;
   const h = w.hero;
   const hx = h.x + a.dir.x * 0.35;
   const hy = h.y - 0.3 + a.dir.y * 0.35;
-  fx.gather(hx, hy, a.color, 1 + Math.round(a.heft * 3));
+  // No new pixels while the display is frozen (they would pile up without moving).
+  if (dt > 0) fx.gather(hx, hy, a.color, 1 + Math.round(a.heft * 3));
   if (a.heft >= 0.7) {
     manaMotes(air, hx, hy, 0.2 + 0.9 * (1 - a.progress), a.color, time, 5, 9, 0.9, 4);
     manaOrb(air, hx, hy, 0.05 + 0.2 * a.progress, a.color, 0xffffff, 0.9);
@@ -2235,7 +2398,7 @@ export function drawAnticipation(air: Graphics, fx: ManaFx, w: ArpgWorld, time: 
 }
 ```
 
-and in `drawGuard`'s wind-up block remove `fx.gather(h.x, h.y, color);`, because anticipation owns the gather now. In `ArenaRenderer.update`, call `drawAnticipation(air, this.fx, w, this.time);` after `drawGuard`.
+In `drawGuard`'s wind-up block remove `fx.gather(h.x, h.y, color);`, because anticipation owns the gather now. That leaves `drawGuard`'s `fx` parameter unused (`noUnusedParameters` would fail `tsc`), so drop it from the signature and call `drawGuard(air, w, this.time)`. In `ArenaRenderer.ts`, add `drawAnticipation` to the `./fx/draw-world` import and `import { windingUp } from './fx/anticipation';`, then call `drawAnticipation(air, this.fx, w, this.time, dt);` after `drawGuard`.
 
 - [ ] **Step 5: Lean and camera kick**
 
@@ -2321,8 +2484,9 @@ const SWEEP_SECONDS = 0.1;
   ): void {
     const heft = o.heft ?? 0.3;
     const life = SWEEP_SECONDS + 0.12 + 0.12 * heft + (o.finisher ? 0.08 : 0);
+    // The blade has mostly swept by the moment it connects, so a hit-stop on this frame shows the arc.
     this.swings.push({
-      x, y, angle, arc, range, color, age: 0, life, heft,
+      x, y, angle, arc, range, color, age: SWEEP_SECONDS * 0.6, life, heft,
       reverse: !!o.reverse,
       finisher: !!o.finisher,
     });
@@ -2364,7 +2528,7 @@ Draw loop:
 
 - [ ] **Step 2: Call it per blow**
 
-In `ArenaRenderer` `case 'basic'` (melee), pass `{ heft: e.heft, reverse: e.step % 2 === 1, finisher: e.finisher }` in place of the old `0.16` life argument. In `case 'slash'`, pass `{ heft: 0.5, finisher: e.arc >= 360 }` (drop the old life argument and the `fx.lunge` line if it is still there).
+In `ArenaRenderer` `case 'basic'` (melee), pass `{ heft: e.heft, reverse: e.step % 2 === 1, finisher: e.finisher }` in place of the old `0.16` life argument. In `case 'slash'`, pass `{ heft: w.hero.abilities.find((a) => a.form.id === 'strike')?.heft ?? 0.5, finisher: e.arc >= 360 }` (drop the old life argument and the `fx.lunge` line if it is still there).
 
 - [ ] **Step 3: Check and commit**
 
@@ -2397,17 +2561,37 @@ export function drawLobs(ground: Graphics, air: Graphics, w: ArpgWorld, time: nu
     const y = z.fromY + (z.y - z.fromY) * p;
     const height = Math.sin(Math.PI * p) * 0.25 * Math.hypot(z.x - z.fromX, z.y - z.fromY);
     manaRing(ground, z.x, z.y, z.radius, color, time, { alpha: 0.25 + 0.6 * p, gaps: 4, spin: 6 });
-    manaEllipse(ground, x, y, 0.25 + 0.15 * p, 0.1 + 0.06 * p, 0x000000, time, 0.4);
-    manaOrb(air, x, y - 0.3 - height, 0.18, color, 0xffffff, 1);
+    // A filled shadow that grows as the orb comes down; the orb lands on the ring.
+    manaOrb(ground, x, y, 0.12 + 0.1 * p, 0x000000, 0x000000, 0.35);
+    manaOrb(air, x, y - 0.3 * (1 - p) - height, 0.18, color, 0xffffff, 1);
   }
 }
 ```
 
-Call `drawLobs(ground, air, w, this.time);` in `ArenaRenderer.update` after `drawZones`.
+Add `drawLobs` to `ArenaRenderer.ts`'s `./fx/draw-world` import and call `drawLobs(ground, air, w, this.time);` in `update` after `drawZones`.
 
 - [ ] **Step 2: The lance extends, then fades from base to tip**
 
-In `ManaFx`, give `Beam` an `age` (start 0) and `life: 0.36`, and replace the beam draw loop:
+In `ManaFx`, replace the `Beam` interface and the `beam()` method:
+
+```ts
+interface Beam {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  width: number;
+  color: number;
+  age: number;
+  life: number;
+}
+
+  beam(x: number, y: number, tx: number, ty: number, width: number, color: number): void {
+    this.beams.push({ x, y, tx, ty, width, color, age: 0, life: 0.36 });
+  }
+```
+
+and replace the beam draw loop:
 
 ```ts
     for (const b of this.beams) {
@@ -2528,7 +2712,7 @@ Expected: FAIL.
 ```ts
 import type { ArpgWorld } from '@alloy/engine';
 import { MANA_HEX } from '../palette';
-import { HOSTILE, elem } from './draw-world';
+import { elem, shotColor } from './draw-world';
 import type { ManaFx } from './mana-fx';
 
 type Fx = Pick<ManaFx, 'burst' | 'disperse'>;
@@ -2552,7 +2736,7 @@ export class Lifecycles {
     for (const p of w.projectiles) {
       if (p.dead) continue;
       seen.add(p.id);
-      const color = p.owner === 'monster' ? HOSTILE : elem(p.element);
+      const color = shotColor(p);
       const known = this.shots.get(p.id);
       if (!known) fx.burst(p.x, p.y, color, 4, 3);
       this.shots.set(p.id, { x: p.x, y: p.y, r: p.radius, color, born: known?.born ?? time });
@@ -2590,9 +2774,27 @@ export class Lifecycles {
 }
 ```
 
-In `draw-world.ts`, export `HOSTILE` and `elem`, and give `drawProjectiles` a `bornAt: (id: number) => number | undefined` parameter. Scale each projectile's drawn radius by `Math.min(1, (time - (bornAt(p.id) ?? time - 1)) / 0.05)` (never below one pixel).
+In `draw-world.ts`, export `elem`, and add a shared colour rule (use it in `drawProjectiles` in place of its inline `color`):
+
+```ts
+/** A projectile's colour: monster shots are their element or hostile red; the hero's are its element. */
+export function shotColor(p: Projectile): number {
+  return p.owner === 'monster' ? (p.element ? MANA_HEX[p.element] : HOSTILE) : elem(p.element);
+}
+```
+
+Give `drawProjectiles` a fifth parameter `bornAt: (id: number) => number | undefined` (after `trails`), and pop each shot in over its first 0.05 s. At the top of the loop body:
+
+```ts
+    const born = bornAt(p.id);
+    const k = born === undefined ? 1 : Math.min(1, (time - born) / 0.05);
+    const r = (v: number) => Math.max(PX, v * k);
+```
+
+and wrap every drawn radius in `r(...)`: `p.radius`, the `0.15` orbs and the `p.radius + PX * 2` rings.
 
 In `ArenaRenderer`:
+- import `{ Lifecycles }` from `./fx/lifecycles`;
 - add `private lifecycles = new Lifecycles();` and clear it wherever `this.trails.clear()` runs;
 - call `this.lifecycles.update(w, this.fx, this.time);` in `update` before `drawProjectiles`;
 - pass `(id) => this.lifecycles.bornAt(id)` to `drawProjectiles`.
@@ -2613,10 +2815,16 @@ git commit -m "feat(client): shots spark at the hand, and effects dissolve inste
 
 - [ ] **Step 1: Screenshots**
 
-With the dev server on 5288, write a scratch spec `packages/client/e2e/zz-feel.spec.ts`. Seed a save with `createDelveProfile` and set its abilities with `setAbility` (as the earlier FX scratch spec did: bolt primary, Crushing strike, burst, Crushing ward). Enter a dive with autopilot off, then:
-- stand next to a pack and hold left click aimed at a foe for 2 s;
-- press Q/E/R aimed;
-- take `page.screenshot` crops around the hero at 30–60 ms intervals.
+With the dev server on 5288 and the Task 12 scratch config recreated, write a scratch spec `packages/client/e2e/zz-feel.spec.ts`:
+- **Save:** build it in Node with `createDelveProfile(createDefaultRegistry(), 4242)` and `setAbility` (`packages/engine/src/delve/profile.ts`), and seed it like `seedProfile(page, seed, false)` in `e2e/delve.spec.ts` (autopilot off).
+- **Display speed:** also set `localStorage['alloy:delve:timescale'] = '0.25'` so a 0.1 s sweep spans several screenshots (each takes well over 30 ms).
+- **Pass A:** Primary Crushing Strike (`{ form: 'strike', elements: ['fire'], weight: 2, payment: 'mana' }`), Defensive Crushing Ward, Ultimate Crushing Nova (mana payment).
+- **Pass B:** Primary Lance, Defensive Ward, Ultimate Maelstrom.
+- **Pass C:** Primary Burst (the thrown lob), the rest default.
+- **In each pass:**
+  - switch to manual attacks with the dive menu's `attack-mode-toggle` (as D05 does);
+  - walk to the nearest pack, hold left click on a foe for 2 s, then press Q, E and R aimed at it;
+  - screenshot crops around the hero every frame you can get.
 
 Save the crops to the session scratchpad `shots/` folder. View them and check:
 - the swing smear sweeps;
@@ -2626,7 +2834,7 @@ Save the crops to the session scratchpad `shots/` folder. View them and check:
 - things dissolve;
 - the hero leans and lunges.
 
-Tune numbers in `mana-fx.ts` / `draw-world.ts` if something reads poorly. Delete the scratch spec and config afterwards.
+Tune numbers in `mana-fx.ts` / `draw-world.ts` if something reads poorly. Delete the scratch spec (keep the scratch config for Step 2).
 
 - [ ] **Step 2: Full verification**
 
@@ -2635,7 +2843,7 @@ Run:
 - `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
 - the Delve E2E through the scratch config (Task 12 Step 1).
 
-Expected: all green (retry only proven flakes).
+Expected: all green (retry only proven flakes). Then delete the scratch config.
 
 - [ ] **Step 3: Docs, version, commit, push**
 
