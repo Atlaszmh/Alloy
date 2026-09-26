@@ -212,7 +212,7 @@ export interface Zone {
   owner: 'hero' | 'monster';
   /** What left it: a form ('maelstrom', 'barrage') or a fusion ('magma', 'rimebloom'…), for VFX. */
   source: string | null;
-  /** The hero ability behind it; a hero zone with `detonateAt` lands as one impact (Barrage). */
+  /** The hero ability behind it; a hero zone with `detonateAt` lands as one impact (Barrage, a thrown Burst). */
   ability: ResolvedAbility | null;
   x: number;
   y: number;
@@ -225,7 +225,7 @@ export interface Zone {
   damage: number;
   element: ManaType | null;
   applies: StatusId[];
-  /** Telegraph / Barrage impact: explodes at this time (0 = lingering zone). */
+  /** Telegraph / Barrage impact / thrown Burst: explodes at this time (0 = lingering zone). */
   detonateAt: number;
   /** A thrown Burst: where it was thrown from (for the arc). */
   fromX?: number;

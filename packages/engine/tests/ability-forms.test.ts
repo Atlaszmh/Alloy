@@ -56,6 +56,8 @@ describe('primary forms', () => {
       primary: { form: 'burst' },
     });
     press(w, 0, { x: 13, y: 29 });
+    // Thrown: it lands after its flight.
+    run(w, 1);
     expect(damaged(w.monsters[0])).toBe(true);
     expect(damaged(w.monsters[1])).toBe(false);
   });
@@ -180,6 +182,7 @@ describe('knobs', () => {
       primary: { form: 'burst', elements: ['storm', 'earth'] },
     });
     press(w, 0, { x: 13, y: 28 });
+    run(w, 1);
     expect(w.monsters[1].x).toBeLessThan(16);
   });
 
@@ -190,6 +193,7 @@ describe('knobs', () => {
     });
     freeze(makeCtx(registry, w, []), w.monsters[0], 5);
     press(w, 0, { x: 13, y: 29 });
+    run(w, 1);
     expect(w.monsters).toHaveLength(0);
   });
 
@@ -211,6 +215,7 @@ describe('knobs', () => {
       primary: { form: 'burst', elements: ['fire', 'nature'] },
     });
     const events = press(w, 0, { x: 13, y: 28 });
+    events.push(...run(w, 1));
     const blast = events.find((e) => e.kind === 'explode')!;
     expect(blast.kind === 'explode' && Math.hypot(blast.x - 13, blast.y - 28)).toBeGreaterThan(
       0.01,

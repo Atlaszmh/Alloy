@@ -723,3 +723,20 @@ describe('heavy payoff and heft', () => {
     expect(s.monsters[0].status.staggerUntil).toBe(0);
   });
 });
+
+describe('Burst is thrown', () => {
+  it('nothing lands until the lob arrives, then it explodes at the aim point', () => {
+    const w = arena([dummy(13, 29)], { noBasic: true, primary: { form: 'burst' } });
+    press(w, 0, { x: 13, y: 29 });
+    const z = w.zones.find((q) => q.source === 'burst')!;
+    expect(z).toBeDefined();
+    expect(z.fromX).toBeCloseTo(w.hero.x, 1);
+    expect(z.detonateAt).toBeGreaterThan(w.t + bal.feel.lobBase - 1e-9);
+    expect(damaged(w.monsters[0])).toBe(false);
+    const events = until(w, () => damaged(w.monsters[0]));
+    const boom = events.find((e) => e.kind === 'explode');
+    expect(boom && boom.kind === 'explode' && Math.hypot(boom.x - 13, boom.y - 29)).toBeLessThan(
+      0.5,
+    );
+  });
+});

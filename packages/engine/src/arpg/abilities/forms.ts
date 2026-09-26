@@ -118,10 +118,33 @@ export function executeForm(
       return done(ex, ey);
     }
 
-    case 'burst':
+    case 'burst': {
+      // Thrown: the mana arcs to the aim point and bursts where it lands.
       h.facing = dir;
-      impact(ctx, ab, p.x, p.y, ab.radius * mult, hit);
+      const land = t + ctx.bal.feel.lobBase + dist(h.x, h.y, p.x, p.y) / Math.max(1, ab.speed);
+      world.zones.push({
+        id: world.nextId++,
+        owner: 'hero',
+        source: 'burst',
+        ability: ab,
+        x: p.x,
+        y: p.y,
+        radius: ab.radius * mult,
+        born: t,
+        until: land + 0.1,
+        tick: 0,
+        nextTick: 0,
+        damage: hit,
+        element: ab.element,
+        applies: ab.knobs.applies,
+        detonateAt: land,
+        dead: false,
+        fromX: h.x,
+        fromY: h.y,
+        heft,
+      });
       return done(p.x, p.y);
+    }
 
     case 'strike': {
       h.facing = dir;

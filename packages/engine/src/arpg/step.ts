@@ -262,7 +262,7 @@ function zonesTick(ctx: SimCtx): void {
       }
       continue;
     }
-    // Barrage impacts land once.
+    // Barrage impacts and thrown Bursts land once.
     if (z.detonateAt > 0) {
       if (world.t >= z.detonateAt) {
         z.dead = true;
