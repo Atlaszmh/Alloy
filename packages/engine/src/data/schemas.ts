@@ -415,6 +415,21 @@ const MonsterDefSchema = z.object({
   size: z.number().positive().optional(),
 });
 
+const ComboStepSchema = z.object({
+  time: z.number().positive(),
+  startup: z.number().gt(0).lt(1),
+  step: z.number(),
+  power: z.number().positive(),
+  heft: z.number().min(0).max(1),
+  arc: z.number().positive().max(360).optional(),
+  reach: z.number().min(0).optional(),
+  knockback: z.number().min(0).optional(),
+  stagger: z.boolean().optional(),
+  size: z.number().positive().optional(),
+  explode: z.number().positive().optional(),
+  speed: z.number().positive().optional(),
+});
+
 export const DelveDataSchema = z.object({
   slotWeights: perSlot(z.number().positive()),
   bases: z
@@ -433,6 +448,7 @@ export const DelveDataSchema = z.object({
             pierce: z.boolean().optional(),
           })
           .optional(),
+        combo: z.array(ComboStepSchema).min(1).optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -590,6 +606,7 @@ export const ArpgDataSchema = z.object({
         arc: z.number().positive().max(360).optional(),
         combo: z.array(z.number().positive()).min(1).optional(),
         comboCount: z.array(z.number().int().positive()).min(1).optional(),
+        motion: z.number().optional(),
       }),
     )
     .length(12),
@@ -622,6 +639,7 @@ const DelveBalanceSchema = z.object({
     unarmedDamage: z.number().positive(),
     unarmedInterval: z.number().positive(),
     basicComboGrace: z.number().min(0),
+    defaultCombo: z.array(ComboStepSchema).min(1),
     minAttackInterval: z.number().positive(),
     critCap: z.number().positive(),
     dodgeCap: z.number().positive(),
@@ -809,6 +827,24 @@ const DelveBalanceSchema = z.object({
       riposteWindow: z.number().positive(),
     })
     .refine((d) => d.perfectWindow <= d.iframes, 'perfectWindow must fit inside iframes'),
+  feel: z.object({
+    conjure: z.array(z.number().min(0)).length(5),
+    conjureSlot: z.object({
+      primary: z.number().min(0),
+      defensive: z.number().min(0),
+      ultimate: z.number().min(0),
+    }),
+    recovery: z.array(z.number().min(0)).length(5),
+    heft: z.array(z.number().min(0).max(1)).length(5),
+    recoveryMove: z.number().min(0).max(1),
+    basicRecovery: z.number().min(0).max(1),
+    motionPerWeight: z.number().min(0),
+    recoilSeconds: z.number().positive(),
+    contactGap: z.number().min(0),
+    buffer: z.number().min(0),
+    heavyKnockback: z.number().min(0),
+    lobBase: z.number().min(0),
+  }),
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),

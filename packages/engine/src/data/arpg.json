@@ -11,27 +11,27 @@
   "forms": [
     {
       "id": "bolt", "slot": "primary", "name": "Bolt", "icon": "☄️",
-      "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "combo": [0.8, 0.8, 1.0, 1.5],
+      "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "combo": [0.8, 0.8, 1.0, 1.5], "motion": -0.15,
       "text": "A bolt that bursts on the first foe it hits. Press again to chain: small, small, medium, large."
     },
     {
       "id": "volley", "slot": "primary", "name": "Volley", "icon": "🎯",
-      "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "combo": [1, 1, 1], "comboCount": [3, 3, 5],
+      "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "combo": [1, 1, 1], "comboCount": [3, 3, 5], "motion": -0.1,
       "text": "Homing darts that seek out different foes. The third press fires five."
     },
     {
       "id": "lance", "slot": "primary", "name": "Lance", "icon": "🗡️",
-      "power": 1.55, "range": 7.5, "radius": 0.55, "combo": [1, 1, 1.4],
+      "power": 1.55, "range": 7.5, "radius": 0.55, "combo": [1, 1, 1.4], "motion": -0.3,
       "text": "An instant line that hits every foe along it. The third press reaches further and hits harder."
     },
     {
       "id": "burst", "slot": "primary", "name": "Burst", "icon": "💥",
-      "power": 1.7, "range": 8, "radius": 1.6, "combo": [1, 1, 1.5],
+      "power": 1.7, "range": 8, "radius": 1.6, "combo": [1, 1, 1.5], "motion": 0.2, "speed": 30,
       "text": "An explosion where you aim. The third press is bigger."
     },
     {
       "id": "strike", "slot": "primary", "name": "Strike", "icon": "⚔️",
-      "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "combo": [1, 1, 1.2, 1.8],
+      "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "combo": [1, 1, 1.2, 1.8], "motion": 0.5,
       "text": "An element-infused sweep in front of you. The fourth press slams everything around you."
     },
     {
@@ -61,12 +61,12 @@
     },
     {
       "id": "barrage", "slot": "ultimate", "name": "Barrage", "icon": "🌠",
-      "power": 1.55, "range": 9, "radius": 1.5, "count": 7, "duration": 1.2,
+      "power": 1.55, "range": 9, "radius": 1.5, "count": 7, "duration": 1.2, "motion": 0.15,
       "text": "Seven impacts rain over the target area."
     },
     {
       "id": "maelstrom", "slot": "ultimate", "name": "Maelstrom", "icon": "🌪️",
-      "power": 0.5, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5,
+      "power": 0.5, "range": 9, "radius": 3.5, "duration": 6, "tick": 0.5, "motion": 0.2,
       "text": "A lingering storm at the target that hits everything inside for 6 s."
     }
   ],

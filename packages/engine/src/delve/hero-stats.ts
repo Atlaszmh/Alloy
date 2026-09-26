@@ -107,8 +107,18 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
         speed: weaponBase.attack.speed ?? 12,
         pierce: weaponBase.attack.pierce ?? false,
         element: weaponItem!.mana,
+        combo: weaponBase.combo ?? bal.hero.defaultCombo,
       }
-    : { baseId: null, kind: 'melee', range: 1.4, arc: 90, speed: 0, pierce: false, element: null };
+    : {
+        baseId: null,
+        kind: 'melee',
+        range: 1.4,
+        arc: 90,
+        speed: 0,
+        pierce: false,
+        element: null,
+        combo: bal.hero.defaultCombo,
+      };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;
 
   const glass = legendaries.glass_cannon ?? 0;

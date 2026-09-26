@@ -53,6 +53,8 @@ export interface FormDef {
   combo?: number[];
   /** Press-combo projectile counts (Volley). */
   comboCount?: number[];
+  /** Units the hero moves when casting: positive steps in over the conjure, negative recoils after the release. */
+  motion?: number;
 }
 
 /** What an element adds to any ability built with it. */

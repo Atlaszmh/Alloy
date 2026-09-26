@@ -26,6 +26,32 @@ export interface WeaponAttackDef {
   pierce?: boolean;
 }
 
+/** One blow of a weapon's basic-attack string (`delve.json` weapon `combo`). */
+export interface ComboStepDef {
+  /** Share of the attack interval this blow takes: its cycle is `attackInterval × time`. */
+  time: number;
+  /** Share of the cycle before the strike (the startup). */
+  startup: number;
+  /** Units of motion: a lunge over the startup (melee) or a recoil after the release (negative, ranged). */
+  step: number;
+  /** Damage multiplier. */
+  power: number;
+  /** 0–1: how hard it lands (hit-stop, camera kick; never the rules). */
+  heft: number;
+  /** Melee: swing arc in degrees (defaults to the weapon's). */
+  arc?: number;
+  /** Melee: extra reach. */
+  reach?: number;
+  knockback?: number;
+  stagger?: boolean;
+  /** Ranged: projectile size multiplier. */
+  size?: number;
+  /** Ranged: the shot bursts over this radius on its first hit or at the end of its flight. */
+  explode?: number;
+  /** Ranged: projectile speed multiplier. */
+  speed?: number;
+}
+
 export interface GearBaseDef {
   id: string;
   slot: GearSlot;
@@ -34,6 +60,8 @@ export interface GearBaseDef {
   attackInterval?: number;
   /** Weapons only: basic-attack profile. */
   attack?: WeaponAttackDef;
+  /** Weapons only: the basic-attack string (else the hero's default string). */
+  combo?: ComboStepDef[];
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -177,6 +205,32 @@ export interface DelveAbilityBalance {
   };
 }
 
+/** Combat weight: action timing and motion. Arrays run Swift → Crushing (ability weight −2..2). */
+export interface FeelBalance {
+  /** Conjure seconds by ability weight. */
+  conjure: number[];
+  conjureSlot: { primary: number; defensive: number; ultimate: number };
+  /** Slowed seconds after an ability lands, by weight (the Defensive has none). */
+  recovery: number[];
+  /** Ability heft by weight. */
+  heft: number[];
+  /** Move speed multiplier during a recovery. */
+  recoveryMove: number;
+  /** Share of a basic's cycle after its strike spent recovering. */
+  basicRecovery: number;
+  /** Ability motion grows by this per weight step. */
+  motionPerWeight: number;
+  recoilSeconds: number;
+  /** A lunge stops when the gap between the hero's and the foe's edges is this small. */
+  contactGap: number;
+  /** Seconds a press waits past the end of whatever keeps the hero busy. */
+  buffer: number;
+  /** Knockback per weight step above Balanced, on direct hits. */
+  heavyKnockback: number;
+  /** A thrown Burst's minimum flight in seconds. */
+  lobBase: number;
+}
+
 export interface DelveBalance {
   hero: {
     baseHp: number;
@@ -186,6 +240,8 @@ export interface DelveBalance {
     unarmedInterval: number;
     /** The melee combo resets after a pause longer than the attack interval plus this. */
     basicComboGrace: number;
+    /** The string for weapons without one (and unarmed). */
+    defaultCombo: ComboStepDef[];
     minAttackInterval: number;
     critCap: number;
     dodgeCap: number;
@@ -361,6 +417,7 @@ export interface DelveBalance {
     /** How long the riposte (next real hit crits and staggers) stays armed. */
     riposteWindow: number;
   };
+  feel: FeelBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
@@ -382,6 +439,8 @@ export interface HeroWeapon {
   pierce: boolean;
   /** Element of basic attacks (the weapon's mana), or null when unarmed. */
   element: ManaType | null;
+  /** The basic-attack string, one entry per blow. */
+  combo: ComboStepDef[];
 }
 
 export interface HeroStats {
