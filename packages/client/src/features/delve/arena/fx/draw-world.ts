@@ -3,6 +3,7 @@ import type { ArpgWorld, ManaType, Vec } from '@alloy/engine';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import type { ManaFx } from './mana-fx';
+import { windingUp } from './anticipation';
 import {
   PX,
   manaArc,
@@ -173,8 +174,8 @@ export function drawFooting(ground: Graphics, w: ArpgWorld, time: number): void 
   }
 }
 
-/** Defensive auras around the hero, and the cast wind-up (gathering mana plus a filling arc). */
-export function drawGuard(air: Graphics, fx: ManaFx, w: ArpgWorld, time: number): void {
+/** Defensive auras around the hero, and a channel's filling arc. */
+export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
   const h = w.hero;
   const cy = h.y - 0.3;
   const guard = h.abilities[1];
@@ -207,14 +208,34 @@ export function drawGuard(air: Graphics, fx: ManaFx, w: ArpgWorld, time: number)
   }
   if (h.windup) {
     const ab = h.abilities[h.windup.slot];
-    const color = ab ? MANA_HEX[ab.element] : 0xffffff;
-    // The ring shows a channel only; a conjure is just the gathering mana.
+    // The ring shows a channel only; a conjure is the anticipation (drawAnticipation).
     if (ab && ab.channel > 0 && w.t >= h.windup.conjureUntil) {
+      const color = MANA_HEX[ab.element];
       const p = progress(w.t, h.windup.conjureUntil, h.windup.until);
       manaRing(air, h.x, cy, 1.2, color, time, { alpha: 0.35, gaps: 8, spin: 5 });
       manaArc(air, h.x, cy, 1.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p, color, 1, 2);
     }
-    fx.gather(h.x, h.y, color);
+  }
+}
+
+/** Mana gathering at the hand while an action winds up: more with heft; heavy ones spiral in around a growing orb. */
+export function drawAnticipation(
+  air: Graphics,
+  fx: ManaFx,
+  w: ArpgWorld,
+  time: number,
+  dt: number,
+): void {
+  const a = windingUp(w);
+  if (!a) return;
+  const h = w.hero;
+  const hx = h.x + a.dir.x * 0.35;
+  const hy = h.y - 0.3 + a.dir.y * 0.35;
+  // No new pixels while the display is frozen (they would pile up without moving).
+  if (dt > 0) fx.gather(hx, hy, a.color, 1 + Math.round(a.heft * 3));
+  if (a.heft >= 0.7) {
+    manaMotes(air, hx, hy, 0.2 + 0.9 * (1 - a.progress), a.color, time, 5, 9, 0.9, 4);
+    manaOrb(air, hx, hy, 0.05 + 0.2 * a.progress, a.color, 0xffffff, 0.9);
   }
 }
 

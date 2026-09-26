@@ -119,7 +119,7 @@ export class ManaFx {
     }
   }
 
-  /** Pixels drawn inward to the hero while an ability winds up. */
+  /** Pixels drawn inward to (x, y) (the hand) while an action winds up. */
   gather(x: number, y: number, color: number, n = 2): void {
     for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -127,7 +127,7 @@ export class ManaFx {
       const life = 0.3;
       this.particles.push({
         x: x + Math.cos(a) * r,
-        y: y - 0.3 + Math.sin(a) * r,
+        y: y + Math.sin(a) * r,
         vx: (-Math.cos(a) * r) / life,
         vy: (-Math.sin(a) * r) / life,
         life,

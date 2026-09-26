@@ -10,8 +10,10 @@ import type {
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx } from './fx/mana-fx';
+import { windingUp } from './fx/anticipation';
 import {
   drawAim,
+  drawAnticipation,
   drawFooting,
   drawGuard,
   drawMonsterMarks,
@@ -95,6 +97,8 @@ export class ArenaRenderer {
   private insets = { top: 0, bottom: 0 };
   private cam = { x: 0, y: 0 };
   private shake = 0;
+  /** A camera nudge toward the last strike (world units), decaying fast. */
+  private kick = { x: 0, y: 0 };
   private time = 0;
 
   private root = new Container();
@@ -166,6 +170,7 @@ export class ArenaRenderer {
     this.monsters.clear();
     this.drops.clear();
     this.trails.clear();
+    this.kick = { x: 0, y: 0 };
     this.dying = [];
     this.fx.clear();
     for (const f of this.floats) this.releaseText(f.text);
@@ -260,6 +265,14 @@ export class ArenaRenderer {
     this.shake = Math.min(0.6, this.shake + amount);
   }
 
+  /** Nudge the camera toward a strike, by its heft; heavy ones shake too. */
+  private kickCamera(dir: Vec, heft: number): void {
+    const len = Math.hypot(dir.x, dir.y) || 1;
+    this.kick.x += (dir.x / len) * 0.12 * heft;
+    this.kick.y += (dir.y / len) * 0.12 * heft;
+    if (heft >= 0.7) this.addShake(0.15 * heft);
+  }
+
   handleEvents(events: ArpgEvent[]): void {
     const w = this.world;
     if (!w) return;
@@ -321,6 +334,7 @@ export class ArenaRenderer {
           }
           break;
         case 'basic': {
+          this.kickCamera(e.dir, e.heft);
           if (e.melee) {
             const wpn = w.hero.stats.weapon;
             const s = wpn.combo[e.step] ?? wpn.combo[0];
@@ -338,6 +352,7 @@ export class ArenaRenderer {
         }
         case 'cast': {
           const color = MANA_HEX[e.element];
+          this.kickCamera({ x: e.tx - e.x, y: e.ty - e.y }, e.heft);
           this.fx.ring(e.x, e.y, 0.9, color, false, 0.2);
           if (SELF_FORMS.has(e.form)) this.fx.burst(e.x, e.y - 0.3, color, 14, 4);
           else {
@@ -528,10 +543,16 @@ export class ArenaRenderer {
         ? w.height / 2
         : Math.max(halfH - 1.5, Math.min(w.height - halfH + 1.5, this.cam.y));
     this.shake = Math.max(0, this.shake - dt * 1.6);
+    const kd = Math.exp(-dt / 0.04);
+    this.kick.x *= kd;
+    this.kick.y *= kd;
     const sx = (Math.random() - 0.5) * this.shake * u;
     const sy = (Math.random() - 0.5) * this.shake * u;
     this.root.scale.set(u);
-    this.root.position.set(width / 2 - cx * u + sx, playTop + playH / 2 - cy * u + sy);
+    this.root.position.set(
+      width / 2 - (cx + this.kick.x) * u + sx,
+      playTop + playH / 2 - (cy + this.kick.y) * u + sy,
+    );
 
     const left = -this.root.position.x / u;
     const top = -this.root.position.y / u;
@@ -550,7 +571,8 @@ export class ArenaRenderer {
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, w, this.time);
     drawProjectiles(air, w, this.time, this.trails);
-    drawGuard(air, this.fx, w, this.time);
+    drawGuard(air, w, this.time);
+    drawAnticipation(air, this.fx, w, this.time, dt);
     this.fx.draw(air, dt, this.time);
     drawAim(air, w, this.aim, this.time);
     this.groundFx.render(view);
@@ -607,7 +629,11 @@ export class ArenaRenderer {
       const s = this.heroSprite;
       s.texture = this.heroFrames[Math.floor(this.time * 3) % this.heroFrames.length];
       s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
-      s.position.set(0, 0.5);
+      // Winding up: lean a pixel back from the target, and lift one for heavy moves.
+      const a = windingUp(w);
+      const lx = a ? -Math.round(a.dir.x) * SPRITE_PIXEL : 0;
+      const ly = a ? -Math.round(a.dir.y) * SPRITE_PIXEL - (a.heft >= 0.7 ? SPRITE_PIXEL : 0) : 0;
+      s.position.set(lx, 0.5 + ly);
       s.tint =
         this.time < this.heroPerfectUntil
           ? 0xfff3b0
