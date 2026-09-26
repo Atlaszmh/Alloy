@@ -1,13 +1,12 @@
 import type { Graphics } from 'pixi.js';
 import type { Vec } from '@alloy/engine';
-import { PX, lungeOffset, manaArc, manaDust, manaLine, manaRing, px } from './mana-pixels';
+import { PX, manaArc, manaDust, manaLine, manaRing, px } from './mana-pixels';
 
 /**
  * Short-lived combat effects, drawn as mana pixels into the air layer: sparks
  * and debris, expanding rings, lightning and dash streaks, swings, beams, and
- * the casting polish (a fling of mana toward the target, pixels gathering
- * during a wind-up, and the hero sprite's lunge). Cosmetic only, so it may
- * use Math.random.
+ * the casting polish (a fling of mana toward the target and pixels gathering
+ * during a wind-up). Cosmetic only, so it may use Math.random.
  */
 
 interface Particle {
@@ -64,7 +63,6 @@ interface Beam {
   max: number;
 }
 
-const LUNGE_SECONDS = 0.14;
 const MAX_PARTICLES = 500;
 
 export class ManaFx {
@@ -73,7 +71,6 @@ export class ManaFx {
   private bolts: Bolt[] = [];
   private swings: Swing[] = [];
   private beams: Beam[] = [];
-  private lungeState: { dx: number; dy: number; pixels: number; start: number } | null = null;
 
   clear(): void {
     this.particles = [];
@@ -81,7 +78,6 @@ export class ManaFx {
     this.bolts = [];
     this.swings = [];
     this.beams = [];
-    this.lungeState = null;
   }
 
   /** Sparks and debris: pixels thrown out in every direction. */
@@ -168,25 +164,6 @@ export class ManaFx {
 
   beam(x: number, y: number, tx: number, ty: number, width: number, color: number): void {
     this.beams.push({ x, y, tx, ty, width, color, life: 0.22, max: 0.22 });
-  }
-
-  /** Step the hero sprite `pixels` toward `dir` and back (negative = recoil). */
-  lunge(dir: Vec, pixels: number, time: number): void {
-    const len = Math.hypot(dir.x, dir.y) || 1;
-    this.lungeState = { dx: dir.x / len, dy: dir.y / len, pixels, start: time };
-  }
-
-  /** The hero sprite's offset right now, in whole pixels. */
-  lungeAt(time: number): Vec {
-    const l = this.lungeState;
-    if (!l) return { x: 0, y: 0 };
-    const p = (time - l.start) / LUNGE_SECONDS;
-    if (p >= 1) {
-      this.lungeState = null;
-      return { x: 0, y: 0 };
-    }
-    const d = lungeOffset(p, Math.abs(l.pixels)) * Math.sign(l.pixels);
-    return { x: Math.round((l.dx * d) / PX) * PX, y: Math.round((l.dy * d) / PX) * PX };
   }
 
   /** Advance and draw everything into `g` (the air layer). */

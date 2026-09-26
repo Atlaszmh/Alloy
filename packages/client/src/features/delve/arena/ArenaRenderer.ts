@@ -321,23 +321,19 @@ export class ArenaRenderer {
           }
           break;
         case 'basic': {
-          const dir = { x: e.tx - e.x, y: e.ty - e.y };
           if (e.melee) {
             const wpn = w.hero.stats.weapon;
+            const s = wpn.combo[e.step] ?? wpn.combo[0];
             this.fx.swing(
               e.x,
               e.y,
-              Math.atan2(dir.y, dir.x),
-              Math.min(360, wpn.arc) * (Math.PI / 180),
-              wpn.range + 0.2,
+              Math.atan2(e.dir.y, e.dir.x),
+              Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180),
+              wpn.range + (s.reach ?? 0) + 0.2,
               elemColor(e.element),
               0.16,
             );
-            this.fx.lunge(dir, 2, this.time);
-          } else {
-            this.fx.fling(e.x, e.y, dir, elemColor(e.element), 6, 7);
-            this.fx.lunge(dir, -1, this.time);
-          }
+          } else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
           break;
         }
         case 'cast': {
@@ -347,7 +343,6 @@ export class ArenaRenderer {
           else {
             const dir = { x: e.tx - e.x, y: e.ty - e.y };
             this.fx.fling(e.x, e.y, dir, color, 14, 9);
-            this.fx.lunge(dir, 1, this.time);
           }
           if (e.slot > 0)
             this.floatText(e.x, e.y - 1.4, e.name, lighten(MANA_HEX[e.element]), 15, {
@@ -370,7 +365,6 @@ export class ArenaRenderer {
             MANA_HEX[e.element],
             0.22,
           );
-          this.fx.lunge(e.dir, 2, this.time);
           if (e.arc >= 360) this.addShake(0.12);
           break;
         case 'buff':
@@ -613,9 +607,7 @@ export class ArenaRenderer {
       const s = this.heroSprite;
       s.texture = this.heroFrames[Math.floor(this.time * 3) % this.heroFrames.length];
       s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
-      // Attacks and casts step the sprite toward the target by whole pixels.
-      const lunge = this.fx.lungeAt(this.time);
-      s.position.set(lunge.x, 0.5 + lunge.y);
+      s.position.set(0, 0.5);
       s.tint =
         this.time < this.heroPerfectUntil
           ? 0xfff3b0

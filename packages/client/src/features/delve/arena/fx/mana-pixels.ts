@@ -40,12 +40,6 @@ export function dustCount(r: number, density: number): number {
   return Math.min(DUST_CAP, Math.round(((Math.PI * r * r) / (PX * PX)) * density));
 }
 
-/** The sprite's lunge offset along its direction at progress `p` (0..1): out and back, in whole pixels. */
-export function lungeOffset(p: number, pixels: number): number {
-  const t = Math.min(1, Math.max(0, p));
-  return Math.round(Math.sin(Math.PI * t) * pixels) * PX;
-}
-
 /** One mana pixel (or a `size`×`size` block). */
 export function px(
   g: Graphics,

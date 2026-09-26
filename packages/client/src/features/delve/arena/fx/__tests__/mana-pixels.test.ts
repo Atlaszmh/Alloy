@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PX, dustCount, hash, lungeOffset, ringPoints, snap } from '../mana-pixels';
+import { PX, dustCount, hash, ringPoints, snap } from '../mana-pixels';
 
 describe('mana pixels', () => {
   it('snaps to the 0.1-unit pixel grid', () => {
@@ -22,16 +22,6 @@ describe('mana pixels', () => {
       const v = hash(i, i * 13);
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThan(1);
-    }
-  });
-
-  it('lunges by whole pixels: out, then back', () => {
-    expect(lungeOffset(0, 2)).toBe(0);
-    expect(lungeOffset(1, 2)).toBe(0);
-    expect(lungeOffset(0.5, 2)).toBeCloseTo(2 * PX);
-    for (let p = 0; p <= 1; p += 0.05) {
-      const px = lungeOffset(p, 2) / PX;
-      expect(Math.abs(px - Math.round(px))).toBeLessThan(1e-9);
     }
   });
 

@@ -18,6 +18,7 @@ function hud(over: Partial<ArenaHud> = {}): ArenaHud {
     riposte: false,
     melee: true,
     basicComboNext: 1,
+    basicComboLength: 3,
     potions: 3,
     monstersLeft: 5,
     monstersTotal: 8,
@@ -76,5 +77,10 @@ describe('AttackButton', () => {
     expect(onAttack).toHaveBeenLastCalledWith(true);
     fireEvent.pointerUp(button);
     expect(onAttack).toHaveBeenLastCalledWith(false);
+  });
+
+  it('shows one pip per blow of the weapon string, for any weapon', () => {
+    render(<AttackButton hud={hud({ basicComboLength: 2, melee: false })} onAttack={() => {}} />);
+    expect(screen.getByTestId('attack-button').querySelectorAll('[data-combo]')).toHaveLength(2);
   });
 });

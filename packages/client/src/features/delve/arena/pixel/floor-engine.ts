@@ -227,7 +227,8 @@ export class FloorEngine {
       if (z.owner !== 'hero') continue;
       const c = this.cell(z.x, z.y);
       const r = z.radius * FLOOR_PPU;
-      if (z.source === 'barrage') continue;
+      // A thrown Burst's zone is its landing point: nothing to paint until it lands.
+      if (z.source === 'barrage' || z.source === 'burst') continue;
       if (z.element === 'fire') pw.lavaBurst(c.x, c.y, r);
       else if (z.element === 'frost' && Math.random() < 0.35) {
         const a = Math.random() * Math.PI * 2;

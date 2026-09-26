@@ -176,6 +176,7 @@ function AbilityButton({
 }: {
   slot: number;
   ab: AbilityHud;
+  /** An ability is channelling (presses wait for it). */
   busy: boolean;
   hint?: string;
   onCast: (slot: number, aim?: Vec | null) => void;
@@ -306,7 +307,7 @@ function AbilityButton({
 
 /**
  * Manual basic attacks on phones: hold to keep attacking, tap for one. Pips
- * show which hit of the melee combo comes next.
+ * show which blow of the weapon's string lands next.
  */
 export function AttackButton({
   hud,
@@ -348,9 +349,9 @@ export function AttackButton({
           {hint}
         </span>
       )}
-      {hud?.melee && (
+      {hud && hud.basicComboLength > 1 && (
         <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
-          {[0, 1, 2].map((k) => (
+          {Array.from({ length: hud.basicComboLength }, (_, k) => (
             <span
               key={k}
               data-combo={k === hud.basicComboNext ? 'next' : 'step'}

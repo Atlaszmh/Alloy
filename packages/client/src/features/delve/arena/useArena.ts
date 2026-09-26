@@ -11,6 +11,7 @@ import {
   stepWorld,
   abilityReady,
   makeCtx,
+  pressStep,
   type AbilityCast,
   type ArpgEvent,
   type ArpgWorld,
@@ -59,7 +60,7 @@ export interface AbilityHud {
   /** Press-combo step that the next press makes (0-based), and the combo's length. */
   comboNext: number;
   comboLength: number;
-  /** This slot's wind-up progress 0..1, or null. */
+  /** This slot's channel progress 0..1, or null (a conjure shows in the arena, not here). */
   windup: number | null;
   affordable: boolean;
   ready: boolean;
@@ -71,7 +72,7 @@ export interface ArenaHud {
   mana: number;
   manaMax: number;
   abilities: AbilityHud[];
-  /** Another ability is winding up: presses are ignored. */
+  /** An ability is channelling (presses wait for it). */
   busy: boolean;
   dodgeCharges: number;
   dodgeMax: number;
@@ -80,8 +81,10 @@ export interface ArenaHud {
   /** A perfect dodge armed the riposte: the next real hit crits and staggers. */
   riposte: boolean;
   melee: boolean;
-  /** Which hit of the 3-hit melee combo comes next (0-based). */
+  /** The blow of the weapon's string that lands next (0-based). */
   basicComboNext: number;
+  /** How many blows the weapon's string has. */
+  basicComboLength: number;
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -137,7 +140,6 @@ function snapshot(world: ArpgWorld): ArenaHud {
       const cooldown = Math.max(0, h.cooldowns[i] - t);
       const charged = ab.build.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
       const affordable = h.mana >= ab.cost;
-      const chained = t - h.comboAt[i] <= comboWindow;
       return {
         name: ab.name,
         icon: ab.icon,
@@ -147,22 +149,30 @@ function snapshot(world: ArpgWorld): ArenaHud {
         payment: ab.build.payment,
         cost: ab.cost,
         cooldown,
-        cooldownTotal: Math.max(0.01, ab.castTime + ab.cooldown),
+        cooldownTotal: Math.max(0.01, ab.channel + ab.cooldown),
         charge:
           ab.build.payment === 'charge'
             ? Math.min(1, h.charge[i] / Math.max(1e-9, ab.chargeNeed))
             : null,
-        comboNext: chained ? (h.comboStep[i] + 1) % ab.combo.length : 0,
+        comboNext: pressStep(h, i, t, comboWindow),
         comboLength: ab.combo.length,
+        // Only a channel shows: a conjure is anticipation in the arena, not a HUD bar.
         windup:
-          h.windup?.slot === i
-            ? Math.min(1, (t - h.windup.start) / Math.max(0.01, h.windup.until - h.windup.start))
+          h.windup?.slot === i && ab.channel > 0
+            ? Math.min(
+                1,
+                Math.max(
+                  0,
+                  (t - h.windup.conjureUntil) /
+                    Math.max(0.01, h.windup.until - h.windup.conjureUntil),
+                ),
+              )
             : null,
         affordable,
         ready: cooldown <= 0 && charged && affordable && !h.windup,
       };
     }),
-    busy: !!h.windup,
+    busy: !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0,
     dodgeCharges: h.dodgeCharges,
     dodgeMax: dodgeBal.charges,
     dodgeRefill:
@@ -170,7 +180,10 @@ function snapshot(world: ArpgWorld): ArenaHud {
     riposte: t < h.riposteUntil,
     melee: h.stats.weapon.kind === 'melee',
     basicComboNext:
-      t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace ? 0 : h.attackCount % 3,
+      t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace
+        ? 0
+        : h.attackCount % h.stats.weapon.combo.length,
+    basicComboLength: h.stats.weapon.combo.length,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -282,6 +295,7 @@ export function useArena(
                     ...(manualRef.current
                       ? {
                           attack: input.attackHeld || input.attackTap || !!pad?.attackHeld,
+                          attackTap: input.attackTap || !!pad?.attackTap,
                           attackAim: padAttackAim
                             ? padAttackAim
                             : input.attackAim

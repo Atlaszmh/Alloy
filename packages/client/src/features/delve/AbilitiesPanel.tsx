@@ -182,10 +182,11 @@ function Readout({
     lines.push(
       `Hits for ${formatNumber(hit)}${ab.radius > 0 && f !== 'strike' ? ` · radius ${ab.radius.toFixed(1)}` : ''}`,
     );
+  const windup = ab.castTime > 0 ? ` · ${ab.castTime.toFixed(2)}s wind-up` : '';
   const pay =
     ab.build.payment === 'charge'
-      ? `Charge ${Math.round(ab.chargeNeed)}`
-      : `${Math.round(ab.cost)} mana${ab.castTime > 0 ? ` · ${ab.castTime.toFixed(2)}s wind-up` : ''}`;
+      ? `Charge ${Math.round(ab.chargeNeed)}${windup}`
+      : `${Math.round(ab.cost)} mana${windup}`;
   lines.push(
     `${pay} · ${ab.build.payment === 'charge' ? 'no cooldown' : `${ab.cooldown.toFixed(ab.cooldown < 2 ? 2 : 0)}s cooldown`}`,
   );

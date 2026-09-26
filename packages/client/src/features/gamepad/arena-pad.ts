@@ -23,6 +23,8 @@ export interface ArenaPadActions {
   potion: boolean;
   /** The attack button held: manual basic attacks. */
   attackHeld: boolean;
+  /** The attack button pressed this frame (a tap the engine keeps briefly). */
+  attackTap: boolean;
   menu: boolean;
 }
 
@@ -48,6 +50,7 @@ export function padToArena(
     dodge: is(cfg.pad.dodge, (b) => pressed.has(b)),
     potion: is(cfg.pad.potion, (b) => pressed.has(b)),
     attackHeld: is(cfg.pad.attack, (b) => state.buttons[b]),
+    attackTap: is(cfg.pad.attack, (b) => pressed.has(b)),
     menu: is(cfg.pad.menu, (b) => pressed.has(b)),
   };
 }

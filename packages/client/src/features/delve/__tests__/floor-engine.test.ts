@@ -83,7 +83,7 @@ describe('snapshotArena', () => {
       { kind: 'explode', x: 1, y: 1, radius: 1, element: 'fire' },
       { kind: 'cleared' },
       { kind: 'heal', amount: 5, source: 'potion' },
-      { kind: 'hit', id: 1, x: 2, y: 2, amount: 3, crit: false, element: null },
+      { kind: 'hit', id: 1, x: 2, y: 2, amount: 3, crit: false, element: null, heft: 0 },
     ];
     const snap = snapshotArena(world, 0.016, events, { left: 0, top: 0, right: 10, bottom: 10 });
     expect(snap.events.map((e) => e.kind)).toEqual(['explode', 'hit']);

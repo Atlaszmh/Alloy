@@ -208,9 +208,12 @@ export function drawGuard(air: Graphics, fx: ManaFx, w: ArpgWorld, time: number)
   if (h.windup) {
     const ab = h.abilities[h.windup.slot];
     const color = ab ? MANA_HEX[ab.element] : 0xffffff;
-    const p = progress(w.t, h.windup.start, h.windup.until);
-    manaRing(air, h.x, cy, 1.2, color, time, { alpha: 0.35, gaps: 8, spin: 5 });
-    manaArc(air, h.x, cy, 1.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p, color, 1, 2);
+    // The ring shows a channel only; a conjure is just the gathering mana.
+    if (ab && ab.channel > 0 && w.t >= h.windup.conjureUntil) {
+      const p = progress(w.t, h.windup.conjureUntil, h.windup.until);
+      manaRing(air, h.x, cy, 1.2, color, time, { alpha: 0.35, gaps: 8, spin: 5 });
+      manaArc(air, h.x, cy, 1.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p, color, 1, 2);
+    }
     fx.gather(h.x, h.y, color);
   }
 }

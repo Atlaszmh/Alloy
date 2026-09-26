@@ -89,6 +89,13 @@ describe('padToArena (triggers fire, bumpers support)', () => {
     expect(aimed.aimDir!.x).toBeCloseTo(1);
     expect(aimed.aimTilt).toBeCloseTo(1);
   });
+
+  it('reports a tap of the attack button on its press edge only', () => {
+    const prev = readPad(fakePad());
+    const next = readPad(fakePad([5]));
+    expect(padToArena(next, edges(prev, next)).attackTap).toBe(true);
+    expect(padToArena(next, edges(next, next)).attackTap).toBe(false);
+  });
 });
 
 describe('custom controls', () => {

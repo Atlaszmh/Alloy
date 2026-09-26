@@ -59,7 +59,10 @@ export function PaperDoll({
               key={cell}
               label="Damage"
               value={formatNumber(est.dps)}
-              sub={`${(1 / stats.attackInterval).toFixed(2)} atk/s`}
+              sub={`${(
+                stats.weapon.combo.length /
+                (stats.attackInterval * stats.weapon.combo.reduce((a, s) => a + s.time, 0))
+              ).toFixed(2)} atk/s`}
             />
           );
         }
