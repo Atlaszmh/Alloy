@@ -266,7 +266,7 @@ function zonesTick(ctx: SimCtx): void {
     if (z.detonateAt > 0) {
       if (world.t >= z.detonateAt) {
         z.dead = true;
-        if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage);
+        if (z.ability) impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { heft: z.heft });
       }
       continue;
     }

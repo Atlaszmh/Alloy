@@ -18,19 +18,31 @@ export function abilityHit(ctx: SimCtx, ab: ResolvedAbility): number {
   return s.weaponDamage * s.damageMult * ab.power;
 }
 
-/** How an ability's knobs shape each of its hits. */
-export function hitOpts(ab: ResolvedAbility, from: Vec, tick = false): HitOpts {
+/**
+ * How an ability's knobs shape each of its hits. `tick` hits (zone ticks,
+ * embers) can't crit or knock back; only `direct` hits (the ability landing,
+ * not chain jumps or ticks) get the weight's heavy payoff and carry heft.
+ */
+export function hitOpts(
+  ab: ResolvedAbility,
+  from: Vec,
+  tick = false,
+  direct = !tick,
+  heft = ab.heft,
+): HitOpts {
   const k = ab.knobs;
+  const stagger = direct && ab.heavyStagger && !k.applies.includes('stagger');
   return {
     source: 'skill',
     canCrit: !tick,
-    applies: k.applies,
-    knockback: tick ? 0 : k.knockback,
+    applies: stagger ? [...k.applies, 'stagger'] : k.applies,
+    knockback: tick ? 0 : k.knockback + (direct ? ab.heavyKnockback : 0),
     kbFrom: from,
     leech: k.lifesteal,
     execute: k.execute,
     spread: k.spread,
     slot: slotIndex(ab),
+    heft: direct ? heft : 0,
   };
 }
 
@@ -59,7 +71,7 @@ export function chainFrom(
     hit.add(next.id);
     amount *= chainPower;
     points.push({ x: next.x, y: next.y });
-    hitMonster(ctx, next, amount, ab.element, hitOpts(ab, current, tick));
+    hitMonster(ctx, next, amount, ab.element, hitOpts(ab, current, tick, false));
     current = next;
   }
   if (points.length > 1) ctx.events.push({ kind: 'chain', points, element: ab.element });
@@ -174,7 +186,7 @@ export function impact(
   if (!o.silent) ctx.events.push({ kind: 'explode', x, y, radius, element: ab.element });
 
   const hits = alive(ctx).filter((m) => dist(x, y, m.x, m.y) <= radius + m.radius);
-  const opts = hitOpts(ab, o.from ?? { x, y }, o.tick);
+  const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
 
   if (hits.length > 0) {

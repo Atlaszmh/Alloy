@@ -662,3 +662,64 @@ describe('casting: conjure, motion, recovery', () => {
     expect(run(s, 0.5).some((e) => e.kind === 'cast')).toBe(false);
   });
 });
+
+describe('heavy payoff and heft', () => {
+  it('a Crushing bolt knocks back and staggers; a Balanced one does not stagger', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { weight: 2 } });
+    const events = press(w, 0);
+    events.push(...run(w, 1));
+    expect(w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
+    const hit = events.find((e) => e.kind === 'hit' && e.id === w.monsters[0].id);
+    expect(hit && hit.kind === 'hit' && hit.heft).toBeCloseTo(1);
+    const b = arena([dummy(13, 30)], { noBasic: true });
+    press(b, 0);
+    run(b, 1);
+    expect(b.monsters[0].status.staggerUntil).toBe(0);
+  });
+
+  it("a Crushing bolt's chain jump keeps no heavy payoff and no heft", () => {
+    const w = arena([dummy(13, 30), dummy(15, 30)], {
+      noBasic: true,
+      primary: { elements: ['storm'], weight: 2 },
+    });
+    const [first, second] = w.monsters;
+    const events = press(w, 0, { x: 13, y: 30 });
+    events.push(...run(w, 1));
+    const chained = events.filter((e) => e.kind === 'hit' && e.id === second.id);
+    expect(chained.length).toBeGreaterThan(0);
+    expect(chained.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
+    expect(second.status.staggerUntil).toBe(0);
+    expect(first.status.staggerUntil).toBeGreaterThan(0);
+  });
+
+  it('Crushing adds knockback to a direct hit', () => {
+    const heavy = arena([dummy(13, 30)], { noBasic: true, primary: { weight: 2 } });
+    const light = arena([dummy(13, 30)], { noBasic: true });
+    for (const w of [heavy, light]) {
+      press(w, 0);
+      until(w, () => damaged(w.monsters[0]));
+    }
+    const kb = (w: ArpgWorld) => Math.hypot(w.monsters[0].kbx, w.monsters[0].kby);
+    expect(kb(heavy)).toBeGreaterThan(kb(light));
+  });
+
+  it("a Crushing Maelstrom's ticks and a Crushing Surge's basic hits never stagger (guard test)", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      ultimate: { form: 'maelstrom', weight: 2, payment: 'mana' },
+    });
+    w.hero.mana = w.hero.manaMax = 1e6;
+    const events = press(w, 2, { x: 13, y: 30 });
+    events.push(...run(w, 2));
+    expect(w.monsters[0].status.staggerUntil).toBe(0);
+    expect(
+      events.filter((e) => e.kind === 'hit').every((e) => e.kind === 'hit' && e.heft === 0),
+    ).toBe(true);
+
+    const s = arena([dummy(13, 0)], { defensive: { form: 'surge', weight: 2 } });
+    place(s, 0.6);
+    press(s, 1);
+    until(s, () => s.hero.attackCount >= 2);
+    expect(s.monsters[0].status.staggerUntil).toBe(0);
+  });
+});

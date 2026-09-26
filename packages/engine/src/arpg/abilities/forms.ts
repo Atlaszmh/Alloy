@@ -3,6 +3,7 @@ import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, clamp, dirTo, dist, distToSegment } from '../geometry.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
+import { stepHeft } from './resolve.js';
 import { aimPoint, alive, spawnProjectile } from './targeting.js';
 
 export interface FormResult {
@@ -33,6 +34,7 @@ export function executeForm(
   if (!p) return { ok: false, tx: h.x, ty: h.y };
   const mult = ab.combo[step % ab.combo.length];
   const hit = abilityHit(ctx, ab) * mult;
+  const heft = stepHeft(ab, step);
   let dir = dirTo(h.x, h.y, p.x, p.y);
   if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
   const done = (tx: number, ty: number): FormResult => ({ ok: true, tx, ty });
@@ -61,6 +63,7 @@ export function executeForm(
         explodeRadius: ab.radius * mult,
         applies: ab.knobs.applies,
         knockback: ab.knobs.knockback,
+        heft,
       });
       return done(h.x + dir.x * ab.range, h.y + dir.y * ab.range);
 
@@ -89,6 +92,7 @@ export function executeForm(
           explodeRadius: ab.radius,
           applies: ab.knobs.applies,
           knockback: ab.knobs.knockback,
+          heft,
         });
       }
       return done(p.x, p.y);
@@ -104,7 +108,7 @@ export function executeForm(
         .filter((m) => distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius)
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
       ctx.events.push({ kind: 'beam', x: h.x, y: h.y, tx: ex, ty: ey, width, element: ab.element });
-      const opts = hitOpts(ab, { x: h.x, y: h.y });
+      const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
       if (hits.length > 0) {
         const last = hits[hits.length - 1];
@@ -139,7 +143,7 @@ export function executeForm(
         arc,
         element: ab.element,
       });
-      const opts = hitOpts(ab, { x: h.x, y: h.y });
+      const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
       if (hits.length > 0) {
         chainFrom(ctx, ab, hits[0], hit, new Set(hits.map((m) => m.id)));
@@ -170,7 +174,7 @@ export function executeForm(
       h.facing = dir;
       h.invulnUntil = Math.max(h.invulnUntil, t + ab.effect);
       ctx.events.push({ kind: 'dash', fromX, fromY, toX: h.x, toY: h.y });
-      const opts = hitOpts(ab, { x: fromX, y: fromY });
+      const opts = hitOpts(ab, { x: fromX, y: fromY }, false, true, heft);
       for (const m of alive(ctx)) {
         if (distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius)
           hitMonster(ctx, m, hit, ab.element, opts);
@@ -180,7 +184,7 @@ export function executeForm(
     }
 
     case 'nova':
-      impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true });
+      impact(ctx, ab, h.x, h.y, ab.radius, hit, { noScatter: true, heft });
       return done(h.x, h.y);
 
     case 'barrage': {
@@ -206,6 +210,7 @@ export function executeForm(
           applies: ab.knobs.applies,
           detonateAt: at,
           dead: false,
+          heft: heft * 0.5,
         });
       }
       return done(p.x, p.y);
