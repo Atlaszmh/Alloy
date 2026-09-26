@@ -61,7 +61,7 @@ export function startSwing(ctx: SimCtx, aim: Vec | null | undefined, standing: b
   const step = h.attackCount % w.combo.length;
   const s = w.combo[step];
   const melee = w.kind === 'melee';
-  const lunge = melee && committed ? Math.max(0, s.step) : 0;
+  const lunge = melee && committed ? Math.max(0, s.move) : 0;
   const reach = w.range + (melee ? (s.reach ?? 0) : 0);
   const acquire = (committed ? reach + lunge : w.range) + (manual ? 1 : 0);
   const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
@@ -168,8 +168,8 @@ export function strike(ctx: SimCtx): void {
         heft: s.heft,
       });
     }
-    if (sw.committed && s.step < 0)
-      startPush(ctx, { x: -dir.x, y: -dir.y }, -s.step, bal.feel.recoilSeconds);
+    if (sw.committed && s.move < 0)
+      startPush(ctx, { x: -dir.x, y: -dir.y }, -s.move, bal.feel.recoilSeconds);
   }
 
   const tgt =

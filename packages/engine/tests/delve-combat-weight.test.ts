@@ -40,18 +40,21 @@ describe('combat weight data', () => {
   });
 
   it("keeps each string's damage per interval within 10% of today's", () => {
-    for (const w of weapons) {
-      const power = w.combo!.reduce((a, s) => a + s.power, 0);
-      const time = w.combo!.reduce((a, s) => a + s.time, 0);
-      const today = w.attack!.kind === 'melee' ? 3.5 / 3 : 1;
-      expect(Math.abs(power / time / today - 1), w.id).toBeLessThanOrEqual(0.1);
-    }
+    const check = (id: string, combo: { power: number; time: number }[], melee: boolean) => {
+      const power = combo.reduce((a, s) => a + s.power, 0);
+      const time = combo.reduce((a, s) => a + s.time, 0);
+      const today = melee ? 3.5 / 3 : 1;
+      expect(Math.abs(power / time / today - 1), id).toBeLessThanOrEqual(0.1);
+    };
+    for (const w of weapons) check(w.id, w.combo!, w.attack!.kind === 'melee');
+    check('default', bal.hero.defaultCombo, true);
   });
 
   it('the hero carries the weapon string, and the default one when unarmed', () => {
     const maul = computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry);
     expect(maul.weapon.combo).toHaveLength(2);
-    expect(computeHeroStats({}, registry).weapon.combo).toEqual(bal.hero.defaultCombo);
+    expect(maul.weapon.combo).toBe(registry.getGearBase('maul').combo);
+    expect(computeHeroStats({}, registry).weapon.combo).toBe(bal.hero.defaultCombo);
   });
 });
 
@@ -69,6 +72,8 @@ describe('ability timing from weight', () => {
     expect(resolve('ultimate', { form: 'nova', payment: 'charge' }).conjure).toBeCloseTo(0.224);
     const cast = resolve('primary', { form: 'bolt', payment: 'cast' });
     expect(cast.channel).toBeCloseTo(bal.abilities.slots.primary.castTime);
+    expect(resolve('primary', { form: 'bolt' }).recovery).toBeCloseTo(0.16);
+    expect(resolve('defensive', { form: 'ward' }).recovery).toBe(0);
   });
 
   it('heft and the heavy payoff come from weight', () => {
@@ -80,6 +85,8 @@ describe('ability timing from weight', () => {
     expect(crushing.heft).toBeCloseTo(1);
     expect(crushing.heavyKnockback).toBeCloseTo(0.5);
     expect(crushing.heavyStagger).toBe(true);
+    expect(resolve('primary', { form: 'bolt', weight: 1 }).heavyStagger).toBe(false);
+    expect(resolve('ultimate', { form: 'nova', weight: 2, payment: 'charge' }).heft).toBeCloseTo(1);
     const bolt = resolve('primary', { form: 'bolt' });
     expect(stepHeft(bolt, 0)).toBeCloseTo(0.45);
     expect(stepHeft(bolt, bolt.combo.length - 1)).toBeCloseTo(0.65);
@@ -168,7 +175,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     const events = until(w, () => w.hero.swing === null);
     expect(basics(events)).toHaveLength(1);
     expect(damaged(w.monsters[0])).toBe(true);
-    expect(y0 - w.hero.y).toBeCloseTo(s.step, 2);
+    expect(y0 - w.hero.y).toBeCloseTo(s.move, 2);
   });
 
   it('the lunge stops short of the foe', () => {
@@ -314,7 +321,7 @@ describe('weapon strings', () => {
     const y0 = w.hero.y;
     until(w, () => w.hero.attackCount >= 1);
     run(w, bal.feel.recoilSeconds + STEP);
-    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.combo[0].step, 2);
+    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.combo[0].move, 2);
 
     const m = arena([dummy(13, 30)], { equipped: wand });
     const my0 = m.hero.y;

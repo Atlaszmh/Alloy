@@ -110,6 +110,7 @@ export function resolveAbility(
         : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
     castTime: channel,
     conjure,
+    recovery: slot === 'defensive' ? 0 : F.recovery[wi],
     channel,
     heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
     heavyKnockback: Math.max(0, w) * F.heavyKnockback,

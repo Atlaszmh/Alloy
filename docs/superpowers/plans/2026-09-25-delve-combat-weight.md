@@ -148,7 +148,7 @@ export interface ComboStepDef {
   /** Share of the cycle before the strike (the startup). */
   startup: number;
   /** Units of motion: a lunge over the startup (melee) or a recoil after the release (negative, ranged). */
-  step: number;
+  move: number;
   /** Damage multiplier. */
   power: number;
   /** 0–1: how hard it lands (hit-stop, camera kick; never the rules). */
@@ -222,7 +222,7 @@ In `src/data/schemas.ts`, above `DelveDataSchema`:
 const ComboStepSchema = z.object({
   time: z.number().positive(),
   startup: z.number().gt(0).lt(1),
-  step: z.number(),
+  move: z.number(),
   power: z.number().positive(),
   heft: z.number().min(0).max(1),
   arc: z.number().positive().max(360).optional(),
@@ -267,9 +267,9 @@ In `DelveBalanceSchema`, after `dodge`:
 
 ```json
 "defaultCombo": [
-  { "time": 0.9, "startup": 0.3, "step": 0.3, "power": 1.0, "heft": 0.2 },
-  { "time": 0.9, "startup": 0.3, "step": 0.3, "power": 1.0, "heft": 0.2 },
-  { "time": 1.2, "startup": 0.35, "step": 0.5, "power": 1.3, "heft": 0.4, "knockback": 0.3 }
+  { "time": 0.9, "startup": 0.3, "move": 0.3, "power": 1.0, "heft": 0.2 },
+  { "time": 0.9, "startup": 0.3, "move": 0.3, "power": 1.0, "heft": 0.2 },
+  { "time": 1.2, "startup": 0.35, "move": 0.5, "power": 1.3, "heft": 0.4, "knockback": 0.3 }
 ],
 ```
 
@@ -296,13 +296,13 @@ In `DelveBalanceSchema`, after `dodge`:
 
 | Base | `combo` |
 |---|---|
-| dagger | `[{"time":0.8,"startup":0.3,"step":0.25,"power":0.8,"heft":0.15},{"time":0.8,"startup":0.3,"step":0.25,"power":0.8,"heft":0.15},{"time":0.8,"startup":0.3,"step":0.3,"power":0.9,"heft":0.15},{"time":1.4,"startup":0.35,"step":0.7,"power":1.7,"heft":0.6,"arc":150,"knockback":0.3}]` |
-| sword | `[{"time":0.9,"startup":0.3,"step":0.4,"power":1.0,"heft":0.3},{"time":0.9,"startup":0.3,"step":0.4,"power":1.0,"heft":0.3},{"time":1.3,"startup":0.4,"step":1.2,"power":1.7,"heft":0.8,"arc":50,"reach":0.9,"knockback":0.6}]` |
-| axe | `[{"time":0.9,"startup":0.35,"step":0.3,"power":1.0,"heft":0.4},{"time":0.9,"startup":0.35,"step":0.3,"power":1.0,"heft":0.4},{"time":1.3,"startup":0.4,"step":0.5,"power":1.7,"heft":0.8,"arc":360,"knockback":0.5}]` |
-| maul | `[{"time":1.0,"startup":0.45,"step":0.5,"power":1.0,"heft":0.6,"arc":140},{"time":1.3,"startup":0.5,"step":0.7,"power":1.8,"heft":1.0,"arc":360,"reach":0.4,"knockback":0.8,"stagger":true}]` |
-| wand | `[{"time":0.9,"startup":0.2,"step":-0.05,"power":0.9,"heft":0.1},{"time":0.9,"startup":0.2,"step":-0.05,"power":0.9,"heft":0.1},{"time":1.2,"startup":0.25,"step":-0.1,"power":1.3,"heft":0.3,"size":1.5}]` |
-| staff | `[{"time":0.9,"startup":0.3,"step":-0.1,"power":0.9,"heft":0.2},{"time":0.9,"startup":0.3,"step":-0.1,"power":0.9,"heft":0.2},{"time":1.3,"startup":0.45,"step":-0.3,"power":1.4,"heft":0.6,"size":1.8,"explode":1.0}]` |
-| bow | `[{"time":0.85,"startup":0.35,"step":-0.05,"power":0.85,"heft":0.2},{"time":0.85,"startup":0.35,"step":-0.05,"power":0.85,"heft":0.2},{"time":1.4,"startup":0.6,"step":-0.2,"power":1.6,"heft":0.6,"speed":1.4}]` |
+| dagger | `[{"time":0.8,"startup":0.3,"move":0.25,"power":0.8,"heft":0.15},{"time":0.8,"startup":0.3,"move":0.25,"power":0.8,"heft":0.15},{"time":0.8,"startup":0.3,"move":0.3,"power":0.9,"heft":0.15},{"time":1.4,"startup":0.35,"move":0.7,"power":1.7,"heft":0.6,"arc":150,"knockback":0.3}]` |
+| sword | `[{"time":0.9,"startup":0.3,"move":0.4,"power":1.0,"heft":0.3},{"time":0.9,"startup":0.3,"move":0.4,"power":1.0,"heft":0.3},{"time":1.3,"startup":0.4,"move":1.2,"power":1.7,"heft":0.8,"arc":50,"reach":0.9,"knockback":0.6}]` |
+| axe | `[{"time":0.9,"startup":0.35,"move":0.3,"power":1.0,"heft":0.4},{"time":0.9,"startup":0.35,"move":0.3,"power":1.0,"heft":0.4},{"time":1.3,"startup":0.4,"move":0.5,"power":1.7,"heft":0.8,"arc":360,"knockback":0.5}]` |
+| maul | `[{"time":1.0,"startup":0.45,"move":0.5,"power":1.0,"heft":0.6,"arc":140},{"time":1.3,"startup":0.5,"move":0.7,"power":1.8,"heft":1.0,"arc":360,"reach":0.4,"knockback":0.8,"stagger":true}]` |
+| wand | `[{"time":0.9,"startup":0.2,"move":-0.05,"power":0.9,"heft":0.1},{"time":0.9,"startup":0.2,"move":-0.05,"power":0.9,"heft":0.1},{"time":1.2,"startup":0.25,"move":-0.1,"power":1.3,"heft":0.3,"size":1.5}]` |
+| staff | `[{"time":0.9,"startup":0.3,"move":-0.1,"power":0.9,"heft":0.2},{"time":0.9,"startup":0.3,"move":-0.1,"power":0.9,"heft":0.2},{"time":1.3,"startup":0.45,"move":-0.3,"power":1.4,"heft":0.6,"size":1.8,"explode":1.0}]` |
+| bow | `[{"time":0.85,"startup":0.35,"move":-0.05,"power":0.85,"heft":0.2},{"time":0.85,"startup":0.35,"move":-0.05,"power":0.85,"heft":0.2},{"time":1.4,"startup":0.6,"move":-0.2,"power":1.6,"heft":0.6,"speed":1.4}]` |
 
 In `delve.json`, change Twin Fang's `text` to `"The last blow of each basic-attack combo strikes again for {v}% damage."`.
 
@@ -781,7 +781,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     const events = until(w, () => w.hero.swing === null);
     expect(basics(events)).toHaveLength(1);
     expect(damaged(w.monsters[0])).toBe(true);
-    expect(y0 - w.hero.y).toBeCloseTo(s.step, 2);
+    expect(y0 - w.hero.y).toBeCloseTo(s.move, 2);
   });
 
   it('the lunge stops short of the foe', () => {
@@ -917,7 +917,7 @@ describe('weapon strings', () => {
     const y0 = w.hero.y;
     until(w, () => w.hero.attackCount >= 1);
     run(w, bal.feel.recoilSeconds + STEP);
-    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.combo[0].step, 2);
+    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.combo[0].move, 2);
 
     const m = arena([dummy(13, 30)], { equipped: wand });
     const my0 = m.hero.y;
@@ -1051,7 +1051,7 @@ export function startSwing(ctx: SimCtx, aim: Vec | null | undefined, standing: b
   const step = h.attackCount % w.combo.length;
   const s = w.combo[step];
   const melee = w.kind === 'melee';
-  const lunge = melee && committed ? Math.max(0, s.step) : 0;
+  const lunge = melee && committed ? Math.max(0, s.move) : 0;
   const reach = w.range + (melee ? (s.reach ?? 0) : 0);
   const acquire = (committed ? reach + lunge : w.range) + (manual ? 1 : 0);
   const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
@@ -1158,8 +1158,8 @@ export function strike(ctx: SimCtx): void {
         heft: s.heft,
       });
     }
-    if (sw.committed && s.step < 0)
-      startPush(ctx, { x: -dir.x, y: -dir.y }, -s.step, bal.feel.recoilSeconds);
+    if (sw.committed && s.move < 0)
+      startPush(ctx, { x: -dir.x, y: -dir.y }, -s.move, bal.feel.recoilSeconds);
   }
 
   const tgt =
@@ -1542,7 +1542,7 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number): boolean
     if (d.x !== 0 || d.y !== 0)
       startPush(ctx, { x: -d.x, y: -d.y }, -ab.motion * mult, bal.feel.recoilSeconds);
   }
-  if (ab.slot !== 'defensive') h.recoverUntil = world.t + bal.feel.recovery[ab.build.weight + 2];
+  if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
   return true;
 }
 
@@ -2282,7 +2282,7 @@ function world(over: Partial<ArpgWorld['hero']>): ArpgWorld {
       swing: null,
       windup: null,
       abilities: [],
-      stats: { weapon: { combo: [{ time: 1, startup: 0.3, step: 0.4, power: 1, heft: 0.8 }], element: 'fire' } },
+      stats: { weapon: { combo: [{ time: 1, startup: 0.3, move: 0.4, power: 1, heft: 0.8 }], element: 'fire' } },
       ...over,
     },
   } as unknown as ArpgWorld;

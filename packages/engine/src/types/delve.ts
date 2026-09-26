@@ -33,16 +33,18 @@ export interface ComboStepDef {
   /** Share of the cycle before the strike (the startup). */
   startup: number;
   /** Units of motion: a lunge over the startup (melee) or a recoil after the release (negative, ranged). */
-  step: number;
+  move: number;
   /** Damage multiplier. */
   power: number;
   /** 0–1: how hard it lands (hit-stop, camera kick; never the rules). */
   heft: number;
   /** Melee: swing arc in degrees (defaults to the weapon's). */
   arc?: number;
-  /** Melee: extra reach. */
+  /** Melee: extra range, added to the weapon's. */
   reach?: number;
+  /** Shove on hit, in units. */
   knockback?: number;
+  /** The blow staggers what it hits. */
   stagger?: boolean;
   /** Ranged: projectile size multiplier. */
   size?: number;
@@ -209,7 +211,8 @@ export interface DelveAbilityBalance {
 export interface FeelBalance {
   /** Conjure seconds by ability weight. */
   conjure: number[];
-  conjureSlot: { primary: number; defensive: number; ultimate: number };
+  /** Conjure multiplier per ability slot. */
+  conjureSlot: Record<AbilitySlot, number>;
   /** Slowed seconds after an ability lands, by weight (the Defensive has none). */
   recovery: number[];
   /** Ability heft by weight. */
@@ -220,6 +223,7 @@ export interface FeelBalance {
   basicRecovery: number;
   /** Ability motion grows by this per weight step. */
   motionPerWeight: number;
+  /** How long a recoil push takes. */
   recoilSeconds: number;
   /** A lunge stops when the gap between the hero's and the foe's edges is this small. */
   contactGap: number;

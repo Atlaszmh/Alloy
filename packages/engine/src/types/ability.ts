@@ -101,10 +101,12 @@ export interface ResolvedAbility {
   /** Mana spent per use (0 when paid by charge). */
   cost: number;
   cooldown: number;
-  /** Wind-up seconds (cast payment only). */
+  /** Wind-up seconds (equals `channel` until the conjure is folded in). */
   castTime: number;
   /** Seconds of anticipation from the weight (every ability). */
   conjure: number;
+  /** Seconds of slowed movement after it lands (0 for the Defensive). */
+  recovery: number;
   /** Seconds of channel (cast payment only). */
   channel: number;
   /** 0–1: how hard its direct hits land (client feel only). */
@@ -113,7 +115,7 @@ export interface ResolvedAbility {
   heavyKnockback: number;
   /** Direct hits stagger (Crushing). */
   heavyStagger: boolean;
-  /** Units moved when cast: + steps in over the conjure, − recoils after the release. */
+  /** Units moved when cast: + steps in over the conjure, − recoils after the release; before the press-combo multiplier. */
   motion: number;
   /** Charge units needed (charge payment only). */
   chargeNeed: number;

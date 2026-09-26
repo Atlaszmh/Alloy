@@ -418,7 +418,7 @@ const MonsterDefSchema = z.object({
 const ComboStepSchema = z.object({
   time: z.number().positive(),
   startup: z.number().gt(0).lt(1),
-  step: z.number(),
+  move: z.number(),
   power: z.number().positive(),
   heft: z.number().min(0).max(1),
   arc: z.number().positive().max(360).optional(),

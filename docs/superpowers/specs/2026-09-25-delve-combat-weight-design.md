@@ -104,7 +104,7 @@ An uncommitted swing:
 - doesn't stop movement during its startup;
 - leaves no recovery slow.
 
-It still strikes at `strikeAt`, from wherever the hero is by then. Automatic mode acquires targets within `range + reach + step` when standing (the lunge closes the gap), and within `range` on the move.
+It still strikes at `strikeAt`, from wherever the hero is by then. Automatic mode acquires targets within `range + reach + move` when standing (the lunge closes the gap), and within `range` on the move.
 
 So a planted fight gets the full weight, while kiting and running past foes play as they do today. The bot uses automatic mode, and its ranged retreat keeps firing.
 
@@ -118,7 +118,7 @@ The string advances one step at each strike and resets after `attackInterval + b
 |---|---|
 | `time` | This step's share of `attackInterval`. The step's **cycle** is `attackInterval × time`, and attack speed and Surge scale it as they scale the interval today. |
 | `startup` | Share of the cycle before the strike. |
-| `step` | Units of motion. Melee: a lunge over the startup toward the target or aim, contact-stopped on the target. Ranged: recoil (negative) over `recoilSeconds` (0.08) after the release. |
+| `move` | Units of motion. Melee: a lunge over the startup toward the target or aim, contact-stopped on the target. Ranged: recoil (negative) over `recoilSeconds` (0.08) after the release. |
 | `power` | Damage multiplier. Replaces today's fixed 1.5× every third hit. |
 | `heft` | 0–1: how hard the step lands (hit-stop, camera kick, sparks). |
 | `arc`, `reach` | Melee: swing arc (degrees; defaults to the weapon's) and extra range. |
@@ -141,7 +141,7 @@ Mana is unchanged: once per shot, at the release.
 
 Starting strings (tuned against the pacing guard rails). Across a full string, damage per interval stays within 10% of today's 1.167 for melee and 1.0 for ranged.
 
-| Weapon (interval) | Steps: time / startup / step / power / heft, extras |
+| Weapon (interval) | Steps: time / startup / move / power / heft, extras |
 |---|---|
 | Dagger (0.55) | jab .8/.3/.25/.8/.15 ×2, jab .8/.3/.3/.9/.15, **flurry** 1.4/.35/.7/1.7/.6 (arc 150, knockback .3) |
 | Sword (0.8) | slash .9/.3/.4/1.0/.3, backslash .9/.3/.4/1.0/.3, **thrust** 1.3/.4/1.2/1.7/.8 (arc 50, reach +.9, knockback .6) |
@@ -312,7 +312,7 @@ Engine tests (TDD, `tests/delve-combat-weight.test.ts`). In `tests/fixtures/aren
 - `delve-manual-attack.test.ts` (it counts `basic` events on the press step);
 - `delve-dodge.test.ts` ("holds a cast pressed mid-dash" runs through the dash and the conjure).
 
-- **Lunge:** a committed melee swing moves the hero toward a dummy during startup by at most `step`, stopping at `contactGap`.
+- **Lunge:** a committed melee swing moves the hero toward a dummy during startup by at most `move`, stopping at `contactGap`.
 - **Strike timing:** damage lands at `strikeAt`, not at the start, and the `basic` event fires then.
 - **Commit and recovery:**
   - Move input is ignored during a committed startup.

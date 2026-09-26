@@ -20,10 +20,10 @@
         "arc": 100
       },
       "combo": [
-        { "time": 0.8, "startup": 0.3, "step": 0.25, "power": 0.8, "heft": 0.15 },
-        { "time": 0.8, "startup": 0.3, "step": 0.25, "power": 0.8, "heft": 0.15 },
-        { "time": 0.8, "startup": 0.3, "step": 0.3, "power": 0.9, "heft": 0.15 },
-        { "time": 1.4, "startup": 0.35, "step": 0.7, "power": 1.7, "heft": 0.6, "arc": 150, "knockback": 0.3 }
+        { "time": 0.8, "startup": 0.3, "move": 0.25, "power": 0.8, "heft": 0.15 },
+        { "time": 0.8, "startup": 0.3, "move": 0.25, "power": 0.8, "heft": 0.15 },
+        { "time": 0.8, "startup": 0.3, "move": 0.3, "power": 0.9, "heft": 0.15 },
+        { "time": 1.4, "startup": 0.35, "move": 0.7, "power": 1.7, "heft": 0.6, "arc": 150, "knockback": 0.3 }
       ],
       "weight": 1,
       "implicits": [
@@ -50,9 +50,9 @@
         "arc": 120
       },
       "combo": [
-        { "time": 0.9, "startup": 0.3, "step": 0.4, "power": 1.0, "heft": 0.3 },
-        { "time": 0.9, "startup": 0.3, "step": 0.4, "power": 1.0, "heft": 0.3 },
-        { "time": 1.3, "startup": 0.4, "step": 1.2, "power": 1.7, "heft": 0.8, "arc": 50, "reach": 0.9, "knockback": 0.6 }
+        { "time": 0.9, "startup": 0.3, "move": 0.4, "power": 1.0, "heft": 0.3 },
+        { "time": 0.9, "startup": 0.3, "move": 0.4, "power": 1.0, "heft": 0.3 },
+        { "time": 1.3, "startup": 0.4, "move": 1.2, "power": 1.7, "heft": 0.8, "arc": 50, "reach": 0.9, "knockback": 0.6 }
       ],
       "weight": 1,
       "implicits": [
@@ -74,9 +74,9 @@
         "arc": 170
       },
       "combo": [
-        { "time": 0.9, "startup": 0.35, "step": 0.3, "power": 1.0, "heft": 0.4 },
-        { "time": 0.9, "startup": 0.35, "step": 0.3, "power": 1.0, "heft": 0.4 },
-        { "time": 1.3, "startup": 0.4, "step": 0.5, "power": 1.7, "heft": 0.8, "arc": 360, "knockback": 0.5 }
+        { "time": 0.9, "startup": 0.35, "move": 0.3, "power": 1.0, "heft": 0.4 },
+        { "time": 0.9, "startup": 0.35, "move": 0.3, "power": 1.0, "heft": 0.4 },
+        { "time": 1.3, "startup": 0.4, "move": 0.5, "power": 1.7, "heft": 0.8, "arc": 360, "knockback": 0.5 }
       ],
       "weight": 1,
       "implicits": [
@@ -103,8 +103,8 @@
         "arc": 360
       },
       "combo": [
-        { "time": 1.0, "startup": 0.45, "step": 0.5, "power": 1.0, "heft": 0.6, "arc": 140 },
-        { "time": 1.3, "startup": 0.5, "step": 0.7, "power": 1.8, "heft": 1.0, "arc": 360, "reach": 0.4, "knockback": 0.8, "stagger": true }
+        { "time": 1.0, "startup": 0.45, "move": 0.5, "power": 1.0, "heft": 0.6, "arc": 140 },
+        { "time": 1.3, "startup": 0.5, "move": 0.7, "power": 1.8, "heft": 1.0, "arc": 360, "reach": 0.4, "knockback": 0.8, "stagger": true }
       ],
       "weight": 1,
       "implicits": [
@@ -126,9 +126,9 @@
         "speed": 13
       },
       "combo": [
-        { "time": 0.9, "startup": 0.3, "step": -0.1, "power": 0.9, "heft": 0.2 },
-        { "time": 0.9, "startup": 0.3, "step": -0.1, "power": 0.9, "heft": 0.2 },
-        { "time": 1.3, "startup": 0.45, "step": -0.3, "power": 1.4, "heft": 0.6, "size": 1.8, "explode": 1.0 }
+        { "time": 0.9, "startup": 0.3, "move": -0.1, "power": 0.9, "heft": 0.2 },
+        { "time": 0.9, "startup": 0.3, "move": -0.1, "power": 0.9, "heft": 0.2 },
+        { "time": 1.3, "startup": 0.45, "move": -0.3, "power": 1.4, "heft": 0.6, "size": 1.8, "explode": 1.0 }
       ],
       "weight": 1,
       "implicits": [
@@ -155,9 +155,9 @@
         "speed": 17
       },
       "combo": [
-        { "time": 0.9, "startup": 0.2, "step": -0.05, "power": 0.9, "heft": 0.1 },
-        { "time": 0.9, "startup": 0.2, "step": -0.05, "power": 0.9, "heft": 0.1 },
-        { "time": 1.2, "startup": 0.25, "step": -0.1, "power": 1.3, "heft": 0.3, "size": 1.5 }
+        { "time": 0.9, "startup": 0.2, "move": -0.05, "power": 0.9, "heft": 0.1 },
+        { "time": 0.9, "startup": 0.2, "move": -0.05, "power": 0.9, "heft": 0.1 },
+        { "time": 1.2, "startup": 0.25, "move": -0.1, "power": 1.3, "heft": 0.3, "size": 1.5 }
       ],
       "weight": 1,
       "implicits": [
@@ -185,9 +185,9 @@
         "pierce": true
       },
       "combo": [
-        { "time": 0.85, "startup": 0.35, "step": -0.05, "power": 0.85, "heft": 0.2 },
-        { "time": 0.85, "startup": 0.35, "step": -0.05, "power": 0.85, "heft": 0.2 },
-        { "time": 1.4, "startup": 0.6, "step": -0.2, "power": 1.6, "heft": 0.6, "speed": 1.4 }
+        { "time": 0.85, "startup": 0.35, "move": -0.05, "power": 0.85, "heft": 0.2 },
+        { "time": 0.85, "startup": 0.35, "move": -0.05, "power": 0.85, "heft": 0.2 },
+        { "time": 1.4, "startup": 0.6, "move": -0.2, "power": 1.6, "heft": 0.6, "speed": 1.4 }
       ],
       "weight": 1,
       "implicits": [
