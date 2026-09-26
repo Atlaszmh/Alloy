@@ -103,6 +103,18 @@ export interface ResolvedAbility {
   cooldown: number;
   /** Wind-up seconds (cast payment only). */
   castTime: number;
+  /** Seconds of anticipation from the weight (every ability). */
+  conjure: number;
+  /** Seconds of channel (cast payment only). */
+  channel: number;
+  /** 0–1: how hard its direct hits land (client feel only). */
+  heft: number;
+  /** Extra knockback on direct hits (Heavy, Crushing). */
+  heavyKnockback: number;
+  /** Direct hits stagger (Crushing). */
+  heavyStagger: boolean;
+  /** Units moved when cast: + steps in over the conjure, − recoils after the release. */
+  motion: number;
   /** Charge units needed (charge payment only). */
   chargeNeed: number;
   range: number;

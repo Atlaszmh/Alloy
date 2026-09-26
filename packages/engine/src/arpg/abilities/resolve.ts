@@ -87,6 +87,11 @@ export function resolveAbility(
   const manaCost = s.cost * (1 + W.cost * w) * (1 - (L.manaweaver ?? 0) / 100);
   const size = 1 + W.size * w;
 
+  const F = bal.feel;
+  const wi = w + 2;
+  const conjure = F.conjure[wi] * F.conjureSlot[slot];
+  const channel = cast ? s.castTime * (1 + W.castTime * w) : 0;
+
   return {
     slot,
     build,
@@ -103,7 +108,13 @@ export function resolveAbility(
       build.payment === 'charge'
         ? ab.chargeLockout
         : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
-    castTime: cast ? s.castTime * (1 + W.castTime * w) : 0,
+    castTime: channel,
+    conjure,
+    channel,
+    heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
+    heavyKnockback: Math.max(0, w) * F.heavyKnockback,
+    heavyStagger: w >= 2,
+    motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
     chargeNeed: build.payment === 'charge' ? s.cost * (1 + W.cost * w) * ab.chargeRatio : 0,
     range: form.range ?? 0,
     radius: (form.radius ?? 0) * size * knobs.area,
@@ -116,6 +127,12 @@ export function resolveAbility(
     comboCount: form.comboCount ?? null,
     knobs,
   };
+}
+
+/** How hard press-combo `step` lands: the ability's heft, +0.2 on the last press of a 2+ press combo. */
+export function stepHeft(ab: ResolvedAbility, step: number): number {
+  const n = ab.combo.length;
+  return Math.min(1, ab.heft + (n > 1 && step % n === n - 1 ? 0.2 : 0));
 }
 
 /** Builds for a new (or migrated) profile, `element` being the weapon's. */

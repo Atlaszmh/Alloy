@@ -9,7 +9,13 @@ export { createDraftState, makePick, autoPickRandom } from './draft/draft-state.
 export type { DraftState, DraftResult } from './draft/draft-state.js';
 export { createForgeState, applyForgeAction } from './forge/forge-state.js';
 export type { ForgeState, ForgeResult } from './forge/forge-state.js';
-export { createForgePlan, applyPlanAction, commitPlan, getPlannedStats, canUnsocketGem } from './forge/forge-plan.js';
+export {
+  createForgePlan,
+  applyPlanAction,
+  commitPlan,
+  getPlannedStats,
+  canUnsocketGem,
+} from './forge/forge-plan.js';
 export type { ForgePlan, PlanResult } from './forge/forge-plan.js';
 export { earnFlux, spendFlux, canSpendFlux } from './run/flux-state.js';
 export { calculateStats } from './forge/stat-calculator.js';
@@ -20,7 +26,12 @@ export { simulate } from './duel/duel-engine.js';
 export { createGladiator } from './duel/gladiator.js';
 export { createMatch, applyAction, createDebugMatch } from './match/match-controller.js';
 export type { DebugPhaseTarget } from './match/match-controller.js';
-export { getNextPhase, getNextPhaseQuick, getNextPhaseRun, countWins } from './match/phase-machine.js';
+export {
+  getNextPhase,
+  getNextPhaseQuick,
+  getNextPhaseRun,
+  countWins,
+} from './match/phase-machine.js';
 export { AIController } from './ai/ai-controller.js';
 export { generateSyntheticOpponent, getTierName } from './ai/synthetic-opponent.js';
 export type { SyntheticOpponent } from './ai/synthetic-opponent.js';
@@ -42,7 +53,12 @@ export type { BalanceIssue } from './balance/balance-report.js';
 
 // Gem combination system
 export { CombinationEngine } from './combine/combination-engine.js';
-export type { CombineResult, CombineLayer, CombineConfig, CombinePreview } from './combine/combination-engine.js';
+export type {
+  CombineResult,
+  CombineLayer,
+  CombineConfig,
+  CombinePreview,
+} from './combine/combination-engine.js';
 export { RecipeRegistry } from './combine/recipe-registry.js';
 export type { RecipeDefinition, RecipeComponent } from './combine/recipe-registry.js';
 export { DiscoveryState } from './combine/discovery-state.js';
@@ -54,7 +70,11 @@ export {
 
 // Transplant system
 export { previewTransplant } from './forge/transplant/preview.js';
-export type { TransplantPreview, TransplantContext, TransplantModifier } from './forge/transplant/types.js';
+export type {
+  TransplantPreview,
+  TransplantContext,
+  TransplantModifier,
+} from './forge/transplant/types.js';
 
 // Run system
 export {
@@ -83,13 +103,7 @@ export {
 } from './loot/item-generator.js';
 export type { ItemGenOptions, RarityRollContext } from './loot/item-generator.js';
 export { rollEncounterDrops } from './loot/drops.js';
-export {
-  salvageValue,
-  upgradeCost,
-  reforgeCost,
-  fuseCost,
-  checkFusion,
-} from './loot/smithing.js';
+export { salvageValue, upgradeCost, reforgeCost, fuseCost, checkFusion } from './loot/smithing.js';
 export {
   computeHeroStats,
   computeAttunement,
@@ -144,10 +158,21 @@ export { runAutopilot } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
 
 // ARPG arena simulation
-export { createFloorWorld, refreshWorldHero, createMonsterEntity, biomeCycle, isBossFloor } from './arpg/world.js';
+export {
+  createFloorWorld,
+  refreshWorldHero,
+  createMonsterEntity,
+  biomeCycle,
+  isBossFloor,
+} from './arpg/world.js';
 export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';
 export { botInput } from './arpg/bot.js';
 export { castAbility, abilityReady } from './arpg/abilities/cast.js';
-export { resolveAbility, mergeKnobs, defaultAbilities } from './arpg/abilities/resolve.js';
+export {
+  resolveAbility,
+  mergeKnobs,
+  defaultAbilities,
+  stepHeft,
+} from './arpg/abilities/resolve.js';
 export { makeCtx } from './arpg/combat.js';
