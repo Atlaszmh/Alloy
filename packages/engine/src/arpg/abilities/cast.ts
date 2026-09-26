@@ -1,8 +1,8 @@
 import type { AbilityCast } from '../../types/ability.js';
-import type { Vec } from '../../types/arpg.js';
+import type { HeroEntity, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
 import { cancelSwing, pushTick, startPush } from '../action.js';
-import { dirTo } from '../geometry.js';
+import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
 import { stepHeft } from './resolve.js';
 import { aimPoint, nearestMonster } from './targeting.js';
@@ -14,6 +14,13 @@ export function abilityReady(ctx: SimCtx, slot: number): boolean {
   if (!ab || h.windup || ctx.world.t < h.cooldowns[slot]) return false;
   if (ab.build.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
   return h.mana >= ab.cost;
+}
+
+/** The press-combo step a press at `t` gets: the next one within `window` of the last cast, else the first. */
+export function pressStep(h: HeroEntity, slot: number, t: number, window: number): number {
+  return t - h.comboAt[slot] <= window
+    ? (h.comboStep[slot] + 1) % h.abilities[slot].combo.length
+    : 0;
 }
 
 /** Fire the slot's form now at press-combo `step`, then its recoil and recovery. */
@@ -82,10 +89,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   cancelSwing(ctx);
   h.push = null;
   h.recoverUntil = t;
-  const step =
-    t - h.comboAt[slot] <= bal.abilities.comboWindow
-      ? (h.comboStep[slot] + 1) % ab.combo.length
-      : 0;
+  const step = pressStep(h, slot, t, bal.abilities.comboWindow);
   const chargePaid = ab.build.payment === 'charge' ? h.charge[slot] : 0;
   pay(ctx, slot, t + ab.channel);
   const dir = dirTo(h.x, h.y, at.x, at.y);
@@ -102,7 +106,12 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   };
   if (ab.motion > 0 && (dir.x !== 0 || dir.y !== 0)) {
     const stop = nearestMonster(ctx, at.x, at.y, 1.5);
-    startPush(ctx, dir, ab.motion * ab.combo[step % ab.combo.length], ab.conjure, stop?.id ?? null);
+    // Never past the aim point, where the form would re-aim from and turn round.
+    const reach = Math.min(
+      ab.motion * ab.combo[step % ab.combo.length],
+      dist(h.x, h.y, at.x, at.y),
+    );
+    startPush(ctx, dir, reach, ab.conjure, stop?.id ?? null);
   }
   ctx.events.push({ kind: 'windup', slot, until: h.windup.until, heft: stepHeft(ab, step) });
   return true;

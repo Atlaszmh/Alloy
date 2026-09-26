@@ -84,8 +84,11 @@ describe('the dodge', () => {
   it('holds a cast pressed mid-dash until the dash ends', () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
     dodge(w, { x: 1, y: 0 });
-    expect(kinds(pressOnly(w, 0))).not.toContain('cast');
-    expect(kinds(run(w, D.duration + w.hero.abilities[0].castTime + 0.05))).toContain('cast');
+    expect(kinds(pressOnly(w, 0))).not.toContain('windup');
+    const end = w.hero.dodge!.until;
+    for (let i = 0; i < 60 && !w.hero.windup; i++)
+      stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
+    expect(w.hero.windup!.start).toBeGreaterThanOrEqual(end - 1e-9);
   });
 
   it('a dodge tap between frames is not lost', () => {

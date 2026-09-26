@@ -269,10 +269,10 @@ export interface HeroEntity {
   cooldowns: number[];
   /** Per slot: charge units banked (charge payment). */
   charge: number[];
-  /** Per slot: combo step of the last press and when it was pressed. */
+  /** Per slot: the combo step of the last cast and when it landed (a press's step is chosen from these). */
   comboStep: number[];
   comboAt: number[];
-  /** An ability winding up (every ability conjures; cast payment channels too); the hero can't move or attack meanwhile. */
+  /** An ability winding up (every ability conjures; cast payment channels too); the hero can't walk or attack meanwhile (a forward form's step-in still moves it). */
   windup: {
     slot: number;
     aim: Vec | null;

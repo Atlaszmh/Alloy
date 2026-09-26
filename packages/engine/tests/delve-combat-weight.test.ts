@@ -514,8 +514,11 @@ describe('presses held by a dash', () => {
       { move: { x: 1, y: 0 }, dodge: true, cast: { slot: 0 } },
       STEP,
     );
-    // The dash, then the wind-up (a tick for the dodge to start, one of float drift, a spare).
-    events.push(...run(w, bal.dodge.duration + w.hero.abilities[0].castTime + 4 * STEP));
+    expect(events.some((e) => e.kind === 'windup')).toBe(false);
+    const end = w.hero.dodge!.until;
+    events.push(...until(w, () => w.hero.windup !== null));
+    expect(w.hero.windup!.start).toBeGreaterThanOrEqual(end - 1e-9);
+    events.push(...until(w, () => w.hero.windup === null));
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
   });
 
@@ -572,11 +575,15 @@ describe('casting: conjure, motion, recovery', () => {
 
   it('the press-combo step is chosen at the press', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
-    w.hero.mana = w.hero.manaMax = 1e6;
-    press(w, 0);
-    run(w, w.hero.abilities[0].cooldown);
+    // The last cast landed just inside the combo window from the press, but outside it from the landing.
+    w.hero.comboStep[0] = 0;
+    const last = (w.hero.comboAt[0] = w.t + STEP - bal.abilities.comboWindow + STEP / 2);
     pressOnly(w, 0);
     expect(w.hero.windup!.step).toBe(1);
+    const events = until(w, () => w.hero.windup === null);
+    expect(w.t - last).toBeGreaterThan(bal.abilities.comboWindow);
+    expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
+    expect(w.hero.comboStep[0]).toBe(1);
   });
 
   it('a bolt recoils the hero after its release', () => {
@@ -615,6 +622,17 @@ describe('casting: conjure, motion, recovery', () => {
     expect(damaged(w.monsters[0])).toBe(true);
   });
 
+  it('a step-in stops at a close aim point instead of passing it and turning round', () => {
+    const w = arena([dummy(13, 0)], { noBasic: true, primary: { form: 'strike' } });
+    w.monsters[0].y = w.hero.y - 2;
+    const y0 = w.hero.y;
+    const events = press(w, 0, { x: 13, y: y0 - 0.2 });
+    expect(y0 - w.hero.y).toBeCloseTo(0.2, 5);
+    const slash = events.find((e) => e.kind === 'slash');
+    expect(slash && slash.kind === 'slash' && slash.dir.y).toBeLessThan(0);
+    expect(damaged(w.monsters[0])).toBe(true);
+  });
+
   it('recovery follows an ability, except the Defensive', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
     press(w, 0);
@@ -646,6 +664,8 @@ describe('casting: conjure, motion, recovery', () => {
     w.hero.charge[2] = ult.chargeNeed;
     pressOnly(w, 2);
     expect(w.hero.charge[2]).toBe(0);
+    // Whatever it gained meanwhile, the refund fills it no further than full.
+    w.hero.charge[2] = ult.chargeNeed * 0.5;
     dodge(w, { x: 1, y: 0 });
     expect(w.hero.charge[2]).toBeCloseTo(ult.chargeNeed);
     const m = arena([dummy(13, 30)], { noBasic: true });
@@ -717,9 +737,9 @@ describe('heavy payoff and heft', () => {
     const events = press(w, 2, { x: 13, y: 30 });
     events.push(...run(w, 2));
     expect(w.monsters[0].status.staggerUntil).toBe(0);
-    expect(
-      events.filter((e) => e.kind === 'hit').every((e) => e.kind === 'hit' && e.heft === 0),
-    ).toBe(true);
+    const hits = events.filter((e) => e.kind === 'hit');
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
 
     const s = arena([dummy(13, 0)], { defensive: { form: 'surge', weight: 2 } });
     place(s, 0.6);

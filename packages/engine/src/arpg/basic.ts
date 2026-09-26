@@ -89,7 +89,7 @@ export function startSwing(
     committed,
   };
   h.nextAttackAt = t + cycle;
-  // An automatic swing on the move leaves an ability's recovery (and any push) alone.
+  // An automatic swing on the move leaves an ability's recovery alone.
   if (committed) h.recoverUntil = t;
   if (lunge > 0) {
     const foe = target ?? foeAhead(ctx, dir, reach + lunge, s.arc ?? w.arc);
@@ -107,8 +107,8 @@ export function strike(ctx: SimCtx): void {
   h.swing = null;
   const w = h.stats.weapon;
   const s = w.combo[sw.step];
-  // The lunge belongs to the swing and ends with it; any other push carries on.
-  if (sw.committed && w.kind === 'melee' && s.move > 0) h.push = null;
+  // The lunge belongs to the swing and ends with it (no other push runs during a swing).
+  h.push = null;
   const last = sw.step === w.combo.length - 1;
   h.attackCount++;
   h.lastBasicAt = world.t;
