@@ -19,7 +19,7 @@ import {
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
 import { castAbility, castTick } from './abilities/cast.js';
-import { defendingAbility, defendTick, gainCharge } from './abilities/defend.js';
+import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
@@ -41,20 +41,15 @@ export function stepWorld(
   dt: number,
 ): ArpgEvent[] {
   const events: ArpgEvent[] = [];
+  // Presses are kept `buffer` seconds; `heroTick` stops them aging while something holds them.
   const buffer = registry.getDelveBalance().feel.buffer;
-  const h = world.hero;
   if (input.cast) {
-    // A press waits out a wind-up or a dash, then gets `buffer` more seconds.
-    const busy = Math.max(h.windup?.until ?? 0, h.dodge?.until ?? 0);
     world.queuedCast = input.cast;
-    world.queuedCastUntil = Math.max(world.t, busy) + buffer;
+    world.queuedCastUntil = world.t + buffer;
   }
-  // A tap waits for the weapon (the current blow's cycle), then `buffer` more.
-  if (input.attackTap)
-    world.queuedAttack = {
-      until: Math.max(world.t, h.nextAttackAt) + buffer,
-      aim: input.attackAim ?? null,
-    };
+  // Taps only matter in manual mode (automatic attacks need no press).
+  if (input.attackTap && input.attack !== undefined)
+    world.queuedAttack = { until: world.t + buffer, aim: input.attackAim ?? null };
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
   if (world.heroDead) return events;
@@ -130,7 +125,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   castTick(ctx);
 
   // Movement: a push carries the hero; a wind-up or a committed swing roots it; a recovery slows it.
-  const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+  const surge = surging(ctx);
   const pushed = !dashing && pushTick(ctx);
   const rooted = !!h.windup || !!h.swing?.committed;
   const v = clampLen(move);
@@ -150,10 +145,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
   if (!h.swing && !h.windup && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
-    if (input.attack === undefined) startSwing(ctx, undefined, speed <= 0.05);
+    if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05);
     else {
       const tap = world.queuedAttack && t <= world.queuedAttack.until ? world.queuedAttack : null;
-      if ((input.attack || tap) && startSwing(ctx, input.attackAim ?? tap?.aim ?? null, true))
+      if ((input.attack || tap) && startSwing(ctx, true, true, input.attackAim ?? tap?.aim ?? null))
         world.queuedAttack = null;
     }
   }
@@ -222,7 +217,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           heft: p.heft,
         });
       else if (p.explodeRadius > 0) {
-        burstShot(ctx, p);
+        burstShot(ctx, p, m);
         break;
       } else
         hitMonster(ctx, m, p.damage, p.element, {

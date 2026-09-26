@@ -3,7 +3,7 @@ import type { ManaType } from '../types/mana.js';
 import { hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { startPush } from './action.js';
-import { defendingAbility } from './abilities/defend.js';
+import { surging } from './abilities/defend.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
@@ -23,7 +23,7 @@ const BASIC_STATUS: Record<ManaType, StatusId> = {
 const BASIC_STATUS_CHANCE = 0.3;
 
 function haste(ctx: SimCtx): number {
-  const surge = ctx.world.hero.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+  const surge = surging(ctx);
   return surge ? 1 + surge.effect : 1;
 }
 
@@ -44,19 +44,22 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
 }
 
 /**
- * Start the next blow of the string when the weapon is ready. Automatic
- * (`aim` undefined): only at a foe in reach, committing only while the hero
- * stands still. Manual: toward `aim` if given, else the nearest foe in reach,
- * else straight ahead; always committed. Returns whether a swing started.
+ * Start the next blow of the string when the weapon is ready. Automatic: only
+ * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
+ * reach, else straight ahead. A committed swing roots the hero, lunges and
+ * ends any recovery. Returns whether a swing started.
  */
-export function startSwing(ctx: SimCtx, aim: Vec | null | undefined, standing: boolean): boolean {
+export function startSwing(
+  ctx: SimCtx,
+  manual: boolean,
+  committed: boolean,
+  aim: Vec | null = null,
+): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
   if (t < h.nextAttackAt) return false;
   const w = h.stats.weapon;
-  const manual = aim !== undefined;
-  const committed = manual || standing;
   if (t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace) h.attackCount = 0;
   const step = h.attackCount % w.combo.length;
   const s = w.combo[step];
@@ -76,12 +79,20 @@ export function startSwing(ctx: SimCtx, aim: Vec | null | undefined, standing: b
   if (committed || !h.moving) h.facing = dir;
   const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
   const startup = cycle * s.startup;
-  h.swing = { step, dir, targetId: target?.id ?? null, start: t, strikeAt: t + startup, committed };
+  h.swing = {
+    step,
+    dir,
+    targetId: target?.id ?? null,
+    start: t,
+    strikeAt: t + startup,
+    cycle,
+    committed,
+  };
   h.nextAttackAt = t + cycle;
-  h.recoverUntil = t;
-  h.push = null;
+  // An automatic swing on the move leaves an ability's recovery (and any push) alone.
+  if (committed) h.recoverUntil = t;
   if (lunge > 0) {
-    const foe = target ?? foeAhead(ctx, dir, reach + lunge, melee ? (s.arc ?? w.arc) : 360);
+    const foe = target ?? foeAhead(ctx, dir, reach + lunge, s.arc ?? w.arc);
     startPush(ctx, dir, lunge, startup, foe?.id ?? null);
   }
   return true;
@@ -94,14 +105,15 @@ export function strike(ctx: SimCtx): void {
   const sw = h.swing;
   if (!sw) return;
   h.swing = null;
-  h.push = null;
   const w = h.stats.weapon;
   const s = w.combo[sw.step];
+  // The lunge belongs to the swing and ends with it; any other push carries on.
+  if (sw.committed && w.kind === 'melee' && s.move > 0) h.push = null;
   const last = sw.step === w.combo.length - 1;
   h.attackCount++;
   h.lastBasicAt = world.t;
 
-  const surge = h.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+  const surge = surging(ctx);
   const unit = h.stats.weaponDamage * h.stats.damageMult;
   const base = unit * s.power;
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
@@ -189,18 +201,15 @@ export function strike(ctx: SimCtx): void {
   });
   if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
   if (sw.committed)
-    h.recoverUntil = Math.min(
-      h.nextAttackAt,
-      world.t + (h.nextAttackAt - sw.start) * bal.feel.basicRecovery,
-    );
+    h.recoverUntil = Math.min(h.nextAttackAt, world.t + sw.cycle * bal.feel.basicRecovery);
 }
 
-/** A basic shot with an explosion bursts over every foe around it (each once). */
-export function burstShot(ctx: SimCtx, p: Projectile): void {
+/** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */
+export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | null = null): void {
   p.dead = true;
   ctx.events.push({ kind: 'explode', x: p.x, y: p.y, radius: p.explodeRadius, element: p.element });
   for (const m of alive(ctx)) {
-    if (dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
+    if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
     hitMonster(ctx, m, p.damage, p.element, {
       source: 'basic',
       canCrit: true,

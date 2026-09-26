@@ -107,8 +107,6 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
         speed: weaponBase.attack.speed ?? 12,
         pierce: weaponBase.attack.pierce ?? false,
         element: weaponItem!.mana,
-        // The registry's own array — never copy it. `refreshWorldHero` compares it by reference
-        // to detect a weapon change (a different string, or none at all).
         combo: weaponBase.combo ?? bal.hero.defaultCombo,
       }
     : {
@@ -119,7 +117,6 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
         speed: 0,
         pierce: false,
         element: null,
-        // Same array as above: shared, not copied.
         combo: bal.hero.defaultCombo,
       };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;

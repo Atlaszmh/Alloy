@@ -7,6 +7,7 @@ import { stepWorld } from '../src/arpg/step.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { pushTick, startPush } from '../src/arpg/action.js';
 import { dist } from '../src/arpg/geometry.js';
+import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import {
   arena,
@@ -53,8 +54,8 @@ describe('combat weight data', () => {
   it('the hero carries the weapon string, and the default one when unarmed', () => {
     const maul = computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry);
     expect(maul.weapon.combo).toHaveLength(2);
-    expect(maul.weapon.combo).toBe(registry.getGearBase('maul').combo);
-    expect(computeHeroStats({}, registry).weapon.combo).toBe(bal.hero.defaultCombo);
+    expect(maul.weapon.combo).toEqual(registry.getGearBase('maul').combo);
+    expect(computeHeroStats({}, registry).weapon.combo).toEqual(bal.hero.defaultCombo);
   });
 });
 
@@ -139,6 +140,26 @@ describe('pushes and buffered input', () => {
     expect(w.queuedCast).toEqual({ slot: 0 });
     expect(w.queuedCastUntil).toBeGreaterThan(w.t);
   });
+
+  it('a tap in automatic mode is not recorded', () => {
+    const w = arena([dummy(13, 34.6)]);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, attackTap: true }, 0);
+    expect(w.queuedAttack).toBeNull();
+  });
+
+  it('a lunge whose foe dies ends at once', () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 1.6);
+    const y0 = w.hero.y;
+    run(w, 3 * STEP);
+    expect(w.hero.push?.stopId).toBe(w.monsters[0].id);
+    const y1 = w.hero.y;
+    expect(y0 - y1).toBeGreaterThan(0);
+    w.monsters[0].dead = true;
+    until(w, () => w.hero.swing === null);
+    expect(w.hero.y).toBe(y1);
+    expect(w.hero.push).toBeNull();
+  });
 });
 
 /** Put the first foe `gap` units from the hero's edge along `dir` (default straight up). */
@@ -157,7 +178,10 @@ function until(
   max = 300,
 ): ArpgEvent[] {
   const events: ArpgEvent[] = [];
-  for (let i = 0; i < max && !done(); i++) events.push(...stepWorld(registry, w, input, STEP));
+  for (let i = 0; !done(); i++) {
+    if (i >= max) throw new Error(`until: not done after ${max} steps`);
+    events.push(...stepWorld(registry, w, input, STEP));
+  }
   return events;
 }
 
@@ -184,8 +208,9 @@ describe('basic attacks: startup, strike, recovery', () => {
     const y0 = w.hero.y;
     until(w, () => w.hero.swing === null && w.t > 0.1);
     const m = w.monsters[0];
-    expect(dist(w.hero.x, w.hero.y, m.x, m.y) - m.radius - w.hero.radius).toBeGreaterThan(0.1);
-    expect(y0 - w.hero.y).toBeLessThan(0.15);
+    const gap = dist(w.hero.x, w.hero.y, m.x, m.y) - m.radius - w.hero.radius;
+    expect(gap).toBeCloseTo(bal.feel.contactGap, 3);
+    expect(y0 - w.hero.y).toBeCloseTo(0.25 - bal.feel.contactGap, 3);
   });
 
   it('ignores movement through a committed startup, then slows it in recovery only', () => {
@@ -226,6 +251,26 @@ describe('basic attacks: startup, strike, recovery', () => {
     stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
     expect(w.hero.x - x0).toBeCloseTo(2 * w.hero.stats.moveSpeed * STEP, 4);
     expect(w.hero.push).toBeNull();
+    // Past the strike: no recovery slow.
+    const events = until(w, () => w.hero.swing === null, { move: { x: 1, y: 0 } });
+    expect(basics(events)).toHaveLength(1);
+    const x1 = w.hero.x;
+    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    expect(w.hero.x - x1).toBeCloseTo(w.hero.stats.moveSpeed * STEP, 4);
+  });
+
+  it("an automatic swing on the move keeps an ability's push and recovery", () => {
+    const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+    const y0 = w.hero.y;
+    // The push outlasts the shot's startup, so both its start and its strike leave it alone.
+    startPush(makeCtx(registry, w, []), { x: 0, y: 1 }, 0.3, 0.3);
+    const recoverUntil = (w.hero.recoverUntil = w.t + 0.3);
+    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    expect(w.hero.swing?.committed).toBe(false);
+    const events = run(w, 0.3, { x: 1, y: 0 });
+    expect(basics(events)).toHaveLength(1);
+    expect(w.hero.y - y0).toBeCloseTo(0.3, 5);
+    expect(w.hero.recoverUntil).toBe(recoverUntil);
   });
 
   it('a dodge in the startup cancels the swing', () => {
@@ -252,6 +297,31 @@ describe('weapon strings', () => {
     const thrust = w.hero.stats.weapon.combo[2];
     expect(thrust.reach).toBeGreaterThan(0);
     expect(thrust.arc).toBeLessThan(w.hero.stats.weapon.arc);
+  });
+
+  it("the sword's thrust reaches a foe the first blow can't", () => {
+    // The foe's edge is 2.5 units from the hero: past the first blow's range plus lunge.
+    const setup = (count: number) => {
+      const w = arena([dummy(13, 0)]);
+      place(w, 2.5 - w.hero.radius);
+      w.hero.attackCount = count;
+      w.hero.lastBasicAt = w.t;
+      const m = w.monsters[0];
+      const input = { move: still, attack: true, attackAim: { x: m.x, y: m.y } };
+      return { w, m, input };
+    };
+    const [first, , thrust] = arena().hero.stats.weapon.combo;
+    const range = arena().hero.stats.weapon.range;
+    expect(range + (first.reach ?? 0) + first.move).toBeLessThan(2.5);
+    expect(range + (thrust.reach ?? 0) + thrust.move).toBeGreaterThan(2.5);
+
+    const a = setup(0);
+    until(a.w, () => a.w.hero.attackCount >= 1, a.input);
+    expect(damaged(a.m)).toBe(false);
+
+    const b = setup(2);
+    until(b.w, () => b.w.hero.attackCount >= 3, b.input);
+    expect(damaged(b.m)).toBe(true);
   });
 
   it('only the thrust knocks the foe back', () => {
@@ -281,10 +351,10 @@ describe('weapon strings', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 0.6);
     until(w, () => w.hero.attackCount >= 1);
-    const foe = { ...w.monsters[0] };
-    w.monsters = [];
+    // Out of reach for the pause (emptying the arena would clear the floor).
+    w.monsters[0].y = 2;
     run(w, w.hero.stats.attackInterval + bal.hero.basicComboGrace + 0.1);
-    w.monsters = [foe];
+    place(w, 0.6);
     until(w, () => w.hero.swing !== null);
     expect(w.hero.swing!.step).toBe(0);
   });
@@ -341,6 +411,56 @@ describe('weapon strings', () => {
     expect(w.monsters.every(damaged)).toBe(true);
   });
 
+  it("the staff's great orb bursts at the end of its flight, hitting a foe beside it", () => {
+    // Fired straight up; the foe stands beside where the flight ends, clear of the path.
+    const w = arena([dummy(14.2, 0)], { equipped: { weapon: gear('fire', 'weapon', 'staff') } });
+    const orb = w.hero.stats.weapon.combo[2];
+    w.monsters[0].y = w.hero.y - 0.5 - (w.hero.stats.weapon.range + 1.5);
+    w.hero.attackCount = 2;
+    w.hero.lastBasicAt = w.t;
+    const events = stepWorld(
+      registry,
+      w,
+      { move: still, attack: true, attackAim: { x: w.hero.x, y: 0 } },
+      STEP,
+    );
+    events.push(
+      ...until(w, () => w.hero.attackCount >= 3 && w.projectiles.length === 0, {
+        move: still,
+        attack: false,
+      }),
+    );
+    const burst = events.find((e) => e.kind === 'explode');
+    expect(burst).toMatchObject({ radius: orb.explode });
+    expect(damaged(w.monsters[0])).toBe(true);
+  });
+
+  it('a basic burst always hits the foe its shot struck', () => {
+    // A burst smaller than the shot: the struck foe is outside it, yet still hit.
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    spawnProjectile(makeCtx(registry, w, []), {
+      owner: 'hero',
+      form: null,
+      ability: null,
+      homingId: null,
+      x: 13,
+      y: 35,
+      vx: 0,
+      vy: -13,
+      radius: 0.5,
+      damage: 10,
+      element: 'fire',
+      pierce: false,
+      maxDist: 10,
+      explodeRadius: 0.01,
+      applies: [],
+      knockback: 0,
+    });
+    const events = until(w, () => w.projectiles.length === 0);
+    expect(events.some((e) => e.kind === 'explode')).toBe(true);
+    expect(damaged(w.monsters[0])).toBe(true);
+  });
+
   it("Twin Fang strikes again on the string's last blow, at today's value (melee ×1.5)", () => {
     const w = arena([dummy(13, 0)]);
     place(w, 0.6);
@@ -375,7 +495,7 @@ describe('weapon strings', () => {
     expect(w.hero.swing).not.toBeNull();
     stepWorld(registry, w, { move: still, attack: false, attackTap: true }, STEP);
     const events = until(w, () => w.hero.attackCount >= 2, { move: still, attack: false });
-    expect(basics(events).length).toBeGreaterThanOrEqual(2);
+    expect(basics(events)).toHaveLength(2);
   });
 });
 
@@ -388,7 +508,8 @@ describe('presses held by a dash', () => {
       { move: { x: 1, y: 0 }, dodge: true, cast: { slot: 0 } },
       STEP,
     );
-    events.push(...run(w, 0.6));
+    // The dash, then the wind-up (a tick for the dodge to start, one of float drift, a spare).
+    events.push(...run(w, bal.dodge.duration + w.hero.abilities[0].castTime + 4 * STEP));
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
   });
 
@@ -400,7 +521,24 @@ describe('presses held by a dash', () => {
       { move: still, attack: false, attackTap: true, dodge: true },
       STEP,
     );
-    events.push(...until(w, () => w.t >= 0.8, { move: still, attack: false }));
+    const s = w.hero.stats.weapon.combo[0];
+    const startup = w.hero.stats.attackInterval * s.time * s.startup;
+    // The dash, then the startup (a tick for the dodge to start, one of float drift, one to
+    // reach the strike, a spare).
+    const end = bal.dodge.duration + startup + 4 * STEP;
+    events.push(...until(w, () => w.t >= end, { move: still, attack: false }));
     expect(basics(events)).toHaveLength(1);
+  });
+
+  it('a tap nothing holds goes stale', () => {
+    // In manual mode a tap is always held or used at once, so only a switch to automatic
+    // attacks (with no foe in reach) leaves one unheld.
+    const w = arena([dummy(13, 20)]);
+    stepWorld(registry, w, { move: still, attack: false, attackTap: true }, 0);
+    expect(w.queuedAttack).not.toBeNull();
+    until(w, () => w.t > bal.feel.buffer + STEP);
+    expect(w.queuedAttack).toBeNull();
+    const events = until(w, () => w.t >= 1, { move: still, attack: false });
+    expect(basics(events)).toHaveLength(0);
   });
 });

@@ -288,6 +288,8 @@ export interface HeroEntity {
     targetId: number | null;
     start: number;
     strikeAt: number;
+    /** Seconds this blow takes, startup included (its share of the attack interval). */
+    cycle: number;
     /** Committed swings root the hero, lunge and leave a recovery (automatic swings on the move don't). */
     committed: boolean;
   } | null;
@@ -326,7 +328,7 @@ export interface HeroEntity {
   /** The next real hit before this time crits and staggers. */
   riposteUntil: number;
   nextAttackAt: number;
-  /** Blows landed in the current string (resets after a pause). */
+  /** Strikes in the current string, whiffs included (resets after a pause). */
   attackCount: number;
   lastBasicAt: number;
   potions: number;

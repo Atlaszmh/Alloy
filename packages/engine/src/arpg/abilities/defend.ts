@@ -12,6 +12,11 @@ export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
   return h.abilities[DEFENSIVE] ?? null;
 }
 
+/** The Surge while it is up, else null. */
+export function surging(ctx: SimCtx): ResolvedAbility | null {
+  return ctx.world.hero.defend?.form === 'surge' ? defendingAbility(ctx) : null;
+}
+
 /** The Ward bursts with its element around the hero. */
 export function wardBurst(ctx: SimCtx): void {
   const h = ctx.world.hero;

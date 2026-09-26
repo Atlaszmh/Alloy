@@ -230,11 +230,13 @@ export function refreshWorldHero(
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
-  // A weapon with a different string starts it over (a blow in progress is dropped and the
-  // weapon is ready); other gear changes leave the swing alone.
-  if (stats.weapon.combo !== h.stats.weapon.combo) {
-    h.swing = null;
-    h.push = null;
+  // A different weapon starts its own string: a blow in progress (and its lunge) is dropped
+  // and the weapon is ready. Other gear changes leave the swing alone.
+  if (stats.weapon.baseId !== h.stats.weapon.baseId) {
+    if (h.swing) {
+      h.swing = null;
+      h.push = null;
+    }
     h.attackCount = 0;
     h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
   }

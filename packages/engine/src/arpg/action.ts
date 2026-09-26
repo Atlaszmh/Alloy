@@ -66,10 +66,15 @@ export function pushTick(ctx: SimCtx, finish = false): boolean {
   const h = world.hero;
   const p = h.push;
   if (!p) return false;
+  const foe = p.stopId === null ? null : world.monsters.find((m) => m.id === p.stopId && !m.dead);
+  // A lunge whose foe is gone ends at once.
+  if (p.stopId !== null && !foe) {
+    h.push = null;
+    return false;
+  }
   const k = finish ? 1 : Math.min(1, (world.t - p.start) / (p.until - p.start));
   const x = clamp(p.fromX + p.dx * k, h.radius, world.width - h.radius);
   const y = clamp(p.fromY + p.dy * k, h.radius, world.height - h.radius);
-  const foe = p.stopId === null ? null : world.monsters.find((m) => m.id === p.stopId && !m.dead);
   const c = foe
     ? contactAt(h.x, h.y, x, y, foe.x, foe.y, foe.radius + h.radius + bal.feel.contactGap)
     : 1;
