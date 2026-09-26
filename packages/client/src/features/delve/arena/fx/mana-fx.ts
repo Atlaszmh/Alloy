@@ -63,8 +63,8 @@ interface Beam {
   ty: number;
   width: number;
   color: number;
+  age: number;
   life: number;
-  max: number;
 }
 
 const MAX_PARTICLES = 500;
@@ -199,7 +199,7 @@ export class ManaFx {
   }
 
   beam(x: number, y: number, tx: number, ty: number, width: number, color: number): void {
-    this.beams.push({ x, y, tx, ty, width, color, life: 0.22, max: 0.22 });
+    this.beams.push({ x, y, tx, ty, width, color, age: 0, life: 0.36 });
   }
 
   /** Advance and draw everything into `g` (the air layer). */
@@ -256,13 +256,32 @@ export class ManaFx {
     this.swings = this.swings.filter((s) => s.age < s.life);
 
     for (const b of this.beams) {
-      b.life -= dt;
-      const a = Math.max(0, b.life / b.max);
-      const thick = Math.max(1, Math.round((b.width * 2 * a) / PX));
-      manaLine(g, b.x, b.y, b.tx, b.ty, b.color, 0.75 * a, { thickness: thick, jitter: 1, time });
-      manaLine(g, b.x, b.y, b.tx, b.ty, 0xffffff, 0.95 * a, { thickness: 1 });
+      b.age += dt;
+      // It extends from the hand, then fades from base to tip.
+      const grow = Math.min(1, b.age / 0.06);
+      const fadeP = Math.max(0, (b.age - 0.06) / (b.life - 0.06));
+      const tipX = b.x + (b.tx - b.x) * grow;
+      const tipY = b.y + (b.ty - b.y) * grow;
+      const baseX = b.x + (b.tx - b.x) * fadeP;
+      const baseY = b.y + (b.ty - b.y) * fadeP;
+      const thick = Math.max(1, Math.round((b.width * 2 * (1 - fadeP)) / PX));
+      manaLine(g, baseX, baseY, tipX, tipY, b.color, 0.75, { thickness: thick, jitter: 1, time });
+      manaLine(g, baseX, baseY, tipX, tipY, 0xffffff, 0.95, { thickness: 1 });
+      // It sheds pixels as it fades.
+      if (fadeP > 0 && this.particles.length < MAX_PARTICLES)
+        this.particles.push({
+          x: baseX,
+          y: baseY,
+          vx: (Math.random() - 0.5) * 1.2,
+          vy: -0.8 - Math.random(),
+          life: 0.4,
+          max: 0.4,
+          color: b.color,
+          size: 1,
+          drag: 0.95,
+        });
     }
-    this.beams = this.beams.filter((b) => b.life > 0);
+    this.beams = this.beams.filter((b) => b.age < b.life);
   }
 }
 

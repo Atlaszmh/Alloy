@@ -55,6 +55,8 @@ export function drawZones(ground: Graphics, w: ArpgWorld, time: number): void {
     }
     const color = elem(z.element);
     if (z.detonateAt > 0) {
+      // A thrown Burst draws as a lob (drawLobs).
+      if (z.source === 'burst') continue;
       // Barrage: a target fills in until the impact lands.
       const p = progress(t, z.born, z.detonateAt);
       manaRing(ground, z.x, z.y, z.radius, color, time, { alpha: 0.4 + p * 0.5, gaps: 4, spin: 6 });
@@ -115,6 +117,28 @@ export function drawZones(ground: Graphics, w: ArpgWorld, time: number): void {
         jitter: 1,
       });
     }
+  }
+}
+
+/** A thrown Burst: an orb arcing to its landing ring, over a shadow that tracks it along the ground. */
+export function drawLobs(ground: Graphics, air: Graphics, w: ArpgWorld, time: number): void {
+  for (const z of w.zones) {
+    if (
+      z.owner !== 'hero' ||
+      z.source !== 'burst' ||
+      z.fromX === undefined ||
+      z.fromY === undefined
+    )
+      continue;
+    const p = progress(w.t, z.born, z.detonateAt);
+    const color = elem(z.element);
+    const x = z.fromX + (z.x - z.fromX) * p;
+    const y = z.fromY + (z.y - z.fromY) * p;
+    const height = Math.sin(Math.PI * p) * 0.25 * Math.hypot(z.x - z.fromX, z.y - z.fromY);
+    manaRing(ground, z.x, z.y, z.radius, color, time, { alpha: 0.25 + 0.6 * p, gaps: 4, spin: 6 });
+    // A filled shadow that grows as the orb comes down; the orb lands on the ring.
+    manaOrb(ground, x, y, 0.12 + 0.1 * p, 0x000000, 0x000000, 0.35);
+    manaOrb(air, x, y - 0.3 * (1 - p) - height, 0.18, color, 0xffffff, 1);
   }
 }
 

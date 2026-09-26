@@ -16,6 +16,7 @@ import {
   drawAnticipation,
   drawFooting,
   drawGuard,
+  drawLobs,
   drawMonsterMarks,
   drawProjectiles,
   drawTelegraphs,
@@ -570,6 +571,7 @@ export class ArenaRenderer {
     this.syncMonsters(w);
     this.syncDrops(w);
     drawZones(ground, w, this.time);
+    drawLobs(ground, air, w, this.time);
     drawTelegraphs(ground, w, this.time);
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, w, this.time);
