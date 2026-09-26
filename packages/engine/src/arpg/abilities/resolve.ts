@@ -108,7 +108,7 @@ export function resolveAbility(
       build.payment === 'charge'
         ? ab.chargeLockout
         : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
-    castTime: channel,
+    castTime: conjure + channel,
     conjure,
     recovery: slot === 'defensive' ? 0 : F.recovery[wi],
     channel,

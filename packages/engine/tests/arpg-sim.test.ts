@@ -171,7 +171,8 @@ describe('abilities in the sim', () => {
     const w = arena([{ x: 13, y: 30 }]);
     stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, STEP / 4);
     const later = stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
-    expect(later.some((e) => e.kind === 'cast')).toBe(true);
+    expect(later.some((e) => e.kind === 'windup' && e.slot === 0)).toBe(true);
+    expect(run(w, w.hero.abilities[0].castTime + STEP).some((e) => e.kind === 'cast')).toBe(true);
   });
 
   it('a Fire Bolt burns what it hits', () => {

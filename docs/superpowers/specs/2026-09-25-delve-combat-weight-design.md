@@ -186,7 +186,7 @@ Each form in `arpg.json` gains `motion` in units, scaled by `1 + motionPerWeight
 
 | Motion | When it happens | Forms |
 |---|---|---|
-| Positive (step in) | Spread over the **conjure** (never the channel, where the hero stands and channels), toward the aim point. It is contact-stopped on the nearest monster within 1.5 units of that point, if any. | Strike .5 (its 1.8× slam press leaps about .9), Burst .2, Barrage .15, Maelstrom .2 |
+| Positive (step in) | Spread over the **conjure** (never the channel, where the hero stands and channels), toward the aim point. It is contact-stopped on the nearest monster within 1.5 units of that point, if any; if that foe dies mid-conjure, the step-in ends at once (as a lunge does). | Strike .5 (its 1.8× slam press leaps about .9), Burst .2, Barrage .15, Maelstrom .2 |
 | Negative (recoil) | After the release, over `recoilSeconds` | Bolt −.15, Volley −.1, Lance −.3 |
 | None | — | Nova, Ward, Armor and Surge (Blink keeps its own dash) |
 

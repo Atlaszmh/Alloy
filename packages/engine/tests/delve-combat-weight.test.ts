@@ -17,6 +17,8 @@ import {
   dodge,
   dummy,
   gear,
+  press,
+  pressOnly,
   registry,
   run,
   STEP,
@@ -540,5 +542,123 @@ describe('presses held by a dash', () => {
     const events = run(w, 1);
     expect(basics(events).length).toBeGreaterThan(0);
     expect(w.queuedAttack).toBeNull();
+  });
+});
+
+describe('casting: conjure, motion, recovery', () => {
+  it('every ability winds up for its conjure; cast payment adds its channel', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    pressOnly(w, 0);
+    const wu = w.hero.windup!;
+    expect(wu.until - wu.start).toBeCloseTo(w.hero.abilities[0].conjure, 5);
+    const c = arena([dummy(13, 30)], { noBasic: true, primary: { payment: 'cast' } });
+    pressOnly(c, 0);
+    const ab = c.hero.abilities[0];
+    expect(c.hero.windup!.until - c.hero.windup!.start).toBeCloseTo(ab.conjure + ab.channel, 5);
+  });
+
+  it('a held Balanced primary keeps its cadence (the conjure overlaps the cooldown)', () => {
+    const w = arena([dummy(13, 30, { hp: 1e9, maxHp: 1e9 })], { noBasic: true });
+    w.hero.mana = w.hero.manaMax = 1e6;
+    let casts = 0;
+    for (let i = 0; i < Math.round(2 / STEP); i++)
+      casts += stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP).filter(
+        (e) => e.kind === 'cast',
+      ).length;
+    expect(casts).toBe(Math.floor(2 / w.hero.abilities[0].cooldown));
+  });
+
+  it('the press-combo step is chosen at the press', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.hero.mana = w.hero.manaMax = 1e6;
+    press(w, 0);
+    run(w, w.hero.abilities[0].cooldown);
+    pressOnly(w, 0);
+    expect(w.hero.windup!.step).toBe(1);
+  });
+
+  it('a bolt recoils the hero after its release', () => {
+    const w = arena([dummy(13, 28)], { noBasic: true });
+    const y0 = w.hero.y;
+    press(w, 0);
+    run(w, bal.feel.recoilSeconds + STEP);
+    const bolt = w.hero.abilities[0];
+    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 2);
+  });
+
+  it('with basics on, the shot that follows a bolt keeps its recoil and recovery (guard test)', () => {
+    // The wand's committed shot starts on the landing tick: it leaves the recoil alone, and its
+    // root and its own recovery hold the hero at least as long as the bolt's recovery.
+    const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+    const y0 = w.hero.y;
+    const bolt = w.hero.abilities[0];
+    press(w, 0);
+    const landed = w.t;
+    expect(w.hero.swing?.committed).toBe(true);
+    until(w, () => w.t >= landed + bal.feel.recoilSeconds);
+    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 2);
+    expect(w.hero.recoverUntil).toBeGreaterThanOrEqual(landed + bolt.recovery - 1e-9);
+  });
+
+  it('a strike steps in over its conjure and hits from there', () => {
+    const w = arena([dummy(13, 0)], { noBasic: true, primary: { form: 'strike' } });
+    const ab = w.hero.abilities[0];
+    place(w, ab.radius - w.hero.radius + 0.3);
+    const y0 = w.hero.y;
+    press(w, 0, { x: 13, y: 20 });
+    expect(y0 - w.hero.y).toBeGreaterThan(0.3);
+    expect(damaged(w.monsters[0])).toBe(true);
+  });
+
+  it('recovery follows an ability, except the Defensive', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    press(w, 0);
+    expect(w.hero.recoverUntil).toBeGreaterThan(w.t);
+    const d = arena([dummy(13, 30)], { noBasic: true });
+    press(d, 1);
+    expect(d.hero.recoverUntil).toBeLessThanOrEqual(d.t);
+  });
+
+  it('a press cancels a swing startup only when the cast goes ahead', () => {
+    const w = arena([dummy(13, 0)], { primary: { form: 'strike' } });
+    place(w, 1.0);
+    run(w, STEP);
+    expect(w.hero.swing).not.toBeNull();
+    w.hero.cooldowns[0] = w.t + 5;
+    pressOnly(w, 0);
+    expect(w.hero.swing).not.toBeNull();
+    w.hero.cooldowns[0] = 0;
+    pressOnly(w, 0, { x: 13, y: 20 });
+    expect(w.hero.swing).toBeNull();
+    expect(w.hero.windup).not.toBeNull();
+    // Its own step-in survives the cancel.
+    expect(w.hero.push).not.toBeNull();
+  });
+
+  it('a dodge out of a wind-up refunds charge; mana stays spent', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    const ult = w.hero.abilities[2];
+    w.hero.charge[2] = ult.chargeNeed;
+    pressOnly(w, 2);
+    expect(w.hero.charge[2]).toBe(0);
+    dodge(w, { x: 1, y: 0 });
+    expect(w.hero.charge[2]).toBeCloseTo(ult.chargeNeed);
+    const m = arena([dummy(13, 30)], { noBasic: true });
+    const mana = m.hero.mana;
+    pressOnly(m, 0);
+    dodge(m, { x: 1, y: 0 });
+    expect(m.hero.mana).toBeLessThan(mana - m.hero.abilities[0].cost + 1);
+  });
+
+  it('a press during a wind-up fires when it lands; a stale press is dropped', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, ultimate: { payment: 'cast' } });
+    pressOnly(w, 2);
+    stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+    const events = run(w, w.hero.abilities[2].castTime + 0.3);
+    expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
+    const s = arena([dummy(13, 30)], { noBasic: true });
+    s.queuedCast = { slot: 0 };
+    s.queuedCastUntil = s.t - 1;
+    expect(run(s, 0.5).some((e) => e.kind === 'cast')).toBe(false);
   });
 });

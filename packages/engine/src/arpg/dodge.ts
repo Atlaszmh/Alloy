@@ -36,9 +36,10 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
   cancelSwing(ctx);
   h.push = null;
   h.recoverUntil = t;
-  // Bailing out of a wind-up keeps the mana spent but frees the ability again.
+  // Bailing out of a wind-up keeps the mana spent but frees the ability again (and refunds charge).
   if (h.windup) {
     h.cooldowns[h.windup.slot] = t;
+    h.charge[h.windup.slot] += h.windup.chargePaid;
     h.windup = null;
   }
   h.dodgeCharges--;

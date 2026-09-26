@@ -24,7 +24,7 @@ describe('resolveAbility', () => {
     expect(r.name).toBe('Fire Bolt');
     expect(r.cost).toBeCloseTo(ab.slots.primary.cost);
     expect(r.cooldown).toBeCloseTo(ab.slots.primary.cooldown);
-    expect(r.castTime).toBe(0);
+    expect(r.channel).toBe(0);
     expect(r.chargeNeed).toBe(0);
     expect(r.power).toBeCloseTo(bolt.power);
     expect(r.knobs.area).toBeCloseTo(1.3);
@@ -67,8 +67,8 @@ describe('resolveAbility', () => {
     );
     expect(cast.cost).toBeCloseTo(heavyMana.cost * ab.castManaMult);
     expect(cast.power).toBeCloseTo(heavyMana.power * ab.castPowerMult);
-    expect(cast.castTime).toBeCloseTo(ab.slots.ultimate.castTime * (1 + ab.weight.castTime));
-    expect(base.castTime).toBe(0);
+    expect(cast.channel).toBeCloseTo(ab.slots.ultimate.castTime * (1 + ab.weight.castTime));
+    expect(base.channel).toBe(0);
   });
 
   it('charge payment costs no mana and needs a charge meter instead of a cooldown', () => {

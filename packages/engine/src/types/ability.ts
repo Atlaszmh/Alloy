@@ -101,7 +101,7 @@ export interface ResolvedAbility {
   /** Mana spent per use (0 when paid by charge). */
   cost: number;
   cooldown: number;
-  /** Wind-up seconds (equals `channel` until the conjure is folded in). */
+  /** Wind-up seconds: conjure + channel. */
   castTime: number;
   /** Seconds of anticipation from the weight (every ability). */
   conjure: number;

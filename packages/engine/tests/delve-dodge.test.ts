@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { stepWorld } from '../src/arpg/step.js';
 import { applyStatus, hitMonster, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
-import { arena, bal, dodge, dummy, press, registry, run, STEP } from './fixtures/arena.js';
+import { arena, bal, dodge, dummy, pressOnly, registry, run, STEP } from './fixtures/arena.js';
 
 // The hero starts at (13, 36), facing up (-y).
 const D = bal.dodge;
@@ -73,7 +73,7 @@ describe('the dodge', () => {
   it('cancels a cast wind-up: the mana stays spent, the cooldown resets', () => {
     const w = arena([dummy(11, 36)], { noBasic: true, ultimate: { payment: 'cast' } });
     const mana = w.hero.mana;
-    press(w, 2);
+    pressOnly(w, 2);
     expect(w.hero.windup).not.toBeNull();
     dodge(w, { x: 1, y: 0 });
     expect(w.hero.windup).toBeNull();
@@ -84,8 +84,8 @@ describe('the dodge', () => {
   it('holds a cast pressed mid-dash until the dash ends', () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
     dodge(w, { x: 1, y: 0 });
-    expect(kinds(press(w, 0))).not.toContain('cast');
-    expect(kinds(run(w, D.duration + 0.05))).toContain('cast');
+    expect(kinds(pressOnly(w, 0))).not.toContain('cast');
+    expect(kinds(run(w, D.duration + w.hero.abilities[0].castTime + 0.05))).toContain('cast');
   });
 
   it('a dodge tap between frames is not lost', () => {

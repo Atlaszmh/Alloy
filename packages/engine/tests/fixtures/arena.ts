@@ -107,10 +107,18 @@ export function run(w: ArpgWorld, seconds: number, move = { x: 0, y: 0 }): ArpgE
   return events;
 }
 
-/** Press an ability (0 Primary, 1 Defensive, 2 Ultimate) and advance one step. */
-export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }): ArpgEvent[] {
+/** Press an ability and advance one step (its wind-up is still in progress). */
+export function pressOnly(w: ArpgWorld, slot: number, aim?: { x: number; y: number }): ArpgEvent[] {
   const cast: AbilityCast = { slot, aim: aim ?? null };
   return stepWorld(registry, w, { move: { x: 0, y: 0 }, cast }, STEP);
+}
+
+/** Press an ability (0 Primary, 1 Defensive, 2 Ultimate) and run until its wind-up lands, returning every event. */
+export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }): ArpgEvent[] {
+  const events = pressOnly(w, slot, aim);
+  for (let i = 0; i < 300 && w.hero.windup; i++)
+    events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP));
+  return events;
 }
 
 export function damaged(m: MonsterEntity): boolean {

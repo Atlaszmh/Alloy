@@ -272,7 +272,7 @@ export interface HeroEntity {
   /** Per slot: combo step of the last press and when it was pressed. */
   comboStep: number[];
   comboAt: number[];
-  /** A cast-paid ability winding up; the hero can't move or attack meanwhile. */
+  /** An ability winding up (every ability conjures; cast payment channels too); the hero can't move or attack meanwhile. */
   windup: {
     slot: number;
     aim: Vec | null;
@@ -280,6 +280,12 @@ export interface HeroEntity {
     at: Vec;
     start: number;
     until: number;
+    /** The press-combo step, chosen at the press. */
+    step: number;
+    /** When the conjure ends (any channel follows). */
+    conjureUntil: number;
+    /** Charge spent at the press (refunded if a dodge cancels). */
+    chargePaid: number;
   } | null;
   /** A basic attack in its startup: the blow lands at `strikeAt`. */
   swing: {

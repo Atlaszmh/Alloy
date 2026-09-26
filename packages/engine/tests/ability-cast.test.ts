@@ -2,13 +2,26 @@ import { describe, it, expect } from 'vitest';
 import { stepWorld } from '../src/arpg/step.js';
 import { abilityReady } from '../src/arpg/abilities/cast.js';
 import { makeCtx } from '../src/arpg/combat.js';
-import { arena, bal, damaged, dummy, gear, press, registry, run, STEP } from './fixtures/arena.js';
+import {
+  arena,
+  bal,
+  damaged,
+  dummy,
+  gear,
+  press,
+  pressOnly,
+  registry,
+  run,
+  STEP,
+} from './fixtures/arena.js';
 
 const ab = bal.abilities;
 
 describe('mana payment', () => {
   it('spends mana and starts the cooldown', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
+    // `press` runs through the conjure; regen would shift the mana check.
+    w.hero.manaRegen = 0;
     const mana = w.hero.mana;
     const cost = w.hero.abilities[0].cost;
     const events = press(w, 0);
@@ -46,16 +59,19 @@ describe('cast payment', () => {
     });
     const castTime = w.hero.abilities[2].castTime;
     expect(castTime).toBeGreaterThan(0);
-    const events = press(w, 2);
+    const events = pressOnly(w, 2);
     expect(events.some((e) => e.kind === 'windup')).toBe(true);
     expect(damaged(w.monsters[0])).toBe(false);
     const y = w.hero.y;
     stepWorld(registry, w, { move: { x: 0, y: -1 }, cast: { slot: 0 } }, STEP);
     expect(w.hero.y).toBe(y);
     expect(w.projectiles).toHaveLength(0);
-    run(w, castTime);
+    // The Q pressed meanwhile waits in the buffer and fires, after its own conjure, once the Nova lands.
+    const later = run(w, castTime + 0.3);
     expect(damaged(w.monsters[0])).toBe(true);
-    expect(w.hero.windup).toBeNull();
+    expect(later.filter((e) => e.kind === 'cast').map((e) => e.kind === 'cast' && e.slot)).toEqual([
+      2, 0,
+    ]);
   });
 });
 
@@ -65,7 +81,7 @@ describe('wind-up targets', () => {
       noBasic: true,
       primary: { form: 'burst', payment: 'cast' },
     });
-    press(w, 0);
+    pressOnly(w, 0);
     expect(w.hero.windup).not.toBeNull();
     w.monsters = [];
     const events = run(w, w.hero.abilities[0].castTime + 0.1);

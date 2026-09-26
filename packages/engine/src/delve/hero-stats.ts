@@ -244,7 +244,7 @@ function damagePerUse(
 function useInterval(ab: ResolvedAbility, manaIncome: number, chargeRate: number): number {
   if (ab.build.payment === 'charge')
     return Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate));
-  return Math.max(ab.cooldown + ab.castTime, ab.cost / Math.max(0.1, manaIncome));
+  return Math.max(ab.cooldown + ab.channel, ab.cost / Math.max(0.1, manaIncome));
 }
 
 /**
