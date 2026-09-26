@@ -378,3 +378,29 @@ describe('weapon strings', () => {
     expect(basics(events).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('presses held by a dash', () => {
+  it('a Q pressed on the same frame as a dodge fires after the dash', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    const events = stepWorld(
+      registry,
+      w,
+      { move: { x: 1, y: 0 }, dodge: true, cast: { slot: 0 } },
+      STEP,
+    );
+    events.push(...run(w, 0.6));
+    expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
+  });
+
+  it('a tap on the same frame as a dodge swings after the dash', () => {
+    const w = arena([dummy(13, 34.6)]);
+    const events = stepWorld(
+      registry,
+      w,
+      { move: still, attack: false, attackTap: true, dodge: true },
+      STEP,
+    );
+    events.push(...until(w, () => w.t >= 0.8, { move: still, attack: false }));
+    expect(basics(events)).toHaveLength(1);
+  });
+});

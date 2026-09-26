@@ -79,7 +79,7 @@ Every basic attack and every ability runs through three phases.
   - **During a swing's startup** (lunge included): if the cast can go ahead, the swing is cancelled first (as the dodge does: no hit, no step, lunge ended, `nextAttackAt = t`) and then the cast starts. If it can't, the swing is untouched, so mashing Q on cooldown never stops the basics.
   - **During any recovery or recoil:** it casts now and ends them.
 - **Basic attack:** none during a wind-up. During an ability's recovery it may start once `nextAttackAt` allows, and starting it ends the recovery.
-- **Weapon swap** (`refreshWorldHero`) clears `swing` and `push` and resets the string to its first step.
+- **Weapon swap** (`refreshWorldHero`) to a weapon with a different string clears `swing` and `push`, resets the string to its first step and readies the weapon (`nextAttackAt` no later than now). Gear that keeps the same string leaves the swing alone.
 
 ### Input buffer
 

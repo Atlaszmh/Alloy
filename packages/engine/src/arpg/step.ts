@@ -118,6 +118,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const dashing = isDashing(ctx);
   const t = world.t;
   // A queued press waits out a wind-up or a dash; anything else lets it through.
+  // A press held by a wind-up or a dash doesn't age: it gets `buffer` from when the hero is free.
+  if (world.queuedCast !== null && (dashing || h.windup))
+    world.queuedCastUntil = Math.max(world.queuedCastUntil, t + bal.feel.buffer);
   if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
   if (world.queuedCast !== null && !dashing && !h.windup) {
     const cast = world.queuedCast;
@@ -142,6 +145,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   }
 
   if (h.swing && t >= h.swing.strikeAt - 1e-9) strike(ctx);
+  // A tap held by a dash, a wind-up, a swing or the weapon's cycle doesn't age either.
+  if (world.queuedAttack && (dashing || h.windup || h.swing || t < h.nextAttackAt))
+    world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
   if (!h.swing && !h.windup && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
     if (input.attack === undefined) startSwing(ctx, undefined, speed <= 0.05);
