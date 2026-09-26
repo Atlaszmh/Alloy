@@ -105,11 +105,13 @@ describe('basic attacks', () => {
     expect(w.hero.mana).toBeCloseTo(basics * bal.mana.basicAttackGain, 5);
   });
 
-  it('every third melee swing is a wider, harder finisher', () => {
+  it("the sword's third blow is its finisher, harder than the first by the string's power", () => {
     const w = arena([dummy(13, 34.4)], { equipped: { weapon: gear('frost') } });
+    const [first, , third] = w.hero.stats.weapon.combo;
+    expect(third.power).toBeGreaterThan(first.power);
     const hits = run(w, 3.5)
       .filter((e) => e.kind === 'hit' && !e.crit)
       .map((e) => (e.kind === 'hit' ? e.amount : 0));
-    expect(Math.max(...hits) / Math.min(...hits)).toBeCloseTo(1.5, 1);
+    expect(Math.max(...hits) / Math.min(...hits)).toBeCloseTo(third.power / first.power, 1);
   });
 });
