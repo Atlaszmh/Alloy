@@ -208,7 +208,7 @@ export class ManaFx {
     if (o.finisher && arc < Math.PI * 2 - 1e-3) {
       const hx = x + Math.cos(angle) * range;
       const hy = y + Math.sin(angle) * range;
-      this.ring(hx, hy, 0.5 + heft * 0.4, color, false, 0.25);
+      this.ring(hx, hy, 0.6 + heft * 0.6, color, true, 0.3);
     }
     if (arc >= Math.PI * 2 - 1e-3 && heft >= 0.9) {
       this.ring(x, y, range, color, true, 0.4);

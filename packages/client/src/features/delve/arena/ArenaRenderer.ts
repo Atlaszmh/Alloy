@@ -638,11 +638,11 @@ export class ArenaRenderer {
       const s = this.heroSprite;
       s.texture = this.heroFrames[Math.floor(this.time * 3) % this.heroFrames.length];
       s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
-      // Winding up: lean a pixel back from the target, and lift one for heavy moves.
+      // Winding up: lean back from the target, a pixel or two for heavy moves (a 1 px lift
+      // would cancel the lean of a blow aimed up).
       const a = windingUp(w);
-      const lx = a ? -Math.round(a.dir.x) * SPRITE_PIXEL : 0;
-      const ly = a ? -Math.round(a.dir.y) * SPRITE_PIXEL - (a.heft >= 0.7 ? SPRITE_PIXEL : 0) : 0;
-      s.position.set(lx, 0.5 + ly);
+      const lean = a ? (a.heft >= 0.7 ? 2 : 1) * SPRITE_PIXEL : 0;
+      s.position.set(-Math.round(a?.dir.x ?? 0) * lean, 0.5 - Math.round(a?.dir.y ?? 0) * lean);
       s.tint =
         this.time < this.heroPerfectUntil
           ? 0xfff3b0

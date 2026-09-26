@@ -258,8 +258,9 @@ export function drawAnticipation(
   const a = windingUp(w);
   if (!a) return;
   const h = w.hero;
-  const hx = h.x + a.dir.x * 0.35;
-  const hy = h.y - 0.3 + a.dir.y * 0.35;
+  // Out past the sprite's edge, so the orb doesn't sit on the hero's face.
+  const hx = h.x + a.dir.x * 0.6;
+  const hy = h.y - 0.3 + a.dir.y * 0.6;
   // No new pixels while the display is frozen (they would pile up without moving).
   if (dt > 0) fx.gather(hx, hy, a.color, 1 + Math.round(a.heft * 3));
   if (a.heft >= 0.7) {
