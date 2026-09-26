@@ -47,9 +47,13 @@ interface Swing {
   angle: number;
   arc: number;
   range: number;
-  life: number;
-  max: number;
   color: number;
+  age: number;
+  life: number;
+  heft: number;
+  /** Sweep from the other side (backslash). */
+  reverse: boolean;
+  finisher: boolean;
 }
 
 interface Beam {
@@ -64,6 +68,7 @@ interface Beam {
 }
 
 const MAX_PARTICLES = 500;
+const SWEEP_SECONDS = 0.1;
 
 export class ManaFx {
   private particles: Particle[] = [];
@@ -147,6 +152,12 @@ export class ManaFx {
     this.bolts.push({ points: jag ? jagged(points) : points, life, max: life, color });
   }
 
+  /**
+   * A melee blow: a pixel smear that travels across the arc (alternate
+   * sides for a backslash), brighter and longer for heavy blows. A finisher
+   * adds a shockwave at the tip; a full-circle heavy blow (a slam) bursts a
+   * ring of ground pixels and dust.
+   */
   swing(
     x: number,
     y: number,
@@ -154,12 +165,37 @@ export class ManaFx {
     arc: number,
     range: number,
     color: number,
-    life: number,
+    o: { heft?: number; reverse?: boolean; finisher?: boolean } = {},
   ): void {
-    this.swings.push({ x, y, angle, arc, range, life, max: life, color });
-    // Sparks where the blade's arc ends.
-    const tip = angle + arc / 2;
-    this.burst(x + Math.cos(tip) * range, y + Math.sin(tip) * range, color, 3, 2.5);
+    const heft = o.heft ?? 0.3;
+    const life = SWEEP_SECONDS + 0.12 + 0.12 * heft + (o.finisher ? 0.08 : 0);
+    // The blade has mostly swept by the moment it connects, so a hit-stop on this frame shows the arc.
+    this.swings.push({
+      x,
+      y,
+      angle,
+      arc,
+      range,
+      color,
+      age: SWEEP_SECONDS * 0.6,
+      life,
+      heft,
+      reverse: !!o.reverse,
+      finisher: !!o.finisher,
+    });
+    const end = o.reverse ? angle - arc / 2 : angle + arc / 2;
+    const tx = x + Math.cos(end) * range;
+    const ty = y + Math.sin(end) * range;
+    this.burst(tx, ty, color, 3 + Math.round(heft * 5), 2.5 + heft * 2);
+    if (o.finisher && arc < Math.PI * 2 - 1e-3) {
+      const hx = x + Math.cos(angle) * range;
+      const hy = y + Math.sin(angle) * range;
+      this.ring(hx, hy, 0.5 + heft * 0.4, color, false, 0.25);
+    }
+    if (arc >= Math.PI * 2 - 1e-3 && heft >= 0.9) {
+      this.ring(x, y, range, color, true, 0.4);
+      this.burst(x, y + 0.2, 0xd6d3d1, 18, 3);
+    }
   }
 
   beam(x: number, y: number, tx: number, ty: number, width: number, color: number): void {
@@ -204,15 +240,20 @@ export class ManaFx {
     this.bolts = this.bolts.filter((b) => b.life > 0);
 
     for (const s of this.swings) {
-      s.life -= dt;
-      const a = Math.max(0, s.life / s.max);
-      const start = s.angle - s.arc / 2;
-      const sweep = start + s.arc * (1 - a * 0.6);
-      // The swept arc glows and thins as it fades; its leading edge is white-hot.
-      manaArc(g, s.x, s.y, s.range, start, sweep, s.color, 0.9 * a, a > 0.5 ? 3 : 2);
-      manaArc(g, s.x, s.y, s.range + PX, sweep - 0.25, sweep, 0xffffff, a, 1);
+      s.age += dt;
+      const p = Math.min(1, s.age / SWEEP_SECONDS);
+      const fade = 1 - Math.max(0, (s.age - SWEEP_SECONDS) / (s.life - SWEEP_SECONDS));
+      const sign = s.reverse ? -1 : 1;
+      const from = s.angle - (sign * s.arc) / 2;
+      const head = from + sign * s.arc * p;
+      const thick = s.heft >= 0.6 ? 3 : 2;
+      manaArc(g, s.x, s.y, s.range, from, head, s.color, 0.9 * fade, thick);
+      // The leading edge is white-hot while it travels.
+      const edge = Math.min(0.3, s.arc * 0.2);
+      manaArc(g, s.x, s.y, s.range + PX, head - sign * edge, head, 0xffffff, fade, 1);
+      if (s.finisher) manaArc(g, s.x, s.y, s.range + PX * 2, from, head, s.color, 0.6 * fade, 1);
     }
-    this.swings = this.swings.filter((s) => s.life > 0);
+    this.swings = this.swings.filter((s) => s.age < s.life);
 
     for (const b of this.beams) {
       b.life -= dt;

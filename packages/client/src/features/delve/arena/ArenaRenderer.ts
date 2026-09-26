@@ -345,7 +345,7 @@ export class ArenaRenderer {
               Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180),
               wpn.range + (s.reach ?? 0) + 0.2,
               elemColor(e.element),
-              0.16,
+              { heft: e.heft, reverse: e.step % 2 === 1, finisher: e.finisher },
             );
           } else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
           break;
@@ -378,7 +378,10 @@ export class ArenaRenderer {
             Math.min(360, e.arc) * (Math.PI / 180),
             e.range,
             MANA_HEX[e.element],
-            0.22,
+            {
+              heft: w.hero.abilities.find((a) => a.form.id === 'strike')?.heft ?? 0.5,
+              finisher: e.arc >= 360,
+            },
           );
           if (e.arc >= 360) this.addShake(0.12);
           break;
