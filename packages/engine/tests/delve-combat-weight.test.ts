@@ -261,17 +261,19 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.x - x1).toBeCloseTo(w.hero.stats.moveSpeed * STEP, 4);
   });
 
-  it("an automatic swing on the move keeps an ability's push and recovery", () => {
+  it("an automatic swing on the move waits out an ability's push and keeps its recovery", () => {
     const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
     const y0 = w.hero.y;
-    // The push outlasts the shot's startup, so both its start and its strike leave it alone.
-    startPush(makeCtx(registry, w, []), { x: 0, y: 1 }, 0.3, 0.3);
-    const recoverUntil = (w.hero.recoverUntil = w.t + 0.3);
-    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
-    expect(w.hero.swing?.committed).toBe(false);
-    const events = run(w, 0.3, { x: 1, y: 0 });
+    startPush(makeCtx(registry, w, []), { x: 0, y: 1 }, 0.1, 0.1);
+    // The recovery outlasts the push and the shot, so the shot's start and strike leave it alone.
+    const recoverUntil = (w.hero.recoverUntil = w.t + 0.5);
+    const move = { move: { x: 1, y: 0 } };
+    until(w, () => w.hero.swing !== null, move);
+    expect(w.hero.push).toBeNull();
+    expect(w.hero.swing!.committed).toBe(false);
+    expect(w.hero.y - y0).toBeCloseTo(0.1, 5);
+    const events = until(w, () => w.hero.swing === null, move);
     expect(basics(events)).toHaveLength(1);
-    expect(w.hero.y - y0).toBeCloseTo(0.3, 5);
     expect(w.hero.recoverUntil).toBe(recoverUntil);
   });
 
@@ -586,18 +588,21 @@ describe('casting: conjure, motion, recovery', () => {
     expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 2);
   });
 
-  it('with basics on, the shot that follows a bolt keeps its recoil and recovery (guard test)', () => {
-    // The wand's committed shot starts on the landing tick: it leaves the recoil alone, and its
-    // root and its own recovery hold the hero at least as long as the bolt's recovery.
-    const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
+  it("with basics on, the sword waits for a bolt's recoil to finish before it swings", () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 1.0);
     const y0 = w.hero.y;
     const bolt = w.hero.abilities[0];
     press(w, 0);
-    const landed = w.t;
-    expect(w.hero.swing?.committed).toBe(true);
-    until(w, () => w.t >= landed + bal.feel.recoilSeconds);
-    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 2);
-    expect(w.hero.recoverUntil).toBeGreaterThanOrEqual(landed + bolt.recovery - 1e-9);
+    // The recoil pushes the hero back (away from the foe above), and nothing swings meanwhile.
+    const recoil = w.hero.push!;
+    expect(recoil.dy).toBeGreaterThan(0);
+    expect(w.hero.swing).toBeNull();
+    until(w, () => w.hero.push !== recoil);
+    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 5);
+    // Then the sword swings again.
+    until(w, () => w.hero.swing !== null);
+    expect(w.hero.swing!.start).toBeGreaterThanOrEqual(recoil.until - 1e-9);
   });
 
   it('a strike steps in over its conjure and hits from there', () => {

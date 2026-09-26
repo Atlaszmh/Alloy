@@ -66,7 +66,7 @@ Every basic attack and every ability runs through three phases.
 
    `h.moving` is true only in cases 3 and 4.
 6. **Strike**: if a swing's `strikeAt` has come, resolve it (see Basic attacks).
-7. **New swing**: if there is no swing or wind-up, the hero isn't dashing, `t ≥ nextAttackAt`, and the mode wants to attack, start one.
+7. **New swing**: if there is no swing or wind-up, no push is still moving the hero (a lunge, an ability step-in or a recoil), the hero isn't dashing, `t ≥ nextAttackAt`, and the mode wants to attack, start one.
 8. **Mana regen, lull charge, `defendTick`** (unchanged).
 
 ### Cancels
@@ -78,12 +78,12 @@ Every basic attack and every ability runs through three phases.
 - **Ability press** (fresh, no wind-up or dash in progress):
   - **During a swing's startup** (lunge included): if the cast can go ahead, the swing is cancelled first (as the dodge does: no hit, no step, lunge ended, `nextAttackAt = t`) and then the cast starts. If it can't, the swing is untouched, so mashing Q on cooldown never stops the basics.
   - **During any recovery or recoil:** it casts now and ends them.
-- **Basic attack:** none during a wind-up. During an ability's recovery it may start once `nextAttackAt` allows. A committed swing ends the recovery; an automatic one on the move doesn't, and it leaves any push alone (only a swing's own lunge ends with it).
+- **Basic attack:** none during a wind-up, and none while a push is still moving the hero, so a lunge never swallows an ability's recoil or step-in (it costs at most `recoilSeconds` after a recoil). During an ability's recovery it may start once `nextAttackAt` allows and the push has ended. A committed swing ends the recovery; an automatic one on the move doesn't.
 - **Weapon swap** (`refreshWorldHero`) to a different weapon base drops a swing in progress (and its lunge), resets the string to its first step and readies the weapon (`nextAttackAt` no later than now). Gear with the same weapon base leaves the swing alone.
 
 ### Input buffer
 
-A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (for a tap, also a swing or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, and a tap left behind when the input turns automatic is dropped (automatic swings would otherwise hold it forever). Manual attack taps get the same treatment:
+A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (for a tap, also a swing, a push or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, and a tap left behind when the input turns automatic is dropped (automatic swings would otherwise hold it forever). Manual attack taps get the same treatment:
 
 - `ArpgInput` gains `attackTap?: boolean`, true on the frame the button was pressed. Mouse and keyboard already track this, and the controller sets it on the press edge of its attack button.
 - In manual mode, `stepWorld` records a tap as `world.queuedAttack = { until, aim }` **before** running any tick, as it does `queuedCast`. So a tap made during a hit-stop freeze (a `dt` of 0 runs no ticks) isn't lost.

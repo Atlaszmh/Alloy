@@ -142,10 +142,11 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (h.swing && t >= h.swing.strikeAt - 1e-9) strike(ctx);
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.
   if (input.attack === undefined) world.queuedAttack = null;
-  // A tap held by a dash, a wind-up, a swing or the weapon's cycle doesn't age either.
-  if (world.queuedAttack && (dashing || h.windup || h.swing || t < h.nextAttackAt))
+  // A tap held by a dash, a wind-up, a swing, a push or the weapon's cycle doesn't age either.
+  if (world.queuedAttack && (dashing || h.windup || h.swing || h.push || t < h.nextAttackAt))
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
-  if (!h.swing && !h.windup && !dashing) {
+  // A swing waits for a push (a lunge, a step-in or a recoil) to finish, so it never swallows one.
+  if (!h.swing && !h.windup && !h.push && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
     if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05);
     else {
