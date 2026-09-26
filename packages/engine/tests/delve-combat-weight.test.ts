@@ -300,10 +300,11 @@ describe('weapon strings', () => {
   });
 
   it("the sword's thrust reaches a foe the first blow can't", () => {
-    // The foe's edge is 2.5 units from the hero: past the first blow's range plus lunge.
+    // The foe's edge is 3.6 units from the hero: past the first blow's range plus lunge, and
+    // past the thrust's range plus lunge too, so only its extra reach gets there.
     const setup = (count: number) => {
       const w = arena([dummy(13, 0)]);
-      place(w, 2.5 - w.hero.radius);
+      place(w, 3.6 - w.hero.radius);
       w.hero.attackCount = count;
       w.hero.lastBasicAt = w.t;
       const m = w.monsters[0];
@@ -312,8 +313,9 @@ describe('weapon strings', () => {
     };
     const [first, , thrust] = arena().hero.stats.weapon.combo;
     const range = arena().hero.stats.weapon.range;
-    expect(range + (first.reach ?? 0) + first.move).toBeLessThan(2.5);
-    expect(range + (thrust.reach ?? 0) + thrust.move).toBeGreaterThan(2.5);
+    expect(range + (first.reach ?? 0) + first.move).toBeLessThan(3.6);
+    expect(range + thrust.move).toBeLessThan(3.6);
+    expect(range + (thrust.reach ?? 0) + thrust.move).toBeGreaterThan(3.6);
 
     const a = setup(0);
     until(a.w, () => a.w.hero.attackCount >= 1, a.input);
@@ -530,15 +532,13 @@ describe('presses held by a dash', () => {
     expect(basics(events)).toHaveLength(1);
   });
 
-  it('a tap nothing holds goes stale', () => {
-    // In manual mode a tap is always held or used at once, so only a switch to automatic
-    // attacks (with no foe in reach) leaves one unheld.
-    const w = arena([dummy(13, 20)]);
+  it('a tap left when the input turns automatic is dropped', () => {
+    // Automatic swings at a foe in reach would otherwise hold it forever.
+    const w = arena([dummy(13, 34.6)]);
     stepWorld(registry, w, { move: still, attack: false, attackTap: true }, 0);
     expect(w.queuedAttack).not.toBeNull();
-    until(w, () => w.t > bal.feel.buffer + STEP);
+    const events = run(w, 1);
+    expect(basics(events).length).toBeGreaterThan(0);
     expect(w.queuedAttack).toBeNull();
-    const events = until(w, () => w.t >= 1, { move: still, attack: false });
-    expect(basics(events)).toHaveLength(0);
   });
 });

@@ -83,7 +83,7 @@ Every basic attack and every ability runs through three phases.
 
 ### Input buffer
 
-A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (for a tap, also a swing or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, so in practice only a tap left behind when the input stops being manual goes stale. Manual attack taps get the same treatment:
+A press is kept `buffer` (0.25 s) seconds. While a wind-up or a dash holds it (for a tap, also a swing or the weapon's current cycle), it doesn't age: `heroTick` renews its deadline (`world.queuedCastUntil`, `queuedAttack.until`) every tick it is held. Past the deadline it is dropped (step 3). A press nothing holds is used at once, and a tap left behind when the input turns automatic is dropped (automatic swings would otherwise hold it forever). Manual attack taps get the same treatment:
 
 - `ArpgInput` gains `attackTap?: boolean`, true on the frame the button was pressed. Mouse and keyboard already track this, and the controller sets it on the press edge of its attack button.
 - In manual mode, `stepWorld` records a tap as `world.queuedAttack = { until, aim }` **before** running any tick, as it does `queuedCast`. So a tap made during a hit-stop freeze (a `dt` of 0 runs no ticks) isn't lost.
