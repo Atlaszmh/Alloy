@@ -202,6 +202,8 @@ export interface Projectile {
   explodeRadius: number;
   applies: StatusId[];
   knockback: number;
+  /** How hard its hit lands (client feel). */
+  heft?: number;
   dead: boolean;
 }
 
@@ -225,6 +227,11 @@ export interface Zone {
   applies: StatusId[];
   /** Telegraph / Barrage impact: explodes at this time (0 = lingering zone). */
   detonateAt: number;
+  /** A thrown Burst: where it was thrown from (for the arc). */
+  fromX?: number;
+  fromY?: number;
+  /** How hard its landing hits (client feel). */
+  heft?: number;
   dead: boolean;
 }
 
@@ -274,6 +281,29 @@ export interface HeroEntity {
     start: number;
     until: number;
   } | null;
+  /** A basic attack in its startup: the blow lands at `strikeAt`. */
+  swing: {
+    step: number;
+    dir: Vec;
+    targetId: number | null;
+    start: number;
+    strikeAt: number;
+    /** Committed swings root the hero, lunge and leave a recovery (automatic swings on the move don't). */
+    committed: boolean;
+  } | null;
+  /** Motion an action imposes (a lunge, a step-in or a recoil), placed by progress; it replaces move input. */
+  push: {
+    fromX: number;
+    fromY: number;
+    dx: number;
+    dy: number;
+    start: number;
+    until: number;
+    /** Stop at this foe's edge (a lunge), or null. */
+    stopId: number | null;
+  } | null;
+  /** Movement is slowed until this time (after a strike or a landed ability). */
+  recoverUntil: number;
   /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
   defend: { form: FormId; until: number } | null;
   ward: { hp: number; max: number } | null;
@@ -296,7 +326,7 @@ export interface HeroEntity {
   /** The next real hit before this time crits and staggers. */
   riposteUntil: number;
   nextAttackAt: number;
-  /** Basic attacks in the current melee combo (resets after a pause). */
+  /** Blows landed in the current string (resets after a pause). */
   attackCount: number;
   lastBasicAt: number;
   potions: number;
@@ -320,6 +350,8 @@ export interface ArpgInput {
    * frame. Leave undefined for automatic basic attacks.
    */
   attack?: boolean;
+  /** Manual attacks: the attack was pressed this frame (kept briefly if the hero is busy). */
+  attackTap?: boolean;
   /** Manual attacks: aim at this world point (else the nearest foe in reach, else ahead). */
   attackAim?: Vec | null;
 }
@@ -334,6 +366,7 @@ export type ArpgEvent =
       crit: boolean;
       element: ManaType | null;
       reaction?: ReactionId;
+      heft: number;
     }
   | {
       kind: 'heroHit';
@@ -354,8 +387,9 @@ export type ArpgEvent =
       y: number;
       tx: number;
       ty: number;
+      heft: number;
     }
-  | { kind: 'windup'; slot: number; until: number }
+  | { kind: 'windup'; slot: number; until: number; heft: number }
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
   | { kind: 'beam'; x: number; y: number; tx: number; ty: number; width: number; element: ManaType }
@@ -432,6 +466,10 @@ export interface ArpgWorld {
   bossId: number | null;
   /** One-shot inputs waiting for the next simulation step. */
   queuedCast: AbilityCast | null;
+  /** The queued cast is dropped after this time: the end of whatever kept the hero busy, plus the buffer. */
+  queuedCastUntil: number;
+  /** A manual attack tap waiting for the weapon (see `queuedCastUntil`). */
+  queuedAttack: { until: number; aim: Vec | null } | null;
   queuedPotion: boolean;
   queuedDodge: boolean;
   kills: number;

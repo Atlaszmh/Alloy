@@ -51,6 +51,8 @@ export interface HitOpts {
   spread?: boolean;
   /** The ability slot dealing the hit; it doesn't charge itself. */
   slot?: number;
+  /** 0–1: how hard the hit lands (client feel; 0 for ticks, DoTs, chains). */
+  heft?: number;
 }
 
 const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
@@ -323,7 +325,17 @@ export function hitMonster(
   m.hp -= amount;
   m.lastHitAt = world.t;
   if (!m.aggro) aggroPack(ctx, m);
-  ctx.events.push({ kind: 'hit', id: m.id, x: m.x, y: m.y, amount, crit, element, reaction });
+  ctx.events.push({
+    kind: 'hit',
+    id: m.id,
+    x: m.x,
+    y: m.y,
+    amount,
+    crit,
+    element,
+    reaction,
+    heft: opts.heft ?? 0,
+  });
 
   if (opts.source === 'basic' || opts.source === 'skill') {
     const shadowGuard = defendingAbility(ctx)?.elements.includes('shadow')
@@ -350,6 +362,7 @@ export function hitMonster(
       crit: true,
       element,
       reaction: 'shatter',
+      heft: 0,
     });
     m.hp = 0;
   }

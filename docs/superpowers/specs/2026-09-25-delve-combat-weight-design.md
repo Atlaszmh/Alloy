@@ -56,7 +56,7 @@ Every basic attack and every ability runs through three phases.
 
 1. **Potion** (unchanged).
 2. **Dash**, then a **queued dodge** (`tryDodge`, which also cancels: see Cancels).
-3. **Queued cast.** A stale press (older than `buffer`, 0.25 s) is dropped. During a wind-up or a dash, a fresh press stays queued. Otherwise, if the cast can go ahead (ready, affordable, something to aim at), any swing in its startup is cancelled **first** (see Cancels), then `castAbility` starts the cast, so the ability's own step-in isn't cleared by the cancel. If it can't (cooldown, no mana with its `noMana` event, nothing to aim at), the press is used up and the swing carries on.
+3. **Queued cast.** A stale press (past its `queuedCastUntil`, see Input buffer) is dropped. During a wind-up or a dash, a fresh press stays queued. Otherwise, if the cast can go ahead (ready, affordable, something to aim at), any swing in its startup is cancelled **first** (see Cancels), then `castAbility` starts the cast, so the ability's own step-in isn't cleared by the cancel. If it can't (cooldown, no mana with its `noMana` event, nothing to aim at), the press is used up and the swing carries on.
 4. **`castTick`**: land a finished wind-up, then apply its recoil push and recovery.
 5. **Movement**:
    1. an active push moves the hero;
@@ -83,10 +83,10 @@ Every basic attack and every ability runs through three phases.
 
 ### Input buffer
 
-`world.queuedCast` gains the time of the press, and a press older than `buffer` is dropped (step 3). Manual attack taps get the same treatment:
+A press is kept until the end of whatever keeps the hero busy (the wind-up or the dash; for a tap, the weapon's current cycle) plus `buffer` (0.25 s), and is dropped after that (step 3). It is stored as that deadline, `world.queuedCastUntil`, rather than the press time. Manual attack taps get the same treatment:
 
 - `ArpgInput` gains `attackTap?: boolean`, true on the frame the button was pressed. Mouse and keyboard already track this, and the controller sets it on the press edge of its attack button.
-- `stepWorld` records a tap as `world.queuedAttack = { at, aim }` **before** running any tick, as it does `queuedCast`. So a tap made during a hit-stop freeze (a `dt` of 0 runs no ticks) isn't lost.
+- `stepWorld` records a tap as `world.queuedAttack = { until, aim }` **before** running any tick, as it does `queuedCast`. So a tap made during a hit-stop freeze (a `dt` of 0 runs no ticks) isn't lost.
 - A fresh queued tap starts the next swing once one is allowed (step 7). A held attack keeps attacking without the buffer.
 
 ### Automatic mode
@@ -333,7 +333,7 @@ Engine tests (TDD, `tests/delve-combat-weight.test.ts`). In `tests/fixtures/aren
   - The staff's great orb bursts on a crowd.
 - **Buffer:**
   - A Q press during another wind-up fires when it lands.
-  - A press older than `buffer` is dropped.
+  - A press is dropped `buffer` after whatever kept the hero busy ends.
   - A tap recorded while `dt` is 0 is not lost.
 - **Conjure and cooldown:**
   - The wind-up equals `conjure` for mana and charge payments, and `conjure + channel` for cast payment. Defensives take half and ultimates 1.6×.

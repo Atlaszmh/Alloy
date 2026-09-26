@@ -50,7 +50,20 @@ export function stepWorld(
   dt: number,
 ): ArpgEvent[] {
   const events: ArpgEvent[] = [];
-  if (input.cast) world.queuedCast = input.cast;
+  const buffer = registry.getDelveBalance().feel.buffer;
+  const h = world.hero;
+  if (input.cast) {
+    // A press waits out a wind-up or a dash, then gets `buffer` more seconds.
+    const busy = Math.max(h.windup?.until ?? 0, h.dodge?.until ?? 0);
+    world.queuedCast = input.cast;
+    world.queuedCastUntil = Math.max(world.t, busy) + buffer;
+  }
+  // A tap waits for the weapon (the current blow's cycle), then `buffer` more.
+  if (input.attackTap)
+    world.queuedAttack = {
+      until: Math.max(world.t, h.nextAttackAt) + buffer,
+      aim: input.attackAim ?? null,
+    };
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
   if (world.heroDead) return events;

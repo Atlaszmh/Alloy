@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { resolveAbility, stepHeft } from '../src/arpg/abilities/resolve.js';
 import type { AbilityBuild, AbilitySlot } from '../src/types/ability.js';
-import { bal, gear, registry } from './fixtures/arena.js';
+import { stepWorld } from '../src/arpg/step.js';
+import { makeCtx } from '../src/arpg/combat.js';
+import { pushTick, startPush } from '../src/arpg/action.js';
+import { arena, bal, dummy, gear, registry, STEP } from './fixtures/arena.js';
 
 const weapons = registry.getDelveData().bases.filter((b) => b.slot === 'weapon');
 
@@ -75,5 +78,44 @@ describe('ability timing from weight', () => {
     expect(resolve('primary', { form: 'bolt', weight: 2 }).motion).toBeCloseTo(-0.24);
     expect(resolve('primary', { form: 'strike' }).motion).toBeCloseTo(0.5);
     expect(resolve('defensive', { form: 'ward' }).motion).toBe(0);
+  });
+});
+
+describe('pushes and buffered input', () => {
+  it('a push places the hero by progress and covers its distance even inside one tick', () => {
+    const w = arena([], { noBasic: true });
+    const ctx = makeCtx(registry, w, []);
+    const y0 = w.hero.y;
+    startPush(ctx, { x: 0, y: -1 }, 0.3, STEP / 2);
+    w.t += STEP;
+    expect(pushTick(ctx)).toBe(true);
+    expect(y0 - w.hero.y).toBeCloseTo(0.3, 5);
+    expect(w.hero.push).toBeNull();
+  });
+
+  it('a push toward a foe stops exactly at the contact gap', () => {
+    const w = arena([dummy(13, 0)], { noBasic: true });
+    const m = w.monsters[0];
+    m.y = w.hero.y - w.hero.radius - m.radius - 1;
+    const y0 = w.hero.y;
+    const ctx = makeCtx(registry, w, []);
+    startPush(ctx, { x: 0, y: -1 }, 2, 0.2, m.id);
+    for (let i = 0; i < 10; i++) {
+      w.t += STEP;
+      pushTick(ctx);
+    }
+    const gap = Math.abs(w.hero.y - m.y) - m.radius - w.hero.radius;
+    expect(gap).toBeCloseTo(bal.feel.contactGap, 4);
+    expect(y0 - w.hero.y).toBeCloseTo(1 - bal.feel.contactGap, 4);
+    expect(w.hero.push).toBeNull();
+  });
+
+  it('presses made while the display is frozen (dt 0) are kept', () => {
+    const w = arena([dummy(13, 34.6)]);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, attack: false, attackTap: true }, 0);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, 0);
+    expect(w.queuedAttack).toMatchObject({ aim: null });
+    expect(w.queuedCast).toEqual({ slot: 0 });
+    expect(w.queuedCastUntil).toBeGreaterThan(w.t);
   });
 });

@@ -195,6 +195,9 @@ export function createHeroEntity(
     comboStep: [0, 0, 0],
     comboAt: [-Infinity, -Infinity, -Infinity],
     windup: null,
+    swing: null,
+    push: null,
+    recoverUntil: 0,
     defend: null,
     ward: null,
     dodgeCharges: registry.getDelveBalance().dodge.charges,
@@ -227,6 +230,14 @@ export function refreshWorldHero(
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
+  // A weapon with a different string starts it over (a blow in progress is dropped and the
+  // weapon is ready); other gear changes leave the swing alone.
+  if (stats.weapon.combo !== h.stats.weapon.combo) {
+    h.swing = null;
+    h.push = null;
+    h.attackCount = 0;
+    h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
+  }
   h.stats = stats;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
   h.manaMax = pool.max;
@@ -276,6 +287,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     totalMonsters: 0,
     bossId: null,
     queuedCast: null,
+    queuedCastUntil: 0,
+    queuedAttack: null,
     queuedPotion: false,
     queuedDodge: false,
     kills: 0,

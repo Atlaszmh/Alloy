@@ -35,6 +35,7 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null): boolean {
     y: h.y,
     tx: res.tx,
     ty: res.ty,
+    heft: 0,
   });
   return true;
 }
@@ -70,7 +71,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     const until = world.t + ab.castTime;
     pay(ctx, slot, until);
     h.windup = { slot, aim, at, start: world.t, until };
-    ctx.events.push({ kind: 'windup', slot, until });
+    ctx.events.push({ kind: 'windup', slot, until, heft: 0 });
     return true;
   }
   if (!fire(ctx, slot, aim)) return false;
