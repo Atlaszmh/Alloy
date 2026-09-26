@@ -32,12 +32,14 @@ describe('AbilitiesPanel', () => {
     expect(abilities().primary.elements).toEqual(['nature']);
   });
 
-  it('sets weight and payment, and shows the wind-up for cast payment', () => {
+  it('sets weight and payment, and shows the wind-up for every payment', () => {
     render(<AbilitiesPanel />);
     fireEvent.click(screen.getByTestId('weight-2'));
-    fireEvent.click(screen.getByTestId('payment-cast'));
-    expect(abilities().primary).toMatchObject({ weight: 2, payment: 'cast' });
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent('wind-up');
+    for (const payment of ['cast', 'mana', 'charge'] as const) {
+      fireEvent.click(screen.getByTestId(`payment-${payment}`));
+      expect(abilities().primary).toMatchObject({ weight: 2, payment });
+      expect(screen.getByTestId('ability-readout')).toHaveTextContent(/\d\.\d\ds wind-up/);
+    }
   });
 
   it('each slot offers only its own forms', () => {

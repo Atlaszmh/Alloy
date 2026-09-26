@@ -73,6 +73,30 @@ describe('FloorEngine', () => {
     const after = pw.scorch.reduce((a, b) => a + b, 0) + pw.frost.reduce((a, b) => a + b, 0);
     expect(after).toBeGreaterThan(before + 10);
   });
+
+  it("paints a hero zone, but not a thrown Burst that hasn't landed", () => {
+    const scorchAfter = (source: string) => {
+      const engine = new FloorEngine({
+        arenaWidth: 26,
+        arenaHeight: 40,
+        biomeId: 'sunken_quarry',
+        depth: 17,
+      });
+      const zone = {
+        x: 8,
+        y: 12,
+        radius: 1.5,
+        source,
+        element: 'fire' as const,
+        owner: 'hero' as const,
+      };
+      const before = engine.world.scorch.reduce((a, b) => a + b, 0);
+      engine.frame(frame({ dt: 0.1, zones: [zone] }));
+      return engine.world.scorch.reduce((a, b) => a + b, 0) - before;
+    };
+    expect(scorchAfter('maelstrom')).toBeGreaterThan(1);
+    expect(scorchAfter('burst')).toBe(0);
+  });
 });
 
 describe('snapshotArena', () => {

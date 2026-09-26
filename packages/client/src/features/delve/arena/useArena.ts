@@ -10,6 +10,7 @@ import {
   refreshWorldHero,
   stepWorld,
   abilityReady,
+  basicStep,
   makeCtx,
   pressStep,
   type AbilityCast,
@@ -80,7 +81,6 @@ export interface ArenaHud {
   dodgeRefill: number;
   /** A perfect dodge armed the riposte: the next real hit crits and staggers. */
   riposte: boolean;
-  melee: boolean;
   /** The blow of the weapon's string that lands next (0-based). */
   basicComboNext: number;
   /** How many blows the weapon's string has. */
@@ -131,6 +131,7 @@ function snapshot(world: ArpgWorld): ArenaHud {
   const dodgeBal = bal.dodge;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
+  const busy = !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0;
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
@@ -158,31 +159,24 @@ function snapshot(world: ArpgWorld): ArenaHud {
         comboLength: ab.combo.length,
         // Only a channel shows: a conjure is anticipation in the arena, not a HUD bar.
         windup:
-          h.windup?.slot === i && ab.channel > 0
+          h.windup?.slot === i && ab.channel > 0 && t >= h.windup.conjureUntil
             ? Math.min(
                 1,
-                Math.max(
-                  0,
-                  (t - h.windup.conjureUntil) /
-                    Math.max(0.01, h.windup.until - h.windup.conjureUntil),
-                ),
+                (t - h.windup.conjureUntil) /
+                  Math.max(0.01, h.windup.until - h.windup.conjureUntil),
               )
             : null,
         affordable,
-        ready: cooldown <= 0 && charged && affordable && !h.windup,
+        ready: cooldown <= 0 && charged && affordable && !busy,
       };
     }),
-    busy: !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0,
+    busy,
     dodgeCharges: h.dodgeCharges,
     dodgeMax: dodgeBal.charges,
     dodgeRefill:
       h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeBal.recharge) : 1,
     riposte: t < h.riposteUntil,
-    melee: h.stats.weapon.kind === 'melee',
-    basicComboNext:
-      t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace
-        ? 0
-        : h.attackCount % h.stats.weapon.combo.length,
+    basicComboNext: basicStep(h, t, bal),
     basicComboLength: h.stats.weapon.combo.length,
     potions: h.potions,
     monstersLeft: world.monsters.length,

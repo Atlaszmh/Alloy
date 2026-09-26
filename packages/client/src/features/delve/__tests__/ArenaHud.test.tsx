@@ -16,7 +16,6 @@ function hud(over: Partial<ArenaHud> = {}): ArenaHud {
     dodgeMax: 2,
     dodgeRefill: 0.4,
     riposte: false,
-    melee: true,
     basicComboNext: 1,
     basicComboLength: 3,
     potions: 3,
@@ -80,7 +79,7 @@ describe('AttackButton', () => {
   });
 
   it('shows one pip per blow of the weapon string, for any weapon', () => {
-    render(<AttackButton hud={hud({ basicComboLength: 2, melee: false })} onAttack={() => {}} />);
+    render(<AttackButton hud={hud({ basicComboLength: 2 })} onAttack={() => {}} />);
     expect(screen.getByTestId('attack-button').querySelectorAll('[data-combo]')).toHaveLength(2);
   });
 });

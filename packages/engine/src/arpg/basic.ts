@@ -1,4 +1,5 @@
-import type { MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
+import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
+import type { DelveBalance } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
 import { hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
@@ -43,6 +44,12 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
   return best;
 }
 
+/** The blow of the weapon's string the next swing makes: the string restarts after a pause. */
+export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
+  if (t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace) return 0;
+  return h.attackCount % h.stats.weapon.combo.length;
+}
+
 /**
  * Start the next blow of the string when the weapon is ready. Automatic: only
  * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
@@ -60,8 +67,8 @@ export function startSwing(
   const t = world.t;
   if (t < h.nextAttackAt) return false;
   const w = h.stats.weapon;
-  if (t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace) h.attackCount = 0;
-  const step = h.attackCount % w.combo.length;
+  const step = basicStep(h, t, bal);
+  h.attackCount = step;
   const s = w.combo[step];
   const melee = w.kind === 'melee';
   const lunge = melee && committed ? Math.max(0, s.move) : 0;
