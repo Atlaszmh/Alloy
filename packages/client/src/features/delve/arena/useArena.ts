@@ -37,6 +37,7 @@ import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
 import { useControlsStore } from '@/stores/controlsStore';
 import { padToArena, stickAimPoint, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { rumble } from '@/features/gamepad/rumble';
+import { HitStop } from './fx/hitstop';
 
 /**
  * Runs a floor: owns the ArpgWorld and the Pixi renderer, drives the engine
@@ -210,6 +211,7 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   const insetsRef = useRef(opts.insets);
   const slowUntilRef = useRef(0);
+  const hitstopRef = useRef(new HitStop());
   const manualRef = useRef(opts.manualAttack);
   manualRef.current = opts.manualAttack;
   const [hud, setHud] = useState<ArenaHud | null>(null);
@@ -264,8 +266,14 @@ export function useArena(
 
         app.ticker.add((ticker) => {
           const world = worldRef.current;
-          const slow = performance.now() < slowUntilRef.current ? SLOWMO_SCALE : 1;
-          const dt = Math.min(0.1, ticker.deltaMS / 1000) * slow;
+          const now = performance.now();
+          // A hit-stop freezes the display (a dt of 0 runs no ticks; presses are still recorded).
+          const scale = hitstopRef.current.frozen(now)
+            ? 0
+            : now < slowUntilRef.current
+              ? SLOWMO_SCALE
+              : 1;
+          const dt = Math.min(0.1, ticker.deltaMS / 1000) * scale;
           if (!world) return;
           const paused = pausedRef.current;
           const pad = padFrame(world, paused);
@@ -306,6 +314,8 @@ export function useArena(
             input.attackTap = false;
             if (events.length > 0) {
               renderer.handleEvents(events);
+              // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
+              if (!flags.autopilot) hitstopRef.current.onEvents(events, performance.now());
               handleEvents(world, events);
             }
             checkEnd(world);
