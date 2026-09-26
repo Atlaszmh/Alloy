@@ -27,4 +27,21 @@ describe('hit-stop', () => {
     s.onEvents([hit(1)], 1000 + 90 + HITSTOP.gapMs + 1);
     expect(s.frozen(1000 + 90 + HITSTOP.gapMs + 10)).toBe(true);
   });
+
+  it('an elite or boss kill freezes even inside the gap', () => {
+    const s = new HitStop();
+    s.onEvents([hit(1)], 1000);
+    s.onEvents([death('elite')], 1150);
+    expect(s.frozen(1200)).toBe(true);
+    expect(s.frozen(1150 + HITSTOP.bigKillMs)).toBe(false);
+  });
+
+  it('reset drops a freeze and its gap (a new floor)', () => {
+    const s = new HitStop();
+    s.onEvents([hit(1)], 1000);
+    s.reset();
+    expect(s.frozen(1010)).toBe(false);
+    s.onEvents([hit(1)], 1020);
+    expect(s.frozen(1030)).toBe(true);
+  });
 });

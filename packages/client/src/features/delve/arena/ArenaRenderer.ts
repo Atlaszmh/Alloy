@@ -99,6 +99,8 @@ export class ArenaRenderer {
   private insets = { top: 0, bottom: 0 };
   private cam = { x: 0, y: 0 };
   private shake = 0;
+  /** This frame's shake offset in px; held while the display is frozen or paused. */
+  private jitter = { x: 0, y: 0 };
   /** A camera nudge toward the last strike (world units), decaying fast. */
   private kick = { x: 0, y: 0 };
   private time = 0;
@@ -382,10 +384,7 @@ export class ArenaRenderer {
             Math.min(360, e.arc) * (Math.PI / 180),
             e.range,
             MANA_HEX[e.element],
-            {
-              heft: w.hero.abilities.find((a) => a.form.id === 'strike')?.heft ?? 0.5,
-              finisher: e.arc >= 360,
-            },
+            { heft: e.heft, finisher: e.arc >= 360 },
           );
           if (e.arc >= 360) this.addShake(0.12);
           break;
@@ -553,8 +552,12 @@ export class ArenaRenderer {
     const kd = Math.exp(-dt / 0.04);
     this.kick.x *= kd;
     this.kick.y *= kd;
-    const sx = (Math.random() - 0.5) * this.shake * u;
-    const sy = (Math.random() - 0.5) * this.shake * u;
+    if (dt > 0)
+      this.jitter = {
+        x: (Math.random() - 0.5) * this.shake * u,
+        y: (Math.random() - 0.5) * this.shake * u,
+      };
+    const { x: sx, y: sy } = this.jitter;
     this.root.scale.set(u);
     this.root.position.set(
       width / 2 - (cx + this.kick.x) * u + sx,

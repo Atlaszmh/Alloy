@@ -264,18 +264,19 @@ The simulation stays fixed-step and deterministic. All of this changes only the 
 - **Hit-stop:**
   - The display clock freezes for the frame's largest direct hit: 0 ms below heft 0.3, otherwise `90 × heft` ms.
   - A crit adds 20 ms, and killing an elite or boss is at least 120 ms. The cap is 120 ms.
-  - A new freeze can't start within 150 ms of the last one ending, so a dagger, Volley and Barrage together don't stutter.
+  - A new freeze can't start within 150 ms of the last one ending, so a dagger, Volley and Barrage together don't stutter. An elite or boss kill skips that gap. A new floor starts unfrozen.
   - It sits beside the perfect-dodge slow-mo in `useArena`, and a freeze beats slow-mo.
   - Inputs made during a freeze are recorded by `stepWorld` (see Input buffer).
 - **Camera:**
   - A strike or release kicks the camera `0.12 × heft` units in its direction, easing back over about 0.12 s.
   - Heft ≥ 0.7 also adds shake.
 - **Anticipation:**
-  - During a committed swing's startup or a wind-up, the hero sprite leans 1 px back from the aim, and lifts 1 px at heft ≥ 0.7. It snaps forward at the strike.
-  - Mana pixels gather at the hand, more with heft.
+  - During a committed swing's startup or a wind-up, the hero sprite leans 1 px back from the aim (2 px at heft ≥ 0.7; no lift, which would cancel the lean of a blow aimed up). It snaps forward at the strike.
+  - The **hand** is 0.6 units from the hero toward the aim, at chest height (past the sprite's edge). Casts fling their mana from it.
+  - Mana pixels gather at the hand, more with heft, at a rate per second (none while the display is frozen).
   - Heavy conjures (heft ≥ 0.7) spiral in and grow a pixel orb at the hand.
 - **Swings sweep:**
-  - A melee strike draws a pixel smear that travels across its arc over about 0.1 s. Steps alternate sides (slash, then backslash).
+  - A melee strike draws a pixel smear that travels across its arc over about 0.1 s. Steps alternate sides (slash, then backslash). At the strike it has already swept 60% of the arc for a blow that can freeze the display (heft ≥ 0.3), so the freeze shows the arc, and 30% for a lighter one.
   - Finishers are longer and brighter, with a pixel shockwave at the tip.
   - Spins sweep the full circle.
   - Slams burst a ring of ground pixels and dust.

@@ -70,6 +70,26 @@ interface Beam {
 const MAX_PARTICLES = 500;
 const SWEEP_SECONDS = 0.1;
 
+/** How far toward the aim a cast leaves the hero's hand (world units), at chest height. */
+export const HAND = 0.6;
+
+/** The hand point: `HAND` units from (x, y) toward `dir`, at chest height. */
+export function handPoint(x: number, y: number, dir: Vec): Vec {
+  const len = Math.hypot(dir.x, dir.y) || 1;
+  return { x: x + (dir.x / len) * HAND, y: y - 0.3 + (dir.y / len) * HAND };
+}
+
+/**
+ * How many pixels to spawn this frame for `rate` per 60 Hz frame: the whole
+ * part, plus one more by chance for the fraction, so density doesn't depend on
+ * the frame rate (and nothing spawns while the display is frozen).
+ */
+export function spawnCount(rate: number, dt: number, rand = Math.random): number {
+  const n = rate * dt * 60;
+  const whole = Math.floor(n);
+  return whole + (rand() < n - whole ? 1 : 0);
+}
+
 export class ManaFx {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
@@ -107,12 +127,13 @@ export class ManaFx {
   /** A cone of mana thrown from (x, y) toward `dir`: the visible "cast" of an ability or shot. */
   fling(x: number, y: number, dir: Vec, color: number, n = 10, speed = 8): void {
     const base = Math.atan2(dir.y, dir.x);
+    const hand = handPoint(x, y, dir);
     for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
       const a = base + (Math.random() - 0.5) * 0.9;
       const s = speed * (0.5 + Math.random() * 0.7);
       this.particles.push({
-        x: x + Math.cos(base) * 0.35,
-        y: y + Math.sin(base) * 0.35 - 0.3,
+        x: hand.x,
+        y: hand.y,
         vx: Math.cos(a) * s,
         vy: Math.sin(a) * s,
         life: 0.22 + Math.random() * 0.12,
@@ -187,7 +208,8 @@ export class ManaFx {
   ): void {
     const heft = o.heft ?? 0.3;
     const life = SWEEP_SECONDS + 0.12 + 0.12 * heft + (o.finisher ? 0.08 : 0);
-    // The blade has mostly swept by the moment it connects, so a hit-stop on this frame shows the arc.
+    // The blade has swept part of its arc by the moment it connects: most of it for a blow heavy
+    // enough to freeze the display (so the freeze shows the arc), less for a light one (so it sweeps).
     this.swings.push({
       x,
       y,
@@ -195,7 +217,7 @@ export class ManaFx {
       arc,
       range,
       color,
-      age: SWEEP_SECONDS * 0.6,
+      age: SWEEP_SECONDS * (heft >= 0.3 ? 0.6 : 0.3),
       life,
       heft,
       reverse: !!o.reverse,
@@ -226,8 +248,10 @@ export class ManaFx {
       p.life -= dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= p.drag;
-      p.vy *= p.drag;
+      // Drag per 60 Hz frame, so sparks slow the same at any frame rate and keep their speed when frozen.
+      const d = Math.pow(p.drag, dt * 60);
+      p.vx *= d;
+      p.vy *= d;
       px(g, p.x, p.y, p.color, Math.max(0, p.life / p.max) * 1.2, p.size);
     }
     this.particles = this.particles.filter((p) => p.life > 0);
@@ -285,19 +309,20 @@ export class ManaFx {
       const thick = Math.max(1, Math.round((b.width * 2 * (1 - fadeP)) / PX));
       manaLine(g, baseX, baseY, tipX, tipY, b.color, 0.75, { thickness: thick, jitter: 1, time });
       manaLine(g, baseX, baseY, tipX, tipY, 0xffffff, 0.95, { thickness: 1 });
-      // It sheds pixels as it fades.
-      if (fadeP > 0 && this.particles.length < MAX_PARTICLES)
-        this.particles.push({
-          x: baseX,
-          y: baseY,
-          vx: (Math.random() - 0.5) * 1.2,
-          vy: -0.8 - Math.random(),
-          life: 0.4,
-          max: 0.4,
-          color: b.color,
-          size: 1,
-          drag: 0.95,
-        });
+      // It sheds pixels as it fades (about one a frame at 60 Hz).
+      if (fadeP > 0)
+        for (let i = spawnCount(1, dt); i > 0 && this.particles.length < MAX_PARTICLES; i--)
+          this.particles.push({
+            x: baseX,
+            y: baseY,
+            vx: (Math.random() - 0.5) * 1.2,
+            vy: -0.8 - Math.random(),
+            life: 0.4,
+            max: 0.4,
+            color: b.color,
+            size: 1,
+            drag: 0.95,
+          });
     }
     this.beams = this.beams.filter((b) => b.age < b.life);
   }

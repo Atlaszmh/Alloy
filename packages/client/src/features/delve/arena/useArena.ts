@@ -124,7 +124,7 @@ function readArenaFlags(): { autopilot: boolean; timescale: number } {
   }
 }
 
-function snapshot(world: ArpgWorld): ArenaHud {
+export function snapshot(world: ArpgWorld): ArenaHud {
   const h = world.hero;
   const t = world.t;
   const bal = getDelveRegistry().getDelveBalance();
@@ -132,7 +132,9 @@ function snapshot(world: ArpgWorld): ArenaHud {
   const dodgeBal = bal.dodge;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
-  const busy = !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0;
+  // Only a channel dims the buttons: its conjure is anticipation in the arena, like any other.
+  const busy =
+    !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0 && t >= h.windup.conjureUntil;
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
@@ -226,6 +228,7 @@ export function useArena(
     if (!renderer || p.dive?.phase !== 'fighting') return;
     const world = beginFloor(registry, p);
     worldRef.current = world;
+    hitstopRef.current.reset();
     endAtRef.current = null;
     finishedRef.current = false;
     renderer.loadFloor(world, registry.getBiomeForDepth(world.depth));

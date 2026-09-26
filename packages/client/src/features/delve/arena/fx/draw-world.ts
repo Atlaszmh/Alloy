@@ -2,7 +2,7 @@ import type { Graphics } from 'pixi.js';
 import type { ArpgWorld, ManaType, Projectile, Vec } from '@alloy/engine';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
-import type { ManaFx } from './mana-fx';
+import { handPoint, spawnCount, type ManaFx } from './mana-fx';
 import { windingUp } from './anticipation';
 import {
   PX,
@@ -257,12 +257,10 @@ export function drawAnticipation(
 ): void {
   const a = windingUp(w);
   if (!a) return;
-  const h = w.hero;
   // Out past the sprite's edge, so the orb doesn't sit on the hero's face.
-  const hx = h.x + a.dir.x * 0.6;
-  const hy = h.y - 0.3 + a.dir.y * 0.6;
-  // No new pixels while the display is frozen (they would pile up without moving).
-  if (dt > 0) fx.gather(hx, hy, a.color, 1 + Math.round(a.heft * 3));
+  const { x: hx, y: hy } = handPoint(w.hero.x, w.hero.y, a.dir);
+  // None while the display is frozen (they would pile up without moving).
+  fx.gather(hx, hy, a.color, spawnCount(1 + a.heft * 3, dt));
   if (a.heft >= 0.7) {
     manaMotes(air, hx, hy, 0.2 + 0.9 * (1 - a.progress), a.color, time, 5, 9, 0.9, 4);
     manaOrb(air, hx, hy, 0.05 + 0.2 * a.progress, a.color, 0xffffff, 0.9);
@@ -314,7 +312,8 @@ export function drawProjectiles(
     } else if (p.form === 'volley' || p.form === 'ember') {
       manaOrb(air, p.x, p.y, r(0.15), color, second ? MANA_HEX[second] : 0xffffff);
     } else {
-      manaOrb(air, p.x, p.y, r(0.15), color, 0xffffff);
+      // A basic shot draws at its size (the staff's great orb, the wand's flare).
+      manaOrb(air, p.x, p.y, r(p.ability ? 0.15 : p.radius * 0.5), color, 0xffffff);
     }
   }
   for (const id of [...trails.keys()]) if (!alive.has(id)) trails.delete(id);

@@ -1,6 +1,9 @@
 import type { ArpgEvent } from '@alloy/engine';
 
-/** Display-only freezes on heavy hits: the rules never pause, only the display clock. */
+/**
+ * Freezes on heavy hits. The display clock drives the simulation, so a freeze
+ * pauses everything for a beat; the rules themselves are unchanged.
+ */
 export const HITSTOP = {
   minHeft: 0.3,
   msPerHeft: 90,
@@ -30,9 +33,16 @@ export class HitStop {
     return now < this.until;
   }
 
+  /** An elite or boss kill always freezes; anything else waits out the gap after the last freeze. */
   onEvents(events: readonly ArpgEvent[], now: number): void {
-    if (now < this.until + HITSTOP.gapMs) return;
+    const bigKill = events.some((e) => e.kind === 'death' && e.monsterKind !== 'normal');
+    if (!bigKill && now < this.until + HITSTOP.gapMs) return;
     const ms = hitstopMs(events);
-    if (ms > 0) this.until = now + ms;
+    if (ms > 0) this.until = Math.max(this.until, now + ms);
+  }
+
+  /** A new floor starts unfrozen. */
+  reset(): void {
+    this.until = -Infinity;
   }
 }
