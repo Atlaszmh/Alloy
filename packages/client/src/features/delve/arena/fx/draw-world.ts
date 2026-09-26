@@ -1,5 +1,5 @@
 import type { Graphics } from 'pixi.js';
-import type { ArpgWorld, ManaType, Vec } from '@alloy/engine';
+import type { ArpgWorld, ManaType, Projectile, Vec } from '@alloy/engine';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import type { ManaFx } from './mana-fx';
@@ -34,8 +34,13 @@ export interface AimView {
   element: ManaType;
 }
 
-function elem(e: ManaType | null | undefined): number {
+export function elem(e: ManaType | null | undefined): number {
   return e ? MANA_HEX[e] : NEUTRAL_HEX;
+}
+
+/** A projectile's colour: monster shots are their element or hostile red; the hero's are its element. */
+export function shotColor(p: Projectile): number {
+  return p.owner === 'monster' ? (p.element ? MANA_HEX[p.element] : HOSTILE) : elem(p.element);
 }
 
 function progress(now: number, start: number, end: number): number {
@@ -263,15 +268,22 @@ export function drawAnticipation(
   }
 }
 
-/** Projectiles as pixel orbs with pixel trails. `trails` keeps each one's recent path. */
+/**
+ * Projectiles as pixel orbs with pixel trails. `trails` keeps each one's
+ * recent path; `bornAt` says when each appeared, so it pops in over 0.05 s.
+ */
 export function drawProjectiles(
   air: Graphics,
   w: ArpgWorld,
   time: number,
   trails: Map<number, Vec[]>,
+  bornAt: (id: number) => number | undefined,
 ): void {
   const alive = new Set<number>();
   for (const p of w.projectiles) {
+    const born = bornAt(p.id);
+    const k = born === undefined ? 1 : Math.min(1, (time - born) / 0.05);
+    const r = (v: number) => Math.max(PX, v * k);
     alive.add(p.id);
     let trail = trails.get(p.id);
     if (!trail) {
@@ -280,8 +292,7 @@ export function drawProjectiles(
     }
     trail.push({ x: p.x, y: p.y });
     if (trail.length > 7) trail.shift();
-    const color =
-      p.owner === 'monster' ? (p.element ? MANA_HEX[p.element] : HOSTILE) : elem(p.element);
+    const color = shotColor(p);
     for (let i = 1; i < trail.length; i++) {
       const a = i / trail.length;
       manaLine(air, trail[i - 1].x, trail[i - 1].y, trail[i].x, trail[i].y, color, 0.6 * a, {
@@ -290,19 +301,19 @@ export function drawProjectiles(
     }
     const second = p.ability?.elements[1];
     if (p.owner === 'monster') {
-      manaOrb(air, p.x, p.y, p.radius, color, 0xffffff);
-      manaRing(air, p.x, p.y, p.radius + PX * 2, HOSTILE, time, { alpha: 0.7, jitter: 1 });
+      manaOrb(air, p.x, p.y, r(p.radius), color, 0xffffff);
+      manaRing(air, p.x, p.y, r(p.radius + PX * 2), HOSTILE, time, { alpha: 0.7, jitter: 1 });
     } else if (p.form === 'bolt') {
       if (p.pierce && p.element === 'earth') {
-        manaOrb(air, p.x, p.y, p.radius, 0x8b6b43, 0xb58a52);
+        manaOrb(air, p.x, p.y, r(p.radius), 0x8b6b43, 0xb58a52);
       } else {
-        manaOrb(air, p.x, p.y, p.radius, color, second ? MANA_HEX[second] : 0xffffff);
-        manaRing(air, p.x, p.y, p.radius + PX * 2, color, time, { alpha: 0.6, jitter: 1 });
+        manaOrb(air, p.x, p.y, r(p.radius), color, second ? MANA_HEX[second] : 0xffffff);
+        manaRing(air, p.x, p.y, r(p.radius + PX * 2), color, time, { alpha: 0.6, jitter: 1 });
       }
     } else if (p.form === 'volley' || p.form === 'ember') {
-      manaOrb(air, p.x, p.y, 0.15, color, second ? MANA_HEX[second] : 0xffffff);
+      manaOrb(air, p.x, p.y, r(0.15), color, second ? MANA_HEX[second] : 0xffffff);
     } else {
-      manaOrb(air, p.x, p.y, 0.15, color, 0xffffff);
+      manaOrb(air, p.x, p.y, r(0.15), color, 0xffffff);
     }
   }
   for (const id of [...trails.keys()]) if (!alive.has(id)) trails.delete(id);

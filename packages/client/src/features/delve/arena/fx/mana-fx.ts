@@ -144,6 +144,24 @@ export class ManaFx {
     }
   }
 
+  /** Something ends: its pixels scatter outward and drift up instead of vanishing. */
+  disperse(x: number, y: number, r: number, color: number, n = 24): void {
+    for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.particles.push({
+        x: x + Math.cos(a) * r,
+        y: y + Math.sin(a) * r,
+        vx: Math.cos(a) * 0.8,
+        vy: Math.sin(a) * 0.8 - 0.6,
+        life: 0.6 + Math.random() * 0.3,
+        max: 0.9,
+        color,
+        size: 1,
+        drag: 0.97,
+      });
+    }
+  }
+
   ring(x: number, y: number, r1: number, color: number, fill = false, life = 0.35, r0 = 0.1): void {
     this.rings.push({ x, y, r0, r1, life, max: life, color, fill });
   }

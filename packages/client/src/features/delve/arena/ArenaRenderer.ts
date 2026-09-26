@@ -11,6 +11,7 @@ import type {
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx } from './fx/mana-fx';
 import { windingUp } from './fx/anticipation';
+import { Lifecycles } from './fx/lifecycles';
 import {
   drawAim,
   drawAnticipation,
@@ -119,6 +120,7 @@ export class ArenaRenderer {
   private monsters = new Map<number, MonsterView>();
   private drops = new Map<number, DropView>();
   private trails = new Map<number, Vec[]>();
+  private lifecycles = new Lifecycles();
   /** Effects as mana pixels: under the characters (ground) and over them (air, glowing). */
   private readonly groundFx: PixelLayer;
   private readonly airFx: PixelLayer;
@@ -171,6 +173,7 @@ export class ArenaRenderer {
     this.monsters.clear();
     this.drops.clear();
     this.trails.clear();
+    this.lifecycles.clear();
     this.kick = { x: 0, y: 0 };
     this.dying = [];
     this.fx.clear();
@@ -575,7 +578,8 @@ export class ArenaRenderer {
     drawTelegraphs(ground, w, this.time);
     drawFooting(ground, w, this.time);
     drawMonsterMarks(ground, air, w, this.time);
-    drawProjectiles(air, w, this.time, this.trails);
+    this.lifecycles.update(w, this.fx, this.time);
+    drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
     drawAnticipation(air, this.fx, w, this.time, dt);
     this.fx.draw(air, dt, this.time);
