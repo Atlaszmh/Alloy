@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import { botInput } from '../src/arpg/bot.js';
 import { resolveAbility, stepHeft } from '../src/arpg/abilities/resolve.js';
 import type { AbilityBuild, AbilitySlot } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
@@ -763,5 +764,29 @@ describe('Burst is thrown', () => {
     expect(boom && boom.kind === 'explode' && Math.hypot(boom.x - 13, boom.y - 29)).toBeLessThan(
       0.5,
     );
+  });
+});
+
+describe('bot and estimates', () => {
+  it("the bot doesn't cancel its own swing with the Primary", () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 0.6);
+    run(w, STEP);
+    expect(w.hero.swing).not.toBeNull();
+    // Only the Primary is ready, so today's bot would press it and cancel the swing.
+    w.hero.cooldowns[1] = w.hero.cooldowns[2] = 1e9;
+    expect(botInput(registry, w).cast?.slot).toBeUndefined();
+  });
+
+  it('the Power estimate reads the weapon string', () => {
+    const sword = computeHeroStats({ weapon: gear('fire', 'weapon', 'sword') }, registry);
+    const maul = computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry);
+    const a = estimateCombat(sword, registry, 5);
+    const b = estimateCombat(
+      { ...sword, weapon: { ...sword.weapon, combo: maul.weapon.combo } },
+      registry,
+      5,
+    );
+    expect(a.dps).not.toBeCloseTo(b.dps, 3);
   });
 });

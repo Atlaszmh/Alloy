@@ -94,7 +94,8 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   const wants = [
     (near >= 3 || big) && abilityReady(ctx, 2) ? 2 : -1,
     (h.hp < h.stats.maxHp * 0.7 || crowded) && gap < 6 && abilityReady(ctx, 1) ? 1 : -1,
-    gap < h.abilities[0].range && abilityReady(ctx, 0) ? 0 : -1,
+    // Let a swing land: pressing the Primary now would cancel it.
+    gap < h.abilities[0].range && !h.swing && abilityReady(ctx, 0) ? 0 : -1,
   ];
   const slot = wants.find((s) => s >= 0);
   if (slot !== undefined) input.cast = { slot };

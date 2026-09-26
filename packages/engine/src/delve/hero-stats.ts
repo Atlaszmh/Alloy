@@ -268,15 +268,19 @@ export function estimateCombat(
   const weaponElem = stats.weapon.element ? stats.elementPower[stats.weapon.element] : 0;
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
-  const finisher = melee ? 1 + 0.5 / 3 : 1;
-  let dps = (hit * (1 + weaponElem) * cleave * finisher) / stats.attackInterval;
-  if (L.twin_fang) dps *= 1 + L.twin_fang / 100 / 3;
+  const combo = stats.weapon.combo;
+  const stringPower = combo.reduce((a, s) => a + s.power, 0);
+  const stringTime = combo.reduce((a, s) => a + s.time, 0);
+  const strikeInterval = (stats.attackInterval * stringTime) / combo.length;
+  let dps = (hit * (1 + weaponElem) * cleave * (stringPower / stringTime)) / stats.attackInterval;
+  // Twin Fang: one extra hit per string (×1.5 melee, ×1 ranged).
+  if (L.twin_fang) dps *= 1 + ((L.twin_fang / 100) * (melee ? 1.5 : 1)) / stringPower;
 
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
     resolveAbility(registry, slot, builds[slot], stats),
   );
   const pool = manaPool(stats, registry);
-  const manaIncome = pool.regen + bal.mana.basicAttackGain / stats.attackInterval;
+  const manaIncome = pool.regen + bal.mana.basicAttackGain / strikeInterval;
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
   const primaryDps =
     damagePerUse(primary, hit, stats, bal) / useInterval(primary, manaIncome * 0.7, dps / unit);
