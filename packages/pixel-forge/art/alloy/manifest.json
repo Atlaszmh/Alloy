@@ -14,6 +14,13 @@
       "subject": "a young battle-mage in a violet hood and dark robes holding a staff topped with a glowing cyan orb"
     },
     {
+      "id": "dummy",
+      "size": 16,
+      "subject": "a straw training dummy on a wooden post with a red and white target on its chest",
+      "source": "code",
+      "file": "sprites/dummy.ts"
+    },
+    {
       "id": "mine_rat",
       "size": 10,
       "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",
