@@ -385,6 +385,8 @@ export type ArpgEvent =
       amount: number;
       dodged: boolean;
       element: ManaType | null;
+      /** Invulnerable (Training Grounds): `amount` is what it would have taken; no life was lost. */
+      blocked?: boolean;
     }
   | { kind: 'heal'; amount: number; source: 'lifesteal' | 'potion' | 'kill' | 'orb' | 'soulfire' }
   | {

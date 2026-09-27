@@ -581,9 +581,19 @@ export function hurtHero(
   if (!opts.unavoidable) dmg *= 1 - armorReduction(bal, h.stats.armor, world.depth);
   dmg = shieldHero(ctx, dmg, source, !!opts.melee);
   if (dmg <= 0) return;
-  h.hp -= dmg;
+  // Invulnerable (Training Grounds): the hit lands and reports its damage, but takes no life.
+  const blocked = !!world.sandbox?.invulnerable;
+  if (!blocked) h.hp -= dmg;
   h.lastHitAt = world.t;
-  ctx.events.push({ kind: 'heroHit', x: h.x, y: h.y, amount: dmg, dodged: false, element });
+  ctx.events.push({
+    kind: 'heroHit',
+    x: h.x,
+    y: h.y,
+    amount: dmg,
+    dodged: false,
+    element,
+    ...(blocked ? { blocked: true } : {}),
+  });
 
   if (source && !source.dead) {
     if (source.traits.includes('vampiric')) {

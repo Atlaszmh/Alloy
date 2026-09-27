@@ -176,7 +176,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   }
   if (world.queuedAttack && t > world.queuedAttack.until) world.queuedAttack = null;
 
-  h.mana = Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  // Infinite mana (Training Grounds) tops the pool up every tick.
+  h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);

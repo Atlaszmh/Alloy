@@ -206,3 +206,42 @@ export function clearMonsters(world: ArpgWorld, which: 'monsters' | 'dummies' | 
   );
   if (!world.monsters.some((m) => m.id === world.bossId)) world.bossId = livingBossId(world);
 }
+
+/** Change the toggles (the client never writes `world.sandbox` itself). */
+export function setSandboxToggles(world: ArpgWorld, toggles: SandboxToggles): void {
+  world.sandbox = { ...toggles };
+  // Switching No cooldowns on frees every ability at once.
+  if (toggles.noCooldowns)
+    world.hero.cooldowns = world.hero.cooldowns.map((c) => Math.min(c, world.t));
+}
+
+/** Fill every charge-paid slot (for when No cooldowns is off). */
+export function fillCharge(world: ArpgWorld): void {
+  const h = world.hero;
+  h.abilities.forEach((ab, i) => {
+    if (ab.build.payment === 'charge') h.charge[i] = ab.chargeNeed;
+  });
+}
+
+/**
+ * The hero fell with Invulnerable off: back at once where it fell, with full
+ * life and potions and Phoenix ready, every action and buff cleared, and a
+ * second of invulnerability so a crowd can't kill it again at once. Monsters stay.
+ */
+export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
+  const h = world.hero;
+  const t = world.t;
+  world.heroDead = false;
+  h.hp = h.stats.maxHp;
+  h.potions = registry.getDelveBalance().dive.potions;
+  h.phoenixAvailable = true;
+  h.phoenixUsed = false;
+  h.windup = null;
+  h.swing = null;
+  h.push = null;
+  h.recoverUntil = t;
+  h.dodge = null;
+  h.defend = null;
+  h.ward = null;
+  h.invulnUntil = t + 1;
+}

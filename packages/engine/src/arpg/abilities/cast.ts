@@ -51,6 +51,8 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number): boolean
       startPush(ctx, { x: -d.x, y: -d.y }, -ab.motion * mult, bal.feel.recoilSeconds);
   }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
+  // No cooldowns also refills a charge-paid ability as it lands.
+  if (world.sandbox?.noCooldowns && ab.build.payment === 'charge') h.charge[slot] = ab.chargeNeed;
   return true;
 }
 
@@ -58,7 +60,8 @@ function pay(ctx: SimCtx, slot: number, from: number): void {
   const h = ctx.world.hero;
   const ab = h.abilities[slot];
   h.mana -= ab.cost;
-  h.cooldowns[slot] = from + ab.cooldown;
+  // No cooldowns (Training Grounds): no cooldown, and so no charge lockout.
+  if (!ctx.world.sandbox?.noCooldowns) h.cooldowns[slot] = from + ab.cooldown;
   if (ab.build.payment === 'charge') h.charge[slot] = 0;
 }
 

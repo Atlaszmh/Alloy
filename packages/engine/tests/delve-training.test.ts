@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest';
 import {
   clearMonsters,
   createSandboxWorld,
+  fillCharge,
   resetDummies,
+  respawnHero,
+  setSandboxToggles,
   spawnDummies,
   spawnMonsters,
 } from '../src/arpg/sandbox.js';
 import { createMonsterEntity, emptyStatus } from '../src/arpg/world.js';
-import { hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
+import { hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
 import { computeHeroStats, referenceMonster } from '../src/delve/hero-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { AbilityBuilds } from '../src/types/ability.js';
@@ -17,8 +20,10 @@ import {
   STEP,
   bal,
   damaged,
+  dodge,
   gear,
   press,
+  pressOnly,
   registry,
   run,
 } from './fixtures/arena.js';
@@ -330,5 +335,129 @@ describe('the spawner', () => {
     expect(w.monsters.map((m) => m.defId)).toEqual(['mine_rat', 'mine_rat']);
     clearMonsters(w, 'all');
     expect(w.monsters).toHaveLength(0);
+  });
+});
+
+describe('toggles', () => {
+  it('infinite mana keeps the pool full', () => {
+    const w = sandbox({ ...ALL_OFF, infiniteMana: true });
+    w.hero.mana = 0;
+    run(w, STEP);
+    expect(w.hero.mana).toBe(w.hero.manaMax);
+    const off = sandbox();
+    off.hero.mana = 0;
+    run(off, STEP);
+    expect(off.hero.mana).toBeLessThan(1);
+  });
+
+  it('no cooldowns: the same ability fires again right after it lands, and charge refills as it lands', () => {
+    const on = sandbox({ ...ALL_OFF, noCooldowns: true, infiniteMana: true });
+    const off = sandbox({ ...ALL_OFF, infiniteMana: true });
+    for (const w of [on, off]) {
+      w.hero.nextAttackAt = 1e9;
+      spawnDummies(registry, w, { layout: 'single', element: null });
+      press(w, 0);
+      pressOnly(w, 0);
+    }
+    expect(on.hero.windup?.slot).toBe(0);
+    expect(off.hero.windup).toBeNull(); // 0.45 s cooldown
+
+    const u = sandbox({ ...ALL_OFF, noCooldowns: true }); // the Ultimate is a charge-paid Nova
+    fillCharge(u);
+    const need = u.hero.abilities[2].chargeNeed;
+    press(u, 2);
+    expect(u.hero.charge[2]).toBe(need);
+    pressOnly(u, 2);
+    expect(u.hero.windup?.slot).toBe(2);
+  });
+
+  it('switching no cooldowns on frees abilities already cooling down', () => {
+    const w = sandbox();
+    w.hero.cooldowns = [5, 5, 5];
+    setSandboxToggles(w, { ...ALL_OFF, noCooldowns: true });
+    expect(w.sandbox).toEqual({ ...ALL_OFF, noCooldowns: true });
+    for (const c of w.hero.cooldowns) expect(c).toBeLessThanOrEqual(w.t);
+  });
+
+  it('invulnerable: no life lost, the would-be damage reported as blocked, and a perfect dodge still counts', () => {
+    const w = sandbox({ ...ALL_OFF, invulnerable: true });
+    const hp = w.hero.hp;
+    const { ctx, events } = ctxOf(w);
+    hurtHero(ctx, 1e6, 'fire', null);
+    expect(w.hero.hp).toBe(hp);
+    expect(w.heroDead).toBe(false);
+    const hit = events.find(
+      (e): e is Extract<ArpgEvent, { kind: 'heroHit' }> => e.kind === 'heroHit',
+    )!;
+    expect(hit).toMatchObject({ dodged: false, blocked: true });
+    expect(hit.amount).toBeGreaterThan(0);
+
+    dodge(w);
+    const next = ctxOf(w);
+    hurtHero(next.ctx, 50, null, null);
+    expect(next.events.map((e) => e.kind)).toContain('perfectDodge');
+  });
+
+  it('fill charge fills every charge-paid slot', () => {
+    const w = sandbox(ALL_OFF, {
+      defensive: { form: 'ward', elements: ['frost'], weight: 0, payment: 'charge' },
+    });
+    fillCharge(w);
+    const [, guard, ult] = w.hero.abilities;
+    expect(w.hero.charge).toEqual([0, guard.chargeNeed, ult.chargeNeed]);
+  });
+
+  it('respawn restores the hero where it fell and clears its action state', () => {
+    const w = sandbox();
+    spawnMonsters(registry, w, { defId: 'mine_rat', kind: 'normal', count: 2 });
+    w.hero.potions = 0;
+    w.hero.phoenixUsed = true;
+    w.hero.phoenixAvailable = false;
+    hurtHero(ctxOf(w).ctx, 1e9, null, null, { unavoidable: true });
+    expect(w.heroDead).toBe(true);
+    const h = w.hero;
+    h.windup = {
+      slot: 0,
+      aim: null,
+      at: { x: 13, y: 20 },
+      start: 0,
+      until: 1,
+      step: 0,
+      conjureUntil: 1,
+      chargePaid: 0,
+    };
+    h.swing = {
+      step: 0,
+      dir: { x: 0, y: -1 },
+      targetId: null,
+      start: 0,
+      strikeAt: 1,
+      cycle: 1,
+      committed: true,
+    };
+    h.push = { fromX: 13, fromY: 26, dx: 0, dy: -1, start: 0, until: 1, stopId: null };
+    h.recoverUntil = w.t + 5;
+    h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };
+    h.defend = { form: 'ward', until: w.t + 5 };
+    h.ward = { hp: 10, max: 10 };
+    const spot = { x: h.x, y: h.y };
+    respawnHero(registry, w);
+    expect(w.heroDead).toBe(false);
+    expect(h).toMatchObject({
+      ...spot,
+      hp: h.stats.maxHp,
+      potions: bal.dive.potions,
+      phoenixAvailable: true,
+      phoenixUsed: false,
+      windup: null,
+      swing: null,
+      push: null,
+      dodge: null,
+      defend: null,
+      ward: null,
+    });
+    expect(h.recoverUntil).toBeLessThanOrEqual(w.t);
+    expect(h.invulnUntil).toBeCloseTo(w.t + 1);
+    expect(w.monsters).toHaveLength(2);
   });
 });
