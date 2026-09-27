@@ -1,8 +1,16 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { AbilityBuilds } from '../types/ability.js';
-import type { ArpgWorld, DummyLayout, MonsterEntity, SandboxToggles, Vec } from '../types/arpg.js';
+import type {
+  ArpgWorld,
+  DummyLayout,
+  MonsterEntity,
+  MonsterKind,
+  SandboxToggles,
+  Vec,
+} from '../types/arpg.js';
 import type { HeroStats, MonsterDef, SandboxBalance } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import { livingBossId } from './combat.js';
 import { clamp } from './geometry.js';
 import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
 
@@ -131,4 +139,70 @@ export function resetDummies(world: ArpgWorld): void {
     m.kby = 0;
     m.lastHitAt = -1;
   }
+}
+
+/** A monster definition from any biome (a monster or a boss), with its home biome's mana. */
+function findMonster(registry: DataRegistry, defId: string): { def: MonsterDef; mana: ManaType } {
+  for (const b of registry.getDelveData().biomes) {
+    const def = b.boss.id === defId ? b.boss : b.monsters.find((m) => m.id === defId);
+    if (def) return { def, mana: b.mana };
+  }
+  throw new Error(`Monster not found: ${defId}`);
+}
+
+/**
+ * Spawn `count` (1–8) monsters of any biome's definition, as `kind`, scaled to
+ * the world's depth and in their home element, evenly round a ring about the
+ * hero (inside the walls) and already aggroed. A boss takes the boss bar.
+ */
+export function spawnMonsters(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  o: { defId: string; kind: MonsterKind; count: number },
+): MonsterEntity[] {
+  const sb = registry.getDelveBalance().sandbox;
+  const { def, mana } = findMonster(registry, o.defId);
+  const n = Math.max(1, Math.min(8, Math.round(o.count)));
+  const h = world.hero;
+  const out: MonsterEntity[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    const p = inside(
+      world,
+      sb.edgeMargin,
+      h.x + Math.cos(a) * sb.spawnRing,
+      h.y + Math.sin(a) * sb.spawnRing,
+    );
+    const m = createMonsterEntity(
+      registry,
+      {
+        id: world.nextId++,
+        def,
+        kind: o.kind,
+        depth: world.depth,
+        door: null,
+        element: mana,
+        x: p.x,
+        y: p.y,
+        packId: 0,
+      },
+      world.rng,
+    );
+    m.aggro = true;
+    m.aggroAt = world.t;
+    m.nextSpecialAt = world.t + 4;
+    world.monsters.push(m);
+    if (o.kind === 'boss') world.bossId = m.id;
+    out.push(m);
+  }
+  world.totalMonsters += n;
+  return out;
+}
+
+/** Remove the real monsters, the dummies, or all; the boss bar moves to the next living boss. */
+export function clearMonsters(world: ArpgWorld, which: 'monsters' | 'dummies' | 'all'): void {
+  world.monsters = world.monsters.filter((m) =>
+    which === 'all' ? false : which === 'dummies' ? !m.dummy : !!m.dummy,
+  );
+  if (!world.monsters.some((m) => m.id === world.bossId)) world.bossId = livingBossId(world);
 }

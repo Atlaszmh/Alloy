@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { createSandboxWorld, resetDummies, spawnDummies } from '../src/arpg/sandbox.js';
+import {
+  clearMonsters,
+  createSandboxWorld,
+  resetDummies,
+  spawnDummies,
+  spawnMonsters,
+} from '../src/arpg/sandbox.js';
 import { createMonsterEntity, emptyStatus } from '../src/arpg/world.js';
-import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
 import { computeHeroStats, referenceMonster } from '../src/delve/hero-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { AbilityBuilds } from '../src/types/ability.js';
@@ -236,5 +242,93 @@ describe('training dummies', () => {
     expect(d).toMatchObject({ x: 13, y: 22, hp: d.maxHp, kbx: 0, kby: 0, lastHitAt: -1 });
     expect(d.status).toEqual(emptyStatus());
     expect(d.dummy?.element).toBe('frost');
+  });
+});
+
+describe('the spawner', () => {
+  it('spawns any monster at the depth scaling, with its home element, aggroed, on a ring round the hero', () => {
+    const w = sandbox(); // the Cinder Mines: fire
+    const wolves = spawnMonsters(registry, w, { defId: 'frost_wolf', kind: 'normal', count: 3 });
+    const home = registry.getDelveData().biomes.find((b) => b.id === 'frostvault')!;
+    const def = home.monsters.find((m) => m.id === 'frost_wolf')!;
+    const ref = createMonsterEntity(
+      registry,
+      {
+        id: 0,
+        def,
+        kind: 'normal',
+        depth: 5,
+        door: null,
+        element: home.mana,
+        x: 0,
+        y: 0,
+        packId: 0,
+      },
+      new SeededRNG(1),
+    );
+    expect(wolves).toHaveLength(3);
+    for (const m of wolves) {
+      expect(m).toMatchObject({
+        defId: 'frost_wolf',
+        kind: 'normal',
+        element: 'frost',
+        maxHp: ref.maxHp,
+        damage: ref.damage,
+        aggro: true,
+        aggroAt: w.t,
+        nextSpecialAt: w.t + 4,
+        dummy: null,
+      });
+      expect(Math.hypot(m.x - 13, m.y - 26)).toBeCloseTo(SB.spawnRing, 5);
+    }
+    expect(w.totalMonsters).toBe(3);
+    const [elite] = spawnMonsters(registry, w, { defId: 'frost_wolf', kind: 'elite', count: 1 });
+    expect(elite.kind).toBe('elite');
+    expect(w.totalMonsters).toBe(4);
+  });
+
+  it('keeps spawns inside the walls, and the count within 1–8', () => {
+    const w = sandbox();
+    w.hero.x = 1;
+    w.hero.y = 1;
+    const rats = spawnMonsters(registry, w, { defId: 'mine_rat', kind: 'normal', count: 20 });
+    expect(rats).toHaveLength(8);
+    for (const m of rats) {
+      expect(m.x).toBeGreaterThanOrEqual(SB.edgeMargin);
+      expect(m.x).toBeLessThanOrEqual(w.width - SB.edgeMargin);
+      expect(m.y).toBeGreaterThanOrEqual(SB.edgeMargin);
+      expect(m.y).toBeLessThanOrEqual(w.height - SB.edgeMargin);
+    }
+    expect(
+      spawnMonsters(registry, w, { defId: 'mine_rat', kind: 'normal', count: 0 }),
+    ).toHaveLength(1);
+  });
+
+  it('a spawned boss takes the boss bar, which then follows the next living boss', () => {
+    const w = sandbox();
+    const [maw] = spawnMonsters(registry, w, { defId: 'pale_maw', kind: 'boss', count: 1 });
+    const [grask] = spawnMonsters(registry, w, { defId: 'foreman_grask', kind: 'boss', count: 1 });
+    expect(w.bossId).toBe(grask.id);
+    killMonster(ctxOf(w).ctx, grask);
+    expect(w.bossId).toBe(maw.id);
+    killMonster(ctxOf(w).ctx, maw);
+    expect(w.bossId).toBeNull();
+  });
+
+  it('clearMonsters removes the real monsters, the dummies or both', () => {
+    const w = sandbox();
+    spawnDummies(registry, w, { layout: 'row', element: null });
+    const [boss] = spawnMonsters(registry, w, { defId: 'pale_maw', kind: 'boss', count: 1 });
+    spawnMonsters(registry, w, { defId: 'mine_rat', kind: 'normal', count: 2 });
+    expect(w.bossId).toBe(boss.id);
+    clearMonsters(w, 'monsters');
+    expect(w.monsters).toHaveLength(5);
+    expect(w.monsters.every((m) => m.dummy)).toBe(true);
+    expect(w.bossId).toBeNull();
+    spawnMonsters(registry, w, { defId: 'mine_rat', kind: 'normal', count: 2 });
+    clearMonsters(w, 'dummies');
+    expect(w.monsters.map((m) => m.defId)).toEqual(['mine_rat', 'mine_rat']);
+    clearMonsters(w, 'all');
+    expect(w.monsters).toHaveLength(0);
   });
 });

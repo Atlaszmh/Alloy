@@ -420,6 +420,15 @@ function spawnDrop(
   ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: kind, rarity: extra.item?.rarity });
 }
 
+/** The latest living boss's id, or null: the boss bar follows it. */
+export function livingBossId(world: ArpgWorld): number | null {
+  for (let i = world.monsters.length - 1; i >= 0; i--) {
+    const m = world.monsters[i];
+    if (!m.dead && m.kind === 'boss') return m.id;
+  }
+  return null;
+}
+
 export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.dead) return;
   const { world, bal, registry } = ctx;
@@ -430,6 +439,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   world.kills++;
   world.pending.kills++;
   if (m.kind === 'boss') world.bossKilled = true;
+  if (m.id === world.bossId) world.bossId = livingBossId(world);
 
   // The Training Grounds drop nothing: no scrap, items, motes or orbs.
   const scrap = world.sandbox
