@@ -1,7 +1,7 @@
 # Delve Training Grounds Design
 
 **Date:** 2026-09-26
-**Status:** Built in v0.41.0.
+**Status:** Built in v0.41.0; review fixes in v0.41.1.
 
 **Engine:** `packages/engine/src/`
 - `arpg/sandbox.ts` (new)
