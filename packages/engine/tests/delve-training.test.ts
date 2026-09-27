@@ -11,9 +11,17 @@ import {
 } from '../src/arpg/sandbox.js';
 import { createMonsterEntity, emptyStatus, refreshWorldHero } from '../src/arpg/world.js';
 import { hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
-import { computeHeroStats, referenceMonster } from '../src/delve/hero-stats.js';
+import {
+  computeAttunement,
+  computeHeroStats,
+  hasMastery,
+  manaPool,
+  referenceMonster,
+} from '../src/delve/hero-stats.js';
+import { generateItem } from '../src/loot/item-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { AbilityBuilds } from '../src/types/ability.js';
+import type { GearItem } from '../src/types/gear.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity, SandboxToggles } from '../src/types/arpg.js';
 import {
   DEFAULT_BUILDS,
@@ -531,5 +539,61 @@ describe('mid-fight build swaps', () => {
     expect(w.hero.windup).toEqual(windup);
     expect(w.hero.ward).not.toBeNull();
     expect(w.hero.abilities[0].form.id).toBe('lance');
+  });
+});
+
+describe('hero stats overrides', () => {
+  const eq = { weapon: gear('fire'), chest: gear('earth', 'chest') };
+  /** A bare amulet (no lines) carrying one legendary power at a set value, or none. */
+  const amulet = (power: { id: string; value: number } | null): GearItem => {
+    const item = generateItem(
+      registry,
+      { uid: 'amulet', ilvl: 3, rarity: 'legendary', slot: 'amulet', legendaryId: 'prism' },
+      new SeededRNG(1),
+    );
+    const bare: GearItem = { ...item, implicits: [], affixes: [] };
+    delete bare.legendary;
+    return power ? { ...bare, legendary: { ...power, roll: 1 } } : bare;
+  };
+
+  it('extra legendaries apply as gear would, the higher of gear and extra winning', () => {
+    const plain = computeHeroStats(eq, registry);
+    const glass = computeHeroStats(eq, registry, { legendaries: { glass_cannon: 50 } });
+    expect(glass.legendaries.glass_cannon).toBe(50);
+    expect(glass.damageMult).toBeCloseTo(plain.damageMult + 0.5);
+    expect(glass.maxHp).toBeCloseTo(plain.maxHp * 0.8);
+    const worn = { ...eq, amulet: amulet({ id: 'glass_cannon', value: 40 }) };
+    const higher = computeHeroStats(worn, registry, { legendaries: { glass_cannon: 50 } });
+    const lower = computeHeroStats(worn, registry, { legendaries: { glass_cannon: 30 } });
+    expect(higher.legendaries.glass_cannon).toBe(50);
+    expect(lower.legendaries.glass_cannon).toBe(40);
+  });
+
+  it('extra attunement adds to the gear, before masteries and the mana pool', () => {
+    const plain = computeHeroStats(eq, registry);
+    expect(hasMastery(registry, plain.attunement, 'earth')).toBe(false);
+    const earth = computeHeroStats(eq, registry, { attunement: { earth: 10 } });
+    expect(earth.attunement.earth).toBe(plain.attunement.earth + 10);
+    expect(hasMastery(registry, earth.attunement, 'earth')).toBe(true);
+    expect(earth.maxHp).toBeCloseTo(plain.maxHp * 1.2); // the Earth mastery
+    expect(manaPool(earth, registry).max).toBe(
+      manaPool(plain, registry).max + 10 * bal.mana.poolPerAttune,
+    );
+  });
+
+  it('an extra Prism raises every element without stacking on gear Prism', () => {
+    const base = computeAttunement({ ...eq, amulet: amulet(null) }, registry);
+    const plus = (n: number) =>
+      Object.fromEntries(Object.entries(base).map(([m, v]) => [m, v + n]));
+    const gear2 = { ...eq, amulet: amulet({ id: 'prism', value: 2 }) };
+    const gear1 = { ...eq, amulet: amulet({ id: 'prism', value: 1 }) };
+    expect(
+      computeAttunement({ ...eq, amulet: amulet(null) }, registry, { legendaries: { prism: 2 } }),
+    ).toEqual(plus(2));
+    expect(computeAttunement(gear2, registry, { legendaries: { prism: 1 } })).toEqual(plus(2));
+    expect(computeAttunement(gear1, registry, { legendaries: { prism: 2 } })).toEqual(plus(2));
+    expect(computeHeroStats(gear1, registry, { legendaries: { prism: 2 } }).attunement).toEqual(
+      plus(2),
+    );
   });
 });

@@ -52,10 +52,23 @@ export function itemAffinityAttunement(registry: DataRegistry, item: GearItem): 
   return registry.getDelveBalance().mana.attuneByRarity[item.rarity];
 }
 
-/** Total attunement per mana type from equipped gear. */
-export function computeAttunement(equipped: EquippedGear, registry: DataRegistry): ManaMap {
+/** Extra powers and attunement on top of the gear (the Training Grounds' toggles). */
+export interface HeroStatsExtra {
+  /** Legendary id → value, merged with the gear's (the higher wins). */
+  legendaries?: Record<string, number>;
+  /** Attunement added per element. */
+  attunement?: Partial<ManaMap>;
+}
+
+/** Total attunement per mana type from equipped gear (plus any `extra`). */
+export function computeAttunement(
+  equipped: EquippedGear,
+  registry: DataRegistry,
+  extra: HeroStatsExtra = {},
+): ManaMap {
   const att = emptyManaMap();
-  let prism = 0;
+  // Prism: the best of the gear's and the extra's, never both.
+  let prism = Math.round(extra.legendaries?.prism ?? 0);
   for (const slot of GEAR_SLOTS) {
     const item = equipped[slot];
     if (!item) continue;
@@ -66,7 +79,7 @@ export function computeAttunement(equipped: EquippedGear, registry: DataRegistry
     }
     if (item.legendary?.id === 'prism') prism = Math.max(prism, Math.round(item.legendary.value));
   }
-  if (prism > 0) for (const m of MANA_TYPES) att[m] += prism;
+  for (const m of MANA_TYPES) att[m] += (extra.attunement?.[m] ?? 0) + prism;
   return att;
 }
 
@@ -78,10 +91,14 @@ function emptyTotals(): Record<HeroStatKey, number> {
   return Object.fromEntries(HERO_STAT_KEYS.map((k) => [k, 0])) as Record<HeroStatKey, number>;
 }
 
-export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry): HeroStats {
+export function computeHeroStats(
+  equipped: EquippedGear,
+  registry: DataRegistry,
+  extra: HeroStatsExtra = {},
+): HeroStats {
   const bal = registry.getDelveBalance();
   const totals = emptyTotals();
-  const legendaries: Record<string, number> = {};
+  const legendaries: Record<string, number> = { ...extra.legendaries };
 
   for (const slot of GEAR_SLOTS) {
     const item = equipped[slot];
@@ -95,7 +112,7 @@ export function computeHeroStats(equipped: EquippedGear, registry: DataRegistry)
     }
   }
 
-  const attunement = computeAttunement(equipped, registry);
+  const attunement = computeAttunement(equipped, registry, extra);
   const weaponItem = equipped.weapon;
   const weaponBase = weaponItem ? registry.getGearBase(weaponItem.baseId) : null;
   const weapon: HeroWeapon = weaponBase?.attack
