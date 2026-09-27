@@ -94,20 +94,31 @@ function layoutOffsets(sb: SandboxBalance, layout: DummyLayout): Vec[] {
   ];
 }
 
+/** A group's sideways shift: 0, then `groupSpacing` right, left, twice right, twice left… */
+function groupShift(sb: SandboxBalance, group: number): number {
+  return Math.ceil(group / 2) * (group % 2 === 1 ? 1 : -1) * sb.groupSpacing;
+}
+
 /**
- * Stand a group of training dummies above the hero. Near a wall the group moves
- * in as a whole (keeping its spacing) to stay `edgeMargin` inside. A dummy
+ * Stand a group of training dummies above the hero. The `group`-th group (from
+ * 0) stands beside the earlier ones (`groupShift`), so a replay with the same
+ * index lands in the same place. Near a wall the group moves in as a whole
+ * (keeping its spacing) to stay `edgeMargin` inside. A dummy
  * is a normal size-1 foe with the reference monster's life × `dummyLifeMult`
  * that never acts or dies; `element` is what it resists (null = Neutral).
  */
 export function spawnDummies(
   registry: DataRegistry,
   world: ArpgWorld,
-  o: { layout: DummyLayout; element: ManaType | null },
+  o: { layout: DummyLayout; element: ManaType | null; group?: number },
 ): MonsterEntity[] {
   const sb = registry.getDelveBalance().sandbox;
   const h = world.hero;
-  const spots = layoutOffsets(sb, o.layout).map((off) => ({ x: h.x + off.x, y: h.y + off.y }));
+  const side = groupShift(sb, o.group ?? 0);
+  const spots = layoutOffsets(sb, o.layout).map((off) => ({
+    x: h.x + side + off.x,
+    y: h.y + off.y,
+  }));
   // The shift that brings the whole group inside (0 when it already fits).
   const xs = spots.map((p) => p.x);
   const ys = spots.map((p) => p.y);
@@ -179,7 +190,8 @@ export function spawnMonsters(
   const h = world.hero;
   const out: MonsterEntity[] = [];
   for (let i = 0; i < n; i++) {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    // Half a step round from straight up, so none lands on a row of dummies.
+    const a = -Math.PI / 2 + (2 * Math.PI * (i + 0.5)) / n;
     const p = inside(
       world,
       sb.edgeMargin,

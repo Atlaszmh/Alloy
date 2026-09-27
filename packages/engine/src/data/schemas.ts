@@ -852,6 +852,7 @@ const DelveBalanceSchema = z.object({
     dummyDistance: z.number().positive(),
     rowSpacing: z.number().positive(),
     clumpRadius: z.number().positive(),
+    groupSpacing: z.number().positive(),
     spawnRing: z.number().positive(),
     edgeMargin: z.number().min(0),
   }),

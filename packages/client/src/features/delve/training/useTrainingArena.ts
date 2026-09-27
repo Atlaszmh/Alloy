@@ -56,7 +56,7 @@ export function useTrainingArena(
         abilities: loadout.abilities,
         toggles: s.toggles,
       });
-      for (const group of s.dummies) spawnDummies(registry, world, group);
+      s.dummies.forEach((g, group) => spawnDummies(registry, world, { ...g, group }));
       meterRef.current.reset();
       return world;
     },
@@ -89,7 +89,11 @@ export function useTrainingArena(
         const s = useSandboxStore.getState();
         if (s.dummies.length >= MAX_DUMMY_GROUPS) return;
         if (worldRef.current)
-          spawnDummies(registry, worldRef.current, { layout, element: s.dummyElement });
+          spawnDummies(registry, worldRef.current, {
+            layout,
+            element: s.dummyElement,
+            group: s.dummies.length,
+          });
         s.addDummyGroup({ layout, element: s.dummyElement });
       },
       spawn: (defId: string, kind: MonsterKind, count: number) => {

@@ -44,9 +44,10 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 |---|---|---|
 | `dummyLifeMult` | 50 | A dummy's life is the reference monster's life at the depth times this. |
 | `heroStart` | `[13, 26]` | Where the hero stands in a sandbox (the arena is 26 × 40). |
-| `dummyDistance` | 4 | How far above the hero the first dummy stands. |
-| `rowSpacing` | 2 | Gap between dummies in a row. This is under `chainRange` (4), so chains can jump. |
+| `dummyDistance` | 3 | How far above the hero the first dummy stands. A row then runs 3.0–7.8 above the hero: on screen beside the docked panel, and mostly within a Lance's 7.5 reach; a clump spans 2.8–5.2. |
+| `rowSpacing` | 1.2 | Gap between dummies in a row: at least twice a monster's radius (0.55), so they don't touch, and under `chainRange` (4), so chains can jump. |
 | `clumpRadius` | 1.2 | How far a clump's dummies sit from its centre. |
+| `groupSpacing` | 3.6 | Each new dummy group stands this much further sideways, alternating right and left, so groups don't land on each other (at least 2 × `clumpRadius` + 2 × the monster radius, so two clumps never touch). |
 | `spawnRing` | 6 | How far from the hero spawned monsters appear. |
 | `edgeMargin` | 1.5 | Spawns are kept this far inside the arena walls. |
 
@@ -68,7 +69,7 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 
 `MonsterEntity` gains `dummy: { homeX: number; homeY: number; element: ManaType | null } | null`. It is `null` for real monsters.
 
-- **Spawning:** `spawnDummies(registry, world, { layout, element })` places dummies above the hero. Positions are relative to the hero (x, y); near a wall the whole group moves in to stay `edgeMargin` inside, keeping its spacing.
+- **Spawning:** `spawnDummies(registry, world, { layout, element, group })` places dummies above the hero. Positions are relative to the hero (x, y). The `group`-th group added (from 0; the client passes the store's group index, on adding and on every replay) is shifted sideways by 0, +`groupSpacing`, −`groupSpacing`, +2 × `groupSpacing`, −2 × `groupSpacing`, … so a second group stands beside the first instead of on it. Near a wall the whole group moves in to stay `edgeMargin` inside, keeping its spacing.
 
   | Layout | Positions |
   |---|---|
@@ -97,7 +98,7 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 
 - **Kind:** `kind` is `'normal' | 'elite' | 'boss'`. Stats come from `createMonsterEntity` at the world's depth.
 - **Element:** each monster uses its home biome's mana (its natural element).
-- **Placement:** evenly around a ring of `spawnRing` about the hero, clamped to `edgeMargin` inside the walls.
+- **Placement:** evenly around a ring of `spawnRing` about the hero, starting half a step round from straight up (so none lands on a row of dummies), clamped to `edgeMargin` inside the walls.
 - **Aggro:** they arrive already aggroed, with `nextSpecialAt = t + 4`, as a normal aggro does.
 - **Bosses:** a spawned boss becomes `world.bossId` (the latest one), so the boss bar shows. When the boss that `bossId` points at dies or is removed, it points at the next living boss, or `null` if none are left.
 - **Count:** `totalMonsters` is increased.

@@ -243,12 +243,14 @@ export interface SandboxBalance {
   dummyLifeMult: number;
   /** Where the hero stands (the arena is 26 × 40). */
   heroStart: [number, number];
-  /** How far above the hero the first dummy stands. */
+  /** How far above the hero the first dummy stands (a row then runs to 7.8: on screen, and mostly in a Lance's 7.5 reach). */
   dummyDistance: number;
-  /** Gap between dummies in a row (under `abilities.chainRange`, so chains can jump). */
+  /** Gap between dummies in a row: at least two monster radii (they don't touch), under `abilities.chainRange` (chains jump). */
   rowSpacing: number;
   /** How far a clump's dummies sit from its centre. */
   clumpRadius: number;
+  /** Each new dummy group stands this much further sideways, alternating right and left (two clumps never touch). */
+  groupSpacing: number;
   /** How far from the hero spawned monsters appear. */
   spawnRing: number;
   /** Dummies and spawns are kept this far inside the walls. */

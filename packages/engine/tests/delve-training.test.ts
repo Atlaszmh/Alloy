@@ -44,6 +44,9 @@ import {
 const SB = bal.sandbox;
 const ALL_ON: SandboxToggles = { infiniteMana: true, noCooldowns: true, invulnerable: true };
 const ALL_OFF: SandboxToggles = { infiniteMana: false, noCooldowns: false, invulnerable: false };
+/** Where a single dummy stands: straight above heroStart. */
+const [HX, HY] = SB.heroStart;
+const DUMMY_Y = HY - SB.dummyDistance;
 
 function sandbox(toggles = ALL_OFF, builds: Partial<AbilityBuilds> = {}, depth = 5): ArpgWorld {
   return createSandboxWorld(registry, {
@@ -109,8 +112,10 @@ describe('the sandbox world', () => {
 describe('training dummies', () => {
   it('stand above the hero in each layout: a normal size-1 foe that never fights, with a lot of life', () => {
     const w = sandbox();
+    const [hx, hy] = SB.heroStart;
+    const up = SB.dummyDistance;
     const [one] = spawnDummies(registry, w, { layout: 'single', element: null });
-    expect(at([one])).toEqual([[13, 22]]);
+    expect(at([one])).toEqual([[hx, hy - up]]);
     expect(one).toMatchObject({
       defId: 'dummy',
       kind: 'normal',
@@ -119,21 +124,21 @@ describe('training dummies', () => {
       damage: 0,
       radius: bal.monster.radius,
       element: w.element,
-      dummy: { homeX: 13, homeY: 22, element: null },
+      dummy: { homeX: hx, homeY: hy - up, element: null },
     });
     expect(one.maxHp).toBe(Math.round(referenceMonster(registry, 5).hp * SB.dummyLifeMult));
-    expect(at(spawnDummies(registry, w, { layout: 'row', element: null }))).toEqual([
-      [13, 22],
-      [13, 20],
-      [13, 18],
-      [13, 16],
-      [13, 14],
-    ]);
+    const row = at(spawnDummies(registry, w, { layout: 'row', element: null }));
+    expect(row).toHaveLength(5);
+    row.forEach(([x, y], k) => {
+      expect(x).toBe(hx);
+      expect(y).toBeCloseTo(hy - (up + k * SB.rowSpacing));
+    });
     const clump = at(spawnDummies(registry, w, { layout: 'clump', element: null }));
     expect(clump).toHaveLength(5);
-    expect(clump[0]).toEqual([13, 21]);
+    expect(clump[0][0]).toBe(hx);
+    expect(clump[0][1]).toBeCloseTo(hy - (up + 1));
     for (const [x, y] of clump.slice(1))
-      expect(Math.hypot(x - 13, y - 21)).toBeCloseTo(SB.clumpRadius);
+      expect(Math.hypot(x - hx, y - (hy - (up + 1)))).toBeCloseTo(SB.clumpRadius);
     expect(w.monsters).toHaveLength(11);
   });
 
@@ -155,6 +160,32 @@ describe('training dummies', () => {
         }
       }
     }
+  });
+
+  it("a row fits on screen and mostly within a lance's reach; its dummies neither touch nor block a chain", () => {
+    expect(SB.dummyDistance + 4 * SB.rowSpacing).toBeLessThanOrEqual(8);
+    expect(SB.rowSpacing).toBeGreaterThanOrEqual(2 * bal.monster.radius);
+    expect(SB.rowSpacing).toBeLessThan(bal.abilities.chainRange);
+  });
+
+  it('each new group stands beside the last (alternating right and left), not on it', () => {
+    const w = sandbox();
+    const hx = SB.heroStart[0];
+    const G = SB.groupSpacing;
+    const xs = [0, 1, 2, 3].map(
+      (group) => spawnDummies(registry, w, { layout: 'single', element: null, group })[0].x,
+    );
+    expect(xs).toEqual([hx, hx + G, hx - G, hx + 2 * G]);
+    // Wide enough that two clumps side by side never touch.
+    expect(G).toBeGreaterThanOrEqual(2 * SB.clumpRadius + 2 * bal.monster.radius);
+    // Replaying a group with its index lands it in the same place.
+    const again = spawnDummies(registry, sandbox(), { layout: 'row', element: null, group: 2 });
+    expect(again.map((m) => m.x)).toEqual([hx - G, hx - G, hx - G, hx - G, hx - G]);
+    // Near a wall the shifted group still moves in as a whole.
+    const edge = sandbox();
+    edge.hero.x = w.width - 2;
+    for (const m of spawnDummies(registry, edge, { layout: 'clump', element: null, group: 1 }))
+      expect(m.x).toBeLessThanOrEqual(edge.width - SB.edgeMargin);
   });
 
   it('near a wall a layout moves in as a group, keeping its spacing', () => {
@@ -232,16 +263,16 @@ describe('training dummies', () => {
     const w = sandbox();
     w.hero.nextAttackAt = 1e9;
     const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
-    w.hero.y = 23.2; // in a real monster's melee reach
+    w.hero.y = DUMMY_Y + 1.2; // in a real monster's melee reach
     const hp = w.hero.hp;
     run(w, 3);
-    expect(at([d])).toEqual([[13, 22]]);
+    expect(at([d])).toEqual([[HX, DUMMY_Y]]);
     expect(w.hero.hp).toBe(hp);
     expect(d.windupUntil).toBe(0);
     expect(d.aggro).toBe(false); // its AI never ran: it never noticed the hero
     run(w, 1, { x: 0, y: -1 });
-    expect(at([d])).toEqual([[13, 22]]);
-    expect(w.hero.y).toBeCloseTo(22 + d.radius + w.hero.radius, 5);
+    expect(at([d])).toEqual([[HX, DUMMY_Y]]);
+    expect(w.hero.y).toBeCloseTo(DUMMY_Y + d.radius + w.hero.radius, 5);
   });
 
   it('are moved by knockback and pull', () => {
@@ -251,20 +282,20 @@ describe('training dummies', () => {
     hitMonster(ctxOf(w).ctx, d, 1, null, {
       source: 'skill',
       knockback: 1,
-      kbFrom: { x: 13, y: 26 },
+      kbFrom: { x: HX, y: HY },
     });
     run(w, 0.3);
-    expect(d.y).toBeLessThan(22 - 0.3);
-    expect(d.x).toBeCloseTo(13, 5);
+    expect(d.y).toBeLessThan(DUMMY_Y - 0.3);
+    expect(d.x).toBeCloseTo(HX, 5);
 
-    // Magnetism (storm + earth) pulls: 75% of the way to a Nova at the hero, 4 units away.
+    // Magnetism (storm + earth) pulls: 75% of the way to a Nova at the hero, dummyDistance away.
     const p = sandbox(ALL_ON, {
       ultimate: { form: 'nova', elements: ['storm', 'earth'], weight: 0, payment: 'mana' },
     });
     p.hero.nextAttackAt = 1e9;
     const [q] = spawnDummies(registry, p, { layout: 'single', element: null });
     press(p, 2);
-    expect(q.y).toBeGreaterThan(23);
+    expect(q.y).toBeGreaterThan(DUMMY_Y + 1);
   });
 
   it("a row's spacing lets a chain jump", () => {
@@ -285,7 +316,7 @@ describe('training dummies', () => {
     d.status.burnUntil = w.t + 3;
     d.status.chillStacks = 1;
     resetDummies(w);
-    expect(d).toMatchObject({ x: 13, y: 22, hp: d.maxHp, kbx: 0, kby: 0, lastHitAt: -1 });
+    expect(d).toMatchObject({ x: HX, y: DUMMY_Y, hp: d.maxHp, kbx: 0, kby: 0, lastHitAt: -1 });
     expect(d.status).toEqual(emptyStatus());
     expect(d.dummy?.element).toBe('frost');
   });
@@ -328,6 +359,15 @@ describe('the spawner', () => {
       expect(Math.hypot(m.x - 13, m.y - 26)).toBeCloseTo(SB.spawnRing, 5);
     }
     expect(w.totalMonsters).toBe(3);
+    // The ring starts half a step round, so no monster lands on a row of dummies straight above.
+    for (let n = 1; n <= 8; n++) {
+      const ring = spawnMonsters(registry, sandbox(), {
+        defId: 'frost_wolf',
+        kind: 'normal',
+        count: n,
+      });
+      for (const m of ring) expect(m.y < 26 && Math.abs(m.x - 13) < 1).toBe(false);
+    }
     const [elite] = spawnMonsters(registry, w, { defId: 'frost_wolf', kind: 'elite', count: 1 });
     expect(elite.kind).toBe('elite');
     expect(w.totalMonsters).toBe(4);
@@ -585,7 +625,7 @@ describe('hit events', () => {
     const hits = (events: ArpgEvent[]) => events.filter((e): e is Hit => e.kind === 'hit');
     const w = sandbox(ALL_ON);
     spawnDummies(registry, w, { layout: 'single', element: null });
-    w.hero.y = 23.5; // the sword reaches the dummy at (13, 22)
+    w.hero.y = DUMMY_Y + 1.5; // the sword reaches the dummy
     const basic = hits(run(w, 1.5)).find((e) => e.source === 'basic');
     expect(basic).toBeDefined();
     expect(basic!.slot).toBeUndefined();
