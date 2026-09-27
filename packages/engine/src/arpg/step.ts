@@ -431,6 +431,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
     }
 
+    // A training dummy keeps its statuses and its knockback, but never acts.
+    if (m.dummy) continue;
+
     if (!m.aggro) {
       if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius) {
         for (const o of world.monsters) {
@@ -560,7 +563,8 @@ function separate(ctx: SimCtx): void {
     const overlap = a.radius + h.radius - d;
     if (overlap > 0) {
       const n = d > 1e-6 ? { x: (a.x - h.x) / d, y: (a.y - h.y) / d } : { x: 0, y: -1 };
-      const heroShare = a.kind === 'boss' ? 0.8 : 0.2;
+      // A dummy doesn't budge for the hero; a boss mostly doesn't.
+      const heroShare = a.dummy ? 1 : a.kind === 'boss' ? 0.8 : 0.2;
       a.x += n.x * overlap * (1 - heroShare);
       a.y += n.y * overlap * (1 - heroShare);
       h.x -= n.x * overlap * heroShare;

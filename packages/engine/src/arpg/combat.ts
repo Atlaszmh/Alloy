@@ -243,10 +243,12 @@ export function hitMonster(
   }
   if (crit) amount *= stats.critMultiplier;
 
+  // A dummy resists as its own setting says (Neutral: nothing); its `element` is only its look.
+  const resists = m.dummy ? m.dummy.element : m.element;
   if (element) {
     if (opts.source !== 'dot') amount *= 1 + stats.elementPower[element];
-    if (element === m.element) amount *= 1 - bal.monster.resist;
-    if (element === ctx.data.weakness[m.element]) amount *= 1 + bal.monster.weakness;
+    if (resists && element === resists) amount *= 1 - bal.monster.resist;
+    if (resists && element === ctx.data.weakness[resists]) amount *= 1 + bal.monster.weakness;
   }
   if (opts.source === 'basic' && m.traits.includes('armored'))
     amount *= 1 - bal.monster.traits.armoredReduction;
@@ -350,6 +352,7 @@ export function hitMonster(
     m.hp > 0 &&
     opts.execute &&
     m.kind !== 'boss' &&
+    !m.dummy &&
     isFrozen(ctx, m) &&
     m.hp / m.maxHp <= opts.execute
   ) {
@@ -367,6 +370,8 @@ export function hitMonster(
     m.hp = 0;
   }
 
+  // A training dummy never dies: lethal damage puts it back to full, and the hit carries on.
+  if (m.dummy && m.hp <= 0) m.hp = m.maxHp;
   if (m.hp <= 0) {
     if (opts.spread) spreadAffliction(ctx, m);
     killMonster(ctx, m);

@@ -163,6 +163,7 @@ export function createMonsterEntity(
     lastHitAt: -1,
     nextSpecialAt: 0,
     dead: false,
+    dummy: null,
   };
 }
 

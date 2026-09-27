@@ -177,6 +177,8 @@ export interface MonsterEntity {
   /** Boss special-attack clock. */
   nextSpecialAt: number;
   dead: boolean;
+  /** A training dummy: where it stands, and the element it resists (null = Neutral). Null for real monsters. */
+  dummy: { homeX: number; homeY: number; element: ManaType | null } | null;
 }
 
 export interface Projectile {
@@ -462,6 +464,9 @@ export interface WorldPending {
   kills: number;
   reactions: ReactionId[];
 }
+
+/** How `spawnDummies` places a group: one; five in a line going up (lances, chains); or five in a clump (areas). */
+export type DummyLayout = 'single' | 'row' | 'clump';
 
 /** Training Grounds rules (see `arpg/sandbox.ts`); each is checked where its rule lives. */
 export interface SandboxToggles {

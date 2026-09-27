@@ -1,12 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { createSandboxWorld } from '../src/arpg/sandbox.js';
-import { createMonsterEntity } from '../src/arpg/world.js';
+import { createSandboxWorld, resetDummies, spawnDummies } from '../src/arpg/sandbox.js';
+import { createMonsterEntity, emptyStatus } from '../src/arpg/world.js';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
-import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { computeHeroStats, referenceMonster } from '../src/delve/hero-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { AbilityBuilds } from '../src/types/ability.js';
-import type { ArpgEvent, ArpgWorld, SandboxToggles } from '../src/types/arpg.js';
-import { DEFAULT_BUILDS, bal, gear, registry, run } from './fixtures/arena.js';
+import type { ArpgEvent, ArpgWorld, MonsterEntity, SandboxToggles } from '../src/types/arpg.js';
+import {
+  DEFAULT_BUILDS,
+  STEP,
+  bal,
+  damaged,
+  gear,
+  press,
+  registry,
+  run,
+} from './fixtures/arena.js';
 
 // A sandbox hero stands at heroStart (13, 26) facing up (-y); depth 5 is the Cinder Mines (fire).
 // The fixtures' `dummy()` is a sturdy normal foe: this file's dummies come from `spawnDummies`.
@@ -27,6 +36,8 @@ function ctxOf(w: ArpgWorld) {
   const events: ArpgEvent[] = [];
   return { ctx: makeCtx(registry, w, events), events };
 }
+
+const at = (ms: MonsterEntity[]) => ms.map((m) => [m.x, m.y]);
 
 describe('the sandbox world', () => {
   it('is empty at any depth (a boss floor too), never clears, and starts the hero at heroStart', () => {
@@ -70,5 +81,160 @@ describe('the sandbox world', () => {
     expect(events.find((e) => e.kind === 'death')).toMatchObject({ scrap: 0 });
     expect(w.pending.scrap).toBe(0);
     expect(events).toContainEqual(expect.objectContaining({ kind: 'heal', source: 'kill' }));
+  });
+});
+
+describe('training dummies', () => {
+  it('stand above the hero in each layout: a normal size-1 foe that never fights, with a lot of life', () => {
+    const w = sandbox();
+    const [one] = spawnDummies(registry, w, { layout: 'single', element: null });
+    expect(at([one])).toEqual([[13, 22]]);
+    expect(one).toMatchObject({
+      defId: 'dummy',
+      kind: 'normal',
+      traits: [],
+      speed: 0,
+      damage: 0,
+      radius: bal.monster.radius,
+      element: w.element,
+      dummy: { homeX: 13, homeY: 22, element: null },
+    });
+    expect(one.maxHp).toBe(Math.round(referenceMonster(registry, 5).hp * SB.dummyLifeMult));
+    expect(at(spawnDummies(registry, w, { layout: 'row', element: null }))).toEqual([
+      [13, 22],
+      [13, 20],
+      [13, 18],
+      [13, 16],
+      [13, 14],
+    ]);
+    const clump = at(spawnDummies(registry, w, { layout: 'clump', element: null }));
+    expect(clump).toHaveLength(5);
+    expect(clump[0]).toEqual([13, 21]);
+    for (const [x, y] of clump.slice(1))
+      expect(Math.hypot(x - 13, y - 21)).toBeCloseTo(SB.clumpRadius);
+    expect(w.monsters).toHaveLength(11);
+  });
+
+  it('stay inside the walls wherever the hero stands', () => {
+    for (const [x, y] of [
+      [0.5, 0.5],
+      [25.5, 39.5],
+      [0.5, 39.5],
+    ]) {
+      const w = sandbox();
+      w.hero.x = x;
+      w.hero.y = y;
+      for (const layout of ['single', 'row', 'clump'] as const) {
+        for (const m of spawnDummies(registry, w, { layout, element: null })) {
+          expect(m.x).toBeGreaterThanOrEqual(SB.edgeMargin);
+          expect(m.x).toBeLessThanOrEqual(w.width - SB.edgeMargin);
+          expect(m.y).toBeGreaterThanOrEqual(SB.edgeMargin);
+          expect(m.y).toBeLessThanOrEqual(w.height - SB.edgeMargin);
+        }
+      }
+    }
+  });
+
+  it('reset to full on lethal damage, and the same hit still applies its status', () => {
+    const w = sandbox();
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    d.hp = 1;
+    const { ctx, events } = ctxOf(w);
+    hitMonster(ctx, d, 1000, 'fire', { source: 'skill', applies: ['burn'] });
+    expect(d.dead).toBe(false);
+    expect(d.hp).toBe(d.maxHp);
+    expect(d.status.burnUntil).toBeGreaterThan(w.t);
+    expect(events.map((e) => e.kind)).not.toContain('death');
+    expect(w.kills).toBe(0);
+    run(w, STEP);
+    expect(w.monsters).toContain(d);
+  });
+
+  it('are exempt from execute', () => {
+    const w = sandbox();
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    d.hp = d.maxHp * 0.1;
+    d.status.freezeUntil = w.t + 5;
+    const { ctx, events } = ctxOf(w);
+    hitMonster(ctx, d, 1, null, { source: 'skill', execute: 0.5 });
+    expect(events.filter((e) => e.kind === 'hit')).toHaveLength(1);
+    expect(d.hp).toBeCloseTo(d.maxHp * 0.1 - 1);
+  });
+
+  it('resist as set: a Neutral dummy takes no resist or weakness, a fire dummy resists fire', () => {
+    const w = sandbox();
+    expect(w.element).toBe('fire');
+    const [neutral] = spawnDummies(registry, w, { layout: 'single', element: null });
+    const [fire] = spawnDummies(registry, w, { layout: 'single', element: 'fire' });
+    expect(neutral.element).toBe('fire'); // the look stays the world's
+    const { ctx } = ctxOf(w);
+    const dot = (m: MonsterEntity, el: 'fire' | 'frost') =>
+      hitMonster(ctx, m, 100, el, { source: 'dot', noReact: true });
+    expect(dot(neutral, 'fire')).toBeCloseTo(100);
+    expect(dot(neutral, 'frost')).toBeCloseTo(100);
+    expect(dot(fire, 'fire')).toBeCloseTo(100 * (1 - bal.monster.resist));
+    expect(dot(fire, 'frost')).toBeCloseTo(100 * (1 + bal.monster.weakness));
+  });
+
+  it('never move or attack, and the hero walking into one does not push it', () => {
+    const w = sandbox();
+    w.hero.nextAttackAt = 1e9;
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.y = 23.2; // in a real monster's melee reach
+    const hp = w.hero.hp;
+    run(w, 3);
+    expect(at([d])).toEqual([[13, 22]]);
+    expect(w.hero.hp).toBe(hp);
+    expect(d.windupUntil).toBe(0);
+    expect(d.aggro).toBe(false); // its AI never ran: it never noticed the hero
+    run(w, 1, { x: 0, y: -1 });
+    expect(at([d])).toEqual([[13, 22]]);
+    expect(w.hero.y).toBeCloseTo(22 + d.radius + w.hero.radius, 5);
+  });
+
+  it('are moved by knockback and pull', () => {
+    const w = sandbox();
+    w.hero.nextAttackAt = 1e9;
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    hitMonster(ctxOf(w).ctx, d, 1, null, {
+      source: 'skill',
+      knockback: 1,
+      kbFrom: { x: 13, y: 26 },
+    });
+    run(w, 0.3);
+    expect(d.y).toBeLessThan(22 - 0.3);
+    expect(d.x).toBeCloseTo(13, 5);
+
+    // Magnetism (storm + earth) pulls: 75% of the way to a Nova at the hero, 4 units away.
+    const p = sandbox(ALL_ON, {
+      ultimate: { form: 'nova', elements: ['storm', 'earth'], weight: 0, payment: 'mana' },
+    });
+    p.hero.nextAttackAt = 1e9;
+    const [q] = spawnDummies(registry, p, { layout: 'single', element: null });
+    press(p, 2);
+    expect(q.y).toBeGreaterThan(23);
+  });
+
+  it("a row's spacing lets a chain jump", () => {
+    const w = sandbox(ALL_ON, {
+      primary: { form: 'bolt', elements: ['storm'], weight: 0, payment: 'mana' },
+    });
+    w.hero.nextAttackAt = 1e9;
+    const row = spawnDummies(registry, w, { layout: 'row', element: null });
+    const events = [...press(w, 0), ...run(w, 1)];
+    expect(events.some((e) => e.kind === 'chain')).toBe(true);
+    expect(damaged(row[1])).toBe(true);
+  });
+
+  it('resetDummies puts them home with full life, no statuses and no knockback', () => {
+    const w = sandbox();
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: 'frost' });
+    Object.assign(d, { x: 16, y: 30, hp: 5, kbx: 3, kby: -2, lastHitAt: w.t });
+    d.status.burnUntil = w.t + 3;
+    d.status.chillStacks = 1;
+    resetDummies(w);
+    expect(d).toMatchObject({ x: 13, y: 22, hp: d.maxHp, kbx: 0, kby: 0, lastHitAt: -1 });
+    expect(d.status).toEqual(emptyStatus());
+    expect(d.dummy?.element).toBe('frost');
   });
 });
