@@ -94,6 +94,22 @@ test.describe('Delve loot loop', () => {
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
+    await expect(page.getByTestId('monsters-left')).toContainText('foes');
+  });
+
+  test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
+    await seedProfile(page);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('extract-button').click();
+    const summary = page.getByTestId('dive-summary');
+    await expect(summary).toContainText('EXTRACTED');
+    // No checkpoint yet, so "Dive again" starts at depth 1: the same key as the finished floor.
+    await page.getByTestId('dive-again').click();
+    await expect(summary).toBeHidden();
+    await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
+    await expect(page.getByTestId('monsters-left')).toContainText('foes', { timeout: ARENA_READY });
   });
 
   test('D06: the ability bar fits on screen', async ({ page }) => {
