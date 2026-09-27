@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AbilitiesPanel } from '../AbilitiesPanel';
+import { computeHeroStats, defaultAbilities } from '@alloy/engine';
+import { AbilitiesPanel, AbilityEditor } from '../AbilitiesPanel';
+import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
 const abilities = () => useDelveStore.getState().profile.abilities;
@@ -68,5 +70,38 @@ describe('AbilitiesPanel', () => {
     expect(screen.getByTestId('form-lance')).toBeDisabled();
     fireEvent.click(screen.getByTestId('form-lance'));
     expect(abilities().primary.form).toBe('bolt');
+  });
+});
+
+describe('AbilityEditor', () => {
+  const stats = computeHeroStats({}, getDelveRegistry());
+  const builds = defaultAbilities('storm');
+
+  it('edits the builds it is given through onChange, and names the reactions it is told about', () => {
+    const onChange = vi.fn();
+    render(
+      <AbilityEditor
+        builds={builds}
+        stats={stats}
+        reactionsSeen={['melt']}
+        locked={false}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Storm Bolt');
+    fireEvent.click(screen.getByTestId('form-lance'));
+    expect(onChange).toHaveBeenCalledWith('primary', { ...builds.primary, form: 'lance' });
+    expect(screen.getByTestId('reaction-melt')).toBeInTheDocument();
+    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(6);
+    expect(screen.getAllByTestId(/^attune-/)).toHaveLength(6);
+  });
+
+  it('changes nothing while locked', () => {
+    const onChange = vi.fn();
+    render(
+      <AbilityEditor builds={builds} stats={stats} reactionsSeen={[]} locked onChange={onChange} />,
+    );
+    fireEvent.click(screen.getByTestId('form-lance'));
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

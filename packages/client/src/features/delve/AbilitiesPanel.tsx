@@ -2,16 +2,16 @@ import { useMemo, useState } from 'react';
 import {
   ABILITY_SLOTS,
   MANA_TYPES,
-  computeAttunement,
   computeHeroStats,
   isDiveActive,
   manaPool,
   resolveAbility,
   type AbilityBuild,
+  type AbilityBuilds,
   type AbilityPayment,
   type AbilitySlot,
   type AbilityWeight,
-  type ManaMap,
+  type HeroStats,
   type ManaType,
   type ResolvedAbility,
 } from '@alloy/engine';
@@ -40,16 +40,13 @@ const PAYMENTS: [AbilityPayment, string, string][] = [
 ];
 
 /** Attunement per element with the mastery threshold, and the one mana pool it feeds. */
-export function AttunementBars({ attunement }: { attunement: ManaMap }) {
+export function AttunementBars({ stats }: { stats: HeroStats }) {
   const registry = getDelveRegistry();
   const bal = registry.getDelveBalance().mana;
   const masteries = registry.getArpgData().masteries;
+  const attunement = stats.attunement;
   const scale = Math.max(bal.masteryThreshold + 2, ...MANA_TYPES.map((m) => attunement[m] + 1));
-  const equipped = useDelveStore((s) => s.profile.equipped);
-  const pool = useMemo(
-    () => manaPool(computeHeroStats(equipped, registry), registry),
-    [equipped, registry],
-  );
+  const pool = manaPool(stats, registry);
 
   return (
     <div className="flex flex-col gap-2">
@@ -117,7 +114,7 @@ export function AttunementBars({ attunement }: { attunement: ManaMap }) {
   );
 }
 
-function Chip({
+export function Chip({
   pressed,
   onClick,
   children,
@@ -212,37 +209,42 @@ function Readout({
   );
 }
 
+export interface AbilityEditorProps {
+  builds: AbilityBuilds;
+  /** The hero the builds resolve against: legendaries, cooldowns, damage, life, attunement, pool. */
+  stats: HeroStats;
+  /** Reactions shown by name; the rest show as ???. */
+  reactionsSeen: readonly string[];
+  /** Read-only (a dive is under way). */
+  locked: boolean;
+  onChange: (slot: AbilitySlot, build: AbilityBuild) => void;
+}
+
 /**
- * The Abilities workshop: build the Primary, Defensive and Ultimate from a
- * form, one or two elements, a weight and a payment. Every part is open;
- * builds only change between dives.
+ * The ability editor: build the Primary, Defensive and Ultimate from a form,
+ * one or two elements, a weight and a payment. Every part is open. The Anvil
+ * binds it to the save; the Training Grounds to its own loadout.
  */
-export function AbilitiesPanel() {
+export function AbilityEditor({
+  builds,
+  stats,
+  reactionsSeen,
+  locked,
+  onChange,
+}: AbilityEditorProps) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
-  const profile = useDelveStore((s) => s.profile);
   const [slot, setSlot] = useState<AbilitySlot>('primary');
-  const stats = useMemo(
-    () => computeHeroStats(profile.equipped, registry),
-    [profile.equipped, registry],
-  );
-  const attunement = useMemo(
-    () => computeAttunement(profile.equipped, registry),
-    [profile.equipped, registry],
-  );
   const pool = manaPool(stats, registry).max;
-  const build = profile.abilities[slot];
-  const resolved = ABILITY_SLOTS.map((s) =>
-    resolveAbility(registry, s, profile.abilities[s], stats),
-  );
+  const build = builds[slot];
+  const resolved = ABILITY_SLOTS.map((s) => resolveAbility(registry, s, builds[s], stats));
   const ab = resolved[ABILITY_SLOTS.indexOf(slot)];
   const [main, infusion] = build.elements;
-  const locked = isDiveActive(profile);
 
   const set = (next: Partial<AbilityBuild>) => {
     if (locked) return;
     playSound('buttonClick');
-    useDelveStore.getState().setAbility(slot, { ...build, ...next });
+    onChange(slot, { ...build, ...next });
   };
   const setMain = (m: ManaType) =>
     set({ elements: infusion && infusion !== m ? [m, infusion] : [m] });
@@ -431,7 +433,7 @@ export function AbilitiesPanel() {
         <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
           Attunement
         </div>
-        <AttunementBars attunement={attunement} />
+        <AttunementBars stats={stats} />
       </section>
 
       <section className="flex flex-col gap-1.5">
@@ -440,12 +442,12 @@ export function AbilitiesPanel() {
             Reactions
           </span>
           <span className="text-[10px] text-stone-500">
-            {profile.reactionsSeen.length}/{data.reactions.length} discovered
+            {reactionsSeen.length}/{data.reactions.length} discovered
           </span>
         </div>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {data.reactions.map((r) => {
-            const seen = profile.reactionsSeen.includes(r.id);
+            const seen = reactionsSeen.includes(r.id);
             return (
               <div
                 key={r.id}
@@ -471,5 +473,24 @@ export function AbilitiesPanel() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** The Anvil's workshop: the save's builds, read-only while a dive is under way. */
+export function AbilitiesPanel() {
+  const registry = getDelveRegistry();
+  const profile = useDelveStore((s) => s.profile);
+  const stats = useMemo(
+    () => computeHeroStats(profile.equipped, registry),
+    [profile.equipped, registry],
+  );
+  return (
+    <AbilityEditor
+      builds={profile.abilities}
+      stats={stats}
+      reactionsSeen={profile.reactionsSeen}
+      locked={isDiveActive(profile)}
+      onChange={(slot, build) => useDelveStore.getState().setAbility(slot, build)}
+    />
   );
 }
