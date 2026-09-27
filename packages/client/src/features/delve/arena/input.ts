@@ -90,12 +90,17 @@ function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
 }
 
-/** Sliders and lists keep their keys (arrows, letters, Space) from moving or attacking. */
+/**
+ * Sliders and lists keep their keys (arrows, letters, Space) from moving or
+ * attacking, while they hold focus: one that let go during this key (the
+ * Training panel's lists do) passes it on.
+ */
 function isField(t: EventTarget | null): boolean {
   return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLSelectElement ||
-    t instanceof HTMLTextAreaElement
+    (t instanceof HTMLInputElement ||
+      t instanceof HTMLSelectElement ||
+      t instanceof HTMLTextAreaElement) &&
+    t === document.activeElement
   );
 }
 

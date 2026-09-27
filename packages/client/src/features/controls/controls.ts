@@ -75,7 +75,7 @@ export const ACTION_LABELS: Record<KeyAction, string> = {
   dodge: 'Dodge',
   attack: 'Basic attack (manual)',
   potion: 'Potion',
-  menu: 'Dive menu',
+  menu: 'Menu',
   up: 'Move up',
   down: 'Move down',
   left: 'Move left',

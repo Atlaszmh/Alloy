@@ -20,6 +20,7 @@ import {
   type HeroStats,
   type ManaMap,
   type ManaType,
+  type MonsterKind,
   type Rarity,
   type SandboxToggles,
 } from '@alloy/engine';
@@ -180,7 +181,24 @@ function load(): SandboxLoadout {
   }
 }
 
+/** The Targets tab's spawn picks. */
+export interface SpawnChoice {
+  biomeId: string;
+  defId: string;
+  kind: MonsterKind;
+  count: number;
+}
+
+/** The first biome's first monster, three normal ones. */
+function defaultSpawn(): SpawnChoice {
+  const biome = getDelveRegistry().getDelveData().biomes[0];
+  return { biomeId: biome.id, defId: biome.monsters[0].id, kind: 'normal', count: 3 };
+}
+
 interface SandboxStore extends SandboxLoadout {
+  /** Kept while the app runs (across tab switches and panel closes), never saved. */
+  spawn: SpawnChoice;
+  setSpawn: (patch: Partial<SpawnChoice>) => void;
   /** Pick a weapon (null = unarmed); a loaded weapon is dropped, unless the choice is unchanged. */
   setWeapon: (weapon: WeaponChoice | null) => void;
   /** Switch a legendary power on (at its max roll) or off. */
@@ -216,6 +234,8 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
   };
   return {
     ...load(),
+    spawn: defaultSpawn(),
+    setSpawn: (patch) => set({ spawn: { ...get().spawn, ...patch } }),
     // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it).
     setWeapon: (weapon) => {
       if (!sameChoice(weapon, get().weapon)) commit({ weapon, loadedWeapon: null });
@@ -253,7 +273,10 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         attunement: {},
       });
     },
-    reset: () => commit(SANDBOX_DEFAULTS),
+    reset: () => {
+      commit(SANDBOX_DEFAULTS);
+      set({ spawn: defaultSpawn() });
+    },
   };
 });
 

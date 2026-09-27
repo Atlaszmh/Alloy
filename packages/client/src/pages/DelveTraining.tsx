@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';
-import { useSandboxStore } from '@/stores/sandboxStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { ToastContainer } from '@/components/Toast';
@@ -22,29 +21,16 @@ import { useTrainingArena, type TrainingArena } from '@/features/delve/training/
 import { MeterChip } from '@/features/delve/training/MeterView';
 import {
   DOCK_WIDTH,
+  DepthLabel,
   TrainingPanel,
   blurOnPointerUp,
+  openLayout,
   type PanelLayout,
   type TrainingTab,
 } from '@/features/delve/training/TrainingPanel';
 import '@/features/delve/delve.css';
 
-/** From this page width, with mouse and keyboard, the panel docks beside the fight. */
-const DOCK_MIN_WIDTH = 1024;
-
 const fineMouse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
-
-/**
- * Decided when the panel opens and kept until it closes: docked (the fight runs
- * on) when the page itself is wide enough (the app frame letterboxes, so not
- * the window) and mouse and keyboard are in use; otherwise a sheet that pauses it.
- */
-function openLayout(page: HTMLElement | null): PanelLayout {
-  return (page?.clientWidth ?? 0) >= DOCK_MIN_WIDTH &&
-    useInputDeviceStore.getState().device === 'keyboard'
-    ? 'dock'
-    : 'sheet';
-}
 
 /**
  * The Training Grounds: the arena with the usual HUD, controls and sounds,
@@ -61,7 +47,6 @@ export function DelveTraining() {
   const [panel, setPanel] = useState<PanelLayout | null>(null);
   const [tab, setTab] = useState<TrainingTab>('loadout');
   const [controlsOpen, setControlsOpen] = useState(false);
-  const depth = useSandboxStore((s) => s.depth);
 
   // Docked and open on entry where it docks; otherwise closed until asked for.
   useLayoutEffect(() => {
@@ -148,12 +133,7 @@ export function DelveTraining() {
               ◂<span className="hidden sm:inline"> Anvil</span>
             </button>
             <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-              <span
-                className="delve-display whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest text-stone-400"
-                data-testid="training-depth-label"
-              >
-                Depth {depth}
-              </span>
+              <DepthLabel />
               <MeterChip meter={arena.meter} onReset={arena.actions.resetMeter} />
             </div>
             <button

@@ -76,8 +76,11 @@ describe('panel controls keep their keys', () => {
     menu.setAttribute('data-pad-menu', '');
     let opened = 0;
     menu.addEventListener('click', () => opened++);
-    const press = (el: Element, code: string) =>
+    // A key reaches the focused control.
+    const press = (el: HTMLElement, code: string) => {
+      el.focus();
       el.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+    };
 
     press(slider, 'ArrowLeft');
     press(list, 'KeyW');

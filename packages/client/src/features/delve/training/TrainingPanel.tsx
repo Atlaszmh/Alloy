@@ -1,8 +1,8 @@
 import {
   memo,
   useRef,
-  useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -15,6 +15,7 @@ import {
   type SandboxToggles,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import {
   MAX_DEPTH,
   MAX_DUMMY_GROUPS,
@@ -37,6 +38,36 @@ export type TrainingTab = 'loadout' | 'abilities' | 'targets' | 'toggles' | 'met
 
 /** The docked panel's width in px (the arena narrows by this). */
 export const DOCK_WIDTH = 360;
+/** From this page width, with mouse and keyboard, the panel docks beside the fight. */
+const DOCK_MIN_WIDTH = 1024;
+
+/**
+ * Decided when the panel opens and kept until it closes: docked (the fight runs
+ * on) when the page itself is wide enough (the app frame letterboxes, so not
+ * the window) and mouse and keyboard are in use; otherwise a sheet that pauses it.
+ */
+export function openLayout(page: HTMLElement | null): PanelLayout {
+  return (page?.clientWidth ?? 0) >= DOCK_MIN_WIDTH &&
+    useInputDeviceStore.getState().device === 'keyboard'
+    ? 'dock'
+    : 'sheet';
+}
+
+/** The top bar's "Depth N", plus the slow-motion speed while it isn't 1×. */
+export function DepthLabel() {
+  const depth = useSandboxStore((s) => s.depth);
+  const slowmo = useSandboxStore((s) => s.slowmo);
+  return (
+    <span className="delve-display flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest text-stone-400">
+      <span data-testid="training-depth-label">Depth {depth}</span>
+      {slowmo !== 1 && (
+        <span className="text-sky-300" data-testid="training-slowmo">
+          {slowmo}×
+        </span>
+      )}
+    </span>
+  );
+}
 
 const TABS: [TrainingTab, string][] = [
   ['loadout', 'Loadout'],
@@ -168,10 +199,16 @@ const LoadoutTab = memo(function LoadoutTab() {
               {legendaryText(registry, weapon.legendary.id, weapon.legendary.value)}
             </div>
           )}
-          {s.loadedWeapon && (
+          {s.loadedWeapon ? (
             <div className="text-[11px] text-stone-500">
               Your own weapon, from Load my build. Change any option for a clean one.
             </div>
+          ) : (
+            weapon && (
+              <div className="text-[11px] text-stone-500">
+                A clean weapon: its base line, scaled by rarity and depth. Powers are below.
+              </div>
+            )
           )}
         </div>
       </Section>
@@ -180,24 +217,33 @@ const LoadoutTab = memo(function LoadoutTab() {
         <div className="flex flex-col gap-1.5">
           {registry.getDelveData().legendaries.map((l) => {
             const on = l.id in s.legendaries;
+            // Worn on the loaded gear: on, at the gear's roll, and switched by changing the gear.
+            const fromGear = !on && l.id in stats.legendaries;
+            const lit = on || fromGear;
             return (
               <button
                 key={l.id}
                 type="button"
                 className="delve-panel flex flex-col items-start gap-0.5 p-2 text-left"
-                style={{ borderColor: on ? '#fb923c' : undefined }}
-                aria-pressed={on}
+                style={{ borderColor: lit ? '#fb923c' : undefined }}
+                aria-pressed={lit}
+                disabled={fromGear}
                 onClick={() => s.setLegendary(l.id, !on)}
                 data-testid={`legendary-${l.id}`}
               >
                 <span
                   className="delve-display text-sm font-bold"
-                  style={{ color: on ? '#fb923c' : '#d6d3d1' }}
+                  style={{ color: lit ? '#fb923c' : '#d6d3d1' }}
                 >
-                  {on ? '★' : '☆'} {l.name}
+                  {lit ? '★' : '☆'} {l.name}
+                  {fromGear && (
+                    <span className="ml-1.5 text-[10px] font-normal normal-case text-stone-400">
+                      from your gear
+                    </span>
+                  )}
                 </span>
                 <span className="text-[11px] leading-snug text-stone-400">
-                  {legendaryText(registry, l.id, l.max)}
+                  {legendaryText(registry, l.id, fromGear ? stats.legendaries[l.id] : l.max)}
                 </span>
               </button>
             );
@@ -275,14 +321,13 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
   const dummyElement = useSandboxStore((s) => s.dummyElement);
   const full = useSandboxStore((s) => s.dummies.length >= MAX_DUMMY_GROUPS);
   const depth = useSandboxStore((s) => s.depth);
-  const [biomeId, setBiomeId] = useState(biomes[0].id);
+  // In the store (not saved), so the picks survive tab switches.
+  const { biomeId, defId, kind, count } = useSandboxStore((s) => s.spawn);
   const biome = biomes.find((b) => b.id === biomeId) ?? biomes[0];
   const defs = [...biome.monsters, biome.boss];
-  const [defId, setDefId] = useState(defs[0].id);
   const def = defs.find((d) => d.id === defId) ?? defs[0];
-  const [kind, setKind] = useState<MonsterKind>('normal');
-  const [count, setCount] = useState(3);
   const store = useSandboxStore.getState;
+  const weakness = registry.getArpgData().weakness;
 
   return (
     <div className="flex flex-col gap-4" data-testid="targets-tab">
@@ -302,7 +347,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
               pressed={dummyElement === m}
               onClick={() => store().setDummyElement(m)}
               testId={`dummy-element-${m}`}
-              title={`Resists ${manaStyle(registry, m).name}`}
+              title={`Resists ${manaStyle(registry, m).name} · weak to ${manaStyle(registry, weakness[m]).name}`}
             >
               {manaStyle(registry, m).icon}
             </Chip>
@@ -343,9 +388,9 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
           value={biome.id}
           onChange={(e) => {
             const next = biomes.find((b) => b.id === e.currentTarget.value) ?? biomes[0];
-            setBiomeId(next.id);
-            setDefId(next.monsters[0].id);
+            store().setSpawn({ biomeId: next.id, defId: next.monsters[0].id });
           }}
+          aria-label="Biome"
           data-testid="spawn-biome"
         >
           {biomes.map((b) => (
@@ -357,7 +402,8 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
         <select
           className={SELECT}
           value={def.id}
-          onChange={(e) => setDefId(e.currentTarget.value)}
+          onChange={(e) => store().setSpawn({ defId: e.currentTarget.value })}
+          aria-label="Monster"
           data-testid="spawn-monster"
         >
           {defs.map((d) => (
@@ -372,7 +418,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             <Chip
               key={k}
               pressed={kind === k}
-              onClick={() => setKind(k)}
+              onClick={() => store().setSpawn({ kind: k })}
               testId={`spawn-kind-${k}`}
             >
               {label}
@@ -387,7 +433,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             max={8}
             step={1}
             value={count}
-            onChange={(e) => setCount(Number(e.currentTarget.value))}
+            onChange={(e) => store().setSpawn({ count: Number(e.currentTarget.value) })}
             className="min-w-0 flex-1"
             data-testid="spawn-count"
           />
@@ -438,6 +484,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             className={SELECT}
             value={depth}
             onChange={(e) => store().setDepth(Number(e.currentTarget.value))}
+            aria-label="Depth"
             data-testid="training-depth"
           >
             {Array.from({ length: MAX_DEPTH }, (_, i) => i + 1).map((d) => (
@@ -447,8 +494,9 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             ))}
           </select>
           <span className="text-xs text-stone-400">
-            {registry.getBiomeForDepth(depth).name}: monsters and dummies scale with depth. A new
-            depth restarts the arena (dummies come back, spawned monsters don&apos;t).
+            {registry.getBiomeForDepth(depth).name}: monsters, dummies and your weapon&apos;s item
+            level follow depth. A new depth restarts the arena (dummies come back, spawned monsters
+            don&apos;t).
           </span>
         </label>
       </Section>
@@ -572,7 +620,9 @@ export const TrainingPanel = memo(function TrainingPanel({
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     pointerList.current = (e.target as Element).closest('select');
   };
-  const onKeyDown = () => {
+  // A pointer-opened list closed without a change lets go on the next key, so WASD reach the fight.
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.target === pointerList.current) (e.target as HTMLElement).blur();
     pointerList.current = null;
   };
   const onChange = (e: FormEvent<HTMLElement>) => {
@@ -648,6 +698,7 @@ export const TrainingPanel = memo(function TrainingPanel({
       <aside
         className="absolute inset-y-0 right-0 z-30 overflow-y-auto border-l border-white/10 p-3"
         style={{ width: DOCK_WIDTH, background: 'linear-gradient(180deg,#16161f,#0e0e14)' }}
+        aria-label="Training"
         data-testid="training-panel"
         data-layout="dock"
       >
@@ -662,6 +713,9 @@ export const TrainingPanel = memo(function TrainingPanel({
       <div
         className="delve-panel max-h-[88%] w-full max-w-[560px] overflow-y-auto p-3"
         style={{ paddingBottom: 'calc(12px + var(--spacing-safe-bottom))' }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Training"
         data-testid="training-panel"
         data-layout="sheet"
       >
