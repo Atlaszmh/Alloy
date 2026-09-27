@@ -10,9 +10,15 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
-import { ABILITY_SLOTS, type AbilityBuilds, type ResolvedAbility } from '../types/ability.js';
+import {
+  ABILITY_SLOTS,
+  type AbilityBuild,
+  type AbilityBuilds,
+  type ResolvedAbility,
+} from '../types/ability.js';
 import { manaPool } from '../delve/hero-stats.js';
 import { resolveAbility } from './abilities/resolve.js';
+import { cancelWindup } from './action.js';
 import { dist } from './geometry.js';
 
 export interface FloorOptions {
@@ -220,9 +226,11 @@ export function createHeroEntity(
 }
 
 /**
- * Swap in new gear stats mid-floor: abilities re-resolve and the pool
- * resizes, keeping the life fraction and current mana (clamped). Charge,
- * buffs, combos and cooldowns carry over.
+ * Swap in new gear stats and builds mid-floor: abilities re-resolve and the
+ * pool resizes, keeping the life fraction and current mana (clamped). Charge,
+ * combos and cooldowns carry over. A slot whose build changed drops its
+ * wind-up (as a dodge does), and a new Defensive ends the old one's buff and
+ * Ward at once, without bursting.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
@@ -243,6 +251,15 @@ export function refreshWorldHero(
     h.attackCount = 0;
     h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
   }
+  const changed = ABILITY_SLOTS.map((slot, i) => !sameBuild(h.abilities[i]?.build, builds[slot]));
+  if (h.windup && changed[h.windup.slot]) {
+    cancelWindup(h, world.t);
+    h.push = null; // its step-in goes with it
+  }
+  if (changed[1]) {
+    h.defend = null;
+    h.ward = null;
+  }
   h.stats = stats;
   h.hp = h.hp > 0 ? Math.max(1, frac * stats.maxHp) : h.hp;
   h.manaMax = pool.max;
@@ -250,6 +267,16 @@ export function refreshWorldHero(
   h.mana = Math.min(h.mana, pool.max);
   h.abilities = resolveAll(registry, builds, stats);
   h.abilities.forEach((ab, i) => (h.charge[i] = Math.min(h.charge[i], ab.chargeNeed)));
+}
+
+function sameBuild(a: AbilityBuild | undefined, b: AbilityBuild): boolean {
+  return (
+    !!a &&
+    a.form === b.form &&
+    a.weight === b.weight &&
+    a.payment === b.payment &&
+    a.elements.join() === b.elements.join()
+  );
 }
 
 /** Build the arena for one depth: hero at the bottom, monster packs spread above. */

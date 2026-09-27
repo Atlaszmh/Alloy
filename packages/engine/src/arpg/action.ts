@@ -1,4 +1,4 @@
-import type { Vec } from '../types/arpg.js';
+import type { HeroEntity, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 import { clamp } from './geometry.js';
 
@@ -97,4 +97,13 @@ export function cancelSwing(ctx: SimCtx): void {
   h.swing = null;
   h.push = null;
   h.nextAttackAt = ctx.world.t;
+}
+
+/** Drop an ability's wind-up: the mana stays spent, the ability is ready again and its charge comes back. */
+export function cancelWindup(h: HeroEntity, t: number): void {
+  const w = h.windup;
+  if (!w) return;
+  h.cooldowns[w.slot] = t;
+  h.charge[w.slot] = Math.min(h.abilities[w.slot].chargeNeed, h.charge[w.slot] + w.chargePaid);
+  h.windup = null;
 }

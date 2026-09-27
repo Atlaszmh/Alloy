@@ -9,7 +9,7 @@ import {
   spawnDummies,
   spawnMonsters,
 } from '../src/arpg/sandbox.js';
-import { createMonsterEntity, emptyStatus } from '../src/arpg/world.js';
+import { createMonsterEntity, emptyStatus, refreshWorldHero } from '../src/arpg/world.js';
 import { hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
 import { computeHeroStats, referenceMonster } from '../src/delve/hero-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
@@ -477,5 +477,59 @@ describe('hit events', () => {
     const later = hits([...press(w, 0), ...run(w, 1.5)]); // a Fire Bolt, which burns
     expect(later.find((e) => e.source === 'skill')).toMatchObject({ slot: 0 });
     expect(later.some((e) => e.source === 'dot')).toBe(true);
+  });
+});
+
+describe('mid-fight build swaps', () => {
+  const swap = (w: ArpgWorld, builds: Partial<AbilityBuilds>) =>
+    refreshWorldHero(registry, w, w.hero.stats, { ...DEFAULT_BUILDS, ...builds });
+
+  it('a new build for the slot winding up cancels the wind-up: cooldown reset, charge back', () => {
+    const w = sandbox(); // the Ultimate is a charge-paid Nova (21 charge)
+    fillCharge(w);
+    const need = w.hero.abilities[2].chargeNeed;
+    pressOnly(w, 2);
+    expect(w.hero.windup?.slot).toBe(2);
+    expect(w.hero.charge[2]).toBe(0);
+    swap(w, { ultimate: { ...DEFAULT_BUILDS.ultimate, form: 'barrage' } });
+    expect(w.hero.windup).toBeNull();
+    expect(w.hero.cooldowns[2]).toBeLessThanOrEqual(w.t);
+    expect(w.hero.charge[2]).toBeCloseTo(Math.min(need, w.hero.abilities[2].chargeNeed));
+    expect(w.hero.abilities[2].form.id).toBe('barrage');
+  });
+
+  it('the mana spent on a cancelled wind-up stays spent', () => {
+    const cast = { ...DEFAULT_BUILDS.primary, payment: 'cast' as const };
+    const w = sandbox(ALL_OFF, { primary: cast });
+    w.hero.nextAttackAt = 1e9;
+    spawnDummies(registry, w, { layout: 'single', element: null }); // the Bolt needs a target
+    const mana = w.hero.mana;
+    pressOnly(w, 0);
+    expect(w.hero.windup?.slot).toBe(0);
+    swap(w, { primary: { ...cast, form: 'lance' } });
+    expect(w.hero.windup).toBeNull();
+    expect(w.hero.mana).toBeLessThan(mana - 1);
+  });
+
+  it('a new Defensive ends the Ward at once, without bursting', () => {
+    const w = sandbox();
+    press(w, 1);
+    expect(w.hero.ward).not.toBeNull();
+    swap(w, { defensive: { form: 'armor', elements: ['earth'], weight: 0, payment: 'mana' } });
+    expect(w.hero.ward).toBeNull();
+    expect(w.hero.defend).toBeNull();
+    expect(run(w, 0.5).map((e) => e.kind)).not.toContain('wardBreak');
+  });
+
+  it('unchanged slots carry on', () => {
+    const w = sandbox();
+    press(w, 1); // a Ward up
+    fillCharge(w);
+    pressOnly(w, 2); // a Nova winding up
+    const windup = { ...w.hero.windup! };
+    swap(w, { primary: { ...DEFAULT_BUILDS.primary, form: 'lance' } });
+    expect(w.hero.windup).toEqual(windup);
+    expect(w.hero.ward).not.toBeNull();
+    expect(w.hero.abilities[0].form.id).toBe('lance');
   });
 });
