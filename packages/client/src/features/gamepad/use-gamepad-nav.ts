@@ -6,9 +6,10 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
 
 /**
  * Controller navigation for every screen outside live combat: D-pad (or a
- * left-stick flick) moves focus to the nearest control in that direction, A
- * presses it, B presses the visible `[data-pad-back]`, LB/RB step through the
- * `[data-pad-tabs]` tabs and Menu presses `[data-pad-menu]`. The last visible
+ * left-stick flick) moves focus to the nearest control in that direction
+ * (left/right adjust a focused slider or list), A presses it, B presses the
+ * visible `[data-pad-back]`, LB/RB step through the `[data-pad-tabs]` tabs
+ * and Menu presses `[data-pad-menu]`. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it. It also
  * records keyboard, mouse and touch use, for button hints and the focus ring.
  */
@@ -53,6 +54,17 @@ function nudgeRange(el: HTMLInputElement, dir: NavDir): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/** Left/right on a focused list steps its choice, clamped (React hears the change event). */
+function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
+  const next = Math.min(
+    el.options.length - 1,
+    Math.max(0, el.selectedIndex + (dir === 'right' ? 1 : -1)),
+  );
+  if (next === el.selectedIndex) return;
+  el.selectedIndex = next;
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 export function moveFocus(dir: NavDir): void {
   const active = document.activeElement;
   if (
@@ -61,6 +73,9 @@ export function moveFocus(dir: NavDir): void {
     (dir === 'left' || dir === 'right')
   ) {
     return nudgeRange(active, dir);
+  }
+  if (active instanceof HTMLSelectElement && (dir === 'left' || dir === 'right')) {
+    return stepSelect(active, dir);
   }
   const els = candidates();
   if (els.length === 0) return;
