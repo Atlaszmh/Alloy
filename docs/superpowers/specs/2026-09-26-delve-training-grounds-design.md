@@ -101,7 +101,7 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 - **Bosses:** a spawned boss becomes `world.bossId` (the latest one), so the boss bar shows. When the boss that `bossId` points at dies or is removed, it points at the next living boss, or `null` if none are left.
 - **Count:** `totalMonsters` is increased.
 
-`clearMonsters(world, which)` removes real monsters, dummies or both (`which: 'monsters' | 'dummies' | 'all'`). If the boss is removed, `bossId` becomes null.
+`clearMonsters(world, which)` removes real monsters, dummies or both (`which: 'monsters' | 'dummies' | 'all'`). If the boss is removed, `bossId` moves to the next living boss, or `null` if none are left.
 
 ### Toggles
 
