@@ -58,3 +58,55 @@ describe('ability keys', () => {
     useControlsStore.getState().reset();
   });
 });
+
+describe('panel controls keep their keys', () => {
+  let detach = () => {};
+  afterEach(() => {
+    detach();
+    document.body.replaceChildren();
+  });
+
+  it('a slider or a list never moves, casts or dodges, but the menu key still works from them', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const slider = document.body.appendChild(document.createElement('input'));
+    slider.type = 'range';
+    const list = document.body.appendChild(document.createElement('select'));
+    const menu = document.body.appendChild(document.createElement('button'));
+    menu.setAttribute('data-pad-menu', '');
+    let opened = 0;
+    menu.addEventListener('click', () => opened++);
+    const press = (el: Element, code: string) =>
+      el.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+
+    press(slider, 'ArrowLeft');
+    press(list, 'KeyW');
+    press(list, 'KeyQ');
+    press(slider, 'Space');
+    expect(input.keys).toEqual({ x: 0, y: 0 });
+    expect(input.aiming).toBeNull();
+    expect(input.dodge).toBe(false);
+
+    press(slider, 'Escape');
+    press(list, 'Escape');
+    expect(opened).toBe(2);
+
+    // Buttons are not ignored: the dive's keyboard play is unchanged.
+    press(menu, 'KeyW');
+    expect(input.keys).toEqual({ x: 0, y: -1 });
+  });
+
+  it('a text field keeps every key, the menu key included', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const text = document.body.appendChild(document.createElement('input'));
+    const menu = document.body.appendChild(document.createElement('button'));
+    menu.setAttribute('data-pad-menu', '');
+    let opened = 0;
+    menu.addEventListener('click', () => opened++);
+    text.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', bubbles: true }));
+    text.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
+    expect(opened).toBe(0);
+    expect(input.keys).toEqual({ x: 0, y: 0 });
+  });
+});

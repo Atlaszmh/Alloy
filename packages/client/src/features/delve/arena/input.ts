@@ -85,6 +85,20 @@ function moveDir(code: string): Vec | null {
   return action && action in MOVE_DIRS ? MOVE_DIRS[action as MoveKey] : null;
 }
 
+/** Text entry keeps every key, the menu key included. */
+function isText(t: EventTarget | null): boolean {
+  return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
+}
+
+/** Sliders and lists keep their keys (arrows, letters, Space) from moving or attacking. */
+function isField(t: EventTarget | null): boolean {
+  return (
+    t instanceof HTMLInputElement ||
+    t instanceof HTMLSelectElement ||
+    t instanceof HTMLTextAreaElement
+  );
+}
+
 /**
  * Wire keyboard controls to `input`, following the player's key bindings.
  * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
@@ -106,13 +120,13 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     input.keys = len > 0 ? { x: x / len, y: y / len } : { x: 0, y: 0 };
   };
   const down = (e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement) return;
-    // The menu key works while paused too, so it can close the dive menu.
+    if (isText(e.target)) return;
+    // The menu key works while paused too (so it can close the menu), and from a slider or a list.
     if (!e.repeat && keyAction(e.code) === 'menu') {
       (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
       return;
     }
-    if (!isEnabled()) return;
+    if (isField(e.target) || !isEnabled()) return;
     if (moveDir(e.code)) {
       held.add(e.code);
       recompute();
