@@ -5,6 +5,7 @@ import {
   fillCharge,
   resetDummies,
   respawnHero,
+  sandboxWeapon,
   setSandboxToggles,
   spawnDummies,
   spawnMonsters,
@@ -594,6 +595,33 @@ describe('hero stats overrides', () => {
     expect(computeAttunement(gear1, registry, { legendaries: { prism: 2 } })).toEqual(plus(2));
     expect(computeHeroStats(gear1, registry, { legendaries: { prism: 2 } }).attunement).toEqual(
       plus(2),
+    );
+  });
+});
+
+describe('the sandbox weapon', () => {
+  it('has its base implicits only, scaled by rarity and item level, no legendary, and is deterministic', () => {
+    const opts = { baseId: 'staff', mana: 'storm', rarity: 'legendary', ilvl: 5 } as const;
+    const a = sandboxWeapon(registry, opts);
+    expect(sandboxWeapon(registry, opts)).toEqual(a);
+    expect(a).toMatchObject({
+      slot: 'weapon',
+      baseId: 'staff',
+      mana: 'storm',
+      rarity: 'legendary',
+      ilvl: 5,
+      affixes: [],
+      upgrade: 0,
+    });
+    expect(a.legendary).toBeUndefined();
+    expect(a.name).toContain('Staff');
+    expect(a.implicits.map((s) => s.stat)).toEqual(
+      registry.getGearBase('staff').implicits.map((t) => t.stat),
+    );
+    const plain = sandboxWeapon(registry, { ...opts, rarity: 'common', ilvl: 1 });
+    expect(a.implicits[0].value).toBeGreaterThan(plain.implicits[0].value);
+    expect(computeAttunement({ weapon: a }, registry).storm).toBe(
+      bal.mana.attuneByRarity.legendary,
     );
   });
 });

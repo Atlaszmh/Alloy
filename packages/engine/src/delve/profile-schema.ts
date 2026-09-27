@@ -3,7 +3,7 @@ import { HeroStatKeySchema as StatKeySchema, ManaTypeSchema } from '../data/sche
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
-const AbilityBuildSchema = z.object({
+export const AbilityBuildSchema = z.object({
   form: z.enum([
     'bolt',
     'volley',

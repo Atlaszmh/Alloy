@@ -118,7 +118,12 @@ export {
   hasMastery,
   isAttuneStat,
 } from './delve/hero-stats.js';
-export type { ItemComparison, ItemStatLine, CombatEstimate } from './delve/hero-stats.js';
+export type {
+  ItemComparison,
+  ItemStatLine,
+  CombatEstimate,
+  HeroStatsExtra,
+} from './delve/hero-stats.js';
 export {
   isBossDepth,
   isDiveActive,
@@ -154,6 +159,7 @@ export {
   setAbility,
 } from './delve/profile.js';
 export type { ProfileActionResult } from './delve/profile.js';
+export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';
 export { runAutopilot } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
 
@@ -177,3 +183,15 @@ export {
   stepHeft,
 } from './arpg/abilities/resolve.js';
 export { makeCtx } from './arpg/combat.js';
+export {
+  createSandboxWorld,
+  setSandboxToggles,
+  spawnDummies,
+  resetDummies,
+  spawnMonsters,
+  clearMonsters,
+  fillCharge,
+  respawnHero,
+  sandboxWeapon,
+} from './arpg/sandbox.js';
+export type { SandboxWorldOptions } from './arpg/sandbox.js';

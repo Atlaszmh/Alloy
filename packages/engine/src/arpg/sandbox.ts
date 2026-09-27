@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import { SeededRNG } from '../rng/seeded-rng.js';
 import type { AbilityBuilds } from '../types/ability.js';
 import type {
   ArpgWorld,
@@ -9,7 +10,9 @@ import type {
   Vec,
 } from '../types/arpg.js';
 import type { HeroStats, MonsterDef, SandboxBalance } from '../types/delve.js';
+import type { GearItem, Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
+import { baseDisplayName, generateItem } from '../loot/item-generator.js';
 import { livingBossId } from './combat.js';
 import { clamp } from './geometry.js';
 import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
@@ -244,4 +247,32 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.defend = null;
   h.ward = null;
   h.invulnUntil = t + 1;
+}
+
+/**
+ * A clean weapon: the base's implicits only, scaled by rarity and item level,
+ * with no random affixes and no legendary power (powers come from the
+ * toggles). A fixed seed, so the same choice always gives the same item; it
+ * attunes to its element by rarity, as any weapon does.
+ */
+export function sandboxWeapon(
+  registry: DataRegistry,
+  o: { baseId: string; mana: ManaType; rarity: Rarity; ilvl: number },
+): GearItem {
+  const item = generateItem(
+    registry,
+    {
+      uid: `sandbox-${o.baseId}`,
+      ilvl: o.ilvl,
+      rarity: o.rarity,
+      slot: 'weapon',
+      baseId: o.baseId,
+      mana: o.mana,
+    },
+    new SeededRNG(1),
+  );
+  item.affixes = [];
+  delete item.legendary;
+  item.name = baseDisplayName(registry, item);
+  return item;
 }

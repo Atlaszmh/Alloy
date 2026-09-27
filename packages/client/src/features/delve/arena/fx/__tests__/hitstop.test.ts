@@ -3,7 +3,17 @@ import type { ArpgEvent } from '@alloy/engine';
 import { HITSTOP, HitStop, hitstopMs } from '../hitstop';
 
 const hit = (heft: number, crit = false): ArpgEvent =>
-  ({ kind: 'hit', id: 1, x: 0, y: 0, amount: 1, crit, element: null, heft }) as ArpgEvent;
+  ({
+    kind: 'hit',
+    id: 1,
+    x: 0,
+    y: 0,
+    amount: 1,
+    crit,
+    element: null,
+    heft,
+    source: 'basic',
+  }) as ArpgEvent;
 const death = (monsterKind: 'normal' | 'elite' | 'boss'): ArpgEvent =>
   ({ kind: 'death', id: 1, x: 0, y: 0, monsterKind, scrap: 0 }) as ArpgEvent;
 
