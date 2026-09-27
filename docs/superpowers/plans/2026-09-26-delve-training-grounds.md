@@ -37,7 +37,7 @@
 | E2E | `cd packages/client && npx playwright test -c playwright.scratch.config.ts <specs>` |
 | Sprite atlas | `pnpm -F @alloy/pixel-forge forge build` |
 
-**E2E scratch config** (used in Tasks 9 and 19; create it when needed and delete it after): `packages/client/playwright.scratch.config.ts`
+**E2E scratch config** (used in Tasks 9, 21 and 22; create it when needed and delete it after): `packages/client/playwright.scratch.config.ts`
 
 ```ts
 import base from './playwright.config';
@@ -82,23 +82,27 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 | File | Change |
 |---|---|
 | `package.json` | `zod` dependency (the same `^3.24.0` as the engine, so one copy); version `0.41.0` |
-| `src/features/delve/arena/useArenaCore.ts` (new) | the shared arena core: Pixi, renderer, ticker, input, hit-stop, HUD snapshot, actions; `ArenaMode` |
+| `src/features/delve/arena/useArenaCore.ts` (new) | the shared arena core: Pixi, renderer, ticker, input, hit-stop, HUD snapshot, actions, host resize; `ArenaMode` |
 | `src/features/delve/arena/useArena.ts` | the dive mode on the core (same API and behaviour) |
 | `src/features/delve/arena/ArenaRenderer.ts` | `pruneViews` (views of monsters that are gone); dummies hide their life bar; blocked hero hits in grey |
 | `src/features/delve/arena/input.ts` | ignore list: text fields, selects, sliders; the menu key works from sliders and selects |
+| `src/features/delve/arena/arena-sounds.ts` (new) | `playArenaEvents`, `noManaToaster`: the arena's sounds, haptics and no-mana toast, moved out of `DelveRun.tsx` |
+| `src/pages/DelveRun.tsx` | `onUi` uses `arena-sounds.ts` (behaviour identical) |
+| `src/features/gamepad/use-gamepad-nav.ts` | left/right step a focused `<select>` |
 | `src/features/delve/AbilitiesPanel.tsx` | prop-driven `AbilityEditor`; `AttunementBars({ stats })`; `Chip` exported; `AbilitiesPanel` is the Anvil wrapper |
 | `src/features/delve/training/meter.ts` (new) | `DamageMeter` (pure) |
 | `src/features/delve/training/useTrainingArena.ts` (new) | the sandbox mode + panel actions |
 | `src/features/delve/training/MeterView.tsx` (new) | `MeterChip`, `MeterTab` |
-| `src/features/delve/training/TrainingPanel.tsx` (new) | panel shell, tabs, Loadout / Abilities / Targets / Toggles tabs, pointer blur |
+| `src/features/delve/training/TrainingPanel.tsx` (new) | panel shell (memoised), tabs, Loadout / Abilities / Targets / Toggles tabs, pointer blur, Back to the Anvil |
 | `src/stores/sandboxStore.ts` (new) | the sandbox loadout store, Zod parse, `sandboxEquipped`, `sandboxStats`, `useSandboxStats` |
 | `src/pages/DelveTraining.tsx` (new) | `/delve/training` |
 | `src/pages/DelveCamp.tsx` | Training Grounds button |
 | `src/components/AppShell.tsx` | TabBar hidden on `/delve/training` |
 | `src/App.tsx` | route |
 | `src/features/delve/__tests__/floor-engine.test.ts`, `src/features/delve/arena/fx/__tests__/hitstop.test.ts` | `hit` fixtures get `source` |
-| `src/stores/sandboxStore.test.ts`, `src/features/delve/__tests__/training-meter.test.ts`, `src/features/delve/__tests__/arena-renderer.test.ts`, `src/pages/__tests__/DelveCamp.test.tsx` (new) | tests |
+| `src/stores/sandboxStore.test.ts`, `src/features/delve/__tests__/training-meter.test.ts`, `src/features/delve/__tests__/arena-renderer.test.ts`, `src/features/delve/__tests__/arena-sounds.test.ts`, `src/features/delve/__tests__/TrainingPanel.test.tsx`, `src/features/gamepad/__tests__/use-gamepad-nav.test.ts`, `src/pages/__tests__/DelveCamp.test.tsx` (new) | tests |
 | `src/features/delve/__tests__/AbilitiesPanel.test.tsx`, `src/features/delve/__tests__/arena-input.test.ts`, `src/features/delve/__tests__/sprite-atlas.test.ts` | new cases |
+| `e2e/delve.spec.ts` | D07 (Dive again at the same depth starts a fresh floor) and a fresh-floor check in D03: guards for the core split |
 | `e2e/delve-training.spec.ts` (new) | the Training Grounds E2E |
 
 **Art (`packages/pixel-forge/`)**
@@ -128,6 +132,15 @@ Chunks 1–3 are engine work. The geometry every test relies on: the arena is 26
 - Modify: `packages/engine/src/arpg/combat.ts` (`killMonster`; new `dropLoot`)
 - Create: `packages/engine/src/arpg/sandbox.ts` (`createSandboxWorld`)
 - Test: `packages/engine/tests/delve-training.test.ts` (new)
+
+- [ ] **Step 0: Commit the reviewed spec and plan**
+
+If `git status` shows the spec or this plan modified (the review revisions), commit them first, so every later commit stays about code:
+
+```bash
+git add docs/superpowers/specs/2026-09-26-delve-training-grounds-design.md docs/superpowers/plans/2026-09-26-delve-training-grounds.md
+git commit -m "docs: Training Grounds review revisions"
+```
 
 - [ ] **Step 1: Write the failing test**
 
@@ -371,6 +384,7 @@ import { createFloorWorld } from './world.js';
  * acting or dying, any monster can be spawned, and toggles bend the rules
  * (`ArpgWorld.sandbox`, checked where each rule lives). The client only asks
  * for things through these functions. See the Training Grounds spec.
+ * Kills and reactions still accrue in `pending`, harmlessly: a sandbox world is never banked.
  */
 
 export interface SandboxWorldOptions {
@@ -553,6 +567,7 @@ describe('training dummies', () => {
     expect(at([d])).toEqual([[13, 22]]);
     expect(w.hero.hp).toBe(hp);
     expect(d.windupUntil).toBe(0);
+    expect(d.aggro).toBe(false); // its AI never ran: it never noticed the hero
     run(w, 1, { x: 0, y: -1 });
     expect(at([d])).toEqual([[13, 22]]);
     expect(w.hero.y).toBeCloseTo(22 + d.radius + w.hero.radius, 5);
@@ -1207,7 +1222,7 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
 }
 ```
 
-(`respawnHero` takes the registry, unlike the spec's `respawnHero(world)`: restoring potions needs `dive.potions`.)
+(`respawnHero` takes the registry, as the spec now says: restoring potions needs `dive.potions`.)
 
 - [ ] **Step 6: Run to verify they pass**
 
@@ -1683,7 +1698,7 @@ In `src/delve/profile-schema.ts`: `const AbilityBuildSchema = z.object({` become
 
 In `src/index.ts`:
 - The hero-stats type export becomes `export type { ItemComparison, ItemStatLine, CombatEstimate, HeroStatsExtra } from './delve/hero-stats.js';`
-- After the `./delve/profile.js` export block, add `export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';`
+- After `export type { ProfileActionResult } from './delve/profile.js';`, add `export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';`
 - After `export { makeCtx } from './arpg/combat.js';`, add:
   ```ts
   export {
@@ -1745,10 +1760,10 @@ git commit -m "feat(engine): the sandbox weapon, and the Training Grounds API ex
 | `SLOWMO_MS`, `SLOWMO_SCALE` (106–108), `readArenaFlags` (110–125), `snapshot` (127–190) | `useArenaCore.ts`, verbatim; `snapshot` re-exported from `useArena.ts` |
 | refs and state (202–223) | the core, except `endAtRef` (the dive) and the profile / phase / depth reads (the dive); the core adds `modeRef` |
 | `startFloor` (225–236) | the core's `startWorld`: it calls `modeRef.current.createWorld()`; the dive's `createWorld` resets `endAtRef` and calls `beginFloor` |
-| the Pixi lifecycle effect (238–496) | the core; its ticker gains the mode's speed, `onHeroDead` and `frame`, and the HUD clock runs on real time |
+| the Pixi lifecycle effect (238–496) | the core; its ticker gains the mode's speed, `onHeroDead` and `frame`, and the HUD clock ignores the mode's speed; a `ResizeObserver` on the host resizes the canvas when the host changes size (the Training panel docking) |
 | `toCast`, `padFrame`, `padAimView`, `aimView` (338–418) | the core, verbatim, inside the lifecycle effect |
 | `handleEvents` (420–432) | the core, minus the bank line; it ends by calling `mode.onEvents` |
-| `bank` (434–458), `checkEnd` (460–485) | the dive (`useArena.ts`): `bank` is `onEvents`; `checkEnd` is `frame` and returns true once it has called `failFloor` / `completeFloor` |
+| `bank` (434–458), `checkEnd` (460–485) | the dive (`useArena.ts`): `bank` is called from `onEvents`; `checkEnd` is `frame` and returns true once it has called `failFloor` / `completeFloor` |
 | the new-floor effect (498–507) | the core's world-key effect; the dive's key is `fighting:${depth}` while fighting, else null |
 | the gear hot-swap effect (509–517) | the core's loadout effect (`mode.loadout`, memoised by the dive on `profile.equipped` and `profile.abilities`) |
 | `cast` … `pixelsPerUnit` callbacks (519–546) and the return (548–560) | the core, verbatim |
@@ -1758,15 +1773,43 @@ git commit -m "feat(engine): the sandbox weapon, and the Training Grounds API ex
 **Files:**
 - Create: `packages/client/src/features/delve/arena/useArenaCore.ts`
 - Modify: `packages/client/src/features/delve/arena/useArena.ts` (rewritten as the dive mode)
-- Test (guards, unchanged): `packages/client/src/features/delve/__tests__/arena-hud-snapshot.test.ts`, the whole client suite, `packages/client/e2e/delve.spec.ts`, `packages/client/e2e/delve-gamepad.spec.ts`
+- Modify: `packages/client/e2e/delve.spec.ts` (new D07; a fresh-floor check in D03): they guard the rewritten world-start logic
+- Test (guards): `packages/client/src/features/delve/__tests__/arena-hud-snapshot.test.ts`, the whole client suite, `packages/client/e2e/delve.spec.ts`, `packages/client/e2e/delve-gamepad.spec.ts`
 
-- [ ] **Step 1: Baseline**
+- [ ] **Step 1: Guard the world start, on the baseline**
 
-The engine was built at the end of Task 8. Restart the dev server on port 5288 (stop it if running, then `cd packages/client && npx vite --port 5288 --strictPort --force --host` in the background) and create the E2E scratch config (see the header). Then run, before touching anything:
+The core replaces the dive's "new floor" effect with the world-key rule, so first pin down what it must keep doing: a fresh floor after a door, and a fresh floor after "Dive again" at the same depth (the key goes `fighting:1` → null → `fighting:1`). A finished world shows `✓ clear` in `monsters-left`; a fresh one shows its foes.
+
+In `packages/client/e2e/delve.spec.ts`, D03: after `await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');` add
+
+```ts
+    await expect(page.getByTestId('monsters-left')).toContainText('foes');
+```
+
+and add, after D03:
+
+```ts
+  test('D07: diving again at the same depth starts a fresh floor', async ({ page }) => {
+    await seedProfile(page);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('extract-button').click();
+    const summary = page.getByTestId('dive-summary');
+    await expect(summary).toContainText('EXTRACTED');
+    // No checkpoint yet, so "Dive again" starts at depth 1: the same key as the finished floor.
+    await page.getByTestId('dive-again').click();
+    await expect(summary).toBeHidden();
+    await expect(page.getByTestId('depth-label')).toHaveText('DEPTH 1');
+    await expect(page.getByTestId('monsters-left')).toContainText('foes', { timeout: ARENA_READY });
+  });
+```
+
+The engine was built at the end of Task 8. Restart the dev server on port 5288 (stop it if running, then `cd packages/client && npx vite --port 5288 --strictPort --force --host` in the background) and create the E2E scratch config (see the header). Then run, before touching the arena code:
 
 Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
 Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts`
-Expected: all green. Note any flake (rerun it alone) so it isn't blamed on the refactor later. Keep the server and the scratch config for Step 5.
+Expected: all green, D07 and the new D03 check included (they describe today's behaviour). Note any flake (rerun it alone) so it isn't blamed on the refactor later. Keep the server and the scratch config for Step 5.
 
 - [ ] **Step 2: Create `useArenaCore.ts`**
 
@@ -1840,7 +1883,7 @@ export interface ArenaMode {
    * the world is finished); true once the mode is done with it, and the core
    * stops stepping it until a new world is made.
    */
-  frame: (world: ArpgWorld, dt: number) => boolean;
+  frame: (world: ArpgWorld) => boolean;
   /** After each step that had events. */
   onEvents: (world: ArpgWorld, events: ArpgEvent[]) => void;
   /** Once, on the frame the hero dies. */
@@ -1905,6 +1948,9 @@ export function useArenaCore(
     const detachKeys = attachKeyboard(inputRef.current, () => !pausedRef.current);
     const flags = readArenaFlags();
     let hudClock = 0;
+    // `resizeTo` only follows the window; the host can also change size on its own (the
+    // Training panel docking beside it), so the canvas follows the host too.
+    const hostResize = new ResizeObserver(() => app.queueResize());
 
     app
       .init({
@@ -1927,6 +1973,7 @@ export function useArenaCore(
         renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
         rendererRef.current = renderer;
         app.renderer.on('resize', () => renderer.resize());
+        hostResize.observe(host); // only now: `queueResize` exists once the app is initialised
 
         app.ticker.add((ticker) => {
           const world = worldRef.current;
@@ -1987,13 +2034,14 @@ export function useArenaCore(
               handleEvents(world, events);
             }
             if (!wasDead && world.heroDead) mode.onHeroDead(world);
-            if (mode.frame(world, dt)) finishedRef.current = true;
+            if (mode.frame(world)) finishedRef.current = true;
           }
           renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
           renderer.setAim(aimView(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
-          // The HUD refreshes on real time, so slow motion doesn't slow it.
-          hudClock += real;
+          // The HUD refresh ignores the mode's speed, so the sandbox's slow motion doesn't slow
+          // it (for the dive, speed 1, this is exactly today's `hudClock += dt`).
+          hudClock += real * scale;
           if (hudClock > 0.08) {
             hudClock = 0;
             setHud(snapshot(world));
@@ -2021,6 +2069,7 @@ export function useArenaCore(
 
     return () => {
       destroyed = true;
+      hostResize.disconnect();
       detachKeys();
       rendererRef.current?.destroy();
       rendererRef.current = null;
@@ -2050,7 +2099,9 @@ export function useArenaCore(
 }
 ```
 
-Replace each `// ← …` marker with the named lines of `useArena.ts`, copied verbatim (they keep compiling: every name they use is in scope above). The `onUiRef.current(...)` calls inside the copied `padFrame` etc. are unchanged.
+Replace each `// ← …` marker with the named lines of `useArena.ts`, copied verbatim (they keep compiling: every name they use is in scope above).
+
+The host `ResizeObserver` changes nothing in a dive (its host only changes size with the window, which `resizeTo` already follows); its first callback queues one resize to the same size.
 
 - [ ] **Step 3: Rewrite `useArena.ts` as the dive mode**
 
@@ -2152,7 +2203,7 @@ export function useArena(
       return beginFloor(registry, useDelveStore.getState().profile);
     },
     loadout,
-    frame: (world) => checkEnd(world),
+    frame: checkEnd,
     onEvents: (world) => {
       if (world.pending.items.length > 0 || world.pending.reactions.length > 0) bank(world);
     },
@@ -2173,12 +2224,13 @@ Expected: clean; all pass (`arena-hud-snapshot.test.ts` imports `snapshot` throu
 - [ ] **Step 5: The dive E2E, unchanged**
 
 Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts`
-Expected: the same results as the Step 1 baseline. A new consistent failure is a regression in the split: debug it (log the world key, `finishedRef` and each `createWorld` call) rather than guess. Keep the dev server running; delete `playwright.scratch.config.ts`.
+Expected: the same results as the Step 1 baseline, D07 and the D03 fresh-floor check included. A new consistent failure is a regression in the split: debug it (log the world key, `finishedRef` and each `createWorld` call) rather than guess. Keep the dev server running; delete `playwright.scratch.config.ts`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/client/src/features/delve/arena/useArenaCore.ts packages/client/src/features/delve/arena/useArena.ts
+npx prettier --write packages/client/e2e/delve.spec.ts
+git add packages/client/src/features/delve/arena/useArenaCore.ts packages/client/src/features/delve/arena/useArena.ts packages/client/e2e/delve.spec.ts
 git commit -m "refactor(client): split the arena into a shared core and the dive mode"
 ```
 
@@ -2186,7 +2238,7 @@ git commit -m "refactor(client): split the arena into a shared core and the dive
 
 ## Chunk 5: Sandbox store, meter and ability editor (client)
 
-Pieces the Training Grounds page (Chunks 7–8) is built from, each tested on its own. The engine is already built (Task 8).
+Pieces the Training Grounds panel and page (Chunks 7–8) are built from, each tested on its own. The engine is already built (Task 8).
 
 ### Task 10: The sandbox store
 
@@ -2197,10 +2249,14 @@ Pieces the Training Grounds page (Chunks 7–8) is built from, each tested on it
 
 - [ ] **Step 1: Add Zod to the client**
 
-The store validates its save with Zod and reuses the engine's `GearItemSchema`; the client has no Zod of its own yet. Add the engine's range, so pnpm links the one installed copy (3.25.x):
+The store validates its save with Zod and reuses the engine's `GearItemSchema`; the client has no Zod of its own yet. Add the engine's range, so pnpm links the one installed copy (3.25.x).
+
+Stop the 5288 dev server first: on Windows a running Vite holds files under `node_modules` (pnpm fails with EPERM) and keeps a stale dependency pre-bundle.
 
 Run: `pnpm -F @alloy/client add zod@^3.24.0`
-Expected: `packages/client/package.json` gains `"zod": "^3.24.0"`; `grep -n "zod@" pnpm-lock.yaml` still shows a single `zod@3.25.76`.
+Expected: `packages/client/package.json` gains `"zod": "^3.24.0"`; `grep -n "zod@" pnpm-lock.yaml` shows only `zod@3.25.76` entries (no second version).
+
+Then restart the dev server with `--force` (the command in the header), so Vite re-bundles its dependencies.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -2211,6 +2267,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createDelveProfile, generateItem, SeededRNG } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
 import {
+  MAX_DUMMY_GROUPS,
   SANDBOX_DEFAULTS,
   SANDBOX_KEY,
   parseSandbox,
@@ -2274,6 +2331,27 @@ describe('sandboxStore', () => {
     expect(s.abilities).toEqual(SANDBOX_DEFAULTS.abilities);
     expect(s.legendaries).toEqual({});
     expect(parseSandbox({ weapon: null }).weapon).toBeNull();
+    const nine = Array.from({ length: 9 }, () => ({ layout: 'single', element: null }));
+    expect(parseSandbox({ dummies: nine }).dummies).toEqual([]);
+  });
+
+  it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
+    const bow = generateItem(
+      registry,
+      { uid: 'L1', ilvl: 9, rarity: 'legendary', slot: 'weapon', baseId: 'bow', mana: 'storm' },
+      new SeededRNG(3),
+    );
+    const named = { baseId: 'bow', mana: 'storm', rarity: 'legendary' };
+    expect(parseSandbox({ weapon: named, loadedWeapon: bow }).loadedWeapon).toEqual(bow);
+    const other = { baseId: 'sword', mana: 'fire', rarity: 'rare' };
+    expect(parseSandbox({ weapon: other, loadedWeapon: bow }).loadedWeapon).toBeNull();
+    expect(parseSandbox({ weapon: null, loadedWeapon: bow }).loadedWeapon).toBeNull();
+  });
+
+  it(`keeps at most ${MAX_DUMMY_GROUPS} dummy groups`, () => {
+    for (let i = 0; i < MAX_DUMMY_GROUPS + 1; i++)
+      store().addDummyGroup({ layout: 'single', element: null });
+    expect(store().dummies).toHaveLength(MAX_DUMMY_GROUPS);
   });
 
   it('Load my build copies the real weapon, the other gear and the builds, and clears the extras', () => {
@@ -2296,6 +2374,9 @@ describe('sandboxStore', () => {
     expect(sandboxEquipped(registry, s).weapon).toEqual(bow);
     expect(sandboxStats(registry, s).legendaries[bow.legendary!.id]).toBe(bow.legendary!.value);
 
+    // Re-picking the same choice (the pressed chip) keeps the real weapon; any change drops it.
+    s.setWeapon({ baseId: 'bow', mana: 'storm', rarity: 'legendary' });
+    expect(store().loadedWeapon).toEqual(bow);
     s.setWeapon({ baseId: 'bow', mana: 'storm', rarity: 'rare' });
     expect(store().loadedWeapon).toBeNull();
     expect(sandboxEquipped(registry, store()).weapon?.legendary).toBeUndefined();
@@ -2358,11 +2439,26 @@ export const SANDBOX_KEY = 'alloy:delve:sandbox:v1';
 export const SLOWMO_SPEEDS = [0.25, 0.5, 0.75, 1] as const;
 export const MAX_EXTRA_ATTUNE = 15;
 export const MAX_DEPTH = 30;
+/** Dummy groups kept (and replayed) at most. */
+export const MAX_DUMMY_GROUPS = 8;
 
 export interface WeaponChoice {
   baseId: string;
   mana: ManaType;
   rarity: Rarity;
+}
+
+/** The weapon choice an item stands for. */
+function choiceOf(item: GearItem): WeaponChoice {
+  return { baseId: item.baseId, mana: item.mana, rarity: item.rarity };
+}
+
+/** Same base, element and rarity (two unarmed choices match too). */
+function sameChoice(a: WeaponChoice | null, b: WeaponChoice | null): boolean {
+  return (
+    a === b ||
+    (!!a && !!b && a.baseId === b.baseId && a.mana === b.mana && a.rarity === b.rarity)
+  );
 }
 
 /** A group of dummies added so far, replayed whenever the arena is rebuilt. */
@@ -2445,6 +2541,7 @@ function loadoutSchema(registry: DataRegistry) {
     dummyElement: ManaSchema.nullable().catch(null),
     dummies: z
       .array(z.object({ layout: z.enum(['single', 'row', 'clump']), element: ManaSchema.nullable() }))
+      .max(MAX_DUMMY_GROUPS)
       .catch([]),
     toggles: z
       .object({ infiniteMana: z.boolean(), noCooldowns: z.boolean(), invulnerable: z.boolean() })
@@ -2459,7 +2556,13 @@ function loadoutSchema(registry: DataRegistry) {
 /** A saved loadout; whatever is missing or bad takes its default. */
 export function parseSandbox(raw: unknown): SandboxLoadout {
   const parsed = loadoutSchema(getDelveRegistry()).safeParse(raw);
-  return parsed.success ? (parsed.data as SandboxLoadout) : SANDBOX_DEFAULTS;
+  if (!parsed.success) return SANDBOX_DEFAULTS;
+  const s = parsed.data as SandboxLoadout;
+  // A loaded weapon only counts while the choice still names it: a bad save can't show one
+  // weapon and fight with another.
+  return s.loadedWeapon && !sameChoice(s.weapon, choiceOf(s.loadedWeapon))
+    ? { ...s, loadedWeapon: null }
+    : s;
 }
 
 function load(): SandboxLoadout {
@@ -2472,7 +2575,7 @@ function load(): SandboxLoadout {
 }
 
 interface SandboxStore extends SandboxLoadout {
-  /** Pick a weapon (null = unarmed); a loaded weapon is dropped. */
+  /** Pick a weapon (null = unarmed); a loaded weapon is dropped, unless the choice is unchanged. */
   setWeapon: (weapon: WeaponChoice | null) => void;
   /** Switch a legendary power on (at its max roll) or off. */
   setLegendary: (id: string, on: boolean) => void;
@@ -2480,6 +2583,7 @@ interface SandboxStore extends SandboxLoadout {
   setAbility: (slot: AbilitySlot, build: AbilityBuild) => void;
   setDepth: (depth: number) => void;
   setDummyElement: (element: ManaType | null) => void;
+  /** Remember a dummy group (ignored once MAX_DUMMY_GROUPS are kept). */
   addDummyGroup: (group: DummyGroup) => void;
   clearDummyGroups: () => void;
   setToggles: (toggles: SandboxToggles) => void;
@@ -2503,7 +2607,10 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
   };
   return {
     ...load(),
-    setWeapon: (weapon) => commit({ weapon, loadedWeapon: null }),
+    // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it).
+    setWeapon: (weapon) => {
+      if (!sameChoice(weapon, get().weapon)) commit({ weapon, loadedWeapon: null });
+    },
     setLegendary: (id, on) => {
       const legendaries = { ...get().legendaries };
       if (on) legendaries[id] = getDelveRegistry().getLegendary(id).max;
@@ -2520,14 +2627,16 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     setAbility: (slot, build) => commit({ abilities: { ...get().abilities, [slot]: build } }),
     setDepth: (depth) => commit({ depth: Math.max(1, Math.min(MAX_DEPTH, Math.round(depth))) }),
     setDummyElement: (dummyElement) => commit({ dummyElement }),
-    addDummyGroup: (group) => commit({ dummies: [...get().dummies, group] }),
+    addDummyGroup: (group) => {
+      if (get().dummies.length < MAX_DUMMY_GROUPS) commit({ dummies: [...get().dummies, group] });
+    },
     clearDummyGroups: () => commit({ dummies: [] }),
     setToggles: (toggles) => commit({ toggles }),
     setSlowmo: (slowmo) => commit({ slowmo }),
     loadMyBuild: (profile) => {
       const { weapon, ...gear } = profile.equipped;
       commit({
-        weapon: weapon ? { baseId: weapon.baseId, mana: weapon.mana, rarity: weapon.rarity } : null,
+        weapon: weapon ? choiceOf(weapon) : null,
         loadedWeapon: weapon ?? null,
         gear,
         abilities: profile.abilities,
@@ -2956,9 +3065,9 @@ git commit -m "refactor(client): the ability editor takes its builds and stats a
 
 ---
 
-## Chunk 6: Renderer and panel keys (client)
+## Chunk 6: Shared arena pieces and the sandbox mode (client)
 
-Two small client changes the Training Grounds needs from shared arena code; the dive is unaffected (its worlds have no dummies, no blocked hits and no panel).
+Small changes to shared client code the Training Grounds needs (Tasks 13–16), then its arena mode (Task 17). The dive is unaffected: its worlds have no dummies, no blocked hits and no panel, and its sounds only move (Task 16).
 
 ### Task 13: Renderer: gone monsters, dummies, blocked hits
 
@@ -3054,7 +3163,7 @@ In `drawMonster`, the life bar condition `if (m.kind !== 'boss' && (m.hp < m.max
     if (!m.dummy && m.kind !== 'boss' && (m.hp < m.maxHp || m.kind === 'elite')) {
 ```
 
-(Dummies need no other renderer change: their `defId` is `dummy`, so `makeCreature` draws the `dummy` sprite once the atlas has it (Task 18), and their `icon` 🎯 until then.)
+(Dummies need no other renderer change: their `defId` is `dummy`, so `makeCreature` draws the `dummy` sprite once the atlas has it (Task 20), and their `icon` 🎯 until then.)
 
 In `handleEvents`, the `heroHit` case becomes:
 
@@ -3082,7 +3191,7 @@ In `useArenaCore.ts`, `handleEvents`: `if (e.kind === 'heroHit' && e.amount >= w
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd packages/client && npx prettier --write src/features/delve/arena/ArenaRenderer.ts src/features/delve/arena/useArenaCore.ts src/features/delve/__tests__/arena-renderer.test.ts && npx vitest run && npx tsc --noEmit -p .`
-Expected: all pass.
+Expected: all pass. Importing `ArenaRenderer.ts` loads Pixi, which prints a harmless `HTMLCanvasElement's getContext() method: not implemented` message on stderr under jsdom (no canvas there); the test still passes.
 
 - [ ] **Step 5: Commit**
 
@@ -3222,14 +3331,263 @@ git commit -m "feat(client): sliders, lists and text fields keep their keys; the
 
 ---
 
-## Chunk 7: The sandbox mode and the Training panel (client)
+### Task 15: Lists on a controller
 
-The hook and the panel have no unit tests of their own: the hook needs Pixi (like `useArena`), and the E2E in Task 19 drives both. Every piece they are built from is tested (Tasks 1–14). Each task ends with the typecheck and the full client suite.
+**Files:**
+- Modify: `packages/client/src/features/gamepad/use-gamepad-nav.ts` (`moveFocus`; new `stepSelect`)
+- Test: `packages/client/src/features/gamepad/__tests__/use-gamepad-nav.test.ts` (new)
 
-### Task 15: `useTrainingArena`, the sandbox mode
+The Training panel's Targets tab has lists (biome, monster, depth). A controller moves focus onto them but can't change them: left/right should step the choice, as they already nudge a slider.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `packages/client/src/features/gamepad/__tests__/use-gamepad-nav.test.ts`:
+
+```ts
+import { describe, it, expect, afterEach } from 'vitest';
+import { moveFocus } from '../use-gamepad-nav';
+
+describe('moveFocus on a list', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it('left and right step a focused select, clamped at its ends, with a change event', () => {
+    const list = document.body.appendChild(document.createElement('select'));
+    for (const v of ['a', 'b', 'c']) list.appendChild(new Option(v, v));
+    let changes = 0;
+    list.addEventListener('change', () => changes++);
+    list.focus();
+
+    moveFocus('right');
+    expect(list.value).toBe('b');
+    moveFocus('right');
+    moveFocus('right'); // already at the end: no change
+    expect(list.value).toBe('c');
+    expect(changes).toBe(2);
+    moveFocus('left');
+    expect(list.value).toBe('b');
+    expect(changes).toBe(3);
+    expect(document.activeElement).toBe(list);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `cd packages/client && npx vitest run src/features/gamepad/__tests__/use-gamepad-nav.test.ts`
+Expected: FAIL (focus leaves the list, and its value stays `a`).
+
+- [ ] **Step 3: Implement**
+
+In `use-gamepad-nav.ts`, below `nudgeRange`:
+
+```ts
+/** Left/right on a focused list steps its choice, clamped (React hears the change event). */
+function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
+  const next = Math.min(
+    el.options.length - 1,
+    Math.max(0, el.selectedIndex + (dir === 'right' ? 1 : -1)),
+  );
+  if (next === el.selectedIndex) return;
+  el.selectedIndex = next;
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+```
+
+and in `moveFocus`, right after the slider branch (`return nudgeRange(active, dir);` and its closing `}`):
+
+```ts
+  if (active instanceof HTMLSelectElement && (dir === 'left' || dir === 'right')) {
+    return stepSelect(active, dir);
+  }
+```
+
+In the file's doc comment, after "moves focus to the nearest control in that direction," add "(left/right adjust a focused slider or list)". React's `onChange` on a `<select>` listens to the native `change` event, so the dispatched event reaches it.
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `cd packages/client && npx prettier --write src/features/gamepad/use-gamepad-nav.ts src/features/gamepad/__tests__/use-gamepad-nav.test.ts && npx vitest run src/features/gamepad && npx tsc --noEmit -p .`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/client/src/features/gamepad/use-gamepad-nav.ts packages/client/src/features/gamepad/__tests__/use-gamepad-nav.test.ts
+git commit -m "feat(client): left and right step a focused list on a controller"
+```
+
+---
+
+### Task 16: The arena's sounds, shared
+
+**Files:**
+- Create: `packages/client/src/features/delve/arena/arena-sounds.ts` (`playArenaEvents`, `noManaToaster`)
+- Modify: `packages/client/src/pages/DelveRun.tsx` (`onUi` uses them)
+- Test: `packages/client/src/features/delve/__tests__/arena-sounds.test.ts` (new)
+
+The Training Grounds needs the dive's hit, cast, dodge and perfect-dodge sounds (feel testing needs sound) and its "not enough mana" toast. Move them out of `DelveRun.tsx` into a helper both pages use; the dive's behaviour stays identical.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `packages/client/src/features/delve/__tests__/arena-sounds.test.ts`:
+
+```ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/shared/utils/sound-manager', () => ({ playSound: vi.fn() }));
+vi.mock('@/shared/utils/haptics', () => ({ vibrate: vi.fn() }));
+vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
+
+import { playSound } from '@/shared/utils/sound-manager';
+import { vibrate } from '@/shared/utils/haptics';
+import { showToast } from '@/components/Toast';
+import { noManaToaster, playArenaEvents } from '../arena/arena-sounds';
+
+describe('arena sounds', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("plays each event's sound and haptic", () => {
+    playArenaEvents([
+      { kind: 'hit', id: 1, x: 0, y: 0, amount: 5, crit: true, element: null, heft: 0, source: 'basic' },
+      { kind: 'perfectDodge', x: 0, y: 0 },
+    ]);
+    expect(playSound).toHaveBeenCalledWith('crit');
+    expect(playSound).toHaveBeenCalledWith('synergyActivate');
+    expect(vibrate).toHaveBeenCalledWith('light');
+    expect(vibrate).toHaveBeenCalledWith('success');
+  });
+
+  it('says "not enough mana" at most every 1.5 s', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(10_000);
+    const toast = noManaToaster();
+    toast('Fire Bolt');
+    toast('Fire Bolt');
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith('Not enough mana for Fire Bolt');
+    now.mockReturnValue(11_600);
+    toast();
+    expect(showToast).toHaveBeenLastCalledWith('Not enough mana');
+    now.mockRestore();
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `cd packages/client && npx vitest run src/features/delve/__tests__/arena-sounds.test.ts`
+Expected: FAIL (`../arena/arena-sounds` does not exist).
+
+- [ ] **Step 3: Implement**
+
+Create `packages/client/src/features/delve/arena/arena-sounds.ts` (the `switch` is `DelveRun.tsx`'s, moved verbatim):
+
+```ts
+import type { ArpgEvent } from '@alloy/engine';
+import { playSound } from '@/shared/utils/sound-manager';
+import { vibrate } from '@/shared/utils/haptics';
+import { showToast } from '@/components/Toast';
+
+/** Sounds and haptics for a frame's arena events: the dive and the Training Grounds share them. */
+export function playArenaEvents(events: readonly ArpgEvent[]): void {
+  for (const ev of events) {
+    switch (ev.kind) {
+      case 'hit':
+        playSound(ev.crit ? 'crit' : 'attack');
+        if (ev.crit) vibrate('light');
+        break;
+      case 'heroHit':
+        playSound(ev.dodged ? 'dodge' : 'heroHurt');
+        if (!ev.dodged) vibrate('light');
+        break;
+      case 'reaction':
+        playSound('combineMerge');
+        break;
+      case 'explode':
+        if (ev.radius >= 2.4) playSound('forgeSlam');
+        break;
+      case 'death':
+        if (ev.monsterKind !== 'normal') playSound('death');
+        break;
+      case 'drop':
+        if (ev.rarity === 'rare' || ev.rarity === 'epic') playSound('lootRare');
+        else if (ev.dropKind === 'item') playSound('lootDrop');
+        break;
+      case 'pickup':
+        if (ev.dropKind === 'item') playSound('dropSuccess');
+        else if (ev.dropKind === 'orb') playSound('potion');
+        break;
+      case 'heal':
+        if (ev.source === 'potion') playSound('potion');
+        break;
+      case 'revive':
+        playSound('lootLegendary');
+        vibrate('heavy');
+        break;
+      case 'heroDeath':
+        playSound('defeat');
+        vibrate('error');
+        break;
+      case 'cast':
+        playSound('orbPlace');
+        break;
+      case 'dodge':
+        vibrate('light');
+        break;
+      case 'perfectDodge':
+        playSound('synergyActivate');
+        vibrate('success');
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/** A "Not enough mana" toast, at most once every 1.5 s. */
+export function noManaToaster(): (abilityName?: string) => void {
+  let last = 0;
+  return (name) => {
+    const now = performance.now();
+    if (now - last <= 1500) return;
+    last = now;
+    showToast(name ? `Not enough mana for ${name}` : 'Not enough mana');
+  };
+}
+```
+
+In `packages/client/src/pages/DelveRun.tsx`:
+- The React import gains `useMemo`; add `import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';`.
+- `const lastNoMana = useRef(0);` becomes `const noManaToast = useMemo(() => noManaToaster(), []);`.
+- In `onUi`, the whole `case 'events':` body (the `for (const ev of e.events) { switch (ev.kind) { … } }` loop) becomes `playArenaEvents(e.events);` (keep its `break;`).
+- The `case 'noMana': { … }` block becomes:
+  ```tsx
+        case 'noMana':
+          noManaToast(arenaRef.current?.hud?.abilities[e.slot]?.name);
+          break;
+  ```
+- `onUi`'s dependency list becomes `[registry, showBanner, noManaToast]`.
+
+`playSound`, `vibrate` and `showToast` stay imported in `DelveRun.tsx` (banners, fanfares, doors and the bag-full toast still use them).
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `cd packages/client && npx prettier --write src/features/delve/arena/arena-sounds.ts src/features/delve/__tests__/arena-sounds.test.ts src/pages/DelveRun.tsx && npx tsc --noEmit -p . && npx vitest run`
+Expected: all pass. (The dive E2E runs again in Task 21.)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/client/src/features/delve/arena/arena-sounds.ts packages/client/src/features/delve/__tests__/arena-sounds.test.ts packages/client/src/pages/DelveRun.tsx
+git commit -m "refactor(client): the arena's sounds and no-mana toast as a shared helper"
+```
+
+---
+
+### Task 17: `useTrainingArena`, the sandbox mode
 
 **Files:**
 - Create: `packages/client/src/features/delve/training/useTrainingArena.ts`
+
+The hook needs Pixi (like `useArena`), so it has no unit test of its own: the E2E (Task 21) drives it, and every piece it is built from is tested (Tasks 1–16).
 
 - [ ] **Step 1: Implement**
 
@@ -3249,7 +3607,7 @@ import {
   type DummyLayout,
   type MonsterKind,
 } from '@alloy/engine';
-import { useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
+import { MAX_DUMMY_GROUPS, useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from '../arena/useArenaCore';
 import { DamageMeter, type MeterSummary } from './meter';
@@ -3319,39 +3677,46 @@ export function useTrainingArena(
     return () => clearInterval(id);
   }, [worldRef]);
 
-  return {
-    ...arena,
-    meter,
-    /** Add a group of dummies (in the store's dummy element) above the hero. */
-    addDummies: (layout: DummyLayout) => {
-      const element = useSandboxStore.getState().dummyElement;
-      if (worldRef.current) spawnDummies(registry, worldRef.current, { layout, element });
-      useSandboxStore.getState().addDummyGroup({ layout, element });
-    },
-    spawn: (defId: string, kind: MonsterKind, count: number) => {
-      if (worldRef.current) spawnMonsters(registry, worldRef.current, { defId, kind, count });
-    },
-    clear: (which: 'monsters' | 'dummies' | 'all') => {
-      if (worldRef.current) clearMonsters(worldRef.current, which);
-      if (which !== 'monsters') useSandboxStore.getState().clearDummyGroups();
-    },
-    resetDummies: () => {
-      if (worldRef.current) resetWorldDummies(worldRef.current);
-    },
-    fillCharge: () => {
-      if (worldRef.current) fillWorldCharge(worldRef.current);
-    },
-    resetMeter: () => {
-      meterRef.current.reset();
-      setMeter(meterRef.current.summary(worldRef.current?.t ?? 0));
-    },
-  };
+  // Stable across renders, so the memoised panel doesn't re-render with the HUD.
+  const actions = useMemo(
+    () => ({
+      /** Add a group of dummies (in the store's dummy element) above the hero, up to the cap. */
+      addDummies: (layout: DummyLayout) => {
+        const s = useSandboxStore.getState();
+        if (s.dummies.length >= MAX_DUMMY_GROUPS) return;
+        if (worldRef.current)
+          spawnDummies(registry, worldRef.current, { layout, element: s.dummyElement });
+        s.addDummyGroup({ layout, element: s.dummyElement });
+      },
+      spawn: (defId: string, kind: MonsterKind, count: number) => {
+        if (worldRef.current) spawnMonsters(registry, worldRef.current, { defId, kind, count });
+      },
+      clear: (which: 'monsters' | 'dummies' | 'all') => {
+        if (worldRef.current) clearMonsters(worldRef.current, which);
+        if (which !== 'monsters') useSandboxStore.getState().clearDummyGroups();
+      },
+      resetDummies: () => {
+        if (worldRef.current) resetWorldDummies(worldRef.current);
+      },
+      fillCharge: () => {
+        if (worldRef.current) fillWorldCharge(worldRef.current);
+      },
+      resetMeter: () => {
+        meterRef.current.reset();
+        setMeter(meterRef.current.summary(worldRef.current?.t ?? 0));
+      },
+    }),
+    [registry, worldRef],
+  );
+
+  return { ...arena, meter, actions };
 }
 
 export type TrainingArena = ReturnType<typeof useTrainingArena>;
+export type TrainingActions = TrainingArena['actions'];
 ```
 
-How it meets the spec's mode table: the world key is the depth (a rebuild on every depth change); `createWorld` replays the store's `dummies` groups from `heroStart` (the fresh hero stands there) and resets the meter, since the new world's clock starts at 0; `loadout` is memoised on the store's derived stats and builds, so the core hot-swaps only real changes (Task 6's build swaps); `frame` never ends the world; `onEvents` feeds the meter with sim time; `onHeroDead` respawns at once; `speed` is the slow motion. The toggles go to the live world through `setSandboxToggles` whenever they change.
+How it meets the spec's mode table: the world key is the depth (a rebuild on every depth change); `createWorld` replays the store's `dummies` groups from `heroStart` (the fresh hero stands there) and resets the meter, since the new world's clock starts at 0; `loadout` is memoised on the store's derived stats and builds, so the core hot-swaps only real changes (Task 6's build swaps); `frame` never ends the world; `onEvents` feeds the meter with sim time; `onHeroDead` respawns at once; `speed` is the slow motion. The toggles reach the live world through `setSandboxToggles` whenever they change. `actions` never changes identity (the registry is a singleton, `worldRef` and `setMeter` are stable).
 
 - [ ] **Step 2: Typecheck**
 
@@ -3367,13 +3732,119 @@ git commit -m "feat(client): the Training Grounds arena mode"
 
 ---
 
-### Task 16: The meter views and the Training panel
+## Chunk 7: The Training panel (client)
+
+The panel takes plain props (the arena's stable `actions`, the meter summary and callbacks), so it gets a jsdom test of its own.
+
+### Task 18: The meter views and the Training panel
 
 **Files:**
 - Create: `packages/client/src/features/delve/training/MeterView.tsx` (`MeterChip`, `MeterTab`)
 - Create: `packages/client/src/features/delve/training/TrainingPanel.tsx` (`TrainingPanel` and its tabs; `blurOnPointerUp`)
+- Test: `packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx` (new)
 
-- [ ] **Step 1: The meter views**
+- [ ] **Step 1: Write the failing test**
+
+The panel takes plain props (`actions` is a bag of functions), so it renders in jsdom without an arena. Create `packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import { MAX_DUMMY_GROUPS, useSandboxStore } from '@/stores/sandboxStore';
+import { DamageMeter } from '../training/meter';
+import { TrainingPanel, type TrainingTab } from '../training/TrainingPanel';
+import type { TrainingActions } from '../training/useTrainingArena';
+
+function renderPanel(tab: TrainingTab) {
+  const actions: TrainingActions = {
+    addDummies: vi.fn(),
+    spawn: vi.fn(),
+    clear: vi.fn(),
+    resetDummies: vi.fn(),
+    fillCharge: vi.fn(),
+    resetMeter: vi.fn(),
+  };
+  const onClose = vi.fn();
+  const onExit = vi.fn();
+  render(
+    <TrainingPanel
+      layout="sheet"
+      tab={tab}
+      onTab={vi.fn()}
+      onClose={onClose}
+      onExit={onExit}
+      actions={actions}
+      meter={new DamageMeter().summary(0)}
+      onOpenControls={vi.fn()}
+    />,
+  );
+  return { actions, onClose, onExit };
+}
+
+describe('TrainingPanel', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useSandboxStore.getState().reset();
+  });
+
+  it('a weapon chip sets the sandbox weapon', () => {
+    renderPanel('loadout');
+    fireEvent.click(screen.getByTestId('weapon-base-staff'));
+    expect(useSandboxStore.getState().weapon).toMatchObject({ baseId: 'staff' });
+    expect(screen.getByTestId('weapon-name')).toHaveTextContent('Staff');
+  });
+
+  it('adds dummies through the arena, and stops at the cap', () => {
+    const { actions } = renderPanel('targets');
+    fireEvent.click(screen.getByTestId('add-dummy-row'));
+    expect(actions.addDummies).toHaveBeenCalledWith('row');
+    act(() => {
+      for (let i = 0; i < MAX_DUMMY_GROUPS; i++)
+        useSandboxStore.getState().addDummyGroup({ layout: 'single', element: null });
+    });
+    expect(screen.getByTestId('add-dummy-single')).toBeDisabled();
+    expect(screen.getByTestId('dummies-full')).toBeInTheDocument();
+  });
+
+  it("the sheet's Close answers the controller's B; Back to the Anvil carries no marker", () => {
+    const { onClose, onExit } = renderPanel('toggles');
+    const close = screen.getByTestId('training-panel-close');
+    expect(close).toHaveAttribute('data-pad-back');
+    expect(screen.getByRole('tablist')).toHaveAttribute('data-pad-tabs');
+    const exit = screen.getByTestId('training-panel-exit');
+    expect(exit).not.toHaveAttribute('data-pad-back');
+    expect(exit).not.toHaveAttribute('data-pad-menu');
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalled();
+    fireEvent.click(exit);
+    expect(onExit).toHaveBeenCalled();
+  });
+
+  it('a control lets go of focus when the pointer does; a list only when the pointer chose it', () => {
+    renderPanel('targets');
+    const button = screen.getByTestId('reset-dummies');
+    button.focus();
+    fireEvent.pointerUp(button);
+    expect(document.activeElement).not.toBe(button);
+
+    const depth = screen.getByTestId('training-depth') as HTMLSelectElement;
+    depth.focus();
+    fireEvent.change(depth, { target: { value: '7' } }); // reached with the keyboard: focus stays
+    expect(document.activeElement).toBe(depth);
+    fireEvent.pointerDown(depth);
+    fireEvent.change(depth, { target: { value: '8' } }); // picked with the pointer: let go
+    expect(document.activeElement).not.toBe(depth);
+    expect(useSandboxStore.getState().depth).toBe(8);
+  });
+});
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `cd packages/client && npx vitest run src/features/delve/__tests__/TrainingPanel.test.tsx`
+Expected: FAIL (`../training/TrainingPanel` does not exist).
+
+- [ ] **Step 3: The meter views**
 
 Create `packages/client/src/features/delve/training/MeterView.tsx`:
 
@@ -3382,11 +3853,11 @@ import { formatNumber } from '../format';
 import { getDelveRegistry } from '../registry';
 import { BUCKET_LABEL, METER_BUCKETS, METER_WINDOW, type MeterSummary } from './meter';
 
-/** The live readout at the top of the Training Grounds HUD: DPS · total · reset. */
+/** The live readout at the top of the Training Grounds HUD: DPS · total · reset (never wraps). */
 export function MeterChip({ meter, onReset }: { meter: MeterSummary; onReset: () => void }) {
   return (
     <div
-      className="delve-panel pointer-events-auto flex items-center gap-2 px-2.5 py-1 text-xs"
+      className="delve-panel pointer-events-auto flex items-center gap-2 whitespace-nowrap px-2.5 py-1 text-xs"
       data-testid="meter-chip"
     >
       <span className="delve-display font-bold text-amber-300" data-testid="meter-dps">
@@ -3477,12 +3948,21 @@ export function MeterTab({ meter, onReset }: { meter: MeterSummary; onReset: () 
 }
 ```
 
-- [ ] **Step 2: The Training panel**
+(`formatNumber` already writes large numbers compactly: 12,345 → "12.3k".)
+
+- [ ] **Step 4: The Training panel**
 
 Create `packages/client/src/features/delve/training/TrainingPanel.tsx`:
 
 ```tsx
-import { useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import {
+  memo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import {
   MANA_TYPES,
   RARITY_ORDER,
@@ -3494,6 +3974,7 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import {
   MAX_DEPTH,
+  MAX_DUMMY_GROUPS,
   MAX_EXTRA_ATTUNE,
   SLOWMO_SPEEDS,
   sandboxEquipped,
@@ -3504,8 +3985,9 @@ import {
 import { getDelveRegistry } from '../registry';
 import { RARITY_COLOR, RARITY_LABEL, formatStat, legendaryText, manaStyle } from '../format';
 import { AbilityEditor, AttunementBars, Chip } from '../AbilitiesPanel';
+import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
-import type { TrainingArena } from './useTrainingArena';
+import type { TrainingActions } from './useTrainingArena';
 
 export type PanelLayout = 'dock' | 'sheet';
 export type TrainingTab = 'loadout' | 'abilities' | 'targets' | 'toggles' | 'meter';
@@ -3537,17 +4019,13 @@ const SWITCHES: [keyof SandboxToggles, string, string][] = [
 ];
 
 /**
- * A control lets go of focus once the pointer does, so the arena's keys keep
- * working (focus reached with Tab stays). Selects blur on change instead:
- * blurring one on pointer-up would close its list.
+ * A button, switch or slider lets go of focus once the pointer does, so the
+ * arena's keys keep working; focus reached with Tab stays. (Lists are handled
+ * in the panel: blurring one on pointer-up would close it.)
  */
 export function blurOnPointerUp(e: ReactPointerEvent<HTMLElement>): void {
   const el = (e.target as Element).closest('button, input');
   if (el instanceof HTMLElement) el.blur();
-}
-
-function blurOnChange(e: FormEvent<HTMLElement>): void {
-  if (e.target instanceof HTMLSelectElement) e.target.blur();
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -3563,7 +4041,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 const SELECT = 'rounded-lg border border-white/10 bg-black/60 px-2 py-1.5 text-sm text-stone-200';
 
-function LoadoutTab() {
+const LoadoutTab = memo(function LoadoutTab() {
   const registry = getDelveRegistry();
   const s = useSandboxStore();
   const stats = useSandboxStats();
@@ -3720,10 +4198,10 @@ function LoadoutTab() {
       </p>
     </div>
   );
-}
+});
 
 /** The Anvil's editor, bound to the sandbox (never locked, every reaction named: it's a testing tool). */
-function TrainingAbilities() {
+const TrainingAbilities = memo(function TrainingAbilities() {
   const builds = useSandboxStore((s) => s.abilities);
   const stats = useSandboxStats();
   const all = getDelveRegistry()
@@ -3738,12 +4216,13 @@ function TrainingAbilities() {
       onChange={(slot, build) => useSandboxStore.getState().setAbility(slot, build)}
     />
   );
-}
+});
 
-function TargetsTab({ arena }: { arena: TrainingArena }) {
+const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActions }) {
   const registry = getDelveRegistry();
   const biomes = registry.getDelveData().biomes;
   const dummyElement = useSandboxStore((s) => s.dummyElement);
+  const full = useSandboxStore((s) => s.dummies.length >= MAX_DUMMY_GROUPS);
   const depth = useSandboxStore((s) => s.depth);
   const [biomeId, setBiomeId] = useState(biomes[0].id);
   const biome = biomes.find((b) => b.id === biomeId) ?? biomes[0];
@@ -3784,17 +4263,23 @@ function TargetsTab({ arena }: { arena: TrainingArena }) {
               key={layout}
               type="button"
               className="delve-btn px-2 py-2 text-xs"
-              onClick={() => arena.addDummies(layout)}
+              disabled={full}
+              onClick={() => actions.addDummies(layout)}
               data-testid={`add-dummy-${layout}`}
             >
               {label}
             </button>
           ))}
         </div>
+        {full && (
+          <div className="text-[11px] text-amber-200" data-testid="dummies-full">
+            {MAX_DUMMY_GROUPS} groups at most: clear the dummies to add more.
+          </div>
+        )}
         <button
           type="button"
           className="delve-btn text-sm"
-          onClick={arena.resetDummies}
+          onClick={actions.resetDummies}
           data-testid="reset-dummies"
         >
           ↺ Reset dummies
@@ -3855,7 +4340,7 @@ function TargetsTab({ arena }: { arena: TrainingArena }) {
         <button
           type="button"
           className="delve-btn text-sm"
-          onClick={() => arena.spawn(def.id, kind, count)}
+          onClick={() => actions.spawn(def.id, kind, count)}
           data-testid="spawn-button"
         >
           Spawn {count} × {def.name}
@@ -3864,13 +4349,28 @@ function TargetsTab({ arena }: { arena: TrainingArena }) {
 
       <Section title="Clear">
         <div className="grid grid-cols-3 gap-1.5">
-          <button type="button" className="delve-btn px-2 text-xs" onClick={() => arena.clear('monsters')} data-testid="clear-monsters">
+          <button
+            type="button"
+            className="delve-btn px-2 text-xs"
+            onClick={() => actions.clear('monsters')}
+            data-testid="clear-monsters"
+          >
             Monsters
           </button>
-          <button type="button" className="delve-btn px-2 text-xs" onClick={() => arena.clear('dummies')} data-testid="clear-dummies">
+          <button
+            type="button"
+            className="delve-btn px-2 text-xs"
+            onClick={() => actions.clear('dummies')}
+            data-testid="clear-dummies"
+          >
             Dummies
           </button>
-          <button type="button" className="delve-btn delve-btn-danger px-2 text-xs" onClick={() => arena.clear('all')} data-testid="clear-all">
+          <button
+            type="button"
+            className="delve-btn delve-btn-danger px-2 text-xs"
+            onClick={() => actions.clear('all')}
+            data-testid="clear-all"
+          >
             All
           </button>
         </div>
@@ -3898,9 +4398,15 @@ function TargetsTab({ arena }: { arena: TrainingArena }) {
       </Section>
     </div>
   );
-}
+});
 
-function TogglesTab({ arena, onOpenControls }: { arena: TrainingArena; onOpenControls: () => void }) {
+const TogglesTab = memo(function TogglesTab({
+  actions,
+  onOpenControls,
+}: {
+  actions: TrainingActions;
+  onOpenControls: () => void;
+}) {
   const toggles = useSandboxStore((s) => s.toggles);
   const slowmo = useSandboxStore((s) => s.slowmo);
   const manual = useDelveStore((s) => s.manualAttack);
@@ -3930,7 +4436,12 @@ function TogglesTab({ arena, onOpenControls }: { arena: TrainingArena; onOpenCon
             </span>
           </button>
         ))}
-        <button type="button" className="delve-btn text-sm" onClick={arena.fillCharge} data-testid="fill-charge">
+        <button
+          type="button"
+          className="delve-btn text-sm"
+          onClick={actions.fillCharge}
+          data-testid="fill-charge"
+        >
           ⚡ Fill charge
         </button>
       </Section>
@@ -3954,53 +4465,95 @@ function TogglesTab({ arena, onOpenControls }: { arena: TrainingArena; onOpenCon
         >
           Basic attack: {manual ? 'Manual' : 'Auto'} ⇄
         </button>
-        <button type="button" className="delve-btn text-sm" onClick={onOpenControls} data-testid="training-open-controls">
+        <button
+          type="button"
+          className="delve-btn text-sm"
+          onClick={onOpenControls}
+          data-testid="training-open-controls"
+        >
           🎮 Controls
         </button>
       </Section>
     </div>
   );
-}
+});
 
 /**
- * The Training panel: docked beside the running fight (wide screens with mouse
+ * The Training panel: docked beside the running fight (wide pages with mouse
  * and keyboard) or a sheet over the paused fight (phones, or a controller), as
  * the page decided when it opened. The sheet keeps the controller's focus
- * (`data-pad-scope`), its Close answers B (`data-pad-back`), and LB/RB step
- * the tabs (`data-pad-tabs`).
+ * (`data-pad-scope`), its Close answers B (`data-pad-back`), LB/RB step the
+ * tabs (`data-pad-tabs`), and Back to the Anvil (no marker) lets a controller
+ * player leave from inside it. Memoised, with memoised tabs, so the HUD's and
+ * the meter's refreshes don't re-render every tab.
  */
-export function TrainingPanel({
+export const TrainingPanel = memo(function TrainingPanel({
   layout,
   tab,
   onTab,
   onClose,
-  arena,
+  onExit,
+  actions,
+  meter,
   onOpenControls,
 }: {
   layout: PanelLayout;
   tab: TrainingTab;
   onTab: (tab: TrainingTab) => void;
   onClose: () => void;
-  arena: TrainingArena;
+  onExit: () => void;
+  actions: TrainingActions;
+  meter: MeterSummary;
   onOpenControls: () => void;
 }) {
+  // A list picked with the pointer lets go of focus once it changes; one worked with keys keeps it.
+  const pointerList = useRef<HTMLSelectElement | null>(null);
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    pointerList.current = (e.target as Element).closest('select');
+  };
+  const onKeyDown = () => {
+    pointerList.current = null;
+  };
+  const onChange = (e: FormEvent<HTMLElement>) => {
+    if (e.target instanceof HTMLSelectElement && e.target === pointerList.current) {
+      pointerList.current = null;
+      e.target.blur();
+    }
+  };
+
   const body = (
-    <div className="flex flex-col gap-3" onPointerUp={blurOnPointerUp} onChange={blurOnChange}>
-      <div className="flex items-center justify-between">
+    <div
+      className="flex flex-col gap-3"
+      onPointerDown={onPointerDown}
+      onPointerUp={blurOnPointerUp}
+      onKeyDown={onKeyDown}
+      onChange={onChange}
+    >
+      <div className="flex items-center justify-between gap-2">
         <span className="delve-display text-lg font-bold uppercase tracking-widest text-amber-300">
-          🎯 Training Grounds
+          🎯 Training
         </span>
-        {layout === 'sheet' && (
+        <span className="flex gap-1.5">
           <button
             type="button"
             className="delve-btn px-3 py-1 text-sm"
-            onClick={onClose}
-            data-pad-back
-            data-testid="training-panel-close"
+            onClick={onExit}
+            data-testid="training-panel-exit"
           >
-            Close
+            ◂ Anvil
           </button>
-        )}
+          {layout === 'sheet' && (
+            <button
+              type="button"
+              className="delve-btn px-3 py-1 text-sm"
+              onClick={onClose}
+              data-pad-back
+              data-testid="training-panel-close"
+            >
+              Close
+            </button>
+          )}
+        </span>
       </div>
       <div className="flex gap-1 rounded-xl bg-black/30 p-1" role="tablist" data-pad-tabs>
         {TABS.map(([id, label]) => (
@@ -4023,9 +4576,9 @@ export function TrainingPanel({
       </div>
       {tab === 'loadout' && <LoadoutTab />}
       {tab === 'abilities' && <TrainingAbilities />}
-      {tab === 'targets' && <TargetsTab arena={arena} />}
-      {tab === 'toggles' && <TogglesTab arena={arena} onOpenControls={onOpenControls} />}
-      {tab === 'meter' && <MeterTab meter={arena.meter} onReset={arena.resetMeter} />}
+      {tab === 'targets' && <TargetsTab actions={actions} />}
+      {tab === 'toggles' && <TogglesTab actions={actions} onOpenControls={onOpenControls} />}
+      {tab === 'meter' && <MeterTab meter={meter} onReset={actions.resetMeter} />}
     </div>
   );
 
@@ -4055,23 +4608,23 @@ export function TrainingPanel({
       </div>
     </div>
   );
-}
+});
 ```
 
 Notes for the implementer:
-- `blurOnPointerUp` and `blurOnChange` sit on the panel's root, so every control inside (buttons, switches, sliders, selects) lets go of focus once used with a pointer; focus reached with Tab stays. The page reuses `blurOnPointerUp` for its top bar (Task 17).
+- The pointer rules sit on the panel's root, so they cover every control inside. The page reuses `blurOnPointerUp` for its top bar (Task 19).
 - Everything is shown (all legendary powers with their text, reactions by name): the spoiler decision in the spec.
 - `SLOWMO_SPEEDS` is a readonly tuple; `setSlowmo` takes a number.
 
-- [ ] **Step 3: Typecheck and tests**
+- [ ] **Step 5: Run to verify it passes**
 
-Run: `cd packages/client && npx prettier --write src/features/delve/training/MeterView.tsx src/features/delve/training/TrainingPanel.tsx && npx tsc --noEmit -p . && npx vitest run`
-Expected: clean; all pass.
+Run: `cd packages/client && npx prettier --write src/features/delve/training/MeterView.tsx src/features/delve/training/TrainingPanel.tsx src/features/delve/__tests__/TrainingPanel.test.tsx && npx vitest run src/features/delve/__tests__/TrainingPanel.test.tsx && npx tsc --noEmit -p . && npx vitest run`
+Expected: PASS; the whole client suite green.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/client/src/features/delve/training/MeterView.tsx packages/client/src/features/delve/training/TrainingPanel.tsx
+git add packages/client/src/features/delve/training/MeterView.tsx packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx
 git commit -m "feat(client): the Training panel: loadout, abilities, targets, toggles and meter tabs"
 ```
 
@@ -4079,7 +4632,7 @@ git commit -m "feat(client): the Training panel: loadout, abilities, targets, to
 
 ## Chunk 8: The page, the dummy sprite, E2E and shipping v0.41.0
 
-### Task 17: The Training Grounds page, its route, and the Anvil button
+### Task 19: The Training Grounds page, its route, and the Anvil button
 
 **Files:**
 - Create: `packages/client/src/pages/DelveTraining.tsx`
@@ -4161,13 +4714,15 @@ In `src/components/AppShell.tsx`:
 Create `packages/client/src/pages/DelveTraining.tsx`:
 
 ```tsx
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';
+import { useSandboxStore } from '@/stores/sandboxStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
+import { ToastContainer } from '@/components/Toast';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
 import {
   AttackButton,
@@ -4177,7 +4732,9 @@ import {
   SkillBar,
   Vitals,
 } from '@/features/delve/arena/ArenaHud';
-import { useTrainingArena } from '@/features/delve/training/useTrainingArena';
+import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
+import type { CoreUiEvent } from '@/features/delve/arena/useArenaCore';
+import { useTrainingArena, type TrainingArena } from '@/features/delve/training/useTrainingArena';
 import { MeterChip } from '@/features/delve/training/MeterView';
 import {
   DOCK_WIDTH,
@@ -4188,39 +4745,44 @@ import {
 } from '@/features/delve/training/TrainingPanel';
 import '@/features/delve/delve.css';
 
-/** From this width, with mouse and keyboard, the panel docks beside the fight. */
+/** From this page width, with mouse and keyboard, the panel docks beside the fight. */
 const DOCK_MIN_WIDTH = 1024;
 
 const fineMouse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
 
 /**
  * Decided when the panel opens and kept until it closes: docked (the fight runs
- * on) on a wide screen with mouse and keyboard; otherwise a sheet that pauses it.
+ * on) when the page itself is wide enough (the app frame letterboxes, so not
+ * the window) and mouse and keyboard are in use; otherwise a sheet that pauses it.
  */
-function openLayout(): PanelLayout {
-  return window.innerWidth >= DOCK_MIN_WIDTH &&
+function openLayout(page: HTMLElement | null): PanelLayout {
+  return (page?.clientWidth ?? 0) >= DOCK_MIN_WIDTH &&
     useInputDeviceStore.getState().device === 'keyboard'
     ? 'dock'
     : 'sheet';
 }
 
 /**
- * The Training Grounds: the arena with the usual HUD and controls, plus
- * dummies, any monster, rule toggles and a damage meter, on a loadout of its
- * own. It never touches the Delve save.
+ * The Training Grounds: the arena with the usual HUD, controls and sounds,
+ * plus dummies, any monster, rule toggles and a damage meter, on a loadout of
+ * its own. It never touches the Delve save.
  */
 export function DelveTraining() {
   const navigate = useNavigate();
+  const pageRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [insets, setInsets] = useState({ top: 60, bottom: 190 });
-  // Docked and open on entry where it docks; otherwise closed until asked for.
-  const [panel, setPanel] = useState<PanelLayout | null>(() =>
-    openLayout() === 'dock' ? 'dock' : null,
-  );
+  const [panel, setPanel] = useState<PanelLayout | null>(null);
   const [tab, setTab] = useState<TrainingTab>('loadout');
   const [controlsOpen, setControlsOpen] = useState(false);
+  const depth = useSandboxStore((s) => s.depth);
+
+  // Docked and open on entry where it docks; otherwise closed until asked for.
+  useLayoutEffect(() => {
+    if (openLayout(pageRef.current) === 'dock') setPanel('dock');
+  }, []);
 
   // Keep the camera clear of the HUD.
   useEffect(() => {
@@ -4245,12 +4807,31 @@ export function DelveTraining() {
   const device = useInputDeviceStore((s) => s.device);
   const controls = useControlsStore((s) => s.config);
   const hints = device === 'gamepad' ? padHints(controls) : fineMouse ? keyHints(controls) : null;
-  const onUi = useCallback(() => {}, []);
+
+  // The dive's sounds, haptics and no-mana toast.
+  const arenaRef = useRef<TrainingArena | null>(null);
+  const noManaToast = useMemo(() => noManaToaster(), []);
+  const onUi = useCallback(
+    (e: CoreUiEvent) => {
+      if (e.kind === 'events') playArenaEvents(e.events);
+      else noManaToast(arenaRef.current?.hud?.abilities[e.slot]?.name);
+    },
+    [noManaToast],
+  );
   const arena = useTrainingArena(hostRef, { paused, insets, onUi, manualAttack });
-  const togglePanel = () => setPanel((p) => (p ? null : openLayout()));
+  arenaRef.current = arena;
+
+  // Stable, so the memoised panel only re-renders for its own props (and the meter).
+  const togglePanel = useCallback(() => {
+    const next = openLayout(pageRef.current);
+    setPanel((p) => (p ? null : next));
+  }, []);
+  const closePanel = useCallback(() => setPanel(null), []);
+  const openControls = useCallback(() => setControlsOpen(true), []);
+  const exit = useCallback(() => navigate('/delve'), [navigate]);
 
   return (
-    <div className="delve-page select-none bg-black" data-testid="delve-training">
+    <div ref={pageRef} className="delve-page select-none bg-black" data-testid="delve-training">
       {/* The arena and its HUD narrow beside a docked panel, so the camera centres in view. */}
       <div
         className="absolute inset-y-0 left-0"
@@ -4275,13 +4856,19 @@ export function DelveTraining() {
             <button
               type="button"
               className="delve-btn pointer-events-auto px-2.5 py-1.5 text-sm"
-              onClick={() => navigate('/delve')}
+              onClick={exit}
               data-testid="training-back"
             >
               ◂ Anvil
             </button>
-            <div className="flex min-w-0 flex-1 justify-center">
-              <MeterChip meter={arena.meter} onReset={arena.resetMeter} />
+            <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+              <span
+                className="delve-display whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest text-stone-400"
+                data-testid="training-depth-label"
+              >
+                Depth {depth}
+              </span>
+              <MeterChip meter={arena.meter} onReset={arena.actions.resetMeter} />
             </div>
             <button
               type="button"
@@ -4330,22 +4917,27 @@ export function DelveTraining() {
           layout={panel}
           tab={tab}
           onTab={setTab}
-          onClose={() => setPanel(null)}
-          arena={arena}
-          onOpenControls={() => setControlsOpen(true)}
+          onClose={closePanel}
+          onExit={exit}
+          actions={arena.actions}
+          meter={arena.meter}
+          onOpenControls={openControls}
         />
       )}
       {/* After the panel: the controller's back button and focus go to the topmost one. */}
       {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
+      <ToastContainer />
     </div>
   );
 }
 ```
 
 How the spec's open/close rules land:
+- The layout is read from the page's own width (`pageRef.current.clientWidth`): between 9:16 and 3:2 the app frame letterboxes, so the window is wider than the page. The first layout effect opens the dock where it docks, before the first paint; the core's host `ResizeObserver` (Task 9) resizes the canvas as the arena narrows.
 - The Panel button (`training-panel-toggle`) carries `data-pad-menu`, so the controller's Menu presses it (through the arena while the fight is live, through the menu layer while a sheet pauses it), and so does the keyboard's menu key (Escape by default) from anywhere, sliders and lists included (Task 14).
-- The sheet's Close carries `data-pad-back`; **◂ Anvil** carries neither marker.
+- The sheet's Close carries `data-pad-back`; both **◂ Anvil** buttons (the top bar's, and the panel header's for a controller player inside the sheet) carry neither marker.
 - `paused` is a sheet or the Controls editor: a docked panel leaves the fight running (and the controller with the arena).
+- The HUD refreshes the page at 12.5 Hz and the meter at 4 Hz; the panel's props are stable apart from `meter`, and its tabs are memoised, so only the shell and the Meter tab re-render with them.
 - The TabBar is hidden here (Step 3).
 
 - [ ] **Step 5: Run to verify it passes**
@@ -4362,7 +4954,7 @@ git commit -m "feat(client): the Training Grounds page, reached from the Anvil"
 
 ---
 
-### Task 18: The training dummy sprite
+### Task 20: The training dummy sprite
 
 **Files:**
 - Create: `packages/pixel-forge/art/alloy/sprites/dummy.ts`
@@ -4479,6 +5071,9 @@ Open `packages/pixel-forge/art/alloy/review.png` (Read it) and check the dummy r
 Run: `cd packages/client && npx vitest run src/features/delve/__tests__/sprite-atlas.test.ts`
 Expected: PASS (the dummy is 16 × 16, two frames).
 
+Run: `pnpm -F @alloy/pixel-forge typecheck && pnpm -F @alloy/pixel-forge test`
+Expected: clean (its tsconfig includes `art/`, so the sprite file is type-checked); all pixel-forge tests pass.
+
 - [ ] **Step 6: Commit**
 
 ```bash
@@ -4489,7 +5084,7 @@ git commit -m "art: a training dummy sprite"
 
 ---
 
-### Task 19: The Training Grounds E2E
+### Task 21: The Training Grounds E2E
 
 **Files:**
 - Create: `packages/client/e2e/delve-training.spec.ts`
@@ -4505,13 +5100,18 @@ import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 
-/** A fresh Delve save and no sandbox save (so the sandbox starts from its defaults). */
+/**
+ * A fresh Delve save, no sandbox save (so the sandbox starts from its
+ * defaults), and manual basic attacks (`MANUAL_ATTACK_KEY` in delveStore.ts),
+ * so with nothing clicking the arena the Primary is the only damage.
+ */
 async function seed(page: Page): Promise<void> {
   const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), 4242));
   await page.addInitScript((value) => {
     if (sessionStorage.getItem('training-e2e')) return;
     localStorage.clear();
     localStorage.setItem('alloy:delve:v2', value);
+    localStorage.setItem('alloy:delve:manualAttack', '1');
     localStorage.setItem('alloy:muted', 'true');
     sessionStorage.setItem('training-e2e', '1');
   }, save);
@@ -4543,7 +5143,8 @@ test.describe('Delve Training Grounds', () => {
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
       timeout: ARENA_READY,
     });
-    await expect(page.getByTestId('ability-0')).toBeVisible({ timeout: ARENA_READY });
+    const ability0 = page.getByTestId('ability-0');
+    await expect(ability0).toBeVisible({ timeout: ARENA_READY });
 
     await openPanel(page);
     await page.getByTestId('training-tab-targets').click();
@@ -4555,10 +5156,13 @@ test.describe('Delve Training Grounds', () => {
 
     const total = async () =>
       Number(await page.getByTestId('meter-total').getAttribute('data-total'));
-    await page.getByTestId('ability-0').click(); // the Primary auto-aims at the dummy
-    await expect.poll(total, { timeout: ARENA_READY }).toBeGreaterThan(0);
+    // The Primary auto-aims at the dummy. A slow frame can turn a click into a cancelled
+    // aim, so press again until the meter counts a hit.
+    await expect(async () => {
+      await ability0.click();
+      expect(await total()).toBeGreaterThan(0);
+    }).toPass({ timeout: ARENA_READY });
 
-    // The Primary's own hits, not just the staff's basic attacks.
     await openPanel(page);
     await page.getByTestId('training-tab-meter').click();
     await expect
@@ -4578,9 +5182,9 @@ Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts 
 Expected: T01 passes on all four device projects (desktop docks the panel; the phones use the sheet).
 
 Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts`
-Expected: all pass, unchanged.
+Expected: all pass (the dive's sounds now come from the shared helper; its behaviour is unchanged).
 
-A consistent failure is a real bug: debug it with the page's console and state (the world key, the panel layout, `meter-total`), not with longer timeouts. Delete `playwright.scratch.config.ts` afterwards.
+A consistent failure is a real bug: debug it with the page's console and state (the world key, the panel layout, `meter-total`), not with longer timeouts. Keep the scratch config for Task 22.
 
 - [ ] **Step 3: Commit**
 
@@ -4592,7 +5196,7 @@ git commit -m "test(e2e): the Training Grounds"
 
 ---
 
-### Task 20: Docs, version, full verification, push
+### Task 22: Docs, version, full verification, push
 
 **Files:**
 - Modify: `CLAUDE.md` (Delve section), `docs/superpowers/specs/2026-09-26-delve-training-grounds-design.md` (status line), `packages/client/package.json` (version)
@@ -4604,7 +5208,7 @@ In `CLAUDE.md`, Delve section:
 - Before the **Test hooks** bullet, add:
 
   ```markdown
-  - **Training Grounds** (`/delve/training`, `pages/DelveTraining.tsx`; spec: `docs/superpowers/specs/2026-09-26-delve-training-grounds-design.md`): a sandbox behind the Anvil's 🎯 button, always open, that never touches the save. It keeps its own loadout (`stores/sandboxStore.ts`, `alloy:delve:sandbox:v1`): any weapon base, element and rarity (`sandboxWeapon`), legendary powers and extra attunement (`computeHeroStats(equipped, registry, extra)`), the three builds, or **Load my build**. The engine's `arpg/sandbox.ts` builds an arena that never clears and drops nothing (`createSandboxWorld`), stands training dummies that never act or die (`spawnDummies`, `resetDummies`; their layout is `balance.json → delve.sandbox`), spawns any monster (`spawnMonsters`, `clearMonsters`), and keeps the toggles on `ArpgWorld.sandbox` (`setSandboxToggles`: infinite mana, no cooldowns, invulnerable; `fillCharge`, `respawnHero`). Builds hot-swap mid-fight (`refreshWorldHero` cancels a changed slot's wind-up), and `hit` events carry `source` and `slot` for the damage meter (`features/delve/training/meter.ts`). The dive and the sandbox share one arena core (`arena/useArenaCore.ts`): the dive mode is `useArena.ts`, the sandbox `features/delve/training/useTrainingArena.ts`.
+  - **Training Grounds** (`/delve/training`, `pages/DelveTraining.tsx`; spec: `docs/superpowers/specs/2026-09-26-delve-training-grounds-design.md`): a sandbox behind the Anvil's 🎯 button, always open, that never touches the save. It keeps its own loadout (`stores/sandboxStore.ts`, `alloy:delve:sandbox:v1`): any weapon base, element and rarity (`sandboxWeapon`), legendary powers and extra attunement (`computeHeroStats(equipped, registry, extra)`), the three builds, or **Load my build**. The engine's `arpg/sandbox.ts` builds an arena that never clears and drops nothing (`createSandboxWorld`), stands training dummies that never act or die (`spawnDummies`, `resetDummies`; their layout is `balance.json → delve.sandbox`), spawns any monster (`spawnMonsters`, `clearMonsters`), and keeps the toggles on `ArpgWorld.sandbox` (`setSandboxToggles`: infinite mana, no cooldowns, invulnerable; `fillCharge`, `respawnHero`). Builds hot-swap mid-fight (`refreshWorldHero` cancels a changed slot's wind-up), and `hit` events carry `source` and `slot` for the damage meter (`features/delve/training/meter.ts`). The dive and the sandbox share one arena core (`arena/useArenaCore.ts`: the dive mode is `useArena.ts`, the sandbox `features/delve/training/useTrainingArena.ts`) and one set of arena sounds (`arena/arena-sounds.ts`).
   ```
 
 In the spec, `**Status:** Approved in conversation.` becomes `**Status:** Built in v0.41.0.`
@@ -4617,9 +5221,10 @@ Run, and check each is green before claiming anything:
 - `cd packages/engine && npx vitest run && npx tsc --noEmit -p .` (the pacing guard rails included)
 - `pnpm -F @alloy/engine build`
 - `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
-- The Delve E2E through the scratch config, on a freshly restarted dev server: `e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts`. Delete the scratch config afterwards.
+- `pnpm -F @alloy/pixel-forge typecheck && pnpm -F @alloy/pixel-forge test`
+- The Delve E2E through the scratch config, on a freshly restarted dev server: `e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts`.
 
-Expected: all green (retry only proven flakes, as in the header).
+Expected: all green (retry only proven flakes, as in the header). Then delete the scratch config, and leave the 5288 dev server running: the user plays on it.
 
 - [ ] **Step 3: Commit and push**
 
@@ -4631,4 +5236,4 @@ chore(client): bump version to 0.41.0"
 git push -q origin claude/alloy-loot-gear-system-6upsy5
 ```
 
-`git status` must show nothing but untracked plan docs (the three 2026-05-01 ones, and this plan if it was never committed).
+`git status` must show nothing but the three untracked 2026-05-01 plan docs.

@@ -14,7 +14,7 @@
 **Client:** `packages/client/src/`
 - `pages/DelveTraining.tsx` (new), `features/delve/training/` (new), `stores/sandboxStore.ts` (new)
 - `features/delve/arena/useArena.ts`, split into `useArenaCore.ts` plus modes
-- `features/delve/arena/input.ts`, `features/delve/arena/ArenaRenderer.ts`
+- `features/delve/arena/input.ts`, `features/delve/arena/ArenaRenderer.ts`, `features/delve/arena/arena-sounds.ts` (new, shared with `pages/DelveRun.tsx`), `features/gamepad/use-gamepad-nav.ts`
 - `features/delve/AbilitiesPanel.tsx`, `pages/DelveCamp.tsx`, `components/AppShell.tsx`, `App.tsx`
 
 **Art:** `packages/pixel-forge` (a training dummy sprite), `features/delve/__tests__/sprite-atlas.test.ts`
@@ -60,7 +60,7 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 - **Hero:** placed at `heroStart`, facing up.
 - **Biome and scaling:** depth picks the biome, as in a dive, and scales monsters.
 - **Toggles:** the world gains `sandbox: { infiniteMana, noCooldowns, invulnerable } | null`, which is `null` for a dive.
-  - `setSandboxToggles(world, toggles)` changes them; the client never writes the field directly.
+  - `setSandboxToggles(world, toggles)` changes them; the client never writes the field directly. Switching No cooldowns on also frees cooldowns already running.
 - **It never ends:** the tick's clear check skips a sandbox world, so it never clears and never ends.
 - **No drops:** killing a real monster in a sandbox drops nothing (no items, motes, orbs or scrap, and no `pending` loot). On-kill effects still happen: heal on kill, Nightstalker, fire-mastery spread and Hellfire Brand.
 
@@ -117,7 +117,7 @@ Each toggle is checked where its rule lives:
   - The `heroHit` event still carries the would-be damage, with a new `blocked: true` flag. The renderer shows it as a grey number with no red flash.
   - Perfect-dodge detection, the riposte, statuses on the hero and everything else still happen.
 - **Fill charge:** `fillCharge(world)` sets every charge-paid slot to its `chargeNeed`. It is an action, for when No cooldowns is off.
-- **Respawn:** `respawnHero(world)` runs at once when the hero dies with Invulnerable off. It:
+- **Respawn:** `respawnHero(registry, world)` runs at once when the hero dies with Invulnerable off (the registry gives the potion count). It:
   - restores full life and potions, and makes Phoenix available again;
   - clears `heroDead`, the wind-up, the swing, the push, the recovery, the dodge, the Defensive buff and the Ward;
   - grants 1 s of `invulnUntil`, so a crowd can't kill the hero again at once;
@@ -164,14 +164,14 @@ A Zustand store, saved under `alloy:delve:sandbox:v1` and validated with Zod on 
 | Field | Contents |
 |---|---|
 | `weapon` | `{ baseId, mana, rarity } \| null`. `null` means unarmed. Default: sword, fire, rare. |
-| `loadedWeapon` | The real weapon item copied by **Load my build**, or `null`. While set, it is used as-is (affixes, upgrades, legendary); changing any weapon choice clears it. |
+| `loadedWeapon` | The real weapon item copied by **Load my build**, or `null`. While set, it is used as-is (affixes, upgrades, legendary); changing any weapon choice clears it (picking the same choice again doesn't). On load, one that no longer matches `weapon`'s base, element and rarity is dropped. |
 | `gear` | The other equipped slots, empty unless filled by **Load my build**. |
 | `legendaries` | id → value; each switched-on power at its max roll. |
 | `attunement` | Extra attunement per element, 0–15. |
 | `abilities` | The three `AbilityBuild`s. Default: the save's defaults. |
 | `depth` | 1–30. Default 5. |
 | `dummyElement` | `null` (Neutral) or a mana type, for new dummies. Default `null`. |
-| `dummies` | The dummy groups added so far, as `{ layout, element }` entries, so a rebuilt world can replay them. Cleared by clearing dummies. |
+| `dummies` | The dummy groups added so far, as `{ layout, element }` entries, so a rebuilt world can replay them. At most 8 groups: at the cap the add buttons are disabled with a note to clear the dummies. Cleared by clearing dummies. |
 | `toggles` | `{ infiniteMana, noCooldowns, invulnerable }`. Default: all on. |
 | `slowmo` | Display speed: 0.25, 0.5, 0.75 or 1. Default 1. |
 
@@ -187,7 +187,8 @@ A Zustand store, saved under `alloy:delve:sandbox:v1` and validated with Zod on 
 
 - **Core:** the Pixi app, renderer, ticker, keyboard, mouse and controller input, hit-stop, the HUD snapshot, and the cast, dodge and attack actions.
   - `opts` are today's options: `paused`, `insets`, `manualAttack`, `onUi`.
-  - The HUD refresh clock runs on real (unscaled) time, so slow motion doesn't slow the HUD.
+  - The HUD refresh ignores the mode's display speed (sandbox slow motion), so slow motion doesn't slow the HUD.
+  - The canvas follows its host's size (Pixi's `resizeTo` only follows the window; a docked panel narrows the host).
   - The core stops stepping a world once the mode's `frame` reports it finished, until a new world is created.
 - **Mode object:**
 
@@ -196,7 +197,7 @@ A Zustand store, saved under `alloy:delve:sandbox:v1` and validated with Zod on 
   | `worldKey` | `string \| null`. The core creates a new world whenever the key changes to a string, including from `null` back to the same string as before (so "Dive again" at the same depth starts a fresh floor), and keeps the current world while it is `null`. The dive uses `fighting:${depth}` while fighting and `null` otherwise, so the finished floor stays on screen behind the door choice or the summary. The sandbox uses `depth`. |
   | `createWorld()` | Returns the world for the current (non-null) key. |
   | `loadout` | `{ stats, abilities }`. The core hot-swaps them with `refreshWorldHero` when they change. |
-  | `frame(world, dt)` | Runs on every frame the core steps the world (never while paused or after the world is finished) and returns `true` once the mode is done with it (the core then stops stepping it). The dive uses it for today's end check: the clear timers and, after a death, the `END_DELAY` beat before `failFloor`. |
+  | `frame(world)` | Runs on every frame the core steps the world (never while paused or after the world is finished) and returns `true` once the mode is done with it (the core then stops stepping it). The dive uses it for today's end check: the clear timers and, after a death, the `END_DELAY` beat before `failFloor`. |
   | `onEvents(world, events)` | After each step with events. The dive banks pickups; the sandbox feeds the meter. |
   | `onHeroDead(world)` | Called once, on the frame the hero dies. The dive does nothing here (its `frame` handles the delayed fail). The sandbox respawns at once. |
   | `speed` | Display speed. The core multiplies it with the perfect-dodge slow motion and the `alloy:delve:timescale` test hook. The dive uses 1; the sandbox uses `slowmo`. |
@@ -219,19 +220,21 @@ A Zustand store, saved under `alloy:delve:sandbox:v1` and validated with Zod on 
 The arena with the HUD and the usual controls (keyboard, mouse, touch and controller), plus the Training panel.
 
 - **TabBar:** hidden. `AppShell` hides it for `/delve/training`, as for `/delve/run`.
-- **Meter chip:** a small live readout at the top of the HUD (DPS · total · reset), so phones and the E2E can read it without opening the panel.
+- **Meter chip:** a small live readout at the top of the HUD (DPS · total · reset), so phones and the E2E can read it without opening the panel. It never wraps and shows large numbers compactly (12.3k), with a small depth label beside it.
+- **Sounds:** the dive's arena sounds, haptics and "not enough mana" toast come from a shared helper (`features/delve/arena/arena-sounds.ts`), used by the dive and the Training Grounds alike.
 - **Panel layout:** decided when the panel opens and kept until it closes, so switching between mouse and controller mid-use never flips it.
-  - On wide screens (at least 1024 px) with mouse or keyboard as the active input, the panel docks on the right and the fight keeps running. It is open by default on entry. The arena host narrows, so the camera centres in the visible area.
+  - On wide screens (the page itself at least 1024 px wide: the app frame letterboxes, so not the window) with mouse or keyboard as the active input, the panel docks on the right and the fight keeps running. It is open by default on entry. The arena host narrows, so the camera centres in the visible area.
   - On narrower screens, or with the controller as the active input (`inputDeviceStore.device === 'gamepad'`) when it opens, it opens as a sheet and pauses the fight. It is closed by default on entry and uses the existing gamepad menu layer (`data-pad-scope`).
   - Opening the 🎮 Controls editor pauses the fight while it is open, as in a dive.
 - **Opening and closing:**
   - A **Panel** button in the top corner (`data-testid="training-panel-toggle"`, carrying `data-pad-menu`, so the controller's Menu button presses it).
   - The keyboard's menu key (Escape by default, bindable). It works from anywhere in the panel, sliders included.
   - The sheet's close button carries `data-pad-back`.
-  - The **Back to the Anvil** button carries neither marker.
+  - The **Back to the Anvil** button carries neither marker. There is one in the top bar and one in the panel's header, so a controller player can leave from inside the sheet.
 - **Keys in the panel:**
   - `attachKeyboard`'s ignore list grows from text inputs to text inputs, selects and range inputs (sliders), so typing or using a slider or dropdown never moves or attacks. Buttons are not ignored, so the dive's keyboard play is unchanged.
-  - Every panel control (buttons, sliders, selects, switches) blurs itself when a pointer interaction ends (on `pointerup`, or `change` for selects), so using the panel with the mouse never leaves focus there and arena keys keep working. Focus reached with Tab stays where it is.
+  - Every panel control (buttons, sliders, selects, switches) blurs itself when a pointer interaction ends (on `pointerup`; a select on the `change` that follows a pointer press on it), so using the panel with the mouse never leaves focus there and arena keys keep working. Focus reached with Tab (or a key) stays where it is.
+  - On a controller, left and right on a focused select step its choice, as they already nudge a slider.
 - **Tabs** (`features/delve/training/`):
 
 | Tab | Contents |
@@ -267,7 +270,7 @@ A pure aggregator: `record(events, t)` and `summary(t)`. Time `t` is the world's
   | Thorns | `source: 'thorns'` |
 
   Melt, Shatter and Soulfire multiply the hit that triggered them, so their damage stays in that hit's bucket.
-- **Summary:** DPS over the last 5 s of sim time, total damage, biggest hit, and hits and damage per bucket.
+- **Summary:** DPS over the last 5 s of sim time, total damage, biggest hit, and hits and damage per bucket. Until 5 s have passed since the first hit, DPS divides by the time since that hit (at least 1 s), so it isn't understated early on.
 - **Reactions:** counted by name from `reaction` events.
 
 ### Anvil
