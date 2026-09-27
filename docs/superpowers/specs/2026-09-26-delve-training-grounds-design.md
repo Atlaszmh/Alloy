@@ -68,7 +68,7 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 
 `MonsterEntity` gains `dummy: { homeX: number; homeY: number; element: ManaType | null } | null`. It is `null` for real monsters.
 
-- **Spawning:** `spawnDummies(registry, world, { layout, element })` places dummies above the hero. Positions are relative to the hero (x, y), and all are clamped to `edgeMargin` inside the walls.
+- **Spawning:** `spawnDummies(registry, world, { layout, element })` places dummies above the hero. Positions are relative to the hero (x, y); near a wall the whole group moves in to stay `edgeMargin` inside, keeping its spacing.
 
   | Layout | Positions |
   |---|---|
@@ -77,7 +77,8 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
   | `clump` | five around (0, −(`dummyDistance` + 1)): one at the centre and four at `clumpRadius`, for areas. |
 
 - **Stats:**
-  - `kind: 'normal'`, no traits, size 1 (radius `bal.monster.radius`), `defId: 'dummy'`, speed 0, damage 0;
+  - named "Training Dummy" at any depth, `kind: 'normal'`, no traits, size 1 (radius `bal.monster.radius`), `defId: 'dummy'`, speed 0, damage 0;
+  - they don't count toward a boss summon's monster cap;
   - life = `referenceMonster(depth).hp × dummyLifeMult`.
 - **Element:**
   - **Resist and weakness:** they use the dummy's own setting: **Neutral** (`null`, the default: no resist, no weakness) or any element, for testing resist and weakness. `m.element` stays a real mana value (the world's) for visuals.
@@ -101,16 +102,16 @@ Every sandbox rule lives in the engine, as all rules do. The client only asks fo
 - **Bosses:** a spawned boss becomes `world.bossId` (the latest one), so the boss bar shows. When the boss that `bossId` points at dies or is removed, it points at the next living boss, or `null` if none are left.
 - **Count:** `totalMonsters` is increased.
 
-`clearMonsters(world, which)` removes real monsters, dummies or both (`which: 'monsters' | 'dummies' | 'all'`). If the boss is removed, `bossId` moves to the next living boss, or `null` if none are left.
+`clearMonsters(world, which)` removes real monsters, dummies or both (`which: 'monsters' | 'dummies' | 'all'`). Clearing the monsters also removes their telegraphs and shots (monster-owned zones and projectiles). If the boss is removed, `bossId` moves to the next living boss, or `null` if none are left.
 
 ### Toggles
 
 Each toggle is checked where its rule lives:
 
-- **Infinite mana:** each tick, `heroTick` sets mana to max.
+- **Infinite mana:** each tick, `heroTick` sets mana to max, and `castAbility` / `abilityReady` ignore cost (an ability dearer than the whole pool still casts).
 - **No cooldowns:**
   - `pay` sets no cooldown and the charge lockout is skipped, so an ability can fire again as soon as it lands.
-  - A charge-paid ability's charge is also refilled when it lands.
+  - Charge-paid abilities stay charged while it's on: `heroTick` fills their charge every tick, and switching it on (or a world created with it on) fills them at once.
   - The channel still plays, so its timing can be tested.
 - **Invulnerable:**
   - In `hurtHero`, the life lost becomes 0 and the hero never dies.
@@ -305,7 +306,7 @@ Engine (TDD, `tests/delve-training.test.ts`):
   - `clearMonsters` removes the chosen group, and removing the boss clears `bossId`.
 - **Toggles:**
   - Infinite mana keeps mana full.
-  - No cooldowns lets the same ability fire again right after it lands, and refills charge.
+  - No cooldowns lets the same ability fire again right after it lands, and keeps charge full.
   - Invulnerable takes no life, reports the would-be damage as `blocked`, and still allows a perfect dodge.
   - Fill charge fills charge-paid slots.
   - Respawn restores the hero and clears its action state.

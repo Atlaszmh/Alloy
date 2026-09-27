@@ -12,6 +12,8 @@ import {
 } from '../src/arpg/sandbox.js';
 import { createMonsterEntity, emptyStatus, refreshWorldHero } from '../src/arpg/world.js';
 import { hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
+import { abilityReady } from '../src/arpg/abilities/cast.js';
+import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import {
   computeAttunement,
   computeHeroStats,
@@ -153,6 +155,36 @@ describe('training dummies', () => {
         }
       }
     }
+  });
+
+  it('near a wall a layout moves in as a group, keeping its spacing', () => {
+    const w = sandbox();
+    w.hero.y = 0.5; // the row would run off the top wall
+    const row = spawnDummies(registry, w, { layout: 'row', element: null });
+    expect(row.map((m) => m.x)).toEqual([13, 13, 13, 13, 13]);
+    row.forEach((m, k) => {
+      expect(m.y).toBeCloseTo(SB.edgeMargin + (4 - k) * SB.rowSpacing);
+      expect(m.dummy).toMatchObject({ homeX: m.x, homeY: m.y });
+    });
+  });
+
+  it('are named Training Dummy at any depth', () => {
+    const deep = bal.dive.bossEvery * registry.getDelveData().biomes.length + 1; // an Abyssal cycle
+    const [d] = spawnDummies(registry, sandbox(ALL_OFF, {}, deep), {
+      layout: 'single',
+      element: null,
+    });
+    expect(d.name).toBe('Training Dummy');
+  });
+
+  it("don't count toward a boss summon's monster cap", () => {
+    const w = sandbox(ALL_ON);
+    for (let i = 0; i < 3; i++) spawnDummies(registry, w, { layout: 'row', element: null });
+    const [boss] = spawnMonsters(registry, w, { defId: 'foreman_grask', kind: 'boss', count: 1 });
+    boss.nextSpecialAt = w.t;
+    w.rng.nextInt = (_lo: number, hi: number) => hi; // the special rolls a summon
+    run(w, STEP);
+    expect(w.monsters.filter((m) => !m.dummy && m.kind === 'normal')).toHaveLength(2);
   });
 
   it('reset to full on lethal damage, and the same hit still applies its status', () => {
@@ -345,6 +377,57 @@ describe('the spawner', () => {
     clearMonsters(w, 'all');
     expect(w.monsters).toHaveLength(0);
   });
+
+  it('clearing monsters also removes their telegraphs and shots, so nothing hits after', () => {
+    const threatened = () => {
+      const w = sandbox();
+      const h = w.hero;
+      w.zones.push({
+        id: w.nextId++,
+        owner: 'monster',
+        source: null,
+        ability: null,
+        x: h.x,
+        y: h.y,
+        radius: 2.6,
+        born: w.t,
+        until: w.t + 1.3,
+        tick: 0,
+        nextTick: 0,
+        damage: 50,
+        element: 'fire',
+        applies: [],
+        detonateAt: w.t + 1.2,
+        dead: false,
+      });
+      spawnProjectile(ctxOf(w).ctx, {
+        owner: 'monster',
+        form: null,
+        ability: null,
+        homingId: null,
+        x: h.x,
+        y: h.y - 3,
+        vx: 0,
+        vy: 6,
+        radius: 0.35,
+        damage: 50,
+        element: 'fire',
+        pierce: false,
+        maxDist: 16,
+        explodeRadius: 0,
+        applies: [],
+        knockback: 0,
+      });
+      return w;
+    };
+    const hits = (w: ArpgWorld) => run(w, 2).filter((e) => e.kind === 'heroHit');
+    expect(hits(threatened())).toHaveLength(2);
+    for (const which of ['monsters', 'all'] as const) {
+      const w = threatened();
+      clearMonsters(w, which);
+      expect(hits(w)).toEqual([]);
+    }
+  });
 });
 
 describe('toggles', () => {
@@ -359,7 +442,30 @@ describe('toggles', () => {
     expect(off.hero.mana).toBeLessThan(1);
   });
 
-  it('no cooldowns: the same ability fires again right after it lands, and charge refills as it lands', () => {
+  it('infinite mana ignores cost: an Ultimate dearer than the whole pool still casts', () => {
+    const crushing = { form: 'nova', elements: ['fire'], weight: 2, payment: 'mana' } as const;
+    const w = sandbox({ ...ALL_OFF, infiniteMana: true }, { ultimate: crushing });
+    expect(w.hero.abilities[2].cost).toBeGreaterThan(w.hero.manaMax);
+    expect(abilityReady(ctxOf(w).ctx, 2)).toBe(true);
+    pressOnly(w, 2);
+    expect(w.hero.windup?.slot).toBe(2);
+    const off = sandbox(ALL_OFF, { ultimate: crushing });
+    off.hero.mana = off.hero.manaMax;
+    expect(abilityReady(ctxOf(off).ctx, 2)).toBe(false);
+  });
+
+  it('no cooldowns keeps charge-paid abilities charged, from the start and once switched on', () => {
+    const u = sandbox(ALL_ON); // the Ultimate is a charge-paid Nova, never charged by hand
+    pressOnly(u, 2);
+    expect(u.hero.windup?.slot).toBe(2);
+    const w = sandbox();
+    expect(w.hero.charge[2]).toBe(0);
+    setSandboxToggles(w, { ...ALL_OFF, noCooldowns: true });
+    run(w, STEP);
+    expect(w.hero.charge[2]).toBe(w.hero.abilities[2].chargeNeed);
+  });
+
+  it('no cooldowns: the same ability fires again right after it lands, and charge stays full', () => {
     const on = sandbox({ ...ALL_OFF, noCooldowns: true, infiniteMana: true });
     const off = sandbox({ ...ALL_OFF, infiniteMana: true });
     for (const w of [on, off]) {
@@ -372,7 +478,6 @@ describe('toggles', () => {
     expect(off.hero.windup).toBeNull(); // 0.45 s cooldown
 
     const u = sandbox({ ...ALL_OFF, noCooldowns: true }); // the Ultimate is a charge-paid Nova
-    fillCharge(u);
     const need = u.hero.abilities[2].chargeNeed;
     press(u, 2);
     expect(u.hero.charge[2]).toBe(need);
@@ -623,5 +728,13 @@ describe('the sandbox weapon', () => {
     expect(computeAttunement({ weapon: a }, registry).storm).toBe(
       bal.mana.attuneByRarity.legendary,
     );
+    const variants = [
+      a,
+      sandboxWeapon(registry, { ...opts, baseId: 'sword' }),
+      sandboxWeapon(registry, { ...opts, mana: 'fire' }),
+      sandboxWeapon(registry, { ...opts, rarity: 'rare' }),
+      sandboxWeapon(registry, { ...opts, ilvl: 6 }),
+    ];
+    expect(new Set(variants.map((i) => i.uid)).size).toBe(variants.length);
   });
 });

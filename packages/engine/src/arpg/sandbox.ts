@@ -15,6 +15,7 @@ import type { ManaType } from '../types/mana.js';
 import { baseDisplayName, generateItem } from '../loot/item-generator.js';
 import { livingBossId } from './combat.js';
 import { clamp } from './geometry.js';
+import { AGGRO_SPECIAL_DELAY } from './step.js';
 import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
 
 /**
@@ -57,7 +58,7 @@ export function createSandboxWorld(registry: DataRegistry, o: SandboxWorldOption
   });
   [world.hero.x, world.hero.y] = bal.sandbox.heroStart;
   world.hero.facing = { x: 0, y: -1 };
-  world.sandbox = { ...o.toggles };
+  setSandboxToggles(world, o.toggles);
   return world;
 }
 
@@ -94,7 +95,8 @@ function layoutOffsets(sb: SandboxBalance, layout: DummyLayout): Vec[] {
 }
 
 /**
- * Stand a group of training dummies above the hero, inside the walls. A dummy
+ * Stand a group of training dummies above the hero. Near a wall the group moves
+ * in as a whole (keeping its spacing) to stay `edgeMargin` inside. A dummy
  * is a normal size-1 foe with the reference monster's life × `dummyLifeMult`
  * that never acts or dies; `element` is what it resists (null = Neutral).
  */
@@ -105,8 +107,15 @@ export function spawnDummies(
 ): MonsterEntity[] {
   const sb = registry.getDelveBalance().sandbox;
   const h = world.hero;
-  return layoutOffsets(sb, o.layout).map((off) => {
-    const p = inside(world, sb.edgeMargin, h.x + off.x, h.y + off.y);
+  const spots = layoutOffsets(sb, o.layout).map((off) => ({ x: h.x + off.x, y: h.y + off.y }));
+  // The shift that brings the whole group inside (0 when it already fits).
+  const xs = spots.map((p) => p.x);
+  const ys = spots.map((p) => p.y);
+  const e = sb.edgeMargin;
+  const dx = clamp(0, e - Math.min(...xs), world.width - e - Math.max(...xs));
+  const dy = clamp(0, e - Math.min(...ys), world.height - e - Math.max(...ys));
+  return spots.map((s) => {
+    const p = { x: s.x + dx, y: s.y + dy };
     const m = createMonsterEntity(
       registry,
       {
@@ -122,6 +131,7 @@ export function spawnDummies(
       },
       world.rng,
     );
+    m.name = DUMMY.name; // no Abyssal prefix at depth
     m.speed = 0;
     m.damage = 0;
     m.dummy = { homeX: p.x, homeY: p.y, element: o.element };
@@ -193,7 +203,7 @@ export function spawnMonsters(
     );
     m.aggro = true;
     m.aggroAt = world.t;
-    m.nextSpecialAt = world.t + 4;
+    m.nextSpecialAt = world.t + AGGRO_SPECIAL_DELAY;
     world.monsters.push(m);
     if (o.kind === 'boss') world.bossId = m.id;
     out.push(m);
@@ -202,20 +212,29 @@ export function spawnMonsters(
   return out;
 }
 
-/** Remove the real monsters, the dummies, or all; the boss bar moves to the next living boss. */
+/**
+ * Remove the real monsters, the dummies, or all; the boss bar moves to the next
+ * living boss. Clearing the monsters also removes their telegraphs and shots.
+ */
 export function clearMonsters(world: ArpgWorld, which: 'monsters' | 'dummies' | 'all'): void {
   world.monsters = world.monsters.filter((m) =>
     which === 'all' ? false : which === 'dummies' ? !m.dummy : !!m.dummy,
   );
+  if (which !== 'dummies') {
+    world.zones = world.zones.filter((z) => z.owner !== 'monster');
+    world.projectiles = world.projectiles.filter((p) => p.owner !== 'monster');
+  }
   if (!world.monsters.some((m) => m.id === world.bossId)) world.bossId = livingBossId(world);
 }
 
 /** Change the toggles (the client never writes `world.sandbox` itself). */
 export function setSandboxToggles(world: ArpgWorld, toggles: SandboxToggles): void {
   world.sandbox = { ...toggles };
-  // Switching No cooldowns on frees every ability at once.
-  if (toggles.noCooldowns)
+  // Switching No cooldowns on frees and charges every ability at once (the tick keeps them so).
+  if (toggles.noCooldowns) {
     world.hero.cooldowns = world.hero.cooldowns.map((c) => Math.min(c, world.t));
+    fillCharge(world);
+  }
 }
 
 /** Fill every charge-paid slot (for when No cooldowns is off). */
@@ -262,7 +281,7 @@ export function sandboxWeapon(
   const item = generateItem(
     registry,
     {
-      uid: `sandbox-${o.baseId}`,
+      uid: `sandbox-${o.baseId}-${o.mana}-${o.rarity}-${o.ilvl}`,
       ilvl: o.ilvl,
       rarity: o.rarity,
       slot: 'weapon',

@@ -13,7 +13,8 @@ export function abilityReady(ctx: SimCtx, slot: number): boolean {
   const ab = h.abilities[slot];
   if (!ab || h.windup || ctx.world.t < h.cooldowns[slot]) return false;
   if (ab.build.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
-  return h.mana >= ab.cost;
+  // Infinite mana (Training Grounds) ignores cost, even one dearer than the whole pool.
+  return !!ctx.world.sandbox?.infiniteMana || h.mana >= ab.cost;
 }
 
 /** The press-combo step a press at `t` gets: the next one within `window` of the last cast, else the first. */
@@ -51,8 +52,6 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number): boolean
       startPush(ctx, { x: -d.x, y: -d.y }, -ab.motion * mult, bal.feel.recoilSeconds);
   }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
-  // No cooldowns also refills a charge-paid ability as it lands.
-  if (world.sandbox?.noCooldowns && ab.build.payment === 'charge') h.charge[slot] = ab.chargeNeed;
   return true;
 }
 
@@ -80,7 +79,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   const ab = h.abilities[slot];
   if (!ab || h.windup || t < h.cooldowns[slot]) return false;
   if (ab.build.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
-  if (h.mana < ab.cost) {
+  if (h.mana < ab.cost && !world.sandbox?.infiniteMana) {
     ctx.events.push({ kind: 'noMana', slot });
     return false;
   }

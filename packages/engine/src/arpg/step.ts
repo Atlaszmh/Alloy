@@ -28,6 +28,8 @@ import { cancelSwing, pushTick } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
+/** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
+export const AGGRO_SPECIAL_DELAY = 4;
 
 /**
  * Advance the world by `dt` real seconds using fixed simulation steps.
@@ -178,6 +180,11 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
   h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
+  // No cooldowns (Training Grounds) keeps every charge-paid ability charged.
+  if (world.sandbox?.noCooldowns)
+    h.abilities.forEach((ab, i) => {
+      if (ab.build.payment === 'charge') h.charge[i] = ab.chargeNeed;
+    });
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);
@@ -372,7 +379,7 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
         knockback: 0,
       });
     }
-  } else if (world.monsters.filter((o) => !o.dead).length < 14) {
+  } else if (world.monsters.filter((o) => !o.dead && !o.dummy).length < 14) {
     const biome = registry.getBiomeForDepth(world.depth);
     for (let i = 0; i < 2; i++) {
       const def = biome.monsters[world.rng.nextInt(0, biome.monsters.length - 1)];
@@ -443,7 +450,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
             o.aggroAt = world.t;
           }
         }
-        if (m.kind === 'boss') m.nextSpecialAt = world.t + 4;
+        if (m.kind === 'boss') m.nextSpecialAt = world.t + AGGRO_SPECIAL_DELAY;
       } else continue;
     }
     if (isStunned(ctx, m)) continue;
