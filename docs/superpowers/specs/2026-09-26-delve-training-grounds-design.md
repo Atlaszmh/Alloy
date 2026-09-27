@@ -193,19 +193,19 @@ A Zustand store, saved under `alloy:delve:sandbox:v1` and validated with Zod on 
 
   | Member | Purpose |
   |---|---|
-  | `worldKey` | `string \| null`. The core creates a new world when it changes to a new string, and keeps the current world while it is `null`. The dive uses `fighting:${depth}` while fighting and `null` otherwise, so the finished floor stays on screen behind the door choice or the summary. The sandbox uses `depth`. |
+  | `worldKey` | `string \| null`. The core creates a new world whenever the key changes to a string, including from `null` back to the same string as before (so "Dive again" at the same depth starts a fresh floor), and keeps the current world while it is `null`. The dive uses `fighting:${depth}` while fighting and `null` otherwise, so the finished floor stays on screen behind the door choice or the summary. The sandbox uses `depth`. |
   | `createWorld()` | Returns the world for the current (non-null) key. |
   | `loadout` | `{ stats, abilities }`. The core hot-swaps them with `refreshWorldHero` when they change. |
-  | `frame(world, dt)` | Runs every frame and returns `true` once the mode is done with the world (the core then stops stepping it). The dive uses it for today's end check: the clear timers and, after a death, the `END_DELAY` beat before `failFloor`. |
+  | `frame(world, dt)` | Runs on every frame the core steps the world (never while paused or after the world is finished) and returns `true` once the mode is done with it (the core then stops stepping it). The dive uses it for today's end check: the clear timers and, after a death, the `END_DELAY` beat before `failFloor`. |
   | `onEvents(world, events)` | After each step with events. The dive banks pickups; the sandbox feeds the meter. |
   | `onHeroDead(world)` | Called once, on the frame the hero dies. The dive does nothing here (its `frame` handles the delayed fail). The sandbox respawns at once. |
   | `speed` | Display speed. The core multiplies it with the perfect-dodge slow motion and the `alloy:delve:timescale` test hook. The dive uses 1; the sandbox uses `slowmo`. |
 
 - **`useArena` (the dive):** today's behaviour moved into a dive mode. Its API and behaviour don't change, and the dive E2E suites must pass unchanged.
 - **`useTrainingArena` (the sandbox):**
-  - creates the world with `createSandboxWorld` from the store;
+  - creates the world with `createSandboxWorld` from the store, and replays the store's `dummies` groups from `heroStart` on every world creation (entering included);
   - calls `setSandboxToggles` when the toggles change;
-  - on a depth change, rebuilds the world: it replays the store's `dummies` groups from `heroStart` and drops spawned monsters;
+  - on a depth change, rebuilds the world (dummies replayed, spawned monsters dropped);
   - feeds the meter and respawns on death.
 
 ### Renderer
@@ -231,7 +231,7 @@ The arena with the HUD and the usual controls (keyboard, mouse, touch and contro
   - The **Back to the Anvil** button carries neither marker.
 - **Keys in the panel:**
   - `attachKeyboard`'s ignore list grows from text inputs to text inputs, selects and range inputs (sliders), so typing or using a slider or dropdown never moves or attacks. Buttons are not ignored, so the dive's keyboard play is unchanged.
-  - Panel buttons blur themselves after a pointer click, so a click in the panel never leaves focus there and arena keys keep working.
+  - Every panel control (buttons, sliders, selects, switches) blurs itself when a pointer interaction ends (on `pointerup`, or `change` for selects), so using the panel with the mouse never leaves focus there and arena keys keep working. Focus reached with Tab stays where it is.
 - **Tabs** (`features/delve/training/`):
 
 | Tab | Contents |
