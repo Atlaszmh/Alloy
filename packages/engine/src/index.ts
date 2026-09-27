@@ -175,7 +175,7 @@ export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';
 export { basicStep } from './arpg/basic.js';
 export { botInput } from './arpg/bot.js';
-export { castAbility, abilityReady, pressStep } from './arpg/abilities/cast.js';
+export { castAbility, abilityReady, canAfford, pressStep } from './arpg/abilities/cast.js';
 export {
   resolveAbility,
   mergeKnobs,

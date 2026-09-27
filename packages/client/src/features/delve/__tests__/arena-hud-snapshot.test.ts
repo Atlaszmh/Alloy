@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { beginFloor, createDelveProfile, setAbility, startDive, stepWorld } from '@alloy/engine';
+import {
+  beginFloor,
+  computeHeroStats,
+  createDelveProfile,
+  createSandboxWorld,
+  defaultAbilities,
+  setAbility,
+  startDive,
+  stepWorld,
+} from '@alloy/engine';
 import { snapshot } from '../arena/useArena';
 import { getDelveRegistry } from '../registry';
 
@@ -27,5 +36,24 @@ describe('arena HUD snapshot', () => {
     hud = snapshot(w);
     expect(hud.busy).toBe(true);
     expect(hud.abilities[1].ready).toBe(false);
+  });
+
+  it('under Infinite mana an ability dearer than the whole pool shows as affordable, as the engine casts it', () => {
+    const make = (infiniteMana: boolean) =>
+      createSandboxWorld(registry, {
+        depth: 5,
+        stats: computeHeroStats({}, registry),
+        abilities: {
+          ...defaultAbilities('fire'),
+          ultimate: { form: 'nova', elements: ['fire'], weight: 2, payment: 'mana' },
+        },
+        toggles: { infiniteMana, noCooldowns: false, invulnerable: false },
+      });
+    const on = make(true);
+    expect(on.hero.abilities[2].cost).toBeGreaterThan(on.hero.manaMax);
+    expect(snapshot(on).abilities[2].affordable).toBe(true);
+    const off = make(false);
+    off.hero.mana = off.hero.manaMax;
+    expect(snapshot(off).abilities[2].affordable).toBe(false);
   });
 });

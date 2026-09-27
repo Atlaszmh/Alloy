@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { z } from 'zod';
 import {
   AbilityBuildSchema,
+  GEAR_SLOTS,
   GearItemSchema,
+  MANA_TYPES,
+  RARITY_ORDER,
   computeHeroStats,
   defaultAbilities,
   sandboxWeapon,
@@ -95,11 +98,11 @@ export const SANDBOX_DEFAULTS: SandboxLoadout = {
   slowmo: 1,
 };
 
-const ManaSchema = z.enum(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
-const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
+const ManaSchema = z.enum(MANA_TYPES as readonly [ManaType, ...ManaType[]]);
+const RaritySchema = z.enum(RARITY_ORDER as [Rarity, ...Rarity[]]);
 
-/** Each field falls back to its default when it is missing or bad. */
-function loadoutSchema(registry: DataRegistry) {
+/** Each field falls back to its default when it is missing or bad; typed, so tsc catches drift. */
+function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodTypeDef, unknown> {
   const D = SANDBOX_DEFAULTS;
   const weaponIds = new Set(registry.getGearBasesForSlot('weapon').map((b) => b.id));
   const powers = new Set(registry.getDelveData().legendaries.map((l) => l.id));
@@ -120,7 +123,11 @@ function loadoutSchema(registry: DataRegistry) {
       .nullable()
       .catch(null),
     gear: z
-      .object({ helm: item, chest: item, gloves: item, boots: item, amulet: item, ring: item })
+      .object(
+        Object.fromEntries(
+          GEAR_SLOTS.filter((slot) => slot !== 'weapon').map((slot) => [slot, item]),
+        ),
+      )
       .catch({}),
     legendaries: z
       .record(z.string(), z.number())
@@ -156,7 +163,7 @@ function loadoutSchema(registry: DataRegistry) {
 export function parseSandbox(raw: unknown): SandboxLoadout {
   const parsed = loadoutSchema(getDelveRegistry()).safeParse(raw);
   if (!parsed.success) return SANDBOX_DEFAULTS;
-  const s = parsed.data as SandboxLoadout;
+  const s = parsed.data;
   // A loaded weapon only counts while the choice still names it: a bad save can't show one
   // weapon and fight with another.
   return s.loadedWeapon && !sameChoice(s.weapon, choiceOf(s.loadedWeapon))

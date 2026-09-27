@@ -1,5 +1,5 @@
-import type { AbilityCast } from '../../types/ability.js';
-import type { HeroEntity, Vec } from '../../types/arpg.js';
+import type { AbilityCast, ResolvedAbility } from '../../types/ability.js';
+import type { ArpgWorld, HeroEntity, Vec } from '../../types/arpg.js';
 import type { SimCtx } from '../combat.js';
 import { cancelSwing, pushTick, startPush } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
@@ -7,14 +7,18 @@ import { executeForm } from './forms.js';
 import { stepHeft } from './resolve.js';
 import { aimPoint, nearestMonster } from './targeting.js';
 
+/** Can the hero pay for it? Infinite mana (Training Grounds) ignores cost, even one dearer than the whole pool. */
+export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
+  return !!world.sandbox?.infiniteMana || world.hero.mana >= ab.cost;
+}
+
 /** Can this slot be used right now (ignoring targets)? For the HUD and bots. */
 export function abilityReady(ctx: SimCtx, slot: number): boolean {
   const h = ctx.world.hero;
   const ab = h.abilities[slot];
   if (!ab || h.windup || ctx.world.t < h.cooldowns[slot]) return false;
   if (ab.build.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
-  // Infinite mana (Training Grounds) ignores cost, even one dearer than the whole pool.
-  return !!ctx.world.sandbox?.infiniteMana || h.mana >= ab.cost;
+  return canAfford(ctx.world, ab);
 }
 
 /** The press-combo step a press at `t` gets: the next one within `window` of the last cast, else the first. */
@@ -79,7 +83,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   const ab = h.abilities[slot];
   if (!ab || h.windup || t < h.cooldowns[slot]) return false;
   if (ab.build.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
-  if (h.mana < ab.cost && !world.sandbox?.infiniteMana) {
+  if (!canAfford(world, ab)) {
     ctx.events.push({ kind: 'noMana', slot });
     return false;
   }

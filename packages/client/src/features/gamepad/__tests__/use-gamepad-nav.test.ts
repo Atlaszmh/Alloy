@@ -22,4 +22,19 @@ describe('moveFocus on a list', () => {
     expect(changes).toBe(3);
     expect(document.activeElement).toBe(list);
   });
+
+  it('steps over disabled options, and stays put when only disabled ones lie ahead', () => {
+    const list = document.body.appendChild(document.createElement('select'));
+    for (const v of ['a', 'b', 'c', 'd']) list.appendChild(new Option(v, v));
+    list.options[1].disabled = true;
+    list.options[3].disabled = true;
+    list.focus();
+
+    moveFocus('right');
+    expect(list.value).toBe('c');
+    moveFocus('right'); // only a disabled option ahead
+    expect(list.value).toBe('c');
+    moveFocus('left');
+    expect(list.value).toBe('a');
+  });
 });

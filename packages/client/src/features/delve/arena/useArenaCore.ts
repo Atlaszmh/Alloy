@@ -6,6 +6,7 @@ import {
   stepWorld,
   abilityReady,
   basicStep,
+  canAfford,
   makeCtx,
   pressStep,
   type AbilityBuilds,
@@ -167,7 +168,7 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     abilities: h.abilities.map((ab, i) => {
       const cooldown = Math.max(0, h.cooldowns[i] - t);
       const charged = ab.build.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
-      const affordable = h.mana >= ab.cost;
+      const affordable = canAfford(world, ab);
       return {
         name: ab.name,
         icon: ab.icon,

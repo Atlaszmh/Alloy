@@ -12,6 +12,7 @@ export function playArenaEvents(events: readonly ArpgEvent[]): void {
         if (ev.crit) vibrate('light');
         break;
       case 'heroHit':
+        if (ev.blocked) break; // Invulnerable: shown in grey, silent
         playSound(ev.dodged ? 'dodge' : 'heroHurt');
         if (!ev.dodged) vibrate('light');
         break;

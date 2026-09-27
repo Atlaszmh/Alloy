@@ -52,8 +52,8 @@ export function useTrainingArena(
       const s = useSandboxStore.getState();
       const world = createSandboxWorld(registry, {
         depth: s.depth,
-        stats,
-        abilities: s.abilities,
+        stats: loadout.stats,
+        abilities: loadout.abilities,
         toggles: s.toggles,
       });
       for (const group of s.dummies) spawnDummies(registry, world, group);

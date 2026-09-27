@@ -54,13 +54,12 @@ function nudgeRange(el: HTMLInputElement, dir: NavDir): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** Left/right on a focused list steps its choice, clamped (React hears the change event). */
+/** Left/right on a focused list steps to the next enabled choice, clamped (React hears the change event). */
 function stepSelect(el: HTMLSelectElement, dir: NavDir): void {
-  const next = Math.min(
-    el.options.length - 1,
-    Math.max(0, el.selectedIndex + (dir === 'right' ? 1 : -1)),
-  );
-  if (next === el.selectedIndex) return;
+  const step = dir === 'right' ? 1 : -1;
+  let next = el.selectedIndex + step;
+  while (el.options[next]?.disabled) next += step;
+  if (!el.options[next]) return;
   el.selectedIndex = next;
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }

@@ -33,6 +33,14 @@ describe('arena sounds', () => {
     expect(vibrate).toHaveBeenCalledWith('success');
   });
 
+  it('a hit Invulnerable blocked makes no hurt sound and no buzz', () => {
+    playArenaEvents([
+      { kind: 'heroHit', x: 0, y: 0, amount: 9, dodged: false, element: null, blocked: true },
+    ]);
+    expect(playSound).not.toHaveBeenCalled();
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
   it('says "not enough mana" at most every 1.5 s', () => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(10_000);
     const toast = noManaToaster();

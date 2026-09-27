@@ -12,7 +12,7 @@ import {
 } from '../src/arpg/sandbox.js';
 import { createMonsterEntity, emptyStatus, refreshWorldHero } from '../src/arpg/world.js';
 import { hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
-import { abilityReady } from '../src/arpg/abilities/cast.js';
+import { abilityReady, canAfford } from '../src/arpg/abilities/cast.js';
 import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import {
   computeAttunement,
@@ -447,11 +447,14 @@ describe('toggles', () => {
     const w = sandbox({ ...ALL_OFF, infiniteMana: true }, { ultimate: crushing });
     expect(w.hero.abilities[2].cost).toBeGreaterThan(w.hero.manaMax);
     expect(abilityReady(ctxOf(w).ctx, 2)).toBe(true);
+    expect(canAfford(w, w.hero.abilities[2])).toBe(true);
     pressOnly(w, 2);
     expect(w.hero.windup?.slot).toBe(2);
     const off = sandbox(ALL_OFF, { ultimate: crushing });
     off.hero.mana = off.hero.manaMax;
     expect(abilityReady(ctxOf(off).ctx, 2)).toBe(false);
+    expect(canAfford(off, off.hero.abilities[2])).toBe(false);
+    expect(canAfford(off, off.hero.abilities[0])).toBe(true);
   });
 
   it('no cooldowns keeps charge-paid abilities charged, from the start and once switched on', () => {
