@@ -25,7 +25,7 @@ export function AppShell() {
   const isInQueue = location.pathname === '/queue';
   const isInActiveGame = isInMatch;
   // The Delve arena is full-screen: the joystick and ability buttons need the space.
-  const hideTabBar = location.pathname === '/delve/run';
+  const hideTabBar = location.pathname === '/delve/run' || location.pathname === '/delve/training';
 
   const confirmVariant = isInQueue ? 'queue' : 'match';
 

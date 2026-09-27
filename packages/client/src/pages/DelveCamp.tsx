@@ -192,6 +192,14 @@ export function DelveCamp() {
                 ? `RESUME DIVE · DEPTH ${profile.dive!.depth}`
                 : `DELVE ▸ DEPTH ${starts.includes(start) ? start : 1}`}
             </button>
+            <button
+              type="button"
+              className="delve-btn py-2.5 text-base"
+              onClick={() => navigate('/delve/training')}
+              data-testid="training-button"
+            >
+              🎯 Training Grounds
+            </button>
           </div>
 
           {/* Tabs */}

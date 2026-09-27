@@ -9,6 +9,7 @@ import { Settings } from './pages/Settings';
 import { GemEncyclopedia } from './pages/GemEncyclopedia';
 import { DelveCamp } from './pages/DelveCamp';
 import { DelveRun } from './pages/DelveRun';
+import { DelveTraining } from './pages/DelveTraining';
 import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useRouteSound } from './hooks/useRouteSound';
 
@@ -34,6 +35,7 @@ export function App() {
         <Route path="/gems" element={<GemEncyclopedia />} />
         <Route path="/delve" element={<DelveCamp />} />
         <Route path="/delve/run" element={<DelveRun />} />
+        <Route path="/delve/training" element={<DelveTraining />} />
       </Route>
     </Routes>
   );
