@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   chooseDoor,
@@ -33,6 +33,7 @@ import {
   Vitals,
 } from '@/features/delve/arena/ArenaHud';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
+import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
 import '@/features/delve/delve.css';
 
 interface BannerState {
@@ -97,7 +98,7 @@ export function DelveRun() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const bannerId = useRef(0);
-  const lastNoMana = useRef(0);
+  const noManaToast = useMemo(() => noManaToaster(), []);
 
   const showBanner = useCallback((title: string, color: string, sub?: string) => {
     setBanners((b) => [...b, { id: ++bannerId.current, title, sub, color }]);
@@ -123,58 +124,7 @@ export function DelveRun() {
     (e: ArenaUiEvent) => {
       switch (e.kind) {
         case 'events':
-          for (const ev of e.events) {
-            switch (ev.kind) {
-              case 'hit':
-                playSound(ev.crit ? 'crit' : 'attack');
-                if (ev.crit) vibrate('light');
-                break;
-              case 'heroHit':
-                playSound(ev.dodged ? 'dodge' : 'heroHurt');
-                if (!ev.dodged) vibrate('light');
-                break;
-              case 'reaction':
-                playSound('combineMerge');
-                break;
-              case 'explode':
-                if (ev.radius >= 2.4) playSound('forgeSlam');
-                break;
-              case 'death':
-                if (ev.monsterKind !== 'normal') playSound('death');
-                break;
-              case 'drop':
-                if (ev.rarity === 'rare' || ev.rarity === 'epic') playSound('lootRare');
-                else if (ev.dropKind === 'item') playSound('lootDrop');
-                break;
-              case 'pickup':
-                if (ev.dropKind === 'item') playSound('dropSuccess');
-                else if (ev.dropKind === 'orb') playSound('potion');
-                break;
-              case 'heal':
-                if (ev.source === 'potion') playSound('potion');
-                break;
-              case 'revive':
-                playSound('lootLegendary');
-                vibrate('heavy');
-                break;
-              case 'heroDeath':
-                playSound('defeat');
-                vibrate('error');
-                break;
-              case 'cast':
-                playSound('orbPlace');
-                break;
-              case 'dodge':
-                vibrate('light');
-                break;
-              case 'perfectDodge':
-                playSound('synergyActivate');
-                vibrate('success');
-                break;
-              default:
-                break;
-            }
-          }
+          playArenaEvents(e.events);
           break;
         case 'loot':
           if (e.bagFull) showToast('Bag full: extra loot was salvaged');
@@ -206,20 +156,14 @@ export function DelveRun() {
           else showBanner(`DEPTH ${d?.depth ?? ''} CLEARED`, '#fcd34d', `+${e.bountyAdded} bounty`);
           break;
         }
-        case 'noMana': {
-          const now = performance.now();
-          if (now - lastNoMana.current > 1500) {
-            lastNoMana.current = now;
-            const ab = arenaRef.current?.hud?.abilities[e.slot];
-            showToast(ab ? `Not enough mana for ${ab.name}` : 'Not enough mana');
-          }
+        case 'noMana':
+          noManaToast(arenaRef.current?.hud?.abilities[e.slot]?.name);
           break;
-        }
         case 'fell':
           break;
       }
     },
-    [registry, showBanner],
+    [registry, showBanner, noManaToast],
   );
 
   const choosing = dive?.phase === 'choosing';

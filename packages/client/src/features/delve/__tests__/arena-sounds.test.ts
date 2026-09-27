@@ -1,0 +1,48 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/shared/utils/sound-manager', () => ({ playSound: vi.fn() }));
+vi.mock('@/shared/utils/haptics', () => ({ vibrate: vi.fn() }));
+vi.mock('@/components/Toast', () => ({ showToast: vi.fn() }));
+
+import { playSound } from '@/shared/utils/sound-manager';
+import { vibrate } from '@/shared/utils/haptics';
+import { showToast } from '@/components/Toast';
+import { noManaToaster, playArenaEvents } from '../arena/arena-sounds';
+
+describe('arena sounds', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("plays each event's sound and haptic", () => {
+    playArenaEvents([
+      {
+        kind: 'hit',
+        id: 1,
+        x: 0,
+        y: 0,
+        amount: 5,
+        crit: true,
+        element: null,
+        heft: 0,
+        source: 'basic',
+      },
+      { kind: 'perfectDodge', x: 0, y: 0 },
+    ]);
+    expect(playSound).toHaveBeenCalledWith('crit');
+    expect(playSound).toHaveBeenCalledWith('synergyActivate');
+    expect(vibrate).toHaveBeenCalledWith('light');
+    expect(vibrate).toHaveBeenCalledWith('success');
+  });
+
+  it('says "not enough mana" at most every 1.5 s', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(10_000);
+    const toast = noManaToaster();
+    toast('Fire Bolt');
+    toast('Fire Bolt');
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith('Not enough mana for Fire Bolt');
+    now.mockReturnValue(11_600);
+    toast();
+    expect(showToast).toHaveBeenLastCalledWith('Not enough mana');
+    now.mockRestore();
+  });
+});
