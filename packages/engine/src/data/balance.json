@@ -170,6 +170,7 @@
       "heavyKnockback": 0.25,
       "lobBase": 0.12
     },
+    "sandbox": { "dummyLifeMult": 50, "heroStart": [13, 26], "dummyDistance": 4, "rowSpacing": 2, "clumpRadius": 1.2, "spawnRing": 6, "edgeMargin": 1.5 },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8, "minPackDistance": 9 }
   }
 }

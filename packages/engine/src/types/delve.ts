@@ -237,6 +237,24 @@ export interface FeelBalance {
   lobBase: number;
 }
 
+/** The Training Grounds (`delve.sandbox`): where the hero stands, and where dummies and spawns go. */
+export interface SandboxBalance {
+  /** A dummy's life is the reference monster's life at the depth times this. */
+  dummyLifeMult: number;
+  /** Where the hero stands (the arena is 26 × 40). */
+  heroStart: [number, number];
+  /** How far above the hero the first dummy stands. */
+  dummyDistance: number;
+  /** Gap between dummies in a row (under `abilities.chainRange`, so chains can jump). */
+  rowSpacing: number;
+  /** How far a clump's dummies sit from its centre. */
+  clumpRadius: number;
+  /** How far from the hero spawned monsters appear. */
+  spawnRing: number;
+  /** Dummies and spawns are kept this far inside the walls. */
+  edgeMargin: number;
+}
+
 export interface DelveBalance {
   hero: {
     baseHp: number;
@@ -424,6 +442,7 @@ export interface DelveBalance {
     riposteWindow: number;
   };
   feel: FeelBalance;
+  sandbox: SandboxBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;

@@ -26,6 +26,8 @@ export interface FloorOptions {
   phoenixAvailable: boolean;
   seed: number;
   loot: LootContext;
+  /** No packs and no boss (the Training Grounds' open arena). */
+  empty?: boolean;
 }
 
 export function emptyStatus(): StatusState {
@@ -298,6 +300,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     cleared: false,
     clearedAt: 0,
     heroDead: false,
+    sandbox: null,
   };
 
   const mods = opts.door?.mods ?? {};
@@ -305,7 +308,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
   const basePacks = boss
     ? 2
     : Math.min(bal.dive.packsMax, bal.dive.packsBase + opts.depth * bal.dive.packsPerDepth);
-  const packs = Math.max(1, Math.round(basePacks * (mods.packs ?? 1)));
+  const packs = opts.empty ? 0 : Math.max(1, Math.round(basePacks * (mods.packs ?? 1)));
   const eliteChance = Math.max(bal.dive.eliteChance, mods.eliteChance ?? 0);
 
   const spawn = (def: MonsterDef, kind: MonsterKind, x: number, y: number, packId: number) => {
@@ -328,7 +331,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     return m;
   };
 
-  if (boss) {
+  if (boss && !opts.empty) {
     const b = spawn(biome.boss, 'boss', width / 2, 9, 0);
     world.bossId = b.id;
   }

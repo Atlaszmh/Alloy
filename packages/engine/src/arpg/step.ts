@@ -82,7 +82,8 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   world.drops = world.drops.filter((d) => !d.dead);
   world.monsters = world.monsters.filter((m) => !m.dead);
 
-  if (!world.cleared && world.monsters.length === 0) {
+  // A Training Grounds world never clears (so it never ends).
+  if (!world.sandbox && !world.cleared && world.monsters.length === 0) {
     world.cleared = true;
     world.clearedAt = world.t;
     for (const d of world.drops) d.vacuum = true;

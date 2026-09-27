@@ -426,12 +426,15 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   world.pending.kills++;
   if (m.kind === 'boss') world.bossKilled = true;
 
-  const scrap = Math.round(
-    bal.loot.scrapPerKill *
-      scrapLevelFactor(registry, world.depth) *
-      KILL_SCRAP_MULT[m.kind] *
-      (1 + h.stats.scrapFind / 100),
-  );
+  // The Training Grounds drop nothing: no scrap, items, motes or orbs.
+  const scrap = world.sandbox
+    ? 0
+    : Math.round(
+        bal.loot.scrapPerKill *
+          scrapLevelFactor(registry, world.depth) *
+          KILL_SCRAP_MULT[m.kind] *
+          (1 + h.stats.scrapFind / 100),
+      );
   world.pending.scrap += scrap;
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
@@ -454,6 +457,27 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     }
   }
 
+  if (!world.sandbox) dropLoot(ctx, m);
+
+  // Hellfire Brand: branded corpses explode and brand their neighbours.
+  if (t < m.status.brandUntil) {
+    const radius = 2.6;
+    const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
+    ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire' });
+    for (const o of world.monsters) {
+      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
+      hitMonster(ctx, o, blast, 'fire', {
+        source: 'skill',
+        canCrit: true,
+        applies: ['brand', 'burn'],
+      });
+    }
+  }
+}
+
+/** Items, a mana mote and health orbs burst from a dying foe. */
+function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, bal, registry } = ctx;
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
@@ -506,21 +530,6 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     spawnDrop(ctx, 'orb', m.x + (lootRng.next() - 0.5) * 2, m.y + (lootRng.next() - 0.5) * 2, {
       amount: bal.dive.healthOrbHeal,
     });
-  }
-
-  // Hellfire Brand: branded corpses explode and brand their neighbours.
-  if (t < m.status.brandUntil) {
-    const radius = 2.6;
-    const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
-    ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire' });
-    for (const o of world.monsters) {
-      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
-      hitMonster(ctx, o, blast, 'fire', {
-        source: 'skill',
-        canCrit: true,
-        applies: ['brand', 'burn'],
-      });
-    }
   }
 }
 

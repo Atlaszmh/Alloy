@@ -463,6 +463,16 @@ export interface WorldPending {
   reactions: ReactionId[];
 }
 
+/** Training Grounds rules (see `arpg/sandbox.ts`); each is checked where its rule lives. */
+export interface SandboxToggles {
+  /** Mana is topped up every tick. */
+  infiniteMana: boolean;
+  /** Abilities set no cooldown (nor charge lockout), and charge refills as a charge-paid one lands. */
+  noCooldowns: boolean;
+  /** Hits take no life (their `heroHit` says `blocked`), so the hero never dies. */
+  invulnerable: boolean;
+}
+
 export interface ArpgWorld {
   t: number;
   accumulator: number;
@@ -498,4 +508,6 @@ export interface ArpgWorld {
   cleared: boolean;
   clearedAt: number;
   heroDead: boolean;
+  /** The Training Grounds' toggles, or null in a dive. Change them with `setSandboxToggles`. */
+  sandbox: SandboxToggles | null;
 }

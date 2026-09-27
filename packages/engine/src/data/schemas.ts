@@ -846,6 +846,15 @@ const DelveBalanceSchema = z.object({
     heavyKnockback: z.number().min(0),
     lobBase: z.number().min(0),
   }),
+  sandbox: z.object({
+    dummyLifeMult: z.number().positive(),
+    heroStart: z.tuple([z.number().min(0), z.number().min(0)]),
+    dummyDistance: z.number().positive(),
+    rowSpacing: z.number().positive(),
+    clumpRadius: z.number().positive(),
+    spawnRing: z.number().positive(),
+    edgeMargin: z.number().min(0),
+  }),
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),
