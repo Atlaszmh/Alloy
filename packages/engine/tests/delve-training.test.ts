@@ -461,3 +461,21 @@ describe('toggles', () => {
     expect(w.monsters).toHaveLength(2);
   });
 });
+
+describe('hit events', () => {
+  it('carry their source, and the ability slot for skill hits', () => {
+    type Hit = Extract<ArpgEvent, { kind: 'hit' }>;
+    const hits = (events: ArpgEvent[]) => events.filter((e): e is Hit => e.kind === 'hit');
+    const w = sandbox(ALL_ON);
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.y = 23.5; // the sword reaches the dummy at (13, 22)
+    const basic = hits(run(w, 1.5)).find((e) => e.source === 'basic');
+    expect(basic).toBeDefined();
+    expect(basic!.slot).toBeUndefined();
+
+    w.hero.nextAttackAt = 1e9;
+    const later = hits([...press(w, 0), ...run(w, 1.5)]); // a Fire Bolt, which burns
+    expect(later.find((e) => e.source === 'skill')).toMatchObject({ slot: 0 });
+    expect(later.some((e) => e.source === 'dot')).toBe(true);
+  });
+});

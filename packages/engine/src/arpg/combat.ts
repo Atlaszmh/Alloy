@@ -4,6 +4,7 @@ import type {
   ArpgEvent,
   ArpgWorld,
   DropKind,
+  HitSource,
   MonsterEntity,
   ReactionId,
   StatusId,
@@ -31,8 +32,6 @@ export interface SimCtx {
 export function makeCtx(registry: DataRegistry, world: ArpgWorld, events: ArpgEvent[]): SimCtx {
   return { registry, bal: registry.getDelveBalance(), data: registry.getArpgData(), world, events };
 }
-
-export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'thorns';
 
 export interface HitOpts {
   source: HitSource;
@@ -337,6 +336,8 @@ export function hitMonster(
     element,
     reaction,
     heft: opts.heft ?? 0,
+    source: opts.source,
+    slot: opts.slot,
   });
 
   if (opts.source === 'basic' || opts.source === 'skill') {
@@ -366,6 +367,8 @@ export function hitMonster(
       element,
       reaction: 'shatter',
       heft: 0,
+      source: opts.source,
+      slot: opts.slot,
     });
     m.hp = 0;
   }

@@ -366,6 +366,9 @@ export interface ArpgInput {
   attackAim?: Vec | null;
 }
 
+/** Where a hit on a monster came from (display data: the damage meter's buckets). */
+export type HitSource = 'basic' | 'skill' | 'dot' | 'reaction' | 'thorns';
+
 export type ArpgEvent =
   | {
       kind: 'hit';
@@ -377,6 +380,9 @@ export type ArpgEvent =
       element: ManaType | null;
       reaction?: ReactionId;
       heft: number;
+      /** Where the hit came from; for skill hits, the ability slot too (0 Primary, 1 Defensive, 2 Ultimate). */
+      source: HitSource;
+      slot?: number;
     }
   | {
       kind: 'heroHit';
