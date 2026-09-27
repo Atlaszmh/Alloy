@@ -451,7 +451,8 @@ export function useArenaCore(
           rumble('perfect');
         }
         if (e.kind === 'dodge') rumble('dodge');
-        if (e.kind === 'heroHit' && e.amount >= world.hero.stats.maxHp * 0.15) rumble('hurt');
+        if (e.kind === 'heroHit' && !e.blocked && e.amount >= world.hero.stats.maxHp * 0.15)
+          rumble('hurt');
       }
       modeRef.current.onEvents(world, events);
     }

@@ -91,6 +91,19 @@ function elemColor(e: ManaType | null | undefined): number {
   return e ? MANA_HEX[e] : NEUTRAL_HEX;
 }
 
+/** Destroy and forget every view whose entity id isn't in `alive`. */
+export function pruneViews<V>(
+  views: Map<number, V>,
+  alive: Set<number>,
+  destroy: (view: V) => void,
+): void {
+  for (const [id, view] of views) {
+    if (alive.has(id)) continue;
+    destroy(view);
+    views.delete(id);
+  }
+}
+
 export class ArenaRenderer {
   readonly app: Application;
   private world: ArpgWorld | null = null;
@@ -317,6 +330,9 @@ export class ArenaRenderer {
         }
         case 'heroHit':
           if (e.dodged) this.floatText(e.x, e.y - 0.5, 'EVADE', 0x67e8f9, 16);
+          // Invulnerable (Training Grounds): the would-be damage in grey, and no flash.
+          else if (e.blocked)
+            this.floatText(e.x, e.y - 0.3, `-${formatShort(e.amount)}`, 0x9ca3af, 20);
           else {
             this.floatText(e.x, e.y - 0.3, `-${formatShort(e.amount)}`, 0xf87171, 20);
             this.heroFlashUntil = this.time + 0.12;
@@ -710,6 +726,10 @@ export class ArenaRenderer {
       }
       this.drawMonster(v, m, w);
     }
+    // A monster removed without dying (the Training Grounds' Clear) leaves no sprite behind.
+    pruneViews(this.monsters, new Set(w.monsters.map((m) => m.id)), (v) =>
+      v.root.destroy({ children: true }),
+    );
   }
 
   private drawMonster(v: MonsterView, m: MonsterEntity, w: ArpgWorld): void {
@@ -755,7 +775,8 @@ export class ArenaRenderer {
 
     const hp = v.hp;
     hp.clear();
-    if (m.kind !== 'boss' && (m.hp < m.maxHp || m.kind === 'elite')) {
+    // Dummies show no life bar: the meter shows the damage.
+    if (!m.dummy && m.kind !== 'boss' && (m.hp < m.maxHp || m.kind === 'elite')) {
       const bw = Math.max(0.9, m.radius * 2);
       const y = -m.radius * 1.55 - 0.2;
       hp.rect(-bw / 2, y, bw, 0.13).fill({ color: 0x000000, alpha: 0.7 });
@@ -785,12 +806,10 @@ export class ArenaRenderer {
         v.label.position.set(p.x, p.y);
       }
     }
-    for (const [id, v] of this.drops) {
-      if (alive.has(id)) continue;
+    pruneViews(this.drops, alive, (v) => {
       v.root.destroy({ children: true });
       v.label?.destroy();
-      this.drops.delete(id);
-    }
+    });
   }
 
   private makeDrop(d: Drop): DropView {
