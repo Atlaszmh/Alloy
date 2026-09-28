@@ -1,7 +1,7 @@
 # Delve Infusion Visuals Design
 
 **Date:** 2026-09-27
-**Status:** Approved in conversation.
+**Status:** Built in v0.42.0.
 
 **Engine:** `packages/engine/src/`
 - `types/arpg.ts`, `types/delve.ts`
