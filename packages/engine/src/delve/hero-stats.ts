@@ -58,6 +58,8 @@ export interface HeroStatsExtra {
   legendaries?: Record<string, number>;
   /** Attunement added per element. */
   attunement?: Partial<ManaMap>;
+  /** A basic-attack infusion to preview (display only); ignored when unarmed or equal to the weapon's element. */
+  basicInfusion?: ManaType;
 }
 
 /** Total attunement per mana type from equipped gear (plus any `extra`). */
@@ -124,6 +126,10 @@ export function computeHeroStats(
         speed: weaponBase.attack.speed ?? 12,
         pierce: weaponBase.attack.pierce ?? false,
         element: weaponItem!.mana,
+        infusion:
+          extra.basicInfusion && extra.basicInfusion !== weaponItem!.mana
+            ? extra.basicInfusion
+            : null,
         combo: weaponBase.combo ?? bal.hero.defaultCombo,
       }
     : {
@@ -134,6 +140,7 @@ export function computeHeroStats(
         speed: 0,
         pierce: false,
         element: null,
+        infusion: null,
         combo: bal.hero.defaultCombo,
       };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;

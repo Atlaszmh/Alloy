@@ -466,6 +466,12 @@ export interface HeroWeapon {
   pierce: boolean;
   /** Element of basic attacks (the weapon's mana), or null when unarmed. */
   element: ManaType | null;
+  /**
+   * A second element basic attacks draw as its motif (display only; hits are
+   * unchanged). Null in real play until elemental affinity fills it; the
+   * Training Grounds previews it through `HeroStatsExtra.basicInfusion`.
+   */
+  infusion: ManaType | null;
   /** The basic-attack string, one entry per blow. */
   combo: ComboStepDef[];
 }
