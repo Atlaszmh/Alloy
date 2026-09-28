@@ -22,13 +22,16 @@ import { shieldHero } from '../src/arpg/abilities/defend.js';
 import { refundDodgeCharge } from '../src/arpg/dodge.js';
 import { hitOpts } from '../src/arpg/abilities/impact.js';
 import { resolveAbility } from '../src/arpg/abilities/resolve.js';
-import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';
+import { botInput } from '../src/arpg/bot.js';
+import { createSandboxWorld, respawnHero, spawnDummies } from '../src/arpg/sandbox.js';
+import { stepWorld } from '../src/arpg/step.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity, ReactionId } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
   DEFAULT_BUILDS,
+  STEP,
   arena,
   bal,
   dummy,
@@ -662,6 +665,36 @@ describe('buff reactions', () => {
     applyStatus(ctx, m, 'hex', 0);
     hitMonster(ctx, m, 10, 'fire', { source: 'skill' });
     expect(reactions(events)).toEqual(['soulfire']);
+  });
+});
+
+describe('resets and determinism', () => {
+  it("respawnHero clears the barrier, the quick step and the reactions' cooldowns", () => {
+    const { w } = setup();
+    const h = w.hero;
+    h.barrier = { hp: 5, max: 5, until: 1e9 };
+    h.quickUntil = 1e9;
+    h.reactionReadyAt = { obsidian: 1e9, galvanize: 1e9 };
+    respawnHero(registry, w);
+    expect(h.barrier).toBeNull();
+    expect(h.quickUntil).toBe(0);
+    expect(h.reactionReadyAt).toEqual({});
+  });
+
+  it('the same seed plays out the same events twice', () => {
+    const play = () => {
+      const w = arena([dummy(13, 30), dummy(14, 30), dummy(12.5, 31)], {
+        primary: { elements: ['storm', 'earth'] },
+        defensive: { form: 'armor', elements: ['frost', 'shadow'] },
+      });
+      const events: ArpgEvent[] = [];
+      for (let i = 0; i < 8 / STEP; i++)
+        events.push(...stepWorld(registry, w, botInput(registry, w), STEP));
+      return events;
+    };
+    const first = play();
+    expect(reactions(first)).toContain('lightning_rod');
+    expect(JSON.stringify(play())).toBe(JSON.stringify(first));
   });
 });
 

@@ -20,7 +20,8 @@ import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
 
 /**
  * The Training Grounds: an open arena at any depth for trying builds. Its
- * world never clears and drops nothing, training dummies soak hits without
+ * world never clears and drops nothing (but the orbs and motes reactions
+ * make: Seedling, Siphon), training dummies soak hits without
  * acting or dying, any monster can be spawned, and toggles bend the rules
  * (`ArpgWorld.sandbox`, checked where each rule lives). The client only asks
  * for things through these functions. See the Training Grounds spec.
@@ -278,6 +279,9 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.dodge = null;
   h.defend = null;
   h.ward = null;
+  h.barrier = null;
+  h.quickUntil = 0;
+  h.reactionReadyAt = {};
   h.invulnUntil = t + 1;
 }
 
