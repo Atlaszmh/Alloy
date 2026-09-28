@@ -111,6 +111,8 @@ export interface BankResult {
   newCodex: string[];
   newReactions: ReactionId[];
   scrap: number;
+  /** Mana Dust from items melted by auto-salvage or a full bag. */
+  dust: number;
 }
 
 /**
@@ -164,6 +166,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
     newCodex: bagged.newCodex,
     newReactions,
     scrap: scrap + bagged.scrap,
+    dust: bagged.dust,
   };
 }
 

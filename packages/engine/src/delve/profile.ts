@@ -22,7 +22,7 @@ import {
   DelveProfileV2Schema,
   DelveProfileV3Schema,
 } from './profile-schema.js';
-import { chooseStartingMana, fixBuildsToPair, inPair, type BuildFix } from './pair.js';
+import { chooseStartingMana, fixBuildsToPair, inPair, salvageDust, type BuildFix } from './pair.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
@@ -251,6 +251,8 @@ export interface BagInsertResult {
   kept: GearItem[];
   salvaged: GearItem[];
   scrap: number;
+  /** Mana Dust from the melted items outside the pair. */
+  dust: number;
   bagFull: boolean;
   newCodex: string[];
 }
@@ -267,6 +269,7 @@ export function addLootToBag(
   const kept: GearItem[] = [];
   const salvaged: GearItem[] = [];
   let scrap = 0;
+  let dust = 0;
   let bagFull = false;
   for (const item of items) {
     const auto = item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
@@ -274,6 +277,7 @@ export function addLootToBag(
       if (!auto) bagFull = true;
       salvaged.push(item);
       scrap += salvageValue(registry, item);
+      dust += salvageDust(registry, item, profile.pair);
     } else {
       bag.push(item);
       kept.push(item);
@@ -284,11 +288,13 @@ export function addLootToBag(
       ...recorded.profile,
       bag,
       scrap: recorded.profile.scrap + scrap,
+      manaDust: recorded.profile.manaDust + dust,
       stats: { ...recorded.profile.stats, scrapEarned: recorded.profile.stats.scrapEarned + scrap },
     },
     kept,
     salvaged,
     scrap,
+    dust,
     bagFull,
     newCodex: recorded.newCodex,
   };
@@ -331,18 +337,20 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
   return { ...profile, autoSalvage: { ...profile.autoSalvage, [rarity]: on } };
 }
 
-/** Salvage bag items. Locked or missing uids are skipped. */
+/** Salvage bag items. Locked or missing uids are skipped. Gear outside the pair also gives Mana Dust. */
 export function salvageItems(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
-): { profile: DelveProfile; scrap: number; count: number } {
+): { profile: DelveProfile; scrap: number; dust: number; count: number } {
   const targets = new Set(uids);
   let scrap = 0;
+  let dust = 0;
   let count = 0;
   const bag = profile.bag.filter((item) => {
     if (!targets.has(item.uid) || item.locked) return true;
     scrap += salvageValue(registry, item);
+    dust += salvageDust(registry, item, profile.pair);
     count++;
     return false;
   });
@@ -351,9 +359,11 @@ export function salvageItems(
       ...profile,
       bag,
       scrap: profile.scrap + scrap,
+      manaDust: profile.manaDust + dust,
       stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + scrap },
     },
     scrap,
+    dust,
     count,
   };
 }

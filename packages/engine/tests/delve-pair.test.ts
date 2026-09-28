@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
-import { beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
+import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
   bindSecondary,
   chooseStartingMana,
@@ -9,6 +9,7 @@ import {
   realign,
   reattuneItem,
   resolveOvertake,
+  salvageDust,
 } from '../src/delve/pair.js';
 import {
   createDelveProfile,
@@ -16,7 +17,9 @@ import {
   parseDelveProfile,
   profilePower,
   salvageCandidates,
+  salvageItems,
   setAbility,
+  setAutoSalvage,
 } from '../src/delve/profile.js';
 import type { AbilityBuild, AbilityBuilds } from '../src/types/ability.js';
 import {
@@ -697,5 +700,45 @@ describe('drops lean toward the pair', () => {
     expect(
       beginFloor(registry, startDive(registry, createDelveProfile(registry, 3), 1)).loot.pair,
     ).toEqual([]);
+  });
+});
+
+describe('Mana Dust from salvage', () => {
+  const dust = bal.pair.salvageDust;
+  const magic = (mana: ManaType, uid: string): GearItem => ({
+    ...item(mana, 'helm'),
+    uid,
+    rarity: 'magic',
+  });
+  const fire = () => createDelveProfile(registry, 3, { primary: 'fire' });
+
+  it('salvageDust: gear outside the pair only, and none before the choice', () => {
+    expect(salvageDust(registry, magic('frost', 'a'), { primary: 'fire', secondary: null })).toBe(
+      dust.magic,
+    );
+    expect(salvageDust(registry, magic('fire', 'a'), { primary: 'fire', secondary: null })).toBe(0);
+    expect(salvageDust(registry, magic('frost', 'a'), { primary: null, secondary: null })).toBe(0);
+  });
+
+  it('salvageItems adds it', () => {
+    const p = { ...fire(), bag: [magic('frost', 'a'), magic('fire', 'b')] };
+    const res = salvageItems(registry, p, ['a', 'b']);
+    expect(res.dust).toBe(dust.magic);
+    expect(res.profile.manaDust).toBe(dust.magic);
+  });
+
+  it('auto-salvage and a full bag add it, and banking reports it', () => {
+    const p = startDive(registry, setAutoSalvage(fire(), 'magic', true), 1);
+    const w = beginFloor(registry, p);
+    w.pending.items = [magic('frost', 'a'), magic('fire', 'b')];
+    const res = bankWorld(registry, p, w);
+    expect(res.dust).toBe(dust.magic);
+    expect(res.profile.manaDust).toBe(dust.magic);
+
+    const bag = Array.from({ length: bal.loot.bagSize }, (_, i) => magic('fire', `f${i}`));
+    const full = { ...startDive(registry, fire(), 1), bag };
+    const w2 = beginFloor(registry, full);
+    w2.pending.items = [{ ...magic('frost', 'r'), rarity: 'rare' }];
+    expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, dust: dust.rare });
   });
 });

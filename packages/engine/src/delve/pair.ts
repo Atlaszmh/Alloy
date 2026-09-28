@@ -1,7 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import { ABILITY_SLOTS, type AbilityBuild, type AbilitySlot } from '../types/ability.js';
-import type { DelveProfile, HeroStats } from '../types/delve.js';
+import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
@@ -37,6 +37,11 @@ export function profileStats(
   profile: Pick<DelveProfile, 'equipped' | 'pair'>,
 ): HeroStats {
   return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair));
+}
+
+/** Mana Dust from salvaging `item`: its rarity's share when its mana is outside the pair (none before the choice). */
+export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPair): number {
+  return inPair({ pair }, item.mana) ? 0 : registry.getDelveBalance().pair.salvageDust[item.rarity];
 }
 
 /**

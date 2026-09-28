@@ -171,6 +171,7 @@ export {
   realign,
   resolveOvertake,
   reattuneItem,
+  salvageDust,
 } from './delve/pair.js';
 export type { BuildFix } from './delve/pair.js';
 export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';
