@@ -37,7 +37,7 @@ An element's **mark** on a foe is its status. The checks sit beside the existing
 - `HitOpts` gains `rattles?: boolean`, and `applyStatus` gains an optional `rattles` parameter. A `stagger` applied with `rattles` rattles the foe. It rattles even when stagger immunity refuses the stagger itself.
 - Who sets `rattles`:
   - `hitOpts` (`impact.ts`), from `ab.elements.includes('earth')`;
-  - `basic.ts`, when the blow's element is `earth`, which includes an Earth finisher's discharge;
+  - `basic.ts`'s strike, when the blow's element is `earth` (an Earth finisher's discharge included) or an Earth Surge is up (`surge.elements.includes('earth')`, whose statuses every blow applies). A ranged blow carries the flag on its projectile (`Projectile.rattles`), and both places a hero shot lands pass it on: the projectile hit in `step.ts` and `burstShot`;
   - `defend.ts`, from `ab.elements.includes('earth')`, on both paths (Armor's `hitMonster` and the other forms' `applyStatus`).
 - `hitMonster`'s status loop passes `opts.rattles` to `applyStatus`.
 - Stagger from anything else doesn't rattle: Crushing weight's `heavyStagger`, a non-Earth weapon blow's `stagger` (such as the Maul finisher), and the riposte.
@@ -91,7 +91,7 @@ The effects are unchanged apart from the notes above. Each reaction's text in `a
 | Reaction | Pair | Effect |
 |---|---|---|
 | Melt | Fire + Frost | ×`meltMult` |
-| Shatter | Earth + Frost | ×`shatterMult`, needs a freeze |
+| Shatter | Earth + Frost | ×`shatterMult`; an Earth hit needs a freeze |
 | Overload | Storm + Fire | Storm blast of ×`overloadMult` within `overloadRadius` |
 | Superconduct | Frost + Storm | `freeze(ctx, m, superconductFreeze)` |
 | Soulfire | Fire + Shadow | heals `soulfireHeal` of the hit; doesn't consume |
@@ -196,6 +196,7 @@ Everything here is cosmetic and follows the mana-pixel rules. Signature effects 
 - **Rattled:**
   - Earth's stagger rattles even under stagger immunity, and rattled lapses after `rattleDuration`.
   - A fused ability with Earth second (for example Fire + Earth) rattles, and so does an Earth finisher's discharge.
+  - A ranged Earth blow (a staff's shot and its burst) rattles, and so does any blow while an Earth Surge is up.
   - A Maul finisher that discharges a non-Earth secondary, Crushing weight and a riposte don't rattle.
   - An Earth Defensive's retaliation rattles, with Earth first or second.
 - **Superconduct reverse:** on a frozen foe it keeps the freeze.
