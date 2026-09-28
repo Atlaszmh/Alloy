@@ -485,14 +485,15 @@ describe('infusions on the pixel floor', () => {
     expect(f.arcs[0][MAX_STAMPS]).toEqual(f.arcs[0][0]);
   });
 
-  it('marks a lance evenly from end to end, one stamp per 5 cells and at most 8', () => {
+  it('marks a lance evenly out to its end, one stamp per 5 cells and at most 8, none under the hero', () => {
     const long = spyFloor();
     applyArenaEvent(long.pw, lance('earth'), PPU, MARGIN);
-    expect(long.stamps).toHaveLength(MAX_STAMPS); // 125 cells would be 26
-    expect(long.stamps[0]).toMatchObject(at(5, 30));
-    expect(long.stamps[MAX_STAMPS - 1]).toMatchObject(at(5, 5));
-    const g = gaps(long.stamps);
+    // 125 cells would be 26; the stamp at the hero's feet is left out.
+    expect(long.stamps).toHaveLength(MAX_STAMPS - 1);
+    const g = gaps([at(5, 30), ...long.stamps]);
     for (const d of g) expect(d).toBeCloseTo(g[0], 5);
+    expect(g[0]).toBeGreaterThanOrEqual(5);
+    expect(long.stamps[MAX_STAMPS - 2]).toMatchObject(at(5, 5));
     const short = spyFloor();
     applyArenaEvent(
       short.pw,
@@ -500,21 +501,21 @@ describe('infusions on the pixel floor', () => {
       PPU,
       MARGIN,
     );
-    expect(short.stamps).toHaveLength(3); // 10 cells
+    expect(short.stamps).toHaveLength(2); // 10 cells: 3, less the hero's
   });
 
   it("stamps shadow's brush along a path, and draws storm there as one open arc", () => {
     const shadow = spyFloor();
     applyArenaEvent(shadow.pw, lance('shadow'), PPU, MARGIN);
-    expect(shadow.stamps).toHaveLength(MAX_STAMPS);
+    expect(shadow.stamps).toHaveLength(MAX_STAMPS - 1);
     expect(shadow.stamps.every((s) => s.brush === 'shadow' && s.r === 2)).toBe(true);
     const storm = spyFloor();
     applyArenaEvent(storm.pw, lance('storm'), PPU, MARGIN);
     expect(storm.stamps).toHaveLength(0);
     expect(storm.arcs).toHaveLength(1);
-    expect(storm.arcs[0]).toHaveLength(MAX_STAMPS); // not closed back to its start
-    expect(storm.arcs[0][0]).toMatchObject(at(5, 30));
-    expect(storm.arcs[0][MAX_STAMPS - 1]).toMatchObject(at(5, 5));
+    expect(storm.arcs[0]).toHaveLength(MAX_STAMPS - 1); // not closed back to its start
+    expect(storm.arcs[0][0]).toEqual({ x: shadow.stamps[0].x, y: shadow.stamps[0].y });
+    expect(storm.arcs[0][MAX_STAMPS - 2]).toMatchObject(at(5, 5));
   });
 
   it('marks a slash evenly along its arc', () => {

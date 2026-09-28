@@ -106,11 +106,12 @@ export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margi
       break;
     }
     case 'beam':
+      // Not under the hero's feet, where every cast would pile its marks up.
       if (e.infusion)
         stamp(
           pw,
           e.infusion,
-          line(arenaToCell(e.x, e.y, ppu, margin), arenaToCell(e.tx, e.ty, ppu, margin)),
+          line(arenaToCell(e.x, e.y, ppu, margin), arenaToCell(e.tx, e.ty, ppu, margin)).slice(1),
         );
       break;
     case 'slash':
