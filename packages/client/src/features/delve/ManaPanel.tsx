@@ -90,7 +90,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
             <div
               className="h-full rounded-full"
               style={{
-                width: `${overtake.ready ? 100 : overtake.need > 0 ? Math.min(1, overtake.have / overtake.need) * 100 : 0}%`,
+                width: `${overtake.ready ? 100 : overtake.need > 0 ? Math.min(0.99, overtake.have / overtake.need) * 100 : 0}%`,
                 background: style(secondary).color,
               }}
               data-testid="overtake-bar"

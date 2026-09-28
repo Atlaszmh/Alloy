@@ -1,7 +1,7 @@
 # Delve Infusion Visuals Design
 
 **Date:** 2026-09-27
-**Status:** Built in v0.42.0; floor-mark and growth fixes in v0.42.1.
+**Status:** Built in v0.42.0; floor-mark and growth fixes in v0.42.1. Basic-attack infusion (`HeroStatsExtra.basicInfusion`, the Training picker rules, the finisher's ring) is superseded by `2026-09-27-delve-elemental-affinity-design.md` (v0.43.0): basics now take the hero's pair.
 
 **Engine:** `packages/engine/src/`
 - `types/arpg.ts`, `types/delve.ts`
