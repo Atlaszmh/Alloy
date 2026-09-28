@@ -127,6 +127,12 @@
       "basePool": 60, "poolPerAttune": 3, "baseRegen": 4, "regenPerAttune": 0.2, "basicAttackGain": 5,
       "moteAmount": 6, "eliteMote": 20, "bossMote": 60
     },
+    "pair": {
+      "overtakeMargin": 1.2, "basicPowerPerAttune": 0.03, "dropBias": 0.6, "primaryShare": 0.6,
+      "salvageDust": { "common": 1, "uncommon": 2, "magic": 3, "rare": 5, "epic": 8, "legendary": 15 },
+      "reattuneDust": { "common": 2, "uncommon": 3, "magic": 5, "rare": 8, "epic": 12, "legendary": 20 },
+      "realignDust": 60, "realignScrap": 200
+    },
     "status": {
       "burnDps": 0.35, "burnDuration": 3, "chillSlow": 0.4, "chillDuration": 3, "chillToFreeze": 2, "freezeDuration": 1.6,
       "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6,

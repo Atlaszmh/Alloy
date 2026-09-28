@@ -390,6 +390,24 @@ export interface DelveBalance {
     eliteMote: number;
     bossMote: number;
   };
+  /** Elemental affinity: the hero's two elements (see the elemental affinity spec). */
+  pair: {
+    /** Between dives, a bound secondary above this × the primary's attunement (and above 0) swaps in. */
+    overtakeMargin: number;
+    /** Basic blows gain this much damage per point of attunement in the element they strike with. */
+    basicPowerPerAttune: number;
+    /** Chance a drop takes one of the pair's elements (else the biome lean and a uniform roll). */
+    dropBias: number;
+    /** Of those, the share that takes the primary once a secondary is bound. */
+    primaryShare: number;
+    /** Mana Dust from salvaging an item outside the pair, by rarity. */
+    salvageDust: Record<Rarity, number>;
+    /** Mana Dust to re-attune an item to the pair's other element, by rarity. */
+    reattuneDust: Record<Rarity, number>;
+    /** What a Realign costs. */
+    realignDust: number;
+    realignScrap: number;
+  };
   status: {
     /** Burn deals this fraction of the igniting hit per second. */
     burnDps: number;

@@ -750,6 +750,16 @@ const DelveBalanceSchema = z.object({
     eliteMote: z.number().min(0),
     bossMote: z.number().min(0),
   }),
+  pair: z.object({
+    overtakeMargin: z.number().min(1),
+    basicPowerPerAttune: z.number().min(0),
+    dropBias: z.number().min(0).max(1),
+    primaryShare: z.number().min(0).max(1),
+    salvageDust: perRarity(z.number().int().min(0)),
+    reattuneDust: perRarity(z.number().int().min(0)),
+    realignDust: z.number().int().min(0),
+    realignScrap: z.number().int().min(0),
+  }),
   status: z.object({
     burnDps: z.number().min(0),
     burnDuration: z.number().positive(),
