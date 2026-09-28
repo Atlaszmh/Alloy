@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Graphics } from 'pixi.js';
 import type { ArpgEvent, Drop } from '@alloy/engine';
-import { drawDrop, pickupColor, pruneViews } from '../arena/ArenaRenderer';
+import { drawDrop, dropPop, pickupColor, pruneViews } from '../arena/ArenaRenderer';
 import { MANA_HEX } from '../arena/palette';
 
 /** A Graphics stand-in that records the colours it fills. */
@@ -49,6 +49,12 @@ describe('the arena renderer', () => {
     const mote = recorder();
     drawDrop(mote.g, drop({ kind: 'mote', mana: 'shadow' }), 1, 1);
     expect(mote.fills).toContain(MANA_HEX.shadow);
+  });
+
+  it("a Seedling's sprout grows in rooted, where a health orb hops as it lands", () => {
+    expect(dropPop(drop({ mana: 'nature' }), 0.17)).toBe(0);
+    expect(dropPop(drop({}), 0.17)).toBeGreaterThan(1);
+    expect(dropPop(drop({}), 0.35)).toBe(0);
   });
 
   it("a Seedling orb's pickup sparkles green, a health orb's red", () => {

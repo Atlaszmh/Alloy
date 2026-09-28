@@ -815,9 +815,9 @@ export class ArenaRenderer {
         this.drops.set(d.id, v);
       }
       const age = w.t - d.born;
-      const pop = age < 0.35 ? Math.sin((age / 0.35) * Math.PI) * 1.1 : 0;
+      const pop = dropPop(d, age);
       // Items lie still, and so does a Seedling's rooted sprout.
-      const still = d.kind === 'item' || (d.kind === 'orb' && d.mana === 'nature');
+      const still = d.kind === 'item' || isSprout(d);
       const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
@@ -892,6 +892,15 @@ export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
   return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
 }
 
+/** A Seedling's orb: a sprout rooted where it grew. */
+const isSprout = (d: Drop) => d.kind === 'orb' && d.mana === 'nature';
+
+/** How high a drop hops as it lands, `age` seconds after it fell: a sprout grows in rooted. */
+export function dropPop(d: Drop, age: number): number {
+  if (age >= 0.35 || isSprout(d)) return 0;
+  return Math.sin((age / 0.35) * Math.PI) * 1.1;
+}
+
 /**
  * A drop's look, `age` seconds after it fell. A Seedling's orb (nature) is a
  * sprout that grows in; a mote wears its mana's colour (a Siphon's is violet).
@@ -923,7 +932,7 @@ export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void 
     g.circle(0, 0, 0.26).fill({ color, alpha: 0.25 });
     g.circle(0, 0, 0.13).fill({ color });
     g.circle(-0.04, -0.04, 0.05).fill({ color: 0xffffff, alpha: 0.8 });
-  } else if (d.kind === 'orb' && d.mana === 'nature') {
+  } else if (isSprout(d)) {
     // A sprout: its stem and two leaves grow in over half a second.
     const k = Math.min(1, age / 0.5);
     g.ellipse(0, 0.12, 0.26, 0.1).fill({ color: 0x000000, alpha: 0.35 });

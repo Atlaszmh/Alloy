@@ -145,9 +145,10 @@ describe('lasting states', () => {
     expect(full).toBeGreaterThan(worn);
   });
 
-  it("Lightning Rod's trail follows the hero while it lasts", () => {
+  it("Lightning Rod's trail follows the hero while it lasts, and only while it walks", () => {
     expect(heroPixels({ quickUntil: 2 })).toBeGreaterThan(0);
     expect(heroPixels({ quickUntil: 0.5 })).toBe(0);
+    expect(heroPixels({ quickUntil: 2, moving: false })).toBe(0);
   });
 
   it('rattled, sundered and blinded foes wear their marks only while they last', () => {
