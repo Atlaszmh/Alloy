@@ -41,4 +41,34 @@ describe('DelveCamp', () => {
     expect(screen.getByText(text)).toBeInTheDocument();
     expect(useDelveStore.getState().notices).toEqual([]);
   });
+
+  it('a new save chooses its mana first; Frost starts with frost gear and frost abilities', () => {
+    useDelveStore.getState().resetProfile(99); // no primary yet
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    const choice = screen.getByTestId('mana-choice');
+    expect(choice).toHaveAttribute('data-pad-scope');
+    const storm = screen.getByTestId('mana-choice-storm');
+    expect(storm).toHaveTextContent('Storm chains');
+    expect(storm).toHaveTextContent('Shock');
+    expect(storm).toHaveTextContent('Superconductor');
+    fireEvent.click(screen.getByTestId('mana-choice-frost'));
+    expect(screen.queryByTestId('mana-choice')).toBeNull();
+    const p = useDelveStore.getState().profile;
+    expect(p.pair).toEqual({ primary: 'frost', secondary: null });
+    expect(p.equipped.weapon!.mana).toBe('frost');
+    expect(p.abilities.defensive.elements).toEqual(['frost']);
+  });
+
+  it('asks nothing once the mana is chosen', () => {
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('mana-choice')).toBeNull();
+  });
 });

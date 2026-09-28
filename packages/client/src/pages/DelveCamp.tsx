@@ -12,6 +12,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer } from '@/components/Toast';
 import { useDelveNotices } from '@/features/delve/useDelveNotices';
+import { ManaChoice } from '@/features/delve/ManaChoice';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { PaperDoll } from '@/features/delve/PaperDoll';
 import { BagPanel } from '@/features/delve/BagPanel';
@@ -276,6 +277,7 @@ export function DelveCamp() {
 
       {selected && <ItemDetailSheet uid={selected} onClose={() => setSelected(null)} />}
       {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
+      {profile.pair.primary === null && <ManaChoice />}
       <ToastContainer />
     </div>
   );
