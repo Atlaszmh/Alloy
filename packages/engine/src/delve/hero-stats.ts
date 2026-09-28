@@ -1,7 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import { ABILITY_SLOTS, type AbilityBuilds, type ResolvedAbility } from '../types/ability.js';
 import { defaultAbilities, resolveAbility } from '../arpg/abilities/resolve.js';
-import type { DelveBalance, HeroStats, HeroWeapon } from '../types/delve.js';
+import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
 import { MANA_TYPES, emptyManaMap, type ManaMap, type ManaType } from '../types/mana.js';
@@ -32,6 +32,19 @@ export function isAttuneStat(stat: HeroStatKey): boolean {
   return stat in ATTUNE_STATS;
 }
 
+/** The element an `*Attune` stat feeds, if it is one. */
+export function attuneElement(stat: HeroStatKey): ManaType | undefined {
+  return ATTUNE_STATS[stat];
+}
+
+/** The pair's elements: the primary, then a bound secondary that differs from it (none before the choice). */
+export function pairElements(pair: ManaPair | undefined): ManaType[] {
+  if (!pair?.primary) return [];
+  return pair.secondary && pair.secondary !== pair.primary
+    ? [pair.primary, pair.secondary]
+    : [pair.primary];
+}
+
 /** Multiplier an item's upgrade level applies to its stats. */
 export function upgradeMultiplier(registry: DataRegistry, upgrade: number): number {
   return 1 + registry.getDelveBalance().forge.upgradeStep * upgrade;
@@ -52,36 +65,53 @@ export function itemAffinityAttunement(registry: DataRegistry, item: GearItem): 
   return registry.getDelveBalance().mana.attuneByRarity[item.rarity];
 }
 
+/** Attunement one item grants per element: its mana's base plus its `*Attune` lines (Prism aside). */
+export function itemAttunement(registry: DataRegistry, item: GearItem): ManaMap {
+  const att = emptyManaMap();
+  att[item.mana] += itemAffinityAttunement(registry, item);
+  for (const line of [...item.implicits, ...item.affixes]) {
+    const mana = ATTUNE_STATS[line.stat];
+    if (mana) att[mana] += Math.round(line.value);
+  }
+  return att;
+}
+
 /** Extra powers and attunement on top of the gear (the Training Grounds' toggles). */
 export interface HeroStatsExtra {
   /** Legendary id → value, merged with the gear's (the higher wins). */
   legendaries?: Record<string, number>;
   /** Attunement added per element. */
   attunement?: Partial<ManaMap>;
-  /** A basic-attack infusion to preview (display only); ignored when unarmed or equal to the weapon's element. */
-  basicInfusion?: ManaType;
+  /**
+   * The hero's pair, for basic attacks: blows strike with the primary (even
+   * unarmed) and the finisher discharges a bound secondary. A secondary equal
+   * to the primary counts as unbound.
+   */
+  pair?: ManaPair;
+  /** The two-element limit: with a pair primary, attunement counts only for the pair's elements. */
+  filterAttunement?: boolean;
 }
 
-/** Total attunement per mana type from equipped gear (plus any `extra`). */
+/** Total attunement per mana type from equipped gear (plus any `extra`); filtered to the pair on request. */
 export function computeAttunement(
   equipped: EquippedGear,
   registry: DataRegistry,
   extra: HeroStatsExtra = {},
 ): ManaMap {
   const att = emptyManaMap();
+  const pair = pairElements(extra.pair);
+  const counts = (m: ManaType) => !extra.filterAttunement || pair.length === 0 || pair.includes(m);
   // Prism: the best of the gear's and the extra's, never both.
   let prism = Math.round(extra.legendaries?.prism ?? 0);
   for (const slot of GEAR_SLOTS) {
     const item = equipped[slot];
     if (!item) continue;
-    att[item.mana] += itemAffinityAttunement(registry, item);
-    for (const line of [...item.implicits, ...item.affixes]) {
-      const mana = ATTUNE_STATS[line.stat];
-      if (mana) att[mana] += Math.round(line.value);
-    }
+    const a = itemAttunement(registry, item);
+    for (const m of MANA_TYPES) att[m] += a[m];
     if (item.legendary?.id === 'prism') prism = Math.max(prism, Math.round(item.legendary.value));
   }
-  for (const m of MANA_TYPES) att[m] += (extra.attunement?.[m] ?? 0) + prism;
+  for (const m of MANA_TYPES)
+    att[m] = counts(m) ? att[m] + (extra.attunement?.[m] ?? 0) + prism : 0;
   return att;
 }
 
@@ -115,6 +145,11 @@ export function computeHeroStats(
   }
 
   const attunement = computeAttunement(equipped, registry, extra);
+  // The pair decides what basic attacks strike with (see HeroStatsExtra.pair).
+  const [primary = null, secondary = null] = pairElements(extra.pair);
+  const perAttune = bal.pair.basicPowerPerAttune;
+  const blowPower = primary ? 1 + perAttune * attunement[primary] : 1;
+  const finisherPower = primary ? 1 + perAttune * attunement[secondary ?? primary] : 1;
   const weaponItem = equipped.weapon;
   const weaponBase = weaponItem ? registry.getGearBase(weaponItem.baseId) : null;
   const weapon: HeroWeapon = weaponBase?.attack
@@ -125,11 +160,10 @@ export function computeHeroStats(
         arc: weaponBase.attack.arc ?? 90,
         speed: weaponBase.attack.speed ?? 12,
         pierce: weaponBase.attack.pierce ?? false,
-        element: weaponItem!.mana,
-        infusion:
-          extra.basicInfusion && extra.basicInfusion !== weaponItem!.mana
-            ? extra.basicInfusion
-            : null,
+        element: primary ?? weaponItem!.mana,
+        infusion: secondary,
+        blowPower,
+        finisherPower,
         combo: weaponBase.combo ?? bal.hero.defaultCombo,
       }
     : {
@@ -139,8 +173,10 @@ export function computeHeroStats(
         arc: 90,
         speed: 0,
         pierce: false,
-        element: null,
-        infusion: null,
+        element: primary,
+        infusion: secondary,
+        blowPower,
+        finisherPower,
         combo: bal.hero.defaultCombo,
       };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;

@@ -482,14 +482,17 @@ export interface HeroWeapon {
   arc: number;
   speed: number;
   pierce: boolean;
-  /** Element of basic attacks (the weapon's mana), or null when unarmed. */
+  /** Element of basic blows: the pair's primary (even unarmed), else the weapon's mana (null unarmed). */
   element: ManaType | null;
   /**
-   * A second element basic attacks draw as its motif (display only; hits are
-   * unchanged). Null in real play until elemental affinity fills it; the
-   * Training Grounds previews it through `HeroStatsExtra.basicInfusion`.
+   * The pair's bound secondary, or null: the combo's finisher discharges it,
+   * and ordinary blows draw it as their motif (see the elemental affinity spec).
    */
   infusion: ManaType | null;
+  /** Ordinary blows' damage multiplier: 1 + basicPowerPerAttune × the primary's attunement (1 without a pair). */
+  blowPower: number;
+  /** The finisher's: by the secondary's attunement (equal to `blowPower` with no secondary). */
+  finisherPower: number;
   /** The basic-attack string, one entry per blow. */
   combo: ComboStepDef[];
 }
@@ -555,6 +558,14 @@ export interface DiveState {
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
+}
+
+/** The hero's two elements (`DelveProfile.pair`). */
+export interface ManaPair {
+  /** Null only before the "Choose your mana" screen. */
+  primary: ManaType | null;
+  /** The bound second element, or null until one is bound. */
+  secondary: ManaType | null;
 }
 
 export interface DelveStats {
