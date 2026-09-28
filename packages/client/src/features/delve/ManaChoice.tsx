@@ -34,6 +34,7 @@ export function ManaChoice() {
       className="absolute inset-0 z-[70] overflow-y-auto bg-black/90"
       role="dialog"
       aria-label="Choose your mana"
+      aria-modal="true"
       data-testid="mana-choice"
       data-pad-scope
     >

@@ -146,13 +146,11 @@ describe('TrainingPanel', () => {
       ...sandboxWeapon(registry, { baseId: 'sword', mana: 'fire', rarity: 'legendary', ilvl: 5 }),
       legendary: { id: power.id, value: power.max, roll: 1 },
     };
-    useSandboxStore
-      .getState()
-      .loadMyBuild({
-        equipped: { weapon },
-        abilities: defaultAbilities('fire'),
-        pair: { primary: 'fire', secondary: null },
-      });
+    useSandboxStore.getState().loadMyBuild({
+      equipped: { weapon },
+      abilities: defaultAbilities('fire'),
+      pair: { primary: 'fire', secondary: null },
+    });
     renderPanel('loadout');
     const button = screen.getByTestId(`legendary-${power.id}`);
     expect(button).toHaveAttribute('aria-pressed', 'true');

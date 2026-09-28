@@ -1,8 +1,10 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { DelveCamp } from '../DelveCamp';
 import { useDelveStore } from '@/stores/delveStore';
+import { moveFocus } from '@/features/gamepad/use-gamepad-nav';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -34,11 +36,13 @@ describe('DelveCamp', () => {
     const text = 'Storm now outweighs Fire: your basic attacks strike with Storm';
     act(() => useDelveStore.setState({ notices: [text] }));
     render(
-      <MemoryRouter>
-        <DelveCamp />
-      </MemoryRouter>,
+      <StrictMode>
+        <MemoryRouter>
+          <DelveCamp />
+        </MemoryRouter>
+      </StrictMode>,
     );
-    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(screen.getAllByText(text)).toHaveLength(1);
     expect(useDelveStore.getState().notices).toEqual([]);
   });
 
@@ -70,5 +74,31 @@ describe('DelveCamp', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('mana-choice')).toBeNull();
+    expect(screen.getByTestId('delve-button').closest('[inert]')).toBeNull();
+  });
+
+  it('the choice holds the keyboard and the pad: the Anvil behind it is inert', () => {
+    useDelveStore.getState().resetProfile(99);
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Choose your mana' })).toHaveAttribute(
+      'aria-modal',
+      'true',
+    );
+    expect(screen.getByTestId('delve-button').closest('[inert]')).not.toBeNull();
+    expect(screen.getByTestId('open-controls').closest('[inert]')).not.toBeNull();
+    // jsdom lays nothing out: give every element a box so the pad sees them.
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+    try {
+      moveFocus('down');
+      expect(document.activeElement).toBe(screen.getByTestId('mana-choice-fire'));
+    } finally {
+      box.mockRestore();
+    }
   });
 });

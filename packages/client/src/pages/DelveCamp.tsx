@@ -80,7 +80,11 @@ export function DelveCamp() {
       />
       <div className="delve-embers" />
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto pb-6">
+      <div
+        className="relative min-h-0 flex-1 overflow-y-auto pb-6"
+        // Until the mana is chosen, nothing behind the choice takes focus or clicks.
+        inert={profile.pair.primary === null}
+      >
         <div className="delve-column flex flex-col gap-4 pt-4">
           {/* Header */}
           <header className="flex items-end justify-between">

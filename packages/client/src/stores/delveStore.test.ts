@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { generateItem, SeededRNG, type BuildFix, type GearSlot } from '@alloy/engine';
 import {
   useDelveStore,
@@ -125,6 +125,29 @@ describe('delveStore', () => {
       pair: { primary: 'fire', secondary: null },
     });
     expect(loaded.fixed.map((f) => f.slot)).toEqual(['defensive']);
+  });
+
+  it('a new store migrates the save, writes it back and queues the fixed builds as notices', async () => {
+    const { pair: _pair, manaDust: _dust, ...rest } = useDelveStore.getState().profile;
+    const frostWard = { ...rest.abilities.defensive, elements: ['frost'] };
+    localStorage.setItem(
+      DELVE_SAVE_KEY,
+      JSON.stringify({
+        ...rest,
+        version: 3,
+        abilities: { ...rest.abilities, defensive: frostWard },
+      }),
+    );
+    // A fresh module and no cached store, as on a page load.
+    (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
+      'delveStore',
+    );
+    vi.resetModules();
+    const fresh = (await import('./delveStore')).useDelveStore;
+    expect(fresh.getState().notices).toEqual([
+      "Your Ward used Frost, which isn't in your pair; it now uses Fire",
+    ]);
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(4);
   });
 
   it('chooses the mana once, binds a second element, and remembers a declined bind this session', () => {
