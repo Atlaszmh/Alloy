@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AttackButton, SkillBar, keyHints, padHints } from '../arena/ArenaHud';
+import { AttackButton, SkillBar, Vitals, keyHints, padHints } from '../arena/ArenaHud';
 import { DEFAULT_CONTROLS } from '@/features/controls/controls';
-import type { ArenaHud } from '../arena/useArena';
+import type { AbilityHud, ArenaHud } from '../arena/useArena';
 
 function hud(over: Partial<ArenaHud> = {}): ArenaHud {
   return {
@@ -23,6 +23,9 @@ function hud(over: Partial<ArenaHud> = {}): ArenaHud {
     monstersTotal: 8,
     boss: null,
     cleared: false,
+    barrier: null,
+    galvanizedAt: null,
+    t: 10,
     ...over,
   };
 }
@@ -62,6 +65,59 @@ describe('SkillBar dodge button', () => {
     );
     expect(screen.getByTestId('dodge-button')).toHaveAttribute('data-riposte', 'true');
     expect(screen.getByTestId('dodge-button')).toHaveTextContent('LT');
+  });
+});
+
+describe('the reactions on the HUD', () => {
+  it("shows Obsidian's barrier as a pale segment after the life (over its end at full life)", () => {
+    const { rerender } = render(<Vitals hud={hud({ hp: 50, barrier: { hp: 20, max: 30 } })} />);
+    const seg = screen.getByTestId('hp-barrier');
+    expect(seg.style.left).toBe('50%');
+    expect(seg.style.width).toBe('20%');
+    rerender(<Vitals hud={hud({ hp: 100, barrier: { hp: 20, max: 30 } })} />);
+    expect(screen.getByTestId('hp-barrier').style.left).toBe('80%');
+    rerender(<Vitals hud={hud()} />);
+    expect(screen.queryByTestId('hp-barrier')).toBeNull();
+  });
+
+  it('sparks the buttons still cooling down for 0.4 s after Galvanize', () => {
+    const cooling: AbilityHud = {
+      name: 'Fire Bolt',
+      icon: '☄️',
+      form: 'bolt',
+      element: 'fire',
+      elements: ['fire'],
+      payment: 'mana',
+      cost: 8,
+      cooldown: 3,
+      cooldownTotal: 5,
+      charge: null,
+      comboNext: 0,
+      comboLength: 1,
+      windup: null,
+      affordable: true,
+      ready: false,
+    };
+    const abilities = [cooling, { ...cooling, cooldown: 0, ready: true }];
+    const bar = (galvanizedAt: number | null) => (
+      <SkillBar
+        hud={hud({ abilities, galvanizedAt, t: 10 })}
+        onCast={() => {}}
+        onAim={() => {}}
+        onPotion={() => {}}
+        onDodge={() => {}}
+        hints={null}
+      />
+    );
+    const spark = (slot: number) =>
+      screen.getByTestId(`ability-${slot}`).querySelector('[data-spark]');
+    const { rerender } = render(bar(9.8));
+    expect(spark(0)).not.toBeNull();
+    expect(spark(1)).toBeNull();
+    rerender(bar(9.5));
+    expect(spark(0)).toBeNull();
+    rerender(bar(null));
+    expect(spark(0)).toBeNull();
   });
 });
 

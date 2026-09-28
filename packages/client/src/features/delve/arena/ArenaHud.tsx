@@ -132,10 +132,23 @@ export function Vitals({ hud }: { hud: ArenaHud | null }) {
   if (!hud) return null;
   const frac = hud.hp / Math.max(1, hud.maxHp);
   const mana = hud.mana / Math.max(1, hud.manaMax);
+  // Obsidian's barrier: a pale segment after the life (over its end when there's no room).
+  const barrier = hud.barrier ? Math.min(1, hud.barrier.hp / Math.max(1, hud.maxHp)) : 0;
   return (
     <div className="flex flex-col gap-1">
       <div className={`delve-hpbar ${frac < 0.3 ? 'animate-pulse' : ''}`} data-testid="hero-hp">
         <div className="fill" style={{ width: `${frac * 100}%`, background: hpGradient(frac) }} />
+        {hud.barrier && (
+          <div
+            className="absolute inset-y-0"
+            data-testid="hp-barrier"
+            style={{
+              left: `${Math.min(frac, 1 - barrier) * 100}%`,
+              width: `${barrier * 100}%`,
+              background: 'rgba(254, 215, 170, 0.6)',
+            }}
+          />
+        )}
         <div className="text">
           {formatNumber(Math.max(0, hud.hp))} / {formatNumber(hud.maxHp)}
         </div>
@@ -161,6 +174,9 @@ export function Vitals({ hud }: { hud: ArenaHud | null }) {
 
 const SLOT_LABEL = ['Primary', 'Defensive', 'Ultimate'];
 
+/** Seconds the buttons still cooling down spark after Galvanize. */
+const GALVANIZE_SPARK = 0.4;
+
 /**
  * One ability button. A quick tap auto-aims; dragging out shows the aim
  * marker in the arena and releasing casts there (release back on the button
@@ -170,6 +186,7 @@ function AbilityButton({
   slot,
   ab,
   busy,
+  galvanized,
   hint,
   onCast,
   onAim,
@@ -178,6 +195,8 @@ function AbilityButton({
   ab: AbilityHud;
   /** An ability is channelling (presses wait for it). */
   busy: boolean;
+  /** Galvanize just fired: a cooling button sparks. */
+  galvanized: boolean;
   hint?: string;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
@@ -299,6 +318,16 @@ function AbilityButton({
       {hint && (
         <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
           {hint}
+        </span>
+      )}
+      {galvanized && cooling && (
+        <span
+          data-spark
+          aria-hidden
+          className="pointer-events-none absolute -left-1 -top-1 text-base"
+          style={{ textShadow: '0 0 6px #d8f56a' }}
+        >
+          ⚡
         </span>
       )}
     </button>
@@ -445,6 +474,8 @@ export function SkillBar({
   /** Button labels to show, or null (touch). */
   hints: ButtonHints | null;
 }) {
+  const galvanized =
+    !!hud && hud.galvanizedAt !== null && hud.t - hud.galvanizedAt < GALVANIZE_SPARK;
   return (
     <div className="flex items-end justify-center gap-2" data-testid="skill-bar">
       <DodgeButton hud={hud} hint={hints?.dodge} onDodge={onDodge} />
@@ -470,6 +501,7 @@ export function SkillBar({
           slot={i}
           ab={ab}
           busy={hud.busy}
+          galvanized={galvanized}
           hint={hints?.abilities[i]}
           onCast={onCast}
           onAim={onAim}

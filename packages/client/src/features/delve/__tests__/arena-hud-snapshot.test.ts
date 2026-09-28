@@ -56,4 +56,18 @@ describe('arena HUD snapshot', () => {
     off.hero.mana = off.hero.manaMax;
     expect(snapshot(off).abilities[2].affordable).toBe(false);
   });
+
+  it("carries Obsidian's barrier and when Galvanize last fired", () => {
+    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    expect(snapshot(w)).toMatchObject({ barrier: null, galvanizedAt: null, t: w.t });
+    w.t = 3;
+    w.hero.barrier = { hp: 5, max: 8, until: 7 };
+    w.hero.reactionReadyAt.galvanize = 2.5;
+    const cooldown = registry.getDelveBalance().reactions.reactionCooldown;
+    expect(snapshot(w)).toMatchObject({
+      barrier: { hp: 5, max: 8 },
+      galvanizedAt: 2.5 - cooldown,
+      t: 3,
+    });
+  });
 });

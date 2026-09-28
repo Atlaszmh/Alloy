@@ -87,6 +87,12 @@ export interface ArenaHud {
   monstersTotal: number;
   boss: { name: string; icon: string; hp: number; maxHp: number } | null;
   cleared: boolean;
+  /** Obsidian's barrier (the life bar's pale segment), or null. */
+  barrier: { hp: number; max: number } | null;
+  /** When Galvanize last fired (world seconds), or null: cooling buttons spark just after. */
+  galvanizedAt: number | null;
+  /** The world's time, for `galvanizedAt`. */
+  t: number;
 }
 
 /** What the core reports to the page, from any fight. */
@@ -211,6 +217,12 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     monstersTotal: world.totalMonsters,
     boss: boss ? { name: boss.name, icon: boss.icon, hp: boss.hp, maxHp: boss.maxHp } : null,
     cleared: world.cleared,
+    barrier: h.barrier ? { hp: h.barrier.hp, max: h.barrier.max } : null,
+    galvanizedAt:
+      h.reactionReadyAt.galvanize === undefined
+        ? null
+        : h.reactionReadyAt.galvanize - bal.reactions.reactionCooldown,
+    t,
   };
 }
 
