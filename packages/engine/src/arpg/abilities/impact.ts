@@ -43,6 +43,8 @@ export function hitOpts(
     spread: k.spread,
     slot: slotIndex(ab),
     heft: direct ? heft : 0,
+    // Either element counts: an ability applies both elements' statuses.
+    rattles: ab.elements.includes('earth'),
   };
 }
 

@@ -255,6 +255,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           canCrit: true,
           applies: p.applies,
           heft: p.heft ?? 0,
+          rattles: p.rattles,
         });
       if (!p.pierce) p.dead = true;
     }

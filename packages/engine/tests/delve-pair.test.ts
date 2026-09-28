@@ -36,18 +36,17 @@ import {
 import { generateItem } from '../src/loot/item-generator.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
+import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile, HeroWeapon, ManaPair } from '../src/types/delve.js';
 import {
   GEAR_SLOTS,
-  type EquippedGear,
   type GearItem,
   type GearSlot,
   type HeroStatKey,
   type Rarity,
 } from '../src/types/gear.js';
 import type { ManaMap, ManaType } from '../src/types/mana.js';
-import { STEP, arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
+import { bal, dummy, firstBlow, gear, registry, run, strikeWorld } from './fixtures/arena.js';
 
 /** A plain item of `mana`: no implicits, and only the lines given (as affixes). */
 function item(
@@ -593,30 +592,6 @@ describe('basic attacks with a pair', () => {
   const staff = { weapon: gear('fire', 'weapon', 'staff') };
   const FIRE_STORM: HeroStatsExtra = { pair: { primary: 'fire', secondary: 'storm' } };
   const k = bal.pair.basicPowerPerAttune;
-
-  /** One sturdy foe (in a sword's reach by default), the hero on `extra`; `finisher` starts on the string's last blow. */
-  function strikeWorld(
-    equipped: EquippedGear,
-    extra: HeroStatsExtra,
-    finisher = false,
-    foe: Partial<MonsterEntity> = dummy(13, 34.5),
-  ): ArpgWorld {
-    const w = arena([foe], { equipped });
-    w.hero.stats = computeHeroStats(equipped, registry, extra);
-    if (finisher) {
-      w.hero.attackCount = w.hero.stats.weapon.combo.length - 1;
-      w.hero.lastBasicAt = 0;
-    }
-    return w;
-  }
-
-  /** Step until the first blow lands (its `basic` event), returning every event. */
-  function firstBlow(w: ArpgWorld): ArpgEvent[] {
-    const events: ArpgEvent[] = [];
-    for (let i = 0; i < 300 && !events.some((e) => e.kind === 'basic'); i++)
-      events.push(...run(w, STEP));
-    return events;
-  }
 
   it('blows strike with the primary; the finisher with the secondary, always applying its status', () => {
     const blow = firstBlow(strikeWorld(sword, FIRE_STORM));

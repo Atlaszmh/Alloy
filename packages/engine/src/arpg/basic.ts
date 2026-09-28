@@ -142,6 +142,8 @@ export function strike(ctx: SimCtx): void {
     if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
   }
   if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
+  // An Earth blow (a discharge included) or an Earth Surge's statuses: its stagger rattles.
+  const rattles = element === 'earth' || !!surge?.elements.includes('earth');
   const dir = sw.dir;
 
   // Mana only for an attack at something: a blow that connects, or a shot with a foe in range.
@@ -161,7 +163,14 @@ export function strike(ctx: SimCtx): void {
       )
         continue;
       landed = true;
-      hitMonster(ctx, m, base, element, { source: 'basic', crit, applies, heft: s.heft, ...kb });
+      hitMonster(ctx, m, base, element, {
+        source: 'basic',
+        crit,
+        applies,
+        heft: s.heft,
+        rattles,
+        ...kb,
+      });
       // Twin Fang: today's finisher value (×1.5) on melee.
       if (twin)
         hitMonster(ctx, m, unit * 1.5 * twinPct, element, { source: 'basic', crit, heft: s.heft });
@@ -194,6 +203,7 @@ export function strike(ctx: SimCtx): void {
         applies,
         knockback: 0,
         heft: s.heft,
+        rattles,
       });
     }
     if (sw.committed && s.move < 0)
@@ -242,6 +252,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       canCrit: true,
       applies: p.applies,
       heft: p.heft ?? 0,
+      rattles: p.rattles,
     });
   }
 }

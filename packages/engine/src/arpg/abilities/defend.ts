@@ -45,16 +45,18 @@ export function shieldHero(
   if (ab.elements.includes('earth')) dmg *= 1 - ctx.bal.abilities.defend.earthReduction;
 
   if (melee && source && !source.dead) {
+    const rattles = ab.elements.includes('earth');
     if (form === 'armor') {
       hitMonster(ctx, source, abilityHit(ctx, ab), ab.element, {
         source: 'skill',
         applies: ab.knobs.applies,
         leech: ab.knobs.lifesteal,
         slot: DEFENSIVE,
+        rattles,
       });
     } else {
       for (const s of ab.knobs.applies)
-        if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5);
+        if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5, rattles);
     }
   }
 

@@ -139,6 +139,8 @@ export interface StatusState {
   shockUntil: number;
   hexUntil: number;
   staggerUntil: number;
+  /** Earth's mark: an Earth source staggered the foe (even if immunity refused the stagger). */
+  rattledUntil: number;
   blindUntil: number;
   brandUntil: number;
   poisonStacks: number;
@@ -220,6 +222,8 @@ export interface Projectile {
   knockback: number;
   /** How hard its hit lands (client feel). */
   heft?: number;
+  /** A basic shot from an Earth source: its stagger rattles (see `HitOpts.rattles`). */
+  rattles?: boolean;
   dead: boolean;
 }
 

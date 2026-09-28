@@ -2,7 +2,7 @@ import { createDefaultRegistry } from '../../src/data/default-registry.js';
 import { SeededRNG } from '../../src/rng/seeded-rng.js';
 import { createFloorWorld, createMonsterEntity } from '../../src/arpg/world.js';
 import { stepWorld } from '../../src/arpg/step.js';
-import { computeHeroStats } from '../../src/delve/hero-stats.js';
+import { computeHeroStats, type HeroStatsExtra } from '../../src/delve/hero-stats.js';
 import { generateItem } from '../../src/loot/item-generator.js';
 import type { AbilityBuild, AbilityBuilds, AbilityCast } from '../../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../../src/types/arpg.js';
@@ -124,6 +124,33 @@ export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }
 
 export function damaged(m: MonsterEntity): boolean {
   return m.hp < m.maxHp;
+}
+
+/**
+ * One sturdy foe (in a sword's reach by default), the hero's stats from `extra`;
+ * `finisher` starts on the string's last blow.
+ */
+export function strikeWorld(
+  equipped: EquippedGear,
+  extra: HeroStatsExtra,
+  finisher = false,
+  foe: Partial<MonsterEntity> = dummy(13, 34.5),
+): ArpgWorld {
+  const w = arena([foe], { equipped });
+  w.hero.stats = computeHeroStats(equipped, registry, extra);
+  if (finisher) {
+    w.hero.attackCount = w.hero.stats.weapon.combo.length - 1;
+    w.hero.lastBasicAt = 0;
+  }
+  return w;
+}
+
+/** Step until the first blow lands (its `basic` event), returning every event. */
+export function firstBlow(w: ArpgWorld): ArpgEvent[] {
+  const events: ArpgEvent[] = [];
+  for (let i = 0; i < 300 && !events.some((e) => e.kind === 'basic'); i++)
+    events.push(...run(w, STEP));
+  return events;
 }
 
 /** Press dodge (moving along `move`, or standing still) and advance one step. */

@@ -47,6 +47,7 @@ export function emptyStatus(): StatusState {
     shockUntil: 0,
     hexUntil: 0,
     staggerUntil: 0,
+    rattledUntil: 0,
     blindUntil: 0,
     brandUntil: 0,
     poisonStacks: 0,

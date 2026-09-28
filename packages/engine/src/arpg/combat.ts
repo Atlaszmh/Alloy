@@ -52,6 +52,8 @@ export interface HitOpts {
   slot?: number;
   /** 0–1: how hard the hit lands (client feel; 0 for ticks, DoTs, chains). */
   heft?: number;
+  /** The source includes Earth: a stagger it applies rattles the foe (Earth's mark). */
+  rattles?: boolean;
 }
 
 const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
@@ -79,6 +81,27 @@ export function isPoisoned(ctx: SimCtx, m: MonsterEntity): boolean {
 }
 export function isRooted(ctx: SimCtx, m: MonsterEntity): boolean {
   return ctx.world.t < m.status.rootUntil;
+}
+export function isRattled(ctx: SimCtx, m: MonsterEntity): boolean {
+  return ctx.world.t < m.status.rattledUntil;
+}
+
+/** Whether `m` carries `element`'s mark: the status a reaction of that element needs. */
+export function hasMark(ctx: SimCtx, m: MonsterEntity, element: ManaType): boolean {
+  switch (element) {
+    case 'fire':
+      return isBurning(ctx, m);
+    case 'frost':
+      return isChilled(ctx, m) || isFrozen(ctx, m);
+    case 'storm':
+      return isShocked(ctx, m);
+    case 'earth':
+      return isRattled(ctx, m);
+    case 'shadow':
+      return isHexed(ctx, m);
+    case 'nature':
+      return isPoisoned(ctx, m);
+  }
 }
 
 /** Poison stack cap (doubled by the Nature mastery). */
@@ -134,11 +157,13 @@ function aggroPack(ctx: SimCtx, m: MonsterEntity): void {
   }
 }
 
+/** Apply `status`; with `rattles` (an Earth source) a stagger also rattles the foe. */
 export function applyStatus(
   ctx: SimCtx,
   m: MonsterEntity,
   status: StatusId,
   hitAmount: number,
+  rattles = false,
 ): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
@@ -172,6 +197,8 @@ export function applyStatus(
       s.hexUntil = t + st.hexDuration;
       break;
     case 'stagger':
+      // Earth's mark outlasts the stagger, and immunity doesn't refuse it.
+      if (rattles) s.rattledUntil = t + st.rattleDuration;
       if (t < s.staggerImmuneUntil) break;
       s.staggerUntil = Math.max(s.staggerUntil, t + st.staggerDuration * ccScale);
       s.staggerImmuneUntil = s.staggerUntil + st.staggerImmunity;
@@ -383,7 +410,7 @@ export function hitMonster(
     return amount;
   }
 
-  for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount);
+  for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount, opts.rattles);
   if (riposte) applyStatus(ctx, m, 'stagger', amount);
 
   if (opts.knockback && opts.kbFrom) {
