@@ -16,7 +16,7 @@
 - Windows 11. The Bash tool runs POSIX sh; PowerShell is also available (use it for process management). Run any Python helper script from a file (not a heredoc) with `PYTHONIOENCODING=utf-8`.
 - Branch `claude/alloy-loot-gear-system-6upsy5` (already checked out). **One commit per task.** Every commit message ends with the trailer `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`; the commit blocks below pass it as the last `-m`.
 - Stage files by path. Never `git add -A` or `git add .` at the repo root: three unrelated untracked plan docs (`docs/superpowers/plans/2026-05-01-*.md`) exist and must stay out.
-- Push only at the very end, with `git push -q origin claude/alloy-loot-gear-system-6upsy5`. Never open a PR.
+- Don't push: the user pushes after a final review. Never open a PR.
 - **The engine is rebuilt once, in Task 13**, with `(cd packages/engine && pnpm build)`. Chunks 1–4 change engine `src` and run only engine checks; don't build before Task 13 (the user plays on the 5288 dev server, and the client only compiles against the new engine once Task 13 adds the new reactions' colours). If you must rebuild later (a tuning fix), restart the dev server after.
 - `tests/delve-pacing.test.ts` is the balance gate: it must pass at the end of Chunk 4 (Task 12) and stay green after. Each engine task ends by running its own test files and the typecheck, then **the whole engine suite** `(cd packages/engine && npx vitest run)`: expect all green (it was, on the scratch copy, after every task). Before Task 12 a red `delve-pacing.test.ts` alone isn't a blocker: note it and go on, since Task 12 judges it; anything else red is.
 - **Run every command from the repo root.** The shell's working directory persists between commands, so every command line below runs in a subshell (`(cd packages/engine && npx vitest run …)`), and every commit block starts with `cd /c/Projects/Alloy`.
@@ -75,7 +75,7 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 | `src/types/delve.ts` | `DelveBalance.status.rattleDuration`; the new numbers in `DelveBalance.reactions` |
 | `src/data/arpg.json` | 15 reactions with `elements` (and `consumes` / `cooldown`), each text naming both elements |
 | `src/data/balance.json` | `delve.status.rattleDuration`; the new numbers in `delve.reactions` |
-| `src/data/schemas.ts` | exported `ReactionIdSchema`; the reactions refined to cover the 15 pairs once; the balance numbers |
+| `src/data/schemas.ts` | exported `ReactionIdSchema`, with a compile-time check that it names the same ids as `ReactionId`; the reactions refined to cover the 15 pairs once; the balance numbers |
 | `src/data/registry.ts` | `getReactionFor(a, b)` |
 | `src/delve/profile-schema.ts` | `DelveProfileSchema.reactionsSeen` takes every id (v3 stays frozen at seven) |
 | `src/arpg/combat.ts` | `HitOpts.rattles`; `isRattled`, `isSundered`, `hasMark`; `applyStatus(…, rattles)`; `nearby`, `findReaction`, `useUpMark`, `react` replace the chain; buff cooldowns; Sunder's bonus; `spawnDrop`'s `vacuum` |
@@ -100,7 +100,7 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 | `package.json` | version `0.44.0` |
 | `src/features/delve/arena/palette.ts` | `REACTION_HEX` gains 8 colours |
 | `src/features/delve/arena/fx/reactions.ts` (new) | `reactionLabel`, `reactionFx`, `barrierBreakFx`, `EMBER`, `OBSIDIAN` |
-| `src/features/delve/arena/ArenaRenderer.ts` | `REACTION_LABEL` goes; the `reaction` and `barrierBreak` cases; `drawDrop` exported (Seedling's sprout) |
+| `src/features/delve/arena/ArenaRenderer.ts` | `REACTION_LABEL` goes; the `reaction` and `barrierBreak` cases; `drawDrop` exported (Seedling's sprout, which doesn't bob); `pickupColor` (the sprout's pickup sparkles green) |
 | `src/features/delve/arena/fx/draw-world.ts` | Obsidian's shell and Lightning Rod's trail (`drawGuard`); rattle chips, Sunder's crack, blind smoke (`drawMonsterMarks`) |
 | `src/features/delve/arena/arena-sounds.ts` | `barrierBreak` plays `orbRemove` |
 | `src/features/delve/arena/useArenaCore.ts` | `ArenaHud.barrier`, `galvanizedAt`, `t`; `snapshot` |
@@ -272,8 +272,13 @@ export const ReactionIdSchema = z.enum([
   'blackout',
   'galvanize',
 ]);
+// The ReactionId union and this list must name the same ids: this stops compiling if they drift.
+type SameIds<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+true satisfies SameIds<ReactionId, z.infer<typeof ReactionIdSchema>>;
 
 ```
+
+and at the top, after `import { z } from 'zod';`, add `import type { ReactionId } from '../types/arpg.js';`. (The check lives in `src` because engine `tsc` covers `src` only and Vitest doesn't type-check, so a type assertion in a test would never run. `tsup` strips the `satisfies` line.)
 
 In `ArpgDataSchema`, replace the `reactions: z.array(z.object({ id: z.enum([…seven ids…]), name, icon, text })).length(7),` entry (it runs from `  reactions: z` to `    .length(7),`) with:
 
@@ -368,6 +373,8 @@ In `src/data/arpg.json`, replace the whole `"reactions": [ … ],` block (the se
 
 Run: `(cd packages/engine && npx vitest run tests/delve-reactions.test.ts tests/delve-profile-abilities.test.ts tests/data.test.ts && npx tsc --noEmit -p .)`
 Expected: PASS, no type errors. (Nothing reacts differently yet: `hitMonster`'s chain still fires only the seven, one way.)
+
+To see the id check bite, delete `  'galvanize',` from `ReactionIdSchema` and rerun `(cd packages/engine && npx tsc --noEmit -p .)`: it fails with "error TS1360: Type 'true' does not satisfy the expected type 'false'." Put the line back.
 
 - [ ] **Step 8: Commit**
 
@@ -711,9 +718,11 @@ describe('marks', () => {
     expect(heavy.m.status.staggerUntil).toBeGreaterThan(heavy.w.t);
     expect(isRattled(heavy.ctx, heavy.m)).toBe(false);
 
+    // An Earth source's hit with no statuses of its own: only the riposte staggers, without a rattle.
     const riposte = setup();
     riposte.w.hero.riposteUntil = 1e9;
-    hitMonster(riposte.ctx, riposte.m, 10, 'fire', { source: 'skill', canCrit: true });
+    const earthHit = { source: 'skill', canCrit: true, rattles: true } as const;
+    hitMonster(riposte.ctx, riposte.m, 10, 'earth', earthHit);
     expect(riposte.m.status.staggerUntil).toBeGreaterThan(riposte.w.t);
     expect(isRattled(riposte.ctx, riposte.m)).toBe(false);
   });
@@ -849,7 +858,26 @@ Expected: the six `marks` tests FAIL (`hasMark` / `isRattled` "is not a function
   ```
 
   (Twin Fang's extra hit applies nothing, so it needs no flag.)
-- in the ranged branch's `spawnProjectile(ctx, { … })`, after `        heft: s.heft,` add `        rattles,`.
+- in the ranged branch's `spawnProjectile(ctx, { … })`, its last lines
+
+  ```ts
+          applies,
+          knockback: 0,
+          heft: s.heft,
+        });
+  ```
+
+  become
+
+  ```ts
+          applies,
+          knockback: 0,
+          heft: s.heft,
+          rattles,
+        });
+  ```
+
+  (`knockback: 0,` is only there, so the anchor is unique whichever edit you make first.)
 
 `burstShot`'s `hitMonster(ctx, m, p.damage, p.element, { … })`: after `      heft: p.heft ?? 0,` add `      rattles: p.rattles,`.
 
@@ -875,7 +903,7 @@ Expected: the six `marks` tests FAIL (`hasMark` / `isRattled` "is not a function
   }
 ```
 
-(Crushing weight's `heavyStagger` only adds a stagger to abilities without Earth, whose `rattles` is false; the riposte and a non-Earth blow's `stagger` never pass the flag.)
+(Crushing weight's `heavyStagger` only adds a stagger to abilities without Earth, whose `rattles` is false; the riposte's stagger never passes the flag, even on an Earth source's hit, and a non-Earth blow's `stagger` never has it.)
 
 - [ ] **Step 7: Run to verify they pass**
 
@@ -1016,8 +1044,9 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
     expect(f.o.hp).toBeLessThan(f.o.maxHp);
   },
   blight: (f) => {
-    // Each affliction spreads only if the foe has it (no empty poison from a hexed foe).
-    expect(isPoisoned(f.ctx, f.o)).toBe(f.marked === 'nature');
+    // Each affliction spreads only if the foe has it: no empty poison from a hexed foe.
+    if (f.marked === 'nature') expect(isPoisoned(f.ctx, f.o)).toBe(true);
+    else expect(f.o.status.poisonUntil).toBe(0);
     expect(isHexed(f.ctx, f.o)).toBe(f.marked === 'shadow');
   },
 };
@@ -1095,6 +1124,28 @@ describe('every pair reacts, both ways', () => {
     expect(reactions(shaken.events)).toEqual(['shatter']);
   });
 
+  it('Storm on a merely chilled foe: Superconduct freezes it', () => {
+    const { ctx, m, events } = setup();
+    applyStatus(ctx, m, 'chill', 0);
+    hitMonster(ctx, m, 10, 'storm', { source: 'skill' });
+    expect(reactions(events)).toEqual(['superconduct']);
+    expect(isChilled(ctx, m)).toBe(false);
+    expect(isFrozen(ctx, m)).toBe(true);
+  });
+
+  it("Catalyst scales the damage reactions and Soulfire's hit", () => {
+    const cases = [
+      ['fire', 'frost'],
+      ['earth', 'frost'],
+      ['fire', 'shadow'],
+    ] as const;
+    for (const [hit, marked] of cases) {
+      const plain = fire(hit, marked);
+      const doubled = fire(hit, marked, (s) => (s.w.hero.stats.legendaries.catalyst = 100));
+      expect(doubled.dealt / plain.dealt, `${hit} on ${marked}`).toBeCloseTo(2);
+    }
+  });
+
   it('with two marks, the first in MANA_TYPES order decides', () => {
     const a = setup();
     applyStatus(a.ctx, a.m, 'poison', 100);
@@ -1113,12 +1164,12 @@ describe('every pair reacts, both ways', () => {
 
 ```
 
-The table covers the reactions `EFFECTS` names: the seven now; each new reaction's task adds its entry. (The table is the spec's "Superconduct reverse" and "Blight reverse" tests too: Storm on a frozen foe keeps the freeze; Nature on a hexed, unpoisoned foe spreads hex and no poison.)
+The table covers the reactions `EFFECTS` names: the seven now; each new reaction's task adds its entry. (The table is the spec's "Superconduct reverse" and "Blight reverse" tests too: Storm on a frozen foe keeps the freeze; Nature on a hexed, unpoisoned foe spreads hex and no poison, not even an empty one: `isPoisoned` needs stacks, so the test reads `poisonUntil`. Catalyst 100 doubles a reaction's multiplier, so each of Melt, Shatter and Soulfire deals twice the uncatalysed reaction.)
 
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-reactions.test.ts)`
-Expected: 10 FAIL: each of the seven's reverse direction ("expected [] to deeply equal [ 'melt' ]", and the same for shatter, overload, superconduct, soulfire, combust and blight), the texts ("melt: expected 'Fire hits a chilled or frozen foe for…' to contain 'Frost'"), Frost on a rattled foe ("expected [] to deeply equal [ 'shatter' ]"), and the two marks ("expected [ 'combust' ] to deeply equal [ 'soulfire' ]"). The seven's forward directions and the own-mark and noReact test already pass.
+Expected: 11 FAIL: each of the seven's reverse direction ("expected [] to deeply equal [ 'melt' ]", and the same for shatter, overload, superconduct, soulfire, combust and blight), the texts ("melt: expected 'Fire hits a chilled or frozen foe for…' to contain 'Frost'"), Frost on a rattled foe ("expected [] to deeply equal [ 'shatter' ]"), Storm on a chilled foe ("expected [] to deeply equal [ 'superconduct' ]"), and the two marks ("expected [ 'combust' ] to deeply equal [ 'soulfire' ]"). The seven's forward directions, the own-mark and noReact test, and Catalyst already pass (the old chain already multiplies these three by Catalyst: they guard it from here on).
 
 - [ ] **Step 3: Implement the lookup**
 
@@ -1364,7 +1415,7 @@ describe('Obsidian', () => {
     expect(breaks.map((e) => e.kind)).toEqual(['barrierBreak', 'wardBreak']);
   });
 
-  it('soaks with no Defensive up, unavoidable damage too', () => {
+  it('soaks with no Defensive up, unavoidable damage too, and under Invulnerable', () => {
     const { w, ctx } = setup();
     const h = w.hero;
     h.barrier = { hp: 30, max: 30, until: 1e9 };
@@ -1372,6 +1423,11 @@ describe('Obsidian', () => {
     const hp = h.hp;
     hurtHero(ctx, 5, null, null, { unavoidable: true });
     expect(h.barrier!.hp).toBe(5);
+    expect(h.hp).toBe(hp);
+    // Invulnerable (Training Grounds): a blocked hit still drains it, as it does the Ward.
+    w.sandbox = { infiniteMana: false, noCooldowns: false, invulnerable: true };
+    hurtHero(ctx, 3, null, null);
+    expect(h.barrier!.hp).toBeLessThan(5);
     expect(h.hp).toBe(hp);
   });
 
@@ -1411,6 +1467,7 @@ describe('Obsidian', () => {
 describe('buff reactions', () => {
   it('on its own cooldown, a buff reaction is skipped: a plain hit keeps the mark, or the next mark reacts', () => {
     const { w, ctx, m, events } = setup();
+    w.sandbox = { infiniteMana: false, noCooldowns: true, invulnerable: false }; // abilities only
     applyStatus(ctx, m, 'stagger', 0, true);
     w.hero.reactionReadyAt.obsidian = w.t + 1;
     hitMonster(ctx, m, 10, 'fire', { source: 'skill' });
@@ -1424,7 +1481,7 @@ describe('buff reactions', () => {
 
 ```
 
-(The fixture hero's max life is 154, so the cap is 46.2: a 1e6 hit caps it, a hit of 1 doesn't.)
+(The fixture hero's max life is 154, so the cap is 46.2: a 1e6 hit caps it, a hit of 1 doesn't. Under Invulnerable, the plain hit of 3 is cut by the hero's armor before the barrier takes it, so the test only asks that the barrier drained and no life went. The buff test runs with the Training Grounds' No cooldowns on: it covers abilities, not reactions.)
 
 - [ ] **Step 2: Run them to verify they fail**
 
@@ -1539,11 +1596,12 @@ export function shieldHero(
 
 The Ward block and `return dmg;` after it stay as they are (`form` is now null without a Defensive, so the Ward block is skipped then). `hurtHero` calls `shieldHero` for unavoidable damage and before it checks Invulnerable, so the barrier soaks both, and drains in the Training Grounds as the Ward does.
 
-`src/arpg/step.ts`, `heroTick`: just above `  if (world.queuedPotion) {` (after `  const move = input.move;` and its blank line) add
+`src/arpg/step.ts`, `heroTick`: just above `  if (world.queuedPotion) {` (after `  const move = input.move;` and its blank line) add these two lines and a blank line after them:
 
 ```ts
   // Obsidian's barrier lapses without breaking.
   if (h.barrier && world.t >= h.barrier.until) h.barrier = null;
+
 ```
 
 - [ ] **Step 6: Run to verify they pass**
@@ -1797,7 +1855,10 @@ Both leave drops: Seedling a health orb (`mana: 'nature'`, so the client can dra
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/delve-reactions.test.ts`, in `EFFECTS`, after the `sunder` entry, add
+In `tests/delve-reactions.test.ts`:
+- after `import { resolveAbility } from '../src/arpg/abilities/resolve.js';` add `import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';`, and before `import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';` add `import { computeHeroStats } from '../src/delve/hero-stats.js';`;
+- in the `./fixtures/arena.js` import, add `  DEFAULT_BUILDS,` before `  arena,`;
+- in `EFFECTS`, after the `sunder` entry, add
 
 ```ts
   seedling: (f) =>
@@ -1852,6 +1913,22 @@ describe('Seedling and Siphon', () => {
     expect(total).toBeCloseTo(bal.reactions.siphonMana * w.hero.manaMax);
     expect(w.hero.mana).toBeGreaterThanOrEqual(total);
   });
+
+  it('the Training Grounds get them too: they are the reaction, not loot', () => {
+    const w = createSandboxWorld(registry, {
+      depth: 3,
+      stats: computeHeroStats({}, registry),
+      abilities: DEFAULT_BUILDS,
+      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+    });
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    const ctx = makeCtx(registry, w, []);
+    applyStatus(ctx, d, 'poison', 100);
+    hitMonster(ctx, d, 10, 'earth', { source: 'skill' }); // Seedling
+    applyStatus(ctx, d, 'hex', 0);
+    hitMonster(ctx, d, 10, 'frost', { source: 'skill' }); // Siphon
+    expect(w.drops.map((x) => x.kind)).toEqual(['orb', 'mote', 'mote', 'mote']);
+  });
 });
 
 ```
@@ -1859,7 +1936,7 @@ describe('Seedling and Siphon', () => {
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-reactions.test.ts)`
-Expected: 6 FAIL: the four table cases (no drops: "expected [] to deeply equal [ ObjectContaining{…} ]", "expected [] to have a length of 3 but got +0"), the orb ("Cannot read properties of undefined (reading 'x')") and the motes ("expected [] to deeply equal [ 'shadow', 'shadow', 'shadow' ]").
+Expected: 7 FAIL: the four table cases (no drops: "expected [] to deeply equal [ ObjectContaining{…} ]", "expected [] to have a length of 3 but got +0"), the orb ("Cannot read properties of undefined (reading 'x')"), the motes ("expected [] to deeply equal [ 'shadow', 'shadow', 'shadow' ]") and the Training Grounds ("expected [] to deeply equal [ 'orb', 'mote', 'mote', 'mote' ]").
 
 - [ ] **Step 3: Implement**
 
@@ -1959,23 +2036,23 @@ describe('Galvanize', () => {
   it('a charge slot gains a unit; a slot cooling down loses a second, never past now', () => {
     const { w, ctx, m } = setup();
     const h = w.hero;
-    h.cooldowns = [w.t + 0.5, w.t + 5, 0];
+    h.cooldowns = [w.t + 0.5, w.t + 5, w.t + 3]; // the Ultimate pays by charge: that's its lockout
     h.charge[2] = h.abilities[2].chargeNeed - 0.5;
     applyStatus(ctx, m, 'shock', 0);
     hitMonster(ctx, m, 10, 'nature', { source: 'skill' });
-    expect(h.cooldowns).toEqual([w.t, w.t + 5 - bal.reactions.galvanizeSeconds, 0]);
+    expect(h.cooldowns).toEqual([w.t, w.t + 5 - bal.reactions.galvanizeSeconds, w.t + 3]);
     expect(h.charge[2]).toBe(h.abilities[2].chargeNeed);
   });
 });
 
 ```
 
-(The fixture's Primary and Defensive pay mana and its Ultimate pays charge; the Ultimate's charge lockout, `cooldowns[2]`, is never shortened.)
+(The fixture's Primary and Defensive pay mana and its Ultimate pays charge. The Ultimate's charge lockout, `cooldowns[2]`, is never shortened, as Nightstalker never shortens one; during it the hit banks no charge either (`gainCharge` skips a slot in lockout), so the full meter is Galvanize's unit alone.)
 
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-reactions.test.ts)`
-Expected: 7 FAIL: the six table cases ("expected 1 to be close to 1.8", "expected +0 to be 4", "expected 5 to be 4") and Galvanize ("expected [ 0.5, 5, +0 ] to deeply equal [ +0, 4, +0 ]"). `checks all fifteen` already passes (it guards the table from now on).
+Expected: 7 FAIL: the six table cases ("expected 1 to be close to 1.8", "expected +0 to be 4", "expected 5 to be 4") and Galvanize ("expected [ 0.5, 5, 3 ] to deeply equal [ +0, 4, 3 ]"). `checks all fifteen` already passes (it guards the table from now on).
 
 - [ ] **Step 3: Implement**
 
@@ -2045,15 +2122,15 @@ git commit -m "feat(engine): Crystallize, Blackout and Galvanize: every pair has
 - [ ] **Step 1: Write the failing tests**
 
 In `tests/delve-reactions.test.ts`:
-- after `import { resolveAbility } from '../src/arpg/abilities/resolve.js';` add
+- `import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';` (from Task 8) becomes
 
   ```ts
   import { botInput } from '../src/arpg/bot.js';
-  import { respawnHero } from '../src/arpg/sandbox.js';
+  import { createSandboxWorld, respawnHero, spawnDummies } from '../src/arpg/sandbox.js';
   import { stepWorld } from '../src/arpg/step.js';
   ```
 
-- in the `./fixtures/arena.js` import, add `  STEP,` before `  arena,`;
+- in the `./fixtures/arena.js` import, add `  STEP,` after `  DEFAULT_BUILDS,`;
 - before `describe('saves remember every reaction', () => {` add
 
 ```ts
@@ -2596,9 +2673,9 @@ import type { ManaFx } from './mana-fx';
 
 type Of<K extends ArpgEvent['kind']> = Extract<ArpgEvent, { kind: K }>;
 
-/** Obsidian's colours: embers cooling onto dark glass. */
+/** Obsidian's colours: embers cooling onto glass (light: the air layer only adds light). */
 export const EMBER = 0xff7a3c;
-export const OBSIDIAN = 0x6b4a5a;
+export const OBSIDIAN = 0xdcd0e6;
 
 /** A reaction's floating label: its name from arpg.json, shouted. */
 export function reactionLabel(id: ReactionId): string {
@@ -2658,7 +2735,7 @@ export function reactionFx(fx: ManaFx, e: Of<'reaction'>, w: ArpgWorld): void {
   }
 }
 
-/** Obsidian's shell shatters: its embers scatter and dark glass flies. */
+/** Obsidian's shell shatters: its embers scatter and glass flies. */
 export function barrierBreakFx(fx: ManaFx, e: Of<'barrierBreak'>): void {
   fx.disperse(e.x, e.y - 0.3, 1.1, EMBER, 24);
   fx.burst(e.x, e.y - 0.3, OBSIDIAN, 14, 5, true);
@@ -2907,7 +2984,7 @@ git commit -m "feat(client): Obsidian's shell, Lightning Rod's trail, and the ra
 
 ### Task 16: Seedling's orb draws as a sprout
 
-`ArenaRenderer`'s private `drawDrop` becomes an exported function (so a test can hand it a recording Graphics), and an orb with `mana: 'nature'` draws as a sprout that grows in. Siphon's motes (`mana: 'shadow'`) are violet already: a mote wears `MANA_HEX[d.mana]`.
+`ArenaRenderer`'s private `drawDrop` becomes an exported function (so a test can hand it a recording Graphics), and an orb with `mana: 'nature'` draws as a sprout that grows in, and doesn't bob. Siphon's motes (`mana: 'shadow'`) are violet already: a mote wears `MANA_HEX[d.mana]`. The `pickup` sparkle took red for every orb; `pickupColor` gives a drop with a mana its mana's colour (the `pickup` event carries the drop's `mana`: `dropsTick` passes `d.mana`), so the sprout's pickup sparkles green.
 
 **Files:**
 - Modify: `packages/client/src/features/delve/arena/ArenaRenderer.ts` (`drawDrop`)
@@ -2920,8 +2997,8 @@ git commit -m "feat(client): Obsidian's shell, Lightning Rod's trail, and the ra
 ```ts
 import { describe, it, expect } from 'vitest';
 import type { Graphics } from 'pixi.js';
-import type { Drop } from '@alloy/engine';
-import { drawDrop, pruneViews } from '../arena/ArenaRenderer';
+import type { ArpgEvent, Drop } from '@alloy/engine';
+import { drawDrop, pickupColor, pruneViews } from '../arena/ArenaRenderer';
 import { MANA_HEX } from '../arena/palette';
 
 /** A Graphics stand-in that records the colours it fills. */
@@ -2962,21 +3039,52 @@ and inside `describe('the arena renderer', …)`, after the existing test, add
     drawDrop(mote.g, drop({ kind: 'mote', mana: 'shadow' }), 1, 1);
     expect(mote.fills).toContain(MANA_HEX.shadow);
   });
+
+  it("a Seedling orb's pickup sparkles green, a health orb's red", () => {
+    const pickup = (over: Partial<Extract<ArpgEvent, { kind: 'pickup' }>>) =>
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'orb', amount: 0.1, ...over });
+    expect(pickup({ mana: 'nature' })).toBe(MANA_HEX.nature);
+    expect(pickup({})).toBe(0xf87171);
+    expect(pickup({ dropKind: 'mote', mana: 'shadow' })).toBe(MANA_HEX.shadow);
+  });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/arena-renderer.test.ts)`
-Expected: FAIL ("(0 , drawDrop) is not a function").
+Expected: 2 FAIL ("(0 , drawDrop) is not a function", "(0 , pickupColor) is not a function").
 
 - [ ] **Step 3: Implement**
 
 In `src/features/delve/arena/ArenaRenderer.ts`:
+- in `handleEvents`, the whole `case 'pickup':` block (its `this.fx.burst(…)` with the nested colour ternary, and `break;`) becomes
+
+  ```ts
+          case 'pickup':
+            this.fx.burst(w.hero.x, w.hero.y, pickupColor(e), 5, 2.5);
+            break;
+  ```
+
+- in `syncDrops`, `      const bob = d.kind === 'item' ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;` becomes
+
+  ```ts
+        // Items lie still, and so does a Seedling's rooted sprout.
+        const still = d.kind === 'item' || (d.kind === 'orb' && d.mana === 'nature');
+        const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
+  ```
+
 - in `syncDrops`, `      this.drawDrop(v, d);` becomes `      drawDrop(v.gfx, d, this.time, age);` (`age` is already computed just above);
 - delete the private method `  private drawDrop(v: DropView, d: Drop): void { … }` (all of it, and the blank line after it);
 - just above `function lighten(color: number): number {` add
 
 ```ts
+/** A pickup's sparkle: the item's rarity, else the drop's mana (a mote, a Seedling orb), else red. */
+export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
+  if (e.item) return RARITY_HEX[e.item.rarity];
+  if (e.mana) return MANA_HEX[e.mana];
+  return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
+}
+
 /**
  * A drop's look, `age` seconds after it fell. A Seedling's orb (nature) is a
  * sprout that grows in; a mote wears its mana's colour (a Siphon's is violet).
@@ -3026,12 +3134,12 @@ export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void 
 
 ```
 
-(Everything but the sprout branch is the old method's body with `this.time` → `time`; `Graphics` and `Drop` are already imported.)
+(Everything in `drawDrop` but the sprout branch is the old method's body with `this.time` → `time`; `ArpgEvent`, `Graphics` and `Drop` are already imported. `pickupColor` keeps the old colours for items, motes and health orbs.)
 
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run src/features/delve/__tests__/arena-renderer.test.ts)`
-Expected: no type errors; PASS.
+Expected: no type errors; PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -3039,7 +3147,7 @@ Expected: no type errors; PASS.
 cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/arena/ArenaRenderer.ts packages/client/src/features/delve/__tests__/arena-renderer.test.ts
 git add packages/client/src/features/delve/arena/ArenaRenderer.ts packages/client/src/features/delve/__tests__/arena-renderer.test.ts
-git commit -m "feat(client): Seedling's orb grows in as a sprout" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+git commit -m "feat(client): Seedling's orb grows in as a still sprout, and sparkles green when picked up" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
@@ -3375,6 +3483,12 @@ import {
 const OUT = process.env.SHOTS_DIR;
 if (!OUT) throw new Error('Set SHOTS_DIR to a folder in your scratchpad');
 const registry = createDefaultRegistry();
+/**
+ * Dummies never strike back, so these get attackers: Obsidian's barrier must
+ * drain and shatter (Invulnerable blocks life loss, not the barrier), and
+ * Lightning Rod's trail shows only while the bot walks.
+ */
+const ATTACKED = new Set(['obsidian', 'lightning_rod']);
 
 async function seed(page: Page, [a, b]: readonly [ManaType, ManaType]): Promise<void> {
   const save = JSON.stringify(createDelveProfile(registry, 4242, { primary: 'fire' }));
@@ -3418,6 +3532,15 @@ for (const { id, elements } of registry.getArpgData().reactions)
     const canvas = page.locator('[data-testid="arena"] canvas');
     await expect(canvas).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('ability-0')).toBeVisible({ timeout: 30_000 });
+    if (ATTACKED.has(id)) {
+      // The panel is docked (open) on desktop, a sheet on phones; spawn the default 3 foes.
+      const panel = page.getByTestId('training-panel');
+      if (!(await panel.isVisible())) await page.getByTestId('training-panel-toggle').click();
+      await page.getByTestId('training-tab-targets').click();
+      await page.getByTestId('spawn-button').click();
+      if ((await panel.getAttribute('data-layout')) === 'sheet')
+        await page.getByTestId('training-panel-close').click();
+    }
     await page.waitForTimeout(1500); // the bot reaches the dummy and marks it
     const box = (await canvas.boundingBox())!;
     const size = Math.min(560, box.width, box.height);
@@ -3440,8 +3563,8 @@ Expected: 15 passed; 17 PNGs per reaction in `<scratchpad>/reaction-shots/`, non
 
 View them with the Read tool and check, reaction by reaction:
 - every reaction floats its name from the data (`LIGHTNING ROD!`, never `undefined`) in its `REACTION_HEX` colour, with its ring;
-- Obsidian: embers gathering onto the hero, then an ember shell round it that thins as blows drain it (Invulnerable still drains the barrier) and shatters;
-- Lightning Rod: a bolt dropping into the ground at the hero; a storm trail behind it whenever it walks;
+- Obsidian: embers gathering onto the hero, then an ember shell round it that thins as the spawned attackers' blows drain it (Invulnerable still drains the barrier) and shatters into ember and glass pixels; its HUD frame shows the pale barrier segment on the life bar (the shatter's `orbRemove` sound is muted here: its unit test covers it);
+- Lightning Rod: a bolt dropping into the ground at the hero; a storm trail behind it as the bot walks among the attackers;
 - Sunder: rock chips bursting off the dummy, then a small earth-coloured crack over it;
 - Seedling: a green puff, a sprout growing in where the dummy stands, and vines on the floor under it;
 - Siphon: a violet flash at the dummy and three violet motes flying to the hero;
@@ -3473,7 +3596,7 @@ git commit -m "test(client): the Anvil lists fifteen reactions to discover" -m "
 
 ---
 
-### Task 20: Docs, version, full verification, push
+### Task 20: Docs, version, full verification
 
 **Files:**
 - Modify: `CLAUDE.md` (CRLF), `docs/superpowers/specs/2026-09-28-delve-pair-reactions-design.md` (CRLF; status line), `packages/client/package.json` (version)
@@ -3505,13 +3628,12 @@ Run, and check each is green before claiming anything:
 
 Expected: all green. Then delete `packages/client/playwright.scratch.config.ts`, and leave the 5288 dev server running: the user plays on it.
 
-- [ ] **Step 3: Commit and push**
+- [ ] **Step 3: Commit**
 
 ```bash
 cd /c/Projects/Alloy
 git add CLAUDE.md docs/superpowers/specs/2026-09-28-delve-pair-reactions-design.md packages/client/package.json
 git commit -m "docs: pair reactions in the Delve notes" -m "chore(client): bump version to 0.44.0" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
-git push -q origin claude/alloy-loot-gear-system-6upsy5
 ```
 
-`git status` must show nothing of this work left: only the three untracked 2026-05-01 plan docs.
+`git status` must show nothing of this work left: only the three untracked 2026-05-01 plan docs. Don't push: the user pushes after a final review.
