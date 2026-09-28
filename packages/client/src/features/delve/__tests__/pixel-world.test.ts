@@ -363,7 +363,7 @@ describe('the growth brush', () => {
     const i = spot.y * pw.width + spot.x;
     const far = i + 8; // outside the brush's radius of 3
     pw.sprout(spot.x, spot.y, 3);
-    expect(pw.growthTarget[i]).toBe(1);
+    expect(pw.growthTarget[i]).toBeGreaterThan(1);
     expect(pw.growth[i]).toBe(0);
     for (let s = 0; s < 7; s++) pw.step();
     expect(pw.growth[i]).toBeCloseTo(7 / 15, 5);
@@ -376,6 +376,20 @@ describe('the growth brush', () => {
     expect(pw.growthTarget[i]).toBe(0);
     expect(pw.growth[far]).toBe(0);
     expect(pw.growthTarget[far]).toBe(0);
+  });
+
+  it('holds full grown for about a second before it fades', () => {
+    const pw = make();
+    const spot = find(pw, (_i, x, y) => neighborhood(pw, x, y, 4, (j) => pw.mat[j] !== MAT.WALL));
+    const i = spot.y * pw.width + spot.x;
+    pw.sprout(spot.x, spot.y, 3);
+    for (let s = 0; s < 15; s++) pw.step();
+    for (let s = 15; s < 45; s++) {
+      pw.step();
+      expect(pw.growth[i]).toBe(1);
+    }
+    for (let s = 45; s < 60; s++) pw.step();
+    expect(pw.growth[i]).toBeLessThan(1);
   });
 
   it('draws grown cells greener', () => {

@@ -88,8 +88,10 @@ export const MAX_PARTICLES = 7000;
 const MAX_RIPPLES = 140;
 /** Growth moves this far toward its target per step (in over ~0.5 s)… */
 const GROW_STEP = 1 / 15;
-/** …and a target falls this much per step (from 1 to 0 in ~4 s). */
-const GROW_FADE = 1 / 120;
+/** …and a target falls this much per step: 1.5 → 1 (held full, ~1.5 s), then 1 → 0 (~3 s). */
+const GROW_FADE = 1 / 88;
+/** A sprout's target: past full, so the vines hold before they fade. */
+const GROW_PEAK = 1.5;
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -157,7 +159,7 @@ export class PixelWorld {
   readonly blight: Float32Array;
   /** Nature infusion's vines, as drawn (0–1): they follow `growthTarget`, and never spread or burn. */
   readonly growth: Float32Array;
-  /** Where the growth is heading (0–1): a `sprout` sets it to 1, then it falls to 0. */
+  /** Where the growth is heading (0–1.5, drawn up to 1): a `sprout` sets it to 1.5, then it falls to 0. */
   readonly growthTarget: Float32Array;
   readonly mat: Uint8Array;
   readonly fuel: Uint8Array;
@@ -623,7 +625,8 @@ export class PixelWorld {
       const gt = growthTarget[i];
       if (gt > 0 || growth[i] > 0) {
         const g = growth[i];
-        growth[i] = g < gt ? Math.min(gt, g + GROW_STEP) : Math.max(gt, g - GROW_STEP);
+        const top = gt < 1 ? gt : 1;
+        growth[i] = g < top ? Math.min(top, g + GROW_STEP) : Math.max(top, g - GROW_STEP);
         growthTarget[i] = gt > GROW_FADE ? gt - GROW_FADE : 0;
       }
     }
@@ -1253,7 +1256,7 @@ export class PixelWorld {
   /** Nature infusion: vines grow in over the cells within `r` (see `growth`). */
   sprout(cx: number, cy: number, r: number): void {
     this.forDisc(cx, cy, r, (i) => {
-      if (this.mat[i] !== MAT.WALL) this.growthTarget[i] = 1;
+      if (this.mat[i] !== MAT.WALL) this.growthTarget[i] = GROW_PEAK;
     });
   }
 
