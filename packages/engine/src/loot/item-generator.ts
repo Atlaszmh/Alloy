@@ -17,6 +17,8 @@ export interface ItemGenOptions {
   mana?: ManaType;
   /** The biome's mana: drops lean toward it. */
   biomeMana?: ManaType;
+  /** The hero's pair, primary first: drops lean toward it. Empty or absent: no lean. */
+  pair?: readonly ManaType[];
 }
 
 export interface RarityRollContext {
@@ -121,9 +123,22 @@ function generateRareName(registry: DataRegistry, slot: GearSlot, rng: SeededRNG
   return `${prefix} ${suffix}`;
 }
 
-/** Pick a mana affinity, leaning toward the biome's element. */
-export function rollMana(registry: DataRegistry, biomeMana: ManaType | undefined, rng: SeededRNG): ManaType {
-  if (biomeMana && rng.next() < registry.getDelveBalance().loot.biomeManaBias) return biomeMana;
+/**
+ * Pick a mana affinity. With a pair, `pair.dropBias` of drops take one of its
+ * elements (the primary `primaryShare` of the time once two are bound); the
+ * rest lean toward the biome's element, else roll uniformly. An empty pair
+ * draws exactly as before (no extra random draw).
+ */
+export function rollMana(
+  registry: DataRegistry,
+  biomeMana: ManaType | undefined,
+  rng: SeededRNG,
+  pair: readonly ManaType[] = [],
+): ManaType {
+  const bal = registry.getDelveBalance();
+  if (pair.length > 0 && rng.next() < bal.pair.dropBias)
+    return pair.length > 1 && rng.next() >= bal.pair.primaryShare ? pair[1] : pair[0];
+  if (biomeMana && rng.next() < bal.loot.biomeManaBias) return biomeMana;
   return MANA_TYPES[rng.nextInt(0, MANA_TYPES.length - 1)];
 }
 
@@ -137,7 +152,7 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     ? registry.getGearBase(opts.baseId)
     : weightedPick(registry.getGearBasesForSlot(slot), (b) => b.weight, rng);
 
-  const mana = opts.mana ?? rollMana(registry, opts.biomeMana, rng);
+  const mana = opts.mana ?? rollMana(registry, opts.biomeMana, rng, opts.pair);
   const implicits = base.implicits.map((t) => rollImplicit(registry, t, ilvl, opts.rarity, rng));
 
   const affixes: StatRoll[] = [];

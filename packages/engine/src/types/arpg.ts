@@ -493,6 +493,8 @@ export interface LootContext {
   dropMult: number;
   /** First boss kill ever drops a guaranteed legendary. */
   forceLegendary: boolean;
+  /** The hero's pair, primary first (empty before the choice): drops lean toward it. */
+  pair: ManaType[];
 }
 
 export interface WorldPending {

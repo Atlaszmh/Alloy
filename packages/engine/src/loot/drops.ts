@@ -19,6 +19,8 @@ export interface DropContext {
   nextUid: number;
   /** The biome's mana; item affinities lean toward it. */
   biomeMana?: ManaType;
+  /** The hero's pair, primary first (empty before the choice): item affinities lean toward it. */
+  pair: ManaType[];
 }
 
 export interface DropResult {
@@ -74,7 +76,7 @@ export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng
       rarity = rollRarity(registry, { luck, pity, minRarity, legendaryBoost: ctx.legendaryBoost }, rng);
     }
     pity = rarity === 'legendary' ? 0 : pity + 1;
-    items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana }, rng));
+    items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana, pair: ctx.pair }, rng));
   }
   return { items, pity, nextUid };
 }

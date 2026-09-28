@@ -65,6 +65,7 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
       legendaryBoost: 1,
       dropMult: 1,
       forceLegendary: false,
+      pair: [],
     },
   });
   const biome = registry.getBiomeForDepth(depth);

@@ -238,6 +238,7 @@ describe('rollEncounterDrops', () => {
     legendaryBoost: 1,
     forceLegendary: false,
     nextUid: 1,
+    pair: [],
   };
 
   it('bosses drop several items, the first at least rare, one item level higher', () => {

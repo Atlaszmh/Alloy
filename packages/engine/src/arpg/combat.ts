@@ -514,6 +514,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
       forceLegendary,
       nextUid: loot.nextUid,
       biomeMana: world.element,
+      pair: loot.pair,
     },
     lootRng,
   );

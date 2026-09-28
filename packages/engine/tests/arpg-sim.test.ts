@@ -46,6 +46,7 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
       legendaryBoost: 1,
       dropMult: 1,
       forceLegendary: false,
+      pair: [],
     },
     ...opts,
   });
@@ -104,7 +105,14 @@ describe('floor generation', () => {
   });
 
   it('re-entering a floor meets the same monsters but rolls fresh loot', () => {
-    const loot = { pity: 0, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false };
+    const loot = {
+      pity: 0,
+      magicFind: 0,
+      legendaryBoost: 1,
+      dropMult: 1,
+      forceLegendary: false,
+      pair: [],
+    };
     const first = world({ loot: { ...loot, nextUid: 100 } });
     const again = world({ loot: { ...loot, nextUid: 140 } });
     const layout = (w: ArpgWorld) => w.monsters.map((m) => [m.defId, m.x, m.y, m.hp]);

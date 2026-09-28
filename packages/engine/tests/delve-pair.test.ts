@@ -27,6 +27,9 @@ import {
   heroPower,
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
+import { generateItem } from '../src/loot/item-generator.js';
+import { rollEncounterDrops } from '../src/loot/drops.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
 import type { DelveProfile, HeroWeapon, ManaPair } from '../src/types/delve.js';
 import {
@@ -628,5 +631,71 @@ describe('basic attacks with a pair', () => {
     expect(amount({ ...FIRE_STORM, attunement: { storm: 5 } }, true) / finisher).toBeCloseTo(
       1 + 5 * k,
     );
+  });
+});
+
+describe('drops lean toward the pair', () => {
+  // Elite drops at depth 5 in a fire biome, seeds 0–7, recorded before the pair existed.
+  const GOLDEN = [
+    'fire:common:helm,frost:common:wand',
+    'fire:common:ring,fire:common:helm',
+    'frost:uncommon:bow,fire:rare:gauntlets,fire:magic:greaves',
+    'fire:uncommon:amulet,storm:common:gauntlets',
+    'fire:common:helm,shadow:magic:axe',
+    'fire:common:ring,fire:uncommon:amulet',
+    'frost:magic:cuirass,fire:common:gauntlets,earth:magic:helm',
+    'earth:rare:gauntlets,storm:magic:greaves',
+  ];
+
+  it('with an empty pair, the seeded drop streams are unchanged', () => {
+    const ctx = {
+      depth: 5,
+      kind: 'elite' as const,
+      magicFind: 0,
+      pity: 0,
+      dropMult: 1,
+      legendaryBoost: 1,
+      forceLegendary: false,
+      nextUid: 1,
+      biomeMana: 'fire' as const,
+      pair: [],
+    };
+    const got = GOLDEN.map((_, s) =>
+      rollEncounterDrops(registry, ctx, new SeededRNG(s))
+        .items.map((i) => `${i.mana}:${i.rarity}:${i.baseId}`)
+        .join(','),
+    );
+    expect(got).toEqual(GOLDEN);
+  });
+
+  it.each([
+    ['frost', 0],
+    ['fire', 1],
+  ] as const)(
+    'with a pair in a %s biome, the in-pair rate matches the formula',
+    (biome, inside) => {
+      const pair: ManaType[] = ['fire', 'storm'];
+      const { dropBias } = bal.pair;
+      const bias = bal.loot.biomeManaBias;
+      const expected = dropBias + (1 - dropBias) * (bias * inside + ((1 - bias) * pair.length) / 6);
+      const N = 4000;
+      let hits = 0;
+      for (let i = 0; i < N; i++) {
+        const opts = { uid: 'p', ilvl: 3, rarity: 'common' as const, biomeMana: biome, pair };
+        if (pair.includes(generateItem(registry, opts, new SeededRNG(i)).mana)) hits++;
+      }
+      expect(Math.abs(hits / N - expected)).toBeLessThan(0.03);
+    },
+  );
+
+  it("the floor's loot context carries the pair, primary first", () => {
+    const p = bindSecondary(
+      createDelveProfile(registry, 3, { primary: 'frost' }),
+      'nature',
+    ).profile;
+    expect(beginFloor(registry, startDive(registry, p, 1)).loot.pair).toEqual(['frost', 'nature']);
+    expect(
+      beginFloor(registry, startDive(registry, createDelveProfile(registry, 3), 1)).loot.pair,
+    ).toEqual([]);
   });
 });

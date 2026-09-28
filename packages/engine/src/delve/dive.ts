@@ -7,6 +7,7 @@ import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';
+import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
@@ -87,6 +88,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
       dropMult: mods.dropMult ?? 1,
       forceLegendary: !profile.firstBossLegendaryGiven,
+      pair: pairElements(profile.pair),
     },
   });
 }
