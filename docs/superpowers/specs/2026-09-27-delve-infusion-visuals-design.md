@@ -55,7 +55,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 
 `drawInfusion(layers, element, shape, time, seed, strength, budget)` draws one element's motif for one carrier.
 
-- **Layers:** `layers` is `{ air, ground }`, the existing pixel layers.
+- **Layers:** `layers` is `{ air, ground? }`, the existing pixel layers. Callers pass `ground` only for carriers that sit on the ground (blasts, zones, blink trails). Its absence is how a motif knows it is on an air carrier (orbs, auras, beams, sweeps).
 - **Shapes:**
   - `orb` `{ x, y, r, vx, vy }`: a moving ball.
   - `path` `{ points, width, progress }`: a beam, a sweep sampled along its arc, or a blink trail. `progress` runs 0–1 as the carrier grows and fades.
@@ -79,7 +79,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
   - Earth's pebbles and rubble use light stone tones so they read on the additive layer.
 - **Layers:** the air layer is additive and sits above the sprites; the ground layer is normal-blend and sits under them.
   - Motifs for air carriers (orbs, auras, beams, sweeps) draw on the air layer. Shadow's smoke and wisps there use the shadow palette's purples, not black.
-  - Dark shapes (shadow's dark smoke, earth's cracks) draw on the ground layer, and only for carriers that sit on the ground: blasts, zones and blink trails.
+  - Dark shapes (shadow's dark smoke, earth's cracks) draw on the ground layer, and only when `layers.ground` is given, which callers do only for blasts, zones and blink trails.
 - **Determinism:** motifs take their randomness from `seed` and `time` through the existing `hash`, so they are stable per carrier and don't shimmer. `Math.random` is not used.
   - Persistent carriers seed from the entity's id; the hero's auras seed from the slot.
   - Transient carriers are seeded when created, from `hash(x, y, t)` of their event.
@@ -107,7 +107,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 
 - **Finisher ring placement:** a melee finisher narrower than 360° rings the tip (`x + dir × reach`). A 360° finisher (the axe spin, the maul slam) rings the hero with `r = reach`. Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion.
 - **`ManaFx` changes:**
-  - `ManaFx.draw` takes `layers` instead of one Graphics.
+  - `ManaFx.draw(layers, dt, time, budget)` takes the layers and the frame's budget instead of one Graphics. It draws the first-priority transient motifs, passing `ground` only for its blast and blink-trail entries.
   - `swing()` and `beam()` accept an optional `infusion`.
   - A new `infusions` list holds the other transient carriers (dash, blast, finisher).
   - `clear()` empties it.
@@ -130,8 +130,9 @@ Where an infused path or blast passes, the floor gets a mark of the infusion ele
 
 - **Paths:** stamps are spaced evenly along the path, one per 4 cells, and at most 12 per event (spread evenly, never cut off). A slash is sampled along its arc from `x, y, dir, range, arc`.
 - **Blasts:** 6 stamps evenly around the rim at the blast's radius, applied after the body's own blast brush, so the body keeps its core and the infusion marks the edge.
-- **Growth brush:** `pixel/world.ts` and `pixel/render.ts` gain a per-cell `growth` field, 0–1:
-  - It grows toward 1 over about 0.5 s where stamped, then decays to 0 over about 4 s, in `stepFields`.
+- **Growth brush:** `pixel/world.ts` and `pixel/render.ts` gain two per-cell fields, `growth` (what is drawn, 0–1) and `growthTarget` (0–1):
+  - A stamp sets `growthTarget = 1` within its radius.
+  - Each step, `stepFields` moves `growth` toward `growthTarget` by 1/15 per step (about 0.5 s at 1/30 s steps) and decays `growthTarget` linearly to 0 over 120 steps (about 4 s). So a stamped cell grows in, holds while the target is high, and fades as the target falls.
   - It is drawn as vine and leaf pixels in the theme's `grass` and `bush` colours, pushed greener.
   - It never spreads or burns.
 
@@ -167,7 +168,7 @@ Client:
 - `ManaFx` keeps and expires infused swings, beams and transient entries, and `clear()` empties them.
 - `applyArenaEvent` stamps the right brush for each infusion element on paths (evenly, at most 12) and blast rims. It stamps nothing for `null`.
 - `FLOOR_EVENTS` includes `beam` and `slash`.
-- The growth field grows in and decays.
+- The growth fields: a stamped cell's `growth` rises over about 15 steps, then falls to 0 within about 120 + 15 steps; an unstamped cell stays 0.
 - The Basic infusion picker writes the store, disables the weapon's element, and is disabled when unarmed.
 
 Screenshots: a Training Grounds pass (Fire Bolt + storm, Frost Lance + nature, Strike + earth, Ward + shadow, Maelstrom + fire, an infused basic melee finisher), looked at and tuned.
