@@ -84,7 +84,7 @@ export interface PixelWorldOptions {
   burnRate?: number;
 }
 
-const MAX_PARTICLES = 7000;
+export const MAX_PARTICLES = 7000;
 const MAX_RIPPLES = 140;
 /** Growth moves this far toward its target per step (in over ~0.5 s)… */
 const GROW_STEP = 1 / 15;

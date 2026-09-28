@@ -1,5 +1,5 @@
 import type { ArpgEvent, ManaType } from '@alloy/engine';
-import type { PixelWorld } from './world';
+import { MAX_PARTICLES, type PixelWorld } from './world';
 
 /** Arena units → floor cells (the floor grid includes a cliff margin). */
 export function arenaToCell(
@@ -51,8 +51,15 @@ function line(a: Cell, b: Cell): Cell[] {
   }));
 }
 
-/** Mark the floor with an infusion's brush at each cell (storm: one arc through them, closed for a ring). */
+/**
+ * Mark the floor with an infusion's brush at each cell (storm: one arc through
+ * them, closed for a ring). Every brush but nature's spawns particles, so they
+ * stop while the floor holds more than half its cap: at the cap the floor drops
+ * weather, hit sparks, splashes and death bursts instead.
+ */
 function stamp(pw: PixelWorld, element: ManaType, cells: Cell[], closed = false): void {
+  // ponytail: a flat soft cap at half the particles; per-brush costs or a stamp budget if marks vanish in real fights.
+  if (element !== 'nature' && pw.particleCount > MAX_PARTICLES / 2) return;
   if (element === 'storm') pw.stormArc(closed ? [...cells, cells[0]] : cells);
   else for (const c of cells) BRUSH[element](pw, c);
 }

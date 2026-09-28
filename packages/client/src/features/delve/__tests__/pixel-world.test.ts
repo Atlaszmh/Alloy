@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ArpgEvent, ManaType } from '@alloy/engine';
-import { PixelWorld, MAT, PROP } from '../arena/pixel/world';
+import { MAX_PARTICLES, PixelWorld, MAT, PROP } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
 import { MAX_STAMPS, RIM_STAMPS, applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
@@ -413,6 +413,7 @@ function spyFloor() {
     sprout: brush('nature'),
     hitSpark: () => {},
     soulBurst: () => {},
+    particleCount: 0,
     stormArc: (points: { x: number; y: number }[]) => {
       arcs.push(points.map((p) => ({ x: p.x, y: p.y })));
     },
@@ -570,5 +571,40 @@ describe('infusions on the pixel floor', () => {
     );
     expect(f.stamps.map((s) => s.brush)).toEqual(['fire', 'shadow']);
     expect(f.arcs).toHaveLength(0);
+  });
+
+  it("stamps no particle brush while the floor's particles are past half the cap (vines still grow)", () => {
+    const f = spyFloor();
+    f.pw.particleCount = MAX_PARTICLES / 2 + 1;
+    for (const infusion of ['fire', 'frost', 'earth', 'shadow', 'storm'] as const) {
+      applyArenaEvent(f.pw, lance(infusion), PPU, MARGIN);
+      applyArenaEvent(f.pw, slash(150, infusion), PPU, MARGIN);
+      applyArenaEvent(
+        f.pw,
+        { kind: 'dash', fromX: 5, fromY: 20, toX: 5, toY: 16, infusion },
+        PPU,
+        MARGIN,
+      );
+      applyArenaEvent(
+        f.pw,
+        { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'fire', infusion },
+        PPU,
+        MARGIN,
+      );
+    }
+    // Only the bodies: five dash landings and five blasts.
+    expect(f.stamps.map((s) => s.brush).sort()).toEqual([
+      ...Array(5).fill('fire'),
+      ...Array(5).fill('shadow'),
+    ]);
+    expect(f.arcs).toHaveLength(0);
+    // Nature's vines spawn no particles, so they keep growing.
+    applyArenaEvent(f.pw, lance('nature'), PPU, MARGIN);
+    expect(f.stamps.filter((s) => s.brush === 'nature').length).toBeGreaterThan(0);
+    // At half the cap they still mark the floor.
+    const g = spyFloor();
+    g.pw.particleCount = MAX_PARTICLES / 2;
+    applyArenaEvent(g.pw, lance('fire'), PPU, MARGIN);
+    expect(g.stamps.length).toBeGreaterThan(0);
   });
 });
