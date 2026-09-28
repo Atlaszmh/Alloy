@@ -3,7 +3,7 @@ import arpgJson from '../src/data/arpg.json';
 import { ArpgDataSchema } from '../src/data/schemas.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import { MANA_TYPES } from '../src/types/mana.js';
-import { registry } from './fixtures/arena.js';
+import { bal, registry } from './fixtures/arena.js';
 
 describe('the reaction table', () => {
   it('has one reaction per pair of elements, found in either order', () => {
@@ -41,6 +41,28 @@ describe('the reaction table', () => {
     expect(ArpgDataSchema.safeParse({ ...arpgJson, reactions: repeat }).success).toBe(false);
     const missing = arpgJson.reactions.filter((r) => r.id !== 'galvanize');
     expect(ArpgDataSchema.safeParse({ ...arpgJson, reactions: missing }).success).toBe(false);
+  });
+});
+
+describe('balance: the reactions', () => {
+  it("loads the new eight's numbers, their cooldown and Earth's rattle", () => {
+    expect(bal.reactions).toMatchObject({
+      obsidianSoak: 0.5,
+      obsidianCap: 0.3,
+      obsidianDuration: 5,
+      lightningRodDuration: 2,
+      lightningRodMove: 0.3,
+      sunderDuration: 4,
+      sunderBonus: 0.25,
+      seedlingHeal: 0.08,
+      siphonMana: 0.15,
+      crystallizeMult: 1.8,
+      crystallizeRadius: 2,
+      blackoutRadius: 2.5,
+      galvanizeSeconds: 1,
+      reactionCooldown: 1.5,
+    });
+    expect(bal.status.rattleDuration).toBe(2);
   });
 });
 

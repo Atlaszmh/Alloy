@@ -422,6 +422,8 @@ export interface DelveBalance {
     hexBonus: number;
     hexDuration: number;
     staggerDuration: number;
+    /** Seconds Earth's mark (rattled) lasts after an Earth source staggers a foe. */
+    rattleDuration: number;
     blindMiss: number;
     blindDuration: number;
     /** Each poison stack deals this fraction of the hit per second. */
@@ -446,6 +448,29 @@ export interface DelveBalance {
     combustMult: number;
     combustRadius: number;
     blightRadius: number;
+    /** Obsidian: a barrier worth this share of the hit, capped at `obsidianCap` × max life, for `obsidianDuration` s. */
+    obsidianSoak: number;
+    obsidianCap: number;
+    obsidianDuration: number;
+    /** Lightning Rod: a dodge charge back, and movement × (1 + `lightningRodMove`) for `lightningRodDuration` s. */
+    lightningRodDuration: number;
+    lightningRodMove: number;
+    /** Sunder: every later hit on the foe deals × (1 + `sunderBonus`) for `sunderDuration` s. */
+    sunderDuration: number;
+    sunderBonus: number;
+    /** Seedling: a health orb worth this share of max life. */
+    seedlingHeal: number;
+    /** Siphon: three motes worth this share of the mana pool between them. */
+    siphonMana: number;
+    /** Crystallize: the hit × this, and one chill stack on foes within `crystallizeRadius`. */
+    crystallizeMult: number;
+    crystallizeRadius: number;
+    /** Blackout: the foe and foes within this radius are blinded. */
+    blackoutRadius: number;
+    /** Galvanize: seconds off each ability still cooling down (a charge slot gains a unit instead). */
+    galvanizeSeconds: number;
+    /** Seconds before a buff reaction (Obsidian, Lightning Rod, Seedling, Siphon, Galvanize) can fire again. */
+    reactionCooldown: number;
   };
   abilities: DelveAbilityBalance;
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */

@@ -135,14 +135,17 @@
     },
     "status": {
       "burnDps": 0.35, "burnDuration": 3, "chillSlow": 0.4, "chillDuration": 3, "chillToFreeze": 2, "freezeDuration": 1.6,
-      "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6,
+      "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6, "rattleDuration": 2,
       "blindMiss": 0.5, "blindDuration": 4,
       "poisonDps": 0.12, "poisonDuration": 4, "poisonMaxStacks": 5, "rootDuration": 1.5, "rootBossMult": 0.4,
       "staggerImmunity": 1.2, "freezeImmunity": 1.5, "rootImmunity": 2
     },
     "reactions": {
       "meltMult": 2, "shatterMult": 2.5, "overloadMult": 1.2, "overloadRadius": 2.6, "superconductFreeze": 1.5, "soulfireHeal": 0.3,
-      "combustMult": 1.6, "combustRadius": 2, "blightRadius": 2.5
+      "combustMult": 1.6, "combustRadius": 2, "blightRadius": 2.5,
+      "obsidianSoak": 0.5, "obsidianCap": 0.3, "obsidianDuration": 5, "lightningRodDuration": 2, "lightningRodMove": 0.3,
+      "sunderDuration": 4, "sunderBonus": 0.25, "seedlingHeal": 0.08, "siphonMana": 0.15,
+      "crystallizeMult": 1.8, "crystallizeRadius": 2, "blackoutRadius": 2.5, "galvanizeSeconds": 1, "reactionCooldown": 1.5
     },
     "abilities": {
       "slots": {
