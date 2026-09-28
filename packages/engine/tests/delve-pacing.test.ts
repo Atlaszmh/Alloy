@@ -14,6 +14,11 @@ const SEEDS = [1, 2, 3, 4];
 const DIVES = 12;
 
 const runs: AutopilotDiveReport[][] = SEEDS.map((seed) => runAutopilot(registry, { seed, dives: DIVES }).reports);
+/** A Frost hero (the starter gear re-attuned to frost) must still get deeper dive over dive. */
+const FROST_SEEDS = [1, 2];
+const frostRuns: AutopilotDiveReport[][] = FROST_SEEDS.map(
+  (seed) => runAutopilot(registry, { seed, dives: DIVES, primary: 'frost' }).reports,
+);
 
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
@@ -30,14 +35,20 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(endDepthAt(DIVES)).toBeGreaterThan(endDepthAt(DIVES / 2));
   });
 
+  it('a Frost primary progresses too', () => {
+    const end = (dive: number) => avg(frostRuns.map((r) => r[dive - 1].endDepth));
+    expect(end(DIVES)).toBeGreaterThanOrEqual(end(1) + 5);
+  });
+
   it('legendaries arrive without completing the codex early', () => {
     const owned = avg(runs.map((r) => r[DIVES - 1].legendariesOwned));
     expect(owned).toBeGreaterThanOrEqual(1);
     expect(owned).toBeLessThan(registry.getDelveData().legendaries.length);
   });
 
-  it('mana combos happen naturally: several reactions get discovered', () => {
-    expect(avg(runs.map((r) => r[DIVES - 1].reactionsSeen))).toBeGreaterThanOrEqual(2);
+  it('mana combos happen naturally: every run, Fire and Frost, finds a reaction by dive 12', () => {
+    // A two-element hero can find at most one reaction (each needs one specific pair).
+    for (const r of [...runs, ...frostRuns]) expect(r[DIVES - 1].reactionsSeen).toBeGreaterThanOrEqual(1);
   });
 
   it('floors are a snackable length', () => {
