@@ -129,7 +129,7 @@ const LoadoutTab = memo(function LoadoutTab() {
   const stats = useSandboxStats();
   const weapon = sandboxEquipped(registry, s).weapon;
   const choice = s.weapon;
-  // What the engine draws: none unarmed, or when the pick is the weapon's own element.
+  // What the engine discharges: none, or when the pick is the primary.
   const infusion = stats.weapon.infusion;
   const pick = (next: Partial<WeaponChoice>) =>
     s.setWeapon({ baseId: 'sword', mana: 'fire', rarity: 'rare', ...(choice ?? {}), ...next });
@@ -215,12 +215,24 @@ const LoadoutTab = memo(function LoadoutTab() {
         </div>
       </Section>
 
+      <Section title="Your primary">
+        <div className="flex flex-wrap gap-1.5">
+          {MANA_TYPES.map((m) => (
+            <Chip
+              key={m}
+              pressed={s.primary === m}
+              onClick={() => s.setPrimary(m)}
+              testId={`sandbox-primary-${m}`}
+            >
+              {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+            </Chip>
+          ))}
+        </div>
+        <p className="text-[11px] text-stone-500">Your primary: what your blows strike with.</p>
+      </Section>
+
       <Section title="Basic infusion">
-        <fieldset
-          disabled={!choice}
-          className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0"
-          style={{ opacity: choice ? 1 : 0.5 }}
-        >
+        <div className="flex flex-wrap gap-1.5">
           <Chip
             pressed={!infusion}
             onClick={() => s.setBasicInfusion(null)}
@@ -232,18 +244,15 @@ const LoadoutTab = memo(function LoadoutTab() {
             <Chip
               key={m}
               pressed={infusion === m}
-              disabled={m === choice?.mana}
+              disabled={m === s.primary}
               onClick={() => s.setBasicInfusion(m)}
               testId={`basic-infusion-${m}`}
             >
               {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
             </Chip>
           ))}
-        </fieldset>
-        <p className="text-[11px] text-stone-500">
-          Preview: in the Delve, basic attacks will gain a second element through elemental
-          affinity.
-        </p>
+        </div>
+        <p className="text-[11px] text-stone-500">Your combo finisher discharges this element.</p>
       </Section>
 
       <Section title="Legendary powers">

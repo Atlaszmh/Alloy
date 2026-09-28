@@ -59,21 +59,23 @@ describe('TrainingPanel', () => {
     expect(screen.getByTestId('weapon-name')).toHaveTextContent('Staff');
   });
 
-  it('the Basic infusion picker writes the store, disables the weapon element, and is off unarmed', () => {
+  it('picks the primary and the finisher discharge; the primary is off in the infusion row, even unarmed', () => {
     renderPanel('loadout');
+    expect(screen.getByTestId('sandbox-primary-fire')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Your primary: what your blows strike with.')).toBeInTheDocument();
     expect(screen.getByTestId('basic-infusion-none')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('basic-infusion-fire')).toBeDisabled(); // the rare fire sword's
+    expect(screen.getByTestId('basic-infusion-fire')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('sandbox-primary-frost'));
+    expect(useSandboxStore.getState().primary).toBe('frost');
+    expect(screen.getByTestId('basic-infusion-frost')).toBeDisabled();
+    expect(screen.getByTestId('basic-infusion-fire')).toBeEnabled();
     fireEvent.click(screen.getByTestId('basic-infusion-storm'));
     expect(useSandboxStore.getState().basicInfusion).toBe('storm');
     expect(screen.getByTestId('basic-infusion-storm')).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByText(
-        'Preview: in the Delve, basic attacks will gain a second element through elemental affinity.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Your combo finisher discharges this element.')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('weapon-base-none'));
-    expect(screen.getByTestId('basic-infusion-storm')).toBeDisabled();
-    expect(screen.getByTestId('basic-infusion-none')).toBeDisabled();
+    expect(screen.getByTestId('basic-infusion-storm')).toBeEnabled();
+    expect(screen.getByTestId('basic-infusion-storm')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('adds dummies through the arena, and stops at the cap', () => {
