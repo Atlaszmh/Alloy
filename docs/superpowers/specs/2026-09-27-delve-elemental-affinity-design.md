@@ -56,6 +56,7 @@ Give each hero an elemental identity:
 Zod checks that `secondary` is null unless `primary` is set, and that it differs from `primary`.
 
 **Save migration:**
+- **Entry point:** `parseDelveProfile(registry, raw)` (it gains the registry, which picking the primary needs) returns `{ profile, fixed } | null`, where `fixed` lists the build slots the migration changed. The store shows the notice from it. Callers update: `delveStore.loadDelveProfile`, `delve-dive.test.ts`, `delve-profile-abilities.test.ts`.
 - **Chain:** a frozen `DelveProfileV3Schema` is kept, so version 2 saves migrate v2 → v3 → v4.
 - **Primary:** the element with the highest total attunement from equipped gear.
   - Ties go to the weapon's mana, then the first in `MANA_TYPES` order.
@@ -101,9 +102,12 @@ Every op returns `ProfileActionResult` (`{ ok, profile, reason }`, like smithing
 
 `HeroStatsExtra` gains two fields:
 
-- **`pair?: { primary: ManaType | null; secondary: ManaType | null }`** (basic attacks). With a `primary`:
+- **`pair?: { primary: ManaType | null; secondary: ManaType | null }`** (basic attacks). A `secondary` equal to the `primary` counts as unbound. With a `primary`:
   - `weapon.element` is the primary, even when unarmed (you punch with your primary);
   - `weapon.infusion` is the bound secondary, or `null`.
+  - `HeroWeapon` gains two precomputed multipliers, both 1 without a pair primary. `basic.ts` and `estimateCombat` both read them, so they can't drift apart:
+    - `blowPower = 1 + basicPowerPerAttune × att[primary]`;
+    - `finisherPower = 1 + basicPowerPerAttune × att[secondary]` (equal to `blowPower` with no secondary).
   - This replaces the infusion spec's `basicInfusion` extra, which becomes `pair.secondary`.
 - **`filterAttunement?: boolean`** (the two-element limit). When true and `pair.primary` is set, attunement accumulates **per element**, only for the primary and the bound secondary:
   - an item's base attunement counts if its mana is in the pair;
@@ -120,17 +124,17 @@ Every op returns `ProfileActionResult` (`{ ok, profile, reason }`, like smithing
 `compareItem` and `heroPower` gain a `pair` parameter.
 
 **`estimateCombat` values the pair:**
-- ordinary blows use `(1 + basicPowerPerAttune × att[primary]) × (1 + elementPower[primary])`;
-- the finisher's share of the string's power uses the secondary's attunement and element power, when bound;
+- ordinary blows use `weapon.blowPower × (1 + elementPower[primary])`;
+- the finisher's share of the string's power uses `weapon.finisherPower × (1 + elementPower[secondary])`, when bound;
 - so Power, ▲ upgrade marks, salvage candidates and the bot's gear choices value investment.
 
 ### Basic attacks (`basic.ts`)
 
 With `weapon.infusion` set (a bound secondary):
 
-- **Ordinary blows** (every step but the string's last) strike with the primary, at `× (1 + basicPowerPerAttune × att[primary])`, with the usual 30% primary status roll.
+- **Ordinary blows** (every step but the string's last) strike with the primary, at `× weapon.blowPower`, with the usual 30% primary status roll.
 - **The finisher:**
-  - deals its damage as the **secondary** element, at `× (1 + basicPowerPerAttune × att[secondary])`;
+  - deals its damage as the **secondary** element, at `× weapon.finisherPower`;
   - skips the primary's status roll and **always** applies the secondary's basic status (subject to normal immunities);
   - resist and weakness, reactions and element power all use the secondary.
 - **Twin Fang's extra hit** on the finisher uses the secondary element and its power.
@@ -140,7 +144,7 @@ With `weapon.infusion` set (a bound secondary):
 
 ### Abilities and defaults
 
-- **`setAbility`:** refuses elements outside the pair when `primary` is set (`ProfileActionResult` with a reason). `resolveAbility` is unchanged.
+- **`setAbility`:** keeps its current contract (returns the profile, throws on a bad build). It also throws for elements outside the pair when `primary` is set; the picker only ever offers the pair. `resolveAbility` is unchanged.
 - **`defaultAbilities(element)`:** now gives the Ward the same element, where it used to be hard-coded frost. New heroes, the choice screen and the Training Grounds defaults all use it.
 
 ### Loot
@@ -171,9 +175,9 @@ With `weapon.infusion` set (a bound secondary):
 ### Autopilot and pacing
 
 - **New profiles:** `createDelveProfile(registry, seed, opts?: { primary?: ManaType })`. With `primary`, it runs `chooseStartingMana`. The player's new save omits it, so the choice screen shows. The bot and the E2E pass `{ primary: 'fire' }`.
-- **Binding:** between dives, before `visitForge` salvages anything, the bot binds the non-primary element with the most attunement across its equipped and bagged items. That total is each item's base attunement for its mana, plus matching `${el}Attune` lines; ties break in `MANA_TYPES` order. It then sets its Primary build to `[primary, secondary]`, so it keeps finding reactions.
+- **Binding:** between dives, before `visitForge` salvages anything, the bot binds the non-primary element with the most attunement across its equipped and bagged items, and skips the bind while every such total is 0. That total is each item's base attunement for its mana, plus matching `${el}Attune` lines; ties break in `MANA_TYPES` order. It then sets its Primary build to `[primary, secondary]`, so it keeps finding reactions.
 - **Overtake:** the bot calls `resolveOvertake` after each dive closes.
-- **Pacing guard rails** (`tests/delve-pacing.test.ts`) must hold. Add a second, smaller run with a Frost primary (2 seeds), which must still progress (dive 12 at least 5 deeper than dive 1). Tune in this order:
+- **Pacing guard rails** (`tests/delve-pacing.test.ts`) must hold. Add a second, smaller run with a Frost primary (2 seeds, via a new `AutopilotOptions.primary`), which must still progress (dive 12 at least 5 deeper than dive 1). Tune in this order:
   1. `basicPowerPerAttune`;
   2. `dropBias`;
   3. `mana.poolPerAttune`;
@@ -209,9 +213,10 @@ With `weapon.infusion` set (a bound secondary):
   - a basic shot draws the infusion motif only when its `element` differs from `weapon.infusion`, so a finisher's secondary-bodied shot doesn't draw it twice;
   - the finisher's wind-up tint (`anticipation.ts`) uses the secondary's colour.
 - **Training Grounds:**
-  - The sandbox passes a basics-only pair: `pair: { primary: weapon element, secondary: basicInfusion }`, `filterAttunement: false`. So the finisher discharge really works there, and every element still counts toward attunement (it stays unrestricted).
+  - The sandbox store gains a saved `primary: ManaType` (default: the default weapon's element, fire), with its own picker in the Loadout tab ("Your primary: what your blows strike with"). `weapon.mana` stays the item's mana.
+  - The sandbox passes a basics-only pair: `pair: { primary, secondary: basicInfusion }`, `filterAttunement: false`. So the finisher discharge really works there, unarmed included, and every element still counts toward attunement (it stays unrestricted).
   - The Basic infusion picker's label becomes "Your combo finisher discharges this element."
-  - **Load my build** also sets the sandbox's weapon element to your primary and Basic infusion to your secondary. The loaded weapon item is kept for its stats; the pair decides what basics strike with.
+  - **Load my build** also sets the sandbox's `primary` to your primary and Basic infusion to your secondary. The loaded weapon item and its real mana are kept, which the store's weapon check relies on.
 
 ## Testing
 
@@ -251,7 +256,7 @@ Client:
 - the per-blow basic visuals;
 - the Training pair.
 
-Store and page tests that create profiles (`DelveCamp.test.tsx`, `ItemDetailSheet`, `AbilitiesPanel` and store tests) seed a pair, through `resetProfile(seed, primary)`.
+Store and page tests that create profiles (`DelveCamp.test.tsx`, `ItemDetailSheet`, `AbilitiesPanel` and store tests) seed a pair, through `resetProfile(seed, primary)`. The default Ward now takes the primary's element, so the "Frost Ward" assertions change: `delve-dive.test.ts`, `AbilitiesPanel.test.tsx`, and `e2e/delve.spec.ts` (`'Defensive: Frost Ward'`).
 
 E2E:
 
