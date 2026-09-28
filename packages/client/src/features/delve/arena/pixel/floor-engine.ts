@@ -95,10 +95,16 @@ const FLOOR_EVENTS = new Set<ArpgEvent['kind']>([
   'hit',
   'death',
   'dash',
-  // Infused lances and Strikes mark the floor (see arena-effects.ts).
+  // Infused lances and Strikes mark the floor (see arena-effects.ts); plain ones are dropped.
   'beam',
   'slash',
 ]);
+
+/** Whether an event does anything on the floor (a lance or Strike only with an infusion). */
+function onFloor(e: ArpgEvent): boolean {
+  if (e.kind === 'beam' || e.kind === 'slash') return e.infusion !== null;
+  return FLOOR_EVENTS.has(e.kind);
+}
 
 function hashString(s: string): number {
   let h = 2166136261;
@@ -121,7 +127,7 @@ export function snapshotArena(
       drops.push({ x: d.x, y: d.y, rarity: d.item.rarity });
   return {
     dt,
-    events: events.filter((e) => FLOOR_EVENTS.has(e.kind)),
+    events: events.filter(onFloor),
     bodies,
     hero: { x: w.hero.x, y: w.hero.y, element: w.hero.stats.weapon.element },
     projectiles: w.projectiles.map((p) => ({

@@ -100,7 +100,7 @@ describe('FloorEngine', () => {
 });
 
 describe('snapshotArena', () => {
-  it('keeps only floor-relevant events (infused lances and slashes too) and every moving body', () => {
+  it('keeps only floor-relevant events (infused lances and slashes, not plain ones) and every moving body', () => {
     const profile = startDive(registry, createDelveProfile(registry, 99), 1);
     const world = beginFloor(registry, profile);
     const events: ArpgEvent[] = [
@@ -138,6 +138,19 @@ describe('snapshotArena', () => {
         element: 'storm',
         heft: 0.5,
         infusion: 'earth',
+      },
+      // Uninfused lances and slashes do nothing on the floor, so they stay behind.
+      { kind: 'beam', x: 1, y: 1, tx: 4, ty: 1, width: 0.55, element: 'frost', infusion: null },
+      {
+        kind: 'slash',
+        x: 2,
+        y: 2,
+        dir: { x: 0, y: -1 },
+        range: 2.4,
+        arc: 150,
+        element: 'storm',
+        heft: 0.5,
+        infusion: null,
       },
     ];
     const snap = snapshotArena(world, 0.016, events, { left: 0, top: 0, right: 10, bottom: 10 });
