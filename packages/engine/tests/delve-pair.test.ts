@@ -795,15 +795,27 @@ describe('the autopilot and the pair', () => {
     expect(after.pair.secondary).toBeNull();
   });
 
-  it('prefers a partner that reacts with the primary, even owning less of it', () => {
+  it('binds the element it owns most, whichever it is: every pair reacts', () => {
     const p = {
       ...createDelveProfile(registry, 5, { primary: 'fire' }),
-      // earth 2 (no reaction with fire), frost 1 (Melt)
+      // earth 2 (Obsidian), frost 1 (Melt)
       bag: [item('earth', 'helm'), item('earth', 'gloves'), item('frost', 'boots')],
     };
     const after = betweenDives(registry, p);
-    expect(after.pair).toEqual({ primary: 'fire', secondary: 'frost' });
-    expect(after.abilities.primary.elements).toEqual(['fire', 'frost']);
+    expect(after.pair).toEqual({ primary: 'fire', secondary: 'earth' });
+    expect(after.abilities.primary.elements).toEqual(['fire', 'earth']);
+  });
+
+  it('binds a given secondary before the first dive, and its fused Primary finds their reaction', () => {
+    const { profile } = runAutopilot(registry, {
+      seed: 1,
+      dives: 1,
+      primary: 'storm',
+      secondary: 'earth',
+    });
+    expect([profile.pair.primary, profile.pair.secondary].sort()).toEqual(['earth', 'storm']);
+    expect([...profile.abilities.primary.elements].sort()).toEqual(['earth', 'storm']);
+    expect(profile.reactionsSeen).toContain('lightning_rod');
   });
 
   it('lets an overtaking secondary swap in, and rebuilds its Primary to match', () => {
