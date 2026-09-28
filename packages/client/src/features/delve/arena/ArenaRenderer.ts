@@ -13,7 +13,7 @@ import { ManaFx, finisherRing } from './fx/mana-fx';
 import { INFUSION_BUDGET, basicMotif, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
-import { reactionLabel } from './fx/reactions';
+import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
 import {
   drawAim,
   drawAnticipation,
@@ -417,6 +417,13 @@ export class ArenaRenderer {
           this.fx.ring(e.x, e.y, 2.4, MANA_HEX[e.element], false, 0.5);
           this.fx.burst(e.x, e.y, 0xffffff, 16, 5);
           this.addShake(0.15);
+          break;
+        case 'barrierBreak':
+          barrierBreakFx(this.fx, e);
+          this.addShake(0.12);
+          break;
+        case 'reaction':
+          reactionFx(this.fx, e, w);
           break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);

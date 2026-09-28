@@ -33,6 +33,11 @@ describe('arena sounds', () => {
     expect(vibrate).toHaveBeenCalledWith('success');
   });
 
+  it("Obsidian's barrier breaks with a socket's pop", () => {
+    playArenaEvents([{ kind: 'barrierBreak', x: 0, y: 0 }]);
+    expect(playSound).toHaveBeenCalledWith('orbRemove');
+  });
+
   it('a hit Invulnerable blocked makes no hurt sound and no buzz', () => {
     playArenaEvents([
       { kind: 'heroHit', x: 0, y: 0, amount: 9, dodged: false, element: null, blocked: true },

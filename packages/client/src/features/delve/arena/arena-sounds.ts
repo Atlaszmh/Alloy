@@ -19,6 +19,9 @@ export function playArenaEvents(events: readonly ArpgEvent[]): void {
       case 'reaction':
         playSound('combineMerge');
         break;
+      case 'barrierBreak':
+        playSound('orbRemove');
+        break;
       case 'explode':
         if (ev.radius >= 2.4) playSound('forgeSlam');
         break;
