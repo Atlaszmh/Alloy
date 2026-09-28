@@ -1,7 +1,7 @@
 # Delve Infusion Visuals Design
 
 **Date:** 2026-09-27
-**Status:** Built in v0.42.0.
+**Status:** Built in v0.42.0; floor-mark and growth fixes in v0.42.1.
 
 **Engine:** `packages/engine/src/`
 - `types/arpg.ts`, `types/delve.ts`
@@ -69,7 +69,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 | Element | Orb | Path | Ring |
 |---|---|---|---|
 | Storm | 2–3 jagged arcs crackling off the ball, re-rolled about 15 times a second | arcs forking off the path every ~1.2 units | arcs zig-zagging around the rim |
-| Nature | leaf sprigs and a short curling vine trailing behind | tendrils sprouting sideways from the path and curling as `progress` rises, with leaf pixels | roots and vines creeping outward from the rim, with sprouts |
+| Nature | leaf sprigs and a short curling vine trailing behind | tendrils sprouting sideways from just past the path's edge, all in full green, and curling as `progress` rises | roots and vines creeping outward from the rim, with sprouts |
 | Frost | 3 ice shards orbiting, with a rime trail | crystal spikes growing from both edges | ice spikes ringing the rim, with glints |
 | Fire | flames licking up from the ball, with embers | flames flickering up along the path | flame tongues around the rim, with rising embers |
 | Earth | 3–4 pebbles orbiting | rubble chunks kicked up along the path | rocks thrown outward, and a cracked rim |
@@ -116,7 +116,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 
 Where an infused path or blast passes, the floor gets a mark of the infusion element. Marks are cosmetic and never feed back into play. They keep each brush's own persistence: fire scorch and earth rubble linger as those brushes always do, and frost melts.
 
-- **Which events reach the floor:** `floor-engine.ts` adds `'beam'` and `'slash'` to `FLOOR_EVENTS`, so they reach the worker (`dash` and `explode` already do). Basic swings don't mark the floor, because they are too frequent.
+- **Which events reach the floor:** `floor-engine.ts` adds `'beam'` and `'slash'` to `FLOOR_EVENTS`, so infused ones reach the worker (`dash` and `explode` already do); an uninfused lance or slash does nothing there, so it isn't posted. Basic swings don't mark the floor, because they are too frequent.
 - **Stamps per element** (radius in floor cells):
 
   | Element | Stamp |
@@ -128,11 +128,12 @@ Where an infused path or blast passes, the floor gets a mark of the infusion ele
   | Earth | `earthImpact(x, y, 2)` |
   | Shadow | `shadowBlast(x, y, 2)` |
 
-- **Paths:** stamps are spaced evenly along the path, one per 5 cells, and at most 8 per event (spread evenly, never cut off; each stamp is a full brush with its own burst, and 12 per lance kept too many floor particles alive). A 360° slam spaces its stamps all the way round, never twice in one place. A slash is sampled along its arc from `x, y, dir, range, arc`.
-- **Blasts:** 6 stamps evenly around the rim at the blast's radius, applied after the body's own blast brush, so the body keeps its core and the infusion marks the edge.
+- **Paths:** stamps are spaced evenly along the path, one per 5 cells, and at most 8 per event (spread evenly, never cut off; each stamp is a full brush with its own burst, and 12 per lance kept too many floor particles alive). A 360° slam spaces its stamps all the way round, never twice in one place. A slash is sampled along its arc from `x, y, dir, range, arc`. A Lance leaves out the stamp at its start, under the hero's feet (every cast would pile one there); a blink trail keeps its.
+- **Blasts:** stamps evenly around the rim at the blast's radius, spaced like a path's (one per 5 cells of rim: 4 on the smallest blast, at most 8), applied after the body's own blast brush, so the body keeps its core and the infusion marks the edge.
+- **Soft cap:** every brush but nature's spawns particles, so no stamp is applied while the floor holds more than half its `MAX_PARTICLES` (7,000). Infused Volley and Barrage spam otherwise pinned the floor at its cap, where it drops weather, hit sparks, splashes and death bursts.
 - **Growth brush:** `pixel/world.ts` and `pixel/render.ts` gain two per-cell fields, `growth` (what is drawn, 0–1) and `growthTarget` (0–1):
-  - A stamp sets `growthTarget = 1` within its radius.
-  - Each step, `stepFields` moves `growth` toward `growthTarget` by 1/15 per step (about 0.5 s at 1/30 s steps) and decays `growthTarget` linearly to 0 over 120 steps (about 4 s). So a stamped cell grows in, holds while the target is high, and fades as the target falls.
+  - A stamp sets `growthTarget = 1.5` within its radius.
+  - Each step, `stepFields` moves `growth` toward `min(1, growthTarget)` by 1/15 per step (about 0.5 s at 1/30 s steps) and decays `growthTarget` linearly by 1/88 per step. So a stamped cell grows in, holds full grown while the target is above 1 (about 1 s once grown, 1.5 s from the stamp), and fades as the target falls to 0 (about 3 s).
   - It is drawn as vine and leaf pixels in the theme's `grass` and `bush` colours, pushed greener.
   - It never spreads or burns.
 
@@ -167,8 +168,9 @@ Client:
   - the budget thins, then skips.
 - `ManaFx` keeps and expires infused swings, beams and transient entries, and `clear()` empties them.
 - `applyArenaEvent` stamps the right brush for each infusion element on paths (evenly, at most 8) and blast rims. It stamps nothing for `null`.
-- `FLOOR_EVENTS` includes `beam` and `slash`.
-- The growth fields: a stamped cell's `growth` rises over about 15 steps, then falls to 0 within about 120 + 15 steps; an unstamped cell stays 0.
+- `FLOOR_EVENTS` includes `beam` and `slash`, and only infused ones are posted.
+- Past half the particle cap, no stamp but nature's is applied.
+- The growth fields: a stamped cell's `growth` rises over about 15 steps, holds at 1 until about step 45, then falls to 0 within about 135 steps; an unstamped cell stays 0.
 - The Basic infusion picker writes the store, disables the weapon's element, and is disabled when unarmed.
 
 Screenshots: a Training Grounds pass (Fire Bolt + storm, Frost Lance + nature, Strike + earth, Ward + shadow, Maelstrom + fire, an infused basic melee finisher), looked at and tuned.
