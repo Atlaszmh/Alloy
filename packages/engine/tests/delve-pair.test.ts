@@ -1,16 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
-import { startDive } from '../src/delve/dive.js';
+import { beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
   bindSecondary,
   chooseStartingMana,
   fixBuildsToPair,
+  profileStats,
   realign,
   reattuneItem,
   resolveOvertake,
 } from '../src/delve/pair.js';
-import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
-import type { AbilityBuilds } from '../src/types/ability.js';
+import {
+  createDelveProfile,
+  equipBest,
+  parseDelveProfile,
+  profilePower,
+  salvageCandidates,
+  setAbility,
+} from '../src/delve/profile.js';
+import type { AbilityBuild, AbilityBuilds } from '../src/types/ability.js';
 import {
   compareItem,
   computeAttunement,
@@ -447,5 +455,41 @@ describe('the pair ops', () => {
     expect(reattuneItem(registry, startDive(registry, p, 1), 'h', 'fire').reason).toBe(
       'Re-attune between dives',
     );
+  });
+});
+
+describe('real stats read the pair', () => {
+  it('setAbility refuses elements outside the pair (anything goes before the choice)', () => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const plague: AbilityBuild = {
+      form: 'bolt',
+      elements: ['fire', 'nature'],
+      weight: 0,
+      payment: 'mana',
+    };
+    expect(() => setAbility(registry, p, 'primary', plague)).toThrow(/two elements/);
+    const withNature = bindSecondary(p, 'nature').profile;
+    expect(setAbility(registry, withNature, 'primary', plague).abilities.primary.elements).toEqual([
+      'fire',
+      'nature',
+    ]);
+    expect(
+      setAbility(registry, createDelveProfile(registry, 3), 'primary', plague).abilities.primary
+        .elements,
+    ).toEqual(['fire', 'nature']);
+  });
+
+  it('Power, Equip best, salvage, the floor and max life ignore attunement outside the pair', () => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    // No stats, only earth 10 (1 + 9): unfiltered, that's the earth mastery (×1.2 max life).
+    const ring = item('earth', 'ring', [['earthAttune', 9]]);
+    const worn = { ...p, equipped: { ...p.equipped, ring } };
+    expect(profilePower(registry, worn)).toBe(profilePower(registry, p));
+    expect(equipBest(registry, { ...p, bag: [ring] }).equipped).toEqual([]);
+    expect(salvageCandidates(registry, { ...p, bag: [ring] }, 'common')).toEqual([ring.uid]);
+    const floor = beginFloor(registry, startDive(registry, worn, 1));
+    expect(floor.hero.stats.attunement.earth).toBe(0);
+    expect(heroMaxHp(registry, worn)).toBe(profileStats(registry, worn).maxHp);
+    expect(heroMaxHp(registry, worn)).toBeLessThan(computeHeroStats(worn.equipped, registry).maxHp);
   });
 });

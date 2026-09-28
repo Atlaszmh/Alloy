@@ -6,7 +6,7 @@ import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, isBossFloor } from '../arpg/world.js';
-import { computeHeroStats } from './hero-stats.js';
+import { profileStats } from './pair.js';
 import { addLootToBag } from './profile.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
@@ -69,7 +69,7 @@ export function floorSeed(dive: DiveState): number {
 /** Build the arena for the dive's current depth. */
 export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgWorld {
   const dive = requireDive(profile, 'fighting');
-  const stats = computeHeroStats(profile.equipped, registry);
+  const stats = profileStats(registry, profile);
   const mods = dive.door?.mods ?? {};
   return createFloorWorld(registry, {
     depth: dive.depth,
@@ -290,5 +290,5 @@ export function drinkPotionBetweenFloors(registry: DataRegistry, profile: DelveP
 
 /** Life fraction the hero would enter the next floor with. */
 export function heroMaxHp(registry: DataRegistry, profile: DelveProfile): number {
-  return computeHeroStats(profile.equipped, registry).maxHp;
+  return profileStats(registry, profile).maxHp;
 }

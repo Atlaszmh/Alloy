@@ -22,7 +22,7 @@ import {
   DelveProfileV2Schema,
   DelveProfileV3Schema,
 } from './profile-schema.js';
-import { chooseStartingMana, fixBuildsToPair, type BuildFix } from './pair.js';
+import { chooseStartingMana, fixBuildsToPair, inPair, type BuildFix } from './pair.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
@@ -99,7 +99,8 @@ export function createDelveProfile(
 
 /**
  * Set one ability build. Throws on a form from another slot, anything but
- * one or two distinct elements, or an unknown weight or payment.
+ * one or two distinct elements, or (once there is a pair) an element outside it,
+ * or an unknown weight or payment.
  */
 export function setAbility(
   registry: DataRegistry,
@@ -117,6 +118,7 @@ export function setAbility(
   if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
     throw new Error('Pick one or two different elements');
   if (!els.every((e) => e in registry.getArpgData().mana)) throw new Error('Unknown element');
+  if (!els.every((e) => inPair(profile, e))) throw new Error('Pick from your two elements');
   if (!ABILITY_WEIGHTS.includes(build.weight)) throw new Error(`Bad weight ${build.weight}`);
   if (!ABILITY_PAYMENTS.includes(build.payment)) throw new Error(`Bad payment ${build.payment}`);
   return {
@@ -186,7 +188,13 @@ export function referenceDepth(profile: DelveProfile): number {
 }
 
 export function profilePower(registry: DataRegistry, profile: DelveProfile): number {
-  return heroPower(profile.equipped, registry, referenceDepth(profile), profile.abilities);
+  return heroPower(
+    profile.equipped,
+    registry,
+    referenceDepth(profile),
+    profile.abilities,
+    profile.pair,
+  );
 }
 
 export function findItem(
@@ -364,7 +372,7 @@ export function salvageCandidates(
         !item.locked &&
         item.rarity !== 'legendary' &&
         rarityIndex(item.rarity) <= cap &&
-        compareItem(profile.equipped, item, registry, depth).powerPct <= 0,
+        compareItem(profile.equipped, item, registry, depth, undefined, profile.pair).powerPct <= 0,
     )
     .map((i) => i.uid);
 }
@@ -380,10 +388,16 @@ export function equipBest(
   for (let pass = 0; pass < 2; pass++) {
     for (const slot of GEAR_SLOTS) {
       let best: GearItem | null = null;
-      let bestPower = heroPower(current.equipped, registry, depth);
+      let bestPower = heroPower(current.equipped, registry, depth, undefined, current.pair);
       for (const item of current.bag) {
         if (item.slot !== slot) continue;
-        const power = heroPower({ ...current.equipped, [slot]: item }, registry, depth);
+        const power = heroPower(
+          { ...current.equipped, [slot]: item },
+          registry,
+          depth,
+          undefined,
+          current.pair,
+        );
         if (power > bestPower) {
           best = item;
           bestPower = power;
