@@ -170,7 +170,7 @@ export function resolveOvertake(
   };
 }
 
-/** Re-attune an item to the pair's other element for Mana Dust, between dives. */
+/** Re-attune an item to either element of the pair (not its own) for Mana Dust, between dives. */
 export function reattuneItem(
   registry: DataRegistry,
   profile: DelveProfile,

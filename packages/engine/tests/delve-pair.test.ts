@@ -379,7 +379,12 @@ describe('the pair ops', () => {
     expect(res.fixed).toEqual([
       { slot: 'primary', removed: ['storm'], build: res.profile.abilities.primary },
     ]);
-    expect(realign(registry, rich, { primary: 'storm', secondary: 'fire' }).ok).toBe(true);
+    // A swap: charged the same; the builds (all fire) stay in the pair.
+    expect(realign(registry, rich, { primary: 'storm', secondary: 'fire' })).toMatchObject({
+      ok: true,
+      profile: { pair: { primary: 'storm', secondary: 'fire' }, manaDust: 0, scrap: 0 },
+      fixed: [],
+    });
     expect(realign(registry, rich, {}).reason).toBe('Nothing to change');
     expect(realign(registry, rich, { primary: 'storm' }).reason).toBe(
       'Pick two different elements',
@@ -445,6 +450,16 @@ describe('the pair ops', () => {
     ]);
     expect(res.profile.bag).toEqual([res.item]);
     expect(res.profile.manaDust).toBe(0);
+    // Equipped gear re-attunes where it is.
+    const chest = p.equipped.chest!; // the fire cuirass
+    const chestCost = bal.pair.reattuneDust[chest.rarity];
+    const worn = reattuneItem(registry, { ...p, manaDust: chestCost }, chest.uid, 'storm');
+    expect(worn.ok).toBe(true);
+    expect(worn.item!.mana).toBe('storm');
+    expect(worn.profile.equipped.chest).toEqual(worn.item);
+    expect(worn.profile.bag).toEqual([helm]);
+    expect(worn.profile.manaDust).toBe(0);
+    expect(reattuneItem(registry, p, 'nope', 'fire').reason).toBe('Item not found');
     expect(reattuneItem(registry, p, 'h', 'nature').reason).toBe(
       'Re-attune to one of your two elements',
     );
