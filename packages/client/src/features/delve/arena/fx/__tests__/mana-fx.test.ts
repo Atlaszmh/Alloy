@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Graphics } from 'pixi.js';
 import type { ArpgWorld } from '@alloy/engine';
-import { HAND, ManaFx, spawnCount } from '../mana-fx';
+import { HAND, ManaFx, finisherRing, spawnCount } from '../mana-fx';
 import { drawAnticipation, drawInfusions, drawProjectiles } from '../draw-world';
 import { INFUSION_BUDGET, type PathShape } from '../infusion';
 
@@ -281,5 +281,24 @@ describe('the infusion pass: persistent carriers', () => {
       used(world({ hero: { ...guarded, defend: { form: 'blink', until: 3 } } })),
     ).toBeGreaterThan(0);
     expect(used(world({ hero: { ...guarded, defend: { form: 'blink', until: 0.5 } } }))).toBe(0);
+  });
+});
+
+describe('finisherRing', () => {
+  const blow = { x: 2, y: 3, dir: { x: 0, y: -1 }, heft: 1, melee: true, finisher: true };
+
+  it('rings the tip of a melee finisher, or the hero for a full circle', () => {
+    expect(finisherRing(blow, Math.PI / 2, 1.6)).toEqual({
+      kind: 'ring',
+      x: 2,
+      y: 3 - 1.6,
+      r: 1.2,
+    });
+    expect(finisherRing(blow, Math.PI * 2, 1.6)).toEqual({ kind: 'ring', x: 2, y: 3, r: 1.6 });
+  });
+
+  it('draws none for a ranged finisher or a plain blow', () => {
+    expect(finisherRing({ ...blow, melee: false }, Math.PI / 2, 1.6)).toBeNull();
+    expect(finisherRing({ ...blow, finisher: false }, Math.PI / 2, 1.6)).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import {
   type InfusionLayers,
   type InfusionShape,
   type PathShape,
+  type RingShape,
 } from './infusion';
 
 /**
@@ -121,6 +122,23 @@ export function spawnCount(rate: number, dt: number, rand = Math.random): number
   const n = rate * dt * 60;
   const whole = Math.floor(n);
   return whole + (rand() < n - whole ? 1 : 0);
+}
+
+/**
+ * Where an infused basic finisher discharges: a ring at the blade's tip
+ * (`reach` out along `dir`, sized by heft), or round the hero at `reach` for a
+ * full-circle blow. Ranged finishers draw none: the shot's orb and any burst
+ * carry the weapon's infusion. `arc` is in radians.
+ */
+export function finisherRing(
+  e: { x: number; y: number; dir: Vec; heft: number; melee: boolean; finisher: boolean },
+  arc: number,
+  reach: number,
+): RingShape | null {
+  if (!e.melee || !e.finisher) return null;
+  if (arc >= Math.PI * 2 - 1e-3) return { kind: 'ring', x: e.x, y: e.y, r: reach };
+  const r = 0.6 + e.heft * 0.6;
+  return { kind: 'ring', x: e.x + e.dir.x * reach, y: e.y + e.dir.y * reach, r };
 }
 
 export class ManaFx {

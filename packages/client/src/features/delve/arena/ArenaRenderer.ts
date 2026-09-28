@@ -9,7 +9,7 @@ import type {
   Vec,
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
-import { ManaFx } from './fx/mana-fx';
+import { ManaFx, finisherRing } from './fx/mana-fx';
 import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
@@ -18,6 +18,7 @@ import {
   drawAnticipation,
   drawFooting,
   drawGuard,
+  drawInfusions,
   drawLobs,
   drawMonsterMarks,
   drawProjectiles,
@@ -363,15 +364,25 @@ export class ArenaRenderer {
           if (e.melee) {
             const wpn = w.hero.stats.weapon;
             const s = wpn.combo[e.step] ?? wpn.combo[0];
+            const arc = Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180);
+            const range = wpn.range + (s.reach ?? 0) + 0.2;
             this.fx.swing(
               e.x,
               e.y,
               Math.atan2(e.dir.y, e.dir.x),
-              Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180),
-              wpn.range + (s.reach ?? 0) + 0.2,
+              arc,
+              range,
               elemColor(e.element),
-              { heft: e.heft, reverse: e.step % 2 === 1, finisher: e.finisher },
+              {
+                heft: e.heft,
+                reverse: e.step % 2 === 1,
+                finisher: e.finisher,
+                infusion: wpn.infusion,
+              },
             );
+            // An infused finisher discharges.
+            const ring = finisherRing(e, arc, range);
+            if (ring && wpn.infusion) this.fx.infuse('finisher', wpn.infusion, ring);
           } else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
           break;
         }
@@ -392,7 +403,7 @@ export class ArenaRenderer {
           break;
         }
         case 'beam':
-          this.fx.beam(e.x, e.y, e.tx, e.ty, e.width, MANA_HEX[e.element]);
+          this.fx.beam(e.x, e.y, e.tx, e.ty, e.width, MANA_HEX[e.element], e.infusion);
           this.fx.burst(e.tx, e.ty, MANA_HEX[e.element], 6, 3);
           break;
         case 'slash':
@@ -403,7 +414,7 @@ export class ArenaRenderer {
             Math.min(360, e.arc) * (Math.PI / 180),
             e.range,
             MANA_HEX[e.element],
-            { heft: e.heft, finisher: e.arc >= 360 },
+            { heft: e.heft, finisher: e.arc >= 360, infusion: e.infusion },
           );
           if (e.arc >= 360) this.addShake(0.12);
           break;
@@ -424,6 +435,8 @@ export class ArenaRenderer {
           this.fx.ring(e.x, e.y, e.radius, elemColor(e.element), false, 0.45);
           this.fx.burst(e.x, e.y, elemColor(e.element), 10, 5);
           this.addShake(0.04 + e.radius * 0.02);
+          if (e.infusion)
+            this.fx.infuse('blast', e.infusion, { kind: 'ring', x: e.x, y: e.y, r: e.radius });
           break;
         case 'freeze':
           break;
@@ -472,6 +485,16 @@ export class ArenaRenderer {
             0.3,
           );
           this.fx.burst(e.toX, e.toY, this.guardColor(w), 10, 4);
+          if (e.infusion)
+            this.fx.infuse('dash', e.infusion, {
+              kind: 'path',
+              points: [
+                { x: e.fromX, y: e.fromY },
+                { x: e.toX, y: e.toY },
+              ],
+              width: 0.4,
+              progress: 0,
+            });
           break;
         case 'dodge': {
           const reach = getDelveRegistry().getDelveBalance().dodge.distance;
@@ -604,8 +627,13 @@ export class ArenaRenderer {
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
     drawAnticipation(air, this.fx, w, this.time, dt);
+    // The effects, then the infusion pass (fx/infusion.ts), sharing one budget in priority order:
+    // ManaFx's transient carriers first, then the hero's aura, projectiles, lobs and zones.
+    const layers = { air, ground };
     this.budget.left = INFUSION_BUDGET;
-    this.fx.draw({ air, ground }, dt, this.time, this.budget);
+    this.fx.draw(layers, dt, this.time, this.budget);
+    drawInfusions(layers, w, this.time, this.budget);
+    // The aim marker stays on top.
     drawAim(air, w, this.aim, this.time);
     this.groundFx.render(view);
     this.airFx.render(view);
