@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
+  compareItem,
   computeAttunement,
   computeHeroStats,
+  estimateCombat,
+  heroPower,
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
+import type { HeroWeapon, ManaPair } from '../src/types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import { bal, gear, registry } from './fixtures/arena.js';
@@ -120,5 +124,34 @@ describe('stats with a pair', () => {
       computeHeroStats({}, registry, { pair: { primary: 'storm', secondary: 'nature' } }).weapon,
     ).toMatchObject({ baseId: null, element: 'storm', infusion: 'nature' });
     expect(computeHeroStats({}, registry).weapon).toMatchObject({ element: null, infusion: null });
+  });
+});
+
+describe('Power values the pair', () => {
+  const weapon = gear('fire');
+  const solo: ManaPair = { primary: 'fire', secondary: null };
+  const bound: ManaPair = { primary: 'fire', secondary: 'storm' };
+
+  it('estimateCombat reads blowPower for ordinary blows and finisherPower for the finisher', () => {
+    const stats = computeHeroStats({ weapon }, registry, { pair: bound });
+    const dps = (w: Partial<HeroWeapon>) =>
+      estimateCombat({ ...stats, weapon: { ...stats.weapon, ...w } }, registry, 3).dps;
+    const base = dps({});
+    expect(dps({ blowPower: stats.weapon.blowPower * 2 })).toBeGreaterThan(base);
+    expect(dps({ finisherPower: stats.weapon.finisherPower * 2 })).toBeGreaterThan(base);
+  });
+
+  it('rises with primary attunement, and with secondary attunement only once bound', () => {
+    const power = (pair: ManaPair, ring?: GearItem) =>
+      heroPower(ring ? { weapon, ring } : { weapon }, registry, 3, undefined, pair);
+    expect(power(solo, item('fire'))).toBeGreaterThan(power(solo));
+    expect(power(solo, item('storm'))).toBe(power(solo)); // unbound: no attunement, no gain
+    expect(power(bound, item('storm'))).toBeGreaterThan(power(bound));
+    expect(
+      compareItem({ weapon }, item('storm'), registry, 3, undefined, solo).attunementDelta,
+    ).toEqual({});
+    expect(
+      compareItem({ weapon }, item('storm'), registry, 3, undefined, bound).attunementDelta,
+    ).toEqual({ storm: 1 });
   });
 });
