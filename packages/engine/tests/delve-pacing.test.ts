@@ -13,12 +13,22 @@ const registry = createDefaultRegistry();
 const SEEDS = [1, 2, 3, 4];
 const DIVES = 12;
 
-const runs: AutopilotDiveReport[][] = SEEDS.map((seed) => runAutopilot(registry, { seed, dives: DIVES }).reports);
+const fireResults = SEEDS.map((seed) => runAutopilot(registry, { seed, dives: DIVES }));
+const runs: AutopilotDiveReport[][] = fireResults.map((r) => r.reports);
 /** A Frost hero (the starter gear re-attuned to frost) must still get deeper dive over dive. */
 const FROST_SEEDS = [1, 2];
-const frostRuns: AutopilotDiveReport[][] = FROST_SEEDS.map(
-  (seed) => runAutopilot(registry, { seed, dives: DIVES, primary: 'frost' }).reports,
-);
+const frostResults = FROST_SEEDS.map((seed) => runAutopilot(registry, { seed, dives: DIVES, primary: 'frost' }));
+const frostRuns: AutopilotDiveReport[][] = frostResults.map((r) => r.reports);
+
+/**
+ * Every pair forced from the start (one seed each): a fused Primary sets off
+ * its own reaction on every hit after the first, so none may run away or stall.
+ */
+const SWEEP_DIVES = 6;
+const sweep = registry.getArpgData().reactions.map(({ elements: [primary, secondary] }) => ({
+  pair: `${primary}+${secondary}`,
+  depth: runAutopilot(registry, { seed: 1, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
+}));
 
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
@@ -46,9 +56,21 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(owned).toBeLessThan(registry.getDelveData().legendaries.length);
   });
 
-  it('mana combos happen naturally: every run, Fire and Frost, finds a reaction by dive 12', () => {
-    // A two-element hero can find at most one reaction (each needs one specific pair).
-    for (const r of [...runs, ...frostRuns]) expect(r[DIVES - 1].reactionsSeen).toBeGreaterThanOrEqual(1);
+  it("mana combos happen naturally: every run, Fire and Frost, discovers its own pair's reaction by dive 12", () => {
+    for (const { profile } of [...fireResults, ...frostResults]) {
+      const { primary, secondary } = profile.pair;
+      expect(secondary).not.toBeNull();
+      expect(profile.reactionsSeen).toContain(registry.getReactionFor(primary!, secondary!).id);
+    }
+  });
+
+  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6', () => {
+    const depths = sweep.map((s) => s.depth).sort((a, b) => a - b);
+    const median = depths[Math.floor(depths.length / 2)];
+    for (const s of sweep) {
+      expect(s.depth, s.pair).toBeGreaterThanOrEqual(0.6 * median);
+      expect(s.depth, s.pair).toBeLessThanOrEqual(1.6 * median);
+    }
   });
 
   it('floors are a snackable length', () => {
