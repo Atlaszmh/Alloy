@@ -591,7 +591,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.kind === 'boss') world.bossKilled = true;
   if (m.id === world.bossId) world.bossId = livingBossId(world);
 
-  // The Training Grounds drop nothing: no scrap, items, motes or orbs.
+  // The Training Grounds drop nothing from kills: no scrap, items, motes or orbs.
   const scrap = world.sandbox
     ? 0
     : Math.round(

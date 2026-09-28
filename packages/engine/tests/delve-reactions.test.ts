@@ -145,12 +145,20 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
       }),
     ]),
   siphon: (f) => {
+    // Fixed round the foe, 0.4 away: straight up, then ±120° from it.
+    const side = 0.2 * Math.sqrt(3);
+    const at = [
+      [0, -0.4],
+      [side, 0.2],
+      [-side, 0.2],
+    ];
     expect(f.w.drops).toHaveLength(3);
-    for (const d of f.w.drops) {
+    f.w.drops.forEach((d, i) => {
       expect(d).toMatchObject({ kind: 'mote', mana: 'shadow', vacuum: true });
       expect(d.amount).toBeCloseTo((bal.reactions.siphonMana * f.w.hero.manaMax) / 3);
-      expect(Math.hypot(d.x - f.m.x, d.y - f.m.y)).toBeCloseTo(0.4);
-    }
+      expect(d.x).toBeCloseTo(f.m.x + at[i][0]);
+      expect(d.y).toBeCloseTo(f.m.y + at[i][1]);
+    });
   },
   crystallize: (f) => {
     expect(f.dealt / f.plain).toBeCloseTo(bal.reactions.crystallizeMult);
@@ -448,6 +456,19 @@ describe('every pair reacts, both ways', () => {
     expect(reactions(events)).toEqual(['superconduct']);
     expect(isChilled(ctx, m)).toBe(false);
     expect(isFrozen(ctx, m)).toBe(true);
+  });
+
+  it('Blackout blinds the foes whose edge is inside its radius, and no further', () => {
+    const { w, ctx, m, events } = setup([dummy(13, 20), dummy(13, 20), dummy(13, 20)]);
+    const [, near, far] = w.monsters;
+    const reach = bal.reactions.blackoutRadius;
+    near.x = m.x + reach + near.radius - 0.01;
+    far.x = m.x + reach + far.radius + 0.01;
+    mark(ctx, m, 'shadow');
+    hitMonster(ctx, m, 10, 'storm', { source: 'skill' });
+    expect(reactions(events)).toEqual(['blackout']);
+    expect(near.status.blindUntil).toBe(w.t + bal.status.blindDuration);
+    expect(far.status.blindUntil).toBe(0);
   });
 
   it("Catalyst scales the damage reactions and Soulfire's hit", () => {
