@@ -149,6 +149,24 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
       expect(Math.hypot(d.x - f.m.x, d.y - f.m.y)).toBeCloseTo(0.4);
     }
   },
+  crystallize: (f) => {
+    expect(f.dealt / f.plain).toBeCloseTo(bal.reactions.crystallizeMult);
+    expect(f.o.status.chillStacks).toBe(1);
+    expect(isChilled(f.ctx, f.o)).toBe(true);
+    expect(f.events).toContainEqual({
+      kind: 'explode',
+      x: f.m.x,
+      y: f.m.y,
+      radius: bal.reactions.crystallizeRadius,
+      element: 'frost',
+      infusion: null,
+    });
+  },
+  blackout: (f) => {
+    for (const foe of [f.m, f.o])
+      expect(foe.status.blindUntil).toBe(f.w.t + bal.status.blindDuration);
+  },
+  galvanize: (f) => expect(f.w.hero.cooldowns[0]).toBe(5 - bal.reactions.galvanizeSeconds),
 };
 
 describe('the reaction table', () => {
@@ -373,6 +391,11 @@ describe('every pair reacts, both ways', () => {
     if (registry.getReaction(id).cooldown)
       expect(f.w.hero.reactionReadyAt[id]).toBeCloseTo(f.w.t + bal.reactions.reactionCooldown);
     EFFECTS[id]!(f);
+  });
+
+  it('checks all fifteen', () => {
+    const ids = registry.getArpgData().reactions.map((r) => r.id);
+    expect(Object.keys(EFFECTS).sort()).toEqual(ids.sort());
   });
 
   it("each reaction's text names both its elements", () => {
@@ -611,6 +634,19 @@ describe('Seedling and Siphon', () => {
     applyStatus(ctx, d, 'hex', 0);
     hitMonster(ctx, d, 10, 'frost', { source: 'skill' }); // Siphon
     expect(w.drops.map((x) => x.kind)).toEqual(['orb', 'mote', 'mote', 'mote']);
+  });
+});
+
+describe('Galvanize', () => {
+  it('a charge slot gains a unit; a slot cooling down loses a second, never past now', () => {
+    const { w, ctx, m } = setup();
+    const h = w.hero;
+    h.cooldowns = [w.t + 0.5, w.t + 5, w.t + 3]; // the Ultimate pays by charge: that's its lockout
+    h.charge[2] = h.abilities[2].chargeNeed - 0.5;
+    applyStatus(ctx, m, 'shock', 0);
+    hitMonster(ctx, m, 10, 'nature', { source: 'skill' });
+    expect(h.cooldowns).toEqual([w.t, w.t + 5 - bal.reactions.galvanizeSeconds, w.t + 3]);
+    expect(h.charge[2]).toBe(h.abilities[2].chargeNeed);
   });
 });
 

@@ -386,8 +386,29 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
       }
       return amount;
     }
-    default:
-      // The new eight's effects arrive in their own tasks.
+    case 'crystallize': {
+      const hit = amount * r.crystallizeMult * catalyst;
+      ctx.events.push({
+        kind: 'explode',
+        x: m.x,
+        y: m.y,
+        radius: r.crystallizeRadius,
+        element: 'frost',
+        infusion: null,
+      });
+      for (const o of nearby(ctx, m, r.crystallizeRadius)) applyStatus(ctx, o, 'chill', hit);
+      return hit;
+    }
+    case 'blackout':
+      for (const o of [m, ...nearby(ctx, m, r.blackoutRadius)]) applyStatus(ctx, o, 'blind', 0);
+      return amount;
+    case 'galvanize':
+      // Per slot, as Nightstalker does for the Defensive.
+      h.abilities.forEach((ab, i) => {
+        if (ab.build.payment === 'charge') h.charge[i] = Math.min(ab.chargeNeed, h.charge[i] + 1);
+        else if (h.cooldowns[i] > t)
+          h.cooldowns[i] = Math.max(t, h.cooldowns[i] - r.galvanizeSeconds);
+      });
       return amount;
   }
 }
