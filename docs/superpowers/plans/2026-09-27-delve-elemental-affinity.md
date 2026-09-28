@@ -19,7 +19,8 @@
 - Push only at the very end, with `git push -q origin claude/alloy-loot-gear-system-6upsy5`. Never open a PR.
 - **The engine is rebuilt once, in Task 12.** Chunks 1–3 change engine `src` and run only engine checks; don't run `pnpm -F @alloy/engine build` before Task 12 (the user plays on the 5288 dev server, and the client only compiles against the new engine once Task 12 has moved its callers). If you must rebuild later (a tuning fix), restart the dev server after.
 - `tests/delve-pacing.test.ts` is the balance gate: it must pass at the end of Chunk 3 (Task 11) and stay green after.
-- Format only the `.ts`/`.tsx` files you touched: `npx prettier --write <files>` (never a folder); the commit steps show it. Never run Prettier on JSON data files or Markdown; edit JSON by hand, keeping its one-line-per-group layout.
+- **Run every command from the repo root.** The shell's working directory persists between commands, so every command line below runs in a subshell (`(cd packages/engine && npx vitest run …)`), and every commit block starts with `cd /c/Projects/Alloy`.
+- **Prettier:** the commit blocks format only files a task creates, or files that were Prettier-clean when this plan was written. These existing files are not clean at HEAD: edit them by hand in their existing style and never format them: `packages/engine/src/delve/{dive,profile-schema,autopilot}.ts`, `packages/engine/src/loot/{item-generator,drops}.ts`, `packages/engine/src/arpg/abilities/resolve.ts`, `packages/engine/tests/{delve-dive,delve-pacing,delve-loot}.test.ts`, `packages/client/src/features/delve/{BagPanel,LootTray}.tsx`, `packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx`. Before formatting any other existing file, `npx prettier --check <file>` must pass on it before your edit; never commit a whole-file reformat. Never run Prettier on a folder, JSON data files or Markdown; edit JSON by hand, keeping its one-line-per-group layout.
 - `src/delve/pair.ts` and `profile.ts` / `dive.ts` import each other's functions (a function-level cycle, like `arpg/combat.ts` ↔ `arpg/abilities/defend.ts`): keep `pair.ts` to `export function` declarations and never call an import at module top level. Likewise `ManaPanel.tsx` ↔ `AbilitiesPanel.tsx` (components used at render time only).
 - Engine `tsc` covers `src` only; client `tsc` covers `src` including tests, so client test code must type-check.
 - Client store tests live in `src/stores/` (not `__tests__`).
@@ -29,13 +30,13 @@
 
 | What | Command (from repo root) |
 |---|---|
-| One engine test file | `cd packages/engine && npx vitest run tests/<file>.test.ts` |
-| All engine tests | `cd packages/engine && npx vitest run` |
-| Engine typecheck | `cd packages/engine && npx tsc --noEmit -p .` |
+| One engine test file | `(cd packages/engine && npx vitest run tests/<file>.test.ts)` |
+| All engine tests | `(cd packages/engine && npx vitest run)` |
+| Engine typecheck | `(cd packages/engine && npx tsc --noEmit -p .)` |
 | Engine build | `pnpm -F @alloy/engine build` |
-| Client typecheck + tests | `cd packages/client && npx tsc --noEmit -p . && npx vitest run` |
-| One client test file | `cd packages/client && npx vitest run <path>` |
-| E2E | `cd packages/client && npx playwright test -c playwright.scratch.config.ts <specs>` |
+| Client typecheck + tests | `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)` |
+| One client test file | `(cd packages/client && npx vitest run <path>)` |
+| E2E | `(cd packages/client && npx playwright test -c playwright.scratch.config.ts <specs>)` |
 
 **Dev server on 5288** (PowerShell; stops whatever owns the port, starts a detached Vite, waits for a 200 and prints `True`; leave it running when done):
 
@@ -134,6 +135,7 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 If `git status` shows this plan untracked, commit it first so every later commit stays about code:
 
 ```bash
+cd /c/Projects/Alloy
 git add docs/superpowers/plans/2026-09-27-delve-elemental-affinity.md
 git commit -m "docs: Delve elemental affinity plan"
 ```
@@ -167,7 +169,7 @@ describe('balance: delve.pair', () => {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`bal.pair` is `undefined`: Zod strips unknown keys, and there is none yet).
 
 - [ ] **Step 3: Implement**
@@ -225,12 +227,13 @@ Expected: FAIL (`bal.pair` is `undefined`: Zod strips unknown keys, and there is
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts tests/balance-schema.test.ts && npx tsc --noEmit -p .`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts tests/balance-schema.test.ts && npx tsc --noEmit -p .)`
 Expected: PASS, no type errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/data/schemas.ts packages/engine/src/types/delve.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/data/balance.json packages/engine/src/data/schemas.ts packages/engine/src/types/delve.ts packages/engine/src/data/delve.json packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): delve.pair balance, and Prism attunes your two elements"
@@ -381,7 +384,7 @@ and in its imports, `import { computeHeroStats, type HeroStatsExtra } from '../s
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts tests/delve-infusion.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts tests/delve-infusion.test.ts)`
 Expected: FAIL (the filter is ignored: frost/nature counted; `blowPower` undefined; `weapon.infusion` null for the pair).
 
 - [ ] **Step 3: The types**
@@ -536,12 +539,13 @@ In `src/index.ts`, the `./delve/hero-stats.js` export list: after `itemAffinityA
 
 - [ ] **Step 6: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
 Expected: all PASS (no pair anywhere else yet, so every other test is unchanged), no type errors.
 
 - [ ] **Step 7: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/types/delve.ts packages/engine/src/delve/hero-stats.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-infusion.test.ts
 git add packages/engine/src/types/delve.ts packages/engine/src/delve/hero-stats.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-infusion.test.ts
 git commit -m "feat(engine): the pair's basics and the two-element attunement limit in hero stats"
@@ -606,7 +610,7 @@ describe('Power values the pair', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`estimateCombat` ignores `blowPower`/`finisherPower`, so the first test's DPS doesn't move; `heroPower`/`compareItem` ignore the extra `pair` argument, so the unbound storm ring still attunes).
 
 - [ ] **Step 3: Implement**
@@ -632,11 +636,11 @@ with
 
 (Without a pair both multipliers are 1 and `infusion` is null, so this equals the old formula.)
 
-Above `compareItem`, add:
+Above `compareItem`, add (exported: `profileStats` in Task 4 reuses it):
 
 ```ts
-/** The extra that applies a profile's pair: its basics and the two-element limit. */
-function pairExtra(pair?: ManaPair): HeroStatsExtra {
+/** The extra that applies a profile's pair: its basics and the two-element limit (none: no pair). */
+export function pairExtra(pair?: ManaPair): HeroStatsExtra {
   return pair ? { pair, filterAttunement: true } : {};
 }
 ```
@@ -659,12 +663,13 @@ and its two `computeHeroStats(equipped, registry)` / `computeHeroStats(next, reg
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
 Expected: all PASS (the pacing test included: nothing passes a pair yet), no type errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/delve/hero-stats.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/delve/hero-stats.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): Power values blows by the primary and the finisher by the secondary"
@@ -762,15 +767,17 @@ describe('save version 4', () => {
     expect(bare.fixed).toEqual([]);
   });
 
-  it('migrates version 2 through version 3, and a save mid-dive keeps its dive', () => {
+  it("migrates version 2 through version 3: its new primary's default builds, nothing to fix; a dive stays", () => {
     const p = startDive(registry, createDelveProfile(registry, 3), 1);
-    const { abilities: _abilities, ...v2 } = v3Of(p);
+    const ring = { ...item('storm'), rarity: 'rare' as const }; // storm 2 beats the fire sword's 1
+    const { abilities: _abilities, ...v2 } = v3Of({ ...p, equipped: { ...p.equipped, ring } });
     const res = parseDelveProfile(
       registry,
       json({ ...v2, version: 2, skillSlots: [null, null, null] }),
     )!;
-    expect(res.profile).toMatchObject({ version: 4, pair: { primary: 'fire', secondary: null } });
-    expect(res.profile.abilities).toEqual(defaultAbilities('fire'));
+    expect(res.profile).toMatchObject({ version: 4, pair: { primary: 'storm', secondary: null } });
+    expect(res.profile.abilities).toEqual(defaultAbilities('storm'));
+    expect(res.fixed).toEqual([]);
     expect(res.profile.dive).toEqual(p.dive);
   });
 
@@ -800,7 +807,7 @@ describe('save version 4', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`../src/delve/pair.js` doesn't exist, so the file fails to load).
 
 - [ ] **Step 3: The type and the schema**
@@ -828,7 +835,7 @@ const PairSchema = z
 export const DelveProfileSchema = DelveProfileV3Schema.extend({
   version: z.literal(4),
   pair: PairSchema,
-  manaDust: z.number().min(0),
+  manaDust: z.number().int().min(0),
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */
@@ -850,7 +857,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { ABILITY_SLOTS, type AbilityBuild, type AbilitySlot } from '../types/ability.js';
 import type { DelveProfile, HeroStats } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
-import { computeHeroStats, pairElements } from './hero-stats.js';
+import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 
 /**
  * Elemental affinity: the hero's two elements (`profile.pair`). The primary is
@@ -876,10 +883,7 @@ export function profileStats(
   registry: DataRegistry,
   profile: Pick<DelveProfile, 'equipped' | 'pair'>,
 ): HeroStats {
-  return computeHeroStats(profile.equipped, registry, {
-    pair: profile.pair,
-    filterAttunement: true,
-  });
+  return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair));
 }
 
 /**
@@ -922,16 +926,12 @@ export interface ParsedDelveProfile {
   fixed: BuildFix[];
 }
 
-/** Version 2 (spell bar), as version 3: everything kept, default ability builds. */
+/** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
 function fromV2(raw: unknown) {
   const old = DelveProfileV2Schema.safeParse(raw);
   if (!old.success) return null;
   const { skillSlots: _spells, ...rest } = old.data;
-  return {
-    ...rest,
-    version: 3 as const,
-    abilities: defaultAbilities(rest.equipped.weapon?.mana ?? 'fire'),
-  };
+  return rest;
 }
 
 /**
@@ -959,10 +959,17 @@ export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedD
   const v3 = DelveProfileV3Schema.safeParse(raw);
   const old = v3.success ? v3.data : fromV2(raw);
   if (!old) return null;
-  const primary = migratedPrimary(registry, old.equipped as EquippedGear);
+  const equipped = old.equipped as EquippedGear;
+  const primary = migratedPrimary(registry, equipped);
+  // A version 2 save had no builds: it starts from its new primary's defaults (nothing to fix).
+  const abilities =
+    'abilities' in old
+      ? old.abilities
+      : defaultAbilities(primary ?? equipped.weapon?.mana ?? 'fire');
   return fixBuildsToPair({
     ...old,
     version: 4,
+    abilities,
     pair: { primary, secondary: null },
     manaDust: 0,
   } as DelveProfile);
@@ -996,20 +1003,22 @@ export type { BuildFix } from './delve/pair.js';
 - In 'unequip moves the item into the bag…', `'Frost Ward',` becomes `'Fire Ward',` (the default Ward takes the weapon's element now).
 
 `tests/delve-profile-abilities.test.ts`:
+- The title `describe('profile abilities (save v3)', …)` becomes `describe('profile abilities (save v4)', …)`.
 - `expect(p.version).toBe(3);` becomes `expect(p.version).toBe(4);`.
 - `parseDelveProfile(JSON.parse(JSON.stringify(p)))?.abilities.primary.elements` becomes `parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))?.profile.abilities.primary.elements`.
-- In 'migrates a version 2 save…', `const p = parseDelveProfile(JSON.parse(JSON.stringify(v2)));` becomes `const p = parseDelveProfile(registry, JSON.parse(JSON.stringify(v2)))?.profile;`, and `expect(p!.version).toBe(3);` becomes `expect(p!.version).toBe(4);` (the frost weapon ties the earth cuirass and wins, so the primary is frost and the builds stay frost).
+- In 'migrates a version 2 save…', `const p = parseDelveProfile(JSON.parse(JSON.stringify(v2)));` becomes `const p = parseDelveProfile(registry, JSON.parse(JSON.stringify(v2)))?.profile;`, `expect(p).not.toBeNull();` becomes `expect(p).toBeDefined();` (`?.profile` gives `undefined`, not `null`, for a bad save), and `expect(p!.version).toBe(3);` becomes `expect(p!.version).toBe(4);` (the frost weapon ties the earth cuirass and wins, so the primary is frost and the builds are frost's defaults).
 - In 'remembers the new reactions', `parseDelveProfile(JSON.parse(JSON.stringify(p)))?.reactionsSeen` becomes `parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))?.profile.reactionsSeen`.
 
 - [ ] **Step 8: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all PASS, no type errors. (The pacing test may drift a little: the bot's Ward is now fire, not frost. If it fails here, carry on: Task 11 is the gate and tunes it.)
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS and no type errors, except possibly `tests/delve-pacing.test.ts`. The bot's default kit loses its Frost Ward (the Ward is fire now), so the assertion likeliest to go red is 'mana combos happen naturally' (`reactionsSeen ≥ 2`). No balance knob fixes that: Task 10's two-element Primary does. If pacing is red here, leave it until Task 11 and name the failing assertion in the commit body (e.g. `pacing: reactionsSeen < 2 until the autopilot binds (Task 10)`); the same holds for Tasks 5–9.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-npx prettier --write packages/engine/src/types/delve.ts packages/engine/src/delve/profile-schema.ts packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/arpg/abilities/resolve.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-dive.test.ts packages/engine/tests/delve-profile-abilities.test.ts
+cd /c/Projects/Alloy
+npx prettier --write packages/engine/src/types/delve.ts packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-profile-abilities.test.ts
 git add packages/engine/src/types/delve.ts packages/engine/src/delve/profile-schema.ts packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/arpg/abilities/resolve.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-dive.test.ts packages/engine/tests/delve-profile-abilities.test.ts
 git commit -m "feat(engine): save version 4 with the hero's pair, migrated from versions 2 and 3"
 ```
@@ -1041,7 +1050,7 @@ import {
 } from '../src/delve/pair.js';
 ```
 
-add `import { GEAR_SLOTS } from '../src/types/gear.js';`, and append:
+merge `GEAR_SLOTS` into the gear import (`import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../src/types/gear.js';` becomes `import { GEAR_SLOTS, type GearItem, type GearSlot, type HeroStatKey, type Rarity } from '../src/types/gear.js';`), and append:
 
 ```ts
 describe('the pair ops', () => {
@@ -1160,6 +1169,14 @@ describe('the pair ops', () => {
     expect(three.profile.pair).toEqual({ primary: 'storm', secondary: 'fire' });
     expect(resolveOvertake(registry, { ...p, equipped: {} }).swapped).toBe(false); // both 0
     expect(resolveOvertake(registry, startDive(registry, wear(3), 1)).swapped).toBe(false);
+    const edge: DelveProfile = {
+      ...p,
+      equipped: {
+        weapon: item('fire', 'weapon', [['fireAttune', 4]]), // fire 5
+        ring: item('storm', 'ring', [['stormAttune', 5]]), // storm 6: equal to 1.2 × 5, not above
+      },
+    };
+    expect(resolveOvertake(registry, edge).swapped).toBe(false);
   });
 
   it('reattuneItem: to the pair only, for Mana Dust, converting the old lines', () => {
@@ -1198,7 +1215,7 @@ describe('the pair ops', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`chooseStartingMana` and the other ops are not exported from `pair.ts`).
 
 - [ ] **Step 3: `profile.ts`**
@@ -1225,7 +1242,23 @@ Expected: FAIL (`chooseStartingMana` and the other ops are not exported from `pa
   ): DelveProfile {
   ```
 
-  and its `return profile;` becomes `return opts.primary ? chooseStartingMana(registry, profile, opts.primary).profile : profile;`.
+  and the function's last lines (after the profile literal)
+
+  ```ts
+      dive: null,
+    };
+    return profile;
+  }
+  ```
+
+  become
+
+  ```ts
+      dive: null,
+    };
+    return opts.primary ? chooseStartingMana(registry, profile, opts.primary).profile : profile;
+  }
+  ```
 - The `./pair.js` import becomes `import { chooseStartingMana, fixBuildsToPair, type BuildFix } from './pair.js';`.
 
 - [ ] **Step 4: `pair.ts`, whole**
@@ -1240,7 +1273,7 @@ import type { DelveProfile, HeroStats } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
-import { computeHeroStats, pairElements } from './hero-stats.js';
+import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
 import { findItem, replaceItem, type ProfileActionResult } from './profile.js';
 
 /**
@@ -1271,10 +1304,7 @@ export function profileStats(
   registry: DataRegistry,
   profile: Pick<DelveProfile, 'equipped' | 'pair'>,
 ): HeroStats {
-  return computeHeroStats(profile.equipped, registry, {
-    pair: profile.pair,
-    filterAttunement: true,
-  });
+  return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair));
 }
 
 /**
@@ -1451,12 +1481,13 @@ export {
 
 - [ ] **Step 6: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts tests/delve-dive.test.ts tests/delve-profile-abilities.test.ts && npx tsc --noEmit -p .`
-Expected: PASS, no type errors.
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS but possibly the pacing test (see Task 4 Step 8), no type errors.
 
 - [ ] **Step 7: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): choose, bind, realign, overtake and re-attune the pair"
@@ -1473,7 +1504,7 @@ git commit -m "feat(engine): choose, bind, realign, overtake and re-attune the p
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/delve-pair.test.ts`: the dive import becomes `import { beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';`; the profile import becomes `import { createDelveProfile, equipBest, parseDelveProfile, profilePower, setAbility } from '../src/delve/profile.js';`; add `profileStats` to the pair import; add `AbilityBuild` to the `../src/types/ability.js` type import. Append:
+In `tests/delve-pair.test.ts`: the dive import becomes `import { beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';`; the profile import becomes `import { createDelveProfile, equipBest, parseDelveProfile, profilePower, salvageCandidates, setAbility } from '../src/delve/profile.js';`; add `profileStats` to the pair import; add `AbilityBuild` to the `../src/types/ability.js` type import. Append:
 
 ```ts
 describe('real stats read the pair', () => {
@@ -1497,25 +1528,26 @@ describe('real stats read the pair', () => {
     ).toEqual(['fire', 'nature']);
   });
 
-  it('Power, Equip best and the floor ignore attunement outside the pair', () => {
+  it('Power, Equip best, salvage, the floor and max life ignore attunement outside the pair', () => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
-    const ring = item('frost'); // no stats: only its frost attunement
+    // No stats, only earth 10 (1 + 9): unfiltered, that's the earth mastery (×1.2 max life).
+    const ring = item('earth', 'ring', [['earthAttune', 9]]);
     const worn = { ...p, equipped: { ...p.equipped, ring } };
-    expect(profileStats(registry, worn).attunement.frost).toBe(0);
     expect(profilePower(registry, worn)).toBe(profilePower(registry, p));
     expect(equipBest(registry, { ...p, bag: [ring] }).equipped).toEqual([]);
+    expect(salvageCandidates(registry, { ...p, bag: [ring] }, 'common')).toEqual([ring.uid]);
     const floor = beginFloor(registry, startDive(registry, worn, 1));
-    expect(floor.hero.stats.attunement.frost).toBe(0);
-    expect(floor.hero.stats.weapon.element).toBe('fire');
+    expect(floor.hero.stats.attunement.earth).toBe(0);
     expect(heroMaxHp(registry, worn)).toBe(profileStats(registry, worn).maxHp);
+    expect(heroMaxHp(registry, worn)).toBeLessThan(computeHeroStats(worn.equipped, registry).maxHp);
   });
 });
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
-Expected: FAIL (`setAbility` accepts nature; the frost ring still grows the pool, so Power differs, Equip best takes it and the floor attunes frost).
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
+Expected: FAIL (`setAbility` accepts nature; unfiltered, the earth ring (earth 10, the earth mastery) is taken by Equip best, left off the salvage list, attuned on the floor and counted in `heroMaxHp`; Power likely differs too).
 
 - [ ] **Step 3: `profile.ts`**
 
@@ -1539,13 +1571,14 @@ Expected: FAIL (`setAbility` accepts nature; the frost ring still grows the pool
 
 - [ ] **Step 5: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all PASS but possibly the pacing test (the autopilot's profiles have no pair until Task 10, so it should still hold; if it doesn't, Task 11 is the gate), no type errors.
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS but possibly the pacing test (see Task 4 Step 8), no type errors.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-npx prettier --write packages/engine/src/delve/profile.ts packages/engine/src/delve/dive.ts packages/engine/tests/delve-pair.test.ts
+cd /c/Projects/Alloy
+npx prettier --write packages/engine/src/delve/profile.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/delve/profile.ts packages/engine/src/delve/dive.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): Power, Equip best, the floor and ability builds keep to the pair"
 ```
@@ -1563,7 +1596,7 @@ git commit -m "feat(engine): Power, Equip best, the floor and ability builds kee
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/delve-pair.test.ts`: add `import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';`, add `EquippedGear` to the `../src/types/gear.js` type import, and the fixtures import becomes `import { STEP, arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';`. Below the `item` helper add:
+In `tests/delve-pair.test.ts`: add `import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';`, add `type EquippedGear` to the `../src/types/gear.js` import, and the fixtures import becomes `import { STEP, arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';`. Below the `item` helper add:
 
 ```ts
 type Of<K extends ArpgEvent['kind']> = Extract<ArpgEvent, { kind: K }>;
@@ -1667,7 +1700,7 @@ describe('basic attacks with a pair', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (the finisher still strikes with fire; the burst carries `infusion: 'storm'`; attunement doesn't scale blows).
 
 - [ ] **Step 3: Implement**
@@ -1718,12 +1751,13 @@ In `src/index.ts`, `export { basicStep } from './arpg/basic.js';` becomes `expor
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all PASS (every other basics test has no pair, so it is unchanged; the pacing test as in Task 6), no type errors.
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS (every other basics test has no pair, so it is unchanged; the pacing test as in Task 4 Step 8), no type errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/arpg/basic.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/arpg/basic.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): basic blows strike with the primary; the finisher discharges the secondary"
@@ -1738,7 +1772,7 @@ git commit -m "feat(engine): basic blows strike with the primary; the finisher d
 - Modify: `packages/engine/src/loot/item-generator.ts` (`ItemGenOptions`, `rollMana`, `generateItem`)
 - Modify: `packages/engine/src/loot/drops.ts` (`DropContext`, `rollEncounterDrops`)
 - Modify: `packages/engine/src/arpg/combat.ts` (`dropLoot`), `packages/engine/src/arpg/sandbox.ts` (`createSandboxWorld`), `packages/engine/src/delve/dive.ts` (`beginFloor`)
-- Modify: `packages/engine/tests/fixtures/arena.ts`, `packages/engine/tests/arpg-sim.test.ts` (their `loot` literals)
+- Modify: `packages/engine/tests/fixtures/arena.ts`, `packages/engine/tests/arpg-sim.test.ts`, `packages/engine/tests/delve-loot.test.ts` (their loot and drop-context literals)
 - Test: `packages/engine/tests/delve-pair.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1817,8 +1851,8 @@ describe('drops lean toward the pair', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
-Expected: FAIL (the golden check already passes; the rate is the plain biome rate, about 0.37 / 0.63; the floor has no `loot.pair`).
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
+Expected: FAIL (the golden check already passes; the rates are the plain biome rates, about 0.18 in the frost biome and 0.63 in the fire one; the floor has no `loot.pair`).
 
 - [ ] **Step 3: Implement**
 
@@ -1878,18 +1912,21 @@ Expected: FAIL (the golden check already passes; the rate is the plain biome rat
 
 `src/delve/dive.ts`: add `import { pairElements } from './hero-stats.js';`, and in `beginFloor`'s `loot`, after `forceLegendary: !profile.firstBossLegendaryGiven,` add `pair: pairElements(profile.pair),`.
 
-`tests/fixtures/arena.ts` and `tests/arpg-sim.test.ts`: in each `loot: { … }` literal, after `forceLegendary: false,` add `pair: [],`.
+`tests/fixtures/arena.ts` and `tests/arpg-sim.test.ts`'s `world()`: in each `loot: { … }` literal, after `forceLegendary: false,` add `pair: [],`. Two more literals (Vitest doesn't type-check tests, so they'd run without it, but keep the fixtures honest):
+- `tests/arpg-sim.test.ts`, 're-entering a floor…': `const loot = { pity: 0, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false };` becomes `const loot = { pity: 0, magicFind: 0, legendaryBoost: 1, dropMult: 1, forceLegendary: false, pair: [] };`.
+- `tests/delve-loot.test.ts`, `describe('rollEncounterDrops')`'s `base`: after `nextUid: 1,` add `pair: [],` (by hand: this file isn't Prettier-clean).
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all PASS (the golden streams hold), no type errors.
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS (the golden streams hold; the pacing test as in Task 4 Step 8), no type errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/loot/item-generator.ts packages/engine/src/loot/drops.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/delve/dive.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-pair.test.ts
-git add packages/engine/src/types/arpg.ts packages/engine/src/loot/item-generator.ts packages/engine/src/loot/drops.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/delve/dive.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-pair.test.ts
+cd /c/Projects/Alloy
+npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/sandbox.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-pair.test.ts
+git add packages/engine/src/types/arpg.ts packages/engine/src/loot/item-generator.ts packages/engine/src/loot/drops.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/delve/dive.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-loot.test.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): drops lean toward the hero's pair"
 ```
 
@@ -1952,7 +1989,7 @@ describe('Mana Dust from salvage', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`salvageDust` is not exported; `res.dust` is undefined).
 
 - [ ] **Step 3: Implement**
@@ -1980,13 +2017,14 @@ export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPa
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all PASS, no type errors.
+Run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all PASS (the pacing test as in Task 4 Step 8), no type errors.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-npx prettier --write packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/delve/dive.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
+cd /c/Projects/Alloy
+npx prettier --write packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/delve/pair.ts packages/engine/src/delve/profile.ts packages/engine/src/delve/dive.ts packages/engine/src/index.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): salvaging gear outside the pair gives Mana Dust"
 ```
@@ -2048,7 +2086,7 @@ describe('the autopilot and the pair', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts)`
 Expected: FAIL (`betweenDives` is not exported; `runAutopilot` ignores `primary`).
 
 - [ ] **Step 3: Implement**
@@ -2088,6 +2126,7 @@ In `src/delve/autopilot.ts`:
       for (const m of MANA_TYPES) if (m !== primary && owned[m] > (best ? owned[best] : 0)) best = m;
       if (!best) return p;
       p = bindSecondary(p, best).profile;
+      if (!p.pair.secondary) return p;
     }
     const elements = [p.pair.primary!, p.pair.secondary!];
     return setAbility(registry, p, 'primary', { ...p.abilities.primary, elements });
@@ -2109,13 +2148,14 @@ In `src/delve/autopilot.ts`:
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pair.test.ts && npx tsc --noEmit -p .`
+Run: `(cd packages/engine && npx vitest run tests/delve-pair.test.ts && npx tsc --noEmit -p .)`
 Expected: PASS, no type errors. (Don't judge the pacing test yet: that's Task 11.)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-npx prettier --write packages/engine/src/delve/autopilot.ts packages/engine/tests/delve-pair.test.ts
+cd /c/Projects/Alloy
+npx prettier --write packages/engine/tests/delve-pair.test.ts
 git add packages/engine/src/delve/autopilot.ts packages/engine/tests/delve-pair.test.ts
 git commit -m "feat(engine): the autopilot binds a second element, builds from both and overtakes"
 ```
@@ -2152,7 +2192,7 @@ and inside the `describe`, after 'keeps progressing dive over dive', add:
 
 - [ ] **Step 2: Run the gate**
 
-Run: `cd packages/engine && npx vitest run tests/delve-pacing.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/delve-pacing.test.ts)`
 (It takes a few seconds: the runs happen at collect time.)
 Expected: PASS. If it does, skip to Step 5.
 
@@ -2192,33 +2232,34 @@ it('prints the curve', () => {
 });
 ```
 
-Run: `cd packages/engine && npx vitest run tests/scratch-pacing.test.ts`
+Run: `(cd packages/engine && npx vitest run tests/scratch-pacing.test.ts)`
 It prints each run's end depths per dive. Read which guard rail fails and why (the gate's rails: dive 1 ends between depths 4 and 12 on average, each run reaches depth 3; dive 12 is more than 5 deeper than dive 1 and deeper than dive 6; at least 1 legendary and fewer than all 12; at least 2 reactions; 8–60 s per floor; Frost: dive 12 at least 5 deeper than dive 1).
 
 - [ ] **Step 4: Tune, in this order, one knob at a time**
 
-Uncomment and change one knob in the scratch file, rerun, and stop at the first value that turns the gate green with some margin:
-1. `pair.basicPowerPerAttune` (0.03): raise it if the curve stalls (investment should pay); lower it if dive 1 runs too deep.
-2. `pair.dropBias` (0.6): raise it if the bot starves for in-pair gear (few reactions, a flat curve); lower it if early dives run away.
-3. `mana.poolPerAttune` (3): raise it if abilities starve now that off-pair gear no longer grows the pool.
-4. Monster numbers (`monster.baseHp`, `growth.monsterHp`), only as a last resort.
+Uncomment and change one knob in the scratch file, rerun, and stop at the first value that turns every rail green with some margin. Walk each knob in these steps before moving to the next:
+1. `pair.basicPowerPerAttune`: 0.03 → 0.04 → 0.05 if the curve stalls (investment should pay); 0.03 → 0.02 if dive 1 runs too deep.
+2. `pair.dropBias`: 0.6 → 0.7 → 0.8 if the bot starves for in-pair gear (a flat curve); 0.6 → 0.5 if early dives run away.
+3. `mana.poolPerAttune`: 3 → 4 → 5 if abilities starve now that off-pair gear no longer grows the pool.
 
-Copy the winning value into `src/data/balance.json` (by hand, keeping the layout), then run `cd packages/engine && npx vitest run` (all green: the pacing gate included). If a `pair` value changed, update Task 1's expected numbers in `tests/delve-pair.test.ts` and the spec's Balance table to match. Delete `tests/scratch-pacing.test.ts`.
+A red `reactionsSeen ≥ 2` is not a knob problem: check that Task 10's bot binds and builds its Primary from both elements. **Stop rule:** if none of the three knobs turns the gate green, stop and report the scratch output to the user before touching monster numbers (`monster.baseHp`, `growth.monsterHp`, the spec's last resort).
 
-- [ ] **Step 5: Commit**
+Copy the winning value into `src/data/balance.json` (by hand, keeping the layout). If a `pair` value changed, update Task 1's expected numbers in `tests/delve-pair.test.ts` and the spec's Balance table to match.
+
+- [ ] **Step 5: Delete the scratch file, then run the whole engine**
+
+Delete `tests/scratch-pacing.test.ts` first (it matches the test glob). Then run: `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)`
+Expected: all green, the pacing gate included. `git status` shows no scratch file.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-npx prettier --write packages/engine/tests/delve-pacing.test.ts
+cd /c/Projects/Alloy
 git add packages/engine/tests/delve-pacing.test.ts
 git commit -m "test(engine): a Frost primary progresses in the pacing run"
 ```
 
-(If you tuned, also stage `packages/engine/src/data/balance.json`, `packages/engine/tests/delve-pair.test.ts` and the spec, and say what changed in the commit body, e.g. `fix(engine): tune basicPowerPerAttune to 0.04 for the pair's pacing`.)
-
-- [ ] **Step 6: The whole engine**
-
-Run: `cd packages/engine && npx vitest run && npx tsc --noEmit -p .`
-Expected: all green. `git status` shows no scratch file.
+(If you tuned, also stage `packages/engine/src/data/balance.json`, `packages/engine/tests/delve-pair.test.ts` and the spec, and say what changed in the commit body, e.g. `fix(engine): tune basicPowerPerAttune to 0.04 for the pair's pacing`. If earlier commits named a red pacing assertion, say it is green again.)
 
 ---
 
@@ -2233,9 +2274,11 @@ Expected: all green. `git status` shows no scratch file.
 - Modify: `packages/client/src/features/delve/BagPanel.tsx`, `packages/client/src/features/delve/LootTray.tsx`, `packages/client/src/features/delve/arena/PickupFeed.tsx`, `packages/client/src/features/delve/ItemDetailSheet.tsx` (`compareItem` with the pair)
 - Test: `packages/client/src/stores/delveStore.test.ts`, `packages/client/src/stores/sandboxStore.test.ts`, `packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx`, `packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx`, `packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx`, `packages/client/src/pages/__tests__/DelveCamp.test.tsx`
 
+> Known transitional states (don't chase them): from this task until Task 15 the Anvil's element picker still offers every element, and picking one outside the pair makes `setAbility` throw; from Task 14 until Task 19 the E2E suites' saves have no primary, so they open on the choice screen (E2E runs only in Task 19).
+
 - [ ] **Step 1: Rebuild the engine and see what breaks**
 
-Run: `pnpm -F @alloy/engine build && cd packages/client && npx tsc --noEmit -p .`
+Run: `pnpm -F @alloy/engine build && (cd packages/client && npx tsc --noEmit -p .)`
 Expected: the build succeeds; tsc FAILS in `src/stores/delveStore.ts` (`parseDelveProfile` now takes the registry and returns `{ profile, fixed }`) and `src/stores/sandboxStore.ts` (`basicInfusion` is no longer a `HeroStatsExtra`).
 
 - [ ] **Step 2: Update the tests**
@@ -2307,6 +2350,7 @@ Expected: the build succeeds; tsc FAILS in `src/stores/delveStore.ts` (`parseDel
       primary: 'fire',
       basicInfusion: null,
     });
+    expect(parseSandbox({ primary: 'storm', basicInfusion: 'storm' }).basicInfusion).toBeNull();
   });
 
   it('the weapon keeps its own mana for attunement and leaves the infusion alone; unarmed punches with the primary', () => {
@@ -2358,6 +2402,8 @@ Expected: the build succeeds; tsc FAILS in `src/stores/delveStore.ts` (`parseDel
     render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
     expect(screen.getByTestId('item-mana')).toHaveTextContent('Fire +1');
     expect(screen.getByTestId('attune-delta')).toHaveTextContent('+1 Fire');
+    // The seed-4 helm also rolls a shadowAttune line: off the pair, so it attunes nothing.
+    expect(screen.getByTestId('attune-delta')).not.toHaveTextContent('Shadow');
     expect(screen.getByTestId('attune-note')).toHaveTextContent('powers abilities');
   });
 ```
@@ -2366,8 +2412,8 @@ Expected: the build succeeds; tsc FAILS in `src/stores/delveStore.ts` (`parseDel
 
 - [ ] **Step 3: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/stores src/features/delve/__tests__/AbilitiesPanel.test.tsx src/features/delve/__tests__/ItemDetailSheet.test.tsx src/pages/__tests__/DelveCamp.test.tsx`
-Expected: FAIL (`loadDelveProfile` still calls the old signature; `resetProfile` ignores the primary; `setPrimary` is not a function; the Anvil still counts every element).
+Run: `(cd packages/client && npx vitest run src/stores src/features/delve/__tests__/AbilitiesPanel.test.tsx src/features/delve/__tests__/ItemDetailSheet.test.tsx src/pages/__tests__/DelveCamp.test.tsx)`
+Expected: FAIL (`loadDelveProfile` still calls the old signature; `resetProfile` still ignores the primary, so the starter cuirass stays earth and AbilitiesPanel's `attune-fire` reads 1, and the item sheet has no pair, so its compare shows the helm's `+1 Shadow`; `setPrimary` is not a function).
 
 - [ ] **Step 4: `delveStore.ts`**
 
@@ -2418,6 +2464,15 @@ Expected: FAIL (`loadDelveProfile` still calls the old signature; `resetProfile`
 
 - `SANDBOX_DEFAULTS`: before `basicInfusion: null,` add `primary: 'fire',` (the default weapon's element).
 - `loadoutSchema`: before `basicInfusion: ManaSchema.nullable().catch(null),` add `primary: ManaSchema.catch(D.primary),`.
+- `parseSandbox`: `const s = parsed.data;` becomes
+
+  ```ts
+    // A Basic infusion is never the primary.
+    const s =
+      parsed.data.basicInfusion === parsed.data.primary
+        ? { ...parsed.data, basicInfusion: null }
+        : parsed.data;
+  ```
 - `interface SandboxStore`: replace the `setBasicInfusion` doc and add `setPrimary` above it:
 
   ```ts
@@ -2497,7 +2552,7 @@ Expected: FAIL (`loadDelveProfile` still calls the old signature; `resetProfile`
 
 - [ ] **Step 7: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
 Expected: no type errors; all client tests PASS.
 
 - [ ] **Step 8: Restart the dev server**
@@ -2507,7 +2562,8 @@ Run the dev-server block (header). Expected: `True`.
 - [ ] **Step 9: Commit**
 
 ```bash
-npx prettier --write packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/stores/sandboxStore.ts packages/client/src/stores/sandboxStore.test.ts packages/client/src/features/delve/arena/useArena.ts packages/client/src/features/delve/PaperDoll.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/BagPanel.tsx packages/client/src/features/delve/LootTray.tsx packages/client/src/features/delve/arena/PickupFeed.tsx packages/client/src/features/delve/ItemDetailSheet.tsx packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
+cd /c/Projects/Alloy
+npx prettier --write packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/stores/sandboxStore.ts packages/client/src/stores/sandboxStore.test.ts packages/client/src/features/delve/arena/useArena.ts packages/client/src/features/delve/PaperDoll.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/arena/PickupFeed.tsx packages/client/src/features/delve/ItemDetailSheet.tsx packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
 git add packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/stores/sandboxStore.ts packages/client/src/stores/sandboxStore.test.ts packages/client/src/features/delve/arena/useArena.ts packages/client/src/features/delve/PaperDoll.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/BagPanel.tsx packages/client/src/features/delve/LootTray.tsx packages/client/src/features/delve/arena/PickupFeed.tsx packages/client/src/features/delve/ItemDetailSheet.tsx packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
 git commit -m "feat(client): real stats, comparisons and the Training Grounds read the hero's pair"
 ```
@@ -2520,7 +2576,7 @@ git commit -m "feat(client): real stats, comparisons and the Training Grounds re
 - Modify: `packages/client/src/stores/delveStore.ts`
 - Create: `packages/client/src/features/delve/useDelveNotices.ts`
 - Modify: `packages/client/src/pages/DelveCamp.tsx`, `packages/client/src/pages/DelveRun.tsx`
-- Test: `packages/client/src/stores/delveStore.test.ts`, `packages/client/src/pages/__tests__/DelveCamp.test.tsx`
+- Test: `packages/client/src/stores/delveStore.test.ts`, `packages/client/src/pages/__tests__/DelveCamp.test.tsx`, `packages/client/src/features/delve/__tests__/useDelveNotices.test.ts` (new)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2634,10 +2690,33 @@ and append inside the `describe`:
   });
 ```
 
+Create `src/features/delve/__tests__/useDelveNotices.test.ts`:
+
+```ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useDelveStore } from '@/stores/delveStore';
+import { useDelveNotices } from '../useDelveNotices';
+
+describe('useDelveNotices', () => {
+  beforeEach(() => useDelveStore.setState({ notices: ['Storm now outweighs Fire'] }));
+
+  it('takes the notices when enabled', () => {
+    renderHook(() => useDelveNotices());
+    expect(useDelveStore.getState().notices).toEqual([]);
+  });
+
+  it('leaves them in the store while disabled (a page with no toasts to show them)', () => {
+    renderHook(() => useDelveNotices(false));
+    expect(useDelveStore.getState().notices).toEqual(['Storm now outweighs Fire']);
+  });
+});
+```
+
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/stores/delveStore.test.ts src/pages/__tests__/DelveCamp.test.tsx`
-Expected: FAIL (`chooseMana`, `fixNotice` and friends don't exist; no toast).
+Run: `(cd packages/client && npx vitest run src/stores/delveStore.test.ts src/pages/__tests__/DelveCamp.test.tsx src/features/delve/__tests__/useDelveNotices.test.ts)`
+Expected: FAIL (`chooseMana`, `fixNotice` and friends don't exist; no toast; `../useDelveNotices` doesn't exist).
 
 - [ ] **Step 3: The store**
 
@@ -2744,30 +2823,36 @@ import { useDelveStore } from '@/stores/delveStore';
  * Show the Delve's waiting notices (an overtake, builds a realign or a save
  * migration changed) as toasts. Call it in a page that renders a
  * ToastContainer: the page's effect runs after its children's, so the
- * container is listening. Taking them from the store makes a StrictMode
- * re-run a no-op.
+ * container is listening. Pass `enabled = false` while the page renders no
+ * ToastContainer, and the notices wait for the next page. Taking them from
+ * the store makes a StrictMode re-run a no-op.
  */
-export function useDelveNotices(): void {
+export function useDelveNotices(enabled = true): void {
   const count = useDelveStore((s) => s.notices.length);
   useEffect(() => {
-    if (count === 0) return;
+    if (!enabled || count === 0) return;
     for (const text of useDelveStore.getState().takeNotices()) showToast(text);
-  }, [count]);
+  }, [count, enabled]);
 }
 ```
 
-In `src/pages/DelveCamp.tsx` add `import { useDelveNotices } from '@/features/delve/useDelveNotices';` and, after `const [controlsOpen, setControlsOpen] = useState(false);`, call `useDelveNotices();`. In `src/pages/DelveRun.tsx` add the same import and call `useDelveNotices();` after `const noManaToast = useMemo(() => noManaToaster(), []);`.
+In `src/pages/DelveCamp.tsx` add `import { useDelveNotices } from '@/features/delve/useDelveNotices';` and, after `const [controlsOpen, setControlsOpen] = useState(false);`, call `useDelveNotices();`. In `src/pages/DelveRun.tsx` add the same import and call `useDelveNotices(!!dive);` after `const noManaToast = useMemo(() => noManaToaster(), []);` (`dive` is declared above it). With no dive, DelveRun renders nothing, not even its ToastContainer: after Abandon, `closeDive` commits before the navigation to the Anvil (react-router wraps `navigate` in a transition), and a page opened on `/delve/run` with no dive bounces the same way. So it leaves the notices for DelveCamp.
 
 - [ ] **Step 5: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
 Expected: no type errors; all PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Restart the dev server**
+
+The store gained fields, and `createHmrStore` hands a hot reload the cached store (with no `notices`), so the Anvil's `useDelveNotices` would throw until a restart. Run the dev-server block (header). Expected: `True`.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-npx prettier --write packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/features/delve/useDelveNotices.ts packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/DelveRun.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
-git add packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/features/delve/useDelveNotices.ts packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/DelveRun.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
+cd /c/Projects/Alloy
+npx prettier --write packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/features/delve/useDelveNotices.ts packages/client/src/features/delve/__tests__/useDelveNotices.test.ts packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/DelveRun.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
+git add packages/client/src/stores/delveStore.ts packages/client/src/stores/delveStore.test.ts packages/client/src/features/delve/useDelveNotices.ts packages/client/src/features/delve/__tests__/useDelveNotices.test.ts packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/DelveRun.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
 git commit -m "feat(client): the store chooses, binds, realigns and re-attunes, and toasts the notices"
 ```
 
@@ -2818,7 +2903,7 @@ In `src/pages/__tests__/DelveCamp.test.tsx`, append inside the `describe`:
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/pages/__tests__/DelveCamp.test.tsx`
+Run: `(cd packages/client && npx vitest run src/pages/__tests__/DelveCamp.test.tsx)`
 Expected: FAIL (no `mana-choice`).
 
 - [ ] **Step 3: Implement**
@@ -2914,12 +2999,13 @@ In `src/pages/DelveCamp.tsx`: add `import { ManaChoice } from '@/features/delve/
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run src/pages/__tests__/DelveCamp.test.tsx`
-Expected: PASS.
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
+Expected: no type errors; all PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/ManaChoice.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
 git add packages/client/src/features/delve/ManaChoice.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx
 git commit -m "feat(client): a new hero chooses its mana on the Anvil"
@@ -3005,6 +3091,21 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     expect(screen.getByTestId('mana-bind-storm')).toBeDisabled();
   });
 
+  it('realign waits for the dive to end too', () => {
+    const { realignDust, realignScrap } = registry.getDelveBalance().pair;
+    store().setProfile({
+      ...store().profile,
+      pair: { primary: 'fire', secondary: 'storm' },
+      manaDust: realignDust,
+      scrap: realignScrap,
+    });
+    store().startDive(1);
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('pair-locked')).toBeInTheDocument();
+    expect(screen.getByTestId('realign-secondary-nature')).toBeDisabled();
+    expect(screen.getByTestId('realign-button')).toBeDisabled();
+  });
+
   it('the element picker offers only the pair', () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
     render(<AbilitiesPanel />);
@@ -3019,7 +3120,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/features/delve/__tests__/ManaPanel.test.tsx`
+Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/ManaPanel.test.tsx)`
 Expected: FAIL (no `pair-primary`; every element in the picker).
 
 - [ ] **Step 3: `ManaPanel.tsx`**
@@ -3118,7 +3219,8 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
             <div
               className="h-full rounded-full"
               style={{
-                width: `${Math.min(1, need > 0 ? att[secondary] / need : 1) * 100}%`,
+                // Empty until the secondary has any attunement (it can't overtake at 0).
+                width: `${att[secondary] > 0 ? Math.min(1, need > 0 ? att[secondary] / need : 1) * 100 : 0}%`,
                 background: style(secondary).color,
               }}
             />
@@ -3291,12 +3393,13 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
 
 - [ ] **Step 5: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run src/features/delve/__tests__`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run src/features/delve/__tests__)`
 Expected: no type errors; PASS (AbilitiesPanel's own tests too: the Wildfire test binds nature first, the `AbilityEditor` tests pass no `elements` and still see six bars).
 
 - [ ] **Step 6: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/ManaPanel.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/features/delve/__tests__/ManaPanel.test.tsx
 git add packages/client/src/features/delve/ManaPanel.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/features/delve/__tests__/ManaPanel.test.tsx
 git commit -m "feat(client): the Mana view binds and realigns; the Delve's picker offers only the pair"
@@ -3390,6 +3493,7 @@ and append inside the `describe`:
     expect(screen.getByTestId('bind-prompt-bound')).toHaveTextContent('Power');
     expect(screen.getByTestId('bind-prompt-unbound')).toHaveTextContent('Power');
     expect(screen.getByTestId('bind-prompt-not-now')).toHaveAttribute('data-pad-back');
+    expect(screen.getByTestId('bind-prompt-confirm')).toHaveFocus();
     fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
     expect(store().profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
     expect(store().profile.equipped.helm?.uid).toBe('h1');
@@ -3437,7 +3541,7 @@ and append inside the `describe`:
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/features/delve/__tests__/ItemDetailSheet.test.tsx`
+Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/ItemDetailSheet.test.tsx)`
 Expected: FAIL (no greying, no Mana Dust on salvage, no Re-attune, no prompt; 'Equip best never asks' already passes).
 
 - [ ] **Step 3: `BindPrompt.tsx`**
@@ -3455,7 +3559,9 @@ import { formatNumber, manaStyle } from './format';
 /**
  * Equipping gear outside the pair while no second element is bound (between
  * dives): bind its element and equip, or equip it for its stats only and not
- * be asked again this session. Shows the Power either way.
+ * be asked about that element again this session ("Not now" is remembered per
+ * element: a "Not now" on Storm still asks about Nature). Shows the Power
+ * either way. Bind has the focus, for the controller.
  */
 export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => void }) {
   const registry = getDelveRegistry();
@@ -3514,6 +3620,7 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
             type="button"
             className="delve-btn delve-btn-gold"
             onClick={() => finish(true)}
+            autoFocus
             data-testid="bind-prompt-confirm"
           >
             Bind
@@ -3584,6 +3691,7 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
     };
   ```
 
+- `flashStats`: `statsRef.current?.animate(` becomes `statsRef.current?.animate?.(`. jsdom has no `Element.prototype.animate`, so a successful re-attune in the tests would throw there (an unhandled error) and never reach its `say(…)`.
 - After `onReforge`, add:
 
   ```tsx
@@ -3612,7 +3720,15 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
   ```
 
   and after its `{mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}` add `{!ownMana && ' · not your element'}`.
-- The implicit lines: `<div key={\`i${i}\`} className="text-sm text-stone-300">{formatStat(registry, l.stat, l.value)}</div>` becomes
+- The implicit lines (lines 278–280 on disk):
+
+  ```tsx
+              <div key={`i${i}`} className="text-sm text-stone-300">
+                {formatStat(registry, l.stat, l.value)}
+              </div>
+  ```
+
+  become
 
   ```tsx
               <div
@@ -3689,13 +3805,14 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
 
 - [ ] **Step 5: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run src/features/delve/__tests__/ItemDetailSheet.test.tsx`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run src/features/delve/__tests__/ItemDetailSheet.test.tsx)`
 Expected: no type errors; PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-npx prettier --write packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ItemDetailSheet.tsx packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx
+cd /c/Projects/Alloy
+npx prettier --write packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ItemDetailSheet.tsx
 git add packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ItemDetailSheet.tsx packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx
 git commit -m "feat(client): the item sheet greys off-pair attunement, re-attunes, and asks to bind"
 ```
@@ -3777,7 +3894,7 @@ and in `describe('the infusion pass: persistent carriers')`, the test "gives a b
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `cd packages/client && npx vitest run src/features/delve/arena/fx/__tests__`
+Run: `(cd packages/client && npx vitest run src/features/delve/arena/fx/__tests__)`
 Expected: FAIL (`basicMotif` is not exported; the ranged finisher returns null; the nature-bodied shot draws nature; the finisher winds up in fire).
 
 - [ ] **Step 3: Implement**
@@ -3819,7 +3936,35 @@ and its first line `if (!e.melee || !e.finisher) return null;` becomes
   }
 ```
 
-(`handPoint` is defined above it in the same file.)
+(`handPoint` is defined above it in the same file.) Two comments in `mana-fx.ts` follow suit: in the file's header comment,
+
+```ts
+ * (fx/infusion.ts): infused swings and beams, finisher discharges, blasts and
+ * blink trails. Cosmetic only, so it may use Math.random.
+```
+
+becomes
+
+```ts
+ * (fx/infusion.ts): infused swings and beams, finisher discharges (at a
+ * blade's tip, round a full circle, or a flare at a shooter's hand), blasts
+ * and blink trails. Cosmetic only, so it may use Math.random.
+```
+
+and the start of `infuse`'s doc,
+
+```ts
+   * A transient infusion carrier: an infused melee finisher's discharge (a
+   * ring, drawn at strength 1.5), an infused blast's rim (a ring that grows
+```
+
+becomes
+
+```ts
+   * A transient infusion carrier: a finisher's discharge (a ring at the blade's
+   * tip, round a full circle, or a flare at the hand for a shot; drawn at
+   * strength 1.5), an infused blast's rim (a ring that grows
+```
 
 `arena/fx/draw-world.ts`: the `'./infusion'` import gains `basicMotif`; `shotInfusion`'s doc becomes `/** A hero shot's infusion: its ability's second element, or for a basic shot the weapon's (none when the shot is that element: a finisher's discharge). Embers have none. */` and its return becomes `return p.ability ? (p.ability.elements[1] ?? null) : basicMotif(w.hero.stats.weapon, p.element);`.
 
@@ -3869,12 +4014,13 @@ and its first line `if (!e.melee || !e.finisher) return null;` becomes
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
 Expected: no type errors; all PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/arena/fx/infusion.ts packages/client/src/features/delve/arena/fx/mana-fx.ts packages/client/src/features/delve/arena/fx/draw-world.ts packages/client/src/features/delve/arena/fx/anticipation.ts packages/client/src/features/delve/arena/ArenaRenderer.ts packages/client/src/features/delve/arena/fx/__tests__/infusion.test.ts packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts packages/client/src/features/delve/arena/fx/__tests__/anticipation.test.ts
 git add packages/client/src/features/delve/arena/fx/infusion.ts packages/client/src/features/delve/arena/fx/mana-fx.ts packages/client/src/features/delve/arena/fx/draw-world.ts packages/client/src/features/delve/arena/fx/anticipation.ts packages/client/src/features/delve/arena/ArenaRenderer.ts packages/client/src/features/delve/arena/fx/__tests__/infusion.test.ts packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts packages/client/src/features/delve/arena/fx/__tests__/anticipation.test.ts
 git commit -m "feat(client): blows wear the secondary's motif, finishers discharge it (at the hand for shots)"
@@ -3915,7 +4061,7 @@ In `src/features/delve/__tests__/TrainingPanel.test.tsx`, replace the test 'the 
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd packages/client && npx vitest run src/features/delve/__tests__/TrainingPanel.test.tsx`
+Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/TrainingPanel.test.tsx)`
 Expected: FAIL (no `sandbox-primary-*` chips).
 
 - [ ] **Step 3: Implement**
@@ -3968,12 +4114,13 @@ In `LoadoutTab`, the comment above `const infusion = stats.weapon.infusion;` bec
 
 - [ ] **Step 4: Run to verify it passes**
 
-Run: `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
+Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
 Expected: no type errors; all PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx
 git add packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx
 git commit -m "feat(client): the Training Grounds pick a primary, and the finisher discharges the infusion"
@@ -4054,7 +4201,7 @@ git commit -m "feat(client): the Training Grounds pick a primary, and the finish
 
 Create the scratch config (header) and make sure the 5288 dev server is up on the rebuilt engine (restart it with the header block; expect `True`).
 
-Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts`
+Run: `(cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts)`
 Expected: all pass on the four device projects. A consistent failure is a regression: read the page's console and the save (`localStorage['alloy:delve:v2']`), not longer timeouts.
 
 - [ ] **Step 3: Look at the blows**
@@ -4063,12 +4210,14 @@ Create `packages/client/e2e/affinity-shots.spec.ts` (scratch: never committed):
 
 ```ts
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
+import { createDefaultRegistry, createDelveProfile, defaultAbilities } from '@alloy/engine';
 
 /**
  * SCRATCH (elemental affinity plan, Task 19): never committed. The Training
- * Grounds with a pair, the engine bot fighting a clump of dummies at half
- * speed; crops round the hero go to test-results/affinity-shots/.
+ * Grounds with a pair, the engine bot fighting one dummy at half speed with
+ * real cooldowns and mana (every cast cancels a swing, so the Ultimate on a
+ * clump would hide the finishers); crops round the hero go to
+ * test-results/affinity-shots/.
  */
 const OUT = 'test-results/affinity-shots';
 const SCENARIOS = [
@@ -4094,10 +4243,11 @@ async function seed(page: Page, s: (typeof SCENARIOS)[number]): Promise<void> {
     gear: {},
     legendaries: {},
     attunement: {},
+    abilities: defaultAbilities(s.primary),
     depth: 5,
     dummyElement: null,
-    dummies: [{ layout: 'clump', element: null }],
-    toggles: { infiniteMana: true, noCooldowns: true, invulnerable: true },
+    dummies: [{ layout: 'single', element: null }],
+    toggles: { infiniteMana: false, noCooldowns: false, invulnerable: true },
     slowmo: 0.5,
     primary: s.primary,
     basicInfusion: s.basicInfusion,
@@ -4133,15 +4283,15 @@ for (const s of SCENARIOS)
       width: size,
       height: size,
     };
-    for (let n = 0; n < 16; n++) {
+    for (let n = 0; n < 40; n++) {
       await page.screenshot({ path: `${OUT}/${s.name}-${String(n).padStart(2, '0')}.png`, clip });
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(150);
     }
   });
 ```
 
-Run: `cd packages/client && npx playwright test -c playwright.scratch.config.ts --project desktop e2e/affinity-shots.spec.ts`
-Expected: 2 passed; 32 PNGs in `packages/client/test-results/affinity-shots/`.
+Run: `(cd packages/client && npx playwright test -c playwright.scratch.config.ts --project desktop e2e/affinity-shots.spec.ts)`
+Expected: 2 passed; 80 PNGs in `packages/client/test-results/affinity-shots/`.
 
 View them with the Read tool and check:
 - the sword's ordinary swings are fire-bodied with storm arcs, and its third blow is a storm-bodied sweep with a storm ring at the tip and no extra arcs on the sweep;
@@ -4151,6 +4301,7 @@ View them with the Read tool and check:
 If the hand flare is too small or too large to read, tune only its radius in `finisherRing` (`r: 0.6`) and the matching test, rerun the client tests and shoot again. Delete `e2e/affinity-shots.spec.ts` when done. If you tuned:
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/arena/fx/mana-fx.ts packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts
 git add packages/client/src/features/delve/arena/fx/mana-fx.ts packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts
 git commit -m "fix(client): tune the ranged discharge flare from the screenshots"
@@ -4159,6 +4310,7 @@ git commit -m "fix(client): tune the ranged discharge flare from the screenshots
 - [ ] **Step 4: Commit the specs**
 
 ```bash
+cd /c/Projects/Alloy
 npx prettier --write packages/client/e2e/delve.spec.ts packages/client/e2e/delve-gamepad.spec.ts packages/client/e2e/delve-training.spec.ts
 git add packages/client/e2e/delve.spec.ts packages/client/e2e/delve-gamepad.spec.ts packages/client/e2e/delve-training.spec.ts
 git commit -m "test(client): the Delve E2E seeds a pair and covers the choice screen"
@@ -4171,7 +4323,7 @@ git commit -m "test(client): the Delve E2E seeds a pair and covers the choice sc
 ### Task 20: Docs, version, full verification, push
 
 **Files:**
-- Modify: `CLAUDE.md`, `docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md` (status line), `packages/client/package.json` (version)
+- Modify: `CLAUDE.md`, `docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md` (status line), `docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md` (line 108), `packages/client/package.json` (version)
 
 - [ ] **Step 1: Docs and version**
 
@@ -4187,22 +4339,25 @@ In `CLAUDE.md`, the Delve section:
 
 In the spec, `**Status:** Approved in conversation.` becomes `**Status:** Built in v0.43.0.`
 
-In `packages/client/package.json`, `"version": "0.42.x"` (whatever it is now) becomes `"version": "0.43.0"`.
+In `docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md`, line 108 (**Finisher ring placement**) ends `Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion.`; append ` (Superseded by the elemental affinity spec: a ranged finisher now flares at the hand.)`.
+
+In `packages/client/package.json`, `"version": "0.42.1"` becomes `"version": "0.43.0"`.
 
 - [ ] **Step 2: Full verification**
 
 Run, and check each is green before claiming anything:
-- `cd packages/engine && npx vitest run && npx tsc --noEmit -p .` (the pacing gate included)
+- `(cd packages/engine && npx vitest run && npx tsc --noEmit -p .)` (the pacing gate included)
 - `pnpm -F @alloy/engine build`
-- `cd packages/client && npx tsc --noEmit -p . && npx vitest run`
-- restart the 5288 dev server (header block; `True`), then `cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts`
+- `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
+- restart the 5288 dev server (header block; `True`), then `(cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts)`
 
 Expected: all green. Then delete `packages/client/playwright.scratch.config.ts`, and leave the 5288 dev server running: the user plays on it.
 
 - [ ] **Step 3: Commit and push**
 
 ```bash
-git add CLAUDE.md docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md packages/client/package.json
+cd /c/Projects/Alloy
+git add CLAUDE.md docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md packages/client/package.json
 git commit -m "docs: elemental affinity in the Delve notes
 
 chore(client): bump version to 0.43.0"
