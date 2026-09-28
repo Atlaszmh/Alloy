@@ -122,6 +122,10 @@ describe('stats with a pair', () => {
     expect(paired).toMatchObject({ element: 'fire', infusion: 'frost' });
     expect(paired.blowPower).toBeCloseTo(1 + 4 * k);
     expect(paired.finisherPower).toBeCloseTo(1 + 1 * k); // the frost staff's own 1
+    // No secondary: the finisher stays the primary, just as strong.
+    const solo = weapon({ pair: { primary: 'frost', secondary: null } });
+    expect(solo.blowPower).toBeGreaterThan(1);
+    expect(solo.finisherPower).toBe(solo.blowPower);
     // A secondary equal to the primary is unbound.
     expect(weapon({ pair: { primary: 'fire', secondary: 'fire' } }).infusion).toBeNull();
     // Unarmed, you punch with your primary.
@@ -144,6 +148,15 @@ describe('Power values the pair', () => {
     const base = dps({});
     expect(dps({ blowPower: stats.weapon.blowPower * 2 })).toBeGreaterThan(base);
     expect(dps({ finisherPower: stats.weapon.finisherPower * 2 })).toBeGreaterThan(base);
+  });
+
+  it("the finisher strikes with the secondary's element power", () => {
+    const plain = item('fire', 'ring');
+    const charged = item('fire', 'ring', [['stormPower', 50]]);
+    const dps = (pair: ManaPair, ring: GearItem) =>
+      estimateCombat(computeHeroStats({ weapon, ring }, registry, { pair }), registry, 3).dps;
+    expect(dps(bound, charged)).toBeGreaterThan(dps(bound, plain));
+    expect(dps(solo, charged)).toBe(dps(solo, plain)); // no storm anywhere: no gain
   });
 
   it('rises with primary attunement, and with secondary attunement only once bound', () => {
@@ -215,6 +228,9 @@ describe('save version 4', () => {
   it('ties go to the weapon, then MANA_TYPES order; nothing equipped leaves the choice open', () => {
     const p = createDelveProfile(registry, 3);
     expect(parseDelveProfile(registry, json(v3Of(p)))!.profile.pair.primary).toBe('fire');
+    // A nature weapon (1) ties the earth cuirass (1) and wins, though earth comes first.
+    const late = { ...v3Of(p), equipped: { ...p.equipped, weapon: item('nature', 'weapon') } };
+    expect(parseDelveProfile(registry, json(late))!.profile.pair.primary).toBe('nature');
     const { weapon: _weapon, ...noWeapon } = p.equipped;
     const tie = { ...v3Of(p), equipped: { ...noWeapon, ring: item('nature') } }; // earth 1, nature 1
     expect(parseDelveProfile(registry, json(tie))!.profile.pair.primary).toBe('earth');

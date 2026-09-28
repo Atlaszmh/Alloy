@@ -76,7 +76,7 @@ export function itemAttunement(registry: DataRegistry, item: GearItem): ManaMap 
   return att;
 }
 
-/** Extra powers and attunement on top of the gear (the Training Grounds' toggles). */
+/** What goes on top of the gear: the Training Grounds' toggles, and the hero's pair (see `pairExtra`). */
 export interface HeroStatsExtra {
   /** Legendary id → value, merged with the gear's (the higher wins). */
   legendaries?: Record<string, number>;
