@@ -211,7 +211,9 @@ With `weapon.infusion` set (a bound secondary):
   - ordinary blows draw the primary body with the secondary's motif;
   - the finisher's body is the secondary (its `element`), with no extra motif, plus the discharge ring in the secondary's motif at strength 1.5;
   - a basic shot draws the infusion motif only when its `element` differs from `weapon.infusion`, so a finisher's secondary-bodied shot doesn't draw it twice;
-  - the finisher's wind-up tint (`anticipation.ts`) uses the secondary's colour.
+  - the finisher's wind-up tint (`anticipation.ts`) uses the secondary's colour;
+  - a ranged finisher, which has no swing tip, draws its discharge ring at the shooter's hand when released (a release flare, radius about 0.6, strength 1.5, in the secondary's motif);
+  - the same "motif only when the element differs from the infusion" guard applies in the engine's `burstShot`, so a ranged finisher's great-orb burst doesn't carry the secondary as an infusion on a secondary body.
 - **Training Grounds:**
   - The sandbox store gains a saved `primary: ManaType` (default: the default weapon's element, fire), with its own picker in the Loadout tab ("Your primary: what your blows strike with"). `weapon.mana` stays the item's mana.
   - The sandbox passes a basics-only pair: `pair: { primary, secondary: basicInfusion }`, `filterAttunement: false`. So the finisher discharge really works there, unarmed included, and every element still counts toward attunement (it stays unrestricted).
