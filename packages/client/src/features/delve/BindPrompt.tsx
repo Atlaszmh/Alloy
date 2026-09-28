@@ -1,5 +1,6 @@
 import { equipItem, profilePower, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
@@ -22,8 +23,16 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
 
   const finish = (bind: boolean) => {
     const store = useDelveStore.getState();
-    if (bind) store.bindSecondary(item.mana);
-    else store.declineBind(item.mana);
+    if (bind) {
+      const res = store.bindSecondary(item.mana);
+      // Refused: say why, and equip nothing.
+      if (!res.ok) {
+        playSound('combineFail');
+        showToast(res.reason ?? 'Cannot bind');
+        onDone();
+        return;
+      }
+    } else store.declineBind(item.mana);
     store.equip(item.uid);
     playSound('orbPlace');
     vibrate('medium');

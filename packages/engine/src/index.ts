@@ -170,7 +170,9 @@ export {
   bindSecondary,
   realign,
   resolveOvertake,
+  overtakeProgress,
   reattuneItem,
+  reattuneCost,
   salvageDust,
 } from './delve/pair.js';
 export type { BuildFix } from './delve/pair.js';

@@ -54,6 +54,33 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     });
   });
 
+  it('realign swaps the two: both elements go to the engine', () => {
+    const { realignDust, realignScrap } = registry.getDelveBalance().pair;
+    store().setProfile({
+      ...store().profile,
+      pair: { primary: 'fire', secondary: 'storm' },
+      manaDust: realignDust,
+      scrap: realignScrap,
+    });
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('realign-primary-storm'));
+    expect(screen.getByTestId('realign-button')).toBeDisabled(); // storm twice
+    fireEvent.click(screen.getByTestId('realign-secondary-fire'));
+    fireEvent.click(screen.getByTestId('realign-button'));
+    expect(store().profile).toMatchObject({
+      pair: { primary: 'storm', secondary: 'fire' },
+      manaDust: 0,
+      scrap: 0,
+    });
+  });
+
+  it('the overtake bar stays empty while the secondary has no attunement', () => {
+    store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('overtake')).toHaveTextContent('Storm 0 /');
+    expect(screen.getByTestId('overtake-bar').style.width).toBe('0%');
+  });
+
   it('binding and realigning wait for the dive to end, and say so', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
     store().startDive(1);

@@ -9,6 +9,7 @@ import {
   itemAffinityAttunement,
   itemStatLines,
   pairElements,
+  reattuneCost,
   referenceDepth,
   reforgeCost,
   salvageDust,
@@ -103,6 +104,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const affixes = lines.filter((l) => l.source === 'affix');
   const upCost = upgradeCost(registry, item);
   const rfCost = reforgeCost(registry, item);
+  const raCost = reattuneCost(registry, item);
   const salvage = salvageValue(registry, item);
   const isUpgrade = cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
   const mana = manaStyle(registry, item.mana);
@@ -116,7 +118,6 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
     return !!el && !inPair(profile, el);
   };
   const reattuneTo = pairElements(profile.pair).filter((m) => m !== item.mana);
-  const reattuneCost = registry.getDelveBalance().pair.reattuneDust[item.rarity];
   // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
   const unbound =
     !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
@@ -479,7 +480,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
                     onClick={() => onReattune(m)}
                     data-testid={`reattune-${m}`}
                   >
-                    {st.icon} {st.name} · ✦ {reattuneCost}
+                    {st.icon} {st.name} · ✦ {raCost}
                   </button>
                 );
               })}

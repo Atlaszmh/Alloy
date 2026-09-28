@@ -155,9 +155,26 @@ export function realign(
 }
 
 /**
+ * How near a bound secondary is to overtaking: its attunement (`have`) against
+ * `overtakeMargin` × the primary's (`need`). `ready` once it is above both 0
+ * and `need`. Nothing to overtake while unbound.
+ */
+export function overtakeProgress(
+  registry: DataRegistry,
+  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
+): { have: number; need: number; ready: boolean } {
+  const { primary, secondary } = profile.pair;
+  if (!primary || !secondary) return { have: 0, need: 0, ready: false };
+  const att = profileStats(registry, profile).attunement;
+  const have = att[secondary];
+  const need = registry.getDelveBalance().pair.overtakeMargin * att[primary];
+  return { have, need, ready: have > 0 && have > need };
+}
+
+/**
  * Between dives, a bound secondary with more attunement than the primary
- * (above 0 and above `overtakeMargin` × it) takes its place, and the old
- * primary becomes the secondary. Builds stay valid: the pair is the same two.
+ * (`overtakeProgress` ready) takes its place, and the old primary becomes the
+ * secondary. Builds stay valid: the pair is the same two.
  */
 export function resolveOvertake(
   registry: DataRegistry,
@@ -165,14 +182,16 @@ export function resolveOvertake(
 ): { profile: DelveProfile; swapped: boolean } {
   const { primary, secondary } = profile.pair;
   if (!primary || !secondary || isDiveActive(profile)) return { profile, swapped: false };
-  const att = profileStats(registry, profile).attunement;
-  const margin = registry.getDelveBalance().pair.overtakeMargin;
-  if (att[secondary] <= 0 || att[secondary] <= margin * att[primary])
-    return { profile, swapped: false };
+  if (!overtakeProgress(registry, profile).ready) return { profile, swapped: false };
   return {
     profile: { ...profile, pair: { primary: secondary, secondary: primary } },
     swapped: true,
   };
+}
+
+/** The Mana Dust re-attuning `item` costs (by its rarity). */
+export function reattuneCost(registry: DataRegistry, item: GearItem): number {
+  return registry.getDelveBalance().pair.reattuneDust[item.rarity];
 }
 
 /** Re-attune an item to either element of the pair (not its own) for Mana Dust, between dives. */
@@ -188,7 +207,7 @@ export function reattuneItem(
   if (!pairElements(profile.pair).includes(mana))
     return refuse(profile, 'Re-attune to one of your two elements');
   if (found.item.mana === mana) return refuse(profile, 'Already attuned to that element');
-  const cost = registry.getDelveBalance().pair.reattuneDust[found.item.rarity];
+  const cost = reattuneCost(registry, found.item);
   if (profile.manaDust < cost) return refuse(profile, 'Not enough Mana Dust');
   const item = attuneTo(found.item, mana);
   return {

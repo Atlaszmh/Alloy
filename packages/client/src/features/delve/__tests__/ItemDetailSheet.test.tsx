@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { generateItem, SeededRNG, type GearItem, type ManaType } from '@alloy/engine';
 import { ItemDetailSheet } from '../ItemDetailSheet';
 import { BagPanel } from '../BagPanel';
@@ -109,6 +109,39 @@ describe('ItemDetailSheet', () => {
     fireEvent.click(screen.getByTestId('equip-button'));
     expect(screen.queryByTestId('bind-prompt')).toBeNull();
     expect(store().profile.equipped.helm?.uid).toBe('h2');
+  });
+
+  it('Not now is remembered per element: Nature still asks after Storm', () => {
+    put(helm('storm'), helm('nature', 'h2'));
+    const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('equip-button'));
+    fireEvent.click(screen.getByTestId('bind-prompt-not-now'));
+    unmount();
+    render(<ItemDetailSheet uid="h2" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('equip-button'));
+    expect(screen.getByTestId('bind-prompt')).toHaveTextContent('Bind Nature as your second element?');
+    expect(store().profile.equipped.helm?.uid).toBe('h1');
+  });
+
+  it('a refused bind says why and equips nothing', () => {
+    put(helm('storm'));
+    const onClose = vi.fn();
+    render(
+      <>
+        <ItemDetailSheet uid="h1" onClose={onClose} />
+        <ToastContainer />
+      </>,
+    );
+    fireEvent.click(screen.getByTestId('equip-button'));
+    // Bound elsewhere while the prompt was open: the engine refuses a second bind.
+    act(() =>
+      store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'nature' } }),
+    );
+    fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
+    expect(screen.getByText('Your second element is already bound')).toBeInTheDocument();
+    expect(store().profile.equipped.helm).toBeUndefined();
+    expect(store().profile.pair.secondary).toBe('nature');
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('mid-dive such gear just equips, with a toast', () => {

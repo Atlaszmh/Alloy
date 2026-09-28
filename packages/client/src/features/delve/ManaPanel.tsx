@@ -3,6 +3,7 @@ import {
   GEAR_SLOTS,
   MANA_TYPES,
   isDiveActive,
+  overtakeProgress,
   profilePower,
   type HeroStats,
   type ManaType,
@@ -17,7 +18,7 @@ import { formatNumber, manaStyle } from './format';
  * The Anvil's Mana view: your primary and secondary with their attunement, how
  * near the secondary is to overtaking, your Mana Dust, and binding a second
  * element or realigning the pair (between dives only). The rules are the
- * engine's (`bindSecondary`, `realign`, `resolveOvertake`).
+ * engine's (`bindSecondary`, `realign`, `overtakeProgress`).
  */
 export function ManaPanel({ stats }: { stats: HeroStats }) {
   const registry = getDelveRegistry();
@@ -29,7 +30,6 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
   if (!primary) return <AttunementBars stats={stats} />;
 
   const cost = registry.getDelveBalance().pair;
-  const att = stats.attunement;
   const locked = isDiveActive(profile);
   const style = (m: ManaType) => manaStyle(registry, m);
   const owned = new Set<ManaType>([
@@ -37,7 +37,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
     ...profile.bag.map((i) => i.mana),
   ]);
   const candidates = MANA_TYPES.filter((m) => m !== primary && owned.has(m));
-  const need = cost.overtakeMargin * att[primary];
+  const overtake = overtakeProgress(registry, profile);
   // Realign always sends both elements: the engine refuses a lone primary equal to the secondary.
   const next = secondary
     ? { primary: target.primary ?? primary, secondary: target.secondary ?? secondary }
@@ -83,17 +83,17 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
       {secondary && (
         <div className="flex flex-col gap-1 text-xs text-stone-400" data-testid="overtake">
           <span>
-            {style(secondary).name} {att[secondary]} / {need.toFixed(1)} to overtake{' '}
+            {style(secondary).name} {overtake.have} / {overtake.need.toFixed(1)} to overtake{' '}
             {style(primary).name} (checked when a dive ends)
           </span>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
             <div
               className="h-full rounded-full"
               style={{
-                // Empty until the secondary has any attunement (it can't overtake at 0).
-                width: `${att[secondary] > 0 ? Math.min(1, need > 0 ? att[secondary] / need : 1) * 100 : 0}%`,
+                width: `${overtake.ready ? 100 : overtake.need > 0 ? Math.min(1, overtake.have / overtake.need) * 100 : 0}%`,
                 background: style(secondary).color,
               }}
+              data-testid="overtake-bar"
             />
           </div>
         </div>

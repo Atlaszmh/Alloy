@@ -6,8 +6,10 @@ import {
   bindSecondary,
   chooseStartingMana,
   fixBuildsToPair,
+  overtakeProgress,
   profileStats,
   realign,
+  reattuneCost,
   reattuneItem,
   resolveOvertake,
   salvageDust,
@@ -468,6 +470,43 @@ describe('the pair ops', () => {
       },
     };
     expect(resolveOvertake(registry, edge).swapped).toBe(false);
+  });
+
+  it("overtakeProgress: the secondary's attunement against the margin × the primary's, as resolveOvertake reads it", () => {
+    const p = bound(); // fire 2, storm 0
+    const need = bal.pair.overtakeMargin * 2;
+    expect(overtakeProgress(registry, p)).toEqual({ have: 0, need, ready: false });
+    const storm = { ...p.equipped, helm: item('storm', 'helm'), gloves: item('storm', 'gloves') };
+    const three = { ...storm, boots: item('storm', 'boots') };
+    expect(overtakeProgress(registry, { ...p, equipped: storm })).toEqual({
+      have: 2,
+      need,
+      ready: false,
+    });
+    expect(overtakeProgress(registry, { ...p, equipped: three })).toEqual({
+      have: 3,
+      need,
+      ready: true,
+    });
+    // Above zero counts even against a primary at 0; never both at 0.
+    const lone = { ring: item('storm', 'ring') };
+    expect(overtakeProgress(registry, { ...p, equipped: lone })).toEqual({
+      have: 1,
+      need: 0,
+      ready: true,
+    });
+    expect(overtakeProgress(registry, { ...p, equipped: {} }).ready).toBe(false);
+    // Unbound: nothing to overtake.
+    expect(
+      overtakeProgress(registry, { ...p, pair: { primary: 'fire', secondary: null } }),
+    ).toEqual({ have: 0, need: 0, ready: false });
+  });
+
+  it("reattuneCost: the item's rarity's Mana Dust", () => {
+    for (const rarity of ['common', 'rare', 'legendary'] as const)
+      expect(reattuneCost(registry, item('storm', 'helm', [], rarity))).toBe(
+        bal.pair.reattuneDust[rarity],
+      );
   });
 
   it('reattuneItem: to the pair only, for Mana Dust, converting the old lines', () => {
