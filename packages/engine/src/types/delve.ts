@@ -584,7 +584,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 3;
+  version: 4;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -602,6 +602,10 @@ export interface DelveProfile {
   autoSalvage: Record<Rarity, boolean>;
   /** The Primary, Defensive and Ultimate builds. */
   abilities: AbilityBuilds;
+  /** The hero's two elements. */
+  pair: ManaPair;
+  /** From salvaging gear outside the pair; spent on Re-attune and Realign. */
+  manaDust: number;
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

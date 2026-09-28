@@ -136,11 +136,11 @@ export function stepHeft(ab: ResolvedAbility, step: number): number {
   return Math.min(1, ab.heft + (n > 1 && step % n === n - 1 ? 0.2 : 0));
 }
 
-/** Builds for a new (or migrated) profile, `element` being the weapon's. */
+/** Builds for a new (or migrated) profile, all of `element`. */
 export function defaultAbilities(element: ManaType): AbilityBuilds {
   return {
     primary: { form: 'bolt', elements: [element], weight: 0, payment: 'mana' },
-    defensive: { form: 'ward', elements: ['frost'], weight: 0, payment: 'mana' },
+    defensive: { form: 'ward', elements: [element], weight: 0, payment: 'mana' },
     ultimate: { form: 'nova', elements: [element], weight: 0, payment: 'charge' },
   };
 }

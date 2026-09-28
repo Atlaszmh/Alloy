@@ -5,10 +5,10 @@ import { startDive } from '../src/delve/dive.js';
 
 const registry = createDefaultRegistry();
 
-describe('profile abilities (save v3)', () => {
+describe('profile abilities (save v4)', () => {
   it('a new profile starts with default builds on its weapon element', () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(3);
+    expect(p.version).toBe(4);
     expect(p.abilities.primary).toEqual({
       form: 'bolt',
       elements: ['fire'],
@@ -32,10 +32,10 @@ describe('profile abilities (save v3)', () => {
       payment: 'cast',
     });
     expect(p.abilities.primary.form).toBe('burst');
-    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.abilities.primary.elements).toEqual([
-      'fire',
-      'nature',
-    ]);
+    expect(
+      parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))?.profile.abilities.primary
+        .elements,
+    ).toEqual(['fire', 'nature']);
   });
 
   it('setAbility rejects a form from another slot, 3 elements, repeats and bad numbers', () => {
@@ -73,9 +73,9 @@ describe('profile abilities (save v3)', () => {
       skillSlots: ['fireball', null, null],
       reactionsSeen: ['melt'],
     };
-    const p = parseDelveProfile(JSON.parse(JSON.stringify(v2)));
-    expect(p).not.toBeNull();
-    expect(p!.version).toBe(3);
+    const p = parseDelveProfile(registry, JSON.parse(JSON.stringify(v2)))?.profile;
+    expect(p).toBeDefined();
+    expect(p!.version).toBe(4);
     expect(p!.scrap).toBe(321);
     expect(p!.equipped.weapon!.uid).toBe(v3.equipped.weapon!.uid);
     expect(p!.abilities.primary.elements).toEqual(['frost']);
@@ -84,9 +84,8 @@ describe('profile abilities (save v3)', () => {
 
   it('remembers the new reactions', () => {
     const p = { ...createDelveProfile(registry, 1), reactionsSeen: ['combust', 'blight'] };
-    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))?.reactionsSeen).toEqual([
-      'combust',
-      'blight',
-    ]);
+    expect(
+      parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))?.profile.reactionsSeen,
+    ).toEqual(['combust', 'blight']);
   });
 });

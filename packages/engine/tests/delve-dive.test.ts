@@ -62,7 +62,7 @@ function clearDepth(p: DelveProfile): DelveProfile {
 describe('profile basics', () => {
   it('starts with a fire sword and an earth cuirass, and Fire abilities', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(3);
+    expect(p.version).toBe(4);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
     expect(p.abilities.primary.elements).toEqual(['fire']);
@@ -73,9 +73,12 @@ describe('profile basics', () => {
   it('round-trips through JSON and rejects garbage and old saves', () => {
     let p = createDelveProfile(registry, 1);
     p = startDive(registry, p, 1);
-    expect(parseDelveProfile(JSON.parse(JSON.stringify(p)))).toEqual(p);
-    expect(parseDelveProfile({ ...p, version: 1 })).toBeNull();
-    expect(parseDelveProfile(null)).toBeNull();
+    expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))).toEqual({
+      profile: p,
+      fixed: [],
+    });
+    expect(parseDelveProfile(registry, { ...p, version: 1 })).toBeNull();
+    expect(parseDelveProfile(registry, null)).toBeNull();
   });
 });
 
@@ -274,7 +277,7 @@ describe('gear management', () => {
     p = startDive(registry, p, 1);
     expect(beginFloor(registry, p).hero.abilities.map((a) => a.name)).toEqual([
       'Fire Bolt',
-      'Frost Ward',
+      'Fire Ward',
       'Fire Nova',
     ]);
   });

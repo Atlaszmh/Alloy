@@ -95,7 +95,8 @@ const DiveSchema = z.object({
   bestFind: GearItemSchema.nullable(),
 });
 
-export const DelveProfileSchema = z.object({
+/** Version 3 (before the pair), kept frozen so older saves migrate through it. */
+export const DelveProfileV3Schema = z.object({
   version: z.literal(3),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
@@ -145,8 +146,22 @@ export const DelveProfileSchema = z.object({
   dive: DiveSchema.nullable(),
 });
 
-/** Version 2 saves had a spell bar instead of ability builds; `parseDelveProfile` migrates them. */
-export const DelveProfileV2Schema = DelveProfileSchema.omit({
+/** The hero's pair: a secondary only once there is a primary, and never the same element. */
+const PairSchema = z
+  .object({ primary: ManaTypeSchema.nullable(), secondary: ManaTypeSchema.nullable() })
+  .refine(
+    (p) => p.secondary === null || (p.primary !== null && p.secondary !== p.primary),
+    'a secondary needs a different primary',
+  );
+
+export const DelveProfileSchema = DelveProfileV3Schema.extend({
+  version: z.literal(4),
+  pair: PairSchema,
+  manaDust: z.number().int().min(0),
+});
+
+/** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */
+export const DelveProfileV2Schema = DelveProfileV3Schema.omit({
   version: true,
   abilities: true,
 }).extend({

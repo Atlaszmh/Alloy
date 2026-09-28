@@ -161,7 +161,9 @@ export {
   fuseGear,
   setAbility,
 } from './delve/profile.js';
-export type { ProfileActionResult } from './delve/profile.js';
+export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
+export { inPair, profileStats, fixBuildsToPair } from './delve/pair.js';
+export type { BuildFix } from './delve/pair.js';
 export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';
 export { runAutopilot } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';

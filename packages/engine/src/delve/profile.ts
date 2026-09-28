@@ -1,8 +1,9 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem, GearSlot, Rarity } from '../types/gear.js';
+import type { EquippedGear, GearItem, GearSlot, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
+import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { generateItem } from '../loot/item-generator.js';
 import {
@@ -15,8 +16,13 @@ import {
   salvageValue,
   upgradeCost,
 } from '../loot/smithing.js';
-import { compareItem, heroPower } from './hero-stats.js';
-import { DelveProfileSchema, DelveProfileV2Schema } from './profile-schema.js';
+import { compareItem, computeAttunement, heroPower } from './hero-stats.js';
+import {
+  DelveProfileSchema,
+  DelveProfileV2Schema,
+  DelveProfileV3Schema,
+} from './profile-schema.js';
+import { fixBuildsToPair, type BuildFix } from './pair.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
@@ -49,7 +55,7 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
     rng,
   );
   const profile: DelveProfile = {
-    version: 3,
+    version: 4,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -73,6 +79,8 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
     firstBossLegendaryGiven: false,
     autoSalvage: perRarity(false),
     abilities: defaultAbilities(weapon.mana),
+    pair: { primary: null, secondary: null },
+    manaDust: 0,
     reactionsSeen: [],
     dive: null,
   };
@@ -107,19 +115,59 @@ export function setAbility(
   };
 }
 
-/** Validate an unknown JSON blob as a save. Returns null when it doesn't fit. */
-export function parseDelveProfile(raw: unknown): DelveProfile | null {
-  const parsed = DelveProfileSchema.safeParse(raw);
-  if (parsed.success) return parsed.data as DelveProfile;
-  // Version 2 (spell bar): keep everything, give default ability builds.
+/** A save read back: the profile, and the build slots a migration changed (for a notice). */
+export interface ParsedDelveProfile {
+  profile: DelveProfile;
+  fixed: BuildFix[];
+}
+
+/** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
+function fromV2(raw: unknown) {
   const old = DelveProfileV2Schema.safeParse(raw);
   if (!old.success) return null;
   const { skillSlots: _spells, ...rest } = old.data;
-  return {
-    ...rest,
-    version: 3,
-    abilities: defaultAbilities(rest.equipped.weapon?.mana ?? 'fire'),
-  } as DelveProfile;
+  return rest;
+}
+
+/**
+ * A migrated save's primary: the element with the most attunement from its
+ * equipped gear (ties: the weapon's mana, then MANA_TYPES order), or null
+ * with nothing equipped (the choice screen then shows).
+ */
+function migratedPrimary(registry: DataRegistry, equipped: EquippedGear): ManaType | null {
+  const att = computeAttunement(equipped, registry);
+  const top = Math.max(...MANA_TYPES.map((m) => att[m]));
+  if (top <= 0) return null;
+  const weapon = equipped.weapon?.mana;
+  if (weapon && att[weapon] === top) return weapon;
+  return MANA_TYPES.find((m) => att[m] === top)!;
+}
+
+/**
+ * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4:
+ * a primary from the gear, no secondary, no Mana Dust, builds fixed to the
+ * pair; a dive in progress stays). Returns null when it doesn't fit.
+ */
+export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
+  const parsed = DelveProfileSchema.safeParse(raw);
+  if (parsed.success) return { profile: parsed.data as DelveProfile, fixed: [] };
+  const v3 = DelveProfileV3Schema.safeParse(raw);
+  const old = v3.success ? v3.data : fromV2(raw);
+  if (!old) return null;
+  const equipped = old.equipped as EquippedGear;
+  const primary = migratedPrimary(registry, equipped);
+  // A version 2 save had no builds: it starts from its new primary's defaults (nothing to fix).
+  const abilities =
+    'abilities' in old
+      ? old.abilities
+      : defaultAbilities(primary ?? equipped.weapon?.mana ?? 'fire');
+  return fixBuildsToPair({
+    ...old,
+    version: 4,
+    abilities,
+    pair: { primary, secondary: null },
+    manaDust: 0,
+  } as DelveProfile);
 }
 
 /** Depth used as the yardstick for Power and comparisons. */
