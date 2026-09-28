@@ -107,7 +107,16 @@ export function executeForm(
       const hits = alive(ctx)
         .filter((m) => distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius)
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
-      ctx.events.push({ kind: 'beam', x: h.x, y: h.y, tx: ex, ty: ey, width, element: ab.element });
+      ctx.events.push({
+        kind: 'beam',
+        x: h.x,
+        y: h.y,
+        tx: ex,
+        ty: ey,
+        width,
+        element: ab.element,
+        infusion: ab.elements[1] ?? null,
+      });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
       if (hits.length > 0) {
@@ -166,6 +175,7 @@ export function executeForm(
         arc,
         element: ab.element,
         heft,
+        infusion: ab.elements[1] ?? null,
       });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
       for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
@@ -197,7 +207,14 @@ export function executeForm(
       h.y = clamp(h.y + dir.y * d, h.radius, world.height - h.radius);
       h.facing = dir;
       h.invulnUntil = Math.max(h.invulnUntil, t + ab.effect);
-      ctx.events.push({ kind: 'dash', fromX, fromY, toX: h.x, toY: h.y });
+      ctx.events.push({
+        kind: 'dash',
+        fromX,
+        fromY,
+        toX: h.x,
+        toY: h.y,
+        infusion: ab.elements[1] ?? null,
+      });
       const opts = hitOpts(ab, { x: fromX, y: fromY }, false, true, heft);
       for (const m of alive(ctx)) {
         if (distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius)

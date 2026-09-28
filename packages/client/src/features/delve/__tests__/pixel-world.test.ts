@@ -301,6 +301,7 @@ describe('arena events on the pixel floor', () => {
       y: cell.y / PPU - MARGIN,
       radius: 1.8,
       element,
+      infusion: null,
     };
     return { i: cell.y * pw.width + cell.x, event };
   }
@@ -346,6 +347,7 @@ describe('arena events on the pixel floor', () => {
         y: cell.y / PPU - MARGIN,
         radius: 1,
         element: 'storm',
+        infusion: null,
       },
       PPU,
       MARGIN,

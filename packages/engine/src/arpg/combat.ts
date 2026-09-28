@@ -281,6 +281,7 @@ export function hitMonster(
         y: m.y,
         radius: r.overloadRadius,
         element: 'storm',
+        infusion: null,
       });
       for (const o of world.monsters) {
         if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.overloadRadius + o.radius)
@@ -302,6 +303,7 @@ export function hitMonster(
         y: m.y,
         radius: r.combustRadius,
         element: 'nature',
+        infusion: null,
       });
       for (const o of world.monsters) {
         if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.combustRadius + o.radius)
@@ -481,7 +483,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (t < m.status.brandUntil) {
     const radius = 2.6;
     const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
-    ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire' });
+    ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire', infusion: null });
     for (const o of world.monsters) {
       if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
       hitMonster(ctx, o, blast, 'fire', {

@@ -410,7 +410,21 @@ export type ArpgEvent =
   | { kind: 'windup'; slot: number; until: number; heft: number }
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
-  | { kind: 'beam'; x: number; y: number; tx: number; ty: number; width: number; element: ManaType }
+  | {
+      kind: 'beam';
+      x: number;
+      y: number;
+      tx: number;
+      ty: number;
+      width: number;
+      element: ManaType;
+      /**
+       * Display data: the ability's second element (the weapon's, for a basic
+       * burst), drawn as its motif; null for one element, ticks, monsters and
+       * reactions. The same on `slash`, `explode` and `dash`.
+       */
+      infusion: ManaType | null;
+    }
   | {
       kind: 'slash';
       x: number;
@@ -420,6 +434,7 @@ export type ArpgEvent =
       arc: number;
       element: ManaType;
       heft: number;
+      infusion: ManaType | null;
     }
   | {
       kind: 'basic';
@@ -435,7 +450,14 @@ export type ArpgEvent =
       finisher: boolean;
     }
   | { kind: 'chain'; points: Vec[]; element: ManaType }
-  | { kind: 'explode'; x: number; y: number; radius: number; element: ManaType | null }
+  | {
+      kind: 'explode';
+      x: number;
+      y: number;
+      radius: number;
+      element: ManaType | null;
+      infusion: ManaType | null;
+    }
   | { kind: 'reaction'; reaction: ReactionId; x: number; y: number }
   | { kind: 'freeze'; id: number }
   | { kind: 'death'; id: number; x: number; y: number; monsterKind: MonsterKind; scrap: number }
@@ -448,7 +470,14 @@ export type ArpgEvent =
       amount: number;
       mana?: ManaType;
     }
-  | { kind: 'dash'; fromX: number; fromY: number; toX: number; toY: number }
+  | {
+      kind: 'dash';
+      fromX: number;
+      fromY: number;
+      toX: number;
+      toY: number;
+      infusion: ManaType | null;
+    }
   | { kind: 'noMana'; slot: number }
   | { kind: 'dodge'; fromX: number; fromY: number; dirX: number; dirY: number }
   | { kind: 'perfectDodge'; x: number; y: number }

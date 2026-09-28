@@ -183,7 +183,16 @@ export function impact(
     radius *= 1 + (world.rng.next() * 2 - 1) * 0.3 * k.scatter;
   }
   if (k.pull) pull(ctx, x, y, radius * 2.2, o.tick ? 0.15 : 0.75);
-  if (!o.silent) ctx.events.push({ kind: 'explode', x, y, radius, element: ab.element });
+  // A tick (a zone tick, an ember) draws no infusion.
+  if (!o.silent)
+    ctx.events.push({
+      kind: 'explode',
+      x,
+      y,
+      radius,
+      element: ab.element,
+      infusion: o.tick ? null : (ab.elements[1] ?? null),
+    });
 
   const hits = alive(ctx).filter((m) => dist(x, y, m.x, m.y) <= radius + m.radius);
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);

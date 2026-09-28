@@ -282,7 +282,14 @@ function zonesTick(ctx: SimCtx): void {
     if (z.owner === 'monster') {
       if (world.t >= z.detonateAt) {
         z.dead = true;
-        ctx.events.push({ kind: 'explode', x: z.x, y: z.y, radius: z.radius, element: z.element });
+        ctx.events.push({
+          kind: 'explode',
+          x: z.x,
+          y: z.y,
+          radius: z.radius,
+          element: z.element,
+          infusion: null,
+        });
         const o = perfectOrigin(ctx);
         if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius)
           hurtHero(ctx, z.damage, z.element, null);

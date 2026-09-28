@@ -216,7 +216,14 @@ export function strike(ctx: SimCtx): void {
 /** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */
 export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | null = null): void {
   p.dead = true;
-  ctx.events.push({ kind: 'explode', x: p.x, y: p.y, radius: p.explodeRadius, element: p.element });
+  ctx.events.push({
+    kind: 'explode',
+    x: p.x,
+    y: p.y,
+    radius: p.explodeRadius,
+    element: p.element,
+    infusion: ctx.world.hero.stats.weapon.infusion,
+  });
   for (const m of alive(ctx)) {
     if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
     hitMonster(ctx, m, p.damage, p.element, {

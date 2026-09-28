@@ -66,8 +66,8 @@ describe('FloorEngine', () => {
     const pw = engine.world;
     const before = pw.scorch.reduce((a, b) => a + b, 0) + pw.frost.reduce((a, b) => a + b, 0);
     const events: ArpgEvent[] = [
-      { kind: 'explode', x: 8, y: 12, radius: 1.5, element: 'fire' },
-      { kind: 'explode', x: 18, y: 28, radius: 1.5, element: 'frost' },
+      { kind: 'explode', x: 8, y: 12, radius: 1.5, element: 'fire', infusion: null },
+      { kind: 'explode', x: 18, y: 28, radius: 1.5, element: 'frost', infusion: null },
     ];
     engine.frame(frame({ events }));
     const after = pw.scorch.reduce((a, b) => a + b, 0) + pw.frost.reduce((a, b) => a + b, 0);
@@ -104,7 +104,7 @@ describe('snapshotArena', () => {
     const profile = startDive(registry, createDelveProfile(registry, 99), 1);
     const world = beginFloor(registry, profile);
     const events: ArpgEvent[] = [
-      { kind: 'explode', x: 1, y: 1, radius: 1, element: 'fire' },
+      { kind: 'explode', x: 1, y: 1, radius: 1, element: 'fire', infusion: null },
       { kind: 'cleared' },
       { kind: 'heal', amount: 5, source: 'potion' },
       {
