@@ -5,6 +5,7 @@ import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
 import { windingUp } from './anticipation';
+import { EMBER } from './reactions';
 import {
   PX,
   manaArc,
@@ -26,6 +27,15 @@ import {
 
 const HOSTILE = 0xff4d4d;
 const HOSTILE_EDGE = 0xff9a9a;
+/** Blinded foes' smoke: dim, since the air layer only adds light. */
+const BLIND_SMOKE = 0x5d5670;
+/** Sunder's crack, in pixels right of the Hellfire brand. */
+const CRACK = [
+  [1, -1],
+  [2, 0],
+  [1, 1],
+  [2, 2],
+];
 
 /** What the player is aiming, in world units (drawn as a circle or a line from the hero). */
 export interface AimView {
@@ -216,10 +226,33 @@ export function drawFooting(ground: Graphics, w: ArpgWorld, time: number): void 
   }
 }
 
-/** Defensive auras around the hero, and a channel's filling arc. */
+/**
+ * Defensive auras around the hero, the reactions' states on it (Obsidian's
+ * shell, Lightning Rod's trail), and a channel's filling arc.
+ */
 export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
   const h = w.hero;
   const cy = h.y - 0.3;
+  if (h.barrier) {
+    // Obsidian: a shell of cooling embers that thins as it soaks.
+    const k = Math.min(1, Math.max(0, h.barrier.hp / Math.max(1e-6, h.barrier.max)));
+    manaRing(air, h.x, cy, 1.15, EMBER, time, {
+      alpha: 0.35 + 0.55 * k,
+      gaps: Math.round(8 * (1 - k)),
+      spin: 1,
+      jitter: 1,
+    });
+    manaDust(air, h.x, cy, 1.1, 0xc0502a, time, 0.01 + 0.05 * k, 0.8, 13);
+  }
+  if (w.t < h.quickUntil && h.moving) {
+    // Lightning Rod: a storm trail behind the quickened hero.
+    const len = Math.hypot(h.facing.x, h.facing.y) || 1;
+    const bx = -h.facing.x / len;
+    const by = -h.facing.y / len;
+    const from = { x: h.x + bx * 0.3, y: h.y + 0.2 + by * 0.3 };
+    const to = { x: h.x + bx * 1.4, y: h.y + 0.2 + by * 1.4 };
+    manaLine(air, from.x, from.y, to.x, to.y, MANA_HEX.storm, 0.8, { every: 2, jitter: 1, time });
+  }
   const guard = h.abilities[1];
   if (h.defend && w.t < h.defend.until && guard) {
     const color = MANA_HEX[guard.element];
@@ -342,7 +375,10 @@ export function drawProjectiles(
   for (const id of [...trails.keys()]) if (!alive.has(id)) trails.delete(id);
 }
 
-/** Elite and boss rings (ground), and status marks (air): hex, shock, frost, poison, stagger, brand. */
+/**
+ * Elite and boss rings (ground), and status marks (air): hex, shock, frost,
+ * poison, stagger, brand, and the reactions' rattle, Sunder and blind.
+ */
 export function drawMonsterMarks(
   ground: Graphics,
   air: Graphics,
@@ -397,6 +433,22 @@ export function drawMonsterMarks(
       manaMotes(air, m.x, m.y - m.radius - 0.25, m.radius * 0.7, 0xfde68a, time, 3, 5, 1, 2);
     }
     if (t < s.brandUntil) px(air, m.x - PX, m.y - m.radius - 0.35, MANA_HEX.fire, 1, 2);
+    if (t < s.rattledUntil) {
+      // Earth's mark: rock chips circling low.
+      for (let i = 0; i < 3; i++) {
+        const a = time * 1.6 + (i * Math.PI * 2) / 3;
+        const x = m.x + Math.cos(a) * (m.radius + 0.15);
+        px(air, x, m.y + 0.3 + Math.sin(a) * 0.18, MANA_HEX.earth, 0.9, 2);
+      }
+    }
+    if (t < s.sunderUntil)
+      for (const [dx, dy] of CRACK)
+        px(air, m.x + dx * PX, m.y - m.radius - 0.35 + dy * PX, MANA_HEX.earth, 1);
+    if (t < s.blindUntil) {
+      // Blind (Blackout, Steam): a dim smoke over the eyes.
+      const r = m.radius * 0.7;
+      manaDust(air, m.x, m.y - m.radius * 0.6, r, BLIND_SMOKE, time, 0.25, 0.6, m.id + 5);
+    }
   }
 }
 

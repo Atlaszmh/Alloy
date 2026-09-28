@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Graphics } from 'pixi.js';
 import type { ArpgWorld, ReactionId } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { barrierBreakFx, reactionFx, reactionLabel } from '../reactions';
+import { drawGuard, drawMonsterMarks } from '../draw-world';
 import type { ManaFx } from '../mana-fx';
 
 /** A ManaFx that records which effects were asked for. */
@@ -20,6 +22,12 @@ function spyFx() {
 }
 
 const world = { t: 1, hero: { x: 5, y: 8, facing: { x: 0, y: -1 } } } as unknown as ArpgWorld;
+
+/** A Graphics stand-in that counts pixels (`px` draws one rect each). */
+function pixels() {
+  const g = { rects: 0, rect: () => (g.rects++, g), fill: () => g };
+  return g as unknown as Graphics & { rects: number };
+}
 
 describe('reaction labels', () => {
   it('come from the data, so a new reaction never floats "undefined"', () => {
@@ -77,5 +85,76 @@ describe('the moment a reaction fires', () => {
     barrierBreakFx(fx, { kind: 'barrierBreak', x: 5, y: 8 });
     expect(spies.disperse).toHaveBeenCalled();
     expect(spies.burst.mock.calls[0].slice(0, 2)).toEqual([5, 8 - 0.3]);
+  });
+});
+
+describe('lasting states', () => {
+  /** The hero's pixels at t = 1, walking up, with no Defensive and no wind-up. */
+  const heroPixels = (over: object) => {
+    const hero = {
+      x: 5,
+      y: 8,
+      facing: { x: 0, y: -1 },
+      moving: true,
+      abilities: [],
+      defend: null,
+      windup: null,
+      barrier: null,
+      quickUntil: 0,
+      ...over,
+    };
+    const air = pixels();
+    drawGuard(air, { t: 1, hero } as unknown as ArpgWorld, 1);
+    return air.rects;
+  };
+
+  /** A plain foe's mark pixels at t = 1, both layers. */
+  const markPixels = (status: object) => {
+    const foe = {
+      id: 1,
+      x: 5,
+      y: 5,
+      radius: 0.55,
+      kind: 'normal',
+      status: {
+        rootUntil: 0,
+        hexUntil: 0,
+        shockUntil: 0,
+        freezeUntil: 0,
+        poisonUntil: 0,
+        poisonStacks: 0,
+        staggerUntil: 0,
+        brandUntil: 0,
+        rattledUntil: 0,
+        sunderUntil: 0,
+        blindUntil: 0,
+        ...status,
+      },
+    };
+    const ground = pixels();
+    const air = pixels();
+    drawMonsterMarks(ground, air, { t: 1, monsters: [foe] } as unknown as ArpgWorld, 1);
+    return ground.rects + air.rects;
+  };
+
+  it("Obsidian's shell holds while the barrier does, thinning as it drains", () => {
+    expect(heroPixels({})).toBe(0);
+    const full = heroPixels({ barrier: { hp: 10, max: 10, until: 9 } });
+    const worn = heroPixels({ barrier: { hp: 2, max: 10, until: 9 } });
+    expect(worn).toBeGreaterThan(0);
+    expect(full).toBeGreaterThan(worn);
+  });
+
+  it("Lightning Rod's trail follows the hero while it lasts", () => {
+    expect(heroPixels({ quickUntil: 2 })).toBeGreaterThan(0);
+    expect(heroPixels({ quickUntil: 0.5 })).toBe(0);
+  });
+
+  it('rattled, sundered and blinded foes wear their marks only while they last', () => {
+    expect(markPixels({})).toBe(0);
+    for (const key of ['rattledUntil', 'sunderUntil', 'blindUntil']) {
+      expect(markPixels({ [key]: 2 }), key).toBeGreaterThan(0);
+      expect(markPixels({ [key]: 0.5 }), key).toBe(0);
+    }
   });
 });
