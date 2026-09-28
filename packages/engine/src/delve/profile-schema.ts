@@ -91,6 +91,7 @@ const DiveSchema = z.object({
   kills: z.number().int().min(0),
   depthsCleared: z.number().int().min(0),
   scrapEarned: z.number().min(0),
+  dustEarned: z.number().int().min(0).default(0),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
 });

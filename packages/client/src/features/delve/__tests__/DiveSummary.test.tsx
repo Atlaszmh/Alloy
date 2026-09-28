@@ -1,0 +1,40 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { createDelveProfile, startDive } from '@alloy/engine';
+import { DiveSummary } from '../DiveSummary';
+import { getDelveRegistry } from '../registry';
+
+beforeAll(() => {
+  // jsdom has no Web Animations; the title's entrance is cosmetic.
+  if (!Element.prototype.animate)
+    Element.prototype.animate = function () {
+      return { finished: Promise.resolve(), cancel() {} } as unknown as Animation;
+    };
+});
+
+function summary(dustEarned: number) {
+  const registry = getDelveRegistry();
+  const dive = startDive(registry, createDelveProfile(registry, 1, { primary: 'fire' }), 1).dive!;
+  const noop = () => {};
+  render(
+    <DiveSummary
+      dive={{ ...dive, phase: 'extracted', dustEarned }}
+      biomeName="Test"
+      onCamp={noop}
+      onAgain={noop}
+      againLabel="Again"
+    />,
+  );
+}
+
+describe('DiveSummary', () => {
+  it('shows the Mana Dust salvage gave this dive', () => {
+    summary(7);
+    expect(screen.getByTestId('dive-dust')).toHaveTextContent('✦ 7 Mana Dust from salvage');
+  });
+
+  it('says nothing about Mana Dust when there was none', () => {
+    summary(0);
+    expect(screen.queryByTestId('dive-dust')).toBeNull();
+  });
+});

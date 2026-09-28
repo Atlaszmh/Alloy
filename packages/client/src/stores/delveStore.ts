@@ -51,15 +51,21 @@ function loadManualAttack(): boolean {
 }
 
 /** The saved profile (migrated when older, with the builds it fixed), or null. */
-export function loadDelveProfile(): ParsedDelveProfile | null {
+export function loadDelveProfile(): (ParsedDelveProfile & { migrated: boolean }) | null {
   try {
     const raw = localStorage.getItem(DELVE_SAVE_KEY);
     if (!raw) return null;
-    return parseDelveProfile(getDelveRegistry(), JSON.parse(raw));
+    const data = JSON.parse(raw);
+    const parsed = parseDelveProfile(getDelveRegistry(), data);
+    return parsed && { ...parsed, migrated: data?.version !== parsed.profile.version };
   } catch {
     return null;
   }
 }
+
+/** Shown once when an older save gains a pair: the gear it no longer counts explains the Power drop. */
+export const BIND_HINT =
+  'Your gear now counts only for your two elements: bind a second one in the Mana view (Abilities tab) to count more of it';
 
 function saveProfile(profile: DelveProfile): void {
   try {
@@ -121,7 +127,8 @@ interface DelveStore {
   equip: (uid: string) => void;
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
-  salvage: (uids: string[]) => number;
+  /** Melt bag items; what they gave. */
+  salvage: (uids: string[]) => { scrap: number; dust: number };
   equipBest: () => GearItem[];
   upgrade: (uid: string) => ProfileActionResult;
   reforge: (uid: string, affixIndex: number) => ProfileActionResult;
@@ -162,7 +169,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     newUids: {},
     diveDrops: [],
     manualAttack: loadManualAttack(),
-    notices: loaded ? loaded.fixed.map((f) => fixNotice(getDelveRegistry(), f)) : [],
+    notices: loaded
+      ? [
+          ...(loaded.migrated && loaded.profile.pair.primary && !loaded.profile.pair.secondary
+            ? [BIND_HINT]
+            : []),
+          ...loaded.fixed.map((f) => fixNotice(getDelveRegistry(), f)),
+        ]
+      : [],
     bindDeclined: [],
 
     setProfile: (profile) => commit(profile),
@@ -219,7 +233,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const res = salvageItems(registry(), get().profile, uids);
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
-      return res.scrap;
+      return { scrap: res.scrap, dust: res.dust };
     },
 
     equipBest: () => {

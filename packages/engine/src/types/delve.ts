@@ -555,6 +555,8 @@ export interface DiveState {
   kills: number;
   depthsCleared: number;
   scrapEarned: number;
+  /** Mana Dust from gear salvaged while banking this dive (auto-salvage, full bag). */
+  dustEarned: number;
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;

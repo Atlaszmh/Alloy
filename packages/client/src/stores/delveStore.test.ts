@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { generateItem, SeededRNG, type BuildFix, type GearSlot } from '@alloy/engine';
 import {
   useDelveStore,
+  BIND_HINT,
   DELVE_SAVE_KEY,
   MANUAL_ATTACK_KEY,
   fixNotice,
@@ -53,17 +54,19 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().newUids.x1).toBeUndefined();
   });
 
-  it('salvage returns scrap gained', () => {
+  it('salvage returns the scrap and Mana Dust gained', () => {
     const item = generateItem(
       registry,
       { uid: 'x2', ilvl: 3, rarity: 'magic', slot: 'ring' },
       new SeededRNG(2),
     );
     const s = useDelveStore.getState();
-    s.setProfile({ ...s.profile, bag: [item] });
-    const scrap = useDelveStore.getState().salvage(['x2']);
+    // Frost is outside the fire hero's pair, so it melts into Mana Dust too.
+    s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }] });
+    const { scrap, dust } = useDelveStore.getState().salvage(['x2']);
     expect(scrap).toBeGreaterThan(0);
-    expect(useDelveStore.getState().profile.scrap).toBe(scrap);
+    expect(dust).toBe(registry.getDelveBalance().pair.salvageDust.magic);
+    expect(useDelveStore.getState().profile).toMatchObject({ scrap, manaDust: dust });
   });
 
   it('upgrade reports failure reasons', () => {
@@ -145,9 +148,20 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([
+      BIND_HINT,
       "Your Ward used Frost, which isn't in your pair; it now uses Fire",
     ]);
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(4);
+  });
+
+  it('a save that is already version 4 gets no bind hint', async () => {
+    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(useDelveStore.getState().profile));
+    (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
+      'delveStore',
+    );
+    vi.resetModules();
+    const fresh = (await import('./delveStore')).useDelveStore;
+    expect(fresh.getState().notices).toEqual([]);
   });
 
   it('chooses the mana once, binds a second element, and remembers a declined bind this session', () => {

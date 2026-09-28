@@ -104,6 +104,12 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
         )}
         <div className="text-xs text-stone-500">
           ⚙ {formatNumber(dive.scrapEarned)} scrap earned this dive
+          {dive.dustEarned > 0 && (
+            <span data-testid="dive-dust">
+              {' '}
+              · ✦ {formatNumber(dive.dustEarned)} Mana Dust from salvage
+            </span>
+          )}
         </div>
       </div>
 

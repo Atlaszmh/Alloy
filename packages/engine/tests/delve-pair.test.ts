@@ -789,6 +789,7 @@ describe('Mana Dust from salvage', () => {
     const res = bankWorld(registry, p, w);
     expect(res.dust).toBe(dust.magic);
     expect(res.profile.manaDust).toBe(dust.magic);
+    expect(res.profile.dive!.dustEarned).toBe(dust.magic);
 
     const bag = Array.from({ length: bal.loot.bagSize }, (_, i) => magic('fire', `f${i}`));
     const full = { ...startDive(registry, fire(), 1), bag };

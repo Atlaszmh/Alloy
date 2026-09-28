@@ -207,7 +207,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
       setConfirmSalvage(true);
       return;
     }
-    const scrap = store().salvage([item.uid]);
+    const { scrap } = store().salvage([item.uid]);
     playSound('orbRemove');
     vibrate('light');
     if (scrap > 0) onClose();

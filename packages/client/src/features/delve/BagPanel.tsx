@@ -51,11 +51,12 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
   };
 
   const onSalvageJunk = () => {
-    const scrap = useDelveStore.getState().salvage(junk);
+    const { scrap, dust } = useDelveStore.getState().salvage(junk);
     if (scrap > 0) {
       playSound('gemScatter');
       vibrate('medium');
-      showToast(`Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap`);
+      const dustText = dust > 0 ? ` · +${formatNumber(dust)} Mana Dust` : '';
+      showToast(`Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}`);
     }
   };
 

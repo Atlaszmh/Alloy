@@ -43,6 +43,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     kills: 0,
     depthsCleared: 0,
     scrapEarned: 0,
+    dustEarned: 0,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -150,6 +151,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
       ...dive,
       kills: dive.kills + pending.kills,
       scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
+      dustEarned: dive.dustEarned + bagged.dust,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       found,
