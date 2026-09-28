@@ -170,6 +170,12 @@ describe('drawInfusion', () => {
       const own = (r: Rect) => r.color === MANA_HEX.nature;
       return rects.filter((r, k) => own(r) && (k === 0 || !own(rects[k - 1]))).map(at);
     };
+    // A fire flame on a path starts (in its light root) right after the last one's top.
+    const flames = (strength: number) => {
+      const rects = draw('fire', PATH, { strength }).air;
+      const top = (r: Rect) => r.color === MANA_HEX.fire;
+      return rects.filter((r, k) => !top(r) && (k === 0 || top(rects[k - 1]))).map(at);
+    };
     // An earth pebble is two rects on one spot.
     const pebbles = (strength: number) =>
       draw('earth', ORB, { strength })
@@ -177,7 +183,7 @@ describe('drawInfusion', () => {
         .map(at);
     const cases = [
       [vines(RING, 1), vines(RING, 0.8)],
-      [vines(PATH, 1), vines(PATH, 0.8)],
+      [flames(1), flames(0.8)],
       [pebbles(1), pebbles(0.8)],
     ];
     for (const [full, faded] of cases) {
@@ -185,6 +191,12 @@ describe('drawInfusion', () => {
       expect(faded.length).toBeLessThan(full.length);
       expect(faded).toEqual(full.slice(0, faded.length));
     }
+  });
+
+  it("draws nature's tendrils on a path all in full green (lighter tips wash out over a beam)", () => {
+    const rects = draw('nature', PATH).air;
+    expect(rects.length).toBeGreaterThan(0);
+    expect(rects.every((r) => r.color === MANA_HEX.nature)).toBe(true);
   });
 
   it('draws nothing on a path with no points', () => {

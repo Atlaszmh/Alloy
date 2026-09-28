@@ -334,12 +334,16 @@ const MOTIFS: Record<ManaType, Motif> = {
     path: (p, s, at, i) => {
       const side = i % 2 ? 1 : -1;
       const e = edge(s, at, side);
-      // Tendrils sprout sideways and curl tighter as the carrier's progress rises.
+      // Tendrils sprout sideways from two pixels past the edge (off a beam's bright body,
+      // where green still reads on the additive layer), all in full green, and curl
+      // tighter as the carrier's progress rises.
+      const x0 = e.x + at.nx * side * 2 * PX;
+      const y0 = e.y + at.ny * side * 2 * PX;
       const len = (0.2 + 0.35 * fixed(p, i, 0)) * p.reach * Math.min(1, 0.3 + 1.5 * s.progress);
       const turn = side * (fixed(p, i, 1) < 0.5 ? 1 : -1) * (0.6 + 2.2 * s.progress);
-      const tip = curl(p.air, e.x, e.y, at.nx * side, at.ny * side, len, turn, p.color, p.alpha);
-      px(p.air, tip.x, tip.y, p.light, p.alpha);
-      px(p.air, tip.x + at.tx * PX, tip.y + at.ty * PX, p.light, p.alpha * 0.8);
+      const tip = curl(p.air, x0, y0, at.nx * side, at.ny * side, len, turn, p.color, p.alpha);
+      px(p.air, tip.x, tip.y, p.color, p.alpha);
+      px(p.air, tip.x + at.tx * PX, tip.y + at.ty * PX, p.color, p.alpha * 0.8);
     },
     ring: (p, o, a, i) => {
       const len = (0.2 + 0.35 * fixed(p, i, 0)) * p.reach;
