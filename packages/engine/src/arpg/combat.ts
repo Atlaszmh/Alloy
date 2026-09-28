@@ -86,6 +86,9 @@ export function isRooted(ctx: SimCtx, m: MonsterEntity): boolean {
 export function isRattled(ctx: SimCtx, m: MonsterEntity): boolean {
   return ctx.world.t < m.status.rattledUntil;
 }
+export function isSundered(ctx: SimCtx, m: MonsterEntity): boolean {
+  return ctx.world.t < m.status.sunderUntil;
+}
 
 /** Whether `m` carries `element`'s mark: the status a reaction of that element needs. */
 export function hasMark(ctx: SimCtx, m: MonsterEntity, element: ManaType): boolean {
@@ -365,6 +368,10 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
       refundDodgeCharge(ctx);
       h.quickUntil = t + r.lightningRodDuration;
       return amount;
+    case 'sunder':
+      // Later hits only: this one's multipliers are already in.
+      m.status.sunderUntil = t + r.sunderDuration;
+      return amount;
     default:
       // The new eight's effects arrive in their own tasks.
       return amount;
@@ -412,6 +419,7 @@ export function hitMonster(
     amount *= 1 - bal.monster.traits.armoredReduction;
   if (isShocked(ctx, m)) amount *= 1 + bal.status.shockBonus * (mastery(ctx, 'storm') ? 2 : 1);
   if (isHexed(ctx, m)) amount *= 1 + bal.status.hexBonus;
+  if (isSundered(ctx, m)) amount *= 1 + bal.reactions.sunderBonus;
   if (isFrozen(ctx, m) && mastery(ctx, 'frost')) amount *= 1.3;
 
   // Elemental reactions: this hit's element meets another element's mark on the foe.

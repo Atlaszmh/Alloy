@@ -141,6 +141,8 @@ export interface StatusState {
   staggerUntil: number;
   /** Earth's mark: an Earth source staggered the foe (even if immunity refused the stagger). */
   rattledUntil: number;
+  /** Sunder: every hit on the foe deals more until this time. */
+  sunderUntil: number;
   blindUntil: number;
   brandUntil: number;
   poisonStacks: number;

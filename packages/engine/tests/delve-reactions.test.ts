@@ -13,6 +13,7 @@ import {
   isPoisoned,
   isRattled,
   isShocked,
+  isSundered,
   makeCtx,
   type SimCtx,
 } from '../src/arpg/combat.js';
@@ -125,6 +126,7 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
     expect(f.w.hero.dodgeCharges).toBe(1);
     expect(f.w.hero.quickUntil).toBe(f.w.t + bal.reactions.lightningRodDuration);
   },
+  sunder: (f) => expect(f.m.status.sunderUntil).toBe(f.w.t + bal.reactions.sunderDuration),
 };
 
 describe('the reaction table', () => {
@@ -522,6 +524,25 @@ describe('Lightning Rod', () => {
       return w.hero.x - x0;
     };
     expect(walk(true) / walk(false)).toBeCloseTo(1 + bal.reactions.lightningRodMove);
+  });
+});
+
+describe('Sunder', () => {
+  it('boosts every later hit on the foe, but not the hit that sunders', () => {
+    const plain = setup();
+    const fireHit = hitMonster(plain.ctx, plain.m, 100, 'fire', { source: 'skill' });
+    const { w, ctx, m } = setup();
+    applyStatus(ctx, m, 'hex', 0);
+    // The sundering hit gets the hex it used up, not Sunder.
+    expect(hitMonster(ctx, m, 100, 'earth', { source: 'skill' })).toBeCloseTo(
+      hitMonster(plain.ctx, plain.m, 100, 'earth', { source: 'skill' }) * (1 + bal.status.hexBonus),
+    );
+    expect(isSundered(ctx, m)).toBe(true);
+    expect(hitMonster(ctx, m, 100, 'fire', { source: 'skill' })).toBeCloseTo(
+      fireHit * (1 + bal.reactions.sunderBonus),
+    );
+    w.t += bal.reactions.sunderDuration;
+    expect(isSundered(ctx, m)).toBe(false);
   });
 });
 
