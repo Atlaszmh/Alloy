@@ -460,19 +460,7 @@ export class ArenaRenderer {
             this.fx.ring(e.x, e.y, 1.2, RARITY_HEX[e.rarity], true, 0.5);
           break;
         case 'pickup':
-          this.fx.burst(
-            w.hero.x,
-            w.hero.y,
-            e.item
-              ? RARITY_HEX[e.item.rarity]
-              : e.dropKind === 'orb'
-                ? 0xf87171
-                : e.mana
-                  ? MANA_HEX[e.mana]
-                  : 0xffffff,
-            5,
-            2.5,
-          );
+          this.fx.burst(w.hero.x, w.hero.y, pickupColor(e), 5, 2.5);
           break;
         case 'dash':
           this.fx.bolt(
@@ -828,10 +816,12 @@ export class ArenaRenderer {
       }
       const age = w.t - d.born;
       const pop = age < 0.35 ? Math.sin((age / 0.35) * Math.PI) * 1.1 : 0;
-      const bob = d.kind === 'item' ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
+      // Items lie still, and so does a Seedling's rooted sprout.
+      const still = d.kind === 'item' || (d.kind === 'orb' && d.mana === 'nature');
+      const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
-      this.drawDrop(v, d);
+      drawDrop(v.gfx, d, this.time, age);
       if (v.label) {
         const p = this.toScreen(d.x, d.y - pop - 0.9);
         v.label.position.set(p.x, p.y);
@@ -867,43 +857,6 @@ export class ArenaRenderer {
     return { root, gfx, label };
   }
 
-  private drawDrop(v: DropView, d: Drop): void {
-    const g = v.gfx;
-    g.clear();
-    if (d.kind === 'item' && d.item) {
-      const color = RARITY_HEX[d.item.rarity];
-      const r = d.item.rarity;
-      if (r === 'rare' || r === 'epic' || r === 'legendary') {
-        const h = r === 'legendary' ? 7 : r === 'epic' ? 5.5 : 4;
-        const flicker = 0.75 + Math.sin(this.time * 3 + d.id) * 0.25;
-        g.rect(-0.28, -h, 0.56, h).fill({ color, alpha: 0.1 * flicker });
-        g.rect(-0.14, -h * 0.8, 0.28, h * 0.8).fill({ color, alpha: 0.18 * flicker });
-        g.rect(-0.05, -h * 0.6, 0.1, h * 0.6).fill({ color: 0xffffff, alpha: 0.25 * flicker });
-      }
-      g.ellipse(0, 0.12, 0.32, 0.12).fill({ color: 0x000000, alpha: 0.4 });
-      g.circle(0, 0, 0.42).fill({ color, alpha: 0.18 });
-      g.poly([0, -0.32, 0.24, 0, 0, 0.32, -0.24, 0]).fill({ color });
-      g.poly([0, -0.32, 0.24, 0, 0, 0]).fill({ color: 0xffffff, alpha: 0.45 });
-      g.poly([0, -0.32, 0.24, 0, 0, 0.32, -0.24, 0]).stroke({
-        width: 0.04,
-        color: 0x000000,
-        alpha: 0.6,
-      });
-      if (d.item.mana) g.circle(0.26, 0.24, 0.09).fill({ color: MANA_HEX[d.item.mana] });
-    } else if (d.kind === 'mote') {
-      const color = d.mana ? MANA_HEX[d.mana] : 0x93c5fd;
-      g.circle(0, 0, 0.26).fill({ color, alpha: 0.25 });
-      g.circle(0, 0, 0.13).fill({ color });
-      g.circle(-0.04, -0.04, 0.05).fill({ color: 0xffffff, alpha: 0.8 });
-    } else if (d.kind === 'orb') {
-      g.circle(0, 0, 0.32).fill({ color: 0xef4444, alpha: 0.25 });
-      g.circle(0, 0, 0.2).fill({ color: 0xdc2626 });
-      g.circle(-0.06, -0.06, 0.07).fill({ color: 0xffffff, alpha: 0.8 });
-    } else {
-      g.circle(0, 0, 0.16).fill({ color: 0xfcd34d });
-    }
-  }
-
   private updateTexts(dt: number): void {
     for (const f of this.floats) {
       f.life -= dt;
@@ -929,6 +882,60 @@ export class ArenaRenderer {
     this.textures.clear();
     for (const t of this.textPool) t.destroy();
     this.textPool = [];
+  }
+}
+
+/** A pickup's sparkle: the item's rarity, else the drop's mana (a mote, a Seedling orb), else red. */
+export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
+  if (e.item) return RARITY_HEX[e.item.rarity];
+  if (e.mana) return MANA_HEX[e.mana];
+  return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
+}
+
+/**
+ * A drop's look, `age` seconds after it fell. A Seedling's orb (nature) is a
+ * sprout that grows in; a mote wears its mana's colour (a Siphon's is violet).
+ */
+export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void {
+  g.clear();
+  if (d.kind === 'item' && d.item) {
+    const color = RARITY_HEX[d.item.rarity];
+    const r = d.item.rarity;
+    if (r === 'rare' || r === 'epic' || r === 'legendary') {
+      const h = r === 'legendary' ? 7 : r === 'epic' ? 5.5 : 4;
+      const flicker = 0.75 + Math.sin(time * 3 + d.id) * 0.25;
+      g.rect(-0.28, -h, 0.56, h).fill({ color, alpha: 0.1 * flicker });
+      g.rect(-0.14, -h * 0.8, 0.28, h * 0.8).fill({ color, alpha: 0.18 * flicker });
+      g.rect(-0.05, -h * 0.6, 0.1, h * 0.6).fill({ color: 0xffffff, alpha: 0.25 * flicker });
+    }
+    g.ellipse(0, 0.12, 0.32, 0.12).fill({ color: 0x000000, alpha: 0.4 });
+    g.circle(0, 0, 0.42).fill({ color, alpha: 0.18 });
+    g.poly([0, -0.32, 0.24, 0, 0, 0.32, -0.24, 0]).fill({ color });
+    g.poly([0, -0.32, 0.24, 0, 0, 0]).fill({ color: 0xffffff, alpha: 0.45 });
+    g.poly([0, -0.32, 0.24, 0, 0, 0.32, -0.24, 0]).stroke({
+      width: 0.04,
+      color: 0x000000,
+      alpha: 0.6,
+    });
+    if (d.item.mana) g.circle(0.26, 0.24, 0.09).fill({ color: MANA_HEX[d.item.mana] });
+  } else if (d.kind === 'mote') {
+    const color = d.mana ? MANA_HEX[d.mana] : 0x93c5fd;
+    g.circle(0, 0, 0.26).fill({ color, alpha: 0.25 });
+    g.circle(0, 0, 0.13).fill({ color });
+    g.circle(-0.04, -0.04, 0.05).fill({ color: 0xffffff, alpha: 0.8 });
+  } else if (d.kind === 'orb' && d.mana === 'nature') {
+    // A sprout: its stem and two leaves grow in over half a second.
+    const k = Math.min(1, age / 0.5);
+    g.ellipse(0, 0.12, 0.26, 0.1).fill({ color: 0x000000, alpha: 0.35 });
+    g.rect(-0.03, 0.1 - 0.4 * k, 0.06, 0.4 * k).fill({ color: 0x3f9a3a });
+    g.ellipse(-0.12 * k, 0.1 - 0.36 * k, 0.12 * k, 0.06 * k).fill({ color: MANA_HEX.nature });
+    g.ellipse(0.12 * k, 0.1 - 0.3 * k, 0.12 * k, 0.06 * k).fill({ color: MANA_HEX.nature });
+  } else if (d.kind === 'orb') {
+    g.circle(0, 0, 0.32).fill({ color: 0xef4444, alpha: 0.25 });
+    g.circle(0, 0, 0.2).fill({ color: 0xdc2626 });
+    g.circle(-0.06, -0.06, 0.07).fill({ color: 0xffffff, alpha: 0.8 });
+  } else {
+    g.circle(0, 0, 0.16).fill({ color: 0xfcd34d });
   }
 }
 
