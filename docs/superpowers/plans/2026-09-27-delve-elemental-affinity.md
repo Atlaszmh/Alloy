@@ -3720,7 +3720,7 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
   ```
 
   and after its `{mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}` add `{!ownMana && ' · not your element'}`.
-- The implicit lines (lines 278–280 on disk):
+- The implicit lines (lines 278–280 at HEAD; the quoted text is unique):
 
   ```tsx
               <div key={`i${i}`} className="text-sm text-stone-300">
@@ -4339,7 +4339,7 @@ In `CLAUDE.md`, the Delve section:
 
 In the spec, `**Status:** Approved in conversation.` becomes `**Status:** Built in v0.43.0.`
 
-In `docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md`, line 108 (**Finisher ring placement**) ends `Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion.`; append ` (Superseded by the elemental affinity spec: a ranged finisher now flares at the hand.)`.
+In `docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md`, line 108 (**Finisher ring placement**) ends `Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion.`; append ` (Superseded by the elemental affinity spec: a ranged finisher now flares at the hand, and its orb and burst carry no motif.)`.
 
 In `packages/client/package.json`, `"version": "0.42.1"` becomes `"version": "0.43.0"`.
 
