@@ -175,9 +175,9 @@ With `weapon.infusion` set (a bound secondary):
 ### Autopilot and pacing
 
 - **New profiles:** `createDelveProfile(registry, seed, opts?: { primary?: ManaType })`. With `primary`, it runs `chooseStartingMana`. The player's new save omits it, so the choice screen shows. The bot and the E2E pass `{ primary: 'fire' }`.
-- **Binding:** between dives, before `visitForge` salvages anything, the bot binds the non-primary element with the most attunement across its equipped and bagged items, and skips the bind while every such total is 0. That total is each item's base attunement for its mana, plus matching `${el}Attune` lines; ties break in `MANA_TYPES` order. It then sets its Primary build to `[primary, secondary]`, so it keeps finding reactions.
+- **Binding:** between dives, before `visitForge` salvages anything, the bot binds a non-primary element, and skips the bind while every non-primary total is 0. That total is each item's base attunement for its mana, plus matching `${el}Attune` lines, across its equipped and bagged items. Among elements with a total above 0 it prefers one that forms a reaction with the primary (the partners mirror `combat.ts`'s reaction rules), then the highest total; ties break in `MANA_TYPES` order. It then sets its Primary build to `[primary, secondary]`, so it keeps finding reactions.
 - **Overtake:** the bot calls `resolveOvertake` after each dive closes.
-- **Pacing guard rails** (`tests/delve-pacing.test.ts`) must hold. Add a second, smaller run with a Frost primary (2 seeds, via a new `AutopilotOptions.primary`), which must still progress (dive 12 at least 5 deeper than dive 1). Tune in this order:
+- **Pacing guard rails** (`tests/delve-pacing.test.ts`) must hold. Add a second, smaller run with a Frost primary (2 seeds, via a new `AutopilotOptions.primary`), which must still progress (dive 12 at least 5 deeper than dive 1). A two-element hero can find at most one reaction (each reaction needs one specific pair, and 8 of the 15 pairs have none yet), so the reactions rail becomes: every run, Fire and Frost, finds at least 1 by dive 12. Reactions for the 8 missing pairs are the next project. Tune in this order:
   1. `basicPowerPerAttune`;
   2. `dropBias`;
   3. `mana.poolPerAttune`;
