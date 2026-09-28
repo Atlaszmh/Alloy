@@ -10,6 +10,7 @@ import type {
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx } from './fx/mana-fx';
+import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import {
@@ -140,6 +141,8 @@ export class ArenaRenderer {
   private readonly groundFx: PixelLayer;
   private readonly airFx: PixelLayer;
   private readonly fx = new ManaFx();
+  /** The infusion pass's per-frame allowance (fx/infusion.ts), reset every frame. */
+  private readonly budget: InfusionBudget = { left: INFUSION_BUDGET };
   private floats: FloatText[] = [];
   private textPool: Text[] = [];
   private dying: Dying[] = [];
@@ -601,7 +604,8 @@ export class ArenaRenderer {
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
     drawAnticipation(air, this.fx, w, this.time, dt);
-    this.fx.draw(air, dt, this.time);
+    this.budget.left = INFUSION_BUDGET;
+    this.fx.draw({ air, ground }, dt, this.time, this.budget);
     drawAim(air, w, this.aim, this.time);
     this.groundFx.render(view);
     this.airFx.render(view);

@@ -3,6 +3,7 @@ import type { Graphics } from 'pixi.js';
 import type { ArpgWorld } from '@alloy/engine';
 import { HAND, ManaFx, spawnCount } from '../mana-fx';
 import { drawAnticipation, drawProjectiles } from '../draw-world';
+import { INFUSION_BUDGET, type PathShape } from '../infusion';
 
 /** A Graphics stand-in that counts pixels (`px` draws one rect per pixel). */
 function fakeGraphics() {
@@ -10,6 +11,9 @@ function fakeGraphics() {
   return g;
 }
 const G = () => fakeGraphics() as unknown as Graphics & { rects: number };
+/** Both pixel layers, for `ManaFx.draw`. */
+const L = () => ({ air: G(), ground: G() });
+const B = () => ({ left: INFUSION_BUDGET });
 const particles = (fx: ManaFx) => (fx as unknown as { particles: { vx: number }[] }).particles;
 
 afterEach(() => vi.restoreAllMocks());
@@ -22,11 +26,11 @@ describe('ManaFx', () => {
     a.burst(0, 0, 0xffffff, 1, 4);
     b.burst(0, 0, 0xffffff, 1, 4);
     const v0 = particles(a)[0].vx;
-    a.draw(G(), 0, 0);
+    a.draw(L(), 0, 0, B());
     expect(particles(a)[0].vx).toBe(v0);
-    a.draw(G(), 1 / 30, 0);
-    b.draw(G(), 1 / 60, 0);
-    b.draw(G(), 1 / 60, 0);
+    a.draw(L(), 1 / 30, 0, B());
+    b.draw(L(), 1 / 60, 0, B());
+    b.draw(L(), 1 / 60, 0, B());
     expect(particles(a)[0].vx).toBeCloseTo(particles(b)[0].vx, 10);
   });
 
@@ -41,9 +45,9 @@ describe('ManaFx', () => {
   it('a fading lance sheds nothing while the display is frozen', () => {
     const fx = new ManaFx();
     fx.beam(0, 0, 5, 0, 0.3, 0xffffff);
-    fx.draw(G(), 0.1, 0);
+    fx.draw(L(), 0.1, 0, B());
     const n = particles(fx).length;
-    for (let i = 0; i < 5; i++) fx.draw(G(), 0, 0);
+    for (let i = 0; i < 5; i++) fx.draw(L(), 0, 0, B());
     expect(particles(fx).length).toBe(n);
   });
 });
@@ -99,5 +103,98 @@ describe('basic shots', () => {
     drawProjectiles(small, shot(0.3), 0, new Map(), () => undefined);
     drawProjectiles(big, shot(0.54), 0, new Map(), () => undefined);
     expect(big.rects).toBeGreaterThan(small.rects);
+  });
+});
+
+describe('infused transient carriers', () => {
+  const TRAIL: PathShape = {
+    kind: 'path',
+    points: [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+    ],
+    width: 0.4,
+    progress: 0,
+  };
+  /** Motif elements one frame spends (the other effects spend nothing). */
+  const used = (fx: ManaFx, dt: number) => {
+    const budget = { left: 1e6 };
+    fx.draw(L(), dt, 0, budget);
+    return 1e6 - budget.left;
+  };
+
+  const CARRIERS: { name: string; add: (fx: ManaFx) => void }[] = [
+    {
+      name: 'a swing',
+      add: (fx) => fx.swing(0, 0, 0, Math.PI / 2, 1.6, 0xffffff, { infusion: 'storm' }),
+    },
+    { name: 'a beam', add: (fx) => fx.beam(0, 0, 5, 0, 0.55, 0xffffff, 'nature') },
+    {
+      name: 'a blast',
+      add: (fx) => fx.infuse('blast', 'fire', { kind: 'ring', x: 3, y: 3, r: 1.5 }),
+    },
+    {
+      name: 'a finisher',
+      add: (fx) => fx.infuse('finisher', 'frost', { kind: 'ring', x: 1, y: 0, r: 0.9 }),
+    },
+    { name: 'a blink trail', add: (fx) => fx.infuse('dash', 'shadow', TRAIL) },
+  ];
+
+  it.each(CARRIERS)('keeps $name while it lasts, then lets it go', ({ add }) => {
+    const fx = new ManaFx();
+    add(fx);
+    expect(used(fx, 0.05)).toBeGreaterThan(0);
+    for (let i = 0; i < 10; i++) used(fx, 0.1);
+    expect(used(fx, 0.1)).toBe(0);
+  });
+
+  it('draws no motif for a plain swing or beam', () => {
+    const fx = new ManaFx();
+    fx.swing(0, 0, 0, Math.PI / 2, 1.6, 0xffffff);
+    fx.beam(0, 0, 5, 0, 0.55, 0xffffff);
+    expect(used(fx, 0.05)).toBe(0);
+  });
+
+  it('clear() lets every infused carrier go', () => {
+    const fx = new ManaFx();
+    fx.swing(0, 0, 0, Math.PI / 2, 1.6, 0xffffff, { infusion: 'storm' });
+    fx.beam(0, 0, 5, 0, 0.55, 0xffffff, 'nature');
+    fx.infuse('blast', 'fire', { kind: 'ring', x: 3, y: 3, r: 1.5 });
+    fx.clear();
+    expect(used(fx, 0.05)).toBe(0);
+  });
+
+  it('gives the ground layer only to blasts and blink trails', () => {
+    const ground = (add: (fx: ManaFx) => void) => {
+      const fx = new ManaFx();
+      add(fx);
+      const layers = L();
+      fx.draw(layers, 0.05, 0, { left: 1e6 });
+      return layers.ground.rects;
+    };
+    expect(
+      ground((fx) => fx.infuse('blast', 'shadow', { kind: 'ring', x: 3, y: 3, r: 1.5 })),
+    ).toBeGreaterThan(0);
+    expect(ground((fx) => fx.infuse('dash', 'shadow', TRAIL))).toBeGreaterThan(0);
+    expect(
+      ground((fx) => fx.infuse('finisher', 'shadow', { kind: 'ring', x: 1, y: 0, r: 0.9 })),
+    ).toBe(0);
+    expect(
+      ground((fx) => fx.swing(0, 0, 0, Math.PI / 2, 1.6, 0xffffff, { infusion: 'shadow' })),
+    ).toBe(0);
+    expect(ground((fx) => fx.beam(0, 0, 5, 0, 0.55, 0xffffff, 'shadow'))).toBe(0);
+  });
+
+  it('spends the budget in priority order: a finisher before a blink trail', () => {
+    const fx = new ManaFx();
+    fx.infuse('dash', 'shadow', TRAIL);
+    fx.infuse('finisher', 'fire', { kind: 'ring', x: 0, y: 0, r: 1 });
+    const layers = { air: G(), ground: G() };
+    // The fire finisher at 1.5: round(1.6 × 2π × 1.5) = 15 elements; the trail's 5 no longer fit.
+    const budget = { left: 16 };
+    fx.draw(layers, 0.001, 0, budget);
+    expect(budget.left).toBe(1);
+    expect(layers.air.rects).toBeGreaterThan(0);
+    expect(layers.ground.rects).toBe(0); // the trail's dark smoke was left out
   });
 });

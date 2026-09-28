@@ -1,12 +1,21 @@
-import type { Graphics } from 'pixi.js';
-import type { Vec } from '@alloy/engine';
+import type { ManaType, Vec } from '@alloy/engine';
 import { PX, manaArc, manaDust, manaLine, manaRing, px } from './mana-pixels';
+import {
+  drawInfusion,
+  eventSeed,
+  type InfusionBudget,
+  type InfusionLayers,
+  type InfusionShape,
+  type PathShape,
+} from './infusion';
 
 /**
  * Short-lived combat effects, drawn as mana pixels into the air layer: sparks
  * and debris, expanding rings, lightning and dash streaks, swings, beams, and
  * the casting polish (a fling of mana toward the target and pixels gathering
- * during a wind-up). Cosmetic only, so it may use Math.random.
+ * during a wind-up). It also holds the transient infusion carriers
+ * (fx/infusion.ts): infused swings and beams, finisher discharges, blasts and
+ * blink trails. Cosmetic only, so it may use Math.random.
  */
 
 interface Particle {
@@ -54,6 +63,9 @@ interface Swing {
   /** Sweep from the other side (backslash). */
   reverse: boolean;
   finisher: boolean;
+  /** The infusion drawn along the swept arc, and its motif's seed. */
+  infusion: ManaType | null;
+  seed: number;
 }
 
 interface Beam {
@@ -65,7 +77,28 @@ interface Beam {
   color: number;
   age: number;
   life: number;
+  infusion: ManaType | null;
+  seed: number;
 }
+
+/** A transient infusion carrier: a finisher's discharge or a blast (rings), or a blink trail (a path). */
+export type InfusedKind = 'finisher' | 'blast' | 'dash';
+
+interface Infused {
+  kind: InfusedKind;
+  element: ManaType;
+  shape: InfusionShape;
+  seed: number;
+  age: number;
+  life: number;
+}
+
+/** How long each transient carrier lasts, and how strongly it draws (finishers discharge at 1.5). */
+const INFUSED: Record<InfusedKind, { life: number; strength: number }> = {
+  finisher: { life: 0.45, strength: 1.5 },
+  blast: { life: 0.45, strength: 1 },
+  dash: { life: 0.4, strength: 1 },
+};
 
 const MAX_PARTICLES = 500;
 const SWEEP_SECONDS = 0.1;
@@ -96,6 +129,9 @@ export class ManaFx {
   private bolts: Bolt[] = [];
   private swings: Swing[] = [];
   private beams: Beam[] = [];
+  private infusions: Infused[] = [];
+  /** Display seconds so far: seeds each transient motif by when it was made. */
+  private now = 0;
 
   clear(): void {
     this.particles = [];
@@ -103,6 +139,7 @@ export class ManaFx {
     this.bolts = [];
     this.swings = [];
     this.beams = [];
+    this.infusions = [];
   }
 
   /** Sparks and debris: pixels thrown out in every direction. */
@@ -204,7 +241,7 @@ export class ManaFx {
     arc: number,
     range: number,
     color: number,
-    o: { heft?: number; reverse?: boolean; finisher?: boolean } = {},
+    o: { heft?: number; reverse?: boolean; finisher?: boolean; infusion?: ManaType | null } = {},
   ): void {
     const heft = o.heft ?? 0.3;
     const life = SWEEP_SECONDS + 0.12 + 0.12 * heft + (o.finisher ? 0.08 : 0);
@@ -222,6 +259,8 @@ export class ManaFx {
       heft,
       reverse: !!o.reverse,
       finisher: !!o.finisher,
+      infusion: o.infusion ?? null,
+      seed: eventSeed(x, y, this.now),
     });
     const end = o.reverse ? angle - arc / 2 : angle + arc / 2;
     const tx = x + Math.cos(end) * range;
@@ -238,12 +277,56 @@ export class ManaFx {
     }
   }
 
-  beam(x: number, y: number, tx: number, ty: number, width: number, color: number): void {
-    this.beams.push({ x, y, tx, ty, width, color, age: 0, life: 0.36 });
+  beam(
+    x: number,
+    y: number,
+    tx: number,
+    ty: number,
+    width: number,
+    color: number,
+    infusion: ManaType | null = null,
+  ): void {
+    this.beams.push({
+      x,
+      y,
+      tx,
+      ty,
+      width,
+      color,
+      age: 0,
+      life: 0.36,
+      infusion,
+      seed: eventSeed(x, y, this.now),
+    });
   }
 
-  /** Advance and draw everything into `g` (the air layer). */
-  draw(g: Graphics, dt: number, time: number): void {
+  /**
+   * A transient infusion carrier: an infused melee finisher's discharge (a
+   * ring, drawn at strength 1.5), an infused blast's rim (a ring that grows
+   * with the blast's own) or a blink trail (a path). Seeded from where and
+   * when it was made.
+   */
+  infuse(kind: InfusedKind, element: ManaType, shape: InfusionShape): void {
+    const at = shape.kind === 'path' ? shape.points[0] : shape;
+    this.infusions.push({
+      kind,
+      element,
+      shape,
+      seed: eventSeed(at.x, at.y, this.now),
+      age: 0,
+      life: INFUSED[kind].life,
+    });
+  }
+
+  /**
+   * Advance and draw everything: the effects on the air layer, then the
+   * infusion pass's first carriers (fx/infusion.ts) in priority order:
+   * finisher discharges, blasts, beams and sweeps, then blink trails. Only
+   * blasts and blink trails lie on the ground, so only they get its layer.
+   */
+  draw(layers: Required<InfusionLayers>, dt: number, time: number, budget: InfusionBudget): void {
+    const g = layers.air;
+    this.now += dt;
     for (const p of this.particles) {
       p.life -= dt;
       p.x += p.vx * dt;
@@ -281,6 +364,8 @@ export class ManaFx {
     }
     this.bolts = this.bolts.filter((b) => b.life > 0);
 
+    // Infused sweeps and beams: their motifs are drawn with the others, below.
+    const paths: { element: ManaType; shape: PathShape; seed: number; strength: number }[] = [];
     for (const s of this.swings) {
       s.age += dt;
       const p = Math.min(1, s.age / SWEEP_SECONDS);
@@ -294,6 +379,18 @@ export class ManaFx {
       const edge = Math.min(0.3, s.arc * 0.2);
       manaArc(g, s.x, s.y, s.range + PX, head - sign * edge, head, 0xffffff, fade, 1);
       if (s.finisher) manaArc(g, s.x, s.y, s.range + PX * 2, from, head, s.color, 0.6 * fade, 1);
+      if (s.infusion)
+        paths.push({
+          element: s.infusion,
+          shape: {
+            kind: 'path',
+            points: arcPoints(s.x, s.y, s.range, from, head),
+            width: 0.3,
+            progress: Math.min(1, s.age / s.life),
+          },
+          seed: s.seed,
+          strength: fade,
+        });
     }
     this.swings = this.swings.filter((s) => s.age < s.life);
 
@@ -323,8 +420,45 @@ export class ManaFx {
             size: 1,
             drag: 0.95,
           });
+      if (b.infusion)
+        paths.push({
+          element: b.infusion,
+          shape: {
+            kind: 'path',
+            points: [
+              { x: baseX, y: baseY },
+              { x: tipX, y: tipY },
+            ],
+            width: b.width,
+            progress: Math.min(1, b.age / b.life),
+          },
+          seed: b.seed,
+          strength: 1 - fadeP,
+        });
     }
     this.beams = this.beams.filter((b) => b.age < b.life);
+
+    // The infusion pass starts here, with these first-priority carriers.
+    for (const f of this.infusions) f.age += dt;
+    const air = { air: g };
+    const transient = (kind: InfusedKind, l: InfusionLayers) => {
+      for (const f of this.infusions)
+        if (f.kind === kind)
+          drawInfusion(
+            l,
+            f.element,
+            shapeAt(f),
+            time,
+            f.seed,
+            INFUSED[kind].strength * Math.max(0, 1 - f.age / f.life),
+            budget,
+          );
+    };
+    transient('finisher', air);
+    transient('blast', layers);
+    for (const q of paths) drawInfusion(air, q.element, q.shape, time, q.seed, q.strength, budget);
+    transient('dash', layers);
+    this.infusions = this.infusions.filter((f) => f.age < f.life);
   }
 }
 
@@ -345,4 +479,22 @@ function jagged(points: Vec[]): Vec[] {
   }
   out.push(points[points.length - 1]);
   return out;
+}
+
+/** Points along an arc from `a0` to `a1`, about every 0.3 units (an infused sweep's path). */
+function arcPoints(x: number, y: number, r: number, a0: number, a1: number): Vec[] {
+  const n = Math.max(1, Math.ceil((Math.abs(a1 - a0) * r) / 0.3));
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const a = a0 + ((a1 - a0) * i) / n;
+    return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r };
+  });
+}
+
+/** A transient carrier's shape at its age: a blast's rim grows with its ring; a trail's progress runs. */
+function shapeAt(f: Infused): InfusionShape {
+  const p = Math.min(1, f.age / f.life);
+  if (f.shape.kind === 'path') return { ...f.shape, progress: p };
+  if (f.kind === 'blast' && f.shape.kind === 'ring')
+    return { ...f.shape, r: 0.1 + (f.shape.r - 0.1) * (1 - Math.pow(1 - p, 3)) };
+  return f.shape;
 }
