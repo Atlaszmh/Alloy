@@ -75,14 +75,17 @@ const STONE = 0xe8d8b4;
 const STONE_DIM = 0xbfa47c;
 const EMBER = 0xffc46b;
 
+/** A storm arc's length along a rim, in units. */
+const STORM_ARC = 0.9;
+
 /** Elements per carrier: an orb's count, per unit of length along a path, per unit of rim round a ring. */
 const DENSITY: Record<ManaType, Record<InfusionShape['kind'], number>> = {
-  storm: { orb: 3, path: 1 / 1.2, ring: 0.5 },
-  nature: { orb: 4, path: 1.4, ring: 0.9 },
+  storm: { orb: 3, path: 1 / 1.2, ring: 0.7 },
+  nature: { orb: 4, path: 1.8, ring: 0.9 },
   frost: { orb: 6, path: 2, ring: 1.4 },
   fire: { orb: 6, path: 2.2, ring: 1.6 },
   earth: { orb: 4, path: 1.5, ring: 0.8 },
-  shadow: { orb: 4, path: 1.3, ring: 1.1 },
+  shadow: { orb: 4, path: 1.3, ring: 1.4 },
 };
 
 /** A seed for a transient carrier, from where and when its event happened. */
@@ -120,8 +123,8 @@ interface Motif {
   orb: (p: Pen, o: OrbShape, i: number) => void;
   /** Element `i` at a point along a path. */
   path: (p: Pen, s: PathShape, at: PathPoint, i: number) => void;
-  /** Element `i` at angle `a` on a rim, owning `span` radians of it. */
-  ring: (p: Pen, o: RingShape, a: number, span: number, i: number) => void;
+  /** Element `i` at angle `a` on a rim. */
+  ring: (p: Pen, o: RingShape, a: number, i: number) => void;
 }
 
 /** A 0..1 value fixed for element `i` of this carrier (`k` picks one of several). */
@@ -256,7 +259,7 @@ const MOTIFS: Record<ManaType, Motif> = {
     orb: (p, o, i) => {
       const a = TAU * flick(p, i, 0, 15);
       const out = a + (flick(p, i, 1, 15) - 0.5) * 0.8;
-      const r1 = o.r + (0.25 + 0.3 * flick(p, i, 2, 15)) * p.reach;
+      const r1 = o.r + (0.3 + 0.3 * flick(p, i, 2, 15)) * p.reach;
       const x1 = o.x + Math.cos(out) * r1;
       const y1 = o.y + Math.sin(out) * r1;
       crooked(
@@ -265,9 +268,9 @@ const MOTIFS: Record<ManaType, Motif> = {
         o.y + Math.sin(a) * o.r,
         x1,
         y1,
-        p.light,
+        p.color,
         p.alpha,
-        0.08,
+        0.14,
         3,
         (j) => flick(p, i, 3 + j, 15),
       );
@@ -279,20 +282,23 @@ const MOTIFS: Record<ManaType, Motif> = {
       const dx = at.nx * side * Math.cos(tilt) + at.tx * Math.sin(tilt);
       const dy = at.ny * side * Math.cos(tilt) + at.ty * Math.sin(tilt);
       const e = edge(s, at, side);
-      const len = (0.2 + 0.3 * flick(p, i, 1, 15)) * p.reach;
-      crooked(p.air, e.x, e.y, e.x + dx * len, e.y + dy * len, p.light, p.alpha, 0.07, 3, (j) =>
+      const len = (0.25 + 0.3 * flick(p, i, 1, 15)) * p.reach;
+      crooked(p.air, e.x, e.y, e.x + dx * len, e.y + dy * len, p.color, p.alpha, 0.12, 3, (j) =>
         flick(p, i, 2 + j, 15),
       );
       px(p.air, e.x + dx * len, e.y + dy * len, 0xffffff, p.alpha);
     },
-    ring: (p, o, a, span, i) => {
+    ring: (p, o, a, i) => {
       if (flick(p, i, 0, 15) < 0.25) return; // it crackles on and off
+      // A set length of rim (not a share of it), so golden-spaced arcs never pile up or shrink when thinned.
+      const span = Math.min(TAU / 3, (STORM_ARC * p.reach) / Math.max(0.1, o.r));
       let prev: Vec | null = null;
       for (let j = 0; j <= 4; j++) {
-        const aj = a + (span * 0.7 * j) / 4;
+        const aj = a + span * (j / 4 - 0.5);
         const rr = o.r + (j % 2 ? 0.18 : -0.06) * p.reach + (flick(p, i, 1 + j, 15) - 0.5) * 0.08;
         const q = { x: o.x + Math.cos(aj) * rr, y: o.y + Math.sin(aj) * rr };
-        if (prev) manaLine(p.air, prev.x, prev.y, q.x, q.y, p.light, p.alpha);
+        if (prev) manaLine(p.air, prev.x, prev.y, q.x, q.y, p.color, p.alpha);
+        if (j % 2) px(p.air, q.x, q.y, 0xffffff, p.alpha);
         prev = q;
       }
     },
@@ -335,7 +341,7 @@ const MOTIFS: Record<ManaType, Motif> = {
       px(p.air, tip.x, tip.y, p.light, p.alpha);
       px(p.air, tip.x + at.tx * PX, tip.y + at.ty * PX, p.light, p.alpha * 0.8);
     },
-    ring: (p, o, a, _span, i) => {
+    ring: (p, o, a, i) => {
       const len = (0.2 + 0.35 * fixed(p, i, 0)) * p.reach;
       const tip = curl(
         p.air,
@@ -397,7 +403,7 @@ const MOTIFS: Record<ManaType, Motif> = {
       manaLine(p.air, e.x, e.y, e.x + dx * len, e.y + dy * len, p.light, p.alpha);
       px(p.air, e.x + dx * len, e.y + dy * len, 0xffffff, p.alpha);
     },
-    ring: (p, o, a, _span, i) => {
+    ring: (p, o, a, i) => {
       const c = Math.cos(a);
       const s = Math.sin(a);
       const r1 = o.r + (0.18 + 0.35 * fixed(p, i, 0)) * p.reach;
@@ -422,13 +428,13 @@ const MOTIFS: Record<ManaType, Motif> = {
     path: (p, s, at, i) => {
       const x = at.x + (fixed(p, i, 0) - 0.5) * s.width;
       const y = at.y + (fixed(p, i, 1) - 0.5) * s.width * 0.5;
-      flame(p, x, y, (0.12 + 0.35 * flick(p, i, 0, 12)) * p.reach, i);
+      flame(p, x, y, (0.18 + 0.35 * flick(p, i, 0, 12)) * p.reach, i);
     },
-    ring: (p, o, a, _span, i) => {
+    ring: (p, o, a, i) => {
       const x = o.x + Math.cos(a) * o.r;
       const y = o.y + Math.sin(a) * o.r;
       if (i % 3 !== 2) {
-        flame(p, x, y, (0.12 + 0.3 * flick(p, i, 0, 12)) * p.reach, i);
+        flame(p, x, y, (0.2 + 0.35 * flick(p, i, 0, 12)) * p.reach, i);
         return;
       }
       const ph = (p.time * 1.2 + fixed(p, i, 0)) % 1;
@@ -474,7 +480,7 @@ const MOTIFS: Record<ManaType, Motif> = {
         );
       }
     },
-    ring: (p, o, a, _span, i) => {
+    ring: (p, o, a, i) => {
       const c = Math.cos(a);
       const s = Math.sin(a);
       // A rock thrown outward from the rim.
@@ -540,12 +546,12 @@ const MOTIFS: Record<ManaType, Motif> = {
         px(p.ground, x, y, SHADOW_SMOKE, 0.7 * p.alpha, 2);
       }
     },
-    ring: (p, o, a, _span, i) => {
+    ring: (p, o, a, i) => {
       const c = Math.cos(a);
       const s = Math.sin(a);
       if (i % 2 === 0) {
         // A wisp rising off the rim.
-        const len = (0.15 + 0.3 * fixed(p, i, 0)) * p.reach;
+        const len = (0.2 + 0.35 * fixed(p, i, 0)) * p.reach;
         const turn = Math.sin(p.time * 3 + i) * 1.5;
         curl(p.air, o.x + c * o.r, o.y + s * o.r, c * 0.3, -1, len, turn, p.color, p.alpha);
         return;
@@ -556,7 +562,7 @@ const MOTIFS: Record<ManaType, Motif> = {
       const x = o.x + c * d;
       const y = o.y + s * d;
       if (p.ground) px(p.ground, x, y, SHADOW_SMOKE, p.alpha * (0.4 + 0.6 * ph), 2);
-      px(p.air, x, y, p.deep, p.alpha * Math.sin(Math.PI * ph));
+      px(p.air, x, y, p.color, p.alpha * Math.sin(Math.PI * ph));
     },
   },
 };
@@ -567,7 +573,8 @@ const MOTIFS: Record<ManaType, Motif> = {
  * (`round(base × strength)`, where the base grows with the carrier's size),
  * the alpha (`min(1, strength)`) and the reach (`× (0.8 + 0.2 × strength)`).
  * The count is checked against `budget` first: drawn in full if it fits,
- * every other element if half fits, else skipped; what is drawn comes off it.
+ * its first half if that fits (the golden slots' most even half), else
+ * skipped; what is drawn comes off it.
  */
 export function drawInfusion(
   layers: InfusionLayers,
@@ -583,8 +590,8 @@ export function drawInfusion(
   const path = shape.kind === 'path' ? sampler(shape.points) : null;
   const size = shape.kind === 'orb' ? 1 : shape.kind === 'ring' ? TAU * shape.r : (path?.len ?? 0);
   const n = Math.round(DENSITY[element][shape.kind] * size * s);
-  const stride = n <= budget.left ? 1 : Math.ceil(n / 2) <= budget.left ? 2 : 0;
-  if (n <= 0 || stride === 0) return;
+  const count = n <= budget.left ? n : Math.ceil(n / 2) <= budget.left ? Math.ceil(n / 2) : 0;
+  if (count <= 0) return;
   const color = MANA_HEX[element];
   const p: Pen = {
     air: layers.air,
@@ -601,11 +608,10 @@ export function drawInfusion(
   const m = MOTIFS[element];
   const offset = fixed(p, 0, 9);
   const slot = (i: number) => (i * GOLDEN + offset) % 1;
-  let drawn = 0;
-  for (let i = 0; i < n; i += stride, drawn++) {
+  for (let i = 0; i < count; i++) {
     if (shape.kind === 'orb') m.orb(p, shape, i);
-    else if (shape.kind === 'ring') m.ring(p, shape, TAU * slot(i), TAU / n, i);
+    else if (shape.kind === 'ring') m.ring(p, shape, TAU * slot(i), i);
     else if (path) m.path(p, shape, path.at(slot(i)), i);
   }
-  budget.left -= drawn;
+  budget.left -= count;
 }

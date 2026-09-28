@@ -147,7 +147,7 @@ describe('drawInfusion', () => {
     );
   });
 
-  it('draws in full when the budget allows, every other element when half fits, else nothing', () => {
+  it('draws in full when the budget allows, its first half when half fits, else nothing', () => {
     const n = draw('frost', RING).used;
     const full = draw('frost', RING, { budget: { left: n } });
     expect(full.left).toBe(0);
@@ -155,6 +155,8 @@ describe('drawInfusion', () => {
     expect(half.left).toBe(0);
     expect(half.air.length).toBeGreaterThan(0);
     expect(half.air.length).toBeLessThan(full.air.length);
+    // The golden slots' first half (their most even half), exactly as the full draw starts.
+    expect(half.air).toEqual(full.air.slice(0, half.air.length));
     const none = draw('frost', RING, { budget: { left: Math.ceil(n / 2) - 1 } });
     expect(none.left).toBe(Math.ceil(n / 2) - 1);
     expect(none.air).toHaveLength(0);

@@ -14,9 +14,13 @@ export function arenaToCell(
 type Cell = { x: number; y: number };
 
 /** An infusion marks a path once per this many cells… */
-const STAMP_SPACING = 4;
-/** …at most this many times per event (spread evenly, never cut off). */
-export const MAX_STAMPS = 12;
+const STAMP_SPACING = 5;
+/**
+ * …at most this many times per event (spread evenly, never cut off). Each
+ * stamp is a full brush with its own burst: 12 per lance kept ~3,500 floor
+ * particles alive under a fire or earth Lance's spam (half the cap); 8 keeps ~2,600.
+ */
+export const MAX_STAMPS = 8;
 /** Marks round an infused blast's rim. */
 export const RIM_STAMPS = 6;
 
@@ -30,7 +34,7 @@ const BRUSH: Record<Exclude<ManaType, 'storm'>, (pw: PixelWorld, c: Cell) => voi
 };
 
 /**
- * Stamps along a path `len` cells long: one per 4 cells, 2 to 12, from t = 0
+ * Stamps along a path `len` cells long: one per 5 cells, 2 to 8, from t = 0
  * to t = 1. A closed path (a 360° slam) spaces them k / n, so its two ends
  * don't stamp the same place twice.
  */

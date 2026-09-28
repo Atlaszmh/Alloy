@@ -478,10 +478,10 @@ describe('infusions on the pixel floor', () => {
     expect(f.arcs[0][RIM_STAMPS]).toEqual(f.arcs[0][0]);
   });
 
-  it('marks a lance evenly from end to end, one stamp per 4 cells and at most 12', () => {
+  it('marks a lance evenly from end to end, one stamp per 5 cells and at most 8', () => {
     const long = spyFloor();
     applyArenaEvent(long.pw, lance('earth'), PPU, MARGIN);
-    expect(long.stamps).toHaveLength(MAX_STAMPS); // 125 cells would be 32
+    expect(long.stamps).toHaveLength(MAX_STAMPS); // 125 cells would be 26
     expect(long.stamps[0]).toMatchObject(at(5, 30));
     expect(long.stamps[MAX_STAMPS - 1]).toMatchObject(at(5, 5));
     const g = gaps(long.stamps);
@@ -514,7 +514,7 @@ describe('infusions on the pixel floor', () => {
     const f = spyFloor();
     applyArenaEvent(f.pw, slash(150, 'nature'), PPU, MARGIN);
     const c = at(10, 10);
-    expect(f.stamps).toHaveLength(8); // 12 cells out over 150°: about 31 cells of arc
+    expect(f.stamps).toHaveLength(7); // 12 cells out over 150°: about 31 cells of arc
     for (const s of f.stamps) expect(Math.hypot(s.x - c.x, s.y - c.y)).toBeCloseTo(12, 5);
     const g = gaps(f.stamps);
     for (const d of g) expect(d).toBeCloseTo(g[0], 5);
@@ -545,9 +545,9 @@ describe('infusions on the pixel floor', () => {
       MARGIN,
     );
     const frost = f.stamps.filter((s) => s.brush === 'frost');
-    expect(frost).toHaveLength(6); // 20 cells
+    expect(frost).toHaveLength(5); // 20 cells
     expect(frost[0]).toMatchObject(at(5, 20));
-    expect(frost[5]).toMatchObject(at(5, 16));
+    expect(frost[4]).toMatchObject(at(5, 16));
     expect(f.stamps.filter((s) => s.brush === 'shadow')).toHaveLength(1);
   });
 

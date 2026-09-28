@@ -85,7 +85,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
   - Transient carriers are seeded when created, from `hash(x, y, t)` of their event.
 - **Budget:** `budget` is a per-frame object `{ left: 600 }`, reset each frame in `ArenaRenderer.update`. A motif estimates its element count first:
   - it draws in full if that fits;
-  - it draws thinned (every other element) if half fits;
+  - it draws thinned (its first half: the golden slots' most even half) if half fits;
   - otherwise it skips;
   - and it subtracts what it drew.
   - **Priority** is the order of the infusion pass, which runs after all other drawing. Transient effects come first (finisher discharges, blasts, beams and sweeps, blink trails), then the hero's auras, projectiles, lobs, and zones last.
@@ -128,7 +128,7 @@ Where an infused path or blast passes, the floor gets a mark of the infusion ele
   | Earth | `earthImpact(x, y, 2)` |
   | Shadow | `shadowBlast(x, y, 2)` |
 
-- **Paths:** stamps are spaced evenly along the path, one per 4 cells, and at most 12 per event (spread evenly, never cut off). A slash is sampled along its arc from `x, y, dir, range, arc`.
+- **Paths:** stamps are spaced evenly along the path, one per 5 cells, and at most 8 per event (spread evenly, never cut off; each stamp is a full brush with its own burst, and 12 per lance kept too many floor particles alive). A 360° slam spaces its stamps all the way round, never twice in one place. A slash is sampled along its arc from `x, y, dir, range, arc`.
 - **Blasts:** 6 stamps evenly around the rim at the blast's radius, applied after the body's own blast brush, so the body keeps its core and the infusion marks the edge.
 - **Growth brush:** `pixel/world.ts` and `pixel/render.ts` gain two per-cell fields, `growth` (what is drawn, 0–1) and `growthTarget` (0–1):
   - A stamp sets `growthTarget = 1` within its radius.
@@ -166,7 +166,7 @@ Client:
   - strength scales the element count;
   - the budget thins, then skips.
 - `ManaFx` keeps and expires infused swings, beams and transient entries, and `clear()` empties them.
-- `applyArenaEvent` stamps the right brush for each infusion element on paths (evenly, at most 12) and blast rims. It stamps nothing for `null`.
+- `applyArenaEvent` stamps the right brush for each infusion element on paths (evenly, at most 8) and blast rims. It stamps nothing for `null`.
 - `FLOOR_EVENTS` includes `beam` and `slash`.
 - The growth fields: a stamped cell's `growth` rises over about 15 steps, then falls to 0 within about 120 + 15 steps; an unstamped cell stays 0.
 - The Basic infusion picker writes the store, disables the weapon's element, and is disabled when unarmed.

@@ -281,6 +281,16 @@ export function drawAnticipation(
 }
 
 /**
+ * The size a shot draws at: bolts and monster shots at their radius, other
+ * ability shots (darts, embers) at 0.15, a basic shot at half its radius (the
+ * staff's great orb, the wand's flare). Shared with the infusion pass.
+ */
+function shotSize(p: Projectile): number {
+  if (p.owner === 'monster' || p.form === 'bolt') return p.radius;
+  return p.ability ? 0.15 : p.radius * 0.5;
+}
+
+/**
  * Projectiles as pixel orbs with pixel trails. `trails` keeps each one's
  * recent path; `bornAt` says when each appeared, so it pops in over 0.05 s.
  */
@@ -296,6 +306,7 @@ export function drawProjectiles(
     const born = bornAt(p.id);
     const k = born === undefined ? 1 : Math.min(1, (time - born) / 0.05);
     const r = (v: number) => Math.max(PX, v * k);
+    const size = shotSize(p);
     alive.add(p.id);
     let trail = trails.get(p.id);
     if (!trail) {
@@ -313,20 +324,19 @@ export function drawProjectiles(
     }
     const second = p.ability?.elements[1];
     if (p.owner === 'monster') {
-      manaOrb(air, p.x, p.y, r(p.radius), color, 0xffffff);
-      manaRing(air, p.x, p.y, r(p.radius + PX * 2), HOSTILE, time, { alpha: 0.7, jitter: 1 });
+      manaOrb(air, p.x, p.y, r(size), color, 0xffffff);
+      manaRing(air, p.x, p.y, r(size + PX * 2), HOSTILE, time, { alpha: 0.7, jitter: 1 });
     } else if (p.form === 'bolt') {
       if (p.pierce && p.element === 'earth') {
-        manaOrb(air, p.x, p.y, r(p.radius), 0x8b6b43, 0xb58a52);
+        manaOrb(air, p.x, p.y, r(size), 0x8b6b43, 0xb58a52);
       } else {
-        manaOrb(air, p.x, p.y, r(p.radius), color, second ? MANA_HEX[second] : 0xffffff);
-        manaRing(air, p.x, p.y, r(p.radius + PX * 2), color, time, { alpha: 0.6, jitter: 1 });
+        manaOrb(air, p.x, p.y, r(size), color, second ? MANA_HEX[second] : 0xffffff);
+        manaRing(air, p.x, p.y, r(size + PX * 2), color, time, { alpha: 0.6, jitter: 1 });
       }
     } else if (p.form === 'volley' || p.form === 'ember') {
-      manaOrb(air, p.x, p.y, r(0.15), color, second ? MANA_HEX[second] : 0xffffff);
+      manaOrb(air, p.x, p.y, r(size), color, second ? MANA_HEX[second] : 0xffffff);
     } else {
-      // A basic shot draws at its size (the staff's great orb, the wand's flare).
-      manaOrb(air, p.x, p.y, r(p.ability ? 0.15 : p.radius * 0.5), color, 0xffffff);
+      manaOrb(air, p.x, p.y, r(size), color, 0xffffff);
     }
   }
   for (const id of [...trails.keys()]) if (!alive.has(id)) trails.delete(id);
@@ -419,13 +429,6 @@ function shotInfusion(w: ArpgWorld, p: Projectile): ManaType | null {
   return p.ability ? (p.ability.elements[1] ?? null) : w.hero.stats.weapon.infusion;
 }
 
-/** The size a hero shot draws at (see `drawProjectiles`). */
-function shotRadius(p: Projectile): number {
-  if (p.form === 'bolt') return p.radius;
-  if (p.form === 'volley' || p.form === 'ember') return 0.15;
-  return p.ability ? 0.15 : p.radius * 0.5;
-}
-
 /**
  * The infusion pass's persistent carriers, drawn after ManaFx's transient
  * ones and in priority order: the hero's Defensive aura (a ring, seeded by its
@@ -448,12 +451,12 @@ export function drawInfusions(
   for (const p of w.projectiles) {
     const el = shotInfusion(w, p);
     if (!el) continue;
-    const orb = { kind: 'orb' as const, x: p.x, y: p.y, r: shotRadius(p), vx: p.vx, vy: p.vy };
+    const orb = { kind: 'orb' as const, x: p.x, y: p.y, r: shotSize(p), vx: p.vx, vy: p.vy };
     drawInfusion(air, el, orb, time, p.id, 1, budget);
   }
   for (const z of w.zones) {
     const el = z.owner === 'hero' ? z.ability?.elements[1] : undefined;
-    if (!el || z.source !== 'burst' || z.fromX === undefined) continue;
+    if (!el || z.source !== 'burst' || z.fromX === undefined || z.fromY === undefined) continue;
     const l = lobAt(z, w.t);
     const orb = {
       kind: 'orb' as const,
@@ -461,7 +464,7 @@ export function drawInfusions(
       y: l.y - l.lift,
       r: 0.18,
       vx: z.x - z.fromX,
-      vy: z.y - (z.fromY ?? z.y),
+      vy: z.y - z.fromY,
     };
     drawInfusion(air, el, orb, time, z.id, 1, budget);
   }

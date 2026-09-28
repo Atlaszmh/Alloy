@@ -3,7 +3,13 @@ import type { Graphics } from 'pixi.js';
 import type { ArpgWorld } from '@alloy/engine';
 import { HAND, ManaFx, finisherRing, spawnCount } from '../mana-fx';
 import { drawAnticipation, drawInfusions, drawProjectiles } from '../draw-world';
-import { INFUSION_BUDGET, type PathShape } from '../infusion';
+import { INFUSION_BUDGET, drawInfusion, type PathShape } from '../infusion';
+
+// The real motifs, recorded (to see which layers each carrier is given).
+vi.mock('../infusion', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../infusion')>();
+  return { ...actual, drawInfusion: vi.fn(actual.drawInfusion) };
+});
 
 /** A Graphics stand-in that counts pixels (`px` draws one rect per pixel). */
 function fakeGraphics() {
@@ -281,6 +287,45 @@ describe('the infusion pass: persistent carriers', () => {
       used(world({ hero: { ...guarded, defend: { form: 'blink', until: 3 } } })),
     ).toBeGreaterThan(0);
     expect(used(world({ hero: { ...guarded, defend: { form: 'blink', until: 0.5 } } }))).toBe(0);
+    expect(used(world({ hero: { ...guarded, abilities: [one, one] } }))).toBe(0); // one element
+  });
+
+  const rim = {
+    id: 9,
+    owner: 'hero',
+    source: 'plasma',
+    ability: two,
+    x: 8,
+    y: 8,
+    radius: 2,
+    born: 0.5,
+    until: 4,
+    detonateAt: 0,
+  };
+
+  it('draws nothing for a zone past its end', () => {
+    expect(used(world({ zones: [{ ...rim, until: 0.9 }] }))).toBe(0);
+  });
+
+  it('gives the ground layer to zone rims only: never the aura, shots or lobs', () => {
+    const hero = {
+      ...plainHero,
+      defend: { form: 'ward', until: 3 },
+      ward: { hp: 1, max: 1 },
+      abilities: [one, two],
+    };
+    const lob = { ...rim, id: 10, source: 'burst', detonateAt: 1.5, fromX: 2, fromY: 2 };
+    const spy = vi.mocked(drawInfusion);
+    spy.mockClear();
+    drawInfusions(L(), world({ hero, projectiles: [shot({})], zones: [rim, lob] }), 0, B());
+    expect(spy.mock.calls.map(([layers, , shape]) => [shape.kind, !!layers.ground])).toEqual([
+      ['ring', false], // the aura
+      ['orb', false], // the shot
+      ['orb', false], // the lob
+      ['ring', true], // the zone's rim
+    ]);
+    // A lob draws only with both ends of its throw (as drawLobs does).
+    expect(used(world({ zones: [{ ...lob, fromY: undefined }] }))).toBe(0);
   });
 });
 
