@@ -13,6 +13,7 @@ import { ManaFx, finisherRing } from './fx/mana-fx';
 import { INFUSION_BUDGET, basicMotif, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
+import { reactionLabel } from './fx/reactions';
 import {
   drawAim,
   drawAnticipation,
@@ -73,16 +74,6 @@ interface Dying {
   life: number;
   max: number;
 }
-
-const REACTION_LABEL: Record<string, string> = {
-  melt: 'MELT!',
-  shatter: 'SHATTER!',
-  overload: 'OVERLOAD!',
-  superconduct: 'SUPERCONDUCT!',
-  soulfire: 'SOULFIRE!',
-  combust: 'COMBUST!',
-  blight: 'BLIGHT!',
-};
 
 const FONT = 'Rajdhani, "DM Sans", system-ui, sans-serif';
 
@@ -310,7 +301,7 @@ export class ArenaRenderer {
             this.floatText(
               e.x,
               e.y - 0.8,
-              REACTION_LABEL[e.reaction],
+              reactionLabel(e.reaction),
               REACTION_HEX[e.reaction],
               26,
               { pop: true, life: 1.1, rise: 1 },

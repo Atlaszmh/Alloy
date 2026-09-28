@@ -27,6 +27,14 @@ export const REACTION_HEX: Record<ReactionId, number> = {
   soulfire: 0xd08bff,
   combust: 0x9cf07a,
   blight: 0x8fb34a,
+  obsidian: 0xf0a878,
+  lightning_rod: 0xfff6a0,
+  sunder: 0xc9905a,
+  seedling: 0x7ee08a,
+  siphon: 0x9fa8ff,
+  crystallize: 0xa8fff0,
+  blackout: 0x8a7aa8,
+  galvanize: 0xd8f56a,
 };
 
 export const NEUTRAL_HEX = 0xe7e5e4;

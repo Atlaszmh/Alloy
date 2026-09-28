@@ -94,7 +94,8 @@ describe('AbilityEditor', () => {
     fireEvent.click(screen.getByTestId('form-lance'));
     expect(onChange).toHaveBeenCalledWith('primary', { ...builds.primary, form: 'lance' });
     expect(screen.getByTestId('reaction-melt')).toBeInTheDocument();
-    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(6);
+    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(14);
+    expect(screen.getByText('1/15 discovered')).toBeInTheDocument();
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(6);
   });
 
