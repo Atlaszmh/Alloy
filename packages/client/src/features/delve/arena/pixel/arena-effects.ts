@@ -138,6 +138,8 @@ export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margi
     case 'hit': {
       const c = arenaToCell(e.x, e.y, ppu, margin);
       pw.hitSpark(c.x, c.y, e.element);
+      // Seedling: a small patch of vines where the orb sprouts.
+      if (e.reaction === 'seedling') pw.sprout(c.x, c.y, 4);
       break;
     }
     case 'death': {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ArpgEvent, ManaType } from '@alloy/engine';
+import type { ArpgEvent, ManaType, ReactionId } from '@alloy/engine';
 import { MAX_PARTICLES, PixelWorld, MAT, PROP } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
@@ -627,5 +627,27 @@ describe('infusions on the pixel floor', () => {
     g.pw.particleCount = MAX_PARTICLES / 2;
     applyArenaEvent(g.pw, lance('fire'), PPU, MARGIN);
     expect(g.stamps.length).toBeGreaterThan(0);
+  });
+});
+
+describe('reactions on the pixel floor', () => {
+  it('a Seedling hit grows a small patch of vines where it sprouts; other hits grow none', () => {
+    const f = spyFloor();
+    const hit = (reaction?: ReactionId): ArpgEvent => ({
+      kind: 'hit',
+      id: 1,
+      x: 10,
+      y: 10,
+      amount: 5,
+      crit: false,
+      element: 'earth',
+      heft: 0,
+      source: 'skill',
+      reaction,
+    });
+    applyArenaEvent(f.pw, hit('seedling'), PPU, MARGIN);
+    applyArenaEvent(f.pw, hit('sunder'), PPU, MARGIN);
+    applyArenaEvent(f.pw, hit(), PPU, MARGIN);
+    expect(f.stamps).toEqual([{ brush: 'nature', ...arenaToCell(10, 10, PPU, MARGIN), r: 4 }]);
   });
 });
