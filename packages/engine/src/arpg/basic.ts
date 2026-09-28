@@ -13,7 +13,8 @@ import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js
  * movement. See the combat weight spec.
  */
 
-const BASIC_STATUS: Record<ManaType, StatusId> = {
+/** The status each element's basic blows may apply (a finisher's discharge always applies it). */
+export const BASIC_STATUS: Record<ManaType, StatusId> = {
   fire: 'burn',
   frost: 'chill',
   storm: 'shock',
@@ -123,13 +124,19 @@ export function strike(ctx: SimCtx): void {
   h.lastBasicAt = world.t;
 
   const surge = surging(ctx);
-  const unit = h.stats.weaponDamage * h.stats.damageMult;
+  // The finisher discharges a bound secondary (weapon.infusion); every other blow strikes
+  // with the primary. Each grows with its element's attunement (blowPower / finisherPower).
+  const discharge = last && w.infusion !== null;
+  const element: ManaType | null = discharge ? w.infusion : w.element;
+  const unit = h.stats.weaponDamage * h.stats.damageMult * (last ? w.finisherPower : w.blowPower);
   const base = unit * s.power;
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
   const twin = twinPct > 0 && last;
-  const element = w.element;
   const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
-  if (element) {
+  if (discharge && element) {
+    // A discharge always applies the secondary's status (immunities still hold).
+    if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
+  } else if (element) {
     const chance = element === 'earth' ? BASIC_STATUS_CHANCE * 0.6 : BASIC_STATUS_CHANCE;
     const status = BASIC_STATUS[element];
     if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
@@ -222,7 +229,11 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
     y: p.y,
     radius: p.explodeRadius,
     element: p.element,
-    infusion: ctx.world.hero.stats.weapon.infusion,
+    // The motif only when the body isn't already that element (a finisher's discharge).
+    infusion:
+      p.element === ctx.world.hero.stats.weapon.infusion
+        ? null
+        : ctx.world.hero.stats.weapon.infusion,
   });
   for (const m of alive(ctx)) {
     if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;

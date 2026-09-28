@@ -337,10 +337,10 @@ export function estimateCombat(
   const blow = w.blowPower * (1 + elem(w.element));
   const finisher = w.finisherPower * (1 + elem(w.infusion ?? w.element));
   const last = combo[combo.length - 1].power;
-  const stringValue = (stringPower - last) * blow + last * finisher;
+  // Twin Fang: one extra hit on the finisher, at its value (×1.5 melee, ×1 ranged).
+  const twin = ((L.twin_fang ?? 0) / 100) * (melee ? 1.5 : 1);
+  const stringValue = (stringPower - last) * blow + (last + twin) * finisher;
   let dps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
-  // Twin Fang: one extra hit per string (×1.5 melee, ×1 ranged).
-  if (L.twin_fang) dps *= 1 + ((L.twin_fang / 100) * (melee ? 1.5 : 1)) / stringPower;
 
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
     resolveAbility(registry, slot, builds[slot], stats),
