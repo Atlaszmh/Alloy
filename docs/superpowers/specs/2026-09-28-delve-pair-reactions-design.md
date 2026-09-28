@@ -33,10 +33,14 @@ An element's **mark** on a foe is its status. The checks sit beside the existing
 | Nature | poisoned |
 
 **Rattled.** Stagger lasts 0.6 s, which is too short to react with. Earth's mark is `StatusState.rattledUntil` instead (`isRattled`), set to `t + bal.status.rattleDuration` (2 s).
-- Only Earth sets it. `applyStatus` gains an optional `element` parameter, and a `stagger` applied with `element === 'earth'` rattles.
-- It rattles even when stagger immunity refuses the stagger itself.
-- Stagger from anything else doesn't rattle: Crushing weight's `heavyStagger`, a weapon blow's `stagger`, the riposte.
-- The callers that pass the element are `hitMonster`'s status loop (the hit's element) and the Defensive's retaliation in `defend.ts` (the ability's element).
+- Only a source that includes Earth sets it. An ability hits with its first element but applies both elements' statuses, so keying on the hit's element would miss every build with Earth second.
+- `HitOpts` gains `rattles?: boolean`, and `applyStatus` gains an optional `rattles` parameter. A `stagger` applied with `rattles` rattles the foe. It rattles even when stagger immunity refuses the stagger itself.
+- Who sets `rattles`:
+  - `hitOpts` (`impact.ts`), from `ab.elements.includes('earth')`;
+  - `basic.ts`, when the blow's element is `earth`, which includes an Earth finisher's discharge;
+  - `defend.ts`, from `ab.elements.includes('earth')`, on both paths (Armor's `hitMonster` and the other forms' `applyStatus`).
+- `hitMonster`'s status loop passes `opts.rattles` to `applyStatus`.
+- Stagger from anything else doesn't rattle: Crushing weight's `heavyStagger`, a non-Earth weapon blow's `stagger` (such as the Maul finisher), and the riposte.
 
 ## The trigger model
 
@@ -54,14 +58,16 @@ The Zod schema:
 
 **Lookup.** In `hitMonster`, a hit of element E (not `noReact`) reacts as follows:
 1. It walks the foe's marks in `MANA_TYPES` order (fire, frost, storm, earth, shadow, nature).
-2. It takes the first mark F ≠ E whose reaction can fire now. A buff reaction on its own cooldown can't fire, and neither can Shatter without a freeze (below).
+2. It takes the first mark F ≠ E whose reaction can fire now. A buff reaction on its own cooldown can't fire, and neither can an Earth hit on a foe that is chilled but not frozen (Shatter, below).
 3. It runs `getReactionFor(E, F)`.
 
 This replaces today's if/else chain. Hits with no element, `noReact` hits (reaction splashes, damage-over-time ticks) and hits with no other element's mark don't react, and keep every mark.
 
 **Using up the mark.** A reaction clears the mark F that set it off, with these exceptions:
 - Soulfire and Blight (`consumes: false`) clear nothing, as today.
-- **Shatter:** on the Frost side it needs a freeze, not just chill (as today), and clears only the freeze. On the Earth side it clears rattled.
+- **Shatter:**
+  - An Earth hit needs the foe frozen, not just chilled (as today), and clears only the freeze.
+  - A Frost hit on any rattled foe shatters it, frozen or not, and clears only rattled.
 - **Superconduct:** on the Frost side it clears only chill and its stacks, so a frozen foe stays frozen. Otherwise, clearing the freeze and then calling `freeze()` would be refused by freeze immunity and thaw the foe.
 - **Melt** (Frost side): clears chill, stacks and freeze, as today.
 
@@ -110,7 +116,7 @@ All numbers go in `balance.json → delve.reactions` (typed in `DelveBalance`, v
 **Obsidian's barrier**, `h.barrier: { hp, max, until } | null`:
 - **Creating and refreshing:** a new barrier replaces the old one when its hp is larger, setting all three fields with `max = hp`. Otherwise it only extends the old one's `until`.
 - **Where it soaks:** `shieldHero` (`defend.ts`) is reworked so the barrier soaks after the Defensive's reductions and retaliation, and just before the Ward. It soaks even with no Defensive up, and it soaks what the Ward would (including `unavoidable` damage).
-- **Invulnerable (Training Grounds):** `hurtHero` returns before any soak, so the barrier doesn't drain.
+- **Invulnerable (Training Grounds):** the barrier drains like the Ward does. `hurtHero` runs `shieldHero` before it checks `invulnerable`, so nothing about that order changes.
 - **Breaking:** when its hp runs out it pushes `{ kind: 'barrierBreak', x, y }` and becomes null.
 - **Lapsing:** the hero tick clears it silently once `t ≥ until`.
 
@@ -185,12 +191,13 @@ Everything here is cosmetic and follows the mana-pixel rules. Signature effects 
 - **When nothing fires:**
   - An element hitting its own mark does nothing.
   - A `noReact` hit (an Overload splash, a poison tick) on a marked foe fires nothing and keeps the mark.
-  - Shatter doesn't fire on a merely chilled foe.
+  - An Earth hit on a merely chilled foe doesn't Shatter; a Frost hit on a rattled, unfrozen foe does.
 - **Two marks:** with two marks on a foe, the first in `MANA_TYPES` order decides.
 - **Rattled:**
   - Earth's stagger rattles even under stagger immunity, and rattled lapses after `rattleDuration`.
-  - A Maul finisher, Crushing weight and a riposte don't rattle.
-  - The Earth Defensive's retaliation does.
+  - A fused ability with Earth second (for example Fire + Earth) rattles, and so does an Earth finisher's discharge.
+  - A Maul finisher that discharges a non-Earth secondary, Crushing weight and a riposte don't rattle.
+  - An Earth Defensive's retaliation rattles, with Earth first or second.
 - **Superconduct reverse:** on a frozen foe it keeps the freeze.
 - **Blight reverse:** on a hexed foe that isn't poisoned, it spreads hex and no empty poison.
 - **Obsidian:**
