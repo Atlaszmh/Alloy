@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   ABILITY_SLOTS,
   MANA_TYPES,
   isDiveActive,
   manaPool,
+  pairElements,
   profileStats,
   resolveAbility,
   type AbilityBuild,
@@ -19,6 +20,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
+import { ManaPanel } from './ManaPanel';
 
 const KEY_HINTS = ['Q', 'E', 'R'];
 const SLOT_NAME: Record<AbilitySlot, string> = {
@@ -39,13 +41,19 @@ const PAYMENTS: [AbilityPayment, string, string][] = [
   ['cast', 'Cast', 'Half the mana and 20% more power, but you stand still while it winds up.'],
 ];
 
-/** Attunement per element with the mastery threshold, and the one mana pool it feeds. */
-export function AttunementBars({ stats }: { stats: HeroStats }) {
+/** Attunement per element (all six, or just `elements`) with the mastery threshold, and the one mana pool it feeds. */
+export function AttunementBars({
+  stats,
+  elements = MANA_TYPES,
+}: {
+  stats: HeroStats;
+  elements?: readonly ManaType[];
+}) {
   const registry = getDelveRegistry();
   const bal = registry.getDelveBalance().mana;
   const masteries = registry.getArpgData().masteries;
   const attunement = stats.attunement;
-  const scale = Math.max(bal.masteryThreshold + 2, ...MANA_TYPES.map((m) => attunement[m] + 1));
+  const scale = Math.max(bal.masteryThreshold + 2, ...elements.map((m) => attunement[m] + 1));
   const pool = manaPool(stats, registry);
 
   return (
@@ -54,7 +62,7 @@ export function AttunementBars({ stats }: { stats: HeroStats }) {
         Mana pool <b className="text-indigo-300">{Math.round(pool.max)}</b> · +
         {pool.regen.toFixed(1)}/s · every point of attunement adds {bal.poolPerAttune}
       </div>
-      {MANA_TYPES.map((m) => {
+      {elements.map((m) => {
         const style = manaStyle(registry, m);
         const a = attunement[m];
         const mastery = masteries.find((x) => x.mana === m);
@@ -222,6 +230,10 @@ export interface AbilityEditorProps {
   /** Read-only (a dive is under way). */
   locked: boolean;
   onChange: (slot: AbilitySlot, build: AbilityBuild) => void;
+  /** The elements the picker offers (the Delve: your pair); all six when absent. */
+  elements?: readonly ManaType[];
+  /** Shown in place of the attunement bars (the Anvil's Mana view). */
+  mana?: ReactNode;
 }
 
 /**
@@ -235,6 +247,8 @@ export function AbilityEditor({
   reactionsSeen,
   locked,
   onChange,
+  elements = MANA_TYPES,
+  mana,
 }: AbilityEditorProps) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
@@ -328,7 +342,7 @@ export function AbilityEditor({
             Element
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {MANA_TYPES.map((m) => (
+            {elements.map((m) => (
               <Chip
                 key={m}
                 pressed={main === m}
@@ -345,16 +359,18 @@ export function AbilityEditor({
             <Chip pressed={!infusion} onClick={() => setInfusion(null)} testId="infusion-none">
               None
             </Chip>
-            {MANA_TYPES.filter((m) => m !== main).map((m) => (
-              <Chip
-                key={m}
-                pressed={infusion === m}
-                onClick={() => setInfusion(m)}
-                testId={`infusion-${m}`}
-              >
-                {manaStyle(registry, m).icon}
-              </Chip>
-            ))}
+            {elements
+              .filter((m) => m !== main)
+              .map((m) => (
+                <Chip
+                  key={m}
+                  pressed={infusion === m}
+                  onClick={() => setInfusion(m)}
+                  testId={`infusion-${m}`}
+                >
+                  {manaStyle(registry, m).icon}
+                </Chip>
+              ))}
             {infusion && (
               <button
                 type="button"
@@ -433,12 +449,14 @@ export function AbilityEditor({
         pool={pool}
       />
 
-      <section className="flex flex-col gap-1.5">
-        <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-          Attunement
-        </div>
-        <AttunementBars stats={stats} />
-      </section>
+      {mana ?? (
+        <section className="flex flex-col gap-1.5">
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Attunement
+          </div>
+          <AttunementBars stats={stats} />
+        </section>
+      )}
 
       <section className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between">
@@ -480,7 +498,7 @@ export function AbilityEditor({
   );
 }
 
-/** The Anvil's workshop: the save's builds, read-only while a dive is under way. */
+/** The Anvil's workshop: the save's builds from your two elements, and your Mana view; read-only while a dive is under way. */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
@@ -489,6 +507,7 @@ export function AbilitiesPanel() {
     () => profileStats(registry, { equipped, pair }),
     [equipped, pair, registry],
   );
+  const elements = pairElements(pair);
   return (
     <AbilityEditor
       builds={profile.abilities}
@@ -496,6 +515,8 @@ export function AbilitiesPanel() {
       reactionsSeen={profile.reactionsSeen}
       locked={isDiveActive(profile)}
       onChange={(slot, build) => useDelveStore.getState().setAbility(slot, build)}
+      elements={elements.length > 0 ? elements : undefined}
+      mana={<ManaPanel stats={stats} />}
     />
   );
 }
