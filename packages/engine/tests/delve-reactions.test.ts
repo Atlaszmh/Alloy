@@ -18,6 +18,7 @@ import {
 } from '../src/arpg/combat.js';
 import { BASIC_STATUS } from '../src/arpg/basic.js';
 import { shieldHero } from '../src/arpg/abilities/defend.js';
+import { refundDodgeCharge } from '../src/arpg/dodge.js';
 import { hitOpts } from '../src/arpg/abilities/impact.js';
 import { resolveAbility } from '../src/arpg/abilities/resolve.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
@@ -119,6 +120,10 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
       max: expect.closeTo(hp, 6),
       until: f.w.t + r.obsidianDuration,
     });
+  },
+  lightning_rod: (f) => {
+    expect(f.w.hero.dodgeCharges).toBe(1);
+    expect(f.w.hero.quickUntil).toBe(f.w.t + bal.reactions.lightningRodDuration);
   },
 };
 
@@ -491,6 +496,32 @@ describe('Obsidian', () => {
     const later = run(w, 0.3);
     expect(h.barrier).toBeNull();
     expect(later.some((e) => e.kind === 'barrierBreak')).toBe(false);
+  });
+});
+
+describe('Lightning Rod', () => {
+  it('gives back a dodge charge as a perfect dodge does', () => {
+    const { w, ctx } = setup();
+    const h = w.hero;
+    h.dodgeCharges = 0;
+    h.dodgeRechargeAt = w.t + 1;
+    refundDodgeCharge(ctx);
+    expect(h).toMatchObject({ dodgeCharges: 1, dodgeRechargeAt: w.t + 1 });
+    refundDodgeCharge(ctx);
+    expect(h).toMatchObject({ dodgeCharges: bal.dodge.charges, dodgeRechargeAt: 0 });
+    refundDodgeCharge(ctx);
+    expect(h.dodgeCharges).toBe(bal.dodge.charges);
+  });
+
+  it('quickens movement while it lasts', () => {
+    const walk = (quick: boolean) => {
+      const { w } = setup([]);
+      if (quick) w.hero.quickUntil = 1e9;
+      const x0 = w.hero.x;
+      run(w, 0.5, { x: 1, y: 0 });
+      return w.hero.x - x0;
+    };
+    expect(walk(true) / walk(false)).toBeCloseTo(1 + bal.reactions.lightningRodMove);
   });
 });
 

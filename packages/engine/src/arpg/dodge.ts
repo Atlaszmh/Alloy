@@ -78,6 +78,14 @@ export function perfectOrigin(ctx: SimCtx): Vec | null {
   return { x: d.fromX, y: d.fromY };
 }
 
+/** One dodge charge back (a perfect dodge, Lightning Rod); full charges stop the recharge. */
+export function refundDodgeCharge(ctx: SimCtx): void {
+  const h = ctx.world.hero;
+  const max = ctx.bal.dodge.charges;
+  h.dodgeCharges = Math.min(max, h.dodgeCharges + 1);
+  if (h.dodgeCharges >= max) h.dodgeRechargeAt = 0;
+}
+
 /** An attack would have landed early in the dodge: a perfect dodge (once per dodge). */
 export function notePerfect(ctx: SimCtx): void {
   if (!perfectOrigin(ctx)) return;
@@ -85,8 +93,7 @@ export function notePerfect(ctx: SimCtx): void {
   const h = world.hero;
   h.dodge!.perfect = true;
   // Chained perfects while the riposte is armed don't refund, so dodges aren't free in a crowd.
-  if (world.t >= h.riposteUntil) h.dodgeCharges = Math.min(bal.dodge.charges, h.dodgeCharges + 1);
-  if (h.dodgeCharges >= bal.dodge.charges) h.dodgeRechargeAt = 0;
+  if (world.t >= h.riposteUntil) refundDodgeCharge(ctx);
   h.riposteUntil = world.t + bal.dodge.riposteWindow;
   ctx.events.push({ kind: 'perfectDodge', x: h.x, y: h.y });
 }

@@ -19,7 +19,7 @@ import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
-import { notePerfect } from './dodge.js';
+import { notePerfect, refundDodgeCharge } from './dodge.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -361,6 +361,10 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
       else h.barrier.until = t + r.obsidianDuration;
       return amount;
     }
+    case 'lightning_rod':
+      refundDodgeCharge(ctx);
+      h.quickUntil = t + r.lightningRodDuration;
+      return amount;
     default:
       // The new eight's effects arrive in their own tasks.
       return amount;

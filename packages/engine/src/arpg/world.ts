@@ -211,6 +211,7 @@ export function createHeroEntity(
     defend: null,
     ward: null,
     barrier: null,
+    quickUntil: 0,
     reactionReadyAt: {},
     dodgeCharges: registry.getDelveBalance().dodge.charges,
     dodgeRechargeAt: 0,

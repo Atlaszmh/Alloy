@@ -157,7 +157,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
   if (h.moving) {
     const slow = t < h.recoverUntil ? bal.feel.recoveryMove : 1;
-    const pace = h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * slow;
+    // Lightning Rod quickens the step, on top of Surge and any recovery.
+    const quick = t < h.quickUntil ? 1 + bal.reactions.lightningRodMove : 1;
+    const pace =
+      h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * quick * slow;
     h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
     h.y = clamp(h.y + v.y * pace * dt, h.radius, world.height - h.radius);
     h.facing = { x: v.x / speed, y: v.y / speed };

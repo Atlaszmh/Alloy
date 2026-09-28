@@ -337,6 +337,8 @@ export interface HeroEntity {
   ward: { hp: number; max: number } | null;
   /** Obsidian's barrier: soaks damage after the Defensive and before the Ward, until `until`. */
   barrier: { hp: number; max: number; until: number } | null;
+  /** Lightning Rod quickens movement until this time. */
+  quickUntil: number;
   /** When each buff reaction can fire again (missing: ready). */
   reactionReadyAt: Partial<Record<ReactionId, number>>;
   dodgeCharges: number;
