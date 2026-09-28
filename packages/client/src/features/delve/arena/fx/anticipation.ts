@@ -14,13 +14,17 @@ export interface WindingUp {
 export function windingUp(w: ArpgWorld): WindingUp | null {
   const h = w.hero;
   if (h.swing?.committed) {
-    const s = h.stats.weapon.combo[h.swing.step];
+    const wpn = h.stats.weapon;
+    const s = wpn.combo[h.swing.step];
     const span = Math.max(1e-6, h.swing.strikeAt - h.swing.start);
+    // A finisher winds up in the colour of the secondary it discharges.
+    const element =
+      h.swing.step === wpn.combo.length - 1 ? (wpn.infusion ?? wpn.element) : wpn.element;
     return {
       dir: h.swing.dir,
       heft: s?.heft ?? 0.3,
       progress: Math.min(1, Math.max(0, (w.t - h.swing.start) / span)),
-      color: h.stats.weapon.element ? MANA_HEX[h.stats.weapon.element] : 0xd4a834,
+      color: element ? MANA_HEX[element] : 0xd4a834,
     };
   }
   if (h.windup) {

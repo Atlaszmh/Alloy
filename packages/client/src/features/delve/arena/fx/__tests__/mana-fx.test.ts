@@ -246,11 +246,13 @@ describe('the infusion pass: persistent carriers', () => {
     ).toBe(0);
   });
 
-  it("gives a basic shot the weapon's infusion", () => {
-    const basic = shot({ form: null, ability: null });
+  it("gives a basic shot the weapon's infusion, unless the shot is that element already", () => {
+    const basic = shot({ form: null, ability: null, element: 'fire' });
     expect(used(world({ projectiles: [basic] }))).toBe(0);
     const infused = { ...plainHero, stats: { weapon: { infusion: 'nature' } } };
     expect(used(world({ projectiles: [basic], hero: infused }))).toBeGreaterThan(0);
+    // A finisher's shot is the secondary's own body: no motif on top.
+    expect(used(world({ projectiles: [{ ...basic, element: 'nature' }], hero: infused }))).toBe(0);
   });
 
   it("draws a fusion's lingering ground and a thrown Burst in flight, not a Barrage target", () => {
@@ -342,8 +344,11 @@ describe('finisherRing', () => {
     expect(finisherRing(blow, Math.PI * 2, 1.6)).toEqual({ kind: 'ring', x: 2, y: 3, r: 1.6 });
   });
 
-  it('draws none for a ranged finisher or a plain blow', () => {
-    expect(finisherRing({ ...blow, melee: false }, Math.PI / 2, 1.6)).toBeNull();
+  it('flares at the hand for a ranged finisher; none for a plain blow', () => {
+    const flare = finisherRing({ ...blow, melee: false }, Math.PI / 2, 1.6)!;
+    expect(flare).toMatchObject({ kind: 'ring', x: 2, r: 0.6 });
+    expect(flare.y).toBeCloseTo(3 - 0.3 - HAND); // chest height, HAND toward the aim (up)
     expect(finisherRing({ ...blow, finisher: false }, Math.PI / 2, 1.6)).toBeNull();
+    expect(finisherRing({ ...blow, melee: false, finisher: false }, Math.PI / 2, 1.6)).toBeNull();
   });
 });

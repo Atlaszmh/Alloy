@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ArpgWorld } from '@alloy/engine';
 import { windingUp } from '../anticipation';
+import { MANA_HEX } from '../../palette';
 
 function world(over: Partial<ArpgWorld['hero']>): ArpgWorld {
   return {
@@ -79,5 +80,23 @@ describe('windingUp', () => {
       ),
     ).toBeNull();
     expect(windingUp(world({}))).toBeNull();
+  });
+
+  it('a finisher winds up in the colour of the secondary it discharges', () => {
+    const step = { time: 1, startup: 0.3, move: 0.4, power: 1, heft: 0.5 };
+    const weapon = { combo: [step, { ...step, power: 1.7 }], element: 'fire', infusion: 'storm' };
+    const swing = {
+      step: 1,
+      dir: { x: 1, y: 0 },
+      targetId: null,
+      start: 0.9,
+      strikeAt: 1.1,
+      committed: true,
+    };
+    const colour = (s: object, w: object) =>
+      windingUp(world({ swing: s, stats: { weapon: w } } as never))!.color;
+    expect(colour(swing, weapon)).toBe(MANA_HEX.storm);
+    expect(colour({ ...swing, step: 0 }, weapon)).toBe(MANA_HEX.fire);
+    expect(colour(swing, { ...weapon, infusion: null })).toBe(MANA_HEX.fire);
   });
 });

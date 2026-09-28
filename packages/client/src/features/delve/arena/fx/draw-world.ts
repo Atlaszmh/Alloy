@@ -1,6 +1,6 @@
 import type { Graphics } from 'pixi.js';
 import type { ArpgWorld, ManaType, Projectile, Vec, Zone } from '@alloy/engine';
-import { drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
+import { basicMotif, drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
@@ -423,10 +423,10 @@ export function drawAim(air: Graphics, w: ArpgWorld, aim: AimView | null, time: 
   }
 }
 
-/** A hero shot's infusion: its ability's second element, or the weapon's for a basic shot (embers have none). */
+/** A hero shot's infusion: its ability's second element, or for a basic shot the weapon's (none when the shot is that element: a finisher's discharge). Embers have none. */
 function shotInfusion(w: ArpgWorld, p: Projectile): ManaType | null {
   if (p.owner !== 'hero' || p.form === 'ember') return null;
-  return p.ability ? (p.ability.elements[1] ?? null) : w.hero.stats.weapon.infusion;
+  return p.ability ? (p.ability.elements[1] ?? null) : basicMotif(w.hero.stats.weapon, p.element);
 }
 
 /**

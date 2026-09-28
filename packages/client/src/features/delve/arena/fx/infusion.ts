@@ -93,6 +93,18 @@ export function eventSeed(x: number, y: number, t: number): number {
   return hash(x * 3.7 + t * 11.3, y * 5.3 - t * 7.1);
 }
 
+/**
+ * The motif a basic blow or shot of `element` draws: the weapon's infusion
+ * (the hero's secondary), unless the blow already is that element (a
+ * finisher's discharge), so it never draws twice.
+ */
+export function basicMotif(
+  weapon: { infusion: ManaType | null },
+  element: ManaType | null,
+): ManaType | null {
+  return weapon.infusion !== element ? weapon.infusion : null;
+}
+
 /** What drawing one motif element needs: the layers, the palette, the clock and the strength's effects. */
 interface Pen {
   air: Graphics;

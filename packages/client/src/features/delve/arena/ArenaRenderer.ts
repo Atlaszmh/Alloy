@@ -10,7 +10,7 @@ import type {
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx, finisherRing } from './fx/mana-fx';
-import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
+import { INFUSION_BUDGET, basicMotif, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import {
@@ -361,11 +361,11 @@ export class ArenaRenderer {
           break;
         case 'basic': {
           this.kickCamera(e.dir, e.heft);
-          if (e.melee) {
-            const wpn = w.hero.stats.weapon;
-            const s = wpn.combo[e.step] ?? wpn.combo[0];
-            const arc = Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180);
-            const range = wpn.range + (s.reach ?? 0) + 0.2;
+          const wpn = w.hero.stats.weapon;
+          const s = wpn.combo[e.step] ?? wpn.combo[0];
+          const arc = Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180);
+          const range = wpn.range + (s.reach ?? 0) + 0.2;
+          if (e.melee)
             this.fx.swing(
               e.x,
               e.y,
@@ -377,13 +377,14 @@ export class ArenaRenderer {
                 heft: e.heft,
                 reverse: e.step % 2 === 1,
                 finisher: e.finisher,
-                infusion: wpn.infusion,
+                // Ordinary blows wear the secondary's motif; the finisher is its body.
+                infusion: basicMotif(wpn, e.element),
               },
             );
-            // An infused finisher discharges.
-            const ring = finisherRing(e, arc, range);
-            if (ring && wpn.infusion) this.fx.infuse('finisher', wpn.infusion, ring);
-          } else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
+          else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
+          // The finisher discharges the secondary: at the tip, round a full circle, or at the hand.
+          const ring = finisherRing(e, arc, range);
+          if (ring && wpn.infusion) this.fx.infuse('finisher', wpn.infusion, ring);
           break;
         }
         case 'cast': {

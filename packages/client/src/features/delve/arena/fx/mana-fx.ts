@@ -15,8 +15,9 @@ import {
  * and debris, expanding rings, lightning and dash streaks, swings, beams, and
  * the casting polish (a fling of mana toward the target and pixels gathering
  * during a wind-up). It also holds the transient infusion carriers
- * (fx/infusion.ts): infused swings and beams, finisher discharges, blasts and
- * blink trails. Cosmetic only, so it may use Math.random.
+ * (fx/infusion.ts): infused swings and beams, finisher discharges (at a
+ * blade's tip, round a full circle, or a flare at a shooter's hand), blasts
+ * and blink trails. Cosmetic only, so it may use Math.random.
  */
 
 interface Particle {
@@ -125,17 +126,21 @@ export function spawnCount(rate: number, dt: number, rand = Math.random): number
 }
 
 /**
- * Where an infused basic finisher discharges: a ring at the blade's tip
- * (`reach` out along `dir`, sized by heft), or round the hero at `reach` for a
- * full-circle blow. Ranged finishers draw none: the shot's orb and any burst
- * carry the weapon's infusion. `arc` is in radians.
+ * Where a basic finisher discharges the secondary: a ring at the blade's tip
+ * (`reach` out along `dir`, sized by heft), round the hero at `reach` for a
+ * full-circle blow, or, for a shot (no tip), a flare at the hand (r 0.6).
+ * `arc` is in radians.
  */
 export function finisherRing(
   e: { x: number; y: number; dir: Vec; heft: number; melee: boolean; finisher: boolean },
   arc: number,
   reach: number,
 ): RingShape | null {
-  if (!e.melee || !e.finisher) return null;
+  if (!e.finisher) return null;
+  if (!e.melee) {
+    const hand = handPoint(e.x, e.y, e.dir);
+    return { kind: 'ring', x: hand.x, y: hand.y, r: 0.6 };
+  }
   if (arc >= Math.PI * 2 - 1e-3) return { kind: 'ring', x: e.x, y: e.y, r: reach };
   const r = 0.6 + e.heft * 0.6;
   return { kind: 'ring', x: e.x + e.dir.x * reach, y: e.y + e.dir.y * reach, r };
@@ -319,8 +324,9 @@ export class ManaFx {
   }
 
   /**
-   * A transient infusion carrier: an infused melee finisher's discharge (a
-   * ring, drawn at strength 1.5), an infused blast's rim (a ring that grows
+   * A transient infusion carrier: a finisher's discharge (a ring at the blade's
+   * tip, round a full circle, or a flare at the hand for a shot; drawn at
+   * strength 1.5), an infused blast's rim (a ring that grows
    * with the blast's own) or a blink trail (a path). Seeded from where and
    * when it was made.
    */
