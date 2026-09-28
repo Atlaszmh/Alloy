@@ -10,18 +10,20 @@ const abilities = () => useDelveStore.getState().profile.abilities;
 describe('AbilitiesPanel', () => {
   beforeEach(() => {
     localStorage.clear();
-    useDelveStore.getState().resetProfile(1234);
+    useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
   it('shows the three default abilities and starter attunement', () => {
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Bolt');
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Frost Ward');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Ward');
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Nova');
-    expect(screen.getByTestId('attune-fire')).toHaveAttribute('data-value', '1');
+    expect(screen.getByTestId('attune-fire')).toHaveAttribute('data-value', '2');
   });
 
   it('builds a Wildfire Burst: form, a Nature infusion, then a swap', () => {
+    const s = useDelveStore.getState();
+    s.setProfile({ ...s.profile, pair: { primary: 'fire', secondary: 'nature' } });
     render(<AbilitiesPanel />);
     fireEvent.click(screen.getByTestId('form-burst'));
     fireEvent.click(screen.getByTestId('infusion-nature'));

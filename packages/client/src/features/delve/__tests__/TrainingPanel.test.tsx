@@ -148,7 +148,11 @@ describe('TrainingPanel', () => {
     };
     useSandboxStore
       .getState()
-      .loadMyBuild({ equipped: { weapon }, abilities: defaultAbilities('fire') });
+      .loadMyBuild({
+        equipped: { weapon },
+        abilities: defaultAbilities('fire'),
+        pair: { primary: 'fire', secondary: null },
+      });
     renderPanel('loadout');
     const button = screen.getByTestId(`legendary-${power.id}`);
     expect(button).toHaveAttribute('aria-pressed', 'true');

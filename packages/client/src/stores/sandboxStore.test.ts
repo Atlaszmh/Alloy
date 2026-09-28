@@ -127,30 +127,52 @@ describe('sandboxStore', () => {
     expect(sandboxStats(registry, store()).weapon.baseId).toBeNull();
   });
 
-  it("keeps a basic infusion: saved, ignored for the weapon's element, cleared by Load my build", () => {
-    expect(store().basicInfusion).toBeNull();
+  it('keeps a primary and a Basic infusion: a basics-only pair, saved, never the same element', () => {
+    expect(store()).toMatchObject({ primary: 'fire', basicInfusion: null });
     store().setBasicInfusion('storm');
+    expect(sandboxStats(registry, store()).weapon).toMatchObject({
+      element: 'fire',
+      infusion: 'storm',
+    });
+    store().setBasicInfusion('fire'); // the primary: ignored
     expect(store().basicInfusion).toBe('storm');
-    expect(parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!)).basicInfusion).toBe(
-      'storm',
-    );
-    expect(sandboxStats(registry, store()).weapon.infusion).toBe('storm');
-    store().setBasicInfusion('fire'); // the rare fire sword's own element
-    expect(store().basicInfusion).toBe('storm');
-    store().setBasicInfusion(null);
+    store().setPrimary('frost');
+    expect(parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!))).toMatchObject({
+      primary: 'frost',
+      basicInfusion: 'storm',
+    });
+    expect(sandboxStats(registry, store()).weapon).toMatchObject({
+      element: 'frost',
+      infusion: 'storm',
+    });
+    store().setPrimary('storm'); // the infusion's element: the infusion goes
     expect(store().basicInfusion).toBeNull();
-    expect(parseSandbox({ basicInfusion: 'plasma' }).basicInfusion).toBeNull();
-    store().setBasicInfusion('frost');
-    store().loadMyBuild(createDelveProfile(registry, 7));
-    expect(store().basicInfusion).toBeNull();
+    expect(parseSandbox({ primary: 'plasma', basicInfusion: 'plasma' })).toMatchObject({
+      primary: 'fire',
+      basicInfusion: null,
+    });
+    expect(parseSandbox({ primary: 'storm', basicInfusion: 'storm' }).basicInfusion).toBeNull();
   });
 
-  it("drops the basic infusion when the new weapon's element matches it, and keeps it otherwise", () => {
+  it('the weapon keeps its own mana for attunement and leaves the infusion alone; unarmed punches with the primary', () => {
     store().setBasicInfusion('storm');
-    store().setWeapon({ baseId: 'axe', mana: 'frost', rarity: 'rare' });
-    expect(store().basicInfusion).toBe('storm');
     store().setWeapon({ baseId: 'staff', mana: 'storm', rarity: 'rare' });
-    expect(store().basicInfusion).toBeNull();
-    expect(JSON.parse(localStorage.getItem(SANDBOX_KEY)!).basicInfusion).toBeNull();
+    expect(store().basicInfusion).toBe('storm');
+    const stats = sandboxStats(registry, store());
+    expect(stats.weapon).toMatchObject({ baseId: 'staff', element: 'fire', infusion: 'storm' });
+    expect(stats.attunement.storm).toBeGreaterThan(0); // unrestricted: every element attunes
+    store().setWeapon(null);
+    expect(sandboxStats(registry, store()).weapon).toMatchObject({
+      baseId: null,
+      element: 'fire',
+      infusion: 'storm',
+    });
+  });
+
+  it('Load my build brings your pair in: primary and Basic infusion', () => {
+    const profile = createDelveProfile(registry, 7, { primary: 'frost' });
+    store().loadMyBuild({ ...profile, pair: { primary: 'frost', secondary: 'nature' } });
+    expect(store()).toMatchObject({ primary: 'frost', basicInfusion: 'nature' });
+    expect(store().loadedWeapon?.mana).toBe('frost'); // the real item, its real mana
   });
 });

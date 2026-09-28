@@ -71,8 +71,11 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const depth = referenceDepth(profile);
 
   const cmp = useMemo(
-    () => (item && !isEquipped ? compareItem(profile.equipped, item, registry, depth) : null),
-    [item, isEquipped, profile.equipped, registry, depth],
+    () =>
+      item && !isEquipped
+        ? compareItem(profile.equipped, item, registry, depth, undefined, profile.pair)
+        : null,
+    [item, isEquipped, profile.equipped, profile.pair, registry, depth],
   );
 
   if (!item) return null;

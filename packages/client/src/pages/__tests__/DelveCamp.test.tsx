@@ -14,7 +14,7 @@ describe('DelveCamp', () => {
   beforeEach(() => {
     localStorage.clear();
     mockNavigate.mockReset();
-    useDelveStore.getState().resetProfile(1234);
+    useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
   it('the Training Grounds button opens the sandbox, even with a dive under way', () => {

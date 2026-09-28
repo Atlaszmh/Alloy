@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import {
   ABILITY_SLOTS,
   MANA_TYPES,
-  computeHeroStats,
   isDiveActive,
   manaPool,
+  profileStats,
   resolveAbility,
   type AbilityBuild,
   type AbilityBuilds,
@@ -484,9 +484,10 @@ export function AbilityEditor({
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const { equipped, pair } = profile;
   const stats = useMemo(
-    () => computeHeroStats(profile.equipped, registry),
-    [profile.equipped, registry],
+    () => profileStats(registry, { equipped, pair }),
+    [equipped, pair, registry],
   );
   return (
     <AbilityEditor

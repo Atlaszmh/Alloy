@@ -8,7 +8,7 @@ const registry = getDelveRegistry();
 describe('delveStore', () => {
   beforeEach(() => {
     localStorage.clear();
-    useDelveStore.getState().resetProfile(1234);
+    useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
   it('starts a fresh profile with starter gear', () => {
@@ -21,7 +21,7 @@ describe('delveStore', () => {
     useDelveStore.getState().startDive(1);
     const saved = JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!);
     expect(saved.dive.depth).toBe(1);
-    expect(loadDelveProfile()?.dive?.depth).toBe(1);
+    expect(loadDelveProfile()?.profile.dive?.depth).toBe(1);
   });
 
   it('falls back to a new profile when the save is corrupt', () => {
@@ -76,15 +76,14 @@ describe('delveStore', () => {
   });
 
   it('sets an ability build and persists it', () => {
-    const build = {
+    useDelveStore
+      .getState()
+      .setAbility('primary', { form: 'burst', elements: ['fire'], weight: 1, payment: 'cast' });
+    expect(useDelveStore.getState().profile.abilities.primary).toMatchObject({
       form: 'burst',
-      elements: ['fire', 'nature'],
-      weight: 1,
-      payment: 'cast',
-    } as const;
-    useDelveStore.getState().setAbility('primary', { ...build, elements: [...build.elements] });
-    expect(useDelveStore.getState().profile.abilities.primary.elements).toEqual(['fire', 'nature']);
-    expect(loadDelveProfile()?.abilities.primary.form).toBe('burst');
+      elements: ['fire'],
+    });
+    expect(loadDelveProfile()?.profile.abilities.primary.form).toBe('burst');
   });
 
   it('refuses a form from another slot', () => {
@@ -94,5 +93,30 @@ describe('delveStore', () => {
         .setAbility('primary', { form: 'nova', elements: ['fire'], weight: 0, payment: 'mana' }),
     ).toThrow(/primary/);
     expect(useDelveStore.getState().profile.abilities.primary.form).toBe('bolt');
+  });
+
+  it('a reset takes a primary; without one the choice is still to make', () => {
+    expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: null });
+    useDelveStore.getState().resetProfile(99);
+    expect(useDelveStore.getState().profile.pair.primary).toBeNull();
+  });
+
+  it('reads an older save back migrated, with the builds it fixed', () => {
+    const { pair: _pair, manaDust: _dust, ...rest } = useDelveStore.getState().profile;
+    const frostWard = { ...rest.abilities.defensive, elements: ['frost'] };
+    localStorage.setItem(
+      DELVE_SAVE_KEY,
+      JSON.stringify({
+        ...rest,
+        version: 3,
+        abilities: { ...rest.abilities, defensive: frostWard },
+      }),
+    );
+    const loaded = loadDelveProfile()!;
+    expect(loaded.profile).toMatchObject({
+      version: 4,
+      pair: { primary: 'fire', secondary: null },
+    });
+    expect(loaded.fixed.map((f) => f.slot)).toEqual(['defensive']);
   });
 });

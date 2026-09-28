@@ -18,6 +18,8 @@ import {
   type DelveProfile,
   type GearItem,
   type GearSlot,
+  type ManaType,
+  type ParsedDelveProfile,
   type ProfileActionResult,
   type Rarity,
 } from '@alloy/engine';
@@ -41,11 +43,12 @@ function loadManualAttack(): boolean {
   }
 }
 
-export function loadDelveProfile(): DelveProfile | null {
+/** The saved profile (migrated when older, with the builds it fixed), or null. */
+export function loadDelveProfile(): ParsedDelveProfile | null {
   try {
     const raw = localStorage.getItem(DELVE_SAVE_KEY);
     if (!raw) return null;
-    return parseDelveProfile(JSON.parse(raw));
+    return parseDelveProfile(getDelveRegistry(), JSON.parse(raw));
   } catch {
     return null;
   }
@@ -73,7 +76,8 @@ interface DelveStore {
   manualAttack: boolean;
 
   setProfile: (profile: DelveProfile) => void;
-  resetProfile: (seed?: number) => void;
+  /** A new save; with `primary` its mana is already chosen (tests, E2E). */
+  resetProfile: (seed?: number, primary?: ManaType) => void;
   startDive: (depth: number) => void;
   closeDive: () => void;
   equip: (uid: string) => void;
@@ -110,16 +114,20 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     return res;
   };
 
+  const loaded = loadDelveProfile();
+  // A migrated save is written back at once.
+  if (loaded) saveProfile(loaded.profile);
+
   return {
-    profile: loadDelveProfile() ?? createDelveProfile(getDelveRegistry(), freshSeed()),
+    profile: loaded?.profile ?? createDelveProfile(getDelveRegistry(), freshSeed()),
     newUids: {},
     diveDrops: [],
     manualAttack: loadManualAttack(),
 
     setProfile: (profile) => commit(profile),
 
-    resetProfile: (seed) => {
-      commit(createDelveProfile(registry(), seed ?? freshSeed()));
+    resetProfile: (seed, primary) => {
+      commit(createDelveProfile(registry(), seed ?? freshSeed(), primary ? { primary } : {}));
       set({ newUids: {}, diveDrops: [] });
     },
 

@@ -51,7 +51,8 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         equipped,
         delta: equipped
           ? null
-          : compareItem(profile.equipped, found.item, registry, depth).powerPct,
+          : compareItem(profile.equipped, found.item, registry, depth, undefined, profile.pair)
+              .powerPct,
       });
     }
     return out;

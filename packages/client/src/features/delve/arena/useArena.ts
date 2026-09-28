@@ -3,8 +3,8 @@ import {
   bankWorld,
   beginFloor,
   completeFloor,
-  computeHeroStats,
   failFloor,
+  profileStats,
   type ArpgWorld,
   type GearItem,
   type ReactionId,
@@ -48,9 +48,10 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
+  const { equipped, pair } = profile;
   const stats = useMemo(
-    () => computeHeroStats(profile.equipped, registry),
-    [profile.equipped, registry],
+    () => profileStats(registry, { equipped, pair }),
+    [equipped, pair, registry],
   );
   const loadout = useMemo(
     () => ({ stats, abilities: profile.abilities }),

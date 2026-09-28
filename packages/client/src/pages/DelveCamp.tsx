@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   MANA_TYPES,
-  computeAttunement,
   isDiveActive,
   profilePower,
+  profileStats,
   startDepthOptions,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
@@ -48,9 +48,10 @@ export function DelveCamp() {
   const codexFound = Object.keys(profile.codex).length;
   const codexTotal = registry.getDelveData().legendaries.length;
   const firstTime = profile.stats.dives === 0;
+  const { equipped, pair } = profile;
   const attunement = useMemo(
-    () => computeAttunement(profile.equipped, registry),
-    [profile.equipped, registry],
+    () => profileStats(registry, { equipped, pair }).attunement,
+    [equipped, pair, registry],
   );
 
   const onDelve = () => {

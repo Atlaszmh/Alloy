@@ -83,7 +83,9 @@ export interface SandboxLoadout {
   toggles: SandboxToggles;
   /** Display speed: 0.25, 0.5, 0.75 or 1. */
   slowmo: number;
-  /** A second element for basic attacks, previewed only (the engine ignores the weapon's own element and unarmed). */
+  /** The sandbox hero's primary: what basic blows strike with (the weapon keeps its mana, for attunement). */
+  primary: ManaType;
+  /** The second element the combo's finisher discharges (null = none; never the primary). */
   basicInfusion: ManaType | null;
 }
 
@@ -99,6 +101,7 @@ export const SANDBOX_DEFAULTS: SandboxLoadout = {
   dummies: [],
   toggles: { infiniteMana: true, noCooldowns: true, invulnerable: true },
   slowmo: 1,
+  primary: 'fire',
   basicInfusion: null,
 };
 
@@ -160,6 +163,7 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
       .number()
       .refine((v) => (SLOWMO_SPEEDS as readonly number[]).includes(v))
       .catch(D.slowmo),
+    primary: ManaSchema.catch(D.primary),
     basicInfusion: ManaSchema.nullable().catch(null),
   });
 }
@@ -168,7 +172,11 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
 export function parseSandbox(raw: unknown): SandboxLoadout {
   const parsed = loadoutSchema(getDelveRegistry()).safeParse(raw);
   if (!parsed.success) return SANDBOX_DEFAULTS;
-  const s = parsed.data;
+  // A Basic infusion is never the primary.
+  const s =
+    parsed.data.basicInfusion === parsed.data.primary
+      ? { ...parsed.data, basicInfusion: null }
+      : parsed.data;
   // A loaded weapon only counts while the choice still names it: a bad save can't show one
   // weapon and fight with another.
   return s.loadedWeapon && !sameChoice(s.weapon, choiceOf(s.loadedWeapon))
@@ -216,10 +224,12 @@ interface SandboxStore extends SandboxLoadout {
   clearDummyGroups: () => void;
   setToggles: (toggles: SandboxToggles) => void;
   setSlowmo: (speed: number) => void;
-  /** Preview a basic-attack infusion (null = none); the weapon's own element is ignored. */
+  /** Pick the primary; a Basic infusion of that element is dropped. */
+  setPrimary: (mana: ManaType) => void;
+  /** The finisher's discharge (null = none); the primary is ignored. */
   setBasicInfusion: (mana: ManaType | null) => void;
-  /** Copy the save's gear and builds in (its powers and attunement then come from the items). */
-  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'abilities'>) => void;
+  /** Copy the save's gear, builds and pair in (its powers and attunement then come from the items). */
+  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'abilities' | 'pair'>) => void;
   reset: () => void;
 }
 
@@ -242,12 +252,10 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     ...load(),
     spawn: defaultSpawn(),
     setSpawn: (patch) => set({ spawn: { ...get().spawn, ...patch } }),
-    // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it). A basic
-    // infusion of the new weapon's own element is dropped, so no hidden pick lingers.
+    // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it).
     setWeapon: (weapon) => {
       if (sameChoice(weapon, get().weapon)) return;
-      const clash = !!weapon && weapon.mana === get().basicInfusion;
-      commit({ weapon, loadedWeapon: null, ...(clash ? { basicInfusion: null } : {}) });
+      commit({ weapon, loadedWeapon: null });
     },
     setLegendary: (id, on) => {
       const legendaries = { ...get().legendaries };
@@ -271,8 +279,10 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     clearDummyGroups: () => commit({ dummies: [] }),
     setToggles: (toggles) => commit({ toggles }),
     setSlowmo: (slowmo) => commit({ slowmo }),
+    setPrimary: (primary) =>
+      commit({ primary, ...(primary === get().basicInfusion ? { basicInfusion: null } : {}) }),
     setBasicInfusion: (basicInfusion) => {
-      if (basicInfusion === null || basicInfusion !== get().weapon?.mana) commit({ basicInfusion });
+      if (basicInfusion !== get().primary) commit({ basicInfusion });
     },
     loadMyBuild: (profile) => {
       const { weapon, ...gear } = profile.equipped;
@@ -283,7 +293,9 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         abilities: profile.abilities,
         legendaries: {},
         attunement: {},
-        basicInfusion: null,
+        // Your pair: the loaded weapon keeps its real mana (the weapon check relies on it).
+        primary: profile.pair.primary ?? get().primary,
+        basicInfusion: profile.pair.secondary,
       });
     },
     reset: () => {
@@ -295,7 +307,14 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
 
 type StatsInput = Pick<
   SandboxLoadout,
-  'weapon' | 'loadedWeapon' | 'gear' | 'legendaries' | 'attunement' | 'depth' | 'basicInfusion'
+  | 'weapon'
+  | 'loadedWeapon'
+  | 'gear'
+  | 'legendaries'
+  | 'attunement'
+  | 'depth'
+  | 'primary'
+  | 'basicInfusion'
 >;
 
 /** What the sandbox hero wears: the loaded weapon, else a clean one of the picked kind (item level = depth). */
@@ -309,7 +328,10 @@ export function sandboxStats(registry: DataRegistry, s: StatsInput): HeroStats {
   return computeHeroStats(sandboxEquipped(registry, s), registry, {
     legendaries: s.legendaries,
     attunement: s.attunement,
-    basicInfusion: s.basicInfusion ?? undefined,
+    // Basics only: blows strike with the primary and the finisher discharges the infusion,
+    // unarmed too. Every element still attunes: the sandbox stays unrestricted.
+    pair: { primary: s.primary, secondary: s.basicInfusion },
+    filterAttunement: false,
   });
 }
 
@@ -321,6 +343,7 @@ export function useSandboxStats(): HeroStats {
   const legendaries = useSandboxStore((s) => s.legendaries);
   const attunement = useSandboxStore((s) => s.attunement);
   const depth = useSandboxStore((s) => s.depth);
+  const primary = useSandboxStore((s) => s.primary);
   const basicInfusion = useSandboxStore((s) => s.basicInfusion);
   return useMemo(
     () =>
@@ -331,8 +354,9 @@ export function useSandboxStats(): HeroStats {
         legendaries,
         attunement,
         depth,
+        primary,
         basicInfusion,
       }),
-    [weapon, loadedWeapon, gear, legendaries, attunement, depth, basicInfusion],
+    [weapon, loadedWeapon, gear, legendaries, attunement, depth, primary, basicInfusion],
   );
 }
