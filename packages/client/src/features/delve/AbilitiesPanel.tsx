@@ -120,12 +120,14 @@ export function Chip({
   children,
   testId,
   title,
+  disabled,
 }: {
   pressed: boolean;
   onClick: () => void;
   children: React.ReactNode;
   testId?: string;
   title?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -135,6 +137,8 @@ export function Chip({
       onClick={onClick}
       data-testid={testId}
       title={title}
+      disabled={disabled}
+      style={disabled ? { opacity: 0.35 } : undefined}
     >
       {children}
     </button>

@@ -59,6 +59,23 @@ describe('TrainingPanel', () => {
     expect(screen.getByTestId('weapon-name')).toHaveTextContent('Staff');
   });
 
+  it('the Basic infusion picker writes the store, disables the weapon element, and is off unarmed', () => {
+    renderPanel('loadout');
+    expect(screen.getByTestId('basic-infusion-none')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('basic-infusion-fire')).toBeDisabled(); // the rare fire sword's
+    fireEvent.click(screen.getByTestId('basic-infusion-storm'));
+    expect(useSandboxStore.getState().basicInfusion).toBe('storm');
+    expect(screen.getByTestId('basic-infusion-storm')).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByText(
+        'Preview: in the Delve, basic attacks will gain a second element through elemental affinity.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('weapon-base-none'));
+    expect(screen.getByTestId('basic-infusion-storm')).toBeDisabled();
+    expect(screen.getByTestId('basic-infusion-none')).toBeDisabled();
+  });
+
   it('adds dummies through the arena, and stops at the cap', () => {
     const { actions } = renderPanel('targets');
     fireEvent.click(screen.getByTestId('add-dummy-row'));

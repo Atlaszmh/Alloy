@@ -126,4 +126,31 @@ describe('sandboxStore', () => {
     expect(sandboxEquipped(registry, store()).weapon).toBeUndefined();
     expect(sandboxStats(registry, store()).weapon.baseId).toBeNull();
   });
+
+  it("keeps a basic infusion: saved, ignored for the weapon's element, cleared by Load my build", () => {
+    expect(store().basicInfusion).toBeNull();
+    store().setBasicInfusion('storm');
+    expect(store().basicInfusion).toBe('storm');
+    expect(parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!)).basicInfusion).toBe(
+      'storm',
+    );
+    expect(sandboxStats(registry, store()).weapon.infusion).toBe('storm');
+    store().setBasicInfusion('fire'); // the rare fire sword's own element
+    expect(store().basicInfusion).toBe('storm');
+    store().setBasicInfusion(null);
+    expect(store().basicInfusion).toBeNull();
+    expect(parseSandbox({ basicInfusion: 'plasma' }).basicInfusion).toBeNull();
+    store().setBasicInfusion('frost');
+    store().loadMyBuild(createDelveProfile(registry, 7));
+    expect(store().basicInfusion).toBeNull();
+  });
+
+  it("drops the basic infusion when the new weapon's element matches it, and keeps it otherwise", () => {
+    store().setBasicInfusion('storm');
+    store().setWeapon({ baseId: 'axe', mana: 'frost', rarity: 'rare' });
+    expect(store().basicInfusion).toBe('storm');
+    store().setWeapon({ baseId: 'staff', mana: 'storm', rarity: 'rare' });
+    expect(store().basicInfusion).toBeNull();
+    expect(JSON.parse(localStorage.getItem(SANDBOX_KEY)!).basicInfusion).toBeNull();
+  });
 });

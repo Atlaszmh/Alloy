@@ -129,6 +129,8 @@ const LoadoutTab = memo(function LoadoutTab() {
   const stats = useSandboxStats();
   const weapon = sandboxEquipped(registry, s).weapon;
   const choice = s.weapon;
+  // What the engine draws: none unarmed, or when the pick is the weapon's own element.
+  const infusion = stats.weapon.infusion;
   const pick = (next: Partial<WeaponChoice>) =>
     s.setWeapon({ baseId: 'sword', mana: 'fire', rarity: 'rare', ...(choice ?? {}), ...next });
 
@@ -211,6 +213,37 @@ const LoadoutTab = memo(function LoadoutTab() {
             )
           )}
         </div>
+      </Section>
+
+      <Section title="Basic infusion">
+        <fieldset
+          disabled={!choice}
+          className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0"
+          style={{ opacity: choice ? 1 : 0.5 }}
+        >
+          <Chip
+            pressed={!infusion}
+            onClick={() => s.setBasicInfusion(null)}
+            testId="basic-infusion-none"
+          >
+            None
+          </Chip>
+          {MANA_TYPES.map((m) => (
+            <Chip
+              key={m}
+              pressed={infusion === m}
+              disabled={m === choice?.mana}
+              onClick={() => s.setBasicInfusion(m)}
+              testId={`basic-infusion-${m}`}
+            >
+              {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+            </Chip>
+          ))}
+        </fieldset>
+        <p className="text-[11px] text-stone-500">
+          Preview: in the Delve, basic attacks will gain a second element through elemental
+          affinity.
+        </p>
       </Section>
 
       <Section title="Legendary powers">

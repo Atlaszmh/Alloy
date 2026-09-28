@@ -83,6 +83,8 @@ export interface SandboxLoadout {
   toggles: SandboxToggles;
   /** Display speed: 0.25, 0.5, 0.75 or 1. */
   slowmo: number;
+  /** A second element for basic attacks, previewed only (the engine ignores the weapon's own element and unarmed). */
+  basicInfusion: ManaType | null;
 }
 
 export const SANDBOX_DEFAULTS: SandboxLoadout = {
@@ -97,6 +99,7 @@ export const SANDBOX_DEFAULTS: SandboxLoadout = {
   dummies: [],
   toggles: { infiniteMana: true, noCooldowns: true, invulnerable: true },
   slowmo: 1,
+  basicInfusion: null,
 };
 
 const ManaSchema = z.enum(MANA_TYPES as readonly [ManaType, ...ManaType[]]);
@@ -157,6 +160,7 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
       .number()
       .refine((v) => (SLOWMO_SPEEDS as readonly number[]).includes(v))
       .catch(D.slowmo),
+    basicInfusion: ManaSchema.nullable().catch(null),
   });
 }
 
@@ -212,6 +216,8 @@ interface SandboxStore extends SandboxLoadout {
   clearDummyGroups: () => void;
   setToggles: (toggles: SandboxToggles) => void;
   setSlowmo: (speed: number) => void;
+  /** Preview a basic-attack infusion (null = none); the weapon's own element is ignored. */
+  setBasicInfusion: (mana: ManaType | null) => void;
   /** Copy the save's gear and builds in (its powers and attunement then come from the items). */
   loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'abilities'>) => void;
   reset: () => void;
@@ -236,9 +242,12 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     ...load(),
     spawn: defaultSpawn(),
     setSpawn: (patch) => set({ spawn: { ...get().spawn, ...patch } }),
-    // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it).
+    // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it). A basic
+    // infusion of the new weapon's own element is dropped, so no hidden pick lingers.
     setWeapon: (weapon) => {
-      if (!sameChoice(weapon, get().weapon)) commit({ weapon, loadedWeapon: null });
+      if (sameChoice(weapon, get().weapon)) return;
+      const clash = !!weapon && weapon.mana === get().basicInfusion;
+      commit({ weapon, loadedWeapon: null, ...(clash ? { basicInfusion: null } : {}) });
     },
     setLegendary: (id, on) => {
       const legendaries = { ...get().legendaries };
@@ -262,6 +271,9 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     clearDummyGroups: () => commit({ dummies: [] }),
     setToggles: (toggles) => commit({ toggles }),
     setSlowmo: (slowmo) => commit({ slowmo }),
+    setBasicInfusion: (basicInfusion) => {
+      if (basicInfusion === null || basicInfusion !== get().weapon?.mana) commit({ basicInfusion });
+    },
     loadMyBuild: (profile) => {
       const { weapon, ...gear } = profile.equipped;
       commit({
@@ -271,6 +283,7 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         abilities: profile.abilities,
         legendaries: {},
         attunement: {},
+        basicInfusion: null,
       });
     },
     reset: () => {
@@ -282,7 +295,7 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
 
 type StatsInput = Pick<
   SandboxLoadout,
-  'weapon' | 'loadedWeapon' | 'gear' | 'legendaries' | 'attunement' | 'depth'
+  'weapon' | 'loadedWeapon' | 'gear' | 'legendaries' | 'attunement' | 'depth' | 'basicInfusion'
 >;
 
 /** What the sandbox hero wears: the loaded weapon, else a clean one of the picked kind (item level = depth). */
@@ -296,6 +309,7 @@ export function sandboxStats(registry: DataRegistry, s: StatsInput): HeroStats {
   return computeHeroStats(sandboxEquipped(registry, s), registry, {
     legendaries: s.legendaries,
     attunement: s.attunement,
+    basicInfusion: s.basicInfusion ?? undefined,
   });
 }
 
@@ -307,6 +321,7 @@ export function useSandboxStats(): HeroStats {
   const legendaries = useSandboxStore((s) => s.legendaries);
   const attunement = useSandboxStore((s) => s.attunement);
   const depth = useSandboxStore((s) => s.depth);
+  const basicInfusion = useSandboxStore((s) => s.basicInfusion);
   return useMemo(
     () =>
       sandboxStats(getDelveRegistry(), {
@@ -316,7 +331,8 @@ export function useSandboxStats(): HeroStats {
         legendaries,
         attunement,
         depth,
+        basicInfusion,
       }),
-    [weapon, loadedWeapon, gear, legendaries, attunement, depth],
+    [weapon, loadedWeapon, gear, legendaries, attunement, depth, basicInfusion],
   );
 }
