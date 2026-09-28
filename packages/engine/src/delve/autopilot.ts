@@ -101,11 +101,27 @@ function pickDoor(profile: DelveProfile): string | null {
   return dive.doorChoices[0];
 }
 
+/** The pairs that form a reaction (melt, shatter, overload, superconduct, combust, blight, soulfire). */
+// ponytail: mirrors combat.ts's reaction rules by hand; goes away once every pair has a reaction (the next project).
+const REACTION_PAIRS: [ManaType, ManaType][] = [
+  ['fire', 'frost'],
+  ['earth', 'frost'],
+  ['storm', 'fire'],
+  ['frost', 'storm'],
+  ['fire', 'nature'],
+  ['shadow', 'nature'],
+  ['fire', 'shadow'],
+];
+
+function reacts(a: ManaType, b: ManaType): boolean {
+  return REACTION_PAIRS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+}
+
 /**
- * Bind the non-primary element the bot owns the most attunement in (equipped
- * and bagged: each item's base plus its `*Attune` lines; ties in MANA_TYPES
- * order), none while that's all 0; then build the Primary from both elements,
- * so it keeps finding reactions.
+ * Bind a non-primary element the bot owns attunement in (equipped and bagged:
+ * each item's base plus its `*Attune` lines), none while that's all 0: one that
+ * reacts with the primary if any, then the most owned (ties in MANA_TYPES
+ * order). Then build the Primary from both elements, so it keeps finding reactions.
  */
 function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const primary = profile.pair.primary;
@@ -118,8 +134,10 @@ function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
       const a = itemAttunement(registry, item);
       for (const m of MANA_TYPES) owned[m] += a[m];
     }
+    const candidates = MANA_TYPES.filter((m) => m !== primary && owned[m] > 0);
+    const reacting = candidates.filter((m) => reacts(primary, m));
     let best: ManaType | null = null;
-    for (const m of MANA_TYPES) if (m !== primary && owned[m] > (best ? owned[best] : 0)) best = m;
+    for (const m of reacting.length > 0 ? reacting : candidates) if (!best || owned[m] > owned[best]) best = m;
     if (!best) return p;
     p = bindSecondary(p, best).profile;
     if (!p.pair.secondary) return p;

@@ -766,6 +766,17 @@ describe('the autopilot and the pair', () => {
     expect(after.pair.secondary).toBeNull();
   });
 
+  it('prefers a partner that reacts with the primary, even owning less of it', () => {
+    const p = {
+      ...createDelveProfile(registry, 5, { primary: 'fire' }),
+      // earth 2 (no reaction with fire), frost 1 (Melt)
+      bag: [item('earth', 'helm'), item('earth', 'gloves'), item('frost', 'boots')],
+    };
+    const after = betweenDives(registry, p);
+    expect(after.pair).toEqual({ primary: 'fire', secondary: 'frost' });
+    expect(after.abilities.primary.elements).toEqual(['fire', 'frost']);
+  });
+
   it('lets an overtaking secondary swap in, and rebuilds its Primary to match', () => {
     const p0 = createDelveProfile(registry, 5, { primary: 'fire' }); // fire 2
     const p: DelveProfile = {
