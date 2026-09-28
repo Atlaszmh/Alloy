@@ -89,7 +89,16 @@ function isBoulder(p: FloorFrame['projectiles'][number]): boolean {
 }
 
 /** Engine event kinds the floor reacts to; the rest are dropped before crossing threads. */
-const FLOOR_EVENTS = new Set<ArpgEvent['kind']>(['explode', 'chain', 'hit', 'death', 'dash']);
+const FLOOR_EVENTS = new Set<ArpgEvent['kind']>([
+  'explode',
+  'chain',
+  'hit',
+  'death',
+  'dash',
+  // Infused lances and Strikes mark the floor (see arena-effects.ts).
+  'beam',
+  'slash',
+]);
 
 function hashString(s: string): number {
   let h = 2166136261;

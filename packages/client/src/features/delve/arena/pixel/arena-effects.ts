@@ -1,4 +1,4 @@
-import type { ArpgEvent } from '@alloy/engine';
+import type { ArpgEvent, ManaType } from '@alloy/engine';
 import type { PixelWorld } from './world';
 
 /** Arena units → floor cells (the floor grid includes a cliff margin). */
@@ -11,7 +11,54 @@ export function arenaToCell(
   return { x: Math.round((x + margin) * ppu), y: Math.round((y + margin) * ppu) };
 }
 
-/** Replay one engine event onto the pixel floor as a visual effect. */
+type Cell = { x: number; y: number };
+
+/** An infusion marks a path once per this many cells… */
+const STAMP_SPACING = 4;
+/** …at most this many times per event (spread evenly, never cut off). */
+export const MAX_STAMPS = 12;
+/** Marks round an infused blast's rim. */
+export const RIM_STAMPS = 6;
+
+/** Each infusion element's brush (radius in cells). Storm draws one arc through the stamps instead. */
+const BRUSH: Record<Exclude<ManaType, 'storm'>, (pw: PixelWorld, c: Cell) => void> = {
+  nature: (pw, c) => pw.sprout(c.x, c.y, 3),
+  frost: (pw, c) => pw.frostBlast(c.x, c.y, 2),
+  fire: (pw, c) => pw.fireBlast(c.x, c.y, 2),
+  earth: (pw, c) => pw.earthImpact(c.x, c.y, 2),
+  shadow: (pw, c) => pw.shadowBlast(c.x, c.y, 2),
+};
+
+/**
+ * Stamps along a path `len` cells long: one per 4 cells, 2 to 12, from t = 0
+ * to t = 1. A closed path (a 360° slam) spaces them k / n, so its two ends
+ * don't stamp the same place twice.
+ */
+function along(len: number, at: (t: number) => Cell, closed = false): Cell[] {
+  const n = Math.min(MAX_STAMPS, Math.max(2, Math.floor(len / STAMP_SPACING) + 1));
+  return Array.from({ length: n }, (_, k) => at(k / (closed ? n : n - 1)));
+}
+
+/** Stamps along the straight path a → b. */
+function line(a: Cell, b: Cell): Cell[] {
+  return along(Math.hypot(b.x - a.x, b.y - a.y), (t) => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  }));
+}
+
+/** Mark the floor with an infusion's brush at each cell (storm: one arc through them, closed for a ring). */
+function stamp(pw: PixelWorld, element: ManaType, cells: Cell[], closed = false): void {
+  if (element === 'storm') pw.stormArc(closed ? [...cells, cells[0]] : cells);
+  else for (const c of cells) BRUSH[element](pw, c);
+}
+
+/**
+ * Replay one engine event onto the pixel floor as a visual effect. An
+ * infusion also marks the floor with its element: along an infused lance,
+ * slash or blink trail, and round an infused blast's rim (after the body's
+ * own brush, so the body keeps its core). Basic swings never reach here.
+ */
 export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margin: number): void {
   switch (e.kind) {
     case 'explode': {
@@ -37,8 +84,41 @@ export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margi
           // Monster slams crack the ground.
           pw.earthImpact(c.x, c.y, Math.max(4, r * 0.6));
       }
+      if (e.infusion) {
+        const rim = Array.from({ length: RIM_STAMPS }, (_, k) => {
+          const a = (k / RIM_STAMPS) * Math.PI * 2;
+          return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+        });
+        stamp(pw, e.infusion, rim, true);
+      }
       break;
     }
+    case 'beam':
+      if (e.infusion)
+        stamp(
+          pw,
+          e.infusion,
+          line(arenaToCell(e.x, e.y, ppu, margin), arenaToCell(e.tx, e.ty, ppu, margin)),
+        );
+      break;
+    case 'slash':
+      if (e.infusion) {
+        const c = arenaToCell(e.x, e.y, ppu, margin);
+        const r = e.range * ppu;
+        const round = e.arc >= 360;
+        const span = (Math.min(360, e.arc) * Math.PI) / 180;
+        const from = Math.atan2(e.dir.y, e.dir.x) - span / 2;
+        const cells = along(
+          r * span,
+          (t) => ({
+            x: c.x + Math.cos(from + span * t) * r,
+            y: c.y + Math.sin(from + span * t) * r,
+          }),
+          round,
+        );
+        stamp(pw, e.infusion, cells, round);
+      }
+      break;
     case 'chain':
       pw.stormArc(e.points.map((p) => arenaToCell(p.x, p.y, ppu, margin)));
       break;
@@ -60,6 +140,7 @@ export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margi
         pw.hitSpark(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps, 'shadow');
       }
       pw.shadowBlast(b.x, b.y, 5);
+      if (e.infusion) stamp(pw, e.infusion, line(a, b));
       break;
     }
     default:

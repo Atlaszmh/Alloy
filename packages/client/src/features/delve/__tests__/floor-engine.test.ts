@@ -100,7 +100,7 @@ describe('FloorEngine', () => {
 });
 
 describe('snapshotArena', () => {
-  it('keeps only floor-relevant events and every moving body', () => {
+  it('keeps only floor-relevant events (infused lances and slashes too) and every moving body', () => {
     const profile = startDive(registry, createDelveProfile(registry, 99), 1);
     const world = beginFloor(registry, profile);
     const events: ArpgEvent[] = [
@@ -118,9 +118,30 @@ describe('snapshotArena', () => {
         heft: 0,
         source: 'basic',
       },
+      {
+        kind: 'beam',
+        x: 1,
+        y: 1,
+        tx: 4,
+        ty: 1,
+        width: 0.55,
+        element: 'frost',
+        infusion: 'nature',
+      },
+      {
+        kind: 'slash',
+        x: 2,
+        y: 2,
+        dir: { x: 0, y: -1 },
+        range: 2.4,
+        arc: 150,
+        element: 'storm',
+        heft: 0.5,
+        infusion: 'earth',
+      },
     ];
     const snap = snapshotArena(world, 0.016, events, { left: 0, top: 0, right: 10, bottom: 10 });
-    expect(snap.events.map((e) => e.kind)).toEqual(['explode', 'hit']);
+    expect(snap.events.map((e) => e.kind)).toEqual(['explode', 'hit', 'beam', 'slash']);
     expect(snap.bodies).toHaveLength(1 + world.monsters.length);
     expect(snap.bodies[0][0]).toBe('hero');
     // Plain data only, so it can be posted to a worker.

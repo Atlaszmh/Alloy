@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { ArpgEvent } from '@alloy/engine';
+import type { ArpgEvent, ManaType } from '@alloy/engine';
 import { PixelWorld, MAT, PROP } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
-import { applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
+import { MAX_STAMPS, RIM_STAMPS, applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
 
 const PPU = 5;
 const MARGIN = 3;
@@ -394,5 +394,181 @@ describe('the growth brush', () => {
     const before = greenness();
     for (const c of cells) pw.growth[c] = 1;
     expect(greenness()).toBeGreaterThan(before);
+  });
+});
+
+/** A floor that records the brushes applied to it (in cells), for the stamp tests. */
+function spyFloor() {
+  const stamps: { brush: string; x: number; y: number; r: number }[] = [];
+  const arcs: { x: number; y: number }[][] = [];
+  const brush = (name: string) => (x: number, y: number, r: number) => {
+    stamps.push({ brush: name, x, y, r });
+  };
+  const pw = {
+    fireBlast: brush('fire'),
+    frostBlast: brush('frost'),
+    stormBlast: brush('storm'),
+    earthImpact: brush('earth'),
+    shadowBlast: brush('shadow'),
+    sprout: brush('nature'),
+    hitSpark: () => {},
+    soulBurst: () => {},
+    stormArc: (points: { x: number; y: number }[]) => {
+      arcs.push(points.map((p) => ({ x: p.x, y: p.y })));
+    },
+  } as unknown as PixelWorld;
+  return { pw, stamps, arcs };
+}
+
+describe('infusions on the pixel floor', () => {
+  const at = (x: number, y: number) => arenaToCell(x, y, PPU, MARGIN);
+  const gaps = (s: { x: number; y: number }[]) =>
+    s.slice(1).map((p, k) => Math.hypot(p.x - s[k].x, p.y - s[k].y));
+  const slash = (arc: number, infusion: ManaType | null): ArpgEvent => ({
+    kind: 'slash',
+    x: 10,
+    y: 10,
+    dir: { x: 0, y: -1 },
+    range: 2.4,
+    arc,
+    element: 'storm',
+    heft: 0.5,
+    infusion,
+  });
+  const lance = (infusion: ManaType | null): ArpgEvent => ({
+    kind: 'beam',
+    x: 5,
+    y: 30,
+    tx: 5,
+    ty: 5,
+    width: 0.55,
+    element: 'fire',
+    infusion,
+  });
+
+  it("marks a blast's rim with 6 stamps of the infusion, after the body's own brush", () => {
+    const c = at(10, 10);
+    for (const infusion of ['nature', 'frost', 'fire', 'earth', 'shadow'] as const) {
+      const f = spyFloor();
+      applyArenaEvent(
+        f.pw,
+        { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'frost', infusion },
+        PPU,
+        MARGIN,
+      );
+      expect(f.stamps[0]).toMatchObject({ brush: 'frost', x: c.x, y: c.y });
+      const rim = f.stamps.slice(1);
+      expect(rim).toHaveLength(RIM_STAMPS);
+      for (const s of rim) {
+        expect(s).toMatchObject({ brush: infusion, r: infusion === 'nature' ? 3 : 2 });
+        expect(Math.hypot(s.x - c.x, s.y - c.y)).toBeCloseTo(1.5 * PPU, 5);
+      }
+    }
+    // Storm: one arc round the rim, closed.
+    const f = spyFloor();
+    applyArenaEvent(
+      f.pw,
+      { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'frost', infusion: 'storm' },
+      PPU,
+      MARGIN,
+    );
+    expect(f.stamps).toHaveLength(1);
+    expect(f.arcs).toHaveLength(1);
+    expect(f.arcs[0]).toHaveLength(RIM_STAMPS + 1);
+    expect(f.arcs[0][RIM_STAMPS]).toEqual(f.arcs[0][0]);
+  });
+
+  it('marks a lance evenly from end to end, one stamp per 4 cells and at most 12', () => {
+    const long = spyFloor();
+    applyArenaEvent(long.pw, lance('earth'), PPU, MARGIN);
+    expect(long.stamps).toHaveLength(MAX_STAMPS); // 125 cells would be 32
+    expect(long.stamps[0]).toMatchObject(at(5, 30));
+    expect(long.stamps[MAX_STAMPS - 1]).toMatchObject(at(5, 5));
+    const g = gaps(long.stamps);
+    for (const d of g) expect(d).toBeCloseTo(g[0], 5);
+    const short = spyFloor();
+    applyArenaEvent(
+      short.pw,
+      { kind: 'beam', x: 5, y: 10, tx: 5, ty: 8, width: 0.55, element: 'fire', infusion: 'fire' },
+      PPU,
+      MARGIN,
+    );
+    expect(short.stamps).toHaveLength(3); // 10 cells
+  });
+
+  it("stamps shadow's brush along a path, and draws storm there as one open arc", () => {
+    const shadow = spyFloor();
+    applyArenaEvent(shadow.pw, lance('shadow'), PPU, MARGIN);
+    expect(shadow.stamps).toHaveLength(MAX_STAMPS);
+    expect(shadow.stamps.every((s) => s.brush === 'shadow' && s.r === 2)).toBe(true);
+    const storm = spyFloor();
+    applyArenaEvent(storm.pw, lance('storm'), PPU, MARGIN);
+    expect(storm.stamps).toHaveLength(0);
+    expect(storm.arcs).toHaveLength(1);
+    expect(storm.arcs[0]).toHaveLength(MAX_STAMPS); // not closed back to its start
+    expect(storm.arcs[0][0]).toMatchObject(at(5, 30));
+    expect(storm.arcs[0][MAX_STAMPS - 1]).toMatchObject(at(5, 5));
+  });
+
+  it('marks a slash evenly along its arc', () => {
+    const f = spyFloor();
+    applyArenaEvent(f.pw, slash(150, 'nature'), PPU, MARGIN);
+    const c = at(10, 10);
+    expect(f.stamps).toHaveLength(8); // 12 cells out over 150°: about 31 cells of arc
+    for (const s of f.stamps) expect(Math.hypot(s.x - c.x, s.y - c.y)).toBeCloseTo(12, 5);
+    const g = gaps(f.stamps);
+    for (const d of g) expect(d).toBeCloseTo(g[0], 5);
+    expect(f.stamps.every((s) => s.y < c.y)).toBe(true); // the arc faces up, where it swung
+  });
+
+  it("spaces a 360° slam's marks all the way round, never twice in one place", () => {
+    const f = spyFloor();
+    applyArenaEvent(f.pw, slash(360, 'fire'), PPU, MARGIN);
+    expect(f.stamps).toHaveLength(MAX_STAMPS);
+    const g = gaps([...f.stamps, f.stamps[0]]);
+    for (const d of g) expect(d).toBeCloseTo(g[0], 5);
+    expect(g[0]).toBeGreaterThan(1);
+    // Storm closes its arc round the slam.
+    const storm = spyFloor();
+    applyArenaEvent(storm.pw, slash(360, 'storm'), PPU, MARGIN);
+    expect(storm.arcs).toHaveLength(1);
+    expect(storm.arcs[0]).toHaveLength(MAX_STAMPS + 1);
+    expect(storm.arcs[0][MAX_STAMPS]).toEqual(storm.arcs[0][0]);
+  });
+
+  it('marks a blink trail, beside the landing it always had', () => {
+    const f = spyFloor();
+    applyArenaEvent(
+      f.pw,
+      { kind: 'dash', fromX: 5, fromY: 20, toX: 5, toY: 16, infusion: 'frost' },
+      PPU,
+      MARGIN,
+    );
+    const frost = f.stamps.filter((s) => s.brush === 'frost');
+    expect(frost).toHaveLength(6); // 20 cells
+    expect(frost[0]).toMatchObject(at(5, 20));
+    expect(frost[5]).toMatchObject(at(5, 16));
+    expect(f.stamps.filter((s) => s.brush === 'shadow')).toHaveLength(1);
+  });
+
+  it('stamps nothing without an infusion', () => {
+    const f = spyFloor();
+    applyArenaEvent(f.pw, lance(null), PPU, MARGIN);
+    applyArenaEvent(f.pw, slash(150, null), PPU, MARGIN);
+    expect(f.stamps).toHaveLength(0);
+    applyArenaEvent(
+      f.pw,
+      { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'fire', infusion: null },
+      PPU,
+      MARGIN,
+    );
+    applyArenaEvent(
+      f.pw,
+      { kind: 'dash', fromX: 5, fromY: 20, toX: 5, toY: 16, infusion: null },
+      PPU,
+      MARGIN,
+    );
+    expect(f.stamps.map((s) => s.brush)).toEqual(['fire', 'shadow']);
+    expect(f.arcs).toHaveLength(0);
   });
 });
