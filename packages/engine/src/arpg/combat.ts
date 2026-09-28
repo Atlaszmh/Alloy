@@ -6,13 +6,14 @@ import type {
   DropKind,
   HitSource,
   MonsterEntity,
+  ReactionDef,
   ReactionId,
   StatusId,
   Vec,
 } from '../types/arpg.js';
 import type { DelveBalance } from '../types/delve.js';
 import type { GearItem } from '../types/gear.js';
-import type { ManaType } from '../types/mana.js';
+import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
@@ -239,6 +240,120 @@ function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity): void
   if (!ctx.world.pending.reactions.includes(reaction)) ctx.world.pending.reactions.push(reaction);
 }
 
+/** Every other living foe within `radius` of `m` (edge to centre, as Overload always measured). */
+function nearby(ctx: SimCtx, m: MonsterEntity, radius: number): MonsterEntity[] {
+  return ctx.world.monsters.filter(
+    (o) => !o.dead && o.id !== m.id && dist(o.x, o.y, m.x, m.y) <= radius + o.radius,
+  );
+}
+
+/**
+ * The reaction a hit of `element` sets off on `m`: the first other element's
+ * mark on it, in MANA_TYPES order, whose reaction can fire now; else null.
+ */
+function findReaction(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  element: ManaType,
+): { def: ReactionDef; mark: ManaType } | null {
+  for (const mark of MANA_TYPES) {
+    if (mark === element || !hasMark(ctx, m, mark)) continue;
+    // Earth shatters a freeze, not a mere chill.
+    if (element === 'earth' && mark === 'frost' && !isFrozen(ctx, m)) continue;
+    return { def: ctx.registry.getReactionFor(element, mark), mark };
+  }
+  return null;
+}
+
+/**
+ * Clear the mark that set `reaction` off. Earth's Shatter breaks only the
+ * freeze; Storm's Superconduct takes only the chill (the freeze it would
+ * add again is refused by immunity, so the foe stays frozen).
+ */
+function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void {
+  const s = m.status;
+  switch (mark) {
+    case 'fire':
+      s.burnUntil = 0;
+      break;
+    case 'frost':
+      if (reaction !== 'shatter') {
+        s.chillUntil = 0;
+        s.chillStacks = 0;
+      }
+      if (reaction !== 'superconduct') s.freezeUntil = 0;
+      break;
+    case 'storm':
+      s.shockUntil = 0;
+      break;
+    case 'earth':
+      s.rattledUntil = 0;
+      break;
+    case 'shadow':
+      s.hexUntil = 0;
+      break;
+    case 'nature':
+      s.poisonStacks = 0;
+      s.poisonUntil = 0;
+      break;
+  }
+}
+
+/**
+ * A reaction's effect on `m` (its mark already used up). Returns the hit's
+ * amount after it: the damage multipliers, times Catalyst.
+ */
+function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): number {
+  const r = ctx.bal.reactions;
+  const h = ctx.world.hero;
+  const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100;
+  switch (id) {
+    case 'melt':
+      return amount * r.meltMult * catalyst;
+    case 'shatter':
+      return amount * r.shatterMult * catalyst;
+    case 'overload': {
+      const blast = amount * r.overloadMult * catalyst;
+      ctx.events.push({
+        kind: 'explode',
+        x: m.x,
+        y: m.y,
+        radius: r.overloadRadius,
+        element: 'storm',
+        infusion: null,
+      });
+      for (const o of nearby(ctx, m, r.overloadRadius))
+        hitMonster(ctx, o, blast, 'storm', { source: 'reaction', noReact: true });
+      return amount;
+    }
+    case 'superconduct':
+      freeze(ctx, m, r.superconductFreeze);
+      return amount;
+    case 'soulfire':
+      return amount * catalyst;
+    case 'combust': {
+      const hit = amount * r.combustMult * catalyst;
+      ctx.events.push({
+        kind: 'explode',
+        x: m.x,
+        y: m.y,
+        radius: r.combustRadius,
+        element: 'nature',
+        infusion: null,
+      });
+      for (const o of nearby(ctx, m, r.combustRadius))
+        hitMonster(ctx, o, hit, 'fire', { source: 'reaction', noReact: true });
+      return hit;
+    }
+    case 'blight':
+      spreadAffliction(ctx, m);
+      return amount;
+    default:
+      // The new eight's effects arrive in their own tasks.
+      return amount;
+  }
+}
+
 /**
  * Deal damage to a monster: resistances, crits, statuses, elemental reactions,
  * lifesteal, knockback and death. Returns the damage dealt.
@@ -282,74 +397,15 @@ export function hitMonster(
   if (isHexed(ctx, m)) amount *= 1 + bal.status.hexBonus;
   if (isFrozen(ctx, m) && mastery(ctx, 'frost')) amount *= 1.3;
 
-  // Elemental reactions: the element of this hit meets a status already on the foe.
+  // Elemental reactions: this hit's element meets another element's mark on the foe.
   let reaction: ReactionId | undefined;
-  if (element && !opts.noReact) {
-    const r = bal.reactions;
-    const catalyst = 1 + (stats.legendaries.catalyst ?? 0) / 100;
-    const s = m.status;
-    if (element === 'fire' && (isChilled(ctx, m) || isFrozen(ctx, m))) {
-      reaction = 'melt';
-      amount *= r.meltMult * catalyst;
-      s.chillUntil = 0;
-      s.chillStacks = 0;
-      s.freezeUntil = 0;
-    } else if (element === 'earth' && isFrozen(ctx, m)) {
-      reaction = 'shatter';
-      amount *= r.shatterMult * catalyst;
-      s.freezeUntil = 0;
-    } else if (element === 'storm' && isBurning(ctx, m)) {
-      reaction = 'overload';
-      s.burnUntil = 0;
-      const blast = amount * r.overloadMult * catalyst;
-      ctx.events.push({
-        kind: 'explode',
-        x: m.x,
-        y: m.y,
-        radius: r.overloadRadius,
-        element: 'storm',
-        infusion: null,
-      });
-      for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.overloadRadius + o.radius)
-          continue;
-        hitMonster(ctx, o, blast, 'storm', { source: 'reaction', noReact: true });
-      }
-    } else if (element === 'frost' && isShocked(ctx, m)) {
-      reaction = 'superconduct';
-      s.shockUntil = 0;
-      freeze(ctx, m, r.superconductFreeze);
-    } else if (element === 'fire' && isPoisoned(ctx, m)) {
-      reaction = 'combust';
-      amount *= r.combustMult * catalyst;
-      s.poisonStacks = 0;
-      s.poisonUntil = 0;
-      ctx.events.push({
-        kind: 'explode',
-        x: m.x,
-        y: m.y,
-        radius: r.combustRadius,
-        element: 'nature',
-        infusion: null,
-      });
-      for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.combustRadius + o.radius)
-          continue;
-        hitMonster(ctx, o, amount, 'fire', { source: 'reaction', noReact: true });
-      }
-    } else if (element === 'shadow' && isPoisoned(ctx, m)) {
-      reaction = 'blight';
-      for (const o of world.monsters) {
-        if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r.blightRadius + o.radius)
-          continue;
-        poison(ctx, o, s.poisonStacks, s.poisonDps);
-      }
-    } else if (element === 'fire' && isHexed(ctx, m)) {
-      reaction = 'soulfire';
-      amount *= catalyst;
-    }
-    if (reaction) noteReaction(ctx, reaction, m);
-    if (reaction === 'soulfire') healHero(ctx, amount * r.soulfireHeal, 'soulfire');
+  const found = element && !opts.noReact ? findReaction(ctx, m, element) : null;
+  if (found) {
+    reaction = found.def.id;
+    if (found.def.consumes !== false) useUpMark(m, found.mark, reaction);
+    amount = react(ctx, m, reaction, amount);
+    noteReaction(ctx, reaction, m);
+    if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
   }
 
   m.hp -= amount;

@@ -63,7 +63,8 @@ describe('ability events carry the infusion', () => {
     const ctx = makeCtx(registry, w, events);
     impact(ctx, w.hero.abilities[0], 13, 30, 1.1, 1, { tick: true });
     impact(ctx, w.hero.abilities[0], 13, 30, 1.1, 1);
-    expect(only(events, 'explode').map((e) => e.infusion)).toEqual([null, 'storm']);
+    // The landing's Fire meets the Storm the tick left: Overload, whose blast carries null.
+    expect(only(events, 'explode').map((e) => e.infusion)).toEqual([null, 'storm', null]);
   });
 
   it('monster slams, Overload, Combust and Hellfire Brand carry null', () => {
