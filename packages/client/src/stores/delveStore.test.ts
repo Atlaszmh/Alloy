@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { generateItem, SeededRNG } from '@alloy/engine';
-import { useDelveStore, DELVE_SAVE_KEY, MANUAL_ATTACK_KEY, loadDelveProfile } from './delveStore';
+import { generateItem, SeededRNG, type BuildFix, type GearSlot } from '@alloy/engine';
+import {
+  useDelveStore,
+  DELVE_SAVE_KEY,
+  MANUAL_ATTACK_KEY,
+  fixNotice,
+  loadDelveProfile,
+  overtakeNotice,
+} from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
 const registry = getDelveRegistry();
@@ -118,5 +125,88 @@ describe('delveStore', () => {
       pair: { primary: 'fire', secondary: null },
     });
     expect(loaded.fixed.map((f) => f.slot)).toEqual(['defensive']);
+  });
+
+  it('chooses the mana once, binds a second element, and remembers a declined bind this session', () => {
+    const s = () => useDelveStore.getState();
+    s().resetProfile(5);
+    expect(s().chooseMana('frost').ok).toBe(true);
+    expect(s().profile.pair.primary).toBe('frost');
+    expect(loadDelveProfile()?.profile.pair.primary).toBe('frost');
+    expect(s().chooseMana('fire').ok).toBe(false);
+    expect(s().bindSecondary('storm').ok).toBe(true);
+    expect(s().profile.pair).toEqual({ primary: 'frost', secondary: 'storm' });
+    s().declineBind('nature');
+    s().declineBind('nature');
+    expect(s().bindDeclined).toEqual(['nature']);
+    s().resetProfile(5);
+    expect(s().bindDeclined).toEqual([]);
+  });
+
+  it('closing a dive lets an overtaking secondary swap in, with a notice', () => {
+    const storm = (slot: GearSlot) =>
+      generateItem(
+        registry,
+        { uid: `s-${slot}`, ilvl: 1, rarity: 'common', slot, mana: 'storm' },
+        new SeededRNG(1),
+      );
+    const s = useDelveStore.getState();
+    s.setProfile({
+      ...s.profile,
+      pair: { primary: 'fire', secondary: 'storm' },
+      equipped: {
+        ...s.profile.equipped,
+        helm: storm('helm'),
+        gloves: storm('gloves'),
+        boots: storm('boots'),
+      },
+    }); // storm 3 > 1.2 × fire 2
+    useDelveStore.getState().startDive(1);
+    useDelveStore.getState().closeDive();
+    expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'storm', secondary: 'fire' });
+    expect(useDelveStore.getState().takeNotices()).toEqual([
+      'Storm now outweighs Fire: your basic attacks strike with Storm',
+    ]);
+    expect(useDelveStore.getState().takeNotices()).toEqual([]);
+  });
+
+  it('realign charges and says which builds it changed; re-attune spends Mana Dust', () => {
+    const s = useDelveStore.getState();
+    s.setProfile({
+      ...s.profile,
+      pair: { primary: 'fire', secondary: 'storm' },
+      manaDust: 500,
+      scrap: 500,
+      abilities: {
+        ...s.profile.abilities,
+        ultimate: { form: 'maelstrom', elements: ['storm'], weight: 0, payment: 'charge' },
+      },
+    });
+    expect(useDelveStore.getState().realign({ secondary: 'frost' }).ok).toBe(true);
+    expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: 'frost' });
+    expect(useDelveStore.getState().takeNotices()).toEqual([
+      "Your Maelstrom used Storm, which isn't in your pair; it now uses Fire",
+    ]);
+    const uid = useDelveStore.getState().profile.equipped.weapon!.uid;
+    const dust = useDelveStore.getState().profile.manaDust;
+    expect(useDelveStore.getState().reattune(uid, 'frost').ok).toBe(true);
+    expect(useDelveStore.getState().profile.equipped.weapon!.mana).toBe('frost');
+    expect(useDelveStore.getState().profile.manaDust).toBe(
+      dust - registry.getDelveBalance().pair.reattuneDust.common,
+    );
+  });
+
+  it('words the notices plainly', () => {
+    const fix: BuildFix = {
+      slot: 'ultimate',
+      removed: ['frost', 'storm'],
+      build: { form: 'maelstrom', elements: ['fire'], weight: 0, payment: 'charge' },
+    };
+    expect(fixNotice(registry, fix)).toBe(
+      "Your Maelstrom used Frost and Storm, which aren't in your pair; it now uses Fire",
+    );
+    expect(overtakeNotice(registry, 'storm', 'fire')).toBe(
+      'Storm now outweighs Fire: your basic attacks strike with Storm',
+    );
   });
 });

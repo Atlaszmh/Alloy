@@ -16,6 +16,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer, showToast } from '@/components/Toast';
 import { getDelveRegistry } from '@/features/delve/registry';
+import { useDelveNotices } from '@/features/delve/useDelveNotices';
 import { DoorChoice } from '@/features/delve/DoorChoice';
 import { DiveSummary } from '@/features/delve/DiveSummary';
 import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
@@ -99,6 +100,7 @@ export function DelveRun() {
   const [controlsOpen, setControlsOpen] = useState(false);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
+  useDelveNotices(!!dive);
 
   const showBanner = useCallback((title: string, color: string, sub?: string) => {
     setBanners((b) => [...b, { id: ++bannerId.current, title, sub, color }]);

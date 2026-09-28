@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { DelveCamp } from '../DelveCamp';
 import { useDelveStore } from '@/stores/delveStore';
@@ -28,5 +28,17 @@ describe('DelveCamp', () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
+  });
+
+  it('shows waiting notices as toasts, once', () => {
+    const text = 'Storm now outweighs Fire: your basic attacks strike with Storm';
+    act(() => useDelveStore.setState({ notices: [text] }));
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(useDelveStore.getState().notices).toEqual([]);
   });
 });

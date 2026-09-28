@@ -11,6 +11,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer } from '@/components/Toast';
+import { useDelveNotices } from '@/features/delve/useDelveNotices';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { PaperDoll } from '@/features/delve/PaperDoll';
 import { BagPanel } from '@/features/delve/BagPanel';
@@ -33,6 +34,7 @@ export function DelveCamp() {
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
+  useDelveNotices();
 
   // A finished dive's summary was shown on the run screen — clear it here.
   useEffect(() => {

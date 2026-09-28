@@ -13,8 +13,15 @@ import {
   fuseGear,
   setAutoSalvage,
   setAbility as engineSetAbility,
+  bindSecondary as engineBindSecondary,
+  chooseStartingMana,
+  realign as engineRealign,
+  reattuneItem,
+  resolveOvertake,
   type AbilityBuild,
   type AbilitySlot,
+  type BuildFix,
+  type DataRegistry,
   type DelveProfile,
   type GearItem,
   type GearSlot,
@@ -66,6 +73,23 @@ function freshSeed(): number {
   return (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) | 0;
 }
 
+const manaName = (registry: DataRegistry, m: ManaType) => registry.getArpgData().mana[m].name;
+const manaNames = (registry: DataRegistry, els: ManaType[]) =>
+  els.map((m) => manaName(registry, m)).join(' and ');
+
+/** "Your Maelstrom used Frost, which isn't in your pair; it now uses Fire" */
+export function fixNotice(registry: DataRegistry, fix: BuildFix): string {
+  const form = registry.getForm(fix.build.form).name;
+  const isnt = fix.removed.length > 1 ? "aren't" : "isn't";
+  return `Your ${form} used ${manaNames(registry, fix.removed)}, which ${isnt} in your pair; it now uses ${manaNames(registry, fix.build.elements)}`;
+}
+
+/** "Storm now outweighs Fire: your basic attacks strike with Storm" (`now` is the new primary). */
+export function overtakeNotice(registry: DataRegistry, now: ManaType, was: ManaType): string {
+  const name = manaName(registry, now);
+  return `${name} now outweighs ${manaName(registry, was)}: your basic attacks strike with ${name}`;
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */
@@ -74,12 +98,26 @@ interface DelveStore {
   diveDrops: string[];
   /** Basic attacks on a button instead of automatic (a device preference). */
   manualAttack: boolean;
+  /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed builds. */
+  notices: string[];
+  /** Elements whose bind prompt was answered "Not now" this session (never saved). */
+  bindDeclined: ManaType[];
 
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
   resetProfile: (seed?: number, primary?: ManaType) => void;
   startDive: (depth: number) => void;
+  /** Close the finished (or abandoned) dive; a secondary that has overtaken swaps in, with a notice. */
   closeDive: () => void;
+  /** The one-time "Choose your mana". */
+  chooseMana: (mana: ManaType) => ProfileActionResult;
+  bindSecondary: (mana: ManaType) => ProfileActionResult;
+  /** Change the bound pair; the builds it had to change become notices. */
+  realign: (next: { primary?: ManaType; secondary?: ManaType }) => ProfileActionResult;
+  reattune: (uid: string, mana: ManaType) => ProfileActionResult;
+  declineBind: (mana: ManaType) => void;
+  /** Hand over the waiting notices, and forget them. */
+  takeNotices: () => string[];
   equip: (uid: string) => void;
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
@@ -113,6 +151,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     if (res.ok) commit(res.profile);
     return res;
   };
+  const notify = (text: string) => set({ notices: [...get().notices, text] });
 
   const loaded = loadDelveProfile();
   // A migrated save is written back at once.
@@ -123,12 +162,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     newUids: {},
     diveDrops: [],
     manualAttack: loadManualAttack(),
+    notices: loaded ? loaded.fixed.map((f) => fixNotice(getDelveRegistry(), f)) : [],
+    bindDeclined: [],
 
     setProfile: (profile) => commit(profile),
 
     resetProfile: (seed, primary) => {
       commit(createDelveProfile(registry(), seed ?? freshSeed(), primary ? { primary } : {}));
-      set({ newUids: {}, diveDrops: [] });
+      set({ newUids: {}, diveDrops: [], notices: [], bindDeclined: [] });
     },
 
     startDive: (depth) => {
@@ -136,7 +177,34 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ diveDrops: [] });
     },
 
-    closeDive: () => commit(engineCloseDive(get().profile)),
+    closeDive: () => {
+      const res = resolveOvertake(registry(), engineCloseDive(get().profile));
+      commit(res.profile);
+      const { primary, secondary } = res.profile.pair;
+      if (res.swapped) notify(overtakeNotice(registry(), primary!, secondary!));
+    },
+
+    chooseMana: (mana) => applyResult(chooseStartingMana(registry(), get().profile, mana)),
+
+    bindSecondary: (mana) => applyResult(engineBindSecondary(get().profile, mana)),
+
+    realign: (next) => {
+      const res = applyResult(engineRealign(registry(), get().profile, next));
+      for (const fix of res.fixed ?? []) notify(fixNotice(registry(), fix));
+      return res;
+    },
+
+    reattune: (uid, mana) => applyResult(reattuneItem(registry(), get().profile, uid, mana)),
+
+    declineBind: (mana) => {
+      if (!get().bindDeclined.includes(mana)) set({ bindDeclined: [...get().bindDeclined, mana] });
+    },
+
+    takeNotices: () => {
+      const notices = get().notices;
+      if (notices.length > 0) set({ notices: [] });
+      return notices;
+    },
 
     equip: (uid) => {
       commit(equipItem(registry(), get().profile, uid));
