@@ -15,6 +15,13 @@ import { PX, hash, manaLine, px } from './mana-pixels';
  */
 
 const TAU = Math.PI * 2;
+/**
+ * Golden-ratio slots: element `i` sits at fraction `i × GOLDEN` (plus the
+ * carrier's own offset) round a ring or along a path. Every prefix is evenly
+ * spread, so a fading carrier (fewer elements) only drops its last ones and
+ * the rest keep their places.
+ */
+const GOLDEN = 0.618034;
 
 export interface OrbShape {
   kind: 'orb';
@@ -94,6 +101,8 @@ interface Pen {
   seed: number;
   alpha: number;
   reach: number;
+  /** Behind an orb carrier and across it (see `behind`). */
+  back: Back;
 }
 
 /** A point along a path, with its unit tangent and normal. */
@@ -107,8 +116,8 @@ interface PathPoint {
 }
 
 interface Motif {
-  /** Element `i` of `n` round a moving ball. */
-  orb: (p: Pen, o: OrbShape, i: number, n: number) => void;
+  /** Element `i` round a moving ball. */
+  orb: (p: Pen, o: OrbShape, i: number) => void;
   /** Element `i` at a point along a path. */
   path: (p: Pen, s: PathShape, at: PathPoint, i: number) => void;
   /** Element `i` at angle `a` on a rim, owning `span` radians of it. */
@@ -165,11 +174,18 @@ function edge(s: PathShape, at: PathPoint, side: number): Vec {
   return { x: at.x + at.nx * w, y: at.y + at.ny * w };
 }
 
-/** Behind a moving orb (straight down while it stands still), and across it. */
-function behind(o: OrbShape): { dx: number; dy: number; qx: number; qy: number } {
-  const v = Math.hypot(o.vx, o.vy);
-  const dx = v > 1e-6 ? -o.vx / v : 0;
-  const dy = v > 1e-6 ? -o.vy / v : 1;
+interface Back {
+  dx: number;
+  dy: number;
+  qx: number;
+  qy: number;
+}
+
+/** Behind something moving at (vx, vy) (straight down while it stands still), and across it. */
+function behind(vx: number, vy: number): Back {
+  const v = Math.hypot(vx, vy);
+  const dx = v > 1e-6 ? -vx / v : 0;
+  const dy = v > 1e-6 ? -vy / v : 1;
   return { dx, dy, qx: -dy, qy: dx };
 }
 
@@ -285,7 +301,7 @@ const MOTIFS: Record<ManaType, Motif> = {
   // Nature: a curling vine and leaf sprigs behind a ball, tendrils off a path, roots out of a rim.
   nature: {
     orb: (p, o, i) => {
-      const b = behind(o);
+      const b = p.back;
       const x0 = o.x + b.dx * o.r;
       const y0 = o.y + b.dy * o.r;
       if (i === 0) {
@@ -358,7 +374,7 @@ const MOTIFS: Record<ManaType, Motif> = {
         return;
       }
       // The rime trail behind it.
-      const b = behind(o);
+      const b = p.back;
       const k = ((i - 3) % 3) + 1;
       const d = o.r + k * 0.14 * p.reach;
       const off = (fixed(p, i, 0) - 0.5) * 0.2;
@@ -428,8 +444,8 @@ const MOTIFS: Record<ManaType, Motif> = {
 
   // Earth: light stone pebbles and rubble on the air layer; cracks on the ground under ground carriers.
   earth: {
-    orb: (p, o, i, n) => {
-      const a = (TAU * i) / n + p.time * 3.5;
+    orb: (p, o, i) => {
+      const a = TAU * (i * GOLDEN + fixed(p, 0, 9)) + p.time * 3.5;
       const rr = o.r + 0.14 + 0.05 * Math.sin(p.time * 2 + i);
       const x = o.x + Math.cos(a) * rr;
       const y = o.y + Math.sin(a) * rr;
@@ -496,11 +512,12 @@ const MOTIFS: Record<ManaType, Motif> = {
   // Shadow: wisps and smoke in the shadow palette's purples on the air layer; dark smoke and void on the ground.
   shadow: {
     orb: (p, o, i) => {
-      const b = behind(o);
-      const side = (i % 2 ? 1 : -1) * 0.05 * (i >> 1);
+      const b = p.back;
+      const side = (i % 2 ? 1 : -1) * 0.05 * ((i + 1) >> 1);
+      const phase = fixed(p, 0, 9) * TAU;
       for (let k = 0; k < 5; k++) {
         const d = o.r * 0.6 + (k + 1) * 0.1 * p.reach;
-        const wave = Math.sin(p.time * 5 + k * 0.9 + i * 2.1) * 0.1 * (k / 4) + side;
+        const wave = Math.sin(p.time * 5 + k * 0.9 + i * 2.1 + phase) * 0.1 * (k / 4) + side;
         px(
           p.air,
           o.x + b.dx * d + b.qx * wave,
@@ -579,14 +596,16 @@ export function drawInfusion(
     seed,
     alpha: Math.min(1, s),
     reach: 0.8 + 0.2 * s,
+    back: shape.kind === 'orb' ? behind(shape.vx, shape.vy) : behind(0, 0),
   };
   const m = MOTIFS[element];
+  const offset = fixed(p, 0, 9);
+  const slot = (i: number) => (i * GOLDEN + offset) % 1;
   let drawn = 0;
   for (let i = 0; i < n; i += stride, drawn++) {
-    if (shape.kind === 'orb') m.orb(p, shape, i, n);
-    else if (shape.kind === 'ring')
-      m.ring(p, shape, (TAU * (i + 0.4 * (fixed(p, i, 9) - 0.5))) / n, TAU / n, i);
-    else if (path) m.path(p, shape, path.at((i + 0.5) / n), i);
+    if (shape.kind === 'orb') m.orb(p, shape, i);
+    else if (shape.kind === 'ring') m.ring(p, shape, TAU * slot(i), TAU / n, i);
+    else if (path) m.path(p, shape, path.at(slot(i)), i);
   }
   budget.left -= drawn;
 }

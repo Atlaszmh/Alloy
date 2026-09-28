@@ -9,10 +9,13 @@ import {
   type InfusionBudget,
   type InfusionShape,
 } from '../infusion';
+import { MANA_HEX } from '../../palette';
 
 interface Rect {
   x: number;
   y: number;
+  w: number;
+  h: number;
   color: number;
   alpha: number;
 }
@@ -20,10 +23,10 @@ interface Rect {
 /** A Graphics stand-in that records every pixel (`px` draws one rect, then fills it). */
 function recorder() {
   const rects: Rect[] = [];
-  let at = { x: 0, y: 0 };
+  let at = { x: 0, y: 0, w: 0, h: 0 };
   const g = {
     rects,
-    rect: (x: number, y: number) => ((at = { x, y }), g),
+    rect: (x: number, y: number, w: number, h: number) => ((at = { x, y, w, h }), g),
     fill: (f: { color: number; alpha: number }) => (
       rects.push({ ...at, color: f.color, alpha: f.alpha }),
       g
@@ -94,7 +97,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('drawInfusion', () => {
   for (const element of MANA_TYPES)
     for (const shape of SHAPES)
-      it(`${element} on a ${shape.kind}: pixels within a unit of the carrier, the same for the same seed and time`, () => {
+      it(`${element} on a ${shape.kind}: pixels within a unit of the carrier, the same for the same seed and time, not for another seed`, () => {
         vi.spyOn(Math, 'random').mockImplementation(() => {
           throw new Error('motifs never use Math.random');
         });
@@ -104,11 +107,14 @@ describe('drawInfusion', () => {
           expect(a.air.length).toBeGreaterThan(0);
           for (const r of [...a.air, ...a.ground]) {
             expect(r.x).toBeGreaterThanOrEqual(b.x0 - 1);
-            expect(r.x).toBeLessThanOrEqual(b.x1 + 1);
+            expect(r.x + r.w).toBeLessThanOrEqual(b.x1 + 1);
             expect(r.y).toBeGreaterThanOrEqual(b.y0 - 1);
-            expect(r.y).toBeLessThanOrEqual(b.y1 + 1);
+            expect(r.y + r.h).toBeLessThanOrEqual(b.y1 + 1);
           }
           expect(draw(element, shape, { time, strength: 1.5, onGround: true })).toEqual(a);
+          expect(
+            draw(element, shape, { time, strength: 1.5, onGround: true, seed: 8 }),
+          ).not.toEqual(a);
         }
       });
 
@@ -152,6 +158,31 @@ describe('drawInfusion', () => {
     const none = draw('frost', RING, { budget: { left: Math.ceil(n / 2) - 1 } });
     expect(none.left).toBe(Math.ceil(n / 2) - 1);
     expect(none.air).toHaveLength(0);
+  });
+
+  it('keeps every element in its place as a carrier fades: it only drops the last ones', () => {
+    const at = ({ x, y }: Rect) => ({ x, y });
+    // A nature vine starts (in the element's colour) right after the last one's light tip.
+    const vines = (shape: InfusionShape, strength: number) => {
+      const rects = draw('nature', shape, { strength }).air;
+      const own = (r: Rect) => r.color === MANA_HEX.nature;
+      return rects.filter((r, k) => own(r) && (k === 0 || !own(rects[k - 1]))).map(at);
+    };
+    // An earth pebble is two rects on one spot.
+    const pebbles = (strength: number) =>
+      draw('earth', ORB, { strength })
+        .air.filter((_, k) => k % 2 === 0)
+        .map(at);
+    const cases = [
+      [vines(RING, 1), vines(RING, 0.8)],
+      [vines(PATH, 1), vines(PATH, 0.8)],
+      [pebbles(1), pebbles(0.8)],
+    ];
+    for (const [full, faded] of cases) {
+      expect(faded.length).toBeGreaterThan(0);
+      expect(faded.length).toBeLessThan(full.length);
+      expect(faded).toEqual(full.slice(0, faded.length));
+    }
   });
 
   it('draws nothing on a path with no points', () => {
