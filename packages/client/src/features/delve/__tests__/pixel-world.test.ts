@@ -355,3 +355,44 @@ describe('arena events on the pixel floor', () => {
     expect(count(pw, (j) => pw.charge[j] > 0.5 && pw.fluid[j] > 0.006)).toBeGreaterThan(100);
   });
 });
+
+describe('the growth brush', () => {
+  it('grows in over about 15 steps, fades as its target falls, and never spreads', () => {
+    const pw = make();
+    const spot = find(pw, (_i, x, y) => neighborhood(pw, x, y, 4, (j) => pw.mat[j] !== MAT.WALL));
+    const i = spot.y * pw.width + spot.x;
+    const far = i + 8; // outside the brush's radius of 3
+    pw.sprout(spot.x, spot.y, 3);
+    expect(pw.growthTarget[i]).toBe(1);
+    expect(pw.growth[i]).toBe(0);
+    for (let s = 0; s < 7; s++) pw.step();
+    expect(pw.growth[i]).toBeCloseTo(7 / 15, 5);
+    for (let s = 7; s < 15; s++) pw.step();
+    expect(pw.growth[i]).toBeGreaterThan(0.85);
+    for (let s = 15; s < 60; s++) pw.step();
+    expect(pw.growth[i]).toBeGreaterThan(0.4); // still there while the target is high
+    for (let s = 60; s < 135; s++) pw.step();
+    expect(pw.growth[i]).toBe(0);
+    expect(pw.growthTarget[i]).toBe(0);
+    expect(pw.growth[far]).toBe(0);
+    expect(pw.growthTarget[far]).toBe(0);
+  });
+
+  it('draws grown cells greener', () => {
+    const pw = make();
+    const spot = find(pw, (_i, x, y) =>
+      neighborhood(pw, x, y, 4, (j) => pw.fluid[j] === 0 && pw.mat[j] !== MAT.WALL),
+    );
+    const cells: number[] = [];
+    for (let dy = -3; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++) cells.push((spot.y + dy) * pw.width + spot.x + dx);
+    const greenness = () => {
+      const out = new Uint8ClampedArray(pw.size * 4);
+      renderPixelWorld(pw, out, 1);
+      return cells.reduce((sum, c) => sum + out[c * 4 + 1] - (out[c * 4] + out[c * 4 + 2]) / 2, 0);
+    };
+    const before = greenness();
+    for (const c of cells) pw.growth[c] = 1;
+    expect(greenness()).toBeGreaterThan(before);
+  });
+});

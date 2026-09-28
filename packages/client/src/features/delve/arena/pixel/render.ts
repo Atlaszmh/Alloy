@@ -49,6 +49,13 @@ const STEM: RGB = [206, 200, 186];
 const POLLEN: RGB = [255, 240, 190];
 const RIPPLE: RGB = [230, 250, 255];
 const WHITE: RGB = [255, 255, 255];
+/** Per-sub-pixel scatter of the growth's leaves. */
+const GROWTH_MUL = [5.37, 9.11, 12.3, 15.7];
+
+/** A theme green pushed greener, for the nature growth. */
+function greener(c: RGB): RGB {
+  return [c[0] * 0.6, Math.min(255, c[1] * 1.3 + 24), c[2] * 0.6];
+}
 
 /** Per-floor data that never changes: texture jitter and grass blades per sub-pixel. */
 interface WorldScratch {
@@ -845,6 +852,37 @@ function passFoliage(F: Frame): void {
   }
 }
 
+/** Nature infusions' growth: wavy vines and scattered leaves, thickening as it grows in (never over fluid). */
+function passGrowth(F: Frame): void {
+  const { pw, out, x0, y0, vw, vh, s, RW } = F;
+  const th = pw.theme;
+  const W = pw.width;
+  const { growth, fluid, noise } = pw;
+  const vine = greener(th.grass[3]);
+  const tip = greener(th.grassTip);
+  const leaf = greener(th.bush[2]);
+  for (let y = y0; y < y0 + vh; y++) {
+    for (let x = x0; x < x0 + vw; x++) {
+      const i = y * W + x;
+      const g = growth[i];
+      if (g < 0.04 || fluid[i] > 0.003) continue;
+      const n = noise[i];
+      const onVine = Math.abs(fsin(x * 0.9 + fsin(y * 0.5 + n) * 1.8)) < 0.3 * g;
+      for (let sy = 0; sy < s; sy++) {
+        for (let sx = 0; sx < s; sx++) {
+          const h = (n * GROWTH_MUL[sx + sy * MAX_SCALE]) % 1;
+          const c = onVine ? (h > 0.75 ? tip : vine) : h > 1 - 0.35 * g ? leaf : null;
+          if (!c) continue;
+          const o = (((y - y0) * s + sy) * RW + (x - x0) * s + sx) * 4;
+          out[o] = c[0];
+          out[o + 1] = c[1];
+          out[o + 2] = c[2];
+        }
+      }
+    }
+  }
+}
+
 /** Flowers, glowing fungi, crystals and runes. */
 function passProps(F: Frame): void {
   const { pw, t, x0, y0, vw, vh, s } = F;
@@ -1131,6 +1169,7 @@ export function renderPixelWorld(
   markWetNear(F);
   passGround(F);
   passFoliage(F);
+  passGrowth(F);
   passProps(F);
   passParticles(F);
   composite(F);

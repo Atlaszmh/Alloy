@@ -86,6 +86,10 @@ export interface PixelWorldOptions {
 
 const MAX_PARTICLES = 7000;
 const MAX_RIPPLES = 140;
+/** Growth moves this far toward its target per step (in over ~0.5 s)… */
+const GROW_STEP = 1 / 15;
+/** …and a target falls this much per step (from 1 to 0 in ~4 s). */
+const GROW_FADE = 1 / 120;
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -151,6 +155,10 @@ export class PixelWorld {
   readonly trample: Float32Array;
   /** Shadow blight (0–1). */
   readonly blight: Float32Array;
+  /** Nature infusion's vines, as drawn (0–1): they follow `growthTarget`, and never spread or burn. */
+  readonly growth: Float32Array;
+  /** Where the growth is heading (0–1): a `sprout` sets it to 1, then it falls to 0. */
+  readonly growthTarget: Float32Array;
   readonly mat: Uint8Array;
   readonly fuel: Uint8Array;
   readonly fire: Uint8Array;
@@ -216,6 +224,8 @@ export class PixelWorld {
     this.charge = new Float32Array(n);
     this.trample = new Float32Array(n);
     this.blight = new Float32Array(n);
+    this.growth = new Float32Array(n);
+    this.growthTarget = new Float32Array(n);
     this.mat = new Uint8Array(n);
     this.fuel = new Uint8Array(n);
     this.fire = new Uint8Array(n);
@@ -578,6 +588,8 @@ export class PixelWorld {
       flow,
       scorch,
       blight,
+      growth,
+      growthTarget,
       charge,
       frost,
       trample,
@@ -608,6 +620,12 @@ export class PixelWorld {
         frost[i] = frost[i] > melt ? frost[i] - melt : 0;
       }
       if (trample[i] > 0) trample[i] = trample[i] < 0.01 ? 0 : trample[i] * 0.985;
+      const gt = growthTarget[i];
+      if (gt > 0 || growth[i] > 0) {
+        const g = growth[i];
+        growth[i] = g < gt ? Math.min(gt, g + GROW_STEP) : Math.max(gt, g - GROW_STEP);
+        growthTarget[i] = gt > GROW_FADE ? gt - GROW_FADE : 0;
+      }
     }
     // Burned ground slowly grows back.
     for (let r = 0; r < 40; r++) {
@@ -1229,6 +1247,13 @@ export class PixelWorld {
       color: [170, 110, 255],
       intensity: 1.1,
       life: 1,
+    });
+  }
+
+  /** Nature infusion: vines grow in over the cells within `r` (see `growth`). */
+  sprout(cx: number, cy: number, r: number): void {
+    this.forDisc(cx, cy, r, (i) => {
+      if (this.mat[i] !== MAT.WALL) this.growthTarget[i] = 1;
     });
   }
 
