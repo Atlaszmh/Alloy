@@ -1,13 +1,25 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
+import {
+  bindSecondary,
+  createDefaultRegistry,
+  createDelveProfile,
+  type ManaType,
+} from '@alloy/engine';
 
 const SAVE_KEY = 'alloy:delve:v2';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 
-/** Seed a deterministic fresh Delve save and let the engine bot play the arena. */
-async function seedProfile(page: Page, seed = 4242, autopilot = true): Promise<void> {
-  const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), seed));
+/** Seed a deterministic Delve save (a fire hero, and `secondary` bound if given) and let the engine bot play the arena. */
+async function seedProfile(
+  page: Page,
+  seed = 4242,
+  autopilot = true,
+  secondary?: ManaType,
+): Promise<void> {
+  let profile = createDelveProfile(createDefaultRegistry(), seed, { primary: 'fire' });
+  if (secondary) profile = bindSecondary(profile, secondary).profile;
+  const save = JSON.stringify(profile);
   await page.addInitScript(
     ([key, value, bot]) => {
       if (sessionStorage.getItem('delve-e2e')) return;
@@ -42,7 +54,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', 'Primary: Fire Bolt');
     await expect(page.getByTestId('ability-1')).toHaveAttribute(
       'aria-label',
-      'Defensive: Frost Ward',
+      'Defensive: Fire Ward',
     );
     await expect(page.getByTestId('ability-2')).toHaveAttribute(
       'aria-label',
@@ -144,7 +156,7 @@ test.describe('Delve loot loop', () => {
   });
 
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
-    await seedProfile(page);
+    await seedProfile(page, 4242, true, 'nature');
     await page.goto('/delve');
     await expect(page.getByTestId('mana-strip')).toContainText('Abilities');
     await page.getByTestId('mana-strip').click();
@@ -159,5 +171,28 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('temper-row')).toHaveCount(2);
     await page.getByTestId('tab-codex').click();
     await expect(page.getByTestId('codex-unknown')).toHaveCount(12);
+  });
+
+  test('D08: a new save chooses its mana first; Frost starts with frost gear and abilities', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('delve-e2e')) return;
+      localStorage.clear();
+      localStorage.setItem('alloy:muted', 'true');
+      sessionStorage.setItem('delve-e2e', '1');
+    });
+    await page.goto('/delve');
+    const choice = page.getByTestId('mana-choice');
+    await expect(choice).toBeVisible();
+    await page.getByTestId('mana-choice-frost').click();
+    await expect(choice).toBeHidden();
+    await page.getByTestId('tab-abilities').click();
+    const summary = page.getByTestId('abilities-summary');
+    await expect(summary).toContainText('Frost Bolt');
+    await expect(summary).toContainText('Frost Ward');
+    await expect(summary).toContainText('Frost Nova');
+    await page.getByTestId('slot-weapon').click();
+    await expect(page.getByTestId('item-mana')).toContainText('Frost');
   });
 });

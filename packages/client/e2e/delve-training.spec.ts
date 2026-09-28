@@ -10,7 +10,9 @@ const ARENA_READY = 30_000;
  * so with nothing clicking the arena the Primary is the only damage.
  */
 async function seed(page: Page): Promise<void> {
-  const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), 4242));
+  const save = JSON.stringify(
+    createDelveProfile(createDefaultRegistry(), 4242, { primary: 'fire' }),
+  );
   await page.addInitScript((value) => {
     if (sessionStorage.getItem('training-e2e')) return;
     localStorage.clear();

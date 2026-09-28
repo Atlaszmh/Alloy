@@ -13,7 +13,9 @@ const ARENA_READY = 30_000;
 const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13 } as const;
 
 async function setup(page: Page, autopilot: boolean): Promise<void> {
-  const save = JSON.stringify(createDelveProfile(createDefaultRegistry(), 4242));
+  const save = JSON.stringify(
+    createDelveProfile(createDefaultRegistry(), 4242, { primary: 'fire' }),
+  );
   await page.addInitScript(
     ([value, bot]) => {
       const w = window as unknown as { __pad: unknown };
