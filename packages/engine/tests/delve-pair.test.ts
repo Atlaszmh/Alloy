@@ -29,7 +29,6 @@ import {
   computeHeroStats,
   estimateCombat,
   heroPower,
-  pairElements,
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
 import { generateItem } from '../src/loot/item-generator.js';
@@ -588,7 +587,14 @@ describe('basic attacks with a pair', () => {
     const fin = firstBlow(w);
     expect(only(fin, 'basic')[0]).toMatchObject({ element: 'storm', finisher: true });
     expect(only(fin, 'hit').map((h) => h.element)).toEqual(['storm']);
-    expect(w.monsters[0].status.shockUntil).toBeGreaterThan(w.t); // no 30% roll: always
+    // No 30% roll: every finisher shocks (fresh rolls each time), and none burns.
+    for (let seed = 0; seed < 12; seed++) {
+      const f = strikeWorld(sword, FIRE_STORM, true);
+      f.rng = new SeededRNG(seed);
+      firstBlow(f);
+      expect(f.monsters[0].status.shockUntil).toBeGreaterThan(f.t);
+      expect(f.monsters[0].status.burnUntil).toBe(0);
+    }
   });
 
   it('fire blows, then a storm finisher on a burning foe: Overload', () => {
@@ -683,13 +689,21 @@ describe('drops lean toward the pair', () => {
       const { dropBias } = bal.pair;
       const bias = bal.loot.biomeManaBias;
       const expected = dropBias + (1 - dropBias) * (bias * inside + ((1 - bias) * pair.length) / 6);
+      // The primary's share: primaryShare of the pair's drops, plus its biome and uniform rolls.
+      const { primaryShare } = bal.pair;
+      const expectedPrimary =
+        dropBias * primaryShare + (1 - dropBias) * (bias * inside + (1 - bias) / 6);
       const N = 4000;
       let hits = 0;
+      let primaryHits = 0;
       for (let i = 0; i < N; i++) {
         const opts = { uid: 'p', ilvl: 3, rarity: 'common' as const, biomeMana: biome, pair };
-        if (pair.includes(generateItem(registry, opts, new SeededRNG(i)).mana)) hits++;
+        const mana = generateItem(registry, opts, new SeededRNG(i)).mana;
+        if (pair.includes(mana)) hits++;
+        if (mana === pair[0]) primaryHits++;
       }
       expect(Math.abs(hits / N - expected)).toBeLessThan(0.03);
+      expect(Math.abs(primaryHits / N - expectedPrimary)).toBeLessThan(0.03);
     },
   );
 
@@ -796,6 +810,6 @@ describe('the autopilot and the pair', () => {
 
   it('starts from the primary it is given', () => {
     const { profile } = runAutopilot(registry, { seed: 1, dives: 1, primary: 'frost' });
-    expect(pairElements(profile.pair)).toContain('frost');
+    expect(profile.pair.primary).toBe('frost'); // unaided, seed 1 ends at fire/frost
   });
 });
