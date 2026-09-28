@@ -1,5 +1,6 @@
 import type { Graphics } from 'pixi.js';
-import type { ArpgWorld, ManaType, Projectile, Vec } from '@alloy/engine';
+import type { ArpgWorld, ManaType, Projectile, Vec, Zone } from '@alloy/engine';
+import { drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
@@ -19,7 +20,8 @@ import {
 /**
  * Effects that follow the game's state every frame, drawn as mana pixels:
  * zones and telegraphs on the ground layer; auras, projectiles, status marks
- * and the aim marker on the air layer.
+ * and the aim marker on the air layer. `drawInfusions` is the infusion pass's
+ * persistent carriers.
  */
 
 const HOSTILE = 0xff4d4d;
@@ -47,6 +49,20 @@ function progress(now: number, start: number, end: number): number {
   return Math.min(1, Math.max(0, (now - start) / Math.max(0.01, end - start)));
 }
 
+/** A lingering zone's fade: in over 0.2 s, out over its last 0.5 s. */
+function zoneFade(z: Zone, t: number): number {
+  return Math.min(1, (z.until - t) / 0.5, (t - z.born) / 0.2);
+}
+
+/** A thrown Burst in flight: how far along (0–1), its point on the ground, and its orb's height above it. */
+function lobAt(z: Zone, t: number): { p: number; x: number; y: number; lift: number } {
+  const p = progress(t, z.born, z.detonateAt);
+  const fx = z.fromX ?? z.x;
+  const fy = z.fromY ?? z.y;
+  const height = Math.sin(Math.PI * p) * 0.25 * Math.hypot(z.x - fx, z.y - fy);
+  return { p, x: fx + (z.x - fx) * p, y: fy + (z.y - fy) * p, lift: 0.3 * (1 - p) + height };
+}
+
 /** Lingering zones, Barrage targets and boss slam telegraphs. */
 export function drawZones(ground: Graphics, w: ArpgWorld, time: number): void {
   const t = w.t;
@@ -68,7 +84,7 @@ export function drawZones(ground: Graphics, w: ArpgWorld, time: number): void {
       manaDust(ground, z.x, z.y, z.radius * p, color, time, 0.22, 0.5 + p * 0.4, z.id);
       continue;
     }
-    const fade = Math.min(1, (z.until - t) / 0.5, (t - z.born) / 0.2);
+    const fade = zoneFade(z, t);
     if (z.source === 'maelstrom') {
       manaDust(ground, z.x, z.y, z.radius, color, time, 0.05, 0.8 * fade, z.id);
       for (let i = 0; i < 3; i++) {
@@ -135,15 +151,12 @@ export function drawLobs(ground: Graphics, air: Graphics, w: ArpgWorld, time: nu
       z.fromY === undefined
     )
       continue;
-    const p = progress(w.t, z.born, z.detonateAt);
+    const { p, x, y, lift } = lobAt(z, w.t);
     const color = elem(z.element);
-    const x = z.fromX + (z.x - z.fromX) * p;
-    const y = z.fromY + (z.y - z.fromY) * p;
-    const height = Math.sin(Math.PI * p) * 0.25 * Math.hypot(z.x - z.fromX, z.y - z.fromY);
     manaRing(ground, z.x, z.y, z.radius, color, time, { alpha: 0.25 + 0.6 * p, gaps: 4, spin: 6 });
     // A filled shadow that grows as the orb comes down; the orb lands on the ring.
     manaOrb(ground, x, y, 0.12 + 0.1 * p, 0x000000, 0x000000, 0.35);
-    manaOrb(air, x, y - 0.3 * (1 - p) - height, 0.18, color, 0xffffff, 1);
+    manaOrb(air, x, y - lift, 0.18, color, 0xffffff, 1);
   }
 }
 
@@ -397,5 +410,65 @@ export function drawAim(air: Graphics, w: ArpgWorld, aim: AimView | null, time: 
   } else {
     manaLine(air, h.x, h.y, x, y, color, 0.7, { every: 2 });
     manaOrb(air, x, y, 0.15, color, 0xffffff);
+  }
+}
+
+/** A hero shot's infusion: its ability's second element, or the weapon's for a basic shot (embers have none). */
+function shotInfusion(w: ArpgWorld, p: Projectile): ManaType | null {
+  if (p.owner !== 'hero' || p.form === 'ember') return null;
+  return p.ability ? (p.ability.elements[1] ?? null) : w.hero.stats.weapon.infusion;
+}
+
+/** The size a hero shot draws at (see `drawProjectiles`). */
+function shotRadius(p: Projectile): number {
+  if (p.form === 'bolt') return p.radius;
+  if (p.form === 'volley' || p.form === 'ember') return 0.15;
+  return p.ability ? 0.15 : p.radius * 0.5;
+}
+
+/**
+ * The infusion pass's persistent carriers, drawn after ManaFx's transient
+ * ones and in priority order: the hero's Defensive aura (a ring, seeded by its
+ * slot), projectiles (orbs), thrown Bursts in flight (orbs), then lingering
+ * zones (their rims, the only ground carriers here).
+ */
+export function drawInfusions(
+  layers: Required<InfusionLayers>,
+  w: ArpgWorld,
+  time: number,
+  budget: InfusionBudget,
+): void {
+  const air = { air: layers.air };
+  const h = w.hero;
+  const aura = h.abilities[1]?.elements[1];
+  if (aura && h.defend && w.t < h.defend.until && (h.defend.form !== 'ward' || h.ward)) {
+    const fade = Math.min(1, (h.defend.until - w.t) / 0.3);
+    drawInfusion(air, aura, { kind: 'ring', x: h.x, y: h.y - 0.3, r: 1 }, time, 1, fade, budget);
+  }
+  for (const p of w.projectiles) {
+    const el = shotInfusion(w, p);
+    if (!el) continue;
+    const orb = { kind: 'orb' as const, x: p.x, y: p.y, r: shotRadius(p), vx: p.vx, vy: p.vy };
+    drawInfusion(air, el, orb, time, p.id, 1, budget);
+  }
+  for (const z of w.zones) {
+    const el = z.owner === 'hero' ? z.ability?.elements[1] : undefined;
+    if (!el || z.source !== 'burst' || z.fromX === undefined) continue;
+    const l = lobAt(z, w.t);
+    const orb = {
+      kind: 'orb' as const,
+      x: l.x,
+      y: l.y - l.lift,
+      r: 0.18,
+      vx: z.x - z.fromX,
+      vy: z.y - (z.fromY ?? z.y),
+    };
+    drawInfusion(air, el, orb, time, z.id, 1, budget);
+  }
+  for (const z of w.zones) {
+    const el = z.owner === 'hero' ? z.ability?.elements[1] : undefined;
+    if (!el || z.detonateAt > 0) continue;
+    const rim = { kind: 'ring' as const, x: z.x, y: z.y, r: z.radius };
+    drawInfusion(layers, el, rim, time, z.id, zoneFade(z, w.t), budget);
   }
 }

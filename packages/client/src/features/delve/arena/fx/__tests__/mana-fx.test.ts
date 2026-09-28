@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Graphics } from 'pixi.js';
 import type { ArpgWorld } from '@alloy/engine';
 import { HAND, ManaFx, spawnCount } from '../mana-fx';
-import { drawAnticipation, drawProjectiles } from '../draw-world';
+import { drawAnticipation, drawInfusions, drawProjectiles } from '../draw-world';
 import { INFUSION_BUDGET, type PathShape } from '../infusion';
 
 /** A Graphics stand-in that counts pixels (`px` draws one rect per pixel). */
@@ -196,5 +196,90 @@ describe('infused transient carriers', () => {
     expect(budget.left).toBe(1);
     expect(layers.air.rects).toBeGreaterThan(0);
     expect(layers.ground.rects).toBe(0); // the trail's dark smoke was left out
+  });
+});
+
+describe('the infusion pass: persistent carriers', () => {
+  const two = { elements: ['fire', 'storm'] };
+  const one = { elements: ['fire'] };
+  const plainHero = {
+    x: 5,
+    y: 5,
+    defend: null,
+    ward: null,
+    abilities: [one, one],
+    stats: { weapon: { infusion: null } },
+  };
+  const world = (over: object) =>
+    ({ t: 1, projectiles: [], zones: [], hero: plainHero, ...over }) as unknown as ArpgWorld;
+  /** Motif elements the pass spends on a world. */
+  const used = (w: ArpgWorld) => {
+    const budget = { left: 1e6 };
+    drawInfusions(L(), w, 0, budget);
+    return 1e6 - budget.left;
+  };
+  const shot = (o: object) => ({
+    id: 1,
+    owner: 'hero',
+    form: 'bolt',
+    ability: two,
+    x: 3,
+    y: 3,
+    vx: 8,
+    vy: 0,
+    radius: 0.3,
+    ...o,
+  });
+
+  it("draws an ability shot's second element; nothing for one element, an ember or a monster shot", () => {
+    expect(used(world({ projectiles: [shot({})] }))).toBeGreaterThan(0);
+    expect(used(world({ projectiles: [shot({ ability: one })] }))).toBe(0);
+    expect(used(world({ projectiles: [shot({ form: 'ember' })] }))).toBe(0);
+    expect(
+      used(world({ projectiles: [shot({ owner: 'monster', form: null, ability: null })] })),
+    ).toBe(0);
+  });
+
+  it("gives a basic shot the weapon's infusion", () => {
+    const basic = shot({ form: null, ability: null });
+    expect(used(world({ projectiles: [basic] }))).toBe(0);
+    const infused = { ...plainHero, stats: { weapon: { infusion: 'nature' } } };
+    expect(used(world({ projectiles: [basic], hero: infused }))).toBeGreaterThan(0);
+  });
+
+  it("draws a fusion's lingering ground and a thrown Burst in flight, not a Barrage target", () => {
+    const zone = {
+      id: 9,
+      owner: 'hero',
+      source: 'plasma',
+      ability: two,
+      x: 8,
+      y: 8,
+      radius: 2,
+      born: 0.5,
+      until: 4,
+      detonateAt: 0,
+    };
+    expect(used(world({ zones: [zone] }))).toBeGreaterThan(0);
+    expect(used(world({ zones: [{ ...zone, ability: one }] }))).toBe(0);
+    expect(used(world({ zones: [{ ...zone, owner: 'monster', ability: null }] }))).toBe(0);
+    const lob = { ...zone, source: 'burst', detonateAt: 1.5, fromX: 2, fromY: 2 };
+    expect(used(world({ zones: [lob] }))).toBeGreaterThan(0);
+    expect(used(world({ zones: [{ ...lob, source: 'barrage' }] }))).toBe(0);
+  });
+
+  it("rings the hero with the Defensive's second element while its buff lasts", () => {
+    const guarded = {
+      ...plainHero,
+      defend: { form: 'ward', until: 3 },
+      ward: { hp: 1, max: 1 },
+      abilities: [one, two],
+    };
+    expect(used(world({ hero: guarded }))).toBeGreaterThan(0);
+    expect(used(world({ hero: { ...guarded, ward: null } }))).toBe(0); // a broken Ward
+    expect(
+      used(world({ hero: { ...guarded, defend: { form: 'blink', until: 3 } } })),
+    ).toBeGreaterThan(0);
+    expect(used(world({ hero: { ...guarded, defend: { form: 'blink', until: 0.5 } } }))).toBe(0);
   });
 });
