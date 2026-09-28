@@ -121,11 +121,12 @@ function poison(ctx: SimCtx, m: MonsterEntity, stacks: number, dps: number): voi
   s.poisonUntil = t + ctx.bal.status.poisonDuration;
 }
 
-/** Plague: a dying foe's poison and hex pass to its neighbours. */
+/**
+ * Plague's and Blight's spread: the foe's poison and hex (each only if it has
+ * it) pass to its neighbours.
+ */
 function spreadAffliction(ctx: SimCtx, m: MonsterEntity): void {
-  const r = ctx.bal.reactions.blightRadius;
-  for (const o of ctx.world.monsters) {
-    if (o.dead || o.id === m.id || dist(o.x, o.y, m.x, m.y) > r + o.radius) continue;
+  for (const o of nearby(ctx, m, ctx.bal.reactions.blightRadius)) {
     if (isPoisoned(ctx, m)) poison(ctx, o, m.status.poisonStacks, m.status.poisonDps);
     if (isHexed(ctx, m)) o.status.hexUntil = Math.max(o.status.hexUntil, m.status.hexUntil);
   }

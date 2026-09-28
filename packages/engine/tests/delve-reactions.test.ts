@@ -147,6 +147,10 @@ describe('the reaction table', () => {
     expect(ArpgDataSchema.safeParse({ ...arpgJson, reactions: repeat }).success).toBe(false);
     const missing = arpgJson.reactions.filter((r) => r.id !== 'galvanize');
     expect(ArpgDataSchema.safeParse({ ...arpgJson, reactions: missing }).success).toBe(false);
+    const self = arpgJson.reactions.map((r) =>
+      r.id === 'melt' ? { ...r, elements: ['fire', 'fire'] } : r,
+    );
+    expect(ArpgDataSchema.safeParse({ ...arpgJson, reactions: self }).success).toBe(false);
   });
 });
 
@@ -360,6 +364,12 @@ describe('every pair reacts, both ways', () => {
     applyStatus(shaken.ctx, shaken.m, 'stagger', 0, true);
     hitMonster(shaken.ctx, shaken.m, 10, 'frost', { source: 'skill' });
     expect(reactions(shaken.events)).toEqual(['shatter']);
+    // The mere chill is passed over, not the end of the walk: the Storm mark after it reacts.
+    const both = setup();
+    applyStatus(both.ctx, both.m, 'chill', 0);
+    applyStatus(both.ctx, both.m, 'shock', 0);
+    hitMonster(both.ctx, both.m, 10, 'earth', { source: 'skill' });
+    expect(reactions(both.events)).toEqual(['lightning_rod']);
   });
 
   it('Storm on a merely chilled foe: Superconduct freezes it', () => {
