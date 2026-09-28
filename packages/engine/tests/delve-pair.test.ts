@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
+import { betweenDives, runAutopilot } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
   bindSecondary,
@@ -28,6 +29,7 @@ import {
   computeHeroStats,
   estimateCombat,
   heroPower,
+  pairElements,
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
 import { generateItem } from '../src/loot/item-generator.js';
@@ -740,5 +742,49 @@ describe('Mana Dust from salvage', () => {
     const w2 = beginFloor(registry, full);
     w2.pending.items = [{ ...magic('frost', 'r'), rarity: 'rare' }];
     expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, dust: dust.rare });
+  });
+});
+
+describe('the autopilot and the pair', () => {
+  /** Storm gear worse than the starter sword (no damage line): junk, salvaged between dives. */
+  const junk = (uid: string): GearItem => ({ ...item('storm', 'weapon'), uid, baseId: 'sword' });
+
+  it('binds the element it owns most before salvaging, and builds its Primary from both', () => {
+    const p = {
+      ...createDelveProfile(registry, 5, { primary: 'fire' }),
+      bag: [junk('j1'), junk('j2')],
+    };
+    const after = betweenDives(registry, p);
+    expect(after.pair).toEqual({ primary: 'fire', secondary: 'storm' });
+    expect(after.bag.map((i) => i.uid)).not.toContain('j1'); // melted…
+    expect(after.manaDust).toBe(0); // …after the bind: storm was in the pair by then
+    expect(after.abilities.primary.elements).toEqual(['fire', 'storm']);
+  });
+
+  it('skips the bind while it owns nothing of another element', () => {
+    const after = betweenDives(registry, createDelveProfile(registry, 5, { primary: 'fire' }));
+    expect(after.pair.secondary).toBeNull();
+  });
+
+  it('lets an overtaking secondary swap in, and rebuilds its Primary to match', () => {
+    const p0 = createDelveProfile(registry, 5, { primary: 'fire' }); // fire 2
+    const p: DelveProfile = {
+      ...p0,
+      pair: { primary: 'fire', secondary: 'storm' },
+      equipped: {
+        ...p0.equipped,
+        helm: item('storm', 'helm'),
+        gloves: item('storm', 'gloves'),
+        boots: item('storm', 'boots'),
+      }, // storm 3 > 2.4
+    };
+    const after = betweenDives(registry, p);
+    expect(after.pair).toEqual({ primary: 'storm', secondary: 'fire' });
+    expect(after.abilities.primary.elements).toEqual(['storm', 'fire']);
+  });
+
+  it('starts from the primary it is given', () => {
+    const { profile } = runAutopilot(registry, { seed: 1, dives: 1, primary: 'frost' });
+    expect(pairElements(profile.pair)).toContain('frost');
   });
 });
