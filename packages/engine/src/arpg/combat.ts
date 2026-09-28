@@ -261,7 +261,10 @@ function findReaction(
     if (mark === element || !hasMark(ctx, m, mark)) continue;
     // Earth shatters a freeze, not a mere chill.
     if (element === 'earth' && mark === 'frost' && !isFrozen(ctx, m)) continue;
-    return { def: ctx.registry.getReactionFor(element, mark), mark };
+    const def = ctx.registry.getReactionFor(element, mark);
+    // A buff reaction on its own cooldown can't fire.
+    if (!def.cooldown || ctx.world.t >= (ctx.world.hero.reactionReadyAt[def.id] ?? 0))
+      return { def, mark };
   }
   return null;
 }
@@ -307,6 +310,7 @@ function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void
 function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): number {
   const r = ctx.bal.reactions;
   const h = ctx.world.hero;
+  const t = ctx.world.t;
   const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100;
   switch (id) {
     case 'melt':
@@ -349,6 +353,14 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
     case 'blight':
       spreadAffliction(ctx, m);
       return amount;
+    case 'obsidian': {
+      // The larger barrier wins; a smaller one only extends it.
+      const hp = Math.min(amount * r.obsidianSoak, h.stats.maxHp * r.obsidianCap);
+      if (!h.barrier || hp > h.barrier.hp)
+        h.barrier = { hp, max: hp, until: t + r.obsidianDuration };
+      else h.barrier.until = t + r.obsidianDuration;
+      return amount;
+    }
     default:
       // The new eight's effects arrive in their own tasks.
       return amount;
@@ -405,6 +417,7 @@ export function hitMonster(
     reaction = found.def.id;
     if (found.def.consumes !== false) useUpMark(m, found.mark, reaction);
     amount = react(ctx, m, reaction, amount);
+    if (found.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
     noteReaction(ctx, reaction, m);
     if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
   }

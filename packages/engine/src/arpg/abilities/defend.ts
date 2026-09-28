@@ -28,8 +28,9 @@ export function wardBurst(ctx: SimCtx): void {
 }
 
 /**
- * Damage the hero takes after the Defensive: Armor and Earth reduce it, the
- * Ward soaks it up, and melt attackers catch the element (Armor strikes back).
+ * Damage the hero takes after its guards: Armor and Earth reduce it, melee
+ * attackers catch the element (Armor strikes back), then Obsidian's barrier
+ * (with or without a Defensive) and the Ward soak it up.
  */
 export function shieldHero(
   ctx: SimCtx,
@@ -37,26 +38,37 @@ export function shieldHero(
   source: MonsterEntity | null,
   melee: boolean,
 ): number {
-  const ab = defendingAbility(ctx);
-  if (!ab) return dmg;
   const h = ctx.world.hero;
-  const form = h.defend!.form;
-  if (form === 'armor') dmg *= 1 - Math.min(0.75, ab.effect);
-  if (ab.elements.includes('earth')) dmg *= 1 - ctx.bal.abilities.defend.earthReduction;
+  const ab = defendingAbility(ctx);
+  const form = ab ? h.defend!.form : null;
+  if (ab) {
+    if (form === 'armor') dmg *= 1 - Math.min(0.75, ab.effect);
+    if (ab.elements.includes('earth')) dmg *= 1 - ctx.bal.abilities.defend.earthReduction;
 
-  if (melee && source && !source.dead) {
-    const rattles = ab.elements.includes('earth');
-    if (form === 'armor') {
-      hitMonster(ctx, source, abilityHit(ctx, ab), ab.element, {
-        source: 'skill',
-        applies: ab.knobs.applies,
-        leech: ab.knobs.lifesteal,
-        slot: DEFENSIVE,
-        rattles,
-      });
-    } else {
-      for (const s of ab.knobs.applies)
-        if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5, rattles);
+    if (melee && source && !source.dead) {
+      const rattles = ab.elements.includes('earth');
+      if (form === 'armor') {
+        hitMonster(ctx, source, abilityHit(ctx, ab), ab.element, {
+          source: 'skill',
+          applies: ab.knobs.applies,
+          leech: ab.knobs.lifesteal,
+          slot: DEFENSIVE,
+          rattles,
+        });
+      } else {
+        for (const s of ab.knobs.applies)
+          if (!source.dead) applyStatus(ctx, source, s, abilityHit(ctx, ab) * 0.5, rattles);
+      }
+    }
+  }
+
+  if (h.barrier) {
+    const soaked = Math.min(h.barrier.hp, dmg);
+    h.barrier.hp -= soaked;
+    dmg -= soaked;
+    if (h.barrier.hp <= 1e-6) {
+      h.barrier = null;
+      ctx.events.push({ kind: 'barrierBreak', x: h.x, y: h.y });
     }
   }
 

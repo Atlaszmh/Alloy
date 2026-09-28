@@ -5,6 +5,7 @@ import {
   applyStatus,
   hasMark,
   hitMonster,
+  hurtHero,
   isBurning,
   isChilled,
   isFrozen,
@@ -108,6 +109,16 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
     if (f.marked === 'nature') expect(isPoisoned(f.ctx, f.o)).toBe(true);
     else expect(f.o.status.poisonUntil).toBe(0);
     expect(isHexed(f.ctx, f.o)).toBe(f.marked === 'shadow');
+  },
+  obsidian: (f) => {
+    const h = f.w.hero;
+    const r = bal.reactions;
+    const hp = Math.min(f.dealt * r.obsidianSoak, h.stats.maxHp * r.obsidianCap);
+    expect(h.barrier).toEqual({
+      hp: expect.closeTo(hp, 6),
+      max: expect.closeTo(hp, 6),
+      until: f.w.t + r.obsidianDuration,
+    });
   },
 };
 
@@ -329,6 +340,9 @@ describe('every pair reacts, both ways', () => {
       expect(m.status.chillStacks).toBe(0);
       expect(isFrozen(ctx, m)).toBe(true);
     } else expect(hasMark(ctx, m, marked)).toBe(false);
+    // A buff reaction starts its own cooldown.
+    if (registry.getReaction(id).cooldown)
+      expect(f.w.hero.reactionReadyAt[id]).toBeCloseTo(f.w.t + bal.reactions.reactionCooldown);
     EFFECTS[id]!(f);
   });
 
@@ -407,6 +421,91 @@ describe('every pair reacts, both ways', () => {
     expect(reactions(b.events)).toEqual(['melt']); // fire before storm
     expect(isBurning(b.ctx, b.m)).toBe(false);
     expect(isShocked(b.ctx, b.m)).toBe(true);
+  });
+});
+
+describe('Obsidian', () => {
+  const r = bal.reactions;
+
+  it("soaks after Armor's reduction and retaliation, and before the Ward", () => {
+    const armor = setup([dummy(13, 35)], { defensive: { form: 'armor', elements: ['fire'] } });
+    const h = armor.w.hero;
+    h.defend = { form: 'armor', until: 1e9 };
+    h.barrier = { hp: 10, max: 10, until: 1e9 };
+    const cut = Math.min(0.75, h.abilities[1].effect);
+    expect(shieldHero(armor.ctx, 100, armor.m, true)).toBeCloseTo(100 * (1 - cut) - 10);
+    expect(armor.m.hp).toBeLessThan(armor.m.maxHp); // Armor struck back
+
+    const ward = setup(); // the fixture's Defensive is a Ward
+    ward.w.hero.defend = { form: 'ward', until: 1e9 };
+    ward.w.hero.ward = { hp: 50, max: 50 };
+    ward.w.hero.barrier = { hp: 30, max: 30, until: 1e9 };
+    expect(shieldHero(ward.ctx, 100, null, false)).toBeCloseTo(20);
+    const breaks = ward.events.filter((e) => e.kind === 'barrierBreak' || e.kind === 'wardBreak');
+    expect(breaks.map((e) => e.kind)).toEqual(['barrierBreak', 'wardBreak']);
+  });
+
+  it('soaks with no Defensive up, unavoidable damage too, and under Invulnerable', () => {
+    const { w, ctx } = setup();
+    const h = w.hero;
+    h.barrier = { hp: 30, max: 30, until: 1e9 };
+    expect(shieldHero(ctx, 20, null, false)).toBe(0);
+    const hp = h.hp;
+    hurtHero(ctx, 5, null, null, { unavoidable: true });
+    expect(h.barrier!.hp).toBe(5);
+    expect(h.hp).toBe(hp);
+    // Invulnerable (Training Grounds): a blocked hit still drains it, as it does the Ward.
+    w.sandbox = { infiniteMana: false, noCooldowns: false, invulnerable: true };
+    hurtHero(ctx, 3, null, null);
+    expect(h.barrier!.hp).toBeLessThan(5);
+    expect(h.hp).toBe(hp);
+  });
+
+  it('keeps the larger barrier (a smaller one only extends it), and caps it', () => {
+    const { w, ctx, m } = setup();
+    const h = w.hero;
+    const cap = h.stats.maxHp * r.obsidianCap;
+    const obsidian = (base: number) => {
+      applyStatus(ctx, m, 'stagger', 0, true);
+      hitMonster(ctx, m, base, 'fire', { source: 'skill' });
+    };
+    obsidian(1e6);
+    expect(h.barrier).toEqual({ hp: cap, max: cap, until: w.t + r.obsidianDuration });
+    h.barrier!.hp = cap / 2;
+    w.t += r.reactionCooldown;
+    obsidian(1);
+    expect(h.barrier).toEqual({ hp: cap / 2, max: cap, until: w.t + r.obsidianDuration });
+    w.t += r.reactionCooldown;
+    obsidian(1e6);
+    expect(h.barrier).toEqual({ hp: cap, max: cap, until: w.t + r.obsidianDuration });
+  });
+
+  it('breaks with its event, and lapses silently', () => {
+    const { w, ctx, events } = setup();
+    const h = w.hero;
+    h.barrier = { hp: 5, max: 5, until: 1e9 };
+    expect(shieldHero(ctx, 8, null, false)).toBe(3);
+    expect(h.barrier).toBeNull();
+    expect(events).toContainEqual({ kind: 'barrierBreak', x: h.x, y: h.y });
+    h.barrier = { hp: 5, max: 5, until: w.t + 0.2 };
+    const later = run(w, 0.3);
+    expect(h.barrier).toBeNull();
+    expect(later.some((e) => e.kind === 'barrierBreak')).toBe(false);
+  });
+});
+
+describe('buff reactions', () => {
+  it('on its own cooldown, a buff reaction is skipped: a plain hit keeps the mark, or the next mark reacts', () => {
+    const { w, ctx, m, events } = setup();
+    w.sandbox = { infiniteMana: false, noCooldowns: true, invulnerable: false }; // abilities only
+    applyStatus(ctx, m, 'stagger', 0, true);
+    w.hero.reactionReadyAt.obsidian = w.t + 1;
+    hitMonster(ctx, m, 10, 'fire', { source: 'skill' });
+    expect(reactions(events)).toEqual([]);
+    expect(isRattled(ctx, m)).toBe(true);
+    applyStatus(ctx, m, 'hex', 0);
+    hitMonster(ctx, m, 10, 'fire', { source: 'skill' });
+    expect(reactions(events)).toEqual(['soulfire']);
   });
 });
 

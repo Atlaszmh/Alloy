@@ -100,6 +100,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const h = world.hero;
   const move = input.move;
 
+  // Obsidian's barrier lapses without breaking.
+  if (h.barrier && world.t >= h.barrier.until) h.barrier = null;
+
   if (world.queuedPotion) {
     world.queuedPotion = false;
     if (h.potions > 0 && h.hp < h.stats.maxHp) {

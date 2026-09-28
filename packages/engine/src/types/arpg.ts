@@ -335,6 +335,10 @@ export interface HeroEntity {
   /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
   defend: { form: FormId; until: number } | null;
   ward: { hp: number; max: number } | null;
+  /** Obsidian's barrier: soaks damage after the Defensive and before the Ward, until `until`. */
+  barrier: { hp: number; max: number; until: number } | null;
+  /** When each buff reaction can fire again (missing: ready). */
+  reactionReadyAt: Partial<Record<ReactionId, number>>;
   dodgeCharges: number;
   /** When the next dodge charge arrives (0 = full). */
   dodgeRechargeAt: number;
@@ -428,6 +432,7 @@ export type ArpgEvent =
   | { kind: 'windup'; slot: number; until: number; heft: number }
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
+  | { kind: 'barrierBreak'; x: number; y: number }
   | {
       kind: 'beam';
       x: number;
