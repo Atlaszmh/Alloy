@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
 import { startDive } from '../src/delve/dive.js';
-import { fixBuildsToPair } from '../src/delve/pair.js';
+import {
+  bindSecondary,
+  chooseStartingMana,
+  fixBuildsToPair,
+  realign,
+  reattuneItem,
+  resolveOvertake,
+} from '../src/delve/pair.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import type { AbilityBuilds } from '../src/types/ability.js';
 import {
@@ -13,7 +20,13 @@ import {
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
 import type { DelveProfile, HeroWeapon, ManaPair } from '../src/types/delve.js';
-import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../src/types/gear.js';
+import {
+  GEAR_SLOTS,
+  type GearItem,
+  type GearSlot,
+  type HeroStatKey,
+  type Rarity,
+} from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import { bal, gear, registry } from './fixtures/arena.js';
 
@@ -273,5 +286,166 @@ describe('save version 4', () => {
       { slot: 'defensive', removed: ['nature'], build: res.profile.abilities.defensive },
     ]);
     expect(fixBuildsToPair(res.profile)).toEqual({ profile: res.profile, fixed: [] });
+  });
+});
+
+describe('the pair ops', () => {
+  const fresh = () => createDelveProfile(registry, 3);
+  /** A fire hero (sword and cuirass: fire 2) with storm bound. */
+  const bound = (manaDust = 0, scrap = 0): DelveProfile => ({
+    ...createDelveProfile(registry, 3, { primary: 'fire' }),
+    pair: { primary: 'fire', secondary: 'storm' },
+    manaDust,
+    scrap,
+  });
+
+  it('chooseStartingMana: the primary, equipped gear re-attuned with its lines, default builds; once', () => {
+    const p0 = fresh();
+    const ring = item('earth', 'ring', [
+      ['earthAttune', 2],
+      ['stormAttune', 1],
+      ['earthPower', 5],
+    ]);
+    const spare = item('earth', 'amulet');
+    const res = chooseStartingMana(
+      registry,
+      { ...p0, equipped: { ...p0.equipped, ring }, bag: [spare] },
+      'storm',
+    );
+    expect(res.ok).toBe(true);
+    expect(res.profile.pair).toEqual({ primary: 'storm', secondary: null });
+    expect(GEAR_SLOTS.flatMap((s) => res.profile.equipped[s]?.mana ?? [])).toEqual([
+      'storm',
+      'storm',
+      'storm',
+    ]);
+    // Old-element lines convert; a new-element line already there swaps with them.
+    expect(res.profile.equipped.ring!.affixes.map((l) => [l.stat, l.value])).toEqual([
+      ['stormAttune', 2],
+      ['earthAttune', 1],
+      ['stormPower', 5],
+    ]);
+    expect(res.profile.bag).toEqual([spare]);
+    expect(res.profile.abilities).toEqual(defaultAbilities('storm'));
+    expect(chooseStartingMana(registry, res.profile, 'fire')).toMatchObject({
+      ok: false,
+      reason: 'Your mana is already chosen',
+    });
+    expect(createDelveProfile(registry, 3, { primary: 'storm' })).toEqual(
+      chooseStartingMana(registry, fresh(), 'storm').profile,
+    );
+  });
+
+  it('bindSecondary: free, once, never the primary, never mid-dive', () => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    expect(bindSecondary(p, 'fire').ok).toBe(false);
+    expect(bindSecondary(fresh(), 'storm').ok).toBe(false);
+    expect(bindSecondary(startDive(registry, p, 1), 'storm').reason).toBe(
+      'Bind a second element between dives',
+    );
+    const res = bindSecondary(p, 'storm');
+    expect(res.profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
+    expect(res.profile.scrap).toBe(p.scrap);
+    expect(bindSecondary(res.profile, 'nature').ok).toBe(false);
+  });
+
+  it('realign: charges Mana Dust and scrap, keeps the gear, fixes the builds; refuses what it must', () => {
+    const { realignDust, realignScrap } = bal.pair;
+    const rich = bound(realignDust, realignScrap);
+    const stormy: DelveProfile = {
+      ...rich,
+      abilities: {
+        ...rich.abilities,
+        primary: { ...rich.abilities.primary, elements: ['fire', 'storm'] },
+      },
+    };
+    const res = realign(registry, stormy, { secondary: 'nature' });
+    expect(res.ok).toBe(true);
+    expect(res.profile).toMatchObject({
+      pair: { primary: 'fire', secondary: 'nature' },
+      manaDust: 0,
+      scrap: 0,
+    });
+    expect(res.profile.equipped).toEqual(rich.equipped);
+    expect(res.profile.abilities.primary.elements).toEqual(['fire']);
+    expect(res.fixed).toEqual([
+      { slot: 'primary', removed: ['storm'], build: res.profile.abilities.primary },
+    ]);
+    expect(realign(registry, rich, { primary: 'storm', secondary: 'fire' }).ok).toBe(true);
+    expect(realign(registry, rich, {}).reason).toBe('Nothing to change');
+    expect(realign(registry, rich, { primary: 'storm' }).reason).toBe(
+      'Pick two different elements',
+    );
+    const solo = createDelveProfile(registry, 3, { primary: 'fire' });
+    expect(realign(registry, solo, { secondary: 'nature' }).reason).toBe(
+      'Bind a second element first',
+    );
+    expect(
+      realign(registry, bound(realignDust - 1, realignScrap), { secondary: 'nature' }).reason,
+    ).toBe('Not enough Mana Dust');
+    expect(
+      realign(registry, bound(realignDust, realignScrap - 1), { secondary: 'nature' }).reason,
+    ).toBe('Not enough scrap');
+    expect(realign(registry, startDive(registry, rich, 1), { secondary: 'nature' }).reason).toBe(
+      'Realign between dives',
+    );
+  });
+
+  it('resolveOvertake: the secondary swaps in above 1.2 × the primary, never at 0 or mid-dive', () => {
+    const p = bound();
+    const slots = ['helm', 'gloves', 'boots'] as const;
+    const wear = (n: number): DelveProfile => ({
+      ...p,
+      equipped: {
+        ...p.equipped,
+        ...Object.fromEntries(slots.slice(0, n).map((s) => [s, item('storm', s)])),
+      },
+    });
+    expect(resolveOvertake(registry, wear(2)).swapped).toBe(false); // storm 2, fire 2 × 1.2
+    const three = resolveOvertake(registry, wear(3)); // storm 3 > 2.4
+    expect(three.swapped).toBe(true);
+    expect(three.profile.pair).toEqual({ primary: 'storm', secondary: 'fire' });
+    expect(resolveOvertake(registry, { ...p, equipped: {} }).swapped).toBe(false); // both 0
+    expect(resolveOvertake(registry, startDive(registry, wear(3), 1)).swapped).toBe(false);
+    const edge: DelveProfile = {
+      ...p,
+      equipped: {
+        weapon: item('fire', 'weapon', [['fireAttune', 4]]), // fire 5
+        ring: item('storm', 'ring', [['stormAttune', 5]]), // storm 6: equal to 1.2 × 5, not above
+      },
+    };
+    expect(resolveOvertake(registry, edge).swapped).toBe(false);
+  });
+
+  it('reattuneItem: to the pair only, for Mana Dust, converting the old lines', () => {
+    const cost = bal.pair.reattuneDust.rare;
+    const helm: GearItem = {
+      ...item('storm', 'helm', [
+        ['stormPower', 8],
+        ['firePower', 3],
+      ]),
+      uid: 'h',
+      rarity: 'rare',
+    };
+    const p = { ...bound(cost), bag: [helm] };
+    const res = reattuneItem(registry, p, 'h', 'fire');
+    expect(res.ok).toBe(true);
+    expect(res.item!.mana).toBe('fire');
+    expect(res.item!.affixes.map((l) => [l.stat, l.value])).toEqual([
+      ['firePower', 8],
+      ['stormPower', 3],
+    ]);
+    expect(res.profile.bag).toEqual([res.item]);
+    expect(res.profile.manaDust).toBe(0);
+    expect(reattuneItem(registry, p, 'h', 'nature').reason).toBe(
+      'Re-attune to one of your two elements',
+    );
+    expect(reattuneItem(registry, p, 'h', 'storm').reason).toBe('Already attuned to that element');
+    expect(reattuneItem(registry, { ...p, manaDust: cost - 1 }, 'h', 'fire').reason).toBe(
+      'Not enough Mana Dust',
+    );
+    expect(reattuneItem(registry, startDive(registry, p, 1), 'h', 'fire').reason).toBe(
+      'Re-attune between dives',
+    );
   });
 });

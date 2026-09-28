@@ -22,7 +22,7 @@ import {
   DelveProfileV2Schema,
   DelveProfileV3Schema,
 } from './profile-schema.js';
-import { fixBuildsToPair, type BuildFix } from './pair.js';
+import { chooseStartingMana, fixBuildsToPair, type BuildFix } from './pair.js';
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
@@ -36,13 +36,23 @@ export interface ProfileActionResult {
   profile: DelveProfile;
   reason?: string;
   item?: GearItem;
+  /** Build slots the op changed to fit the pair (Realign). */
+  fixed?: BuildFix[];
 }
 
 function perRarity<T>(value: T): Record<Rarity, T> {
   return Object.fromEntries(RARITY_ORDER.map((r) => [r, value])) as Record<Rarity, T>;
 }
 
-export function createDelveProfile(registry: DataRegistry, seed: number): DelveProfile {
+/**
+ * A new save. Without `primary` the hero has no pair yet (the Anvil asks);
+ * the bot and tests pass one, which runs `chooseStartingMana`.
+ */
+export function createDelveProfile(
+  registry: DataRegistry,
+  seed: number,
+  opts: { primary?: ManaType } = {},
+): DelveProfile {
   const rng = new SeededRNG(seed).fork('starter');
   const weapon = generateItem(
     registry,
@@ -84,7 +94,7 @@ export function createDelveProfile(registry: DataRegistry, seed: number): DelveP
     reactionsSeen: [],
     dive: null,
   };
-  return profile;
+  return opts.primary ? chooseStartingMana(registry, profile, opts.primary).profile : profile;
 }
 
 /**
@@ -193,7 +203,7 @@ export function findItem(
 }
 
 /** Replace an item (matched by uid) wherever it lives. */
-function replaceItem(profile: DelveProfile, item: GearItem): DelveProfile {
+export function replaceItem(profile: DelveProfile, item: GearItem): DelveProfile {
   const found = findItem(profile, item.uid);
   if (!found) throw new Error(`Item not found: ${item.uid}`);
   if (found.where === 'bag') {
