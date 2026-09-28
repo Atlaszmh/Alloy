@@ -1,21 +1,29 @@
 import { useMemo, useRef, useState } from 'react';
 import {
+  attuneElement,
   baseDisplayName,
   compareItem,
   findItem,
+  inPair,
+  isDiveActive,
   itemAffinityAttunement,
   itemStatLines,
+  pairElements,
   referenceDepth,
   reforgeCost,
+  salvageDust,
   salvageValue,
   upgradeCost,
+  type HeroStatKey,
   type ManaType,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
+import { BindPrompt } from './BindPrompt';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
@@ -54,6 +62,15 @@ function qualityColor(roll: number): string {
   return '#78716c';
 }
 
+/** Marks an attunement line of an element outside the pair: it grants nothing. */
+function NotMine() {
+  return (
+    <span className="ml-1.5 text-[10px] text-stone-500" data-testid="not-your-element">
+      not your element
+    </span>
+  );
+}
+
 export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
@@ -63,6 +80,7 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
   const [flashIdx, setFlashIdx] = useState<number | null>(null);
   const [confirmSalvage, setConfirmSalvage] = useState(false);
+  const [binding, setBinding] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
   const found = findItem(profile, uid);
@@ -90,9 +108,21 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const mana = manaStyle(registry, item.mana);
   const attuneDelta = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const attack = registry.getDelveData().bases.find((b) => b.id === item.baseId)?.attack;
+  const diving = isDiveActive(profile);
+  const dust = salvageDust(registry, item, profile.pair);
+  const ownMana = inPair(profile, item.mana);
+  const notMine = (stat: HeroStatKey) => {
+    const el = attuneElement(stat);
+    return !!el && !inPair(profile, el);
+  };
+  const reattuneTo = pairElements(profile.pair).filter((m) => m !== item.mana);
+  const reattuneCost = registry.getDelveBalance().pair.reattuneDust[item.rarity];
+  // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
+  const unbound =
+    !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
 
   const flashStats = () => {
-    statsRef.current?.animate(
+    statsRef.current?.animate?.(
       [
         { filter: 'brightness(2.2)', transform: 'scale(1.02)' },
         { filter: 'brightness(1)', transform: 'scale(1)' },
@@ -107,7 +137,12 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   };
 
   const onEquip = () => {
+    if (unbound && !diving && !store().bindDeclined.includes(item.mana)) {
+      setBinding(true);
+      return;
+    }
     store().equip(item.uid);
+    if (unbound && diving) showToast(`Bind ${mana.name} between dives to draw power from it`);
     playSound('orbPlace');
     vibrate('medium');
     onClose();
@@ -151,6 +186,19 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
     }
   };
 
+  const onReattune = (to: ManaType) => {
+    const res = store().reattune(item.uid, to);
+    if (res.ok) {
+      playSound('combineMerge');
+      vibrate('medium');
+      flashStats();
+      say(`Attuned to ${manaStyle(registry, to).name}`, true);
+    } else {
+      playSound('combineFail');
+      say(res.reason ?? 'Cannot re-attune', false);
+    }
+  };
+
   const onSalvage = () => {
     const precious =
       item.rarity === 'rare' || item.rarity === 'epic' || item.rarity === 'legendary';
@@ -176,6 +224,8 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={item.name}
+        // The bind prompt holds the keyboard: nothing behind it takes focus or clicks.
+        inert={binding}
       >
         {/* Header */}
         <div className="flex items-start gap-3">
@@ -195,10 +245,15 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
             <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-stone-400">
               <span
                 className="rounded px-1.5 py-0.5 font-semibold"
-                style={{ background: `${mana.color}22`, color: mana.color }}
+                style={
+                  ownMana
+                    ? { background: `${mana.color}22`, color: mana.color }
+                    : { background: 'rgba(255,255,255,0.05)', color: '#78716c' }
+                }
                 data-testid="item-mana"
               >
                 {mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}
+                {!ownMana && ' · not your element'}
               </span>
               {attack && (
                 <span className="rounded bg-white/5 px-1.5 py-0.5">
@@ -278,8 +333,13 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
         {/* Stats */}
         <div ref={statsRef} className="mt-3 space-y-1.5">
           {implicits.map((l, i) => (
-            <div key={`i${i}`} className="text-sm text-stone-300">
+            <div
+              key={`i${i}`}
+              className="text-sm"
+              style={{ color: notMine(l.stat) ? '#57534e' : '#d6d3d1' }}
+            >
               {formatStat(registry, l.stat, l.value)}
+              {notMine(l.stat) && <NotMine />}
             </div>
           ))}
           {implicits.length > 0 && affixes.length > 0 && <div className="my-1 h-px bg-white/10" />}
@@ -308,7 +368,10 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
                 data-testid="item-affix"
               >
                 <div className="flex items-center justify-between text-sm">
-                  <span style={{ color: '#93c5fd' }}>{formatStat(registry, l.stat, l.value)}</span>
+                  <span style={{ color: notMine(l.stat) ? '#57534e' : '#93c5fd' }}>
+                    {formatStat(registry, l.stat, l.value)}
+                    {notMine(l.stat) && <NotMine />}
+                  </span>
                   {l.roll >= 0.9 && (
                     <span className="text-[10px] font-bold text-amber-300">PERFECT</span>
                   )}
@@ -390,16 +453,57 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
             disabled={isEquipped || item.locked}
             data-testid="salvage-button"
           >
-            {confirmSalvage ? 'Tap again to melt' : `Salvage +${formatNumber(salvage)}`}
+            {confirmSalvage
+              ? 'Tap again to melt'
+              : `Salvage +${formatNumber(salvage)}${dust > 0 ? ` · ✦ ${dust}` : ''}`}
           </button>
           <button className="delve-btn" onClick={onLock}>
             {item.locked ? 'Unlock' : 'Lock'}
           </button>
         </div>
+        {reattuneTo.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1.5" data-testid="reattune">
+            <div className="text-[11px] text-stone-400">
+              Re-attune to your other element: its {mana.name} lines follow.
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {reattuneTo.map((m) => {
+                const st = manaStyle(registry, m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    className="delve-chip"
+                    disabled={diving}
+                    style={diving ? { opacity: 0.35 } : undefined}
+                    onClick={() => onReattune(m)}
+                    data-testid={`reattune-${m}`}
+                  >
+                    {st.icon} {st.name} · ✦ {reattuneCost}
+                  </button>
+                );
+              })}
+            </div>
+            {diving && (
+              <div className="text-[11px] text-amber-200" data-testid="reattune-locked">
+                Re-attune between dives.
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-3 text-center text-[11px] text-stone-500">
-          ⚙ {formatNumber(profile.scrap)} scrap
+          ⚙ {formatNumber(profile.scrap)} scrap · ✦ {formatNumber(profile.manaDust)} Mana Dust
         </div>
       </div>
+      {binding && !isEquipped && (
+        <BindPrompt
+          item={item}
+          onDone={() => {
+            setBinding(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }
