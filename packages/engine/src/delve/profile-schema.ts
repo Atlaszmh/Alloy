@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { HeroStatKeySchema as StatKeySchema, ManaTypeSchema } from '../data/schemas.js';
+import {
+  HeroStatKeySchema as StatKeySchema,
+  ManaTypeSchema,
+  ReactionIdSchema,
+} from '../data/schemas.js';
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
@@ -159,6 +163,8 @@ export const DelveProfileSchema = DelveProfileV3Schema.extend({
   version: z.literal(4),
   pair: PairSchema,
   manaDust: z.number().int().min(0),
+  // Every reaction (the frozen version 3 keeps its seven).
+  reactionsSeen: z.array(ReactionIdSchema),
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */

@@ -150,13 +150,21 @@
       "text": "When a foe dies, its poison and hex spread to foes nearby." }
   ],
   "reactions": [
-    { "id": "melt", "name": "Melt", "icon": "🫠", "text": "Fire hits a chilled or frozen foe for double damage." },
-    { "id": "shatter", "name": "Shatter", "icon": "💥", "text": "Earth hits a frozen foe for massive bonus damage." },
-    { "id": "overload", "name": "Overload", "icon": "💢", "text": "Storm hits a burning foe and it explodes, hitting everything nearby." },
-    { "id": "superconduct", "name": "Superconduct", "icon": "🔷", "text": "Frost hits a shocked foe and freezes it solid." },
-    { "id": "soulfire", "name": "Soulfire", "icon": "💜", "text": "Fire hits a hexed foe and part of the damage heals you." },
-    { "id": "combust", "name": "Combust", "icon": "💚", "text": "Fire hits a poisoned foe and the poison detonates around it." },
-    { "id": "blight", "name": "Blight", "icon": "🦠", "text": "Shadow hits a poisoned foe and its poison spreads to its neighbours." }
+    { "id": "melt", "elements": ["fire", "frost"], "name": "Melt", "icon": "🫠", "text": "Fire hits a chilled or frozen foe for double damage." },
+    { "id": "shatter", "elements": ["earth", "frost"], "name": "Shatter", "icon": "💥", "text": "Earth hits a frozen foe for massive bonus damage." },
+    { "id": "overload", "elements": ["storm", "fire"], "name": "Overload", "icon": "💢", "text": "Storm hits a burning foe and it explodes, hitting everything nearby." },
+    { "id": "superconduct", "elements": ["frost", "storm"], "name": "Superconduct", "icon": "🔷", "text": "Frost hits a shocked foe and freezes it solid." },
+    { "id": "soulfire", "elements": ["fire", "shadow"], "consumes": false, "name": "Soulfire", "icon": "💜", "text": "Fire hits a hexed foe and part of the damage heals you." },
+    { "id": "combust", "elements": ["fire", "nature"], "name": "Combust", "icon": "💚", "text": "Fire hits a poisoned foe and the poison detonates around it." },
+    { "id": "blight", "elements": ["shadow", "nature"], "consumes": false, "name": "Blight", "icon": "🦠", "text": "Shadow hits a poisoned foe and its poison spreads to its neighbours." },
+    { "id": "obsidian", "elements": ["fire", "earth"], "cooldown": true, "name": "Obsidian", "icon": "🪨", "text": "Fire and Earth meet: obsidian hardens around you, a barrier worth half the hit." },
+    { "id": "lightning_rod", "elements": ["storm", "earth"], "cooldown": true, "name": "Lightning Rod", "icon": "🌩️", "text": "Storm and Earth meet: the charge grounds through you, giving back a dodge and quickening your step." },
+    { "id": "sunder", "elements": ["earth", "shadow"], "name": "Sunder", "icon": "⛏️", "text": "Earth and Shadow meet: the foe is sundered, taking more damage from every hit that follows." },
+    { "id": "seedling", "elements": ["earth", "nature"], "cooldown": true, "name": "Seedling", "icon": "🪴", "text": "Earth and Nature meet: a healing seedling sprouts where the foe stands." },
+    { "id": "siphon", "elements": ["frost", "shadow"], "cooldown": true, "name": "Siphon", "icon": "🌀", "text": "Frost and Shadow meet: motes of mana tear loose from the foe and fly to you." },
+    { "id": "crystallize", "elements": ["frost", "nature"], "name": "Crystallize", "icon": "💎", "text": "Frost and Nature meet: the foe crystallizes for heavy damage, and the shards chill foes nearby." },
+    { "id": "blackout", "elements": ["storm", "shadow"], "name": "Blackout", "icon": "🌫️", "text": "Storm and Shadow meet: a cloud of darkness blinds the foe and everything near it." },
+    { "id": "galvanize", "elements": ["storm", "nature"], "cooldown": true, "name": "Galvanize", "icon": "🔋", "text": "Storm and Nature meet: your abilities surge, charging up and cooling down faster." }
   ],
   "masteries": [
     { "mana": "fire", "name": "Inferno", "text": "Burning foes spread their flames when they die." },

@@ -25,7 +25,15 @@ export type ReactionId =
   | 'superconduct'
   | 'soulfire'
   | 'combust'
-  | 'blight';
+  | 'blight'
+  | 'obsidian'
+  | 'lightning_rod'
+  | 'sunder'
+  | 'seedling'
+  | 'siphon'
+  | 'crystallize'
+  | 'blackout'
+  | 'galvanize';
 
 /** An ability form: what the ability does. Values are before weight, payment and knobs. */
 export interface FormDef {
@@ -76,11 +84,17 @@ export interface FusionDef {
   knobs: Partial<Knobs>;
 }
 
+/** A hit of either element on a foe carrying the other's mark sets it off (see the pair reactions spec). */
 export interface ReactionDef {
   id: ReactionId;
+  elements: [ManaType, ManaType];
   name: string;
   icon: string;
   text: string;
+  /** False: the mark that set it off stays (Soulfire, Blight). */
+  consumes?: false;
+  /** A buff reaction: after it fires it can't again for `reactionCooldown` seconds. */
+  cooldown?: true;
 }
 
 export interface MasteryDef {

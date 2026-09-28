@@ -214,6 +214,15 @@ export class DataRegistry {
     );
   }
 
+  /** The reaction of a pair of distinct elements, in either order. */
+  getReactionFor(a: ManaType, b: ManaType): ReactionDef {
+    const reaction = this.getArpgData().reactions.find(
+      (r) => a !== b && r.elements.includes(a) && r.elements.includes(b),
+    );
+    if (!reaction) throw new Error(`No reaction for ${a} + ${b}`);
+    return reaction;
+  }
+
   getReaction(id: string): ReactionDef {
     const reaction = this.getArpgData().reactions.find((r) => r.id === id);
     if (!reaction) throw new Error(`Reaction not found: ${id}`);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ReactionId } from '../types/arpg.js';
 
 // --- Shared Schemas ---
 
@@ -368,6 +369,28 @@ const StatusIdSchema = z.enum([
   'root',
 ]);
 
+/** Every reaction id: arpg.json's reactions and the save's `reactionsSeen` both check against it. */
+export const ReactionIdSchema = z.enum([
+  'melt',
+  'shatter',
+  'overload',
+  'superconduct',
+  'soulfire',
+  'combust',
+  'blight',
+  'obsidian',
+  'lightning_rod',
+  'sunder',
+  'seedling',
+  'siphon',
+  'crystallize',
+  'blackout',
+  'galvanize',
+]);
+// The ReactionId union and this list must name the same ids: this stops compiling if they drift.
+type SameIds<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+true satisfies SameIds<ReactionId, z.infer<typeof ReactionIdSchema>>;
+
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
     common: schema,
@@ -556,21 +579,23 @@ export const ArpgDataSchema = z.object({
   reactions: z
     .array(
       z.object({
-        id: z.enum([
-          'melt',
-          'shatter',
-          'overload',
-          'superconduct',
-          'soulfire',
-          'combust',
-          'blight',
-        ]),
+        id: ReactionIdSchema,
+        elements: z
+          .tuple([ManaTypeSchema, ManaTypeSchema])
+          .refine(([a, b]) => a !== b, 'a reaction needs two elements'),
         name: z.string(),
         icon: z.string(),
         text: z.string(),
+        consumes: z.literal(false).optional(),
+        cooldown: z.literal(true).optional(),
       }),
     )
-    .length(7),
+    .length(15)
+    .refine((rs) => new Set(rs.map((r) => r.id)).size === rs.length, 'reaction ids must differ')
+    .refine(
+      (rs) => new Set(rs.map((r) => [...r.elements].sort().join('+'))).size === rs.length,
+      'each pair of elements needs exactly one reaction',
+    ),
   masteries: z
     .array(z.object({ mana: ManaTypeSchema, name: z.string(), text: z.string() }))
     .length(6),
