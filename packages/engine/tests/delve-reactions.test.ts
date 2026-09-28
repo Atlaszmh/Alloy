@@ -22,10 +22,13 @@ import { shieldHero } from '../src/arpg/abilities/defend.js';
 import { refundDodgeCharge } from '../src/arpg/dodge.js';
 import { hitOpts } from '../src/arpg/abilities/impact.js';
 import { resolveAbility } from '../src/arpg/abilities/resolve.js';
+import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';
+import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity, ReactionId } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
+  DEFAULT_BUILDS,
   arena,
   bal,
   dummy,
@@ -127,6 +130,25 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
     expect(f.w.hero.quickUntil).toBe(f.w.t + bal.reactions.lightningRodDuration);
   },
   sunder: (f) => expect(f.m.status.sunderUntil).toBe(f.w.t + bal.reactions.sunderDuration),
+  seedling: (f) =>
+    expect(f.w.drops).toEqual([
+      expect.objectContaining({
+        kind: 'orb',
+        mana: 'nature',
+        amount: bal.reactions.seedlingHeal,
+        x: f.m.x,
+        y: f.m.y,
+        vacuum: false,
+      }),
+    ]),
+  siphon: (f) => {
+    expect(f.w.drops).toHaveLength(3);
+    for (const d of f.w.drops) {
+      expect(d).toMatchObject({ kind: 'mote', mana: 'shadow', vacuum: true });
+      expect(d.amount).toBeCloseTo((bal.reactions.siphonMana * f.w.hero.manaMax) / 3);
+      expect(Math.hypot(d.x - f.m.x, d.y - f.m.y)).toBeCloseTo(0.4);
+    }
+  },
 };
 
 describe('the reaction table', () => {
@@ -543,6 +565,52 @@ describe('Sunder', () => {
     );
     w.t += bal.reactions.sunderDuration;
     expect(isSundered(ctx, m)).toBe(false);
+  });
+});
+
+describe('Seedling and Siphon', () => {
+  it("Seedling's orb heals when picked up", () => {
+    const { w, ctx, m } = setup();
+    applyStatus(ctx, m, 'poison', 100);
+    hitMonster(ctx, m, 10, 'earth', { source: 'skill' });
+    const h = w.hero;
+    h.hp = 1;
+    [h.x, h.y] = [w.drops[0].x, w.drops[0].y + 1];
+    expect(run(w, 0.5).filter((e) => e.kind === 'heal')).toEqual([
+      {
+        kind: 'heal',
+        amount: expect.closeTo(h.stats.maxHp * bal.reactions.seedlingHeal, 6),
+        source: 'orb',
+      },
+    ]);
+  });
+
+  it("Siphon's motes fly in from across the arena and restore mana", () => {
+    const { w, ctx, m } = setup(); // the hero stands 16 units off
+    applyStatus(ctx, m, 'hex', 0);
+    hitMonster(ctx, m, 10, 'frost', { source: 'skill' });
+    w.hero.mana = 0;
+    const pickups = run(w, 2).flatMap((e) => (e.kind === 'pickup' ? [e] : []));
+    expect(pickups.map((e) => e.mana)).toEqual(['shadow', 'shadow', 'shadow']);
+    const total = pickups.reduce((sum, e) => sum + e.amount, 0);
+    expect(total).toBeCloseTo(bal.reactions.siphonMana * w.hero.manaMax);
+    expect(w.hero.mana).toBeGreaterThanOrEqual(total);
+  });
+
+  it('the Training Grounds get them too: they are the reaction, not loot', () => {
+    const w = createSandboxWorld(registry, {
+      depth: 3,
+      stats: computeHeroStats({}, registry),
+      abilities: DEFAULT_BUILDS,
+      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+    });
+    const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
+    const ctx = makeCtx(registry, w, []);
+    applyStatus(ctx, d, 'poison', 100);
+    hitMonster(ctx, d, 10, 'earth', { source: 'skill' }); // Seedling
+    applyStatus(ctx, d, 'hex', 0);
+    hitMonster(ctx, d, 10, 'frost', { source: 'skill' }); // Siphon
+    expect(w.drops.map((x) => x.kind)).toEqual(['orb', 'mote', 'mote', 'mote']);
   });
 });
 

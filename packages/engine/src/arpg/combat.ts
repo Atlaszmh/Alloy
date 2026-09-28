@@ -372,6 +372,20 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
       // Later hits only: this one's multipliers are already in.
       m.status.sunderUntil = t + r.sunderDuration;
       return amount;
+    case 'seedling':
+      spawnDrop(ctx, 'orb', m.x, m.y, { amount: r.seedlingHeal, mana: 'nature' });
+      return amount;
+    case 'siphon': {
+      // Three motes round the foe (fixed, no rng), pulled to the hero wherever it stands.
+      const each = (r.siphonMana * h.manaMax) / 3;
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
+        const x = m.x + Math.cos(a) * 0.4;
+        const y = m.y + Math.sin(a) * 0.4;
+        spawnDrop(ctx, 'mote', x, y, { amount: each, mana: 'shadow', vacuum: true });
+      }
+      return amount;
+    }
     default:
       // The new eight's effects arrive in their own tasks.
       return amount;
@@ -515,7 +529,8 @@ function spawnDrop(
   kind: DropKind,
   x: number,
   y: number,
-  extra: { item?: GearItem; mana?: ManaType; amount: number },
+  /** `vacuum`: pulled to the hero from anywhere (default: once the floor is cleared). */
+  extra: { item?: GearItem; mana?: ManaType; amount: number; vacuum?: boolean },
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
@@ -528,7 +543,7 @@ function spawnDrop(
     mana: extra.mana,
     amount: extra.amount,
     born: world.t,
-    vacuum: world.cleared,
+    vacuum: extra.vacuum ?? world.cleared,
     dead: false,
   });
   ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: kind, rarity: extra.item?.rarity });
