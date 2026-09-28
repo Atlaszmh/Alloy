@@ -13,6 +13,8 @@ export function arenaToCell(
 
 type Cell = { x: number; y: number };
 
+const TAU = Math.PI * 2;
+
 /** An infusion marks a path once per this many cells… */
 const STAMP_SPACING = 5;
 /**
@@ -21,8 +23,6 @@ const STAMP_SPACING = 5;
  * particles alive under a fire or earth Lance's spam (half the cap); 8 keeps ~2,600.
  */
 export const MAX_STAMPS = 8;
-/** Marks round an infused blast's rim. */
-export const RIM_STAMPS = 6;
 
 /** Each infusion element's brush (radius in cells). Storm draws one arc through the stamps instead. */
 const BRUSH: Record<Exclude<ManaType, 'storm'>, (pw: PixelWorld, c: Cell) => void> = {
@@ -35,8 +35,8 @@ const BRUSH: Record<Exclude<ManaType, 'storm'>, (pw: PixelWorld, c: Cell) => voi
 
 /**
  * Stamps along a path `len` cells long: one per 5 cells, 2 to 8, from t = 0
- * to t = 1. A closed path (a 360° slam) spaces them k / n, so its two ends
- * don't stamp the same place twice.
+ * to t = 1. A closed path (a 360° slam, a blast's rim) spaces them k / n, so
+ * its two ends don't stamp the same place twice.
  */
 function along(len: number, at: (t: number) => Cell, closed = false): Cell[] {
   const n = Math.min(MAX_STAMPS, Math.max(2, Math.floor(len / STAMP_SPACING) + 1));
@@ -96,10 +96,11 @@ export function applyArenaEvent(pw: PixelWorld, e: ArpgEvent, ppu: number, margi
           pw.earthImpact(c.x, c.y, Math.max(4, r * 0.6));
       }
       if (e.infusion) {
-        const rim = Array.from({ length: RIM_STAMPS }, (_, k) => {
-          const a = (k / RIM_STAMPS) * Math.PI * 2;
-          return { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
-        });
+        const rim = along(
+          TAU * r,
+          (t) => ({ x: c.x + Math.cos(TAU * t) * r, y: c.y + Math.sin(TAU * t) * r }),
+          true,
+        );
         stamp(pw, e.infusion, rim, true);
       }
       break;

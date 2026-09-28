@@ -3,7 +3,7 @@ import type { ArpgEvent, ManaType } from '@alloy/engine';
 import { MAX_PARTICLES, PixelWorld, MAT, PROP } from '../arena/pixel/world';
 import { renderPixelWorld } from '../arena/pixel/render';
 import { PIXEL_THEMES, type PixelTheme } from '../arena/pixel/themes';
-import { MAX_STAMPS, RIM_STAMPS, applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
+import { MAX_STAMPS, applyArenaEvent, arenaToCell } from '../arena/pixel/arena-effects';
 
 const PPU = 5;
 const MARGIN = 3;
@@ -447,36 +447,42 @@ describe('infusions on the pixel floor', () => {
     infusion,
   });
 
-  it("marks a blast's rim with 6 stamps of the infusion, after the body's own brush", () => {
+  it("marks a blast's rim evenly all the way round, after the body's own brush", () => {
     const c = at(10, 10);
+    const blast = (radius: number, infusion: ManaType): ArpgEvent => ({
+      kind: 'explode',
+      x: 10,
+      y: 10,
+      radius,
+      element: 'frost',
+      infusion,
+    });
     for (const infusion of ['nature', 'frost', 'fire', 'earth', 'shadow'] as const) {
       const f = spyFloor();
-      applyArenaEvent(
-        f.pw,
-        { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'frost', infusion },
-        PPU,
-        MARGIN,
-      );
+      applyArenaEvent(f.pw, blast(1.5, infusion), PPU, MARGIN);
       expect(f.stamps[0]).toMatchObject({ brush: 'frost', x: c.x, y: c.y });
       const rim = f.stamps.slice(1);
-      expect(rim).toHaveLength(RIM_STAMPS);
+      expect(rim).toHaveLength(MAX_STAMPS); // 47 cells of rim would be 10
       for (const s of rim) {
         expect(s).toMatchObject({ brush: infusion, r: infusion === 'nature' ? 3 : 2 });
         expect(Math.hypot(s.x - c.x, s.y - c.y)).toBeCloseTo(1.5 * PPU, 5);
       }
+      const g = gaps([...rim, rim[0]]);
+      for (const d of g) expect(d).toBeCloseTo(g[0], 5);
     }
+    // The count follows the rim: a small blast (its floor radius clamped to 3 cells) gets 4.
+    const small = spyFloor();
+    applyArenaEvent(small.pw, blast(0.4, 'fire'), PPU, MARGIN);
+    expect(small.stamps.slice(1)).toHaveLength(4);
+    for (const s of small.stamps.slice(1))
+      expect(Math.hypot(s.x - c.x, s.y - c.y)).toBeCloseTo(3, 5);
     // Storm: one arc round the rim, closed.
     const f = spyFloor();
-    applyArenaEvent(
-      f.pw,
-      { kind: 'explode', x: 10, y: 10, radius: 1.5, element: 'frost', infusion: 'storm' },
-      PPU,
-      MARGIN,
-    );
+    applyArenaEvent(f.pw, blast(1.5, 'storm'), PPU, MARGIN);
     expect(f.stamps).toHaveLength(1);
     expect(f.arcs).toHaveLength(1);
-    expect(f.arcs[0]).toHaveLength(RIM_STAMPS + 1);
-    expect(f.arcs[0][RIM_STAMPS]).toEqual(f.arcs[0][0]);
+    expect(f.arcs[0]).toHaveLength(MAX_STAMPS + 1);
+    expect(f.arcs[0][MAX_STAMPS]).toEqual(f.arcs[0][0]);
   });
 
   it('marks a lance evenly from end to end, one stamp per 5 cells and at most 8', () => {
