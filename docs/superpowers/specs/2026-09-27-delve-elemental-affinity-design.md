@@ -1,7 +1,7 @@
 # Delve Elemental Affinity Design
 
 **Date:** 2026-09-27
-**Status:** Approved in conversation.
+**Status:** Built in v0.43.0.
 
 **Engine:** `packages/engine/src/`
 - `delve/pair.ts` (new)

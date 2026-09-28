@@ -105,7 +105,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 | Ward, Armor, Surge and Blink on the hero | ring around the hero (radius 1) | world, the Defensive's second element | while the buff lasts |
 | Basic melee finisher with an infusion | ring, strength 1.5 | a transient entry from the `basic` event with `finisher` | 0.45 s |
 
-- **Finisher ring placement:** a melee finisher narrower than 360° rings the tip (`x + dir × reach`). A 360° finisher (the axe spin, the maul slam) rings the hero with `r = reach`. Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion.
+- **Finisher ring placement:** a melee finisher narrower than 360° rings the tip (`x + dir × reach`). A 360° finisher (the axe spin, the maul slam) rings the hero with `r = reach`. Ranged finishers draw no extra ring: the shot's orb and any burst carry the infusion. (Superseded by the elemental affinity spec: a ranged finisher now flares at the hand, and its orb and burst carry no motif.)
 - **`ManaFx` changes:**
   - `ManaFx.draw(layers, dt, time, budget)` takes the layers and the frame's budget instead of one Graphics. It draws the first-priority transient motifs, passing `ground` only for its blast and blink-trail entries.
   - `swing()` and `beam()` accept an optional `infusion`.
