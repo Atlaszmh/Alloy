@@ -24,7 +24,7 @@ describe('primary forms', () => {
     expect(damaged(w.monsters[1])).toBe(false);
   });
 
-  it("Bolt's default chain goes light, light, medium, heavy, each bigger by its step, then wraps", () => {
+  it("Bolt's default chain goes light to heavy, each move bigger by its step, then wraps", () => {
     const moves = registry.getForm('bolt').defaultChain.map((kind) => ({
       kind,
       form: 'bolt' as const,

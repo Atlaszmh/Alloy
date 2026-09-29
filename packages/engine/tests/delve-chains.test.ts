@@ -74,7 +74,7 @@ describe('balance: delve.chains', () => {
       holdTime: 1,
       holdMax: 2,
       holdStages: [0.33, 0.66],
-      stepBonus: 0.1,
+      stepBonus: 0.15,
     });
     expect(bal.stacks.basicByKind).toEqual({ light: 1, medium: 1, heavy: 2, hold: 2 });
     expect(MOVE_KINDS).toEqual(['light', 'medium', 'heavy', 'hold']);
@@ -255,17 +255,22 @@ describe('data: feel tables and default chains', () => {
     }
   });
 
-  it("each form's default chain follows its old press-combo: ≤ 0.9 light, ≤ 1.2 medium, else heavy", () => {
-    const old: Record<string, number[]> = {
-      bolt: [0.8, 0.8, 1, 1.5],
-      volley: [1, 1, 1],
-      lance: [1, 1, 1.4],
-      burst: [1, 1, 1.5],
-      strike: [1, 1, 1.2, 1.8],
+  it("each form's default chain: its old press-combo's (≤ 0.9 light, ≤ 1.2 medium, else heavy), as tuned", () => {
+    // From the old multipliers: Bolt [0.8, 0.8, 1, 1.5] L L M H, Volley [1, 1, 1] M M M, Lance
+    // [1, 1, 1.4] M M H, Burst [1, 1, 1.5] M M H, Strike [1, 1, 1.2, 1.8] M M M H. The DPS Lab
+    // gate made Bolt's second move and Strike's third a step heavier (see the plan's gate decision).
+    const L = 'light';
+    const M = 'medium';
+    const H = 'heavy';
+    const want: Record<string, MoveKind[]> = {
+      bolt: [L, M, M, H],
+      volley: [M, M, M],
+      lance: [M, M, H],
+      burst: [M, M, H],
+      strike: [M, M, H, H],
     };
-    const kind = (m: number): MoveKind => (m <= 0.9 ? 'light' : m <= 1.2 ? 'medium' : 'heavy');
     for (const form of registry.getArpgData().forms)
-      expect(form.defaultChain, form.id).toEqual((old[form.id] ?? [1]).map(kind));
+      expect(form.defaultChain, form.id).toEqual(want[form.id] ?? [M]);
     expect(registry.getForm('volley').countByKind).toEqual({
       light: 3,
       medium: 3,
@@ -336,7 +341,7 @@ describe('resolving a chain', () => {
     });
     expect(defaultChains(registry, 'frost', null).primary.moves.map((x) => x.kind)).toEqual([
       'light',
-      'light',
+      'medium',
       'medium',
       'heavy',
     ]);
@@ -838,6 +843,22 @@ describe('holds', () => {
     expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(1);
   });
 
+  it('is deterministic: the same inputs give the same events twice, chains and holds included', () => {
+    const play = () => {
+      const w = arena([dummy(13, 30), dummy(15, 30)], {
+        primary: { moves: [m('light'), m('hold'), m('heavy')] },
+        defensive: { moves: [m('medium', 'ward'), m('medium', 'blink')] },
+      });
+      const events: ArpgEvent[] = [];
+      for (let i = 0; i < Math.round(6 / STEP); i++)
+        events.push(...stepWorld(registry, w, botInput(registry, w), STEP));
+      return events;
+    };
+    const events = play();
+    expect(events.some((e) => e.kind === 'holdStage')).toBe(true);
+    expect(play()).toEqual(events);
+  });
+
   it('the bot charges a hold to full, then lets go', () => {
     const w = holder();
     w.hero.cooldowns[1] = [1e9];
@@ -1046,7 +1067,7 @@ describe('save v5', () => {
     const cases: [AbilityBuild, MoveKind[]][] = [
       [
         { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' },
-        ['light', 'light', 'medium', 'heavy'],
+        ['light', 'medium', 'medium', 'heavy'],
       ],
       [
         { form: 'volley', elements: ['fire'], weight: 0, payment: 'mana' },
@@ -1062,7 +1083,7 @@ describe('save v5', () => {
       ],
       [
         { form: 'strike', elements: ['fire'], weight: 0, payment: 'mana' },
-        ['medium', 'medium', 'medium', 'heavy'],
+        ['medium', 'medium', 'heavy', 'heavy'],
       ],
       [
         { form: 'bolt', elements: ['fire'], weight: -2, payment: 'mana' },

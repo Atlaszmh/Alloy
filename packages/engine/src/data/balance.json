@@ -172,7 +172,7 @@
       "cap": { "basic": 5, "primary": 5, "defensive": 5, "ultimate": 5 },
       "kindWeight": { "light": -1, "medium": 0, "heavy": 1 },
       "holdStageWeight": [0, 1, 2], "holdTime": 1.0, "holdMax": 2.0, "holdStages": [0.33, 0.66],
-      "stepBonus": 0.1
+      "stepBonus": 0.15
     },
     "dodge": {
       "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,

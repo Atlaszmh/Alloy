@@ -12,7 +12,7 @@
     {
       "id": "bolt", "slot": "primary", "name": "Bolt", "icon": "☄️",
       "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "motion": -0.15,
-      "defaultChain": ["light", "light", "medium", "heavy"],
+      "defaultChain": ["light", "medium", "medium", "heavy"],
       "text": "A bolt that bursts on the first foe it hits. Each later move of a chain hits harder and bursts wider."
     },
     {
@@ -36,7 +36,7 @@
     {
       "id": "strike", "slot": "primary", "name": "Strike", "icon": "⚔️",
       "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "motion": 0.5,
-      "defaultChain": ["medium", "medium", "medium", "heavy"],
+      "defaultChain": ["medium", "medium", "heavy", "heavy"],
       "text": "An element-infused sweep in front of you. The last move of a chain slams everything around you."
     },
     {

@@ -178,7 +178,7 @@ describe('dpsCombos', () => {
     });
     // A form's default chain: what a held button plays.
     expect(setup('ability|strike|frost|fire|default|mana').chains.primary).toEqual({
-      moves: ['medium', 'medium', 'medium', 'heavy'].map((kind) => ({
+      moves: ['medium', 'medium', 'heavy', 'heavy'].map((kind) => ({
         kind,
         form: 'strike',
         elements: ['frost', 'fire'],
@@ -252,11 +252,11 @@ describe('simulateDps', () => {
     );
     const casts = events.filter((e) => e.kind === 'cast' && e.slot === 0);
     expect(out.casts).toBe(casts.length);
-    // Light, light, medium, heavy: the last lands 0.2 heftier.
+    // Light, medium, medium, heavy: the last lands 0.2 heftier.
     const heft = bal.feel.heft;
     expect(casts.slice(0, 4).map((e) => e.kind === 'cast' && e.heft)).toEqual([
       heft[1],
-      heft[1],
+      heft[2],
       heft[2],
       Math.min(1, heft[3] + 0.2),
     ]);
