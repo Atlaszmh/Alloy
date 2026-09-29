@@ -37,7 +37,7 @@ import { generateItem } from '../src/loot/item-generator.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
-import type { DelveProfile, HeroWeapon, ManaPair } from '../src/types/delve.js';
+import type { DelveProfile, ManaPair } from '../src/types/delve.js';
 import {
   GEAR_SLOTS,
   type GearItem,
@@ -136,39 +136,42 @@ describe('stats with a pair', () => {
     });
   });
 
-  it('blows strike with the primary and the finisher discharges a bound secondary, stronger with attunement', () => {
+  it("the pair's default basic chain: blows of the primary, the last the bound secondary, each powered by its element", () => {
     const staff = { weapon: gear('frost', 'weapon', 'staff') }; // frost 1
-    const weapon = (extra: HeroStatsExtra) => computeHeroStats(staff, registry, extra).weapon;
-    expect(weapon({})).toMatchObject({
-      element: 'frost',
-      infusion: null,
-      blowPower: 1,
-      finisherPower: 1,
-    });
-    expect(weapon({ pair: { primary: 'fire', secondary: null } })).toMatchObject({
-      element: 'fire',
-      infusion: null,
-      blowPower: 1,
-      finisherPower: 1,
-    });
-    const paired = weapon({
+    const blows = (extra: HeroStatsExtra) => computeHeroStats(staff, registry, extra).weapon.blows;
+    const elements = (extra: HeroStatsExtra) => blows(extra).map((b) => b.element);
+    const power = (extra: HeroStatsExtra) => blows(extra).map((b) => b.attunePower);
+    // No pair yet: the weapon's mana, and no attunement power.
+    expect(elements({})).toEqual(['frost', 'frost', 'frost']);
+    expect(power({})).toEqual([1, 1, 1]);
+    expect(elements({ pair: { primary: 'fire', secondary: null } })).toEqual([
+      'fire',
+      'fire',
+      'fire',
+    ]);
+    expect(power({ pair: { primary: 'fire', secondary: null } })).toEqual([1, 1, 1]);
+    const paired = {
       pair: { primary: 'fire', secondary: 'frost' },
       attunement: { fire: 4 },
-    });
-    expect(paired).toMatchObject({ element: 'fire', infusion: 'frost' });
-    expect(paired.blowPower).toBeCloseTo(1 + 4 * k);
-    expect(paired.finisherPower).toBeCloseTo(1 + 1 * k); // the frost staff's own 1
-    // No secondary: the finisher stays the primary, just as strong.
-    const solo = weapon({ pair: { primary: 'frost', secondary: null } });
-    expect(solo.blowPower).toBeGreaterThan(1);
-    expect(solo.finisherPower).toBe(solo.blowPower);
+    } as const;
+    expect(elements(paired)).toEqual(['fire', 'fire', 'frost']);
+    expect(power(paired)[0]).toBeCloseTo(1 + 4 * k);
+    expect(power(paired)[2]).toBeCloseTo(1 + 1 * k); // the frost staff's own 1
     // A secondary equal to the primary is unbound.
-    expect(weapon({ pair: { primary: 'fire', secondary: 'fire' } }).infusion).toBeNull();
-    // Unarmed, you punch with your primary.
-    expect(
-      computeHeroStats({}, registry, { pair: { primary: 'storm', secondary: 'nature' } }).weapon,
-    ).toMatchObject({ baseId: null, element: 'storm', infusion: 'nature' });
-    expect(computeHeroStats({}, registry).weapon).toMatchObject({ element: null, infusion: null });
+    expect(elements({ pair: { primary: 'fire', secondary: 'fire' } })).toEqual([
+      'fire',
+      'fire',
+      'fire',
+    ]);
+    // Unarmed, you punch with your pair; with no pair and no weapon, with fire.
+    const bare = (pair?: ManaPair) =>
+      computeHeroStats({}, registry, { pair }).weapon.blows.map((b) => b.element);
+    expect(bare({ primary: 'storm', secondary: 'nature' })).toEqual(['storm', 'storm', 'nature']);
+    expect(bare()).toEqual(['fire', 'fire', 'fire']);
+    // The hero's own basic chain wins over the default.
+    expect(elements({ ...paired, basic: [{ kind: 'heavy', element: 'frost' }] })).toEqual([
+      'frost',
+    ]);
   });
 });
 
@@ -177,16 +180,28 @@ describe('Power values the pair', () => {
   const solo: ManaPair = { primary: 'fire', secondary: null };
   const bound: ManaPair = { primary: 'fire', secondary: 'storm' };
 
-  it('estimateCombat reads blowPower for ordinary blows and finisherPower for the finisher', () => {
+  it("estimateCombat values each blow by its element's attunement power", () => {
     const stats = computeHeroStats({ weapon }, registry, { pair: bound });
-    const dps = (w: Partial<HeroWeapon>) =>
-      estimateCombat({ ...stats, weapon: { ...stats.weapon, ...w } }, registry, 3).dps;
-    const base = dps({});
-    expect(dps({ blowPower: stats.weapon.blowPower * 2 })).toBeGreaterThan(base);
-    expect(dps({ finisherPower: stats.weapon.finisherPower * 2 })).toBeGreaterThan(base);
+    const dps = (i: number) =>
+      estimateCombat(
+        {
+          ...stats,
+          weapon: {
+            ...stats.weapon,
+            blows: stats.weapon.blows.map((b, j) =>
+              j === i ? { ...b, attunePower: b.attunePower * 2 } : b,
+            ),
+          },
+        },
+        registry,
+        3,
+      ).dps;
+    const base = dps(-1);
+    expect(dps(0)).toBeGreaterThan(base);
+    expect(dps(2)).toBeGreaterThan(base);
   });
 
-  it("the finisher strikes with the secondary's element power", () => {
+  it("the last blow strikes with the secondary's element power", () => {
     const plain = item('fire', 'ring');
     const charged = item('fire', 'ring', [['stormPower', 50]]);
     const dps = (pair: ManaPair, ring: GearItem) =>
@@ -195,19 +210,26 @@ describe('Power values the pair', () => {
     expect(dps(solo, charged)).toBe(dps(solo, plain)); // no storm anywhere: no gain
   });
 
-  it("Twin Fang's extra hit is worth the finisher, not the string's average", () => {
-    // Two strings worth the same without Twin Fang: one's finisher discharges storm
+  it("Twin Fang's extra hit is worth the last blow, not the chain's average", () => {
+    // Two chains worth the same without Twin Fang: one's last blow strikes with storm
     // power, the other's blows all carry the fire power that evens them out. Nature
     // abilities (no power either way) keep everything else equal.
     const stats = computeHeroStats({ weapon }, registry, { pair: bound });
-    const combo = stats.weapon.combo;
-    const last = combo[combo.length - 1].power;
-    const even = (0.5 * last) / combo.reduce((a, s) => a + s.power, 0);
-    const dps = (infusion: ManaType | null, power: Partial<ManaMap>, twin: number) =>
+    const blows = stats.weapon.blows;
+    const last = blows[blows.length - 1].power;
+    const even = (0.5 * last) / blows.reduce((a, s) => a + s.power, 0);
+    const dps = (lastElement: ManaType, power: Partial<ManaMap>, twin: number) =>
       estimateCombat(
         {
           ...stats,
-          weapon: { ...stats.weapon, infusion, blowPower: 1, finisherPower: 1 },
+          weapon: {
+            ...stats.weapon,
+            blows: blows.map((b, i) => ({
+              ...b,
+              attunePower: 1,
+              element: i === blows.length - 1 ? lastElement : 'fire',
+            })),
+          },
           elementPower: { ...stats.elementPower, fire: 0, storm: 0, ...power },
           legendaries: { twin_fang: twin },
         },
@@ -216,7 +238,7 @@ describe('Power values the pair', () => {
         defaultChains(registry, 'nature', 'sword'),
       ).dps;
     const discharge = (twin: number) => dps('storm', { storm: 0.5 }, twin);
-    const solo = (twin: number) => dps(null, { fire: even }, twin);
+    const solo = (twin: number) => dps('fire', { fire: even }, twin);
     expect(discharge(0)).toBeCloseTo(solo(0), 6);
     expect(discharge(100) / solo(100)).toBeGreaterThan(1.01);
   });
@@ -593,15 +615,15 @@ describe('basic attacks with a pair', () => {
   const FIRE_STORM: HeroStatsExtra = { pair: { primary: 'fire', secondary: 'storm' } };
   const k = bal.pair.basicPowerPerAttune;
 
-  it('blows strike with the primary; the finisher with the secondary, always applying its status', () => {
+  it('on the default chain, blows strike with the primary, the last with the secondary, always applying its status', () => {
     const blow = firstBlow(strikeWorld(sword, FIRE_STORM));
-    expect(only(blow, 'basic')[0]).toMatchObject({ element: 'fire', finisher: false });
+    expect(only(blow, 'basic')[0]).toMatchObject({ element: 'fire', moveKind: 'light' });
     expect(only(blow, 'hit').map((h) => h.element)).toEqual(['fire']);
     const w = strikeWorld(sword, FIRE_STORM, true);
     const fin = firstBlow(w);
-    expect(only(fin, 'basic')[0]).toMatchObject({ element: 'storm', finisher: true });
+    expect(only(fin, 'basic')[0]).toMatchObject({ element: 'storm', moveKind: 'heavy' });
     expect(only(fin, 'hit').map((h) => h.element)).toEqual(['storm']);
-    // No 30% roll: every finisher shocks (fresh rolls each time), and none burns.
+    // No 30% roll: every last blow shocks (fresh rolls each time), and none burns.
     for (let seed = 0; seed < 12; seed++) {
       const f = strikeWorld(sword, FIRE_STORM, true);
       f.rng = new SeededRNG(seed);
@@ -619,16 +641,16 @@ describe('basic attacks with a pair', () => {
     expect(only(firstBlow(w), 'reaction').map((e) => e.reaction)).toContain('overload');
   });
 
-  it("Twin Fang's extra hit follows the finisher's element", () => {
+  it("Twin Fang's extra hit follows the last blow's element", () => {
     const w = strikeWorld(sword, { ...FIRE_STORM, legendaries: { twin_fang: 100 } }, true);
     const hits = only(firstBlow(w), 'hit').filter((h) => h.source === 'basic');
     expect(hits.map((h) => h.element)).toEqual(['storm', 'storm']);
   });
 
-  it("a ranged finisher's shot carries the secondary, and its great-orb burst no infusion", () => {
+  it("a ranged last blow's shot carries the secondary, and its great-orb burst no infusion", () => {
     const w = strikeWorld(staff, FIRE_STORM, true, dummy(13, 30));
     const events = firstBlow(w);
-    expect(only(events, 'basic')[0]).toMatchObject({ element: 'storm', finisher: true });
+    expect(only(events, 'basic')[0]).toMatchObject({ element: 'storm', moveKind: 'heavy' });
     w.hero.nextAttackAt = 1e9; // just this shot
     events.push(...run(w, 1));
     const bursts = only(events, 'explode');
@@ -639,14 +661,14 @@ describe('basic attacks with a pair', () => {
     for (const h of hits) expect(h.element).toBe('storm');
   });
 
-  it('unarmed punches with the primary; without a secondary the finisher stays the primary', () => {
+  it('unarmed punches with the primary; without a secondary the last blow stays the primary', () => {
     const punch = firstBlow(strikeWorld({}, { pair: { primary: 'frost', secondary: null } }));
     expect(only(punch, 'hit')[0].element).toBe('frost');
     const solo = strikeWorld(sword, { pair: { primary: 'fire', secondary: null } }, true);
-    expect(only(firstBlow(solo), 'basic')[0]).toMatchObject({ element: 'fire', finisher: true });
+    expect(only(firstBlow(solo), 'basic')[0]).toMatchObject({ element: 'fire', moveKind: 'heavy' });
   });
 
-  it('attunement powers each: blows by the primary, the finisher by the secondary', () => {
+  it('attunement powers each blow by its element: the primary, then the secondary last', () => {
     const amount = (extra: HeroStatsExtra, finisher: boolean) =>
       only(firstBlow(strikeWorld(sword, extra, finisher)), 'hit')[0].amount;
     const blow = amount(FIRE_STORM, false); // the sword's own fire 1

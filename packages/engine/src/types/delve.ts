@@ -26,7 +26,7 @@ export interface WeaponAttackDef {
   pierce?: boolean;
 }
 
-/** One blow of a weapon's basic-attack string (`delve.json` weapon `combo`). */
+/** A basic blow's row: the weapon's (`delve.json` weapon `feel`) for its kind. */
 export interface ComboStepDef {
   /** Share of the attack interval this blow takes: its cycle is `attackInterval × time`. */
   time: number;
@@ -62,8 +62,6 @@ export interface GearBaseDef {
   attackInterval?: number;
   /** Weapons only: basic-attack profile. */
   attack?: WeaponAttackDef;
-  /** Weapons only: the basic-attack string (else the hero's default string). */
-  combo?: ComboStepDef[];
   /** Weapons only: a blow's row by its kind (else the hero's). */
   feel?: Record<MoveKind, ComboStepDef>;
   /** Weapons only: the basic chain a new hero gets (else the hero's). */
@@ -268,10 +266,8 @@ export interface DelveBalance {
     baseCritMultiplier: number;
     unarmedDamage: number;
     unarmedInterval: number;
-    /** The melee combo resets after a pause longer than the attack interval plus this. */
+    /** The basic chain restarts after a pause longer than the attack interval plus this. */
     basicComboGrace: number;
-    /** The string for weapons without one (and unarmed). */
-    defaultCombo: ComboStepDef[];
     /** Unarmed: a blow's row by its kind. */
     feel: Record<MoveKind, ComboStepDef>;
     /** Unarmed: the default basic chain. */
@@ -441,9 +437,6 @@ export interface DelveBalance {
     duration: Record<ManaType, number>;
     /** An ability's direct hit, by weight: Swift, Light, Balanced, Heavy, Crushing. */
     byWeight: number[];
-    basicBlow: number;
-    /** A combo's finisher, and its discharge of the secondary. */
-    basicFinisher: number;
     /** A basic blow's stacks, by its kind. */
     basicByKind: Record<MoveKind, number>;
     /** Every other hit that applies statuses: zone ticks, embers, chain jumps, retaliation… */
@@ -549,6 +542,14 @@ export interface DelveBalance {
 
 // ── Hero at runtime ────────────────────────────────────────────────────────
 
+/** One blow of the hero's basic chain: the weapon's row for its kind, in its element. */
+export interface HeroBlow extends ComboStepDef {
+  kind: MoveKind;
+  element: ManaType;
+  /** Its damage multiplier: 1 + basicPowerPerAttune × its element's attunement (1 without a pair). */
+  attunePower: number;
+}
+
 export interface HeroWeapon {
   baseId: string | null;
   kind: 'melee' | 'bolt';
@@ -556,19 +557,10 @@ export interface HeroWeapon {
   arc: number;
   speed: number;
   pierce: boolean;
-  /** Element of basic blows: the pair's primary (even unarmed), else the weapon's mana (null unarmed). */
-  element: ManaType | null;
-  /**
-   * The pair's bound secondary, or null: the combo's finisher discharges it,
-   * and ordinary blows draw it as their motif (see the elemental affinity spec).
-   */
-  infusion: ManaType | null;
-  /** Ordinary blows' damage multiplier: 1 + basicPowerPerAttune × the primary's attunement (1 without a pair). */
-  blowPower: number;
-  /** The finisher's: by the secondary's attunement (equal to `blowPower` with no secondary). */
-  finisherPower: number;
-  /** The basic-attack string, one entry per blow. */
-  combo: ComboStepDef[];
+  /** A blow's row by its kind (a manual hold blow's stages read medium, heavy and hold). */
+  feel: Record<MoveKind, ComboStepDef>;
+  /** The basic chain, one entry per blow (see the moves and chains spec). */
+  blows: HeroBlow[];
 }
 
 export interface HeroStats {

@@ -124,7 +124,7 @@ describe('basic attacks', () => {
 
   it("the sword's third blow is its finisher, harder than the first by the string's power", () => {
     const w = arena([dummy(13, 34.4)], { equipped: { weapon: gear('frost') } });
-    const [first, , third] = w.hero.stats.weapon.combo;
+    const [first, , third] = w.hero.stats.weapon.blows;
     expect(third.power).toBeGreaterThan(first.power);
     const hits = run(w, 3.5)
       .filter((e) => e.kind === 'hit' && !e.crit)

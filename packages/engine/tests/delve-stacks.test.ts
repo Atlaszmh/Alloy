@@ -59,8 +59,6 @@ describe('balance: delve.stacks', () => {
       cap: 5,
       duration: { fire: 3, frost: 3, storm: 4, earth: 2, shadow: 6, nature: 4 },
       byWeight: [1, 1, 2, 3, 3],
-      basicBlow: 1,
-      basicFinisher: 2,
       basicByKind: { light: 1, medium: 1, heavy: 2, hold: 2 },
       tick: 1,
       curve: [1, 1.8, 2.45, 3, 3.5],
@@ -159,7 +157,7 @@ describe('stacks', () => {
     m.status.stackUntil.fire = w.t + STEP / 2;
     expect(run(w, STEP).some((e) => e.kind === 'basic')).toBe(true);
     // The blow's own count and ref, not the stale five re-armed at 1e6.
-    expect(m.status.stacks.fire).toBe(bal.stacks.basicBlow);
+    expect(m.status.stacks.fire).toBe(bal.stacks.basicByKind.light);
     expect(m.status.burnRef).toBeLessThan(1e6);
   });
 
@@ -323,27 +321,30 @@ describe('freeze', () => {
 describe('stacks per hit', () => {
   const sword = { weapon: gear('fire') };
 
-  it('every blow applies basicBlow stacks, whatever the seed: no roll', () => {
+  it("every blow applies its kind's stacks, whatever the seed: no roll", () => {
     for (let seed = 1; seed <= 5; seed++) {
       const w = strikeWorld(sword, {});
       w.rng = new SeededRNG(seed);
       firstBlow(w);
       firstBlow(w);
-      expect(w.monsters[0].status.stacks.fire, `seed ${seed}`).toBe(2 * bal.stacks.basicBlow);
+      // The sword's first two blows are light.
+      expect(w.monsters[0].status.stacks.fire, `seed ${seed}`).toBe(
+        2 * bal.stacks.basicByKind.light,
+      );
     }
   });
 
-  it("a finisher applies basicFinisher of the secondary it discharges; Twin Fang's extra hit applies none", () => {
+  it("the sword's last blow, a heavy of the pair's secondary, applies a heavy's stacks; Twin Fang's extra hit none", () => {
     const pair = { pair: { primary: 'fire', secondary: 'storm' } } as const;
     const fin = strikeWorld(sword, pair, true);
     firstBlow(fin);
     expect(fin.monsters[0].status.stacks).toMatchObject({
-      storm: bal.stacks.basicFinisher,
+      storm: bal.stacks.basicByKind.heavy,
       fire: 0,
     });
     const twin = strikeWorld(sword, { ...pair, legendaries: { twin_fang: 100 } }, true);
     firstBlow(twin);
-    expect(twin.monsters[0].status.stacks.storm).toBe(bal.stacks.basicFinisher);
+    expect(twin.monsters[0].status.stacks.storm).toBe(bal.stacks.basicByKind.heavy);
   });
 
   it("a ranged blow's shot carries its count to what it hits", () => {
@@ -351,11 +352,11 @@ describe('stacks per hit', () => {
     firstBlow(w);
     expect(w.projectiles.find((p) => p.owner === 'hero')).toMatchObject({
       applies: ['burn'],
-      stacks: bal.stacks.basicBlow,
+      stacks: bal.stacks.basicByKind.light,
     });
     w.hero.nextAttackAt = 1e9;
     run(w, 1);
-    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicBlow);
+    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.light);
   });
 
   it("an ability's direct hit applies its weight's stacks", () => {
@@ -493,8 +494,8 @@ describe('pairing', () => {
       expect(fired(events), baseId).toEqual([]);
       // The finisher's own fresh stacks stay: the echo didn't Melt them.
       expect(w.monsters[0].status.stacks, baseId).toMatchObject({
-        frost: bal.stacks.basicFinisher,
-        fire: bal.stacks.basicFinisher,
+        frost: bal.stacks.basicByKind.heavy,
+        fire: bal.stacks.basicByKind.heavy,
       });
     }
   });

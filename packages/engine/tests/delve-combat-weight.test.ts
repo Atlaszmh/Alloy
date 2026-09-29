@@ -37,16 +37,16 @@ import {
 const weapons = registry.getDelveData().bases.filter((b) => b.slot === 'weapon');
 
 describe('combat weight data', () => {
-  it('every weapon swings a combo string, and the feel block loads', () => {
+  it('every weapon has a row per kind and a default chain, and the feel block loads', () => {
     expect(weapons.length).toBeGreaterThan(0);
     for (const w of weapons) {
-      expect(w.combo?.length, w.id).toBeGreaterThan(0);
-      for (const s of w.combo!) {
+      expect(w.defaultChain?.length, w.id).toBeGreaterThan(0);
+      for (const s of Object.values(w.feel!)) {
         expect(s.startup).toBeGreaterThan(0);
         expect(s.startup).toBeLessThan(1);
       }
     }
-    expect(bal.hero.defaultCombo.length).toBeGreaterThan(0);
+    expect(bal.hero.defaultChain.length).toBeGreaterThan(0);
     expect(bal.feel.conjure).toHaveLength(5);
     expect(bal.feel.lungeHold).toBeCloseTo(0.6);
     expect(registry.getForm('bolt').motion).toBeLessThan(0);
@@ -60,15 +60,27 @@ describe('combat weight data', () => {
       const today = melee ? 3.5 / 3 : 1;
       expect(Math.abs(power / time / today - 1), id).toBeLessThanOrEqual(0.1);
     };
-    for (const w of weapons) check(w.id, w.combo!, w.attack!.kind === 'melee');
-    check('default', bal.hero.defaultCombo, true);
+    for (const w of weapons)
+      check(
+        w.id,
+        w.defaultChain!.map((k) => w.feel![k]),
+        w.attack!.kind === 'melee',
+      );
+    check(
+      'default',
+      bal.hero.defaultChain.map((k) => bal.hero.feel[k]),
+      true,
+    );
   });
 
-  it('the hero carries the weapon string, and the default one when unarmed', () => {
+  it("the hero's blows are the weapon's rows along its default chain, and the unarmed ones", () => {
     const maul = computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry);
-    expect(maul.weapon.combo).toHaveLength(2);
-    expect(maul.weapon.combo).toEqual(registry.getGearBase('maul').combo);
-    expect(computeHeroStats({}, registry).weapon.combo).toEqual(bal.hero.defaultCombo);
+    const base = registry.getGearBase('maul');
+    expect(maul.weapon.blows.map((b) => b.kind)).toEqual(base.defaultChain);
+    expect(maul.weapon.blows[1]).toMatchObject(base.feel!.heavy);
+    const bare = computeHeroStats({}, registry).weapon;
+    expect(bare.blows.map((b) => b.kind)).toEqual(bal.hero.defaultChain);
+    expect(bare.feel).toEqual(bal.hero.feel);
   });
 });
 
@@ -221,7 +233,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.6);
     const y0 = w.hero.y;
-    const s = w.hero.stats.weapon.combo[0];
+    const s = w.hero.stats.weapon.blows[0];
     run(w, STEP);
     const sw = w.hero.swing!;
     expect(sw.committed).toBe(true);
@@ -368,14 +380,14 @@ describe('basic attacks: startup, strike, recovery', () => {
 });
 
 describe('weapon strings', () => {
-  it("the sword's third blow is the finisher thrust", () => {
+  it("the sword's third blow is its heavy thrust", () => {
     const w = arena([dummy(13, 0)]);
     place(w, 0.6);
     const all = until(w, () => w.hero.attackCount >= 3);
     const b = basics(all);
     expect(b.map((e) => e.kind === 'basic' && e.step)).toEqual([0, 1, 2]);
-    expect(b.map((e) => e.kind === 'basic' && e.finisher)).toEqual([false, false, true]);
-    const thrust = w.hero.stats.weapon.combo[2];
+    expect(b.map((e) => e.kind === 'basic' && e.moveKind)).toEqual(['light', 'light', 'heavy']);
+    const thrust = w.hero.stats.weapon.blows[2];
     expect(thrust.reach).toBeGreaterThan(0);
     expect(thrust.arc).toBeLessThan(w.hero.stats.weapon.arc);
   });
@@ -392,7 +404,7 @@ describe('weapon strings', () => {
       const input = { move: still, attack: true, attackAim: { x: m.x, y: m.y } };
       return { w, m, input };
     };
-    const [first, , thrust] = arena().hero.stats.weapon.combo;
+    const [first, , thrust] = arena().hero.stats.weapon.blows;
     const range = arena().hero.stats.weapon.range;
     expect(range + (first.reach ?? 0) + first.move).toBeLessThan(3.6);
     expect(range + thrust.move).toBeLessThan(3.6);
@@ -474,7 +486,7 @@ describe('weapon strings', () => {
     const y0 = w.hero.y;
     until(w, () => w.hero.attackCount >= 1);
     run(w, bal.feel.recoilSeconds + STEP);
-    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.combo[0].move, 2);
+    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.blows[0].move, 2);
 
     const m = arena([dummy(13, 30)], { equipped: wand });
     const my0 = m.hero.y;
@@ -497,7 +509,7 @@ describe('weapon strings', () => {
   it("the staff's great orb bursts at the end of its flight, hitting a foe beside it", () => {
     // Fired straight up; the foe stands beside where the flight ends, clear of the path.
     const w = arena([dummy(14.2, 0)], { equipped: { weapon: gear('fire', 'weapon', 'staff') } });
-    const orb = w.hero.stats.weapon.combo[2];
+    const orb = w.hero.stats.weapon.blows[2];
     w.monsters[0].y = w.hero.y - 0.5 - (w.hero.stats.weapon.range + 1.5);
     w.hero.attackCount = 2;
     w.hero.lastBasicAt = w.t;
@@ -553,7 +565,7 @@ describe('weapon strings', () => {
     expect(blows).toHaveLength(4);
     const [thrust, twin] = blows.slice(2) as Extract<ArpgEvent, { kind: 'hit' }>[];
     // Same swing, same crit roll and resistances: only the multipliers differ.
-    expect(twin.amount / thrust.amount).toBeCloseTo(1.5 / w.hero.stats.weapon.combo[2].power, 2);
+    expect(twin.amount / thrust.amount).toBeCloseTo(1.5 / w.hero.stats.weapon.blows[2].power, 2);
   });
 
   it('ranged Twin Fang fires a second shot at ×1.0, copying the size but never exploding', () => {
@@ -569,7 +581,7 @@ describe('weapon strings', () => {
     // It applies nothing: its stacks can only pair what the foe already has.
     expect(w.projectiles[1]).toMatchObject({ applies: [], stacks: 0 });
     expect(w.projectiles[1].damage / w.projectiles[0].damage).toBeCloseTo(
-      1 / w.hero.stats.weapon.combo[2].power,
+      1 / w.hero.stats.weapon.blows[2].power,
       5,
     );
   });
@@ -609,7 +621,7 @@ describe('presses held by a dash', () => {
       { move: still, attack: false, attackTap: true, dodge: true },
       STEP,
     );
-    const s = w.hero.stats.weapon.combo[0];
+    const s = w.hero.stats.weapon.blows[0];
     const startup = w.hero.stats.attackInterval * s.time * s.startup;
     // The dash, then the startup (a tick for the dodge to start, one of float drift, one to
     // reach the strike, a spare).
@@ -913,12 +925,12 @@ describe('bot and estimates', () => {
     expect(botInput(registry, w).cast?.slot).toBeUndefined();
   });
 
-  it('the Power estimate reads the weapon string', () => {
+  it('the Power estimate reads the blows', () => {
     const sword = computeHeroStats({ weapon: gear('fire', 'weapon', 'sword') }, registry);
     const maul = computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry);
     const a = estimateCombat(sword, registry, 5);
     const b = estimateCombat(
-      { ...sword, weapon: { ...sword.weapon, combo: maul.weapon.combo } },
+      { ...sword, weapon: { ...sword.weapon, blows: maul.weapon.blows } },
       registry,
       5,
     );

@@ -302,7 +302,7 @@ describe('marks', () => {
       element: 'earth',
       rattles: true,
       applies: ['stagger'],
-      stacks: bal.stacks.basicBlow,
+      stacks: bal.stacks.basicByKind.light,
     });
     shot.hero.nextAttackAt = 1e9;
     run(shot, 1);

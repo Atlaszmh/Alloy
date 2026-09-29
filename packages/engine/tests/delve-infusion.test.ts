@@ -33,17 +33,19 @@ function cast(c: (typeof CASES)[number], elements: ManaType[]): ArpgEvent[] {
   return [...press(w, c.slot, { x: 13, y: 34 }), ...run(w, 1)];
 }
 
-describe('the weapon infusion', () => {
-  const staff = { weapon: gear('fire', 'weapon', 'staff') };
-
-  it("is the pair's bound secondary; none without one, or when it equals the primary", () => {
-    const pair = (secondary: ManaType | null) => ({
-      pair: { primary: 'fire' as const, secondary },
+describe('basic attacks', () => {
+  it('draw no infusion: a blow has one element, and so does its burst', () => {
+    const staff = { weapon: gear('fire', 'weapon', 'staff') };
+    const w = arena([dummy(13, 30)], { equipped: staff });
+    w.hero.stats = computeHeroStats(staff, registry, {
+      pair: { primary: 'fire', secondary: 'storm' },
     });
-    expect(computeHeroStats(staff, registry).weapon.infusion).toBeNull();
-    expect(computeHeroStats(staff, registry, pair('storm')).weapon.infusion).toBe('storm');
-    expect(computeHeroStats(staff, registry, pair('fire')).weapon.infusion).toBeNull();
-    expect(computeHeroStats(staff, registry, pair(null)).weapon.infusion).toBeNull();
+    w.hero.attackCount = 2;
+    w.hero.lastBasicAt = 0;
+    const events = run(w, 1.5);
+    const bursts = only(events, 'explode');
+    expect(bursts.length).toBeGreaterThan(0);
+    for (const e of bursts) expect(e.infusion).toBeNull();
   });
 });
 

@@ -61,8 +61,11 @@ describe('computeHeroStats', () => {
     });
     const s = computeHeroStats({ weapon: staff }, registry);
     expect(s.weapon.kind).toBe('bolt');
-    expect(s.weapon.element).toBe('frost');
-    expect(computeHeroStats({}, registry).weapon.element).toBeNull();
+    // With no pair yet, the blows strike with the weapon's mana; unarmed, with fire.
+    expect(s.weapon.blows.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
+    expect(computeHeroStats({}, registry).weapon.blows.every((b) => b.element === 'fire')).toBe(
+      true,
+    );
   });
 
   it('uses the weapon base interval and sums flat damage from every slot', () => {

@@ -174,7 +174,7 @@ export function damaged(m: MonsterEntity): boolean {
 
 /**
  * One sturdy foe (in a sword's reach by default), the hero's stats from `extra`;
- * `finisher` starts on the string's last blow.
+ * `finisher` starts on the basic chain's last blow.
  */
 export function strikeWorld(
   equipped: EquippedGear,
@@ -185,7 +185,7 @@ export function strikeWorld(
   const w = arena([foe], { equipped });
   w.hero.stats = computeHeroStats(equipped, registry, extra);
   if (finisher) {
-    w.hero.attackCount = w.hero.stats.weapon.combo.length - 1;
+    w.hero.attackCount = w.hero.stats.weapon.blows.length - 1;
     w.hero.lastBasicAt = 0;
   }
   return w;

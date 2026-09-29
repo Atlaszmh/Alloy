@@ -25,7 +25,7 @@ import { impact } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
-import { burstShot, startSwing, strike } from './basic.js';
+import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
 import { cancelSwing, pushTick } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
@@ -197,7 +197,12 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     h.facing = { x: v.x / speed, y: v.y / speed };
   }
 
-  if (h.swing && t >= h.swing.strikeAt - 1e-9) strike(ctx);
+  if (h.swing && t >= h.swing.strikeAt - 1e-9) {
+    // A manual hold blow holds at its strike point while the attack stays held.
+    if (input.attack !== undefined && h.stats.weapon.blows[h.swing.step].kind === 'hold')
+      basicHoldTick(ctx, input.attack, dt);
+    else strike(ctx);
+  }
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.
   if (input.attack === undefined) world.queuedAttack = null;
   // A tap held by a dash, a wind-up, a hold, a swing, a push or the weapon's cycle doesn't age either.

@@ -1,16 +1,18 @@
 import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
+import { HOLD_STAGE_KINDS } from '../types/ability.js';
 import type { DelveBalance } from '../types/delve.js';
-import type { ManaType } from '../types/mana.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { startPush } from './action.js';
+import { holdCharge } from './abilities/cast.js';
 import { surging } from './abilities/defend.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
- * The basic attack: each blow of the weapon's string has a startup (a
- * committed melee blow lunges in), a strike, and a recovery that slows
- * movement. See the combat weight spec.
+ * The basic attack: each blow of the hero's basic chain (its kind's row, in
+ * its element) has a startup (a committed melee blow lunges in), a strike,
+ * and a recovery that slows movement. See the combat weight and the moves and
+ * chains specs.
  */
 
 function haste(ctx: SimCtx): number {
@@ -34,17 +36,18 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
   return best;
 }
 
-/** The blow of the weapon's string the next swing makes: the string restarts after a pause. */
+/** The blow of the basic chain the next swing makes: the chain restarts after a pause. */
 export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
   if (t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace) return 0;
-  return h.attackCount % h.stats.weapon.combo.length;
+  return h.attackCount % h.stats.weapon.blows.length;
 }
 
 /**
- * Start the next blow of the string when the weapon is ready. Automatic: only
+ * Start the next blow of the chain when the weapon is ready. Automatic: only
  * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
  * reach, else straight ahead. A committed swing roots the hero, lunges and
- * ends any recovery. Returns whether a swing started.
+ * ends any recovery; a manual hold blow starts as a medium one (it holds at
+ * its strike point: see `basicHoldTick`). Returns whether a swing started.
  */
 export function startSwing(
   ctx: SimCtx,
@@ -59,7 +62,8 @@ export function startSwing(
   const w = h.stats.weapon;
   const step = basicStep(h, t, bal);
   h.attackCount = step;
-  const s = w.combo[step];
+  const blow = w.blows[step];
+  const s = manual && blow.kind === 'hold' ? w.feel.medium : blow;
   const melee = w.kind === 'melee';
   const lunge = melee && committed ? Math.max(0, s.move) : 0;
   const reach = w.range + (melee ? (s.reach ?? 0) : 0);
@@ -84,6 +88,7 @@ export function startSwing(
     strikeAt: t + startup,
     cycle,
     committed,
+    held: null,
   };
   h.nextAttackAt = t + cycle;
   // An automatic swing on the move leaves an ability's recovery alone.
@@ -97,36 +102,56 @@ export function startSwing(
   return true;
 }
 
-/** Land the swing's blow from where the hero stands now. */
-export function strike(ctx: SimCtx): void {
+/**
+ * A manual hold blow at its strike point: while the attack stays held it
+ * charges (stages by `holdStages`, saying so), and it strikes with its
+ * stage's row when the attack lets go or at `holdMax` (stage 2).
+ */
+export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number): void {
+  const { world, bal } = ctx;
+  const sw = world.hero.swing!;
+  const t = world.t;
+  sw.held ??= t;
+  const { stage } = holdCharge(bal, sw.held, t);
+  if (t - sw.held >= bal.chains.holdMax - 1e-9) return strike(ctx, 2);
+  if (!held) return strike(ctx, stage);
+  if (stage > holdCharge(bal, sw.held, t - dt).stage)
+    ctx.events.push({ kind: 'holdStage', slot: null, stage });
+}
+
+/**
+ * Land the swing's blow from where the hero stands now: in its element, with
+ * its power and its kind's stacks. A held blow (`stage`) strikes with that
+ * stage's row (medium, heavy, hold) and takes its time from it.
+ */
+export function strike(ctx: SimCtx, stage: number | null = null): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const sw = h.swing;
   if (!sw) return;
   h.swing = null;
   const w = h.stats.weapon;
-  const s = w.combo[sw.step];
+  const blow = w.blows[sw.step];
+  const kind = stage === null ? blow.kind : HOLD_STAGE_KINDS[stage];
+  const s = stage === null ? blow : w.feel[kind];
   // The lunge belongs to the swing and ends with it (no other push runs during a swing).
   h.push = null;
-  const last = sw.step === w.combo.length - 1;
+  const last = sw.step === w.blows.length - 1;
   h.attackCount++;
   h.lastBasicAt = world.t;
 
   const surge = surging(ctx);
-  // The finisher discharges a bound secondary (weapon.infusion); every other blow strikes
-  // with the primary. Each grows with its element's attunement (blowPower / finisherPower).
-  const discharge = last && w.infusion !== null;
-  const element: ManaType | null = discharge ? w.infusion : w.element;
-  const unit = h.stats.weaponDamage * h.stats.damageMult * (last ? w.finisherPower : w.blowPower);
+  const element = blow.element;
+  const unit = h.stats.weaponDamage * h.stats.damageMult * blow.attunePower;
   const base = unit * s.power;
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
   const twin = twinPct > 0 && last;
-  // Every blow applies its element's stacks (a Surge's statuses ride along), the finisher more.
+  // Every blow applies its element's stacks, by its kind (a Surge's statuses ride along).
   const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
-  if (element && !applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
+  if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
   if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
-  const stacks = last ? bal.stacks.basicFinisher : bal.stacks.basicBlow;
-  // An Earth blow (a discharge included) or an Earth Surge's statuses: its stagger adds Earth stacks.
+  const stacks = bal.stacks.basicByKind[kind];
+  // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
   const rattles = element === 'earth' || !!surge?.elements.includes('earth');
   const dir = sw.dir;
 
@@ -157,7 +182,7 @@ export function strike(ctx: SimCtx): void {
         ...kb,
       });
       // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks and pairs
-      // nothing (it would only Melt the finisher's own fresh stacks).
+      // nothing (it would only react with the last blow's own fresh stacks).
       if (twin)
         hitMonster(ctx, m, unit * 1.5 * twinPct, element, {
           source: 'basic',
@@ -216,12 +241,15 @@ export function strike(ctx: SimCtx): void {
     melee: w.kind === 'melee',
     heft: s.heft,
     step: sw.step,
+    moveKind: kind,
     dir,
-    finisher: last,
   });
   if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+  // A held blow takes its time from its stage's row; its startup was spent holding.
+  const cycle = stage === null ? sw.cycle : (h.stats.attackInterval * s.time) / haste(ctx);
+  if (stage !== null) h.nextAttackAt = world.t + cycle * (1 - s.startup);
   if (sw.committed)
-    h.recoverUntil = Math.min(h.nextAttackAt, world.t + sw.cycle * bal.feel.basicRecovery);
+    h.recoverUntil = Math.min(h.nextAttackAt, world.t + cycle * bal.feel.basicRecovery);
 }
 
 /** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */
@@ -233,11 +261,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
     y: p.y,
     radius: p.explodeRadius,
     element: p.element,
-    // The motif only when the body isn't already that element (a finisher's discharge).
-    infusion:
-      p.element === ctx.world.hero.stats.weapon.infusion
-        ? null
-        : ctx.world.hero.stats.weapon.infusion,
+    infusion: null,
   });
   for (const m of alive(ctx)) {
     if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;

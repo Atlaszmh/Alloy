@@ -248,9 +248,11 @@ export function refreshWorldHero(
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
   const pool = manaPool(stats, registry);
-  // A different weapon starts its own string: a blow in progress (and its lunge) is dropped
-  // and the weapon is ready. Other gear changes leave the swing alone.
-  if (stats.weapon.baseId !== h.stats.weapon.baseId) {
+  // A different weapon, or a basic chain whose blows changed (their kinds or number), starts
+  // its own string: a blow in progress (and its lunge) is dropped and the weapon is ready.
+  // Other changes leave the swing alone.
+  const kinds = (s: HeroStats) => s.weapon.blows.map((b) => b.kind).join();
+  if (stats.weapon.baseId !== h.stats.weapon.baseId || kinds(stats) !== kinds(h.stats)) {
     if (h.swing) {
       h.swing = null;
       h.push = null;

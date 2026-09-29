@@ -338,6 +338,8 @@ export interface HeroEntity {
     cycle: number;
     /** Committed swings root the hero, lunge and leave a recovery (automatic swings on the move don't). */
     committed: boolean;
+    /** A manual hold blow held at its strike point: since when (else null). */
+    held: number | null;
   } | null;
   /** Motion an action imposes (a lunge, a step-in or a recoil), placed by progress; it replaces move input. */
   push: {
@@ -467,8 +469,8 @@ export type ArpgEvent =
       heft: number;
     }
   | { kind: 'windup'; slot: number; until: number; heft: number }
-  /** A hold reached a new stage (1, then 2). */
-  | { kind: 'holdStage'; slot: number; stage: number }
+  /** A hold reached a new stage (1, then 2): an ability slot's, or the basic attack's (null). */
+  | { kind: 'holdStage'; slot: number | null; stage: number }
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
   | { kind: 'barrierBreak'; x: number; y: number }
@@ -481,9 +483,9 @@ export type ArpgEvent =
       width: number;
       element: ManaType;
       /**
-       * Display data: the ability's second element (the weapon's, for a basic
-       * burst), drawn as its motif; null for one element, ticks, monsters and
-       * reactions. The same on `slash`, `explode` and `dash`.
+       * Display data: the ability's second element, drawn as its motif; null for
+       * one element, basic attacks, ticks, monsters and reactions. The same on
+       * `slash`, `explode` and `dash`.
        */
       infusion: ManaType | null;
     }
@@ -504,12 +506,13 @@ export type ArpgEvent =
       y: number;
       tx: number;
       ty: number;
-      element: ManaType | null;
+      element: ManaType;
       melee: boolean;
       heft: number;
+      /** The blow of the basic chain, and the kind it struck as (a held blow's stage's). */
       step: number;
+      moveKind: MoveKind;
       dir: Vec;
-      finisher: boolean;
     }
   | { kind: 'chain'; points: Vec[]; element: ManaType }
   | {

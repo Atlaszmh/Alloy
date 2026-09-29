@@ -14,12 +14,14 @@ import {
 import { botInput } from '../src/arpg/bot.js';
 import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
+import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
-import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import {
   CHAIN_SKILLS,
   MAX_CHAIN,
   MOVE_KINDS,
+  type Blow,
   type FormId,
   type Move,
   type MoveKind,
@@ -28,18 +30,22 @@ import type { ArpgEvent } from '../src/types/arpg.js';
 import type { ComboStepDef } from '../src/types/delve.js';
 import type { ManaType } from '../src/types/mana.js';
 import {
+  DEFAULT_CHAINS,
   STEP,
   arena,
   bal,
   chainsWith,
   dodge,
   dummy,
+  firstBlow,
+  gear,
   holdFor,
   moveOf,
   press,
   pressOnly,
   registry,
   run,
+  strikeWorld,
 } from './fixtures/arena.js';
 
 // See the moves and chains spec. The fixture arena's hero stands at (13, 36) facing up (−y);
@@ -839,5 +845,188 @@ describe('holds', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     expect(casts(events)).toHaveLength(1);
     expect(w.t - start).toBeGreaterThanOrEqual(bal.chains.holdTime - 1e-6);
+  });
+});
+
+describe('basics', () => {
+  const sword = { weapon: gear('fire') };
+  const still = { x: 0, y: 0 };
+  const basics = (events: ArpgEvent[]) =>
+    events.filter((e): e is Extract<ArpgEvent, { kind: 'basic' }> => e.kind === 'basic');
+
+  it("estimateCombat values each weapon's default chain as it valued its string (v0.45.0)", () => {
+    // A rare ilvl-12 Fire weapon on a Fire/Storm pair with Twin Fang 40, at depth 5; the
+    // abilities one medium move each (a Volley's, a Ward's, a Nova's numbers are as they were).
+    const today: Record<string, number> = {
+      unarmed: 13.233961,
+      dagger: 188.213808,
+      sword: 195.522722,
+      axe: 237.869592,
+      maul: 343.63993,
+      staff: 124.587614,
+      wand: 120.353622,
+      bow: 151.257273,
+    };
+    const one = (form: FormId, payment: 'mana' | 'charge') => ({
+      moves: [m('medium', form)],
+      payment,
+    });
+    const chains = {
+      primary: one('volley', 'mana'),
+      defensive: one('ward', 'mana'),
+      ultimate: one('nova', 'charge'),
+    };
+    for (const [id, dps] of Object.entries(today)) {
+      const weapon =
+        id === 'unarmed'
+          ? undefined
+          : sandboxWeapon(registry, { baseId: id, mana: 'fire', rarity: 'rare', ilvl: 12 });
+      const stats = computeHeroStats(weapon ? { weapon } : {}, registry, {
+        pair: { primary: 'fire', secondary: 'storm' },
+        legendaries: { twin_fang: 40 },
+      });
+      expect(estimateCombat(stats, registry, 5, chains).dps, id).toBeCloseTo(dps, 5);
+    }
+  });
+
+  it("each blow strikes in its own element, powered by its attunement, with its kind's stacks", () => {
+    const k = bal.pair.basicPowerPerAttune;
+    const w = strikeWorld(sword, {
+      pair: { primary: 'fire', secondary: 'frost' },
+      attunement: { frost: 5 },
+      basic: [
+        { kind: 'light', element: 'frost' },
+        { kind: 'heavy', element: 'fire' },
+      ],
+    });
+    const [a, b] = w.hero.stats.weapon.blows;
+    expect(a).toMatchObject({ kind: 'light', element: 'frost' });
+    expect(a.attunePower).toBeCloseTo(1 + 5 * k);
+    expect(b.attunePower).toBeCloseTo(1 + 1 * k); // the Fire sword's own 1
+    expect(basics(firstBlow(w))[0]).toMatchObject({ element: 'frost', moveKind: 'light', step: 0 });
+    expect(w.monsters[0].status.stacks).toMatchObject({
+      frost: bal.stacks.basicByKind.light,
+      fire: 0,
+    });
+    expect(basics(firstBlow(w))[0]).toMatchObject({ element: 'fire', moveKind: 'heavy', step: 1 });
+  });
+
+  it("Twin Fang doubles the chain's last blow, whatever its kind", () => {
+    const w = strikeWorld(sword, {
+      legendaries: { twin_fang: 100 },
+      basic: [
+        { kind: 'heavy', element: 'fire' },
+        { kind: 'light', element: 'fire' },
+      ],
+    });
+    const hits = (events: ArpgEvent[]) =>
+      events.filter((e) => e.kind === 'hit' && e.source === 'basic').length;
+    expect(hits(firstBlow(w))).toBe(1);
+    expect(hits(firstBlow(w))).toBe(2);
+  });
+
+  it("a manual hold blow holds at its strike point while the attack stays held, then strikes with its stage's row", () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const f = w.hero.stats.weapon.feel;
+    const iv = w.hero.stats.attackInterval;
+    const held = { move: still, attack: true };
+    stepWorld(registry, w, held, STEP);
+    const sw = w.hero.swing!;
+    // It starts as a medium blow.
+    expect(sw.strikeAt - sw.start).toBeCloseTo(iv * f.medium.time * f.medium.startup);
+    const events: ArpgEvent[] = [];
+    while (w.t < sw.strikeAt + 0.5) events.push(...stepWorld(registry, w, held, STEP));
+    expect(basics(events)).toHaveLength(0);
+    expect(events.filter((e) => e.kind === 'holdStage')).toEqual([
+      { kind: 'holdStage', slot: null, stage: 1 },
+    ]);
+    const release = stepWorld(registry, w, { move: still, attack: false }, STEP);
+    expect(basics(release)[0]).toMatchObject({ moveKind: 'heavy', heft: f.heavy.heft });
+    // Its startup was spent holding: the rest of the heavy row's cycle follows the release.
+    expect(w.hero.nextAttackAt).toBeCloseTo(w.t + iv * f.heavy.time * (1 - f.heavy.startup));
+    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.heavy);
+  });
+
+  it('a manual hold blow let go before its strike point strikes as a medium; held past holdMax, at stage 2', () => {
+    const tap = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const tapped = stepWorld(registry, tap, { move: still, attack: false, attackTap: true }, STEP);
+    for (let i = 0; i < 60 && basics(tapped).length === 0; i++)
+      tapped.push(...stepWorld(registry, tap, { move: still, attack: false }, STEP));
+    expect(basics(tapped)[0].moveKind).toBe('medium');
+
+    const long = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.chains.holdMax + 1) / STEP); i++)
+      events.push(...stepWorld(registry, long, { move: still, attack: true }, STEP));
+    expect(basics(events)[0].moveKind).toBe('hold');
+  });
+
+  it('an automatic hold blow plays the hold row straight: a slow, hard blow with its stacks', () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const f = w.hero.stats.weapon.feel;
+    run(w, STEP);
+    const sw = w.hero.swing!;
+    expect(sw.strikeAt - sw.start).toBeCloseTo(
+      w.hero.stats.attackInterval * f.hold.time * f.hold.startup,
+    );
+    expect(basics(firstBlow(w))[0]).toMatchObject({ moveKind: 'hold', heft: f.hold.heft });
+    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.hold);
+  });
+
+  it('an ability press while a manual hold blow charges cancels it unstruck', () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const held = { move: still, attack: true };
+    stepWorld(registry, w, held, STEP);
+    const sw = w.hero.swing!;
+    while (w.t < sw.strikeAt + 0.2) stepWorld(registry, w, held, STEP);
+    expect(w.hero.swing?.held).toBeTypeOf('number');
+    const events = stepWorld(registry, w, { ...held, cast: { slot: 0 } }, STEP);
+    events.push(...stepWorld(registry, w, { move: still, attack: false }, STEP));
+    expect(basics(events)).toHaveLength(0);
+    expect(w.hero.swing).toBeNull();
+    expect(w.hero.windup).not.toBeNull();
+  });
+
+  it('a manual attack held on charges each hold blow to holdMax', () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const blows: { t: number; kind: MoveKind }[] = [];
+    for (let i = 0; i < Math.round(6 / STEP); i++)
+      for (const e of basics(stepWorld(registry, w, { move: still, attack: true }, STEP)))
+        blows.push({ t: w.t, kind: e.moveKind });
+    expect(blows.map((b) => b.kind)).toEqual(['hold', 'hold']);
+    expect(blows[1].t - blows[0].t).toBeGreaterThan(bal.chains.holdMax);
+  });
+
+  it('a basic-chain edit that changes its blows drops a swing in flight, as a weapon swap does', () => {
+    // On the chain's third blow, winding up; then the chain becomes two blows.
+    const w = strikeWorld(sword, {}, true);
+    run(w, STEP);
+    expect(w.hero.swing?.step).toBe(2);
+    const two: Blow[] = [
+      { kind: 'light', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+    ];
+    refreshWorldHero(
+      registry,
+      w,
+      computeHeroStats(sword, registry, { basic: two }),
+      DEFAULT_CHAINS,
+    );
+    expect(w.hero.swing).toBeNull();
+    expect(basics(firstBlow(w))[0].step).toBe(0);
+    // Only the elements changed: the swing carries on.
+    const same = strikeWorld(sword, {}, true);
+    run(same, STEP);
+    const storm = same.hero.stats.weapon.blows.map((b) => ({
+      kind: b.kind,
+      element: 'storm' as const,
+    }));
+    refreshWorldHero(
+      registry,
+      same,
+      computeHeroStats(sword, registry, { basic: storm }),
+      DEFAULT_CHAINS,
+    );
+    expect(same.hero.swing?.step).toBe(2);
   });
 });

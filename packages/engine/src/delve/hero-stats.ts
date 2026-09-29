@@ -2,10 +2,11 @@ import type { DataRegistry } from '../data/registry.js';
 import {
   ABILITY_SLOTS,
   type AbilitySlot,
+  type Blow,
   type Chains,
   type ResolvedChain,
 } from '../types/ability.js';
-import { defaultChains, resolveChain, stepBonus } from '../arpg/abilities/resolve.js';
+import { defaultBasic, defaultChains, resolveChain, stepBonus } from '../arpg/abilities/resolve.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -88,13 +89,15 @@ export interface HeroStatsExtra {
   /** Attunement added per element. */
   attunement?: Partial<ManaMap>;
   /**
-   * The hero's pair, for basic attacks: blows strike with the primary (even
-   * unarmed) and the finisher discharges a bound secondary. A secondary equal
-   * to the primary counts as unbound.
+   * The hero's pair: its attunement powers basic blows, and with no `basic`
+   * the blows are the weapon's default chain on it (see `defaultBasic`). A
+   * secondary equal to the primary counts as unbound.
    */
   pair?: ManaPair;
   /** The two-element limit: with a pair primary, attunement counts only for the pair's elements. */
   filterAttunement?: boolean;
+  /** The hero's basic chain (see the moves and chains spec). */
+  basic?: Blow[];
 }
 
 /** Total attunement per mana type from equipped gear (plus any `extra`); filtered to the pair on request. */
@@ -150,40 +153,35 @@ export function computeHeroStats(
   }
 
   const attunement = computeAttunement(equipped, registry, extra);
-  // The pair decides what basic attacks strike with (see HeroStatsExtra.pair).
   const [primary = null, secondary = null] = pairElements(extra.pair);
-  const perAttune = bal.pair.basicPowerPerAttune;
-  const blowPower = primary ? 1 + perAttune * attunement[primary] : 1;
-  const finisherPower = primary ? 1 + perAttune * attunement[secondary ?? primary] : 1;
   const weaponItem = equipped.weapon;
   const weaponBase = weaponItem ? registry.getGearBase(weaponItem.baseId) : null;
-  const weapon: HeroWeapon = weaponBase?.attack
+  const armed = weaponBase?.attack ? weaponBase : null;
+  // The basic chain: the hero's, else the weapon's default on the pair (with no pair yet, the
+  // weapon's mana, else fire). Each blow is its kind's row, powered by its element's attunement.
+  const feel = armed?.feel ?? bal.hero.feel;
+  const chain =
+    extra.basic ??
+    defaultBasic(registry, armed?.id ?? null, primary ?? weaponItem?.mana ?? 'fire', secondary);
+  const perAttune = bal.pair.basicPowerPerAttune;
+  const blows = chain.map((b) => ({
+    ...feel[b.kind],
+    kind: b.kind,
+    element: b.element,
+    attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
+  }));
+  const weapon: HeroWeapon = armed?.attack
     ? {
-        baseId: weaponBase.id,
-        kind: weaponBase.attack.kind,
-        range: weaponBase.attack.range,
-        arc: weaponBase.attack.arc ?? 90,
-        speed: weaponBase.attack.speed ?? 12,
-        pierce: weaponBase.attack.pierce ?? false,
-        element: primary ?? weaponItem!.mana,
-        infusion: secondary,
-        blowPower,
-        finisherPower,
-        combo: weaponBase.combo ?? bal.hero.defaultCombo,
+        baseId: armed.id,
+        kind: armed.attack.kind,
+        range: armed.attack.range,
+        arc: armed.attack.arc ?? 90,
+        speed: armed.attack.speed ?? 12,
+        pierce: armed.attack.pierce ?? false,
+        feel,
+        blows,
       }
-    : {
-        baseId: null,
-        kind: 'melee',
-        range: 1.4,
-        arc: 90,
-        speed: 0,
-        pierce: false,
-        element: primary,
-        infusion: secondary,
-        blowPower,
-        finisherPower,
-        combo: bal.hero.defaultCombo,
-      };
+    : { baseId: null, kind: 'melee', range: 1.4, arc: 90, speed: 0, pierce: false, feel, blows };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;
 
   const glass = legendaries.glass_cannon ?? 0;
@@ -341,7 +339,7 @@ export function estimateCombat(
   depth: number,
   chains: Pick<Chains, AbilitySlot> = defaultChains(
     registry,
-    stats.weapon.element ?? 'fire',
+    stats.weapon.blows[0].element,
     stats.weapon.baseId,
   ),
 ): CombatEstimate {
@@ -353,19 +351,15 @@ export function estimateCombat(
   const hit = stats.weaponDamage * stats.damageMult * critFactor;
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
-  const combo = stats.weapon.combo;
-  const stringPower = combo.reduce((a, s) => a + s.power, 0);
-  const stringTime = combo.reduce((a, s) => a + s.time, 0);
-  const strikeInterval = (stats.attackInterval * stringTime) / combo.length;
-  // Ordinary blows strike with the primary; the finisher discharges the secondary (or stays the primary).
-  const w = stats.weapon;
-  const elem = (m: ManaType | null) => (m ? stats.elementPower[m] : 0);
-  const blow = w.blowPower * (1 + elem(w.element));
-  const finisher = w.finisherPower * (1 + elem(w.infusion ?? w.element));
-  const last = combo[combo.length - 1].power;
-  // Twin Fang: one extra hit on the finisher, at its value (×1.5 melee, ×1 ranged).
+  // Each blow's power × its element's power, over the chain's time.
+  const blows = stats.weapon.blows;
+  const stringTime = blows.reduce((a, s) => a + s.time, 0);
+  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
+  const value = (b: (typeof blows)[number]) => b.attunePower * (1 + stats.elementPower[b.element]);
+  // Twin Fang: one extra hit on the last blow, at its value (×1.5 melee, ×1 ranged).
   const twin = ((L.twin_fang ?? 0) / 100) * (melee ? 1.5 : 1);
-  const stringValue = (stringPower - last) * blow + (last + twin) * finisher;
+  const stringValue =
+    blows.reduce((a, b) => a + b.power * value(b), 0) + twin * value(blows[blows.length - 1]);
   let dps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
 
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
