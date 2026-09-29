@@ -5,7 +5,7 @@ import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
 import { windingUp } from './anticipation';
-import { EMBER } from './reactions';
+import { EMBER, OBSIDIAN } from './reactions';
 import {
   PX,
   manaArc,
@@ -234,15 +234,17 @@ export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
   const h = w.hero;
   const cy = h.y - 0.3;
   if (h.barrier) {
-    // Obsidian: a shell of cooling embers that thins as it soaks.
+    // Obsidian: a glassy shell over cooling embers that thins as it soaks (pale,
+    // so it reads over the burning floor its own fire leaves).
     const k = Math.min(1, Math.max(0, h.barrier.hp / Math.max(1e-6, h.barrier.max)));
-    manaRing(air, h.x, cy, 1.15, EMBER, time, {
+    manaRing(air, h.x, cy, 1.15, OBSIDIAN, time, {
       alpha: 0.35 + 0.55 * k,
+      thickness: k > 0.5 ? 2 : 1,
       gaps: Math.round(8 * (1 - k)),
       spin: 1,
       jitter: 1,
     });
-    manaDust(air, h.x, cy, 1.1, 0xc0502a, time, 0.01 + 0.05 * k, 0.8, 13);
+    manaDust(air, h.x, cy, 1.1, EMBER, time, 0.01 + 0.05 * k, 0.8, 13);
   }
   if (w.t < h.quickUntil && h.moving) {
     // Lightning Rod: a storm trail behind the quickened hero.
