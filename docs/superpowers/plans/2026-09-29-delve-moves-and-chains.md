@@ -157,7 +157,7 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 |---|---|
 | `features/delve/chains/chain-text.ts` (new) | `KIND_LABEL`, `KIND_ICON`, `moveText`, `blowText`, `chainText` |
 | `features/delve/chains/ChainEditor.tsx`, `MoveEditor.tsx` (new) | the chain builder: skill tabs, move cards (◂ ▸ ×, +), the move editor, payment, attunement, reactions |
-| `features/delve/AbilitiesPanel.tsx`, `delve.css` | keeps `AttunementBars` and `Chip` (its disabled look moves to `.delve-chip:disabled`, which the reorder buttons share); the panel renders `ChainEditor` on the save |
+| `features/delve/AbilitiesPanel.tsx`, `delve.css` | keeps `AttunementBars` and `Chip` (its disabled look moves to `.delve-chip[disabled]`, which the reorder buttons share); the panel renders `ChainEditor` on the save |
 | `features/delve/training/TrainingPanel.tsx` | "Your secondary" replaces "Basic infusion"; the Abilities tab edits the sandbox's chains |
 | `stores/delveStore.ts`, `stores/sandboxStore.ts` | `setChain`; per-move fix notices; the sandbox's `chains`, `secondary`, `refit`, `loadMyBuild` |
 | `features/delve/ManaPanel.tsx`, `BindPrompt.tsx`, `ManaChoice.tsx`, `PaperDoll.tsx`, `pages/DelveCamp.tsx` | chains in `profileStats`; texts say blows and chains; the bind preview mid-dive |
@@ -10998,12 +10998,12 @@ git commit -m "feat(client): the stores hold chains, notices per move, and the c
 
 ### Task 10: The chain builder
 
-The Abilities tab (and the Training Grounds' Abilities tab) becomes a chain builder, `chains/ChainEditor.tsx`. It lists the four skills, Basic first, as `role="tab"` buttons (`chain-skill-<skill>`; it opens on the Primary), each showing its form's icon and "n of cap" (the Q/E/R hints only from the `sm` width up, so the four names fit on one line at 375 px). A skill shows a row of cards, one per move (`move-<i>`, `aria-label` its name): the kind's glyph (▪, ▪▪, ▪▪▪, ◉), the form's icon and name (a blow: ⚔️ and the weapon's name) and its element icons; under each, ◂ ▸ reorder (`move-left-<i>`, `move-right-<i>`) and × removes (`move-remove-<i>`, never the last), each labelled with the move's name ("Move light Fire Bolt earlier", "Remove light Fire Bolt"), and a + card (`move-add`) copies the picked move while under the skill's cap. After an add or a remove the picked card takes the focus, so a controller keeps its place; a disabled chip or reorder button is dimmed by `.delve-chip:disabled` in `delve.css`. The summary line names the chain (`abilities-summary`: "light Fire Bolt · medium Fire Bolt · …"). The picked card opens `MoveEditor.tsx` below: kind chips (`kind-<kind>`, their glyphs `aria-hidden`), the skill's form chips (none for a blow), the main element and infusion chips (`element-<m>`, `infusion-none`, `infusion-<m>`, `swap-elements`; a blow picks one element), the element's effect text (`element-effect`) and the readout (`ability-readout`: the hit with the move's step bonus, cost, wind-up, cooldown, stacks, a hold's full charge, its cost in mana or, for a charge chain, "Charge N"; `cost-warning` when a mana cost exceeds the pool); a blow's readout shows its hit, its time and its stacks, and the kind hint under the chips is a move's (a hold blow gets its own line). Payment chips sit once per ability chain (`payment-<p>`). The Anvil binds it to the save (`caps` from the profile, elements from the pair, read-only mid-dive), the Training Grounds to the sandbox (caps `MAX_CHAIN`, any element for a move, the sandbox's pair for a blow), where "Basic infusion" becomes "Your secondary" (`secondary-none`, `secondary-<m>`). Texts: the how-to, the Mana view, the bind prompt and the mana choice say the basic chain's last blow strikes with the secondary (the Mana view and the Training panel: your blows use the primary but where you pick the secondary); mid-dive, the Mana view's bind preview binds as between dives (`bindSecondary({ ...profile, dive: null }, m)`, at the dive's depth); the overtake notice reads "Storm now outweighs Fire: Storm is your primary"; the Paper Doll's attacks per second count blows.
+The Abilities tab (and the Training Grounds' Abilities tab) becomes a chain builder, `chains/ChainEditor.tsx`. It lists the four skills, Basic first, as `role="tab"` buttons (`chain-skill-<skill>`; it opens on the Primary), each showing its form's icon and "n of cap" (the Q/E/R hints only from the `sm` width up, so the four names fit on one line at 375 px). A skill shows a row of cards, one per move (`move-<i>`, `aria-label` its name): the kind's glyph (▪, ▪▪, ▪▪▪, ◉), the form's icon and name (a blow: ⚔️ and the weapon's name) and its element icons; under each, ◂ ▸ reorder (`move-left-<i>`, `move-right-<i>`) and × removes (`move-remove-<i>`, never the last), each labelled with the move's name ("Move light Fire Bolt earlier", "Remove light Fire Bolt"), and a + card (`move-add`) copies the picked move while under the skill's cap. After an add or a remove the picked card takes the focus, so a controller keeps its place; a disabled chip or reorder button is dimmed by `.delve-chip[disabled]` in `delve.css`. The summary line names the chain (`abilities-summary`: "light Fire Bolt · medium Fire Bolt · …"). The picked card opens `MoveEditor.tsx` below: kind chips (`kind-<kind>`, their glyphs `aria-hidden`), the skill's form chips (none for a blow), the main element and infusion chips (`element-<m>`, `infusion-none`, `infusion-<m>`, `swap-elements`; a blow picks one element), the element's effect text (`element-effect`) and the readout (`ability-readout`: the hit with the move's step bonus, cost, wind-up, cooldown, stacks, a hold's full charge, its cost in mana or, for a charge chain, "Charge N"; `cost-warning` when a mana cost exceeds the pool); a blow's readout shows its hit, its time and its stacks, and the kind hint under the chips is a move's (a hold blow gets its own line). Payment chips sit once per ability chain (`payment-<p>`). The Anvil binds it to the save (`caps` from the profile, elements from the pair, read-only mid-dive), the Training Grounds to the sandbox (caps `MAX_CHAIN`, any element for a move, the sandbox's pair for a blow), where "Basic infusion" becomes "Your secondary" (`secondary-none`, `secondary-<m>`). Texts: the how-to, the Mana view, the bind prompt and the mana choice say the basic chain's last blow strikes with the secondary (the Mana view and the Training panel: your blows use the primary but where you pick the secondary); mid-dive, the Mana view's bind preview binds as between dives (`bindSecondary({ ...profile, dive: null }, m)`, at the dive's depth); the overtake notice reads "Storm now outweighs Fire: Storm is your primary"; the Paper Doll's attacks per second count blows.
 
 **Files:**
 - Create: `packages/client/src/features/delve/chains/MoveEditor.tsx`, `packages/client/src/features/delve/chains/ChainEditor.tsx`
 - Modify: `packages/client/src/features/delve/AbilitiesPanel.tsx` (whole file: keeps `AttunementBars` and `Chip`, renders `ChainEditor`)
-- Modify: `packages/client/src/features/delve/training/TrainingPanel.tsx:11,31,132-134,231-255,336-355`, `packages/client/src/features/delve/delve.css:237` (CRLF, hand-edit: `.delve-chip:disabled`)
+- Modify: `packages/client/src/features/delve/training/TrainingPanel.tsx:11,31,132-134,231-255,336-355`, `packages/client/src/features/delve/delve.css:237` (CRLF, hand-edit: `.delve-chip[disabled]`)
 - Modify: `packages/client/src/pages/DelveCamp.tsx:54-57,139-141`, `packages/client/src/features/delve/ManaPanel.tsx:5,35,71,78,115-133`, `BindPrompt.tsx:1,22,60-61`, `ManaChoice.tsx:47`, `PaperDoll.tsx:40-43,64-65`, `packages/client/src/stores/delveStore.ts:108-111`
 - Test: `packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx` (whole file), `TrainingPanel.test.tsx`, `packages/client/src/pages/__tests__/DelveCamp.test.tsx`, `packages/client/src/stores/delveStore.test.ts`; `ManaPanel.test.tsx` passes unchanged once `ManaPanel.tsx` reads chains
 
@@ -12166,7 +12166,7 @@ Replace:
 ```
 with:
 ```css
-.delve-chip:disabled {
+.delve-chip[disabled] {
   opacity: 0.35;
   cursor: default;
 }
@@ -12222,7 +12222,7 @@ Replace:
 with:
 ```tsx
         <p className="text-[11px] text-stone-500">
-          Your primary: your basic blows strike with it, but where they pick your secondary.
+          Your primary: your basic blows strike with it, except where they pick your secondary.
         </p>
       </Section>
 
@@ -12374,7 +12374,7 @@ Replace:
 with:
 ```tsx
           {style(primary).icon} {style(primary).name} · primary: your blows and abilities use it,
-          but where you pick your secondary
+          except where you pick your secondary
 ```
 
 Replace:
