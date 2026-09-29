@@ -70,9 +70,22 @@ export function stepWorld(
   return events;
 }
 
+/**
+ * An element's stacks lapse together at its timer, on every foe (dummies too), before
+ * anything in the step can read them (see the elemental stacks spec).
+ */
+function lapseStacks(world: ArpgWorld): void {
+  for (const m of world.monsters) {
+    if (m.dead) continue;
+    const s = m.status;
+    for (const e of MANA_TYPES) if (world.t >= s.stackUntil[e]) s.stacks[e] = 0;
+  }
+}
+
 function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const { world } = ctx;
   world.t += dt;
+  lapseStacks(world);
   heroTick(ctx, input, dt);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
@@ -429,8 +442,6 @@ function monstersTick(ctx: SimCtx, dt: number): void {
   for (const m of world.monsters) {
     if (m.dead) continue;
     const s = m.status;
-    // An element's stacks lapse together at its timer (a dummy's too).
-    for (const e of MANA_TYPES) if (world.t >= s.stackUntil[e]) s.stacks[e] = 0;
 
     if (s.stacks.fire > 0 && world.t >= s.burnTickAt) {
       s.burnTickAt += 0.5;

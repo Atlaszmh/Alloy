@@ -334,6 +334,7 @@ function findReaction(
  * Clear the mark that set `reaction` off: its element's stacks. Earth's Shatter
  * breaks only the freeze; Storm's Superconduct takes only the stacks (the freeze
  * it would add again is refused by immunity, so the foe stays frozen).
+ * Interim: Task 4 replaces this with consumePairs.
  */
 function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void {
   if (mark !== 'frost' || reaction !== 'shatter') m.status.stacks[mark] = 0;

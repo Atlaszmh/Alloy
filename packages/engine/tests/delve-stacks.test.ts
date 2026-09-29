@@ -24,6 +24,7 @@ import type { ArpgEvent, MonsterEntity } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
   DEFAULT_BUILDS,
+  STEP,
   arena,
   bal,
   dummy,
@@ -137,6 +138,22 @@ describe('stacks', () => {
     applyStatus(makeCtx(registry, sandbox, []), target, 'hex', 0);
     run(sandbox, bal.stacks.duration.shadow + 0.1);
     expect(target.status.stacks.shadow).toBe(0);
+  });
+
+  it('stacks lapse before anything in the step: a blow landing as a fire timer runs out finds none stale', () => {
+    const w = strikeWorld({ weapon: gear('fire') }, {});
+    const m = w.monsters[0];
+    run(w, STEP); // the swing starts
+    const strikeAt = w.hero.swing!.strikeAt;
+    while (w.t + STEP < strikeAt - 1e-9) run(w, STEP); // the next step lands the blow
+    // A capped burn with a huge ref, whose timer runs out within that step.
+    m.status.stacks.fire = bal.stacks.cap;
+    m.status.burnRef = 1e6;
+    m.status.stackUntil.fire = w.t + STEP / 2;
+    expect(run(w, STEP).some((e) => e.kind === 'basic')).toBe(true);
+    // The blow's own count and ref, not the stale five re-armed at 1e6.
+    expect(m.status.stacks.fire).toBe(bal.stacks.basicBlow);
+    expect(m.status.burnRef).toBeLessThan(1e6);
   });
 
   it('a hit applies `stacks` of each element status it carries (stacks.tick when it names none)', () => {

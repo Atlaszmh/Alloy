@@ -610,7 +610,7 @@ describe('Sunder', () => {
     // The sundering hit gets the hex stack it used up, not Sunder.
     expect(hitMonster(ctx, m, 100, 'earth', { source: 'skill' })).toBeCloseTo(
       hitMonster(plain.ctx, plain.m, 100, 'earth', { source: 'skill' }) *
-        (1 + bal.stacks.hexPerStack),
+        (1 + bal.stacks.hexPerStack * bal.stacks.curve[0]),
     );
     expect(isSundered(ctx, m)).toBe(true);
     expect(hitMonster(ctx, m, 100, 'fire', { source: 'skill' })).toBeCloseTo(
