@@ -26,9 +26,14 @@ import { chooseStartingMana, fixBuildsToPair, inPair, salvageDust, type BuildFix
 import { defaultAbilities } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
+  ABILITY_SLOTS,
   ABILITY_WEIGHTS,
   type AbilityBuild,
+  type AbilityBuilds,
   type AbilitySlot,
+  type Chain,
+  type Chains,
+  type MoveKind,
 } from '../types/ability.js';
 
 export interface ProfileActionResult {
@@ -127,6 +132,36 @@ export function setAbility(
   };
 }
 
+const STRENGTH: MoveKind[] = ['light', 'medium', 'heavy'];
+
+/**
+ * A version 4 build as a chain: its form's default chain, each move a step
+ * lighter for a light build (weight −2 or −1) and a step heavier for a heavy
+ * one (+1 or +2), within light..heavy, with the build's elements and payment.
+ */
+export function chainFromBuild(registry: DataRegistry, build: AbilityBuild): Chain {
+  const shift = Math.sign(build.weight);
+  return {
+    moves: registry.getForm(build.form).defaultChain.map((kind) => ({
+      kind: STRENGTH[Math.max(0, Math.min(2, STRENGTH.indexOf(kind) + shift))],
+      form: build.form,
+      elements: [...build.elements],
+    })),
+    payment: build.payment,
+  };
+}
+
+/** Version 4 builds as the three ability chains. */
+export function buildChains(
+  registry: DataRegistry,
+  builds: AbilityBuilds,
+): Pick<Chains, AbilitySlot> {
+  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
+    chainFromBuild(registry, builds[slot]),
+  );
+  return { primary, defensive, ultimate };
+}
+
 /** A save read back: the profile, and the build slots a migration changed (for a notice). */
 export interface ParsedDelveProfile {
   profile: DelveProfile;
@@ -192,7 +227,7 @@ export function profilePower(registry: DataRegistry, profile: DelveProfile): num
     profile.equipped,
     registry,
     referenceDepth(profile),
-    profile.abilities,
+    buildChains(registry, profile.abilities),
     profile.pair,
   );
 }

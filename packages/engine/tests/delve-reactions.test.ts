@@ -21,7 +21,7 @@ import {
 import { shieldHero } from '../src/arpg/abilities/defend.js';
 import { refundDodgeCharge } from '../src/arpg/dodge.js';
 import { hitOpts } from '../src/arpg/abilities/impact.js';
-import { resolveAbility } from '../src/arpg/abilities/resolve.js';
+import { chainMove, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { botInput } from '../src/arpg/bot.js';
 import { createSandboxWorld, respawnHero, spawnDummies } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -30,13 +30,14 @@ import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity, ReactionId } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
-  DEFAULT_BUILDS,
+  DEFAULT_CHAINS,
   STEP,
   arena,
   bal,
   dummy,
   firstBlow,
   gear,
+  moveOf,
   registry,
   run,
   strikeWorld,
@@ -177,7 +178,7 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
     for (const foe of [f.m, f.o])
       expect(foe.status.blindUntil).toBe(f.w.t + bal.status.blindDuration);
   },
-  galvanize: (f) => expect(f.w.hero.cooldowns[0]).toBe(5 - bal.reactions.galvanizeSeconds),
+  galvanize: (f) => expect(f.w.hero.cooldowns[0][0]).toBe(5 - bal.reactions.galvanizeSeconds),
 };
 
 describe('the reaction table', () => {
@@ -274,7 +275,7 @@ describe('marks', () => {
 
   it("a fused ability with Earth second rattles, and so does an Earth finisher's discharge", () => {
     const { w, ctx, m } = setup([dummy(13, 20)], { primary: { elements: ['fire', 'earth'] } });
-    const opts = hitOpts(w.hero.abilities[0], { x: 13, y: 20 });
+    const opts = hitOpts(moveOf(w, 0), { x: 13, y: 20 });
     expect(opts.rattles).toBe(true);
     hitMonster(ctx, m, 10, 'fire', opts);
     expect(isRattled(ctx, m)).toBe(true);
@@ -322,9 +323,11 @@ describe('marks', () => {
       { weapon: gear('fire') },
       { pair: { primary: 'fire', secondary: null } },
     );
-    const build = { form: 'surge', elements: ['earth'], weight: 0, payment: 'mana' } as const;
-    surge.hero.abilities[1] = resolveAbility(registry, 'defensive', build, surge.hero.stats);
-    surge.hero.defend = { form: 'surge', until: 1e9 };
+    surge.hero.chains[1] = resolveChain(registry, surge.hero.stats, 'defensive', {
+      moves: [{ kind: 'medium', form: 'surge', elements: ['earth'] }],
+      payment: 'mana',
+    });
+    surge.hero.defend = { form: 'surge', until: 1e9, move: 0, stage: 0 };
     firstBlow(surge);
     expect(rattled(surge)).toBe(true);
   });
@@ -339,8 +342,9 @@ describe('marks', () => {
     expect(maul.monsters[0].status.staggerUntil).toBeGreaterThan(maul.t);
     expect(rattled(maul)).toBe(false);
 
-    const heavy = setup([dummy(13, 20)], { primary: { weight: 2 } });
-    const opts = hitOpts(heavy.w.hero.abilities[0], { x: 13, y: 20 });
+    // Crushing: a hold's full charge (weight +2).
+    const heavy = setup([dummy(13, 20)], { primary: { kind: 'hold' } });
+    const opts = hitOpts(chainMove(heavy.w.hero.chains[0], 0, 2), { x: 13, y: 20 });
     hitMonster(heavy.ctx, heavy.m, 10, 'fire', opts);
     expect(heavy.m.status.staggerUntil).toBeGreaterThan(heavy.w.t);
     expect(isRattled(heavy.ctx, heavy.m)).toBe(false);
@@ -363,7 +367,7 @@ describe('marks', () => {
       const { w, ctx, m } = setup([dummy(13, 35)], {
         defensive: { form, elements: [...elements] },
       });
-      w.hero.defend = { form, until: 1e9 };
+      w.hero.defend = { form, until: 1e9, move: 0, stage: 0 };
       shieldHero(ctx, 10, m, true);
       expect(isRattled(ctx, m), form).toBe(true);
     }
@@ -385,7 +389,7 @@ describe('every pair reacts, both ways', () => {
     const f = fire(hit, marked, (s) => {
       s.w.hero.hp = 1;
       s.w.hero.dodgeCharges = 0;
-      s.w.hero.cooldowns[0] = 5;
+      s.w.hero.cooldowns[0][0] = 5;
     });
     expect(reactions(f.events)).toEqual([id]);
     const { ctx, m } = f;
@@ -503,14 +507,14 @@ describe('Obsidian', () => {
   it("soaks after Armor's reduction and retaliation, and before the Ward", () => {
     const armor = setup([dummy(13, 35)], { defensive: { form: 'armor', elements: ['fire'] } });
     const h = armor.w.hero;
-    h.defend = { form: 'armor', until: 1e9 };
+    h.defend = { form: 'armor', until: 1e9, move: 0, stage: 0 };
     h.barrier = { hp: 10, max: 10, until: 1e9 };
-    const cut = Math.min(0.75, h.abilities[1].effect);
+    const cut = Math.min(0.75, moveOf(armor.w, 1).effect);
     expect(shieldHero(armor.ctx, 100, armor.m, true)).toBeCloseTo(100 * (1 - cut) - 10);
     expect(armor.m.hp).toBeLessThan(armor.m.maxHp); // Armor struck back
 
     const ward = setup(); // the fixture's Defensive is a Ward
-    ward.w.hero.defend = { form: 'ward', until: 1e9 };
+    ward.w.hero.defend = { form: 'ward', until: 1e9, move: 0, stage: 0 };
     ward.w.hero.ward = { hp: 50, max: 50 };
     ward.w.hero.barrier = { hp: 30, max: 30, until: 1e9 };
     expect(shieldHero(ward.ctx, 100, null, false)).toBeCloseTo(20);
@@ -646,7 +650,7 @@ describe('Seedling and Siphon', () => {
     const w = createSandboxWorld(registry, {
       depth: 3,
       stats: computeHeroStats({}, registry),
-      abilities: DEFAULT_BUILDS,
+      chains: DEFAULT_CHAINS,
       toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
     });
     const [d] = spawnDummies(registry, w, { layout: 'single', element: null });
@@ -664,12 +668,12 @@ describe('Galvanize', () => {
   it('a charge slot gains a unit; a slot cooling down loses a second, never past now', () => {
     const { w, ctx, m } = setup();
     const h = w.hero;
-    h.cooldowns = [w.t + 0.5, w.t + 5, w.t + 3]; // the Ultimate pays by charge: that's its lockout
-    h.charge[2] = h.abilities[2].chargeNeed - 0.5;
+    h.cooldowns = [[w.t + 0.5], [w.t + 5], [w.t + 3]]; // the Ultimate pays by charge: that's its lockout
+    h.charge[2] = moveOf(w, 2).chargeNeed - 0.5;
     applyStatus(ctx, m, 'shock', 0);
     hitMonster(ctx, m, 10, 'nature', { source: 'skill' });
-    expect(h.cooldowns).toEqual([w.t, w.t + 5 - bal.reactions.galvanizeSeconds, w.t + 3]);
-    expect(h.charge[2]).toBe(h.abilities[2].chargeNeed);
+    expect(h.cooldowns).toEqual([[w.t], [w.t + 5 - bal.reactions.galvanizeSeconds], [w.t + 3]]);
+    expect(h.charge[2]).toBe(moveOf(w, 2).chargeNeed);
   });
 });
 

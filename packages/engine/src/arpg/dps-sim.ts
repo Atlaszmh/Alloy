@@ -9,6 +9,7 @@ import {
 import type { ArpgEvent, ArpgInput } from '../types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { defaultAbilities } from './abilities/resolve.js';
+import { buildChains } from '../delve/profile.js';
 import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
@@ -72,7 +73,7 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   const world = createSandboxWorld(registry, {
     depth: o.depth,
     stats: computeHeroStats({ weapon }, registry, { pair: { primary, secondary } }),
-    abilities: setup.abilities,
+    chains: buildChains(registry, setup.abilities),
     toggles: NO_TOGGLES,
   });
   const h = world.hero;

@@ -1,7 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { applyStatus, freeze, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
-import { arena, damaged, dummy, gear, press, registry, run } from './fixtures/arena.js';
+import {
+  arena,
+  bal,
+  damaged,
+  dummy,
+  gear,
+  moveOf,
+  press,
+  registry,
+  run,
+} from './fixtures/arena.js';
 
 // The hero starts at (13, 36), facing up (-y).
 
@@ -14,17 +24,24 @@ describe('primary forms', () => {
     expect(damaged(w.monsters[1])).toBe(false);
   });
 
-  it('Bolt combos go small, small, medium, large, then reset after the window', () => {
-    const w = arena([dummy(13, 30)], { noBasic: true });
-    const ab = w.hero.abilities[0];
+  it("Bolt's default chain goes light, light, medium, heavy, each bigger by its step, then wraps", () => {
+    const moves = registry.getForm('bolt').defaultChain.map((kind) => ({
+      kind,
+      form: 'bolt' as const,
+      elements: ['fire' as const],
+    }));
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { moves } });
     const sizes: number[] = [];
     for (let i = 0; i < 5; i++) {
       press(w, 0);
-      sizes.push(w.projectiles.at(-1)!.explodeRadius / ab.radius);
-      run(w, ab.cooldown + 0.05);
+      sizes.push(w.projectiles.at(-1)!.explodeRadius);
+      run(w, 0.1);
     }
-    expect(sizes.map((s) => +s.toFixed(2))).toEqual([0.8, 0.8, 1, 1.5, 0.8]);
-    run(w, registry.getDelveBalance().abilities.comboWindow + 0.1);
+    const step = (i: number) => 1 + (bal.chains.stepBonus * i) / 2;
+    expect(sizes).toEqual([0, 1, 2, 3, 0].map((i) => moveOf(w, 0, i).radius * step(i)));
+    expect(sizes[3]).toBeGreaterThan(sizes[2]);
+    expect(sizes[2]).toBeGreaterThan(sizes[1]);
+    run(w, bal.abilities.comboWindow + 0.1);
     press(w, 0);
     expect(w.hero.comboStep[0]).toBe(0);
   });
@@ -62,15 +79,17 @@ describe('primary forms', () => {
     expect(damaged(w.monsters[1])).toBe(false);
   });
 
-  it("Strike's fourth press slams everything around the hero", () => {
-    const w = arena([dummy(13, 34.4), dummy(13, 37.8)], {
-      noBasic: true,
-      primary: { form: 'strike' },
-    });
+  it('the last move of a Strike chain slams everything around the hero', () => {
+    const moves = registry.getForm('strike').defaultChain.map((kind) => ({
+      kind,
+      form: 'strike' as const,
+      elements: ['fire' as const],
+    }));
+    const w = arena([dummy(13, 34.4), dummy(13, 37.8)], { noBasic: true, primary: { moves } });
     const behind = w.monsters[1];
     for (let i = 0; i < 3; i++) {
       press(w, 0);
-      run(w, w.hero.abilities[0].cooldown + 0.05);
+      run(w, 0.1);
     }
     expect(damaged(behind)).toBe(false);
     press(w, 0);

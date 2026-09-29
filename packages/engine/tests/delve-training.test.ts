@@ -23,20 +23,22 @@ import {
 } from '../src/delve/hero-stats.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import type { AbilityBuilds } from '../src/types/ability.js';
+import type { AbilitySlot } from '../src/types/ability.js';
 import type { GearItem } from '../src/types/gear.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity, SandboxToggles } from '../src/types/arpg.js';
 import {
-  DEFAULT_BUILDS,
   STEP,
   bal,
+  chainsWith,
   damaged,
   dodge,
   gear,
+  moveOf,
   press,
   pressOnly,
   registry,
   run,
+  type ChainOpts,
 } from './fixtures/arena.js';
 
 // A sandbox hero stands at heroStart (13, 26) facing up (-y); depth 5 is the Cinder Mines (fire).
@@ -48,11 +50,13 @@ const ALL_OFF: SandboxToggles = { infiniteMana: false, noCooldowns: false, invul
 const [HX, HY] = SB.heroStart;
 const DUMMY_Y = HY - SB.dummyDistance;
 
-function sandbox(toggles = ALL_OFF, builds: Partial<AbilityBuilds> = {}, depth = 5): ArpgWorld {
+type SlotOpts = Partial<Record<AbilitySlot, ChainOpts>>;
+
+function sandbox(toggles = ALL_OFF, chains: SlotOpts = {}, depth = 5): ArpgWorld {
   return createSandboxWorld(registry, {
     depth,
     stats: computeHeroStats({ weapon: gear('fire'), chest: gear('earth', 'chest') }, registry),
-    abilities: { ...DEFAULT_BUILDS, ...builds },
+    chains: chainsWith(chains),
     toggles,
   });
 }
@@ -290,7 +294,7 @@ describe('training dummies', () => {
 
     // Magnetism (storm + earth) pulls: 75% of the way to a Nova at the hero, dummyDistance away.
     const p = sandbox(ALL_ON, {
-      ultimate: { form: 'nova', elements: ['storm', 'earth'], weight: 0, payment: 'mana' },
+      ultimate: { elements: ['storm', 'earth'], payment: 'mana' },
     });
     p.hero.nextAttackAt = 1e9;
     const [q] = spawnDummies(registry, p, { layout: 'single', element: null });
@@ -300,7 +304,7 @@ describe('training dummies', () => {
 
   it("a row's spacing lets a chain jump", () => {
     const w = sandbox(ALL_ON, {
-      primary: { form: 'bolt', elements: ['storm'], weight: 0, payment: 'mana' },
+      primary: { elements: ['storm'] },
     });
     w.hero.nextAttackAt = 1e9;
     const row = spawnDummies(registry, w, { layout: 'row', element: null });
@@ -482,18 +486,18 @@ describe('toggles', () => {
   });
 
   it('infinite mana ignores cost: an Ultimate dearer than the whole pool still casts', () => {
-    const crushing = { form: 'nova', elements: ['fire'], weight: 2, payment: 'mana' } as const;
-    const w = sandbox({ ...ALL_OFF, infiniteMana: true }, { ultimate: crushing });
-    expect(w.hero.abilities[2].cost).toBeGreaterThan(w.hero.manaMax);
+    const heavy = { kind: 'heavy', payment: 'mana' } as const;
+    const w = sandbox({ ...ALL_OFF, infiniteMana: true }, { ultimate: heavy });
+    expect(moveOf(w, 2).cost).toBeGreaterThan(w.hero.manaMax);
     expect(abilityReady(ctxOf(w).ctx, 2)).toBe(true);
-    expect(canAfford(w, w.hero.abilities[2])).toBe(true);
+    expect(canAfford(w, moveOf(w, 2))).toBe(true);
     pressOnly(w, 2);
     expect(w.hero.windup?.slot).toBe(2);
-    const off = sandbox(ALL_OFF, { ultimate: crushing });
+    const off = sandbox(ALL_OFF, { ultimate: heavy });
     off.hero.mana = off.hero.manaMax;
     expect(abilityReady(ctxOf(off).ctx, 2)).toBe(false);
-    expect(canAfford(off, off.hero.abilities[2])).toBe(false);
-    expect(canAfford(off, off.hero.abilities[0])).toBe(true);
+    expect(canAfford(off, moveOf(off, 2))).toBe(false);
+    expect(canAfford(off, moveOf(off, 0))).toBe(true);
   });
 
   it('no cooldowns keeps charge-paid abilities charged, from the start and once switched on', () => {
@@ -504,7 +508,7 @@ describe('toggles', () => {
     expect(w.hero.charge[2]).toBe(0);
     setSandboxToggles(w, { ...ALL_OFF, noCooldowns: true });
     run(w, STEP);
-    expect(w.hero.charge[2]).toBe(w.hero.abilities[2].chargeNeed);
+    expect(w.hero.charge[2]).toBe(moveOf(w, 2).chargeNeed);
   });
 
   it('no cooldowns: the same ability fires again right after it lands, and charge stays full', () => {
@@ -520,7 +524,7 @@ describe('toggles', () => {
     expect(off.hero.windup).toBeNull(); // 0.45 s cooldown
 
     const u = sandbox({ ...ALL_OFF, noCooldowns: true }); // the Ultimate is a charge-paid Nova
-    const need = u.hero.abilities[2].chargeNeed;
+    const need = moveOf(u, 2).chargeNeed;
     press(u, 2);
     expect(u.hero.charge[2]).toBe(need);
     pressOnly(u, 2);
@@ -529,10 +533,10 @@ describe('toggles', () => {
 
   it('switching no cooldowns on frees abilities already cooling down', () => {
     const w = sandbox();
-    w.hero.cooldowns = [5, 5, 5];
+    w.hero.cooldowns = [[5], [5], [5]];
     setSandboxToggles(w, { ...ALL_OFF, noCooldowns: true });
     expect(w.sandbox).toEqual({ ...ALL_OFF, noCooldowns: true });
-    for (const c of w.hero.cooldowns) expect(c).toBeLessThanOrEqual(w.t);
+    for (const c of w.hero.cooldowns.flat()) expect(c).toBeLessThanOrEqual(w.t);
   });
 
   it('invulnerable: no life lost, the would-be damage reported as blocked, and a perfect dodge still counts', () => {
@@ -555,12 +559,9 @@ describe('toggles', () => {
   });
 
   it('fill charge fills every charge-paid slot', () => {
-    const w = sandbox(ALL_OFF, {
-      defensive: { form: 'ward', elements: ['frost'], weight: 0, payment: 'charge' },
-    });
+    const w = sandbox(ALL_OFF, { defensive: { payment: 'charge' } });
     fillCharge(w);
-    const [, guard, ult] = w.hero.abilities;
-    expect(w.hero.charge).toEqual([0, guard.chargeNeed, ult.chargeNeed]);
+    expect(w.hero.charge).toEqual([0, moveOf(w, 1).chargeNeed, moveOf(w, 2).chargeNeed]);
   });
 
   it('respawn restores the hero where it fell and clears its action state', () => {
@@ -594,7 +595,7 @@ describe('toggles', () => {
     h.push = { fromX: 13, fromY: 26, dx: 0, dy: -1, start: 0, until: 1, stopId: null };
     h.recoverUntil = w.t + 5;
     h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };
-    h.defend = { form: 'ward', until: w.t + 5 };
+    h.defend = { form: 'ward', until: w.t + 5, move: 0, stage: 0 };
     h.ward = { hp: 10, max: 10 };
     const spot = { x: h.x, y: h.y };
     respawnHero(registry, w);
@@ -637,25 +638,25 @@ describe('hit events', () => {
 });
 
 describe('mid-fight build swaps', () => {
-  const swap = (w: ArpgWorld, builds: Partial<AbilityBuilds>) =>
-    refreshWorldHero(registry, w, w.hero.stats, { ...DEFAULT_BUILDS, ...builds });
+  const swap = (w: ArpgWorld, chains: SlotOpts) =>
+    refreshWorldHero(registry, w, w.hero.stats, chainsWith(chains));
 
   it('a new build for the slot winding up cancels the wind-up: cooldown reset, charge back', () => {
     const w = sandbox(); // the Ultimate is a charge-paid Nova (21 charge)
     fillCharge(w);
-    const need = w.hero.abilities[2].chargeNeed;
+    const need = moveOf(w, 2).chargeNeed;
     pressOnly(w, 2);
     expect(w.hero.windup?.slot).toBe(2);
     expect(w.hero.charge[2]).toBe(0);
-    swap(w, { ultimate: { ...DEFAULT_BUILDS.ultimate, form: 'barrage' } });
+    swap(w, { ultimate: { form: 'barrage' } });
     expect(w.hero.windup).toBeNull();
-    expect(w.hero.cooldowns[2]).toBeLessThanOrEqual(w.t);
-    expect(w.hero.charge[2]).toBeCloseTo(Math.min(need, w.hero.abilities[2].chargeNeed));
-    expect(w.hero.abilities[2].form.id).toBe('barrage');
+    expect(w.hero.cooldowns[2][0]).toBeLessThanOrEqual(w.t);
+    expect(w.hero.charge[2]).toBeCloseTo(Math.min(need, moveOf(w, 2).chargeNeed));
+    expect(moveOf(w, 2).form.id).toBe('barrage');
   });
 
   it('the mana spent on a cancelled wind-up stays spent', () => {
-    const cast = { ...DEFAULT_BUILDS.primary, payment: 'cast' as const };
+    const cast = { payment: 'cast' as const };
     const w = sandbox(ALL_OFF, { primary: cast });
     w.hero.nextAttackAt = 1e9;
     spawnDummies(registry, w, { layout: 'single', element: null }); // the Bolt needs a target
@@ -671,7 +672,7 @@ describe('mid-fight build swaps', () => {
     const w = sandbox();
     press(w, 1);
     expect(w.hero.ward).not.toBeNull();
-    swap(w, { defensive: { form: 'armor', elements: ['earth'], weight: 0, payment: 'mana' } });
+    swap(w, { defensive: { form: 'armor', elements: ['earth'] } });
     expect(w.hero.ward).toBeNull();
     expect(w.hero.defend).toBeNull();
     expect(run(w, 0.5).map((e) => e.kind)).not.toContain('wardBreak');
@@ -683,10 +684,10 @@ describe('mid-fight build swaps', () => {
     fillCharge(w);
     pressOnly(w, 2); // a Nova winding up
     const windup = { ...w.hero.windup! };
-    swap(w, { primary: { ...DEFAULT_BUILDS.primary, form: 'lance' } });
+    swap(w, { primary: { form: 'lance' } });
     expect(w.hero.windup).toEqual(windup);
     expect(w.hero.ward).not.toBeNull();
-    expect(w.hero.abilities[0].form.id).toBe('lance');
+    expect(moveOf(w, 0).form.id).toBe('lance');
   });
 });
 

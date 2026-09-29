@@ -638,8 +638,6 @@ export const ArpgDataSchema = z.object({
         duration: z.number().positive().optional(),
         tick: z.number().positive().optional(),
         arc: z.number().positive().max(360).optional(),
-        combo: z.array(z.number().positive()).min(1).optional(),
-        comboCount: z.array(z.number().int().positive()).min(1).optional(),
         motion: z.number().optional(),
         defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN),
         countByKind: perKind(z.number().int().positive()).optional(),

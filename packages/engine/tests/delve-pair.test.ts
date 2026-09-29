@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
+import { defaultAbilities, defaultChains } from '../src/arpg/abilities/resolve.js';
 import { betweenDives, runAutopilot } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
@@ -213,7 +213,7 @@ describe('Power values the pair', () => {
         },
         registry,
         3,
-        defaultAbilities('nature'),
+        defaultChains(registry, 'nature', 'sword'),
       ).dps;
     const discharge = (twin: number) => dps('storm', { storm: 0.5 }, twin);
     const solo = (twin: number) => dps(null, { fire: even }, twin);

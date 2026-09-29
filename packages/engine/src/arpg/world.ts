@@ -12,12 +12,13 @@ import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delv
 import type { ManaType } from '../types/mana.js';
 import {
   ABILITY_SLOTS,
-  type AbilityBuild,
-  type AbilityBuilds,
-  type ResolvedAbility,
+  type AbilitySlot,
+  type Chain,
+  type Chains,
+  type ResolvedChain,
 } from '../types/ability.js';
 import { manaPool } from '../delve/hero-stats.js';
-import { resolveAbility } from './abilities/resolve.js';
+import { chargeCap, resolveChain } from './abilities/resolve.js';
 import { cancelWindup } from './action.js';
 import { dist } from './geometry.js';
 
@@ -25,8 +26,8 @@ export interface FloorOptions {
   depth: number;
   door: DoorDef | null;
   stats: HeroStats;
-  /** The profile's Primary, Defensive and Ultimate builds. */
-  abilities: AbilityBuilds;
+  /** The Primary's, Defensive's and Ultimate's chains (the basic chain is in `stats`). */
+  chains: Pick<Chains, AbilitySlot>;
   heroHpFrac: number;
   potions: number;
   phoenixAvailable: boolean;
@@ -175,19 +176,20 @@ export function createMonsterEntity(
 
 function resolveAll(
   registry: DataRegistry,
-  builds: AbilityBuilds,
+  chains: Pick<Chains, AbilitySlot>,
   stats: HeroStats,
-): ResolvedAbility[] {
-  return ABILITY_SLOTS.map((slot) => resolveAbility(registry, slot, builds[slot], stats));
+): ResolvedChain[] {
+  return ABILITY_SLOTS.map((slot) => resolveChain(registry, stats, slot, chains[slot]));
 }
 
 export function createHeroEntity(
   registry: DataRegistry,
   stats: HeroStats,
-  builds: AbilityBuilds,
+  chains: Pick<Chains, AbilitySlot>,
   opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
 ): HeroEntity {
   const pool = manaPool(stats, registry);
+  const resolved = resolveAll(registry, chains, stats);
   return {
     x: opts.x,
     y: opts.y,
@@ -198,8 +200,8 @@ export function createHeroEntity(
     mana: pool.max,
     manaMax: pool.max,
     manaRegen: pool.regen,
-    abilities: resolveAll(registry, builds, stats),
-    cooldowns: [0, 0, 0],
+    chains: resolved,
+    cooldowns: resolved.map((c) => c.moves.map(() => 0)),
     charge: [0, 0, 0],
     comboStep: [0, 0, 0],
     comboAt: [-Infinity, -Infinity, -Infinity],
@@ -229,17 +231,18 @@ export function createHeroEntity(
 }
 
 /**
- * Swap in new gear stats and builds mid-floor: abilities re-resolve and the
- * pool resizes, keeping the life fraction and current mana (clamped). Charge,
- * combos and cooldowns carry over. A slot whose build changed drops its
- * wind-up (as a dodge does), and a new Defensive ends the old one's buff and
- * Ward at once, without bursting.
+ * Swap in new gear stats and chains mid-floor: the chains re-resolve and the
+ * pool resizes, keeping the life fraction and current mana (clamped). Charge
+ * (clamped to each chain's largest need), combos (clamped to a shortened
+ * chain) and each move's cooldown carry over. A slot whose chain changed
+ * drops its wind-up (as a dodge does), and a new Defensive ends the old one's
+ * buff and Ward at once, without bursting.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
   stats: HeroStats,
-  builds: AbilityBuilds,
+  chains: Pick<Chains, AbilitySlot>,
 ): void {
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
@@ -254,7 +257,7 @@ export function refreshWorldHero(
     h.attackCount = 0;
     h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
   }
-  const changed = ABILITY_SLOTS.map((slot, i) => !sameBuild(h.abilities[i]?.build, builds[slot]));
+  const changed = ABILITY_SLOTS.map((slot, i) => !sameChain(h.chains[i], chains[slot]));
   if (h.windup && changed[h.windup.slot]) {
     cancelWindup(h, world.t);
     h.push = null; // its step-in goes with it
@@ -268,17 +271,25 @@ export function refreshWorldHero(
   h.manaMax = pool.max;
   h.manaRegen = pool.regen;
   h.mana = Math.min(h.mana, pool.max);
-  h.abilities = resolveAll(registry, builds, stats);
-  h.abilities.forEach((ab, i) => (h.charge[i] = Math.min(h.charge[i], ab.chargeNeed)));
+  h.chains = resolveAll(registry, chains, stats);
+  h.chains.forEach((chain, i) => {
+    h.cooldowns[i] = chain.moves.map((_, j) => h.cooldowns[i][j] ?? 0);
+    h.comboStep[i] = Math.min(h.comboStep[i], chain.moves.length - 1);
+    h.charge[i] = Math.min(h.charge[i], chargeCap(chain));
+  });
 }
 
-function sameBuild(a: AbilityBuild | undefined, b: AbilityBuild): boolean {
+function sameChain(a: ResolvedChain | undefined, b: Chain): boolean {
   return (
     !!a &&
-    a.form === b.form &&
-    a.weight === b.weight &&
     a.payment === b.payment &&
-    a.elements.join() === b.elements.join()
+    a.moves.length === b.moves.length &&
+    a.moves.every(
+      (m, i) =>
+        m.kind === b.moves[i].kind &&
+        m.form.id === b.moves[i].form &&
+        m.elements.join() === b.moves[i].elements.join(),
+    )
   );
 }
 
@@ -305,7 +316,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     door: opts.door,
     width,
     height,
-    hero: createHeroEntity(registry, opts.stats, opts.abilities, {
+    hero: createHeroEntity(registry, opts.stats, opts.chains, {
       hpFrac: opts.heroHpFrac,
       potions: opts.potions,
       phoenixAvailable: opts.phoenixAvailable,

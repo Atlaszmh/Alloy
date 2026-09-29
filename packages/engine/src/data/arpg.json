@@ -11,33 +11,33 @@
   "forms": [
     {
       "id": "bolt", "slot": "primary", "name": "Bolt", "icon": "☄️",
-      "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "combo": [0.8, 0.8, 1.0, 1.5], "motion": -0.15,
+      "power": 1.45, "range": 9, "radius": 0.9, "speed": 13, "motion": -0.15,
       "defaultChain": ["light", "light", "medium", "heavy"],
-      "text": "A bolt that bursts on the first foe it hits. Press again to chain: small, small, medium, large."
+      "text": "A bolt that bursts on the first foe it hits. Each later move of a chain hits harder and bursts wider."
     },
     {
       "id": "volley", "slot": "primary", "name": "Volley", "icon": "🎯",
-      "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "combo": [1, 1, 1], "comboCount": [3, 3, 5], "motion": -0.1,
+      "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "motion": -0.1,
       "defaultChain": ["medium", "medium", "medium"], "countByKind": { "light": 3, "medium": 3, "heavy": 5, "hold": 5 },
-      "text": "Homing darts that seek out different foes. The third press fires five."
+      "text": "Homing darts that seek out different foes: three, or five from a heavy move or a hold charged past its first stage."
     },
     {
       "id": "lance", "slot": "primary", "name": "Lance", "icon": "🗡️",
-      "power": 1.55, "range": 7.5, "radius": 0.55, "combo": [1, 1, 1.4], "motion": -0.3,
+      "power": 1.55, "range": 7.5, "radius": 0.55, "motion": -0.3,
       "defaultChain": ["medium", "medium", "heavy"],
-      "text": "An instant line that hits every foe along it. The third press reaches further and hits harder."
+      "text": "An instant line that hits every foe along it. Each later move of a chain reaches further and hits harder."
     },
     {
       "id": "burst", "slot": "primary", "name": "Burst", "icon": "💥",
-      "power": 1.7, "range": 8, "radius": 1.6, "combo": [1, 1, 1.5], "motion": 0.2, "speed": 30,
+      "power": 1.7, "range": 8, "radius": 1.6, "motion": 0.2, "speed": 30,
       "defaultChain": ["medium", "medium", "heavy"],
-      "text": "An explosion where you aim. The third press is bigger."
+      "text": "An explosion where you aim. Each later move of a chain is bigger."
     },
     {
       "id": "strike", "slot": "primary", "name": "Strike", "icon": "⚔️",
-      "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "combo": [1, 1, 1.2, 1.8], "motion": 0.5,
+      "power": 1.4, "range": 2.4, "radius": 2.4, "arc": 150, "motion": 0.5,
       "defaultChain": ["medium", "medium", "medium", "heavy"],
-      "text": "An element-infused sweep in front of you. The fourth press slams everything around you."
+      "text": "An element-infused sweep in front of you. The last move of a chain slams everything around you."
     },
     {
       "id": "ward", "slot": "defensive", "name": "Ward", "icon": "🛡️",

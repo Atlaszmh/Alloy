@@ -19,9 +19,10 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { castAbility, castTick } from './abilities/cast.js';
+import { castAbility, castTick, pressStep } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
+import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { burstShot, startSwing, strike } from './basic.js';
@@ -137,16 +138,17 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (world.queuedCast !== null && (dashing || h.windup))
     world.queuedCastUntil = Math.max(world.queuedCastUntil, t + bal.feel.buffer);
   if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
-  // A press on cooldown stays queued (ageing) and fires if the cooldown ends in time.
+  // A press whose move is on cooldown stays queued (ageing) and fires if the cooldown ends in time.
+  const q = world.queuedCast;
   if (
-    world.queuedCast !== null &&
+    q !== null &&
     !dashing &&
     !h.windup &&
-    t >= h.cooldowns[world.queuedCast.slot]
+    !!h.chains[q.slot] &&
+    t >= h.cooldowns[q.slot][pressStep(h, q.slot, t, bal.abilities.comboWindow)]
   ) {
-    const cast = world.queuedCast;
     world.queuedCast = null;
-    castAbility(ctx, cast);
+    castAbility(ctx, q);
   }
   castTick(ctx);
 
@@ -200,10 +202,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
   // Infinite mana (Training Grounds) tops the pool up every tick.
   h.mana = world.sandbox?.infiniteMana ? h.manaMax : Math.min(h.manaMax, h.mana + h.manaRegen * dt);
-  // No cooldowns (Training Grounds) keeps every charge-paid ability charged.
+  // No cooldowns (Training Grounds) keeps every charge-paid chain charged.
   if (world.sandbox?.noCooldowns)
-    h.abilities.forEach((ab, i) => {
-      if (ab.build.payment === 'charge') h.charge[i] = ab.chargeNeed;
+    h.chains.forEach((chain, i) => {
+      if (chain.payment === 'charge') h.charge[i] = chargeCap(chain);
     });
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);

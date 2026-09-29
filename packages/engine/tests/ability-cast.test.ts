@@ -8,6 +8,7 @@ import {
   damaged,
   dummy,
   gear,
+  moveOf,
   press,
   pressOnly,
   registry,
@@ -23,14 +24,14 @@ describe('mana payment', () => {
     // `press` runs through the conjure; regen would shift the mana check.
     w.hero.manaRegen = 0;
     const mana = w.hero.mana;
-    const cost = w.hero.abilities[0].cost;
+    const cost = moveOf(w, 0).cost;
     const events = press(w, 0);
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0 && e.name === 'Fire Bolt')).toBe(
       true,
     );
     expect(w.hero.mana).toBeCloseTo(mana - cost, 0);
     expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(false);
-    run(w, w.hero.abilities[0].cooldown);
+    run(w, moveOf(w, 0).cooldown);
     expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(true);
   });
 
@@ -57,7 +58,7 @@ describe('cast payment', () => {
       noBasic: true,
       ultimate: { payment: 'cast' },
     });
-    const castTime = w.hero.abilities[2].castTime;
+    const castTime = moveOf(w, 2).castTime;
     expect(castTime).toBeGreaterThan(0);
     const events = pressOnly(w, 2);
     expect(events.some((e) => e.kind === 'windup')).toBe(true);
@@ -84,7 +85,7 @@ describe('wind-up targets', () => {
     pressOnly(w, 0);
     expect(w.hero.windup).not.toBeNull();
     w.monsters = [];
-    const events = run(w, w.hero.abilities[0].castTime + 0.1);
+    const events = run(w, moveOf(w, 0).castTime + 0.1);
     const cast = events.find((e) => e.kind === 'cast');
     expect(cast && cast.kind === 'cast' && Math.hypot(cast.tx - 13, cast.ty - 29)).toBeLessThan(
       0.01,
@@ -95,7 +96,7 @@ describe('wind-up targets', () => {
 describe('charge payment', () => {
   it('fills from damage dealt and in lulls, fires only when full, then empties', () => {
     const w = arena([dummy(13, 34.4)], { noBasic: false });
-    const need = w.hero.abilities[2].chargeNeed;
+    const need = moveOf(w, 2).chargeNeed;
     expect(w.hero.charge[2]).toBe(0);
     expect(press(w, 2).some((e) => e.kind === 'cast')).toBe(false);
     run(w, 3);

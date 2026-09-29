@@ -6,7 +6,7 @@ import { stepWorld } from '../src/arpg/step.js';
 import { applyStatus, hitMonster, makeCtx } from '../src/arpg/combat.js';
 import { botInput } from '../src/arpg/bot.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
-import { DEFAULT_BUILDS } from './fixtures/arena.js';
+import { DEFAULT_CHAINS, moveOf } from './fixtures/arena.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
@@ -34,7 +34,7 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
     depth: 2,
     door: null,
     stats: computeHeroStats(equipped, registry),
-    abilities: DEFAULT_BUILDS,
+    chains: DEFAULT_CHAINS,
     heroHpFrac: 1,
     potions: 3,
     phoenixAvailable: true,
@@ -180,7 +180,7 @@ describe('abilities in the sim', () => {
     stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, STEP / 4);
     const later = stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
     expect(later.some((e) => e.kind === 'windup' && e.slot === 0)).toBe(true);
-    expect(run(w, w.hero.abilities[0].castTime + STEP).some((e) => e.kind === 'cast')).toBe(true);
+    expect(run(w, moveOf(w, 0).castTime + STEP).some((e) => e.kind === 'cast')).toBe(true);
   });
 
   it('a Fire Bolt burns what it hits', () => {

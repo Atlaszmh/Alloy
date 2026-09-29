@@ -2,10 +2,11 @@ import type { ManaType } from './mana.js';
 import type { FormDef, FusionDef, StatusId, Vec } from './arpg.js';
 
 /**
- * Abilities are built from parts: a form (what it does), one or two elements
- * (how it behaves), a weight (light and cheap to heavy and costly) and a
- * payment (mana, charge or cast time). `resolveAbility` compiles a build into
- * plain numbers and knobs that the combat code reads.
+ * Each ability slot holds a chain of moves (see the moves and chains spec): a
+ * move is a kind (light, medium, heavy or hold), a form (what it does) and one
+ * or two elements (how it behaves); the chain has one payment (mana, charge or
+ * cast time). `resolveChain` compiles a chain into plain numbers and knobs that
+ * the combat code reads.
  */
 
 export type AbilitySlot = 'primary' | 'defensive' | 'ultimate';
@@ -26,7 +27,7 @@ export type FormId =
   | 'barrage'
   | 'maelstrom';
 
-/** Swift, Quick, Balanced, Heavy, Crushing. */
+/** Swift, Quick, Balanced, Heavy, Crushing: the per-weight tables' index − 2 (a version 4 build's weight). */
 export type AbilityWeight = -2 | -1 | 0 | 1 | 2;
 
 export const ABILITY_WEIGHTS: readonly AbilityWeight[] = [-2, -1, 0, 1, 2] as const;
@@ -35,6 +36,7 @@ export type AbilityPayment = 'mana' | 'charge' | 'cast';
 
 export const ABILITY_PAYMENTS: readonly AbilityPayment[] = ['mana', 'charge', 'cast'] as const;
 
+/** A version 4 save's ability (see `chainFromBuild`). */
 export interface AbilityBuild {
   form: FormId;
   /** One element, or two distinct elements (a fusion). */
@@ -49,6 +51,9 @@ export type AbilityBuilds = Record<AbilitySlot, AbilityBuild>;
 export type MoveKind = 'light' | 'medium' | 'heavy' | 'hold';
 
 export const MOVE_KINDS: readonly MoveKind[] = ['light', 'medium', 'heavy', 'hold'] as const;
+
+/** The kinds whose numbers a hold's three stages take (Volley's darts, a basic hold's rows). */
+export const HOLD_STAGE_KINDS: readonly MoveKind[] = ['medium', 'heavy', 'hold'] as const;
 
 /** One move of an ability chain: its kind, a form of the chain's slot, and one or two elements. */
 export interface Move {
@@ -127,10 +132,18 @@ export interface AbilityCast {
   aim?: Vec | null;
 }
 
-/** An ability build compiled to plain numbers; the combat code reads only this. */
+/** A move compiled to plain numbers; the combat code reads only this. */
 export interface ResolvedAbility {
   slot: AbilitySlot;
-  build: AbilityBuild;
+  kind: MoveKind;
+  /** The weight it resolved at (its kind's; a hold's stage's). */
+  weight: number;
+  /** A hold move's stage (0 for any other move). */
+  stage: number;
+  payment: AbilityPayment;
+  /** Its place in the chain (from 0), and whether it is the last move of a chain of 2 or more. */
+  index: number;
+  last: boolean;
   form: FormDef;
   /** "Wildfire Burst", "Frost Ward". */
   name: string;
@@ -162,9 +175,9 @@ export interface ResolvedAbility {
   heavyStagger: boolean;
   /** Stacks each direct hit applies (by weight, `stacks.byWeight`). */
   stacks: number;
-  /** Units moved when cast: + steps in over the conjure, − recoils after the release; before the press-combo multiplier. */
+  /** Units moved when cast: + steps in over the conjure, − recoils after the release; before the step bonus. */
   motion: number;
-  /** Charge units needed (charge payment only). */
+  /** Charge units needed (charge payment only; a hold's is its stage 2's). */
   chargeNeed: number;
   range: number;
   radius: number;
@@ -174,8 +187,12 @@ export interface ResolvedAbility {
   tick: number;
   /** Melee arc in degrees. */
   arc: number;
-  /** Press-combo multipliers; `[1]` when the form has no combo. */
-  combo: number[];
-  comboCount: number[] | null;
   knobs: Knobs;
+}
+
+/** A slot's chain compiled: its moves (a hold's at stage 0) and each hold move's three stages. */
+export interface ResolvedChain {
+  moves: ResolvedAbility[];
+  payment: AbilityPayment;
+  hold: (ResolvedAbility[] | null)[];
 }

@@ -1,6 +1,11 @@
 import type { DataRegistry } from '../data/registry.js';
-import { ABILITY_SLOTS, type AbilityBuilds, type ResolvedAbility } from '../types/ability.js';
-import { defaultAbilities, resolveAbility } from '../arpg/abilities/resolve.js';
+import {
+  ABILITY_SLOTS,
+  type AbilitySlot,
+  type Chains,
+  type ResolvedChain,
+} from '../types/ability.js';
+import { defaultChains, resolveChain, stepBonus } from '../arpg/abilities/resolve.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -280,31 +285,48 @@ const TARGETS: Record<string, number> = {
   blink: 1.5,
 };
 
-/** Damage of one use, counting combos, chains, lingering ground and repeats. */
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/**
+ * Damage of one use of a chain, averaged over its moves (each with its step
+ * bonus), counting jumps, lingering ground and repeats.
+ */
 function damagePerUse(
-  ab: ResolvedAbility,
+  chain: ResolvedChain,
   hit: number,
   stats: HeroStats,
   bal: DelveBalance,
 ): number {
-  const combo = ab.combo.reduce((a, b) => a + b, 0) / ab.combo.length;
-  const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
-  const repeats =
-    ab.form.id === 'barrage' ? ab.count : ab.form.id === 'maelstrom' ? ab.duration / ab.tick : 1;
-  let chain = 0;
-  for (let i = 1; i <= ab.knobs.chain; i++) chain += Math.pow(bal.abilities.chainPower, i);
-  const zone = ab.knobs.zone
-    ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets
-    : 0;
-  const perHit = hit * ab.power * combo * (1 + stats.elementPower[ab.element]);
-  return perHit * (targets + chain + zone) * repeats;
+  return mean(
+    chain.moves.map((ab) => {
+      const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
+      const repeats =
+        ab.form.id === 'barrage'
+          ? ab.count
+          : ab.form.id === 'maelstrom'
+            ? ab.duration / ab.tick
+            : 1;
+      let jumps = 0;
+      for (let i = 1; i <= ab.knobs.chain; i++) jumps += Math.pow(bal.abilities.chainPower, i);
+      const zone = ab.knobs.zone
+        ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets
+        : 0;
+      const step = stepBonus(bal, ab.index).power;
+      const perHit = hit * ab.power * step * (1 + stats.elementPower[ab.element]);
+      return perHit * (targets + jumps + zone) * repeats;
+    }),
+  );
 }
 
-/** Seconds between uses when the ability is used as often as its payment allows. */
-function useInterval(ab: ResolvedAbility, manaIncome: number, chargeRate: number): number {
-  if (ab.build.payment === 'charge')
-    return Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate));
-  return Math.max(ab.cooldown + ab.channel, ab.cost / Math.max(0.1, manaIncome));
+/** Seconds between uses, averaged over the chain's moves, when used as often as the payment allows. */
+function useInterval(chain: ResolvedChain, manaIncome: number, chargeRate: number): number {
+  return mean(
+    chain.moves.map((ab) =>
+      chain.payment === 'charge'
+        ? Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate))
+        : Math.max(ab.cooldown + ab.channel, ab.cost / Math.max(0.1, manaIncome)),
+    ),
+  );
 }
 
 /**
@@ -317,7 +339,11 @@ export function estimateCombat(
   stats: HeroStats,
   registry: DataRegistry,
   depth: number,
-  builds: AbilityBuilds = defaultAbilities(stats.weapon.element ?? 'fire'),
+  chains: Pick<Chains, AbilitySlot> = defaultChains(
+    registry,
+    stats.weapon.element ?? 'fire',
+    stats.weapon.baseId,
+  ),
 ): CombatEstimate {
   const bal = registry.getDelveBalance();
   const ref = referenceMonster(registry, depth);
@@ -343,7 +369,7 @@ export function estimateCombat(
   let dps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
 
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
-    resolveAbility(registry, slot, builds[slot], stats),
+    resolveChain(registry, stats, slot, chains[slot]),
   );
   const pool = manaPool(stats, registry);
   const manaIncome = pool.regen + bal.mana.basicAttackGain / strikeInterval;
@@ -361,15 +387,16 @@ export function estimateCombat(
   let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
   let bonusLife = 0;
   const guardEvery = useInterval(defensive, manaIncome * 0.3, chargeRate);
-  const guardFor =
-    defensive.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : defensive.duration;
+  // The Defensive's effect: its first move's.
+  const guard = defensive.moves[0];
+  const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
   const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
-  if (defensive.form.id === 'armor') mitigation *= 1 - Math.min(0.75, defensive.effect) * uptime;
-  if (defensive.elements.includes('earth'))
+  if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
+  if (guard.elements.includes('earth'))
     mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
-  if (defensive.form.id === 'ward') bonusLife += stats.maxHp * defensive.effect * uptime * 2;
-  if (defensive.form.id === 'surge') dps *= 1 + defensive.effect * uptime;
-  if (defensive.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
+  if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
+  if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
+  if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
   dps += (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
 
   dps += stats.thorns / ref.interval;
@@ -411,7 +438,7 @@ export function compareItem(
   item: GearItem,
   registry: DataRegistry,
   depth: number,
-  builds?: AbilityBuilds,
+  chains?: Pick<Chains, AbilitySlot>,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): ItemComparison {
@@ -419,8 +446,8 @@ export function compareItem(
   const next = { ...equipped, [item.slot]: item };
   const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair));
   const afterStats = computeHeroStats(next, registry, pairExtra(pair));
-  const before = estimateCombat(beforeStats, registry, depth, builds);
-  const after = estimateCombat(afterStats, registry, depth, builds);
+  const before = estimateCombat(beforeStats, registry, depth, chains);
+  const after = estimateCombat(afterStats, registry, depth, chains);
 
   const attunementDelta: Partial<ManaMap> = {};
   for (const m of MANA_TYPES) {
@@ -444,10 +471,10 @@ export function heroPower(
   equipped: EquippedGear,
   registry: DataRegistry,
   depth: number,
-  builds?: AbilityBuilds,
+  chains?: Pick<Chains, AbilitySlot>,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): number {
   const stats = computeHeroStats(equipped, registry, pairExtra(pair));
-  return estimateCombat(stats, registry, depth, builds).power;
+  return estimateCombat(stats, registry, depth, chains).power;
 }

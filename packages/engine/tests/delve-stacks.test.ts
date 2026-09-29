@@ -17,21 +17,21 @@ import {
   type HitOpts,
 } from '../src/arpg/combat.js';
 import { shieldHero } from '../src/arpg/abilities/defend.js';
-import { resolveAbility } from '../src/arpg/abilities/resolve.js';
+import { resolveAbility, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { ABILITY_WEIGHTS } from '../src/types/ability.js';
 import type { ArpgEvent, MonsterEntity } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
-  DEFAULT_BUILDS,
+  DEFAULT_CHAINS,
   STEP,
   arena,
   bal,
   dummy,
   firstBlow,
   gear,
+  moveOf,
   press,
   registry,
   run,
@@ -138,7 +138,7 @@ describe('stacks', () => {
     const sandbox = createSandboxWorld(registry, {
       depth: 3,
       stats: computeHeroStats({}, registry),
-      abilities: DEFAULT_BUILDS,
+      chains: DEFAULT_CHAINS,
       toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
     });
     const [target] = spawnDummies(registry, sandbox, { layout: 'single', element: null });
@@ -313,7 +313,7 @@ describe('freeze', () => {
 
   it("a Frost Ward's retaliation freezes an attacker whose chills cross freezeAt", () => {
     const { w, ctx, m } = setup([dummy(13, 35)]); // the fixture's Defensive is a Frost Ward
-    w.hero.defend = { form: 'ward', until: 1e9 };
+    w.hero.defend = { form: 'ward', until: 1e9, move: 0, stage: 0 };
     m.status.stacks.frost = bal.stacks.freezeAt - 1;
     shieldHero(ctx, 10, m, true);
     expect(isFrozen(ctx, m)).toBe(true);
@@ -360,18 +360,26 @@ describe('stacks per hit', () => {
 
   it("an ability's direct hit applies its weight's stacks", () => {
     const stats = computeHeroStats({}, registry);
-    const counts = ABILITY_WEIGHTS.map(
-      (weight) =>
-        resolveAbility(registry, 'primary', { ...DEFAULT_BUILDS.primary, weight }, stats).stacks,
+    const bolt = DEFAULT_CHAINS.primary.moves[0];
+    const at = (kind: 'light' | 'medium' | 'heavy' | 'hold', stage = 0) =>
+      resolveAbility(registry, 'primary', { ...bolt, kind }, 'mana', stats, stage);
+    const moves = [
+      at('light'),
+      at('medium'),
+      at('heavy'),
+      at('hold', 0),
+      at('hold', 1),
+      at('hold', 2),
+    ];
+    expect(moves.map((ab) => ab.stacks)).toEqual(
+      moves.map((ab) => bal.stacks.byWeight[ab.weight + 2]),
     );
-    expect(counts).toEqual(bal.stacks.byWeight);
-    for (const weight of [-2, 0, 2] as const) {
-      const w = arena([dummy(13, 30)], { noBasic: true, primary: { weight } });
+    expect(moves.map((ab) => ab.stacks)).toEqual([1, 2, 3, 2, 3, 3]);
+    for (const kind of ['light', 'medium', 'heavy'] as const) {
+      const w = arena([dummy(13, 30)], { noBasic: true, primary: { kind } });
       press(w, 0);
       run(w, 1);
-      expect(w.monsters[0].status.stacks.fire, `weight ${weight}`).toBe(
-        bal.stacks.byWeight[weight + 2],
-      );
+      expect(w.monsters[0].status.stacks.fire, kind).toBe(moveOf(w, 0).stacks);
     }
   });
 
@@ -460,7 +468,6 @@ describe('pairing', () => {
   });
 
   it("a Twin Fang echo pairs nothing: a Fire Surge's frost finisher and its echo react with nothing on a clean foe", () => {
-    const build = { form: 'surge', elements: ['fire'], weight: 0, payment: 'mana' } as const;
     for (const [baseId, foe] of [
       ['sword', dummy(13, 34.5)],
       ['staff', dummy(13, 33)],
@@ -471,8 +478,11 @@ describe('pairing', () => {
         true,
         foe,
       );
-      w.hero.abilities[1] = resolveAbility(registry, 'defensive', build, w.hero.stats);
-      w.hero.defend = { form: 'surge', until: 1e9 };
+      w.hero.chains[1] = resolveChain(registry, w.hero.stats, 'defensive', {
+        moves: [{ kind: 'medium', form: 'surge', elements: ['fire'] }],
+        payment: 'mana',
+      });
+      w.hero.defend = { form: 'surge', until: 1e9, move: 0, stage: 0 };
       const events = firstBlow(w);
       w.hero.nextAttackAt = 1e9;
       events.push(...run(w, 1)); // the shots land
@@ -637,7 +647,7 @@ describe('strength', () => {
       // Room for each effect to show: a heal, a dodge to give back, a cooldown to cut.
       h.hp = 1;
       h.dodgeCharges = 0;
-      h.cooldowns[0] = 5;
+      h.cooldowns[0][0] = 5;
       m.status.stacks[partner] = n;
       const dealt = hitMonster(ctx, m, 100, hit, { source: 'skill', stacks: n });
       expect(fired(events), `n ${n}`).toEqual([[id, 1]]);
@@ -651,7 +661,7 @@ describe('strength', () => {
         barrier: h.barrier?.hp,
         dodges: h.dodgeCharges,
         quick: h.quickUntil,
-        cooldown: h.cooldowns[0],
+        cooldown: h.cooldowns[0][0],
         drops: w.drops.map((d) => d.kind),
         frozen: isFrozen(ctx, m),
         sunder: m.status.sunderUntil,

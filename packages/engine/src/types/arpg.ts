@@ -9,6 +9,7 @@ import type {
   Knobs,
   MoveKind,
   ResolvedAbility,
+  ResolvedChain,
 } from './ability.js';
 
 // ── Data definitions (arpg.json) ───────────────────────────────────────────
@@ -64,10 +65,6 @@ export interface FormDef {
   tick?: number;
   /** Melee arc in degrees. */
   arc?: number;
-  /** Press-combo multipliers for power and size (Primary forms). */
-  combo?: number[];
-  /** Press-combo projectile counts (Volley). */
-  comboCount?: number[];
   /** The form's default chain: new heroes' and migrated builds' moves (see the moves and chains spec). */
   defaultChain: MoveKind[];
   /** Projectiles by kind (Volley; a hold's stages count as medium, heavy and hold). */
@@ -299,13 +296,13 @@ export interface HeroEntity {
   manaMax: number;
   /** Mana per second. */
   manaRegen: number;
-  /** Primary, Defensive, Ultimate. */
-  abilities: ResolvedAbility[];
-  /** Per slot: time it is ready again. */
-  cooldowns: number[];
-  /** Per slot: charge units banked (charge payment). */
+  /** The Primary's, Defensive's and Ultimate's chains. */
+  chains: ResolvedChain[];
+  /** Per slot and move: the time the move is ready again. */
+  cooldowns: number[][];
+  /** Per slot: charge units banked (a charge-paid chain's meter). */
   charge: number[];
-  /** Per slot: the combo step of the last cast and when it landed (a press's step is chosen from these). */
+  /** Per slot: the move of the last cast and when it landed (a press's move is chosen from these). */
   comboStep: number[];
   comboAt: number[];
   /** An ability winding up (every ability conjures; cast payment channels too); the hero can't walk or attack meanwhile (a forward form's step-in still moves it). */
@@ -316,7 +313,7 @@ export interface HeroEntity {
     at: Vec;
     start: number;
     until: number;
-    /** The press-combo step, chosen at the press. */
+    /** The chain's move, chosen at the press. */
     step: number;
     /** When the conjure ends (any channel follows). */
     conjureUntil: number;
@@ -348,8 +345,11 @@ export interface HeroEntity {
   } | null;
   /** Movement is slowed until this time (after a strike or a landed ability). */
   recoverUntil: number;
-  /** The active defensive (Ward, Armor, Surge; Blink's trail effects). */
-  defend: { form: FormId; until: number } | null;
+  /**
+   * The active defensive (Ward, Armor, Surge; Blink's trail effects): the chain's
+   * `move` that cast it, at its hold `stage` (0 for any other move).
+   */
+  defend: { form: FormId; until: number; move: number; stage: number } | null;
   ward: { hp: number; max: number } | null;
   /** Obsidian's barrier: soaks damage after the Defensive and before the Ward, until `until`. */
   barrier: { hp: number; max: number; until: number } | null;

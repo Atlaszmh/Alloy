@@ -21,6 +21,7 @@ import {
 import { compareItem, itemAttunement } from './hero-stats.js';
 import { bindSecondary, fixBuildsToPair, profileStats, resolveOvertake } from './pair.js';
 import {
+  buildChains,
   createDelveProfile,
   equipBest,
   fuseGear,
@@ -84,7 +85,12 @@ function playFloor(
       const best = equipBest(registry, p);
       if (best.equipped.length > 0) {
         p = best.profile;
-        refreshWorldHero(registry, world, profileStats(registry, p), p.abilities);
+        refreshWorldHero(
+          registry,
+          world,
+          profileStats(registry, p),
+          buildChains(registry, p.abilities),
+        );
       }
     }
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;

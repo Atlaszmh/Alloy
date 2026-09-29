@@ -1,13 +1,20 @@
 import type { DataRegistry } from '../../data/registry.js';
-import type {
-  AbilityBuild,
-  AbilityBuilds,
-  AbilitySlot,
-  Knobs,
-  ResolvedAbility,
+import {
+  HOLD_STAGE_KINDS,
+  type AbilityBuilds,
+  type AbilityPayment,
+  type AbilitySlot,
+  type Blow,
+  type Chain,
+  type Chains,
+  type FormId,
+  type Knobs,
+  type Move,
+  type ResolvedAbility,
+  type ResolvedChain,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
-import type { HeroStats } from '../../types/delve.js';
+import type { DelveBalance, HeroStats } from '../../types/delve.js';
 
 const NEUTRAL: Knobs = {
   power: 1,
@@ -44,48 +51,64 @@ export function mergeKnobs(...parts: Partial<Knobs>[]): Knobs {
   return k;
 }
 
-/** Compile a build into the numbers and knobs the combat code reads. */
+/** The weight a move resolves at: its kind's (`chains.kindWeight`), a hold's by its stage. */
+export function moveWeight(bal: DelveBalance, kind: Move['kind'], stage = 0): number {
+  const c = bal.chains;
+  return kind === 'hold' ? c.holdStageWeight[stage] : c.kindWeight[kind];
+}
+
+/**
+ * Compile one move into the numbers and knobs the combat code reads: at its
+ * kind's weight (a hold's at `stage`), paid with `payment`. It resolves as the
+ * first move of a chain; `resolveChain` places it.
+ */
 export function resolveAbility(
   registry: DataRegistry,
   slot: AbilitySlot,
-  build: AbilityBuild,
+  move: Move,
+  payment: AbilityPayment,
   stats: HeroStats,
+  stage = 0,
 ): ResolvedAbility {
   const data = registry.getArpgData();
   const bal = registry.getDelveBalance();
   const ab = bal.abilities;
-  const form = registry.getForm(build.form);
+  const form = registry.getForm(move.form);
   if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
-  const [element, second] = build.elements;
+  const [element, second] = move.elements;
   const fusion =
     second && second !== element ? (registry.getFusion(element, second) ?? null) : null;
   const L = stats.legendaries;
 
   const legendary: Partial<Knobs>[] = [];
-  if (L.stormcaller && build.elements.includes('storm'))
+  if (L.stormcaller && move.elements.includes('storm'))
     legendary.push({ chain: Math.round(L.stormcaller) });
-  if (L.bedrock && build.elements.includes('earth'))
+  if (L.bedrock && move.elements.includes('earth'))
     legendary.push({ area: 1.4, applies: ['stagger'] });
-  if (L.rimeheart && build.form === 'nova' && build.elements.includes('frost')) {
+  if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
   const knobs = mergeKnobs(
-    ...build.elements.map((e) => data.elementTraits[e].knobs),
+    ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
   );
 
-  const w = build.weight;
+  const w = moveWeight(bal, move.kind, stage);
   const W = ab.weight;
   const s = ab.slots[slot];
-  const cast = build.payment === 'cast';
+  const cast = payment === 'cast';
   const payPower = cast ? ab.castPowerMult : 1;
   const avgAttune =
-    build.elements.reduce((sum, e) => sum + stats.attunement[e], 0) / build.elements.length;
+    move.elements.reduce((sum, e) => sum + stats.attunement[e], 0) / move.elements.length;
   // Gear `<Element> Damage` applies per hit by damage element (hitMonster), not here.
   const attunePower = 1 + bal.mana.powerPerAttune * avgAttune;
   const manaCost = s.cost * (1 + W.cost * w) * (1 - (L.manaweaver ?? 0) / 100);
   const size = 1 + W.size * w;
+  // A hold needs its full charge's worth before it starts (see the moves and chains spec).
+  const needWeight = move.kind === 'hold' ? moveWeight(bal, 'hold', 2) : w;
+  // Volley's darts by kind; a hold's stages count as medium, heavy and hold.
+  const countKind = move.kind === 'hold' ? HOLD_STAGE_KINDS[stage] : move.kind;
 
   const F = bal.feel;
   const wi = w + 2;
@@ -94,18 +117,23 @@ export function resolveAbility(
 
   return {
     slot,
-    build,
+    kind: move.kind,
+    weight: w,
+    stage: move.kind === 'hold' ? stage : 0,
+    payment,
+    index: 0,
+    last: false,
     form,
     name: `${fusion ? fusion.name : data.mana[element].name} ${form.name}`,
     icon: form.icon,
     element,
-    elements: [...build.elements],
+    elements: [...move.elements],
     fusion,
     power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower,
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
-    cost: build.payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
+    cost: payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
     cooldown:
-      build.payment === 'charge'
+      payment === 'charge'
         ? ab.chargeLockout
         : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
     castTime: conjure + channel,
@@ -117,27 +145,104 @@ export function resolveAbility(
     heavyStagger: w >= 2,
     stacks: bal.stacks.byWeight[wi],
     motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
-    chargeNeed: build.payment === 'charge' ? s.cost * (1 + W.cost * w) * ab.chargeRatio : 0,
+    chargeNeed: payment === 'charge' ? s.cost * (1 + W.cost * needWeight) * ab.chargeRatio : 0,
     range: form.range ?? 0,
     radius: (form.radius ?? 0) * size * knobs.area,
     speed: (form.speed ?? 0) * (1 - W.speed * w),
-    count: form.count ?? 1,
+    count: form.countByKind?.[countKind] ?? form.count ?? 1,
     duration: form.duration ?? 0,
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,
-    combo: form.combo ?? [1],
-    comboCount: form.comboCount ?? null,
     knobs,
   };
 }
 
-/** How hard press-combo `step` lands: the ability's heft, +0.2 on the last press of a 2+ press combo. */
-export function stepHeft(ab: ResolvedAbility, step: number): number {
-  const n = ab.combo.length;
-  return Math.min(1, ab.heft + (n > 1 && step % n === n - 1 ? 0.2 : 0));
+/**
+ * Compile a slot's chain: each move at its kind's weight with the chain's
+ * payment, placed in the chain (its `index`, and `last` on the last of 2+),
+ * and each hold move's three stages (`moves[i]` is its stage 0).
+ */
+export function resolveChain(
+  registry: DataRegistry,
+  stats: HeroStats,
+  slot: AbilitySlot,
+  chain: Chain,
+): ResolvedChain {
+  const n = chain.moves.length;
+  const at = (move: Move, index: number, stage = 0): ResolvedAbility => ({
+    ...resolveAbility(registry, slot, move, chain.payment, stats, stage),
+    index,
+    last: n > 1 && index === n - 1,
+  });
+  return {
+    moves: chain.moves.map((m, i) => at(m, i)),
+    payment: chain.payment,
+    hold: chain.moves.map((m, i) => (m.kind === 'hold' ? [0, 1, 2].map((s) => at(m, i, s)) : null)),
+  };
 }
 
-/** Builds for a new (or migrated) profile, all of `element`. */
+/** Move `step` of a chain as it fires: a hold move at `stage`, any other as it is. */
+export function chainMove(chain: ResolvedChain, step: number, stage = 0): ResolvedAbility {
+  return chain.hold[step]?.[stage] ?? chain.moves[step];
+}
+
+/** The most charge a chain's meter holds: its largest need. */
+export function chargeCap(chain: ResolvedChain): number {
+  return Math.max(...chain.moves.map((m) => m.chargeNeed));
+}
+
+/** The step bonus of the move at `index`: its power and size factors. */
+export function stepBonus(bal: DelveBalance, index: number): { power: number; size: number } {
+  const b = bal.chains.stepBonus * index;
+  return { power: 1 + b, size: 1 + b / 2 };
+}
+
+/** How hard a move lands: its heft, +0.2 on the last move of a chain of 2 or more. */
+export function stepHeft(ab: ResolvedAbility): number {
+  return Math.min(1, ab.heft + (ab.last ? 0.2 : 0));
+}
+
+/**
+ * The weapon's default basic chain on the pair: every blow the primary, the
+ * last the secondary when one is bound (unarmed: the hero's default chain).
+ */
+export function defaultBasic(
+  registry: DataRegistry,
+  weaponBaseId: string | null,
+  primary: ManaType,
+  secondary: ManaType | null = null,
+): Blow[] {
+  const kinds =
+    (weaponBaseId ? registry.getGearBase(weaponBaseId).defaultChain : undefined) ??
+    registry.getDelveBalance().hero.defaultChain;
+  return kinds.map((kind, i) => ({
+    kind,
+    element: secondary && i === kinds.length - 1 ? secondary : primary,
+  }));
+}
+
+/**
+ * A new (or reset) hero's chains, all of `element`: each slot's form's default
+ * chain (Bolt, Ward, Nova) with today's payments, and the weapon's default basic chain.
+ */
+export function defaultChains(
+  registry: DataRegistry,
+  element: ManaType,
+  weaponBaseId: string | null,
+): Chains {
+  const chain = (form: FormId, payment: AbilityPayment): Chain => ({
+    moves: registry.getForm(form).defaultChain.map((kind) => ({ kind, form, elements: [element] })),
+    payment,
+  });
+  return {
+    basic: defaultBasic(registry, weaponBaseId, element),
+    primary: chain('bolt', 'mana'),
+    defensive: chain('ward', 'mana'),
+    ultimate: chain('nova', 'charge'),
+  };
+}
+
+/** Builds for a new (or migrated) profile, all of `element` (until the save holds chains). */
 export function defaultAbilities(element: ManaType): AbilityBuilds {
   return {
     primary: { form: 'bolt', elements: [element], weight: 0, payment: 'mana' },

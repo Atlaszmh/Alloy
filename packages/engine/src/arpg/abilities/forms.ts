@@ -3,7 +3,7 @@ import type { Vec } from '../../types/arpg.js';
 import { hitMonster, type SimCtx } from '../combat.js';
 import { angleBetween, clamp, dirTo, dist, distToSegment } from '../geometry.js';
 import { abilityHit, chainFrom, hitOpts, impact, leaveZone } from './impact.js';
-import { stepHeft } from './resolve.js';
+import { stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, alive, spawnProjectile } from './targeting.js';
 
 export interface FormResult {
@@ -17,29 +17,26 @@ function rotate(d: Vec, a: number): Vec {
 }
 
 /**
- * Carry out an ability's form. `step` is the press-combo step (Primary forms
- * scale their size and power by `combo[step]`). Fails (nothing happens) when
- * there is nothing to aim at.
+ * Carry out a move's form. A move after a chain's first lands with its step
+ * bonus: harder, and a Bolt, a Lance or a Burst bigger. Fails (nothing
+ * happens) when there is nothing to aim at.
  */
-export function executeForm(
-  ctx: SimCtx,
-  ab: ResolvedAbility,
-  aim: Vec | null,
-  step: number,
-): FormResult {
+export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): FormResult {
   const { world } = ctx;
   const h = world.hero;
   const t = world.t;
   const p = aimPoint(ctx, ab, aim);
   if (!p) return { ok: false, tx: h.x, ty: h.y };
-  const mult = ab.combo[step % ab.combo.length];
-  const hit = abilityHit(ctx, ab) * mult;
-  const heft = stepHeft(ab, step);
+  const { power, size } = stepBonus(ctx.bal, ab.index);
+  const hit = abilityHit(ctx, ab) * power;
+  const heft = stepHeft(ab);
   let dir = dirTo(h.x, h.y, p.x, p.y);
   if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
   const done = (tx: number, ty: number): FormResult => ({ ok: true, tx, ty });
+  // A Defensive move replaces the one up: its Ward (without a burst), Surge or Blink trail.
   const buff = (form: 'ward' | 'armor' | 'surge' | 'blink', until: number) => {
-    h.defend = { form, until };
+    h.ward = null;
+    h.defend = { form, until, move: ab.index, stage: ab.stage };
     ctx.events.push({ kind: 'buff', form, element: ab.element, until });
   };
 
@@ -55,12 +52,12 @@ export function executeForm(
         y: h.y + dir.y * 0.6,
         vx: dir.x * ab.speed,
         vy: dir.y * ab.speed,
-        radius: 0.3 + 0.15 * mult,
+        radius: 0.3 + 0.15 * size,
         damage: hit,
         element: ab.element,
         pierce: ab.knobs.pierce,
         maxDist: ab.range,
-        explodeRadius: ab.radius * mult,
+        explodeRadius: ab.radius * size,
         applies: ab.knobs.applies,
         knockback: ab.knobs.knockback,
         heft,
@@ -69,7 +66,7 @@ export function executeForm(
 
     case 'volley': {
       h.facing = dir;
-      const n = ab.comboCount?.[step % ab.comboCount.length] ?? ab.count;
+      const n = ab.count;
       const targets = alive(ctx)
         .filter((m) => dist(h.x, h.y, m.x, m.y) - m.radius <= ab.range + 2)
         .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
@@ -100,7 +97,7 @@ export function executeForm(
 
     case 'lance': {
       h.facing = dir;
-      const len = ab.range * mult;
+      const len = ab.range * size;
       const ex = h.x + dir.x * len;
       const ey = h.y + dir.y * len;
       const width = ab.radius;
@@ -138,7 +135,7 @@ export function executeForm(
         ability: ab,
         x: p.x,
         y: p.y,
-        radius: ab.radius * mult,
+        radius: ab.radius * size,
         born: t,
         until: land + 0.1,
         tick: 0,
@@ -156,7 +153,8 @@ export function executeForm(
 
     case 'strike': {
       h.facing = dir;
-      const slam = ab.combo.length > 1 && step % ab.combo.length === ab.combo.length - 1;
+      // The last move of a chain slams all around.
+      const slam = ab.last;
       const arc = slam ? 360 : ab.arc;
       const reach = ab.radius * (slam ? 1.15 : 1);
       const half = (arc * Math.PI) / 360;
@@ -186,8 +184,8 @@ export function executeForm(
     }
 
     case 'ward':
-      h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
       buff('ward', t + ab.duration);
+      h.ward = { hp: h.stats.maxHp * ab.effect, max: h.stats.maxHp * ab.effect };
       return done(h.x, h.y);
 
     case 'armor':

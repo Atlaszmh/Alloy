@@ -4,7 +4,7 @@ import { impact } from '../src/arpg/abilities/impact.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { ManaType } from '../src/types/mana.js';
-import { STEP, arena, dummy, gear, press, registry, run } from './fixtures/arena.js';
+import { STEP, arena, dummy, gear, moveOf, press, registry, run } from './fixtures/arena.js';
 
 // The fixture arena's hero starts at (13, 36), facing up (-y).
 
@@ -61,8 +61,8 @@ describe('ability events carry the infusion', () => {
     const w = arena([dummy(13, 30)], { noBasic: true, primary: { elements: ['fire', 'storm'] } });
     const events: ArpgEvent[] = [];
     const ctx = makeCtx(registry, w, events);
-    impact(ctx, w.hero.abilities[0], 13, 30, 1.1, 1, { tick: true });
-    impact(ctx, w.hero.abilities[0], 13, 30, 1.1, 1);
+    impact(ctx, moveOf(w, 0), 13, 30, 1.1, 1, { tick: true });
+    impact(ctx, moveOf(w, 0), 13, 30, 1.1, 1);
     // The landing's Fire meets the Storm the tick left: Overload, whose blast carries null.
     expect(only(events, 'explode').map((e) => e.infusion)).toEqual([null, 'storm', null]);
   });

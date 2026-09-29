@@ -77,7 +77,7 @@ describe('the dodge', () => {
     expect(w.hero.windup).not.toBeNull();
     dodge(w, { x: 1, y: 0 });
     expect(w.hero.windup).toBeNull();
-    expect(w.hero.cooldowns[2]).toBeLessThanOrEqual(w.t);
+    expect(w.hero.cooldowns[2][0]).toBeLessThanOrEqual(w.t);
     expect(w.hero.mana).toBeLessThan(mana - 1);
   });
 

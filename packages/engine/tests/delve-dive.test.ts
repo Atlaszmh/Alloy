@@ -275,7 +275,7 @@ describe('gear management', () => {
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
     p = startDive(registry, p, 1);
-    expect(beginFloor(registry, p).hero.abilities.map((a) => a.name)).toEqual([
+    expect(beginFloor(registry, p).hero.chains.map((c) => c.moves[0].name)).toEqual([
       'Fire Bolt',
       'Fire Ward',
       'Fire Nova',

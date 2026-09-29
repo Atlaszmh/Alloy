@@ -19,6 +19,8 @@ import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
+import { pressStep } from './abilities/cast.js';
+import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
@@ -474,11 +476,13 @@ function react(
       for (const o of [m, ...nearby(ctx, m, r.blackoutRadius)]) applyStatus(ctx, o, 'blind', 0);
       return amount;
     case 'galvanize':
-      // Per slot, as Nightstalker does for the Defensive.
-      h.abilities.forEach((ab, i) => {
-        if (ab.build.payment === 'charge') h.charge[i] = Math.min(ab.chargeNeed, h.charge[i] + 1);
-        else if (h.cooldowns[i] > t)
-          h.cooldowns[i] = Math.max(t, h.cooldowns[i] - r.galvanizeSeconds);
+      // Per slot, as Nightstalker does for the Defensive: a unit of charge, or every move's cooldown.
+      h.chains.forEach((chain, i) => {
+        if (chain.payment === 'charge') h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + 1);
+        else
+          h.cooldowns[i] = h.cooldowns[i].map((c) =>
+            c > t ? Math.max(t, c - r.galvanizeSeconds) : c,
+          );
       });
       return amount;
   }
@@ -693,11 +697,14 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
   if (isHexed(ctx, m) && mastery(ctx, 'shadow')) healHero(ctx, h.stats.maxHp * 0.04, 'kill');
-  // Nightstalker: kills hurry the Defensive along.
-  const guard = h.abilities[1];
+  // Nightstalker: kills hurry the Defensive's next move along.
+  const guard = h.chains[1];
   if (h.stats.legendaries.nightstalker && guard) {
-    if (guard.build.payment === 'charge') h.charge[1] = Math.min(guard.chargeNeed, h.charge[1] + 1);
-    else h.cooldowns[1] = Math.max(t, h.cooldowns[1] - 1);
+    if (guard.payment === 'charge') h.charge[1] = Math.min(chargeCap(guard), h.charge[1] + 1);
+    else {
+      const step = pressStep(h, 1, t, bal.abilities.comboWindow);
+      h.cooldowns[1][step] = Math.max(t, h.cooldowns[1][step] - 1);
+    }
   }
 
   // Fire mastery: flames spread from burning corpses.

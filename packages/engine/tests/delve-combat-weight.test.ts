@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import { botInput } from '../src/arpg/bot.js';
-import { resolveAbility, stepHeft } from '../src/arpg/abilities/resolve.js';
-import type { AbilityBuild, AbilitySlot } from '../src/types/ability.js';
+import {
+  resolveAbility,
+  resolveChain,
+  stepBonus,
+  stepHeft,
+} from '../src/arpg/abilities/resolve.js';
+import { activeMove } from '../src/arpg/abilities/cast.js';
+import type { AbilityPayment, AbilitySlot, Move } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { makeCtx } from '../src/arpg/combat.js';
@@ -14,10 +20,11 @@ import {
   arena,
   bal,
   damaged,
-  DEFAULT_BUILDS,
+  DEFAULT_CHAINS,
   dodge,
   dummy,
   gear,
+  moveOf,
   press,
   pressOnly,
   registry,
@@ -64,44 +71,60 @@ describe('combat weight data', () => {
 });
 
 const stats = computeHeroStats({ weapon: gear('fire') }, registry);
-const resolve = (slot: AbilitySlot, b: Partial<AbilityBuild> & Pick<AbilityBuild, 'form'>) =>
-  resolveAbility(registry, slot, { elements: ['fire'], weight: 0, payment: 'mana', ...b }, stats);
+/** One move (a medium one of Fire unless changed); a hold at `stage`. */
+const resolve = (
+  slot: AbilitySlot,
+  m: Partial<Move> & Pick<Move, 'form'>,
+  payment: AbilityPayment = 'mana',
+  stage = 0,
+) =>
+  resolveAbility(
+    registry,
+    slot,
+    { kind: 'medium', elements: ['fire'], ...m },
+    payment,
+    stats,
+    stage,
+  );
 
-describe('ability timing from weight', () => {
+describe("ability timing from the kind's weight", () => {
   it('conjure grows with weight and by slot; cast payment adds its channel', () => {
-    expect(resolve('primary', { form: 'bolt', weight: -2 }).conjure).toBeCloseTo(0.04);
-    const crushing = resolve('primary', { form: 'bolt', weight: 2 });
+    expect(resolve('primary', { form: 'bolt', kind: 'light' }).conjure).toBeCloseTo(0.08);
+    // A hold's full charge resolves at Crushing (+2).
+    const crushing = resolve('primary', { form: 'bolt', kind: 'hold' }, 'mana', 2);
     expect(crushing.conjure).toBeCloseTo(0.38);
     expect(crushing.channel).toBe(0);
     expect(resolve('defensive', { form: 'ward' }).conjure).toBeCloseTo(0.07);
-    expect(resolve('ultimate', { form: 'nova', payment: 'charge' }).conjure).toBeCloseTo(0.224);
-    const cast = resolve('primary', { form: 'bolt', payment: 'cast' });
+    expect(resolve('ultimate', { form: 'nova' }, 'charge').conjure).toBeCloseTo(0.224);
+    const cast = resolve('primary', { form: 'bolt' }, 'cast');
     expect(cast.channel).toBeCloseTo(bal.abilities.slots.primary.castTime);
     expect(resolve('primary', { form: 'bolt' }).recovery).toBeCloseTo(0.16);
     expect(resolve('defensive', { form: 'ward' }).recovery).toBe(0);
   });
 
-  it('heft and the heavy payoff come from weight', () => {
-    const swift = resolve('primary', { form: 'bolt', weight: -2 });
-    const crushing = resolve('primary', { form: 'bolt', weight: 2 });
-    expect(swift.heft).toBeCloseTo(0.15);
-    expect(swift.heavyKnockback).toBe(0);
-    expect(swift.heavyStagger).toBe(false);
+  it('heft and the heavy payoff come from weight; the last move of a chain lands harder', () => {
+    const light = resolve('primary', { form: 'bolt', kind: 'light' });
+    const crushing = resolve('primary', { form: 'bolt', kind: 'hold' }, 'mana', 2);
+    expect(light.heft).toBeCloseTo(0.3);
+    expect(light.heavyKnockback).toBe(0);
+    expect(light.heavyStagger).toBe(false);
     expect(crushing.heft).toBeCloseTo(1);
     expect(crushing.heavyKnockback).toBeCloseTo(0.5);
     expect(crushing.heavyStagger).toBe(true);
-    expect(resolve('primary', { form: 'bolt', weight: 1 }).heavyStagger).toBe(false);
-    expect(resolve('ultimate', { form: 'nova', weight: 2, payment: 'charge' }).heft).toBeCloseTo(1);
-    const bolt = resolve('primary', { form: 'bolt' });
-    expect(stepHeft(bolt, 0)).toBeCloseTo(0.45);
-    expect(stepHeft(bolt, bolt.combo.length - 1)).toBeCloseTo(0.65);
-    // One-press forms get no last-press bonus; ultimates +0.2.
-    expect(stepHeft(resolve('ultimate', { form: 'nova', payment: 'charge' }), 0)).toBeCloseTo(0.65);
+    expect(resolve('primary', { form: 'bolt', kind: 'heavy' }).heavyStagger).toBe(false);
+    expect(resolve('ultimate', { form: 'nova', kind: 'hold' }, 'charge', 2).heft).toBeCloseTo(1);
+    const bolt: Move = { kind: 'medium', form: 'bolt', elements: ['fire'] };
+    const two = resolveChain(registry, stats, 'primary', { moves: [bolt, bolt], payment: 'mana' });
+    expect(stepHeft(two.moves[0])).toBeCloseTo(0.45);
+    expect(stepHeft(two.moves[1])).toBeCloseTo(0.65);
+    // A one-move chain gets no last-move bonus; ultimates +0.2.
+    expect(stepHeft(resolve('primary', { form: 'bolt' }))).toBeCloseTo(0.45);
+    expect(stepHeft(resolve('ultimate', { form: 'nova' }, 'charge'))).toBeCloseTo(0.65);
   });
 
   it('motion scales with weight', () => {
     expect(resolve('primary', { form: 'bolt' }).motion).toBeCloseTo(-0.15);
-    expect(resolve('primary', { form: 'bolt', weight: 2 }).motion).toBeCloseTo(-0.24);
+    expect(resolve('primary', { form: 'bolt', kind: 'hold' }, 'mana', 2).motion).toBeCloseTo(-0.24);
     expect(resolve('primary', { form: 'strike' }).motion).toBeCloseTo(0.5);
     expect(resolve('defensive', { form: 'ward' }).motion).toBe(0);
   });
@@ -427,7 +450,7 @@ describe('weapon strings', () => {
       registry,
       w,
       computeHeroStats({ weapon: gear('fire') }, registry),
-      DEFAULT_BUILDS,
+      DEFAULT_CHAINS,
     );
     expect(w.hero.swing).not.toBeNull();
     expect(w.hero.attackCount).toBe(1);
@@ -436,7 +459,7 @@ describe('weapon strings', () => {
       registry,
       w,
       computeHeroStats({ weapon: gear('fire', 'weapon', 'maul') }, registry),
-      DEFAULT_BUILDS,
+      DEFAULT_CHAINS,
     );
     expect(w.hero.swing).toBeNull();
     expect(w.hero.attackCount).toBe(0);
@@ -609,10 +632,10 @@ describe('casting: conjure, motion, recovery', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
     pressOnly(w, 0);
     const wu = w.hero.windup!;
-    expect(wu.until - wu.start).toBeCloseTo(w.hero.abilities[0].conjure, 5);
+    expect(wu.until - wu.start).toBeCloseTo(moveOf(w, 0).conjure, 5);
     const c = arena([dummy(13, 30)], { noBasic: true, primary: { payment: 'cast' } });
     pressOnly(c, 0);
-    const ab = c.hero.abilities[0];
+    const ab = moveOf(c, 0);
     expect(c.hero.windup!.until - c.hero.windup!.start).toBeCloseTo(ab.conjure + ab.channel, 5);
   });
 
@@ -624,43 +647,53 @@ describe('casting: conjure, motion, recovery', () => {
       casts += stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP).filter(
         (e) => e.kind === 'cast',
       ).length;
-    expect(casts).toBe(Math.floor(2 / w.hero.abilities[0].cooldown));
+    expect(casts).toBe(Math.floor(2 / moveOf(w, 0).cooldown));
   });
 
-  it('the press-combo step is chosen at the press', () => {
-    const w = arena([dummy(13, 30)], { noBasic: true });
+  it("the chain's move is chosen at the press", () => {
+    const bolt = DEFAULT_CHAINS.primary.moves[0];
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { moves: [bolt, bolt] } });
     // The last cast landed just inside the combo window from the press, but outside it from the landing.
     w.hero.comboStep[0] = 0;
     const last = (w.hero.comboAt[0] = w.t + STEP - bal.abilities.comboWindow + STEP / 2);
     pressOnly(w, 0);
     expect(w.hero.windup!.step).toBe(1);
+    expect(activeMove(w.hero, 0)?.index).toBe(1);
     const events = until(w, () => w.hero.windup === null);
     expect(w.t - last).toBeGreaterThan(bal.abilities.comboWindow);
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
     expect(w.hero.comboStep[0]).toBe(1);
   });
 
-  it('a bolt recoils the hero after its release', () => {
+  it("a bolt recoils the hero after its release; a chain's later move by its step bonus's size", () => {
     const w = arena([dummy(13, 28)], { noBasic: true });
     const y0 = w.hero.y;
     press(w, 0);
     run(w, bal.feel.recoilSeconds + STEP);
-    const bolt = w.hero.abilities[0];
-    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 2);
+    expect(w.hero.y - y0).toBeCloseTo(-moveOf(w, 0).motion, 2);
+    const bolt = DEFAULT_CHAINS.primary.moves[0];
+    const c = arena([dummy(13, 28)], { noBasic: true, primary: { moves: [bolt, bolt] } });
+    press(c, 0);
+    run(c, bal.feel.recoilSeconds + STEP);
+    const y1 = c.hero.y;
+    press(c, 0);
+    expect(c.hero.comboStep[0]).toBe(1);
+    run(c, bal.feel.recoilSeconds + STEP);
+    expect(c.hero.y - y1).toBeCloseTo(-moveOf(c, 0, 1).motion * stepBonus(bal, 1).size, 2);
   });
 
   it("with basics on, the sword waits for a bolt's recoil to finish before it swings", () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
     const y0 = w.hero.y;
-    const bolt = w.hero.abilities[0];
+    const bolt = moveOf(w, 0);
     press(w, 0);
     // The recoil pushes the hero back (away from the foe above), and nothing swings meanwhile.
     const recoil = w.hero.push!;
     expect(recoil.dy).toBeGreaterThan(0);
     expect(w.hero.swing).toBeNull();
     until(w, () => w.hero.push !== recoil);
-    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion * bolt.combo[0], 5);
+    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion, 5);
     // Then the sword swings again.
     until(w, () => w.hero.swing !== null);
     expect(w.hero.swing!.start).toBeGreaterThanOrEqual(recoil.until - 1e-9);
@@ -668,7 +701,7 @@ describe('casting: conjure, motion, recovery', () => {
 
   it('a strike steps in over its conjure and hits from there', () => {
     const w = arena([dummy(13, 0)], { noBasic: true, primary: { form: 'strike' } });
-    const ab = w.hero.abilities[0];
+    const ab = moveOf(w, 0);
     place(w, ab.radius - w.hero.radius + 0.3);
     const y0 = w.hero.y;
     press(w, 0, { x: 13, y: 20 });
@@ -684,9 +717,7 @@ describe('casting: conjure, motion, recovery', () => {
     expect(y0 - w.hero.y).toBeCloseTo(0.2, 5);
     const slash = events.find((e) => e.kind === 'slash');
     expect(slash && slash.kind === 'slash' && slash.dir.y).toBeLessThan(0);
-    expect(slash && slash.kind === 'slash' && slash.heft).toBeCloseTo(
-      stepHeft(w.hero.abilities[0], 0),
-    );
+    expect(slash && slash.kind === 'slash' && slash.heft).toBeCloseTo(stepHeft(moveOf(w, 0)));
     expect(damaged(w.monsters[0])).toBe(true);
   });
 
@@ -704,10 +735,10 @@ describe('casting: conjure, motion, recovery', () => {
     place(w, 1.0);
     run(w, STEP);
     expect(w.hero.swing).not.toBeNull();
-    w.hero.cooldowns[0] = w.t + 5;
+    w.hero.cooldowns[0][0] = w.t + 5;
     pressOnly(w, 0);
     expect(w.hero.swing).not.toBeNull();
-    w.hero.cooldowns[0] = 0;
+    w.hero.cooldowns[0][0] = 0;
     pressOnly(w, 0, { x: 13, y: 20 });
     expect(w.hero.swing).toBeNull();
     expect(w.hero.windup).not.toBeNull();
@@ -717,7 +748,7 @@ describe('casting: conjure, motion, recovery', () => {
 
   it('a press made just before the cooldown ends fires when it is ready', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
-    w.hero.cooldowns[0] = w.t + 1.5 * STEP;
+    w.hero.cooldowns[0][0] = w.t + 1.5 * STEP;
     const events = pressOnly(w, 0);
     expect(w.hero.windup).toBeNull();
     expect(w.queuedCast).toEqual({ slot: 0, aim: null });
@@ -727,7 +758,7 @@ describe('casting: conjure, motion, recovery', () => {
 
   it('a press made well before the cooldown ends ages out', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
-    w.hero.cooldowns[0] = w.t + 0.5;
+    w.hero.cooldowns[0][0] = w.t + 0.5;
     const events = pressOnly(w, 0);
     events.push(...run(w, 1));
     expect(events.some((e) => e.kind === 'windup')).toBe(false);
@@ -739,7 +770,7 @@ describe('casting: conjure, motion, recovery', () => {
     place(w, 1.0);
     run(w, STEP);
     const sw = w.hero.swing!;
-    w.hero.cooldowns[0] = sw.strikeAt + STEP;
+    w.hero.cooldowns[0][0] = sw.strikeAt + STEP;
     pressOnly(w, 0);
     expect(w.queuedCast).not.toBeNull();
     const events = until(w, () => w.hero.swing === null);
@@ -748,7 +779,7 @@ describe('casting: conjure, motion, recovery', () => {
 
   it('a dodge out of a wind-up refunds charge; mana stays spent', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
-    const ult = w.hero.abilities[2];
+    const ult = moveOf(w, 2);
     w.hero.charge[2] = ult.chargeNeed;
     pressOnly(w, 2);
     expect(w.hero.charge[2]).toBe(0);
@@ -760,14 +791,14 @@ describe('casting: conjure, motion, recovery', () => {
     const mana = m.hero.mana;
     pressOnly(m, 0);
     dodge(m, { x: 1, y: 0 });
-    expect(m.hero.mana).toBeLessThan(mana - m.hero.abilities[0].cost + 1);
+    expect(m.hero.mana).toBeLessThan(mana - moveOf(m, 0).cost + 1);
   });
 
   it('a press during a wind-up fires when it lands; a stale press is dropped', () => {
     const w = arena([dummy(13, 30)], { noBasic: true, ultimate: { payment: 'cast' } });
     pressOnly(w, 2);
     stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
-    const events = run(w, w.hero.abilities[2].castTime + 0.3);
+    const events = run(w, moveOf(w, 2).castTime + 0.3);
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
     const s = arena([dummy(13, 30)], { noBasic: true });
     s.queuedCast = { slot: 0 };
@@ -777,36 +808,33 @@ describe('casting: conjure, motion, recovery', () => {
 });
 
 describe('heavy payoff and heft', () => {
-  it('a Crushing bolt knocks back and staggers; a Balanced one does not stagger', () => {
-    const w = arena([dummy(13, 30)], { noBasic: true, primary: { weight: 2 } });
+  it('a heavy bolt lands with its heft and no stagger (only Crushing, a full hold, staggers)', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'heavy' } });
     const events = press(w, 0);
     events.push(...run(w, 1));
-    expect(w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
+    expect(w.monsters[0].status.staggerUntil).toBe(0);
     const hit = events.find((e) => e.kind === 'hit' && e.id === w.monsters[0].id);
-    expect(hit && hit.kind === 'hit' && hit.heft).toBeCloseTo(1);
-    const b = arena([dummy(13, 30)], { noBasic: true });
-    press(b, 0);
-    run(b, 1);
-    expect(b.monsters[0].status.staggerUntil).toBe(0);
+    expect(hit && hit.kind === 'hit' && hit.heft).toBeCloseTo(0.7);
   });
 
-  it("a Crushing bolt's chain jump keeps no heavy payoff and no heft", () => {
+  it("a heavy bolt's chain jump keeps no heavy payoff and no heft", () => {
     const w = arena([dummy(13, 30), dummy(15, 30)], {
       noBasic: true,
-      primary: { elements: ['storm'], weight: 2 },
+      primary: { elements: ['storm'], kind: 'heavy' },
     });
     const [first, second] = w.monsters;
     const events = press(w, 0, { x: 13, y: 30 });
-    events.push(...run(w, 1));
+    events.push(...until(w, () => damaged(second)));
     const chained = events.filter((e) => e.kind === 'hit' && e.id === second.id);
     expect(chained.length).toBeGreaterThan(0);
     expect(chained.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
-    expect(second.status.staggerUntil).toBe(0);
-    expect(first.status.staggerUntil).toBeGreaterThan(0);
+    // Storm knocks nothing back: only the direct hit's heavy payoff does.
+    expect(Math.hypot(second.kbx, second.kby)).toBe(0);
+    expect(Math.hypot(first.kbx, first.kby)).toBeGreaterThan(0);
   });
 
-  it('Crushing adds knockback to a direct hit', () => {
-    const heavy = arena([dummy(13, 30)], { noBasic: true, primary: { weight: 2 } });
+  it('a heavy move adds knockback to a direct hit', () => {
+    const heavy = arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'heavy' } });
     const light = arena([dummy(13, 30)], { noBasic: true });
     for (const w of [heavy, light]) {
       press(w, 0);
@@ -816,10 +844,10 @@ describe('heavy payoff and heft', () => {
     expect(kb(heavy)).toBeGreaterThan(kb(light));
   });
 
-  it("a Crushing Maelstrom's ticks and a Crushing Surge's basic hits never stagger (guard test)", () => {
+  it("a heavy Maelstrom's ticks and a heavy Surge's basic hits never stagger (guard test)", () => {
     const w = arena([dummy(13, 30)], {
       noBasic: true,
-      ultimate: { form: 'maelstrom', weight: 2, payment: 'mana' },
+      ultimate: { form: 'maelstrom', kind: 'heavy', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
     const events = press(w, 2, { x: 13, y: 30 });
@@ -829,7 +857,7 @@ describe('heavy payoff and heft', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
 
-    const s = arena([dummy(13, 0)], { defensive: { form: 'surge', weight: 2 } });
+    const s = arena([dummy(13, 0)], { defensive: { form: 'surge', kind: 'heavy' } });
     place(s, 0.6);
     press(s, 1);
     until(s, () => s.hero.attackCount >= 2);
@@ -861,7 +889,8 @@ describe('bot and estimates', () => {
     run(w, STEP);
     expect(w.hero.swing).not.toBeNull();
     // Only the Primary is ready, so today's bot would press it and cancel the swing.
-    w.hero.cooldowns[1] = w.hero.cooldowns[2] = 1e9;
+    w.hero.cooldowns[1] = [1e9];
+    w.hero.cooldowns[2] = [1e9];
     expect(botInput(registry, w).cast?.slot).toBeUndefined();
   });
 

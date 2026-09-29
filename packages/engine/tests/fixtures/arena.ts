@@ -4,7 +4,14 @@ import { createFloorWorld, createMonsterEntity } from '../../src/arpg/world.js';
 import { stepWorld } from '../../src/arpg/step.js';
 import { computeHeroStats, type HeroStatsExtra } from '../../src/delve/hero-stats.js';
 import { generateItem } from '../../src/loot/item-generator.js';
-import type { AbilityBuild, AbilityBuilds, AbilityCast } from '../../src/types/ability.js';
+import type {
+  AbilityCast,
+  AbilityPayment,
+  AbilitySlot,
+  Chain,
+  Chains,
+  Move,
+} from '../../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../../src/types/arpg.js';
 import type { EquippedGear } from '../../src/types/gear.js';
 import type { ManaType } from '../../src/types/mana.js';
@@ -25,17 +32,37 @@ export function gear(
   );
 }
 
-export const DEFAULT_BUILDS: AbilityBuilds = {
-  primary: { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' },
-  defensive: { form: 'ward', elements: ['frost'], weight: 0, payment: 'mana' },
-  ultimate: { form: 'nova', elements: ['fire'], weight: 0, payment: 'charge' },
+/** The fixture's chains: one medium move each (a Fire Bolt, a Frost Ward, a charged Fire Nova). */
+export const DEFAULT_CHAINS: Pick<Chains, AbilitySlot> = {
+  primary: { moves: [{ kind: 'medium', form: 'bolt', elements: ['fire'] }], payment: 'mana' },
+  defensive: { moves: [{ kind: 'medium', form: 'ward', elements: ['frost'] }], payment: 'mana' },
+  ultimate: { moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }], payment: 'charge' },
 };
+
+/** A slot's chain in a test: its one move with these parts changed and its payment, or whole `moves`. */
+export type ChainOpts = Partial<Move> & { payment?: AbilityPayment; moves?: Move[] };
+
+export function chainOf(base: Chain, o: ChainOpts = {}): Chain {
+  const { payment = base.payment, moves, ...move } = o;
+  return { moves: moves ?? [{ ...base.moves[0], ...move }], payment };
+}
+
+/** The fixture's chains, with each slot's changes (see `ChainOpts`). */
+export function chainsWith(
+  o: Partial<Record<AbilitySlot, ChainOpts>> = {},
+): Pick<Chains, AbilitySlot> {
+  return {
+    primary: chainOf(DEFAULT_CHAINS.primary, o.primary),
+    defensive: chainOf(DEFAULT_CHAINS.defensive, o.defensive),
+    ultimate: chainOf(DEFAULT_CHAINS.ultimate, o.ultimate),
+  };
+}
 
 export interface ArenaOpts {
   equipped?: EquippedGear;
-  primary?: Partial<AbilityBuild>;
-  defensive?: Partial<AbilityBuild>;
-  ultimate?: Partial<AbilityBuild>;
+  primary?: ChainOpts;
+  defensive?: ChainOpts;
+  ultimate?: ChainOpts;
   /** Stop the hero's automatic basic attack so only abilities deal damage. */
   noBasic?: boolean;
   depth?: number;
@@ -49,11 +76,7 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
     depth,
     door: null,
     stats: computeHeroStats(equipped, registry),
-    abilities: {
-      primary: { ...DEFAULT_BUILDS.primary, ...opts.primary },
-      defensive: { ...DEFAULT_BUILDS.defensive, ...opts.defensive },
-      ultimate: { ...DEFAULT_BUILDS.ultimate, ...opts.ultimate },
-    },
+    chains: chainsWith(opts),
     heroHpFrac: 1,
     potions: 3,
     phoenixAvailable: true,
@@ -120,6 +143,11 @@ export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }
   for (let i = 0; i < 300 && w.hero.windup; i++)
     events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP));
   return events;
+}
+
+/** The slot's move `step` (its first by default), as the hero resolved it. */
+export function moveOf(w: ArpgWorld, slot: number, step = 0) {
+  return w.hero.chains[slot].moves[step];
 }
 
 export function damaged(m: MonsterEntity): boolean {

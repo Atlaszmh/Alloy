@@ -2,14 +2,15 @@ import type { ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
 import { abilityHit, impact } from './impact.js';
+import { chainMove, chargeCap } from './resolve.js';
 
 const DEFENSIVE = 1;
 
-/** The Defensive ability while its effect is up, else null. */
+/** The Defensive move whose effect is up (`defend.move` at its stage), else null. */
 export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
   const h = ctx.world.hero;
   if (!h.defend || ctx.world.t >= h.defend.until) return null;
-  return h.abilities[DEFENSIVE] ?? null;
+  return chainMove(h.chains[DEFENSIVE], h.defend.move, h.defend.stage);
 }
 
 /** The Surge while it is up, else null. */
@@ -17,12 +18,10 @@ export function surging(ctx: SimCtx): ResolvedAbility | null {
   return ctx.world.hero.defend?.form === 'surge' ? defendingAbility(ctx) : null;
 }
 
-/** The Ward bursts with its element around the hero. */
-export function wardBurst(ctx: SimCtx): void {
+/** The Ward (the Defensive move `ab`) bursts with its element around the hero. */
+export function wardBurst(ctx: SimCtx, ab: ResolvedAbility): void {
   const h = ctx.world.hero;
-  const ab = h.abilities[DEFENSIVE];
   h.ward = null;
-  if (!ab) return;
   ctx.events.push({ kind: 'wardBreak', x: h.x, y: h.y, element: ab.element });
   impact(ctx, ab, h.x, h.y, ab.radius, abilityHit(ctx, ab), { noScatter: true });
 }
@@ -78,7 +77,7 @@ export function shieldHero(
     dmg -= soaked;
     if (h.ward.hp <= 1e-6) {
       h.defend = null;
-      wardBurst(ctx);
+      wardBurst(ctx, ab!);
     }
   }
   return dmg;
@@ -89,14 +88,14 @@ export function defendTick(ctx: SimCtx, dt: number): void {
   const { world } = ctx;
   const h = world.hero;
   if (!h.defend) return;
+  const ab = chainMove(h.chains[DEFENSIVE], h.defend.move, h.defend.stage);
   if (world.t >= h.defend.until) {
     const wasWard = h.defend.form === 'ward' && h.ward;
     h.defend = null;
-    if (wasWard) wardBurst(ctx);
+    if (wasWard) wardBurst(ctx, ab);
     return;
   }
-  const ab = h.abilities[DEFENSIVE];
-  if (ab?.elements.includes('nature') && h.hp < h.stats.maxHp) {
+  if (ab.elements.includes('nature') && h.hp < h.stats.maxHp) {
     h.hp = Math.min(
       h.stats.maxHp,
       h.hp + h.stats.maxHp * ctx.bal.abilities.defend.natureRegen * dt,
@@ -105,8 +104,9 @@ export function defendTick(ctx: SimCtx, dt: number): void {
 }
 
 /**
- * Charge-paid abilities bank one unit per weapon-hit worth of damage the hero
- * deals; an ability never charges from its own hits, nor during its lockout.
+ * Charge-paid chains bank one unit per weapon-hit worth of damage the hero
+ * deals, up to their largest need; a chain never charges from its own hits,
+ * nor while any of its moves cools down (its lockout).
  */
 export function addCharge(ctx: SimCtx, amount: number, fromSlot: number | undefined): void {
   const h = ctx.world.hero;
@@ -116,8 +116,9 @@ export function addCharge(ctx: SimCtx, amount: number, fromSlot: number | undefi
 
 export function gainCharge(ctx: SimCtx, units: number, fromSlot?: number): void {
   const h = ctx.world.hero;
-  h.abilities.forEach((ab, i) => {
-    if (ab.build.payment !== 'charge' || i === fromSlot || ctx.world.t < h.cooldowns[i]) return;
-    h.charge[i] = Math.min(ab.chargeNeed, h.charge[i] + units);
+  const t = ctx.world.t;
+  h.chains.forEach((chain, i) => {
+    if (chain.payment !== 'charge' || i === fromSlot || h.cooldowns[i].some((c) => t < c)) return;
+    h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + units);
   });
 }

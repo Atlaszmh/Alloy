@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
-import type { AbilityBuilds } from '../types/ability.js';
+import type { AbilitySlot, Chains } from '../types/ability.js';
 import type {
   ArpgWorld,
   DummyLayout,
@@ -14,6 +14,7 @@ import type { GearItem, Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { baseDisplayName, generateItem } from '../loot/item-generator.js';
 import { livingBossId } from './combat.js';
+import { chargeCap } from './abilities/resolve.js';
 import { clamp } from './geometry.js';
 import { AGGRO_SPECIAL_DELAY } from './step.js';
 import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
@@ -31,7 +32,8 @@ import { createFloorWorld, createMonsterEntity, emptyStatus } from './world.js';
 export interface SandboxWorldOptions {
   depth: number;
   stats: HeroStats;
-  abilities: AbilityBuilds;
+  /** The Primary's, Defensive's and Ultimate's chains (the basic chain is in `stats`). */
+  chains: Pick<Chains, AbilitySlot>;
   toggles: SandboxToggles;
 }
 
@@ -42,7 +44,7 @@ export function createSandboxWorld(registry: DataRegistry, o: SandboxWorldOption
     depth: o.depth,
     door: null,
     stats: o.stats,
-    abilities: o.abilities,
+    chains: o.chains,
     heroHpFrac: 1,
     potions: bal.dive.potions,
     phoenixAvailable: true,
@@ -244,18 +246,18 @@ export function clearMonsters(world: ArpgWorld, which: 'monsters' | 'dummies' | 
 /** Change the toggles (the client never writes `world.sandbox` itself). */
 export function setSandboxToggles(world: ArpgWorld, toggles: SandboxToggles): void {
   world.sandbox = { ...toggles };
-  // Switching No cooldowns on frees and charges every ability at once (the tick keeps them so).
+  // Switching No cooldowns on frees every move and charges every chain at once (the tick keeps them so).
   if (toggles.noCooldowns) {
-    world.hero.cooldowns = world.hero.cooldowns.map((c) => Math.min(c, world.t));
+    world.hero.cooldowns = world.hero.cooldowns.map((cs) => cs.map((c) => Math.min(c, world.t)));
     fillCharge(world);
   }
 }
 
-/** Fill every charge-paid slot (for when No cooldowns is off). */
+/** Fill every charge-paid chain to its largest need (for when No cooldowns is off). */
 export function fillCharge(world: ArpgWorld): void {
   const h = world.hero;
-  h.abilities.forEach((ab, i) => {
-    if (ab.build.payment === 'charge') h.charge[i] = ab.chargeNeed;
+  h.chains.forEach((chain, i) => {
+    if (chain.payment === 'charge') h.charge[i] = chargeCap(chain);
   });
 }
 

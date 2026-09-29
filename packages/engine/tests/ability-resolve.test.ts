@@ -2,15 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { mergeKnobs, resolveAbility } from '../src/arpg/abilities/resolve.js';
-import type { AbilityBuild } from '../src/types/ability.js';
+import type { Move } from '../src/types/ability.js';
 import type { HeroStats } from '../src/types/delve.js';
 
 const registry = createDefaultRegistry();
 const ab = registry.getDelveBalance().abilities;
 const bare = computeHeroStats({}, registry);
 
-function build(over: Partial<AbilityBuild> = {}): AbilityBuild {
-  return { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana', ...over };
+/** A medium Fire Bolt, with these parts changed. */
+function move(over: Partial<Move> = {}): Move {
+  return { kind: 'medium', form: 'bolt', elements: ['fire'], ...over };
 }
 
 function withStats(over: Partial<HeroStats>): HeroStats {
@@ -18,9 +19,9 @@ function withStats(over: Partial<HeroStats>): HeroStats {
 }
 
 describe('resolveAbility', () => {
-  it('resolves a Balanced mana Fire Bolt from the slot numbers and the form', () => {
+  it('resolves a medium mana Fire Bolt from the slot numbers and the form', () => {
     const bolt = registry.getForm('bolt');
-    const r = resolveAbility(registry, 'primary', build(), bare);
+    const r = resolveAbility(registry, 'primary', move(), 'mana', bare);
     expect(r.name).toBe('Fire Bolt');
     expect(r.cost).toBeCloseTo(ab.slots.primary.cost);
     expect(r.cooldown).toBeCloseTo(ab.slots.primary.cooldown);
@@ -30,41 +31,31 @@ describe('resolveAbility', () => {
     expect(r.knobs.area).toBeCloseTo(1.3);
     expect(r.radius).toBeCloseTo(bolt.radius! * 1.3);
     expect(r.knobs.applies).toEqual(['burn']);
-    expect(r.combo).toEqual(bolt.combo);
+    expect(r).toMatchObject({ kind: 'medium', weight: 0, stage: 0, payment: 'mana', index: 0 });
+    expect(r.last).toBe(false);
   });
 
-  it('weight trades power and size for cost, cooldown and speed', () => {
-    const base = resolveAbility(registry, 'primary', build(), bare);
-    const heavy = resolveAbility(registry, 'primary', build({ weight: 2 }), bare);
-    expect(heavy.power / base.power).toBeCloseTo(1 + 2 * ab.weight.power);
-    expect(heavy.cost / base.cost).toBeCloseTo(1 + 2 * ab.weight.cost);
-    expect(heavy.cooldown / base.cooldown).toBeCloseTo(1 + 2 * ab.weight.cooldown);
-    expect(heavy.speed / base.speed).toBeCloseTo(1 - 2 * ab.weight.speed);
-    expect(heavy.radius / base.radius).toBeCloseTo(1 + 2 * ab.weight.size);
-    const swift = resolveAbility(registry, 'primary', build({ weight: -2 }), bare);
-    expect(swift.power).toBeLessThan(base.power);
-    expect(swift.cost).toBeLessThan(base.cost);
+  it("a kind's weight trades power and size for cost, cooldown and speed", () => {
+    const base = resolveAbility(registry, 'primary', move(), 'mana', bare);
+    const heavy = resolveAbility(registry, 'primary', move({ kind: 'heavy' }), 'mana', bare);
+    expect(heavy.weight).toBe(1);
+    expect(heavy.power / base.power).toBeCloseTo(1 + ab.weight.power);
+    expect(heavy.cost / base.cost).toBeCloseTo(1 + ab.weight.cost);
+    expect(heavy.cooldown / base.cooldown).toBeCloseTo(1 + ab.weight.cooldown);
+    expect(heavy.speed / base.speed).toBeCloseTo(1 - ab.weight.speed);
+    expect(heavy.radius / base.radius).toBeCloseTo(1 + ab.weight.size);
+    const light = resolveAbility(registry, 'primary', move({ kind: 'light' }), 'mana', bare);
+    expect(light.weight).toBe(-1);
+    expect(light.power).toBeLessThan(base.power);
+    expect(light.cost).toBeLessThan(base.cost);
   });
 
   it('cast payment halves the cost, adds power and a wind-up', () => {
-    const base = resolveAbility(
-      registry,
-      'ultimate',
-      build({ form: 'nova', payment: 'mana' }),
-      bare,
-    );
-    const cast = resolveAbility(
-      registry,
-      'ultimate',
-      build({ form: 'nova', payment: 'cast', weight: 1 }),
-      bare,
-    );
-    const heavyMana = resolveAbility(
-      registry,
-      'ultimate',
-      build({ form: 'nova', payment: 'mana', weight: 1 }),
-      bare,
-    );
+    const nova = (kind: Move['kind'], payment: 'mana' | 'cast') =>
+      resolveAbility(registry, 'ultimate', move({ form: 'nova', kind }), payment, bare);
+    const base = nova('medium', 'mana');
+    const cast = nova('heavy', 'cast');
+    const heavyMana = nova('heavy', 'mana');
     expect(cast.cost).toBeCloseTo(heavyMana.cost * ab.castManaMult);
     expect(cast.power).toBeCloseTo(heavyMana.power * ab.castPowerMult);
     expect(cast.channel).toBeCloseTo(ab.slots.ultimate.castTime * (1 + ab.weight.castTime));
@@ -72,12 +63,7 @@ describe('resolveAbility', () => {
   });
 
   it('charge payment costs no mana and needs a charge meter instead of a cooldown', () => {
-    const r = resolveAbility(
-      registry,
-      'ultimate',
-      build({ form: 'nova', payment: 'charge' }),
-      bare,
-    );
+    const r = resolveAbility(registry, 'ultimate', move({ form: 'nova' }), 'charge', bare);
     expect(r.cost).toBe(0);
     expect(r.chargeNeed).toBeCloseTo(ab.slots.ultimate.cost * ab.chargeRatio);
     expect(r.cooldown).toBeCloseTo(ab.chargeLockout);
@@ -87,7 +73,8 @@ describe('resolveAbility', () => {
     const r = resolveAbility(
       registry,
       'primary',
-      build({ form: 'burst', elements: ['fire', 'nature'] }),
+      move({ form: 'burst', elements: ['fire', 'nature'] }),
+      'mana',
       bare,
     );
     const burst = registry.getForm('burst');
@@ -102,7 +89,13 @@ describe('resolveAbility', () => {
   });
 
   it('the first element is the damage element', () => {
-    const r = resolveAbility(registry, 'primary', build({ elements: ['nature', 'fire'] }), bare);
+    const r = resolveAbility(
+      registry,
+      'primary',
+      move({ elements: ['nature', 'fire'] }),
+      'mana',
+      bare,
+    );
     expect(r.element).toBe('nature');
     expect(r.name).toBe('Wildfire Bolt');
     expect(r.knobs.applies).toEqual(['poison', 'burn']);
@@ -111,11 +104,12 @@ describe('resolveAbility', () => {
   it('attunement in the ability elements powers it, averaged', () => {
     const per = registry.getDelveBalance().mana.powerPerAttune;
     const stats = withStats({ attunement: { ...bare.attunement, fire: 4 } });
-    const fire = resolveAbility(registry, 'primary', build(), stats);
+    const fire = resolveAbility(registry, 'primary', move(), 'mana', stats);
     const fusion = resolveAbility(
       registry,
       'primary',
-      build({ elements: ['fire', 'storm'] }),
+      move({ elements: ['fire', 'storm'] }),
+      'mana',
       stats,
     );
     const bolt = registry.getForm('bolt').power;
@@ -127,7 +121,8 @@ describe('resolveAbility', () => {
     const r = resolveAbility(
       registry,
       'primary',
-      build(),
+      move(),
+      'mana',
       withStats({ legendaries: { manaweaver: 30 }, cooldownMult: 0.8 }),
     );
     expect(r.cost).toBeCloseTo(ab.slots.primary.cost * 0.7);
@@ -138,44 +133,45 @@ describe('resolveAbility', () => {
     const storm = resolveAbility(
       registry,
       'primary',
-      build({ elements: ['storm'] }),
+      move({ elements: ['storm'] }),
+      'mana',
       withStats({ legendaries: { stormcaller: 3 } }),
     );
     expect(storm.knobs.chain).toBe(4);
     const earth = resolveAbility(
       registry,
       'primary',
-      build({ form: 'burst', elements: ['frost', 'earth'] }),
+      move({ form: 'burst', elements: ['frost', 'earth'] }),
+      'mana',
       withStats({ legendaries: { bedrock: 30 } }),
     );
     const plain = resolveAbility(
       registry,
       'primary',
-      build({ form: 'burst', elements: ['frost', 'earth'] }),
+      move({ form: 'burst', elements: ['frost', 'earth'] }),
+      'mana',
       bare,
     );
     expect(earth.radius / plain.radius).toBeCloseTo(1.4);
   });
 
-  it('defensive forms scale their effect with weight', () => {
-    const ward = resolveAbility(
-      registry,
-      'defensive',
-      build({ form: 'ward', elements: ['frost'] }),
-      bare,
-    );
-    const heavy = resolveAbility(
-      registry,
-      'defensive',
-      build({ form: 'ward', elements: ['frost'], weight: 2 }),
-      bare,
-    );
-    expect(ward.effect).toBeCloseTo(registry.getForm('ward').effect!);
-    expect(heavy.effect / ward.effect).toBeCloseTo(1 + 2 * ab.weight.power);
+  it("defensive forms scale their effect with the kind's weight", () => {
+    const ward = (kind: Move['kind']) =>
+      resolveAbility(
+        registry,
+        'defensive',
+        move({ form: 'ward', elements: ['frost'], kind }),
+        'mana',
+        bare,
+      );
+    expect(ward('medium').effect).toBeCloseTo(registry.getForm('ward').effect!);
+    expect(ward('heavy').effect / ward('medium').effect).toBeCloseTo(1 + ab.weight.power);
   });
 
   it('rejects a form from another slot', () => {
-    expect(() => resolveAbility(registry, 'primary', build({ form: 'nova' }), bare)).toThrow();
+    expect(() =>
+      resolveAbility(registry, 'primary', move({ form: 'nova' }), 'mana', bare),
+    ).toThrow();
   });
 });
 

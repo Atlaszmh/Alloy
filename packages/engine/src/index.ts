@@ -160,6 +160,8 @@ export {
   reforgeGear,
   fuseGear,
   setAbility,
+  chainFromBuild,
+  buildChains,
 } from './delve/profile.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
@@ -192,11 +194,25 @@ export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';
 export { basicStep } from './arpg/basic.js';
 export { botInput } from './arpg/bot.js';
-export { castAbility, abilityReady, canAfford, pressStep } from './arpg/abilities/cast.js';
+export {
+  castAbility,
+  abilityReady,
+  canAfford,
+  pressStep,
+  nextMove,
+  activeMove,
+} from './arpg/abilities/cast.js';
 export {
   resolveAbility,
+  resolveChain,
+  moveWeight,
+  chainMove,
+  chargeCap,
+  stepBonus,
   mergeKnobs,
   defaultAbilities,
+  defaultBasic,
+  defaultChains,
   stepHeft,
 } from './arpg/abilities/resolve.js';
 export { makeCtx, BASIC_STATUS } from './arpg/combat.js';
