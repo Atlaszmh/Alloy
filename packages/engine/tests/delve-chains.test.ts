@@ -422,6 +422,20 @@ describe('chain play', () => {
     expect(activeMove(w.hero, 1)?.index).toBe(1);
   });
 
+  it("a Blink's trail hits after the defensive it replaces is gone: a Shadow Armor lends it no lifesteal", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      defensive: { moves: [m('medium', 'armor', ['shadow']), m('medium', 'blink', ['frost'])] },
+    });
+    press(w, 1);
+    expect(w.hero.defend).toMatchObject({ form: 'armor', move: 0 });
+    w.hero.hp = w.hero.stats.maxHp / 2;
+    const events = press(w, 1, { x: 13, y: 30 });
+    expect(events.some((e) => e.kind === 'hit' && e.slot === 1)).toBe(true);
+    expect(events.filter((e) => e.kind === 'heal')).toEqual([]);
+    expect(w.hero.defend).toMatchObject({ form: 'blink', move: 1 });
+  });
+
   it("Galvanize takes its seconds off every move of a slot; Nightstalker off the Defensive's next move", () => {
     const w = arena([dummy(13, 30), dummy(15, 30)], {
       noBasic: true,
@@ -470,7 +484,7 @@ describe('chain play', () => {
     expect(w.hero.charge[2]).toBeCloseTo(heavy.chargeNeed - light.chargeNeed + 5);
   });
 
-  it("a shortened chain clamps the step, and each move's cooldown carries over", () => {
+  it("a shortened chain clamps the step, each move's cooldown carries over, and a new move starts ready", () => {
     const bolt = m('medium');
     const w = arena([dummy(13, 30)], { noBasic: true, primary: { moves: [bolt, bolt, bolt] } });
     for (let i = 0; i < 3; i++) {
@@ -478,10 +492,17 @@ describe('chain play', () => {
       run(w, 0.05);
     }
     expect(w.hero.comboStep[0]).toBe(2);
-    const cooling = w.hero.cooldowns[0][1];
+    const before = [...w.hero.cooldowns[0]];
     refreshWorldHero(registry, w, w.hero.stats, chainsWith({ primary: { moves: [bolt, bolt] } }));
     expect(w.hero.comboStep[0]).toBe(1);
-    expect(w.hero.cooldowns[0]).toEqual([expect.any(Number), cooling]);
+    expect(w.hero.cooldowns[0]).toEqual(before.slice(0, 2));
+    refreshWorldHero(
+      registry,
+      w,
+      w.hero.stats,
+      chainsWith({ primary: { moves: [bolt, bolt, bolt] } }),
+    );
+    expect(w.hero.cooldowns[0]).toEqual([...before.slice(0, 2), 0]);
   });
 
   it('the bot flows through its Primary chain', () => {

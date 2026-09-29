@@ -197,6 +197,9 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       return done(h.x, h.y);
 
     case 'blink': {
+      // The defensive it replaces goes first, as `buff()` clears it, so the trail's hits don't draw on it.
+      h.ward = null;
+      h.defend = null;
       const fromX = h.x;
       const fromY = h.y;
       const d = Math.min(dist(h.x, h.y, p.x, p.y), ab.range);
