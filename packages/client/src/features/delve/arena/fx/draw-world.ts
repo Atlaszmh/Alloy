@@ -252,8 +252,7 @@ export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
     const bx = -h.facing.x / len;
     const by = -h.facing.y / len;
     const y = h.y + 0.2;
-    manaLine(air, h.x + bx * 0.3, y + by * 0.3, h.x + bx * 1.4, y + by * 1.4, MANA_HEX.storm, 0.8, {
-      every: 2,
+    manaLine(air, h.x + bx * 0.3, y + by * 0.3, h.x + bx * 1.8, y + by * 1.8, MANA_HEX.storm, 1, {
       jitter: 1,
       time,
     });
