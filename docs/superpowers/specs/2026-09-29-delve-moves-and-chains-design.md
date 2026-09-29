@@ -96,7 +96,7 @@ The hero holds `chains: ResolvedChain[]` (index = slot); `h.abilities` goes. `ne
 
 ### Balance and data
 
-`balance.json → delve.chains`: `cap` {basic 5, primary 5, defensive 5, ultimate 5}, `kindWeight` {light −1, medium 0, heavy 1}, `holdStageWeight` [0, 1, 2], `holdTime` 1.0, `holdMax` 2.0, `holdStages` [0.33, 0.66], `stepBonus` 0.1. `delve.stacks.basicByKind` {light 1, medium 1, heavy 2, hold 2} replaces `basicBlow`/`basicFinisher`. `arpg.json` forms lose `combo`/`comboCount` and gain `defaultChain` (and Volley `countByKind`). `delve.json` bases lose `combo` and gain `feel` and `defaultChain`; `hero.defaultCombo` becomes `hero.feel` + `hero.defaultChain`. `comboWindow` stays in `delve.abilities`.
+`balance.json → delve.chains`: `cap` {basic 5, primary 5, defensive 5, ultimate 5}, `kindWeight` {light −1, medium 0, heavy 1}, `holdStageWeight` [0, 1, 2], `holdTime` 1.0, `holdMax` 2.0, `holdStages` [0.33, 0.66], `stepBonus` 0.1 to start. The plan's gate settled `stepBonus` 0.15 and two default chains: Bolt light, medium, medium, heavy (two lights put too few frost stacks on for Shatter) and Strike medium, medium, heavy, heavy (a heavier third move spaces the presses past the reaction lockout); the chains above read with those. `delve.stacks.basicByKind` {light 1, medium 1, heavy 2, hold 2} replaces `basicBlow`/`basicFinisher`. `arpg.json` forms lose `combo`/`comboCount` and gain `defaultChain` (and Volley `countByKind`). `delve.json` bases lose `combo` and gain `feel` and `defaultChain`; `hero.defaultCombo` becomes `hero.feel` + `hero.defaultChain`. `comboWindow` stays in `delve.abilities`.
 
 ### Bot and autopilot
 
