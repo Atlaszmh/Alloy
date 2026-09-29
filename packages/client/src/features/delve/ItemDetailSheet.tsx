@@ -92,9 +92,9 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const cmp = useMemo(
     () =>
       item && !isEquipped
-        ? compareItem(profile.equipped, item, registry, depth, undefined, profile.pair)
+        ? compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
         : null,
-    [item, isEquipped, profile.equipped, profile.pair, registry, depth],
+    [item, isEquipped, profile.equipped, profile.pair, profile.chains, registry, depth],
   );
 
   if (!item) return null;

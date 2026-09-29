@@ -19,7 +19,7 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
   const st = manaStyle(registry, item.mana);
   const worn = equipItem(registry, profile, item.uid);
   const statsOnly = profilePower(registry, worn);
-  const bound = profilePower(registry, bindSecondary(worn, item.mana).profile);
+  const bound = profilePower(registry, bindSecondary(registry, worn, item.mana).profile);
 
   const finish = (bind: boolean) => {
     const store = useDelveStore.getState();

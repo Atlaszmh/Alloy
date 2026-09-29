@@ -123,7 +123,7 @@ function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
     let best: ManaType | null = null;
     for (const m of MANA_TYPES) if (m !== primary && owned[m] > (best ? owned[best] : 0)) best = m;
     if (!best) return p;
-    p = bindSecondary(p, best).profile;
+    p = bindSecondary(registry, p, best).profile;
     if (!p.pair.secondary) return p;
   }
   const elements = [p.pair.primary!, p.pair.secondary!];
@@ -153,7 +153,10 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
   for (const rarity of FUSE_RARITIES) {
     for (;;) {
       const spare = p.bag.filter(
-        (i) => i.rarity === rarity && !i.locked && compareItem(p.equipped, i, registry, depth, undefined, p.pair).powerPct <= 0,
+        (i) =>
+          i.rarity === rarity &&
+          !i.locked &&
+          compareItem(p.equipped, i, registry, depth, p.chains, p.pair).powerPct <= 0,
       );
       if (spare.length < 3) break;
       const res = fuseGear(
@@ -189,7 +192,7 @@ export function runAutopilot(
   const maxDepth = opts.maxDepth ?? 100;
   const maxFloorSeconds = opts.maxFloorSeconds ?? 240;
   let p = opts.profile ?? createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
-  if (opts.secondary) p = bindBest(registry, bindSecondary(p, opts.secondary).profile);
+  if (opts.secondary) p = bindBest(registry, bindSecondary(registry, p, opts.secondary).profile);
   const reports: AutopilotDiveReport[] = [];
 
   for (let n = 0; n < opts.dives; n++) {

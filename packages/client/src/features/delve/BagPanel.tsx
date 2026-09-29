@@ -27,7 +27,7 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
     return profile.bag
       .map((item) => ({
         item,
-        delta: compareItem(profile.equipped, item, registry, depth, undefined, profile.pair)
+        delta: compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
           .powerPct,
       }))
       .sort(
@@ -36,7 +36,7 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
           b.delta - a.delta ||
           b.item.ilvl - a.item.ilvl,
       );
-  }, [profile.bag, profile.equipped, profile.pair, registry, depth]);
+  }, [profile.bag, profile.equipped, profile.pair, profile.chains, registry, depth]);
 
   const upgrades = rows.filter((r) => r.delta > UPGRADE_EPSILON).length;
   const junk = useMemo(() => salvageCandidates(registry, profile, 'magic'), [registry, profile]);

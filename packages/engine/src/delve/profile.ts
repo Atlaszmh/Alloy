@@ -24,7 +24,7 @@ import {
   DelveProfileV4Schema,
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
-import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
+import { defaultBasic, defaultChains, followDefaultBasic } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
@@ -371,8 +371,9 @@ export function addLootToBag(
   };
 }
 
+/** Equip a bag item; a basic chain still on its default follows a new weapon (`followDefaultBasic`). */
 export function equipItem(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): DelveProfile {
@@ -381,9 +382,12 @@ export function equipItem(
   const previous = profile.equipped[item.slot];
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
-  return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  const next = { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
+  const basic = item.slot === 'weapon' && followDefaultBasic(registry, profile, next);
+  return basic ? { ...next, chains: { ...next.chains, basic } } : next;
 }
 
+/** Unequip into the bag; a basic chain still on its default follows the weapon off (unarmed). */
 export function unequipSlot(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -394,7 +398,9 @@ export function unequipSlot(
   if (profile.bag.length >= registry.getDelveBalance().loot.bagSize) throw new Error('Bag is full');
   const equipped = { ...profile.equipped };
   delete equipped[slot];
-  return { ...profile, equipped, bag: [...profile.bag, item] };
+  const next = { ...profile, equipped, bag: [...profile.bag, item] };
+  const basic = slot === 'weapon' && followDefaultBasic(registry, profile, next);
+  return basic ? { ...next, chains: { ...next.chains, basic } } : next;
 }
 
 export function toggleLock(profile: DelveProfile, uid: string): DelveProfile {
@@ -453,32 +459,26 @@ export function salvageCandidates(
         !item.locked &&
         item.rarity !== 'legendary' &&
         rarityIndex(item.rarity) <= cap &&
-        compareItem(profile.equipped, item, registry, depth, undefined, profile.pair).powerPct <= 0,
+        compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
+          .powerPct <= 0,
     )
     .map((i) => i.uid);
 }
 
-/** Greedily equip any bag item that raises Power. */
+/** Greedily equip any bag item that raises Power (with the chains equipping it gives). */
 export function equipBest(
   registry: DataRegistry,
   profile: DelveProfile,
 ): { profile: DelveProfile; equipped: GearItem[] } {
-  const depth = referenceDepth(profile);
   let current = profile;
   const changed = new Map<GearSlot, GearItem>();
   for (let pass = 0; pass < 2; pass++) {
     for (const slot of GEAR_SLOTS) {
       let best: GearItem | null = null;
-      let bestPower = heroPower(current.equipped, registry, depth, undefined, current.pair);
+      let bestPower = profilePower(registry, current);
       for (const item of current.bag) {
         if (item.slot !== slot) continue;
-        const power = heroPower(
-          { ...current.equipped, [slot]: item },
-          registry,
-          depth,
-          undefined,
-          current.pair,
-        );
+        const power = profilePower(registry, equipItem(registry, current, item.uid));
         if (power > bestPower) {
           best = item;
           bestPower = power;

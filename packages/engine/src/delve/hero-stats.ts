@@ -6,7 +6,13 @@ import {
   type Chains,
   type ResolvedChain,
 } from '../types/ability.js';
-import { defaultBasic, defaultChains, resolveChain, stepBonus } from '../arpg/abilities/resolve.js';
+import {
+  defaultBasic,
+  defaultChains,
+  followDefaultBasic,
+  resolveChain,
+  stepBonus,
+} from '../arpg/abilities/resolve.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -426,7 +432,11 @@ export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
   return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
 }
 
-/** How equipping `item` (in its slot) would change the hero. */
+/**
+ * How equipping `item` (in its slot) would change the hero. With its chains and
+ * pair, a new weapon swings the basic chain equipping it gives (a default one
+ * follows the weapon: `followDefaultBasic`).
+ */
 export function compareItem(
   equipped: EquippedGear,
   item: GearItem,
@@ -439,10 +449,15 @@ export function compareItem(
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
+  const basic =
+    chains && pair && item.slot === 'weapon'
+      ? followDefaultBasic(registry, { equipped, pair, chains }, { equipped: next, pair })
+      : null;
+  const nextChains = chains && basic ? { ...chains, basic } : chains;
   const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
-  const afterStats = computeHeroStats(next, registry, pairExtra(pair, chains?.basic));
+  const afterStats = computeHeroStats(next, registry, pairExtra(pair, nextChains?.basic));
   const before = estimateCombat(beforeStats, registry, depth, chains);
-  const after = estimateCombat(afterStats, registry, depth, chains);
+  const after = estimateCombat(afterStats, registry, depth, nextChains);
 
   const attunementDelta: Partial<ManaMap> = {};
   for (const m of MANA_TYPES) {

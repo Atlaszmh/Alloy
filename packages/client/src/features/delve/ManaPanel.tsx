@@ -36,7 +36,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
   // The Power once `m` is bound: mid-dive too (binding refuses then), at the dive's depth.
   const boundPower = (m: ManaType) =>
     profilePower(registry, {
-      ...bindSecondary({ ...profile, dive: null }, m).profile,
+      ...bindSecondary(registry, { ...profile, dive: null }, m).profile,
       dive: profile.dive,
     });
   const owned = new Set<ManaType>([

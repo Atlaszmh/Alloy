@@ -215,7 +215,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     chooseMana: (mana) => applyResult(chooseStartingMana(registry(), get().profile, mana)),
 
-    bindSecondary: (mana) => applyResult(engineBindSecondary(get().profile, mana)),
+    bindSecondary: (mana) => applyResult(engineBindSecondary(registry(), get().profile, mana)),
 
     realign: (next) => {
       const res = applyResult(engineRealign(registry(), get().profile, next));

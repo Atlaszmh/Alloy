@@ -86,7 +86,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
     store().unequip('chest'); // under 1000 Power: the chip's whole number shows the bind's change
     // Binding Storm between dives gives this Power; mid-dive the preview still shows it.
-    const bound = profilePower(registry, bindSecondary(store().profile, 'storm').profile);
+    const bound = profilePower(registry, bindSecondary(registry, store().profile, 'storm').profile);
     store().startDive(1);
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('pair-locked')).toHaveTextContent('between dives');

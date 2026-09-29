@@ -43,8 +43,8 @@ export function PaperDoll({
     [equipped, pair, chains, registry],
   );
   const est = useMemo(
-    () => estimateCombat(stats, registry, referenceDepth(profile)),
-    [stats, registry, profile],
+    () => estimateCombat(stats, registry, referenceDepth(profile), chains),
+    [stats, registry, profile, chains],
   );
 
   return (

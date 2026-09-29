@@ -13,7 +13,7 @@ import {
   type ResolvedChain,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
-import type { DelveBalance, HeroStats } from '../../types/delve.js';
+import type { DelveBalance, DelveProfile, HeroStats } from '../../types/delve.js';
 
 const NEUTRAL: Knobs = {
   power: 1,
@@ -218,6 +218,29 @@ export function defaultBasic(
     kind,
     element: secondary && i === kinds.length - 1 ? secondary : primary,
   }));
+}
+
+/**
+ * A basic chain still on its default follows its weapon and pair: when `was`'s
+ * chain equals `defaultBasic` for `was`'s weapon and pair (the same kinds and
+ * elements), the default for `now`'s. Null for a chain the player built, which
+ * stays as it is, and before the choice.
+ */
+export function followDefaultBasic(
+  registry: DataRegistry,
+  was: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
+  now: Pick<DelveProfile, 'equipped' | 'pair'>,
+): Blow[] | null {
+  const defaultOf = ({ equipped, pair }: Pick<DelveProfile, 'equipped' | 'pair'>) =>
+    pair.primary
+      ? defaultBasic(registry, equipped.weapon?.baseId ?? null, pair.primary, pair.secondary)
+      : null;
+  const old = defaultOf(was);
+  const mine = was.chains.basic;
+  const onDefault =
+    old?.length === mine.length &&
+    old.every((b, i) => b.kind === mine[i].kind && b.element === mine[i].element);
+  return onDefault ? defaultOf(now) : null;
 }
 
 /**

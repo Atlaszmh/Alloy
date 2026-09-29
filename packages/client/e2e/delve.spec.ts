@@ -17,8 +17,9 @@ async function seedProfile(
   autopilot = true,
   secondary?: ManaType,
 ): Promise<void> {
-  let profile = createDelveProfile(createDefaultRegistry(), seed, { primary: 'fire' });
-  if (secondary) profile = bindSecondary(profile, secondary).profile;
+  const registry = createDefaultRegistry();
+  let profile = createDelveProfile(registry, seed, { primary: 'fire' });
+  if (secondary) profile = bindSecondary(registry, profile, secondary).profile;
   const save = JSON.stringify(profile);
   await page.addInitScript(
     ([key, value, bot]) => {
