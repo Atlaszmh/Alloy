@@ -24,7 +24,7 @@ Elemental marks become **stacks**. Every hit applies stacks of its element to th
 |---|---|
 | Can a hit's own stacks pair with each other? | No. A hit's stacks pair only with stacks already on the foe from earlier hits. A fused ability sets up on one hit and pairs on the next (which may be the next dart of the same Volley, 0.1 s later). |
 | What is a stack? | One counter per element per foe. The count is the status and its intensity; consuming a pair spends both statuses. |
-| Several pairs at once | All matching pairs go at once. Damage reactions multiply per pair; effect reactions fire once. |
+| Several pairs at once | Damage reactions take every matching pair at once and multiply per pair. Effect reactions fire once and take exactly one pair, so the rest of both statuses stay on the foe (an effect gains nothing from more pairs, and spending them all left Soulfire, Sunder and Obsidian pairs with no burn or hex to build). |
 | How stacks build and fade | Every hit applies (no 30% roll any more). Each element caps at 5 per foe and has one timer that any new stack of it refreshes; at the timer all of that element's stacks lapse together. |
 | Fused abilities reacting every hit | A per-foe reaction lockout: after a reaction fires on a foe, none fires on it for 1 s. Stacks still build meanwhile. |
 
@@ -44,7 +44,7 @@ Removed: `burnUntil`, `chillStacks`, `chillUntil`, `shockUntil`, `hexUntil`, `ra
 
 ### What the count does (the status)
 
-Per-stack values are set so 2 stacks ≈ today's effect. "While stacked" means `stacks[el] > 0`.
+The per-stack values are the gate's tuning knobs: they are set so that a weapon's total status damage over a 30 s hold lands near today's, not so that 2 stacks equal today's one application (every blow applies now, so a stack is worth less than today's status). "While stacked" means `stacks[el] > 0`.
 
 | Element | While stacked | Per-stack value (`delve.stacks`) |
 |---|---|---|
@@ -53,7 +53,7 @@ Per-stack values are set so 2 stacks ≈ today's effect. "While stacked" means `
 | Storm | takes `+stacks × shockPerStack` damage: +50% at the cap, doubled by Tempest | `shockPerStack` 0.1 |
 | Earth | rattled (the mark). Stagger stays a separate crowd control that Earth hits also apply, with its immunity | — |
 | Shadow | takes `+stacks × hexPerStack` damage: +37.5% at the cap | `hexPerStack` 0.075 |
-| Nature | poisoned: `poisonRef × stacks` per second, as today | cap ×2 with Plaguebearer |
+| Nature | poisoned: `poisonRef × stacks × poisonPerStack` per second | `poisonPerStack` 1.0 to start; cap ×2 with Plaguebearer |
 
 The predicates keep their names: `isBurning` = fire > 0, `isChilled` = frost > 0, `isFrozen` = `t < freezeUntil` (unchanged), `isShocked`, `isHexed` (Night's Embrace reads it), `isRattled`, `isPoisoned` = nature > 0. `hasMark(el)` = `stacks[el] > 0`, except frost, where a bare freeze counts: `hasMark(frost)` = frost > 0 or frozen (today's "chilled or frozen").
 
@@ -79,11 +79,11 @@ On a hit of element E that isn't `noReact`:
 1. `before[F]` = each element's count before this hit. For frost as a *partner* only, a bare freeze counts as one: `before[frost] = max(stacks.frost, frozen ? 1 : 0)`.
 2. `total_E = min(cap, stacks[E] + k)`, from the raw count (no pseudo-stack: a frost hit never pairs a stack it doesn't have), where `k` is this hit's `stacks`.
 3. Walk F over `MANA_TYPES` (fire, frost, storm, earth, shadow, nature), skipping E. The first F with `before[F] > 0` whose reaction can fire pairs: `n = min(total_E, before[F])`. A reaction can't fire while the foe's `reactionLockUntil` runs, while a buff reaction's hero-side cooldown runs, or for an Earth hit on a foe that is chilled but not frozen (Shatter needs the freeze).
-4. If `n > 0`: the reaction fires with `n`, reading the foe's *pre-consumption* state (Blight spreads what the foe has now), and `reactionLockUntil = t + reactionLockout`.
+4. If `n > 0`: the reaction fires with `n`, reading the foe's *pre-consumption* state (Blight spreads what the foe has now), and `reactionLockUntil = t + reactionLockout`. The number consumed, `c`, is `n` for a damage reaction and 1 for an effect reaction.
 5. Damage is dealt, scaled by the reaction as today. A kill ends here: a killing reaction never consumes, and kill-time readers (Inferno's flames, Night's Embrace, Plague's spread) see the pre-consumption counts.
-6. If the foe survived, in this order: apply this hit's E stacks; remove `n` from E and from F (a count stops at 0 and its status ends: a burn stops, a slow ends); apply the hit's other elements' stacks; then evaluate frost's crossing once on the final count.
+6. If the foe survived, in this order: apply this hit's E stacks; remove `c` from E and from F (a count stops at 0 and its status ends: a burn stops, a slow ends); apply the hit's other elements' stacks; then evaluate frost's crossing once on the final count. (Lapsing runs once per step in `monstersTick`, so a hit earlier in the same 1/30 s step can still pair a count whose timer ran out within that step; accepted.)
 
-A fused hit carries stacks of both its elements, but only `before[]` counts as earlier, so it never pairs with itself; the order in step 6 keeps its second element from crossing the freeze threshold before the pairs come off. `useUpMark` becomes `consumePairs(m, E, F, n)`.
+A fused hit carries stacks of both its elements, but only `before[]` counts as earlier, so it never pairs with itself; the order in step 6 keeps its second element from crossing the freeze threshold before the pairs come off. `useUpMark` becomes `consumePairs(m, E, F, c, reaction)` (the reaction id decides the freeze exception).
 
 **Which reactions end a freeze:** a freeze ends only when frost was the *partner* F that paired (a Fire hit's Melt, an Earth hit's Shatter, a Nature hit's Crystallize, a Shadow hit's Siphon…), never when frost is the hit's own element: a frost hit that Shatters a rattled frozen foe leaves it frozen, as today's `useUpMark` touches only the F side. Superconduct is the exception and keeps a freeze it finds (pseudo-stack included), adding its own if none. Shatter from an Earth hit still needs the foe frozen. Soulfire and Blight consume like every other reaction (`consumes` leaves `arpg.json`).
 
@@ -96,8 +96,8 @@ A fused hit carries stacks of both its elements, but only `before[]` counts as e
 | Overload | the blast is hit × overloadMult × n × catalyst |
 | Combust | hit × (1 + (combustMult − 1) × n × catalyst); the splash deals the same amount |
 | Crystallize | hit × (1 + (crystallizeMult − 1) × n × catalyst); neighbours get `tick` frost stacks, once |
-| Blight | once: Plague's spread. Neighbours within `blightRadius` take the foe's nature and shadow counts (`max(theirs, the foe's)`, capped), with the poison ref and slot under the ref rule |
-| Superconduct, Soulfire, Obsidian, Lightning Rod, Sunder, Seedling, Siphon, Blackout, Galvanize | once, whatever `n` (Soulfire heals from the hit; Obsidian's barrier from the hit) |
+| Blight | once, one pair consumed: Plague's spread. Neighbours within `blightRadius` take the foe's nature and shadow counts (`max(theirs, the foe's)`, capped), with the poison ref and slot under the ref rule |
+| Superconduct, Soulfire, Obsidian, Lightning Rod, Sunder, Seedling, Siphon, Blackout, Galvanize | once, whatever `n`, and they consume one pair (Soulfire heals from the hit; Obsidian's barrier from the hit) |
 
 Bosses take stacks and n-scaled reactions unscaled (only freeze and stagger keep their ×0.4), deliberately. The `reaction` event and the `hit` event gain `pairs?: number`.
 
@@ -111,7 +111,7 @@ New block `balance.json → delve.stacks` (typed in `DelveBalance`, validated in
 - `cap` 5;
 - `duration` per element, today's values: fire 3, frost 3, storm 4, earth 2, shadow 6, nature 4;
 - `byWeight` [1, 1, 2, 3, 3], `basicBlow` 1, `basicFinisher` 2, `tick` 1;
-- `freezeAt` 3, `firePerStack` 0.5, `frostSlowPerStack` 0.2, `frostSlowCap` 0.6, `shockPerStack` 0.1, `hexPerStack` 0.075;
+- `freezeAt` 3, `firePerStack`, `frostSlowPerStack` 0.2, `frostSlowCap` 0.6, `shockPerStack`, `hexPerStack`, `poisonPerStack`: the starting values are 0.5, 0.1, 0.075 and 1.0, and the plan records what the gate settled on;
 - `reactionLockout` 1.0.
 
 `delve.status` loses `burnDuration`, `chillSlow`, `chillDuration`, `chillToFreeze`, `shockBonus`, `shockDuration`, `hexBonus`, `hexDuration`, `rattleDuration`, `poisonDuration`, `poisonMaxStacks` (moved or replaced) and keeps `burnDps`, `poisonDps`, `freezeDuration`, `freezeImmunity`, stagger, root and blind. `delve.reactions` is unchanged.
@@ -140,7 +140,7 @@ The 15 reactions' effects, `getReactionFor` and the fixed walk, discovery and `r
 - Status: burn per second scales with fire stacks and stops at 0; slow scales and caps; shock and hex bonuses scale; rattled while earth ≥ 1; poison as today with the cap and Plaguebearer.
 - Freeze: crossing 3 freezes with immunity and the stacks stay; a foe at 3+ past immunity doesn't re-freeze on the next frost hit; dropping below 3 and climbing back does; a fused Steam hit on a foe with 2 frost Melts without a phantom freeze; Glacier freezes on its first hit; a frozen foe with 0 frost stacks can still be Shattered by Earth and Melted by Fire (the bare freeze counts as one partner stack), and that ends the freeze; a frost hit on a frozen foe with 0 frost stacks pairs nothing of its own and never unfreezes it; a Frost Ward's retaliation still freezes an attacker whose chills cross 3.
 - Pairing: earlier-only (a fused hit doesn't pair with itself, the next hit does); the fixed order with two other elements present; `n = min`; leftovers stay; Earth on a chilled-not-frozen foe walks on; a killing reaction leaves the counts.
-- Strength: each damage reaction's bonus is × n (n = 1, 2, 3); each effect reaction fires once with n = 3; Blight spreads the pre-consumption counts; Catalyst scales the bonus.
+- Strength: each damage reaction's bonus is × n (n = 1, 2, 3) and consumes n pairs; each effect reaction fires once with n = 3 and consumes one pair, leaving the rest; Blight spreads the pre-consumption counts; Catalyst scales the bonus; a boss takes the full per-pair scaling.
 - Lockout: a second reaction within 1 s doesn't fire, stacks build meanwhile, and the next past the lockout pairs the bigger n. The hero-side buff cooldown still applies.
 - Consuming: a status ends at 0; Melt ends a freeze; Shatter needs the freeze and ends it; Superconduct keeps it; Crystallize and Siphon end it; Soulfire and Blight consume.
 - All 15 reactions both ways with stacks; `pairs` on the events; determinism (same seed, same events twice).
@@ -148,7 +148,7 @@ The 15 reactions' effects, `getReactionFor` and the fixed walk, discovery and `r
 
 **Pacing** (`tests/delve-pacing.test.ts`): the rails hold unchanged, including each run finding its own pair's reaction and the 15-pair sweep. Tuning order: the per-stack values (`firePerStack` first), then `freezeAt`, then `reactionLockout`, then `cap`/`duration`, then nothing else without asking.
 
-**DPS Lab before/after** (a scratch script over `dpsCombos`, depth 10, one dummy and the pack; the "before" grid is saved from the pre-stacks engine): single-element basics stay within about 15% of today; a Fire Bolt (Balanced, mana) on one dummy stays within about 25% of today; a Nature+Fire Burst against the pack falls under about twice its unpacked figure; against one dummy the best fused Burst stays under twice the best single-element Burst; no pair vanishes from the top of the basics table. The shifts go in this spec's status note when it ships.
+**DPS Lab before/after** (a scratch script over `dpsCombos`, depth 10, one dummy and the pack, 40-seed means for basics and the Bolt; the "before" grid is saved from the pre-stacks engine): single-element basics stay within about 15% of today; a Fire Bolt (Balanced, mana) on one dummy stays within about 25% of today; a Nature+Fire Burst against the pack stays under about twice its pre-stacks figure; the best fused Burst's ratio to the best single-element Burst (×2.45 today, one dummy) grows by no more than 10%; every pair keeps an entry in the top 30 of the basics table, one dummy and pack. The shifts go in this spec's status note when it ships.
 
 **Client:** pips per count and element; the ×n label; the meter's pair sums; the texts; the fake `StatusState` in `reactions.test.ts` updated.
 
