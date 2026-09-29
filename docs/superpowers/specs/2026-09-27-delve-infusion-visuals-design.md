@@ -38,7 +38,7 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 - **Ability events.** `beam`, `slash`, `explode` and `dash` gain `infusion: ManaType | null`:
   - **From an ability:** `impact`, Lance, Strike and Blink use `ab.elements[1] ?? null`. A tick impact (zone ticks, Pyroclasm embers) uses `null`, so embers don't draw infused rings: `infusion = o.tick ? null : ab.elements[1] ?? null`.
   - **From a basic burst:** the staff great orb's `burstShot` uses the weapon's infusion.
-  - **Always `null`:** monster slams, and the reaction and power explosions (Overload, Combust, Hellfire Brand).
+  - **Always `null`:** monster slams, and the reaction and power explosions (Overload, Combust, Crystallize, Hellfire Brand).
 - **Weapon infusion.**
   - `HeroWeapon` gains `infusion: ManaType | null`. It is `null` in real play for now; project B will fill it.
   - `HeroStatsExtra` gains `basicInfusion?: ManaType` for the Training Grounds preview. It is ignored when it equals the weapon's element, or when unarmed.

@@ -94,8 +94,9 @@ export function MeterTab({ meter, onReset }: { meter: MeterSummary; onReset: () 
         ))}
       </div>
       <p className="text-[11px] text-stone-500">
-        Melt, Shatter and Soulfire multiply the hit that set them off, so their damage stays in that
-        hit&apos;s row. Time is the fight&apos;s own, so slow motion doesn&apos;t change the DPS.
+        Melt, Shatter, Soulfire, Combust and Crystallize multiply the hit that set them off, so
+        their damage stays in that hit&apos;s row; Sunder&apos;s bonus shows in later hits&apos;
+        rows. Time is the fight&apos;s own, so slow motion doesn&apos;t change the DPS.
       </p>
       <button
         type="button"

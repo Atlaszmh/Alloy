@@ -1,7 +1,7 @@
 # Delve Elemental Affinity Design
 
 **Date:** 2026-09-27
-**Status:** Built in v0.43.0.
+**Status:** Built in v0.43.0. The reaction-partner bind and the one-reaction pacing rail are superseded by `2026-09-28-delve-pair-reactions-design.md` (v0.44.0): every pair reacts now.
 
 **Engine:** `packages/engine/src/`
 - `delve/pair.ts` (new)
