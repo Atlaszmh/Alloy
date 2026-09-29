@@ -2,7 +2,14 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
-import type { AbilityCast, AbilitySlot, FormId, Knobs, ResolvedAbility } from './ability.js';
+import type {
+  AbilityCast,
+  AbilitySlot,
+  FormId,
+  Knobs,
+  MoveKind,
+  ResolvedAbility,
+} from './ability.js';
 
 // ── Data definitions (arpg.json) ───────────────────────────────────────────
 
@@ -61,6 +68,10 @@ export interface FormDef {
   combo?: number[];
   /** Press-combo projectile counts (Volley). */
   comboCount?: number[];
+  /** The form's default chain: new heroes' and migrated builds' moves (see the moves and chains spec). */
+  defaultChain: MoveKind[];
+  /** Projectiles by kind (Volley; a hold's stages count as medium, heavy and hold). */
+  countByKind?: Record<MoveKind, number>;
   /** Units the hero moves when casting: positive steps in over the conjure, negative recoils after the release. */
   motion?: number;
 }

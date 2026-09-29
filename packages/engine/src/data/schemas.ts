@@ -480,6 +480,8 @@ export const DelveDataSchema = z.object({
           })
           .optional(),
         combo: z.array(ComboStepSchema).min(1).optional(),
+        feel: perKind(ComboStepSchema).optional(),
+        defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN).optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -639,6 +641,8 @@ export const ArpgDataSchema = z.object({
         combo: z.array(z.number().positive()).min(1).optional(),
         comboCount: z.array(z.number().int().positive()).min(1).optional(),
         motion: z.number().optional(),
+        defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN),
+        countByKind: perKind(z.number().int().positive()).optional(),
       }),
     )
     .length(12),
@@ -672,6 +676,8 @@ const DelveBalanceSchema = z.object({
     unarmedInterval: z.number().positive(),
     basicComboGrace: z.number().min(0),
     defaultCombo: z.array(ComboStepSchema).min(1),
+    feel: perKind(ComboStepSchema),
+    defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN),
     minAttackInterval: z.number().positive(),
     critCap: z.number().positive(),
     dodgeCap: z.number().positive(),

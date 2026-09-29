@@ -64,6 +64,10 @@ export interface GearBaseDef {
   attack?: WeaponAttackDef;
   /** Weapons only: the basic-attack string (else the hero's default string). */
   combo?: ComboStepDef[];
+  /** Weapons only: a blow's row by its kind (else the hero's). */
+  feel?: Record<MoveKind, ComboStepDef>;
+  /** Weapons only: the basic chain a new hero gets (else the hero's). */
+  defaultChain?: MoveKind[];
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -268,6 +272,10 @@ export interface DelveBalance {
     basicComboGrace: number;
     /** The string for weapons without one (and unarmed). */
     defaultCombo: ComboStepDef[];
+    /** Unarmed: a blow's row by its kind. */
+    feel: Record<MoveKind, ComboStepDef>;
+    /** Unarmed: the default basic chain. */
+    defaultChain: MoveKind[];
     minAttackInterval: number;
     critCap: number;
     dodgeCap: number;
