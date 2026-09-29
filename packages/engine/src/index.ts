@@ -201,6 +201,7 @@ export {
   pressStep,
   nextMove,
   activeMove,
+  holdCharge,
 } from './arpg/abilities/cast.js';
 export {
   resolveAbility,

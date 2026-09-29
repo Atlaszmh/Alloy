@@ -36,8 +36,11 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
   cancelSwing(ctx);
   h.push = null;
   h.recoverUntil = t;
-  // Bailing out of a wind-up keeps the mana spent but frees the ability again (and refunds charge).
+  // Bailing out of a wind-up keeps the mana spent but frees the ability again (and refunds charge);
+  // a hold is dropped unpaid.
   cancelWindup(h, t);
+  if (h.hold) world.holdDropped = h.hold.slot;
+  h.hold = null;
   h.dodgeCharges--;
   if (h.dodgeRechargeAt === 0) h.dodgeRechargeAt = t + bal.dodge.recharge;
   h.dodge = {

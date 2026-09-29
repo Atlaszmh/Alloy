@@ -275,6 +275,7 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.phoenixAvailable = true;
   h.phoenixUsed = false;
   h.windup = null;
+  h.hold = null;
   h.swing = null;
   h.push = null;
   h.recoverUntil = t;

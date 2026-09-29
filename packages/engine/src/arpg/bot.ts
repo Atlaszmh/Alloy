@@ -2,7 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import type { ArpgInput, ArpgWorld, Vec } from '../types/arpg.js';
 import { makeCtx } from './combat.js';
 import { dirTo, dist } from './geometry.js';
-import { abilityReady, nextMove } from './abilities/cast.js';
+import { abilityReady, holdCharge, nextMove } from './abilities/cast.js';
 import { nearestMonster } from './abilities/targeting.js';
 
 /**
@@ -10,8 +10,9 @@ import { nearestMonster } from './abilities/targeting.js';
  * weapons), steps (or dodges) out of telegraphed slams, dodges blows about to
  * land, drinks at low life, grabs nearby
  * loot, and uses its abilities: the Ultimate on a crowd or a big foe, the
- * Defensive when hurt or crowded, the Primary whenever it's ready. Drives the
- * pacing tests.
+ * Defensive when hurt or crowded, the Primary whenever it's ready. A hold move
+ * charges to full before it lets go (the bot never taps one). Drives the pacing
+ * tests.
  */
 export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   const ctx = makeCtx(registry, world, []);
@@ -60,6 +61,13 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
     }
   }
 
+  // A hold charges until full, then lets go.
+  if (h.hold) {
+    input.holding = h.hold.slot;
+    if (holdCharge(ctx.bal, h.hold.start, world.t).charge >= 1) input.cast = { slot: h.hold.slot };
+    return input;
+  }
+
   const target = nearestMonster(ctx, h.x, h.y, 60);
   if (!target) {
     const drop = world.drops.find((d) => !d.dead);
@@ -102,6 +110,10 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
       : -1,
   ];
   const slot = wants.find((s) => s >= 0);
-  if (slot !== undefined) input.cast = { slot };
+  if (slot !== undefined) {
+    if (nextMove(h, slot, world.t, ctx.bal.abilities.comboWindow).kind === 'hold')
+      input.holding = slot;
+    else input.cast = { slot };
+  }
   return input;
 }

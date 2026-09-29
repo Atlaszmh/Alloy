@@ -206,6 +206,7 @@ export function createHeroEntity(
     comboStep: [0, 0, 0],
     comboAt: [-Infinity, -Infinity, -Infinity],
     windup: null,
+    hold: null,
     swing: null,
     push: null,
     recoverUntil: 0,
@@ -235,8 +236,8 @@ export function createHeroEntity(
  * pool resizes, keeping the life fraction and current mana (clamped). Charge
  * (clamped to each chain's largest need), combos (clamped to a shortened
  * chain) and each move's cooldown carry over. A slot whose chain changed
- * drops its wind-up (as a dodge does), and a new Defensive ends the old one's
- * buff and Ward at once, without bursting.
+ * drops its wind-up (as a dodge does) and its hold, and a new Defensive ends
+ * the old one's buff and Ward at once, without bursting.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
@@ -261,6 +262,11 @@ export function refreshWorldHero(
   if (h.windup && changed[h.windup.slot]) {
     cancelWindup(h, world.t);
     h.push = null; // its step-in goes with it
+  }
+  // A changed slot's hold is dropped, unpaid.
+  if (h.hold && changed[h.hold.slot]) {
+    world.holdDropped = h.hold.slot;
+    h.hold = null;
   }
   if (changed[1]) {
     h.defend = null;
@@ -334,6 +340,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     bossId: null,
     queuedCast: null,
     queuedCastUntil: 0,
+    queuedRelease: null,
+    holdDropped: null,
     queuedAttack: null,
     queuedPotion: false,
     queuedDodge: false,

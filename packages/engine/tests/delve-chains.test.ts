@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import balanceData from '../src/data/balance.json';
 import { BalanceConfigSchema } from '../src/data/schemas.js';
-import { activeMove, nextMove } from '../src/arpg/abilities/cast.js';
+import { abilityReady, activeMove, holdCharge, nextMove } from '../src/arpg/abilities/cast.js';
 import { defendingAbility, gainCharge } from '../src/arpg/abilities/defend.js';
 import {
+  chainMove,
   chargeCap,
   defaultBasic,
   defaultChains,
@@ -31,7 +32,9 @@ import {
   arena,
   bal,
   chainsWith,
+  dodge,
   dummy,
+  holdFor,
   moveOf,
   press,
   pressOnly,
@@ -517,5 +520,324 @@ describe('chain play', () => {
       for (const e of stepWorld(registry, w, botInput(registry, w), STEP))
         if (e.kind === 'cast' && e.slot === 0) steps.add(w.hero.comboStep[0]);
     expect([...steps].sort()).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe('holds', () => {
+  const still = { x: 0, y: 0 };
+  const holdStep = (w: ReturnType<typeof arena>, slot = 0, move = still) =>
+    stepWorld(registry, w, { move, holding: slot }, STEP);
+  /** A Fire Bolt chain of `moves` (one hold by default), basic attacks off, a foe up the arena. */
+  const holder = (moves: Move[] = [m('hold')]) =>
+    arena([dummy(13, 30)], { noBasic: true, primary: { moves } });
+  const casts = (events: ArpgEvent[]) =>
+    events.filter((e): e is Extract<ArpgEvent, { kind: 'cast' }> => e.kind === 'cast');
+
+  it('holding starts a charge only when the next move is a hold: rooted, and paying nothing yet', () => {
+    const plain = holder([m('medium')]);
+    holdStep(plain);
+    expect(plain.hero.hold).toBeNull();
+    expect(plain.hero.windup).toBeNull();
+
+    const w = holder();
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const x = w.hero.x;
+    holdStep(w, 0, { x: 1, y: 0 });
+    expect(w.hero.hold).toMatchObject({ slot: 0, step: 0, start: w.t });
+    expect(w.hero.hold!.aim).toMatchObject({ x: 13, y: 30 });
+    holdStep(w, 0, { x: 1, y: 0 });
+    expect(w.hero.x).toBe(x);
+    expect(w.hero.mana).toBe(mana);
+    expect(activeMove(w.hero, 0)?.kind).toBe('hold');
+  });
+
+  it('a hold starting cancels a swing still in its startup', () => {
+    const w = arena([dummy(13, 34.4)], { primary: { kind: 'hold' } });
+    run(w, STEP);
+    expect(w.hero.swing).not.toBeNull();
+    holdStep(w);
+    expect(w.hero.swing).toBeNull();
+    expect(w.hero.hold).not.toBeNull();
+  });
+
+  it('reaches stage 1 at 0.33 of holdTime and stage 2 at 0.66, saying so each time', () => {
+    const w = holder();
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round(1.2 / STEP); i++) events.push(...holdStep(w));
+    const start = w.hero.hold!.start;
+    const stages = events.filter((e) => e.kind === 'holdStage');
+    expect(stages.map((e) => e.kind === 'holdStage' && [e.slot, e.stage])).toEqual([
+      [0, 1],
+      [0, 2],
+    ]);
+    const c = bal.chains;
+    expect(holdCharge(bal, start, start + c.holdStages[0] * c.holdTime - 0.01).stage).toBe(0);
+    expect(holdCharge(bal, start, start + c.holdStages[0] * c.holdTime + 0.01).stage).toBe(1);
+    expect(holdCharge(bal, start, start + c.holdStages[1] * c.holdTime + 0.01).stage).toBe(2);
+    expect(holdCharge(bal, start, start + c.holdTime).charge).toBe(1);
+  });
+
+  it("its release fires the stage's move at once, paying its cost and setting its cooldown and stacks", () => {
+    const w = holder();
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const events = holdFor(w, 0, 0.5);
+    const stage1 = w.hero.chains[0].hold[0]![1];
+    expect(casts(events)).toHaveLength(1);
+    expect(events.some((e) => e.kind === 'windup')).toBe(false);
+    expect(w.hero.hold).toBeNull();
+    expect(mana - w.hero.mana).toBeCloseTo(stage1.cost);
+    expect(w.hero.cooldowns[0][0]).toBeCloseTo(w.t + stage1.cooldown);
+    expect(w.projectiles.at(-1)!.explodeRadius).toBeCloseTo(stage1.radius);
+    run(w, 1);
+    expect(w.monsters[0].status.stacks.fire).toBe(stage1.stacks);
+  });
+
+  it('a tap winds up in full, as a plain medium move does: a medium hit', () => {
+    const w = holder();
+    const plain = holder([m('medium')]);
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const events = pressOnly(w, 0);
+    pressOnly(plain, 0);
+    expect(casts(events)).toHaveLength(0);
+    const span = (x: ReturnType<typeof arena>) => x.hero.windup!.until - x.hero.windup!.start;
+    expect(span(w)).toBeCloseTo(span(plain));
+    expect(span(w)).toBeCloseTo(moveOf(plain, 0).castTime);
+    expect(mana - w.hero.mana).toBeCloseTo(moveOf(w, 0).cost);
+    expect(moveOf(w, 0).weight).toBe(0);
+    expect(casts(run(w, moveOf(w, 0).castTime + STEP))).toHaveLength(1);
+  });
+
+  it("charging counts toward the stage's wind-up: a quick release waits out the rest, a full one fires at once", () => {
+    const w = holder();
+    holdStep(w);
+    const start = w.hero.hold!.start;
+    holdStep(w);
+    const events = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+    const stage0 = chainMove(w.hero.chains[0], 0, 0);
+    expect(casts(events)).toHaveLength(0);
+    expect(w.hero.windup).toMatchObject({ step: 0, stage: 0 });
+    expect(w.hero.windup!.until - start).toBeCloseTo(stage0.castTime, 6);
+    expect(activeMove(w.hero, 0)).toBe(stage0);
+
+    const full = holder();
+    const stage2 = chainMove(full.hero.chains[0], 0, 2);
+    expect(stage2.castTime).toBeLessThan(bal.chains.holdTime);
+    expect(casts(holdFor(full, 0, bal.chains.holdTime))).toHaveLength(1);
+    expect(full.hero.windup).toBeNull();
+  });
+
+  it('a cast-paid release gets its discount, waits out the rest of its channel, and cools from the landing', () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      primary: { moves: [m('hold')], payment: 'cast' },
+    });
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const events = holdFor(w, 0, 0.5);
+    const stage1 = chainMove(w.hero.chains[0], 0, 1);
+    const asMana = resolveAbility(registry, 'primary', m('hold'), 'mana', w.hero.stats, 1);
+    expect(stage1.cost).toBeCloseTo(asMana.cost * bal.abilities.castManaMult);
+    expect(mana - w.hero.mana).toBeCloseTo(stage1.cost);
+    expect(casts(events)).toHaveLength(0);
+    const wu = w.hero.windup!;
+    expect(wu.stage).toBe(1);
+    expect(activeMove(w.hero, 0)).toBe(stage1);
+    expect(w.hero.cooldowns[0][0]).toBeCloseTo(wu.until + stage1.cooldown, 6);
+    expect(casts(run(w, wu.until - w.t + STEP))).toHaveLength(1);
+    // It lands at the stage it was released at.
+    expect(w.projectiles.at(-1)!.explodeRadius).toBeCloseTo(stage1.radius);
+  });
+
+  it("a dodge in a released charge-paid hold's wind-up refunds its charge; the move is ready again", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      primary: { moves: [m('hold')], payment: 'charge' },
+    });
+    w.hero.manaRegen = 0;
+    const need = moveOf(w, 0).chargeNeed;
+    w.hero.charge[0] = need;
+    const mana = w.hero.mana;
+    holdStep(w);
+    holdStep(w);
+    stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+    expect(w.hero.windup).toMatchObject({ step: 0, stage: 0 });
+    expect(w.hero.charge[0]).toBe(0);
+    dodge(w, { x: 1, y: 0 });
+    expect(w.hero.windup).toBeNull();
+    expect(w.hero.charge[0]).toBeCloseTo(need);
+    expect(w.hero.cooldowns[0][0]).toBeLessThanOrEqual(w.t);
+    expect(w.hero.mana).toBe(mana);
+  });
+
+  it('fires by itself at stage 2 past holdMax, and at its stage when the button lets go unreleased', () => {
+    const w = holder();
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.chains.holdMax + 0.1) / STEP); i++)
+      events.push(...holdStep(w));
+    expect(casts(events)).toHaveLength(1);
+    expect(mana - w.hero.mana).toBeCloseTo(w.hero.chains[0].hold[0]![2].cost);
+
+    const lost = holder();
+    lost.hero.manaRegen = 0;
+    const before = lost.hero.mana;
+    for (let i = 0; i < Math.round(0.5 / STEP); i++) holdStep(lost);
+    const e = stepWorld(registry, lost, { move: still }, STEP);
+    expect(casts(e)).toHaveLength(1);
+    expect(before - lost.hero.mana).toBeCloseTo(lost.hero.chains[0].hold[0]![1].cost);
+  });
+
+  it('a stage it cannot afford at the release falls to the highest it can; none, and it ends unpaid', () => {
+    const w = holder();
+    w.hero.manaRegen = 0;
+    const [stage0, stage1] = w.hero.chains[0].hold[0]!;
+    for (let i = 0; i < Math.round(1.2 / STEP); i++) holdStep(w);
+    w.hero.mana = stage1.cost + 0.1;
+    const events = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+    expect(casts(events)).toHaveLength(1);
+    expect(w.hero.mana).toBeCloseTo(0.1);
+
+    const broke = holder();
+    broke.hero.manaRegen = 0;
+    holdStep(broke);
+    broke.hero.mana = stage0.cost - 0.1;
+    const none = holdFor(broke, 0, 0.5);
+    expect(casts(none)).toHaveLength(0);
+    expect(broke.hero.hold).toBeNull();
+    expect(broke.hero.mana).toBeCloseTo(stage0.cost - 0.1);
+    expect(broke.hero.cooldowns[0][0]).toBe(0);
+  });
+
+  it('a dodge, cancelHold and a changed chain drop it unpaid; its release, the button held on, does nothing', () => {
+    const cases: [string, (w: ReturnType<typeof arena>) => void][] = [
+      [
+        'dodge',
+        (w) => stepWorld(registry, w, { move: { x: 1, y: 0 }, holding: 0, dodge: true }, STEP),
+      ],
+      [
+        'cancelHold',
+        (w) => stepWorld(registry, w, { move: still, holding: 0, cancelHold: true }, STEP),
+      ],
+      [
+        'refresh',
+        (w) =>
+          refreshWorldHero(registry, w, w.hero.stats, chainsWith({ primary: { kind: 'heavy' } })),
+      ],
+    ];
+    for (const [name, drop] of cases) {
+      const w = holder();
+      w.hero.manaRegen = 0;
+      const mana = w.hero.mana;
+      for (let i = 0; i < 10; i++) holdStep(w);
+      drop(w);
+      expect(w.hero.hold, name).toBeNull();
+      expect(w.holdDropped, name).toBe(0);
+      expect(w.hero.mana, name).toBe(mana);
+      expect(w.hero.cooldowns[0][0], name).toBe(0);
+      holdStep(w);
+      const e = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+      e.push(...run(w, 1));
+      expect(casts(e), name).toHaveLength(0);
+      expect(w.hero.mana, name).toBe(mana);
+    }
+  });
+
+  it("a dropped hold's release is swallowed while its button stays held, and no new hold starts", () => {
+    const drop = (w: ReturnType<typeof arena>) => {
+      for (let i = 0; i < 10; i++) holdStep(w);
+      stepWorld(registry, w, { move: { x: 1, y: 0 }, holding: 0, dodge: true }, STEP);
+    };
+    // Dodge, then let go during the dash: nothing fires and nothing is paid.
+    const a = holder();
+    a.hero.manaRegen = 0;
+    const mana = a.hero.mana;
+    drop(a);
+    expect(a.hero.hold).toBeNull();
+    const e1 = stepWorld(registry, a, { move: still, cast: { slot: 0 } }, STEP);
+    e1.push(...run(a, 1));
+    expect(casts(e1)).toHaveLength(0);
+    expect(a.hero.mana).toBe(mana);
+    expect(a.holdDropped).toBeNull();
+
+    // Dodge, keep holding past the dash, then let go: no new hold, and nothing fires.
+    const b = holder();
+    b.hero.manaRegen = 0;
+    drop(b);
+    const e2: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.dodge.duration + 0.3) / STEP); i++) e2.push(...holdStep(b));
+    expect(b.hero.hold).toBeNull();
+    e2.push(...stepWorld(registry, b, { move: still, cast: { slot: 0 } }, STEP));
+    e2.push(...run(b, 1));
+    expect(casts(e2)).toHaveLength(0);
+    expect(b.hero.mana).toBe(mana);
+  });
+
+  it("a dropped hold's mark clears once the button no longer holds its slot: the next hold starts", () => {
+    const w = holder();
+    for (let i = 0; i < 10; i++) holdStep(w);
+    stepWorld(registry, w, { move: still, holding: 0, cancelHold: true }, STEP);
+    expect(w.holdDropped).toBe(0);
+    holdStep(w);
+    expect(w.hero.hold).toBeNull();
+    stepWorld(registry, w, { move: still, holding: null }, STEP);
+    expect(w.holdDropped).toBeNull();
+    holdStep(w);
+    expect(w.hero.hold).toMatchObject({ slot: 0, step: 0 });
+  });
+
+  it('held past holdMax it fires once; the release after is swallowed, and the next hold charges', () => {
+    const w = holder();
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.chains.holdMax + 0.5) / STEP); i++)
+      events.push(...holdStep(w));
+    expect(w.hero.hold).toBeNull();
+    events.push(...stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP));
+    events.push(...run(w, 1));
+    expect(casts(events)).toHaveLength(1);
+    holdStep(w);
+    expect(w.hero.hold).not.toBeNull();
+  });
+
+  it("gates presses as a wind-up does: another slot's press waits, unaged, and fires after the release", () => {
+    const w = holder();
+    holdStep(w);
+    expect(abilityReady(makeCtx(registry, w, []), 1)).toBe(false);
+    stepWorld(registry, w, { move: still, holding: 0, cast: { slot: 1 } }, STEP);
+    for (let i = 0; i < Math.round(0.6 / STEP); i++) holdStep(w);
+    expect(w.hero.windup).toBeNull();
+    expect(w.queuedCast).toMatchObject({ slot: 1 });
+    const events = holdFor(w, 0, 0);
+    events.push(...run(w, 0.5));
+    expect(casts(events).map((e) => e.slot)).toEqual([0, 1]);
+  });
+
+  it("pauses the slot's combo window while it charges", () => {
+    const w = holder([m('light'), m('hold')]);
+    press(w, 0);
+    for (let i = 0; i < Math.round(1.5 / STEP); i++) holdStep(w);
+    expect(w.hero.hold?.step).toBe(1);
+    // Past the window since the light landed, but not counting the hold: the hold is still next.
+    dodge(w, { x: 1, y: 0 });
+    expect(w.hero.hold).toBeNull();
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(1);
+  });
+
+  it('the bot charges a hold to full, then lets go', () => {
+    const w = holder();
+    w.hero.cooldowns[1] = [1e9];
+    w.hero.cooldowns[2] = [1e9];
+    const events: ArpgEvent[] = [];
+    let start = -1;
+    for (let i = 0; i < Math.round(1.5 / STEP) && casts(events).length === 0; i++) {
+      events.push(...stepWorld(registry, w, botInput(registry, w), STEP));
+      if (w.hero.hold && start < 0) start = w.hero.hold.start;
+    }
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(casts(events)).toHaveLength(1);
+    expect(w.t - start).toBeGreaterThanOrEqual(bal.chains.holdTime - 1e-6);
   });
 });

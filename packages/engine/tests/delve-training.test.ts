@@ -580,6 +580,7 @@ describe('toggles', () => {
       start: 0,
       until: 1,
       step: 0,
+      stage: 0,
       conjureUntil: 1,
       chargePaid: 0,
     };

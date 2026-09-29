@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import { botInput } from '../src/arpg/bot.js';
 import {
+  chainMove,
   resolveAbility,
   resolveChain,
   stepBonus,
@@ -24,6 +25,7 @@ import {
   dodge,
   dummy,
   gear,
+  holdFor,
   moveOf,
   press,
   pressOnly,
@@ -808,6 +810,19 @@ describe('casting: conjure, motion, recovery', () => {
 });
 
 describe('heavy payoff and heft', () => {
+  it('a fully held bolt (Crushing) knocks back and staggers; a medium one does not stagger', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'hold' } });
+    const events = holdFor(w, 0, bal.chains.holdTime);
+    events.push(...run(w, 1));
+    expect(w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
+    const hit = events.find((e) => e.kind === 'hit' && e.id === w.monsters[0].id);
+    expect(hit && hit.kind === 'hit' && hit.heft).toBeCloseTo(1);
+    const b = arena([dummy(13, 30)], { noBasic: true });
+    press(b, 0);
+    run(b, 1);
+    expect(b.monsters[0].status.staggerUntil).toBe(0);
+  });
+
   it('a heavy bolt lands with its heft and no stagger (only Crushing, a full hold, staggers)', () => {
     const w = arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'heavy' } });
     const events = press(w, 0);
@@ -817,17 +832,19 @@ describe('heavy payoff and heft', () => {
     expect(hit && hit.kind === 'hit' && hit.heft).toBeCloseTo(0.7);
   });
 
-  it("a heavy bolt's chain jump keeps no heavy payoff and no heft", () => {
+  it("a fully held (Crushing) bolt's chain jump keeps no heavy payoff and no heft", () => {
     const w = arena([dummy(13, 30), dummy(15, 30)], {
       noBasic: true,
-      primary: { elements: ['storm'], kind: 'heavy' },
+      primary: { elements: ['storm'], kind: 'hold' },
     });
     const [first, second] = w.monsters;
-    const events = press(w, 0, { x: 13, y: 30 });
+    const events = holdFor(w, 0, bal.chains.holdTime, { x: 13, y: 30 });
     events.push(...until(w, () => damaged(second)));
     const chained = events.filter((e) => e.kind === 'hit' && e.id === second.id);
     expect(chained.length).toBeGreaterThan(0);
     expect(chained.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
+    expect(second.status.staggerUntil).toBe(0);
+    expect(first.status.staggerUntil).toBeGreaterThan(0);
     // Storm knocks nothing back: only the direct hit's heavy payoff does.
     expect(Math.hypot(second.kbx, second.kby)).toBe(0);
     expect(Math.hypot(first.kbx, first.kby)).toBeGreaterThan(0);
@@ -844,22 +861,24 @@ describe('heavy payoff and heft', () => {
     expect(kb(heavy)).toBeGreaterThan(kb(light));
   });
 
-  it("a heavy Maelstrom's ticks and a heavy Surge's basic hits never stagger (guard test)", () => {
+  it("a fully held (Crushing) Maelstrom's ticks and Surge's basic hits never stagger (guard test)", () => {
     const w = arena([dummy(13, 30)], {
       noBasic: true,
-      ultimate: { form: 'maelstrom', kind: 'heavy', payment: 'mana' },
+      ultimate: { form: 'maelstrom', kind: 'hold', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
-    const events = press(w, 2, { x: 13, y: 30 });
+    expect(chainMove(w.hero.chains[2], 0, 2).heavyStagger).toBe(true);
+    const events = holdFor(w, 2, bal.chains.holdTime, { x: 13, y: 30 });
     events.push(...run(w, 2));
     expect(w.monsters[0].status.staggerUntil).toBe(0);
     const hits = events.filter((e) => e.kind === 'hit');
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((e) => e.kind === 'hit' && e.heft === 0)).toBe(true);
 
-    const s = arena([dummy(13, 0)], { defensive: { form: 'surge', kind: 'heavy' } });
+    const s = arena([dummy(13, 0)], { defensive: { form: 'surge', kind: 'hold' } });
     place(s, 0.6);
-    press(s, 1);
+    holdFor(s, 1, bal.chains.holdTime);
+    expect(s.hero.defend).toMatchObject({ form: 'surge', stage: 2 });
     until(s, () => s.hero.attackCount >= 2);
     expect(s.monsters[0].status.staggerUntil).toBe(0);
   });

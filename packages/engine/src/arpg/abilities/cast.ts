@@ -1,5 +1,6 @@
 import type { AbilityCast, ResolvedAbility } from '../../types/ability.js';
 import type { ArpgWorld, HeroEntity, Vec } from '../../types/arpg.js';
+import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
 import { cancelSwing, pushTick, startPush } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
@@ -18,7 +19,7 @@ export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
 export function abilityReady(ctx: SimCtx, slot: number): boolean {
   const h = ctx.world.hero;
   const chain = h.chains[slot];
-  if (!chain || h.windup) return false;
+  if (!chain || h.windup || h.hold) return false;
   const step = pressStep(h, slot, ctx.world.t, ctx.bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (ctx.world.t < h.cooldowns[slot][step]) return false;
@@ -39,20 +40,32 @@ export function nextMove(h: HeroEntity, slot: number, t: number, window: number)
   return h.chains[slot].moves[pressStep(h, slot, t, window)];
 }
 
-/** The slot's move winding up or, for the Defensive, the one whose effect is up; else null. */
+/** The slot's move winding up, holding or, for the Defensive, the one whose effect is up; else null. */
 export function activeMove(h: HeroEntity, slot: number): ResolvedAbility | null {
   const chain = h.chains[slot];
   if (!chain) return null;
-  if (h.windup?.slot === slot) return chain.moves[h.windup.step];
+  if (h.windup?.slot === slot) return chainMove(chain, h.windup.step, h.windup.stage);
+  if (h.hold?.slot === slot) return chain.moves[h.hold.step];
   if (slot === DEFENSIVE && h.defend) return chainMove(chain, h.defend.move, h.defend.stage);
   return null;
 }
 
-/** Fire move `step` of the slot's chain now, then its recoil and recovery. */
-function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number): boolean {
+/** A hold's charge at `t` (0..1 over `holdTime`) and its stage (by `holdStages`). */
+export function holdCharge(
+  bal: DelveBalance,
+  start: number,
+  t: number,
+): { charge: number; stage: number } {
+  const c = bal.chains;
+  const charge = Math.min(1, (t - start) / c.holdTime + 1e-9);
+  return { charge, stage: charge >= c.holdStages[1] ? 2 : charge >= c.holdStages[0] ? 1 : 0 };
+}
+
+/** Fire move `step` of the slot's chain (a hold at `stage`) now, then its recoil and recovery. */
+function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 0): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
-  const ab = chainMove(h.chains[slot], step);
+  const ab = chainMove(h.chains[slot], step, stage);
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
   h.comboStep[slot] = step;
@@ -102,7 +115,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   const t = world.t;
   const slot = cast.slot;
   const chain = h.chains[slot];
-  if (!chain || h.windup) return false;
+  if (!chain || h.windup || h.hold) return false;
   const step = pressStep(h, slot, t, bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (t < h.cooldowns[slot][step]) return false;
@@ -116,6 +129,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   if (!at) return false;
 
   // It goes ahead: a swing still winding up gives way first, so the step-in below survives.
+  // (A tap on a hold move, with no hold running, is its stage 0 with its full wind-up.)
   cancelSwing(ctx);
   h.push = null;
   h.recoverUntil = t;
@@ -130,6 +144,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     start: t,
     until: t + ab.castTime,
     step,
+    stage: 0,
     conjureUntil: t + ab.conjure,
     chargePaid,
   };
@@ -144,15 +159,122 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
 }
 
 /**
- * Land a finished wind-up: its press-time move. Auto-aim is chosen again now;
- * if nothing is left to aim at, it lands where the press aimed.
+ * Holding `slot`: its next move, a hold, starts charging when the hero is free
+ * as a press needs (a swing winding up gives way) and its first stage is
+ * affordable. Nothing is paid yet; the hero faces what it aims at.
+ */
+function startHold(ctx: SimCtx, slot: number): void {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const t = world.t;
+  const chain = h.chains[slot];
+  if (!chain || h.windup) return;
+  const step = pressStep(h, slot, t, bal.abilities.comboWindow);
+  const ab = chain.moves[step];
+  if (ab.kind !== 'hold' || t < h.cooldowns[slot][step]) return;
+  if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return;
+  if (!canAfford(world, ab)) return;
+  cancelSwing(ctx);
+  h.push = null;
+  h.recoverUntil = t;
+  const aim = aimPoint(ctx, ab, null);
+  const dir = aim ? dirTo(h.x, h.y, aim.x, aim.y) : null;
+  if (dir && (dir.x !== 0 || dir.y !== 0)) h.facing = dir;
+  h.hold = { slot, step, start: t, aim };
+}
+
+/**
+ * Release the running hold at `stage`, or at the highest stage below that it
+ * can afford, paying that stage's cost now (with no stage affordable, or
+ * nothing to aim at, it ends unpaid). The time spent charging counts toward
+ * the stage's wind-up: what is left of it (its conjure, then any channel)
+ * runs as an ordinary wind-up without a step-in, so a long hold fires at once.
+ * Its cooldown counts from the landing.
+ */
+function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
+  const { world } = ctx;
+  const h = world.hero;
+  const t = world.t;
+  const hold = h.hold!;
+  h.hold = null;
+  const chain = h.chains[hold.slot];
+  let s = stage;
+  while (s > 0 && !canAfford(world, chainMove(chain, hold.step, s))) s--;
+  const ab = chainMove(chain, hold.step, s);
+  if (!canAfford(world, ab)) return;
+  const at = aimPoint(ctx, ab, aim) ?? hold.aim;
+  if (!at) return;
+  const held = t - hold.start;
+  const left = Math.max(0, ab.castTime - held);
+  pay(ctx, hold.slot, hold.step, ab, t + left);
+  if (left < 1e-9) {
+    if (!fire(ctx, hold.slot, aim, hold.step, s)) fire(ctx, hold.slot, at, hold.step, s);
+    return;
+  }
+  h.windup = {
+    slot: hold.slot,
+    aim,
+    at,
+    start: t,
+    until: t + left,
+    step: hold.step,
+    stage: s,
+    conjureUntil: t + Math.max(0, ab.conjure - held),
+    chargePaid: chain.payment === 'charge' ? ab.chargeNeed : 0,
+  };
+  ctx.events.push({ kind: 'windup', slot: hold.slot, until: h.windup.until, heft: stepHeft(ab) });
+}
+
+/**
+ * The hold, each step: holding a slot whose next move is a hold starts one
+ * (not while the slot's dropped hold's button stays held: `holdDropped`).
+ * While it runs, its release (a press of its slot: the button let go) fires it
+ * at its stage; past `holdMax` it fires by itself at stage 2 (and marks the
+ * slot, as a drop does); the button let go with no release (a lost release)
+ * fires it at its stage. Meanwhile the hero stays rooted, each new stage says
+ * so, and the slot's combo window is paused.
+ */
+export function holdTick(
+  ctx: SimCtx,
+  holding: number | null | undefined,
+  dt: number,
+  dashing: boolean,
+): void {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const release = world.queuedRelease;
+  world.queuedRelease = null;
+  if (world.holdDropped !== null && holding !== world.holdDropped) world.holdDropped = null;
+  if (!h.hold) {
+    if (holding !== null && holding !== undefined && !dashing && holding !== world.holdDropped)
+      startHold(ctx, holding);
+    return;
+  }
+  const t = world.t;
+  const { stage } = holdCharge(bal, h.hold.start, t);
+  if (release) releaseHold(ctx, release.aim ?? null, stage);
+  else if (t - h.hold.start >= bal.chains.holdMax - 1e-9) {
+    world.holdDropped = h.hold.slot;
+    releaseHold(ctx, null, 2);
+  } else if (holding !== h.hold.slot) releaseHold(ctx, null, stage);
+  else {
+    if (stage > holdCharge(bal, h.hold.start, t - dt).stage)
+      ctx.events.push({ kind: 'holdStage', slot: h.hold.slot, stage });
+    h.comboAt[h.hold.slot] += dt;
+  }
+}
+
+/**
+ * Land a finished wind-up: its press-time move (a released hold's stage).
+ * Auto-aim is chosen again now; if nothing is left to aim at, it lands where
+ * the press aimed.
  */
 export function castTick(ctx: SimCtx): void {
   const h = ctx.world.hero;
   if (!h.windup || ctx.world.t < h.windup.until - 1e-9) return;
-  const { slot, aim, at, step } = h.windup;
+  const { slot, aim, at, step, stage } = h.windup;
   h.windup = null;
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   pushTick(ctx, true);
-  if (!fire(ctx, slot, aim, step)) fire(ctx, slot, at, step);
+  if (!fire(ctx, slot, aim, step, stage)) fire(ctx, slot, at, step, stage);
 }

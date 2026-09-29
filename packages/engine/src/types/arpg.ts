@@ -313,13 +313,20 @@ export interface HeroEntity {
     at: Vec;
     start: number;
     until: number;
-    /** The chain's move, chosen at the press. */
+    /** The chain's move, chosen at the press, and its hold stage (a released hold's; else 0). */
     step: number;
+    stage: number;
     /** When the conjure ends (any channel follows). */
     conjureUntil: number;
     /** Charge spent at the press (refunded if a dodge cancels). */
     chargePaid: number;
   } | null;
+  /**
+   * A hold move charging while its button is held (see the moves and chains
+   * spec): the slot, the chain's move, when it began, and what it aimed at then
+   * (null: nothing in reach). Nothing is paid until it fires.
+   */
+  hold: { slot: number; step: number; start: number; aim: Vec | null } | null;
   /** A basic attack in its startup: the blow lands at `strikeAt`. */
   swing: {
     step: number;
@@ -390,8 +397,15 @@ export interface HeroEntity {
 export interface ArpgInput {
   /** Desired direction; length is clamped to 1. Zero = stand still. */
   move: Vec;
-  /** Ability to use this step (0 Primary, 1 Defensive, 2 Ultimate), with an optional aim point. */
+  /**
+   * Ability to use this step (0 Primary, 1 Defensive, 2 Ultimate), with an optional aim point:
+   * a press, or the release of a hold move's button.
+   */
   cast?: AbilityCast | null;
+  /** The ability slot whose button is held this step: a hold move charges while it is. */
+  holding?: number | null;
+  /** Drop a running hold unpaid (an aim released back on its button). */
+  cancelHold?: boolean;
   potion?: boolean;
   /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
   dodge?: boolean;
@@ -453,6 +467,8 @@ export type ArpgEvent =
       heft: number;
     }
   | { kind: 'windup'; slot: number; until: number; heft: number }
+  /** A hold reached a new stage (1, then 2). */
+  | { kind: 'holdStage'; slot: number; stage: number }
   | { kind: 'buff'; form: FormId; element: ManaType; until: number }
   | { kind: 'wardBreak'; x: number; y: number; element: ManaType }
   | { kind: 'barrierBreak'; x: number; y: number }
@@ -596,6 +612,14 @@ export interface ArpgWorld {
   queuedCast: AbilityCast | null;
   /** The queued cast is dropped after this time: the end of whatever kept the hero busy, plus the buffer. */
   queuedCastUntil: number;
+  /** A press of the slot whose hold runs: its release, for the next step. */
+  queuedRelease: AbilityCast | null;
+  /**
+   * The slot whose hold was dropped (a dodge, `cancelHold`, a changed chain) or
+   * fired by itself at `holdMax` while its button stayed held: until the button
+   * lets go, its release is swallowed and no new hold starts.
+   */
+  holdDropped: number | null;
   /** A manual attack tap waiting for the weapon (see `queuedCastUntil`). */
   queuedAttack: { until: number; aim: Vec | null } | null;
   queuedPotion: boolean;

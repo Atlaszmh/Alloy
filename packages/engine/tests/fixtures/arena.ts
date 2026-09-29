@@ -145,6 +145,24 @@ export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }
   return events;
 }
 
+/**
+ * Hold the slot's button for `seconds` (a hold move charges meanwhile), then let
+ * go with its release; returns every event.
+ */
+export function holdFor(
+  w: ArpgWorld,
+  slot: number,
+  seconds: number,
+  aim: { x: number; y: number } | null = null,
+): ArpgEvent[] {
+  const still = { x: 0, y: 0 };
+  const events: ArpgEvent[] = [];
+  for (let i = 0; i < Math.round(seconds / STEP); i++)
+    events.push(...stepWorld(registry, w, { move: still, holding: slot }, STEP));
+  events.push(...stepWorld(registry, w, { move: still, cast: { slot, aim } }, STEP));
+  return events;
+}
+
 /** The slot's move `step` (its first by default), as the hero resolved it. */
 export function moveOf(w: ArpgWorld, slot: number, step = 0) {
   return w.hero.chains[slot].moves[step];

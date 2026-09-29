@@ -19,7 +19,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { castAbility, castTick, pressStep } from './abilities/cast.js';
+import { castAbility, castTick, holdTick, pressStep } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -48,14 +48,25 @@ export function stepWorld(
   // Presses are kept `buffer` seconds; `heroTick` stops them aging while something holds them.
   const buffer = registry.getDelveBalance().feel.buffer;
   if (input.cast) {
-    world.queuedCast = input.cast;
-    world.queuedCastUntil = world.t + buffer;
+    // A press of the slot whose hold runs is its release; a dropped hold's release is
+    // swallowed; another slot's press waits its turn.
+    if (world.hero.hold?.slot === input.cast.slot) world.queuedRelease = input.cast;
+    else if (world.holdDropped === input.cast.slot) world.holdDropped = null;
+    else {
+      world.queuedCast = input.cast;
+      world.queuedCastUntil = world.t + buffer;
+    }
   }
   // Taps only matter in manual mode (automatic attacks need no press).
   if (input.attackTap && input.attack !== undefined)
     world.queuedAttack = { until: world.t + buffer, aim: input.attackAim ?? null };
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
+  // Nothing is paid until a hold fires: dropping one costs nothing.
+  if (input.cancelHold && world.hero.hold) {
+    world.holdDropped = world.hero.hold.slot;
+    world.hero.hold = null;
+  }
   if (world.heroDead) return events;
 
   const ctx = makeCtx(registry, world, events);
@@ -133,9 +144,9 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   }
   const dashing = isDashing(ctx);
   const t = world.t;
-  // A queued press waits out a wind-up or a dash; anything else lets it through.
-  // A press held by a wind-up or a dash doesn't age: it gets `buffer` from when the hero is free.
-  if (world.queuedCast !== null && (dashing || h.windup))
+  // A queued press waits out a wind-up, a hold or a dash; anything else lets it through.
+  // A press held so doesn't age: it gets `buffer` from when the hero is free.
+  if (world.queuedCast !== null && (dashing || h.windup || h.hold))
     world.queuedCastUntil = Math.max(world.queuedCastUntil, t + bal.feel.buffer);
   if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
   // A press whose move is on cooldown stays queued (ageing) and fires if the cooldown ends in time.
@@ -144,12 +155,15 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     q !== null &&
     !dashing &&
     !h.windup &&
+    !h.hold &&
     !!h.chains[q.slot] &&
     t >= h.cooldowns[q.slot][pressStep(h, q.slot, t, bal.abilities.comboWindow)]
   ) {
     world.queuedCast = null;
     castAbility(ctx, q);
   }
+  // A hold starts, charges, or fires.
+  holdTick(ctx, input.holding, dt, dashing);
   castTick(ctx);
 
   const v = clampLen(move);
@@ -166,10 +180,11 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     }
   }
 
-  // Movement: a push carries the hero; a wind-up or a committed swing roots it; a recovery slows it.
+  // Movement: a push carries the hero; a wind-up, a hold or a committed swing roots it; a
+  // recovery slows it.
   const surge = surging(ctx);
   const pushed = !dashing && pushTick(ctx);
-  const rooted = !!h.windup || !!h.swing?.committed;
+  const rooted = !!h.windup || !!h.hold || !!h.swing?.committed;
   h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
   if (h.moving) {
     const slow = t < h.recoverUntil ? bal.feel.recoveryMove : 1;
@@ -185,11 +200,14 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (h.swing && t >= h.swing.strikeAt - 1e-9) strike(ctx);
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.
   if (input.attack === undefined) world.queuedAttack = null;
-  // A tap held by a dash, a wind-up, a swing, a push or the weapon's cycle doesn't age either.
-  if (world.queuedAttack && (dashing || h.windup || h.swing || h.push || t < h.nextAttackAt))
+  // A tap held by a dash, a wind-up, a hold, a swing, a push or the weapon's cycle doesn't age either.
+  if (
+    world.queuedAttack &&
+    (dashing || h.windup || h.hold || h.swing || h.push || t < h.nextAttackAt)
+  )
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
   // A swing waits for a push (a lunge, a step-in or a recoil) to finish, so it never swallows one.
-  if (!h.swing && !h.windup && !h.push && !dashing) {
+  if (!h.swing && !h.windup && !h.hold && !h.push && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
     if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05);
     else {
