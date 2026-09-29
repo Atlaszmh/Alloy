@@ -15,7 +15,7 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  */
 
 const FOCUSABLE =
-  'button:not(:disabled), a[href], [role="tab"], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not(:disabled), a[href], [role="tab"], input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const REPEAT_DELAY_MS = 350;
 const REPEAT_EVERY_MS = 150;
 

@@ -178,12 +178,16 @@ const SLOT_LABEL = ['Primary', 'Defensive', 'Ultimate'];
 /** Seconds the buttons still cooling down spark after Galvanize. */
 const GALVANIZE_SPARK = 0.4;
 
-/** A hold's charge filling above its button, ticked at the stages (`data-stage`: the stage reached). */
+/**
+ * A hold's charge filling above its button over a track that shows on any
+ * floor, ticked at the stages (`data-stage`: the stage reached). The fill
+ * glides between the HUD's refreshes.
+ */
 function HoldBar({ hold, color }: { hold: { charge: number; stage: number }; color: string }) {
   const stages = getDelveRegistry().getDelveBalance().chains.holdStages;
   return (
     <span
-      className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/70"
+      className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/60 ring-1 ring-white/30"
       data-hold
       data-stage={hold.stage}
     >
@@ -193,6 +197,7 @@ function HoldBar({ hold, color }: { hold: { charge: number; stage: number }; col
           width: `${hold.charge * 100}%`,
           background: color,
           opacity: 0.55 + 0.225 * hold.stage,
+          transition: 'width 80ms linear',
         }}
       />
       {stages.map((s) => (
@@ -242,13 +247,13 @@ function AbilityButton({
 }: {
   slot: number;
   ab: AbilityHud;
-  /** An ability is channelling (presses wait for it). */
+  /** An ability is channelling or a hold is charging (presses wait for it). */
   busy: boolean;
   /** Galvanize just fired: a cooling button sparks. */
   galvanized: boolean;
   hint?: string;
   onCast: (slot: number, aim?: Vec | null) => void;
-  onAim: (slot: number | null, at?: Vec) => void;
+  onAim: (slot: number | null, at?: Vec, onButton?: boolean) => void;
   onCancel: () => void;
 }) {
   const registry = getDelveRegistry();
@@ -274,7 +279,7 @@ function AbilityButton({
       y: e.clientY,
       left: false,
     };
-    onAim(slot, { x: e.clientX, y: e.clientY });
+    onAim(slot, { x: e.clientX, y: e.clientY }, true);
   };
   /** Whether the pointer is over the button: within its radius and the drag threshold (a thumb jitters). */
   const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -285,8 +290,9 @@ function AbilityButton({
   const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const p = press.current;
     if (p?.id !== e.pointerId) return;
-    if (!over(e)) p.left = true;
-    onAim(slot, { x: e.clientX, y: e.clientY });
+    const on = over(e);
+    if (!on) p.left = true;
+    onAim(slot, { x: e.clientX, y: e.clientY }, on);
   };
   const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const p = press.current;
@@ -331,7 +337,7 @@ function AbilityButton({
         style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
       >
         <span
-          className="absolute top-1.5 text-[8px] leading-none text-stone-300"
+          className="absolute top-1.5 text-[11px] leading-none text-stone-300"
           data-kind={ab.nextKind}
         >
           {KIND_ICON[ab.nextKind]}
@@ -439,7 +445,7 @@ export function AttackButton({
         ⚔️
         {hud && (
           <span
-            className="absolute top-1.5 text-[8px] leading-none text-stone-300"
+            className="absolute top-1.5 text-[11px] leading-none text-stone-300"
             data-kind={hud.basicNextKind}
           >
             {KIND_ICON[hud.basicNextKind]}
@@ -530,7 +536,7 @@ export function SkillBar({
 }: {
   hud: ArenaHud | null;
   onCast: (slot: number, aim?: Vec | null) => void;
-  onAim: (slot: number | null, at?: Vec) => void;
+  onAim: (slot: number | null, at?: Vec, onButton?: boolean) => void;
   /** An aim released back on its button: drop a charging hold unpaid. */
   onCancel: () => void;
   onPotion: () => void;

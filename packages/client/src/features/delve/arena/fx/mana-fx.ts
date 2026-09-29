@@ -15,9 +15,10 @@ import {
  * and debris, expanding rings, lightning and dash streaks, swings, beams, and
  * the casting polish (a fling of mana toward the target and pixels gathering
  * during a wind-up). It also holds the transient infusion carriers
- * (fx/infusion.ts): infused swings and beams, finisher discharges (at a
- * blade's tip, round a full circle, or a flare at a shooter's hand), blasts
- * and blink trails. Cosmetic only, so it may use Math.random.
+ * (fx/infusion.ts): infused swings and beams, heavy and hold blows' rings in
+ * their own element (at a blade's tip, round a full circle, or a flare at a
+ * shooter's hand), blasts and blink trails. Cosmetic only, so it may use
+ * Math.random.
  */
 
 interface Particle {
@@ -83,7 +84,7 @@ interface Beam {
   seed: number;
 }
 
-/** A transient infusion carrier: a finisher's discharge or a blast (rings), or a blink trail (a path). */
+/** A transient infusion carrier: a heavy or hold blow's ring ('finisher') or a blast (rings), or a blink trail (a path). */
 export type InfusedKind = 'finisher' | 'blast' | 'dash';
 
 interface Infused {
@@ -324,11 +325,11 @@ export class ManaFx {
   }
 
   /**
-   * A transient infusion carrier: a finisher's discharge (a ring at the blade's
-   * tip, round a full circle, or a flare at the hand for a shot; drawn at
-   * strength 1.5), an infused blast's rim (a ring that grows
-   * with the blast's own) or a blink trail (a path). Seeded from where and
-   * when it was made.
+   * A transient infusion carrier: a heavy or hold blow's ring in its own
+   * element (at the blade's tip, round a full circle, or a flare at the hand
+   * for a shot; drawn at strength 1.5), an infused blast's rim (a ring that
+   * grows with the blast's own) or a blink trail (a path). Seeded from where
+   * and when it was made.
    */
   infuse(kind: InfusedKind, element: ManaType, shape: InfusionShape): void {
     const at = shape.kind === 'path' ? shape.points[0] : shape;

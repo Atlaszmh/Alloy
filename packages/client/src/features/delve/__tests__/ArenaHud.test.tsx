@@ -98,7 +98,7 @@ describe('the ability buttons', () => {
     const button = screen.getByTestId('ability-0');
     const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
     fireEvent.pointerDown(button, { pointerId: 1, clientX: 0, clientY: 0 });
-    expect(onAim).toHaveBeenLastCalledWith(0, { x: 0, y: 0 });
+    expect(onAim).toHaveBeenLastCalledWith(0, { x: 0, y: 0 }, true);
     fireEvent.pointerUp(button, { pointerId: 1, clientX: 0, clientY: 0 });
     expect(onCast).toHaveBeenLastCalledWith(0); // a tap auto-aims
     expect(onAim).toHaveBeenLastCalledWith(null);
@@ -151,6 +151,19 @@ describe('the ability buttons', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCast).toHaveBeenCalledTimes(2);
     now.mockRestore();
+  });
+
+  it('says whether the pointer is still on its button, so the aim marker waits for a drag', () => {
+    const onAim = vi.fn();
+    render(bar({ abilities: [BOLT] }, { onAim }));
+    const button = screen.getByTestId('ability-0');
+    button.getBoundingClientRect = () => new DOMRect(0, 0, 64, 64);
+    const at = (x: number) => ({ pointerId: 1, clientX: x, clientY: 32 });
+    fireEvent.pointerDown(button, at(32));
+    fireEvent.pointerMove(button, at(72)); // over the rim, within the drag threshold
+    fireEvent.pointerMove(button, at(110));
+    fireEvent.pointerMove(button, at(40));
+    expect(onAim.mock.calls.map((c) => c[2])).toEqual([true, true, false, true]);
   });
 
   it('a hold held in place fires on release; dragged out and back, it cancels', () => {

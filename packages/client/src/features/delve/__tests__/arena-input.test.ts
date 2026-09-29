@@ -1,12 +1,16 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  chainMove,
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
+  stepWorld,
   type Chain,
   type Vec,
 } from '@alloy/engine';
 import { attachKeyboard, createArenaInput, frameInput, holdingSlot } from '../arena/input';
+import { TAP_MS } from '../arena/aim-gestures';
+import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { padMemory, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -144,16 +148,44 @@ describe('panel controls keep their keys', () => {
   });
 });
 
-describe("frameInput: each step's input from the keys, the HUD and the pad", () => {
-  const registry = getDelveRegistry();
-  /** A sandbox hero on Fire's default chains, the Primary `primary` if given. */
-  const world = (primary?: Chain) =>
-    createSandboxWorld(registry, {
-      depth: 5,
-      stats: computeHeroStats({}, registry),
-      chains: { ...defaultChains(registry, 'fire', null), ...(primary ? { primary } : {}) },
-      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+const registry = getDelveRegistry();
+/** A sandbox hero on Fire's default chains, the Primary `primary` if given. */
+const world = (primary?: Chain) =>
+  createSandboxWorld(registry, {
+    depth: 5,
+    stats: computeHeroStats({}, registry),
+    chains: { ...defaultChains(registry, 'fire', null), ...(primary ? { primary } : {}) },
+    toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+  });
+
+describe('the aim marker of a key or button held to aim', () => {
+  const point = { x: 20, y: 10 };
+  const aiming = { slot: 0, since: 0, at: { x: 1, y: 1 } };
+
+  it("none before a tap's time, nor while a HUD press is still on its button; then at the pointer", () => {
+    const w = world();
+    expect(aimView(w, aiming, point, TAP_MS - 1)).toBeNull();
+    expect(aimView(w, { ...aiming, onButton: true }, point, 1000)).toBeNull();
+    expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line', point });
+  });
+
+  it("a charging hold's circle has its stage's radius", () => {
+    const w = world({
+      moves: [{ kind: 'hold', form: 'burst', elements: ['fire'] }],
+      payment: 'mana',
     });
+    const STEP = registry.getDelveBalance().arena.step;
+    for (let i = 0; i < Math.round(0.8 / STEP); i++)
+      stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP);
+    expect(w.hero.hold?.slot).toBe(0);
+    const view = aimView(w, aiming, point, 1000)!;
+    expect(view.marker).toBe('circle');
+    expect(view.radius).toBeCloseTo(chainMove(w.hero.chains[0], 0, 2).radius);
+    expect(view.radius).toBeGreaterThan(w.hero.chains[0].moves[0].radius);
+  });
+});
+
+describe("frameInput: each step's input from the keys, the HUD and the pad", () => {
   /** The pad this frame: nothing held, pressed or tilted but what's given. */
   const pad = (over: Partial<ArenaPadActions> = {}): ArenaPadActions => ({
     move: { x: 0, y: 0 },

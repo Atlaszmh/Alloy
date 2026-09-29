@@ -59,4 +59,24 @@ describe('moveFocus between buttons', () => {
     moveFocus('right');
     expect(document.activeElement).toBe(last);
   });
+
+  it('skips a field or a list a disabled fieldset turns off, as it does a button', () => {
+    const at = <T extends HTMLElement>(el: T, left: number): T => {
+      el.getBoundingClientRect = () =>
+        ({ left, top: 0, width: 10, height: 10, right: left + 10, bottom: 10 }) as DOMRect;
+      return el;
+    };
+    const locked = document.createElement('fieldset');
+    locked.disabled = true;
+    const first = at(document.createElement('button'), 0);
+    const last = at(document.createElement('button'), 60);
+    locked.append(
+      at(document.createElement('input'), 20),
+      at(document.createElement('select'), 40),
+    );
+    document.body.append(first, locked, last);
+    first.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(last);
+  });
 });

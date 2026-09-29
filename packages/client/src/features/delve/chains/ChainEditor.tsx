@@ -173,7 +173,7 @@ export function ChainEditor({
                 onClick={() => setPicked(i)}
                 data-testid={`move-${i}`}
               >
-                <span className="text-xs font-bold leading-none text-amber-200/90">
+                <span className="text-sm font-bold leading-none text-amber-200/90">
                   {KIND_ICON[e.kind]}
                 </span>
                 <span className="text-lg leading-none">
@@ -195,8 +195,9 @@ export function ChainEditor({
                   onClick={() => {
                     commit(moved(entries, i, i - 1));
                     setPicked(i - 1);
-                    setFocusOn([`[data-testid="move-left-${i - 1}"]`, card(i - 1)]);
+                    setFocusOn([`[data-earlier="${i - 1}"]`, card(i - 1)]);
                   }}
+                  data-earlier={i}
                   data-testid={`move-left-${i}`}
                 >
                   ◂
@@ -209,8 +210,9 @@ export function ChainEditor({
                   onClick={() => {
                     commit(moved(entries, i, i + 1));
                     setPicked(i + 1);
-                    setFocusOn([`[data-testid="move-right-${i + 1}"]`, card(i + 1)]);
+                    setFocusOn([`[data-later="${i + 1}"]`, card(i + 1)]);
                   }}
+                  data-later={i}
                   data-testid={`move-right-${i}`}
                 >
                   ▸

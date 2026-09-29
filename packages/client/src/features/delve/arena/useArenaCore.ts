@@ -7,6 +7,7 @@ import {
   activeMove,
   basicStep,
   canAfford,
+  chainMove,
   holdCharge,
   nextMove,
   pressStep,
@@ -17,11 +18,20 @@ import {
   type HeroStats,
   type ManaType,
   type MoveKind,
+  type ResolvedAbility,
+  type Vec,
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
+import type { AimView } from './fx/draw-world';
 import { loadDelveSprites } from './sprites';
-import { attachKeyboard, createArenaInput, frameInput, type ArenaInput } from './input';
+import {
+  attachKeyboard,
+  createArenaInput,
+  frameInput,
+  type Aiming,
+  type ArenaInput,
+} from './input';
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -238,6 +248,33 @@ export function snapshot(world: ArpgWorld): ArenaHud {
   };
 }
 
+/** The move a slot's button would fire: its hold at the stage it has reached while one charges, else its next move. */
+function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
+  const h = world.hero;
+  const bal = getDelveRegistry().getDelveBalance();
+  return h.hold?.slot === slot
+    ? chainMove(h.chains[slot], h.hold.step, holdCharge(bal, h.hold.start, world.t).stage)
+    : nextMove(h, slot, world.t, bal.abilities.comboWindow);
+}
+
+/**
+ * The aim marker for a key or HUD button held long enough to aim, at `point`
+ * (world units: the pointer, or the mouse for a key); none while a HUD
+ * button's press is still over its button, where letting go casts
+ * auto-aimed. A charging hold's marker has its stage's size.
+ */
+export function aimView(world: ArpgWorld, a: Aiming, point: Vec, now: number): AimView | null {
+  if (a.onButton || now - a.since < TAP_MS) return null;
+  const ab = aimedMove(world, a.slot);
+  return {
+    marker: aimMarkerFor(ab.form.id),
+    point,
+    radius: ab.radius,
+    range: ab.range,
+    element: ab.element,
+  };
+}
+
 export function useArenaCore(
   hostRef: RefObject<HTMLDivElement | null>,
   mode: ArenaMode,
@@ -282,7 +319,6 @@ export function useArenaCore(
     const app = new Application();
     const detachKeys = attachKeyboard(inputRef.current, () => !pausedRef.current);
     const flags = readArenaFlags();
-    const comboWindow = registry.getDelveBalance().abilities.comboWindow;
     let hudClock = 0;
     /** What the pad remembers from the frame before (a hold's release, a chord's press, the attack button). */
     const padMem = padMemory();
@@ -352,7 +388,7 @@ export function useArenaCore(
             if (mode.frame(world)) finishedRef.current = true;
           }
           renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
-          renderer.setAim(aimView(world) ?? padAimView(world));
+          renderer.setAim(heldAim(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
           // The HUD refresh ignores the mode's speed, so the sandbox's slow motion doesn't slow
           // it (for the dive, speed 1, this is exactly today's `hudClock += dt`).
@@ -378,11 +414,11 @@ export function useArenaCore(
       return acts;
     }
 
-    /** While the right stick is tilted, show where the Primary's next move would go. */
+    /** While the right stick is tilted, show where the Primary's next move (or its hold) would go. */
     function padAimView(world: ArpgWorld) {
       const state = padState();
       if (!state || (state.right.x === 0 && state.right.y === 0)) return null;
-      const ab = nextMove(world.hero, 0, world.t, comboWindow);
+      const ab = aimedMove(world, 0);
       const tilt = Math.hypot(state.right.x, state.right.y);
       const dir = { x: state.right.x / tilt, y: state.right.y / tilt };
       const marker = aimMarkerFor(ab.form.id);
@@ -396,21 +432,14 @@ export function useArenaCore(
       };
     }
 
-    /** The marker for a press held long enough to aim (a key follows the mouse). */
-    function aimView(world: ArpgWorld) {
+    /** The marker for a press held to aim, at the pointer (a key's follows the mouse). */
+    function heldAim(world: ArpgWorld) {
       const a = inputRef.current.aiming;
+      const at = a?.at ?? inputRef.current.mouse;
       const r = rendererRef.current;
-      if (!a || !r || performance.now() - a.since < TAP_MS) return null;
-      const ab = nextMove(world.hero, a.slot, world.t, comboWindow);
-      const at = a.at ?? inputRef.current.mouse;
-      if (!at) return null;
-      return {
-        marker: aimMarkerFor(ab.form.id),
-        point: r.screenToWorld(at.x, at.y),
-        radius: ab.radius,
-        range: ab.range,
-        element: ab.element,
-      };
+      return a && at && r
+        ? aimView(world, a, r.screenToWorld(at.x, at.y), performance.now())
+        : null;
     }
 
     function handleEvents(world: ArpgWorld, events: ArpgEvent[]) {
@@ -458,12 +487,15 @@ export function useArenaCore(
   const cast = useCallback((slot: number, aim?: { x: number; y: number } | null) => {
     inputRef.current.cast = { slot, aim: aim ?? null };
   }, []);
-  /** Show the aim marker for a held button at a screen point, or hide it (null). */
-  const aim = useCallback((slot: number | null, at?: { x: number; y: number }) => {
+  /**
+   * A held button aims at a screen point (its marker waits while the pointer is
+   * still `onButton`, but the button still holds its slot), or lets go (null).
+   */
+  const aim = useCallback((slot: number | null, at?: Vec, onButton = false) => {
     inputRef.current.aiming =
       slot === null || !at
         ? null
-        : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at };
+        : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at, onButton };
   }, []);
   /** Drop a charging hold unpaid (an aim released back on its button). */
   const cancelHold = useCallback(() => {

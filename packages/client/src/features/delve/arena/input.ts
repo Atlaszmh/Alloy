@@ -27,6 +27,8 @@ export interface Aiming {
   slot: number;
   since: number;
   at: Vec | null;
+  /** A HUD button's press still over its button: no marker (let go there, it casts auto-aimed). */
+  onButton?: boolean;
 }
 
 /** Live controller state shared between the controls and the game loop. */

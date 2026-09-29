@@ -54,7 +54,9 @@ describe('windingUp', () => {
     const winding = (last: boolean) =>
       windingUp(
         world({
-          chains: [{ moves: [{ element: 'frost', heft: 0.45, last }], hold: [null] }],
+          chains: [
+            { moves: [{ element: 'frost', heft: 0.45, last, castTime: 0.4 }], hold: [null] },
+          ],
           windup: {
             slot: 0,
             aim: null,
@@ -102,6 +104,38 @@ describe('windingUp', () => {
     expect(a.heft).toBeCloseTo(0.6); // stage 1
     expect(a.dir).toEqual({ x: 1, y: 0 });
     expect(a.color).toBe(MANA_HEX.nature);
+  });
+
+  it('a hold leans toward the aim marker while one shows, the point its release will take', () => {
+    const stage = { element: 'nature', heft: 0.45, last: false };
+    const w = world({
+      chains: [{ moves: [stage], hold: [[stage, stage, stage]] }],
+      hold: { slot: 0, step: 0, start: 1 - 0.5 * holdTime, aim: { x: 9, y: 5 } },
+    } as never);
+    expect(windingUp(w, { x: 5, y: 1 })!.dir).toEqual({ x: 0, y: -1 });
+    expect(windingUp(w, null)!.dir).toEqual({ x: 1, y: 0 });
+  });
+
+  it("a released hold's wind-up carries on from what the charge counted, rather than starting over", () => {
+    // Stage 1 of a 0.5 s wind-up, released after 0.3 s of charge: 0.2 s left, 0.1 s of it gone.
+    const stage = (castTime: number) => ({ element: 'fire', heft: 0.6, last: false, castTime });
+    const a = windingUp(
+      world({
+        chains: [{ moves: [stage(0.3)], hold: [[stage(0.3), stage(0.5), stage(0.7)]] }],
+        windup: {
+          slot: 0,
+          aim: null,
+          at: { x: 9, y: 5 },
+          start: 0.9,
+          until: 1.1,
+          step: 0,
+          stage: 1,
+          conjureUntil: 1.1,
+          chargePaid: 0,
+        },
+      } as never),
+    )!;
+    expect(a.progress).toBeCloseTo(0.8);
   });
 
   it("a manual blow held at its strike point gathers with its charge, as its stage's row", () => {

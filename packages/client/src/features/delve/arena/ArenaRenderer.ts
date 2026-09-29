@@ -616,7 +616,7 @@ export class ArenaRenderer {
     this.lifecycles.update(w, this.fx, this.time);
     drawProjectiles(air, w, this.time, this.trails, (id) => this.lifecycles.bornAt(id));
     drawGuard(air, w, this.time);
-    drawAnticipation(air, this.fx, w, this.time, dt);
+    drawAnticipation(air, this.fx, w, this.time, dt, this.aim?.point ?? null);
     // The effects, then the infusion pass (fx/infusion.ts), sharing one budget in priority order:
     // ManaFx's transient carriers first, then the hero's aura, projectiles, lobs and zones.
     const layers = { air, ground };
@@ -681,7 +681,7 @@ export class ArenaRenderer {
       s.scale.set(SPRITE_PIXEL * (fx < -0.2 ? -1 : 1), SPRITE_PIXEL);
       // Winding up: lean back from the target, a pixel or two for heavy moves (a 1 px lift
       // would cancel the lean of a blow aimed up).
-      const a = windingUp(w);
+      const a = windingUp(w, this.aim?.point ?? null);
       const lean = a ? (a.heft >= 0.7 ? 2 : 1) * SPRITE_PIXEL : 0;
       s.position.set(-Math.round(a?.dir.x ?? 0) * lean, 0.5 - Math.round(a?.dir.y ?? 0) * lean);
       s.tint =

@@ -67,7 +67,9 @@ describe('the hand', () => {
       facing: { x: 1, y: 0 },
       swing: null,
       hold: null,
-      chains: [{ moves: [{ element: 'frost', heft: 0.45, last: false }], hold: [null] }],
+      chains: [
+        { moves: [{ element: 'frost', heft: 0.45, last: false, castTime: 0.4 }], hold: [null] },
+      ],
       windup: {
         slot: 0,
         aim: null,

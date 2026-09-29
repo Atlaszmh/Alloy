@@ -318,15 +318,20 @@ export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
   }
 }
 
-/** Mana gathering at the hand while an action winds up: more with heft; heavy ones spiral in around a growing orb. */
+/**
+ * Mana gathering at the hand while an action winds up: more with heft; heavy
+ * ones spiral in around a growing orb. A hold gathers toward `aim` (the aim
+ * marker's point) while one shows.
+ */
 export function drawAnticipation(
   air: Graphics,
   fx: ManaFx,
   w: ArpgWorld,
   time: number,
   dt: number,
+  aim: Vec | null = null,
 ): void {
-  const a = windingUp(w);
+  const a = windingUp(w, aim);
   if (!a) return;
   // Out past the sprite's edge, so the orb doesn't sit on the hero's face.
   const { x: hx, y: hy } = handPoint(w.hero.x, w.hero.y, a.dir);

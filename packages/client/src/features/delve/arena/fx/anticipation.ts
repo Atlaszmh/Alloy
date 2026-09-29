@@ -32,9 +32,11 @@ function toward(w: ArpgWorld, at: Vec): Vec {
  * The action the hero is winding up right now (a committed swing, an ability
  * or a hold charging), or null. A blow winds up in its own element; a hold
  * (an ability's, or a manual blow held at its strike point) gathers with its
- * charge, as heavy as the stage it has reached.
+ * charge, as heavy as the stage it has reached, toward `aim` (the aim
+ * marker's point, where its release will go) while one shows. A released
+ * hold's wind-up carries on from what the charge already counted of it.
  */
-export function windingUp(w: ArpgWorld): WindingUp | null {
+export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | null {
   const h = w.hero;
   const bal = getDelveRegistry().getDelveBalance();
   if (h.swing?.committed) {
@@ -57,8 +59,9 @@ export function windingUp(w: ArpgWorld): WindingUp | null {
   if (h.hold) {
     const { charge, stage } = holdCharge(bal, h.hold.start, w.t);
     const ab = chainMove(h.chains[h.hold.slot], h.hold.step, stage);
+    const at = aim ?? h.hold.aim;
     return {
-      dir: h.hold.aim ? toward(w, h.hold.aim) : { ...h.facing },
+      dir: at ? toward(w, at) : { ...h.facing },
       heft: stepHeft(ab),
       progress: charge,
       color: MANA_HEX[ab.element],
@@ -67,11 +70,12 @@ export function windingUp(w: ArpgWorld): WindingUp | null {
   if (h.windup) {
     const ab = activeMove(h, h.windup.slot);
     if (!ab) return null;
-    const span = Math.max(1e-6, h.windup.until - h.windup.start);
+    // Out of the move's whole wind-up: a released hold's starts part-way, where its charge left it.
+    const left = (h.windup.until - w.t) / Math.max(1e-6, ab.castTime);
     return {
       dir: toward(w, h.windup.at),
       heft: stepHeft(ab),
-      progress: Math.min(1, Math.max(0, (w.t - h.windup.start) / span)),
+      progress: Math.min(1, Math.max(0, 1 - left)),
       color: MANA_HEX[ab.element],
     };
   }
