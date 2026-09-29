@@ -234,6 +234,11 @@
   cursor: pointer;
 }
 
+.delve-chip[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .delve-chip[aria-pressed='true'] {
   background: rgba(212, 168, 52, 0.18);
   border-color: #d4a834;

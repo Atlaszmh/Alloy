@@ -105,10 +105,10 @@ export function fixNotice(registry: DataRegistry, fix: ChainFix): string {
   return `Your ${what} used ${manaNames(registry, fix.removed)}, which ${isnt} in your pair; it now uses ${manaNames(registry, now)}`;
 }
 
-/** "Storm now outweighs Fire: your basic attacks strike with Storm" (`now` is the new primary). */
+/** "Storm now outweighs Fire: Storm is your primary" (`now` is the new primary). */
 export function overtakeNotice(registry: DataRegistry, now: ManaType, was: ManaType): string {
   const name = manaName(registry, now);
-  return `${name} now outweighs ${manaName(registry, was)}: your basic attacks strike with ${name}`;
+  return `${name} now outweighs ${manaName(registry, was)}: ${name} is your primary`;
 }
 
 interface DelveStore {

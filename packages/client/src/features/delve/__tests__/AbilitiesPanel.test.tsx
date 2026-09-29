@@ -1,98 +1,184 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { computeHeroStats, defaultAbilities } from '@alloy/engine';
-import { AbilitiesPanel, AbilityEditor } from '../AbilitiesPanel';
+import { computeHeroStats, defaultChains, type Move } from '@alloy/engine';
+import { AbilitiesPanel } from '../AbilitiesPanel';
+import { ChainEditor } from '../chains/ChainEditor';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
-const abilities = () => useDelveStore.getState().profile.abilities;
+const store = () => useDelveStore.getState();
+const chains = () => store().profile.chains;
 
 describe('AbilitiesPanel', () => {
   beforeEach(() => {
     localStorage.clear();
-    useDelveStore.getState().resetProfile(1234, 'fire');
+    store().resetProfile(1234, 'fire');
   });
 
-  it('shows the three default abilities and starter attunement', () => {
+  it("lists the four skills, Basic first, and names the chosen skill's chain", () => {
     render(<AbilitiesPanel />);
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Bolt');
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Ward');
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Fire Nova');
+    expect(screen.getAllByRole('tab').map((t) => t.getAttribute('data-testid'))).toEqual([
+      'chain-skill-basic',
+      'chain-skill-primary',
+      'chain-skill-defensive',
+      'chain-skill-ultimate',
+    ]);
+    expect(screen.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
+      'light Fire Bolt · medium Fire Bolt · medium Fire Bolt · heavy Fire Bolt',
+    );
+    expect(screen.getAllByTestId(/^move-\d$/)).toHaveLength(4);
     expect(screen.getByTestId('attune-fire')).toHaveAttribute('data-value', '2');
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
+      'light Fire blow · light Fire blow · heavy Fire blow',
+    );
+    expect(screen.queryByTestId('form-bolt')).toBeNull(); // a blow has no form
+    expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
-  it('builds a Wildfire Burst: form, a Nature infusion, then a swap', () => {
-    const s = useDelveStore.getState();
-    s.setProfile({ ...s.profile, pair: { primary: 'fire', secondary: 'nature' } });
+  it('edits a move: a Wildfire Burst from its form and a Nature infusion, then a swap', () => {
+    store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'nature' } });
     render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('move-1'));
     fireEvent.click(screen.getByTestId('form-burst'));
     fireEvent.click(screen.getByTestId('infusion-nature'));
-    expect(abilities().primary).toMatchObject({ form: 'burst', elements: ['fire', 'nature'] });
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent('Wildfire Burst');
+    expect(chains().primary.moves[1]).toEqual({
+      kind: 'medium',
+      form: 'burst',
+      elements: ['fire', 'nature'],
+    });
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Wildfire Burst');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent(
+      'light Fire Bolt · medium Wildfire Burst',
+    );
     expect(screen.getByTestId('element-effect')).toHaveTextContent('Wildfire');
     fireEvent.click(screen.getByTestId('swap-elements'));
-    expect(abilities().primary.elements).toEqual(['nature', 'fire']);
+    expect(chains().primary.moves[1].elements).toEqual(['nature', 'fire']);
     fireEvent.click(screen.getByTestId('infusion-none'));
-    expect(abilities().primary.elements).toEqual(['nature']);
+    expect(chains().primary.moves[1].elements).toEqual(['nature']);
   });
 
-  it('sets weight and payment, and shows the wind-up for every payment', () => {
+  it("sets a move's kind, and the chain's one payment with its wind-up", () => {
     render(<AbilitiesPanel />);
-    fireEvent.click(screen.getByTestId('weight-2'));
+    fireEvent.click(screen.getByTestId('kind-hold'));
+    expect(chains().primary.moves[0].kind).toBe('hold');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ \d+ mana/);
+    fireEvent.click(screen.getByTestId('payment-charge'));
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ Charge \d+/);
+    fireEvent.click(screen.getByTestId('kind-heavy'));
     for (const payment of ['cast', 'mana', 'charge'] as const) {
       fireEvent.click(screen.getByTestId(`payment-${payment}`));
-      expect(abilities().primary).toMatchObject({ weight: 2, payment });
+      expect(chains().primary.payment).toBe(payment);
       expect(screen.getByTestId('ability-readout')).toHaveTextContent(/\d\.\d\ds wind-up/);
     }
+    expect(chains().primary.moves[0].kind).toBe('heavy');
   });
 
-  it('each slot offers only its own forms', () => {
+  it('adds, reorders and removes moves within the cap, never below one', () => {
+    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    store().setChain('primary', { moves: [bolt], payment: 'mana' });
     render(<AbilitiesPanel />);
-    fireEvent.click(screen.getByTestId('ability-slot-defensive'));
+    expect(screen.getByTestId('move-remove-0')).toBeDisabled();
+    expect(screen.getByTestId('move-remove-0')).toHaveAccessibleName('Remove light Fire Bolt');
+    fireEvent.click(screen.getByTestId('move-add'));
+    expect(document.activeElement).toBe(screen.getByTestId('move-1')); // the new card
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByTestId('move-add'));
+    expect(chains().primary.moves).toHaveLength(5);
+    expect(screen.queryByTestId('move-add')).toBeNull(); // the cap
+    expect(document.activeElement).toBe(screen.getByTestId('move-4'));
+    // The new move is picked: make it heavy, then bring it forward.
+    fireEvent.click(screen.getByTestId('kind-heavy'));
+    expect(chains().primary.moves[4].kind).toBe('heavy');
+    fireEvent.click(screen.getByTestId('move-left-4'));
+    expect(chains().primary.moves.map((m) => m.kind)).toEqual([
+      'light',
+      'light',
+      'light',
+      'heavy',
+      'light',
+    ]);
+    fireEvent.click(screen.getByTestId('move-remove-0'));
+    expect(chains().primary.moves).toHaveLength(4);
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByTestId('move-2')); // the heavy, still picked
+  });
+
+  it("stops at the skill's own cap", () => {
+    store().setProfile({
+      ...store().profile,
+      chainCaps: { ...store().profile.chainCaps, primary: 4 },
+    });
+    render(<AbilitiesPanel />);
+    expect(screen.queryByTestId('move-add')).toBeNull();
+    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+  });
+
+  it('each ability offers only its own forms; a blow picks from the pair', () => {
+    store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('chain-skill-defensive'));
     expect(screen.getByTestId('form-ward')).toBeInTheDocument();
     expect(screen.queryByTestId('form-bolt')).toBeNull();
     fireEvent.click(screen.getByTestId('form-armor'));
-    expect(abilities().defensive.form).toBe('armor');
-    fireEvent.click(screen.getByTestId('ability-slot-ultimate'));
+    expect(chains().defensive.moves[0].form).toBe('armor');
+    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
     expect(screen.getByTestId('form-maelstrom')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    expect(screen.getAllByTestId(/^element-/).map((c) => c.getAttribute('data-testid'))).toEqual([
+      'element-fire',
+      'element-storm',
+    ]);
+    fireEvent.click(screen.getByTestId('move-2'));
+    fireEvent.click(screen.getByTestId('element-storm'));
+    expect(chains().basic[2]).toEqual({ kind: 'heavy', element: 'storm' });
   });
 
   it('warns when a mana cost is bigger than the pool', () => {
     render(<AbilitiesPanel />);
-    fireEvent.click(screen.getByTestId('ability-slot-ultimate'));
+    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
     fireEvent.click(screen.getByTestId('payment-mana'));
-    fireEvent.click(screen.getByTestId('weight-2'));
+    fireEvent.click(screen.getByTestId('kind-heavy'));
     expect(screen.getByTestId('cost-warning')).toHaveTextContent('your pool holds');
   });
 
   it('is read-only while a dive is under way', () => {
-    useDelveStore.getState().startDive(1);
+    store().startDive(1);
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('abilities-locked')).toBeInTheDocument();
     expect(screen.getByTestId('form-lance')).toBeDisabled();
+    expect(screen.getByTestId('move-add')).toBeDisabled();
     fireEvent.click(screen.getByTestId('form-lance'));
-    expect(abilities().primary.form).toBe('bolt');
+    expect(chains().primary.moves[0].form).toBe('bolt');
   });
 });
 
-describe('AbilityEditor', () => {
-  const stats = computeHeroStats({}, getDelveRegistry());
-  const builds = defaultAbilities('storm');
+describe('ChainEditor', () => {
+  const registry = getDelveRegistry();
+  const stats = computeHeroStats({}, registry);
+  const given = defaultChains(registry, 'storm', null);
+  const caps = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
 
-  it('edits the builds it is given through onChange, and names the reactions it is told about', () => {
+  it('edits the chains it is given through onChange, and names the reactions it is told about', () => {
     const onChange = vi.fn();
     render(
-      <AbilityEditor
-        builds={builds}
+      <ChainEditor
+        chains={given}
+        caps={caps}
         stats={stats}
         reactionsSeen={['melt']}
         locked={false}
         onChange={onChange}
       />,
     );
-    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('Storm Bolt');
+    expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Storm Bolt');
     fireEvent.click(screen.getByTestId('form-lance'));
-    expect(onChange).toHaveBeenCalledWith('primary', { ...builds.primary, form: 'lance' });
+    const [first, ...rest] = given.primary.moves;
+    expect(onChange).toHaveBeenCalledWith('primary', {
+      ...given.primary,
+      moves: [{ ...first, form: 'lance' }, ...rest],
+    });
     expect(screen.getByTestId('reaction-melt')).toBeInTheDocument();
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(14);
     expect(screen.getAllByTestId('reaction-unknown')[0]).toHaveTextContent(
@@ -105,9 +191,17 @@ describe('AbilityEditor', () => {
   it('changes nothing while locked', () => {
     const onChange = vi.fn();
     render(
-      <AbilityEditor builds={builds} stats={stats} reactionsSeen={[]} locked onChange={onChange} />,
+      <ChainEditor
+        chains={given}
+        caps={caps}
+        stats={stats}
+        reactionsSeen={[]}
+        locked
+        onChange={onChange}
+      />,
     );
     fireEvent.click(screen.getByTestId('form-lance'));
+    fireEvent.click(screen.getByTestId('move-add'));
     expect(onChange).not.toHaveBeenCalled();
   });
 });

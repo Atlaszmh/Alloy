@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   GEAR_SLOTS,
   MANA_TYPES,
+  bindSecondary,
   isDiveActive,
   overtakeProgress,
   profilePower,
@@ -32,6 +33,12 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
   const cost = registry.getDelveBalance().pair;
   const locked = isDiveActive(profile);
   const style = (m: ManaType) => manaStyle(registry, m);
+  // The Power once `m` is bound: mid-dive too (binding refuses then), at the dive's depth.
+  const boundPower = (m: ManaType) =>
+    profilePower(registry, {
+      ...bindSecondary({ ...profile, dive: null }, m).profile,
+      dive: profile.dive,
+    });
   const owned = new Set<ManaType>([
     ...GEAR_SLOTS.flatMap((s) => profile.equipped[s]?.mana ?? []),
     ...profile.bag.map((i) => i.mana),
@@ -68,14 +75,15 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
       </div>
       <div className="flex flex-col gap-0.5 text-sm">
         <span data-testid="pair-primary" style={{ color: style(primary).color }}>
-          {style(primary).icon} {style(primary).name} · primary: your blows strike with it
+          {style(primary).icon} {style(primary).name} · primary: your blows and abilities use it,
+          except where you pick your secondary
         </span>
         <span
           data-testid="pair-secondary"
           style={{ color: secondary ? style(secondary).color : '#78716c' }}
         >
           {secondary
-            ? `${style(secondary).icon} ${style(secondary).name} · secondary: your combo finisher discharges it`
+            ? `${style(secondary).icon} ${style(secondary).name} · secondary: your blows and abilities can use it`
             : 'No second element yet'}
         </span>
       </div>
@@ -112,8 +120,8 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
       {!secondary && (
         <div className="flex flex-col gap-1.5" data-testid="bind-section">
           <div className="text-xs text-stone-400">
-            Bind a second element: your combo finisher discharges it and your abilities can use it.
-            Power now {formatNumber(profilePower(registry, profile))}.
+            Bind a second element: your basic chain's last blow strikes with it and your abilities
+            can use it. Power now {formatNumber(profilePower(registry, profile))}.
           </div>
           {candidates.length === 0 ? (
             <div className="text-xs text-stone-500">Find gear of another element to bind it.</div>
@@ -127,10 +135,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
                   onClick={() => setBinding(m)}
                   testId={`mana-bind-${m}`}
                 >
-                  {style(m).icon} {style(m).name} · Power{' '}
-                  {formatNumber(
-                    profilePower(registry, { ...profile, pair: { primary, secondary: m } }),
-                  )}
+                  {style(m).icon} {style(m).name} · Power {formatNumber(boundPower(m))}
                 </Chip>
               ))}
             </div>

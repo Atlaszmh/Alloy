@@ -1,4 +1,4 @@
-import { equipItem, profilePower, type GearItem } from '@alloy/engine';
+import { bindSecondary, equipItem, profilePower, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -19,7 +19,7 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
   const st = manaStyle(registry, item.mana);
   const worn = equipItem(registry, profile, item.uid);
   const statsOnly = profilePower(registry, worn);
-  const bound = profilePower(registry, { ...worn, pair: { ...worn.pair, secondary: item.mana } });
+  const bound = profilePower(registry, bindSecondary(worn, item.mana).profile);
 
   const finish = (bind: boolean) => {
     const store = useDelveStore.getState();
@@ -57,8 +57,8 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
           {st.icon} Bind {st.name} as your second element?
         </div>
         <p className="text-sm text-stone-300">
-          Your combo finisher will discharge {st.name}, your abilities can use it, and its gear will
-          attune you. After that, only a Realign changes it.
+          Your basic chain's last blow will strike with {st.name}, your abilities can use it, and
+          its gear will attune you. After that, only a Realign changes it.
         </p>
         <div className="flex text-center text-xs text-stone-400">
           <div className="flex-1" data-testid="bind-prompt-bound">

@@ -222,7 +222,7 @@ describe('delveStore', () => {
     useDelveStore.getState().closeDive();
     expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'storm', secondary: 'fire' });
     expect(useDelveStore.getState().takeNotices()).toEqual([
-      'Storm now outweighs Fire: your basic attacks strike with Storm',
+      'Storm now outweighs Fire: Storm is your primary',
     ]);
     expect(useDelveStore.getState().takeNotices()).toEqual([]);
   });
@@ -277,7 +277,7 @@ describe('delveStore', () => {
       "Your basic attack's 2nd blow used Frost, which isn't in your pair; it now uses Fire",
     );
     expect(overtakeNotice(registry, 'storm', 'fire')).toBe(
-      'Storm now outweighs Fire: your basic attacks strike with Storm',
+      'Storm now outweighs Fire: Storm is your primary',
     );
   });
 });

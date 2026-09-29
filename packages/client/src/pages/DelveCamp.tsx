@@ -51,10 +51,10 @@ export function DelveCamp() {
   const codexFound = Object.keys(profile.codex).length;
   const codexTotal = registry.getDelveData().legendaries.length;
   const firstTime = profile.stats.dives === 0;
-  const { equipped, pair } = profile;
+  const { equipped, pair, chains } = profile;
   const attunement = useMemo(
-    () => profileStats(registry, { equipped, pair }).attunement,
-    [equipped, pair, registry],
+    () => profileStats(registry, { equipped, pair, chains }).attunement,
+    [equipped, pair, chains, registry],
   );
 
   const onDelve = () => {
@@ -136,9 +136,11 @@ export function DelveCamp() {
                 every menu.
               </p>
               <p>
-                🔥 Build your Primary, Defensive and Ultimate in the{' '}
-                <b className="text-violet-300">Abilities</b> tab: a form, one or two elements, a
-                weight and a payment. Gear attunes you to its element and powers those abilities.
+                🔥 Each skill is a chain of moves: build your basic attack, Primary, Defensive and
+                Ultimate in the <b className="text-violet-300">Abilities</b> tab, each move a kind
+                (light, medium, heavy, or a hold you charge), a form and one or two elements. Each
+                press casts the chain's next move, each harder than the last; a pause starts it
+                over. Gear attunes you to its element and powers those moves.
               </p>
               <p>
                 💎 Loot bursts from monsters: walk over it. A green{' '}

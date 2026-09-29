@@ -8,6 +8,7 @@ import {
 } from 'react';
 import {
   MANA_TYPES,
+  MAX_CHAIN,
   RARITY_ORDER,
   itemStatLines,
   type DummyLayout,
@@ -28,7 +29,8 @@ import {
 } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_COLOR, RARITY_LABEL, formatStat, legendaryText, manaStyle } from '../format';
-import { AbilityEditor, AttunementBars, Chip } from '../AbilitiesPanel';
+import { AttunementBars, Chip } from '../AbilitiesPanel';
+import { ChainEditor } from '../chains/ChainEditor';
 import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
 import type { TrainingActions } from './useTrainingArena';
@@ -129,8 +131,6 @@ const LoadoutTab = memo(function LoadoutTab() {
   const stats = useSandboxStats();
   const weapon = sandboxEquipped(registry, s).weapon;
   const choice = s.weapon;
-  // What the engine discharges: none, or when the pick is the primary.
-  const infusion = stats.weapon.infusion;
   const pick = (next: Partial<WeaponChoice>) =>
     s.setWeapon({ baseId: 'sword', mana: 'fire', rarity: 'rare', ...(choice ?? {}), ...next });
 
@@ -228,31 +228,32 @@ const LoadoutTab = memo(function LoadoutTab() {
             </Chip>
           ))}
         </div>
-        <p className="text-[11px] text-stone-500">Your primary: what your blows strike with.</p>
+        <p className="text-[11px] text-stone-500">
+          Your primary: your basic blows strike with it, except where they pick your secondary.
+        </p>
       </Section>
 
-      <Section title="Basic infusion">
+      <Section title="Your secondary">
         <div className="flex flex-wrap gap-1.5">
-          <Chip
-            pressed={!infusion}
-            onClick={() => s.setBasicInfusion(null)}
-            testId="basic-infusion-none"
-          >
+          <Chip pressed={!s.secondary} onClick={() => s.setSecondary(null)} testId="secondary-none">
             None
           </Chip>
           {MANA_TYPES.map((m) => (
             <Chip
               key={m}
-              pressed={infusion === m}
+              pressed={s.secondary === m}
               disabled={m === s.primary}
-              onClick={() => s.setBasicInfusion(m)}
-              testId={`basic-infusion-${m}`}
+              onClick={() => s.setSecondary(m)}
+              testId={`secondary-${m}`}
             >
               {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
             </Chip>
           ))}
         </div>
-        <p className="text-[11px] text-stone-500">Your combo finisher discharges this element.</p>
+        <p className="text-[11px] text-stone-500">
+          The second element your basic blows can pick (in Abilities, Basic); binding one gives it
+          your last blow.
+        </p>
       </Section>
 
       <Section title="Legendary powers">
@@ -333,26 +334,35 @@ const LoadoutTab = memo(function LoadoutTab() {
         Load my build
       </button>
       <p className="text-[11px] text-stone-500">
-        Copies your equipped gear and abilities in. Nothing here ever changes your save.
+        Copies your equipped gear, chains and pair in. Nothing here ever changes your save.
       </p>
     </div>
   );
 });
 
-/** The Anvil's editor, bound to the sandbox (never locked, every reaction named: it's a testing tool). */
+const CAPS = { basic: MAX_CHAIN, primary: MAX_CHAIN, defensive: MAX_CHAIN, ultimate: MAX_CHAIN };
+
+/**
+ * The Anvil's chain builder, bound to the sandbox: never locked, any element for
+ * an ability, the pair for a blow, every reaction named (it's a testing tool).
+ */
 const TrainingAbilities = memo(function TrainingAbilities() {
-  const builds = useSandboxStore((s) => s.abilities);
+  const chains = useSandboxStore((s) => s.chains);
+  const primary = useSandboxStore((s) => s.primary);
+  const secondary = useSandboxStore((s) => s.secondary);
   const stats = useSandboxStats();
   const all = getDelveRegistry()
     .getArpgData()
     .reactions.map((r) => r.id);
   return (
-    <AbilityEditor
-      builds={builds}
+    <ChainEditor
+      chains={chains}
+      caps={CAPS}
       stats={stats}
       reactionsSeen={all}
       locked={false}
-      onChange={(slot, build) => useSandboxStore.getState().setAbility(slot, build)}
+      onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
+      blowElements={secondary ? [primary, secondary] : [primary]}
     />
   );
 });

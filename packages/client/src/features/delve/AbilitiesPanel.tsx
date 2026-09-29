@@ -1,45 +1,18 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import {
-  ABILITY_SLOTS,
   MANA_TYPES,
   isDiveActive,
   manaPool,
   pairElements,
   profileStats,
-  resolveAbility,
-  type AbilityBuild,
-  type AbilityBuilds,
-  type AbilityPayment,
-  type AbilitySlot,
-  type AbilityWeight,
   type HeroStats,
   type ManaType,
-  type ResolvedAbility,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
-import { formatNumber, manaStyle } from './format';
+import { manaStyle } from './format';
 import { ManaPanel } from './ManaPanel';
-
-const KEY_HINTS = ['Q', 'E', 'R'];
-const SLOT_NAME: Record<AbilitySlot, string> = {
-  primary: 'Primary',
-  defensive: 'Defensive',
-  ultimate: 'Ultimate',
-};
-const WEIGHTS: [AbilityWeight, string][] = [
-  [-2, 'Swift'],
-  [-1, 'Quick'],
-  [0, 'Balanced'],
-  [1, 'Heavy'],
-  [2, 'Crushing'],
-];
-const PAYMENTS: [AbilityPayment, string, string][] = [
-  ['mana', 'Mana', 'Pay mana, then wait the cooldown.'],
-  ['charge', 'Charge', 'No mana: fill a meter by dealing damage (and in lulls), then unleash it.'],
-  ['cast', 'Cast', 'Half the mana and 20% more power, but you stand still while it winds up.'],
-];
+import { ChainEditor } from './chains/ChainEditor';
 
 /** Attunement per element (all six, or just `elements`) with the mastery threshold, and the one mana pool it feeds. */
 export function AttunementBars({
@@ -146,377 +119,30 @@ export function Chip({
       data-testid={testId}
       title={title}
       disabled={disabled}
-      style={disabled ? { opacity: 0.35 } : undefined}
     >
       {children}
     </button>
   );
 }
 
-/** Plain-language numbers for a resolved ability. */
-function Readout({
-  ab,
-  hit,
-  maxHp,
-  pool,
-}: {
-  ab: ResolvedAbility;
-  hit: number;
-  maxHp: number;
-  pool: number;
-}) {
-  const lines: string[] = [];
-  const f = ab.form.id;
-  if (f === 'ward')
-    lines.push(
-      `Absorbs ${formatNumber(maxHp * ab.effect)} for ${ab.duration}s`,
-      `Bursts for ${formatNumber(hit)}`,
-    );
-  else if (f === 'armor')
-    lines.push(
-      `${Math.round(Math.min(0.75, ab.effect) * 100)}% less damage for ${ab.duration}s`,
-      `Strikes back for ${formatNumber(hit)}`,
-    );
-  else if (f === 'surge')
-    lines.push(`+${Math.round(ab.effect * 100)}% attack speed for ${ab.duration}s`);
-  else if (f === 'blink')
-    lines.push(
-      `${ab.range} units, untouchable ${ab.effect.toFixed(2)}s`,
-      `Trail hits for ${formatNumber(hit)}`,
-    );
-  else if (f === 'barrage') lines.push(`${ab.count} impacts of ${formatNumber(hit)}`);
-  else if (f === 'maelstrom')
-    lines.push(`${formatNumber(hit)} every ${ab.tick}s for ${ab.duration}s`);
-  else
-    lines.push(
-      `Hits for ${formatNumber(hit)}${ab.radius > 0 && f !== 'strike' ? ` · radius ${ab.radius.toFixed(1)}` : ''}`,
-    );
-  const windup = ab.castTime > 0 ? ` · ${ab.castTime.toFixed(2)}s wind-up` : '';
-  const pay =
-    ab.build.payment === 'charge'
-      ? `Charge ${Math.round(ab.chargeNeed)}${windup}`
-      : `${Math.round(ab.cost)} mana${windup}`;
-  lines.push(
-    `${pay} · ${ab.build.payment === 'charge' ? 'no cooldown' : `${ab.cooldown.toFixed(ab.cooldown < 2 ? 2 : 0)}s cooldown`}`,
-  );
-  return (
-    <div className="delve-panel flex flex-col gap-0.5 p-3 text-sm" data-testid="ability-readout">
-      <div
-        className="delve-display text-lg font-bold"
-        style={{ color: manaStyle(getDelveRegistry(), ab.element).color }}
-      >
-        {ab.icon} {ab.name}
-      </div>
-      {lines.map((l) => (
-        <div key={l} className="text-stone-300">
-          {l}
-        </div>
-      ))}
-      {ab.cost > pool && (
-        <div className="text-xs font-semibold text-red-300" data-testid="cost-warning">
-          Needs {Math.round(ab.cost)} mana; your pool holds {Math.round(pool)}.
-        </div>
-      )}
-    </div>
-  );
-}
-
-export interface AbilityEditorProps {
-  builds: AbilityBuilds;
-  /** The hero the builds resolve against: legendaries, cooldowns, damage, life, attunement, pool. */
-  stats: HeroStats;
-  /** Reactions shown by name; the rest show as ???. */
-  reactionsSeen: readonly string[];
-  /** Read-only (a dive is under way). */
-  locked: boolean;
-  onChange: (slot: AbilitySlot, build: AbilityBuild) => void;
-  /** The elements the picker offers (the Delve: your pair); all six when absent. */
-  elements?: readonly ManaType[];
-  /** Shown in place of the attunement bars (the Anvil's Mana view). */
-  mana?: ReactNode;
-}
-
-/**
- * The ability editor: build the Primary, Defensive and Ultimate from a form,
- * one or two elements, a weight and a payment. Every part is open. The Anvil
- * binds it to the save; the Training Grounds to its own loadout.
- */
-export function AbilityEditor({
-  builds,
-  stats,
-  reactionsSeen,
-  locked,
-  onChange,
-  elements = MANA_TYPES,
-  mana,
-}: AbilityEditorProps) {
-  const registry = getDelveRegistry();
-  const data = registry.getArpgData();
-  const [slot, setSlot] = useState<AbilitySlot>('primary');
-  const pool = manaPool(stats, registry).max;
-  const build = builds[slot];
-  const resolved = ABILITY_SLOTS.map((s) => resolveAbility(registry, s, builds[s], stats));
-  const ab = resolved[ABILITY_SLOTS.indexOf(slot)];
-  const [main, infusion] = build.elements;
-
-  const set = (next: Partial<AbilityBuild>) => {
-    if (locked) return;
-    playSound('buttonClick');
-    onChange(slot, { ...build, ...next });
-  };
-  const setMain = (m: ManaType) =>
-    set({ elements: infusion && infusion !== m ? [m, infusion] : [m] });
-  const setInfusion = (m: ManaType | null) => set({ elements: m ? [main, m] : [main] });
-  const trait = (m: ManaType) => data.elementTraits[m];
-
-  return (
-    <div className="flex flex-col gap-3" data-testid="abilities-panel">
-      <div className="text-xs text-stone-400" data-testid="abilities-summary">
-        {resolved.map((r, i) => (
-          <span key={r.slot}>
-            {i > 0 && ' · '}
-            <b className="text-stone-300">{KEY_HINTS[i]}</b> {r.icon} {r.name}
-          </span>
-        ))}
-      </div>
-
-      <div className="flex gap-1.5" role="tablist">
-        {ABILITY_SLOTS.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            role="tab"
-            aria-selected={slot === s}
-            className="delve-panel flex flex-1 flex-col items-center gap-0.5 p-2"
-            style={{ borderColor: slot === s ? '#fcd34d' : undefined }}
-            onClick={() => setSlot(s)}
-            data-testid={`ability-slot-${s}`}
-          >
-            <span className="text-[10px] uppercase tracking-widest text-stone-400">
-              {SLOT_NAME[s]} · {KEY_HINTS[i]}
-            </span>
-            <span className="text-2xl leading-none">{resolved[i].icon}</span>
-            <span className="text-center text-[11px] font-semibold leading-tight text-stone-200">
-              {resolved[i].name}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {locked && (
-        <div
-          className="delve-panel p-2 text-center text-xs text-amber-200"
-          data-testid="abilities-locked"
-        >
-          A dive is under way: abilities can change once you extract or fall.
-        </div>
-      )}
-      <fieldset
-        disabled={locked}
-        className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0"
-        style={{ opacity: locked ? 0.55 : 1 }}
-      >
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Form
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {data.forms
-              .filter((f) => f.slot === slot)
-              .map((f) => (
-                <Chip
-                  key={f.id}
-                  pressed={build.form === f.id}
-                  onClick={() => set({ form: f.id })}
-                  testId={`form-${f.id}`}
-                >
-                  {f.icon} {f.name}
-                </Chip>
-              ))}
-          </div>
-          <div className="text-xs text-stone-400">{ab.form.text}</div>
-        </section>
-
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Element
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {elements.map((m) => (
-              <Chip
-                key={m}
-                pressed={main === m}
-                onClick={() => setMain(m)}
-                testId={`element-${m}`}
-                title={trait(m).text}
-              >
-                {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
-              </Chip>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-stone-500">Infuse with</span>
-            <Chip pressed={!infusion} onClick={() => setInfusion(null)} testId="infusion-none">
-              None
-            </Chip>
-            {elements
-              .filter((m) => m !== main)
-              .map((m) => (
-                <Chip
-                  key={m}
-                  pressed={infusion === m}
-                  onClick={() => setInfusion(m)}
-                  testId={`infusion-${m}`}
-                >
-                  {manaStyle(registry, m).icon}
-                </Chip>
-              ))}
-            {infusion && (
-              <button
-                type="button"
-                className="delve-chip"
-                onClick={() => set({ elements: [infusion, main] })}
-                aria-label="Swap the main element and the infusion"
-                data-testid="swap-elements"
-              >
-                ⇄
-              </button>
-            )}
-          </div>
-          <div className="text-xs text-stone-400" data-testid="element-effect">
-            {ab.fusion ? (
-              <>
-                <b className="text-stone-200">
-                  {ab.fusion.icon} {ab.fusion.name}:
-                </b>{' '}
-                {ab.fusion.text} {manaStyle(registry, main).name} sets the damage type.
-              </>
-            ) : slot === 'defensive' ? (
-              trait(main).defensive
-            ) : (
-              trait(main).text
-            )}
-          </div>
-        </section>
-
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Weight
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {WEIGHTS.map(([w, label]) => (
-              <Chip
-                key={w}
-                pressed={build.weight === w}
-                onClick={() => set({ weight: w })}
-                testId={`weight-${w}`}
-              >
-                {label}
-              </Chip>
-            ))}
-          </div>
-          <div className="text-[11px] text-stone-500">
-            Heavier hits harder and bigger, but costs more and comes slower.
-          </div>
-        </section>
-
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Pay with
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {PAYMENTS.map(([p, label]) => (
-              <Chip
-                key={p}
-                pressed={build.payment === p}
-                onClick={() => set({ payment: p })}
-                testId={`payment-${p}`}
-              >
-                {label}
-              </Chip>
-            ))}
-          </div>
-          <div className="text-[11px] text-stone-500">
-            {PAYMENTS.find(([p]) => p === build.payment)![2]}
-          </div>
-        </section>
-      </fieldset>
-
-      <Readout
-        ab={ab}
-        hit={stats.weaponDamage * stats.damageMult * ab.power}
-        maxHp={stats.maxHp}
-        pool={pool}
-      />
-
-      {mana ?? (
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Attunement
-          </div>
-          <AttunementBars stats={stats} />
-        </section>
-      )}
-
-      <section className="flex flex-col gap-1.5">
-        <div className="flex items-baseline justify-between">
-          <span className="delve-display text-xs font-bold uppercase tracking-widest text-fuchsia-300">
-            Reactions
-          </span>
-          <span className="text-[10px] text-stone-500">
-            {reactionsSeen.length}/{data.reactions.length} discovered
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {data.reactions.map((r) => {
-            const seen = reactionsSeen.includes(r.id);
-            return (
-              <div
-                key={r.id}
-                className="delve-panel flex items-center gap-2.5 p-2"
-                data-testid={seen ? `reaction-${r.id}` : 'reaction-unknown'}
-                style={seen ? { borderColor: 'rgba(232,121,249,0.4)' } : undefined}
-              >
-                <span className="w-8 text-center text-2xl">{seen ? r.icon : '❔'}</span>
-                <span className="min-w-0">
-                  <span
-                    className="delve-display block text-sm font-bold"
-                    style={{ color: seen ? '#f0abfc' : '#57534e' }}
-                  >
-                    {seen ? r.name : '???'}
-                  </span>
-                  <span className="block text-[10.5px] leading-snug text-stone-400">
-                    {seen
-                      ? r.text
-                      : 'Stack one element on a foe, then hit it with another, to discover.'}
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/** The Anvil's workshop: the save's builds from your two elements, and your Mana view; read-only while a dive is under way. */
+/** The Anvil's workshop: the save's chains from your two elements, and your Mana view; read-only while a dive is under way. */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const { equipped, pair } = profile;
+  const { equipped, pair, chains } = profile;
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair }),
-    [equipped, pair, registry],
+    () => profileStats(registry, { equipped, pair, chains }),
+    [equipped, pair, chains, registry],
   );
   const elements = pairElements(pair);
   return (
-    <AbilityEditor
-      builds={profile.abilities}
+    <ChainEditor
+      chains={chains}
+      caps={profile.chainCaps}
       stats={stats}
       reactionsSeen={profile.reactionsSeen}
       locked={isDiveActive(profile)}
-      onChange={(slot, build) => useDelveStore.getState().setAbility(slot, build)}
+      onChange={(skill, chain) => useDelveStore.getState().setChain(skill, chain)}
       elements={elements.length > 0 ? elements : undefined}
       mana={<ManaPanel stats={stats} />}
     />

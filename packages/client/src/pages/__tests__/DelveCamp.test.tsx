@@ -64,7 +64,7 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p.pair).toEqual({ primary: 'frost', secondary: null });
     expect(p.equipped.weapon!.mana).toBe('frost');
-    expect(p.abilities.defensive.elements).toEqual(['frost']);
+    expect(p.chains.defensive.moves[0].elements).toEqual(['frost']);
   });
 
   it('asks nothing once the mana is chosen', () => {

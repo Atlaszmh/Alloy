@@ -37,10 +37,10 @@ export function PaperDoll({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newUids = useDelveStore((s) => s.newUids);
-  const { equipped, pair } = profile;
+  const { equipped, pair, chains } = profile;
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair }),
-    [equipped, pair, registry],
+    () => profileStats(registry, { equipped, pair, chains }),
+    [equipped, pair, chains, registry],
   );
   const est = useMemo(
     () => estimateCombat(stats, registry, referenceDepth(profile)),
@@ -61,8 +61,8 @@ export function PaperDoll({
               label="Damage"
               value={formatNumber(est.dps)}
               sub={`${(
-                stats.weapon.combo.length /
-                (stats.attackInterval * stats.weapon.combo.reduce((a, s) => a + s.time, 0))
+                stats.weapon.blows.length /
+                (stats.attackInterval * stats.weapon.blows.reduce((a, s) => a + s.time, 0))
               ).toFixed(2)} atk/s`}
             />
           );

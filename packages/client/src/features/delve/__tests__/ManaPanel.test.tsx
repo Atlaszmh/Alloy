@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { generateItem, SeededRNG, type ManaType } from '@alloy/engine';
+import { bindSecondary, generateItem, profilePower, SeededRNG, type ManaType } from '@alloy/engine';
 import { AbilitiesPanel } from '../AbilitiesPanel';
+import { formatNumber } from '../format';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
@@ -83,10 +84,16 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
 
   it('binding and realigning wait for the dive to end, and say so', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
+    store().unequip('chest'); // under 1000 Power: the chip's whole number shows the bind's change
+    // Binding Storm between dives gives this Power; mid-dive the preview still shows it.
+    const bound = profilePower(registry, bindSecondary(store().profile, 'storm').profile);
     store().startDive(1);
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('pair-locked')).toHaveTextContent('between dives');
     expect(screen.getByTestId('mana-bind-storm')).toBeDisabled();
+    expect(screen.getByTestId('mana-bind-storm')).toHaveTextContent(
+      new RegExp(`Power ${formatNumber(bound)}$`),
+    );
   });
 
   it('realign waits for the dive to end too', () => {

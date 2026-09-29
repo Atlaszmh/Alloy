@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
-import { defaultAbilities, sandboxWeapon } from '@alloy/engine';
+import { defaultChains, sandboxWeapon } from '@alloy/engine';
 import { MAX_DUMMY_GROUPS, useSandboxStore } from '@/stores/sandboxStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { attachKeyboard, createArenaInput } from '../arena/input';
@@ -59,23 +59,34 @@ describe('TrainingPanel', () => {
     expect(screen.getByTestId('weapon-name')).toHaveTextContent('Staff');
   });
 
-  it('picks the primary and the finisher discharge; the primary is off in the infusion row, even unarmed', () => {
+  it('picks the primary and the secondary; the primary is off in the secondary row, even unarmed', () => {
     renderPanel('loadout');
     expect(screen.getByTestId('sandbox-primary-fire')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('Your primary: what your blows strike with.')).toBeInTheDocument();
-    expect(screen.getByTestId('basic-infusion-none')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('basic-infusion-fire')).toBeDisabled();
+    expect(screen.getByText(/your basic blows strike with it/)).toBeInTheDocument();
+    expect(screen.getByTestId('secondary-none')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('secondary-fire')).toBeDisabled();
     fireEvent.click(screen.getByTestId('sandbox-primary-frost'));
     expect(useSandboxStore.getState().primary).toBe('frost');
-    expect(screen.getByTestId('basic-infusion-frost')).toBeDisabled();
-    expect(screen.getByTestId('basic-infusion-fire')).toBeEnabled();
-    fireEvent.click(screen.getByTestId('basic-infusion-storm'));
-    expect(useSandboxStore.getState().basicInfusion).toBe('storm');
-    expect(screen.getByTestId('basic-infusion-storm')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('Your combo finisher discharges this element.')).toBeInTheDocument();
+    expect(screen.getByTestId('secondary-frost')).toBeDisabled();
+    expect(screen.getByTestId('secondary-fire')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('secondary-storm'));
+    expect(useSandboxStore.getState().secondary).toBe('storm');
+    expect(screen.getByTestId('secondary-storm')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/The second element your basic blows can pick/)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('weapon-base-none'));
-    expect(screen.getByTestId('basic-infusion-storm')).toBeEnabled();
-    expect(screen.getByTestId('basic-infusion-storm')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('secondary-storm')).toBeEnabled();
+    expect(screen.getByTestId('secondary-storm')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it("the Abilities tab builds the sandbox's chains: any element for a move, the pair for a blow", () => {
+    useSandboxStore.getState().setSecondary('storm');
+    renderPanel('abilities');
+    fireEvent.click(screen.getByTestId('element-shadow'));
+    expect(useSandboxStore.getState().chains.primary.moves[0].elements).toEqual(['shadow']);
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    expect(screen.getAllByTestId(/^element-/)).toHaveLength(2);
+    fireEvent.click(screen.getByTestId('element-storm'));
+    expect(useSandboxStore.getState().chains.basic[0].element).toBe('storm');
   });
 
   it('adds dummies through the arena, and stops at the cap', () => {
@@ -150,7 +161,7 @@ describe('TrainingPanel', () => {
     };
     useSandboxStore.getState().loadMyBuild({
       equipped: { weapon },
-      abilities: defaultAbilities('fire'),
+      chains: defaultChains(registry, 'fire', 'sword'),
       pair: { primary: 'fire', secondary: null },
     });
     renderPanel('loadout');
