@@ -42,7 +42,7 @@ Today damage over time and reaction splash carry no ability slot, so an ability'
 
 - **Splash:** `react()` passes the triggering hit's `opts.slot` to its splash hits (Overload's blast, Combust's blast).
 - **Damage over time:** `StatusState` gains `burnSlot` and `poisonSlot` (`number | undefined`, starting undefined in `emptyStatus()`).
-  - `applyStatus` takes the applying hit's slot, passed from `hitMonster`'s status loop as `opts.slot`, and records it whenever it applies burn or poison. The most recent applier wins.
+  - `applyStatus` takes the applying hit's slot, passed from `hitMonster`'s status loop as `opts.slot`, and records it when it sets the status's damage: when the status wasn't active, or the new damage is at least the current one (`if (!active || dps >= s.burnDps) s.burnSlot = slot`, and the same for poison). A weaker refresh (a basic re-burning a foe an ability burned harder) keeps the stronger applier's slot, since the tick still deals its damage.
   - The burn and poison ticks in `step.ts` put that slot on their `hit` event.
   - Spreading copies it: Blight/Plague's `spreadAffliction` for poison, and Fire mastery's corpse flames for burn.
 
@@ -119,6 +119,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 
 **Reaching it.**
 - `features/delve/lab/dev-routes.tsx` exports `DEV_LAB = import.meta.env.DEV ? lazy(() => import('../../../pages/DelveLab')) : null`. That is created at module scope, so a production build drops the page.
+  `lazy` needs a default export and the pages use named ones, so it is `lazy(() => import(...).then((m) => ({ default: m.DelveLab })))`.
 - `App.tsx` renders `{DEV_LAB && <Route path="/delve/lab" element={<Suspense fallback={null}><DEV_LAB /></Suspense>} />}`.
 - The Training Grounds' top bar gains a 📈 **DPS Lab** button (`training-lab`), shown only when `import.meta.env.DEV`.
 - `AppShell` hides the TabBar on `/delve/lab`, as it does on `/delve/training`.
@@ -166,16 +167,16 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
   - An ability's Overload splash hits carry its slot.
   - A burn applied by a slot ticks with that slot, and a basic's burn ticks with none.
   - A spread poison keeps its slot.
-  - The Training meter buckets are unchanged.
+  - The attributed hits keep their `source` (`dot`, `reaction`), which is what the Training meter buckets by.
 - **`dpsCombos`:** 252 basics and 4,320 abilities, and every `dpsKey` is unique.
 - **Determinism:** the same setup gives the same result twice.
 - **Basics:**
   - Every weapon base deals damage (`dps > 0`), with 60 samples.
   - A Fire basic run counts its burn ticks: it is above the same run's direct hits alone.
-- **Positions hold:** an Earth Bolt run (whose knockback would push the dummy away) keeps a steady DPS. Its last 10 s average is within 25% of its middle 10 s.
+- **Positions hold:** an Earth Bolt run (whose knockback would push the dummy out of reach within about 10 s) keeps dealing damage. Its middle 10 s DPS is above half its whole-run DPS, and its last 10 s is within 25% of its middle 10 s. (`series` is a running average, so a window's DPS is `(series[j]·t_j − series[i]·t_i) / (t_j − t_i)`.)
 - **Ability counting:**
   - A mana-paid Crushing Nova returns `casts: 0` and `dps: 0` while basics swing, which proves basic hits aren't counted.
-  - A Fire+Storm Bolt run's DPS includes its Overload splash.
+  - A Fire+Storm Bolt run with `pack: true` includes its Overload splash. (Splash never hits the foe that reacted, so a single dummy takes none.)
 - **Pack:** a Frost, Balanced (weight 0), mana-paid Nova does more with `pack: true` than without, by a larger ratio than the same Bolt.
 - **Depth:** a deeper depth gives more DPS.
 
@@ -186,7 +187,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
   - a chip narrows the rows;
   - the chart draws one `path` per ticked row;
   - an unaffordable row shows "can't afford".
-- **`dev-routes`:** `DEV_LAB` is null when `import.meta.env.DEV` is false. The `training-lab` button renders only in DEV, tested on the button alone, so the test doesn't pull in Pixi.
+- **`dev-routes`:** `DEV_LAB` is null when `import.meta.env.DEV` is false (set it false, `vi.resetModules()`, then import the module again, since `DEV_LAB` is made at module scope). The `training-lab` button renders only in DEV, tested on the button alone, so the test doesn't pull in Pixi.
 
 **Release:**
 - No version bump: the lab exists only in dev builds, and the attribution change alters no rules and nothing a player sees.
