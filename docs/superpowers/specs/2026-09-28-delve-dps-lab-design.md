@@ -5,7 +5,7 @@
 
 **Engine** (`packages/engine/`):
 - `src/arpg/dps-sim.ts` (new), `src/index.ts`
-- `src/arpg/combat.ts`, `src/arpg/step.ts`, `src/types/arpg.ts` (hit attribution only)
+- `src/arpg/combat.ts`, `src/arpg/step.ts`, `src/arpg/world.ts`, `src/types/arpg.ts` (hit attribution only)
 - `tests/delve-dps-sim.test.ts` (new)
 
 **Client** (`packages/client/src/`):
@@ -32,7 +32,7 @@ Each combo assumes the player just holds the button, with no gear or modifiers b
 | Ability mana | Real play: basics swing automatically and feed mana, and only the ability's own damage counts, including its damage over time and reaction splash. |
 | Positions | Held in place. The hero and dummies are put back every tick, so knockback, pulls and recoils don't drift them apart. |
 | Showing hundreds of combos | A ranked table, plus a chart of the ticked rows (top 8 by default). |
-| Running | One background Web Worker, restarted for each new request. The whole grid takes 1–3 s. |
+| Running | One background Web Worker, restarted for each new request. The whole grid takes about 2 s for one dummy and 5 s for the pack. |
 | Setups | Any loadout, labelled by its dimensions, so the sim, table and chart don't know the build model. Only `dpsCombos` is re-enumerated when builds change (the coming moves-and-chains refactor). |
 
 ## Engine
