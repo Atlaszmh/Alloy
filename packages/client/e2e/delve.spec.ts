@@ -165,7 +165,7 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('infusion-nature').click();
     await expect(page.getByTestId('ability-readout')).toContainText('Wildfire Burst');
     await expect(page.getByTestId('abilities-summary')).toContainText('Wildfire Burst');
-    await expect(page.getByTestId('reaction-unknown')).toHaveCount(7);
+    await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
     await expect(page.getByTestId('temper-row')).toHaveCount(2);
