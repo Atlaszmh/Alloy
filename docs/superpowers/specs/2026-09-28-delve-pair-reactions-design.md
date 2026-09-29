@@ -1,7 +1,7 @@
 # Delve Pair Reactions Design
 
 **Date:** 2026-09-28
-**Status:** Draft.
+**Status:** Built in v0.44.0.
 **Follows:** `2026-09-27-delve-elemental-affinity-design.md` (v0.43.0). The hero holds two elements, but only 7 of the 15 pairs have a reaction today.
 
 **Engine** (`packages/engine/src/`):
