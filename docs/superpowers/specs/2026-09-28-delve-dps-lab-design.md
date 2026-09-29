@@ -33,6 +33,7 @@ Each combo assumes the player just holds the button, with no gear or modifiers b
 | Positions | Held in place. The hero and dummies are put back every tick, so knockback, pulls and recoils don't drift them apart. |
 | Showing hundreds of combos | A ranked table, plus a chart of the ticked rows (top 8 by default). |
 | Running | One background Web Worker, restarted for each new request. The whole grid takes 1–3 s. |
+| Setups | Any loadout, labelled by its dimensions, so the sim, table and chart don't know the build model. Only `dpsCombos` is re-enumerated when builds change (the coming moves-and-chains refactor). |
 
 ## Engine
 
@@ -53,9 +54,16 @@ Today damage over time and reaction splash carry no ability slot, so an ability'
 It is pure and deterministic, and built on the Training Grounds sandbox.
 
 ```ts
-type DpsSetup =
-  | { kind: 'basic'; baseId: string; primary: ManaType; secondary: ManaType | null }
-  | ({ kind: 'ability' } & AbilityBuild);
+/** One run: a whole loadout, labelled by the dimensions the lab filters and colours by. */
+interface DpsSetup {
+  view: 'basic' | 'ability';
+  /** Filterable dimensions in display order, e.g. { weapon, primary, secondary } or { form, first, second, weight, payment }. Values are short ids; a missing element is 'none'. */
+  dims: Record<string, string>;
+  weapon: { baseId: string; primary: ManaType; secondary: ManaType | null };
+  abilities: AbilityBuilds;
+  /** The button held: the basic attack, or an ability slot. */
+  hold: 'attack' | { slot: number };
+}
 
 interface DpsOptions { depth: number; pack: boolean }
 
@@ -64,33 +72,35 @@ interface DpsResult {
   series: number[];
   /** The last sample: DPS over the whole 30 s. */
   dps: number;
-  /** Ability runs: how many times it was cast (0 = it never could be, e.g. unaffordable). Basics: 0. */
+  /** `hold: { slot }` runs: how many times that slot was cast (0 = it never could be, e.g. unaffordable). `hold: 'attack'`: 0. */
   casts: number;
 }
 
 const DPS_SECONDS = 30;
 function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult;
 function dpsCombos(registry: DataRegistry): DpsSetup[];
-/** A stable key for a setup, e.g. `basic|sword|fire|storm`, `ability|bolt|fire+storm|2|mana`. */
+/** A stable key: the view, then the `dims` values in order, e.g. `basic|sword|fire|none`, `ability|bolt|fire|storm|2|mana`. */
 function dpsKey(setup: DpsSetup): string;
 ```
 
+The setup carries the whole loadout, so `simulateDps` never reads the build model. When builds become chains of moves, `dpsCombos` changes and nothing else does, and a "your builds" view later is one function from the profile.
+
 **Baseline hero.**
-- The weapon is `sandboxWeapon(registry, { baseId, mana: primary, rarity: 'common', ilvl: depth })`, the Training Grounds' own maker. Its item level is the depth, as in real drops.
+- The weapon is `sandboxWeapon(registry, { baseId: setup.weapon.baseId, mana: primary, rarity: 'common', ilvl: depth })`, the Training Grounds' own maker. Its item level is the depth, as in real drops.
 - Nothing else is equipped, and there are no legendaries.
 - Stats come from `computeHeroStats({ weapon }, registry, { pair: { primary, secondary } })`, unfiltered, as the sandbox's basics-only pair does.
-- An ability run uses a plain sword, with the pair `{ primary: elements[0], secondary: elements[1] ?? null }`, just as the game limits abilities to the pair.
+- `dpsCombos` gives every ability setup a plain sword and the pair `{ primary: elements[0], secondary: elements[1] ?? null }`, just as the game limits abilities to the pair.
 - The run starts as a fresh floor does: mana full, ability charge 0, cooldowns ready. Mana payments therefore front-load. The chart's early seconds show that, and it is intended.
 
 **Arena.**
 - `createSandboxWorld(registry, { depth, stats, abilities, toggles })` with every toggle off.
 - The dummies are neutral (`element: null`): the `'single'` layout, or the 5-dummy `'clump'`. The group is shifted as a whole so the nearest dummy's edge sits 0.4 units from the hero's edge, straight ahead.
-- The abilities are `defaultAbilities(primary)`. An ability run replaces its form's slot with the combo's build.
+- The abilities are `setup.abilities`.
 
 **Holding the button.**
 - `move: {0, 0}` every tick.
-- **Basics:** `attack: true, attackAim: <the nearest dummy>`.
-- **Abilities:** `cast: { slot, aim: <the nearest dummy> }`, with `attack` undefined, so basics swing automatically, as in the game.
+- **`hold: 'attack'`:** `attack: true, attackAim: <the nearest dummy>`.
+- **`hold: { slot }`:** `cast: { slot, aim: <the nearest dummy> }`, with `attack` undefined, so basics swing automatically, as in the game.
   - A press the engine refuses (no mana) is dropped and pressed again next tick. A press on cooldown waits, and a wind-up is never restarted.
   - Holding a cast-paid Primary cancels basic swings in their startup, so its runs get little mana from basics. That is real engine behaviour.
 
@@ -102,17 +112,18 @@ function dpsKey(setup: DpsSetup): string;
 Pushes are placed by progress from their own start (`action.ts`), so lunges, step-ins and recoils still take their time and still block swings. Only the drift is removed. Knockback, pulls and crowd control therefore count for nothing in the lab. Dummies never act, so crowd control never mattered here anyway.
 
 **Counting.** The sim sums the `hit` events' `amount`:
-- **Basics:** every hit. No ability is pressed, so everything is the basic attack's, including its burn or poison and any reaction.
-- **Abilities:** every hit whose `slot` is the ability's slot. That covers direct hits, chains, ticks, its reaction splash, and damage over time from statuses it applied (see attribution above). Basic hits don't count, and neither does damage over time from statuses the basics applied.
+- **`hold: 'attack'`:** every hit. No ability is pressed, so everything is the basic attack's, including its burn or poison and any reaction.
+- **`hold: { slot }`:** every hit whose `slot` is that slot. That covers direct hits, chains, ticks, its reaction splash, and damage over time from statuses it applied (see attribution above). Basic hits don't count, and neither does damage over time from statuses the basics applied.
 
 **Determinism.** Every run uses the sandbox's fixed world seed. The same setup and options give the same result.
 
 **The grid** (`dpsCombos`):
-- **Basics** (252): every weapon base × 6 primaries × (no secondary, or each of the 5 others).
+- **Basics** (252): every weapon base × 6 primaries × (no secondary, or each of the 5 others). Each is `{ view: 'basic', dims: { weapon, primary, secondary }, hold: 'attack' }` with `defaultAbilities(primary)`.
 - **Abilities** (4,320): every form whose slot is Primary or Ultimate × 36 element sets × 5 weights × 3 payments.
   - Forms: today that is 8 (Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom), read from `arpg.json`, so a new form joins by itself.
   - Element sets: the 6 singles and the 30 *ordered* pairs. The first element is the damage element and decides the reactions, so Fire+Storm and Storm+Fire are different builds.
   - Defensive forms are left out.
+  - Each is `{ view: 'ability', dims: { form, first, second, weight, payment }, hold: { slot } }`, where `slot` is the form's slot and `abilities` is `defaultAbilities(first)` with that slot replaced by the build.
   - Combos a plain hero can never afford stay in the grid with `casts: 0`, for example a mana-paid Heavy or Crushing Ultimate (78 and 96 mana against a pool of about 63).
 
 ## Client: the DPS Lab
@@ -130,11 +141,8 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
   - the **Basics | Abilities** tabs;
   - a **Depth** slider, 1 to `MAX_DEPTH` (30, from the sandbox store), default 10;
   - a **Pack of 5** switch;
-  - a **Colour by** select. "Line" is the default and gives each line its own colour; the other choices are the view's dimensions.
-- **Filter chips:**
-  - Basics: weapon, primary, secondary (including "none").
-  - Abilities: form, first element, second element (including "none"), weight, payment.
-  - All start on. They narrow the table and chart instantly.
+  - a **Colour by** select. "Line" is the default and gives each line its own colour; the other choices are the view's `dims` keys.
+- **Filter chips:** one group per key in the view's `dims`, in order, with a chip per distinct value in the grid (today: weapon, primary, secondary for basics; form, first, second, weight, payment for abilities). Nothing in the client names a dimension. All start on, and they narrow the table and chart instantly.
 - **Progress bar:** shown while the worker runs.
 
 **Running.**
@@ -145,7 +153,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 
 **Table** (`LabTable.tsx`):
 - It lists every result that passes the filters, ranked by `dps`.
-- The columns are the view's dimensions, then DPS, shown as a number and a bar scaled to the top row.
+- The columns are the `dims` keys, then DPS, shown as a number and a bar scaled to the top row.
 - Rows with `casts: 0` sit at the bottom, greyed, labelled "can't afford".
 - Each row has a checkbox that decides whether it is charted. The top 8 start ticked; a filter change resets the ticks to the new top 8.
 
@@ -154,11 +162,11 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 - x runs over 0–30 s. y runs from 0 to the highest charted sample from 3 s onward, rounded up; earlier samples above that are clipped at the top edge.
 - There is one path per ticked row.
   - Colour by "Line" uses an 8-colour categorical palette.
-  - An element dimension uses `manaStyles(registry)[m].color` (from `features/delve/format.ts`), with "none" in stone grey.
+  - A value that is a mana type uses `manaStyles(registry)[m].color` (from `features/delve/format.ts`), and `'none'` is stone grey.
   - The other dimensions use the categorical palette.
 - A legend, and a hover crosshair that reads out the time and each line's DPS.
 
-**Model helpers** (`lab-model.ts`, pure and unit-tested): the filter predicate, ranking (unaffordable rows last), the top-N ticks, and the colour lookup.
+**Model helpers** (`lab-model.ts`, pure and unit-tested): the dimension groups derived from a grid's `dims`, the filter predicate, ranking (unaffordable rows last), the top-N ticks, and the colour lookup.
 
 ## Testing
 
@@ -181,7 +189,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 - **Depth:** a deeper depth gives more DPS.
 
 **Client:**
-- **`lab-model`:** the filter, the ranking (unaffordable last), the top-8 ticks and the colours.
+- **`lab-model`:** the dimension groups from `dims`, the filter, the ranking (unaffordable last), the top-8 ticks and the colours.
 - **`DelveLab`**, with `vi.stubGlobal('Worker', FakeWorker)` posting fixed results:
   - it renders the chips and ranked rows;
   - a chip narrows the rows;
