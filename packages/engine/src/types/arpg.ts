@@ -133,6 +133,8 @@ export interface StatusState {
   burnDps: number;
   burnUntil: number;
   burnTickAt: number;
+  /** The ability slot whose burn set its damage (undefined: a basic's, or no slot's); its ticks carry it. */
+  burnSlot: number | undefined;
   chillStacks: number;
   chillUntil: number;
   freezeUntil: number;
@@ -150,6 +152,8 @@ export interface StatusState {
   poisonDps: number;
   poisonUntil: number;
   poisonTickAt: number;
+  /** The ability slot whose poison set its damage (see `burnSlot`). */
+  poisonSlot: number | undefined;
   rootUntil: number;
   /** Crowd-control immunity after a stagger, freeze or root ends, so spam can't lock a foe. */
   staggerImmuneUntil: number;
@@ -406,7 +410,10 @@ export type ArpgEvent =
       element: ManaType | null;
       reaction?: ReactionId;
       heft: number;
-      /** Where the hit came from; for skill hits, the ability slot too (0 Primary, 1 Defensive, 2 Ultimate). */
+      /**
+       * Where the hit came from, and the ability slot (0 Primary, 1 Defensive, 2 Ultimate) behind
+       * it: a skill hit's, or the one whose burn, poison or reaction splash this is.
+       */
       source: HitSource;
       slot?: number;
     }

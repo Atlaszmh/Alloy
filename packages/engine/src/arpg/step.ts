@@ -431,7 +431,11 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     if (world.t < s.burnUntil && world.t >= s.burnTickAt) {
       s.burnTickAt += 0.5;
-      hitMonster(ctx, m, s.burnDps * 0.5, 'fire', { source: 'dot', noReact: true });
+      hitMonster(ctx, m, s.burnDps * 0.5, 'fire', {
+        source: 'dot',
+        noReact: true,
+        slot: s.burnSlot,
+      });
       if (m.dead) continue;
     }
     if (world.t < s.poisonUntil && world.t >= s.poisonTickAt) {
@@ -439,6 +443,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       hitMonster(ctx, m, s.poisonDps * s.poisonStacks * 0.5, 'nature', {
         source: 'dot',
         noReact: true,
+        slot: s.poisonSlot,
       });
       if (m.dead) continue;
     }

@@ -49,7 +49,7 @@ export interface HitOpts {
   execute?: number;
   /** On a kill, the foe's poison and hex spread to its neighbours (Plague). */
   spread?: boolean;
-  /** The ability slot dealing the hit; it doesn't charge itself. */
+  /** The ability slot dealing the hit; it doesn't charge itself. Its burn, poison and reaction splash carry it too. */
   slot?: number;
   /** 0–1: how hard the hit lands (client feel; 0 for ticks, DoTs, chains). */
   heft?: number;
@@ -113,12 +113,22 @@ function poisonCap(ctx: SimCtx): number {
   return ctx.bal.status.poisonMaxStacks * (mastery(ctx, 'nature') ? 2 : 1);
 }
 
-/** Give `m` at least `stacks` poison stacks of `dps` each, refreshing the duration. */
-function poison(ctx: SimCtx, m: MonsterEntity, stacks: number, dps: number): void {
+/**
+ * Give `m` at least `stacks` poison stacks of `dps` each, refreshing the duration.
+ * `slot` gets the ticks when this poison sets their damage.
+ */
+function poison(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  stacks: number,
+  dps: number,
+  slot: number | undefined,
+): void {
   const s = m.status;
   const t = ctx.world.t;
   const active = isPoisoned(ctx, m);
   if (!active) s.poisonTickAt = t + 0.5;
+  if (!active || dps >= s.poisonDps) s.poisonSlot = slot;
   s.poisonStacks = Math.min(poisonCap(ctx), Math.max(active ? s.poisonStacks : 0, stacks));
   s.poisonDps = active ? Math.max(s.poisonDps, dps) : dps;
   s.poisonUntil = t + ctx.bal.status.poisonDuration;
@@ -130,7 +140,8 @@ function poison(ctx: SimCtx, m: MonsterEntity, stacks: number, dps: number): voi
  */
 function spreadAffliction(ctx: SimCtx, m: MonsterEntity): void {
   for (const o of nearby(ctx, m, ctx.bal.reactions.blightRadius)) {
-    if (isPoisoned(ctx, m)) poison(ctx, o, m.status.poisonStacks, m.status.poisonDps);
+    if (isPoisoned(ctx, m))
+      poison(ctx, o, m.status.poisonStacks, m.status.poisonDps, m.status.poisonSlot);
     if (isHexed(ctx, m)) o.status.hexUntil = Math.max(o.status.hexUntil, m.status.hexUntil);
   }
 }
@@ -162,13 +173,17 @@ function aggroPack(ctx: SimCtx, m: MonsterEntity): void {
   }
 }
 
-/** Apply `status`; with `rattles` (an Earth source) a stagger also rattles the foe. */
+/**
+ * Apply `status`; with `rattles` (an Earth source) a stagger also rattles the foe.
+ * `slot`: the ability applying it; a burn's or poison's ticks carry it when it sets their damage.
+ */
 export function applyStatus(
   ctx: SimCtx,
   m: MonsterEntity,
   status: StatusId,
   hitAmount: number,
   rattles = false,
+  slot?: number,
 ): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
@@ -178,6 +193,8 @@ export function applyStatus(
   switch (status) {
     case 'burn': {
       const dps = hitAmount * st.burnDps;
+      // A weaker refresh keeps the stronger burn's slot: its damage is what ticks.
+      if (t >= s.burnUntil || dps >= s.burnDps) s.burnSlot = slot;
       s.burnDps = t < s.burnUntil ? Math.max(s.burnDps, dps) : dps;
       if (t >= s.burnUntil) s.burnTickAt = t + 0.5;
       s.burnUntil = t + st.burnDuration;
@@ -211,7 +228,7 @@ export function applyStatus(
       break;
     case 'poison': {
       const active = isPoisoned(ctx, m);
-      poison(ctx, m, active ? s.poisonStacks + 1 : 1, hitAmount * st.poisonDps);
+      poison(ctx, m, active ? s.poisonStacks + 1 : 1, hitAmount * st.poisonDps, slot);
       break;
     }
     case 'root':
@@ -308,9 +325,16 @@ function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void
 
 /**
  * A reaction's effect on `m` (its mark already used up). Returns the hit's
- * amount after it: the damage multipliers, times Catalyst.
+ * amount after it: the damage multipliers, times Catalyst. `slot`: the hit's
+ * ability slot, which its splash carries.
  */
-function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): number {
+function react(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  id: ReactionId,
+  amount: number,
+  slot: number | undefined,
+): number {
   const r = ctx.bal.reactions;
   const h = ctx.world.hero;
   const t = ctx.world.t;
@@ -331,7 +355,7 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
         infusion: null,
       });
       for (const o of nearby(ctx, m, r.overloadRadius))
-        hitMonster(ctx, o, blast, 'storm', { source: 'reaction', noReact: true });
+        hitMonster(ctx, o, blast, 'storm', { source: 'reaction', noReact: true, slot });
       return amount;
     }
     case 'superconduct':
@@ -350,7 +374,7 @@ function react(ctx: SimCtx, m: MonsterEntity, id: ReactionId, amount: number): n
         infusion: null,
       });
       for (const o of nearby(ctx, m, r.combustRadius))
-        hitMonster(ctx, o, hit, 'fire', { source: 'reaction', noReact: true });
+        hitMonster(ctx, o, hit, 'fire', { source: 'reaction', noReact: true, slot });
       return hit;
     }
     case 'blight':
@@ -463,7 +487,7 @@ export function hitMonster(
   if (found) {
     reaction = found.def.id;
     if (found.def.consumes !== false) useUpMark(m, found.mark, reaction);
-    amount = react(ctx, m, reaction, amount);
+    amount = react(ctx, m, reaction, amount, opts.slot);
     if (found.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
     noteReaction(ctx, reaction, m);
     if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
@@ -527,7 +551,7 @@ export function hitMonster(
     return amount;
   }
 
-  for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount, opts.rattles);
+  for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount, opts.rattles, opts.slot);
   if (riposte) applyStatus(ctx, m, 'stagger', amount);
 
   if (opts.knockback && opts.kbFrom) {
@@ -616,6 +640,8 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (t < m.status.burnUntil && mastery(ctx, 'fire')) {
     for (const o of world.monsters) {
       if (o.dead || dist(o.x, o.y, m.x, m.y) > 2.5) continue;
+      if (t >= o.status.burnUntil || m.status.burnDps >= o.status.burnDps)
+        o.status.burnSlot = m.status.burnSlot;
       o.status.burnDps = Math.max(o.status.burnDps, m.status.burnDps);
       if (t >= o.status.burnUntil) o.status.burnTickAt = t + 0.5;
       o.status.burnUntil = t + bal.status.burnDuration;
