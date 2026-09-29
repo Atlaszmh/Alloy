@@ -10,7 +10,7 @@ import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 
-const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13 } as const;
+const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13, left: 14, right: 15 } as const;
 
 async function setup(page: Page, autopilot: boolean): Promise<void> {
   const save = JSON.stringify(
@@ -138,7 +138,9 @@ test.describe('Delve with a controller', () => {
     await expect(dodge).toContainText('LT');
   });
 
-  test('G04: holding RT with the right stick aimed keeps casting the Primary', async ({ page }) => {
+  test('G04: holding RT with the right stick aimed keeps casting the Primary, through its chain', async ({
+    page,
+  }) => {
     await setup(page, false);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
@@ -146,6 +148,8 @@ test.describe('Delve with a controller', () => {
     await expect(bar).toBeVisible({ timeout: ARENA_READY });
     const mana = async () =>
       Number((await bar.getAttribute('aria-label'))!.match(/Mana (\d+)/)![1]);
+    const primary = page.getByTestId('ability-0');
+    await expect(primary).toHaveAttribute('aria-label', 'Primary: light Fire Bolt');
     const before = await mana();
     await page.evaluate(() => {
       const pad = (
@@ -156,9 +160,12 @@ test.describe('Delve with a controller', () => {
       pad.axes = [0, 0, 0, -1];
       pad.buttons[7] = { pressed: true, value: 1 };
     });
-    // Two or more Primary casts (8 mana each) outpace the regen while RT is held
-    // (polling while held, since game time runs slow when the machine is busy).
+    // Two or more Bolts outpace the regen while RT is held, stepping through the
+    // chain (polling while held, since game time runs slow when the machine is busy).
     await expect.poll(mana, { timeout: ARENA_READY }).toBeLessThan(before - 6);
+    await expect
+      .poll(() => primary.getAttribute('aria-label'), { timeout: ARENA_READY })
+      .toBe('Primary: medium Fire Bolt');
     await page.evaluate(() => {
       const pad = (
         window as unknown as {
@@ -192,6 +199,40 @@ test.describe('Delve with a controller', () => {
 
     expect(await tapAndReadCharges(page, BUTTON.a)).toBe('1');
     await expect(dodge).toContainText('A');
+  });
+
+  test('G06: the D-pad and A pick a skill, a move and its kind in the chain builder', async ({
+    page,
+  }) => {
+    await setup(page, false);
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.rb);
+    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    await tap(page, BUTTON.left);
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(page.getByTestId('move-0')).toBeFocused();
+    await tap(page, BUTTON.right);
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    const blow = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!).chains.basic[1]);
+    expect((await blow()).kind).toBe('light');
+    // Down past the card's reorder buttons to its kind chips (twice; on a phone the
+    // fixed tab bar sits in between, one press more).
+    const focused = () =>
+      page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
+    for (let i = 0; i < 4 && !(await focused()).startsWith('kind-'); i++) {
+      await tap(page, BUTTON.down);
+    }
+    const chip = await focused();
+    expect(chip).toMatch(/^kind-(medium|heavy|hold)$/);
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await blow()).kind).toBe(chip.slice('kind-'.length));
   });
 
   test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {

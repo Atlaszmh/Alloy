@@ -52,14 +52,19 @@ test.describe('Delve loot loop', () => {
       timeout: ARENA_READY,
     });
     await expect(page.getByTestId('hero-hp')).toBeVisible();
-    await expect(page.getByTestId('ability-0')).toHaveAttribute('aria-label', 'Primary: Fire Bolt');
+    // Each button names its chain's next move: the bot is already stepping through the
+    // Primary's (G04 and T01 see its first move before any press).
+    await expect(page.getByTestId('ability-0')).toHaveAttribute(
+      'aria-label',
+      /^Primary: (light|medium|heavy) Fire Bolt$/,
+    );
     await expect(page.getByTestId('ability-1')).toHaveAttribute(
       'aria-label',
-      'Defensive: Fire Ward',
+      'Defensive: medium Fire Ward',
     );
     await expect(page.getByTestId('ability-2')).toHaveAttribute(
       'aria-label',
-      'Ultimate: Fire Nova',
+      'Ultimate: medium Fire Nova',
     );
     await expect(page.getByTestId('mana-bar')).toBeVisible();
     await expect(page.getByTestId('dodge-button')).toBeVisible();
@@ -162,10 +167,17 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('mana-strip')).toContainText('Abilities');
     await page.getByTestId('mana-strip').click();
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
+    // The Primary's first move becomes a Wildfire Burst; the chain keeps its other moves.
     await page.getByTestId('form-burst').click();
     await page.getByTestId('infusion-nature').click();
-    await expect(page.getByTestId('ability-readout')).toContainText('Wildfire Burst');
-    await expect(page.getByTestId('abilities-summary')).toContainText('Wildfire Burst');
+    await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
+    await expect(page.getByTestId('abilities-summary')).toHaveText(
+      'light Wildfire Burst · medium Fire Bolt · medium Fire Bolt · heavy Fire Bolt',
+    );
+    // A fifth move fills the cap: no more + card.
+    await page.getByTestId('move-add').click();
+    await expect(page.getByTestId('move-4')).toBeVisible();
+    await expect(page.getByTestId('move-add')).toHaveCount(0);
     await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
@@ -191,7 +203,9 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('tab-abilities').click();
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toContainText('Frost Bolt');
+    await page.getByTestId('chain-skill-defensive').click();
     await expect(summary).toContainText('Frost Ward');
+    await page.getByTestId('chain-skill-ultimate').click();
     await expect(summary).toContainText('Frost Nova');
     await page.getByTestId('slot-weapon').click();
     await expect(page.getByTestId('item-mana')).toContainText('Frost');

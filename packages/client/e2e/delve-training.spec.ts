@@ -51,6 +51,8 @@ test.describe('Delve Training Grounds', () => {
     });
     const ability0 = page.getByTestId('ability-0');
     await expect(ability0).toBeVisible({ timeout: ARENA_READY });
+    // The sandbox starts on Fire's default chains.
+    await expect(ability0).toHaveAttribute('aria-label', 'Primary: light Fire Bolt');
 
     // The top bar fits on one line: the meter sits between the two buttons.
     const back = (await page.getByTestId('training-back').boundingBox())!;
