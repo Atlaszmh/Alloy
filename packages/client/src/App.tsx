@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router';
 import { AppShell } from './components/AppShell';
 import { MainMenu } from './pages/MainMenu';
@@ -10,6 +11,7 @@ import { GemEncyclopedia } from './pages/GemEncyclopedia';
 import { DelveCamp } from './pages/DelveCamp';
 import { DelveRun } from './pages/DelveRun';
 import { DelveTraining } from './pages/DelveTraining';
+import { DEV_LAB } from './features/delve/lab/dev-routes';
 import { useAudioUnlock } from './hooks/useAudioUnlock';
 import { useRouteSound } from './hooks/useRouteSound';
 
@@ -36,6 +38,16 @@ export function App() {
         <Route path="/delve" element={<DelveCamp />} />
         <Route path="/delve/run" element={<DelveRun />} />
         <Route path="/delve/training" element={<DelveTraining />} />
+        {DEV_LAB && (
+          <Route
+            path="/delve/lab"
+            element={
+              <Suspense fallback={null}>
+                <DEV_LAB />
+              </Suspense>
+            }
+          />
+        )}
       </Route>
     </Routes>
   );

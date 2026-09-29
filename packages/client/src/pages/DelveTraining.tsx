@@ -19,6 +19,7 @@ import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sou
 import type { CoreUiEvent } from '@/features/delve/arena/useArenaCore';
 import { useTrainingArena, type TrainingArena } from '@/features/delve/training/useTrainingArena';
 import { MeterChip } from '@/features/delve/training/MeterView';
+import { LabButton } from '@/features/delve/lab/dev-routes';
 import {
   DOCK_WIDTH,
   DepthLabel,
@@ -136,6 +137,7 @@ export function DelveTraining() {
               <DepthLabel />
               <MeterChip meter={arena.meter} onReset={arena.actions.resetMeter} />
             </div>
+            <LabButton />
             <button
               type="button"
               className="delve-btn pointer-events-auto px-2.5 py-1.5 text-sm"
