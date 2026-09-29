@@ -21,6 +21,8 @@ Every pair of elements gets a reaction. Whichever of the pair's two elements hit
 
 ## Marks
 
+> **Superseded** by `2026-09-28-delve-elemental-stacks-design.md` (v0.45.0): a mark is now its element's stack count (`StatusState.stacks`; `hasMark` is a count above 0, or frozen for frost), and a reaction pairs a hit's stacks with another element's from earlier hits.
+
 An element's **mark** on a foe is its status. The checks sit beside the existing `is*` helpers in `combat.ts`, as `hasMark(ctx, m, element)`.
 
 | Element | Mark |
@@ -62,6 +64,8 @@ The Zod schema:
 3. It runs `getReactionFor(E, F)`.
 
 This replaces today's if/else chain. Hits with no element, `noReact` hits (reaction splashes, damage-over-time ticks) and hits with no other element's mark don't react, and keep every mark.
+
+> **Superseded** by the elemental stacks spec (v0.45.0): a reaction takes pairs of stacks off both sides (`consumePairs`: every pair for a damage reaction, one for an effect), Soulfire and Blight included (`consumes` is gone), and a freeze ends only when frost was the partner, except under Superconduct.
 
 **Using up the mark.** A reaction clears the mark F that set it off, with these exceptions:
 - Soulfire and Blight (`consumes: false`) clear nothing, as today.
