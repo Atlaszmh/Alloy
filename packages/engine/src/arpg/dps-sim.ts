@@ -3,13 +3,14 @@ import { computeHeroStats } from '../delve/hero-stats.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
-  ABILITY_WEIGHTS,
-  type AbilityBuilds,
+  MOVE_KINDS,
+  type Chains,
+  type MoveKind,
 } from '../types/ability.js';
 import type { ArpgEvent, ArpgInput } from '../types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
-import { defaultAbilities } from './abilities/resolve.js';
-import { buildChains } from '../delve/profile.js';
+import { holdCharge, nextMove } from './abilities/cast.js';
+import { defaultBasic, defaultChains } from './abilities/resolve.js';
 import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
@@ -26,11 +27,13 @@ export interface DpsSetup {
   view: 'basic' | 'ability';
   /**
    * Filterable dimensions in display order, e.g. { weapon, primary, secondary } or
-   * { form, first, second, weight, payment }. Values are short ids; a missing element is 'none'.
+   * { form, first, second, kind, payment } (a kind, or 'default' for the form's default
+   * chain). Values are short ids; a missing element is 'none'.
    */
   dims: Record<string, string>;
   weapon: { baseId: string; primary: ManaType; secondary: ManaType | null };
-  abilities: AbilityBuilds;
+  /** The hero's chains: the basic chain (for the stats) and each ability slot's. */
+  chains: Chains;
   /** The button held: the basic attack, or an ability slot. */
   hold: 'attack' | { slot: number };
 }
@@ -72,8 +75,11 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   });
   const world = createSandboxWorld(registry, {
     depth: o.depth,
-    stats: computeHeroStats({ weapon }, registry, { pair: { primary, secondary } }),
-    chains: buildChains(registry, setup.abilities),
+    stats: computeHeroStats({ weapon }, registry, {
+      pair: { primary, secondary },
+      basic: setup.chains.basic,
+    }),
+    chains: setup.chains,
     toggles: NO_TOGGLES,
   });
   const h = world.hero;
@@ -95,22 +101,33 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   const aim = { x: near.x, y: near.y };
   const hold = setup.hold;
   const slot = hold === 'attack' ? null : hold.slot;
-  // A refused press (no mana) is dropped and pressed again next tick; one on cooldown waits.
-  const input: ArpgInput =
-    slot === null
-      ? { move: { x: 0, y: 0 }, attack: true, attackAim: aim }
-      : { move: { x: 0, y: 0 }, cast: { slot, aim } };
+  const bal = registry.getDelveBalance();
+  const move = { x: 0, y: 0 };
+  // The held button, each tick: the attack; or the ability pressed, a refused press (no mana)
+  // dropped and pressed again, one on cooldown waiting. Nothing is pressed while a wind-up runs
+  // (the press would only wait for it), and a hold move is held to full charge, then let go.
+  const input = (): ArpgInput => {
+    if (slot === null) return { move, attack: true, attackAim: aim };
+    if (h.windup) return { move };
+    if (h.hold) {
+      const full = holdCharge(bal, h.hold.start, world.t).charge >= 1;
+      return { move, holding: slot, cast: full ? { slot, aim } : null };
+    }
+    if (nextMove(h, slot, world.t, bal.abilities.comboWindow).kind === 'hold')
+      return { move, holding: slot };
+    return { move, cast: { slot, aim } };
+  };
   const acted = (e: ArpgEvent) =>
     slot === null ? e.kind === 'basic' : e.kind === 'cast' && e.slot === slot;
 
-  const step = registry.getDelveBalance().arena.step;
+  const step = bal.arena.step;
   const ticks = Math.round(DPS_SAMPLE / step);
   const series: number[] = [];
   let damage = 0;
   let casts = 0;
   for (let i = 0; i < DPS_SECONDS / DPS_SAMPLE; i++) {
     for (let k = 0; k < ticks; k++) {
-      for (const e of stepWorld(registry, world, input, step)) {
+      for (const e of stepWorld(registry, world, input(), step)) {
         if (e.kind === 'hit' && (slot === null || e.slot === slot)) damage += e.amount;
         if (acted(e)) casts++;
       }
@@ -133,10 +150,12 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
 
 /**
  * Every combo the lab runs: each weapon base × primary × secondary (none, or
- * another element) on the basic attack, and each Primary or Ultimate form ×
- * element set × weight × payment on its ability. Ability setups carry a plain
- * sword and the pair `{ first, second }`, as the game limits abilities to the pair.
- * The only function here that knows the build model.
+ * another element) on the basic attack (the weapon's default chain on the
+ * pair), and each Primary or Ultimate form × element set × kind × payment as a
+ * one-move chain, plus the form's default chain (`kind: 'default'`, what a held
+ * button plays) × element set × payment. Ability setups carry a plain sword,
+ * the pair `{ first, second }` (as the game limits abilities to the pair) and
+ * its default basics. The only function here that knows the chain model.
  */
 export function dpsCombos(registry: DataRegistry): DpsSetup[] {
   const out: DpsSetup[] = [];
@@ -149,7 +168,10 @@ export function dpsCombos(registry: DataRegistry): DpsSetup[] {
           view: 'basic',
           dims: { weapon: base.id, primary, secondary: secondary ?? 'none' },
           weapon: { baseId: base.id, primary, secondary },
-          abilities: defaultAbilities(primary),
+          chains: {
+            ...defaultChains(registry, primary, base.id),
+            basic: defaultBasic(registry, base.id, primary, secondary),
+          },
           hold: 'attack',
         });
       }
@@ -162,22 +184,21 @@ export function dpsCombos(registry: DataRegistry): DpsSetup[] {
   for (const form of registry.getArpgData().forms) {
     if (form.slot === 'defensive') continue;
     for (const elements of sets)
-      for (const weight of ABILITY_WEIGHTS)
+      for (const kind of [...MOVE_KINDS, 'default' as const])
         for (const payment of ABILITY_PAYMENTS) {
           const [first, second = null] = elements;
+          const kinds: MoveKind[] = kind === 'default' ? form.defaultChain : [kind];
           out.push({
             view: 'ability',
-            dims: {
-              form: form.id,
-              first,
-              second: second ?? 'none',
-              weight: String(weight),
-              payment,
-            },
+            dims: { form: form.id, first, second: second ?? 'none', kind, payment },
             weapon: { baseId: 'sword', primary: first, secondary: second },
-            abilities: {
-              ...defaultAbilities(first),
-              [form.slot]: { form: form.id, elements, weight, payment },
+            chains: {
+              ...defaultChains(registry, first, 'sword'),
+              basic: defaultBasic(registry, 'sword', first, second),
+              [form.slot]: {
+                moves: kinds.map((k) => ({ kind: k, form: form.id, elements })),
+                payment,
+              },
             },
             hold: { slot: ABILITY_SLOTS.indexOf(form.slot) },
           });

@@ -1,7 +1,6 @@
 import type { DataRegistry } from '../../data/registry.js';
 import {
   HOLD_STAGE_KINDS,
-  type AbilityBuilds,
   type AbilityPayment,
   type AbilitySlot,
   type Blow,
@@ -239,14 +238,5 @@ export function defaultChains(
     primary: chain('bolt', 'mana'),
     defensive: chain('ward', 'mana'),
     ultimate: chain('nova', 'charge'),
-  };
-}
-
-/** Builds for a new (or migrated) profile, all of `element` (until the save holds chains). */
-export function defaultAbilities(element: ManaType): AbilityBuilds {
-  return {
-    primary: { form: 'bolt', elements: [element], weight: 0, payment: 'mana' },
-    defensive: { form: 'ward', elements: [element], weight: 0, payment: 'mana' },
-    ultimate: { form: 'nova', elements: [element], weight: 0, payment: 'charge' },
   };
 }

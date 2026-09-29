@@ -216,7 +216,6 @@ export {
   chargeCap,
   stepBonus,
   mergeKnobs,
-  defaultAbilities,
   defaultBasic,
   defaultChains,
   stepHeft,

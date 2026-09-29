@@ -30,8 +30,6 @@ export type FormId =
 /** Swift, Quick, Balanced, Heavy, Crushing: the per-weight tables' index − 2 (a version 4 build's weight). */
 export type AbilityWeight = -2 | -1 | 0 | 1 | 2;
 
-export const ABILITY_WEIGHTS: readonly AbilityWeight[] = [-2, -1, 0, 1, 2] as const;
-
 export type AbilityPayment = 'mana' | 'charge' | 'cast';
 
 export const ABILITY_PAYMENTS: readonly AbilityPayment[] = ['mana', 'charge', 'cast'] as const;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
-import { defaultAbilities } from '../src/arpg/abilities/resolve.js';
+import { defaultBasic, defaultChains } from '../src/arpg/abilities/resolve.js';
 import {
   DPS_SECONDS,
   dpsCombos,
@@ -11,7 +11,7 @@ import {
 } from '../src/arpg/dps-sim.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
-import { arena, dummy, gear, registry, run } from './fixtures/arena.js';
+import { arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
 
 type Hit = Extract<ArpgEvent, { kind: 'hit' }>;
 
@@ -128,10 +128,11 @@ function windowDps(series: number[], from: number, to: number): number {
 }
 
 describe('dpsCombos', () => {
-  it('252 basic combos and 4,320 ability combos, each with its own key', () => {
+  it('252 basic combos, 3,456 one-move chains and 864 default chains, each with its own key', () => {
     expect(grid.filter((s) => s.view === 'basic')).toHaveLength(252);
     const abilities = grid.filter((s) => s.view === 'ability');
-    expect(abilities).toHaveLength(4320);
+    expect(abilities.filter((s) => s.dims.kind !== 'default')).toHaveLength(3456);
+    expect(abilities.filter((s) => s.dims.kind === 'default')).toHaveLength(864);
     // Primary and Ultimate forms only.
     expect([...new Set(abilities.map((s) => s.dims.form))]).toEqual([
       'bolt',
@@ -147,30 +148,49 @@ describe('dpsCombos', () => {
   });
 
   it('a setup carries its whole loadout, labelled by its dimensions', () => {
-    expect(setup('basic|bow|storm|none')).toEqual({
+    expect(setup('basic|bow|storm|fire')).toEqual({
       view: 'basic',
-      dims: { weapon: 'bow', primary: 'storm', secondary: 'none' },
-      weapon: { baseId: 'bow', primary: 'storm', secondary: null },
-      abilities: defaultAbilities('storm'),
+      dims: { weapon: 'bow', primary: 'storm', secondary: 'fire' },
+      weapon: { baseId: 'bow', primary: 'storm', secondary: 'fire' },
+      chains: {
+        ...defaultChains(registry, 'storm', 'bow'),
+        basic: defaultBasic(registry, 'bow', 'storm', 'fire'),
+      },
       hold: 'attack',
     });
-    // Ordered pairs: Frost+Fire is its own build, on a sword with that pair.
-    expect(setup('ability|nova|frost|fire|2|charge')).toEqual({
+    // Ordered pairs: Frost+Fire is its own build, on a sword with that pair and its basics.
+    const frostFire = {
+      ...defaultChains(registry, 'frost', 'sword'),
+      basic: defaultBasic(registry, 'sword', 'frost', 'fire'),
+    };
+    expect(setup('ability|nova|frost|fire|hold|charge')).toEqual({
       view: 'ability',
-      dims: { form: 'nova', first: 'frost', second: 'fire', weight: '2', payment: 'charge' },
+      dims: { form: 'nova', first: 'frost', second: 'fire', kind: 'hold', payment: 'charge' },
       weapon: { baseId: 'sword', primary: 'frost', secondary: 'fire' },
-      abilities: {
-        ...defaultAbilities('frost'),
-        ultimate: { form: 'nova', elements: ['frost', 'fire'], weight: 2, payment: 'charge' },
+      chains: {
+        ...frostFire,
+        ultimate: {
+          moves: [{ kind: 'hold', form: 'nova', elements: ['frost', 'fire'] }],
+          payment: 'charge',
+        },
       },
       hold: { slot: 2 },
+    });
+    // A form's default chain: what a held button plays.
+    expect(setup('ability|strike|frost|fire|default|mana').chains.primary).toEqual({
+      moves: ['medium', 'medium', 'medium', 'heavy'].map((kind) => ({
+        kind,
+        form: 'strike',
+        elements: ['frost', 'fire'],
+      })),
+      payment: 'mana',
     });
   });
 });
 
 describe('simulateDps', () => {
   it('gives the same result for the same setup', () => {
-    const s = setup('ability|barrage|storm|nature|1|cast');
+    const s = setup('ability|barrage|storm|nature|heavy|cast');
     expect(simulateDps(registry, s, PACK)).toEqual(simulateDps(registry, s, PACK));
   });
 
@@ -194,15 +214,15 @@ describe('simulateDps', () => {
   });
 
   it("holds positions: an Earth Bolt's knockback never drives the dummy out of reach", () => {
-    const r = simulateDps(registry, setup('ability|bolt|earth|none|0|mana'), ONE);
+    const r = simulateDps(registry, setup('ability|bolt|earth|none|medium|mana'), ONE);
     const middle = windowDps(r.series, 10, 20);
     expect(middle).toBeGreaterThan(r.dps / 2);
     expect(Math.abs(windowDps(r.series, 20, 30) - middle)).toBeLessThan(middle * 0.25);
   });
 
-  it('counts only the held ability: a mana-paid Crushing Nova never casts while basics swing', () => {
+  it('counts only the held ability: a mana-paid heavy Nova, dearer than the pool, never casts while basics swing', () => {
     const { out, events } = recorded(() =>
-      simulateDps(registry, setup('ability|nova|fire|none|2|mana'), ONE),
+      simulateDps(registry, setup('ability|nova|fire|none|heavy|mana'), ONE),
     );
     expect(out).toMatchObject({ dps: 0, casts: 0 });
     expect(hitsFrom(events, 'basic').length).toBeGreaterThan(0);
@@ -210,7 +230,7 @@ describe('simulateDps', () => {
 
   it("counts the ability's reaction splash: a Fire+Storm Bolt's Overload in a pack", () => {
     const { out, events } = recorded(() =>
-      simulateDps(registry, setup('ability|bolt|fire|storm|0|mana'), PACK),
+      simulateDps(registry, setup('ability|bolt|fire|storm|medium|mana'), PACK),
     );
     expect(out.casts).toBe(events.filter((e) => e.kind === 'cast' && e.slot === 0).length);
     expect(hitsFrom(events, 'reaction').filter((e) => e.slot === 0).length).toBeGreaterThan(0);
@@ -221,9 +241,40 @@ describe('simulateDps', () => {
   it('a pack favours area: a Frost Nova gains more from five dummies than a Frost Bolt', () => {
     const gain = (key: string) =>
       simulateDps(registry, setup(key), PACK).dps / simulateDps(registry, setup(key), ONE).dps;
-    expect(gain('ability|nova|frost|none|0|mana')).toBeGreaterThan(
-      gain('ability|bolt|frost|none|0|mana'),
+    expect(gain('ability|nova|frost|none|medium|mana')).toBeGreaterThan(
+      gain('ability|bolt|frost|none|medium|mana'),
     );
+  });
+
+  it("the held button flows through a form's default chain, each move in turn", () => {
+    const { out, events } = recorded(() =>
+      simulateDps(registry, setup('ability|bolt|fire|none|default|mana'), ONE),
+    );
+    const casts = events.filter((e) => e.kind === 'cast' && e.slot === 0);
+    expect(out.casts).toBe(casts.length);
+    // Light, light, medium, heavy: the last lands 0.2 heftier.
+    const heft = bal.feel.heft;
+    expect(casts.slice(0, 4).map((e) => e.kind === 'cast' && e.heft)).toEqual([
+      heft[1],
+      heft[1],
+      heft[2],
+      Math.min(1, heft[3] + 0.2),
+    ]);
+  });
+
+  it('holds a hold move to full charge each press', () => {
+    const { out, events } = recorded(() =>
+      simulateDps(registry, setup('ability|bolt|fire|none|hold|mana'), ONE),
+    );
+    expect(out.casts).toBeGreaterThan(0);
+    expect(out.casts).toBeLessThanOrEqual(DPS_SECONDS / bal.chains.holdTime);
+    const kinds = events.filter(
+      (e) => e.kind === 'holdStage' || (e.kind === 'cast' && e.slot === 0),
+    );
+    // Each cast comes after its hold reached stage 2.
+    kinds.forEach((e, i) => {
+      if (e.kind === 'cast') expect(kinds[i - 1]).toMatchObject({ kind: 'holdStage', stage: 2 });
+    });
   });
 
   it('deals more deeper', () => {
