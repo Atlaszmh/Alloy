@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { DPS_SECONDS } from '@alloy/engine';
+import { DPS_SAMPLE, DPS_SECONDS } from '@alloy/engine';
 import { formatDps } from './lab-model';
 
 export interface ChartLine {
   key: string;
   label: string;
   color: string;
-  /** Average DPS so far, every SAMPLE seconds: index i is at (i + 1) × SAMPLE. */
+  /** Average DPS so far, every DPS_SAMPLE seconds: index i is at (i + 1) × DPS_SAMPLE. */
   series: readonly number[];
 }
 
@@ -15,7 +15,6 @@ const LEFT = 44;
 const RIGHT = 12;
 const TOP = 10;
 const BOTTOM = 22;
-const SAMPLE = 0.5;
 /** The y scale ignores the samples before this: mana payments front-load, and those clip. */
 const SETTLED = 3;
 
@@ -42,15 +41,17 @@ export function LabChart({ lines }: { lines: readonly ChartLine[] }) {
     return () => ro.disconnect();
   }, []);
 
-  const top = niceCeil(Math.max(0, ...lines.flatMap((l) => l.series.slice(SETTLED / SAMPLE - 1))));
+  const top = niceCeil(
+    Math.max(0, ...lines.flatMap((l) => l.series.slice(SETTLED / DPS_SAMPLE - 1))),
+  );
   const x = (t: number) => LEFT + (t / DPS_SECONDS) * (w - LEFT - RIGHT);
   const y = (v: number) => TOP + (1 - Math.min(v, top) / top) * (H - TOP - BOTTOM);
-  const last = DPS_SECONDS / SAMPLE - 1;
+  const last = DPS_SECONDS / DPS_SAMPLE - 1;
   const onMove = (e: PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     if (r.width === 0) return;
     const t = ((((e.clientX - r.left) / r.width) * w - LEFT) / (w - LEFT - RIGHT)) * DPS_SECONDS;
-    setHover(Math.min(last, Math.max(0, Math.round(t / SAMPLE) - 1)));
+    setHover(Math.min(last, Math.max(0, Math.round(t / DPS_SAMPLE) - 1)));
   };
   const at = hover ?? last;
 
@@ -89,7 +90,10 @@ export function LabChart({ lines }: { lines: readonly ChartLine[] }) {
           <path
             key={l.key}
             d={l.series
-              .map((v, i) => `${i ? 'L' : 'M'}${x((i + 1) * SAMPLE).toFixed(1)},${y(v).toFixed(1)}`)
+              .map(
+                (v, i) =>
+                  `${i ? 'L' : 'M'}${x((i + 1) * DPS_SAMPLE).toFixed(1)},${y(v).toFixed(1)}`,
+              )
               .join('')}
             fill="none"
             stroke={l.color}
@@ -100,8 +104,8 @@ export function LabChart({ lines }: { lines: readonly ChartLine[] }) {
         ))}
         {hover !== null && (
           <line
-            x1={x((hover + 1) * SAMPLE)}
-            x2={x((hover + 1) * SAMPLE)}
+            x1={x((hover + 1) * DPS_SAMPLE)}
+            x2={x((hover + 1) * DPS_SAMPLE)}
             y1={TOP}
             y2={H - BOTTOM}
             stroke="#e7e5e4"
@@ -112,7 +116,7 @@ export function LabChart({ lines }: { lines: readonly ChartLine[] }) {
       </svg>
       <ul className="mt-1 flex flex-col gap-0.5 text-[11px]" data-testid="lab-legend">
         <li className="text-stone-500" data-testid="lab-readout-time">
-          {hover === null ? 'DPS over 30 s' : `DPS at ${(hover + 1) * SAMPLE} s`}
+          {hover === null ? 'DPS over 30 s' : `DPS at ${(hover + 1) * DPS_SAMPLE} s`}
         </li>
         {lines.map((l) => (
           <li key={l.key} className="flex items-center gap-2">

@@ -54,7 +54,8 @@ export interface DpsResult {
 
 export const DPS_SECONDS = 30;
 /** Seconds between samples. */
-const SAMPLE = 0.5;
+/** Seconds between the samples of `DpsResult.series`. */
+export const DPS_SAMPLE = 0.5;
 /** Edge to edge: the hero and the nearest dummy. */
 const GAP = 0.4;
 const NO_TOGGLES = { infiniteMana: false, noCooldowns: false, invulnerable: false };
@@ -102,11 +103,11 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
     slot === null ? e.kind === 'basic' : e.kind === 'cast' && e.slot === slot;
 
   const step = registry.getDelveBalance().arena.step;
-  const ticks = Math.round(SAMPLE / step);
+  const ticks = Math.round(DPS_SAMPLE / step);
   const series: number[] = [];
   let damage = 0;
   let casts = 0;
-  for (let i = 0; i < DPS_SECONDS / SAMPLE; i++) {
+  for (let i = 0; i < DPS_SECONDS / DPS_SAMPLE; i++) {
     for (let k = 0; k < ticks; k++) {
       for (const e of stepWorld(registry, world, input, step)) {
         if (e.kind === 'hit' && (slot === null || e.slot === slot)) damage += e.amount;
@@ -124,7 +125,7 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
         m.kby = 0;
       }
     }
-    series.push(damage / ((i + 1) * SAMPLE));
+    series.push(damage / ((i + 1) * DPS_SAMPLE));
   }
   return { series, dps: series[series.length - 1], casts };
 }

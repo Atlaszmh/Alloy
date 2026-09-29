@@ -67,6 +67,8 @@ export function DelveLab() {
       remember(depth, pack, e.data);
       setRows((prev) => [...prev, ...e.data]);
     };
+    // A throw inside simulateDps would otherwise leave the progress bar stuck in silence.
+    worker.onerror = (e) => console.error('DPS Lab worker', e.message);
     worker.postMessage({ depth, pack } satisfies DpsOptions);
     return () => {
       worker.onmessage = null;
