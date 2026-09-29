@@ -1,5 +1,12 @@
 import type { Graphics } from 'pixi.js';
-import type { ArpgWorld, ManaType, Projectile, Vec, Zone } from '@alloy/engine';
+import {
+  MANA_TYPES,
+  type ArpgWorld,
+  type ManaType,
+  type Projectile,
+  type Vec,
+  type Zone,
+} from '@alloy/engine';
 import { basicMotif, drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
@@ -16,6 +23,7 @@ import {
   manaOrb,
   manaRing,
   px,
+  snap,
 } from './mana-pixels';
 
 /**
@@ -29,6 +37,8 @@ const HOSTILE = 0xff4d4d;
 const HOSTILE_EDGE = 0xff9a9a;
 /** Blinded foes' haze: a pale violet, since the air layer only adds light (a dark smoke vanishes). */
 const BLIND_SMOKE = 0x9a8cc4;
+/** Pips in a stack row: the cap (Plaguebearer's extra Nature stacks don't widen it). */
+const MAX_PIPS = 5;
 /** Sunder's crack, in pixels right of the Hellfire brand. */
 const CRACK = [
   [1, -1],
@@ -380,8 +390,8 @@ export function drawProjectiles(
 }
 
 /**
- * Elite and boss rings (ground), and status marks (air): hex, shock, frost,
- * poison, stagger, brand, and the reactions' rattle, Sunder and blind.
+ * Elite and boss rings and stack pips (ground), and status marks (air): frost,
+ * stagger, brand, and the reactions' Sunder and blind.
  */
 export function drawMonsterMarks(
   ground: Graphics,
@@ -398,53 +408,22 @@ export function drawMonsterMarks(
       manaRing(ground, m.x, m.y, m.radius + 0.15, 0xef4444, time, { alpha: 0.95, thickness: 2 });
     if (t < s.rootUntil)
       manaRing(ground, m.x, m.y, m.radius + 0.05, MANA_HEX.nature, time, { gaps: 5, spin: 1 });
-    if (t < s.hexUntil)
-      manaMotes(
-        air,
-        m.x,
-        m.y - m.radius * 0.3,
-        m.radius + 0.28,
-        MANA_HEX.shadow,
-        time,
-        3,
-        2,
-        0.9,
-        4,
-      );
-    if (t < s.shockUntil) {
-      manaRing(air, m.x, m.y, m.radius + 0.2, MANA_HEX.storm, time, {
-        alpha: 0.9,
-        gaps: 3,
-        spin: 20,
-        jitter: 2,
-      });
+    // Stacks: under the foe, a row per stacked element (in element order), one pip a stack, on a
+    // dark plate so they read on any floor.
+    let top = m.y + m.radius + 0.1;
+    for (const e of MANA_TYPES) {
+      const n = Math.min(MAX_PIPS, s.stacks[e]);
+      if (n <= 0) continue;
+      const left = m.x - (n + 0.5) * PX;
+      ground.rect(snap(left), snap(top), (2 * n + 1) * PX, 3 * PX).fill({ color: 0, alpha: 0.6 });
+      for (let i = 0; i < n; i++) px(ground, left + (2 * i + 1) * PX, top + PX, MANA_HEX[e], 1);
+      top += 3 * PX;
     }
     if (t < s.freezeUntil) manaDust(air, m.x, m.y, m.radius, 0xbfefff, time, 0.25, 0.9, m.id);
-    if (t < s.poisonUntil && s.poisonStacks > 0) {
-      manaDust(
-        air,
-        m.x,
-        m.y - m.radius * 0.2,
-        m.radius * 0.9,
-        MANA_HEX.nature,
-        time,
-        0.04 + 0.02 * s.poisonStacks,
-        0.85,
-        m.id + 3,
-      );
-    }
     if (t < s.staggerUntil && t >= s.freezeUntil) {
       manaMotes(air, m.x, m.y - m.radius - 0.25, m.radius * 0.7, 0xfde68a, time, 3, 5, 1, 2);
     }
     if (t < s.brandUntil) px(air, m.x - PX, m.y - m.radius - 0.35, MANA_HEX.fire, 1, 2);
-    if (t < s.rattledUntil) {
-      // Earth's mark: rock chips circling low.
-      for (let i = 0; i < 3; i++) {
-        const a = time * 1.6 + (i * Math.PI * 2) / 3;
-        const x = m.x + Math.cos(a) * (m.radius + 0.15);
-        px(air, x, m.y + 0.3 + Math.sin(a) * 0.18, MANA_HEX.earth, 0.9, 2);
-      }
-    }
     if (t < s.sunderUntil)
       for (const [dx, dy] of CRACK)
         px(air, m.x + dx * PX, m.y - m.radius - 0.35 + dy * PX, MANA_HEX.earth, 1);

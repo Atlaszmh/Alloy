@@ -34,6 +34,11 @@ describe('reaction labels', () => {
     expect(reactionLabel('melt')).toBe('MELT!');
     expect(reactionLabel('lightning_rod')).toBe('LIGHTNING ROD!');
   });
+
+  it('say how many pairs a reaction took, when it took more than one', () => {
+    expect(reactionLabel('melt', 1)).toBe('MELT!');
+    expect(reactionLabel('melt', 2)).toBe('MELT! ×2');
+  });
 });
 
 describe('the moment a reaction fires', () => {
@@ -108,6 +113,8 @@ describe('lasting states', () => {
     return air.rects;
   };
 
+  const NO_STACKS = { fire: 0, frost: 0, storm: 0, earth: 0, shadow: 0, nature: 0 };
+
   /** A plain foe's mark pixels at t = 1, both layers. */
   const markPixels = (status: object) => {
     const foe = {
@@ -117,15 +124,11 @@ describe('lasting states', () => {
       radius: 0.55,
       kind: 'normal',
       status: {
+        stacks: NO_STACKS,
         rootUntil: 0,
-        hexUntil: 0,
-        shockUntil: 0,
         freezeUntil: 0,
-        poisonUntil: 0,
-        poisonStacks: 0,
         staggerUntil: 0,
         brandUntil: 0,
-        rattledUntil: 0,
         sunderUntil: 0,
         blindUntil: 0,
         ...status,
@@ -151,11 +154,17 @@ describe('lasting states', () => {
     expect(heroPixels({ quickUntil: 2, moving: false })).toBe(0);
   });
 
-  it('rattled, sundered and blinded foes wear their marks only while they last', () => {
+  it('sundered and blinded foes wear their marks only while they last', () => {
     expect(markPixels({})).toBe(0);
-    for (const key of ['rattledUntil', 'sunderUntil', 'blindUntil']) {
+    for (const key of ['sunderUntil', 'blindUntil']) {
       expect(markPixels({ [key]: 2 }), key).toBeGreaterThan(0);
       expect(markPixels({ [key]: 0.5 }), key).toBe(0);
     }
+  });
+
+  it('a foe wears a pip per stack on a plate per stacked element, five pips at most', () => {
+    expect(markPixels({ stacks: { ...NO_STACKS, fire: 3 } })).toBe(1 + 3);
+    expect(markPixels({ stacks: { ...NO_STACKS, fire: 3, earth: 2 } })).toBe(1 + 3 + 1 + 2);
+    expect(markPixels({ stacks: { ...NO_STACKS, nature: 10 } })).toBe(1 + 5);
   });
 });

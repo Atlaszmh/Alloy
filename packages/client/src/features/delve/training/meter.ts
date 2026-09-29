@@ -32,7 +32,7 @@ export interface MeterSummary {
   total: number;
   biggest: number;
   buckets: Record<MeterBucket, { hits: number; damage: number }>;
-  /** Reactions set off, by name. */
+  /** Reactions set off, by name: the pairs of stacks each consumed, summed. */
   reactions: Partial<Record<ReactionId, number>>;
 }
 
@@ -67,7 +67,8 @@ export class DamageMeter {
 
   record(events: readonly ArpgEvent[], t: number): void {
     for (const e of events) {
-      if (e.kind === 'reaction') this.reactions[e.reaction] = (this.reactions[e.reaction] ?? 0) + 1;
+      if (e.kind === 'reaction')
+        this.reactions[e.reaction] = (this.reactions[e.reaction] ?? 0) + (e.pairs ?? 1);
       if (e.kind !== 'hit') continue;
       this.start ??= t;
       this.total += e.amount;

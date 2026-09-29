@@ -486,7 +486,9 @@ export function AbilityEditor({
                     {seen ? r.name : '???'}
                   </span>
                   <span className="block text-[10.5px] leading-snug text-stone-400">
-                    {seen ? r.text : 'Hit one foe with two different elements to discover.'}
+                    {seen
+                      ? r.text
+                      : 'Stack one element on a foe, then hit it with another, to discover.'}
                   </span>
                 </span>
               </div>

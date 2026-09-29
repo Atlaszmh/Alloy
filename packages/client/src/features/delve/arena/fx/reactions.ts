@@ -17,9 +17,10 @@ type Of<K extends ArpgEvent['kind']> = Extract<ArpgEvent, { kind: K }>;
 export const EMBER = 0xff7a3c;
 export const OBSIDIAN = 0xdcd0e6;
 
-/** A reaction's floating label: its name from arpg.json, shouted. */
-export function reactionLabel(id: ReactionId): string {
-  return `${getDelveRegistry().getReaction(id).name.toUpperCase()}!`;
+/** A reaction's floating label: its name from arpg.json, shouted, with ×n when it took n pairs. */
+export function reactionLabel(id: ReactionId, pairs = 1): string {
+  const label = `${getDelveRegistry().getReaction(id).name.toUpperCase()}!`;
+  return pairs > 1 ? `${label} ×${pairs}` : label;
 }
 
 /** The moment a reaction fires: a signature for each of the eight new ones, nothing for the seven. */

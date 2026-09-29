@@ -64,7 +64,7 @@ export function ManaChoice() {
                 </span>
                 <span className="text-sm text-stone-200">{PLAY_STYLE[m]}</span>
                 <span className="text-[11px] text-stone-400">
-                  Basic status: {title(BASIC_STATUS[m])}
+                  Every blow applies a stack of {st.name}: {title(BASIC_STATUS[m])}
                 </span>
                 <span className="text-[11px] text-stone-500">
                   Fusions: {mixes.map((f) => `${f.icon} ${f.name}`).join(' · ')}

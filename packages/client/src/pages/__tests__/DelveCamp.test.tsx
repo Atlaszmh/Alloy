@@ -57,7 +57,7 @@ describe('DelveCamp', () => {
     expect(choice).toHaveAttribute('data-pad-scope');
     const storm = screen.getByTestId('mana-choice-storm');
     expect(storm).toHaveTextContent('Storm chains');
-    expect(storm).toHaveTextContent('Shock');
+    expect(storm).toHaveTextContent('Every blow applies a stack of Storm: Shock');
     expect(storm).toHaveTextContent('Superconductor');
     fireEvent.click(screen.getByTestId('mana-choice-frost'));
     expect(screen.queryByTestId('mana-choice')).toBeNull();

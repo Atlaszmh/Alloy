@@ -14,10 +14,16 @@ const hit = (amount: number, source: HitSource, slot?: number): ArpgEvent => ({
   source,
   slot,
 });
-const melt: ArpgEvent = { kind: 'reaction', reaction: 'melt', x: 0, y: 0 };
+const melt = (pairs: number): ArpgEvent => ({
+  kind: 'reaction',
+  reaction: 'melt',
+  x: 0,
+  y: 0,
+  pairs,
+});
 
 describe('the damage meter', () => {
-  it('buckets hits by source and ability slot, and counts reactions by name', () => {
+  it('buckets hits by source and ability slot, and counts reactions by name, a pair at a time', () => {
     const m = new DamageMeter();
     m.record(
       [
@@ -29,8 +35,8 @@ describe('the damage meter', () => {
         hit(60, 'reaction', 0),
         hit(70, 'dot', 2),
         hit(80, 'thorns'),
-        melt,
-        melt,
+        melt(1),
+        melt(3),
       ],
       1,
     );
@@ -47,7 +53,7 @@ describe('the damage meter', () => {
     });
     expect(s.total).toBe(360);
     expect(s.biggest).toBe(80);
-    expect(s.reactions).toEqual({ melt: 2 });
+    expect(s.reactions).toEqual({ melt: 4 });
   });
 
   it('measures DPS over the last 5 s of sim time', () => {
@@ -62,7 +68,7 @@ describe('the damage meter', () => {
 
   it('reset starts over', () => {
     const m = new DamageMeter();
-    m.record([hit(100, 'basic'), melt], 1);
+    m.record([hit(100, 'basic'), melt(1)], 1);
     m.reset();
     expect(m.summary(2)).toMatchObject({ dps: 0, total: 0, biggest: 0, reactions: {} });
     expect(m.summary(2).buckets.basic).toEqual({ hits: 0, damage: 0 });

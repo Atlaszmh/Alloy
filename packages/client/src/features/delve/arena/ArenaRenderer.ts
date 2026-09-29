@@ -301,7 +301,7 @@ export class ArenaRenderer {
             this.floatText(
               e.x,
               e.y - 0.8,
-              reactionLabel(e.reaction),
+              reactionLabel(e.reaction, e.pairs),
               REACTION_HEX[e.reaction],
               26,
               { pop: true, life: 1.1, rise: 1 },
@@ -779,9 +779,9 @@ export class ArenaRenderer {
       ? 0x9fe8ff
       : hit
         ? 0xffd6d6
-        : t < s.chillUntil
+        : s.stacks.frost > 0
           ? 0xc8ecff
-          : t < s.burnUntil && Math.sin(this.time * 20) > 0
+          : s.stacks.fire > 0 && Math.sin(this.time * 20) > 0
             ? 0xffc29a
             : 0xffffff;
 
