@@ -467,17 +467,18 @@ describe('every pair reacts, both ways', () => {
     expect(far.status.blindUntil).toBe(0);
   });
 
-  it("Catalyst scales the damage reactions and Soulfire's hit", () => {
+  it("Catalyst scales the damage reactions' bonus and Soulfire's hit", () => {
+    const catalyst = (s: ReturnType<typeof setup>) => (s.w.hero.stats.legendaries.catalyst = 100);
     const cases = [
-      ['fire', 'frost'],
-      ['earth', 'frost'],
-      ['fire', 'shadow'],
+      ['fire', bal.reactions.meltMult],
+      ['earth', bal.reactions.shatterMult],
     ] as const;
-    for (const [hit, marked] of cases) {
-      const plain = fire(hit, marked);
-      const doubled = fire(hit, marked, (s) => (s.w.hero.stats.legendaries.catalyst = 100));
-      expect(doubled.dealt / plain.dealt, `${hit} on ${marked}`).toBeCloseTo(2);
+    for (const [hit, mult] of cases) {
+      // One pair: Catalyst doubles the bonus, mult − 1.
+      const ratio = fire(hit, 'frost', catalyst).dealt / fire(hit, 'frost').dealt;
+      expect(ratio, hit).toBeCloseTo((1 + 2 * (mult - 1)) / mult);
     }
+    expect(fire('fire', 'shadow', catalyst).dealt / fire('fire', 'shadow').dealt).toBeCloseTo(2);
   });
 
   it('with two marks, the first in MANA_TYPES order decides', () => {

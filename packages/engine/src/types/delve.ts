@@ -459,8 +459,10 @@ export interface DelveBalance {
     reactionLockout: number;
   };
   reactions: {
+    /** Melt, Shatter, Combust, Crystallize: the hit × (1 + (mult − 1) × pairs × Catalyst). */
     meltMult: number;
     shatterMult: number;
+    /** Overload's blast: the hit × this × pairs × Catalyst. */
     overloadMult: number;
     overloadRadius: number;
     superconductFreeze: number;
@@ -482,7 +484,7 @@ export interface DelveBalance {
     seedlingHeal: number;
     /** Siphon: three motes worth this share of the mana pool between them. */
     siphonMana: number;
-    /** Crystallize: the hit × this, and `stacks.tick` frost stacks on foes within `crystallizeRadius`. */
+    /** Crystallize: per pair as `meltMult`, and `stacks.tick` frost stacks on foes within `crystallizeRadius`. */
     crystallizeMult: number;
     crystallizeRadius: number;
     /** Blackout: the foe and foes within this radius are blinded. */

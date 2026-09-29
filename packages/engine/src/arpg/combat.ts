@@ -309,11 +309,20 @@ function nearby(ctx: SimCtx, m: MonsterEntity, radius: number): MonsterEntity[] 
   );
 }
 
+/** The damage reactions: each pair they take adds to the hit (see `react`); the rest fire once. */
+const DAMAGE_REACTIONS = new Set<ReactionId>([
+  'melt',
+  'shatter',
+  'overload',
+  'combust',
+  'crystallize',
+]);
+
 /**
  * What a hit of `element` bringing `k` stacks pairs with on `m`: the first other element in
  * MANA_TYPES order with stacks from earlier hits (a bare freeze counts as one frost stack) whose
- * reaction can fire, and `n`, the pairs (see the elemental stacks spec); null while the foe's
- * lockout runs, or if nothing pairs.
+ * reaction can fire, and `n`, the pairs it takes: all it can for a damage reaction, one for an
+ * effect (see the elemental stacks spec); null while the foe's lockout runs, or if nothing pairs.
  */
 function findPair(
   ctx: SimCtx,
@@ -336,7 +345,8 @@ function findPair(
     const def = ctx.registry.getReactionFor(element, partner);
     // A buff reaction on its own cooldown can't fire.
     if (def.cooldown && t < (ctx.world.hero.reactionReadyAt[def.id] ?? 0)) continue;
-    return { def, partner, n: Math.min(total, before) };
+    // A damage reaction takes every pair; an effect takes one, leaving the rest of both.
+    return { def, partner, n: DAMAGE_REACTIONS.has(def.id) ? Math.min(total, before) : 1 };
   }
   return null;
 }
@@ -359,9 +369,9 @@ function consumePairs(
 }
 
 /**
- * A reaction's effect on `m`, before its pairs come off. Returns the hit's
- * amount after it: the damage multipliers, times Catalyst. `slot`: the hit's
- * ability slot, which its splash carries.
+ * A reaction's effect on `m` with `n` pairs, before they come off. Returns the
+ * hit's amount after it: a damage reaction adds its bonus once per pair, scaled
+ * by Catalyst. `slot`: the hit's ability slot, which its splash carries.
  */
 function react(
   ctx: SimCtx,
@@ -369,18 +379,20 @@ function react(
   id: ReactionId,
   amount: number,
   slot: number | undefined,
+  n: number,
 ): number {
   const r = ctx.bal.reactions;
   const h = ctx.world.hero;
   const t = ctx.world.t;
   const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100;
+  const boost = (mult: number) => 1 + (mult - 1) * n * catalyst;
   switch (id) {
     case 'melt':
-      return amount * r.meltMult * catalyst;
+      return amount * boost(r.meltMult);
     case 'shatter':
-      return amount * r.shatterMult * catalyst;
+      return amount * boost(r.shatterMult);
     case 'overload': {
-      const blast = amount * r.overloadMult * catalyst;
+      const blast = amount * r.overloadMult * n * catalyst;
       ctx.events.push({
         kind: 'explode',
         x: m.x,
@@ -399,7 +411,7 @@ function react(
     case 'soulfire':
       return amount * catalyst;
     case 'combust': {
-      const hit = amount * r.combustMult * catalyst;
+      const hit = amount * boost(r.combustMult);
       ctx.events.push({
         kind: 'explode',
         x: m.x,
@@ -446,7 +458,7 @@ function react(
       return amount;
     }
     case 'crystallize': {
-      const hit = amount * r.crystallizeMult * catalyst;
+      const hit = amount * boost(r.crystallizeMult);
       ctx.events.push({
         kind: 'explode',
         x: m.x,
@@ -525,7 +537,7 @@ export function hitMonster(
   const pair = element && !opts.noReact ? findPair(ctx, m, element, k) : null;
   if (pair) {
     reaction = pair.def.id;
-    amount = react(ctx, m, reaction, amount, opts.slot);
+    amount = react(ctx, m, reaction, amount, opts.slot, pair.n);
     m.status.reactionLockUntil = world.t + bal.stacks.reactionLockout;
     if (pair.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
     noteReaction(ctx, reaction, m, pair.n);

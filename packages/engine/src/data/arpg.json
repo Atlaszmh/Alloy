@@ -47,7 +47,7 @@
     {
       "id": "surge", "slot": "defensive", "name": "Surge", "icon": "⚡",
       "power": 0, "effect": 0.3, "duration": 6,
-      "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits always apply the element's status."
+      "text": "For 6 s: +30% attack speed, +20% move speed, and basic hits also apply the element's stacks."
     },
     {
       "id": "blink", "slot": "defensive", "name": "Blink", "icon": "💨",
@@ -73,17 +73,17 @@
   "elementTraits": {
     "fire": {
       "knobs": { "area": 1.3, "applies": ["burn"] },
-      "text": "Burns, and blasts 30% wider.",
+      "text": "Burns, hotter with every stack, and blasts 30% wider.",
       "defensive": "Burns attackers; Surge hits always burn."
     },
     "frost": {
       "knobs": { "applies": ["chill"] },
-      "text": "Chills; chill twice to freeze.",
+      "text": "Chills, slower with every stack; 3 stacks freeze.",
       "defensive": "Chills attackers; Surge hits always chill."
     },
     "storm": {
       "knobs": { "chain": 1, "applies": ["shock"] },
-      "text": "Shocks, and hits jump to 1 more foe.",
+      "text": "Shocks: more damage taken with every stack; hits jump to 1 more foe.",
       "defensive": "Shocks attackers; Surge hits always shock."
     },
     "earth": {
@@ -93,7 +93,7 @@
     },
     "shadow": {
       "knobs": { "lifesteal": 0.08, "applies": ["hex"] },
-      "text": "Hexes, and heals you for 8% of the damage.",
+      "text": "Hexes: more damage taken with every stack; heals you for 8% of the damage.",
       "defensive": "Hexes attackers, and +10% lifesteal while active."
     },
     "nature": {

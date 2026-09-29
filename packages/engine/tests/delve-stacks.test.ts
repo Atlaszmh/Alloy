@@ -511,3 +511,117 @@ describe('the lockout', () => {
     expect(fired(events).map(([id]) => id)).toEqual(['obsidian', 'soulfire']);
   });
 });
+
+describe('strength', () => {
+  const DAMAGE = [
+    ['melt', 'fire', 'frost', 'meltMult'],
+    ['shatter', 'earth', 'frost', 'shatterMult'],
+    ['combust', 'fire', 'nature', 'combustMult'],
+    ['crystallize', 'nature', 'frost', 'crystallizeMult'],
+  ] as const;
+
+  it.each(DAMAGE)('%s adds its bonus per pair and takes every pair', (id, hit, partner, mult) => {
+    // Shadow foes: neutral to all four hits and to Combust's Fire splash.
+    const foes = () =>
+      setup([dummy(13, 20, { element: 'shadow' }), dummy(14.5, 20, { element: 'shadow' })]);
+    const p = foes();
+    const plain = hitMonster(p.ctx, p.m, 100, hit, { source: 'skill', stacks: 1 });
+    for (const n of [1, 2, 3]) {
+      const { w, ctx, m, events } = foes();
+      m.status.stacks[partner] = n;
+      if (id === 'shatter') freeze(ctx, m, 5); // Earth shatters only a freeze
+      const dealt = hitMonster(ctx, m, 100, hit, { source: 'skill', stacks: n });
+      expect(fired(events), `n ${n}`).toEqual([[id, n]]);
+      expect(dealt / plain, `n ${n}`).toBeCloseTo(1 + (bal.reactions[mult] - 1) * n);
+      expect(m.status.stacks[partner], `n ${n}`).toBe(0);
+      // Combust's splash deals the same amount.
+      if (id === 'combust') expect(w.monsters[1].maxHp - w.monsters[1].hp).toBeCloseTo(dealt);
+    }
+  });
+
+  it("Overload's blast grows with the pairs", () => {
+    const blast = (n: number) => {
+      const { w, ctx, m } = setup([dummy(13, 20), dummy(14.5, 20)]);
+      m.status.stacks.fire = n;
+      hitMonster(ctx, m, 100, 'storm', { source: 'skill', stacks: n });
+      return w.monsters[1].maxHp - w.monsters[1].hp;
+    };
+    expect(blast(2) / blast(1)).toBeCloseTo(2);
+    expect(blast(3) / blast(1)).toBeCloseTo(3);
+  });
+
+  it('a boss takes the full per-pair scaling', () => {
+    const melt = (n: number) => {
+      const { ctx, m } = setup([dummy(13, 20, { kind: 'boss', element: 'shadow' })]);
+      m.status.stacks.frost = n;
+      return hitMonster(ctx, m, 100, 'fire', { source: 'skill', stacks: 3 });
+    };
+    expect(melt(3) / melt(0)).toBeCloseTo(1 + (bal.reactions.meltMult - 1) * 3);
+  });
+
+  const EFFECT = [
+    ['superconduct', 'storm', 'frost'],
+    ['soulfire', 'shadow', 'fire'],
+    ['obsidian', 'fire', 'earth'],
+    ['lightning_rod', 'storm', 'earth'],
+    ['sunder', 'shadow', 'earth'],
+    ['seedling', 'earth', 'nature'],
+    ['siphon', 'shadow', 'frost'],
+    ['blackout', 'storm', 'shadow'],
+    ['galvanize', 'storm', 'nature'],
+  ] as const;
+
+  it.each(EFFECT)('%s fires once, whatever the pairs, and takes one', (id, hit, partner) => {
+    const outcome = (n: number) => {
+      const { w, ctx, m, events } = setup([dummy(13, 20), dummy(14.5, 20)]);
+      const h = w.hero;
+      // Room for each effect to show: a heal, a dodge to give back, a cooldown to cut.
+      h.hp = 1;
+      h.dodgeCharges = 0;
+      h.cooldowns[0] = 5;
+      m.status.stacks[partner] = n;
+      const dealt = hitMonster(ctx, m, 100, hit, { source: 'skill', stacks: n });
+      expect(fired(events), `n ${n}`).toEqual([[id, 1]]);
+      // One pair comes off; the rest of the partner's stacks stay.
+      expect(m.status.stacks[partner], `n ${n}`).toBe(n - 1);
+      // Only the partner's own stacks change the hit: a hexed foe takes more from every hit.
+      const taken =
+        1 + (partner === 'shadow' ? bal.stacks.hexPerStack * bal.stacks.curve[n - 1] : 0);
+      return {
+        hit: dealt / taken,
+        barrier: h.barrier?.hp,
+        dodges: h.dodgeCharges,
+        quick: h.quickUntil,
+        cooldown: h.cooldowns[0],
+        drops: w.drops.map((d) => d.kind),
+        frozen: isFrozen(ctx, m),
+        sunder: m.status.sunderUntil,
+        blind: w.monsters.map((foe) => foe.status.blindUntil),
+      };
+    };
+    const once = outcome(1);
+    const thrice = outcome(3);
+    expect(thrice.hit).toBeCloseTo(once.hit);
+    expect({ ...thrice, hit: 0 }).toEqual({ ...once, hit: 0 });
+  });
+
+  it('Blight spreads the counts the foe had before its pair came off, and takes one pair', () => {
+    const { w, ctx, m, events } = setup([dummy(13, 20), dummy(14.5, 20)]);
+    applyStatus(ctx, m, 'poison', 100, false, undefined, 3);
+    hitMonster(ctx, m, 10, 'shadow', { source: 'skill', applies: ['hex'], stacks: 2 });
+    expect(fired(events)).toEqual([['blight', 1]]);
+    expect(w.monsters[1].status.stacks).toMatchObject({ nature: 3, shadow: 0 });
+    expect(m.status.stacks).toMatchObject({ nature: 2, shadow: 1 });
+  });
+
+  it('Catalyst scales the bonus, not the hit', () => {
+    const dealt = (catalyst: number, n: number) => {
+      const { w, ctx, m } = setup();
+      w.hero.stats.legendaries.catalyst = catalyst;
+      m.status.stacks.frost = n;
+      return hitMonster(ctx, m, 100, 'fire', { source: 'skill', stacks: n });
+    };
+    const hit = dealt(0, 1) / bal.reactions.meltMult; // one pair: ×meltMult
+    expect(dealt(50, 2) / hit).toBeCloseTo(1 + (bal.reactions.meltMult - 1) * 2 * 1.5);
+  });
+});
