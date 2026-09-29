@@ -26,7 +26,8 @@ Elemental marks become **stacks**. Every hit applies stacks of its element to th
 | What is a stack? | One counter per element per foe. The count is the status and its intensity; consuming a pair spends both statuses. |
 | Several pairs at once | Damage reactions take every matching pair at once and multiply per pair. Effect reactions fire once and take exactly one pair, so the rest of both statuses stay on the foe (an effect gains nothing from more pairs, and spending them all left Soulfire, Sunder and Obsidian pairs with no burn or hex to build). |
 | How stacks build and fade | Every hit applies (no 30% roll any more). Each element caps at 5 per foe and has one timer that any new stack of it refreshes; at the timer all of that element's stacks lapse together. |
-| Fused abilities reacting every hit | A per-foe reaction lockout: after a reaction fires on a foe, none fires on it for 1 s. Stacks still build meanwhile. |
+| Fused abilities reacting every hit | A per-foe reaction lockout: after a reaction fires on a foe, none fires on it for 1 s (the gate may raise it to at most 2 s). Stacks still build meanwhile. |
+| How much each stack is worth | Diminishing: a status's intensity is its per-stack value × a cumulative curve (1, 1.8, 2.45, 3.0, 3.5), so the first two stacks carry most of the value and five don't run away. A finisher's two secondary stacks are then worth about half of a full status, not two fifths of a cap. |
 
 ## The model
 
@@ -44,16 +45,16 @@ Removed: `burnUntil`, `chillStacks`, `chillUntil`, `shockUntil`, `hexUntil`, `ra
 
 ### What the count does (the status)
 
-The per-stack values are the gate's tuning knobs: they are set so that a weapon's total status damage over a 30 s hold lands near today's, not so that 2 stacks equal today's one application (every blow applies now, so a stack is worth less than today's status). "While stacked" means `stacks[el] > 0`.
+A status's intensity is `perStack[el] × curve[stacks[el]]`, where `curve` is cumulative (`[1, 1.8, 2.45, 3.0, 3.5]`; past its end each stack adds its last step, 0.5, for Plaguebearer's 10). The per-stack values are the gate's knobs, set so that nothing single-element gets weaker than today and the pacing rails hold; with the starting values below, 2 stacks are about 63% of today's one full application and 5 are about 122%. "While stacked" means `stacks[el] > 0`.
 
 | Element | While stacked | Per-stack value (`delve.stacks`) |
 |---|---|---|
-| Fire | burns: `burnRef × stacks × firePerStack` per second, ticking every 0.5 s as today (ticks still skip element power and apply resist and the shock/hex/sunder bonuses, as today) | `firePerStack` 0.5 |
+| Fire | burns: `burnRef × firePerStack × curve[stacks]` per second, ticking every 0.5 s as today (ticks still skip element power and apply resist and the shock/hex/sunder bonuses, as today) | `firePerStack` 0.35 |
 | Frost | slowed by `min(frostSlowCap, stacks × frostSlowPerStack)`; **crossing `freezeAt`** freezes (below) | `frostSlowPerStack` 0.2, `frostSlowCap` 0.6, `freezeAt` 3 |
-| Storm | takes `+stacks × shockPerStack` damage: +50% at the cap, doubled by Tempest | `shockPerStack` 0.1 |
+| Storm | takes `+shockPerStack × curve[stacks]` damage (+28% at the cap with the starting value), doubled by Tempest | `shockPerStack` 0.08 |
 | Earth | rattled (the mark). Stagger stays a separate crowd control that Earth hits also apply, with its immunity | — |
-| Shadow | takes `+stacks × hexPerStack` damage: +37.5% at the cap | `hexPerStack` 0.075 |
-| Nature | poisoned: `poisonRef × stacks × poisonPerStack` per second | `poisonPerStack` 1.0 to start; cap ×2 with Plaguebearer |
+| Shadow | takes `+hexPerStack × curve[stacks]` damage (+21% at the cap with the starting value) | `hexPerStack` 0.06 |
+| Nature | poisoned: `poisonRef × poisonPerStack × curve[stacks]` per second | `poisonPerStack` 0.6; cap ×2 with Plaguebearer |
 
 The predicates keep their names: `isBurning` = fire > 0, `isChilled` = frost > 0, `isFrozen` = `t < freezeUntil` (unchanged), `isShocked`, `isHexed` (Night's Embrace reads it), `isRattled`, `isPoisoned` = nature > 0. `hasMark(el)` = `stacks[el] > 0`, except frost, where a bare freeze counts: `hasMark(frost)` = frost > 0 or frozen (today's "chilled or frozen").
 
@@ -111,8 +112,9 @@ New block `balance.json → delve.stacks` (typed in `DelveBalance`, validated in
 - `cap` 5;
 - `duration` per element, today's values: fire 3, frost 3, storm 4, earth 2, shadow 6, nature 4;
 - `byWeight` [1, 1, 2, 3, 3], `basicBlow` 1, `basicFinisher` 2, `tick` 1;
-- `freezeAt` 3, `firePerStack`, `frostSlowPerStack` 0.2, `frostSlowCap` 0.6, `shockPerStack`, `hexPerStack`, `poisonPerStack`: the starting values are 0.5, 0.1, 0.075 and 1.0, and the plan records what the gate settled on;
-- `reactionLockout` 1.0.
+- `curve` [1, 1.8, 2.45, 3.0, 3.5];
+- `freezeAt` 3, `frostSlowPerStack` 0.2, `frostSlowCap` 0.6, and the per-stack values `firePerStack` 0.35, `shockPerStack` 0.08, `hexPerStack` 0.06, `poisonPerStack` 0.6 to start; the plan records what the gate settled on;
+- `reactionLockout` 1.0 to start, at most 2.0.
 
 `delve.status` loses `burnDuration`, `chillSlow`, `chillDuration`, `chillToFreeze`, `shockBonus`, `shockDuration`, `hexBonus`, `hexDuration`, `rattleDuration`, `poisonDuration`, `poisonMaxStacks` (moved or replaced) and keeps `burnDps`, `poisonDps`, `freezeDuration`, `freezeImmunity`, stagger, root and blind. `delve.reactions` is unchanged.
 
@@ -137,7 +139,7 @@ The 15 reactions' effects, `getReactionFor` and the fixed walk, discovery and `r
 
 **Engine** (`tests/delve-stacks.test.ts`):
 - Build: a blow applies 1, a Balanced ability 2, a Crushing one 3, a finisher 2, a chain jump and a zone tick 1; the cap holds; a new stack refreshes the timer; at the timer all of that element's stacks lapse together (and a lapsed count can't pair); every blow applies (no roll).
-- Status: burn per second scales with fire stacks and stops at 0; slow scales and caps; shock and hex bonuses scale; rattled while earth ≥ 1; poison as today with the cap and Plaguebearer.
+- Status: burn per second follows the curve over fire stacks and stops at 0; slow scales and caps; shock and hex bonuses follow the curve; rattled while earth ≥ 1; poison follows the curve, with the cap and Plaguebearer (past the curve's end, +0.5 a stack).
 - Freeze: crossing 3 freezes with immunity and the stacks stay; a foe at 3+ past immunity doesn't re-freeze on the next frost hit; dropping below 3 and climbing back does; a fused Steam hit on a foe with 2 frost Melts without a phantom freeze; Glacier freezes on its first hit; a frozen foe with 0 frost stacks can still be Shattered by Earth and Melted by Fire (the bare freeze counts as one partner stack), and that ends the freeze; a frost hit on a frozen foe with 0 frost stacks pairs nothing of its own and never unfreezes it; a Frost Ward's retaliation still freezes an attacker whose chills cross 3.
 - Pairing: earlier-only (a fused hit doesn't pair with itself, the next hit does); the fixed order with two other elements present; `n = min`; leftovers stay; Earth on a chilled-not-frozen foe walks on; a killing reaction leaves the counts.
 - Strength: each damage reaction's bonus is × n (n = 1, 2, 3) and consumes n pairs; each effect reaction fires once with n = 3 and consumes one pair, leaving the rest; Blight spreads the pre-consumption counts; Catalyst scales the bonus; a boss takes the full per-pair scaling.
@@ -146,9 +148,12 @@ The 15 reactions' effects, `getReactionFor` and the fixed walk, discovery and `r
 - All 15 reactions both ways with stacks; `pairs` on the events; determinism (same seed, same events twice).
 - The existing reaction, status, forms, sim, infusion, pair, training, dodge, combat-weight and DPS-sim tests are updated to stacks, not weakened.
 
-**Pacing** (`tests/delve-pacing.test.ts`): the rails hold unchanged, including each run finding its own pair's reaction and the 15-pair sweep. Tuning order: the per-stack values (`firePerStack` first), then `freezeAt`, then `reactionLockout`, then `cap`/`duration`, then nothing else without asking.
+**Pacing** (`tests/delve-pacing.test.ts`): the rails hold unchanged, including each run finding its own pair's reaction and the 15-pair sweep. Tuning order: the per-stack values, then `reactionLockout` (up to 2 s), then `freezeAt`, then `basicFinisher` (3 at most), then `cap`/`duration`, then nothing else without asking.
 
-**DPS Lab before/after** (a scratch script over `dpsCombos`, depth 10, one dummy and the pack, 40-seed means for basics and the Bolt; the "before" grid is saved from the pre-stacks engine): single-element basics stay within about 15% of today; a Fire Bolt (Balanced, mana) on one dummy stays within about 25% of today; a Nature+Fire Burst against the pack stays under about twice its pre-stacks figure; the best fused Burst's ratio to the best single-element Burst (×2.45 today, one dummy) grows by no more than 10%; every pair keeps an entry in the top 30 of the basics table, one dummy and pack. The shifts go in this spec's status note when it ships.
+**DPS Lab before/after** (a scratch script over `dpsCombos`, depth 10, one dummy and the pack, 40-seed means for basics and single-element abilities; the "before" grid is saved from the pre-stacks engine). The gate guards against regressions and reports the rest:
+- **Hard:** no single-element basic (any weapon, one dummy) loses more than 15%; no single-element Balanced mana Bolt, Burst or Nova (one dummy) loses more than 15%; a Nature+Fire Burst against the pack stays under twice its pre-stacks figure; the best fused Burst's ratio to the best single-element Burst (×2.45 today, one dummy) grows by no more than 10%.
+- **Reported, not tuned to:** the per-weapon and per-pair basics shifts (one dummy and pack), which pairs moved in or out of the basics top 30, the median shift per element for single-element abilities, and the fused Bursts' shifts. Gains are expected (every blow applies now); the report is what the balance review reads.
+The shifts go in this spec's status note when it ships.
 
 **Client:** pips per count and element; the ×n label; the meter's pair sums; the texts; the fake `StatusState` in `reactions.test.ts` updated.
 
