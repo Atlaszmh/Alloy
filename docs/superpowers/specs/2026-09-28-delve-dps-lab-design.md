@@ -1,7 +1,7 @@
 # Delve DPS Lab Design
 
 **Date:** 2026-09-28
-**Status:** Draft.
+**Status:** Built (dev builds only; no version bump).
 
 **Engine** (`packages/engine/`):
 - `src/arpg/dps-sim.ts` (new), `src/index.ts`
