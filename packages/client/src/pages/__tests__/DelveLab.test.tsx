@@ -93,11 +93,14 @@ describe('DelveLab', () => {
   it("an unaffordable ability sits last, as can't afford", () => {
     renderLab();
     latest().reply([
-      result('ability|nova|fire|none|2|mana', 0, 0),
-      result('ability|bolt|fire|none|0|mana', 40),
+      result('ability|nova|fire|none|heavy|mana', 0, 0),
+      result('ability|bolt|fire|none|medium|mana', 40),
     ]);
     fireEvent.click(screen.getByTestId('lab-tab-ability'));
-    expect(rowKeys()).toEqual(['ability|bolt|fire|none|0|mana', 'ability|nova|fire|none|2|mana']);
+    expect(rowKeys()).toEqual([
+      'ability|bolt|fire|none|medium|mana',
+      'ability|nova|fire|none|heavy|mana',
+    ]);
     expect(screen.getAllByTestId('lab-row')[1]).toHaveTextContent("can't afford");
   });
 

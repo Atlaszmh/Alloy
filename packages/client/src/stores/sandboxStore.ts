@@ -1,17 +1,20 @@
 import { useMemo } from 'react';
 import { z } from 'zod';
 import {
-  AbilityBuildSchema,
+  BlowSchema,
+  ChainSchema,
   GEAR_SLOTS,
   GearItemSchema,
   MANA_TYPES,
+  MAX_CHAIN,
   RARITY_ORDER,
   computeHeroStats,
-  defaultAbilities,
+  defaultChains,
   sandboxWeapon,
-  type AbilityBuild,
-  type AbilityBuilds,
   type AbilitySlot,
+  type Blow,
+  type Chains,
+  type ChainSkill,
   type DataRegistry,
   type DelveProfile,
   type DummyLayout,
@@ -28,7 +31,7 @@ import { getDelveRegistry } from '@/features/delve/registry';
 import { createHmrStore } from './hmr-store';
 
 /**
- * The Training Grounds loadout: its own weapon, powers, attunement, builds and
+ * The Training Grounds loadout: its own weapon, powers, attunement, chains and
  * arena settings, saved apart from the Delve save, which it never touches.
  * Rules stay in the engine; this only remembers the choices.
  */
@@ -75,7 +78,8 @@ export interface SandboxLoadout {
   legendaries: Record<string, number>;
   /** Attunement added per element, 0–15. */
   attunement: Partial<ManaMap>;
-  abilities: AbilityBuilds;
+  /** The basic chain and each ability slot's (any element: the sandbox is unrestricted). */
+  chains: Chains;
   depth: number;
   /** What new dummies resist: null = Neutral. */
   dummyElement: ManaType | null;
@@ -83,10 +87,10 @@ export interface SandboxLoadout {
   toggles: SandboxToggles;
   /** Display speed: 0.25, 0.5, 0.75 or 1. */
   slowmo: number;
-  /** The sandbox hero's primary: what basic blows strike with (the weapon keeps its mana, for attunement). */
+  /** The sandbox hero's pair: the elements its basic blows can pick (the weapon keeps its mana, for attunement). */
   primary: ManaType;
-  /** The second element the combo's finisher discharges (null = none; never the primary). */
-  basicInfusion: ManaType | null;
+  /** The pair's second element (null = none; never the primary). */
+  secondary: ManaType | null;
 }
 
 export const SANDBOX_DEFAULTS: SandboxLoadout = {
@@ -95,14 +99,14 @@ export const SANDBOX_DEFAULTS: SandboxLoadout = {
   gear: {},
   legendaries: {},
   attunement: {},
-  abilities: defaultAbilities('fire'),
+  chains: defaultChains(getDelveRegistry(), 'fire', 'sword'),
   depth: 5,
   dummyElement: null,
   dummies: [],
   toggles: { infiniteMana: true, noCooldowns: true, invulnerable: true },
   slowmo: 1,
   primary: 'fire',
-  basicInfusion: null,
+  secondary: null,
 };
 
 const ManaSchema = z.enum(MANA_TYPES as readonly [ManaType, ...ManaType[]]);
@@ -114,8 +118,10 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
   const weaponIds = new Set(registry.getGearBasesForSlot('weapon').map((b) => b.id));
   const powers = new Set(registry.getDelveData().legendaries.map((l) => l.id));
   const forms = registry.getArpgData().forms;
-  const build = (slot: AbilitySlot) =>
-    AbilityBuildSchema.refine((b) => forms.some((f) => f.id === b.form && f.slot === slot));
+  const chain = (slot: AbilitySlot) =>
+    ChainSchema.refine((c) =>
+      c.moves.every((m) => forms.some((f) => f.id === m.form && f.slot === slot)),
+    );
   const item = GearItemSchema.optional();
   return z.object({
     weapon: z
@@ -141,13 +147,14 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
       .refine((l) => Object.keys(l).every((id) => powers.has(id)))
       .catch({}),
     attunement: z.record(ManaSchema, z.number().int().min(0).max(MAX_EXTRA_ATTUNE)).catch({}),
-    abilities: z
+    chains: z
       .object({
-        primary: build('primary'),
-        defensive: build('defensive'),
-        ultimate: build('ultimate'),
+        basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
+        primary: chain('primary'),
+        defensive: chain('defensive'),
+        ultimate: chain('ultimate'),
       })
-      .catch(D.abilities),
+      .catch(D.chains),
     depth: z.number().int().min(1).max(MAX_DEPTH).catch(D.depth),
     dummyElement: ManaSchema.nullable().catch(null),
     dummies: z
@@ -164,7 +171,7 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
       .refine((v) => (SLOWMO_SPEEDS as readonly number[]).includes(v))
       .catch(D.slowmo),
     primary: ManaSchema.catch(D.primary),
-    basicInfusion: ManaSchema.nullable().catch(null),
+    secondary: ManaSchema.nullable().catch(null),
   });
 }
 
@@ -172,10 +179,10 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
 export function parseSandbox(raw: unknown): SandboxLoadout {
   const parsed = loadoutSchema(getDelveRegistry()).safeParse(raw);
   if (!parsed.success) return SANDBOX_DEFAULTS;
-  // A Basic infusion is never the primary.
+  // The secondary is never the primary.
   const s =
-    parsed.data.basicInfusion === parsed.data.primary
-      ? { ...parsed.data, basicInfusion: null }
+    parsed.data.secondary === parsed.data.primary
+      ? { ...parsed.data, secondary: null }
       : parsed.data;
   // A loaded weapon only counts while the choice still names it: a bad save can't show one
   // weapon and fight with another.
@@ -216,7 +223,7 @@ interface SandboxStore extends SandboxLoadout {
   /** Switch a legendary power on (at its max roll) or off. */
   setLegendary: (id: string, on: boolean) => void;
   setAttunement: (mana: ManaType, extra: number) => void;
-  setAbility: (slot: AbilitySlot, build: AbilityBuild) => void;
+  setChain: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
   setDepth: (depth: number) => void;
   setDummyElement: (element: ManaType | null) => void;
   /** Remember a dummy group (ignored once MAX_DUMMY_GROUPS are kept). */
@@ -224,16 +231,36 @@ interface SandboxStore extends SandboxLoadout {
   clearDummyGroups: () => void;
   setToggles: (toggles: SandboxToggles) => void;
   setSlowmo: (speed: number) => void;
-  /** Pick the primary; a Basic infusion of that element is dropped. */
+  /** Pick the primary (a secondary of that element is dropped); the basic blows follow the pair. */
   setPrimary: (mana: ManaType) => void;
-  /** The finisher's discharge (null = none); the primary is ignored. */
-  setBasicInfusion: (mana: ManaType | null) => void;
-  /** Copy the save's gear, builds and pair in (its powers and attunement then come from the items). */
-  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'abilities' | 'pair'>) => void;
+  /** Pick the secondary (null = none; the primary is ignored); the basic blows follow the pair. */
+  setSecondary: (mana: ManaType | null) => void;
+  /** Copy the save's gear, chains and pair in (its powers and attunement then come from the items). */
+  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'chains' | 'pair'>) => void;
   reset: () => void;
 }
 
 const FIELDS = Object.keys(SANDBOX_DEFAULTS) as (keyof SandboxLoadout)[];
+
+/**
+ * The basic chain after the pair changes: the old secondary's blows take the
+ * new one (a secondary bound from none takes the last blow, as `bindSecondary`
+ * does), every other blow the primary.
+ */
+function refit(
+  basic: Blow[],
+  was: ManaType | null,
+  primary: ManaType,
+  secondary: ManaType | null,
+): Blow[] {
+  return basic.map((b, i) => ({
+    ...b,
+    element:
+      secondary && (was === null ? i === basic.length - 1 : b.element === was)
+        ? secondary
+        : primary,
+  }));
+}
 
 export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set, get) => {
   const commit = (patch: Partial<SandboxLoadout>) => {
@@ -270,7 +297,7 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
           [mana]: Math.max(0, Math.min(MAX_EXTRA_ATTUNE, Math.round(extra))),
         },
       }),
-    setAbility: (slot, build) => commit({ abilities: { ...get().abilities, [slot]: build } }),
+    setChain: (skill, chain) => commit({ chains: { ...get().chains, [skill]: chain } }),
     setDepth: (depth) => commit({ depth: Math.max(1, Math.min(MAX_DEPTH, Math.round(depth))) }),
     setDummyElement: (dummyElement) => commit({ dummyElement }),
     addDummyGroup: (group) => {
@@ -279,10 +306,22 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     clearDummyGroups: () => commit({ dummies: [] }),
     setToggles: (toggles) => commit({ toggles }),
     setSlowmo: (slowmo) => commit({ slowmo }),
-    setPrimary: (primary) =>
-      commit({ primary, ...(primary === get().basicInfusion ? { basicInfusion: null } : {}) }),
-    setBasicInfusion: (basicInfusion) => {
-      if (basicInfusion !== get().primary) commit({ basicInfusion });
+    setPrimary: (primary) => {
+      const { secondary: was, chains } = get();
+      const secondary = was === primary ? null : was;
+      commit({
+        primary,
+        secondary,
+        chains: { ...chains, basic: refit(chains.basic, was, primary, secondary) },
+      });
+    },
+    setSecondary: (secondary) => {
+      const { primary, secondary: was, chains } = get();
+      if (secondary === primary) return;
+      commit({
+        secondary,
+        chains: { ...chains, basic: refit(chains.basic, was, primary, secondary) },
+      });
     },
     loadMyBuild: (profile) => {
       const { weapon, ...gear } = profile.equipped;
@@ -290,12 +329,12 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         weapon: weapon ? choiceOf(weapon) : null,
         loadedWeapon: weapon ?? null,
         gear,
-        abilities: profile.abilities,
+        chains: profile.chains,
         legendaries: {},
         attunement: {},
         // Your pair: the loaded weapon keeps its real mana (the weapon check relies on it).
         primary: profile.pair.primary ?? get().primary,
-        basicInfusion: profile.pair.secondary,
+        secondary: profile.pair.secondary,
       });
     },
     reset: () => {
@@ -314,8 +353,8 @@ type StatsInput = Pick<
   | 'attunement'
   | 'depth'
   | 'primary'
-  | 'basicInfusion'
->;
+  | 'secondary'
+> & { chains: Pick<Chains, 'basic'> };
 
 /** What the sandbox hero wears: the loaded weapon, else a clean one of the picked kind (item level = depth). */
 export function sandboxEquipped(registry: DataRegistry, s: StatsInput): EquippedGear {
@@ -328,10 +367,10 @@ export function sandboxStats(registry: DataRegistry, s: StatsInput): HeroStats {
   return computeHeroStats(sandboxEquipped(registry, s), registry, {
     legendaries: s.legendaries,
     attunement: s.attunement,
-    // Basics only: blows strike with the primary and the finisher discharges the infusion,
-    // unarmed too. Every element still attunes: the sandbox stays unrestricted.
-    pair: { primary: s.primary, secondary: s.basicInfusion },
+    // The pair powers the basic blows; every element still attunes: the sandbox stays unrestricted.
+    pair: { primary: s.primary, secondary: s.secondary },
     filterAttunement: false,
+    basic: s.chains.basic,
   });
 }
 
@@ -344,7 +383,8 @@ export function useSandboxStats(): HeroStats {
   const attunement = useSandboxStore((s) => s.attunement);
   const depth = useSandboxStore((s) => s.depth);
   const primary = useSandboxStore((s) => s.primary);
-  const basicInfusion = useSandboxStore((s) => s.basicInfusion);
+  const secondary = useSandboxStore((s) => s.secondary);
+  const basic = useSandboxStore((s) => s.chains.basic);
   return useMemo(
     () =>
       sandboxStats(getDelveRegistry(), {
@@ -355,8 +395,9 @@ export function useSandboxStats(): HeroStats {
         attunement,
         depth,
         primary,
-        basicInfusion,
+        secondary,
+        chains: { basic },
       }),
-    [weapon, loadedWeapon, gear, legendaries, attunement, depth, primary, basicInfusion],
+    [weapon, loadedWeapon, gear, legendaries, attunement, depth, primary, secondary, basic],
   );
 }

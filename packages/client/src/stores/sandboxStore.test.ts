@@ -33,7 +33,7 @@ describe('sandboxStore', () => {
     });
     const stats = sandboxStats(registry, store());
     expect(stats.weapon.baseId).toBe('sword');
-    expect(stats.weapon.element).toBe('fire');
+    expect(stats.weapon.blows.map((b) => b.element)).toEqual(['fire', 'fire', 'fire']);
   });
 
   it('saves every change under its own key and reads it back', () => {
@@ -56,18 +56,30 @@ describe('sandboxStore', () => {
       weapon: { baseId: 'spoon', mana: 'fire', rarity: 'rare' },
       slowmo: 0.5,
       toggles: { infiniteMana: false, noCooldowns: true, invulnerable: true },
-      abilities: { primary: { form: 'ward', elements: ['fire'], weight: 0, payment: 'mana' } },
       legendaries: { not_a_power: 5 },
     });
     expect(s.depth).toBe(SANDBOX_DEFAULTS.depth);
     expect(s.weapon).toEqual(SANDBOX_DEFAULTS.weapon);
     expect(s.slowmo).toBe(0.5);
     expect(s.toggles.infiniteMana).toBe(false);
-    expect(s.abilities).toEqual(SANDBOX_DEFAULTS.abilities);
     expect(s.legendaries).toEqual({});
     expect(parseSandbox({ weapon: null }).weapon).toBeNull();
     const nine = Array.from({ length: 9 }, () => ({ layout: 'single', element: null }));
     expect(parseSandbox({ dummies: nine }).dummies).toEqual(nine.slice(0, MAX_DUMMY_GROUPS));
+  });
+
+  it("keeps saved chains, but falls back when a move's form is another slot's", () => {
+    const D = SANDBOX_DEFAULTS.chains;
+    const lance = {
+      moves: [{ kind: 'heavy', form: 'lance', elements: ['storm'] }],
+      payment: 'cast',
+    };
+    expect(parseSandbox({ chains: { ...D, primary: lance } }).chains).toEqual({
+      ...D,
+      primary: lance,
+    });
+    const ward = { moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }], payment: 'mana' };
+    expect(parseSandbox({ chains: { ...D, primary: ward } }).chains).toEqual(D);
   });
 
   it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
@@ -89,7 +101,7 @@ describe('sandboxStore', () => {
     expect(store().dummies).toHaveLength(MAX_DUMMY_GROUPS);
   });
 
-  it('Load my build copies the real weapon, the other gear and the builds, and clears the extras', () => {
+  it('Load my build copies the real weapon, the other gear and the chains, and clears the extras', () => {
     const profile = createDelveProfile(registry, 7);
     const bow = generateItem(
       registry,
@@ -103,7 +115,7 @@ describe('sandboxStore', () => {
     expect(s.loadedWeapon).toEqual(bow);
     expect(s.weapon).toEqual({ baseId: 'bow', mana: 'storm', rarity: 'legendary' });
     expect(s.gear).toEqual({ chest: profile.equipped.chest });
-    expect(s.abilities).toEqual(profile.abilities);
+    expect(s.chains).toEqual(profile.chains);
     expect(s.legendaries).toEqual({});
     expect(s.attunement).toEqual({});
     expect(sandboxEquipped(registry, s).weapon).toEqual(bow);
@@ -127,52 +139,55 @@ describe('sandboxStore', () => {
     expect(sandboxStats(registry, store()).weapon.baseId).toBeNull();
   });
 
-  it('keeps a primary and a Basic infusion: a basics-only pair, saved, never the same element', () => {
-    expect(store()).toMatchObject({ primary: 'fire', basicInfusion: null });
-    store().setBasicInfusion('storm');
-    expect(sandboxStats(registry, store()).weapon).toMatchObject({
-      element: 'fire',
-      infusion: 'storm',
-    });
-    store().setBasicInfusion('fire'); // the primary: ignored
-    expect(store().basicInfusion).toBe('storm');
-    store().setPrimary('frost');
+  it('keeps a pair for the basic blows, saved, never the same element; the blows follow it', () => {
+    const elements = () => store().chains.basic.map((b) => b.element);
+    expect(store()).toMatchObject({ primary: 'fire', secondary: null });
+    store().setSecondary('storm'); // bound from none: the last blow takes it
+    expect(elements()).toEqual(['fire', 'fire', 'storm']);
+    store().setChain('basic', [
+      { kind: 'light', element: 'fire' },
+      { kind: 'heavy', element: 'storm' },
+    ]);
+    expect(sandboxStats(registry, store()).weapon.blows.map((b) => b.element)).toEqual([
+      'fire',
+      'storm',
+    ]);
+    store().setSecondary('fire'); // the primary: ignored
+    expect(store().secondary).toBe('storm');
+    store().setPrimary('frost'); // the primary's blows follow it
     expect(parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!))).toMatchObject({
       primary: 'frost',
-      basicInfusion: 'storm',
+      secondary: 'storm',
     });
-    expect(sandboxStats(registry, store()).weapon).toMatchObject({
-      element: 'frost',
-      infusion: 'storm',
-    });
-    store().setPrimary('storm'); // the infusion's element: the infusion goes
-    expect(store().basicInfusion).toBeNull();
-    expect(parseSandbox({ primary: 'plasma', basicInfusion: 'plasma' })).toMatchObject({
+    expect(elements()).toEqual(['frost', 'storm']);
+    store().setSecondary('nature'); // and the secondary's
+    expect(elements()).toEqual(['frost', 'nature']);
+    store().setPrimary('nature'); // the secondary's element: the secondary goes, its blows too
+    expect(store().secondary).toBeNull();
+    expect(elements()).toEqual(['nature', 'nature']);
+    expect(parseSandbox({ primary: 'plasma', secondary: 'plasma' })).toMatchObject({
       primary: 'fire',
-      basicInfusion: null,
+      secondary: null,
     });
-    expect(parseSandbox({ primary: 'storm', basicInfusion: 'storm' }).basicInfusion).toBeNull();
+    expect(parseSandbox({ primary: 'storm', secondary: 'storm' }).secondary).toBeNull();
   });
 
-  it('the weapon keeps its own mana for attunement and leaves the infusion alone; unarmed punches with the primary', () => {
-    store().setBasicInfusion('storm');
+  it('the weapon keeps its own mana for attunement; unarmed punches with the pair', () => {
     store().setWeapon({ baseId: 'staff', mana: 'storm', rarity: 'rare' });
-    expect(store().basicInfusion).toBe('storm');
     const stats = sandboxStats(registry, store());
-    expect(stats.weapon).toMatchObject({ baseId: 'staff', element: 'fire', infusion: 'storm' });
+    expect(stats.weapon.baseId).toBe('staff');
+    expect(stats.weapon.blows.every((b) => b.element === 'fire')).toBe(true);
     expect(stats.attunement.storm).toBeGreaterThan(0); // unrestricted: every element attunes
     store().setWeapon(null);
-    expect(sandboxStats(registry, store()).weapon).toMatchObject({
-      baseId: null,
-      element: 'fire',
-      infusion: 'storm',
-    });
+    const bare = sandboxStats(registry, store()).weapon;
+    expect(bare.baseId).toBeNull();
+    expect(bare.blows.every((b) => b.element === 'fire')).toBe(true);
   });
 
-  it('Load my build brings your pair in: primary and Basic infusion', () => {
+  it('Load my build brings your pair in', () => {
     const profile = createDelveProfile(registry, 7, { primary: 'frost' });
     store().loadMyBuild({ ...profile, pair: { primary: 'frost', secondary: 'nature' } });
-    expect(store()).toMatchObject({ primary: 'frost', basicInfusion: 'nature' });
+    expect(store()).toMatchObject({ primary: 'frost', secondary: 'nature' });
     expect(store().loadedWeapon?.mana).toBe('frost'); // the real item, its real mana
   });
 });

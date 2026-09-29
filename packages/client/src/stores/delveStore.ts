@@ -12,15 +12,15 @@ import {
   reforgeGear,
   fuseGear,
   setAutoSalvage,
-  setAbility as engineSetAbility,
+  setChain as engineSetChain,
   bindSecondary as engineBindSecondary,
   chooseStartingMana,
   realign as engineRealign,
   reattuneItem,
   resolveOvertake,
-  type AbilityBuild,
-  type AbilitySlot,
-  type BuildFix,
+  type ChainFix,
+  type Chains,
+  type ChainSkill,
   type DataRegistry,
   type DelveProfile,
   type GearItem,
@@ -50,14 +50,19 @@ function loadManualAttack(): boolean {
   }
 }
 
-/** The saved profile (migrated when older, with the builds it fixed), or null. */
-export function loadDelveProfile(): (ParsedDelveProfile & { migrated: boolean }) | null {
+/**
+ * The saved profile (migrated when older, with the moves it fixed), or null;
+ * `gainedPair` when the save predates the pair (version 3 or older).
+ */
+export function loadDelveProfile(): (ParsedDelveProfile & { gainedPair: boolean }) | null {
   try {
     const raw = localStorage.getItem(DELVE_SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
     const parsed = parseDelveProfile(getDelveRegistry(), data);
-    return parsed && { ...parsed, migrated: data?.version !== parsed.profile.version };
+    return (
+      parsed && { ...parsed, gainedPair: typeof data?.version === 'number' && data.version < 4 }
+    );
   } catch {
     return null;
   }
@@ -83,11 +88,21 @@ const manaName = (registry: DataRegistry, m: ManaType) => registry.getArpgData()
 const manaNames = (registry: DataRegistry, els: ManaType[]) =>
   els.map((m) => manaName(registry, m)).join(' and ');
 
-/** "Your Maelstrom used Frost, which isn't in your pair; it now uses Fire" */
-export function fixNotice(registry: DataRegistry, fix: BuildFix): string {
-  const form = registry.getForm(fix.build.form).name;
+const ORDINALS = ['1st', '2nd', '3rd', '4th', '5th'];
+
+/**
+ * "Your Bolt's 3rd move used Frost, which isn't in your pair; it now uses Fire";
+ * a blow: "Your basic attack's 2nd blow used …".
+ */
+export function fixNotice(registry: DataRegistry, fix: ChainFix): string {
+  const nth = ORDINALS[fix.index] ?? `${fix.index + 1}th`;
+  const now = 'element' in fix.move ? [fix.move.element] : fix.move.elements;
+  const what =
+    'form' in fix.move
+      ? `${registry.getForm(fix.move.form).name}'s ${nth} move`
+      : `basic attack's ${nth} blow`;
   const isnt = fix.removed.length > 1 ? "aren't" : "isn't";
-  return `Your ${form} used ${manaNames(registry, fix.removed)}, which ${isnt} in your pair; it now uses ${manaNames(registry, fix.build.elements)}`;
+  return `Your ${what} used ${manaNames(registry, fix.removed)}, which ${isnt} in your pair; it now uses ${manaNames(registry, now)}`;
 }
 
 /** "Storm now outweighs Fire: your basic attacks strike with Storm" (`now` is the new primary). */
@@ -104,7 +119,7 @@ interface DelveStore {
   diveDrops: string[];
   /** Basic attacks on a button instead of automatic (a device preference). */
   manualAttack: boolean;
-  /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed builds. */
+  /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed moves. */
   notices: string[];
   /** Elements whose bind prompt was answered "Not now" this session (never saved). */
   bindDeclined: ManaType[];
@@ -118,7 +133,7 @@ interface DelveStore {
   /** The one-time "Choose your mana". */
   chooseMana: (mana: ManaType) => ProfileActionResult;
   bindSecondary: (mana: ManaType) => ProfileActionResult;
-  /** Change the bound pair; the builds it had to change become notices. */
+  /** Change the bound pair; the moves it had to change become notices. */
   realign: (next: { primary?: ManaType; secondary?: ManaType }) => ProfileActionResult;
   reattune: (uid: string, mana: ManaType) => ProfileActionResult;
   declineBind: (mana: ManaType) => void;
@@ -137,8 +152,8 @@ interface DelveStore {
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
-  /** Set the Primary, Defensive or Ultimate build (throws on an invalid one). */
-  setAbility: (slot: AbilitySlot, build: AbilityBuild) => void;
+  /** Set a skill's chain (throws on an invalid one). */
+  setChain: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
   setManualAttack: (on: boolean) => void;
 }
 
@@ -171,7 +186,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     manualAttack: loadManualAttack(),
     notices: loaded
       ? [
-          ...(loaded.migrated && loaded.profile.pair.primary && !loaded.profile.pair.secondary
+          ...(loaded.gainedPair && loaded.profile.pair.primary && !loaded.profile.pair.secondary
             ? [BIND_HINT]
             : []),
           ...loaded.fixed.map((f) => fixNotice(getDelveRegistry(), f)),
@@ -290,8 +305,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ manualAttack: on });
     },
 
-    setAbility: (slot, build) => {
-      commit(engineSetAbility(registry(), get().profile, slot, build));
+    setChain: (skill, chain) => {
+      commit(engineSetChain(registry(), get().profile, skill, chain));
     },
   };
 });

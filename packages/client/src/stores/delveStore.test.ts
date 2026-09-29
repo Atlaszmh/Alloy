@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { generateItem, SeededRNG, type BuildFix, type GearSlot } from '@alloy/engine';
+import { generateItem, SeededRNG, type ChainFix, type GearSlot } from '@alloy/engine';
 import {
   useDelveStore,
   BIND_HINT,
@@ -12,6 +12,32 @@ import {
 import { getDelveRegistry } from '@/features/delve/registry';
 
 const registry = getDelveRegistry();
+
+/** The store's save as version 3 (builds, no pair): a Frost Ward and Fire's Bolt and Nova. */
+function v3Save() {
+  const {
+    pair: _pair,
+    manaDust: _dust,
+    chains: _chains,
+    chainCaps: _caps,
+    ...rest
+  } = useDelveStore.getState().profile;
+  const build = (form: string, elements: string[], payment = 'mana') => ({
+    form,
+    elements,
+    weight: 0,
+    payment,
+  });
+  return {
+    ...rest,
+    version: 3,
+    abilities: {
+      primary: build('bolt', ['fire']),
+      defensive: build('ward', ['frost']),
+      ultimate: build('nova', ['fire'], 'charge'),
+    },
+  };
+}
 
 describe('delveStore', () => {
   beforeEach(() => {
@@ -85,24 +111,26 @@ describe('delveStore', () => {
     expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('0');
   });
 
-  it('sets an ability build and persists it', () => {
-    useDelveStore
-      .getState()
-      .setAbility('primary', { form: 'burst', elements: ['fire'], weight: 1, payment: 'cast' });
-    expect(useDelveStore.getState().profile.abilities.primary).toMatchObject({
-      form: 'burst',
-      elements: ['fire'],
-    });
-    expect(loadDelveProfile()?.profile.abilities.primary.form).toBe('burst');
+  it('sets a chain and persists it', () => {
+    const chain = {
+      moves: [{ kind: 'heavy' as const, form: 'burst' as const, elements: ['fire' as const] }],
+      payment: 'cast' as const,
+    };
+    useDelveStore.getState().setChain('primary', chain);
+    expect(useDelveStore.getState().profile.chains.primary).toEqual(chain);
+    expect(loadDelveProfile()?.profile.chains.primary).toEqual(chain);
+    useDelveStore.getState().setChain('basic', [{ kind: 'hold', element: 'fire' }]);
+    expect(loadDelveProfile()?.profile.chains.basic).toEqual([{ kind: 'hold', element: 'fire' }]);
   });
 
   it('refuses a form from another slot', () => {
     expect(() =>
-      useDelveStore
-        .getState()
-        .setAbility('primary', { form: 'nova', elements: ['fire'], weight: 0, payment: 'mana' }),
+      useDelveStore.getState().setChain('primary', {
+        moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }],
+        payment: 'mana',
+      }),
     ).toThrow(/primary/);
-    expect(useDelveStore.getState().profile.abilities.primary.form).toBe('bolt');
+    expect(useDelveStore.getState().profile.chains.primary.moves[0].form).toBe('bolt');
   });
 
   it('a reset takes a primary; without one the choice is still to make', () => {
@@ -111,36 +139,19 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().profile.pair.primary).toBeNull();
   });
 
-  it('reads an older save back migrated, with the builds it fixed', () => {
-    const { pair: _pair, manaDust: _dust, ...rest } = useDelveStore.getState().profile;
-    const frostWard = { ...rest.abilities.defensive, elements: ['frost'] };
-    localStorage.setItem(
-      DELVE_SAVE_KEY,
-      JSON.stringify({
-        ...rest,
-        version: 3,
-        abilities: { ...rest.abilities, defensive: frostWard },
-      }),
-    );
+  it('reads an older save back migrated, with the moves it fixed', () => {
+    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
     const loaded = loadDelveProfile()!;
     expect(loaded.profile).toMatchObject({
-      version: 4,
+      version: 5,
       pair: { primary: 'fire', secondary: null },
     });
-    expect(loaded.fixed.map((f) => f.slot)).toEqual(['defensive']);
+    expect(loaded.fixed.map((f) => [f.skill, f.index])).toEqual([['defensive', 0]]);
+    expect(loaded.gainedPair).toBe(true);
   });
 
-  it('a new store migrates the save, writes it back and queues the fixed builds as notices', async () => {
-    const { pair: _pair, manaDust: _dust, ...rest } = useDelveStore.getState().profile;
-    const frostWard = { ...rest.abilities.defensive, elements: ['frost'] };
-    localStorage.setItem(
-      DELVE_SAVE_KEY,
-      JSON.stringify({
-        ...rest,
-        version: 3,
-        abilities: { ...rest.abilities, defensive: frostWard },
-      }),
-    );
+  it('a new store migrates the save, writes it back and queues the fixed moves as notices', async () => {
+    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
     // A fresh module and no cached store, as on a page load.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',
@@ -149,12 +160,21 @@ describe('delveStore', () => {
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([
       BIND_HINT,
-      "Your Ward used Frost, which isn't in your pair; it now uses Fire",
+      "Your Ward's 1st move used Frost, which isn't in your pair; it now uses Fire",
     ]);
-    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(4);
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(5);
   });
 
-  it('a save that is already version 4 gets no bind hint', async () => {
+  it('a save that already has its pair (version 4 or 5) gets no bind hint', async () => {
+    const { chains: _chains, chainCaps: _caps, ...v4 } = useDelveStore.getState().profile;
+    const bolt = { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' };
+    const abilities = {
+      primary: bolt,
+      defensive: { ...bolt, form: 'ward' },
+      ultimate: { ...bolt, form: 'nova' },
+    };
+    localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify({ ...v4, version: 4, abilities }));
+    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 5 } });
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(useDelveStore.getState().profile));
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',
@@ -207,22 +227,26 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().takeNotices()).toEqual([]);
   });
 
-  it('realign charges and says which builds it changed; re-attune spends Mana Dust', () => {
+  it('realign charges and says which moves it changed; re-attune spends Mana Dust', () => {
     const s = useDelveStore.getState();
     s.setProfile({
       ...s.profile,
       pair: { primary: 'fire', secondary: 'storm' },
       manaDust: 500,
       scrap: 500,
-      abilities: {
-        ...s.profile.abilities,
-        ultimate: { form: 'maelstrom', elements: ['storm'], weight: 0, payment: 'charge' },
+      chains: {
+        ...s.profile.chains,
+        ultimate: {
+          moves: [{ kind: 'medium', form: 'maelstrom', elements: ['storm'] }],
+          payment: 'charge',
+        },
       },
     });
     expect(useDelveStore.getState().realign({ secondary: 'frost' }).ok).toBe(true);
     expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: 'frost' });
+    // Storm's role (the secondary) went to Frost.
     expect(useDelveStore.getState().takeNotices()).toEqual([
-      "Your Maelstrom used Storm, which isn't in your pair; it now uses Fire",
+      "Your Maelstrom's 1st move used Storm, which isn't in your pair; it now uses Frost",
     ]);
     const uid = useDelveStore.getState().profile.equipped.weapon!.uid;
     const dust = useDelveStore.getState().profile.manaDust;
@@ -233,14 +257,24 @@ describe('delveStore', () => {
     );
   });
 
-  it('words the notices plainly', () => {
-    const fix: BuildFix = {
-      slot: 'ultimate',
+  it('words the notices plainly, one a move', () => {
+    const fix: ChainFix = {
+      skill: 'primary',
+      index: 2,
       removed: ['frost', 'storm'],
-      build: { form: 'maelstrom', elements: ['fire'], weight: 0, payment: 'charge' },
+      move: { kind: 'medium', form: 'bolt', elements: ['fire'] },
     };
     expect(fixNotice(registry, fix)).toBe(
-      "Your Maelstrom used Frost and Storm, which aren't in your pair; it now uses Fire",
+      "Your Bolt's 3rd move used Frost and Storm, which aren't in your pair; it now uses Fire",
+    );
+    const blow: ChainFix = {
+      skill: 'basic',
+      index: 1,
+      removed: ['frost'],
+      move: { kind: 'light', element: 'fire' },
+    };
+    expect(fixNotice(registry, blow)).toBe(
+      "Your basic attack's 2nd blow used Frost, which isn't in your pair; it now uses Fire",
     );
     expect(overtakeNotice(registry, 'storm', 'fire')).toBe(
       'Storm now outweighs Fire: your basic attacks strike with Storm',
