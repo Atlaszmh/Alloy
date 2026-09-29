@@ -13,7 +13,7 @@ import {
   resolveChain,
 } from '../src/arpg/abilities/resolve.js';
 import { botInput } from '../src/arpg/bot.js';
-import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
+import { applyStatus, hitMonster, hurtHero, killMonster, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
@@ -386,7 +386,7 @@ describe('chain play', () => {
     expect(w.hero.comboStep[0]).toBe(0);
   });
 
-  it("moveNumbers gives the hit and radius the sim uses: a Ward's burst without the step bonus", () => {
+  it("moveNumbers gives the hit and radius the sim uses: a Ward's burst and an Armor's strike-back without the step bonus", () => {
     const numbers = (w: ArpgWorld, slot: number, step: number) =>
       moveNumbers(w.hero.stats, bal, moveOf(w, slot, step));
     const aim = { x: 13, y: 29 };
@@ -425,6 +425,18 @@ describe('chain play', () => {
     const hits = run(w, STEP).filter((e) => e.kind === 'hit');
     expect(hits.map((e) => e.kind === 'hit' && e.amount)).toEqual([
       expect.closeTo(numbers(w, 1, 1).hit, 9),
+    ]);
+    // An Armor on move 2 strikes a melee attacker back for its hit without it too.
+    const armor: Move = { kind: 'medium', form: 'armor', elements: ['shadow'] };
+    const a = arena([dummy(13, 35)], { noBasic: true, defensive: { moves: [armor, armor] } });
+    a.hero.stats = { ...a.hero.stats, critChance: 0 };
+    press(a, 1);
+    press(a, 1);
+    expect(a.hero.defend?.move).toBe(1);
+    const struck: ArpgEvent[] = [];
+    hurtHero(makeCtx(registry, a, struck), 10, null, a.monsters[0], { melee: true });
+    expect(struck.flatMap((e) => (e.kind === 'hit' ? [e.amount] : []))).toEqual([
+      expect.closeTo(numbers(a, 1, 1).hit, 9),
     ]);
   });
 
@@ -1079,6 +1091,35 @@ describe('basics', () => {
     expect(heading(true)).toBeCloseTo(0); // at the foe, now to its right
     expect(heading(true, { x: 7, y: 36 })).toBeCloseTo(Math.PI); // at the aim, to its left
     expect(heading(false)).toBeCloseTo(-Math.PI / 2); // a tap: ahead, as it began
+  });
+
+  it("a held sword blow re-aims as it strikes: it turns to its foe, or to the attack's aim past it", () => {
+    /** A sword hold blow held past its strike point while its foe, ahead, moves round to the hero's right. */
+    const release = (aimLeft: boolean) => {
+      const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+      const held = { move: still, attack: true };
+      stepWorld(registry, w, held, STEP);
+      const sw = w.hero.swing!;
+      expect(sw.dir.y).toBeCloseTo(-1);
+      while (w.t < sw.strikeAt + 0.4) stepWorld(registry, w, held, STEP);
+      const h = w.hero;
+      Object.assign(w.monsters[0], { x: h.x + 1.5, y: h.y });
+      const attackAim = aimLeft ? { x: h.x - 5, y: h.y } : null;
+      const events = stepWorld(registry, w, { move: still, attack: false, attackAim }, STEP);
+      const hit = events.some((e) => e.kind === 'hit' && e.id === w.monsters[0].id);
+      return { h, blow: basics(events)[0], hit };
+    };
+    const toFoe = release(false);
+    expect(toFoe.blow.dir).toEqual({ x: expect.closeTo(1), y: expect.closeTo(0) });
+    expect(toFoe.h.facing).toEqual({ x: expect.closeTo(1), y: expect.closeTo(0) });
+    expect(toFoe.hit).toBe(true);
+    // Let go aiming left: the blow follows the aim, and its old foe, behind, isn't struck.
+    const aimed = release(true);
+    const range = aimed.h.stats.weapon.range;
+    expect(aimed.blow.dir).toEqual({ x: expect.closeTo(-1), y: expect.closeTo(0) });
+    expect(aimed.blow.tx).toBeCloseTo(aimed.h.x - range);
+    expect(aimed.blow.ty).toBeCloseTo(aimed.h.y);
+    expect(aimed.hit).toBe(false);
   });
 
   it('an automatic hold blow plays the hold row straight: a slow, hard blow with its stacks', () => {

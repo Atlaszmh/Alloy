@@ -65,8 +65,9 @@ export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPa
  * swap, an overtake) or with no `was` (the migration), a move keeps its
  * in-pair elements, and a move left with none, like a blow outside the pair,
  * takes the primary. A move keeps its elements' order (the first is its body),
- * each once. Kinds, forms and payments stay. Returns the moves and blows whose
- * elements changed, one notice each, with the old elements each lost.
+ * each once. Kinds, forms and payments stay. Returns a fix for each move and
+ * blow whose elements changed, with the old elements it lost (the client
+ * groups a skill's fixes into its notices).
  */
 export function fixChainsToPair(
   profile: DelveProfile,
@@ -199,8 +200,9 @@ export function bindSecondary(
  * Change a bound pair (either element, or swap them) for Mana Dust and scrap,
  * between dives. Gear stays as it is; the chains follow the new pair
  * (`fixChainsToPair`): once an element is replaced, every move and blow takes
- * its elements' roles' new elements, a notice each. A basic chain still on its
- * default becomes the new pair's default instead, with no notice.
+ * its elements' roles' new elements, and each one changed comes back in
+ * `fixed`. A basic chain still on its default becomes the new pair's default
+ * instead, with no fix.
  */
 export function realign(
   registry: DataRegistry,

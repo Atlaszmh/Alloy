@@ -51,7 +51,7 @@ export interface ProfileActionResult {
   profile: DelveProfile;
   reason?: string;
   item?: GearItem;
-  /** The chains' moves the op changed to fit the pair (Realign), one notice each. */
+  /** The chains' moves the op changed to fit the pair (Realign), a fix each. */
   fixed?: ChainFix[];
 }
 
@@ -182,7 +182,7 @@ function buildChains(registry: DataRegistry, builds: AbilityBuilds): Pick<Chains
   return { primary, defensive, ultimate };
 }
 
-/** A save read back: the profile, and the moves a migration changed (for a notice each). */
+/** A save read back: the profile, and the moves a migration changed (a fix each). */
 export interface ParsedDelveProfile {
   profile: DelveProfile;
   fixed: ChainFix[];

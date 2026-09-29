@@ -332,7 +332,7 @@ describe('save version 5', () => {
       ['storm'],
       ['storm'],
     ]);
-    // The Bolt's default chain has four moves: a notice each.
+    // The Bolt's default chain has four moves: a fix each.
     expect(res.fixed.map((f) => [f.skill, f.index, f.removed])).toEqual([
       ['primary', 0, ['fire']],
       ['primary', 1, ['fire']],
@@ -371,7 +371,7 @@ describe('save version 5', () => {
     expect(res.profile.dive).toEqual(p.dive);
   });
 
-  it('fixChainsToPair keeps in-pair elements, gives an emptied move or a blow the primary, a notice each', () => {
+  it('fixChainsToPair keeps in-pair elements, gives an emptied move or a blow the primary, a fix each', () => {
     const chains: Chains = {
       basic: [
         { kind: 'light', element: 'fire' },
@@ -868,6 +868,38 @@ describe('a basic chain on its default follows the weapon and the pair', () => {
       [0, ['storm']],
       [1, ['fire']],
     ]);
+  });
+
+  it("a re-coloured default (the default's kinds, other elements) is a built chain", () => {
+    // The sword's light, light, heavy, all Fire on the Fire+Storm pair (the default's last is Storm).
+    const allFire = defaultBasic(registry, 'sword', 'fire');
+    const on = { weaponBaseId: 'sword', primary: 'fire', secondary: 'storm' } as const;
+    expect(isDefaultBasic(registry, allFire, on)).toBe(false);
+    const p = setChain(registry, { ...hero(), bag: [maul] }, 'basic', allFire);
+    expect(equipItem(registry, p, 'maul').chains.basic).toEqual(allFire);
+    const storm: DelveProfile = {
+      ...p,
+      equipped: {
+        ...p.equipped,
+        helm: item('storm', 'helm'),
+        gloves: item('storm', 'gloves'),
+        boots: item('storm', 'boots'),
+      },
+    };
+    const over = resolveOvertake(registry, storm);
+    expect(over.swapped).toBe(true);
+    expect(over.profile.chains.basic).toEqual(allFire);
+    // A bind starts from one element, where the default's kinds make the default itself. A
+    // realign maps the chain by role (its Fire blows take Storm), a fix each, rather than
+    // giving it the new pair's default.
+    const { realignDust, realignScrap } = bal.pair;
+    const res = realign(
+      registry,
+      { ...p, manaDust: realignDust, scrap: realignScrap },
+      { primary: 'storm', secondary: 'nature' },
+    );
+    expect(res.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
+    expect(res.fixed!.filter((f) => f.skill === 'basic')).toHaveLength(3);
   });
 });
 
