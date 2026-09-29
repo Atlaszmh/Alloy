@@ -3,6 +3,7 @@ import balanceData from '../src/data/balance.json';
 import { BalanceConfigSchema } from '../src/data/schemas.js';
 import {
   applyStatus,
+  freeze,
   hasMark,
   hitMonster,
   isBurning,
@@ -13,6 +14,7 @@ import {
   isRattled,
   isShocked,
   makeCtx,
+  type HitOpts,
 } from '../src/arpg/combat.js';
 import { shieldHero } from '../src/arpg/abilities/defend.js';
 import { resolveAbility } from '../src/arpg/abilities/resolve.js';
@@ -46,6 +48,10 @@ function setup(monsters: Partial<MonsterEntity>[] = [dummy(13, 20)], opts: Arena
   const events: ArpgEvent[] = [];
   return { w, events, ctx: makeCtx(registry, w, events), m: w.monsters[0] };
 }
+
+/** The reactions that fired, each with the pairs it consumed. */
+const fired = (events: ArpgEvent[]) =>
+  events.flatMap((e) => (e.kind === 'reaction' ? [[e.reaction, e.pairs]] : []));
 
 describe('balance: delve.stacks', () => {
   it('loads the stack numbers', () => {
@@ -359,5 +365,149 @@ describe('stacks per hit', () => {
     press(zone, 2, { x: 13, y: 28 });
     run(zone, 0.1); // the first tick
     expect(zone.monsters[0].status.stacks.fire).toBe(bal.stacks.tick);
+  });
+});
+
+describe('pairing', () => {
+  it('a hit pairs only with earlier stacks: a fused Steam hit sets up, the next Melts without a phantom freeze', () => {
+    const { ctx, m, events } = setup();
+    const steam: HitOpts = { source: 'skill', applies: ['burn', 'chill'], stacks: 2 };
+    hitMonster(ctx, m, 10, 'fire', steam);
+    expect(fired(events)).toEqual([]);
+    expect(m.status.stacks).toMatchObject({ fire: 2, frost: 2 });
+    hitMonster(ctx, m, 10, 'fire', steam);
+    // Its fire goes on, two pairs come off, then its frost: two before and after, no crossing.
+    expect(fired(events)).toEqual([['melt', 2]]);
+    expect(m.status.stacks).toMatchObject({ fire: 2, frost: 2 });
+    expect(isFrozen(ctx, m)).toBe(false);
+  });
+
+  it('the first partner in MANA_TYPES order pairs, n is the smaller count, and the rest stays', () => {
+    const { ctx, m, events } = setup();
+    applyStatus(ctx, m, 'shock', 0, false, undefined, 3);
+    applyStatus(ctx, m, 'burn', 100, false, undefined, 1);
+    hitMonster(ctx, m, 10, 'frost', { source: 'skill', applies: ['chill'], stacks: 2 });
+    // Fire comes before Storm, and has one stack: one pair.
+    expect(fired(events)).toEqual([['melt', 1]]);
+    expect(m.status.stacks).toMatchObject({ fire: 0, frost: 1, storm: 3 });
+  });
+
+  it("the hit's own element counts what the foe already had", () => {
+    const { ctx, m, events } = setup();
+    m.status.stacks.fire = 2;
+    m.status.stacks.frost = 3;
+    hitMonster(ctx, m, 10, 'fire', { source: 'skill', stacks: 1 });
+    // Two fire on the foe and one from the hit: three pairs with the three frost.
+    expect(fired(events)).toEqual([['melt', 3]]);
+    expect(m.status.stacks).toMatchObject({ fire: 0, frost: 0 });
+  });
+
+  it('a bare freeze is one frost stack to a partner: Earth Shatters it, Fire Melts it, and either ends it', () => {
+    for (const [hit, id] of [
+      ['earth', 'shatter'],
+      ['fire', 'melt'],
+    ] as const) {
+      const { ctx, m, events } = setup();
+      freeze(ctx, m, 5);
+      hitMonster(ctx, m, 10, hit, { source: 'skill', stacks: 2 });
+      expect(fired(events), hit).toEqual([[id, 1]]);
+      expect(isFrozen(ctx, m), hit).toBe(false);
+    }
+  });
+
+  it('a frost hit pairs no freeze of its own, and its pair never ends one', () => {
+    const bare = setup();
+    freeze(bare.ctx, bare.m, 5);
+    hitMonster(bare.ctx, bare.m, 10, 'frost', { source: 'skill', applies: ['chill'], stacks: 1 });
+    expect(fired(bare.events)).toEqual([]);
+    expect(isFrozen(bare.ctx, bare.m)).toBe(true);
+    // Frost on a rattled frozen foe: Shatter from the frost side, so the freeze holds.
+    const rattled = setup();
+    freeze(rattled.ctx, rattled.m, 5);
+    applyStatus(rattled.ctx, rattled.m, 'stagger', 0, true);
+    hitMonster(rattled.ctx, rattled.m, 10, 'frost', { source: 'skill', stacks: 1 });
+    expect(fired(rattled.events)).toEqual([['shatter', 1]]);
+    expect(isFrozen(rattled.ctx, rattled.m)).toBe(true);
+  });
+
+  it('a killing reaction consumes nothing: what reads the corpse sees its stacks as they were', () => {
+    const { w, ctx } = setup([dummy(13, 20, { hp: 1 }), dummy(14.5, 20)]);
+    const [a, b] = w.monsters;
+    a.status.stacks.frost = 3;
+    applyStatus(ctx, a, 'poison', 100, false, undefined, 3);
+    applyStatus(ctx, a, 'hex', 0, false, undefined, 2);
+    // Fire meets Frost first: Melt, and the hit kills. Plague spreads from the corpse.
+    hitMonster(ctx, a, 10, 'fire', { source: 'skill', stacks: 1, spread: true });
+    expect(a.dead).toBe(true);
+    expect(a.status.stacks).toMatchObject({ frost: 3, nature: 3, shadow: 2 });
+    expect(b.status.stacks).toMatchObject({ nature: 3, shadow: 2 });
+  });
+});
+
+describe('consuming', () => {
+  it('a pair ends a freeze only from the partner side, and Superconduct keeps it', () => {
+    const onFrozen = (hit: ManaType) => {
+      const { ctx, m, events } = setup();
+      applyStatus(ctx, m, 'chill', 0, false, undefined, 3); // three frost: frozen
+      hitMonster(ctx, m, 10, hit, { source: 'skill', stacks: 1 });
+      return [fired(events)[0][0], isFrozen(ctx, m), m.status.stacks.frost];
+    };
+    expect(onFrozen('fire')).toEqual(['melt', false, 2]);
+    expect(onFrozen('earth')).toEqual(['shatter', false, 2]);
+    expect(onFrozen('nature')).toEqual(['crystallize', false, 2]);
+    expect(onFrozen('shadow')).toEqual(['siphon', false, 2]);
+    expect(onFrozen('storm')).toEqual(['superconduct', true, 2]);
+  });
+
+  it('a count stops at 0 and its status with it; Soulfire and Blight consume like the rest', () => {
+    const soul = setup();
+    applyStatus(soul.ctx, soul.m, 'hex', 0, false, undefined, 2);
+    hitMonster(soul.ctx, soul.m, 10, 'fire', { source: 'skill', applies: ['burn'], stacks: 1 });
+    expect(fired(soul.events)).toEqual([['soulfire', 1]]);
+    // Its burn went on and came off with the pair: no burn ticks.
+    expect(soul.m.status.stacks).toMatchObject({ shadow: 1, fire: 0 });
+    expect(run(soul.w, 1).some((e) => e.kind === 'hit' && e.source === 'dot')).toBe(false);
+    const blight = setup();
+    applyStatus(blight.ctx, blight.m, 'poison', 100, false, undefined, 2);
+    hitMonster(blight.ctx, blight.m, 10, 'shadow', { source: 'skill', stacks: 1 });
+    expect(fired(blight.events)).toEqual([['blight', 1]]);
+    expect(blight.m.status.stacks.nature).toBe(1);
+  });
+});
+
+describe('the lockout', () => {
+  it('a reaction locks the foe for reactionLockout: stacks build meanwhile, and the next pairs more', () => {
+    const { w, ctx, m, events } = setup();
+    const frostHit: HitOpts = { source: 'skill', applies: ['chill'], stacks: 1 };
+    applyStatus(ctx, m, 'burn', 100, false, undefined, 2);
+    hitMonster(ctx, m, 10, 'frost', frostHit); // Melt, one pair
+    expect(m.status.reactionLockUntil).toBeCloseTo(w.t + bal.stacks.reactionLockout);
+    applyStatus(ctx, m, 'burn', 100, false, undefined, 2);
+    hitMonster(ctx, m, 10, 'frost', frostHit);
+    hitMonster(ctx, m, 10, 'frost', frostHit);
+    expect(fired(events)).toEqual([['melt', 1]]);
+    expect(m.status.stacks).toMatchObject({ fire: 3, frost: 2 });
+    w.t = m.status.reactionLockUntil;
+    hitMonster(ctx, m, 10, 'frost', frostHit);
+    expect(fired(events)).toEqual([
+      ['melt', 1],
+      ['melt', 3],
+    ]);
+    // The reacting hits carry their pairs too.
+    const reacting = events.filter(
+      (e): e is Extract<ArpgEvent, { kind: 'hit' }> => e.kind === 'hit' && !!e.reaction,
+    );
+    expect(reacting.map((e) => e.pairs)).toEqual([1, 3]);
+  });
+
+  it("a buff reaction's hero-side cooldown still holds on another foe", () => {
+    const { w, ctx, events } = setup([dummy(13, 20), dummy(16, 20)]);
+    for (const foe of w.monsters) {
+      applyStatus(ctx, foe, 'stagger', 0, true);
+      applyStatus(ctx, foe, 'hex', 0);
+    }
+    hitMonster(ctx, w.monsters[0], 10, 'fire', { source: 'skill' }); // Earth before Shadow: Obsidian
+    hitMonster(ctx, w.monsters[1], 10, 'fire', { source: 'skill' }); // Obsidian cools down: Soulfire
+    expect(fired(events).map(([id]) => id)).toEqual(['obsidian', 'soulfire']);
   });
 });

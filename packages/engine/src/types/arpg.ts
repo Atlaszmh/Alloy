@@ -84,15 +84,13 @@ export interface FusionDef {
   knobs: Partial<Knobs>;
 }
 
-/** A hit of either element on a foe carrying the other's mark sets it off (see the pair reactions spec). */
+/** A hit of either element pairs its stacks off with the other's on a foe to set it off (see the elemental stacks spec). */
 export interface ReactionDef {
   id: ReactionId;
   elements: [ManaType, ManaType];
   name: string;
   icon: string;
   text: string;
-  /** False: the mark that set it off stays (Soulfire, Blight). */
-  consumes?: false;
   /** A buff reaction: after it fires it can't again for `reactionCooldown` seconds. */
   cooldown?: true;
 }
@@ -155,6 +153,8 @@ export interface StatusState {
   staggerImmuneUntil: number;
   freezeImmuneUntil: number;
   rootImmuneUntil: number;
+  /** No reaction fires on the foe before this time (`stacks.reactionLockout` after one does). */
+  reactionLockUntil: number;
 }
 
 export interface MonsterEntity {
@@ -406,6 +406,8 @@ export type ArpgEvent =
       crit: boolean;
       element: ManaType | null;
       reaction?: ReactionId;
+      /** The pairs of stacks the reaction consumed (see the `reaction` event). */
+      pairs?: number;
       heft: number;
       /**
        * Where the hit came from, and the ability slot (0 Primary, 1 Defensive, 2 Ultimate) behind
@@ -489,7 +491,14 @@ export type ArpgEvent =
       element: ManaType | null;
       infusion: ManaType | null;
     }
-  | { kind: 'reaction'; reaction: ReactionId; x: number; y: number }
+  | {
+      kind: 'reaction';
+      reaction: ReactionId;
+      x: number;
+      y: number;
+      /** How many pairs of stacks it consumed: damage reactions scale with it. */
+      pairs?: number;
+    }
   | { kind: 'freeze'; id: number }
   | { kind: 'death'; id: number; x: number; y: number; monsterKind: MonsterKind; scrap: number }
   | { kind: 'drop'; dropId: number; x: number; y: number; dropKind: DropKind; rarity?: Rarity }

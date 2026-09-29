@@ -193,12 +193,9 @@ describe('the reaction table', () => {
     expect(registry.getReactionFor('earth', 'storm').name).toBe('Lightning Rod');
   });
 
-  it('Soulfire and Blight keep their mark; the five buff reactions have a cooldown', () => {
+  it('every reaction uses up its pairs; the five buff reactions have a cooldown', () => {
     const reactions = registry.getArpgData().reactions;
-    expect(reactions.filter((r) => r.consumes === false).map((r) => r.id)).toEqual([
-      'soulfire',
-      'blight',
-    ]);
+    expect(reactions.some((r) => 'consumes' in r)).toBe(false);
     expect(reactions.filter((r) => r.cooldown).map((r) => r.id)).toEqual([
       'obsidian',
       'lightning_rod',
@@ -392,17 +389,11 @@ describe('every pair reacts, both ways', () => {
     });
     expect(reactions(f.events)).toEqual([id]);
     const { ctx, m } = f;
-    if (id === 'soulfire' || id === 'blight') expect(hasMark(ctx, m, marked)).toBe(true);
-    else if (id === 'shatter' && hit === 'earth') {
-      // Earth breaks the freeze and leaves the chill.
-      expect(isFrozen(ctx, m)).toBe(false);
-      expect(isChilled(ctx, m)).toBe(true);
-    } else if (id === 'superconduct' && hit === 'storm') {
-      // Storm takes the chill and leaves the freeze (freezing again would be refused).
-      expect(isChilled(ctx, m)).toBe(false);
-      expect(m.status.stacks.frost).toBe(0);
-      expect(isFrozen(ctx, m)).toBe(true);
-    } else expect(hasMark(ctx, m, marked)).toBe(false);
+    // One pair comes off both sides: the mark drops by one (a frost mark's three leave two), and
+    // a freeze ends when frost was the partner, except under Superconduct.
+    expect(m.status.stacks[marked]).toBe(marked === 'frost' ? 2 : 0);
+    expect(m.status.stacks[hit]).toBe(0);
+    expect(isFrozen(ctx, m)).toBe(id === 'superconduct');
     // A buff reaction starts its own cooldown.
     if (registry.getReaction(id).cooldown)
       expect(f.w.hero.reactionReadyAt[id]).toBeCloseTo(f.w.t + bal.reactions.reactionCooldown);
@@ -661,6 +652,7 @@ describe('Seedling and Siphon', () => {
     const ctx = makeCtx(registry, w, []);
     applyStatus(ctx, d, 'poison', 100);
     hitMonster(ctx, d, 10, 'earth', { source: 'skill' }); // Seedling
+    w.t += bal.stacks.reactionLockout; // the dummy's lockout
     applyStatus(ctx, d, 'hex', 0);
     hitMonster(ctx, d, 10, 'frost', { source: 'skill' }); // Siphon
     expect(w.drops.map((x) => x.kind)).toEqual(['orb', 'mote', 'mote', 'mote']);

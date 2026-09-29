@@ -586,7 +586,6 @@ export const ArpgDataSchema = z.object({
         name: z.string(),
         icon: z.string(),
         text: z.string(),
-        consumes: z.literal(false).optional(),
         cooldown: z.literal(true).optional(),
       }),
     )

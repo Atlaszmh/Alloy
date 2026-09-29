@@ -56,6 +56,7 @@ export function emptyStatus(): StatusState {
     staggerImmuneUntil: 0,
     freezeImmuneUntil: 0,
     rootImmuneUntil: 0,
+    reactionLockUntil: 0,
   };
 }
 

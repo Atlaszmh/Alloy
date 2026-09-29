@@ -56,8 +56,8 @@ export interface HitOpts {
   /** The source includes Earth: its stagger adds Earth stacks. */
   rattles?: boolean;
   /**
-   * Stacks the hit applies of each element status in `applies` (default `stacks.tick`; see
-   * the elemental stacks spec).
+   * Stacks the hit applies of each element status in `applies`, and brings to a pairing
+   * (default `stacks.tick`; see the elemental stacks spec).
    */
   stacks?: number;
 }
@@ -297,8 +297,8 @@ export function freeze(ctx: SimCtx, m: MonsterEntity, seconds: number): void {
   ctx.events.push({ kind: 'freeze', id: m.id });
 }
 
-function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity): void {
-  ctx.events.push({ kind: 'reaction', reaction, x: m.x, y: m.y });
+function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity, pairs: number): void {
+  ctx.events.push({ kind: 'reaction', reaction, x: m.x, y: m.y, pairs });
   if (!ctx.world.pending.reactions.includes(reaction)) ctx.world.pending.reactions.push(reaction);
 }
 
@@ -310,39 +310,56 @@ function nearby(ctx: SimCtx, m: MonsterEntity, radius: number): MonsterEntity[] 
 }
 
 /**
- * The reaction a hit of `element` sets off on `m`: the first other element's
- * mark on it, in MANA_TYPES order, whose reaction can fire now; else null.
+ * What a hit of `element` bringing `k` stacks pairs with on `m`: the first other element in
+ * MANA_TYPES order with stacks from earlier hits (a bare freeze counts as one frost stack) whose
+ * reaction can fire, and `n`, the pairs (see the elemental stacks spec); null while the foe's
+ * lockout runs, or if nothing pairs.
  */
-function findReaction(
+function findPair(
   ctx: SimCtx,
   m: MonsterEntity,
   element: ManaType,
-): { def: ReactionDef; mark: ManaType } | null {
-  for (const mark of MANA_TYPES) {
-    if (mark === element || !hasMark(ctx, m, mark)) continue;
+  k: number,
+): { def: ReactionDef; partner: ManaType; n: number } | null {
+  const s = m.status;
+  const t = ctx.world.t;
+  // This hit's own element pairs from its raw count: a frost hit never pairs a freeze it has no stacks for.
+  const total = Math.min(stackCap(ctx, element), s.stacks[element] + k);
+  if (total <= 0 || t < s.reactionLockUntil) return null;
+  const frozen = isFrozen(ctx, m);
+  for (const partner of MANA_TYPES) {
+    if (partner === element) continue;
+    const before = partner === 'frost' && frozen ? Math.max(1, s.stacks.frost) : s.stacks[partner];
+    if (before <= 0) continue;
     // Earth shatters a freeze, not a mere chill.
-    if (element === 'earth' && mark === 'frost' && !isFrozen(ctx, m)) continue;
-    const def = ctx.registry.getReactionFor(element, mark);
+    if (element === 'earth' && partner === 'frost' && !frozen) continue;
+    const def = ctx.registry.getReactionFor(element, partner);
     // A buff reaction on its own cooldown can't fire.
-    if (!def.cooldown || ctx.world.t >= (ctx.world.hero.reactionReadyAt[def.id] ?? 0))
-      return { def, mark };
+    if (def.cooldown && t < (ctx.world.hero.reactionReadyAt[def.id] ?? 0)) continue;
+    return { def, partner, n: Math.min(total, before) };
   }
   return null;
 }
 
 /**
- * Clear the mark that set `reaction` off: its element's stacks. Earth's Shatter
- * breaks only the freeze; Storm's Superconduct takes only the stacks (the freeze
- * it would add again is refused by immunity, so the foe stays frozen).
- * Interim: Task 4 replaces this with consumePairs.
+ * Take `n` stacks off both sides of a pair (a count stops at 0, and its status with it). A
+ * freeze ends when frost was the partner, except under Superconduct, which keeps it.
  */
-function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void {
-  if (mark !== 'frost' || reaction !== 'shatter') m.status.stacks[mark] = 0;
-  if (mark === 'frost' && reaction !== 'superconduct') m.status.freezeUntil = 0;
+function consumePairs(
+  m: MonsterEntity,
+  element: ManaType,
+  partner: ManaType,
+  n: number,
+  reaction: ReactionId,
+): void {
+  const s = m.status;
+  s.stacks[element] = Math.max(0, s.stacks[element] - n);
+  s.stacks[partner] = Math.max(0, s.stacks[partner] - n);
+  if (partner === 'frost' && reaction !== 'superconduct') s.freezeUntil = 0;
 }
 
 /**
- * A reaction's effect on `m` (its mark already used up). Returns the hit's
+ * A reaction's effect on `m`, before its pairs come off. Returns the hit's
  * amount after it: the damage multipliers, times Catalyst. `slot`: the hit's
  * ability slot, which its splash carries.
  */
@@ -501,16 +518,17 @@ export function hitMonster(
   if (isSundered(ctx, m)) amount *= 1 + bal.reactions.sunderBonus;
   if (isFrozen(ctx, m) && mastery(ctx, 'frost')) amount *= 1.3;
 
-  // Elemental reactions: this hit's element meets another element's mark on the foe.
+  // Elemental reactions: this hit's stacks pair off with another element's from earlier hits.
+  const k = opts.stacks ?? bal.stacks.tick;
   const frostBefore = stacks.frost;
   let reaction: ReactionId | undefined;
-  const found = element && !opts.noReact ? findReaction(ctx, m, element) : null;
-  if (found) {
-    reaction = found.def.id;
-    if (found.def.consumes !== false) useUpMark(m, found.mark, reaction);
+  const pair = element && !opts.noReact ? findPair(ctx, m, element, k) : null;
+  if (pair) {
+    reaction = pair.def.id;
     amount = react(ctx, m, reaction, amount, opts.slot);
-    if (found.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
-    noteReaction(ctx, reaction, m);
+    m.status.reactionLockUntil = world.t + bal.stacks.reactionLockout;
+    if (pair.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
+    noteReaction(ctx, reaction, m, pair.n);
     if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
   }
 
@@ -526,6 +544,7 @@ export function hitMonster(
     crit,
     element,
     reaction,
+    ...(pair ? { pairs: pair.n } : {}),
     heft: opts.heft ?? 0,
     source: opts.source,
     slot: opts.slot,
@@ -566,17 +585,23 @@ export function hitMonster(
 
   // A training dummy never dies: lethal damage puts it back to full, and the hit carries on.
   if (m.dummy && m.hp <= 0) m.hp = m.maxHp;
+  // A kill consumes nothing: what reads the corpse sees its stacks as they were.
   if (m.hp <= 0) {
     if (opts.spread) spreadAffliction(ctx, m);
     killMonster(ctx, m);
     return amount;
   }
 
-  const k = opts.stacks ?? bal.stacks.tick;
-  for (const s of opts.applies ?? []) addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
+  // The hit's own element's stacks, then the pairs come off both sides, then its other
+  // statuses; frost freezes only if its final count crossed the threshold.
+  const applies = opts.applies ?? [];
+  const own = element ? BASIC_STATUS[element] : null;
+  const add = (s: StatusId) => addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
+  if (own && applies.includes(own)) add(own);
+  if (element && pair) consumePairs(m, element, pair.partner, pair.n, pair.def.id);
+  for (const s of applies) if (s !== own) add(s);
   // The riposte staggers; it adds no stacks.
   if (riposte) addStatus(ctx, m, 'stagger', amount, false, undefined, 0);
-  // Frost freezes only if the hit's final count crossed the threshold.
   crossFreeze(ctx, m, frostBefore);
 
   if (opts.knockback && opts.kbFrom) {
