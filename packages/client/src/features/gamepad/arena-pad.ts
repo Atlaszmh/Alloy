@@ -72,7 +72,9 @@ export function padToArena(
  * charging, casts on its button's release (`released`: the slot held last
  * frame and not now), never on the press and never by repeat: the held
  * button charges it. Any other casts on the press, which always tries (so an
- * unaffordable one still says so), or with repeat on, again whenever it's ready.
+ * unaffordable one still says so), or with repeat on, again whenever it's ready,
+ * but not while the button that dropped its slot's hold stays held
+ * (`holdDropped`): after a hold fires by itself, the next move waits for a press.
  */
 export function padCast(
   registry: DataRegistry,
@@ -81,28 +83,54 @@ export function padCast(
   released: number | null,
 ): number | null {
   const h = world.hero;
-  const window = registry.getDelveBalance().abilities.comboWindow;
+  const comboWindow = registry.getDelveBalance().abilities.comboWindow;
   const isHold = (slot: number) =>
-    h.hold?.slot === slot || nextMove(h, slot, world.t, window).kind === 'hold';
+    h.hold?.slot === slot || nextMove(h, slot, world.t, comboWindow).kind === 'hold';
   if (released !== null && isHold(released)) return released;
   if (acts.cast !== null) return isHold(acts.cast) ? null : acts.cast;
   const held = acts.castHeld;
-  return held !== null && !isHold(held) && abilityReady(makeCtx(registry, world, []), held)
+  return held !== null &&
+    !isHold(held) &&
+    world.holdDropped !== held &&
+    abilityReady(makeCtx(registry, world, []), held)
     ? held
     : null;
 }
 
+/** What the pad remembers from the frame before. */
+export interface PadMemory {
+  /** The ability slot held then: once it no longer is, its button has let go. */
+  holding: number | null;
+  /** A press that came as another slot's hold released: it casts now. */
+  carried: number | null;
+  /** The attack button held then: the tick it lets go still aims with the stick. */
+  attackHeld: boolean;
+}
+
+export function padMemory(): PadMemory {
+  return { holding: null, carried: null, attackHeld: false };
+}
+
 /**
- * The pad's release edge: fed each frame's held ability slot, it returns the
- * slot whose button went up since the frame before (else null), for `padCast`.
+ * This frame's controller cast (`padCast`) with the pad's memory of the frame
+ * before: the slot held then and not now has released. `holding` names one
+ * slot, so a chord (another button pressed while a hold charges) brings a
+ * release and a press in one frame: the release casts now and the press the
+ * frame after, rather than being lost.
  */
-export function releaseEdge(): (holding: number | null) => number | null {
-  let last: number | null = null;
-  return (holding) => {
-    const released = last !== null && holding !== last ? last : null;
-    last = holding;
-    return released;
-  };
+export function padFrameCast(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  acts: Pick<ArenaPadActions, 'cast' | 'castHeld' | 'holding'>,
+  mem: PadMemory,
+): number | null {
+  const released = mem.holding !== null && acts.holding !== mem.holding ? mem.holding : null;
+  const press = acts.cast ?? mem.carried;
+  mem.holding = acts.holding;
+  mem.carried = null;
+  const slot = padCast(registry, world, { cast: press, castHeld: acts.castHeld }, released);
+  if (slot !== null && slot === released && press !== null && press !== slot) mem.carried = press;
+  return slot;
 }
 
 /**

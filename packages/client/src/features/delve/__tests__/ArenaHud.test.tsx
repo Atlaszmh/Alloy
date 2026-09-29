@@ -90,7 +90,7 @@ describe('the ability buttons', () => {
     expect(screen.getByTestId('ability-1').querySelector('[data-chain]')).toBeNull();
   });
 
-  it('a press aims (a hold move charges meanwhile), a release casts, and a release back on the button cancels', () => {
+  it('a press aims (a hold move charges meanwhile), a release casts, and a lost pointer cancels', () => {
     const onCast = vi.fn();
     const onAim = vi.fn();
     const onCancel = vi.fn();
@@ -102,16 +102,54 @@ describe('the ability buttons', () => {
     fireEvent.pointerUp(button, { pointerId: 1, clientX: 0, clientY: 0 });
     expect(onCast).toHaveBeenLastCalledWith(0); // a tap auto-aims
     expect(onAim).toHaveBeenLastCalledWith(null);
-    // Held past a tap, then let go back on the button (jsdom lays it out at 0, 0).
-    fireEvent.pointerDown(button, { pointerId: 2, clientX: 0, clientY: 0 });
-    now.mockReturnValue(1500);
-    fireEvent.pointerUp(button, { pointerId: 2, clientX: 0, clientY: 0 });
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(onCast).toHaveBeenCalledTimes(1);
-    // The browser takes the pointer away: cancelled too.
+    // The browser takes the pointer away: cancelled.
     fireEvent.pointerDown(button, { pointerId: 3, clientX: 0, clientY: 0 });
     fireEvent.pointerCancel(button, { pointerId: 3 });
-    expect(onCancel).toHaveBeenCalledTimes(2);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCast).toHaveBeenCalledTimes(1);
+    now.mockRestore();
+  });
+
+  it('a slow press of any move let go in place casts it, auto-aimed, as a key does', () => {
+    const onCast = vi.fn();
+    const onCancel = vi.fn();
+    render(bar({ abilities: [BOLT] }, { onCast, onCancel }));
+    const button = screen.getByTestId('ability-0');
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    // Held past a tap, then let go where it began (jsdom lays the button out at 0, 0).
+    fireEvent.pointerDown(button, { pointerId: 1, clientX: 0, clientY: 0 });
+    now.mockReturnValue(1800);
+    fireEvent.pointerUp(button, { pointerId: 1, clientX: 0, clientY: 0 });
+    expect(onCast).toHaveBeenCalledTimes(1);
+    expect(onCast).toHaveBeenLastCalledWith(0);
+    expect(onCancel).not.toHaveBeenCalled();
+    now.mockRestore();
+  });
+
+  it('a thumb jittering over the rim stays in place; only out past the drag threshold and back cancels', () => {
+    const onCast = vi.fn();
+    const onCancel = vi.fn();
+    render(bar({ abilities: [{ ...BOLT, nextKind: 'hold' as const }] }, { onCast, onCancel }));
+    const button = screen.getByTestId('ability-0');
+    // A 64 px button: centre (32, 32), radius 32.
+    button.getBoundingClientRect = () => new DOMRect(0, 0, 64, 64);
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const hold = (id: number, path: number[], upX: number) => {
+      fireEvent.pointerDown(button, { pointerId: id, clientX: 32, clientY: 32 });
+      for (const x of path)
+        fireEvent.pointerMove(button, { pointerId: id, clientX: x, clientY: 32 });
+      now.mockReturnValue(performance.now() + 800);
+      fireEvent.pointerUp(button, { pointerId: id, clientX: upX, clientY: 32 });
+    };
+    // Over the rim by 8 px and back, let go inside, then let go 8 px past the rim: both in place.
+    hold(1, [72, 40], 40);
+    hold(2, [72], 72);
+    expect(onCast.mock.calls).toEqual([[0], [0]]);
+    expect(onCancel).not.toHaveBeenCalled();
+    // Out past the rim and the drag threshold, then back: cancelled.
+    hold(3, [110, 40], 40);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCast).toHaveBeenCalledTimes(2);
     now.mockRestore();
   });
 

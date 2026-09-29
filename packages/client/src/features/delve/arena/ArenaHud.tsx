@@ -3,7 +3,7 @@ import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
 import { KIND_ICON, moveText } from '../chains/chain-text';
-import { classifyPress, isCancelled } from './aim-gestures';
+import { DRAG_PX, classifyPress, isCancelled } from './aim-gestures';
 import { keyLabel, padHint, type ControlsConfig } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from './useArena';
 
@@ -225,10 +225,10 @@ function ChainDots({ step, length, color }: { step: number; length: number; colo
 
 /**
  * One ability button: its chain's next move, the step dots, that move's kind
- * and a hold's charge. A quick tap auto-aims; dragging out shows the aim
- * marker in the arena and releasing casts there (drag out and back onto the
- * button to cancel). While it's held a hold move charges: letting go in place
- * casts it, auto-aimed; out and back cancels it unpaid.
+ * and a hold's charge. A tap, or a press let go in place, casts auto-aimed;
+ * dragging out shows the aim marker in the arena and releasing casts there;
+ * out and back onto the button cancels (a charging hold unpaid). While it's
+ * held a hold move charges.
  */
 function AbilityButton({
   slot,
@@ -276,10 +276,10 @@ function AbilityButton({
     };
     onAim(slot, { x: e.clientX, y: e.clientY });
   };
-  /** Whether the pointer is over the button (within its radius). */
+  /** Whether the pointer is over the button: within its radius and the drag threshold (a thumb jitters). */
   const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 + DRAG_PX };
     return isCancelled({ x: e.clientX, y: e.clientY }, button);
   };
   const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -296,8 +296,8 @@ function AbilityButton({
     const drag = Math.hypot(e.clientX - p.x, e.clientY - p.y);
     if (classifyPress(performance.now() - p.t, drag) === 'tap') return onCast(slot);
     if (!over(e)) return onCast(slot, { x: e.clientX, y: e.clientY });
-    // Back on the button: a hold held in place fires; out and back cancels.
-    if (!p.left && (ab.hold !== null || ab.nextKind === 'hold')) onCast(slot);
+    // On the button: let go in place it casts, auto-aimed (as a key does); out and back cancels.
+    if (!p.left) onCast(slot);
     else onCancel();
   };
   const cancel = () => {

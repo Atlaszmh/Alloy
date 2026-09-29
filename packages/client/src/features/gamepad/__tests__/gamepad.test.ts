@@ -1,7 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { computeHeroStats, createSandboxWorld, defaultChains, stepWorld } from '@alloy/engine';
+import {
+  abilityReady,
+  computeHeroStats,
+  createSandboxWorld,
+  defaultChains,
+  makeCtx,
+  spawnDummies,
+  stepWorld,
+  type ArpgEvent,
+  type ArpgWorld,
+} from '@alloy/engine';
 import { edges, radialDeadzone, readPad, type GamepadLike } from '../gamepad';
-import { padCast, padToArena, releaseEdge, stickAimPoint } from '../arena-pad';
+import {
+  padCast,
+  padFrameCast,
+  padMemory,
+  padToArena,
+  stickAimPoint,
+  type PadMemory,
+} from '../arena-pad';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { DEFAULT_CONTROLS, bindPad } from '@/features/controls/controls';
 import { pickNext, type NavRect } from '../spatial-nav';
@@ -103,14 +120,6 @@ describe('padToArena (triggers fire, bumpers support)', () => {
   });
 });
 
-describe('releaseEdge', () => {
-  it('reports the slot held the frame before and not now', () => {
-    const release = releaseEdge();
-    const frames: (number | null)[] = [0, 0, null, 1, 2, null];
-    expect(frames.map((held) => release(held))).toEqual([null, null, 0, null, 1, 2]);
-  });
-});
-
 describe('padCast (a hold casts on its release, read from the world)', () => {
   const registry = getDelveRegistry();
   const STEP = registry.getDelveBalance().arena.step;
@@ -154,6 +163,69 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     expect(w.hero.hold?.slot).toBe(0);
     expect(padCast(registry, w, none, 0)).toBe(0);
     expect(padCast(registry, w, none, 1)).toBeNull(); // the Ward isn't a hold
+  });
+
+  it('repeat stops at a hold that fired by itself, while its button stays held', () => {
+    const w = world();
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.comboStep[0] = 0;
+    w.hero.comboAt[0] = w.t;
+    // Held past holdMax, the Lance fires by itself and lands; the button stays held.
+    const { holdMax } = registry.getDelveBalance().chains;
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((holdMax + 0.5) / STEP); i++)
+      events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP));
+    expect(events.filter((e) => e.kind === 'cast')).toHaveLength(1);
+    expect(w.holdDropped).toBe(0);
+    // The next move, the light Bolt, is ready, but the held button doesn't repeat into it.
+    expect(abilityReady(makeCtx(registry, w, []), 0)).toBe(true);
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
+  });
+
+  /** One frame on the pad: its cast (`padFrameCast`) into a step of `w`, `holding`'s button held. */
+  const frame = (w: ArpgWorld, mem: PadMemory, cast: number | null, holding: number | null) => {
+    const slot = padFrameCast(registry, w, { cast, castHeld: null, holding }, mem);
+    const step = {
+      move: { x: 0, y: 0 },
+      holding,
+      cast: slot === null ? null : { slot, aim: null },
+    };
+    const casts = stepWorld(registry, w, step, STEP).flatMap((e) =>
+      e.kind === 'cast' ? [e.slot] : [],
+    );
+    return { slot, casts };
+  };
+
+  it('padFrameCast: a hold casts on the frame its button goes up', () => {
+    const w = world();
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.comboStep[0] = 0;
+    w.hero.comboAt[0] = w.t;
+    const mem = padMemory();
+    const frames = [0, 0, 0, null].map((held, i) => frame(w, mem, i === 0 ? 0 : null, held));
+    expect(frames.map((f) => f.slot)).toEqual([null, null, null, 0]);
+  });
+
+  it('padFrameCast: a chord keeps both presses, the release first', () => {
+    // The Ultimate a Nova that holds (on R3), the Defensive a Ward (on LB).
+    const w = createSandboxWorld(registry, {
+      depth: 5,
+      stats: computeHeroStats({}, registry),
+      chains: {
+        ...defaultChains(registry, 'fire', null),
+        ultimate: { moves: [{ kind: 'hold', form: 'nova', elements: ['fire'] }], payment: 'mana' },
+      },
+      // Mana enough for both.
+      toggles: { infiniteMana: true, noCooldowns: false, invulnerable: false },
+    });
+    const mem = padMemory();
+    for (let i = 0; i < 15; i++) frame(w, mem, i === 0 ? 2 : null, 2);
+    expect(w.hero.hold?.slot).toBe(2);
+    // LB goes down with R3 still held: `holding` names the Defensive now, so the Nova releases
+    // this frame, and the Ward's press casts the next.
+    const frames = Array.from({ length: 60 }, (_, i) => frame(w, mem, i === 0 ? 1 : null, 1));
+    expect(frames.slice(0, 3).map((f) => f.slot)).toEqual([2, 1, null]);
+    expect(frames.flatMap((f) => f.casts)).toEqual([2, 1]);
   });
 });
 

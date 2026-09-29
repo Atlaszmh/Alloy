@@ -10,7 +10,6 @@ import {
   holdCharge,
   nextMove,
   pressStep,
-  type AbilityCast,
   type ArpgEvent,
   type ArpgWorld,
   type Chains,
@@ -22,21 +21,13 @@ import {
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
 import { loadDelveSprites } from './sprites';
-import {
-  attachKeyboard,
-  createArenaInput,
-  holdingSlot,
-  moveVector,
-  type ArenaInput,
-  type CastPress,
-} from './input';
+import { attachKeyboard, createArenaInput, frameInput, type ArenaInput } from './input';
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
 import { useControlsStore } from '@/stores/controlsStore';
 import {
-  padCast,
+  padMemory,
   padToArena,
-  releaseEdge,
   stickAimPoint,
   type ArenaPadActions,
 } from '@/features/gamepad/arena-pad';
@@ -293,8 +284,8 @@ export function useArenaCore(
     const flags = readArenaFlags();
     const comboWindow = registry.getDelveBalance().abilities.comboWindow;
     let hudClock = 0;
-    /** The pad's release edge (a hold casts on its release). */
-    const padRelease = releaseEdge();
+    /** What the pad remembers from the frame before (a hold's release, a chord's press, the attack button). */
+    const padMem = padMemory();
     // `resizeTo` only follows the window; the host can also change size on its own (the
     // Training panel docking beside it), so the canvas follows the host too.
     const hostResize = new ResizeObserver(() => app.queueResize());
@@ -337,47 +328,20 @@ export function useArenaCore(
           const dt = real * scale * mode.speed;
           if (!world) return;
           const paused = pausedRef.current;
-          const pad = padFrame(world, paused);
+          const pad = padFrame(paused);
           if (!paused && !finishedRef.current) {
-            const input = inputRef.current;
-            const padMove = pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : null;
-            // Whenever the stick is off-centre, not only while attack is held: a held blow
-            // re-aims on its release tick (the engine reads the aim only then and at a swing's start).
-            const padAttackAim = pad?.aimDir
-              ? stickAimPoint(world.hero, pad.aimDir, 1, world.hero.stats.weapon.range, false)
-              : null;
+            const input = frameInput(registry, world, inputRef.current, pad, padMem, {
+              manual: manualRef.current,
+              aimReach: useControlsStore.getState().config.aimReach,
+              toWorld: (p) => renderer.screenToWorld(p.x, p.y),
+            });
             const wasDead = world.heroDead;
             const events = stepWorld(
               registry,
               world,
-              flags.autopilot
-                ? botInput(registry, world)
-                : {
-                    move: padMove ?? moveVector(input),
-                    cast: toCast(input.cast),
-                    holding: holdingSlot(input) ?? pad?.holding ?? null,
-                    cancelHold: input.cancelHold,
-                    potion: input.potion || !!pad?.potion,
-                    dodge: input.dodge || !!pad?.dodge,
-                    ...(manualRef.current
-                      ? {
-                          attack: input.attackHeld || input.attackTap || !!pad?.attackHeld,
-                          attackTap: input.attackTap || !!pad?.attackTap,
-                          attackAim: padAttackAim
-                            ? padAttackAim
-                            : input.attackAim
-                              ? renderer.screenToWorld(input.attackAim.x, input.attackAim.y)
-                              : null,
-                        }
-                      : {}),
-                  },
+              flags.autopilot ? botInput(registry, world) : input,
               dt * flags.timescale,
             );
-            input.cast = null;
-            input.cancelHold = false;
-            input.potion = false;
-            input.dodge = false;
-            input.attackTap = false;
             if (events.length > 0) {
               renderer.handleEvents(events);
               // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
@@ -401,44 +365,16 @@ export function useArenaCore(
         setReady(true);
       });
 
-    /** A press's screen aim point → world units. */
-    function toCast(press: CastPress | null): AbilityCast | null {
-      if (!press) return null;
-      if (press.aimWorld) return { slot: press.slot, aim: press.aimWorld };
-      const r = rendererRef.current;
-      return {
-        slot: press.slot,
-        aim: press.aim && r ? r.screenToWorld(press.aim.x, press.aim.y) : null,
-      };
-    }
-
     /**
-     * The controller's part of this frame (see gamepad-hub): Menu opens the
-     * dive menu, and an ability press (or a hold's release: see `padCast`) is
-     * queued, aimed by the right stick.
+     * The controller's part of this frame (see gamepad-hub), or null with none
+     * or while paused; Menu opens the dive menu. `frameInput` turns it into the
+     * step's input (a press, or a hold's release: see `padFrameCast`).
      */
-    function padFrame(world: ArpgWorld, paused: boolean): ArenaPadActions | null {
+    function padFrame(paused: boolean): ArenaPadActions | null {
       const state = padState();
       if (!state || paused) return null;
-      const pressed = takeArenaPresses();
-      const controls = useControlsStore.getState().config;
-      const acts = padToArena(state, pressed, controls);
+      const acts = padToArena(state, takeArenaPresses(), useControlsStore.getState().config);
       if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
-      const slot = padCast(registry, world, acts, padRelease(acts.holding));
-      if (slot !== null) {
-        const ab = nextMove(world.hero, slot, world.t, comboWindow);
-        const aimWorld = acts.aimDir
-          ? stickAimPoint(
-              world.hero,
-              acts.aimDir,
-              acts.aimTilt,
-              ab.range,
-              aimMarkerFor(ab.form.id) === 'circle',
-              controls.aimReach,
-            )
-          : null;
-        inputRef.current.cast = { slot, aim: null, aimWorld };
-      }
       return acts;
     }
 

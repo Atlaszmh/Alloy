@@ -1,14 +1,25 @@
-import type { Vec } from '@alloy/engine';
-import { classifyPress } from './aim-gestures';
+import {
+  nextMove,
+  type AbilityCast,
+  type ArpgInput,
+  type ArpgWorld,
+  type DataRegistry,
+  type Vec,
+} from '@alloy/engine';
+import { aimMarkerFor, classifyPress } from './aim-gestures';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
+import {
+  padFrameCast,
+  stickAimPoint,
+  type ArenaPadActions,
+  type PadMemory,
+} from '@/features/gamepad/arena-pad';
 
 /** An ability press. `aim` is a screen point (client px), or null to auto-aim. */
 export interface CastPress {
   slot: number;
   aim: Vec | null;
-  /** An aim already in world units (the controller's right stick). */
-  aimWorld?: Vec | null;
 }
 
 /** A press being held to aim: the marker follows `at` (client px), or the mouse when null. */
@@ -63,6 +74,73 @@ export function moveVector(input: ArenaInput): Vec {
 /** The ability slot whose key or button is held: a hold move charges while it is, and its release casts. */
 export function holdingSlot(input: ArenaInput): number | null {
   return input.aiming?.slot ?? null;
+}
+
+/** How `frameInput` reads the controls: manual attacks, the stick's aim reach, screen px to world units. */
+export interface FrameOpts {
+  manual: boolean;
+  aimReach: number;
+  toWorld: (screen: Vec) => Vec;
+}
+
+/**
+ * One step's input from the keys, mouse and HUD (`input`) and the controller
+ * (`pad`, null when there is none; `mem`, what it remembers from the frame
+ * before). The pad's cast (`padFrameCast`, aimed by the right stick) wins over
+ * a key's or a button's; a key or button held wins `holding` over the pad; the
+ * stick aims the attack only while the pad drives it (the attack button held,
+ * or let go this frame, whose tick a held blow re-aims on). Each press (a
+ * cast, `cancelHold`, a dodge, a potion, an attack tap) goes once, then resets.
+ */
+export function frameInput(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  input: ArenaInput,
+  pad: ArenaPadActions | null,
+  mem: PadMemory,
+  o: FrameOpts,
+): ArpgInput {
+  const h = world.hero;
+  const press = input.cast;
+  let cast: AbilityCast | null = press
+    ? { slot: press.slot, aim: press.aim ? o.toWorld(press.aim) : null }
+    : null;
+  const slot = pad ? padFrameCast(registry, world, pad, mem) : null;
+  if (pad && slot !== null) {
+    const ab = nextMove(h, slot, world.t, registry.getDelveBalance().abilities.comboWindow);
+    const placed = aimMarkerFor(ab.form.id) === 'circle';
+    const aim = pad.aimDir
+      ? stickAimPoint(h, pad.aimDir, pad.aimTilt, ab.range, placed, o.aimReach)
+      : null;
+    cast = { slot, aim };
+  }
+  const stick = pad?.aimDir && (pad.attackHeld || mem.attackHeld) ? pad.aimDir : null;
+  mem.attackHeld = !!pad?.attackHeld;
+  const out: ArpgInput = {
+    move: pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : moveVector(input),
+    cast,
+    holding: holdingSlot(input) ?? pad?.holding ?? null,
+    cancelHold: input.cancelHold,
+    potion: input.potion || !!pad?.potion,
+    dodge: input.dodge || !!pad?.dodge,
+    ...(o.manual
+      ? {
+          attack: input.attackHeld || input.attackTap || !!pad?.attackHeld,
+          attackTap: input.attackTap || !!pad?.attackTap,
+          attackAim: stick
+            ? stickAimPoint(h, stick, 1, h.stats.weapon.range, false)
+            : input.attackAim
+              ? o.toWorld(input.attackAim)
+              : null,
+        }
+      : {}),
+  };
+  input.cast = null;
+  input.cancelHold = false;
+  input.potion = false;
+  input.dodge = false;
+  input.attackTap = false;
+  return out;
 }
 
 /** The arrow keys always move, whatever else is bound. */
