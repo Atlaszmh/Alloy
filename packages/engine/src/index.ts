@@ -212,3 +212,5 @@ export {
   sandboxWeapon,
 } from './arpg/sandbox.js';
 export type { SandboxWorldOptions } from './arpg/sandbox.js';
+export { simulateDps, dpsCombos, dpsKey, DPS_SECONDS } from './arpg/dps-sim.js';
+export type { DpsSetup, DpsOptions, DpsResult } from './arpg/dps-sim.js';
