@@ -21,18 +21,21 @@ import {
   DelveProfileSchema,
   DelveProfileV2Schema,
   DelveProfileV3Schema,
+  DelveProfileV4Schema,
 } from './profile-schema.js';
-import { chooseStartingMana, fixBuildsToPair, inPair, salvageDust, type BuildFix } from './pair.js';
-import { defaultAbilities } from '../arpg/abilities/resolve.js';
+import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
+import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
-  ABILITY_WEIGHTS,
+  MOVE_KINDS,
   type AbilityBuild,
   type AbilityBuilds,
   type AbilitySlot,
+  type Blow,
   type Chain,
   type Chains,
+  type ChainSkill,
   type MoveKind,
 } from '../types/ability.js';
 
@@ -41,8 +44,8 @@ export interface ProfileActionResult {
   profile: DelveProfile;
   reason?: string;
   item?: GearItem;
-  /** Build slots the op changed to fit the pair (Realign). */
-  fixed?: BuildFix[];
+  /** The chains' moves the op changed to fit the pair (Realign), one notice each. */
+  fixed?: ChainFix[];
 }
 
 function perRarity<T>(value: T): Record<Rarity, T> {
@@ -70,7 +73,7 @@ export function createDelveProfile(
     rng,
   );
   const profile: DelveProfile = {
-    version: 4,
+    version: 5,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -93,7 +96,8 @@ export function createDelveProfile(
     pity: 0,
     firstBossLegendaryGiven: false,
     autoSalvage: perRarity(false),
-    abilities: defaultAbilities(weapon.mana),
+    chains: defaultChains(registry, weapon.mana, weapon.baseId),
+    chainCaps: { ...registry.getDelveBalance().chains.cap },
     pair: { primary: null, secondary: null },
     manaDust: 0,
     reactionsSeen: [],
@@ -103,33 +107,45 @@ export function createDelveProfile(
 }
 
 /**
- * Set one ability build. Throws on a form from another slot, anything but
- * one or two distinct elements, or (once there is a pair) an element outside it,
- * or an unknown weight or payment.
+ * Set one skill's chain. Throws mid-dive, and on fewer than one move or more
+ * than the skill's cap, an unknown kind, a form from another slot, anything
+ * but one or two different elements (a blow: one), an element outside the
+ * pair (once there is one), or an unknown payment.
  */
-export function setAbility(
+export function setChain<S extends ChainSkill>(
   registry: DataRegistry,
   profile: DelveProfile,
-  slot: AbilitySlot,
-  build: AbilityBuild,
+  skill: S,
+  chain: Chains[S],
 ): DelveProfile {
   const phase = profile.dive?.phase;
   if (phase === 'fighting' || phase === 'choosing') {
-    throw new Error('Abilities can only change between dives');
+    throw new Error('Chains can only change between dives');
   }
-  const form = registry.getForm(build.form);
-  if (form.slot !== slot) throw new Error(`${form.name} is not a ${slot} form`);
-  const els = build.elements;
-  if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
-    throw new Error('Pick one or two different elements');
-  if (!els.every((e) => e in registry.getArpgData().mana)) throw new Error('Unknown element');
-  if (!els.every((e) => inPair(profile, e))) throw new Error('Pick from your two elements');
-  if (!ABILITY_WEIGHTS.includes(build.weight)) throw new Error(`Bad weight ${build.weight}`);
-  if (!ABILITY_PAYMENTS.includes(build.payment)) throw new Error(`Bad payment ${build.payment}`);
-  return {
-    ...profile,
-    abilities: { ...profile.abilities, [slot]: { ...build, elements: [...els] } },
+  const blows = skill === 'basic' ? (chain as Blow[]) : null;
+  const moves = blows ?? (chain as Chain).moves;
+  const cap = profile.chainCaps[skill];
+  if (moves.length < 1 || moves.length > cap) throw new Error(`A chain holds 1 to ${cap} moves`);
+  const elements = (els: ManaType[]) => {
+    if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
+      throw new Error('Pick one or two different elements');
+    if (!els.every((e) => e in registry.getArpgData().mana)) throw new Error('Unknown element');
+    if (!els.every((e) => inPair(profile, e))) throw new Error('Pick from your two elements');
   };
+  for (const m of moves) if (!MOVE_KINDS.includes(m.kind)) throw new Error(`Bad kind ${m.kind}`);
+  if (blows) {
+    for (const b of blows) elements([b.element]);
+    return { ...profile, chains: { ...profile.chains, basic: blows.map((b) => ({ ...b })) } };
+  }
+  const { payment } = chain as Chain;
+  for (const m of (chain as Chain).moves) {
+    const form = registry.getForm(m.form);
+    if (form.slot !== skill) throw new Error(`${form.name} is not a ${skill} form`);
+    elements(m.elements);
+  }
+  if (!ABILITY_PAYMENTS.includes(payment)) throw new Error(`Bad payment ${payment}`);
+  const copy = (chain as Chain).moves.map((m) => ({ ...m, elements: [...m.elements] }));
+  return { ...profile, chains: { ...profile.chains, [skill]: { moves: copy, payment } } };
 }
 
 const STRENGTH: MoveKind[] = ['light', 'medium', 'heavy'];
@@ -162,10 +178,10 @@ export function buildChains(
   return { primary, defensive, ultimate };
 }
 
-/** A save read back: the profile, and the build slots a migration changed (for a notice). */
+/** A save read back: the profile, and the moves a migration changed (for a notice each). */
 export interface ParsedDelveProfile {
   profile: DelveProfile;
-  fixed: BuildFix[];
+  fixed: ChainFix[];
 }
 
 /** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
@@ -191,30 +207,50 @@ function migratedPrimary(registry: DataRegistry, equipped: EquippedGear): ManaTy
 }
 
 /**
- * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4:
- * a primary from the gear, no secondary, no Mana Dust, builds fixed to the
- * pair; a dive in progress stays). Returns null when it doesn't fit.
+ * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4 → 5).
+ * To 4: a primary from the gear, no secondary, no Mana Dust. To 5: each
+ * build its form's default chain shifted by its weight (`chainFromBuild`),
+ * the weapon's default basic chain on the pair, the balance's caps, and every
+ * move fixed to the pair. A dive in progress stays. Null when it doesn't fit.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   const parsed = DelveProfileSchema.safeParse(raw);
   if (parsed.success) return { profile: parsed.data as DelveProfile, fixed: [] };
+  const v4 = DelveProfileV4Schema.safeParse(raw);
+  const old = v4.success ? v4.data : fromV3(registry, raw);
+  if (!old) return null;
+  const { abilities, ...rest } = old;
+  const { primary, secondary } = old.pair;
+  const weapon = (old.equipped as EquippedGear).weapon;
+  const element = primary ?? weapon?.mana ?? 'fire';
+  // A version 2 save had no builds: it starts from its new primary's defaults.
+  const chains: Chains = abilities
+    ? {
+        basic: defaultBasic(registry, weapon?.baseId ?? null, element, secondary),
+        ...buildChains(registry, abilities),
+      }
+    : defaultChains(registry, element, weapon?.baseId ?? null);
+  return fixChainsToPair({
+    ...rest,
+    version: 5,
+    chains,
+    chainCaps: { ...registry.getDelveBalance().chains.cap },
+  } as DelveProfile);
+}
+
+/** A version 3 or 2 save as version 4 (see `parseDelveProfile`); version 2 has no builds. */
+function fromV3(registry: DataRegistry, raw: unknown) {
   const v3 = DelveProfileV3Schema.safeParse(raw);
   const old = v3.success ? v3.data : fromV2(raw);
   if (!old) return null;
-  const equipped = old.equipped as EquippedGear;
-  const primary = migratedPrimary(registry, equipped);
-  // A version 2 save had no builds: it starts from its new primary's defaults (nothing to fix).
-  const abilities =
-    'abilities' in old
-      ? old.abilities
-      : defaultAbilities(primary ?? equipped.weapon?.mana ?? 'fire');
-  return fixBuildsToPair({
+  const primary = migratedPrimary(registry, old.equipped as EquippedGear);
+  return {
     ...old,
-    version: 4,
-    abilities,
+    version: 4 as const,
+    abilities: 'abilities' in old ? old.abilities : undefined,
     pair: { primary, secondary: null },
     manaDust: 0,
-  } as DelveProfile);
+  };
 }
 
 /** Depth used as the yardstick for Power and comparisons. */
@@ -227,7 +263,7 @@ export function profilePower(registry: DataRegistry, profile: DelveProfile): num
     profile.equipped,
     registry,
     referenceDepth(profile),
-    buildChains(registry, profile.abilities),
+    profile.chains,
     profile.pair,
   );
 }

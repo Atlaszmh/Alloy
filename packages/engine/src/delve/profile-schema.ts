@@ -2,34 +2,75 @@ import { z } from 'zod';
 import {
   HeroStatKeySchema as StatKeySchema,
   ManaTypeSchema,
+  MoveKindSchema,
   ReactionIdSchema,
 } from '../data/schemas.js';
+import { MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
+/** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
+export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
+  primary: ['bolt', 'volley', 'lance', 'burst', 'strike'],
+  defensive: ['ward', 'armor', 'surge', 'blink'],
+  ultimate: ['nova', 'barrage', 'maelstrom'],
+};
+
+const FormIdSchema = z.enum([
+  'bolt',
+  'volley',
+  'lance',
+  'burst',
+  'strike',
+  'ward',
+  'armor',
+  'surge',
+  'blink',
+  'nova',
+  'barrage',
+  'maelstrom',
+]);
+
+/** One element, or two different ones (a fusion). */
+const ElementsSchema = z
+  .array(ManaTypeSchema)
+  .min(1)
+  .max(2)
+  .refine((e) => new Set(e).size === e.length, 'elements must differ');
+
+const PaymentSchema = z.enum(['mana', 'charge', 'cast']);
+
+/** A version 3 or 4 save's ability (see `chainFromBuild`). */
 export const AbilityBuildSchema = z.object({
-  form: z.enum([
-    'bolt',
-    'volley',
-    'lance',
-    'burst',
-    'strike',
-    'ward',
-    'armor',
-    'surge',
-    'blink',
-    'nova',
-    'barrage',
-    'maelstrom',
-  ]),
-  elements: z
-    .array(ManaTypeSchema)
-    .min(1)
-    .max(2)
-    .refine((e) => new Set(e).size === e.length, 'elements must differ'),
+  form: FormIdSchema,
+  elements: ElementsSchema,
   weight: z.union([z.literal(-2), z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]),
-  payment: z.enum(['mana', 'charge', 'cast']),
+  payment: PaymentSchema,
 });
+
+export const MoveSchema = z.object({
+  kind: MoveKindSchema,
+  form: FormIdSchema,
+  elements: ElementsSchema,
+});
+
+export const BlowSchema = z.object({ kind: MoveKindSchema, element: ManaTypeSchema });
+
+/** An ability chain: 1 to `MAX_CHAIN` moves and a payment (see `slotChain` for the forms). */
+export const ChainSchema = z.object({
+  moves: z.array(MoveSchema).min(1).max(MAX_CHAIN),
+  payment: PaymentSchema,
+});
+
+/** A chain whose every move is one of `slot`'s forms. */
+function slotChain(slot: AbilitySlot) {
+  return ChainSchema.refine(
+    (c) => c.moves.every((m) => SLOT_FORMS[slot].includes(m.form)),
+    `every move must be a ${slot} form`,
+  );
+}
+
+const CapSchema = z.number().int().min(1).max(MAX_CHAIN);
 
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
@@ -159,12 +200,30 @@ const PairSchema = z
     'a secondary needs a different primary',
   );
 
-export const DelveProfileSchema = DelveProfileV3Schema.extend({
+/** Version 4 (the pair, before chains), kept frozen so older saves migrate through it. */
+export const DelveProfileV4Schema = DelveProfileV3Schema.extend({
   version: z.literal(4),
   pair: PairSchema,
   manaDust: z.number().int().min(0),
   // Every reaction (the frozen version 3 keeps its seven).
   reactionsSeen: z.array(ReactionIdSchema),
+});
+
+/** Version 5: each skill a chain of moves (see the moves and chains spec). */
+export const DelveProfileSchema = DelveProfileV4Schema.omit({ abilities: true }).extend({
+  version: z.literal(5),
+  chains: z.object({
+    basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
+    primary: slotChain('primary'),
+    defensive: slotChain('defensive'),
+    ultimate: slotChain('ultimate'),
+  }),
+  chainCaps: z.object({
+    basic: CapSchema,
+    primary: CapSchema,
+    defensive: CapSchema,
+    ultimate: CapSchema,
+  }),
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */

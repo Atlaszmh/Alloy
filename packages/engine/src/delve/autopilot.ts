@@ -19,9 +19,8 @@ import {
   startDive,
 } from './dive.js';
 import { compareItem, itemAttunement } from './hero-stats.js';
-import { bindSecondary, fixBuildsToPair, profileStats, resolveOvertake } from './pair.js';
+import { bindSecondary, fixChainsToPair, profileStats, resolveOvertake } from './pair.js';
 import {
-  buildChains,
   createDelveProfile,
   equipBest,
   fuseGear,
@@ -29,7 +28,7 @@ import {
   referenceDepth,
   salvageCandidates,
   salvageItems,
-  setAbility,
+  setChain,
   upgradeGear,
 } from './profile.js';
 
@@ -85,12 +84,7 @@ function playFloor(
       const best = equipBest(registry, p);
       if (best.equipped.length > 0) {
         p = best.profile;
-        refreshWorldHero(
-          registry,
-          world,
-          profileStats(registry, p),
-          buildChains(registry, p.abilities),
-        );
+        refreshWorldHero(registry, world, profileStats(registry, p), p.chains);
       }
     }
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
@@ -112,8 +106,8 @@ function pickDoor(profile: DelveProfile): string | null {
 /**
  * Bind the non-primary element the bot owns the most attunement in (equipped
  * and bagged: each item's base plus its `*Attune` lines; ties in MANA_TYPES
- * order), none while that's all 0: every pair reacts. Then build the Primary
- * from both elements, so it keeps finding their reaction.
+ * order), none while that's all 0: every pair reacts. Then build every move of
+ * the Primary chain from both elements, so it keeps finding their reaction.
  */
 function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const primary = profile.pair.primary;
@@ -133,17 +127,21 @@ function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
     if (!p.pair.secondary) return p;
   }
   const elements = [p.pair.primary!, p.pair.secondary!];
-  return setAbility(registry, p, 'primary', { ...p.abilities.primary, elements });
+  const chain = p.chains.primary;
+  return setChain(registry, p, 'primary', {
+    ...chain,
+    moves: chain.moves.map((m) => ({ ...m, elements })),
+  });
 }
 
 /**
  * Between dives, as a player would: an overtaking secondary swaps in, the
- * builds keep to the pair (a no-op for the bot's own builds; it matters for a
+ * chains keep to the pair (a no-op for the bot's own chains; it matters for a
  * continued `opts.profile`), a second element is bound (before anything is
  * salvaged) and the Primary built from both, then the forge visit.
  */
 export function betweenDives(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const settled = fixBuildsToPair(resolveOvertake(registry, profile).profile).profile;
+  const settled = fixChainsToPair(resolveOvertake(registry, profile).profile).profile;
   return visitForge(registry, bindBest(registry, settled));
 }
 

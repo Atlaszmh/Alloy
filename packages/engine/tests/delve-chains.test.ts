@@ -17,10 +17,14 @@ import { stepWorld } from '../src/arpg/step.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
+import { SLOT_FORMS } from '../src/delve/profile-schema.js';
 import {
+  ABILITY_SLOTS,
   CHAIN_SKILLS,
   MAX_CHAIN,
   MOVE_KINDS,
+  type AbilityBuild,
   type Blow,
   type FormId,
   type Move,
@@ -31,8 +35,10 @@ import type { ComboStepDef } from '../src/types/delve.js';
 import type { ManaType } from '../src/types/mana.js';
 import {
   DEFAULT_CHAINS,
+  OLD_BUILDS,
   STEP,
   arena,
+  asV4,
   bal,
   chainsWith,
   dodge,
@@ -1028,5 +1034,118 @@ describe('basics', () => {
       DEFAULT_CHAINS,
     );
     expect(same.hero.swing?.step).toBe(2);
+  });
+});
+
+describe('save v5', () => {
+  const json = (x: unknown) => JSON.parse(JSON.stringify(x));
+  const hero = createDelveProfile(registry, 3, { primary: 'fire' });
+  const migrate = (v4: object) => parseDelveProfile(registry, json(v4))!;
+
+  it("v4 → v5 gives each build its form's default chain, a step lighter or heavier by its weight", () => {
+    const cases: [AbilityBuild, MoveKind[]][] = [
+      [
+        { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' },
+        ['light', 'light', 'medium', 'heavy'],
+      ],
+      [
+        { form: 'volley', elements: ['fire'], weight: 0, payment: 'mana' },
+        ['medium', 'medium', 'medium'],
+      ],
+      [
+        { form: 'lance', elements: ['fire'], weight: 0, payment: 'cast' },
+        ['medium', 'medium', 'heavy'],
+      ],
+      [
+        { form: 'burst', elements: ['fire'], weight: 0, payment: 'charge' },
+        ['medium', 'medium', 'heavy'],
+      ],
+      [
+        { form: 'strike', elements: ['fire'], weight: 0, payment: 'mana' },
+        ['medium', 'medium', 'medium', 'heavy'],
+      ],
+      [
+        { form: 'bolt', elements: ['fire'], weight: -2, payment: 'mana' },
+        ['light', 'light', 'light', 'medium'],
+      ],
+      [
+        { form: 'bolt', elements: ['fire'], weight: -1, payment: 'mana' },
+        ['light', 'light', 'light', 'medium'],
+      ],
+      [
+        { form: 'strike', elements: ['fire'], weight: 2, payment: 'mana' },
+        ['heavy', 'heavy', 'heavy', 'heavy'],
+      ],
+      [
+        { form: 'lance', elements: ['fire'], weight: 1, payment: 'mana' },
+        ['heavy', 'heavy', 'heavy'],
+      ],
+    ];
+    for (const [build, kinds] of cases) {
+      const { profile, fixed } = migrate(asV4(hero, { ...OLD_BUILDS, primary: build }));
+      expect(profile.chains.primary, `${build.form} ${build.weight}`).toEqual({
+        moves: kinds.map((kind) => ({ kind, form: build.form, elements: build.elements })),
+        payment: build.payment,
+      });
+      expect(fixed).toEqual([]);
+    }
+    const { profile } = migrate(
+      asV4(hero, {
+        ...OLD_BUILDS,
+        defensive: { form: 'armor', elements: ['fire'], weight: 2, payment: 'cast' },
+        ultimate: { form: 'barrage', elements: ['fire'], weight: -1, payment: 'charge' },
+      }),
+    );
+    expect(profile).toMatchObject({ version: 5, chainCaps: bal.chains.cap });
+    expect('abilities' in profile).toBe(false);
+    expect(profile.chains.defensive).toEqual({
+      moves: [{ kind: 'heavy', form: 'armor', elements: ['fire'] }],
+      payment: 'cast',
+    });
+    expect(profile.chains.ultimate).toEqual({
+      moves: [{ kind: 'light', form: 'barrage', elements: ['fire'] }],
+      payment: 'charge',
+    });
+  });
+
+  it("v4 → v5 gives the weapon's default basics, the secondary last when bound; with no primary, the weapon's mana", () => {
+    const blows = (v4: object) => migrate(v4).profile.chains.basic;
+    const bound = { ...asV4(hero), pair: { primary: 'fire', secondary: 'storm' } };
+    expect(blows(bound)).toEqual([
+      { kind: 'light', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+      { kind: 'heavy', element: 'storm' },
+    ]);
+    const maul = {
+      ...asV4(hero),
+      equipped: { ...hero.equipped, weapon: gear('fire', 'weapon', 'maul') },
+    };
+    expect(blows(maul).map((b) => b.kind)).toEqual(['medium', 'heavy']);
+    const unchosen = createDelveProfile(registry, 3); // no pair yet; a Frost sword
+    const frost = { ...asV4(unchosen), equipped: { weapon: gear('frost') } };
+    expect(blows(frost).map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
+  });
+
+  it('refuses a chain past MAX_CHAIN or empty, a form in the wrong slot, and a cap out of range', () => {
+    const p = createDelveProfile(registry, 3);
+    const bad = (x: object) => parseDelveProfile(registry, json(x));
+    const bolt = p.chains.primary.moves[0];
+    const chains = (over: object) => ({ ...p, chains: { ...p.chains, ...over } });
+    expect(
+      bad(chains({ primary: { moves: Array(MAX_CHAIN + 1).fill(bolt), payment: 'mana' } })),
+    ).toBeNull();
+    expect(bad(chains({ primary: { moves: [], payment: 'mana' } }))).toBeNull();
+    expect(bad(chains({ defensive: { moves: [bolt], payment: 'mana' } }))).toBeNull();
+    expect(bad(chains({ basic: [] }))).toBeNull();
+    expect(bad({ ...p, chainCaps: { ...p.chainCaps, basic: 0 } })).toBeNull();
+    expect(bad({ ...p, chainCaps: { ...p.chainCaps, ultimate: MAX_CHAIN + 1 } })).toBeNull();
+    // The save's slot forms are arpg.json's.
+    for (const slot of ABILITY_SLOTS)
+      expect(SLOT_FORMS[slot]).toEqual(
+        registry
+          .getArpgData()
+          .forms.filter((f) => f.slot === slot)
+          .map((f) => f.id),
+      );
   });
 });

@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
-import { defaultAbilities } from '../arpg/abilities/resolve.js';
-import { ABILITY_SLOTS, type AbilityBuild, type AbilitySlot } from '../types/ability.js';
+import { defaultChains } from '../arpg/abilities/resolve.js';
+import { ABILITY_SLOTS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
@@ -15,11 +15,12 @@ import { findItem, replaceItem, type ProfileActionResult } from './profile.js';
  * profile.ts and dive.ts import this module back: keep to function declarations.
  */
 
-/** A build slot the pair changed: the elements it dropped and the build it has now. */
-export interface BuildFix {
-  slot: AbilitySlot;
+/** A chain's move (or blow) the pair changed: where it is, the elements it dropped, and what it is now. */
+export interface ChainFix {
+  skill: ChainSkill;
+  index: number;
   removed: ManaType[];
-  build: AbilityBuild;
+  move: Move | Blow;
 }
 
 function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
@@ -31,12 +32,16 @@ export function inPair(profile: Pick<DelveProfile, 'pair'>, mana: ManaType): boo
   return !profile.pair.primary || pairElements(profile.pair).includes(mana);
 }
 
-/** The hero's real stats: its gear, with the pair's basics and the two-element limit. */
+/** The hero's real stats: its gear, with its basic chain, the pair's power and the two-element limit. */
 export function profileStats(
   registry: DataRegistry,
-  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
+  profile: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
 ): HeroStats {
-  return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair));
+  return computeHeroStats(
+    profile.equipped,
+    registry,
+    pairExtra(profile.pair, profile.chains.basic),
+  );
 }
 
 /** Mana Dust from salvaging `item`: its rarity's share when its mana is outside the pair (none before the choice). */
@@ -45,26 +50,51 @@ export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPa
 }
 
 /**
- * Keep each build's in-pair elements; a build left with none takes the
- * primary. Form, weight and payment stay. Returns the slots it changed.
+ * Fit every move and blow to the pair. After a pair op (`was`, the pair
+ * before it), an element that left the pair becomes the element that took its
+ * role: the old primary's the new primary, the old secondary's the new
+ * secondary (a Fire+Storm move stays fused as Fire+Nature). With no `was` (the
+ * migration), a move keeps its in-pair elements, and a move left with none,
+ * like a blow outside the pair, takes the primary. Kinds, forms and payments
+ * stay. Returns the moves it changed, one notice each.
  */
-export function fixBuildsToPair(profile: DelveProfile): {
-  profile: DelveProfile;
-  fixed: BuildFix[];
-} {
-  const primary = profile.pair.primary;
+export function fixChainsToPair(
+  profile: DelveProfile,
+  was?: ManaPair,
+): { profile: DelveProfile; fixed: ChainFix[] } {
+  const { primary, secondary } = profile.pair;
   if (!primary) return { profile, fixed: [] };
-  const abilities = { ...profile.abilities };
-  const fixed: BuildFix[] = [];
+  const heir = (e: ManaType): ManaType | null =>
+    e === was?.primary ? primary : e === was?.secondary ? (secondary ?? primary) : null;
+  /** The elements that stay or take over, each once; none left: the primary. */
+  const fit = (els: ManaType[]): ManaType[] => {
+    const kept = els.map((e) => (inPair(profile, e) ? e : heir(e)));
+    const out = [...new Set(kept.filter((e): e is ManaType => e !== null))];
+    return out.length > 0 ? out : [primary];
+  };
+  const fixed: ChainFix[] = [];
+  const basic = profile.chains.basic.map((blow, index) => {
+    if (inPair(profile, blow.element)) return blow;
+    const move = { ...blow, element: fit([blow.element])[0] };
+    fixed.push({ skill: 'basic', index, removed: [blow.element], move });
+    return move;
+  });
+  const chains = { ...profile.chains, basic };
   for (const slot of ABILITY_SLOTS) {
-    const old = abilities[slot];
-    const kept = old.elements.filter((e) => inPair(profile, e));
-    if (kept.length === old.elements.length) continue;
-    const build = { ...old, elements: kept.length > 0 ? kept : [primary] };
-    abilities[slot] = build;
-    fixed.push({ slot, removed: old.elements.filter((e) => !kept.includes(e)), build });
+    const moves = chains[slot].moves.map((old, index) => {
+      if (old.elements.every((e) => inPair(profile, e))) return old;
+      const move = { ...old, elements: fit(old.elements) };
+      fixed.push({
+        skill: slot,
+        index,
+        removed: old.elements.filter((e) => !inPair(profile, e)),
+        move,
+      });
+      return move;
+    });
+    chains[slot] = { ...chains[slot], moves };
   }
-  return { profile: fixed.length > 0 ? { ...profile, abilities } : profile, fixed };
+  return { profile: fixed.length > 0 ? { ...profile, chains } : profile, fixed };
 }
 
 /**
@@ -91,11 +121,11 @@ function attuneTo(item: GearItem, mana: ManaType): GearItem {
 
 /**
  * The one-time choice: `mana` becomes the primary, every equipped item is
- * re-attuned to it for free (the bag is left alone), and the builds start
- * over from `defaultAbilities(mana)`. Allowed mid-dive (a migrated save may be).
+ * re-attuned to it for free (the bag is left alone), and the chains start
+ * over from `defaultChains` in it. Allowed mid-dive (a migrated save may be).
  */
 export function chooseStartingMana(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
   mana: ManaType,
 ): ProfileActionResult {
@@ -111,24 +141,38 @@ export function chooseStartingMana(
       ...profile,
       equipped,
       pair: { primary: mana, secondary: null },
-      abilities: defaultAbilities(mana),
+      chains: defaultChains(registry, mana, equipped.weapon?.baseId ?? null),
     },
   };
 }
 
-/** Bind a second element: free, once, between dives. */
+/**
+ * Bind a second element: free, once, between dives. The basic chain's last
+ * blow takes it, as the weapon's default chain on the pair has it.
+ */
 export function bindSecondary(profile: DelveProfile, mana: ManaType): ProfileActionResult {
   if (isDiveActive(profile)) return refuse(profile, 'Bind a second element between dives');
   const { primary, secondary } = profile.pair;
   if (!primary) return refuse(profile, 'Choose your mana first');
   if (secondary) return refuse(profile, 'Your second element is already bound');
   if (mana === primary) return refuse(profile, 'That is already your primary');
-  return { ok: true, profile: { ...profile, pair: { primary, secondary: mana } } };
+  const basic = profile.chains.basic.map((b, i, all) =>
+    i === all.length - 1 ? { ...b, element: mana } : b,
+  );
+  return {
+    ok: true,
+    profile: {
+      ...profile,
+      pair: { primary, secondary: mana },
+      chains: { ...profile.chains, basic },
+    },
+  };
 }
 
 /**
  * Change a bound pair (either element, or swap them) for Mana Dust and scrap,
- * between dives. Gear stays as it is; the builds follow the new pair.
+ * between dives. Gear stays as it is; the chains follow the new pair, each
+ * replaced element's moves and blows taking its role's new element.
  */
 export function realign(
   registry: DataRegistry,
@@ -145,12 +189,15 @@ export function realign(
   const cost = registry.getDelveBalance().pair;
   if (profile.manaDust < cost.realignDust) return refuse(profile, 'Not enough Mana Dust');
   if (profile.scrap < cost.realignScrap) return refuse(profile, 'Not enough scrap');
-  const res = fixBuildsToPair({
-    ...profile,
-    pair: { primary, secondary },
-    manaDust: profile.manaDust - cost.realignDust,
-    scrap: profile.scrap - cost.realignScrap,
-  });
+  const res = fixChainsToPair(
+    {
+      ...profile,
+      pair: { primary, secondary },
+      manaDust: profile.manaDust - cost.realignDust,
+      scrap: profile.scrap - cost.realignScrap,
+    },
+    profile.pair,
+  );
   return { ok: true, profile: res.profile, fixed: res.fixed };
 }
 
@@ -161,7 +208,7 @@ export function realign(
  */
 export function overtakeProgress(
   registry: DataRegistry,
-  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
+  profile: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
 ): { have: number; need: number; ready: boolean } {
   const { primary, secondary } = profile.pair;
   if (!primary || !secondary) return { have: 0, need: 0, ready: false };
@@ -174,7 +221,7 @@ export function overtakeProgress(
 /**
  * Between dives, a bound secondary with more attunement than the primary
  * (`overtakeProgress` ready) takes its place, and the old primary becomes the
- * secondary. Builds stay valid: the pair is the same two.
+ * secondary. Chains stay valid: the pair is the same two.
  */
 export function resolveOvertake(
   registry: DataRegistry,

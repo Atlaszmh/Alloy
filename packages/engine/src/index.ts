@@ -159,15 +159,14 @@ export {
   upgradeGear,
   reforgeGear,
   fuseGear,
-  setAbility,
+  setChain,
   chainFromBuild,
-  buildChains,
 } from './delve/profile.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,
   profileStats,
-  fixBuildsToPair,
+  fixChainsToPair,
   chooseStartingMana,
   bindSecondary,
   realign,
@@ -177,8 +176,14 @@ export {
   reattuneCost,
   salvageDust,
 } from './delve/pair.js';
-export type { BuildFix } from './delve/pair.js';
-export { GearItemSchema, AbilityBuildSchema } from './delve/profile-schema.js';
+export type { ChainFix } from './delve/pair.js';
+export {
+  GearItemSchema,
+  MoveSchema,
+  BlowSchema,
+  ChainSchema,
+  SLOT_FORMS,
+} from './delve/profile-schema.js';
 export { runAutopilot } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
 

@@ -33,6 +33,7 @@ import {
   DEFAULT_CHAINS,
   STEP,
   arena,
+  asV4,
   bal,
   dummy,
   firstBlow,
@@ -735,10 +736,10 @@ describe('saves remember every reaction', () => {
 
   it('a version 3 save with the seven still migrates', () => {
     const fresh = createDelveProfile(registry, 1, { primary: 'fire' });
-    const { pair: _pair, manaDust: _dust, ...rest } = fresh;
+    const { pair: _pair, manaDust: _dust, ...rest } = asV4(fresh);
     const v3 = { ...rest, version: 3, reactionsSeen: ['melt', 'blight'] };
     expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(v3)))?.profile).toMatchObject({
-      version: 4,
+      version: 5,
       reactionsSeen: ['melt', 'blight'],
     });
   });

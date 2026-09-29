@@ -8,7 +8,7 @@ import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';
 import { pairElements } from './hero-stats.js';
-import { addLootToBag, buildChains } from './profile.js';
+import { addLootToBag } from './profile.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -77,7 +77,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     depth: dive.depth,
     door: dive.door,
     stats,
-    chains: buildChains(registry, profile.abilities),
+    chains: profile.chains,
     heroHpFrac: dive.heroHpFrac,
     potions: dive.potions,
     phoenixAvailable: !dive.phoenixUsed,

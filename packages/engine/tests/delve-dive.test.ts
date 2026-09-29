@@ -60,12 +60,12 @@ function clearDepth(p: DelveProfile): DelveProfile {
 }
 
 describe('profile basics', () => {
-  it('starts with a fire sword and an earth cuirass, and Fire abilities', () => {
+  it('starts with a fire sword and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(4);
+    expect(p.version).toBe(5);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
-    expect(p.abilities.primary.elements).toEqual(['fire']);
+    expect(p.chains.primary.moves.every((m) => m.elements.join() === 'fire')).toBe(true);
     expect(p.bag).toHaveLength(0);
     expect(p.dive).toBeNull();
   });

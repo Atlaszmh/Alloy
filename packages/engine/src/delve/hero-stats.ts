@@ -421,9 +421,9 @@ function pct(from: number, to: number): number {
   return (to - from) / from;
 }
 
-/** The extra that applies a profile's pair: its basics and the two-element limit (none: no pair). */
-export function pairExtra(pair?: ManaPair): HeroStatsExtra {
-  return pair ? { pair, filterAttunement: true } : {};
+/** The extra that applies a profile's pair (its power and the two-element limit) and its basic chain. */
+export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
+  return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
 }
 
 /** How equipping `item` (in its slot) would change the hero. */
@@ -432,14 +432,15 @@ export function compareItem(
   item: GearItem,
   registry: DataRegistry,
   depth: number,
-  chains?: Pick<Chains, AbilitySlot>,
+  /** The hero's chains (none: the weapon's defaults). */
+  chains?: Chains,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
-  const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair));
-  const afterStats = computeHeroStats(next, registry, pairExtra(pair));
+  const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
+  const afterStats = computeHeroStats(next, registry, pairExtra(pair, chains?.basic));
   const before = estimateCombat(beforeStats, registry, depth, chains);
   const after = estimateCombat(afterStats, registry, depth, chains);
 
@@ -465,10 +466,11 @@ export function heroPower(
   equipped: EquippedGear,
   registry: DataRegistry,
   depth: number,
-  chains?: Pick<Chains, AbilitySlot>,
+  /** The hero's chains (none: the weapon's defaults). */
+  chains?: Chains,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): number {
-  const stats = computeHeroStats(equipped, registry, pairExtra(pair));
+  const stats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
   return estimateCombat(stats, registry, depth, chains).power;
 }

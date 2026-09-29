@@ -5,6 +5,7 @@ import { stepWorld } from '../../src/arpg/step.js';
 import { computeHeroStats, type HeroStatsExtra } from '../../src/delve/hero-stats.js';
 import { generateItem } from '../../src/loot/item-generator.js';
 import type {
+  AbilityBuilds,
   AbilityCast,
   AbilityPayment,
   AbilitySlot,
@@ -13,6 +14,7 @@ import type {
   Move,
 } from '../../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../../src/types/arpg.js';
+import type { DelveProfile } from '../../src/types/delve.js';
 import type { EquippedGear } from '../../src/types/gear.js';
 import type { ManaType } from '../../src/types/mana.js';
 
@@ -38,6 +40,19 @@ export const DEFAULT_CHAINS: Pick<Chains, AbilitySlot> = {
   defensive: { moves: [{ kind: 'medium', form: 'ward', elements: ['frost'] }], payment: 'mana' },
   ultimate: { moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }], payment: 'charge' },
 };
+
+/** A version 4 save's default builds (all Fire), for the migration tests. */
+export const OLD_BUILDS: AbilityBuilds = {
+  primary: { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' },
+  defensive: { form: 'ward', elements: ['fire'], weight: 0, payment: 'mana' },
+  ultimate: { form: 'nova', elements: ['fire'], weight: 0, payment: 'charge' },
+};
+
+/** `p` as a version 4 save: `abilities` instead of its chains and caps. */
+export function asV4(p: DelveProfile, abilities: AbilityBuilds = OLD_BUILDS) {
+  const { chains: _chains, chainCaps: _caps, ...rest } = p;
+  return { ...rest, version: 4, abilities };
+}
 
 /** A slot's chain in a test: its one move with these parts changed and its payment, or whole `moves`. */
 export type ChainOpts = Partial<Move> & { payment?: AbilityPayment; moves?: Move[] };

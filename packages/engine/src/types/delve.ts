@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilityBuilds, AbilitySlot, ChainSkill, MoveKind } from './ability.js';
+import type { AbilitySlot, Chains, ChainSkill, MoveKind } from './ability.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -652,7 +652,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 4;
+  version: 5;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -668,8 +668,10 @@ export interface DelveProfile {
   pity: number;
   firstBossLegendaryGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
-  /** The Primary, Defensive and Ultimate builds. */
-  abilities: AbilityBuilds;
+  /** The basic attack's and each ability slot's chain of moves (see the moves and chains spec). */
+  chains: Chains;
+  /** Most moves each skill's chain may hold (at most `MAX_CHAIN`; the balance's to start). */
+  chainCaps: Record<ChainSkill, number>;
   /** The hero's two elements. */
   pair: ManaPair;
   /** From salvaging gear outside the pair; spent on Re-attune and Realign. */
