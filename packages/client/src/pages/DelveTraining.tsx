@@ -173,6 +173,7 @@ export function DelveTraining() {
               hud={arena.hud}
               onCast={arena.cast}
               onAim={arena.aim}
+              onCancel={arena.cancelHold}
               onPotion={arena.potion}
               onDodge={arena.dodge}
               hints={hints}

@@ -48,15 +48,12 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
-  const { equipped, pair } = profile;
+  const { equipped, pair, chains } = profile;
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair }),
-    [equipped, pair, registry],
+    () => profileStats(registry, { equipped, pair, chains }),
+    [equipped, pair, chains, registry],
   );
-  const loadout = useMemo(
-    () => ({ stats, abilities: profile.abilities }),
-    [stats, profile.abilities],
-  );
+  const loadout = useMemo(() => ({ stats, chains }), [stats, chains]);
 
   function bank(world: ArpgWorld) {
     const store = useDelveStore.getState();

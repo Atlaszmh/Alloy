@@ -4,18 +4,20 @@ import {
   botInput,
   refreshWorldHero,
   stepWorld,
-  abilityReady,
+  activeMove,
   basicStep,
   canAfford,
-  makeCtx,
+  holdCharge,
+  nextMove,
   pressStep,
-  type AbilityBuilds,
   type AbilityCast,
   type ArpgEvent,
   type ArpgWorld,
+  type Chains,
   type FormId,
   type HeroStats,
   type ManaType,
+  type MoveKind,
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
@@ -23,6 +25,7 @@ import { loadDelveSprites } from './sprites';
 import {
   attachKeyboard,
   createArenaInput,
+  holdingSlot,
   moveVector,
   type ArenaInput,
   type CastPress,
@@ -30,7 +33,13 @@ import {
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
 import { useControlsStore } from '@/stores/controlsStore';
-import { padToArena, stickAimPoint, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import {
+  padCast,
+  padToArena,
+  releaseEdge,
+  stickAimPoint,
+  type ArenaPadActions,
+} from '@/features/gamepad/arena-pad';
 import { rumble } from '@/features/gamepad/rumble';
 import { HitStop } from './fx/hitstop';
 
@@ -43,6 +52,7 @@ import { HitStop } from './fx/hitstop';
  */
 
 export interface AbilityHud {
+  /** The next move's name, icon, form and elements. */
   name: string;
   icon: string;
   form: FormId;
@@ -50,14 +60,17 @@ export interface AbilityHud {
   elements: ManaType[];
   payment: 'mana' | 'charge' | 'cast';
   cost: number;
-  /** Seconds until ready (0 = ready). */
+  /** Seconds until the next move is ready (0 = ready). */
   cooldown: number;
   cooldownTotal: number;
-  /** Charge-paid: 0..1 of the meter; otherwise null. */
+  /** Charge-paid: the meter over the next move's need, 0..1; otherwise null. */
   charge: number | null;
-  /** Press-combo step that the next press makes (0-based), and the combo's length. */
-  comboNext: number;
-  comboLength: number;
+  /** The chain's move the next press makes (0-based), the chain's length, and that move's kind. */
+  chainStep: number;
+  chainLength: number;
+  nextKind: MoveKind;
+  /** This slot's hold charging: its charge 0..1 and stage 0..2, or null. */
+  hold: { charge: number; stage: number } | null;
   /** This slot's channel progress 0..1, or null (a conjure shows in the arena, not here). */
   windup: number | null;
   affordable: boolean;
@@ -70,7 +83,7 @@ export interface ArenaHud {
   mana: number;
   manaMax: number;
   abilities: AbilityHud[];
-  /** An ability is channelling (presses wait for it). */
+  /** An ability is channelling or a hold is charging (presses wait for it). */
   busy: boolean;
   dodgeCharges: number;
   dodgeMax: number;
@@ -78,10 +91,12 @@ export interface ArenaHud {
   dodgeRefill: number;
   /** A perfect dodge armed the riposte: the next real hit crits and staggers. */
   riposte: boolean;
-  /** The blow of the weapon's string that lands next (0-based). */
-  basicComboNext: number;
-  /** How many blows the weapon's string has. */
-  basicComboLength: number;
+  /** The basic chain's blow that lands next (0-based), the chain's length, and that blow's kind. */
+  basicChainStep: number;
+  basicChainLength: number;
+  basicNextKind: MoveKind;
+  /** A manual hold blow held at its strike point: its charge 0..1 and stage 0..2, or null. */
+  basicHold: { charge: number; stage: number } | null;
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -110,8 +125,8 @@ export interface ArenaMode {
   worldKey: string | null;
   /** The world for the current (non-null) key. */
   createWorld: () => ArpgWorld;
-  /** The hero's stats and builds, hot-swapped whenever this object changes: memoise it. */
-  loadout: { stats: HeroStats; abilities: AbilityBuilds };
+  /** The hero's stats and chains, hot-swapped whenever this object changes: memoise it. */
+  loadout: { stats: HeroStats; chains: Chains };
   /**
    * On every frame the core steps the world (never while paused, never after
    * the world is finished); true once the mode is done with it, and the core
@@ -163,17 +178,22 @@ export function snapshot(world: ArpgWorld): ArenaHud {
   const dodgeBal = bal.dodge;
   const boss =
     world.bossId !== null ? world.monsters.find((m) => m.id === world.bossId) : undefined;
-  // Only a channel dims the buttons: its conjure is anticipation in the arena, like any other.
-  const busy =
-    !!h.windup && (h.abilities[h.windup.slot]?.channel ?? 0) > 0 && t >= h.windup.conjureUntil;
+  // Only a channel or a hold dims the buttons: a conjure is anticipation in the arena, like any other.
+  const w = h.windup;
+  const channel = w && (activeMove(h, w.slot)?.channel ?? 0) > 0 && t >= w.conjureUntil ? w : null;
+  const busy = !!channel || !!h.hold;
+  const blow = basicStep(h, t, bal);
+  const held = h.swing?.held ?? null;
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
     mana: h.mana,
     manaMax: h.manaMax,
-    abilities: h.abilities.map((ab, i) => {
-      const cooldown = Math.max(0, h.cooldowns[i] - t);
-      const charged = ab.build.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
+    abilities: h.chains.map((chain, i) => {
+      const step = pressStep(h, i, t, comboWindow);
+      const ab = chain.moves[step];
+      const cooldown = Math.max(0, h.cooldowns[i][step] - t);
+      const charged = ab.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
       const affordable = canAfford(world, ab);
       return {
         name: ab.name,
@@ -181,23 +201,22 @@ export function snapshot(world: ArpgWorld): ArenaHud {
         form: ab.form.id,
         element: ab.element,
         elements: ab.elements,
-        payment: ab.build.payment,
+        payment: ab.payment,
         cost: ab.cost,
         cooldown,
         cooldownTotal: Math.max(0.01, ab.channel + ab.cooldown),
         charge:
-          ab.build.payment === 'charge'
-            ? Math.min(1, h.charge[i] / Math.max(1e-9, ab.chargeNeed))
-            : null,
-        comboNext: pressStep(h, i, t, comboWindow),
-        comboLength: ab.combo.length,
+          ab.payment === 'charge' ? Math.min(1, h.charge[i] / Math.max(1e-9, ab.chargeNeed)) : null,
+        chainStep: step,
+        chainLength: chain.moves.length,
+        nextKind: ab.kind,
+        hold: h.hold?.slot === i ? holdCharge(bal, h.hold.start, t) : null,
         // Only a channel shows: a conjure is anticipation in the arena, not a HUD bar.
         windup:
-          h.windup?.slot === i && ab.channel > 0 && t >= h.windup.conjureUntil
+          channel?.slot === i
             ? Math.min(
                 1,
-                (t - h.windup.conjureUntil) /
-                  Math.max(0.01, h.windup.until - h.windup.conjureUntil),
+                (t - channel.conjureUntil) / Math.max(0.01, channel.until - channel.conjureUntil),
               )
             : null,
         affordable,
@@ -210,8 +229,10 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     dodgeRefill:
       h.dodgeRechargeAt > 0 ? Math.max(0, 1 - (h.dodgeRechargeAt - t) / dodgeBal.recharge) : 1,
     riposte: t < h.riposteUntil,
-    basicComboNext: basicStep(h, t, bal),
-    basicComboLength: h.stats.weapon.combo.length,
+    basicChainStep: blow,
+    basicChainLength: h.stats.weapon.blows.length,
+    basicNextKind: h.stats.weapon.blows[blow].kind,
+    basicHold: held !== null ? holdCharge(bal, held, t) : null,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -270,7 +291,10 @@ export function useArenaCore(
     const app = new Application();
     const detachKeys = attachKeyboard(inputRef.current, () => !pausedRef.current);
     const flags = readArenaFlags();
+    const comboWindow = registry.getDelveBalance().abilities.comboWindow;
     let hudClock = 0;
+    /** The pad's release edge (a hold casts on its release). */
+    const padRelease = releaseEdge();
     // `resizeTo` only follows the window; the host can also change size on its own (the
     // Training panel docking beside it), so the canvas follows the host too.
     const hostResize = new ResizeObserver(() => app.queueResize());
@@ -317,10 +341,11 @@ export function useArenaCore(
           if (!paused && !finishedRef.current) {
             const input = inputRef.current;
             const padMove = pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : null;
-            const padAttackAim =
-              pad?.attackHeld && pad.aimDir
-                ? stickAimPoint(world.hero, pad.aimDir, 1, world.hero.stats.weapon.range, false)
-                : null;
+            // Whenever the stick is off-centre, not only while attack is held: a held blow
+            // re-aims on its release tick (the engine reads the aim only then and at a swing's start).
+            const padAttackAim = pad?.aimDir
+              ? stickAimPoint(world.hero, pad.aimDir, 1, world.hero.stats.weapon.range, false)
+              : null;
             const wasDead = world.heroDead;
             const events = stepWorld(
               registry,
@@ -330,6 +355,8 @@ export function useArenaCore(
                 : {
                     move: padMove ?? moveVector(input),
                     cast: toCast(input.cast),
+                    holding: holdingSlot(input) ?? pad?.holding ?? null,
+                    cancelHold: input.cancelHold,
                     potion: input.potion || !!pad?.potion,
                     dodge: input.dodge || !!pad?.dodge,
                     ...(manualRef.current
@@ -347,6 +374,7 @@ export function useArenaCore(
               dt * flags.timescale,
             );
             input.cast = null;
+            input.cancelHold = false;
             input.potion = false;
             input.dodge = false;
             input.attackTap = false;
@@ -386,7 +414,8 @@ export function useArenaCore(
 
     /**
      * The controller's part of this frame (see gamepad-hub): Menu opens the
-     * dive menu, and an ability press is queued, aimed by the right stick.
+     * dive menu, and an ability press (or a hold's release: see `padCast`) is
+     * queued, aimed by the right stick.
      */
     function padFrame(world: ArpgWorld, paused: boolean): ArenaPadActions | null {
       const state = padState();
@@ -395,36 +424,29 @@ export function useArenaCore(
       const controls = useControlsStore.getState().config;
       const acts = padToArena(state, pressed, controls);
       if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
-      // A press always tries (so an unaffordable one still says so); holding RT
-      // casts the Primary again as soon as it's ready.
-      const slot =
-        acts.cast ??
-        (acts.castHeld !== null && abilityReady(makeCtx(registry, world, []), acts.castHeld)
-          ? acts.castHeld
-          : null);
+      const slot = padCast(registry, world, acts, padRelease(acts.holding));
       if (slot !== null) {
-        const ab = world.hero.abilities[slot];
-        const aimWorld =
-          acts.aimDir && ab
-            ? stickAimPoint(
-                world.hero,
-                acts.aimDir,
-                acts.aimTilt,
-                ab.range,
-                aimMarkerFor(ab.form.id) === 'circle',
-                controls.aimReach,
-              )
-            : null;
+        const ab = nextMove(world.hero, slot, world.t, comboWindow);
+        const aimWorld = acts.aimDir
+          ? stickAimPoint(
+              world.hero,
+              acts.aimDir,
+              acts.aimTilt,
+              ab.range,
+              aimMarkerFor(ab.form.id) === 'circle',
+              controls.aimReach,
+            )
+          : null;
         inputRef.current.cast = { slot, aim: null, aimWorld };
       }
       return acts;
     }
 
-    /** While the right stick is tilted, show where the Primary would go. */
+    /** While the right stick is tilted, show where the Primary's next move would go. */
     function padAimView(world: ArpgWorld) {
       const state = padState();
-      const ab = world.hero.abilities[0];
-      if (!state || !ab || (state.right.x === 0 && state.right.y === 0)) return null;
+      if (!state || (state.right.x === 0 && state.right.y === 0)) return null;
+      const ab = nextMove(world.hero, 0, world.t, comboWindow);
       const tilt = Math.hypot(state.right.x, state.right.y);
       const dir = { x: state.right.x / tilt, y: state.right.y / tilt };
       const marker = aimMarkerFor(ab.form.id);
@@ -442,8 +464,8 @@ export function useArenaCore(
     function aimView(world: ArpgWorld) {
       const a = inputRef.current.aiming;
       const r = rendererRef.current;
-      const ab = a ? world.hero.abilities[a.slot] : undefined;
-      if (!a || !r || !ab || performance.now() - a.since < TAP_MS) return null;
+      if (!a || !r || performance.now() - a.since < TAP_MS) return null;
+      const ab = nextMove(world.hero, a.slot, world.t, comboWindow);
       const at = a.at ?? inputRef.current.mouse;
       if (!at) return null;
       return {
@@ -487,11 +509,11 @@ export function useArenaCore(
     if (ready && mode.worldKey !== null) startWorld();
   }, [ready, mode.worldKey, startWorld]);
 
-  // The loadout changed mid-fight → hot-swap the hero (abilities re-resolve, changed builds swap).
+  // The loadout changed mid-fight → hot-swap the hero (chains re-resolve, changed moves swap).
   useEffect(() => {
     const world = worldRef.current;
     if (world && !world.heroDead && !finishedRef.current) {
-      refreshWorldHero(registry, world, mode.loadout.stats, mode.loadout.abilities);
+      refreshWorldHero(registry, world, mode.loadout.stats, mode.loadout.chains);
       setHud(snapshot(world));
     }
   }, [mode.loadout, registry]);
@@ -506,6 +528,10 @@ export function useArenaCore(
       slot === null || !at
         ? null
         : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at };
+  }, []);
+  /** Drop a charging hold unpaid (an aim released back on its button). */
+  const cancelHold = useCallback(() => {
+    inputRef.current.cancelHold = true;
   }, []);
   /** The HUD attack button: held or released (it auto-aims). */
   const attack = useCallback((held: boolean) => {
@@ -531,6 +557,7 @@ export function useArenaCore(
     input: inputRef.current,
     cast,
     aim,
+    cancelHold,
     attack,
     dodge,
     potion,

@@ -37,13 +37,13 @@ export function useTrainingArena(
 ) {
   const registry = getDelveRegistry();
   const stats = useSandboxStats();
-  const abilities = useSandboxStore((s) => s.abilities);
+  const chains = useSandboxStore((s) => s.chains);
   const depth = useSandboxStore((s) => s.depth);
   const toggles = useSandboxStore((s) => s.toggles);
   const slowmo = useSandboxStore((s) => s.slowmo);
   const meterRef = useRef(new DamageMeter());
   const [meter, setMeter] = useState<MeterSummary>(() => meterRef.current.summary(0));
-  const loadout = useMemo(() => ({ stats, abilities }), [stats, abilities]);
+  const loadout = useMemo(() => ({ stats, chains }), [stats, chains]);
 
   const mode: ArenaMode = {
     // A new depth rebuilds the arena: dummy groups are replayed, spawned monsters go.
@@ -53,7 +53,7 @@ export function useTrainingArena(
       const world = createSandboxWorld(registry, {
         depth: s.depth,
         stats: loadout.stats,
-        abilities: loadout.abilities,
+        chains: loadout.chains,
         toggles: s.toggles,
       });
       s.dummies.forEach((g, group) => spawnDummies(registry, world, { ...g, group }));

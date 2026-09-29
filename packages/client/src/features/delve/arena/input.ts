@@ -25,7 +25,10 @@ export interface ArenaInput {
   /** Touch joystick or mouse-drag direction. */
   pointer: Vec;
   cast: CastPress | null;
+  /** The key or button held (it aims; a hold move charges while it is). */
   aiming: Aiming | null;
+  /** Drop a charging hold unpaid on the next step (an aim released back on its button). */
+  cancelHold: boolean;
   /** Last mouse position (client px), for hold-to-aim on the keyboard. */
   mouse: Vec | null;
   potion: boolean;
@@ -42,6 +45,7 @@ export function createArenaInput(): ArenaInput {
     pointer: { x: 0, y: 0 },
     cast: null,
     aiming: null,
+    cancelHold: false,
     mouse: null,
     potion: false,
     dodge: false,
@@ -54,6 +58,11 @@ export function createArenaInput(): ArenaInput {
 /** Combined move vector: keyboard wins when pressed. */
 export function moveVector(input: ArenaInput): Vec {
   return input.keys.x !== 0 || input.keys.y !== 0 ? input.keys : input.pointer;
+}
+
+/** The ability slot whose key or button is held: a hold move charges while it is, and its release casts. */
+export function holdingSlot(input: ArenaInput): number | null {
+  return input.aiming?.slot ?? null;
 }
 
 /** The arrow keys always move, whatever else is bound. */
@@ -107,7 +116,8 @@ function isField(t: EventTarget | null): boolean {
 /**
  * Wire keyboard controls to `input`, following the player's key bindings.
  * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
- * mouse and releasing casts there. Returns a cleanup function.
+ * mouse (and charges a hold move) and releasing casts there. Returns a
+ * cleanup function.
  */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();

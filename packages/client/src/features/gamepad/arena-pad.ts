@@ -1,4 +1,11 @@
-import type { Vec } from '@alloy/engine';
+import {
+  abilityReady,
+  makeCtx,
+  nextMove,
+  type ArpgWorld,
+  type DataRegistry,
+  type Vec,
+} from '@alloy/engine';
 import type { PadButton, PadState } from './gamepad';
 import { DEFAULT_CONTROLS, type ControlsConfig } from '@/features/controls/controls';
 
@@ -19,6 +26,8 @@ export interface ArenaPadActions {
   cast: number | null;
   /** Ability slot held down with hold-to-repeat on: cast again whenever it's ready. */
   castHeld: number | null;
+  /** Ability slot whose button is held (repeat or not): a hold move charges while it is. */
+  holding: number | null;
   dodge: boolean;
   potion: boolean;
   /** The attack button held: manual basic attacks. */
@@ -41,17 +50,58 @@ export function padToArena(
   const held = ABILITY_ACTIONS.findIndex(
     (a) => cfg.repeat[a] && is(cfg.pad[a], (b) => state.buttons[b]),
   );
+  const holding = ABILITY_ACTIONS.findIndex((a) => is(cfg.pad[a], (b) => state.buttons[b]));
   return {
     move: state.left,
     aimDir: tilt > 0 ? { x: state.right.x / tilt, y: state.right.y / tilt } : null,
     aimTilt: tilt,
     cast: cast >= 0 ? cast : null,
     castHeld: held >= 0 ? held : null,
+    holding: holding >= 0 ? holding : null,
     dodge: is(cfg.pad.dodge, (b) => pressed.has(b)),
     potion: is(cfg.pad.potion, (b) => pressed.has(b)),
     attackHeld: is(cfg.pad.attack, (b) => state.buttons[b]),
     attackTap: is(cfg.pad.attack, (b) => pressed.has(b)),
     menu: is(cfg.pad.menu, (b) => pressed.has(b)),
+  };
+}
+
+/**
+ * The ability slot the controller casts this frame, read from the world (not
+ * the HUD snapshot). A slot whose next move is a hold, or whose hold is
+ * charging, casts on its button's release (`released`: the slot held last
+ * frame and not now), never on the press and never by repeat: the held
+ * button charges it. Any other casts on the press, which always tries (so an
+ * unaffordable one still says so), or with repeat on, again whenever it's ready.
+ */
+export function padCast(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  acts: Pick<ArenaPadActions, 'cast' | 'castHeld'>,
+  released: number | null,
+): number | null {
+  const h = world.hero;
+  const window = registry.getDelveBalance().abilities.comboWindow;
+  const isHold = (slot: number) =>
+    h.hold?.slot === slot || nextMove(h, slot, world.t, window).kind === 'hold';
+  if (released !== null && isHold(released)) return released;
+  if (acts.cast !== null) return isHold(acts.cast) ? null : acts.cast;
+  const held = acts.castHeld;
+  return held !== null && !isHold(held) && abilityReady(makeCtx(registry, world, []), held)
+    ? held
+    : null;
+}
+
+/**
+ * The pad's release edge: fed each frame's held ability slot, it returns the
+ * slot whose button went up since the frame before (else null), for `padCast`.
+ */
+export function releaseEdge(): (holding: number | null) => number | null {
+  let last: number | null = null;
+  return (holding) => {
+    const released = last !== null && holding !== last ? last : null;
+    last = holding;
+    return released;
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { attachKeyboard, createArenaInput } from '../arena/input';
+import { attachKeyboard, createArenaInput, holdingSlot } from '../arena/input';
 import { useControlsStore } from '@/stores/controlsStore';
 
 const key = (type: 'keydown' | 'keyup', code: string) =>
@@ -15,6 +15,27 @@ describe('ability keys', () => {
     key('keydown', 'KeyQ');
     key('keyup', 'KeyQ');
     expect(input.cast).toEqual({ slot: 0, aim: null });
+  });
+
+  it('an ability key held down is holding its slot (a hold move charges); its release casts', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'KeyE');
+    expect(holdingSlot(input)).toBe(1);
+    expect(input.cast).toBeNull();
+    key('keyup', 'KeyE');
+    expect(holdingSlot(input)).toBeNull();
+    expect(input.cast?.slot).toBe(1);
+  });
+
+  it("ignores a held key's repeats: its press keeps its start, and nothing casts", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'KeyQ');
+    const since = input.aiming!.since;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyQ', repeat: true }));
+    expect(input.aiming!.since).toBe(since);
+    expect(input.cast).toBeNull();
   });
 
   it('pressing a second ability key while one is held casts the first instead of dropping it', () => {

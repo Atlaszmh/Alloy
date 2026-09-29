@@ -2,6 +2,7 @@ import { forwardRef, useRef, type PointerEvent as ReactPointerEvent } from 'reac
 import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
+import { KIND_ICON, moveText } from '../chains/chain-text';
 import { classifyPress, isCancelled } from './aim-gestures';
 import { keyLabel, padHint, type ControlsConfig } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from './useArena';
@@ -177,10 +178,57 @@ const SLOT_LABEL = ['Primary', 'Defensive', 'Ultimate'];
 /** Seconds the buttons still cooling down spark after Galvanize. */
 const GALVANIZE_SPARK = 0.4;
 
+/** A hold's charge filling above its button, ticked at the stages (`data-stage`: the stage reached). */
+function HoldBar({ hold, color }: { hold: { charge: number; stage: number }; color: string }) {
+  const stages = getDelveRegistry().getDelveBalance().chains.holdStages;
+  return (
+    <span
+      className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/70"
+      data-hold
+      data-stage={hold.stage}
+    >
+      <span
+        className="block h-full"
+        style={{
+          width: `${hold.charge * 100}%`,
+          background: color,
+          opacity: 0.55 + 0.225 * hold.stage,
+        }}
+      />
+      {stages.map((s) => (
+        <span
+          key={s}
+          className="absolute inset-y-0 w-px bg-white/70"
+          style={{ left: `${s * 100}%` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/** A chain's step dots under its button, the next one lit (`data-chain`: next or step). */
+function ChainDots({ step, length, color }: { step: number; length: number; color: string }) {
+  if (length < 2) return null;
+  return (
+    <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
+      {Array.from({ length }, (_, k) => (
+        <span
+          key={k}
+          data-chain={k === step ? 'next' : 'step'}
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: k === step ? color : 'rgba(255,255,255,0.25)' }}
+        />
+      ))}
+    </span>
+  );
+}
+
 /**
- * One ability button. A quick tap auto-aims; dragging out shows the aim
- * marker in the arena and releasing casts there (release back on the button
- * to cancel).
+ * One ability button: its chain's next move, the step dots, that move's kind
+ * and a hold's charge. A quick tap auto-aims; dragging out shows the aim
+ * marker in the arena and releasing casts there (drag out and back onto the
+ * button to cancel). While it's held a hold move charges: letting go in place
+ * casts it, auto-aimed; out and back cancels it unpaid.
  */
 function AbilityButton({
   slot,
@@ -190,6 +238,7 @@ function AbilityButton({
   hint,
   onCast,
   onAim,
+  onCancel,
 }: {
   slot: number;
   ab: AbilityHud;
@@ -200,9 +249,11 @@ function AbilityButton({
   hint?: string;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
+  onCancel: () => void;
 }) {
   const registry = getDelveRegistry();
-  const press = useRef<{ id: number; t: number; x: number; y: number } | null>(null);
+  // `left`: the pointer has been off the button since the press (back on it, that's a cancel).
+  const press = useRef<{ id: number; t: number; x: number; y: number; left: boolean } | null>(null);
   const color = manaStyle(registry, ab.elements[0]).color;
   const color2 = manaStyle(registry, ab.elements[ab.elements.length - 1]).color;
   const cooling = ab.cooldown > 0.05;
@@ -216,11 +267,26 @@ function AbilityButton({
     } catch {
       /* pointer already gone */
     }
-    press.current = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
+    press.current = {
+      id: e.pointerId,
+      t: performance.now(),
+      x: e.clientX,
+      y: e.clientY,
+      left: false,
+    };
     onAim(slot, { x: e.clientX, y: e.clientY });
   };
+  /** Whether the pointer is over the button (within its radius). */
+  const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    return isCancelled({ x: e.clientX, y: e.clientY }, button);
+  };
   const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (press.current?.id === e.pointerId) onAim(slot, { x: e.clientX, y: e.clientY });
+    const p = press.current;
+    if (p?.id !== e.pointerId) return;
+    if (!over(e)) p.left = true;
+    onAim(slot, { x: e.clientX, y: e.clientY });
   };
   const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const p = press.current;
@@ -229,14 +295,15 @@ function AbilityButton({
     onAim(null);
     const drag = Math.hypot(e.clientX - p.x, e.clientY - p.y);
     if (classifyPress(performance.now() - p.t, drag) === 'tap') return onCast(slot);
-    const r = e.currentTarget.getBoundingClientRect();
-    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
-    if (!isCancelled({ x: e.clientX, y: e.clientY }, button))
-      onCast(slot, { x: e.clientX, y: e.clientY });
+    if (!over(e)) return onCast(slot, { x: e.clientX, y: e.clientY });
+    // Back on the button: a hold held in place fires; out and back cancels.
+    if (!p.left && (ab.hold !== null || ab.nextKind === 'hold')) onCast(slot);
+    else onCancel();
   };
   const cancel = () => {
     press.current = null;
     onAim(null);
+    onCancel();
   };
 
   return (
@@ -246,7 +313,7 @@ function AbilityButton({
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={cancel}
-      aria-label={`${SLOT_LABEL[slot]}: ${ab.name}`}
+      aria-label={`${SLOT_LABEL[slot]}: ${moveText({ kind: ab.nextKind, name: ab.name })}`}
       data-testid={`ability-${slot}`}
       data-ready={ab.ready}
       className="relative rounded-full border-0 p-[3px]"
@@ -255,7 +322,7 @@ function AbilityButton({
         height: size,
         background: `linear-gradient(135deg, ${color}, ${color2})`,
         boxShadow: ab.ready ? `0 0 16px ${color}aa` : 'none',
-        opacity: busy && ab.windup === null ? 0.5 : ab.affordable ? 1 : 0.55,
+        opacity: busy && ab.windup === null && ab.hold === null ? 0.5 : ab.affordable ? 1 : 0.55,
         touchAction: 'none',
       }}
     >
@@ -263,6 +330,12 @@ function AbilityButton({
         className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-full"
         style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
       >
+        <span
+          className="absolute top-1.5 text-[8px] leading-none text-stone-300"
+          data-kind={ab.nextKind}
+        >
+          {KIND_ICON[ab.nextKind]}
+        </span>
         <span className="text-2xl leading-none">{ab.icon}</span>
         {ab.charge !== null && ab.charge < 1 && (
           <span
@@ -296,17 +369,8 @@ function AbilityButton({
           </span>
         )}
       </span>
-      {ab.comboLength > 1 && (
-        <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
-          {Array.from({ length: ab.comboLength }, (_, k) => (
-            <span
-              key={k}
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: k === ab.comboNext ? color : 'rgba(255,255,255,0.25)' }}
-            />
-          ))}
-        </span>
-      )}
+      <ChainDots step={ab.chainStep} length={ab.chainLength} color={color} />
+      {ab.hold !== null && <HoldBar hold={ab.hold} color={color} />}
       {ab.windup !== null && (
         <span className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/70">
           <span
@@ -336,7 +400,8 @@ function AbilityButton({
 
 /**
  * Manual basic attacks on phones: hold to keep attacking, tap for one. Pips
- * show which blow of the weapon's string lands next.
+ * show which blow of the basic chain lands next, a glyph its kind, and a bar
+ * a held blow's charge.
  */
 export function AttackButton({
   hud,
@@ -368,30 +433,26 @@ export function AttackButton({
       style={{ background: 'linear-gradient(135deg,#e7e5e4,#a8a29e)', touchAction: 'none' }}
     >
       <span
-        className="flex h-full w-full items-center justify-center rounded-full text-3xl"
+        className="relative flex h-full w-full items-center justify-center rounded-full text-3xl"
         style={{ background: 'radial-gradient(circle at 50% 35%, #2c2c3c, #121219)' }}
       >
         ⚔️
+        {hud && (
+          <span
+            className="absolute top-1.5 text-[8px] leading-none text-stone-300"
+            data-kind={hud.basicNextKind}
+          >
+            {KIND_ICON[hud.basicNextKind]}
+          </span>
+        )}
       </span>
       {hint && (
         <span className="absolute -top-1 right-0 rounded bg-black/70 px-1 text-[9px] text-stone-300">
           {hint}
         </span>
       )}
-      {hud && hud.basicComboLength > 1 && (
-        <span className="absolute -bottom-1.5 left-1/2 flex -translate-x-1/2 gap-0.5" aria-hidden>
-          {Array.from({ length: hud.basicComboLength }, (_, k) => (
-            <span
-              key={k}
-              data-combo={k === hud.basicComboNext ? 'next' : 'step'}
-              className="h-1.5 w-1.5 rounded-full"
-              style={{
-                background: k === hud.basicComboNext ? '#fde047' : 'rgba(255,255,255,0.25)',
-              }}
-            />
-          ))}
-        </span>
-      )}
+      {hud && <ChainDots step={hud.basicChainStep} length={hud.basicChainLength} color="#fde047" />}
+      {hud?.basicHold && <HoldBar hold={hud.basicHold} color="#fde047" />}
     </button>
   );
 }
@@ -462,6 +523,7 @@ export function SkillBar({
   hud,
   onCast,
   onAim,
+  onCancel,
   onPotion,
   onDodge,
   hints,
@@ -469,6 +531,8 @@ export function SkillBar({
   hud: ArenaHud | null;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec) => void;
+  /** An aim released back on its button: drop a charging hold unpaid. */
+  onCancel: () => void;
   onPotion: () => void;
   onDodge: () => void;
   /** Button labels to show, or null (touch). */
@@ -505,6 +569,7 @@ export function SkillBar({
           hint={hints?.abilities[i]}
           onCast={onCast}
           onAim={onAim}
+          onCancel={onCancel}
         />
       ))}
     </div>

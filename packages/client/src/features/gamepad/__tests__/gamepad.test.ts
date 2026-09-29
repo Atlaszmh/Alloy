@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { computeHeroStats, createSandboxWorld, defaultChains, stepWorld } from '@alloy/engine';
 import { edges, radialDeadzone, readPad, type GamepadLike } from '../gamepad';
-import { padToArena, stickAimPoint } from '../arena-pad';
+import { padCast, padToArena, releaseEdge, stickAimPoint } from '../arena-pad';
+import { getDelveRegistry } from '@/features/delve/registry';
 import { DEFAULT_CONTROLS, bindPad } from '@/features/controls/controls';
 import { pickNext, type NavRect } from '../spatial-nav';
 
@@ -69,6 +71,9 @@ describe('padToArena (triggers fire, bumpers support)', () => {
     expect(act([6]).dodge).toBe(true); // LT
     expect(act([7]).cast).toBe(0); // RT press
     expect(act([7]).castHeld).toBe(0); // RT held keeps casting
+    expect(act([7]).holding).toBe(0); // and charges a hold move
+    expect(act([4]).holding).toBe(1);
+    expect(act([]).holding).toBeNull();
     expect(act([4]).cast).toBe(1); // LB
     expect(act([11]).cast).toBe(2); // R3
     expect(act([5]).attackHeld).toBe(true); // RB
@@ -98,6 +103,60 @@ describe('padToArena (triggers fire, bumpers support)', () => {
   });
 });
 
+describe('releaseEdge', () => {
+  it('reports the slot held the frame before and not now', () => {
+    const release = releaseEdge();
+    const frames: (number | null)[] = [0, 0, null, 1, 2, null];
+    expect(frames.map((held) => release(held))).toEqual([null, null, 0, null, 1, 2]);
+  });
+});
+
+describe('padCast (a hold casts on its release, read from the world)', () => {
+  const registry = getDelveRegistry();
+  const STEP = registry.getDelveBalance().arena.step;
+  /** A light Bolt then a held Lance on the Primary, the Defensive a single Ward. */
+  const world = () =>
+    createSandboxWorld(registry, {
+      depth: 5,
+      stats: computeHeroStats({}, registry),
+      chains: {
+        ...defaultChains(registry, 'fire', null),
+        primary: {
+          moves: [
+            { kind: 'light', form: 'bolt', elements: ['fire'] },
+            { kind: 'hold', form: 'lance', elements: ['fire'] },
+          ],
+          payment: 'mana',
+        },
+      },
+      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+    });
+  const none = { cast: null, castHeld: null };
+
+  it('a press casts a non-hold next move, and repeat casts it again once ready', () => {
+    const w = world();
+    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toBe(0);
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBe(0);
+    expect(padCast(registry, w, none, 0)).toBeNull(); // its release does nothing
+    w.hero.cooldowns[0][0] = w.t + 1;
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
+    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toBe(0); // a press always tries
+  });
+
+  it("a hold next move ignores the press and repeat, and casts on the button's release", () => {
+    const w = world();
+    // The light Bolt landed: the next move is the held Lance.
+    w.hero.comboStep[0] = 0;
+    w.hero.comboAt[0] = w.t;
+    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toBeNull();
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP);
+    expect(w.hero.hold?.slot).toBe(0);
+    expect(padCast(registry, w, none, 0)).toBe(0);
+    expect(padCast(registry, w, none, 1)).toBeNull(); // the Ward isn't a hold
+  });
+});
+
 describe('custom controls', () => {
   it('follows the bindings and per-ability repeat', () => {
     let cfg = bindPad(DEFAULT_CONTROLS, 'primary', 'a');
@@ -111,6 +170,7 @@ describe('custom controls', () => {
     expect(act([0]).castHeld).toBeNull(); // with repeat off
     expect(act([7]).cast).toBeNull(); // RT is unbound now
     expect(act([4]).castHeld).toBe(1); // LB Defensive repeats
+    expect(act([0]).holding).toBe(0); // held, repeat or not
   });
 
   it('reads the sticks with the configured deadzones', () => {
