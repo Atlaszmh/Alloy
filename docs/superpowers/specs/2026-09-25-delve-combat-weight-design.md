@@ -110,6 +110,8 @@ So a planted fight gets the full weight, while kiting and running past foes play
 
 ## Basic attacks: weapon combo strings
 
+> **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a weapon's string is its default basic chain (`GearBaseDef.defaultChain`) over a feel row per kind (`GearBaseDef.feel`: light, medium, heavy, hold; unarmed, `balance.json → delve.hero.feel` and `defaultChain`), derived so the default chain plays the string below blow for blow; the player can build a chain of up to five blows, each a kind and an element of the pair.
+
 Each weapon base in `delve.json` gains a `combo` array, validated by Zod (optional in the gear-base schema). A weapon without one, including the unarmed fallback in `hero-stats.ts`, uses `balance.json → delve.hero.defaultCombo`. `HeroWeapon` gains `combo`.
 
 The string advances one step at each strike and resets after `attackInterval + basicComboGrace` without a strike (today's rule, measured from the last strike). One entry per step:
@@ -164,6 +166,8 @@ Starting strings (tuned against the pacing guard rails). Across a full string, d
 - `estimateCombat` (`hero-stats.ts`) uses the string's `Σ power / Σ time` in place of today's hard-coded finisher factor, and Twin Fang's rate becomes `1 / steps`. Its ability `useInterval` becomes `cooldown + channel`, since the conjure no longer slows the fire rate.
 
 ## Abilities: weight in time
+
+> **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a move's kind sets its weight (light −1, medium 0, heavy +1; a hold's stages 0, +1, +2), and the +0.2 heft of a press-combo's last step goes to a chain's last move (`stepHeft`).
 
 `ResolvedAbility` gains `conjure`, `channel` and `heft`, and `castTime = conjure + channel`:
 

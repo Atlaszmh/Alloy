@@ -1,7 +1,7 @@
 # Delve Moves and Chains Design
 
 **Date:** 2026-09-29
-**Status:** Draft.
+**Status:** Built in v0.46.0. The DPS Lab gate kept every starting value but three, first `stepBonus` then two forms' default chains: `stepBonus` 0.1 → 0.15, Bolt's default chain light, medium, medium, heavy (not light, light, medium, heavy: its two light moves apply one stack each, so the Glacier Bolt loses its Shatters) and Strike's medium, medium, heavy, heavy (not medium, medium, medium, heavy: the Wildfire Strike in the pack loses its Combusts to the reaction lockout). On the 40-seed floor, every mana default-chain row holds: the worst −10.8% (the Earth+Fire Volley, the pack). Basics are unchanged (worst +0.0%). The pacing rails hold: first dives 12, 11, 5, 4; the 15-pair sweep's median 32 (26–40). (At the gate they read 11, 11, 5, 4 and 29 (20–38); they moved with the review fixes, as a default basic chain began following the weapon and the pair and the autopilot's gear choices began valuing its own chains.)
 **Follows:** `2026-09-28-delve-elemental-stacks-design.md` (v0.45.0). Stage 3 of the skill refactor. Stage 4 (weapon slot caps and acquired modifiers) builds on the chain caps this stage introduces.
 
 **Engine** (`packages/engine/`):

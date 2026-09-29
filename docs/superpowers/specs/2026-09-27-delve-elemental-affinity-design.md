@@ -130,6 +130,8 @@ Every op returns `ProfileActionResult` (`{ ok, profile, reason }`, like smithing
 
 ### Basic attacks (`basic.ts`)
 
+> **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): each blow of the basic chain strikes with its own element of the pair (the default chain's last blow the secondary once bound) and that element's attunement powers it (`HeroBlow.attunePower`); the finisher's discharge and `HeroWeapon.element`, `infusion`, `blowPower` and `finisherPower` are gone. A basic chain still on its default follows the weapon and the pair (`followBasic`): equipping or unequipping a weapon, a bind, a realign and an overtake make it the new default, while a chain the player built keeps its blows.
+
 With `weapon.infusion` set (a bound secondary):
 
 - **Ordinary blows** (every step but the string's last) strike with the primary, at `× weapon.blowPower`, with the usual 30% primary status roll.
@@ -143,6 +145,8 @@ With `weapon.infusion` set (a bound secondary):
 - **Without a pair `primary`:** basics work exactly as today (the weapon's mana, no attunement power).
 
 ### Abilities and defaults
+
+> **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): `setChain`, `defaultChains` and `fixChainsToPair` replace `setAbility`, `defaultAbilities` and `fixBuildsToPair`. `fixChainsToPair` works per move and blow and returns a `ChainFix` for each one it changes, which the client groups per skill into its toasts (`fixNotices`); after a realign it maps each element by its old role (`roleHeir`: the old primary's to the new primary, the old secondary's to the new secondary). `bindSecondary` takes the registry: `bindSecondary(registry, profile, mana)`.
 
 - **`setAbility`:** keeps its current contract (returns the profile, throws on a bad build). It also throws for elements outside the pair when `primary` is set; the picker only ever offers the pair. `resolveAbility` is unchanged.
 - **`defaultAbilities(element)`:** now gives the Ward the same element, where it used to be hard-coded frost. New heroes, the choice screen and the Training Grounds defaults all use it.

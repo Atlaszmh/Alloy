@@ -33,6 +33,8 @@ Keys: Q Primary, E Defensive, R Ultimate (F potion as today). On phones, three b
 
 ## An ability
 
+> **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a slot holds a chain of up to five moves (`profile.chains`, save version 5), each a kind (light, medium, heavy, or a hold that charges while its button is held), a form and one or two elements, with one payment per chain. A move's kind sets its weight (`balance.json → delve.chains.kindWeight`; a hold's stages `holdStageWeight`), so Swift and Crushing are no fixed picks, and the forms' press-combos (`combo`, `comboCount`) are gone: a chain escalates by its kinds and the step bonus, and each move has its own cooldown.
+
 ```ts
 type AbilitySlot = 'primary' | 'defensive' | 'ultimate';
 interface AbilityBuild {

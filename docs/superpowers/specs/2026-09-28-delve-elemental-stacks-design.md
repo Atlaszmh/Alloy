@@ -62,6 +62,8 @@ The predicates keep their names: `isBurning` = fire > 0, `isChilled` = frost > 0
 
 ### Stacks per hit
 
+> **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a basic blow applies `stacks.basicByKind[kind]` (light 1, medium 1, heavy 2, hold 2; a manual hold blow, its stage's kind: medium, heavy, hold), replacing `basicBlow` and `basicFinisher`; an ability move's direct hit applies `byWeight` at its kind's weight (a hold's, its stage's).
+
 Every hit carries one count, `HitOpts.stacks` (and `Projectile.stacks` for shots), applied to every element status the hit carries. `applyStatus(status, hitAmount, rattles, slot, n)` maps the six element statuses to their element through `BASIC_STATUS`'s inverse (`burn` → fire … `poison` → nature; the map stays and is still exported) and calls `applyStacks(ctx, m, element, n, ref, slot)`, which adds `n` (capped), refreshes `stackUntil[element] = t + duration[element]`, and updates the ref and slot under the DPS Lab's rule (`!active || ref >= current`). `stagger` still applies the stagger CC; it adds Earth stacks only with `rattles` (an Earth source), as today's rattle rule.
 
 | Source | `stacks` | Balance key |

@@ -51,6 +51,8 @@ Today damage over time and reaction splash carry no ability slot, so an ability'
 
 ### `arpg/dps-sim.ts`
 
+> **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a setup carries `chains` (the basic chain and each slot's) in place of `abilities`, and an ability setup's dims are `{ form, first, second, kind, payment }`: a single move of each kind, and each form's default chain (`kind: 'default'`), which is what a held button plays; a hold move is held to full charge each press. Basics run each weapon's default chain on the pair.
+
 It is pure and deterministic, and built on the Training Grounds sandbox.
 
 ```ts

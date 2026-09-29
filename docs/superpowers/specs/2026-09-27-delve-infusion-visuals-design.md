@@ -35,6 +35,8 @@ Basic attacks draw their infusion the same way whenever the weapon carries one.
 
 ## Engine (display data only; no rule changes)
 
+> **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): basic attacks carry no infusion. `HeroWeapon.infusion` is gone and each blow strikes with one element of the pair, so a basic swing, shot or burst draws no motif (`basicMotif` is gone; the great orb's `burstShot` sends `null`), and heavy and hold blows ring out in their own element. Ability events keep their infusions as below.
+
 - **Ability events.** `beam`, `slash`, `explode` and `dash` gain `infusion: ManaType | null`:
   - **From an ability:** `impact`, Lance, Strike and Blink use `ab.elements[1] ?? null`. A tick impact (zone ticks, Pyroclasm embers) uses `null`, so embers don't draw infused rings: `infusion = o.tick ? null : ab.elements[1] ?? null`.
   - **From a basic burst:** the staff great orb's `burstShot` uses the weapon's infusion.
