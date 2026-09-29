@@ -27,8 +27,8 @@ import {
 
 const HOSTILE = 0xff4d4d;
 const HOSTILE_EDGE = 0xff9a9a;
-/** Blinded foes' smoke: dim, since the air layer only adds light. */
-const BLIND_SMOKE = 0x5d5670;
+/** Blinded foes' haze: a pale violet, since the air layer only adds light (a dark smoke vanishes). */
+const BLIND_SMOKE = 0x9a8cc4;
 /** Sunder's crack, in pixels right of the Hellfire brand. */
 const CRACK = [
   [1, -1],
@@ -449,9 +449,9 @@ export function drawMonsterMarks(
       for (const [dx, dy] of CRACK)
         px(air, m.x + dx * PX, m.y - m.radius - 0.35 + dy * PX, MANA_HEX.earth, 1);
     if (t < s.blindUntil) {
-      // Blind (Blackout, Steam): a dim smoke over the eyes.
-      const r = m.radius * 0.7;
-      manaDust(air, m.x, m.y - m.radius * 0.6, r, BLIND_SMOKE, time, 0.25, 0.6, m.id + 5);
+      // Blind (Blackout, Steam): a haze over the eyes.
+      const r = m.radius * 0.6;
+      manaDust(air, m.x, m.y - m.radius - 0.3, r, BLIND_SMOKE, time, 0.6, 0.9, m.id + 5);
     }
   }
 }
