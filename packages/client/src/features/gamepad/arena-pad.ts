@@ -103,7 +103,10 @@ export interface PadMemory {
   holding: number | null;
   /** A press that came as another slot's hold released: it casts now. */
   carried: number | null;
-  /** The attack button held then: the tick it lets go still aims with the stick. */
+  /**
+   * The attack button held then, or let go with its held blow not yet struck:
+   * the tick that strikes it still aims with the stick.
+   */
   attackHeld: boolean;
 }
 

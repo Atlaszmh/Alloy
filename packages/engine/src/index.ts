@@ -216,6 +216,7 @@ export {
   chargeCap,
   stepBonus,
   moveNumbers,
+  blowNumbers,
   mergeKnobs,
   defaultBasic,
   defaultChains,

@@ -4,6 +4,7 @@ import { BalanceConfigSchema } from '../src/data/schemas.js';
 import { abilityReady, activeMove, holdCharge, nextMove } from '../src/arpg/abilities/cast.js';
 import { defendingAbility, gainCharge } from '../src/arpg/abilities/defend.js';
 import {
+  blowNumbers,
   chainMove,
   chargeCap,
   defaultBasic,
@@ -991,6 +992,30 @@ describe('basics', () => {
       fire: 0,
     });
     expect(basics(firstBlow(w))[0]).toMatchObject({ element: 'fire', moveKind: 'heavy', step: 1 });
+  });
+
+  it('blowNumbers gives the hit and the stacks the sim deals: a light and a heavy blow', () => {
+    for (const kind of ['light', 'heavy'] as const) {
+      const w = strikeWorld(
+        sword,
+        {
+          pair: { primary: 'fire', secondary: 'shadow' },
+          attunement: { shadow: 5 },
+          basic: [{ kind, element: 'shadow' }],
+        },
+        false,
+        dummy(13, 34.5, { traits: [] }),
+      );
+      // Shadow on a Fire foe, which neither resists it nor is weak to it, and no crits.
+      w.hero.stats = { ...w.hero.stats, critChance: 0 };
+      const n = blowNumbers(w.hero.stats, bal, w.hero.stats.weapon.blows[0]);
+      const hits = firstBlow(w).filter((e) => e.kind === 'hit');
+      expect(
+        hits.map((e) => e.kind === 'hit' && e.amount),
+        kind,
+      ).toEqual([expect.closeTo(n.hit, 9)]);
+      expect(w.monsters[0].status.stacks.shadow, kind).toBe(n.stacks);
+    }
   });
 
   it("Twin Fang doubles the chain's last blow, whatever its kind", () => {

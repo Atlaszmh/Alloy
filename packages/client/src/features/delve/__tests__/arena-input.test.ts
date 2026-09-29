@@ -4,8 +4,11 @@ import {
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
+  moveNumbers,
+  spawnDummies,
   stepWorld,
   type Chain,
+  type Move,
   type Vec,
 } from '@alloy/engine';
 import { attachKeyboard, createArenaInput, frameInput, holdingSlot } from '../arena/input';
@@ -183,6 +186,21 @@ describe('the aim marker of a key or button held to aim', () => {
     expect(view.radius).toBeCloseTo(chainMove(w.hero.chains[0], 0, 2).radius);
     expect(view.radius).toBeGreaterThan(w.hero.chains[0].moves[0].radius);
   });
+
+  it("a later move's circle has its step's size: a Burst as move 4", () => {
+    const burst: Move = { kind: 'medium', form: 'burst', elements: ['fire'] };
+    const w = world({ moves: [burst, burst, burst, burst], payment: 'mana' });
+    // Pressed to its third move: the next press is its fourth.
+    w.hero.comboStep[0] = 2;
+    w.hero.comboAt[0] = w.t;
+    const fourth = w.hero.chains[0].moves[3];
+    const view = aimView(w, aiming, point, 1000)!;
+    expect(view.marker).toBe('circle');
+    expect(view.radius).toBeCloseTo(
+      moveNumbers(w.hero.stats, registry.getDelveBalance(), fourth).radius,
+    );
+    expect(view.radius).toBeGreaterThan(fourth.radius);
+  });
 });
 
 describe("frameInput: each step's input from the keys, the HUD and the pad", () => {
@@ -274,5 +292,39 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(aim(true)).toEqual(along);
     expect(aim(false)).toEqual(along);
     expect(aim(false)).toEqual({ x: 5, y: 6 });
+  });
+
+  it('RB let go on a frame that runs no tick: the next frame still aims with the stick, and the held blow strikes along it', () => {
+    const w = createSandboxWorld(registry, {
+      depth: 5,
+      stats: computeHeroStats({}, registry, { basic: [{ kind: 'hold', element: 'fire' }] }),
+      chains: defaultChains(registry, 'fire', null),
+      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+    });
+    const h = w.hero;
+    // A foe just above the hero: a held blow let go with no aim turns to it.
+    Object.assign(spawnDummies(registry, w, { layout: 'single', element: null })[0], {
+      x: h.x,
+      y: h.y - 1.5,
+    });
+    const input = createArenaInput();
+    const mem = padMemory();
+    const STEP = registry.getDelveBalance().arena.step;
+    /** One frame with the stick to the left, RB held or not, running `dt` of sim time. */
+    const frame = (rb: boolean, dt: number) => {
+      const acts = pad({ aimDir: { x: -1, y: 0 }, aimTilt: 1, attackHeld: rb });
+      const out = frameInput(registry, w, input, acts, mem, opts);
+      return { out, events: stepWorld(registry, w, out, dt) };
+    };
+    // RB held until the blow holds at its strike point, then let go on a frame with no tick.
+    for (let i = 0; i < 60 && h.swing?.held == null; i++) frame(true, STEP);
+    frame(false, 0);
+    expect(h.swing?.held).toBeTypeOf('number');
+    const along = { x: h.x - h.stats.weapon.range, y: h.y };
+    const next = frame(false, STEP);
+    expect(next.out.attackAim).toEqual(along);
+    expect(next.events.find((e) => e.kind === 'basic')).toMatchObject({
+      dir: { x: expect.closeTo(-1), y: expect.closeTo(0) },
+    });
   });
 });

@@ -9,6 +9,7 @@ import {
   canAfford,
   chainMove,
   holdCharge,
+  moveNumbers,
   nextMove,
   pressStep,
   type ArpgEvent,
@@ -261,7 +262,8 @@ function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
  * The aim marker for a key or HUD button held long enough to aim, at `point`
  * (world units: the pointer, or the mouse for a key); none while a HUD
  * button's press is still over its button, where letting go casts
- * auto-aimed. A charging hold's marker has its stage's size.
+ * auto-aimed. A charging hold's marker has its stage's size, and a later
+ * move's its step's (`moveNumbers`).
  */
 export function aimView(world: ArpgWorld, a: Aiming, point: Vec, now: number): AimView | null {
   if (a.onButton || now - a.since < TAP_MS) return null;
@@ -269,7 +271,7 @@ export function aimView(world: ArpgWorld, a: Aiming, point: Vec, now: number): A
   return {
     marker: aimMarkerFor(ab.form.id),
     point,
-    radius: ab.radius,
+    radius: moveNumbers(world.hero.stats, getDelveRegistry().getDelveBalance(), ab).radius,
     range: ab.range,
     element: ab.element,
   };
@@ -426,7 +428,7 @@ export function useArenaCore(
       return {
         marker: marker === 'none' ? ('line' as const) : marker,
         point: stickAimPoint(world.hero, dir, tilt, ab.range, marker === 'circle', reach),
-        radius: ab.radius,
+        radius: moveNumbers(world.hero.stats, registry.getDelveBalance(), ab).radius,
         range: ab.range,
         element: ab.element,
       };

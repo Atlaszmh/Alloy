@@ -90,9 +90,10 @@ export interface FrameOpts {
  * (`pad`, null when there is none; `mem`, what it remembers from the frame
  * before). The pad's cast (`padFrameCast`, aimed by the right stick) wins over
  * a key's or a button's; a key or button held wins `holding` over the pad; the
- * stick aims the attack only while the pad drives it (the attack button held,
- * or let go this frame, whose tick a held blow re-aims on). Each press (a
- * cast, `cancelHold`, a dodge, a potion, an attack tap) goes once, then resets.
+ * stick aims the attack only while the pad drives it: the attack button held,
+ * or let go this frame or with its held blow not yet struck (the tick that
+ * strikes it re-aims it, and a frame may run none). Each press (a cast,
+ * `cancelHold`, a dodge, a potion, an attack tap) goes once, then resets.
  */
 export function frameInput(
   registry: DataRegistry,
@@ -117,7 +118,7 @@ export function frameInput(
     cast = { slot, aim };
   }
   const stick = pad?.aimDir && (pad.attackHeld || mem.attackHeld) ? pad.aimDir : null;
-  mem.attackHeld = !!pad?.attackHeld;
+  mem.attackHeld = !!pad?.attackHeld || (mem.attackHeld && h.swing?.held != null);
   const out: ArpgInput = {
     move: pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : moveVector(input),
     cast,

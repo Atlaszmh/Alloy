@@ -1,4 +1,4 @@
-import { forwardRef, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { forwardRef, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
@@ -229,11 +229,29 @@ function ChainDots({ step, length, color }: { step: number; length: number; colo
 }
 
 /**
+ * A press on an ability button: its slot and pointer, where and when it
+ * began, where it is now (`at`, `on` its button), and whether it has been off
+ * the button since (`left`: back on it, that's a cancel).
+ */
+interface Press {
+  slot: number;
+  id: number;
+  t: number;
+  x: number;
+  y: number;
+  at: Vec;
+  on: boolean;
+  left: boolean;
+}
+
+/**
  * One ability button: its chain's next move, the step dots, that move's kind
  * and a hold's charge. A tap, or a press let go in place, casts auto-aimed;
  * dragging out shows the aim marker in the arena and releasing casts there;
  * out and back onto the button cancels (a charging hold unpaid). While it's
- * held a hold move charges.
+ * held a hold move charges. The bar's buttons share one press (`press`), as
+ * the aim holds one slot: another button's press lets it go where it is (as a
+ * second key does), and its pointer does nothing more.
  */
 function AbilityButton({
   slot,
@@ -241,6 +259,7 @@ function AbilityButton({
   busy,
   galvanized,
   hint,
+  press,
   onCast,
   onAim,
   onCancel,
@@ -252,13 +271,12 @@ function AbilityButton({
   /** Galvanize just fired: a cooling button sparks. */
   galvanized: boolean;
   hint?: string;
+  press: RefObject<Press | null>;
   onCast: (slot: number, aim?: Vec | null) => void;
   onAim: (slot: number | null, at?: Vec, onButton?: boolean) => void;
   onCancel: () => void;
 }) {
   const registry = getDelveRegistry();
-  // `left`: the pointer has been off the button since the press (back on it, that's a cancel).
-  const press = useRef<{ id: number; t: number; x: number; y: number; left: boolean } | null>(null);
   const color = manaStyle(registry, ab.elements[0]).color;
   const color2 = manaStyle(registry, ab.elements[ab.elements.length - 1]).color;
   const cooling = ab.cooldown > 0.05;
@@ -272,14 +290,11 @@ function AbilityButton({
     } catch {
       /* pointer already gone */
     }
-    press.current = {
-      id: e.pointerId,
-      t: performance.now(),
-      x: e.clientX,
-      y: e.clientY,
-      left: false,
-    };
-    onAim(slot, { x: e.clientX, y: e.clientY }, true);
+    if (press.current && press.current.slot !== slot) letGo(press.current);
+    const at = { x: e.clientX, y: e.clientY };
+    const t = performance.now();
+    press.current = { slot, id: e.pointerId, t, x: at.x, y: at.y, at, on: true, left: false };
+    onAim(slot, at, true);
   };
   /** Whether the pointer is over the button: within its radius and the drag threshold (a thumb jitters). */
   const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -287,26 +302,38 @@ function AbilityButton({
     const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 + DRAG_PX };
     return isCancelled({ x: e.clientX, y: e.clientY }, button);
   };
-  const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
+  /** This button's own press, following its pointer; null for any other pointer. */
+  const follow = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const p = press.current;
-    if (p?.id !== e.pointerId) return;
-    const on = over(e);
-    if (!on) p.left = true;
-    onAim(slot, { x: e.clientX, y: e.clientY }, on);
+    if (p?.id !== e.pointerId) return null;
+    p.at = { x: e.clientX, y: e.clientY };
+    p.on = over(e);
+    if (!p.on) p.left = true;
+    return p;
   };
-  const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    const p = press.current;
-    if (!p || p.id !== e.pointerId) return;
+  /**
+   * Let a press go where it is: a tap, or let go in place, casts auto-aimed
+   * (as a key does); off its button it casts there; out and back cancels.
+   */
+  const letGo = (p: Press) => {
     press.current = null;
     onAim(null);
-    const drag = Math.hypot(e.clientX - p.x, e.clientY - p.y);
-    if (classifyPress(performance.now() - p.t, drag) === 'tap') return onCast(slot);
-    if (!over(e)) return onCast(slot, { x: e.clientX, y: e.clientY });
-    // On the button: let go in place it casts, auto-aimed (as a key does); out and back cancels.
-    if (!p.left) onCast(slot);
+    const drag = Math.hypot(p.at.x - p.x, p.at.y - p.y);
+    if (classifyPress(performance.now() - p.t, drag) === 'tap') return onCast(p.slot);
+    if (!p.on) return onCast(p.slot, p.at);
+    if (!p.left) onCast(p.slot);
     else onCancel();
   };
-  const cancel = () => {
+  const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = follow(e);
+    if (p) onAim(slot, p.at, p.on);
+  };
+  const up = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = follow(e);
+    if (p) letGo(p);
+  };
+  const cancel = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (press.current?.id !== e.pointerId) return;
     press.current = null;
     onAim(null);
     onCancel();
@@ -546,6 +573,7 @@ export function SkillBar({
 }) {
   const galvanized =
     !!hud && hud.galvanizedAt !== null && hud.t - hud.galvanizedAt < GALVANIZE_SPARK;
+  const press = useRef<Press | null>(null);
   return (
     <div className="flex items-end justify-center gap-2" data-testid="skill-bar">
       <DodgeButton hud={hud} hint={hints?.dodge} onDodge={onDodge} />
@@ -573,6 +601,7 @@ export function SkillBar({
           busy={hud.busy}
           galvanized={galvanized}
           hint={hints?.abilities[i]}
+          press={press}
           onCast={onCast}
           onAim={onAim}
           onCancel={onCancel}

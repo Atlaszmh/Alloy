@@ -13,7 +13,13 @@ import {
   type ResolvedChain,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
-import type { DelveBalance, DelveProfile, HeroStats, ManaPair } from '../../types/delve.js';
+import type {
+  DelveBalance,
+  DelveProfile,
+  HeroBlow,
+  HeroStats,
+  ManaPair,
+} from '../../types/delve.js';
 
 const NEUTRAL: Knobs = {
   power: 1,
@@ -213,6 +219,22 @@ export function moveNumbers(
   return {
     hit: stats.weaponDamage * stats.damageMult * ab.power * power,
     radius: ab.radius * (f === 'bolt' || f === 'burst' ? step.size : 1),
+  };
+}
+
+/**
+ * A basic blow's numbers as the sim uses them: its hit before the foe's
+ * modifiers (weapon damage × damage × its element's attunement power × its
+ * kind's row), and the stacks its kind applies.
+ */
+export function blowNumbers(
+  stats: HeroStats,
+  bal: DelveBalance,
+  blow: HeroBlow,
+): { hit: number; stacks: number } {
+  return {
+    hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power,
+    stacks: bal.stacks.basicByKind[blow.kind],
   };
 }
 

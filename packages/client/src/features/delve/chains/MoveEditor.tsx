@@ -1,5 +1,6 @@
 import {
   MOVE_KINDS,
+  blowNumbers,
   moveNumbers,
   type AbilitySlot,
   type Blow,
@@ -118,11 +119,10 @@ function Readout({
   );
 }
 
-/** A basic blow's numbers: its hit, its time and its stacks. */
+/** A basic blow's numbers: its hit and its stacks (the engine's), and its time. */
 function BlowReadout({ blow, stats }: { blow: HeroBlow; stats: HeroStats }) {
   const registry = getDelveRegistry();
-  const hit = stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power;
-  const stacks = registry.getDelveBalance().stacks.basicByKind[blow.kind];
+  const { hit, stacks } = blowNumbers(stats, registry.getDelveBalance(), blow);
   return (
     <div className="delve-panel flex flex-col gap-0.5 p-3 text-sm" data-testid="ability-readout">
       <div

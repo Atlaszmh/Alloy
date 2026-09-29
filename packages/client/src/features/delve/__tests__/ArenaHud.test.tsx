@@ -187,6 +187,37 @@ describe('the ability buttons', () => {
     expect(onCast).toHaveBeenCalledTimes(1);
     now.mockRestore();
   });
+
+  it('a second button pressed while one is held lets the first go there and then, as a second key does; lifting the first then does nothing', () => {
+    const onCast = vi.fn();
+    const onAim = vi.fn();
+    const onCancel = vi.fn();
+    // The Primary's hold move charging.
+    const charging = { ...BOLT, nextKind: 'hold' as const, hold: { charge: 0.4, stage: 1 } };
+    render(bar({ abilities: [charging, BOLT, BOLT], busy: true }, { onCast, onAim, onCancel }));
+    const [q, e, r] = [0, 1, 2].map((s) => screen.getByTestId(`ability-${s}`));
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    fireEvent.pointerDown(q, { pointerId: 1, clientX: 0, clientY: 0 });
+    now.mockReturnValue(1800);
+    fireEvent.pointerDown(e, { pointerId: 2, clientX: 0, clientY: 0 });
+    // Q lets go in place (auto-aimed), and E aims.
+    expect(onCast.mock.calls).toEqual([[0]]);
+    expect(onAim).toHaveBeenLastCalledWith(1, { x: 0, y: 0 }, true);
+    // Q's finger moves on and lifts: nothing, and E still aims.
+    fireEvent.pointerMove(q, { pointerId: 1, clientX: 90, clientY: 0 });
+    fireEvent.pointerUp(q, { pointerId: 1, clientX: 90, clientY: 0 });
+    expect(onCast).toHaveBeenCalledTimes(1);
+    expect(onAim).toHaveBeenLastCalledWith(1, { x: 0, y: 0 }, true);
+    fireEvent.pointerUp(e, { pointerId: 2, clientX: 0, clientY: 0 });
+    expect(onCast.mock.calls.map((c) => c[0])).toEqual([0, 1]);
+    // Dragged out when another button comes down, a press casts where it was aimed.
+    fireEvent.pointerDown(q, { pointerId: 3, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(q, { pointerId: 3, clientX: 90, clientY: 0 });
+    fireEvent.pointerDown(r, { pointerId: 4, clientX: 0, clientY: 0 });
+    expect(onCast).toHaveBeenLastCalledWith(0, { x: 90, y: 0 });
+    expect(onCancel).not.toHaveBeenCalled();
+    now.mockRestore();
+  });
 });
 
 describe('SkillBar dodge button', () => {
