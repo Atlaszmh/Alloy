@@ -72,7 +72,7 @@ interface DpsResult {
   series: number[];
   /** The last sample: DPS over the whole 30 s. */
   dps: number;
-  /** `hold: { slot }` runs: how many times that slot was cast (0 = it never could be, e.g. unaffordable). `hold: 'attack'`: 0. */
+  /** How often the held button acted: `basic` events (strikes) for `hold: 'attack'`, casts of that slot for `hold: { slot }`. 0 means it never could, e.g. an unaffordable ability. */
   casts: number;
 }
 
@@ -118,12 +118,12 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 **Determinism.** Every run uses the sandbox's fixed world seed. The same setup and options give the same result.
 
 **The grid** (`dpsCombos`):
-- **Basics** (252): every weapon base × 6 primaries × (no secondary, or each of the 5 others). Each is `{ view: 'basic', dims: { weapon, primary, secondary }, hold: 'attack' }` with `defaultAbilities(primary)`.
+- **Basics** (252): every weapon base × 6 primaries × (no secondary, or each of the 5 others). Each is `{ view: 'basic', dims: { weapon, primary, secondary }, weapon: { baseId, primary, secondary }, hold: 'attack' }` with `defaultAbilities(primary)`.
 - **Abilities** (4,320): every form whose slot is Primary or Ultimate × 36 element sets × 5 weights × 3 payments.
   - Forms: today that is 8 (Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom), read from `arpg.json`, so a new form joins by itself.
   - Element sets: the 6 singles and the 30 *ordered* pairs. The first element is the damage element and decides the reactions, so Fire+Storm and Storm+Fire are different builds.
   - Defensive forms are left out.
-  - Each is `{ view: 'ability', dims: { form, first, second, weight, payment }, hold: { slot } }`, where `slot` is the form's slot and `abilities` is `defaultAbilities(first)` with that slot replaced by the build.
+  - Each is `{ view: 'ability', dims: { form, first, second, weight, payment }, weapon: { baseId: 'sword', primary: first, secondary: second ?? null }, hold: { slot } }`, where `slot` is `ABILITY_SLOTS.indexOf(form.slot)` and `abilities` is `defaultAbilities(first)` with that slot replaced by the build.
   - Combos a plain hero can never afford stay in the grid with `casts: 0`, for example a mana-paid Heavy or Crushing Ultimate (78 and 96 mana against a pool of about 63).
 
 ## Client: the DPS Lab
@@ -154,7 +154,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 **Table** (`LabTable.tsx`):
 - It lists every result that passes the filters, ranked by `dps`.
 - The columns are the `dims` keys, then DPS, shown as a number and a bar scaled to the top row.
-- Rows with `casts: 0` sit at the bottom, greyed, labelled "can't afford".
+- Rows with `casts: 0` (the held button never acted: an unaffordable ability) sit at the bottom, greyed, labelled "can't afford".
 - Each row has a checkbox that decides whether it is charted. The top 8 start ticked; a filter change resets the ticks to the new top 8.
 
 **Chart** (`LabChart.tsx`):
@@ -179,7 +179,7 @@ Pushes are placed by progress from their own start (`action.ts`), so lunges, ste
 - **`dpsCombos`:** 252 basics and 4,320 abilities, and every `dpsKey` is unique.
 - **Determinism:** the same setup gives the same result twice.
 - **Basics:**
-  - Every weapon base deals damage (`dps > 0`), with 60 samples.
+  - Every weapon base deals damage (`dps > 0`) and strikes (`casts > 0`), with 60 samples.
   - A Fire basic run counts its burn ticks: it is above the same run's direct hits alone.
 - **Positions hold:** an Earth Bolt run (whose knockback would push the dummy out of reach within about 10 s) keeps dealing damage. Its middle 10 s DPS is above half its whole-run DPS, and its last 10 s is within 25% of its middle 10 s. (`series` is a running average, so a window's DPS is `(series[j]·t_j − series[i]·t_i) / (t_j − t_i)`.)
 - **Ability counting:**
