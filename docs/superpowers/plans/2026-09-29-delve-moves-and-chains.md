@@ -8,13 +8,13 @@
 
 **Tech Stack:** TypeScript 5.7, Vitest 3 (engine: Node; client: jsdom), Zod 3, React 19, Zustand 5, PixiJS 8, Playwright (the Delve E2E specs and a scratch screenshot pass).
 
-**Spec:** `docs/superpowers/specs/2026-09-29-delve-moves-and-chains-design.md` at `a9b7f87` (the requirements; read it first, twice: the Chain play, Hold and Basics sections carry ordering rules the code follows exactly).
+**Spec:** `docs/superpowers/specs/2026-09-29-delve-moves-and-chains-design.md` at `21ae31b` (the requirements; read it first, twice: the Chain play, Hold and Basics sections carry ordering rules the code follows exactly).
 
 ---
 
 ## Gate decision: read before executing
 
-Everything below was built and run on a scratch copy of HEAD `a9b7f87`, the DPS Lab gate included. Tasks 1–7 ship the spec's starting values; the gate (Task 8) then changes three, in the spec's knob order (`stepBonus`, then a form's `defaultChain` kinds):
+Everything below was built and run on a scratch copy of HEAD `21ae31b`, the DPS Lab gate included. Tasks 1–7 ship the spec's starting values; the gate (Task 8) then changes three, in the spec's knob order (`stepBonus`, then a form's `defaultChain` kinds):
 
 | Knob | Spec's start | This plan | Why |
 |---|---|---|---|
@@ -42,7 +42,7 @@ The last row is the only one with room on both sides. The gate on these values (
 | Basics: every weapon and pair, one dummy and the pack, within 1% (the default chain is today's string) | 504 rows, worst +0.0% | pass |
 | Floor: every non-Defensive form's mana default chain under a held button loses at most 15% against today's Balanced row (40-seed means) | 576 rows, worst −10.8% | pass |
 
-Reported, not gated (one seed, depth 10): the mana default chains' median +0.0% [−21.7%, +129.1%] (the one-seed −21.7%, the Storm+Nature Lance on one dummy, is +0.9% on 40 seeds; Nova, Barrage and Maelstrom, a single medium move, +0.0%); cast default chains +27.4% [+0.0%, +145.9%]; charge default chains +0.0% [−56.9%, +158.6%] (today's charge rows only ever fired press 1, so they aren't comparable). One-move chains against today's equivalent weight: light and medium median −11.4% (mana, cast), heavy +0.0%. Hold moves at full charge against today's Crushing rows: mana median −38.2% (the single-element mana Bolt on one dummy −29.5%, as the spec expects: the charge adds to the cycle), cast −10.2%, charge −2.3%.
+Reported, not gated (one seed, depth 10): the mana default chains' median +0.0% [−21.7%, +129.1%] (the one-seed −21.7%, the Storm+Nature Lance on one dummy, is +0.9% on 40 seeds; Nova, Barrage and Maelstrom, a single medium move, +0.0%); cast default chains +27.4% [+0.0%, +145.9%]; charge default chains +0.0% [−56.9%, +158.6%] (today's charge rows only ever fired press 1, so they aren't comparable). One-move chains against today's equivalent weight: light and medium median −11.4% (mana, cast; light mana −11.5%), heavy +0.0%. Hold moves at full charge against today's Crushing rows: mana median −38.2% (the single-element mana Bolt on one dummy −29.5%, as the spec expects: the charge adds to the cycle), cast −10.2%, charge −2.3%.
 
 ---
 
@@ -50,17 +50,22 @@ Reported, not gated (one seed, depth 10): the mana default chains' median +0.0% 
 
 - **`HeroBlow.attunePower`**: the spec's per-blow `power` (1 + `basicPowerPerAttune` × the element's attunement; 1 without a pair) is `attunePower`, because `ComboStepDef.power` (the row's multiplier) already carries that name on the same object.
 - **`basic` event**: the spec's "gains `kind`" is `moveKind` (`kind` is the event's discriminator, `'basic'`).
-- **`nextMove(h, slot, t, window)`** takes the combo window, as `pressStep` does. `activeMove(h, slot)` reads the wind-up's move, then the hold's, then (the Defensive) `h.defend.move` at `h.defend.stage`: a held Defensive's effect keeps its stage's numbers, so `h.defend` carries `stage` too.
-- **The release is routed before the buffer:** a `cast` for the slot whose hold runs goes to `world.queuedRelease` (read by `holdTick` that step), never to `queuedCast`. A release fires at once for every payment, cast included (the charge was its wind-up).
+- **`nextMove(h, slot, t, window)`** takes the combo window, as `pressStep` does. `activeMove(h, slot)` reads the wind-up's move (at `windup.stage`: a released hold winds up at its stage), then the hold's, then (the Defensive) `h.defend.move` at `h.defend.stage`: a held Defensive's effect keeps its stage's numbers, so `h.defend` carries `stage` too. The guard's FX (the Ward's shell, the Defensive's aura, the dissolving guard) read `h.defend` first (`guardMove`), so the chain's next Defensive move winding up doesn't recolour the guard that's up.
+- **The release is routed before the buffer:** a `cast` for the slot whose hold runs goes to `world.queuedRelease` (read by `holdTick` that step), never to `queuedCast`. The release pays, then waits out what charging left of its stage's wind-up as an ordinary wind-up (`windup.stage`; no step-in), its cooldown counting from the landing. The spec's dropped-hold marker is `world.holdDropped` (the slot), which the `holdMax` auto-fire sets too.
 - **Held basic blows** apply their stage's kind's stacks (stage 0 medium 1, stage 1 heavy 2, stage 2 hold 2), and their `holdStage` events carry `slot: null`.
-- **Binding a secondary** makes the basic chain's last blow the secondary (the default chain's rule), whatever the chain; `realign` and `fixChainsToPair` then keep blows in the pair.
+- **Binding a secondary** makes the basic chain's last blow the secondary (the default chain's rule), whatever the chain. `fixChainsToPair(profile, was)` takes the pair before a pair op (`realign` passes it) to map each element that left to its role's new one; the migration passes none and keeps the rule that a move left with no in-pair element, like a blow outside the pair, takes the primary.
 - **The DPS Lab's ability setups** carry the sword's default basics on the pair `{ first, second }` (the last blow the second), as today's setups discharged the second at the finisher, so the before and after rows stay comparable. The sim doesn't press while a wind-up runs.
-- **The Training Grounds' sandbox** keeps a `secondary` for its blows (`setSecondary`); when the primary or secondary changes, blows of the old secondary take the new one (the primary if there's none) and every other blow the primary.
+- **The Training Grounds' sandbox** keeps a `secondary` for its blows (`setSecondary`); when the primary or secondary changes, blows of the old secondary take the new one (the primary if there's none), a secondary bound from none takes the last blow (as `bindSecondary` does), and every other blow the primary.
 - **Notices:** the bind hint shows only for saves older than version 4 (`gainedPair`), not for every migrated save; the overtake notice reads "Storm now outweighs Fire: Storm is your primary" (blows keep their own elements now).
 - **Names:** a hold move reads "held" ("held Fire Bolt"); the builder's skill tabs list Basic first but open on the Primary.
 - **Controller:** `padCast` (in `arena-pad.ts`) decides a frame's cast from the world: a slot whose next move is a hold (or whose hold runs) casts on its button's release, which the core finds from the slot held the frame before; hold-to-repeat skips it.
 - **The hero's aura, footing ring and floor light** take the first blow's element (they took the weapon's, which is gone).
-- **E2E D01** matches the Primary's label with a pattern (the bot is already stepping through the chain when the arena shows); G04 and T01 check the exact "Primary: light Fire Bolt" before any press.
+- **Chains into the world:** `FloorOptions.chains` and `SandboxWorldOptions.chains` take `Pick<Chains, AbilitySlot>` (the basic chain rides in the hero's stats). `refreshWorldHero` carries cooldowns by position: a move keeps the cooldown of the move that was at its index, and a new index starts ready.
+- **Power's estimate:** `useInterval` averages each move's full cooldown, so it overstates a multi-move mana chain's interval (each move cools on its own while the chain presses on). It feeds Power only, never combat.
+- **Keyboard aiming past `comboWindow`:** a key held to aim a non-hold move is still `holding` its slot, so once the window lapses the chain's next move is its first; if that is a hold, it starts charging, and the key's release fires it.
+- **The mana panel's bind preview** mid-dive shows each secondary's Power as bound between dives (`bindSecondary({ ...profile, dive: null }, m)`), at the dive's depth.
+- **The pacing margin is thin:** seed 4's first dive reaches 4 (the rail is ≥ 3), and the pair sweep's low is 20 (the rail's floor 17.4).
+- **E2E D01** matches the Primary's label with a pattern (the bot is already stepping through the chain when the arena shows); G04 and T01 check the exact "Primary: light Fire Bolt" before any press. G06 walks the builder with the D-pad: down from a card's reorder buttons reaches its kind chips in one press on the desktop, two on a phone (the fixed tab bar sits between), so it presses down until a chip has the focus.
 
 ---
 
@@ -70,8 +75,8 @@ Reported, not gated (one seed, depth 10): the mana default chains' median +0.0% 
 - Stage files by path. Never `git add -A` or `git add .` at the repo root: three unrelated untracked plan docs (`docs/superpowers/plans/2026-05-01-*.md`) exist and must stay out.
 - **Don't push**: the controller pushes after a final review. Never open a PR.
 - **Run every command from the repo root.** The shell's working directory persists between commands, so every command line below runs in a subshell (`(cd packages/engine && npx vitest run …)`), and every commit block starts with `cd /c/Projects/Alloy`.
-- **Prettier:** the commit blocks format only files a task creates, or files that pass `npx prettier --check` before the edit (the repo's own Prettier, 3.8.1, run from the repo root). Of the files this plan touches, these are not clean at HEAD and are **never formatted**, only hand-edited: `packages/engine/src/types/ability.ts`, `packages/engine/src/arpg/abilities/resolve.ts`, `packages/engine/src/delve/profile-schema.ts`, `packages/engine/src/delve/autopilot.ts`, `packages/engine/src/delve/dive.ts`, `packages/engine/tests/delve-hero-smithing.test.ts`, the three data files `balance.json`, `arpg.json` and `delve.json` (hand-laid-out JSON), `CLAUDE.md` and the spec docs. Every other existing file edited here passed `npx prettier --check` at HEAD; never commit a whole-file reformat. The code below is already Prettier-formatted (checked on the scratch copy), so the commit blocks' `--write` changes nothing if you typed it as written.
-- **Line endings:** `types/ability.ts`, `abilities/resolve.ts`, `delve/profile-schema.ts`, `delve/autopilot.ts`, `delve/dive.ts`, `CLAUDE.md` and the specs `2026-09-25-delve-combat-weight-design.md`, `2026-09-27-delve-elemental-affinity-design.md`, `2026-09-28-delve-elemental-stacks-design.md` and `2026-09-29-delve-moves-and-chains-design.md` use CRLF; every other file here is LF. Keep each file's endings (the Edit tool does; don't rewrite a file with a script that normalises them). The known CRLF files `registry.ts`, `delve-pacing.test.ts` and `App.tsx` aren't touched.
+- **Prettier:** the commit blocks format only files a task creates, or files that pass `npx prettier --check` before the edit (the repo's own Prettier, 3.8.1, run from the repo root). Of the files this plan touches, these are not clean at HEAD and are **never formatted**, only hand-edited: `packages/engine/src/types/ability.ts`, `packages/engine/src/arpg/abilities/resolve.ts`, `packages/engine/src/delve/profile-schema.ts`, `packages/engine/src/delve/autopilot.ts`, `packages/engine/src/delve/dive.ts`, `packages/engine/tests/delve-hero-smithing.test.ts`, `packages/client/src/features/delve/delve.css`, the three data files `balance.json`, `arpg.json` and `delve.json` (hand-laid-out JSON), `CLAUDE.md` and the spec docs. Every other existing file edited here passed `npx prettier --check` at HEAD; never commit a whole-file reformat. The code below is already Prettier-formatted (checked on the scratch copy), so the commit blocks' `--write` changes nothing if you typed it as written.
+- **Line endings:** `types/ability.ts`, `abilities/resolve.ts`, `delve/profile-schema.ts`, `delve/autopilot.ts`, `delve/dive.ts`, `tests/delve-hero-smithing.test.ts`, the client's `features/delve/delve.css`, `CLAUDE.md` and the specs `2026-09-25-delve-combat-weight-design.md`, `2026-09-27-delve-elemental-affinity-design.md`, `2026-09-28-delve-elemental-stacks-design.md` and `2026-09-29-delve-moves-and-chains-design.md` use CRLF; every other file here is LF. Keep each file's endings (the Edit tool does; don't rewrite a file with a script that normalises them). The known CRLF files `registry.ts`, `delve-pacing.test.ts` and `App.tsx` aren't touched.
 - **How the edits read.** "Replace: A with: B" is one Edit (old A, new B). "After: A add: B" is the Edit old A, new A followed by B on the next line; "Before: A add: B" is old A, new B followed by A. Every A is unique in its file at that point, in the order given, so apply each file's edits top to bottom. "Replace the whole of `f` with" is a Write (only ever an LF file).
 - `arpg/combat.ts` and the modules in `arpg/abilities/` import each other (`combat.ts` reads `defend.js`, and from Task 3 `cast.js` and `resolve.js`; they read `combat.js`): only ever read such an import inside a function, never at module top level.
 - Engine `tsc` covers `src` only; client `tsc` covers `src` including tests, so client test code must type-check.
@@ -84,7 +89,7 @@ Reported, not gated (one seed, depth 10): the mana default chains' median +0.0% 
 | What | Command (from repo root) |
 |---|---|
 | One engine test file | `(cd packages/engine && npx vitest run tests/<file>.test.ts)` |
-| All engine tests | `(cd packages/engine && npx vitest run)` (about 20 s; the pacing rails run while the files load) |
+| All engine tests | `(cd packages/engine && npx vitest run)` (about 45 s; the pacing rails run while the files load) |
 | Engine typecheck | `(cd packages/engine && npx tsc --noEmit -p .)` |
 | Engine build | `(cd packages/engine && pnpm build)` |
 | Client typecheck | `(cd packages/client && npx tsc --noEmit -p .)` |
@@ -125,20 +130,20 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 
 | File | Change |
 |---|---|
-| `src/types/ability.ts` | `MoveKind`, `MOVE_KINDS`, `HOLD_STAGE_KINDS`, `Move`, `Chain`, `Blow`, `ChainSkill`, `CHAIN_SKILLS`, `Chains`, `MAX_CHAIN`; `FormDef` loses `combo`/`comboCount` and gains `defaultChain`, `countByKind`; `ResolvedAbility` gains `kind`, `stage`, `index`, `last` and loses `build`/`combo`; `ResolvedChain`; `AbilityBuild` stays for the frozen saves |
+| `src/types/ability.ts` | `MoveKind`, `MOVE_KINDS`, `HOLD_STAGE_KINDS`, `Move`, `Chain`, `Blow`, `ChainSkill`, `CHAIN_SKILLS`, `Chains`, `MAX_CHAIN`; `ResolvedAbility` gains `kind`, `weight`, `stage`, `payment`, `index`, `last` and loses `build`, `combo`, `comboCount`; `ResolvedChain`; `AbilityBuild` stays for the frozen saves |
 | `src/types/delve.ts` | `DelveBalance.chains`, `stacks.basicByKind` (Task 5 drops `basicBlow`/`basicFinisher`); `GearBaseDef.feel`/`defaultChain` (Task 5 drops `combo`), `hero.feel`/`defaultChain`; `HeroBlow`; `HeroWeapon.feel`/`blows` (Task 5 drops `element`, `infusion`, `blowPower`, `finisherPower`, `combo`); `DelveProfile` v5 (`chains`, `chainCaps`) |
-| `src/types/arpg.ts` | `HeroEntity.chains`, per-move `cooldowns`, `hold`, `defend.move`/`stage`, `swing.held`; `ArpgInput.holding`/`cancelHold`; `holdStage` event; `basic` event `moveKind` (and no `finisher`); `ArpgWorld.queuedRelease`; `FloorOptions.chains` |
+| `src/types/arpg.ts` | `FormDef` loses `combo`/`comboCount` and gains `defaultChain`, `countByKind`; `HeroEntity.chains`, per-move `cooldowns`, `hold`, `windup.stage`, `defend.move`/`stage`, `swing.held`; `ArpgInput.holding`/`cancelHold`; `holdStage` event; `basic` event `moveKind` (and no `finisher`); `ArpgWorld.queuedRelease`, `holdDropped` |
 | `src/data/balance.json`, `schemas.ts` | `delve.chains`; `stacks.basicByKind`; `hero.feel`/`defaultChain` (the unarmed rows; Task 5 drops `defaultCombo`, `basicBlow`, `basicFinisher`) |
 | `src/data/delve.json` | each weapon's `feel` and `defaultChain` (Task 5 drops `combo`) |
 | `src/data/arpg.json` | forms' `defaultChain`, Volley's `countByKind`; `combo`/`comboCount` go; the forms' texts describe chains |
 | `src/arpg/abilities/resolve.ts` | `resolveAbility(registry, slot, move, payment, stats, stage)`, `moveWeight`, `resolveChain`, `chainMove`, `chargeCap`, `stepBonus`, `stepHeft`, `defaultBasic`, `defaultChains` |
 | `src/arpg/abilities/cast.ts` | `abilityReady`, `pressStep`, `nextMove`, `activeMove`, `holdCharge`; per-move payment and cooldowns; `castAbility` on the chain; holds (`startHold`, `releaseHold`, `holdTick`) |
 | `src/arpg/abilities/forms.ts`, `defend.ts` | the step bonus on power and size; Volley's count by kind; Strike's slam on a chain's last move; the Defensive's effect from `h.defend.move`; `buff()` replaces a running defensive |
-| `src/arpg/world.ts`, `step.ts`, `action.ts`, `dodge.ts`, `combat.ts`, `sandbox.ts`, `bot.ts` | the hero's chains, per-move cooldowns and charge caps; `refreshWorldHero` on chains (a changed move's wind-up or hold cancels); release routing, `cancelHold`, `holdTick` and `basicHoldTick`; a dodge drops a hold; Nightstalker and Galvanize on chains; the bot reads `nextMove` and charges holds |
+| `src/arpg/world.ts`, `step.ts`, `action.ts`, `dodge.ts`, `combat.ts`, `sandbox.ts`, `bot.ts` | `FloorOptions.chains`; the hero's chains, per-move cooldowns and charge caps; `refreshWorldHero` on chains (a changed move's wind-up or hold cancels; a basic chain whose blows change drops the swing); release routing, `cancelHold`, `holdTick` and `basicHoldTick`; a dodge drops a hold, whose release is then swallowed (`holdDropped`); Nightstalker and Galvanize on chains; the bot reads `nextMove` and charges holds |
 | `src/arpg/basic.ts` | blows per kind and element; `basicByKind` stacks; manual hold blows (`basicHoldTick`, `strike(ctx, stage)`) |
 | `src/arpg/dps-sim.ts` | setups carry `chains`; `dpsCombos` enumerates one-move chains by kind and each form's default chain; holds held to full charge |
 | `src/delve/hero-stats.ts` | `HeroStatsExtra.basic`; `HeroWeapon.blows`; `estimateCombat` over blows and each chain's average step bonus |
-| `src/delve/profile.ts`, `profile-schema.ts`, `pair.ts`, `dive.ts`, `autopilot.ts` | save v5 and the v4 → v5 migration (`chainFromBuild`, `buildChains`); `setChain`; `fixChainsToPair` (`ChainFix`); `chooseStartingMana`, `bindSecondary`, `realign`, `reattune` on chains; the autopilot's `bindBest` |
+| `src/delve/profile.ts`, `profile-schema.ts`, `pair.ts`, `dive.ts`, `autopilot.ts` | save v5 and the v4 → v5 migration (`chainFromBuild`, `buildChains`); `setChain`; `fixChainsToPair` (`ChainFix`; after a pair op a replaced element's moves and blows take its role's new element); `chooseStartingMana`, `bindSecondary`, `realign`, `reattune` on chains; the autopilot's `bindBest` |
 | `src/index.ts` | the new exports; the build ops' go |
 | `tests/delve-chains.test.ts` (new) | the spec's engine tests |
 | `tests/fixtures/arena.ts` | `DEFAULT_CHAINS`, `chainsWith`, `chainOf`, `moveOf`, `holdFor`, `OLD_BUILDS`, `asV4`, `strikeWorld` |
@@ -152,18 +157,18 @@ A timeout under load that passes on a rerun (`-g <test> --repeat-each 2`) is fla
 |---|---|
 | `features/delve/chains/chain-text.ts` (new) | `KIND_LABEL`, `KIND_ICON`, `moveText`, `blowText`, `chainText` |
 | `features/delve/chains/ChainEditor.tsx`, `MoveEditor.tsx` (new) | the chain builder: skill tabs, move cards (◂ ▸ ×, +), the move editor, payment, attunement, reactions |
-| `features/delve/AbilitiesPanel.tsx` | keeps `AttunementBars` and `Chip`; the panel renders `ChainEditor` on the save |
+| `features/delve/AbilitiesPanel.tsx`, `delve.css` | keeps `AttunementBars` and `Chip` (its disabled look moves to `.delve-chip:disabled`, which the reorder buttons share); the panel renders `ChainEditor` on the save |
 | `features/delve/training/TrainingPanel.tsx` | "Your secondary" replaces "Basic infusion"; the Abilities tab edits the sandbox's chains |
 | `stores/delveStore.ts`, `stores/sandboxStore.ts` | `setChain`; per-move fix notices; the sandbox's `chains`, `secondary`, `refit`, `loadMyBuild` |
-| `features/delve/ManaPanel.tsx`, `BindPrompt.tsx`, `ManaChoice.tsx`, `PaperDoll.tsx`, `pages/DelveCamp.tsx` | chains in `profileStats`; texts say blows and chains |
+| `features/delve/ManaPanel.tsx`, `BindPrompt.tsx`, `ManaChoice.tsx`, `PaperDoll.tsx`, `pages/DelveCamp.tsx` | chains in `profileStats`; texts say blows and chains; the bind preview mid-dive |
 | `features/delve/arena/useArenaCore.ts`, `useArena.ts`, `training/useTrainingArena.ts` | the HUD snapshot's chains (`chainStep`, `chainLength`, `nextKind`, `hold`, the basic's too); `holding`, `cancelHold`, the pad's release edge; loadouts carry `chains` |
 | `features/delve/arena/ArenaHud.tsx`, `input.ts`, `features/gamepad/arena-pad.ts`, `pages/DelveRun.tsx`, `pages/DelveTraining.tsx` | step dots, kind glyphs, the hold bar, the next move's aria-label, release-back cancels; `holdingSlot`; `padCast` |
-| `features/delve/arena/ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/mana-fx.ts`, `fx/lifecycles.ts`, `fx/infusion.ts`, `pixel/floor-engine.ts` | blows by kind and element; heavy and hold blows ring out; `holdStage` pings; anticipation grows with a hold's charge; the basic motif goes |
+| `features/delve/arena/ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/mana-fx.ts`, `fx/lifecycles.ts`, `fx/infusion.ts`, `pixel/floor-engine.ts` | blows by kind and element; heavy and hold blows ring out; `holdStage` pings; anticipation grows with a hold's charge; the guard reads `h.defend` (`guardMove`); the basic motif goes |
 | tests | `features/delve/__tests__/{chain-text,AbilitiesPanel,TrainingPanel,ArenaHud,arena-hud-snapshot,arena-input,arena-renderer}`, `features/gamepad/__tests__/gamepad.test.ts`, `features/delve/arena/fx/__tests__/{anticipation,infusion,lifecycles,mana-fx,reactions}`, `pages/__tests__/{DelveCamp,DelveLab}`, `stores/{delveStore,sandboxStore}.test.ts` |
 
-`features/controls/controls.ts` needs no edit (hold-to-repeat keeps its per-ability setting), nor do `features/delve/training/meter.ts` (its buckets are the slots) and `features/delve/lab/` (it reads each setup's `dims`). E2E: `e2e/delve.spec.ts` (D01, D04, D08), `e2e/delve-gamepad.spec.ts` (G04), `e2e/delve-training.spec.ts` (T01). `packages/client/package.json`: 0.45.0 → 0.46.0 (Task 14).
+`features/controls/controls.ts` needs no edit (hold-to-repeat keeps its per-ability setting), nor do `features/delve/training/meter.ts` (its buckets are the slots) and `features/delve/lab/` (it reads each setup's `dims`). E2E: `e2e/delve.spec.ts` (D01, D04, D08), `e2e/delve-gamepad.spec.ts` (G04, and G06: the builder by D-pad), `e2e/delve-training.spec.ts` (T01). `packages/client/package.json`: 0.45.0 → 0.46.0 (Task 14).
 
-**Docs:** `CLAUDE.md` (the Delve paragraph and its engine, data, affinity, stacks, client, FX, controller, Training Grounds and DPS Lab bullets), the chains spec's status line, and superseded notes in the ability-system, combat-weight, affinity, stacks and DPS Lab specs.
+**Docs:** `CLAUDE.md` (the Delve paragraph and its engine, data, affinity, stacks, client, FX, controller, Training Grounds and DPS Lab bullets), the chains spec's status line, and superseded notes in the ability-system, combat-weight, infusion-visuals, affinity, stacks and DPS Lab specs.
 
 ---
 
@@ -198,7 +203,7 @@ Task 8 compares against the pre-chains engine, which exists only until Task 2.
 Run: `(ls /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before)`
 Expected, among others: `before-depth10.json`, `before-mana40.json`, `floor.mjs`, `gate.mjs`, `pacing.mjs`, `seeds.mjs`, `snapshot.mjs`.
 
-If `before-depth10.json` or `before-mana40.json` is missing, make them now from HEAD (first write any missing script from the texts at the end of Task 8): `(cd packages/engine && pnpm build)`, then `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/snapshot.mjs)` (prints `runs 9144 …`; a few minutes) and `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/seeds.mjs packages/engine/dist/index.js --grid "\|0\|mana$" /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/before-mana40.json)` (prints `rows 576`; about five minutes).
+If `before-depth10.json` or `before-mana40.json` is missing, make them now from HEAD (first write any missing script from the texts at the end of Task 8): `(cd packages/engine && pnpm build)`, then `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/snapshot.mjs)` (prints `runs 9144 …`; under a minute) and `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/seeds.mjs packages/engine/dist/index.js --grid "\|0\|mana$" /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before/before-mana40.json)` (prints `rows 576`; under a minute).
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1899,7 +1904,7 @@ with:
 
 - [ ] **Step 4: The combat-weight tests**
 
-Builds become moves: a Swift build is a light move now (weight −1, so its conjure is 0.08 s, not 0.04 s), a Crushing one a hold's full charge (`resolve(…, 'hold', …, stage 2)`); press-combo steps become chain moves (`moveOf`, a two-move chain for "the move is chosen at the press"), and `stepHeft` takes the move alone:
+Builds become moves: a Swift build is a light move now (weight −1, so its conjure is 0.08 s, not 0.04 s), a Crushing one a hold's full charge (`resolve(…, 'hold', …, stage 2)`), though the guard test's Crushing Maelstrom and Surge are heavy moves until Task 4 can hold them; press-combo steps become chain moves (`moveOf`, a two-move chain for "the move is chosen at the press", which also reads `activeMove` during the wind-up), a bolt's recoil on a chain's later move grows by the step bonus's size, and `stepHeft` takes the move alone:
 
 In `packages/engine/tests/delve-combat-weight.test.ts`:
 
@@ -1910,7 +1915,13 @@ import type { AbilityBuild, AbilitySlot } from '../src/types/ability.js';
 ```
 with:
 ```ts
-import { resolveAbility, resolveChain, stepHeft } from '../src/arpg/abilities/resolve.js';
+import {
+  resolveAbility,
+  resolveChain,
+  stepBonus,
+  stepHeft,
+} from '../src/arpg/abilities/resolve.js';
+import { activeMove } from '../src/arpg/abilities/cast.js';
 import type { AbilityPayment, AbilitySlot, Move } from '../src/types/ability.js';
 ```
 
@@ -2078,6 +2089,24 @@ with:
     const w = arena([dummy(13, 30)], { noBasic: true, primary: { moves: [bolt, bolt] } });
 ```
 
+Before:
+```ts
+    const events = until(w, () => w.hero.windup === null);
+```
+add:
+```ts
+    expect(activeMove(w.hero, 0)?.index).toBe(1);
+```
+
+Replace:
+```ts
+  it('a bolt recoils the hero after its release', () => {
+```
+with:
+```ts
+  it("a bolt recoils the hero after its release; a chain's later move by its step bonus's size", () => {
+```
+
 Replace:
 ```ts
     const bolt = w.hero.abilities[0];
@@ -2086,6 +2115,15 @@ Replace:
 with:
 ```ts
     expect(w.hero.y - y0).toBeCloseTo(-moveOf(w, 0).motion, 2);
+    const bolt = DEFAULT_CHAINS.primary.moves[0];
+    const c = arena([dummy(13, 28)], { noBasic: true, primary: { moves: [bolt, bolt] } });
+    press(c, 0);
+    run(c, bal.feel.recoilSeconds + STEP);
+    const y1 = c.hero.y;
+    press(c, 0);
+    expect(c.hero.comboStep[0]).toBe(1);
+    run(c, bal.feel.recoilSeconds + STEP);
+    expect(c.hero.y - y1).toBeCloseTo(-moveOf(c, 0, 1).motion * stepBonus(bal, 1).size, 2);
 ```
 
 Replace:
@@ -2261,10 +2299,16 @@ with:
 
 Replace:
 ```ts
+  it("a Crushing Maelstrom's ticks and a Crushing Surge's basic hits never stagger (guard test)", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
       ultimate: { form: 'maelstrom', weight: 2, payment: 'mana' },
 ```
 with:
 ```ts
+  it("a heavy Maelstrom's ticks and a heavy Surge's basic hits never stagger (guard test)", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
       ultimate: { form: 'maelstrom', kind: 'heavy', payment: 'mana' },
 ```
 
@@ -2871,7 +2915,11 @@ with:
 - [ ] **Step 7: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/ability-resolve.test.ts tests/ability-forms.test.ts tests/ability-cast.test.ts tests/arpg-sim.test.ts tests/delve-combat-weight.test.ts tests/delve-training.test.ts tests/delve-reactions.test.ts tests/delve-stacks.test.ts tests/delve-infusion.test.ts tests/delve-pair.test.ts tests/delve-dive.test.ts tests/delve-dodge.test.ts)`
-Expected: 291 FAIL, 87 pass, in all 13 files. 202 of them are `TypeError: Cannot read properties of undefined (reading 'primary')` (the fixture hands the world `chains`, and today's hero still resolves `abilities`), 13 `… (reading 'stormcaller')` (`resolveAbility` given a move and a payment where it takes a build and stats), and 4 `(0 , resolveChain) is not a function` / `(0 , defaultChains) is not a function`.
+Expected: 291 FAIL, 87 pass, in all 13 files:
+- 271 `TypeError: Cannot read properties of undefined (reading 'primary')` (the fixture hands the world `chains`, and today's hero still resolves `abilities`);
+- 14 `… (reading 'stormcaller')` (`resolveAbility` given a move and a payment where it takes a build and stats): ability-resolve 10, delve-combat-weight 3, delve-stacks 1;
+- 5 `… is not a function`: 3 `(0 , resolveChain)` in delve-chains, and 2 `(0 , defaultChains)`, delve-chains' "gives a new hero each form's default chain …" and delve-pair's "Twin Fang's extra hit is worth the finisher …";
+- 1 `… (reading 'map')` in delve-dive ("unequip moves the item into the bag; the floor still has all three abilities").
 
 - [ ] **Step 8: The types**
 
@@ -2899,7 +2947,7 @@ Replace:
 ```
 with:
 ```ts
-/** Swift, Light, Balanced, Heavy, Crushing: the per-weight tables' index − 2 (a version 4 build's weight). */
+/** Swift, Quick, Balanced, Heavy, Crushing: the per-weight tables' index − 2 (a version 4 build's weight). */
 ```
 
 Before:
@@ -3092,7 +3140,7 @@ with:
       "id": "volley", "slot": "primary", "name": "Volley", "icon": "🎯",
       "power": 0.6, "range": 9, "radius": 0.35, "speed": 11, "count": 3, "motion": -0.1,
       "defaultChain": ["medium", "medium", "medium"], "countByKind": { "light": 3, "medium": 3, "heavy": 5, "hold": 5 },
-      "text": "Homing darts that seek out different foes: three, or five from a heavy or a held move."
+      "text": "Homing darts that seek out different foes: three, or five from a heavy move or a hold charged past its first stage."
     },
     {
       "id": "lance", "slot": "primary", "name": "Lance", "icon": "🗡️",
@@ -4600,25 +4648,25 @@ git commit -m "feat(engine): the hero plays chains: each press casts the chain's
 
 ---
 
-## Chunk 7: Engine: holds
+## Chunk 7: Engine: holds (Task 4: the tests)
 
 ### Task 4: Hold moves
 
-A hold is a hero state, `h.hold = { slot, step, start, aim }`, that nothing pays for until it fires. Each step, in `heroTick` after the queued-cast buffer and before `castTick` (`holdTick`):
+A hold is a hero state, `h.hold = { slot, step, start, aim }`, that nothing pays for until its release. Each step, in `heroTick` after the queued-cast buffer and before `castTick` (`holdTick`):
 - **Starting.** With no hold running, `input.holding` naming a slot whose next move is a hold starts one when the hero is free as a press needs (no wind-up; a swing in its startup gives way, the push and recovery clear) and the move's first stage is affordable (its cooldown, the charge meter against the hold's need, its cost). Not while dashing. The hero faces what it would aim at and stays rooted.
 - **Charging.** `holdCharge(bal, start, t)` is `min(1, (t − start) / holdTime)` and its stage (0, 1 or 2 by `holdStages`); each rise emits `holdStage { slot, stage }`. The slot's combo window is paused (`comboAt` moves with the clock).
-- **Firing.** A `cast` for the holding slot is its release: `stepWorld` routes it to `world.queuedRelease` (never to the buffer), and `holdTick` fires `hold[step][stage]` at once (the charge was its wind-up: no conjure, no step-in, every payment alike) at the release's aim, else what it aimed at when it began, paying that stage's cost and setting its cooldown from now; a stage it can't afford falls to the highest it can, and with none (or nothing to aim at) the hold ends unpaid. Past `holdMax` it fires by itself at stage 2; if `holding` stops without a release (a lost release) it fires at its current stage.
-- **Cancelling.** A dodge, `input.cancelHold` (`stepWorld` drops the hold before the tick) and `refreshWorldHero` on a changed slot drop it unpaid; a respawn clears it.
+- **Releasing.** A `cast` for the holding slot is its release: `stepWorld` routes it to `world.queuedRelease` (never to the buffer), and `holdTick` releases `hold[step][stage]` at the release's aim, else what it aimed at when it began. The charging counts toward that stage's wind-up (`castTime`: its conjure, plus its channel under cast payment): the release pays the stage's cost, then runs what's left, `castTime − (t − start)`, as an ordinary wind-up with no step-in (`windup.stage` holds the stage, so `activeMove` returns it meanwhile), and its cooldown counts from the landing; held that long already, it fires at once. A stage it can't afford falls to the highest it can, and with none (or nothing to aim at) the hold ends unpaid. Past `holdMax` it fires by itself at stage 2; if `holding` stops without a release (a lost release) it releases at its current stage.
+- **Cancelling.** A dodge, `input.cancelHold` (`stepWorld` drops the hold before the tick) and `refreshWorldHero` on a changed slot drop it unpaid; a respawn clears it. A drop, and the `holdMax` auto-fire, mark the slot `world.holdDropped`: while its button stays held, the slot's release `cast` is swallowed and no new hold starts; the mark clears once `holding` no longer names the slot.
 - **Gating.** A hold gates presses as a wind-up does (`castAbility`, `abilityReady`), holds the buffered press unaged (another slot's press fires after the release), and blocks swings and queued attack taps.
-- **A tap.** A `cast` for a slot whose next move is a hold with no hold running fires stage 0 at once: a medium hit.
+- **A tap.** A `cast` for a slot whose next move is a hold with no hold running is an ordinary press of stage 0: its full wind-up, then a medium hit.
 - **The bot** holds a hold to full charge, then releases; it never taps one.
 
 **Files:**
-- Modify: `packages/engine/src/types/arpg.ts:323,393-394,456,599` (`HeroEntity.hold`, `ArpgInput.holding`/`cancelHold`, the `holdStage` event, `ArpgWorld.queuedRelease`)
-- Modify: `packages/engine/src/arpg/abilities/cast.ts:3,21-22,42-55,105,122,147` (`holdCharge`, `fire` at a stage, the gates, a tap, `startHold`, `releaseHold`, `holdTick`)
+- Modify: `packages/engine/src/types/arpg.ts:316-317,323,393-394,456,599` (`windup.stage`, `HeroEntity.hold`, `ArpgInput.holding`/`cancelHold`, the `holdStage` event, `ArpgWorld.queuedRelease`/`holdDropped`)
+- Modify: `packages/engine/src/arpg/abilities/cast.ts:3,21-22,42-55,105,119,133,147-157` (`holdCharge`, `fire` at a stage, `activeMove` and the wind-up at a stage, the gates, `startHold`, `releaseHold`, `holdTick`)
 - Modify: `packages/engine/src/arpg/step.ts:22,51-59,136-192` (release routing, `cancelHold`, `holdTick`, the gates), `world.ts:209,238-265,337`, `dodge.ts:39-40`, `sandbox.ts:278`, `bot.ts:5,13-14,63,105`, `packages/engine/src/index.ts:204`
 - Modify: `packages/engine/tests/fixtures/arena.ts:148` (`holdFor`)
-- Test: `packages/engine/tests/delve-chains.test.ts`, `packages/engine/tests/delve-combat-weight.test.ts`
+- Test: `packages/engine/tests/delve-chains.test.ts`, `packages/engine/tests/delve-combat-weight.test.ts`, `packages/engine/tests/delve-training.test.ts:583` (a hand-made wind-up gains its stage)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -4656,10 +4704,15 @@ In `packages/engine/tests/delve-chains.test.ts`, the imports, then the hold test
 Replace:
 ```ts
 import { activeMove, nextMove } from '../src/arpg/abilities/cast.js';
+import { defendingAbility, gainCharge } from '../src/arpg/abilities/defend.js';
+import {
 ```
 with:
 ```ts
 import { abilityReady, activeMove, holdCharge, nextMove } from '../src/arpg/abilities/cast.js';
+import { defendingAbility, gainCharge } from '../src/arpg/abilities/defend.js';
+import {
+  chainMove,
 ```
 
 Replace:
@@ -4756,15 +4809,59 @@ describe('holds', () => {
     expect(w.monsters[0].status.stacks.fire).toBe(stage1.stacks);
   });
 
-  it('a tap fires stage 0 at once: a medium hit', () => {
+  it('a tap winds up in full, as a plain medium move does: a medium hit', () => {
     const w = holder();
+    const plain = holder([m('medium')]);
     w.hero.manaRegen = 0;
     const mana = w.hero.mana;
     const events = pressOnly(w, 0);
-    expect(casts(events)).toHaveLength(1);
-    expect(w.hero.windup).toBeNull();
+    pressOnly(plain, 0);
+    expect(casts(events)).toHaveLength(0);
+    const span = (x: ReturnType<typeof arena>) => x.hero.windup!.until - x.hero.windup!.start;
+    expect(span(w)).toBeCloseTo(span(plain));
+    expect(span(w)).toBeCloseTo(moveOf(plain, 0).castTime);
     expect(mana - w.hero.mana).toBeCloseTo(moveOf(w, 0).cost);
     expect(moveOf(w, 0).weight).toBe(0);
+    expect(casts(run(w, moveOf(w, 0).castTime + STEP))).toHaveLength(1);
+  });
+
+  it("charging counts toward the stage's wind-up: a quick release waits out the rest, a full one fires at once", () => {
+    const w = holder();
+    holdStep(w);
+    const start = w.hero.hold!.start;
+    holdStep(w);
+    const events = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+    const stage0 = chainMove(w.hero.chains[0], 0, 0);
+    expect(casts(events)).toHaveLength(0);
+    expect(w.hero.windup).toMatchObject({ step: 0, stage: 0 });
+    expect(w.hero.windup!.until - start).toBeCloseTo(stage0.castTime, 6);
+    expect(activeMove(w.hero, 0)).toBe(stage0);
+
+    const full = holder();
+    const stage2 = chainMove(full.hero.chains[0], 0, 2);
+    expect(stage2.castTime).toBeLessThan(bal.chains.holdTime);
+    expect(casts(holdFor(full, 0, bal.chains.holdTime))).toHaveLength(1);
+    expect(full.hero.windup).toBeNull();
+  });
+
+  it('a cast-paid release gets its discount, waits out the rest of its channel, and cools from the landing', () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      primary: { moves: [m('hold')], payment: 'cast' },
+    });
+    w.hero.manaRegen = 0;
+    const mana = w.hero.mana;
+    const events = holdFor(w, 0, 0.5);
+    const stage1 = chainMove(w.hero.chains[0], 0, 1);
+    const asMana = resolveAbility(registry, 'primary', m('hold'), 'mana', w.hero.stats, 1);
+    expect(stage1.cost).toBeCloseTo(asMana.cost * bal.abilities.castManaMult);
+    expect(mana - w.hero.mana).toBeCloseTo(stage1.cost);
+    expect(casts(events)).toHaveLength(0);
+    const wu = w.hero.windup!;
+    expect(wu.stage).toBe(1);
+    expect(activeMove(w.hero, 0)).toBe(stage1);
+    expect(w.hero.cooldowns[0][0]).toBeCloseTo(wu.until + stage1.cooldown, 6);
+    expect(casts(run(w, wu.until - w.t + STEP))).toHaveLength(1);
   });
 
   it('fires by itself at stage 2 past holdMax, and at its stage when the button lets go unreleased', () => {
@@ -4807,10 +4904,16 @@ describe('holds', () => {
     expect(broke.hero.cooldowns[0][0]).toBe(0);
   });
 
-  it('a dodge, cancelHold and a changed chain drop it unpaid', () => {
+  it('a dodge, cancelHold and a changed chain drop it unpaid; its release, the button held on, does nothing', () => {
     const cases: [string, (w: ReturnType<typeof arena>) => void][] = [
-      ['dodge', (w) => dodge(w, { x: 1, y: 0 })],
-      ['cancelHold', (w) => stepWorld(registry, w, { move: still, cancelHold: true }, STEP)],
+      [
+        'dodge',
+        (w) => stepWorld(registry, w, { move: { x: 1, y: 0 }, holding: 0, dodge: true }, STEP),
+      ],
+      [
+        'cancelHold',
+        (w) => stepWorld(registry, w, { move: still, holding: 0, cancelHold: true }, STEP),
+      ],
       [
         'refresh',
         (w) =>
@@ -4824,9 +4927,58 @@ describe('holds', () => {
       for (let i = 0; i < 10; i++) holdStep(w);
       drop(w);
       expect(w.hero.hold, name).toBeNull();
+      expect(w.holdDropped, name).toBe(0);
       expect(w.hero.mana, name).toBe(mana);
       expect(w.hero.cooldowns[0][0], name).toBe(0);
+      holdStep(w);
+      const e = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+      e.push(...run(w, 1));
+      expect(casts(e), name).toHaveLength(0);
+      expect(w.hero.mana, name).toBe(mana);
     }
+  });
+
+  it("a dropped hold's release is swallowed while its button stays held, and no new hold starts", () => {
+    const drop = (w: ReturnType<typeof arena>) => {
+      for (let i = 0; i < 10; i++) holdStep(w);
+      stepWorld(registry, w, { move: { x: 1, y: 0 }, holding: 0, dodge: true }, STEP);
+    };
+    // Dodge, then let go during the dash: nothing fires and nothing is paid.
+    const a = holder();
+    a.hero.manaRegen = 0;
+    const mana = a.hero.mana;
+    drop(a);
+    expect(a.hero.hold).toBeNull();
+    const e1 = stepWorld(registry, a, { move: still, cast: { slot: 0 } }, STEP);
+    e1.push(...run(a, 1));
+    expect(casts(e1)).toHaveLength(0);
+    expect(a.hero.mana).toBe(mana);
+    expect(a.holdDropped).toBeNull();
+
+    // Dodge, keep holding past the dash, then let go: no new hold, and nothing fires.
+    const b = holder();
+    b.hero.manaRegen = 0;
+    drop(b);
+    const e2: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.dodge.duration + 0.3) / STEP); i++) e2.push(...holdStep(b));
+    expect(b.hero.hold).toBeNull();
+    e2.push(...stepWorld(registry, b, { move: still, cast: { slot: 0 } }, STEP));
+    e2.push(...run(b, 1));
+    expect(casts(e2)).toHaveLength(0);
+    expect(b.hero.mana).toBe(mana);
+  });
+
+  it('held past holdMax it fires once; the release after is swallowed, and the next hold charges', () => {
+    const w = holder();
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < Math.round((bal.chains.holdMax + 0.5) / STEP); i++)
+      events.push(...holdStep(w));
+    expect(w.hero.hold).toBeNull();
+    events.push(...stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP));
+    events.push(...run(w, 1));
+    expect(casts(events)).toHaveLength(1);
+    holdStep(w);
+    expect(w.hero.hold).not.toBeNull();
   });
 
   it("gates presses as a wind-up does: another slot's press waits, unaged, and fires after the release", () => {
@@ -4870,7 +5022,16 @@ describe('holds', () => {
 });
 ```
 
-In `packages/engine/tests/delve-combat-weight.test.ts`, the Crushing payoff is a hold's full charge:
+In `packages/engine/tests/delve-combat-weight.test.ts`, the Crushing payoff is a hold's full charge, and the guard test's Crushing Maelstrom and Surge are fully held:
+
+Before:
+```ts
+  resolveAbility,
+```
+add:
+```ts
+  chainMove,
+```
 
 Before:
 ```ts
@@ -4905,6 +5066,9 @@ with:
 
 Replace:
 ```ts
+  it("a heavy Maelstrom's ticks and a heavy Surge's basic hits never stagger (guard test)", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
       ultimate: { form: 'maelstrom', kind: 'heavy', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
@@ -4912,9 +5076,13 @@ Replace:
 ```
 with:
 ```ts
+  it("a fully held (Crushing) Maelstrom's ticks and Surge's basic hits never stagger (guard test)", () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
       ultimate: { form: 'maelstrom', kind: 'hold', payment: 'mana' },
     });
     w.hero.mana = w.hero.manaMax = 1e6;
+    expect(chainMove(w.hero.chains[2], 0, 2).heavyStagger).toBe(true);
     const events = holdFor(w, 2, bal.chains.holdTime, { x: 13, y: 30 });
 ```
 
@@ -4929,16 +5097,48 @@ with:
     const s = arena([dummy(13, 0)], { defensive: { form: 'surge', kind: 'hold' } });
     place(s, 0.6);
     holdFor(s, 1, bal.chains.holdTime);
+    expect(s.hero.defend).toMatchObject({ form: 'surge', stage: 2 });
+```
+
+In `packages/engine/tests/delve-training.test.ts`:
+
+Before:
+```ts
+      conjureUntil: 1,
+```
+add:
+```ts
+      stage: 0,
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/delve-combat-weight.test.ts)`
-Expected: 12 FAIL, 76 pass: "holding starts a charge only when the next move is a hold …" (expected undefined to be null), "a hold starting cancels a swing …" (expected { step: +0, …(6) } to be null), "reaches stage 1 at 0.33 …" (Cannot read properties of undefined (reading 'start')), the release, tap, `holdMax`, lost-release and unaffordable-stage tests (expected [] to have a length of 1 but got +0), "a dodge, cancelHold and a changed chain drop it unpaid" (dodge: expected undefined to be null), "gates presses as a wind-up does …" (expected true to be false), "pauses the slot's combo window …" (expected undefined to be 1), "the bot charges a hold to full, then lets go" (expected -1 to be greater than or equal to 0), and combat-weight's "a fully held bolt (Crushing) knocks back and staggers …" (expected 0 to be greater than 0).
+Expected: 16 FAIL, 76 pass:
+- delve-chains 14: "holding starts a charge only when the next move is a hold …" (expected undefined to be null); "a hold starting cancels a swing …" (expected { step: +0, …(6) } to be null); "reaches stage 1 at 0.33 …" and "charging counts toward the stage's wind-up …" (Cannot read properties of undefined (reading 'start')); "a cast-paid release gets its discount …" (expected 4 to be close to 5.2); the release, `holdMax` and unaffordable-stage tests (expected [] to have a length of 1 but got +0); the three dropped-hold tests (expected undefined to be null; the first says "dodge:"); "gates presses as a wind-up does …" (expected true to be false); "pauses the slot's combo window …" (expected undefined to be 1); "the bot charges a hold to full, then lets go" (expected -1 to be greater than or equal to 0).
+- delve-combat-weight 2: "a fully held bolt (Crushing) knocks back and staggers …" (expected 0 to be greater than 0) and the guard test (expected null to match object { form: 'surge', stage: 2 }).
+
+"a tap winds up in full, as a plain medium move does …" passes already: it pins what a tap keeps.
+
+---
+
+## Chunk 8: Engine: holds (Task 4 continued: the code)
 
 - [ ] **Step 3: The types**
 
 In `packages/engine/src/types/arpg.ts`:
+
+Replace:
+```ts
+    /** The chain's move, chosen at the press. */
+    step: number;
+```
+with:
+```ts
+    /** The chain's move, chosen at the press, and its hold stage (a released hold's; else 0). */
+    step: number;
+    stage: number;
+```
 
 Before:
 ```ts
@@ -4990,6 +5190,12 @@ add:
 ```ts
   /** A press of the slot whose hold runs: its release, for the next step. */
   queuedRelease: AbilityCast | null;
+  /**
+   * The slot whose hold was dropped (a dodge, `cancelHold`, a changed chain) or
+   * fired by itself at `holdMax` while its button stayed held: until the button
+   * lets go, its release is swallowed and no new hold starts.
+   */
+  holdDropped: number | null;
 ```
 
 - [ ] **Step 4: Starting, charging and firing a hold**
@@ -5019,18 +5225,18 @@ with:
 Replace:
 ```ts
 /** The slot's move winding up or, for the Defensive, the one whose effect is up; else null. */
+export function activeMove(h: HeroEntity, slot: number): ResolvedAbility | null {
+  const chain = h.chains[slot];
+  if (!chain) return null;
+  if (h.windup?.slot === slot) return chain.moves[h.windup.step];
 ```
 with:
 ```ts
 /** The slot's move winding up, holding or, for the Defensive, the one whose effect is up; else null. */
-```
-
-Before:
-```ts
-  if (slot === DEFENSIVE && h.defend) return chainMove(chain, h.defend.move, h.defend.stage);
-```
-add:
-```ts
+export function activeMove(h: HeroEntity, slot: number): ResolvedAbility | null {
+  const chain = h.chains[slot];
+  if (!chain) return null;
+  if (h.windup?.slot === slot) return chainMove(chain, h.windup.step, h.windup.stage);
   if (h.hold?.slot === slot) return chain.moves[h.hold.step];
 ```
 
@@ -5073,23 +5279,28 @@ with:
 
 Before:
 ```ts
-  const chargePaid = chain.payment === 'charge' ? ab.chargeNeed : 0;
+  cancelSwing(ctx);
 ```
 add:
 ```ts
-  // A tap on a hold move fires its first stage at once.
-  if (ab.kind === 'hold') {
-    pay(ctx, slot, step, ab, t);
-    if (!fire(ctx, slot, aim, step)) fire(ctx, slot, at, step);
-    return true;
-  }
+  // (A tap on a hold move, with no hold running, is its stage 0 with its full wind-up.)
 ```
 
 Before:
 ```ts
- * Land a finished wind-up: its press-time move. Auto-aim is chosen again now;
+    conjureUntil: t + ab.conjure,
 ```
 add:
+```ts
+    stage: 0,
+```
+
+Replace:
+```ts
+ * Land a finished wind-up: its press-time move. Auto-aim is chosen again now;
+ * if nothing is left to aim at, it lands where the press aimed.
+```
+with:
 ```ts
  * Holding `slot`: its next move, a hold, starts charging when the hero is free
  * as a press needs (a swing winding up gives way) and its first stage is
@@ -5116,14 +5327,17 @@ function startHold(ctx: SimCtx, slot: number): void {
 }
 
 /**
- * Fire the running hold at `stage` at once (its charge was its wind-up), or at
- * the highest stage below that it can afford, paying that stage's cost and
- * setting its cooldown. With no stage affordable, or nothing to aim at, it
- * ends unpaid.
+ * Release the running hold at `stage`, or at the highest stage below that it
+ * can afford, paying that stage's cost now (with no stage affordable, or
+ * nothing to aim at, it ends unpaid). The time spent charging counts toward
+ * the stage's wind-up: what is left of it (its conjure, then any channel)
+ * runs as an ordinary wind-up without a step-in, so a long hold fires at once.
+ * Its cooldown counts from the landing.
  */
 function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   const { world } = ctx;
   const h = world.hero;
+  const t = world.t;
   const hold = h.hold!;
   h.hold = null;
   const chain = h.chains[hold.slot];
@@ -5131,17 +5345,37 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   while (s > 0 && !canAfford(world, chainMove(chain, hold.step, s))) s--;
   const ab = chainMove(chain, hold.step, s);
   if (!canAfford(world, ab)) return;
-  if (!aimPoint(ctx, ab, aim) && !hold.aim) return;
-  pay(ctx, hold.slot, hold.step, ab, world.t);
-  if (!fire(ctx, hold.slot, aim, hold.step, s)) fire(ctx, hold.slot, hold.aim, hold.step, s);
+  const at = aimPoint(ctx, ab, aim) ?? hold.aim;
+  if (!at) return;
+  const held = t - hold.start;
+  const left = Math.max(0, ab.castTime - held);
+  pay(ctx, hold.slot, hold.step, ab, t + left);
+  if (left < 1e-9) {
+    if (!fire(ctx, hold.slot, aim, hold.step, s)) fire(ctx, hold.slot, at, hold.step, s);
+    return;
+  }
+  h.windup = {
+    slot: hold.slot,
+    aim,
+    at,
+    start: t,
+    until: t + left,
+    step: hold.step,
+    stage: s,
+    conjureUntil: t + Math.max(0, ab.conjure - held),
+    chargePaid: chain.payment === 'charge' ? ab.chargeNeed : 0,
+  };
+  ctx.events.push({ kind: 'windup', slot: hold.slot, until: h.windup.until, heft: stepHeft(ab) });
 }
 
 /**
- * The hold, each step: holding a slot whose next move is a hold starts one.
+ * The hold, each step: holding a slot whose next move is a hold starts one
+ * (not while the slot's dropped hold's button stays held: `holdDropped`).
  * While it runs, its release (a press of its slot: the button let go) fires it
- * at its stage; past `holdMax` it fires by itself at stage 2; the button let
- * go with no release (a lost release) fires it at its stage. Meanwhile the
- * hero stays rooted, each new stage says so, and the slot's combo window is paused.
+ * at its stage; past `holdMax` it fires by itself at stage 2 (and marks the
+ * slot, as a drop does); the button let go with no release (a lost release)
+ * fires it at its stage. Meanwhile the hero stays rooted, each new stage says
+ * so, and the slot's combo window is paused.
  */
 export function holdTick(
   ctx: SimCtx,
@@ -5153,15 +5387,19 @@ export function holdTick(
   const h = world.hero;
   const release = world.queuedRelease;
   world.queuedRelease = null;
+  if (world.holdDropped !== null && holding !== world.holdDropped) world.holdDropped = null;
   if (!h.hold) {
-    if (holding !== null && holding !== undefined && !dashing) startHold(ctx, holding);
+    if (holding !== null && holding !== undefined && !dashing && holding !== world.holdDropped)
+      startHold(ctx, holding);
     return;
   }
   const t = world.t;
   const { stage } = holdCharge(bal, h.hold.start, t);
   if (release) releaseHold(ctx, release.aim ?? null, stage);
-  else if (t - h.hold.start >= bal.chains.holdMax - 1e-9) releaseHold(ctx, null, 2);
-  else if (holding !== h.hold.slot) releaseHold(ctx, null, stage);
+  else if (t - h.hold.start >= bal.chains.holdMax - 1e-9) {
+    world.holdDropped = h.hold.slot;
+    releaseHold(ctx, null, 2);
+  } else if (holding !== h.hold.slot) releaseHold(ctx, null, stage);
   else {
     if (stage > holdCharge(bal, h.hold.start, t - dt).stage)
       ctx.events.push({ kind: 'holdStage', slot: h.hold.slot, stage });
@@ -5170,6 +5408,26 @@ export function holdTick(
 }
 
 /**
+ * Land a finished wind-up: its press-time move (a released hold's stage).
+ * Auto-aim is chosen again now; if nothing is left to aim at, it lands where
+ * the press aimed.
+```
+
+Replace:
+```ts
+  const { slot, aim, at, step } = h.windup;
+  h.windup = null;
+  // A step-in finishes before the blow lands, so it hits from where the step took the hero.
+  pushTick(ctx, true);
+  if (!fire(ctx, slot, aim, step)) fire(ctx, slot, at, step);
+```
+with:
+```ts
+  const { slot, aim, at, step, stage } = h.windup;
+  h.windup = null;
+  // A step-in finishes before the blow lands, so it hits from where the step took the hero.
+  pushTick(ctx, true);
+  if (!fire(ctx, slot, aim, step, stage)) fire(ctx, slot, at, step, stage);
 ```
 
 - [ ] **Step 5: The step, the world, the dodge, the sandbox, the bot**
@@ -5192,8 +5450,10 @@ Replace:
 ```
 with:
 ```ts
-    // A press of the slot whose hold runs is its release; another slot's press waits its turn.
+    // A press of the slot whose hold runs is its release; a dropped hold's release is
+    // swallowed; another slot's press waits its turn.
     if (world.hero.hold?.slot === input.cast.slot) world.queuedRelease = input.cast;
+    else if (world.holdDropped === input.cast.slot) world.holdDropped = null;
     else {
       world.queuedCast = input.cast;
       world.queuedCastUntil = world.t + buffer;
@@ -5207,7 +5467,10 @@ Before:
 add:
 ```ts
   // Nothing is paid until a hold fires: dropping one costs nothing.
-  if (input.cancelHold) world.hero.hold = null;
+  if (input.cancelHold && world.hero.hold) {
+    world.holdDropped = world.hero.hold.slot;
+    world.hero.hold = null;
+  }
 ```
 
 Replace:
@@ -5278,7 +5541,7 @@ with:
   if (!h.swing && !h.windup && !h.hold && !h.push && !dashing) {
 ```
 
-In `packages/engine/src/arpg/world.ts`, the hero starts with no hold, a changed slot's hold is dropped, and the world starts with no release queued:
+In `packages/engine/src/arpg/world.ts`, the hero starts with no hold, a changed slot's hold is dropped (and marked), and the world starts with no release queued and no hold dropped:
 
 Before:
 ```ts
@@ -5307,7 +5570,10 @@ Before:
 add:
 ```ts
   // A changed slot's hold is dropped, unpaid.
-  if (h.hold && changed[h.hold.slot]) h.hold = null;
+  if (h.hold && changed[h.hold.slot]) {
+    world.holdDropped = h.hold.slot;
+    h.hold = null;
+  }
 ```
 
 Before:
@@ -5317,6 +5583,7 @@ Before:
 add:
 ```ts
     queuedRelease: null,
+    holdDropped: null,
 ```
 
 In `packages/engine/src/arpg/dodge.ts`:
@@ -5331,6 +5598,7 @@ with:
   // Bailing out of a wind-up keeps the mana spent but frees the ability again (and refunds charge);
   // a hold is dropped unpaid.
   cancelWindup(h, t);
+  if (h.hold) world.holdDropped = h.hold.slot;
   h.hold = null;
 ```
 
@@ -5411,33 +5679,33 @@ add:
 - [ ] **Step 6: Run them to verify they pass**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/delve-combat-weight.test.ts)`
-Expected: PASS (88).
+Expected: PASS (92).
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 1234 tests pass.
+Expected: no type errors; all 1238 tests pass.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 cd /c/Projects/Alloy
-npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/arpg/abilities/cast.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/src/arpg/dodge.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/arpg/bot.ts packages/engine/src/index.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts
-git add packages/engine/src/types/arpg.ts packages/engine/src/arpg/abilities/cast.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/src/arpg/dodge.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/arpg/bot.ts packages/engine/src/index.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts
-git commit -m "feat(engine): hold moves charge while their button is held and fire on release" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/arpg/abilities/cast.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/src/arpg/dodge.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/arpg/bot.ts packages/engine/src/index.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-training.test.ts
+git add packages/engine/src/types/arpg.ts packages/engine/src/arpg/abilities/cast.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/src/arpg/dodge.ts packages/engine/src/arpg/sandbox.ts packages/engine/src/arpg/bot.ts packages/engine/src/index.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-training.test.ts
+git commit -m "feat(engine): hold moves charge while their button is held and fire on release, the charge counting toward the wind-up" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Chunk 8: Engine: basics per blow (Task 5: the tests)
+## Chunk 9: Engine: basics per blow (Task 5: the tests)
 
 ### Task 5: Basics per blow
 
 The basic attack becomes a chain of blows, each a kind and an element. `HeroWeapon` keeps the weapon's `feel` table and carries `blows: HeroBlow[]`: each blow's row (`feel[kind]`), its kind, its element and `attunePower` (1 + `basicPowerPerAttune` × its element's attunement; 1 without a pair). `element`, `infusion`, `blowPower`, `finisherPower` and `combo` go. `computeHeroStats` takes the chain through `HeroStatsExtra.basic`; with none, the weapon's default chain on the pair (`defaultBasic`: every blow the primary, the last the secondary when bound; with no primary yet, the weapon's mana, else fire). Profiles pass their own chains from Task 6; until then every hero plays the default, so the basics don't move.
 
-A blow strikes in its own element with its own power, and applies `stacks.basicByKind[kind]` (light and medium 1, heavy and hold 2: today's blow and finisher counts, so nothing changes); the finisher's discharge goes, Twin Fang still doubles the last blow, and the `basic` event gains `moveKind` and loses `finisher`. A basic shot's burst draws no motif (`infusion: null`). In manual mode a hold blow starts with the medium row's startup and lunge; at its strike point, while the attack stays held, it charges (`basicHoldTick`: stages by `holdStages`, a `holdStage` event with `slot: null`, stage 2 at `holdMax`), then strikes with the stage's row (medium, heavy, hold) and its kind's stacks, taking its cycle from that row: `nextAttackAt = release + cycle × (1 − startup)` (the startup was spent holding) and the recovery from it. In automatic mode a hold blow plays the hold row straight. `estimateCombat` sums each blow's power × its element's power over the chain's time (a test pins every weapon's figure, unarmed included, at v0.45.0's to five decimals), and the weapons' `combo`, the hero's `defaultCombo`, `basicBlow` and `basicFinisher` leave the data.
+A blow strikes in its own element with its own power, and applies `stacks.basicByKind[kind]` (light and medium 1, heavy and hold 2: today's blow and finisher counts, so nothing changes); the finisher's discharge goes, Twin Fang still doubles the last blow, and the `basic` event gains `moveKind` and loses `finisher`. A basic shot's burst draws no motif (`infusion: null`). In manual mode a hold blow starts with the medium row's startup and lunge; at its strike point, while the attack stays held, it charges (`basicHoldTick`: stages by `holdStages`, a `holdStage` event with `slot: null`, stage 2 at `holdMax`), then strikes with the stage's row (medium, heavy, hold) and its kind's stacks, taking its cycle from that row: `nextAttackAt = release + cycle × (1 − startup)` (the startup was spent holding) and the recovery from it. An ability press while a hold blow charges cancels it unstruck (as a press cancels any swing it can), and an attack held on charges each hold blow in turn to `holdMax`. In automatic mode a hold blow plays the hold row straight. `refreshWorldHero` drops a swing in flight when the basic chain's blows change (their kinds or their number), as a weapon swap does: the swing indexes the old blows. `estimateCombat` sums each blow's power × its element's power over the chain's time (a test pins every weapon's figure, unarmed included, at v0.45.0's to five decimals), and the weapons' `combo`, the hero's `defaultCombo`, `basicBlow` and `basicFinisher` leave the data.
 
 **Files:**
-- Modify: `packages/engine/src/types/delve.ts:29,65-66,271-274,444-446,552-571` (`HeroBlow`, `HeroWeapon`; the old fields go), `packages/engine/src/types/arpg.ts:339,469-511` (`swing.held`, `holdStage`'s null slot, the `basic` event)
-- Modify: `packages/engine/src/arpg/basic.ts` (throughout), `step.ts:28,195`
+- Modify: `packages/engine/src/types/delve.ts:29,65-66,271-274,444-446,552-571` (`HeroBlow`, `HeroWeapon`; the old fields go), `packages/engine/src/types/arpg.ts:340,470-512` (`swing.held`, `holdStage`'s null slot, the `basic` event)
+- Modify: `packages/engine/src/arpg/basic.ts` (throughout), `step.ts:28,200`, `world.ts:251-253` (`refreshWorldHero`: changed blows drop the swing)
 - Modify: `packages/engine/src/delve/hero-stats.ts:5-8,91-97,153-186,344-368`
 - Modify: `packages/engine/src/data/schemas.ts:482,676,816-817`, `balance.json:82-86,150` (hand-edit), `delve.json` (each weapon's `combo`; hand-edit)
 - Modify: `packages/engine/tests/fixtures/arena.ts:177,188` (`strikeWorld`'s `finisher` starts on the chain's last blow)
@@ -5477,6 +5745,24 @@ with:
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+```
+
+Before:
+```ts
+  type FormId,
+```
+add:
+```ts
+  type Blow,
+```
+
+Before:
+```ts
+  STEP,
+```
+add:
+```ts
+  DEFAULT_CHAINS,
 ```
 
 Before:
@@ -5633,6 +5919,63 @@ describe('basics', () => {
     );
     expect(basics(firstBlow(w))[0]).toMatchObject({ moveKind: 'hold', heft: f.hold.heft });
     expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.hold);
+  });
+
+  it('an ability press while a manual hold blow charges cancels it unstruck', () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const held = { move: still, attack: true };
+    stepWorld(registry, w, held, STEP);
+    const sw = w.hero.swing!;
+    while (w.t < sw.strikeAt + 0.2) stepWorld(registry, w, held, STEP);
+    expect(w.hero.swing?.held).toBeTypeOf('number');
+    const events = stepWorld(registry, w, { ...held, cast: { slot: 0 } }, STEP);
+    events.push(...stepWorld(registry, w, { move: still, attack: false }, STEP));
+    expect(basics(events)).toHaveLength(0);
+    expect(w.hero.swing).toBeNull();
+    expect(w.hero.windup).not.toBeNull();
+  });
+
+  it('a manual attack held on charges each hold blow to holdMax', () => {
+    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    const blows: { t: number; kind: MoveKind }[] = [];
+    for (let i = 0; i < Math.round(6 / STEP); i++)
+      for (const e of basics(stepWorld(registry, w, { move: still, attack: true }, STEP)))
+        blows.push({ t: w.t, kind: e.moveKind });
+    expect(blows.map((b) => b.kind)).toEqual(['hold', 'hold']);
+    expect(blows[1].t - blows[0].t).toBeGreaterThan(bal.chains.holdMax);
+  });
+
+  it('a basic-chain edit that changes its blows drops a swing in flight, as a weapon swap does', () => {
+    // On the chain's third blow, winding up; then the chain becomes two blows.
+    const w = strikeWorld(sword, {}, true);
+    run(w, STEP);
+    expect(w.hero.swing?.step).toBe(2);
+    const two: Blow[] = [
+      { kind: 'light', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+    ];
+    refreshWorldHero(
+      registry,
+      w,
+      computeHeroStats(sword, registry, { basic: two }),
+      DEFAULT_CHAINS,
+    );
+    expect(w.hero.swing).toBeNull();
+    expect(basics(firstBlow(w))[0].step).toBe(0);
+    // Only the elements changed: the swing carries on.
+    const same = strikeWorld(sword, {}, true);
+    run(same, STEP);
+    const storm = same.hero.stats.weapon.blows.map((b) => ({
+      kind: b.kind,
+      element: 'storm' as const,
+    }));
+    refreshWorldHero(
+      registry,
+      same,
+      computeHeroStats(sword, registry, { basic: storm }),
+      DEFAULT_CHAINS,
+    );
+    expect(same.hero.swing?.step).toBe(2);
   });
 });
 ```
@@ -6214,11 +6557,17 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/delve-combat-weight.test.ts tests/delve-pair.test.ts tests/delve-stacks.test.ts tests/delve-infusion.test.ts tests/ability-cast.test.ts tests/delve-reactions.test.ts tests/delve-hero-smithing.test.ts)`
-Expected: 32 FAIL, 259 pass: in delve-chains 5 (e.g. "each blow strikes in its own element …": undefined is not iterable; "a manual hold blow holds at its strike point …": Cannot read properties of undefined (reading 'medium')), delve-combat-weight 10 (e.g. "the sword's third blow is its heavy thrust": expected [ undefined, undefined, undefined ] to deeply equal [ 'light', 'light', 'heavy' ]), delve-pair 9 (Cannot read properties of undefined (reading 'map'/'length')), delve-stacks 3 ("loads the stack numbers": expected { cap: 5, …(15) } to deeply equal { cap: 5, …(13) }), delve-reactions 3, ability-cast 1 and delve-hero-smithing 1 ("the Power estimate reads the blows": expected 58.84240978020277 to not be close to 58.84240978020277). The `estimateCombat` pin passes already: it holds today's values.
+Expected: 35 FAIL, 263 pass:
+- delve-chains 8, e.g. "each blow strikes in its own element …" (undefined is not iterable), "a manual hold blow holds at its strike point …" (Cannot read properties of undefined (reading 'medium')), "an ability press while a manual hold blow charges cancels it unstruck" (expected undefined to be type of 'number'), "a manual attack held on charges each hold blow to holdMax" (expected [ undefined, undefined, …(5) ] to deeply equal [ 'hold', 'hold' ]) and "a basic-chain edit that changes its blows drops a swing …" (Cannot read properties of undefined (reading 'length'));
+- delve-combat-weight 10, e.g. "the sword's third blow is its heavy thrust" (expected [ undefined, undefined, undefined ] to deeply equal [ 'light', 'light', 'heavy' ]) and "the Power estimate reads the blows" (expected 58.84240978020277 to not be close to 58.84240978020277);
+- delve-pair 9 (most: Cannot read properties of undefined (reading 'map'/'length')), delve-stacks 3 ("loads the stack numbers": expected { cap: 5, …(15) } to deeply equal { cap: 5, …(13) }), delve-reactions 3, ability-cast 1;
+- delve-hero-smithing 1: "derives the basic attack from the weapon base and its mana" (Cannot read properties of undefined (reading 'map')).
+
+The `estimateCombat` pin passes already: it holds today's values.
 
 ---
 
-## Chunk 9: Engine: basics per blow (Task 5 continued: the blows)
+## Chunk 10: Engine: basics per blow (Task 5 continued: the blows)
 
 - [ ] **Step 3: The types**
 
@@ -6912,30 +7261,47 @@ with:
   }
 ```
 
+In `packages/engine/src/arpg/world.ts`, `refreshWorldHero` drops the swing when the blows change, not only the weapon:
+
+Replace:
+```ts
+  // A different weapon starts its own string: a blow in progress (and its lunge) is dropped
+  // and the weapon is ready. Other gear changes leave the swing alone.
+  if (stats.weapon.baseId !== h.stats.weapon.baseId) {
+```
+with:
+```ts
+  // A different weapon, or a basic chain whose blows changed (their kinds or number), starts
+  // its own string: a blow in progress (and its lunge) is dropped and the weapon is ready.
+  // Other changes leave the swing alone.
+  const kinds = (s: HeroStats) => s.weapon.blows.map((b) => b.kind).join();
+  if (stats.weapon.baseId !== h.stats.weapon.baseId || kinds(stats) !== kinds(h.stats)) {
+```
+
 - [ ] **Step 7: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (291).
+Expected: PASS (298).
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 1240 tests pass.
+Expected: no type errors; all 1247 tests pass.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 cd /c/Projects/Alloy
-npx prettier --write packages/engine/src/types/delve.ts packages/engine/src/types/arpg.ts packages/engine/src/data/schemas.ts packages/engine/src/delve/hero-stats.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/ability-cast.test.ts packages/engine/tests/delve-reactions.test.ts
-git add packages/engine/src/types/delve.ts packages/engine/src/types/arpg.ts packages/engine/src/data/schemas.ts packages/engine/src/data/balance.json packages/engine/src/data/delve.json packages/engine/src/delve/hero-stats.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/ability-cast.test.ts packages/engine/tests/delve-reactions.test.ts packages/engine/tests/delve-hero-smithing.test.ts
+npx prettier --write packages/engine/src/types/delve.ts packages/engine/src/types/arpg.ts packages/engine/src/data/schemas.ts packages/engine/src/delve/hero-stats.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/ability-cast.test.ts packages/engine/tests/delve-reactions.test.ts
+git add packages/engine/src/types/delve.ts packages/engine/src/types/arpg.ts packages/engine/src/data/schemas.ts packages/engine/src/data/balance.json packages/engine/src/data/delve.json packages/engine/src/delve/hero-stats.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/world.ts packages/engine/tests/fixtures/arena.ts packages/engine/tests/delve-chains.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/ability-cast.test.ts packages/engine/tests/delve-reactions.test.ts packages/engine/tests/delve-hero-smithing.test.ts
 git commit -m "feat(engine): basic blows each strike in their own kind and element; manual hold blows" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Chunk 10: Engine: save v5 and the chain ops (Task 6: the tests)
+## Chunk 11: Engine: save v5 and the chain ops (Task 6: the tests)
 
 ### Task 6: Save v5, the chain ops, the autopilot
 
-The profile holds `chains: Chains` and `chainCaps: Record<ChainSkill, number>` (the balance's `chains.cap` to start; nothing writes them yet) instead of `abilities`, at version 5. `DelveProfileSchema` v5 validates `MoveSchema`, `BlowSchema` and `ChainSchema` (1 to `MAX_CHAIN` moves, one or two different elements, each move a form of its slot: `SLOT_FORMS`, which a test holds to `arpg.json`'s) and the caps (1 to `MAX_CHAIN`); today's schema is frozen as `DelveProfileV4Schema`, and v3 and v2 stay. `parseDelveProfile` migrates 2 → 3 → 4 → 5: to 5, each build is its form's default chain shifted a step lighter (weight −2, −1) or heavier (+1, +2) within light..heavy (`chainFromBuild`, from Task 3), with its elements and payment; the basics are the weapon's default chain with the secondary last when bound (with no primary, the weapon's mana, else fire); a version 2 save starts from its new primary's defaults; the caps are the balance's; and every move is fixed to the pair. The ops move to chains: `setChain(registry, profile, skill, chain)` replaces `setAbility` (it refuses mid-dive, fewer than one move or more than the skill's cap, an unknown kind, a form from another slot, anything but one or two different elements (a blow: one), an element outside the pair once there is one, a bad payment); `fixChainsToPair` replaces `fixBuildsToPair`, per move with one `ChainFix { skill, index, removed, move }` each (an emptied move, or a blow outside the pair, takes the primary); `chooseStartingMana` resets to `defaultChains` on the weapon; `bindSecondary` makes the basic chain's last blow the secondary; `realign` and `reattune` keep their contracts. `profileStats`/`pairExtra` pass the profile's basic chain, and `compareItem`/`heroPower`/`profilePower` take the profile's chains. The autopilot's `bindBest` sets every move of the Primary chain to the pair.
+The profile holds `chains: Chains` and `chainCaps: Record<ChainSkill, number>` (the balance's `chains.cap` to start; nothing writes them yet) instead of `abilities`, at version 5. `DelveProfileSchema` v5 validates `MoveSchema`, `BlowSchema` and `ChainSchema` (1 to `MAX_CHAIN` moves, one or two different elements, each move a form of its slot: `SLOT_FORMS`, which a test holds to `arpg.json`'s) and the caps (1 to `MAX_CHAIN`); today's schema is frozen as `DelveProfileV4Schema`, and v3 and v2 stay. `parseDelveProfile` migrates 2 → 3 → 4 → 5: to 5, each build is its form's default chain shifted a step lighter (weight −2, −1) or heavier (+1, +2) within light..heavy (`chainFromBuild`, from Task 3), with its elements and payment; the basics are the weapon's default chain with the secondary last when bound (with no primary, the weapon's mana, else fire); a version 2 save starts from its new primary's defaults; the caps are the balance's; and every move is fixed to the pair. The ops move to chains: `setChain(registry, profile, skill, chain)` replaces `setAbility` (it refuses mid-dive, fewer than one move or more than the skill's cap, an unknown kind, a form from another slot, anything but one or two different elements (a blow: one), an element outside the pair once there is one, a bad payment); `fixChainsToPair(profile, was?)` replaces `fixBuildsToPair`, per move with one `ChainFix { skill, index, removed, move }` each: after a pair op (`was`, the pair before it) an element that left the pair becomes the element that took its role (the old primary's, the new primary; the old secondary's, the new secondary), so a fused move stays fused; with no `was` (the migration) a move keeps its in-pair elements, and an emptied move, or a blow outside the pair, takes the primary; `chooseStartingMana` resets to `defaultChains` on the weapon; `bindSecondary` makes the basic chain's last blow the secondary; `realign` passes the old pair, and `realign` and `reattune` keep their contracts. `profileStats`/`pairExtra` pass the profile's basic chain, and `compareItem`/`heroPower`/`profilePower` take the profile's chains. The autopilot's `bindBest` sets every move of the Primary chain to the pair.
 
 **Files:**
 - Modify: `packages/engine/src/types/delve.ts:3,655,671-672` (`DelveProfile` v5)
@@ -7027,13 +7393,13 @@ with:
 
 Replace:
 ```ts
-    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.hold);
+    expect(same.hero.swing?.step).toBe(2);
   });
 });
 ```
 with:
 ```ts
-    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.hold);
+    expect(same.hero.swing?.step).toBe(2);
   });
 });
 
@@ -7555,12 +7921,63 @@ Replace:
 ```
 with:
 ```ts
+    // Storm's role (the secondary) goes to Nature: the fused moves stay fused.
     const moves = res.profile.chains.primary.moves;
-    expect(moves.map((m) => m.elements)).toEqual(moves.map(() => ['fire']));
+    expect(moves.map((m) => m.elements)).toEqual(moves.map(() => ['fire', 'nature']));
     expect(res.fixed).toEqual(
       moves.map((move, index) => ({ skill: 'primary', index, removed: ['storm'], move })),
     );
     // A swap: charged the same; the chains (all fire) stay in the pair.
+```
+
+Replace:
+```ts
+  });
+
+  it("overtakeProgress: the secondary's attunement against the margin × the primary's, as resolveOvertake reads it", () => {
+```
+with:
+```ts
+  });
+
+  it("a replaced element's moves and blows take its role's new element; an overtake replaces none", () => {
+    const { realignDust, realignScrap } = bal.pair;
+    const rich = bound(realignDust, realignScrap);
+    const fused = rich.chains.primary.moves.map((m) => ({
+      ...m,
+      elements: ['fire', 'storm'] as ManaType[],
+    }));
+    const basic = rich.chains.basic.map((b, i, all) => ({
+      ...b,
+      element: (i === all.length - 1 ? 'storm' : 'fire') as ManaType,
+    }));
+    const p: DelveProfile = {
+      ...rich,
+      chains: { ...rich.chains, basic, primary: { ...rich.chains.primary, moves: fused } },
+    };
+    const kinds = (els: ManaType[]) => els.join('+');
+    // The secondary goes from Storm to Nature: Storm's moves and blows take Nature.
+    const nature = realign(registry, p, { secondary: 'nature' }).profile.chains;
+    expect(nature.primary.moves.map((m) => kinds(m.elements))).toEqual(
+      fused.map(() => 'fire+nature'),
+    );
+    expect(nature.basic.map((b) => b.element)).toEqual(
+      basic.map((b) => (b.element === 'storm' ? 'nature' : 'fire')),
+    );
+    // The primary goes from Fire to Frost: Fire's take Frost.
+    const frost = realign(registry, p, { primary: 'frost' }).profile.chains;
+    expect(frost.primary.moves.map((m) => kinds(m.elements))).toEqual(
+      fused.map(() => 'frost+storm'),
+    );
+    expect(frost.basic.map((b) => b.element)).toEqual(
+      basic.map((b) => (b.element === 'storm' ? 'storm' : 'frost')),
+    );
+    // An overtake swaps the two: nothing left the pair, so nothing changes.
+    const over: DelveProfile = { ...p, pair: { primary: 'storm', secondary: 'fire' } };
+    expect(fixChainsToPair(over, p.pair)).toEqual({ profile: over, fixed: [] });
+  });
+
+  it("overtakeProgress: the secondary's attunement against the margin × the primary's, as resolveOvertake reads it", () => {
 ```
 
 Replace:
@@ -7705,11 +8122,16 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/delve-profile-abilities.test.ts tests/delve-pair.test.ts tests/delve-dive.test.ts tests/delve-reactions.test.ts)`
-Expected: 22 FAIL, 151 pass: delve-chains 3 (the two v4 → v5 migrations: Cannot read properties of undefined (reading 'primary') / (reading 'basic'); "refuses a chain past MAX_CHAIN …"), delve-profile-abilities 5 (e.g. "a new profile starts with its weapon element's default chains …": expected 4 to be 5; "setChain takes a valid chain …": (0 , setChain) is not a function), delve-pair 12 (e.g. "a new profile is version 5 …": expected { version: 4, … } to match object { version: 5, … }; "fixChainsToPair …": (0 , fixChainsToPair) is not a function), delve-dive 1 and delve-reactions 1 (Cannot read properties of undefined (reading 'primary')).
+Expected: 23 FAIL, 158 pass:
+- delve-chains 3: the two v4 → v5 migrations (Cannot read properties of undefined (reading 'primary') / (reading 'basic')) and "refuses a chain past MAX_CHAIN …";
+- delve-profile-abilities 5, e.g. "a new profile starts with its weapon element's default chains …" (expected 4 to be 5) and "setChain takes a valid chain …" ((0 , setChain) is not a function);
+- delve-pair 13, e.g. "a new profile is version 5 …" (expected { version: 4, … } to match object { version: 5, … }), "fixChainsToPair …" ((0 , fixChainsToPair) is not a function) and "a replaced element's moves and blows take its role's new element …" (Cannot read properties of undefined (reading 'primary'));
+- delve-dive 1: "starts with a fire sword and an earth cuirass, and Fire chains" (expected 4 to be 5);
+- delve-reactions 1: "a version 3 save with the seven still migrates" (expected { version: 4, … } to match object { version: 5, … }).
 
 ---
 
-## Chunk 11: Engine: save v5 and the chain ops (Task 6 continued: the save, the ops, the autopilot)
+## Chunk 12: Engine: save v5 and the chain ops (Task 6 continued: the save, the ops, the autopilot)
 
 - [ ] **Step 3: The profile type and the schemas**
 
@@ -8133,7 +8555,7 @@ with:
     profile.chains,
 ```
 
-In `packages/engine/src/delve/pair.ts`, `ChainFix`, the stats with the basic chain, `fixChainsToPair`, and the ops on chains:
+In `packages/engine/src/delve/pair.ts`, `ChainFix`, the stats with the basic chain, `fixChainsToPair` (a replaced element's role goes to its heir), and the ops on chains (`realign` passes the old pair):
 
 Replace:
 ```ts
@@ -8212,33 +8634,44 @@ export function fixBuildsToPair(profile: DelveProfile): {
 ```
 with:
 ```ts
- * Keep each move's in-pair elements; a move left with none takes the primary,
- * and so does a blow outside the pair. Kinds, forms and payments stay.
- * Returns the moves it changed, one notice each.
+ * Fit every move and blow to the pair. After a pair op (`was`, the pair
+ * before it), an element that left the pair becomes the element that took its
+ * role: the old primary's the new primary, the old secondary's the new
+ * secondary (a Fire+Storm move stays fused as Fire+Nature). With no `was` (the
+ * migration), a move keeps its in-pair elements, and a move left with none,
+ * like a blow outside the pair, takes the primary. Kinds, forms and payments
+ * stay. Returns the moves it changed, one notice each.
  */
-export function fixChainsToPair(profile: DelveProfile): {
-  profile: DelveProfile;
-  fixed: ChainFix[];
-} {
-  const primary = profile.pair.primary;
+export function fixChainsToPair(
+  profile: DelveProfile,
+  was?: ManaPair,
+): { profile: DelveProfile; fixed: ChainFix[] } {
+  const { primary, secondary } = profile.pair;
   if (!primary) return { profile, fixed: [] };
+  const heir = (e: ManaType): ManaType | null =>
+    e === was?.primary ? primary : e === was?.secondary ? (secondary ?? primary) : null;
+  /** The elements that stay or take over, each once; none left: the primary. */
+  const fit = (els: ManaType[]): ManaType[] => {
+    const kept = els.map((e) => (inPair(profile, e) ? e : heir(e)));
+    const out = [...new Set(kept.filter((e): e is ManaType => e !== null))];
+    return out.length > 0 ? out : [primary];
+  };
   const fixed: ChainFix[] = [];
   const basic = profile.chains.basic.map((blow, index) => {
     if (inPair(profile, blow.element)) return blow;
-    const move = { ...blow, element: primary };
+    const move = { ...blow, element: fit([blow.element])[0] };
     fixed.push({ skill: 'basic', index, removed: [blow.element], move });
     return move;
   });
   const chains = { ...profile.chains, basic };
   for (const slot of ABILITY_SLOTS) {
     const moves = chains[slot].moves.map((old, index) => {
-      const kept = old.elements.filter((e) => inPair(profile, e));
-      if (kept.length === old.elements.length) return old;
-      const move = { ...old, elements: kept.length > 0 ? kept : [primary] };
+      if (old.elements.every((e) => inPair(profile, e))) return old;
+      const move = { ...old, elements: fit(old.elements) };
       fixed.push({
         skill: slot,
         index,
-        removed: old.elements.filter((e) => !kept.includes(e)),
+        removed: old.elements.filter((e) => !inPair(profile, e)),
         move,
       });
       return move;
@@ -8311,16 +8744,30 @@ Replace:
 ```
 with:
 ```ts
- * between dives. Gear stays as it is; the chains follow the new pair.
+ * between dives. Gear stays as it is; the chains follow the new pair, each
+ * replaced element's moves and blows taking its role's new element.
 ```
 
 Replace:
 ```ts
   const res = fixBuildsToPair({
+    ...profile,
+    pair: { primary, secondary },
+    manaDust: profile.manaDust - cost.realignDust,
+    scrap: profile.scrap - cost.realignScrap,
+  });
 ```
 with:
 ```ts
-  const res = fixChainsToPair({
+  const res = fixChainsToPair(
+    {
+      ...profile,
+      pair: { primary, secondary },
+      manaDust: profile.manaDust - cost.realignDust,
+      scrap: profile.scrap - cost.realignScrap,
+    },
+    profile.pair,
+  );
 ```
 
 Replace:
@@ -8545,10 +8992,10 @@ export {
 - [ ] **Step 6: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (173).
+Expected: PASS (181).
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 1243 tests pass (the pacing rails play chains from the save now).
+Expected: no type errors; all 1251 tests pass (the pacing rails play chains from the save now).
 
 - [ ] **Step 7: Commit**
 
@@ -8561,7 +9008,7 @@ git commit -m "feat(engine): save v5 holds chains; setChain, fixChainsToPair and
 
 ---
 
-## Chunk 12: Engine: the DPS Lab on chains
+## Chunk 13: Engine: the DPS Lab on chains
 
 ### Task 7: The DPS Lab plays chains
 
@@ -8997,7 +9444,7 @@ Run: `(cd packages/engine && npx vitest run tests/delve-dps-sim.test.ts)`
 Expected: PASS (16).
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 1245 tests pass.
+Expected: no type errors; all 1253 tests pass.
 
 - [ ] **Step 6: Commit**
 
@@ -9010,7 +9457,7 @@ git commit -m "feat(engine): the DPS Lab runs one-move chains by kind and each f
 
 ---
 
-## Chunk 13: Engine: the gate, and the engine build
+## Chunk 14: Engine: the gate, and the engine build
 
 ### Task 8: The gate's values, determinism, and the gate
 
@@ -9138,7 +9585,7 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-chains.test.ts tests/delve-dps-sim.test.ts tests/ability-forms.test.ts)`
-Expected: 6 FAIL, 67 pass: "loads the chain numbers" (the step bonus), "each form's default chain … as tuned" (bolt: expected [ 'light', 'light', 'medium', 'heavy' ] to deeply equal [ Array(4) ]), "gives a new hero each form's default chain …", "v4 → v5 gives each build its form's default chain …" (bolt 0: …), dps-sim's "a setup carries its whole loadout …" and "the held button flows through a form's default chain …" (expected [ 0.3, 0.3, 0.45, 0.8999999999999999 ] to deeply equal [ 0.3, 0.45, 0.45, 0.8999999999999999 ]).
+Expected: 6 FAIL, 74 pass: "loads the chain numbers" (the step bonus), "each form's default chain … as tuned" (bolt: expected [ 'light', 'light', 'medium', 'heavy' ] to deeply equal [ Array(4) ]), "gives a new hero each form's default chain …", "v4 → v5 gives each build its form's default chain …" (bolt 0: …), dps-sim's "a setup carries its whole loadout …" and "the held button flows through a form's default chain …" (expected [ 0.3, 0.3, 0.45, 0.8999999999999999 ] to deeply equal [ 0.3, 0.45, 0.45, 0.8999999999999999 ]).
 
 - [ ] **Step 3: The values**
 
@@ -9176,7 +9623,7 @@ with:
 - [ ] **Step 4: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (73).
+Expected: PASS (80).
 
 - [ ] **Step 5: Determinism, chains and holds included**
 
@@ -9210,14 +9657,14 @@ with:
 ```
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 1246 tests pass (the pacing rails at the gate's values).
+Expected: no type errors; all 1254 tests pass (the pacing rails at the gate's values).
 
 - [ ] **Step 6: Build the engine and measure the gate**
 
 Run: `(cd packages/engine && pnpm build)`
 Expected: the build succeeds.
 
-Each of the next three runs takes about five minutes.
+Each of the next three runs takes about 8–30 s.
 
 Run: `(B=/c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/chains-before; node $B/gate.mjs packages/engine/dist/index.js after)`
 Expected, exactly (the DPS Lab grid, one seed, against `before-depth10.json`):
@@ -9247,9 +9694,9 @@ Expected, exactly (the DPS Lab grid, one seed, against `before-depth10.json`):
 3. heavy (vs 1), charge: median +0.0% [-11.4%, +1242.9%]
 4. hold (vs +2), mana: median -38.2% [-90.9%, +44.1%]
    bolt single element, one dummy: median -29.5% [-31.9%, -29.2%]
-4. hold (vs +2), cast: median -10.2% [-90.2%, +890.5%]
+4. hold (vs +2), cast: median -10.2% [-90.2%, +29.4%]
    bolt single element, one dummy: median -31.0% [-31.3%, -30.9%]
-   nova single element, one dummy: median +100.2% [+8.3%, +128.1%]
+   nova single element, one dummy: median +0.0% [+0.0%, +0.0%]
 4. hold (vs +2), charge: median -2.3% [-76.4%, +458.8%]
    bolt single element, one dummy: median +9.4% [+7.2%, +16.9%]
    nova single element, one dummy: median +0.0% [+0.0%, +0.0%]
@@ -9564,11 +10011,11 @@ console.log(`seconds per floor: ${avg(perFloor).toFixed(2)} (8–60)`);
 
 ---
 
-## Chunk 14: Client: the stores and the chain texts
+## Chunk 15: Client: the stores and the chain texts
 
 ### Task 9: The stores hold chains; the chain texts
 
-The save's store calls `setChain` (its `setAbility` goes) and words a migration's or a Realign's fixes per move ("Your Bolt's 3rd move used Frost, which isn't in your pair; it now uses Fire"; a blow: "Your basic attack's 2nd blow used …"); the bind hint shows only for a save that predates the pair (version 3 or older: `gainedPair`), since every version 4 save now migrates. The Training Grounds' store keeps `chains` (validated with the engine's `BlowSchema` and `ChainSchema`, each move a form of its slot, `.catch(defaults)`) and a `secondary` in place of `basicInfusion`; changing the primary or the secondary refits the basic chain (the old secondary's blows take the new one, the primary's with none, every other blow the primary), `loadMyBuild` copies the save's chains and pair, and `sandboxStats` passes the sandbox's basic chain. `chains/chain-text.ts` names moves for the builder and the HUD: `KIND_LABEL` (a hold reads "held"), `KIND_ICON` (▪, ▪▪, ▪▪▪, ◉), `moveText`, `blowText`, `chainText`. And the DPS Lab page's test uses the engine's new keys (its old ones have failed since Task 8's rebuild).
+The save's store calls `setChain` (its `setAbility` goes) and words a migration's or a Realign's fixes per move ("Your Bolt's 3rd move used Frost, which isn't in your pair; it now uses Fire"; a blow: "Your basic attack's 2nd blow used …"); the bind hint shows only for a save that predates the pair (version 3 or older: `gainedPair`), since every version 4 save now migrates. The Training Grounds' store keeps `chains` (validated with the engine's `BlowSchema` and `ChainSchema`, each move a form of its slot, `.catch(defaults)`) and a `secondary` in place of `basicInfusion`; changing the primary or the secondary refits the basic chain (the old secondary's blows take the new one, the primary's with none; a secondary bound from none takes the last blow, as `bindSecondary` does; every other blow the primary), `loadMyBuild` copies the save's chains and pair, and `sandboxStats` passes the sandbox's basic chain. `chains/chain-text.ts` names moves for the builder and the HUD: `KIND_LABEL` (a hold reads "held"), `KIND_ICON` (▪, ▪▪, ▪▪▪, ◉), `moveText`, `blowText`, `chainText`. And the DPS Lab page's test uses the engine's new keys (the file can't load from Task 8's rebuild until the sandbox's store is fixed: the page imports it).
 
 **Files:**
 - Create: `packages/client/src/features/delve/chains/chain-text.ts`, `packages/client/src/features/delve/__tests__/chain-text.test.ts`
@@ -9802,11 +10249,14 @@ with:
 
 Replace:
 ```ts
+    expect(useDelveStore.getState().takeNotices()).toEqual([
       "Your Maelstrom used Storm, which isn't in your pair; it now uses Fire",
 ```
 with:
 ```ts
-      "Your Maelstrom's 1st move used Storm, which isn't in your pair; it now uses Fire",
+    // Storm's role (the secondary) went to Frost.
+    expect(useDelveStore.getState().takeNotices()).toEqual([
+      "Your Maelstrom's 1st move used Storm, which isn't in your pair; it now uses Frost",
 ```
 
 Replace:
@@ -9856,21 +10306,48 @@ with:
 Replace:
 ```ts
       abilities: { primary: { form: 'ward', elements: ['fire'], weight: 0, payment: 'mana' } },
+      legendaries: { not_a_power: 5 },
 ```
 with:
 ```ts
-      chains: {
-        primary: { moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }], payment: 'mana' },
-      },
+      legendaries: { not_a_power: 5 },
 ```
 
 Replace:
 ```ts
     expect(s.abilities).toEqual(SANDBOX_DEFAULTS.abilities);
+    expect(s.legendaries).toEqual({});
 ```
 with:
 ```ts
-    expect(s.chains).toEqual(SANDBOX_DEFAULTS.chains);
+    expect(s.legendaries).toEqual({});
+```
+
+Replace:
+```ts
+  });
+
+  it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
+```
+with:
+```ts
+  });
+
+  it("keeps saved chains, but falls back when a move's form is another slot's", () => {
+    const D = SANDBOX_DEFAULTS.chains;
+    const lance = {
+      moves: [{ kind: 'heavy', form: 'lance', elements: ['storm'] }],
+      payment: 'cast',
+    };
+    expect(parseSandbox({ chains: { ...D, primary: lance } }).chains).toEqual({
+      ...D,
+      primary: lance,
+    });
+    const ward = { moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }], payment: 'mana' };
+    expect(parseSandbox({ chains: { ...D, primary: ward } }).chains).toEqual(D);
+  });
+
+  it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
 ```
 
 Replace:
@@ -9945,7 +10422,8 @@ with:
   it('keeps a pair for the basic blows, saved, never the same element; the blows follow it', () => {
     const elements = () => store().chains.basic.map((b) => b.element);
     expect(store()).toMatchObject({ primary: 'fire', secondary: null });
-    store().setSecondary('storm');
+    store().setSecondary('storm'); // bound from none: the last blow takes it
+    expect(elements()).toEqual(['fire', 'fire', 'storm']);
     store().setChain('basic', [
       { kind: 'light', element: 'fire' },
       { kind: 'heavy', element: 'storm' },
@@ -10017,14 +10495,15 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/client && npx vitest run src/stores/delveStore.test.ts src/stores/sandboxStore.test.ts src/features/delve/__tests__/chain-text.test.ts src/pages/__tests__/DelveLab.test.tsx)`
-Expected: FAIL. `delveStore.test.ts` 7 FAIL, 10 pass ("sets a chain and persists it": useDelveStore.getState(...).setChain is not a function; "reads an older save back migrated …": expected undefined to be true; the notice tests: Cannot read properties of undefined (reading 'form')); `sandboxStore.test.ts` fails to load ((0 , defaultAbilities) is not a function: the store builds its defaults from an export the engine dropped in Task 7); `chain-text.test.ts` fails to load (Failed to resolve import "../chains/chain-text"). `DelveLab.test.tsx` passes: the page reads whatever `dims` a setup has.
+Expected: FAIL. `delveStore.test.ts` 7 FAIL, 10 pass ("sets a chain and persists it": useDelveStore.getState(...).setChain is not a function; "reads an older save back migrated …": expected undefined to be true; the notice tests: Cannot read properties of undefined (reading 'form')); `sandboxStore.test.ts` fails to load ((0 , defaultAbilities) is not a function: the store builds its defaults from an export the engine dropped in Task 7); `chain-text.test.ts` fails to load (Failed to resolve import "../chains/chain-text"); `DelveLab.test.tsx` fails to load too ((0 , defaultAbilities) is not a function, at `sandboxStore.ts:98`: the page imports the sandbox's store); it passes once Step 5 fixes that store.
 
 - [ ] **Step 3: The chain texts**
 
 Create `packages/client/src/features/delve/chains/chain-text.ts`:
 
 ```ts
-import type { DataRegistry, MoveKind } from '@alloy/engine';
+import type { DataRegistry, ManaType, MoveKind } from '@alloy/engine';
+import { manaStyle } from '../format';
 
 /** How a move's kind reads in a name: "light Fire Bolt", "held Frost Lance". */
 export const KIND_LABEL: Record<MoveKind, string> = {
@@ -10050,10 +10529,9 @@ export function moveText(move: { kind: MoveKind; name: string }): string {
 /** A basic blow's name: "heavy Storm blow". */
 export function blowText(
   registry: DataRegistry,
-  blow: { kind: MoveKind; element: string },
+  blow: { kind: MoveKind; element: ManaType },
 ): string {
-  const mana = registry.getArpgData().mana as Record<string, { name: string }>;
-  return `${KIND_LABEL[blow.kind]} ${mana[blow.element].name} blow`;
+  return `${KIND_LABEL[blow.kind]} ${manaStyle(registry, blow.element).name} blow`;
 }
 
 /** A chain's names in order: "light Fire Bolt · medium Fire Bolt". */
@@ -10373,8 +10851,9 @@ with:
 const FIELDS = Object.keys(SANDBOX_DEFAULTS) as (keyof SandboxLoadout)[];
 
 /**
- * The basic chain after the pair changes: each blow keeps its part, the old
- * secondary's taking the new one (the primary with none), every other the primary.
+ * The basic chain after the pair changes: the old secondary's blows take the
+ * new one (a secondary bound from none takes the last blow, as `bindSecondary`
+ * does), every other blow the primary.
  */
 function refit(
   basic: Blow[],
@@ -10382,9 +10861,12 @@ function refit(
   primary: ManaType,
   secondary: ManaType | null,
 ): Blow[] {
-  return basic.map((b) => ({
+  return basic.map((b, i) => ({
     ...b,
-    element: b.element === was && secondary ? secondary : primary,
+    element:
+      secondary && (was === null ? i === basic.length - 1 : b.element === was)
+        ? secondary
+        : primary,
   }));
 }
 ```
@@ -10496,10 +10978,10 @@ with:
 - [ ] **Step 6: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (34).
+Expected: PASS (35).
 
 Run: `(cd packages/client && npx vitest run)`
-Expected: 17 FAIL, 629 pass, in 5 files that later tasks fix: `AbilitiesPanel`, `ManaPanel`, `TrainingPanel`, `DelveCamp` (Task 10) and `arena-hud-snapshot` (Task 11). The client typecheck still fails in 16 files (fixed by Tasks 10–12).
+Expected: 17 FAIL, 630 pass, in 5 files that later tasks fix: `AbilitiesPanel`, `ManaPanel`, `TrainingPanel`, `DelveCamp` (Task 10) and `arena-hud-snapshot` (Task 11). The client typecheck still fails in 16 files (fixed by Tasks 10–12).
 
 - [ ] **Step 7: Commit**
 
@@ -10512,17 +10994,17 @@ git commit -m "feat(client): the stores hold chains, notices per move, and the c
 
 ---
 
-## Chunk 15: Client: the chain builder (Task 10: the tests and the move editor)
+## Chunk 16: Client: the chain builder (Task 10: the tests and the move editor)
 
 ### Task 10: The chain builder
 
-The Abilities tab (and the Training Grounds' Abilities tab) becomes a chain builder, `chains/ChainEditor.tsx`. It lists the four skills, Basic first, as `role="tab"` buttons (`chain-skill-<skill>`; it opens on the Primary), each showing its form's icon and "n of cap". A skill shows a row of cards, one per move (`move-<i>`, `aria-label` its name): the kind's glyph (▪, ▪▪, ▪▪▪, ◉), the form's icon and name (a blow: ⚔️ and the weapon's name) and its element icons; under each, ◂ ▸ reorder (`move-left-<i>`, `move-right-<i>`) and × removes (`move-remove-<i>`, never the last), and a + card (`move-add`) copies the picked move while under the skill's cap. The summary line names the chain (`abilities-summary`: "light Fire Bolt · medium Fire Bolt · …"). The picked card opens `MoveEditor.tsx` below: kind chips (`kind-<kind>`), the skill's form chips (none for a blow), the main element and infusion chips (`element-<m>`, `infusion-none`, `infusion-<m>`, `swap-elements`; a blow picks one element), the element's effect text (`element-effect`) and the readout (`ability-readout`: the hit with the move's step bonus, cost, wind-up, cooldown, stacks, a hold's full charge; `cost-warning` when a mana cost exceeds the pool); a blow's readout shows its hit, its time and its stacks. Payment chips sit once per ability chain (`payment-<p>`). The Anvil binds it to the save (`caps` from the profile, elements from the pair, read-only mid-dive), the Training Grounds to the sandbox (caps `MAX_CHAIN`, any element for a move, the sandbox's pair for a blow), where "Basic infusion" becomes "Your secondary" (`secondary-none`, `secondary-<m>`). Texts: the how-to, the Mana view, the bind prompt and the mana choice say the basic chain's last blow strikes with the secondary; the overtake notice reads "Storm now outweighs Fire: Storm is your primary"; the Paper Doll's attacks per second count blows.
+The Abilities tab (and the Training Grounds' Abilities tab) becomes a chain builder, `chains/ChainEditor.tsx`. It lists the four skills, Basic first, as `role="tab"` buttons (`chain-skill-<skill>`; it opens on the Primary), each showing its form's icon and "n of cap" (the Q/E/R hints only from the `sm` width up, so the four names fit on one line at 375 px). A skill shows a row of cards, one per move (`move-<i>`, `aria-label` its name): the kind's glyph (▪, ▪▪, ▪▪▪, ◉), the form's icon and name (a blow: ⚔️ and the weapon's name) and its element icons; under each, ◂ ▸ reorder (`move-left-<i>`, `move-right-<i>`) and × removes (`move-remove-<i>`, never the last), each labelled with the move's name ("Move light Fire Bolt earlier", "Remove light Fire Bolt"), and a + card (`move-add`) copies the picked move while under the skill's cap. After an add or a remove the picked card takes the focus, so a controller keeps its place; a disabled chip or reorder button is dimmed by `.delve-chip:disabled` in `delve.css`. The summary line names the chain (`abilities-summary`: "light Fire Bolt · medium Fire Bolt · …"). The picked card opens `MoveEditor.tsx` below: kind chips (`kind-<kind>`, their glyphs `aria-hidden`), the skill's form chips (none for a blow), the main element and infusion chips (`element-<m>`, `infusion-none`, `infusion-<m>`, `swap-elements`; a blow picks one element), the element's effect text (`element-effect`) and the readout (`ability-readout`: the hit with the move's step bonus, cost, wind-up, cooldown, stacks, a hold's full charge, its cost in mana or, for a charge chain, "Charge N"; `cost-warning` when a mana cost exceeds the pool); a blow's readout shows its hit, its time and its stacks, and the kind hint under the chips is a move's (a hold blow gets its own line). Payment chips sit once per ability chain (`payment-<p>`). The Anvil binds it to the save (`caps` from the profile, elements from the pair, read-only mid-dive), the Training Grounds to the sandbox (caps `MAX_CHAIN`, any element for a move, the sandbox's pair for a blow), where "Basic infusion" becomes "Your secondary" (`secondary-none`, `secondary-<m>`). Texts: the how-to, the Mana view, the bind prompt and the mana choice say the basic chain's last blow strikes with the secondary (the Mana view and the Training panel: your blows use the primary but where you pick the secondary); mid-dive, the Mana view's bind preview binds as between dives (`bindSecondary({ ...profile, dive: null }, m)`, at the dive's depth); the overtake notice reads "Storm now outweighs Fire: Storm is your primary"; the Paper Doll's attacks per second count blows.
 
 **Files:**
 - Create: `packages/client/src/features/delve/chains/MoveEditor.tsx`, `packages/client/src/features/delve/chains/ChainEditor.tsx`
 - Modify: `packages/client/src/features/delve/AbilitiesPanel.tsx` (whole file: keeps `AttunementBars` and `Chip`, renders `ChainEditor`)
-- Modify: `packages/client/src/features/delve/training/TrainingPanel.tsx:11,31,132-133,231-255,336-355`
-- Modify: `packages/client/src/pages/DelveCamp.tsx:54-57,139-141`, `packages/client/src/features/delve/ManaPanel.tsx:5,78,115-133`, `BindPrompt.tsx:1,22,60-61`, `ManaChoice.tsx:47`, `PaperDoll.tsx:40-43,64-65`, `packages/client/src/stores/delveStore.ts:108-111`
+- Modify: `packages/client/src/features/delve/training/TrainingPanel.tsx:11,31,132-134,231-255,336-355`, `packages/client/src/features/delve/delve.css:237` (CRLF, hand-edit: `.delve-chip:disabled`)
+- Modify: `packages/client/src/pages/DelveCamp.tsx:54-57,139-141`, `packages/client/src/features/delve/ManaPanel.tsx:5,35,71,78,115-133`, `BindPrompt.tsx:1,22,60-61`, `ManaChoice.tsx:47`, `PaperDoll.tsx:40-43,64-65`, `packages/client/src/stores/delveStore.ts:108-111`
 - Test: `packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx` (whole file), `TrainingPanel.test.tsx`, `packages/client/src/pages/__tests__/DelveCamp.test.tsx`, `packages/client/src/stores/delveStore.test.ts`; `ManaPanel.test.tsx` passes unchanged once `ManaPanel.tsx` reads chains
 
 - [ ] **Step 1: Write the failing tests**
@@ -10568,6 +11050,7 @@ describe('AbilitiesPanel', () => {
       'light Fire blow · light Fire blow · heavy Fire blow',
     );
     expect(screen.queryByTestId('form-bolt')).toBeNull(); // a blow has no form
+    expect(screen.queryByText('Quick and cheap.')).toBeNull(); // nor a cost
   });
 
   it('edits a move: a Wildfire Burst from its form and a Nature infusion, then a swap', () => {
@@ -10596,7 +11079,9 @@ describe('AbilitiesPanel', () => {
     render(<AbilitiesPanel />);
     fireEvent.click(screen.getByTestId('kind-hold'));
     expect(chains().primary.moves[0].kind).toBe('hold');
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent('Fully charged');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ \d+ mana/);
+    fireEvent.click(screen.getByTestId('payment-charge'));
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ Charge \d+/);
     fireEvent.click(screen.getByTestId('kind-heavy'));
     for (const payment of ['cast', 'mana', 'charge'] as const) {
       fireEvent.click(screen.getByTestId(`payment-${payment}`));
@@ -10611,9 +11096,13 @@ describe('AbilitiesPanel', () => {
     store().setChain('primary', { moves: [bolt], payment: 'mana' });
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('move-remove-0')).toBeDisabled();
-    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByTestId('move-add'));
+    expect(screen.getByTestId('move-remove-0')).toHaveAccessibleName('Remove light Fire Bolt');
+    fireEvent.click(screen.getByTestId('move-add'));
+    expect(document.activeElement).toBe(screen.getByTestId('move-1')); // the new card
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByTestId('move-add'));
     expect(chains().primary.moves).toHaveLength(5);
     expect(screen.queryByTestId('move-add')).toBeNull(); // the cap
+    expect(document.activeElement).toBe(screen.getByTestId('move-4'));
     // The new move is picked: make it heavy, then bring it forward.
     fireEvent.click(screen.getByTestId('kind-heavy'));
     expect(chains().primary.moves[4].kind).toBe('heavy');
@@ -10628,6 +11117,7 @@ describe('AbilitiesPanel', () => {
     fireEvent.click(screen.getByTestId('move-remove-0'));
     expect(chains().primary.moves).toHaveLength(4);
     expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByTestId('move-2')); // the heavy, still picked
   });
 
   it("stops at the skill's own cap", () => {
@@ -10769,7 +11259,7 @@ with:
   it('picks the primary and the secondary; the primary is off in the secondary row, even unarmed', () => {
     renderPanel('loadout');
     expect(screen.getByTestId('sandbox-primary-fire')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/what your basic blows strike with/)).toBeInTheDocument();
+    expect(screen.getByText(/your basic blows strike with it/)).toBeInTheDocument();
     expect(screen.getByTestId('secondary-none')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('secondary-fire')).toBeDisabled();
     fireEvent.click(screen.getByTestId('sandbox-primary-frost'));
@@ -10841,7 +11331,7 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/AbilitiesPanel.test.tsx src/features/delve/__tests__/TrainingPanel.test.tsx src/features/delve/__tests__/ManaPanel.test.tsx src/pages/__tests__/DelveCamp.test.tsx src/stores/delveStore.test.ts)`
-Expected: 16 FAIL, 27 pass, and `AbilitiesPanel.test.tsx` fails to load (Failed to resolve import "../chains/ChainEditor"): `ManaPanel.test.tsx` 7 and `DelveCamp.test.tsx` 5 (Cannot read properties of undefined (reading 'basic'): `profileStats` reads the chains the pages don't pass yet), `TrainingPanel.test.tsx` 2 ("picks the primary and the secondary …": Unable to find an element with the text: /what your basic blows strike with/; "the Abilities tab builds the sandbox's chains …": Cannot read properties of undefined (reading 'primary')), `delveStore.test.ts` 2 (expected 'Storm now outweighs Fire: your basic …' to be 'Storm now outweighs Fire: Storm is yo…').
+Expected: 16 FAIL, 27 pass, and `AbilitiesPanel.test.tsx` fails to load (Failed to resolve import "../chains/ChainEditor"): `ManaPanel.test.tsx` 7 and `DelveCamp.test.tsx` 5 (Cannot read properties of undefined (reading 'basic'): `profileStats` reads the chains the pages don't pass yet), `TrainingPanel.test.tsx` 2 ("picks the primary and the secondary …": Unable to find an element with the text: /your basic blows strike with it/; "the Abilities tab builds the sandbox's chains …": Cannot read properties of undefined (reading 'primary')), `delveStore.test.ts` 2 (expected 'Storm now outweighs Fire: your basic …' to be 'Storm now outweighs Fire: Storm is yo…').
 
 - [ ] **Step 3: The move editor**
 
@@ -10935,7 +11425,7 @@ function Readout({
   );
   if (full)
     lines.push(
-      `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(hitOf(full))}, ${Math.round(full.cost)} mana`,
+      `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(hitOf(full))}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}`,
     );
   return (
     <div className="delve-panel flex flex-col gap-0.5 p-3 text-sm" data-testid="ability-readout">
@@ -11026,11 +11516,16 @@ export function MoveEditor({
               onClick={() => set({ kind: k })}
               testId={`kind-${k}`}
             >
-              {KIND_ICON[k]} {KIND_LABEL[k]}
+              <span aria-hidden>{KIND_ICON[k]}</span> {KIND_LABEL[k]}
             </Chip>
           ))}
         </div>
-        <div className="text-[11px] text-stone-500">{KIND_HINT[move.kind]}</div>
+        <div className="text-[11px] text-stone-500">
+          {'form' in move
+            ? KIND_HINT[move.kind]
+            : move.kind === 'hold' &&
+              'Hold the attack to charge it; automatic attacks swing it slow and hard.'}
+        </div>
       </section>
 
       {'element' in move ? (
@@ -11151,14 +11646,14 @@ export function MoveEditor({
 
 ---
 
-## Chunk 16: Client: the chain builder (Task 10 continued: the chain editor and its homes)
+## Chunk 17: Client: the chain builder (Task 10 continued: the chain editor and its homes)
 
 - [ ] **Step 4: The chain editor**
 
 Create `packages/client/src/features/delve/chains/ChainEditor.tsx`:
 
 ```tsx
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CHAIN_SKILLS,
   MANA_TYPES,
@@ -11182,9 +11677,15 @@ import { MoveEditor } from './MoveEditor';
 
 const SKILL_NAME: Record<ChainSkill, string> = {
   basic: 'Basic',
-  primary: 'Primary · Q',
-  defensive: 'Defensive · E',
-  ultimate: 'Ultimate · R',
+  primary: 'Primary',
+  defensive: 'Defensive',
+  ultimate: 'Ultimate',
+};
+const SKILL_KEY: Record<ChainSkill, string | null> = {
+  basic: null,
+  primary: 'Q',
+  defensive: 'E',
+  ultimate: 'R',
 };
 const PAYMENTS: [AbilityPayment, string, string][] = [
   ['mana', 'Mana', 'Pay mana, then wait the cooldown.'],
@@ -11241,6 +11742,9 @@ export function ChainEditor({
   const data = registry.getArpgData();
   const [skill, setSkill] = useState<ChainSkill>('primary');
   const [picked, setPicked] = useState(0);
+  // After an add or a remove, the picked card takes the focus (a controller keeps its place).
+  const cards = useRef<HTMLDivElement>(null);
+  const [focusCard, setFocusCard] = useState<number | null>(null);
   const pool = manaPool(stats, registry).max;
   const slot = skill === 'basic' ? null : skill;
   const chain = slot ? chains[slot] : null;
@@ -11262,6 +11766,14 @@ export function ChainEditor({
     setSkill(s);
     setPicked(0);
   };
+  useEffect(() => {
+    const card =
+      focusCard === null ? null : cards.current?.querySelector(`[data-card="${focusCard}"]`);
+    if (card instanceof HTMLElement) {
+      card.focus();
+      setFocusCard(null);
+    }
+  }, [focusCard, entries.length]);
 
   return (
     <div className="flex flex-col gap-3" data-testid="abilities-panel">
@@ -11277,8 +11789,9 @@ export function ChainEditor({
             onClick={() => pick(s)}
             data-testid={`chain-skill-${s}`}
           >
-            <span className="text-[10px] uppercase tracking-widest text-stone-400">
+            <span className="whitespace-nowrap text-[10px] uppercase tracking-wider text-stone-400">
               {SKILL_NAME[s]}
+              {SKILL_KEY[s] && <span className="hidden sm:inline"> · {SKILL_KEY[s]}</span>}
             </span>
             <span className="text-lg leading-none">
               {s === 'basic' ? '⚔️' : registry.getForm(chains[s].moves[0].form).icon}
@@ -11307,13 +11820,14 @@ export function ChainEditor({
         className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0"
         style={{ opacity: locked ? 0.55 : 1 }}
       >
-        <div className="flex flex-wrap items-stretch gap-1.5" data-testid="chain-cards">
+        <div ref={cards} className="flex flex-wrap items-stretch gap-1.5" data-testid="chain-cards">
           {entries.map((e, i) => {
             const els = 'element' in e ? [e.element] : e.elements;
             return (
               <div key={i} className="flex flex-col items-center gap-1">
                 <button
                   type="button"
+                  data-card={i}
                   className="delve-panel flex w-20 flex-col items-center gap-0.5 p-1.5"
                   style={{ borderColor: i === index ? '#fcd34d' : undefined }}
                   aria-pressed={i === index}
@@ -11321,7 +11835,9 @@ export function ChainEditor({
                   onClick={() => setPicked(i)}
                   data-testid={`move-${i}`}
                 >
-                  <span className="text-[10px] text-stone-400">{KIND_ICON[e.kind]}</span>
+                  <span className="text-xs font-bold leading-none text-amber-200/90">
+                    {KIND_ICON[e.kind]}
+                  </span>
                   <span className="text-lg leading-none">
                     {'form' in e ? registry.getForm(e.form).icon : '⚔️'}
                   </span>
@@ -11337,7 +11853,7 @@ export function ChainEditor({
                     type="button"
                     className="delve-chip px-1.5"
                     disabled={i === 0}
-                    aria-label="Move earlier"
+                    aria-label={`Move ${names[i]} earlier`}
                     onClick={() => {
                       commit(moved(entries, i, i - 1));
                       setPicked(i - 1);
@@ -11350,7 +11866,7 @@ export function ChainEditor({
                     type="button"
                     className="delve-chip px-1.5"
                     disabled={i === entries.length - 1}
-                    aria-label="Move later"
+                    aria-label={`Move ${names[i]} later`}
                     onClick={() => {
                       commit(moved(entries, i, i + 1));
                       setPicked(i + 1);
@@ -11363,10 +11879,12 @@ export function ChainEditor({
                     type="button"
                     className="delve-chip px-1.5"
                     disabled={entries.length === 1}
-                    aria-label="Remove"
+                    aria-label={`Remove ${names[i]}`}
                     onClick={() => {
+                      const next = Math.max(0, i === index ? i - 1 : index > i ? index - 1 : index);
                       commit(entries.filter((_, j) => j !== i));
-                      setPicked(Math.max(0, i === index ? i - 1 : index > i ? index - 1 : index));
+                      setPicked(next);
+                      setFocusCard(next);
                     }}
                     data-testid={`move-remove-${i}`}
                   >
@@ -11384,6 +11902,7 @@ export function ChainEditor({
               onClick={() => {
                 commit([...entries, { ...entries[index] }]);
                 setPicked(entries.length);
+                setFocusCard(entries.length);
               }}
               data-testid="move-add"
             >
@@ -11482,7 +12001,7 @@ export function ChainEditor({
 
 - [ ] **Step 5: The Anvil's and the Training Grounds' Abilities tabs**
 
-`AbilitiesPanel.tsx` keeps `AttunementBars` and `Chip` (the builder and the Training panel import them) and renders the builder on the save:
+`AbilitiesPanel.tsx` keeps `AttunementBars` and `Chip` (the builder and the Training panel import them; a disabled chip's look moves to the stylesheet) and renders the builder on the save:
 
 Replace the whole of `packages/client/src/features/delve/AbilitiesPanel.tsx` with:
 
@@ -11608,7 +12127,6 @@ export function Chip({
       data-testid={testId}
       title={title}
       disabled={disabled}
-      style={disabled ? { opacity: 0.35 } : undefined}
     >
       {children}
     </button>
@@ -11638,6 +12156,22 @@ export function AbilitiesPanel() {
     />
   );
 }
+```
+
+In `packages/client/src/features/delve/delve.css` (CRLF, not Prettier-clean at HEAD: hand-edit), before the pressed chip's rule:
+
+Replace:
+```css
+.delve-chip[aria-pressed='true'] {
+```
+with:
+```css
+.delve-chip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.delve-chip[aria-pressed='true'] {
 ```
 
 In `packages/client/src/features/delve/training/TrainingPanel.tsx`, the secondary row replaces the Basic infusion row, and the Abilities tab builds the sandbox's chains:
@@ -11688,7 +12222,7 @@ Replace:
 with:
 ```tsx
         <p className="text-[11px] text-stone-500">
-          Your primary: what your basic blows strike with, and its attunement powers them.
+          Your primary: your basic blows strike with it, but where they pick your secondary.
         </p>
       </Section>
 
@@ -11719,7 +12253,8 @@ Replace:
 with:
 ```tsx
         <p className="text-[11px] text-stone-500">
-          The second element your basic blows can pick (in Abilities, Basic).
+          The second element your basic blows can pick (in Abilities, Basic); binding one gives it
+          your last blow.
         </p>
 ```
 
@@ -11807,7 +12342,7 @@ with:
                 over. Gear attunes you to its element and powers those moves.
 ```
 
-In `packages/client/src/features/delve/ManaPanel.tsx`, the texts, and a bind's Power from `bindSecondary` (so the last blow takes the secondary in the preview too):
+In `packages/client/src/features/delve/ManaPanel.tsx`, the texts, and a bind's Power from `bindSecondary` (so the last blow takes the secondary in the preview too; mid-dive it binds as between dives, at the dive's depth):
 
 Before:
 ```tsx
@@ -11816,6 +12351,30 @@ Before:
 add:
 ```tsx
   bindSecondary,
+```
+
+Before:
+```tsx
+  const owned = new Set<ManaType>([
+```
+add:
+```tsx
+  // The Power once `m` is bound: mid-dive too (binding refuses then), at the dive's depth.
+  const boundPower = (m: ManaType) =>
+    profilePower(registry, {
+      ...bindSecondary({ ...profile, dive: null }, m).profile,
+      dive: profile.dive,
+    });
+```
+
+Replace:
+```tsx
+          {style(primary).icon} {style(primary).name} · primary: your blows strike with it
+```
+with:
+```tsx
+          {style(primary).icon} {style(primary).name} · primary: your blows and abilities use it,
+          but where you pick your secondary
 ```
 
 Replace:
@@ -11840,13 +12399,14 @@ with:
 
 Replace:
 ```tsx
+                  {style(m).icon} {style(m).name} · Power{' '}
                   {formatNumber(
                     profilePower(registry, { ...profile, pair: { primary, secondary: m } }),
                   )}
 ```
 with:
 ```tsx
-                  {formatNumber(profilePower(registry, bindSecondary(profile, m).profile))}
+                  {style(m).icon} {style(m).name} · Power {formatNumber(boundPower(m))}
 ```
 
 In `packages/client/src/features/delve/BindPrompt.tsx`:
@@ -11942,32 +12502,32 @@ Run the Step 2 command again.
 Expected: PASS (53).
 
 Run: `(cd packages/client && npx vitest run)`
-Expected: 3 FAIL, 654 pass, all in `arena-hud-snapshot.test.ts` (Task 11). The client typecheck still fails in 9 files: the arena's (`useArena.ts`, `useArenaCore.ts`, `useTrainingArena.ts`, `ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/lifecycles.ts`, `pixel/floor-engine.ts`) and `arena-hud-snapshot.test.ts`.
+Expected: 3 FAIL, 655 pass, all in `arena-hud-snapshot.test.ts` (Task 11). The client typecheck still fails in 9 files: the arena's (`useArena.ts`, `useArenaCore.ts`, `useTrainingArena.ts`, `ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/lifecycles.ts`, `pixel/floor-engine.ts`) and `arena-hud-snapshot.test.ts`.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 cd /c/Projects/Alloy
 npx prettier --write packages/client/src/features/delve/chains/MoveEditor.tsx packages/client/src/features/delve/chains/ChainEditor.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/ManaPanel.tsx packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ManaChoice.tsx packages/client/src/features/delve/PaperDoll.tsx packages/client/src/stores/delveStore.ts packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx packages/client/src/stores/delveStore.test.ts
-git add packages/client/src/features/delve/chains/MoveEditor.tsx packages/client/src/features/delve/chains/ChainEditor.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/ManaPanel.tsx packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ManaChoice.tsx packages/client/src/features/delve/PaperDoll.tsx packages/client/src/stores/delveStore.ts packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx packages/client/src/stores/delveStore.test.ts
+git add packages/client/src/features/delve/chains/MoveEditor.tsx packages/client/src/features/delve/chains/ChainEditor.tsx packages/client/src/features/delve/AbilitiesPanel.tsx packages/client/src/features/delve/delve.css packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/pages/DelveCamp.tsx packages/client/src/features/delve/ManaPanel.tsx packages/client/src/features/delve/BindPrompt.tsx packages/client/src/features/delve/ManaChoice.tsx packages/client/src/features/delve/PaperDoll.tsx packages/client/src/stores/delveStore.ts packages/client/src/features/delve/__tests__/AbilitiesPanel.test.tsx packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx packages/client/src/pages/__tests__/DelveCamp.test.tsx packages/client/src/stores/delveStore.test.ts
 git commit -m "feat(client): the chain builder at the Anvil and in the Training Grounds" -m "The client's typecheck and arena-hud-snapshot.test.ts stay red until Tasks 11-12 move the HUD and the arena to chains." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Chunk 17: Client: the HUD and input (Task 11: the tests, the keys and the pad)
+## Chunk 18: Client: the HUD and input (Task 11: the tests, the keys and the pad)
 
 ### Task 11: The HUD shows chains; input holds and releases
 
 **The HUD snapshot** (`useArenaCore.ts`'s `snapshot`) reads each chain's next move (`nextMove`'s): its name, icon, form, elements, payment and cost, its own cooldown, and for a charge chain the meter over its need. `chainStep`/`chainLength`/`nextKind` replace `comboNext`/`comboLength`, `hold: { charge, stage } | null` is the slot's hold, and `busy` is a channel or a hold (a hold dims the other buttons as a channel does). The attack button's `basicChainStep`, `basicChainLength`, `basicNextKind` and `basicHold` (a manual hold blow held at its strike point) replace `basicComboNext`/`basicComboLength`.
 
-**The buttons** (`ArenaHud.tsx`) show their chain as step dots (`data-chain`: `next` lit), the next move's kind glyph (`data-kind`) and, while holding, a charge bar ticked at the two stages (`data-hold`, `data-stage`); the holding button itself isn't dimmed. The `aria-label` names the next move: "Primary: light Fire Bolt". A release back on the button now calls `onCancel` (the core's `cancelHold`), so a charging hold drops unpaid instead of firing as a lost release. The attack button shows the basic chain the same way.
+**The buttons** (`ArenaHud.tsx`) show their chain as step dots (`data-chain`: `next` lit), the next move's kind glyph (`data-kind`) and, while holding, a charge bar ticked at the two stages (`data-hold`, `data-stage`); the holding button itself isn't dimmed. The `aria-label` names the next move: "Primary: light Fire Bolt". Letting go back on the button after dragging out and back now calls `onCancel` (the core's `cancelHold`), so a charging hold drops unpaid instead of firing as a lost release; a button pressed and let go in place (the pointer never left it) while a hold charges, or with a hold next, casts auto-aimed (`onCast(slot)`), as a held key does; a pointer the browser takes away also calls `onCancel`. The attack button shows the basic chain the same way.
 
-**Input.** Keyboard and HUD buttons already aim while held and cast on release; `holdingSlot(input)` (the slot aiming) becomes `ArpgInput.holding`, so keydown/pointer-down charges a hold move and keyup/pointer-up is its release `cast`; `ArenaInput.cancelHold` carries the release-back cancel for one step. The controller: `padToArena` reports `holding` (any ability button held, repeat or not), and `padCast(registry, world, acts, released)` decides the frame's cast from the world, not the HUD: a slot whose next move is a hold (or whose hold runs) casts on its button's release (`released`: the core remembers the slot held the frame before) and never on the press or by repeat; any other casts on the press, or with repeat on again whenever `abilityReady`. The core sends `holding`, `cancelHold` and the pad's release, aims the pad and the aim marker with `nextMove`, and loadouts carry `chains` (`refreshWorldHero(…, chains)`).
+**Input.** Keyboard and HUD buttons already aim while held and cast on release; `holdingSlot(input)` (the slot aiming) becomes `ArpgInput.holding`, so keydown/pointer-down charges a hold move and keyup/pointer-up is its release `cast`; `ArenaInput.cancelHold` carries the release-back cancel for one step. A held key's repeats change nothing (its press keeps its start). The controller: `padToArena` reports `holding` (any ability button held, repeat or not), and `padCast(registry, world, acts, released)` decides the frame's cast from the world, not the HUD: a slot whose next move is a hold (or whose hold runs) casts on its button's release (`released`: the pad's release edge, `releaseEdge()`, remembers the slot held the frame before) and never on the press or by repeat; any other casts on the press, or with repeat on again whenever `abilityReady`. The core sends `holding`, `cancelHold` and the pad's release, aims the pad and the aim marker with `nextMove`, and loadouts carry `chains` (`refreshWorldHero(…, chains)`).
 
 **Files:**
 - Modify: `packages/client/src/features/delve/arena/input.ts:28,45,56,110` (`cancelHold`, `holdingSlot`)
-- Modify: `packages/client/src/features/gamepad/arena-pad.ts:1,22,43,50,55` (`holding`, `padCast`)
+- Modify: `packages/client/src/features/gamepad/arena-pad.ts:1,22,43,50,55-56` (`holding`, `padCast`, `releaseEdge`)
 - Modify: `packages/client/src/features/delve/arena/useArenaCore.ts` (the HUD types, `snapshot`, the step input, `padFrame`, the aim views, the loadout, `cancelHold`)
 - Modify: `packages/client/src/features/delve/arena/ArenaHud.tsx` (`HoldBar`, `ChainDots`, the buttons, `SkillBar.onCancel`)
 - Modify: `packages/client/src/features/delve/arena/useArena.ts:51-59`, `packages/client/src/features/delve/training/useTrainingArena.ts:40,46,56`, `packages/client/src/pages/DelveRun.tsx:274`, `packages/client/src/pages/DelveTraining.tsx:176`
@@ -11975,45 +12535,29 @@ git commit -m "feat(client): the chain builder at the Anvil and in the Training 
 
 - [ ] **Step 1: Write the failing tests**
 
-The HUD's buttons: the next move's name, the dots, the kind glyph and the hold bar, the holding button undimmed; a press aims, a tap casts, a release back on the button cancels (`performance.now` is mocked; jsdom lays the button out at 0, 0, so releasing at 0, 0 after 500 ms is a release back):
+The HUD's buttons: the next move's name, the dots, the kind glyph and the hold bar, the holding button undimmed; a press aims, a tap casts, a release back on the button cancels, and so does a cancelled pointer; a hold held in place fires, dragged out and back it cancels (`performance.now` is mocked; jsdom lays the button out at 0, 0, so releasing at 0, 0 after 500 ms is a release on the button):
 
-Replace the whole of `packages/client/src/features/delve/__tests__/ArenaHud.test.tsx` with:
+In `packages/client/src/features/delve/__tests__/ArenaHud.test.tsx`:
 
+Replace:
 ```tsx
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { AttackButton, SkillBar, Vitals, keyHints, padHints } from '../arena/ArenaHud';
-import { DEFAULT_CONTROLS } from '@/features/controls/controls';
-import type { AbilityHud, ArenaHud } from '../arena/useArena';
-
-function hud(over: Partial<ArenaHud> = {}): ArenaHud {
-  return {
-    hp: 100,
-    maxHp: 100,
-    mana: 50,
-    manaMax: 60,
-    abilities: [],
-    busy: false,
-    dodgeCharges: 1,
-    dodgeMax: 2,
-    dodgeRefill: 0.4,
-    riposte: false,
+    basicComboNext: 1,
+    basicComboLength: 3,
+```
+with:
+```tsx
     basicChainStep: 1,
     basicChainLength: 3,
     basicNextKind: 'light',
     basicHold: null,
-    potions: 3,
-    monstersLeft: 5,
-    monstersTotal: 8,
-    boss: null,
-    cleared: false,
-    barrier: null,
-    galvanizedAt: null,
-    t: 10,
-    ...over,
-  };
-}
+```
 
+Replace:
+```tsx
+describe('SkillBar dodge button', () => {
+```
+with:
+```tsx
 /** A light Fire Bolt, ready: the first of a 1-move chain. */
 const BOLT: AbilityHud = {
   name: 'Fire Bolt',
@@ -12090,63 +12634,101 @@ describe('the ability buttons', () => {
     fireEvent.pointerUp(button, { pointerId: 2, clientX: 0, clientY: 0 });
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCast).toHaveBeenCalledTimes(1);
+    // The browser takes the pointer away: cancelled too.
+    fireEvent.pointerDown(button, { pointerId: 3, clientX: 0, clientY: 0 });
+    fireEvent.pointerCancel(button, { pointerId: 3 });
+    expect(onCancel).toHaveBeenCalledTimes(2);
+    now.mockRestore();
+  });
+
+  it('a hold held in place fires on release; dragged out and back, it cancels', () => {
+    const onCast = vi.fn();
+    const onCancel = vi.fn();
+    const hold = { ...BOLT, nextKind: 'hold' as const };
+    render(bar({ abilities: [hold] }, { onCast, onCancel }));
+    const button = screen.getByTestId('ability-0');
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    fireEvent.pointerDown(button, { pointerId: 1, clientX: 0, clientY: 0 });
+    now.mockReturnValue(1800);
+    fireEvent.pointerUp(button, { pointerId: 1, clientX: 0, clientY: 0 });
+    expect(onCast).toHaveBeenLastCalledWith(0);
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.pointerDown(button, { pointerId: 2, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(button, { pointerId: 2, clientX: 60, clientY: 0 });
+    fireEvent.pointerMove(button, { pointerId: 2, clientX: 0, clientY: 0 });
+    now.mockReturnValue(2600);
+    fireEvent.pointerUp(button, { pointerId: 2, clientX: 0, clientY: 0 });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCast).toHaveBeenCalledTimes(1);
     now.mockRestore();
   });
 });
 
 describe('SkillBar dodge button', () => {
-  it('shows a pip per charge and dodges on press', () => {
-    const onDodge = vi.fn();
-    render(
-      <SkillBar
-        hud={hud()}
-        onCast={() => {}}
-        onAim={() => {}}
-        onCancel={() => {}}
+```
+
+Before:
+```tsx
         onPotion={() => {}}
         onDodge={onDodge}
-        hints={keyHints(DEFAULT_CONTROLS)}
-      />,
-    );
-    const button = screen.getByTestId('dodge-button');
-    expect(button).toHaveAttribute('data-charges', '1');
-    expect(button.querySelectorAll('[data-pip="full"]')).toHaveLength(1);
-    expect(button.querySelectorAll('[data-pip="empty"]')).toHaveLength(1);
-    expect(button).toHaveTextContent('Space');
-    fireEvent.pointerDown(button);
-    expect(onDodge).toHaveBeenCalledTimes(1);
-  });
-
-  it('glows while the riposte is armed', () => {
-    render(
-      <SkillBar
-        hud={hud({ riposte: true })}
-        onCast={() => {}}
-        onAim={() => {}}
+```
+add:
+```tsx
         onCancel={() => {}}
+```
+
+Before:
+```tsx
         onPotion={() => {}}
         onDodge={() => {}}
         hints={padHints(DEFAULT_CONTROLS)}
-      />,
+```
+add:
+```tsx
+        onCancel={() => {}}
+```
+
+Replace:
+```tsx
+    const cooling: AbilityHud = {
+      name: 'Fire Bolt',
+      icon: '☄️',
+      form: 'bolt',
+      element: 'fire',
+      elements: ['fire'],
+      payment: 'mana',
+      cost: 8,
+      cooldown: 3,
+      cooldownTotal: 5,
+      charge: null,
+      comboNext: 0,
+      comboLength: 1,
+      windup: null,
+      affordable: true,
+      ready: false,
+    };
+    const abilities = [cooling, { ...cooling, cooldown: 0, ready: true }];
+    const bar = (galvanizedAt: number | null) => (
+      <SkillBar
+        hud={hud({ abilities, galvanizedAt, t: 10 })}
+        onCast={() => {}}
+        onAim={() => {}}
+        onPotion={() => {}}
+        onDodge={() => {}}
+        hints={null}
+      />
     );
-    expect(screen.getByTestId('dodge-button')).toHaveAttribute('data-riposte', 'true');
-    expect(screen.getByTestId('dodge-button')).toHaveTextContent('LT');
-  });
-});
-
-describe('the reactions on the HUD', () => {
-  it("shows Obsidian's barrier as a pale segment after the life (over its end at full life)", () => {
-    const { rerender } = render(<Vitals hud={hud({ hp: 50, barrier: { hp: 20, max: 30 } })} />);
-    const seg = screen.getByTestId('hp-barrier');
-    expect(seg.style.left).toBe('50%');
-    expect(seg.style.width).toBe('20%');
-    rerender(<Vitals hud={hud({ hp: 100, barrier: { hp: 20, max: 30 } })} />);
-    expect(screen.getByTestId('hp-barrier').style.left).toBe('80%');
-    rerender(<Vitals hud={hud()} />);
-    expect(screen.queryByTestId('hp-barrier')).toBeNull();
-  });
-
-  it('sparks the buttons still cooling down for 0.4 s after Galvanize', () => {
+    const spark = (slot: number) =>
+      screen.getByTestId(`ability-${slot}`).querySelector('[data-spark]');
+    const { rerender } = render(bar(9.8));
+    expect(spark(0)).not.toBeNull();
+    expect(spark(1)).toBeNull();
+    rerender(bar(9.5));
+    expect(spark(0)).toBeNull();
+    rerender(bar(null));
+```
+with:
+```tsx
     const cooling: AbilityHud = { ...BOLT, cooldown: 3, ready: false };
     const abilities = [cooling, { ...cooling, cooldown: 0, ready: true }];
     const galvanize = (galvanizedAt: number | null) => bar({ abilities, galvanizedAt, t: 10 });
@@ -12158,11 +12740,19 @@ describe('the reactions on the HUD', () => {
     rerender(galvanize(9.5));
     expect(spark(0)).toBeNull();
     rerender(galvanize(null));
-    expect(spark(0)).toBeNull();
-  });
-});
+```
 
-describe('AttackButton', () => {
+Replace:
+```tsx
+  it('holds while pressed and shows the melee combo', () => {
+    const onAttack = vi.fn();
+    render(<AttackButton hud={hud()} onAttack={onAttack} />);
+    const button = screen.getByTestId('attack-button');
+    expect(button.querySelectorAll('[data-combo]')).toHaveLength(3);
+    expect(button.querySelector('[data-combo="next"]')).not.toBeNull();
+```
+with:
+```tsx
   it('holds while pressed and shows the basic chain', () => {
     const onAttack = vi.fn();
     render(<AttackButton hud={hud()} onAttack={onAttack} />);
@@ -12170,12 +12760,16 @@ describe('AttackButton', () => {
     expect(button.querySelectorAll('[data-chain]')).toHaveLength(3);
     expect(button.querySelector('[data-chain="next"]')).not.toBeNull();
     expect(button.querySelector('[data-kind="light"]')).toHaveTextContent('▪');
-    fireEvent.pointerDown(button);
-    expect(onAttack).toHaveBeenLastCalledWith(true);
-    fireEvent.pointerUp(button);
-    expect(onAttack).toHaveBeenLastCalledWith(false);
-  });
+```
 
+Replace:
+```tsx
+  it('shows one pip per blow of the weapon string, for any weapon', () => {
+    render(<AttackButton hud={hud({ basicComboLength: 2 })} onAttack={() => {}} />);
+    expect(screen.getByTestId('attack-button').querySelectorAll('[data-combo]')).toHaveLength(2);
+```
+with:
+```tsx
   it('shows one pip per blow of the basic chain, and a held blow charging', () => {
     const basic = { basicChainLength: 2, basicNextKind: 'hold' as const };
     render(
@@ -12188,8 +12782,6 @@ describe('AttackButton', () => {
     expect(button.querySelectorAll('[data-chain]')).toHaveLength(2);
     expect(button.querySelector('[data-kind="hold"]')).toHaveTextContent('◉');
     expect(button.querySelector('[data-hold]')).toHaveAttribute('data-stage', '2');
-  });
-});
 ```
 
 The snapshot, on engine worlds: a channel dims only once it starts; Infinite mana; each chain's next move, its kind and step, its own cooldown and a hold's charge; the basic chain and a manual hold blow's charge:
@@ -12335,7 +12927,7 @@ describe('arena HUD snapshot', () => {
 });
 ```
 
-In `packages/client/src/features/delve/__tests__/arena-input.test.ts`, a held key is `holding` its slot, its release the cast:
+In `packages/client/src/features/delve/__tests__/arena-input.test.ts`, a held key is `holding` its slot, its release the cast, and its repeats change nothing:
 
 Replace:
 ```ts
@@ -12367,10 +12959,20 @@ with:
     expect(input.cast?.slot).toBe(1);
   });
 
+  it("ignores a held key's repeats: its press keeps its start, and nothing casts", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'KeyQ');
+    const since = input.aiming!.since;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyQ', repeat: true }));
+    expect(input.aiming!.since).toBe(since);
+    expect(input.cast).toBeNull();
+  });
+
   it('pressing a second ability key while one is held casts the first instead of dropping it', () => {
 ```
 
-In `packages/client/src/features/gamepad/__tests__/gamepad.test.ts`, `holding`, and `padCast`'s release rule on a sandbox world:
+In `packages/client/src/features/gamepad/__tests__/gamepad.test.ts`, `holding`, the pad's release edge, and `padCast`'s release rule on a sandbox world:
 
 Replace:
 ```ts
@@ -12381,7 +12983,7 @@ with:
 ```ts
 import { computeHeroStats, createSandboxWorld, defaultChains, stepWorld } from '@alloy/engine';
 import { edges, radialDeadzone, readPad, type GamepadLike } from '../gamepad';
-import { padCast, padToArena, stickAimPoint } from '../arena-pad';
+import { padCast, padToArena, releaseEdge, stickAimPoint } from '../arena-pad';
 import { getDelveRegistry } from '@/features/delve/registry';
 ```
 
@@ -12402,6 +13004,14 @@ describe('custom controls', () => {
 ```
 with:
 ```ts
+describe('releaseEdge', () => {
+  it('reports the slot held the frame before and not now', () => {
+    const release = releaseEdge();
+    const frames: (number | null)[] = [0, 0, null, 1, 2, null];
+    expect(frames.map((held) => release(held))).toEqual([null, null, 0, null, 1, 2]);
+  });
+});
+
 describe('padCast (a hold casts on its release, read from the world)', () => {
   const registry = getDelveRegistry();
   const STEP = registry.getDelveBalance().arena.step;
@@ -12463,7 +13073,11 @@ add:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/client && npx vitest run src/features/delve/__tests__/ArenaHud.test.tsx src/features/delve/__tests__/arena-hud-snapshot.test.ts src/features/delve/__tests__/arena-input.test.ts src/features/gamepad/__tests__/gamepad.test.ts)`
-Expected: 14 FAIL, 20 pass: arena-hud-snapshot 5 (Cannot read properties of undefined (reading 'map'), (reading '0'): the snapshot reads `hero.abilities`), ArenaHud 4 ("names each chain's next move …": expect(element).toHaveAccessibleName(); "a press aims …": expected "spy" to be called 1 times, but got 0 times; the two attack-button tests: expected to have a length of 3 (2) but got +0), arena-input 1 ((0 , holdingSlot) is not a function), gamepad 4 (expected undefined to be +0: no `holding` yet; (0 , padCast) is not a function).
+Expected: 16 FAIL, 21 pass:
+- arena-hud-snapshot 5 (Cannot read properties of undefined (reading 'map'), (reading '0'): the snapshot reads `hero.abilities`);
+- ArenaHud 5: "names each chain's next move …" (expect(element).toHaveAccessibleName()), "a press aims …" (expected "spy" to be called 1 times, but got 0 times), "a hold held in place fires on release …" (expected last "spy" call to have been called with [ +0 ]), and the two attack-button tests (expected to have a length of 3 (2) but got +0);
+- arena-input 1 ((0 , holdingSlot) is not a function; "ignores a held key's repeats …" passes already: it pins the keys' rule);
+- gamepad 5 (expected undefined to be +0: no `holding` yet; (0 , releaseEdge) is not a function; (0 , padCast) is not a function).
 
 - [ ] **Step 3: The keys**
 
@@ -12601,15 +13215,28 @@ export function padCast(
     ? held
     : null;
 }
+
+/**
+ * The pad's release edge: fed each frame's held ability slot, it returns the
+ * slot whose button went up since the frame before (else null), for `padCast`.
+ */
+export function releaseEdge(): (holding: number | null) => number | null {
+  let last: number | null = null;
+  return (holding) => {
+    const released = last !== null && holding !== last ? last : null;
+    last = holding;
+    return released;
+  };
+}
 ```
 
 ---
 
-## Chunk 18: Client: the HUD and input (Task 11 continued: the core and the buttons)
+## Chunk 19: Client: the HUD and input (Task 11 continued: the core and the buttons)
 
 - [ ] **Step 5: The arena core**
 
-In `packages/client/src/features/delve/arena/useArenaCore.ts`. The imports; the HUD types; the snapshot from the chains (a channel is the wind-up whose active move channels); then, in the effect, the combo window and the pad's last held slot, the step input, the pad frame's cast by `padCast`, the aim views by `nextMove`, the hot-swapped chains, and `cancelHold`:
+In `packages/client/src/features/delve/arena/useArenaCore.ts`. The imports; the HUD types; the snapshot from the chains (a channel is the wind-up whose active move channels); then, in the effect, the combo window and the pad's release edge, the step input, the pad frame's cast by `padCast`, the aim views by `nextMove`, the hot-swapped chains, and `cancelHold`:
 
 Replace:
 ```ts
@@ -12662,6 +13289,7 @@ with:
 import {
   padCast,
   padToArena,
+  releaseEdge,
   stickAimPoint,
   type ArenaPadActions,
 } from '@/features/gamepad/arena-pad';
@@ -12830,8 +13458,8 @@ with:
 ```ts
     const comboWindow = registry.getDelveBalance().abilities.comboWindow;
     let hudClock = 0;
-    /** The ability slot whose pad button was held last frame (its release casts a hold). */
-    let padHeld: number | null = null;
+    /** The pad's release edge (a hold casts on its release). */
+    const padRelease = releaseEdge();
 ```
 
 Before:
@@ -12888,9 +13516,7 @@ Replace:
 ```
 with:
 ```ts
-      const released = padHeld !== null && acts.holding !== padHeld ? padHeld : null;
-      padHeld = acts.holding;
-      const slot = padCast(registry, world, acts, released);
+      const slot = padCast(registry, world, acts, padRelease(acts.holding));
       if (slot !== null) {
         const ab = nextMove(world.hero, slot, world.t, comboWindow);
         const aimWorld = acts.aimDir
@@ -12973,7 +13599,7 @@ add:
 
 - [ ] **Step 6: The buttons**
 
-In `packages/client/src/features/delve/arena/ArenaHud.tsx`. The chain texts import; `HoldBar` and `ChainDots` before `AbilityButton`, which gains `onCancel`, names its next move, shows its kind, dots and hold bar, and keeps a holding button undimmed; the attack button's glyph, dots and hold bar; `SkillBar` passes `onCancel` down:
+In `packages/client/src/features/delve/arena/ArenaHud.tsx`. The chain texts import; `HoldBar` and `ChainDots` before `AbilityButton`, which gains `onCancel` (out and back, or a cancelled pointer; a hold let go in place casts), names its next move, shows its kind, dots and hold bar, and keeps a holding button undimmed; the attack button's glyph, dots and hold bar; `SkillBar` passes `onCancel` down:
 
 Before:
 ```tsx
@@ -13041,9 +13667,9 @@ function ChainDots({ step, length, color }: { step: number; length: number; colo
 /**
  * One ability button: its chain's next move, the step dots, that move's kind
  * and a hold's charge. A quick tap auto-aims; dragging out shows the aim
- * marker in the arena and releasing casts there (release back on the button
- * to cancel). While it's held a hold move charges, and the release casts it
- * (release back cancels it unpaid).
+ * marker in the arena and releasing casts there (drag out and back onto the
+ * button to cancel). While it's held a hold move charges: letting go in place
+ * casts it, auto-aimed; out and back cancels it unpaid.
 ```
 
 Before:
@@ -13056,25 +13682,78 @@ add:
   onCancel,
 ```
 
-Before:
+Replace:
 ```tsx
 }) {
   const registry = getDelveRegistry();
+  const press = useRef<{ id: number; t: number; x: number; y: number } | null>(null);
 ```
-add:
+with:
 ```tsx
   onCancel: () => void;
+}) {
+  const registry = getDelveRegistry();
+  // `left`: the pointer has been off the button since the press (back on it, that's a cancel).
+  const press = useRef<{ id: number; t: number; x: number; y: number; left: boolean } | null>(null);
 ```
 
 Replace:
 ```tsx
+    press.current = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
+    onAim(slot, { x: e.clientX, y: e.clientY });
+  };
+  const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (press.current?.id === e.pointerId) onAim(slot, { x: e.clientX, y: e.clientY });
+```
+with:
+```tsx
+    press.current = {
+      id: e.pointerId,
+      t: performance.now(),
+      x: e.clientX,
+      y: e.clientY,
+      left: false,
+    };
+    onAim(slot, { x: e.clientX, y: e.clientY });
+  };
+  /** Whether the pointer is over the button (within its radius). */
+  const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
+    return isCancelled({ x: e.clientX, y: e.clientY }, button);
+  };
+  const move = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    const p = press.current;
+    if (p?.id !== e.pointerId) return;
+    if (!over(e)) p.left = true;
+    onAim(slot, { x: e.clientX, y: e.clientY });
+```
+
+Replace:
+```tsx
+    const r = e.currentTarget.getBoundingClientRect();
+    const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 };
     if (!isCancelled({ x: e.clientX, y: e.clientY }, button))
       onCast(slot, { x: e.clientX, y: e.clientY });
 ```
 with:
 ```tsx
-    if (isCancelled({ x: e.clientX, y: e.clientY }, button)) onCancel();
-    else onCast(slot, { x: e.clientX, y: e.clientY });
+    if (!over(e)) return onCast(slot, { x: e.clientX, y: e.clientY });
+    // Back on the button: a hold held in place fires; out and back cancels.
+    if (!p.left && (ab.hold !== null || ab.nextKind === 'hold')) onCast(slot);
+    else onCancel();
+```
+
+Replace:
+```tsx
+    onAim(null);
+  };
+```
+with:
+```tsx
+    onAim(null);
+    onCancel();
+  };
 ```
 
 Replace:
@@ -13293,10 +13972,10 @@ add:
 - [ ] **Step 8: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (34).
+Expected: PASS (37).
 
 Run: `(cd packages/client && npx vitest run)`
-Expected: all 664 tests pass. The client typecheck still fails in 5 files, the arena FX (`ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/lifecycles.ts`, `pixel/floor-engine.ts`): Task 12.
+Expected: all 668 tests pass. The client typecheck still fails in 5 files, the arena FX (`ArenaRenderer.ts`, `fx/anticipation.ts`, `fx/draw-world.ts`, `fx/lifecycles.ts`, `pixel/floor-engine.ts`): Task 12.
 
 - [ ] **Step 9: Commit**
 
@@ -13309,16 +13988,16 @@ git commit -m "feat(client): the HUD shows each chain's step, next kind and a ho
 
 ---
 
-## Chunk 19: Client: the arena FX
+## Chunk 20: Client: the arena FX
 
 ### Task 12: The arena FX read moves and blows
 
-Display only. A basic blow draws its kind's row (`feel[moveKind]`: a held blow's is its stage's) in its own element; heavy and hold blows swing as finishers and ring out in their own element (`finisherRing` keys on `moveKind`; the secondary's discharge is gone), and the basic motif (`basicMotif`, a basic shot's infusion) goes: a blow has one element. The guard FX (the Ward, Armor, Surge and Blink-trail rings, the dissolving guard, the Defensive's infusion aura) and the channel ring read `activeMove`; the hero's aura, footing ring and pixel-floor light take the first blow's element. `windingUp` reads the active move: a committed swing winds up in its blow's element with its heft; a manual blow held at its strike point gathers with its charge (progress is the charge, heft its stage's row's); an ability's hold gathers with its charge toward its aim, as heavy as its stage's move (`stepHeft(chainMove(…, stage))`); a wind-up takes `stepHeft` of the move winding up. A `holdStage` event pings a ring round the hero in the held move's element, wider at stage 2 (`holdPing`).
+Display only. A basic blow draws its kind's row (`feel[moveKind]`: a held blow's is its stage's) in its own element; heavy and hold blows swing as finishers and ring out in their own element (`finisherRing` keys on `moveKind`; the secondary's discharge is gone), and the basic motif (`basicMotif`, a basic shot's infusion) goes: a blow has one element. The guard FX (the Ward, Armor, Surge and Blink-trail rings, the dissolving guard, the Defensive's infusion aura) read the move whose effect is up, `guardMove(h)` (`h.defend`'s move at its stage), so the chain's next Defensive move winding up doesn't recolour them; the channel ring reads `activeMove`; the hero's aura, footing ring and pixel-floor light take the first blow's element. `windingUp` reads the active move: a committed swing winds up in its blow's element with its heft; a manual blow held at its strike point gathers with its charge (progress is the charge, heft its stage's row's); an ability's hold gathers with its charge toward its aim, as heavy as its stage's move (`stepHeft(chainMove(…, stage))`); a wind-up takes `stepHeft` of the move winding up. A `holdStage` event pings a ring round the hero in the held move's element, wider at stage 2 (`holdPing`).
 
 **Files:**
-- Modify: `packages/client/src/features/delve/arena/ArenaRenderer.ts:2-13,355-378,416,530,655,888` (the imports, `basic`, `holdStage`, `guardColor`, the aura, `holdPing`)
+- Modify: `packages/client/src/features/delve/arena/ArenaRenderer.ts:2-13,28,355-378,416,530,655,888` (the imports, `basic`, `holdStage`, `guardColor`, the aura, `holdPing`)
 - Modify: `packages/client/src/features/delve/arena/fx/anticipation.ts` (whole file)
-- Modify: `packages/client/src/features/delve/arena/fx/draw-world.ts:4,10,225,270,299,461-487`, `fx/mana-fx.ts:1,129-139`, `fx/lifecycles.ts:1,56`, `fx/infusion.ts:94-105`, `pixel/floor-engine.ts:132`
+- Modify: `packages/client/src/features/delve/arena/fx/draw-world.ts:4-10,222-225,270,299,461-487` (`guardMove`), `fx/mana-fx.ts:1,129-139`, `fx/lifecycles.ts:3,56`, `fx/infusion.ts:94-105`, `pixel/floor-engine.ts:132`
 - Test: `packages/client/src/features/delve/arena/fx/__tests__/anticipation.test.ts` (whole file), `mana-fx.test.ts`, `lifecycles.test.ts`, `reactions.test.ts`, `infusion.test.ts`, `packages/client/src/features/delve/__tests__/arena-renderer.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
@@ -13443,7 +14122,7 @@ describe('windingUp', () => {
 });
 ```
 
-In `packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts`, the hand's and the infusion pass's worlds hold chains, a basic shot draws no motif, and `finisherRing` keys on the blow's kind:
+In `packages/client/src/features/delve/arena/fx/__tests__/mana-fx.test.ts`, the hand's and the infusion pass's worlds hold chains, a basic shot draws no motif, the Ward's aura stays while the chain's next Defensive move winds up, and `finisherRing` keys on the blow's kind:
 
 Replace:
 ```ts
@@ -13529,6 +14208,13 @@ with:
     expect(used(world({ hero: { ...guarded, defend: blink(3) } }))).toBeGreaterThan(0);
     expect(used(world({ hero: { ...guarded, defend: blink(0.5) } }))).toBe(0);
     expect(used(world({ hero: { ...guarded, chains: [chain(one), chain(one)] } }))).toBe(0); // one element
+    // The chain's next Defensive move (one element) winding up leaves the Ward's ring as it is.
+    const next = {
+      ...guarded,
+      chains: [chain(one), { moves: [two, one], hold: [null, null] }],
+      windup: { slot: 1, step: 1, stage: 0 },
+    };
+    expect(used(world({ hero: next }))).toBeGreaterThan(0);
 ```
 
 Replace:
@@ -13590,7 +14276,7 @@ with:
     }
 ```
 
-In `packages/client/src/features/delve/arena/fx/__tests__/lifecycles.test.ts`:
+In `packages/client/src/features/delve/arena/fx/__tests__/lifecycles.test.ts`, the worlds hold chains, and a guard dissolves in its own element while the next Defensive move winds up:
 
 Before:
 ```ts
@@ -13621,6 +14307,30 @@ with:
 ```ts
           defend: ward,
           chains: [frost, frost],
+```
+
+Replace:
+```ts
+  it('leaves a landing Burst or Barrage (they explode) and a guard that stays up', () => {
+```
+with:
+```ts
+  it("a guard dissolves in its own element, not the next Defensive move's winding up", () => {
+    const l = new Lifecycles();
+    const f = fx();
+    const guarded = {
+      x: 0,
+      y: 0,
+      defend: ward,
+      chains: [frost, { moves: [{ element: 'frost' }, { element: 'fire' }], hold: [null, null] }],
+      windup: { slot: 1, step: 1, stage: 0 },
+    };
+    l.update(world({ hero: guarded as never }), f as never, 1);
+    l.update(world({}), f as never, 1.1);
+    expect(f.disperse).toHaveBeenCalledWith(0, -0.3, 1, MANA_HEX.frost, 30);
+  });
+
+  it('leaves a landing Burst or Barrage (they explode) and a guard that stays up', () => {
 ```
 
 Replace:
@@ -13720,7 +14430,11 @@ with:
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/client && npx vitest run src/features/delve/arena/fx src/features/delve/__tests__/arena-renderer.test.ts)`
-Expected: 20 FAIL, 58 pass: anticipation 5 (Cannot read properties of undefined (reading '0'): `windingUp` reads `weapon.combo`/`hero.abilities`; "a hold gathers …": Cannot read properties of null (reading 'progress')), mana-fx 9 (Cannot read properties of undefined (reading '1') / (reading '0'); `finisherRing`: expected null to deeply equal { kind: 'ring', x: 2, y: 1.4, r: 1.2 }), lifecycles 3 and reactions 2 (Cannot read properties of undefined (reading '1')), arena-renderer 1 ((0 , holdPing) is not a function).
+Expected: 21 FAIL, 58 pass:
+- anticipation 5: three Cannot read properties of undefined (reading '0') and "a blow winds up in its own element" (… (reading '1')): `windingUp` reads `weapon.combo`/`hero.abilities`; "a hold gathers …": Cannot read properties of null (reading 'progress');
+- mana-fx 9 (Cannot read properties of undefined (reading '1') / (reading '0'); `finisherRing`: expected null to deeply equal { kind: 'ring', x: 2, y: 1.4, r: 1.2 });
+- lifecycles 4 and reactions 2 (Cannot read properties of undefined (reading '1'));
+- arena-renderer 1 ((0 , holdPing) is not a function).
 
 - [ ] **Step 3: Anticipation**
 
@@ -13873,32 +14587,52 @@ with:
 }
 ```
 
-In `packages/client/src/features/delve/arena/fx/draw-world.ts`, the footing ring's colour, the guard and the channel from `activeMove`, and only ability shots carry an infusion:
-
-Before:
-```ts
-  type ArpgWorld,
-```
-add:
-```ts
-  activeMove,
-```
+In `packages/client/src/features/delve/arena/fx/draw-world.ts`, the footing ring's colour, `guardMove` for the guard and the aura, the channel from `activeMove`, and only ability shots carry an infusion:
 
 Replace:
 ```ts
+  type ArpgWorld,
+  type ManaType,
+  type Projectile,
+  type Vec,
+  type Zone,
+} from '@alloy/engine';
 import { basicMotif, drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 ```
 with:
 ```ts
+  activeMove,
+  chainMove,
+  type ArpgWorld,
+  type ManaType,
+  type Projectile,
+  type ResolvedAbility,
+  type Vec,
+  type Zone,
+} from '@alloy/engine';
 import { drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 ```
 
 Replace:
 ```ts
+/** The hero's footing: a pixel ring on the ground with a notch showing where it faces. */
+export function drawFooting(ground: Graphics, w: ArpgWorld, time: number): void {
+  const h = w.hero;
   const color = h.stats.weapon.element ? MANA_HEX[h.stats.weapon.element] : 0xd4a834;
 ```
 with:
 ```ts
+/**
+ * The Defensive move whose effect is up (`h.defend`, at its stage), even while
+ * the chain's next move winds up, else null.
+ */
+export function guardMove(h: ArpgWorld['hero']): ResolvedAbility | null {
+  return h.defend ? chainMove(h.chains[1], h.defend.move, h.defend.stage) : null;
+}
+
+/** The hero's footing: a pixel ring on the ground with a notch showing where it faces. */
+export function drawFooting(ground: Graphics, w: ArpgWorld, time: number): void {
+  const h = w.hero;
   const color = MANA_HEX[h.stats.weapon.blows[0].element];
 ```
 
@@ -13908,7 +14642,7 @@ Replace:
 ```
 with:
 ```ts
-  const guard = activeMove(h, 1);
+  const guard = guardMove(h);
 ```
 
 Replace:
@@ -13941,7 +14675,7 @@ Replace:
 ```
 with:
 ```ts
-  const aura = activeMove(h, 1)?.elements[1];
+  const aura = guardMove(h)?.elements[1];
 ```
 
 Replace:
@@ -13954,15 +14688,15 @@ with:
     const el = p.owner === 'hero' && p.form !== 'ember' ? p.ability?.elements[1] : undefined;
 ```
 
-In `packages/client/src/features/delve/arena/fx/lifecycles.ts`:
+In `packages/client/src/features/delve/arena/fx/lifecycles.ts`, the dissolving guard takes `guardMove`'s element:
 
 Replace:
 ```ts
-import type { ArpgWorld } from '@alloy/engine';
+import { elem, shotColor } from './draw-world';
 ```
 with:
 ```ts
-import { activeMove, type ArpgWorld } from '@alloy/engine';
+import { elem, guardMove, shotColor } from './draw-world';
 ```
 
 Replace:
@@ -13971,7 +14705,7 @@ Replace:
 ```
 with:
 ```ts
-    const el = activeMove(h, 1)?.element;
+    const el = guardMove(h)?.element;
 ```
 
 In `packages/client/src/features/delve/arena/pixel/floor-engine.ts`:
@@ -13985,7 +14719,7 @@ with:
     hero: { x: w.hero.x, y: w.hero.y, element: w.hero.stats.weapon.blows[0].element },
 ```
 
-In `packages/client/src/features/delve/arena/ArenaRenderer.ts`, the engine import becomes a value import (`activeMove`), the basic swing reads its blow, `holdStage` pings, the guard's colour is the active Defensive move's, the aura the first blow's, and `holdPing` joins the exported helpers:
+In `packages/client/src/features/delve/arena/ArenaRenderer.ts`, the engine import becomes a value import (`activeMove`), the basic swing reads its blow, `holdStage` pings, the guard's colour is `guardMove`'s, the aura the first blow's, and `holdPing` joins the exported helpers:
 
 Replace:
 ```ts
@@ -14017,6 +14751,15 @@ import {
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx, finisherRing } from './fx/mana-fx';
 import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
+```
+
+Before:
+```ts
+  type AimView,
+```
+add:
+```ts
+  guardMove,
 ```
 
 Replace:
@@ -14080,7 +14823,7 @@ Replace:
 ```
 with:
 ```ts
-    const guard = activeMove(w.hero, 1);
+    const guard = guardMove(w.hero);
 ```
 
 Replace:
@@ -14120,10 +14863,10 @@ export function holdPing(
 - [ ] **Step 5: Run them to verify they pass**
 
 Run the Step 2 command again.
-Expected: PASS (78).
+Expected: PASS (79).
 
 Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 666 tests pass. The client is green again.
+Expected: no type errors; all 671 tests pass. The client is green again.
 
 - [ ] **Step 6: Commit**
 
@@ -14136,14 +14879,14 @@ git commit -m "feat(client): the arena draws blows by kind and element, grows th
 
 ---
 
-## Chunk 20: Release: E2E, screenshots, docs, version
+## Chunk 21: Release: E2E, screenshots, docs, version
 
 ### Task 13: The Delve E2E specs, and a screenshot pass
 
-The E2E specs meet the chains: D01's buttons name their next move (the Defensive's and Ultimate's single medium moves exactly; the Primary's with a pattern, since the bot is already stepping through its chain when the arena shows); D04 edits the Primary's first move into a Wildfire Burst, checks the whole summary, and adds a fifth move up to the cap; D08 reads each skill's summary from its tab; G04 checks the Primary's first move before RT goes down, then that held RT steps through the chain; T01 checks the sandbox's first move before any press.
+The E2E specs meet the chains: D01's buttons name their next move (the Defensive's and Ultimate's single medium moves exactly; the Primary's with a pattern, since the bot is already stepping through its chain when the arena shows); D04 edits the Primary's first move into a Wildfire Burst, checks the whole summary, and adds a fifth move up to the cap; D08 reads each skill's summary from its tab; G04 checks the Primary's first move before RT goes down, then that held RT steps through the chain; G06 (new) edits a chain by pad at the Anvil: RB to the Abilities tab, down to the Primary's skill tab, left and A to pick Basic, down to the first card, right and A to pick the second, down to its kind chips (one press more on a phone, past the fixed tab bar), A, and the saved blow takes that kind (`BUTTON` gains `left: 14, right: 15`); T01 checks the sandbox's first move before any press.
 
 **Files:**
-- Modify: `packages/client/e2e/delve.spec.ts` (D01, D04, D08), `packages/client/e2e/delve-gamepad.spec.ts` (G04), `packages/client/e2e/delve-training.spec.ts` (T01)
+- Modify: `packages/client/e2e/delve.spec.ts` (D01, D04, D08), `packages/client/e2e/delve-gamepad.spec.ts` (G04, G06), `packages/client/e2e/delve-training.spec.ts` (T01)
 - Create (scratch, never committed): `packages/client/playwright.scratch.config.ts` (see the header), `packages/client/e2e/chains-shots.spec.ts`
 
 - [ ] **Step 1: The specs**
@@ -14215,6 +14958,15 @@ In `packages/client/e2e/delve-gamepad.spec.ts`:
 
 Replace:
 ```ts
+const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13 } as const;
+```
+with:
+```ts
+const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13, left: 14, right: 15 } as const;
+```
+
+Replace:
+```ts
   test('G04: holding RT with the right stick aimed keeps casting the Primary', async ({ page }) => {
 ```
 with:
@@ -14250,6 +15002,49 @@ with:
       .toBe('Primary: medium Fire Bolt');
 ```
 
+Replace:
+```ts
+  test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {
+```
+with:
+```ts
+  test('G06: the D-pad and A pick a skill, a move and its kind in the chain builder', async ({
+    page,
+  }) => {
+    await setup(page, false);
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.rb);
+    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    await tap(page, BUTTON.left);
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(page.getByTestId('move-0')).toBeFocused();
+    await tap(page, BUTTON.right);
+    await tap(page, BUTTON.a);
+    await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    const blow = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!).chains.basic[1]);
+    expect((await blow()).kind).toBe('light');
+    // Down past the card's reorder buttons to its kind chips (twice; on a phone the
+    // fixed tab bar sits in between, one press more).
+    const focused = () =>
+      page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
+    for (let i = 0; i < 3 && !(await focused()).startsWith('kind-'); i++) {
+      await tap(page, BUTTON.down);
+    }
+    const chip = await focused();
+    expect(chip).toMatch(/^kind-(medium|heavy|hold)$/);
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await blow()).kind).toBe(chip.slice('kind-'.length));
+  });
+
+  test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {
+```
+
 In `packages/client/e2e/delve-training.spec.ts`:
 
 After:
@@ -14267,7 +15062,7 @@ add:
 Create the scratch config (header). The 5288 dev server must be running with the rebuilt engine (Task 8 restarted it; run the header block again if in doubt; expect `True`).
 
 Run: `(cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts)`
-Expected: 56 passed (14 tests on the four device projects). A timeout under load that passes on `-g <test> --repeat-each 2` is flakiness (see the header): on the scratch copy G01 (the dive menu's D-pad focus, which chains don't touch) timed out once in each of two full runs, on a different device each time, and passed 40 of 40 when `delve-gamepad.spec.ts` ran alone with `--repeat-each 2`.
+Expected: 60 passed (15 tests on the four device projects; about 3.5 minutes). A timeout under load that passes on `-g <test> --repeat-each 2` is flakiness (see the header): on the scratch copy G01 (the dive menu's D-pad focus, which chains don't touch) timed out once in each of two earlier full runs, on a different device each time, and passed 40 of 40 when `delve-gamepad.spec.ts` ran alone with `--repeat-each 2`; the last full run passed 60 of 60.
 
 - [ ] **Step 3: The screenshot pass**
 
@@ -14296,6 +15091,18 @@ async function seed(page: Page): Promise<void> {
   }, JSON.stringify(profile));
 }
 
+/** The skill bar with room round it: a hold's charge bar sits above its button. */
+async function skillBar(page: Page, path: string): Promise<void> {
+  const b = (await page.getByTestId('skill-bar').boundingBox())!;
+  const pad = 24;
+  const x = Math.max(0, b.x - pad);
+  const y = Math.max(0, b.y - pad);
+  await page.screenshot({
+    path,
+    clip: { x, y, width: b.width + b.x - x + pad, height: b.height + b.y - y + pad },
+  });
+}
+
 test('chains screenshots', async ({ page }) => {
   await seed(page);
   await page.goto('/delve');
@@ -14307,8 +15114,14 @@ test('chains screenshots', async ({ page }) => {
   await page.getByTestId('infusion-nature').click();
   await expect(page.getByTestId('ability-readout')).toContainText('Fully charged');
   await page.screenshot({ path: `${DIR}/2-builder-hold-move.png`, fullPage: true });
+  await page.getByTestId('ability-readout').screenshot({ path: `${DIR}/2b-readout.png` });
   await page.getByTestId('chain-skill-basic').click();
   await page.screenshot({ path: `${DIR}/3-builder-basic.png`, fullPage: true });
+  // A phone's width: the four skill tabs stay on one line each.
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.getByTestId('chain-skill-basic').evaluate((el) => el.scrollIntoView());
+  await page.screenshot({ path: `${DIR}/3b-skill-tabs-375.png` });
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // The Training Grounds: a held first move, charging on Q.
   await page.getByTestId('training-button').click();
@@ -14334,19 +15147,22 @@ test('chains screenshots', async ({ page }) => {
   await page.keyboard.down('KeyQ');
   await page.waitForTimeout(550);
   await page.screenshot({ path: `${DIR}/4-hud-hold-charging.png` });
-  await page.getByTestId('skill-bar').screenshot({ path: `${DIR}/5-skill-bar-hold.png` });
+  await skillBar(page, `${DIR}/5-skill-bar-hold.png`);
   await page.keyboard.up('KeyQ');
   await page.waitForTimeout(300);
-  await page.getByTestId('skill-bar').screenshot({ path: `${DIR}/6-skill-bar-after.png` });
+  await skillBar(page, `${DIR}/6-skill-bar-after.png`);
 });
 ```
 
 Run, with `<scratchpad>` your session's scratchpad directory (forward slashes): `(cd packages/client && SHOTS_DIR="<scratchpad>/chains-shots" npx playwright test -c playwright.scratch.config.ts --project=desktop e2e/chains-shots.spec.ts)` (create the folder first).
-Expected: 1 passed, and six PNGs. Look at each (Read shows images):
+Expected: 1 passed, and eight PNGs. Look at each (Read shows images):
 - `1-builder-primary.png`: four skill tabs (Basic 3 of 5, Primary 4 of 5, Defensive 1 of 5, Ultimate 1 of 5, the Primary outlined), the summary "light Fire Bolt · medium Fire Bolt · medium Fire Bolt · heavy Fire Bolt", four cards with their kind glyphs (▪, ▪▪, ▪▪, ▪▪▪) and a + card.
-- `2-builder-hold-move.png`: the third card ◉ with a Fire and a Nature icon, the "held" kind chip lit, the Wildfire effect text, and the readout "held Wildfire Bolt" with its full-charge line.
-- `3-builder-basic.png`: the Basic tab, three blow cards (the last a Nature blow: the pair's secondary), no form chips, one element per blow.
-- `4-hud-hold-charging.png` and `5-skill-bar-hold.png`: the Primary button with ◉, a charge bar above it about half full past the first tick, four dots under it with the second lit, and the Defensive and Ultimate buttons dimmed.
+- `2-builder-hold-move.png`: the third card ◉ with a Fire and a Nature icon, the "held" kind chip lit, and the Wildfire effect text (the page scrolls inside its own frame, so a page shot can cut the readout off).
+- `2b-readout.png`, the readout itself: "held Wildfire Bolt", "Hits for 16 · radius 1.6", "8 mana · 0.14s wind-up · 0.45s cooldown", "2 stacks a hit", "Fully charged (1s): hits for 25, 13 mana".
+- `3-builder-basic.png`: the Basic tab, three blow cards (the last a Nature blow: the pair's secondary), no form chips, one element per blow, and no kind hint under a light blow's chips.
+- `3b-skill-tabs-375.png`, at 375 px: the four skill tabs' names each on one line (no Q/E/R hints at this width), and the cards' ◂ ▸ × rows with the first ◂ and the last ▸ dimmed.
+- `4-hud-hold-charging.png`: the Primary button with ◉, a charge bar above it about half full past the first tick, four dots under it with the second lit, and the Defensive and Ultimate buttons dimmed.
+- `5-skill-bar-hold.png`, the skill bar with room round it (a padded clip, so the bar above the button shows), a moment later: the same, the charge bar now full.
 - `6-skill-bar-after.png`: nothing dimmed, the Primary's third dot lit (its next move, medium).
 If a glyph, a dot or the bar is missing, clipped or unreadable, fix it in `ArenaHud.tsx` or `ChainEditor.tsx` (display only), rerun the pass and the client tests, and commit the fix with this task. On the scratch copy nothing needed fixing.
 
@@ -14366,7 +15182,7 @@ git commit -m "test(client): the Delve E2E specs read chains: next-move labels, 
 **Files:**
 - Modify: `CLAUDE.md` (CRLF, hand-edit: the Delve paragraph; the Spec, Engine, Data, Elemental affinity, Elemental stacks, Client, Mana-pixel FX, Controller, Training Grounds and DPS Lab bullets)
 - Modify: `docs/superpowers/specs/2026-09-29-delve-moves-and-chains-design.md` (CRLF: the status line)
-- Modify: `docs/superpowers/specs/2026-09-25-delve-ability-system-design.md`, `2026-09-25-delve-combat-weight-design.md` (CRLF), `2026-09-27-delve-elemental-affinity-design.md` (CRLF), `2026-09-28-delve-elemental-stacks-design.md` (CRLF), `2026-09-28-delve-dps-lab-design.md` (superseded notes)
+- Modify: `docs/superpowers/specs/2026-09-25-delve-ability-system-design.md`, `2026-09-25-delve-combat-weight-design.md` (CRLF), `2026-09-27-delve-infusion-visuals-design.md`, `2026-09-27-delve-elemental-affinity-design.md` (CRLF), `2026-09-28-delve-elemental-stacks-design.md` (CRLF), `2026-09-28-delve-dps-lab-design.md` (superseded notes)
 - Modify: `packages/client/package.json:3`
 
 - [ ] **Step 1: CLAUDE.md**
@@ -14483,6 +15299,15 @@ HUD with drag-to-aim ability buttons that show their chain's step, the next move
 
 Replace:
 ```markdown
+schema version 4, validated with Zod on load; versions 2 and 3 migrate, and the builds a migration changes become a toast
+```
+with:
+```markdown
+schema version 5, validated with Zod on load; versions 2, 3 and 4 migrate, and the moves a migration changes become a toast
+```
+
+Replace:
+```markdown
 basic attacks draw `HeroWeapon.infusion`, the hero's bound secondary (ordinary blows wear its motif, `basicMotif`; the finisher is its body and discharges it: a ring at the tip, round a full circle, or a flare at the hand for a shot)
 ```
 with:
@@ -14594,6 +15419,19 @@ with:
 > **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a move's kind sets its weight (light −1, medium 0, heavy +1; a hold's stages 0, +1, +2), and the +0.2 heft of a press-combo's last step goes to a chain's last move (`stepHeft`).
 ```
 
+In `docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md`, under its Engine heading:
+
+Replace:
+```markdown
+## Engine (display data only; no rule changes)
+```
+with:
+```markdown
+## Engine (display data only; no rule changes)
+
+> **Superseded** in part by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): basic attacks carry no infusion. `HeroWeapon.infusion` is gone and each blow strikes with one element of the pair, so a basic swing, shot or burst draws no motif (`basicMotif` is gone; the great orb's `burstShot` sends `null`), and heavy and hold blows ring out in their own element. Ability events keep their infusions as below.
+```
+
 In `docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md` (CRLF):
 
 Replace:
@@ -14660,16 +15498,19 @@ with:
 - [ ] **Step 4: The full verification**
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run && pnpm build)`
-Expected: no type errors; all 1246 tests pass; the build succeeds.
+Expected: no type errors; all 1254 tests pass; the build succeeds.
 
 Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; all 666 tests pass.
+Expected: no type errors; all 671 tests pass.
+
+Run: `(pnpm -F @alloy/client build) && grep -l '0\.46\.0' packages/client/dist/assets/*.js`
+Expected: the build succeeds (Vite's warning about chunks over 500 kB is expected), and grep prints one file, `packages/client/dist/assets/index-<hash>.js`: the bundle carries the new version.
 
 Run (the TypeScript files this plan formats: every one it touched but the six never formatted): `(base=$(git log --diff-filter=A --format=%h -1 -- docs/superpowers/plans/2026-09-29-delve-moves-and-chains.md); git diff --name-only $base HEAD -- '*.ts' '*.tsx' | grep -v -e types/ability.ts -e abilities/resolve.ts -e profile-schema.ts -e delve/autopilot.ts -e delve/dive.ts -e delve-hero-smithing.test.ts | xargs npx prettier --check)`
 Expected: "All matched files use Prettier code style!" (82 files).
 
 Run the PowerShell block under "Dev server on 5288" (the version shows in the TabBar); expect `True`. Then: `(cd packages/client && npx playwright test -c playwright.scratch.config.ts e2e/delve.spec.ts e2e/delve-gamepad.spec.ts e2e/delve-training.spec.ts)`
-Expected: 56 passed (a G01 timeout under load: rerun it as Task 13 says).
+Expected: 60 passed (a G01 timeout under load: rerun it as Task 13 says).
 
 Then delete `packages/client/playwright.scratch.config.ts`, and leave the 5288 dev server running: the user plays on it.
 
@@ -14677,8 +15518,8 @@ Then delete `packages/client/playwright.scratch.config.ts`, and leave the 5288 d
 
 ```bash
 cd /c/Projects/Alloy
-git add CLAUDE.md docs/superpowers/specs/2026-09-29-delve-moves-and-chains-design.md docs/superpowers/specs/2026-09-25-delve-ability-system-design.md docs/superpowers/specs/2026-09-25-delve-combat-weight-design.md docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md docs/superpowers/specs/2026-09-28-delve-elemental-stacks-design.md docs/superpowers/specs/2026-09-28-delve-dps-lab-design.md packages/client/package.json
-git commit -m "chore(client): bump version to 0.46.0" -m "Moves and chains in the Delve notes; the chains spec's status and gate values; the ability-system, combat-weight, affinity, stacks and DPS Lab specs' builds and strings marked superseded." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add CLAUDE.md docs/superpowers/specs/2026-09-29-delve-moves-and-chains-design.md docs/superpowers/specs/2026-09-25-delve-ability-system-design.md docs/superpowers/specs/2026-09-25-delve-combat-weight-design.md docs/superpowers/specs/2026-09-27-delve-infusion-visuals-design.md docs/superpowers/specs/2026-09-27-delve-elemental-affinity-design.md docs/superpowers/specs/2026-09-28-delve-elemental-stacks-design.md docs/superpowers/specs/2026-09-28-delve-dps-lab-design.md packages/client/package.json
+git commit -m "chore(client): bump version to 0.46.0" -m "Moves and chains in the Delve notes; the chains spec's status and gate values; the ability-system, combat-weight, infusion-visuals, affinity, stacks and DPS Lab specs' builds, strings and basic motif marked superseded." -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 Don't push: the controller pushes after the final review.
