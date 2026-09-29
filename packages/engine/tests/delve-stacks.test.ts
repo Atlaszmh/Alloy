@@ -282,6 +282,34 @@ describe('freeze', () => {
     expect(m.status.stacks.frost).toBe(bal.stacks.freezeAt);
   });
 
+  it('a hit that pairs frost off and re-stacks it past freezeAt re-freezes, once immunity has lapsed', () => {
+    const { w, ctx, m, events } = setup();
+    const steam = (n: number): HitOpts => ({
+      source: 'skill',
+      applies: ['burn', 'chill'],
+      stacks: n,
+    });
+    applyStatus(ctx, m, 'chill', 0, false, undefined, bal.stacks.freezeAt); // frozen, then immune
+    // Crushing Steam while immune: its Melt takes the three and its chill puts three back, so
+    // 3 → 0 → 3 crosses, but immunity refuses the freeze.
+    hitMonster(ctx, m, 10, 'fire', steam(3));
+    expect(fired(events)).toEqual([['melt', 3]]);
+    expect(m.status.stacks.frost).toBe(bal.stacks.freezeAt);
+    expect(isFrozen(ctx, m)).toBe(false);
+    // Past immunity the same hit re-freezes.
+    w.t = m.status.freezeImmuneUntil;
+    hitMonster(ctx, m, 10, 'fire', steam(3));
+    expect(isFrozen(ctx, m)).toBe(true);
+    expect(events.filter((e) => e.kind === 'freeze')).toHaveLength(2);
+    // Balanced Steam on two frost: 2 → 0 → 2 never crosses.
+    const two = setup();
+    two.m.status.stacks.frost = 2;
+    hitMonster(two.ctx, two.m, 10, 'fire', steam(2));
+    expect(fired(two.events)).toEqual([['melt', 2]]);
+    expect(two.m.status.stacks.frost).toBe(2);
+    expect(isFrozen(two.ctx, two.m)).toBe(false);
+  });
+
   it("a Frost Ward's retaliation freezes an attacker whose chills cross freezeAt", () => {
     const { w, ctx, m } = setup([dummy(13, 35)]); // the fixture's Defensive is a Frost Ward
     w.hero.defend = { form: 'ward', until: 1e9 };
@@ -428,6 +456,36 @@ describe('pairing', () => {
     hitMonster(rattled.ctx, rattled.m, 10, 'frost', { source: 'skill', stacks: 1 });
     expect(fired(rattled.events)).toEqual([['shatter', 1]]);
     expect(isFrozen(rattled.ctx, rattled.m)).toBe(true);
+  });
+
+  it("a Twin Fang echo pairs nothing: a Fire Surge's frost finisher and its echo react with nothing on a clean foe", () => {
+    const build = { form: 'surge', elements: ['fire'], weight: 0, payment: 'mana' } as const;
+    for (const [baseId, foe] of [
+      ['sword', dummy(13, 34.5)],
+      ['staff', dummy(13, 33)],
+    ] as const) {
+      const w = strikeWorld(
+        { weapon: gear('frost', 'weapon', baseId) },
+        { legendaries: { twin_fang: 100 } },
+        true,
+        foe,
+      );
+      w.hero.abilities[1] = resolveAbility(registry, 'defensive', build, w.hero.stats);
+      w.hero.defend = { form: 'surge', until: 1e9 };
+      const events = firstBlow(w);
+      w.hero.nextAttackAt = 1e9;
+      events.push(...run(w, 1)); // the shots land
+      expect(
+        events.filter((e) => e.kind === 'hit' && e.source === 'basic'),
+        baseId,
+      ).toHaveLength(2);
+      expect(fired(events), baseId).toEqual([]);
+      // The finisher's own fresh stacks stay: the echo didn't Melt them.
+      expect(w.monsters[0].status.stacks, baseId).toMatchObject({
+        frost: bal.stacks.basicFinisher,
+        fire: bal.stacks.basicFinisher,
+      });
+    }
   });
 
   it('a killing reaction consumes nothing: what reads the corpse sees its stacks as they were', () => {

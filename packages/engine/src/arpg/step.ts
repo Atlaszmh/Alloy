@@ -277,6 +277,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           heft: p.heft ?? 0,
           rattles: p.rattles,
           stacks: p.stacks,
+          noReact: p.noReact,
         });
       if (!p.pierce) p.dead = true;
     }

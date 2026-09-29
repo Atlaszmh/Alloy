@@ -605,16 +605,18 @@ export function hitMonster(
   }
 
   // The hit's own element's stacks, then the pairs come off both sides, then its other
-  // statuses; frost freezes only if its final count crossed the threshold.
+  // statuses; frost freezes only if its final count crossed the threshold from the lowest the
+  // hit saw (on entry, or right after the pairs came off: 3 → 0 → 3 crosses, 2 → 0 → 2 doesn't).
   const applies = opts.applies ?? [];
   const own = element ? BASIC_STATUS[element] : null;
   const add = (s: StatusId) => addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
   if (own && applies.includes(own)) add(own);
   if (element && pair) consumePairs(m, element, pair.partner, pair.n, pair.def.id);
+  const frostLow = Math.min(frostBefore, stacks.frost);
   for (const s of applies) if (s !== own) add(s);
   // The riposte staggers; it adds no stacks.
   if (riposte) addStatus(ctx, m, 'stagger', amount, false, undefined, 0);
-  crossFreeze(ctx, m, frostBefore);
+  crossFreeze(ctx, m, frostLow);
 
   if (opts.knockback && opts.kbFrom) {
     const resist = m.kind === 'boss' ? 0.15 : m.kind === 'elite' ? 0.5 : 1;

@@ -156,13 +156,15 @@ export function strike(ctx: SimCtx): void {
         stacks,
         ...kb,
       });
-      // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks.
+      // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks and pairs
+      // nothing (it would only Melt the finisher's own fresh stacks).
       if (twin)
         hitMonster(ctx, m, unit * 1.5 * twinPct, element, {
           source: 'basic',
           crit,
           heft: s.heft,
           stacks: 0,
+          noReact: true,
         });
     }
   } else {
@@ -184,7 +186,7 @@ export function strike(ctx: SimCtx): void {
         vx: d.x * speed,
         vy: d.y * speed,
         radius: 0.3 * size,
-        // Twin Fang's extra shot: today's value (×1.0), never an explosion, and no stacks.
+        // Twin Fang's extra shot: today's value (×1.0), never an explosion, no stacks and no pairing.
         damage: i === 0 ? base : unit * twinPct,
         element,
         pierce: w.pierce,
@@ -195,6 +197,7 @@ export function strike(ctx: SimCtx): void {
         heft: s.heft,
         rattles,
         stacks: i === 0 ? stacks : 0,
+        noReact: i === 1,
       });
     }
     if (sw.committed && s.move < 0)
@@ -245,6 +248,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       heft: p.heft ?? 0,
       rattles: p.rattles,
       stacks: p.stacks,
+      noReact: p.noReact,
     });
   }
 }

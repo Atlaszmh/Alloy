@@ -228,6 +228,8 @@ export interface Projectile {
   rattles?: boolean;
   /** A basic shot's stacks (see `HitOpts.stacks`). */
   stacks?: number;
+  /** A Twin Fang echo: its hit pairs nothing (see `HitOpts.noReact`). */
+  noReact?: boolean;
   dead: boolean;
 }
 
