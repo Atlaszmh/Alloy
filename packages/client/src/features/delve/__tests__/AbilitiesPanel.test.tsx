@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { computeHeroStats, defaultChains, type Move } from '@alloy/engine';
+import { computeHeroStats, defaultChains, type Move, type MoveKind } from '@alloy/engine';
 import { AbilitiesPanel } from '../AbilitiesPanel';
 import { ChainEditor } from '../chains/ChainEditor';
 import { getDelveRegistry } from '../registry';
@@ -104,6 +104,41 @@ describe('AbilitiesPanel', () => {
     expect(document.activeElement).toBe(screen.getByTestId('move-2')); // the heavy, still picked
   });
 
+  it('▸ moves a card later and the selection follows it; the ends are off', () => {
+    const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+    store().setChain('primary', {
+      moves: [bolt('light'), bolt('medium'), bolt('heavy')],
+      payment: 'mana',
+    });
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('move-left-0')).toBeDisabled();
+    expect(screen.getByTestId('move-right-2')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('move-right-0'));
+    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['medium', 'light', 'heavy']);
+    expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent('light Fire Bolt');
+    expect(document.activeElement).toBe(screen.getByTestId('move-right-1'));
+  });
+
+  it('two ◂ presses move a card two places, the selection and the focus with it', () => {
+    const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+    store().setChain('primary', {
+      moves: [bolt('light'), bolt('medium'), bolt('heavy')],
+      payment: 'mana',
+    });
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('move-2'));
+    fireEvent.click(screen.getByTestId('move-left-2'));
+    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['light', 'heavy', 'medium']);
+    expect(screen.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    expect(document.activeElement).toBe(screen.getByTestId('move-left-1'));
+    fireEvent.click(document.activeElement!);
+    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['heavy', 'light', 'medium']);
+    expect(screen.getByTestId('move-0')).toHaveAttribute('aria-pressed', 'true');
+    // At the front its ◂ is off: the card itself keeps the focus.
+    expect(document.activeElement).toBe(screen.getByTestId('move-0'));
+  });
+
   it("stops at the skill's own cap", () => {
     store().setProfile({
       ...store().profile,
@@ -143,6 +178,16 @@ describe('AbilitiesPanel', () => {
     expect(screen.getByTestId('cost-warning')).toHaveTextContent('your pool holds');
   });
 
+  it("warns when a hold move's full charge costs more than the pool", () => {
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
+    fireEvent.click(screen.getByTestId('payment-mana'));
+    fireEvent.click(screen.getByTestId('kind-hold'));
+    expect(screen.getByTestId('cost-warning')).toHaveTextContent(
+      /^A full charge needs \d+ mana; your pool holds \d+\.$/,
+    );
+  });
+
   it('is read-only while a dive is under way', () => {
     store().startDive(1);
     render(<AbilitiesPanel />);
@@ -151,6 +196,17 @@ describe('AbilitiesPanel', () => {
     expect(screen.getByTestId('move-add')).toBeDisabled();
     fireEvent.click(screen.getByTestId('form-lance'));
     expect(chains().primary.moves[0].form).toBe('bolt');
+  });
+
+  it('mid-dive every move can still be picked and read, but not moved, removed or added', () => {
+    store().startDive(1);
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('move-2')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('move-2'));
+    expect(screen.getByTestId('move-2')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('ability-readout')).toHaveTextContent('medium Fire Bolt');
+    for (const id of ['move-left-2', 'move-right-2', 'move-remove-2', 'move-add'])
+      expect(screen.getByTestId(id), id).toBeDisabled();
   });
 });
 

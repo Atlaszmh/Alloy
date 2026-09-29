@@ -222,6 +222,12 @@ describe('sandboxStore', () => {
     const bare = sandboxStats(registry, store()).weapon;
     expect(bare.baseId).toBeNull();
     expect(bare.blows.every((b) => b.element === 'fire')).toBe(true);
+    store().setSecondary('storm'); // the default's last blow takes it
+    expect(sandboxStats(registry, store()).weapon.blows.map((b) => b.element)).toEqual([
+      'fire',
+      'fire',
+      'storm',
+    ]);
   });
 
   it('Load my build brings your pair in', () => {

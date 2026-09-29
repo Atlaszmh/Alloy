@@ -87,6 +87,15 @@ function Readout({
     lines.push(
       `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}`,
     );
+  // A mana cost the pool can't hold: the move's, else a hold's full charge (the engine would
+  // let go at the highest stage the pool pays).
+  const holds = `your pool holds ${Math.round(pool)}.`;
+  const warning =
+    ab.cost > pool
+      ? `Needs ${Math.round(ab.cost)} mana; ${holds}`
+      : full && full.cost > pool
+        ? `A full charge needs ${Math.round(full.cost)} mana; ${holds}`
+        : null;
   return (
     <div className="delve-panel flex flex-col gap-0.5 p-3 text-sm" data-testid="ability-readout">
       <div
@@ -100,9 +109,9 @@ function Readout({
           {l}
         </div>
       ))}
-      {ab.cost > pool && (
+      {warning && (
         <div className="text-xs font-semibold text-red-300" data-testid="cost-warning">
-          Needs {Math.round(ab.cost)} mana; your pool holds {Math.round(pool)}.
+          {warning}
         </div>
       )}
     </div>

@@ -81,9 +81,10 @@ export function ChainEditor({
   const data = registry.getArpgData();
   const [skill, setSkill] = useState<ChainSkill>('primary');
   const [picked, setPicked] = useState(0);
-  // After an add or a remove, the picked card takes the focus (a controller keeps its place).
+  // After an add, a remove or a reorder, the focus stays with the move (a controller keeps its
+  // place): the first of these selectors that finds an enabled control.
   const cards = useRef<HTMLDivElement>(null);
-  const [focusCard, setFocusCard] = useState<number | null>(null);
+  const [focusOn, setFocusOn] = useState<string[] | null>(null);
   const pool = manaPool(stats, registry).max;
   const slot = skill === 'basic' ? null : skill;
   const chain = slot ? chains[slot] : null;
@@ -106,13 +107,15 @@ export function ChainEditor({
     setPicked(0);
   };
   useEffect(() => {
-    const card =
-      focusCard === null ? null : cards.current?.querySelector(`[data-card="${focusCard}"]`);
-    if (card instanceof HTMLElement) {
-      card.focus();
-      setFocusCard(null);
+    const el = focusOn
+      ?.map((sel) => cards.current?.querySelector<HTMLButtonElement>(sel))
+      .find((e) => e && !e.disabled);
+    if (el) {
+      el.focus();
+      setFocusOn(null);
     }
-  }, [focusCard, entries.length]);
+  }, [focusOn, entries]);
+  const card = (n: number) => `[data-card="${n}"]`;
 
   return (
     <div className="flex flex-col gap-3" data-testid="abilities-panel">
@@ -154,102 +157,107 @@ export function ChainEditor({
           A dive is under way: your chains can change once you extract or fall.
         </div>
       )}
+      {/* Picking a card only changes the view: the cards stay open while the chain is locked. */}
+      <div ref={cards} className="flex flex-wrap items-stretch gap-1.5" data-testid="chain-cards">
+        {entries.map((e, i) => {
+          const els = 'element' in e ? [e.element] : e.elements;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1">
+              <button
+                type="button"
+                data-card={i}
+                className="delve-panel flex w-20 flex-col items-center gap-0.5 p-1.5"
+                style={{ borderColor: i === index ? '#fcd34d' : undefined }}
+                aria-pressed={i === index}
+                aria-label={names[i]}
+                onClick={() => setPicked(i)}
+                data-testid={`move-${i}`}
+              >
+                <span className="text-xs font-bold leading-none text-amber-200/90">
+                  {KIND_ICON[e.kind]}
+                </span>
+                <span className="text-lg leading-none">
+                  {'form' in e ? registry.getForm(e.form).icon : '⚔️'}
+                </span>
+                <span className="text-center text-[10px] font-semibold leading-tight text-stone-200">
+                  {'form' in e ? registry.getForm(e.form).name : weapon}
+                </span>
+                <span className="text-xs leading-none">
+                  {els.map((m) => manaStyle(registry, m).icon).join('')}
+                </span>
+              </button>
+              <span className="flex gap-0.5">
+                <button
+                  type="button"
+                  className="delve-chip px-1.5"
+                  disabled={locked || i === 0}
+                  aria-label={`Move ${names[i]} earlier`}
+                  onClick={() => {
+                    commit(moved(entries, i, i - 1));
+                    setPicked(i - 1);
+                    setFocusOn([`[data-testid="move-left-${i - 1}"]`, card(i - 1)]);
+                  }}
+                  data-testid={`move-left-${i}`}
+                >
+                  ◂
+                </button>
+                <button
+                  type="button"
+                  className="delve-chip px-1.5"
+                  disabled={locked || i === entries.length - 1}
+                  aria-label={`Move ${names[i]} later`}
+                  onClick={() => {
+                    commit(moved(entries, i, i + 1));
+                    setPicked(i + 1);
+                    setFocusOn([`[data-testid="move-right-${i + 1}"]`, card(i + 1)]);
+                  }}
+                  data-testid={`move-right-${i}`}
+                >
+                  ▸
+                </button>
+                <button
+                  type="button"
+                  className="delve-chip px-1.5"
+                  disabled={locked || entries.length === 1}
+                  aria-label={`Remove ${names[i]}`}
+                  onClick={() => {
+                    const next = Math.max(0, i === index ? i - 1 : index > i ? index - 1 : index);
+                    commit(entries.filter((_, j) => j !== i));
+                    setPicked(next);
+                    setFocusOn([card(next)]);
+                  }}
+                  data-testid={`move-remove-${i}`}
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+          );
+        })}
+        {entries.length < caps[skill] && (
+          <button
+            type="button"
+            className="delve-panel flex w-20 items-center justify-center p-1.5 text-2xl text-stone-400"
+            style={{ opacity: locked ? 0.55 : 1 }}
+            disabled={locked}
+            aria-label="Add a move"
+            onClick={() => {
+              commit([...entries, { ...entries[index] }]);
+              setPicked(entries.length);
+              setFocusOn([card(entries.length)]);
+            }}
+            data-testid="move-add"
+          >
+            +
+          </button>
+        )}
+      </div>
+
       <fieldset
         disabled={locked}
         className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0"
         style={{ opacity: locked ? 0.55 : 1 }}
       >
-        <div ref={cards} className="flex flex-wrap items-stretch gap-1.5" data-testid="chain-cards">
-          {entries.map((e, i) => {
-            const els = 'element' in e ? [e.element] : e.elements;
-            return (
-              <div key={i} className="flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  data-card={i}
-                  className="delve-panel flex w-20 flex-col items-center gap-0.5 p-1.5"
-                  style={{ borderColor: i === index ? '#fcd34d' : undefined }}
-                  aria-pressed={i === index}
-                  aria-label={names[i]}
-                  onClick={() => setPicked(i)}
-                  data-testid={`move-${i}`}
-                >
-                  <span className="text-xs font-bold leading-none text-amber-200/90">
-                    {KIND_ICON[e.kind]}
-                  </span>
-                  <span className="text-lg leading-none">
-                    {'form' in e ? registry.getForm(e.form).icon : '⚔️'}
-                  </span>
-                  <span className="text-center text-[10px] font-semibold leading-tight text-stone-200">
-                    {'form' in e ? registry.getForm(e.form).name : weapon}
-                  </span>
-                  <span className="text-xs leading-none">
-                    {els.map((m) => manaStyle(registry, m).icon).join('')}
-                  </span>
-                </button>
-                <span className="flex gap-0.5">
-                  <button
-                    type="button"
-                    className="delve-chip px-1.5"
-                    disabled={i === 0}
-                    aria-label={`Move ${names[i]} earlier`}
-                    onClick={() => {
-                      commit(moved(entries, i, i - 1));
-                      setPicked(i - 1);
-                    }}
-                    data-testid={`move-left-${i}`}
-                  >
-                    ◂
-                  </button>
-                  <button
-                    type="button"
-                    className="delve-chip px-1.5"
-                    disabled={i === entries.length - 1}
-                    aria-label={`Move ${names[i]} later`}
-                    onClick={() => {
-                      commit(moved(entries, i, i + 1));
-                      setPicked(i + 1);
-                    }}
-                    data-testid={`move-right-${i}`}
-                  >
-                    ▸
-                  </button>
-                  <button
-                    type="button"
-                    className="delve-chip px-1.5"
-                    disabled={entries.length === 1}
-                    aria-label={`Remove ${names[i]}`}
-                    onClick={() => {
-                      const next = Math.max(0, i === index ? i - 1 : index > i ? index - 1 : index);
-                      commit(entries.filter((_, j) => j !== i));
-                      setPicked(next);
-                      setFocusCard(next);
-                    }}
-                    data-testid={`move-remove-${i}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              </div>
-            );
-          })}
-          {entries.length < caps[skill] && (
-            <button
-              type="button"
-              className="delve-panel flex w-20 items-center justify-center p-1.5 text-2xl text-stone-400"
-              aria-label="Add a move"
-              onClick={() => {
-                commit([...entries, { ...entries[index] }]);
-                setPicked(entries.length);
-                setFocusCard(entries.length);
-              }}
-              data-testid="move-add"
-            >
-              +
-            </button>
-          )}
-        </div>
-
         <MoveEditor
           slot={slot}
           move={entries[index]}

@@ -38,3 +38,25 @@ describe('moveFocus on a list', () => {
     expect(list.value).toBe('a');
   });
 });
+
+describe('moveFocus between buttons', () => {
+  afterEach(() => document.body.replaceChildren());
+
+  it('skips a button a disabled fieldset turns off', () => {
+    const button = (left: number) => {
+      const b = document.createElement('button');
+      b.getBoundingClientRect = () =>
+        ({ left, top: 0, width: 10, height: 10, right: left + 10, bottom: 10 }) as DOMRect;
+      return b;
+    };
+    const locked = document.createElement('fieldset');
+    locked.disabled = true;
+    const first = button(0);
+    const last = button(40);
+    locked.appendChild(button(20));
+    document.body.append(first, locked, last);
+    first.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(last);
+  });
+});
