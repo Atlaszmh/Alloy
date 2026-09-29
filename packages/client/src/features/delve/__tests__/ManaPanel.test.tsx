@@ -58,6 +58,9 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     });
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('mana-dust')).toHaveTextContent(`✦ ${realignDust} Mana Dust`);
+    expect(screen.getByTestId('realign-section')).toHaveTextContent(
+      'your moves and blows follow the new pair',
+    );
     expect(screen.getByTestId('realign-button')).toBeDisabled(); // nothing changed yet
     fireEvent.click(screen.getByTestId('realign-secondary-nature'));
     fireEvent.click(screen.getByTestId('realign-button'));

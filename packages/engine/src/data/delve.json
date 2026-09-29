@@ -821,7 +821,7 @@
     {
       "id": "twin_fang",
       "name": "Twin Fang",
-      "text": "The last blow of each basic-attack combo strikes again for {v}% damage.",
+      "text": "The last blow of each basic-attack chain strikes again for {v}% damage.",
       "min": 80,
       "max": 130,
       "slots": [

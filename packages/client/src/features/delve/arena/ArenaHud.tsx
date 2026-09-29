@@ -3,7 +3,7 @@ import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
 import { KIND_ICON, moveText } from '../chains/chain-text';
-import { DRAG_PX, classifyPress, isCancelled } from './aim-gestures';
+import { DRAG_PX, classifyPress, isOverButton } from './aim-gestures';
 import { keyLabel, padHint, type ControlsConfig } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from './useArena';
 
@@ -300,7 +300,7 @@ function AbilityButton({
   const over = (e: ReactPointerEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const button = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2 + DRAG_PX };
-    return isCancelled({ x: e.clientX, y: e.clientY }, button);
+    return isOverButton({ x: e.clientX, y: e.clientY }, button);
   };
   /** This button's own press, following its pointer; null for any other pointer. */
   const follow = (e: ReactPointerEvent<HTMLButtonElement>) => {

@@ -96,7 +96,10 @@ interface Infused {
   life: number;
 }
 
-/** How long each transient carrier lasts, and how strongly it draws (finishers discharge at 1.5). */
+/**
+ * How long each transient carrier lasts, and how strongly it draws (a heavy
+ * or hold blow's ring, in the blow's own element, at 1.5).
+ */
 const INFUSED: Record<InfusedKind, { life: number; strength: number }> = {
   finisher: { life: 0.45, strength: 1.5 },
   blast: { life: 0.45, strength: 1 },
@@ -254,9 +257,10 @@ export class ManaFx {
 
   /**
    * A melee blow: a pixel smear that travels across the arc (alternate
-   * sides for a backslash), brighter and longer for heavy blows. A finisher
-   * adds a shockwave at the tip; a full-circle heavy blow (a slam) bursts a
-   * ring of ground pixels and dust.
+   * sides for a backslash), brighter and longer for heavy blows. A heavy or
+   * hold blow (`finisher`) adds a shockwave at the tip, in the blow's own
+   * element; a full-circle heavy blow (a slam) bursts a ring of ground pixels
+   * and dust.
    */
   swing(
     x: number,
@@ -345,8 +349,8 @@ export class ManaFx {
 
   /**
    * Advance and draw everything: the effects on the air layer, then the
-   * infusion pass's first carriers (fx/infusion.ts) in priority order:
-   * finisher discharges, blasts, beams and sweeps, then blink trails. Only
+   * infusion pass's first carriers (fx/infusion.ts) in priority order: heavy
+   * and hold blows' rings, blasts, beams and sweeps, then blink trails. Only
    * blasts and blink trails lie on the ground, so only they get its layer.
    */
   draw(layers: Required<InfusionLayers>, dt: number, time: number, budget: InfusionBudget): void {

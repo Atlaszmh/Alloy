@@ -21,7 +21,7 @@ export function aimMarkerFor(form: FormId): AimMarker {
   return 'none';
 }
 
-/** Releasing back over the button (within its radius) cancels the aim. */
-export function isCancelled(release: Vec, button: { x: number; y: number; r: number }): boolean {
-  return Math.hypot(release.x - button.x, release.y - button.y) <= button.r;
+/** Whether a point is over the button: within its radius. */
+export function isOverButton(p: Vec, button: { x: number; y: number; r: number }): boolean {
+  return Math.hypot(p.x - button.x, p.y - button.y) <= button.r;
 }

@@ -573,9 +573,10 @@ const MOTIFS: Record<ManaType, Motif> = {
 
 /**
  * Draw `element`'s motif on one carrier. `strength` (0–1.5: carriers pass
- * their fade, finisher discharges draw at 1.5) scales the element count
- * (`round(base × strength)`, where the base grows with the carrier's size),
- * the alpha (`min(1, strength)`) and the reach (`× (0.8 + 0.2 × strength)`).
+ * their fade; a heavy or hold blow's ring, in the blow's own element, draws
+ * at 1.5) scales the element count (`round(base × strength)`, where the base
+ * grows with the carrier's size), the alpha (`min(1, strength)`) and the
+ * reach (`× (0.8 + 0.2 × strength)`).
  * The count is checked against `budget` first: drawn in full if it fits,
  * its first half if that fits (the golden slots' most even half), else
  * skipped; what is drawn comes off it.

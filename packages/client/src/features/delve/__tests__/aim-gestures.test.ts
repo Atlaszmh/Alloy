@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aimMarkerFor, classifyPress, isCancelled } from '../arena/aim-gestures';
+import { aimMarkerFor, classifyPress, isOverButton } from '../arena/aim-gestures';
 
 describe('aim gestures', () => {
   it('a quick, still press is a tap; a long or dragged one aims', () => {
@@ -17,8 +17,8 @@ describe('aim gestures', () => {
     expect(aimMarkerFor('ward')).toBe('none');
   });
 
-  it('releasing over the button cancels', () => {
-    expect(isCancelled({ x: 102, y: 98 }, { x: 100, y: 100, r: 34 })).toBe(true);
-    expect(isCancelled({ x: 100, y: 20 }, { x: 100, y: 100, r: 34 })).toBe(false);
+  it("a point within the button's radius is over it", () => {
+    expect(isOverButton({ x: 102, y: 98 }, { x: 100, y: 100, r: 34 })).toBe(true);
+    expect(isOverButton({ x: 100, y: 20 }, { x: 100, y: 100, r: 34 })).toBe(false);
   });
 });

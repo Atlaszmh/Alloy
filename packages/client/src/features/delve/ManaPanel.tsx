@@ -173,7 +173,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
         <div className="flex flex-col gap-1.5" data-testid="realign-section">
           <div className="text-xs text-stone-400">
             Realign: change your pair for ✦ {cost.realignDust} Mana Dust and ⚙ {cost.realignScrap}{' '}
-            scrap. Gear stays as it is; abilities follow the new pair.
+            scrap. Gear stays as it is; your moves and blows follow the new pair.
           </div>
           {(['primary', 'secondary'] as const).map((role) => (
             <div key={role} className="flex flex-wrap items-center gap-1.5">
