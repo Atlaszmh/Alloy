@@ -23,8 +23,15 @@ import {
   DelveProfileV3Schema,
   DelveProfileV4Schema,
 } from './profile-schema.js';
-import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
-import { defaultBasic, defaultChains, followDefaultBasic } from '../arpg/abilities/resolve.js';
+import {
+  chooseStartingMana,
+  fixChainsToPair,
+  followBasicTo,
+  inPair,
+  salvageDust,
+  type ChainFix,
+} from './pair.js';
+import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
@@ -368,7 +375,7 @@ export function addLootToBag(
   };
 }
 
-/** Equip a bag item; a basic chain still on its default follows a new weapon (`followDefaultBasic`). */
+/** Equip a bag item; a basic chain still on its default follows a new weapon (`followBasicTo`). */
 export function equipItem(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -380,8 +387,7 @@ export function equipItem(
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
   const next = { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
-  const basic = item.slot === 'weapon' && followDefaultBasic(registry, profile, next);
-  return basic ? { ...next, chains: { ...next.chains, basic } } : next;
+  return item.slot === 'weapon' ? followBasicTo(registry, profile, next) : next;
 }
 
 /** Unequip into the bag; a basic chain still on its default follows the weapon off (unarmed). */
@@ -396,8 +402,7 @@ export function unequipSlot(
   const equipped = { ...profile.equipped };
   delete equipped[slot];
   const next = { ...profile, equipped, bag: [...profile.bag, item] };
-  const basic = slot === 'weapon' && followDefaultBasic(registry, profile, next);
-  return basic ? { ...next, chains: { ...next.chains, basic } } : next;
+  return slot === 'weapon' ? followBasicTo(registry, profile, next) : next;
 }
 
 export function toggleLock(profile: DelveProfile, uid: string): DelveProfile {

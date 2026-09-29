@@ -97,6 +97,21 @@ describe('ItemDetailSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('the bind prompt gives the last blow only while the basic chain is its default', () => {
+    put(helm('storm'));
+    const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('equip-button'));
+    expect(screen.getByTestId('bind-prompt')).toHaveTextContent(
+      "Your basic chain's last blow will strike with Storm",
+    );
+    unmount();
+    store().setChain('basic', [{ kind: 'heavy', element: 'fire' }]);
+    render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('equip-button'));
+    expect(screen.getByTestId('bind-prompt')).toHaveTextContent('keeps the blows you built');
+    expect(screen.getByTestId('bind-prompt')).not.toHaveTextContent('last blow');
+  });
+
   it('Not now equips for its stats only, and the prompt stays away this session', () => {
     put(helm('storm'), helm('storm', 'h2'));
     const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);

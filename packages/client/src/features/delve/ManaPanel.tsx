@@ -2,7 +2,9 @@ import { useState } from 'react';
 import {
   GEAR_SLOTS,
   MANA_TYPES,
+  basicLoadout,
   bindSecondary,
+  isDefaultBasic,
   isDiveActive,
   overtakeProgress,
   profilePower,
@@ -120,8 +122,10 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
       {!secondary && (
         <div className="flex flex-col gap-1.5" data-testid="bind-section">
           <div className="text-xs text-stone-400">
-            Bind a second element: your basic chain's last blow strikes with it and your abilities
-            can use it. Power now {formatNumber(profilePower(registry, profile))}.
+            {isDefaultBasic(registry, profile.chains.basic, basicLoadout(profile)!)
+              ? "Bind a second element: your basic chain's last blow strikes with it and your abilities can use it."
+              : 'Bind a second element: your abilities can use it, and your basic chain keeps the blows you built (add the element on the Basic tab).'}{' '}
+            Power now {formatNumber(profilePower(registry, profile))}.
           </div>
           {candidates.length === 0 ? (
             <div className="text-xs text-stone-500">Find gear of another element to bind it.</div>

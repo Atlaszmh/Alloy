@@ -251,8 +251,9 @@ const LoadoutTab = memo(function LoadoutTab() {
           ))}
         </div>
         <p className="text-[11px] text-stone-500">
-          The second element your basic blows can pick (in Abilities, Basic); binding one gives it
-          your last blow.
+          The second element your basic blows can pick (in Abilities, Basic). The default basic
+          chain follows your weapon and pair, so binding one gives it the last blow; a chain you
+          built keeps its blows.
         </p>
       </Section>
 

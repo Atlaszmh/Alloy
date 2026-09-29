@@ -13,7 +13,7 @@ import {
   type ResolvedChain,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
-import type { DelveBalance, DelveProfile, HeroStats } from '../../types/delve.js';
+import type { DelveBalance, DelveProfile, HeroStats, ManaPair } from '../../types/delve.js';
 
 const NEUTRAL: Knobs = {
   power: 1,
@@ -196,6 +196,26 @@ export function stepBonus(bal: DelveBalance, index: number): { power: number; si
   return { power: 1 + b, size: 1 + b / 2 };
 }
 
+/**
+ * A move's numbers as the sim uses them: its hit before the foe's modifiers
+ * (weapon damage × damage × power, with the step bonus's power, but for a
+ * Ward's burst and an Armor's strike-back), and its radius (with the step's
+ * size for a Bolt's explosion and a Burst).
+ */
+export function moveNumbers(
+  stats: HeroStats,
+  bal: DelveBalance,
+  ab: ResolvedAbility,
+): { hit: number; radius: number } {
+  const step = stepBonus(bal, ab.index);
+  const f = ab.form.id;
+  const power = f === 'ward' || f === 'armor' ? 1 : step.power;
+  return {
+    hit: stats.weaponDamage * stats.damageMult * ab.power * power,
+    radius: ab.radius * (f === 'bolt' || f === 'burst' ? step.size : 1),
+  };
+}
+
 /** How hard a move lands: its heft, +0.2 on the last move of a chain of 2 or more. */
 export function stepHeft(ab: ResolvedAbility): number {
   return Math.min(1, ab.heft + (ab.last ? 0.2 : 0));
@@ -220,27 +240,67 @@ export function defaultBasic(
   }));
 }
 
+/** A weapon and a pair: what a default basic chain is made of (see `defaultBasic`). */
+export interface BasicLoadout {
+  weaponBaseId: string | null;
+  primary: ManaType;
+  secondary: ManaType | null;
+}
+
+/** A hero's weapon and pair as a `BasicLoadout`; null before the choice. */
+export function basicLoadout({
+  equipped,
+  pair,
+}: Pick<DelveProfile, 'equipped' | 'pair'>): BasicLoadout | null {
+  const { primary, secondary } = pair;
+  return primary ? { weaponBaseId: equipped.weapon?.baseId ?? null, primary, secondary } : null;
+}
+
+/** Whether `basic` is still `on`'s default chain: the same kinds and elements. */
+export function isDefaultBasic(registry: DataRegistry, basic: Blow[], on: BasicLoadout): boolean {
+  const def = defaultBasic(registry, on.weaponBaseId, on.primary, on.secondary);
+  return (
+    def.length === basic.length &&
+    def.every((b, i) => b.kind === basic[i].kind && b.element === basic[i].element)
+  );
+}
+
 /**
- * A basic chain still on its default follows its weapon and pair: when `was`'s
- * chain equals `defaultBasic` for `was`'s weapon and pair (the same kinds and
- * elements), the default for `now`'s. Null for a chain the player built, which
- * stays as it is, and before the choice.
+ * Each element's heir once a pair op takes an element of `before`'s out of the
+ * pair (`after`): the old primary's the new primary, the old secondary's the
+ * new secondary (the primary without one), and any other element itself while
+ * it's in the pair, else the primary. Null when nothing left the pair (a swap,
+ * a bind).
  */
-export function followDefaultBasic(
+export function roleHeir(
+  before: ManaPair,
+  after: { primary: ManaType; secondary: ManaType | null },
+): ((e: ManaType) => ManaType) | null {
+  const kept = (e: ManaType) => e === after.primary || e === after.secondary;
+  if (![before.primary, before.secondary].some((e) => e && !kept(e))) return null;
+  return (e) => {
+    if (e === before.primary) return after.primary;
+    if (e === before.secondary) return after.secondary ?? after.primary;
+    return kept(e) ? e : after.primary;
+  };
+}
+
+/**
+ * The basic chain after its weapon or pair changes from `before` to `after`:
+ * one still on its default becomes the new default; otherwise, once an element
+ * leaves the pair, each blow takes its element's heir (`roleHeir`); else it
+ * stays as it is.
+ */
+export function followBasic(
   registry: DataRegistry,
-  was: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
-  now: Pick<DelveProfile, 'equipped' | 'pair'>,
-): Blow[] | null {
-  const defaultOf = ({ equipped, pair }: Pick<DelveProfile, 'equipped' | 'pair'>) =>
-    pair.primary
-      ? defaultBasic(registry, equipped.weapon?.baseId ?? null, pair.primary, pair.secondary)
-      : null;
-  const old = defaultOf(was);
-  const mine = was.chains.basic;
-  const onDefault =
-    old?.length === mine.length &&
-    old.every((b, i) => b.kind === mine[i].kind && b.element === mine[i].element);
-  return onDefault ? defaultOf(now) : null;
+  basic: Blow[],
+  before: BasicLoadout,
+  after: BasicLoadout,
+): Blow[] {
+  if (isDefaultBasic(registry, basic, before))
+    return defaultBasic(registry, after.weaponBaseId, after.primary, after.secondary);
+  const heir = roleHeir(before, after);
+  return heir ? basic.map((b) => ({ ...b, element: heir(b.element) })) : basic;
 }
 
 /**

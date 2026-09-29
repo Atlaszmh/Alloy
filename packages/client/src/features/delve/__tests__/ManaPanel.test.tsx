@@ -35,6 +35,19 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(2); // the pair's bars only
   });
 
+  it('says a bind gives the last blow only while the basic chain is its default', () => {
+    store().setProfile({ ...store().profile, bag: [helm('storm')] });
+    const { unmount } = render(<AbilitiesPanel />);
+    expect(screen.getByTestId('bind-section')).toHaveTextContent(
+      "your basic chain's last blow strikes with it",
+    );
+    unmount();
+    store().setChain('basic', [{ kind: 'heavy', element: 'fire' }]);
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('bind-section')).toHaveTextContent('keeps the blows you built');
+    expect(screen.getByTestId('bind-section')).not.toHaveTextContent('last blow');
+  });
+
   it('shows the Mana Dust, and realigns for its cost', () => {
     const { realignDust, realignScrap } = registry.getDelveBalance().pair;
     store().setProfile({

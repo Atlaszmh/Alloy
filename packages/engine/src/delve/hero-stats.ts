@@ -7,9 +7,10 @@ import {
   type ResolvedChain,
 } from '../types/ability.js';
 import {
+  basicLoadout,
   defaultBasic,
   defaultChains,
-  followDefaultBasic,
+  followBasic,
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
@@ -435,7 +436,7 @@ export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
 /**
  * How equipping `item` (in its slot) would change the hero. With its chains and
  * pair, a new weapon swings the basic chain equipping it gives (a default one
- * follows the weapon: `followDefaultBasic`).
+ * follows the weapon: `followBasic`).
  */
 export function compareItem(
   equipped: EquippedGear,
@@ -449,11 +450,14 @@ export function compareItem(
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
-  const basic =
-    chains && pair && item.slot === 'weapon'
-      ? followDefaultBasic(registry, { equipped, pair, chains }, { equipped: next, pair })
-      : null;
-  const nextChains = chains && basic ? { ...chains, basic } : chains;
+  const worn = pair ? basicLoadout({ equipped, pair }) : null;
+  const nextChains =
+    chains && worn && item.slot === 'weapon'
+      ? {
+          ...chains,
+          basic: followBasic(registry, chains.basic, worn, { ...worn, weaponBaseId: item.baseId }),
+        }
+      : chains;
   const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
   const afterStats = computeHeroStats(next, registry, pairExtra(pair, nextChains?.basic));
   const before = estimateCombat(beforeStats, registry, depth, chains);

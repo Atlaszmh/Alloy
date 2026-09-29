@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { defaultBasic, defaultChains } from '../src/arpg/abilities/resolve.js';
+import {
+  defaultBasic,
+  defaultChains,
+  followBasic,
+  isDefaultBasic,
+} from '../src/arpg/abilities/resolve.js';
 import { betweenDives, runAutopilot } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
@@ -757,6 +762,44 @@ describe('a basic chain on its default follows the weapon and the pair', () => {
     bindSecondary(registry, createDelveProfile(registry, 3, { primary: 'fire' }), 'storm').profile;
   const built: Blow[] = [{ kind: 'heavy', element: 'fire' }];
   const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
+
+  it('followBasic: a default chain becomes the new default; a built one keeps its blows, by role once an element leaves', () => {
+    const at = (weaponBaseId: string | null, primary: ManaType, secondary: ManaType | null) => ({
+      weaponBaseId,
+      primary,
+      secondary,
+    });
+    const fireStorm = at('sword', 'fire', 'storm');
+    const def = defaultBasic(registry, 'sword', 'fire', 'storm');
+    const own: Blow[] = [
+      { kind: 'heavy', element: 'storm' },
+      { kind: 'light', element: 'fire' },
+    ];
+    expect(isDefaultBasic(registry, def, fireStorm)).toBe(true);
+    expect(isDefaultBasic(registry, own, fireStorm)).toBe(false);
+    // A weapon swap.
+    const maulFS = at('maul', 'fire', 'storm');
+    expect(followBasic(registry, def, fireStorm, maulFS)).toEqual(
+      defaultBasic(registry, 'maul', 'fire', 'storm'),
+    );
+    expect(followBasic(registry, own, fireStorm, maulFS)).toEqual(own);
+    // A bind.
+    const fire = at('sword', 'fire', null);
+    expect(followBasic(registry, defaultBasic(registry, 'sword', 'fire'), fire, fireStorm)).toEqual(
+      def,
+    );
+    expect(followBasic(registry, built, fire, fireStorm)).toEqual(built);
+    // A new primary: each blow takes its element's role's new element.
+    expect(followBasic(registry, own, fireStorm, at('sword', 'frost', 'storm'))).toEqual([
+      { kind: 'heavy', element: 'storm' },
+      { kind: 'light', element: 'frost' },
+    ]);
+    // The secondary gone: its blows take the primary.
+    expect(followBasic(registry, own, fireStorm, fire)).toEqual([
+      { kind: 'heavy', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+    ]);
+  });
 
   it("a weapon change: the new weapon's default (unarmed too); a built chain stays", () => {
     const p = { ...hero(), bag: [maul] };

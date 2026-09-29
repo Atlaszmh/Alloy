@@ -9,10 +9,11 @@ import {
   MAX_CHAIN,
   RARITY_ORDER,
   computeHeroStats,
+  defaultBasic,
   defaultChains,
+  followBasic,
   sandboxWeapon,
   type AbilitySlot,
-  type Blow,
   type Chains,
   type ChainSkill,
   type DataRegistry,
@@ -112,16 +113,26 @@ export const SANDBOX_DEFAULTS: SandboxLoadout = {
 const ManaSchema = z.enum(MANA_TYPES as readonly [ManaType, ...ManaType[]]);
 const RaritySchema = z.enum(RARITY_ORDER as [Rarity, ...Rarity[]]);
 
-/** Each field falls back to its default when it is missing or bad; typed, so tsc catches drift. */
-function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodTypeDef, unknown> {
-  const D = SANDBOX_DEFAULTS;
-  const weaponIds = new Set(registry.getGearBasesForSlot('weapon').map((b) => b.id));
-  const powers = new Set(registry.getDelveData().legendaries.map((l) => l.id));
+/** The saved chains: the basic one, and each slot's with forms of that slot. */
+function chainsSchema(registry: DataRegistry) {
   const forms = registry.getArpgData().forms;
   const chain = (slot: AbilitySlot) =>
     ChainSchema.refine((c) =>
       c.moves.every((m) => forms.some((f) => f.id === m.form && f.slot === slot)),
     );
+  return z.object({
+    basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
+    primary: chain('primary'),
+    defensive: chain('defensive'),
+    ultimate: chain('ultimate'),
+  });
+}
+
+/** Each field falls back to its default when it is missing or bad; typed, so tsc catches drift. */
+function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodTypeDef, unknown> {
+  const D = SANDBOX_DEFAULTS;
+  const weaponIds = new Set(registry.getGearBasesForSlot('weapon').map((b) => b.id));
+  const powers = new Set(registry.getDelveData().legendaries.map((l) => l.id));
   const item = GearItemSchema.optional();
   return z.object({
     weapon: z
@@ -147,14 +158,8 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
       .refine((l) => Object.keys(l).every((id) => powers.has(id)))
       .catch({}),
     attunement: z.record(ManaSchema, z.number().int().min(0).max(MAX_EXTRA_ATTUNE)).catch({}),
-    chains: z
-      .object({
-        basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
-        primary: chain('primary'),
-        defensive: chain('defensive'),
-        ultimate: chain('ultimate'),
-      })
-      .catch(D.chains),
+    // Bad or missing: `parseSandbox` builds the defaults on the save's own weapon and pair.
+    chains: chainsSchema(registry).catch(D.chains),
     depth: z.number().int().min(1).max(MAX_DEPTH).catch(D.depth),
     dummyElement: ManaSchema.nullable().catch(null),
     dummies: z
@@ -175,15 +180,30 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
   });
 }
 
-/** A saved loadout; whatever is missing or bad takes its default. */
+/**
+ * A saved loadout; whatever is missing or bad takes its default. A save from
+ * before chains keeps its pair: its basics-only `basicInfusion` becomes the
+ * secondary, and its chains the defaults on its weapon and pair.
+ */
 export function parseSandbox(raw: unknown): SandboxLoadout {
-  const parsed = loadoutSchema(getDelveRegistry()).safeParse(raw);
+  const registry = getDelveRegistry();
+  const parsed = loadoutSchema(registry).safeParse(raw);
   if (!parsed.success) return SANDBOX_DEFAULTS;
+  const old = raw as { secondary?: unknown; basicInfusion?: unknown; chains?: unknown };
+  const infusion = ManaSchema.safeParse(old.basicInfusion);
+  const { primary, weapon } = parsed.data;
+  const second =
+    old.secondary === undefined && infusion.success ? infusion.data : parsed.data.secondary;
   // The secondary is never the primary.
-  const s =
-    parsed.data.secondary === parsed.data.primary
-      ? { ...parsed.data, secondary: null }
-      : parsed.data;
+  const secondary = second === primary ? null : second;
+  const weaponBaseId = weapon?.baseId ?? null;
+  const chains = chainsSchema(registry).safeParse(old.chains).success
+    ? parsed.data.chains
+    : {
+        ...defaultChains(registry, primary, weaponBaseId),
+        basic: defaultBasic(registry, weaponBaseId, primary, secondary),
+      };
+  const s = { ...parsed.data, secondary, chains };
   // A loaded weapon only counts while the choice still names it: a bad save can't show one
   // weapon and fight with another.
   return s.loadedWeapon && !sameChoice(s.weapon, choiceOf(s.loadedWeapon))
@@ -218,7 +238,10 @@ interface SandboxStore extends SandboxLoadout {
   /** Kept while the app runs (across tab switches and panel closes), never saved. */
   spawn: SpawnChoice;
   setSpawn: (patch: Partial<SpawnChoice>) => void;
-  /** Pick a weapon (null = unarmed); a loaded weapon is dropped, unless the choice is unchanged. */
+  /**
+   * Pick a weapon (null = unarmed); a loaded weapon is dropped, unless the choice is unchanged.
+   * A basic chain on its default follows the weapon (the engine's `followBasic`).
+   */
   setWeapon: (weapon: WeaponChoice | null) => void;
   /** Switch a legendary power on (at its max roll) or off. */
   setLegendary: (id: string, on: boolean) => void;
@@ -231,9 +254,9 @@ interface SandboxStore extends SandboxLoadout {
   clearDummyGroups: () => void;
   setToggles: (toggles: SandboxToggles) => void;
   setSlowmo: (speed: number) => void;
-  /** Pick the primary (a secondary of that element is dropped); the basic blows follow the pair. */
+  /** Pick the primary (a secondary of that element is dropped); the basic chain follows the pair. */
   setPrimary: (mana: ManaType) => void;
-  /** Pick the secondary (null = none; the primary is ignored); the basic blows follow the pair. */
+  /** Pick the secondary (null = none; the primary is ignored); the basic chain follows the pair. */
   setSecondary: (mana: ManaType | null) => void;
   /** Copy the save's gear, chains and pair in (its powers and attunement then come from the items). */
   loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'chains' | 'pair'>) => void;
@@ -242,27 +265,20 @@ interface SandboxStore extends SandboxLoadout {
 
 const FIELDS = Object.keys(SANDBOX_DEFAULTS) as (keyof SandboxLoadout)[];
 
-/**
- * The basic chain after the pair changes: the old secondary's blows take the
- * new one (a secondary bound from none takes the last blow, as `bindSecondary`
- * does), every other blow the primary.
- */
-function refit(
-  basic: Blow[],
-  was: ManaType | null,
-  primary: ManaType,
-  secondary: ManaType | null,
-): Blow[] {
-  return basic.map((b, i) => ({
-    ...b,
-    element:
-      secondary && (was === null ? i === basic.length - 1 : b.element === was)
-        ? secondary
-        : primary,
-  }));
-}
+type Loadout = Pick<SandboxLoadout, 'weapon' | 'primary' | 'secondary'>;
 
 export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set, get) => {
+  /** The chains with the basic one following the weapon and pair to `next` (the engine's rule). */
+  const follow = (next: Partial<Loadout>): Chains => {
+    const s = get();
+    const at = (l: Loadout) => ({
+      weaponBaseId: l.weapon?.baseId ?? null,
+      primary: l.primary,
+      secondary: l.secondary,
+    });
+    const basic = followBasic(getDelveRegistry(), s.chains.basic, at(s), at({ ...s, ...next }));
+    return { ...s.chains, basic };
+  };
   const commit = (patch: Partial<SandboxLoadout>) => {
     set(patch);
     const state = get();
@@ -282,7 +298,7 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     // Re-clicking the pressed chip changes nothing (so a loaded weapon survives it).
     setWeapon: (weapon) => {
       if (sameChoice(weapon, get().weapon)) return;
-      commit({ weapon, loadedWeapon: null });
+      commit({ weapon, loadedWeapon: null, chains: follow({ weapon }) });
     },
     setLegendary: (id, on) => {
       const legendaries = { ...get().legendaries };
@@ -307,21 +323,13 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
     setToggles: (toggles) => commit({ toggles }),
     setSlowmo: (slowmo) => commit({ slowmo }),
     setPrimary: (primary) => {
-      const { secondary: was, chains } = get();
+      const was = get().secondary;
       const secondary = was === primary ? null : was;
-      commit({
-        primary,
-        secondary,
-        chains: { ...chains, basic: refit(chains.basic, was, primary, secondary) },
-      });
+      commit({ primary, secondary, chains: follow({ primary, secondary }) });
     },
     setSecondary: (secondary) => {
-      const { primary, secondary: was, chains } = get();
-      if (secondary === primary) return;
-      commit({
-        secondary,
-        chains: { ...chains, basic: refit(chains.basic, was, primary, secondary) },
-      });
+      if (secondary === get().primary) return;
+      commit({ secondary, chains: follow({ secondary }) });
     },
     loadMyBuild: (profile) => {
       const { weapon, ...gear } = profile.equipped;

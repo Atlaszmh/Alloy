@@ -215,11 +215,16 @@ export {
   chainMove,
   chargeCap,
   stepBonus,
+  moveNumbers,
   mergeKnobs,
   defaultBasic,
   defaultChains,
   stepHeft,
+  basicLoadout,
+  isDefaultBasic,
+  followBasic,
 } from './arpg/abilities/resolve.js';
+export type { BasicLoadout } from './arpg/abilities/resolve.js';
 export { makeCtx, BASIC_STATUS } from './arpg/combat.js';
 export {
   createSandboxWorld,

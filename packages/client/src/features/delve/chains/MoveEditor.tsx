@@ -1,6 +1,6 @@
 import {
   MOVE_KINDS,
-  stepBonus,
+  moveNumbers,
   type AbilitySlot,
   type Blow,
   type HeroBlow,
@@ -44,9 +44,9 @@ function Readout({
 }) {
   const registry = getDelveRegistry();
   const bal = registry.getDelveBalance();
-  const hitOf = (m: ResolvedAbility) =>
-    stats.weaponDamage * stats.damageMult * m.power * stepBonus(bal, m.index).power;
-  const hit = hitOf(ab);
+  // The engine's numbers: the hit it deals (a Ward's burst and an Armor's strike-back without
+  // the step bonus), and the radius it uses.
+  const { hit, radius } = moveNumbers(stats, bal, ab);
   const maxHp = stats.maxHp;
   const lines: string[] = [];
   const f = ab.form.id;
@@ -72,7 +72,7 @@ function Readout({
     lines.push(`${formatNumber(hit)} every ${ab.tick}s for ${ab.duration}s`);
   else
     lines.push(
-      `Hits for ${formatNumber(hit)}${ab.radius > 0 && f !== 'strike' ? ` · radius ${ab.radius.toFixed(1)}` : ''}`,
+      `Hits for ${formatNumber(hit)}${radius > 0 && f !== 'strike' ? ` · radius ${radius.toFixed(1)}` : ''}`,
     );
   const windup = ab.castTime > 0 ? ` · ${ab.castTime.toFixed(2)}s wind-up` : '';
   const pay =
@@ -85,7 +85,7 @@ function Readout({
   );
   if (full)
     lines.push(
-      `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(hitOf(full))}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}`,
+      `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}`,
     );
   return (
     <div className="delve-panel flex flex-col gap-0.5 p-3 text-sm" data-testid="ability-readout">

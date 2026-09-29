@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createDelveProfile, generateItem, SeededRNG } from '@alloy/engine';
+import {
+  createDelveProfile,
+  defaultBasic,
+  defaultChains,
+  generateItem,
+  SeededRNG,
+  type Blow,
+} from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
 import {
   MAX_DUMMY_GROUPS,
@@ -80,6 +87,24 @@ describe('sandboxStore', () => {
     });
     const ward = { moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }], payment: 'mana' };
     expect(parseSandbox({ chains: { ...D, primary: ward } }).chains).toEqual(D);
+  });
+
+  it('a save from before chains keeps its pair: its basics-only infusion is the secondary, and the chains are the defaults on it', () => {
+    const old = parseSandbox({ primary: 'frost', basicInfusion: 'storm' });
+    expect(old).toMatchObject({ primary: 'frost', secondary: 'storm' });
+    expect(old.chains).toEqual({
+      ...defaultChains(registry, 'frost', 'sword'),
+      basic: defaultBasic(registry, 'sword', 'frost', 'storm'),
+    });
+    expect(parseSandbox({ primary: 'frost', basicInfusion: 'frost' }).secondary).toBeNull();
+    // Valid chains stay as they are.
+    const chains = {
+      ...defaultChains(registry, 'nature', 'sword'),
+      basic: [{ kind: 'heavy', element: 'fire' }],
+    };
+    expect(parseSandbox({ primary: 'frost', basicInfusion: 'storm', chains }).chains).toEqual(
+      chains,
+    );
   });
 
   it('keeps a saved loaded weapon only while the weapon choice still names it', () => {
@@ -170,6 +195,21 @@ describe('sandboxStore', () => {
       secondary: null,
     });
     expect(parseSandbox({ primary: 'storm', secondary: 'storm' }).secondary).toBeNull();
+  });
+
+  it('the basic chain on its default follows the weapon; a built one survives a swap and a bind', () => {
+    store().setSecondary('storm');
+    store().setWeapon({ baseId: 'maul', mana: 'fire', rarity: 'rare' });
+    expect(store().chains.basic).toEqual(defaultBasic(registry, 'maul', 'fire', 'storm'));
+    store().setSecondary(null);
+    const built: Blow[] = [
+      { kind: 'heavy', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+    ];
+    store().setChain('basic', built);
+    store().setWeapon({ baseId: 'dagger', mana: 'fire', rarity: 'rare' });
+    store().setSecondary('storm');
+    expect(store().chains.basic).toEqual(built);
   });
 
   it('the weapon keeps its own mana for attunement; unarmed punches with the pair', () => {

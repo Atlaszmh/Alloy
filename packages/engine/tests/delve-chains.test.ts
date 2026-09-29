@@ -8,6 +8,7 @@ import {
   chargeCap,
   defaultBasic,
   defaultChains,
+  moveNumbers,
   resolveAbility,
   resolveChain,
 } from '../src/arpg/abilities/resolve.js';
@@ -30,7 +31,7 @@ import {
   type Move,
   type MoveKind,
 } from '../src/types/ability.js';
-import type { ArpgEvent } from '../src/types/arpg.js';
+import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { ComboStepDef } from '../src/types/delve.js';
 import type { ManaType } from '../src/types/mana.js';
 import {
@@ -383,6 +384,48 @@ describe('chain play', () => {
     expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(0);
     press(w, 0);
     expect(w.hero.comboStep[0]).toBe(0);
+  });
+
+  it("moveNumbers gives the hit and radius the sim uses: a Ward's burst without the step bonus", () => {
+    const numbers = (w: ArpgWorld, slot: number, step: number) =>
+      moveNumbers(w.hero.stats, bal, moveOf(w, slot, step));
+    const aim = { x: 13, y: 29 };
+    /** A chain of three medium `form` moves, pressed to its third. */
+    const third = (form: FormId) => {
+      const w = arena([dummy(13, 29)], {
+        noBasic: true,
+        primary: { moves: [0, 1, 2].map(() => m('medium', form)) },
+      });
+      for (let i = 0; i < 2; i++) {
+        press(w, 0, aim);
+        run(w, 0.1);
+      }
+      press(w, 0, aim);
+      return w;
+    };
+    // A 3rd-move Bolt's shot and a 3rd-move Burst: the step's power, and its size on the radius.
+    const bolt = third('bolt');
+    const shot = bolt.projectiles.at(-1)!;
+    expect(shot.damage).toBeCloseTo(numbers(bolt, 0, 2).hit, 9);
+    expect(shot.explodeRadius).toBeCloseTo(numbers(bolt, 0, 2).radius, 9);
+    const burst = third('burst');
+    const zone = burst.zones.at(-1)!;
+    expect(zone.damage).toBeCloseTo(numbers(burst, 0, 2).hit, 9);
+    expect(zone.radius).toBeCloseTo(numbers(burst, 0, 2).radius, 9);
+    expect(numbers(burst, 0, 2).radius).toBeGreaterThan(moveOf(burst, 0, 2).radius);
+    // A Ward on move 2 bursts (as it fades) for its hit without the step bonus: Shadow on a
+    // Fire foe, which neither resists it nor is weak to it, and no crits.
+    const ward: Move = { kind: 'medium', form: 'ward', elements: ['shadow'] };
+    const w = arena([dummy(13, 35)], { noBasic: true, defensive: { moves: [ward, ward] } });
+    w.hero.stats = { ...w.hero.stats, critChance: 0 };
+    press(w, 1);
+    press(w, 1);
+    expect(w.hero.defend?.move).toBe(1);
+    w.hero.defend!.until = w.t;
+    const hits = run(w, STEP).filter((e) => e.kind === 'hit');
+    expect(hits.map((e) => e.kind === 'hit' && e.amount)).toEqual([
+      expect.closeTo(numbers(w, 1, 1).hit, 9),
+    ]);
   });
 
   it("each move pays its own cost and sets its own cooldown; a press waits only for the next move's", () => {
