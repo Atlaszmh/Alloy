@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ReactionId } from '../types/arpg.js';
+import { MAX_CHAIN, type MoveKind } from '../types/ability.js';
 
 // --- Shared Schemas ---
 
@@ -390,6 +391,13 @@ export const ReactionIdSchema = z.enum([
 // The ReactionId union and this list must name the same ids: this stops compiling if they drift.
 type SameIds<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 true satisfies SameIds<ReactionId, z.infer<typeof ReactionIdSchema>>;
+
+export const MoveKindSchema = z.enum(['light', 'medium', 'heavy', 'hold']);
+true satisfies SameIds<MoveKind, z.infer<typeof MoveKindSchema>>;
+
+function perKind<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({ light: schema, medium: schema, heavy: schema, hold: schema });
+}
 
 function perRarity<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
@@ -803,6 +811,7 @@ const DelveBalanceSchema = z.object({
     byWeight: z.array(z.number().int().min(0)).length(5),
     basicBlow: z.number().int().min(0),
     basicFinisher: z.number().int().min(0),
+    basicByKind: perKind(z.number().int().min(0)),
     tick: z.number().int().min(0),
     curve: z.array(z.number().min(0)).min(2),
     freezeAt: z.number().int().positive(),
@@ -871,6 +880,28 @@ const DelveBalanceSchema = z.object({
       blinkSeconds: z.number().min(0),
     }),
   }),
+  chains: z
+    .object({
+      cap: z.object({
+        basic: z.number().int().min(1).max(MAX_CHAIN),
+        primary: z.number().int().min(1).max(MAX_CHAIN),
+        defensive: z.number().int().min(1).max(MAX_CHAIN),
+        ultimate: z.number().int().min(1).max(MAX_CHAIN),
+      }),
+      // The per-weight tables (`feel`, `stacks.byWeight`) run Swift to Crushing: −2..2.
+      kindWeight: z.object({
+        light: z.number().int().min(-2).max(2),
+        medium: z.number().int().min(-2).max(2),
+        heavy: z.number().int().min(-2).max(2),
+      }),
+      holdStageWeight: z.array(z.number().int().min(-2).max(2)).length(3),
+      holdTime: z.number().positive(),
+      holdMax: z.number().positive(),
+      holdStages: z.array(z.number().gt(0).lt(1)).length(2),
+      stepBonus: z.number().min(0),
+    })
+    .refine((c) => c.holdStages[0] < c.holdStages[1], 'holdStages must rise')
+    .refine((c) => c.holdMax >= c.holdTime, 'holdMax must be at least holdTime'),
   dodge: z
     .object({
       charges: z.number().int().positive(),

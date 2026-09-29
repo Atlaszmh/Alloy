@@ -45,6 +45,51 @@ export interface AbilityBuild {
 
 export type AbilityBuilds = Record<AbilitySlot, AbilityBuild>;
 
+/** How a move lands: light, medium or heavy, or a hold that charges while the button is held. */
+export type MoveKind = 'light' | 'medium' | 'heavy' | 'hold';
+
+export const MOVE_KINDS: readonly MoveKind[] = ['light', 'medium', 'heavy', 'hold'] as const;
+
+/** One move of an ability chain: its kind, a form of the chain's slot, and one or two elements. */
+export interface Move {
+  kind: MoveKind;
+  form: FormId;
+  /** One element, or two distinct elements (a fusion). */
+  elements: ManaType[];
+}
+
+/** An ability slot's chain: each press casts its next move; one payment for every move. */
+export interface Chain {
+  moves: Move[];
+  payment: AbilityPayment;
+}
+
+/** One blow of the basic chain: the weapon's row for its kind, in its element. */
+export interface Blow {
+  kind: MoveKind;
+  element: ManaType;
+}
+
+/** A skill that holds a chain: the basic attack or an ability slot. */
+export type ChainSkill = 'basic' | AbilitySlot;
+
+export const CHAIN_SKILLS: readonly ChainSkill[] = [
+  'basic',
+  'primary',
+  'defensive',
+  'ultimate',
+] as const;
+
+export interface Chains {
+  basic: Blow[];
+  primary: Chain;
+  defensive: Chain;
+  ultimate: Chain;
+}
+
+/** Most moves a chain can hold (each skill's own cap, on the profile, is at most this). */
+export const MAX_CHAIN = 5;
+
 /** Lingering ground left where an ability lands. */
 export interface ZoneKnob {
   seconds: number;

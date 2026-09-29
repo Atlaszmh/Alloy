@@ -61,6 +61,7 @@ describe('balance: delve.stacks', () => {
       byWeight: [1, 1, 2, 3, 3],
       basicBlow: 1,
       basicFinisher: 2,
+      basicByKind: { light: 1, medium: 1, heavy: 2, hold: 2 },
       tick: 1,
       curve: [1, 1.8, 2.45, 3, 3.5],
       freezeAt: 3,

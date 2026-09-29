@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilityBuilds, AbilitySlot } from './ability.js';
+import type { AbilityBuilds, AbilitySlot, ChainSkill, MoveKind } from './ability.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -436,6 +436,8 @@ export interface DelveBalance {
     basicBlow: number;
     /** A combo's finisher, and its discharge of the secondary. */
     basicFinisher: number;
+    /** A basic blow's stacks, by its kind. */
+    basicByKind: Record<MoveKind, number>;
     /** Every other hit that applies statuses: zone ticks, embers, chain jumps, retaliation… */
     tick: number;
     /**
@@ -495,6 +497,23 @@ export interface DelveBalance {
     reactionCooldown: number;
   };
   abilities: DelveAbilityBalance;
+  /** Moves and chains (see the moves and chains spec). */
+  chains: {
+    /** Most moves each skill's chain holds, a profile's caps to start with (at most `MAX_CHAIN`). */
+    cap: Record<ChainSkill, number>;
+    /** The weight each kind resolves at: every per-weight table reads through it. */
+    kindWeight: Record<Exclude<MoveKind, 'hold'>, number>;
+    /** A hold's three stages' weights. */
+    holdStageWeight: number[];
+    /** Seconds a hold takes to charge fully. */
+    holdTime: number;
+    /** A hold still charging this many seconds after it began fires by itself at stage 2. */
+    holdMax: number;
+    /** The charge (0..1) at which a hold reaches stage 1, then stage 2. */
+    holdStages: number[];
+    /** Move `i` (from 0) lands at power × (1 + this × i) and size × (1 + this × i / 2). */
+    stepBonus: number;
+  };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {
     charges: number;
