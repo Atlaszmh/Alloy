@@ -145,7 +145,6 @@ export function executeForm(
         nextTick: 0,
         damage: hit,
         element: ab.element,
-        applies: ab.knobs.applies,
         detonateAt: land,
         dead: false,
         fromX: h.x,
@@ -248,7 +247,6 @@ export function executeForm(
           nextTick: 0,
           damage: hit,
           element: ab.element,
-          applies: ab.knobs.applies,
           detonateAt: at,
           dead: false,
           heft: heft * 0.5,
@@ -272,7 +270,6 @@ export function executeForm(
         nextTick: t + 0.05,
         damage: hit,
         element: ab.element,
-        applies: ab.knobs.applies,
         detonateAt: 0,
         dead: false,
       });

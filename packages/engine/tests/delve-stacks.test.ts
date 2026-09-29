@@ -15,8 +15,11 @@ import {
   makeCtx,
 } from '../src/arpg/combat.js';
 import { shieldHero } from '../src/arpg/abilities/defend.js';
+import { resolveAbility } from '../src/arpg/abilities/resolve.js';
 import { createSandboxWorld, spawnDummies } from '../src/arpg/sandbox.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
+import { ABILITY_WEIGHTS } from '../src/types/ability.js';
 import type { ArpgEvent, MonsterEntity } from '../src/types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../src/types/mana.js';
 import {
@@ -24,9 +27,12 @@ import {
   arena,
   bal,
   dummy,
+  firstBlow,
+  gear,
   press,
   registry,
   run,
+  strikeWorld,
   type ArenaOpts,
 } from './fixtures/arena.js';
 
@@ -259,5 +265,82 @@ describe('freeze', () => {
     m.status.stacks.frost = bal.stacks.freezeAt - 1;
     shieldHero(ctx, 10, m, true);
     expect(isFrozen(ctx, m)).toBe(true);
+  });
+});
+
+describe('stacks per hit', () => {
+  const sword = { weapon: gear('fire') };
+
+  it('every blow applies basicBlow stacks, whatever the seed: no roll', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const w = strikeWorld(sword, {});
+      w.rng = new SeededRNG(seed);
+      firstBlow(w);
+      firstBlow(w);
+      expect(w.monsters[0].status.stacks.fire, `seed ${seed}`).toBe(2 * bal.stacks.basicBlow);
+    }
+  });
+
+  it("a finisher applies basicFinisher of the secondary it discharges; Twin Fang's extra hit applies none", () => {
+    const pair = { pair: { primary: 'fire', secondary: 'storm' } } as const;
+    const fin = strikeWorld(sword, pair, true);
+    firstBlow(fin);
+    expect(fin.monsters[0].status.stacks).toMatchObject({
+      storm: bal.stacks.basicFinisher,
+      fire: 0,
+    });
+    const twin = strikeWorld(sword, { ...pair, legendaries: { twin_fang: 100 } }, true);
+    firstBlow(twin);
+    expect(twin.monsters[0].status.stacks.storm).toBe(bal.stacks.basicFinisher);
+  });
+
+  it("a ranged blow's shot carries its count to what it hits", () => {
+    const w = strikeWorld({ weapon: gear('fire', 'weapon', 'staff') }, {}, false, dummy(13, 30));
+    firstBlow(w);
+    expect(w.projectiles.find((p) => p.owner === 'hero')).toMatchObject({
+      applies: ['burn'],
+      stacks: bal.stacks.basicBlow,
+    });
+    w.hero.nextAttackAt = 1e9;
+    run(w, 1);
+    expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicBlow);
+  });
+
+  it("an ability's direct hit applies its weight's stacks", () => {
+    const stats = computeHeroStats({}, registry);
+    const counts = ABILITY_WEIGHTS.map(
+      (weight) =>
+        resolveAbility(registry, 'primary', { ...DEFAULT_BUILDS.primary, weight }, stats).stacks,
+    );
+    expect(counts).toEqual(bal.stacks.byWeight);
+    for (const weight of [-2, 0, 2] as const) {
+      const w = arena([dummy(13, 30)], { noBasic: true, primary: { weight } });
+      press(w, 0);
+      run(w, 1);
+      expect(w.monsters[0].status.stacks.fire, `weight ${weight}`).toBe(
+        bal.stacks.byWeight[weight + 2],
+      );
+    }
+  });
+
+  it('its chain jumps and zone ticks apply stacks.tick', () => {
+    const chain = arena([dummy(13, 30), dummy(15, 30)], {
+      noBasic: true,
+      primary: { elements: ['storm'] },
+    });
+    press(chain, 0, { x: 13, y: 30 });
+    run(chain, 1);
+    expect(chain.monsters.map((m) => m.status.stacks.storm)).toEqual([
+      bal.stacks.byWeight[2],
+      bal.stacks.tick,
+    ]);
+
+    const zone = arena([dummy(13, 28)], {
+      noBasic: true,
+      ultimate: { form: 'maelstrom', payment: 'mana' },
+    });
+    press(zone, 2, { x: 13, y: 28 });
+    run(zone, 0.1); // the first tick
+    expect(zone.monsters[0].status.stacks.fire).toBe(bal.stacks.tick);
   });
 });

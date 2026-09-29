@@ -92,7 +92,6 @@ describe('ability events carry the infusion', () => {
       nextTick: 0,
       damage: 1,
       element: 'fire',
-      applies: [],
       detonateAt: w.t,
       dead: false,
     }); // a boss slam, landing next tick

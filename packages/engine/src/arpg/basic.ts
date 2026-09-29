@@ -13,8 +13,6 @@ import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js
  * movement. See the combat weight spec.
  */
 
-const BASIC_STATUS_CHANCE = 0.3;
-
 function haste(ctx: SimCtx): number {
   const surge = surging(ctx);
   return surge ? 1 + surge.effect : 1;
@@ -123,17 +121,12 @@ export function strike(ctx: SimCtx): void {
   const base = unit * s.power;
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
   const twin = twinPct > 0 && last;
+  // Every blow applies its element's stacks (a Surge's statuses ride along), the finisher more.
   const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
-  if (discharge && element) {
-    // A discharge always applies the secondary's status (immunities still hold).
-    if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
-  } else if (element) {
-    const chance = element === 'earth' ? BASIC_STATUS_CHANCE * 0.6 : BASIC_STATUS_CHANCE;
-    const status = BASIC_STATUS[element];
-    if (!applies.includes(status) && world.rng.next() < chance) applies.push(status);
-  }
+  if (element && !applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
   if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
-  // An Earth blow (a discharge included) or an Earth Surge's statuses: its stagger rattles.
+  const stacks = last ? bal.stacks.basicFinisher : bal.stacks.basicBlow;
+  // An Earth blow (a discharge included) or an Earth Surge's statuses: its stagger adds Earth stacks.
   const rattles = element === 'earth' || !!surge?.elements.includes('earth');
   const dir = sw.dir;
 
@@ -160,11 +153,17 @@ export function strike(ctx: SimCtx): void {
         applies,
         heft: s.heft,
         rattles,
+        stacks,
         ...kb,
       });
-      // Twin Fang: today's finisher value (×1.5) on melee.
+      // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks.
       if (twin)
-        hitMonster(ctx, m, unit * 1.5 * twinPct, element, { source: 'basic', crit, heft: s.heft });
+        hitMonster(ctx, m, unit * 1.5 * twinPct, element, {
+          source: 'basic',
+          crit,
+          heft: s.heft,
+          stacks: 0,
+        });
     }
   } else {
     const size = s.size ?? 1;
@@ -185,16 +184,17 @@ export function strike(ctx: SimCtx): void {
         vx: d.x * speed,
         vy: d.y * speed,
         radius: 0.3 * size,
-        // Twin Fang's extra shot: today's value (×1.0) and never an explosion.
+        // Twin Fang's extra shot: today's value (×1.0), never an explosion, and no stacks.
         damage: i === 0 ? base : unit * twinPct,
         element,
         pierce: w.pierce,
         maxDist: w.range + 1.5,
         explodeRadius: i === 0 ? (s.explode ?? 0) : 0,
-        applies,
+        applies: i === 0 ? applies : [],
         knockback: 0,
         heft: s.heft,
         rattles,
+        stacks: i === 0 ? stacks : 0,
       });
     }
     if (sw.committed && s.move < 0)
@@ -244,6 +244,7 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       applies: p.applies,
       heft: p.heft ?? 0,
       rattles: p.rattles,
+      stacks: p.stacks,
     });
   }
 }

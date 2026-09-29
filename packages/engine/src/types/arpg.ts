@@ -226,6 +226,8 @@ export interface Projectile {
   heft?: number;
   /** A basic shot from an Earth source: its stagger rattles (see `HitOpts.rattles`). */
   rattles?: boolean;
+  /** A basic shot's stacks (see `HitOpts.stacks`). */
+  stacks?: number;
   dead: boolean;
 }
 
@@ -246,7 +248,6 @@ export interface Zone {
   nextTick: number;
   damage: number;
   element: ManaType | null;
-  applies: StatusId[];
   /** Telegraph / Barrage impact / thrown Burst: explodes at this time (0 = lingering zone). */
   detonateAt: number;
   /** A thrown Burst: where it was thrown from (for the arc). */

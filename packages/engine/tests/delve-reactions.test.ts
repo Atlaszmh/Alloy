@@ -300,8 +300,12 @@ describe('marks', () => {
     );
     firstBlow(shot);
     const p = shot.projectiles.find((q) => q.owner === 'hero')!;
-    expect(p).toMatchObject({ element: 'earth', rattles: true });
-    p.applies = ['stagger']; // its 18% roll, made certain
+    expect(p).toMatchObject({
+      element: 'earth',
+      rattles: true,
+      applies: ['stagger'],
+      stacks: bal.stacks.basicBlow,
+    });
     shot.hero.nextAttackAt = 1e9;
     run(shot, 1);
     expect(rattled(shot)).toBe(true);

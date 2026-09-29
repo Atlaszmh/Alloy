@@ -541,6 +541,8 @@ describe('weapon strings', () => {
     expect(w.projectiles).toHaveLength(2);
     expect(w.projectiles[1].radius).toBeCloseTo(w.projectiles[0].radius);
     expect(w.projectiles[1].explodeRadius).toBe(0);
+    // It applies nothing: its stacks can only pair what the foe already has.
+    expect(w.projectiles[1]).toMatchObject({ applies: [], stacks: 0 });
     expect(w.projectiles[1].damage / w.projectiles[0].damage).toBeCloseTo(
       1 / w.hero.stats.weapon.combo[2].power,
       5,

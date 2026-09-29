@@ -436,7 +436,6 @@ describe('the spawner', () => {
         nextTick: 0,
         damage: 50,
         element: 'fire',
-        applies: [],
         detonateAt: w.t + 1.2,
         dead: false,
       });

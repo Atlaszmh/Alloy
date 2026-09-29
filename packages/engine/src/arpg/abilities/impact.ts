@@ -21,7 +21,8 @@ export function abilityHit(ctx: SimCtx, ab: ResolvedAbility): number {
 /**
  * How an ability's knobs shape each of its hits. `tick` hits (zone ticks,
  * embers) can't crit or knock back; only `direct` hits (the ability landing,
- * not chain jumps or ticks) get the weight's heavy payoff and carry heft.
+ * not chain jumps or ticks) get the weight's heavy payoff and stacks, and carry
+ * heft (the rest apply `stacks.tick`).
  */
 export function hitOpts(
   ab: ResolvedAbility,
@@ -45,6 +46,7 @@ export function hitOpts(
     heft: direct ? heft : 0,
     // Either element counts: an ability applies both elements' statuses.
     rattles: ab.elements.includes('earth'),
+    stacks: direct ? ab.stacks : undefined,
   };
 }
 
@@ -105,7 +107,6 @@ export function leaveZone(
     nextTick: world.t + 0.5,
     damage: damage * zone.tickPower,
     element: ab.element,
-    applies: ab.knobs.applies,
     detonateAt: 0,
     dead: false,
   });

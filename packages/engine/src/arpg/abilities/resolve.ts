@@ -115,6 +115,7 @@ export function resolveAbility(
     heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
     heavyKnockback: Math.max(0, w) * F.heavyKnockback,
     heavyStagger: w >= 2,
+    stacks: bal.stacks.byWeight[wi],
     motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
     chargeNeed: build.payment === 'charge' ? s.cost * (1 + W.cost * w) * ab.chargeRatio : 0,
     range: form.range ?? 0,

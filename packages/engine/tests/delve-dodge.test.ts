@@ -158,7 +158,6 @@ describe('perfect dodge', () => {
       nextTick: 0,
       damage: 50,
       element: 'fire',
-      applies: [],
       detonateAt: w.t + 0.13,
       dead: false,
     });

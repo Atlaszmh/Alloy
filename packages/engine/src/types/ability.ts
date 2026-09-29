@@ -115,6 +115,8 @@ export interface ResolvedAbility {
   heavyKnockback: number;
   /** Direct hits stagger (Crushing). */
   heavyStagger: boolean;
+  /** Stacks each direct hit applies (by weight, `stacks.byWeight`). */
+  stacks: number;
   /** Units moved when cast: + steps in over the conjure, − recoils after the release; before the press-combo multiplier. */
   motion: number;
   /** Charge units needed (charge payment only). */

@@ -263,6 +263,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           applies: p.applies,
           heft: p.heft ?? 0,
           rattles: p.rattles,
+          stacks: p.stacks,
         });
       if (!p.pierce) p.dead = true;
     }
@@ -368,7 +369,6 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
       nextTick: 0,
       damage: m.damage * 1.7 * enrageMult(ctx, m),
       element: m.element,
-      applies: [],
       detonateAt: world.t + 1.2,
       dead: false,
     });

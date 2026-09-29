@@ -320,7 +320,6 @@ describe('monsters', () => {
       nextTick: 0,
       damage: 50,
       element: 'fire',
-      applies: [],
       detonateAt: 0.5,
       dead: false,
     });
@@ -341,7 +340,6 @@ describe('monsters', () => {
       nextTick: 0,
       damage: 50,
       element: 'fire',
-      applies: [],
       detonateAt: w.t + 0.5,
       dead: false,
     });
