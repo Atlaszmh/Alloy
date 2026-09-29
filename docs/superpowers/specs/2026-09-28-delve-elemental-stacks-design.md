@@ -41,7 +41,7 @@ Per foe:
 
 Removed: `burnUntil`, `chillStacks`, `chillUntil`, `shockUntil`, `hexUntil`, `rattledUntil`, `poisonStacks`, `poisonUntil`. `emptyStatus()` (`world.ts`) starts every count and timer at 0. `Zone.applies`, written and never read, goes too.
 
-**Lapsing.** At the top of `monstersTick` (before its dummy `continue`, so dummies lapse too), any element whose `stackUntil` has passed has its count set to 0. Everything else reads `stacks[el]` raw: `before[]`, the predicates, the ticks, the pips.
+**Lapsing.** At the top of `stepWorld`, before the hero, projectile, zone and monster ticks (so no hit in the step can see an expired count, and dummies lapse too), any element whose `stackUntil` has passed has its count set to 0. Everything else reads `stacks[el]` raw: `before[]`, the predicates, the ticks, the pips.
 
 ### What the count does (the status)
 
@@ -82,7 +82,7 @@ On a hit of element E that isn't `noReact`:
 3. Walk F over `MANA_TYPES` (fire, frost, storm, earth, shadow, nature), skipping E. The first F with `before[F] > 0` whose reaction can fire pairs: `n = min(total_E, before[F])`. A reaction can't fire while the foe's `reactionLockUntil` runs, while a buff reaction's hero-side cooldown runs, or for an Earth hit on a foe that is chilled but not frozen (Shatter needs the freeze).
 4. If `n > 0`: the reaction fires with `n`, reading the foe's *pre-consumption* state (Blight spreads what the foe has now), and `reactionLockUntil = t + reactionLockout`. The number consumed, `c`, is `n` for a damage reaction and 1 for an effect reaction.
 5. Damage is dealt, scaled by the reaction as today. A kill ends here: a killing reaction never consumes, and kill-time readers (Inferno's flames, Night's Embrace, Plague's spread) see the pre-consumption counts.
-6. If the foe survived, in this order: apply this hit's E stacks; remove `c` from E and from F (a count stops at 0 and its status ends: a burn stops, a slow ends); apply the hit's other elements' stacks; then evaluate frost's crossing once on the final count. (Lapsing runs once per step in `monstersTick`, so a hit earlier in the same 1/30 s step can still pair a count whose timer ran out within that step; accepted.)
+6. If the foe survived, in this order: apply this hit's E stacks; remove `c` from E and from F (a count stops at 0 and its status ends: a burn stops, a slow ends); apply the hit's other elements' stacks; then evaluate frost's crossing once on the final count.
 
 A fused hit carries stacks of both its elements, but only `before[]` counts as earlier, so it never pairs with itself; the order in step 6 keeps its second element from crossing the freeze threshold before the pairs come off. `useUpMark` becomes `consumePairs(m, E, F, c, reaction)` (the reaction id decides the freeze exception).
 
