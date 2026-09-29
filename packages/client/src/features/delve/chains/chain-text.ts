@@ -1,5 +1,13 @@
-import type { DataRegistry, ManaType, MoveKind } from '@alloy/engine';
+import type { ChainSkill, DataRegistry, ManaType, MoveKind } from '@alloy/engine';
 import { manaStyle } from '../format';
+
+/** A skill's name in the builder and the notices. */
+export const SKILL_NAME: Record<ChainSkill, string> = {
+  basic: 'Basic',
+  primary: 'Primary',
+  defensive: 'Defensive',
+  ultimate: 'Ultimate',
+};
 
 /** How a move's kind reads in a name: "light Fire Bolt", "held Frost Lance". */
 export const KIND_LABEL: Record<MoveKind, string> = {

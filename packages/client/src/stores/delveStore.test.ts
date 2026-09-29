@@ -1,11 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { generateItem, SeededRNG, type ChainFix, type GearSlot } from '@alloy/engine';
+import {
+  generateItem,
+  SeededRNG,
+  type ChainFix,
+  type GearSlot,
+  type ManaType,
+} from '@alloy/engine';
 import {
   useDelveStore,
   BIND_HINT,
   DELVE_SAVE_KEY,
   MANUAL_ATTACK_KEY,
-  fixNotice,
+  fixNotices,
   loadDelveProfile,
   overtakeNotice,
 } from './delveStore';
@@ -257,25 +263,67 @@ describe('delveStore', () => {
     );
   });
 
-  it('words the notices plainly, one a move', () => {
-    const fix: ChainFix = {
+  it('a realign that changes a whole chain says so in one notice', () => {
+    const s = () => useDelveStore.getState();
+    expect(s().bindSecondary('storm').ok).toBe(true);
+    s().setProfile({ ...s().profile, manaDust: 500, scrap: 500 });
+    expect(s().realign({ primary: 'frost' }).ok).toBe(true);
+    // The default basic chain follows the pair silently; each ability chain says so once.
+    expect(s().takeNotices()).toEqual([
+      "Your Bolt's 1st, 2nd, 3rd and 4th moves used Fire, which isn't in your pair; they now use Frost",
+      "Your Ward's 1st move used Fire, which isn't in your pair; it now uses Frost",
+      "Your Nova's 1st move used Fire, which isn't in your pair; it now uses Frost",
+    ]);
+  });
+
+  it('words the notices plainly: one a skill for its moves that changed the same way', () => {
+    const pair = { primary: 'fire', secondary: 'storm' } as const;
+    const move = (
+      index: number,
+      removed: ManaType[],
+      elements: ManaType[],
+      form: 'bolt' | 'lance' = 'bolt',
+    ): ChainFix => ({
       skill: 'primary',
-      index: 2,
-      removed: ['frost', 'storm'],
-      move: { kind: 'medium', form: 'bolt', elements: ['fire'] },
-    };
-    expect(fixNotice(registry, fix)).toBe(
-      "Your Bolt's 3rd move used Frost and Storm, which aren't in your pair; it now uses Fire",
-    );
-    const blow: ChainFix = {
+      index,
+      removed,
+      move: { kind: 'medium', form, elements },
+    });
+    const blow = (index: number): ChainFix => ({
       skill: 'basic',
-      index: 1,
+      index,
       removed: ['frost'],
       move: { kind: 'light', element: 'fire' },
-    };
-    expect(fixNotice(registry, blow)).toBe(
+    });
+    expect(fixNotices(registry, [move(2, ['frost', 'nature'], ['fire'])], pair)).toEqual([
+      "Your Bolt's 3rd move used Frost and Nature, which aren't in your pair; it now uses Fire",
+    ]);
+    const moves = [
+      move(0, ['frost'], ['storm']),
+      move(1, ['frost'], ['storm']),
+      move(2, ['frost'], ['fire']),
+      move(3, ['frost'], ['storm']),
+    ];
+    expect(fixNotices(registry, moves, pair)).toEqual([
+      "Your Bolt's 1st, 2nd and 4th moves used Frost, which isn't in your pair; they now use Storm",
+      "Your Bolt's 3rd move used Frost, which isn't in your pair; it now uses Fire",
+    ]);
+    expect(fixNotices(registry, [blow(1)], pair)).toEqual([
       "Your basic attack's 2nd blow used Frost, which isn't in your pair; it now uses Fire",
-    );
+    ]);
+    expect(fixNotices(registry, [blow(0), blow(2)], pair)).toEqual([
+      "Your basic attack's 1st and 3rd blows used Frost, which isn't in your pair; they now use Fire",
+    ]);
+    // Moves of different forms go by their skill.
+    const mixed = [move(0, ['frost'], ['fire']), move(1, ['frost'], ['fire'], 'lance')];
+    expect(fixNotices(registry, mixed, pair)).toEqual([
+      "Your Primary's 1st and 2nd moves used Frost, which isn't in your pair; they now use Fire",
+    ]);
+    // An element still in the pair (Storm took the primary's role) needs no clause.
+    const stormy = { primary: 'storm', secondary: 'nature' } as const;
+    expect(fixNotices(registry, [move(1, ['storm'], ['nature'])], stormy)).toEqual([
+      "Your Bolt's 2nd move used Storm; it now uses Nature",
+    ]);
     expect(overtakeNotice(registry, 'storm', 'fire')).toBe(
       'Storm now outweighs Fire: Storm is your primary',
     );

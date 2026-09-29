@@ -18,6 +18,7 @@ import {
   realign as engineRealign,
   reattuneItem,
   resolveOvertake,
+  pairElements,
   type ChainFix,
   type Chains,
   type ChainSkill,
@@ -25,11 +26,13 @@ import {
   type DelveProfile,
   type GearItem,
   type GearSlot,
+  type ManaPair,
   type ManaType,
   type ParsedDelveProfile,
   type ProfileActionResult,
   type Rarity,
 } from '@alloy/engine';
+import { SKILL_NAME } from '@/features/delve/chains/chain-text';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { createHmrStore } from './hmr-store';
 
@@ -85,24 +88,53 @@ function freshSeed(): number {
 }
 
 const manaName = (registry: DataRegistry, m: ManaType) => registry.getArpgData().mana[m].name;
+
+/** "a", "a and b", "a, b and c". */
+function listed(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('');
+}
+
 const manaNames = (registry: DataRegistry, els: ManaType[]) =>
-  els.map((m) => manaName(registry, m)).join(' and ');
+  listed(els.map((m) => manaName(registry, m)));
 
 const ORDINALS = ['1st', '2nd', '3rd', '4th', '5th'];
 
 /**
- * "Your Bolt's 3rd move used Frost, which isn't in your pair; it now uses Fire";
- * a blow: "Your basic attack's 2nd blow used …".
+ * The notices for the moves and blows a pair op changed (`fixed`), `pair` the
+ * pair after it: one per skill for its moves that changed the same way (the
+ * same elements lost, the same elements now). "Your Bolt's 3rd move used
+ * Frost, which isn't in your pair; it now uses Fire", "Your Bolt's 1st, 2nd and
+ * 4th moves used Fire, which isn't in your pair; they now use Storm", "Your
+ * basic attack's 2nd blow used …"; moves of different forms go by their
+ * skill ("Your Primary's …"). Elements still in the pair need no clause:
+ * "Your Bolt's 2nd move used Storm; it now uses Nature".
  */
-export function fixNotice(registry: DataRegistry, fix: ChainFix): string {
-  const nth = ORDINALS[fix.index] ?? `${fix.index + 1}th`;
-  const now = 'element' in fix.move ? [fix.move.element] : fix.move.elements;
-  const what =
-    'form' in fix.move
-      ? `${registry.getForm(fix.move.form).name}'s ${nth} move`
-      : `basic attack's ${nth} blow`;
-  const isnt = fix.removed.length > 1 ? "aren't" : "isn't";
-  return `Your ${what} used ${manaNames(registry, fix.removed)}, which ${isnt} in your pair; it now uses ${manaNames(registry, now)}`;
+export function fixNotices(registry: DataRegistry, fixed: ChainFix[], pair: ManaPair): string[] {
+  const now = (f: ChainFix) => ('element' in f.move ? [f.move.element] : f.move.elements);
+  const groups = new Map<string, ChainFix[]>();
+  for (const f of fixed) {
+    const key = `${f.skill}|${f.removed.join()}|${now(f).join()}`;
+    groups.set(key, [...(groups.get(key) ?? []), f]);
+  }
+  return [...groups.values()].map((group) => {
+    const [first] = group;
+    const forms = new Set(group.map((f) => ('form' in f.move ? f.move.form : null)));
+    const [form] = forms;
+    const owner =
+      first.skill === 'basic'
+        ? 'basic attack'
+        : forms.size === 1 && form
+          ? registry.getForm(form).name
+          : SKILL_NAME[first.skill];
+    const nths = listed(group.map((f) => ORDINALS[f.index] ?? `${f.index + 1}th`));
+    const noun = `${first.skill === 'basic' ? 'blow' : 'move'}${group.length > 1 ? 's' : ''}`;
+    const outside = first.removed.every((e) => !pairElements(pair).includes(e));
+    const clause = outside
+      ? `, which ${first.removed.length > 1 ? "aren't" : "isn't"} in your pair`
+      : '';
+    const uses = group.length > 1 ? 'they now use' : 'it now uses';
+    return `Your ${owner}'s ${nths} ${noun} used ${manaNames(registry, first.removed)}${clause}; ${uses} ${manaNames(registry, now(first))}`;
+  });
 }
 
 /** "Storm now outweighs Fire: Storm is your primary" (`now` is the new primary). */
@@ -189,7 +221,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
           ...(loaded.gainedPair && loaded.profile.pair.primary && !loaded.profile.pair.secondary
             ? [BIND_HINT]
             : []),
-          ...loaded.fixed.map((f) => fixNotice(getDelveRegistry(), f)),
+          ...fixNotices(getDelveRegistry(), loaded.fixed, loaded.profile.pair),
         ]
       : [],
     bindDeclined: [],
@@ -219,7 +251,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     realign: (next) => {
       const res = applyResult(engineRealign(registry(), get().profile, next));
-      for (const fix of res.fixed ?? []) notify(fixNotice(registry(), fix));
+      for (const text of fixNotices(registry(), res.fixed ?? [], res.profile.pair)) notify(text);
       return res;
     },
 

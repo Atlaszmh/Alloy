@@ -17,15 +17,9 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { AttunementBars, Chip } from '../AbilitiesPanel';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
-import { KIND_ICON, blowText, chainText, moveText } from './chain-text';
+import { KIND_ICON, SKILL_NAME, blowText, chainText, moveText } from './chain-text';
 import { MoveEditor } from './MoveEditor';
 
-const SKILL_NAME: Record<ChainSkill, string> = {
-  basic: 'Basic',
-  primary: 'Primary',
-  defensive: 'Defensive',
-  ultimate: 'Ultimate',
-};
 const SKILL_KEY: Record<ChainSkill, string | null> = {
   basic: null,
   primary: 'Q',
