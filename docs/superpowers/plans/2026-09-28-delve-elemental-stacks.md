@@ -48,7 +48,7 @@ What stands out: the fused Frost+Fire and Frost+Earth Bursts at ×2.5–2.7 toda
 
 **Conventions:**
 - Windows 11. The Bash tool runs POSIX sh; PowerShell is also available (use it for process management).
-- Branch `claude/alloy-loot-gear-system-6upsy5` (already checked out). **One commit per task.** Every commit message ends with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`; the commit blocks below pass it as the last `-m`.
+- Branch `claude/alloy-loot-gear-system-6upsy5` (already checked out). **One commit per task.** Every commit message ends with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`; the commit blocks below pass it as the last `-m`. The commit bodies of Tasks 2–4 must also carry the line `Pacing rails (tests/delve-pacing.test.ts) not run: the stacks model is whole only after Task 5 (they pass on the scratch copy).`, which their blocks pass as a second `-m`.
 - Stage files by path. Never `git add -A` or `git add .` at the repo root: three unrelated untracked plan docs (`docs/superpowers/plans/2026-05-01-*.md`) exist and must stay out.
 - **Don't push**: the controller pushes after a final review. Never open a PR.
 - **Run every command from the repo root.** The shell's working directory persists between commands, so every command line below runs in a subshell (`(cd packages/engine && npx vitest run …)`), and every commit block starts with `cd /c/Projects/Alloy`.
@@ -1177,7 +1177,7 @@ Expected: 72 files, 1161 tests, all green; no type errors. (The pacing file is l
 cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/types/delve.ts packages/engine/src/data/schemas.ts packages/engine/src/arpg/world.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/basic.ts packages/engine/src/index.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/ability-forms.test.ts packages/engine/tests/ability-status.test.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-training.test.ts packages/engine/tests/delve-reactions.test.ts
 git add packages/engine/src/types/arpg.ts packages/engine/src/types/delve.ts packages/engine/src/data/schemas.ts packages/engine/src/data/balance.json packages/engine/src/arpg/world.ts packages/engine/src/arpg/combat.ts packages/engine/src/arpg/step.ts packages/engine/src/arpg/basic.ts packages/engine/src/index.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/ability-forms.test.ts packages/engine/tests/ability-status.test.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/delve-pair.test.ts packages/engine/tests/delve-training.test.ts packages/engine/tests/delve-reactions.test.ts
-git commit -m "feat(engine): elemental stacks replace the status timers" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(engine): elemental stacks replace the status timers" -m "Pacing rails (tests/delve-pacing.test.ts) not run: the stacks model is whole only after Task 5 (they pass on the scratch copy)." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1195,7 +1195,7 @@ The spec's table of counts: a blow `basicBlow`, a finisher (and its discharge) `
 - Modify: `packages/engine/src/arpg/abilities/impact.ts:21-49` (`hitOpts`), `:108` (`leaveZone`)
 - Modify: `packages/engine/src/arpg/abilities/forms.ts:148`, `:251`, `:275`
 - Modify: `packages/engine/src/arpg/basic.ts` (after Task 2: `:16`, `:126-137`, `:157-167`, `:188-198`, `:246`)
-- Modify: `packages/engine/src/arpg/step.ts:264` (the basic shot), `:370` (the boss slam)
+- Modify: `packages/engine/src/arpg/step.ts` (after Task 2: `:265`, the basic shot; `:371`, the boss slam)
 - Modify: `packages/engine/tests/delve-stacks.test.ts` (imports; a new `describe`)
 - Modify: `packages/engine/tests/{delve-reactions,delve-combat-weight,arpg-sim,delve-dodge,delve-infusion,delve-training}.test.ts` (Step 6)
 
@@ -1470,7 +1470,7 @@ Expected: 72 files, 1166 tests, all green; no type errors.
 cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/arpg/abilities/impact.ts packages/engine/src/arpg/abilities/forms.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-reactions.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-dodge.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/delve-training.test.ts
 git add packages/engine/src/types/arpg.ts packages/engine/src/types/ability.ts packages/engine/src/arpg/abilities/resolve.ts packages/engine/src/arpg/abilities/impact.ts packages/engine/src/arpg/abilities/forms.ts packages/engine/src/arpg/basic.ts packages/engine/src/arpg/step.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-reactions.test.ts packages/engine/tests/delve-combat-weight.test.ts packages/engine/tests/arpg-sim.test.ts packages/engine/tests/delve-dodge.test.ts packages/engine/tests/delve-infusion.test.ts packages/engine/tests/delve-training.test.ts
-git commit -m "feat(engine): every hit carries its stack count; the basic attack's status roll goes" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(engine): every hit carries its stack count; the basic attack's status roll goes" -m "Pacing rails (tests/delve-pacing.test.ts) not run: the stacks model is whole only after Task 5 (they pass on the scratch copy)." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1486,7 +1486,7 @@ The spec's Pairing section, in its order. `findPair` replaces `findReaction`: `b
 - Modify: `packages/engine/src/arpg/world.ts` (`emptyStatus`)
 - Modify: `packages/engine/src/data/schemas.ts:589` (`consumes`)
 - Modify: `packages/engine/src/data/arpg.json:157`, `:159` (hand-edit)
-- Modify: `packages/engine/src/arpg/combat.ts` (after Task 3: `HitOpts.stacks`' doc `:58-61`; `noteReaction` `:288-291`; `findReaction` through `react`'s comment `:300-335`; `hitMonster` `:490-501`, `:514`, `:554-566`)
+- Modify: `packages/engine/src/arpg/combat.ts` (after Task 3: `HitOpts.stacks`' doc `:58-61`; `noteReaction` `:300-303`; `findReaction` through `react`'s comment `:312-347`; `hitMonster` `:503-514`, `:527`, `:567-579`; the text anchors below are what count)
 - Modify: `packages/engine/tests/delve-stacks.test.ts` (imports, a helper, three new `describe`s)
 - Modify: `packages/engine/tests/delve-reactions.test.ts` (Step 6)
 
@@ -1570,12 +1570,13 @@ describe('pairing', () => {
   it('a killing reaction consumes nothing: what reads the corpse sees its stacks as they were', () => {
     const { w, ctx } = setup([dummy(13, 20, { hp: 1 }), dummy(14.5, 20)]);
     const [a, b] = w.monsters;
+    a.status.stacks.frost = 3;
     applyStatus(ctx, a, 'poison', 100, false, undefined, 3);
     applyStatus(ctx, a, 'hex', 0, false, undefined, 2);
-    // Fire meets Shadow before Nature: Soulfire, and the hit kills. Plague spreads from the corpse.
+    // Fire meets Frost first: Melt, and the hit kills. Plague spreads from the corpse.
     hitMonster(ctx, a, 10, 'fire', { source: 'skill', stacks: 1, spread: true });
     expect(a.dead).toBe(true);
-    expect(a.status.stacks).toMatchObject({ nature: 3, shadow: 2 });
+    expect(a.status.stacks).toMatchObject({ frost: 3, nature: 3, shadow: 2 });
     expect(b.status.stacks).toMatchObject({ nature: 3, shadow: 2 });
   });
 });
@@ -1654,7 +1655,7 @@ describe('the lockout', () => {
 - [ ] **Step 2: Run them to verify they fail**
 
 Run: `(cd packages/engine && npx vitest run tests/delve-stacks.test.ts)`
-Expected: 8 FAIL, 22 PASS. The failures: the reaction events carry no `pairs` yet ("expected [ [ 'melt', undefined ] ] to deeply equal [ [ 'melt', 2 ] ]" and the like), "expected [ 'melt', false, +0 ] to deeply equal [ 'melt', false, 2 ]" (today's all-or-nothing use-up), and "expected undefined to be close to 1" (no lockout). "a killing reaction consumes nothing" and "a buff reaction's hero-side cooldown still holds on another foe" pass already: they guard what must not change.
+Expected: 9 FAIL, 21 PASS. The failures: the reaction events carry no `pairs` yet ("expected [ [ 'melt', undefined ] ] to deeply equal [ [ 'melt', 2 ] ]" and the like), "expected [ 'melt', false, +0 ] to deeply equal [ 'melt', false, 2 ]" (today's all-or-nothing use-up), "expected { Object (fire, frost, ...) } to match object { frost: 3, nature: 3, shadow: 2 }" (today the Melt uses up the frost before the killing damage lands), and "expected undefined to be close to 1" (no lockout). "a buff reaction's hero-side cooldown still holds on another foe" passes already: it guards what must not change.
 
 - [ ] **Step 3: The types and the data**
 
@@ -1722,7 +1723,7 @@ function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity, pairs
 }
 ```
 
-3. Everything from `findReaction`'s doc comment (line 300, the `/**` above "The reaction a hit of `element` sets off on `m`: the first other element's") through the end of `react`'s doc comment (line 335, the ` */` after "ability slot, which its splash carries."), i.e. `findReaction`, the interim `useUpMark` and `react`'s comment, becomes
+3. Everything from `findReaction`'s doc comment (line 312, the `/**` above "The reaction a hit of `element` sets off on `m`: the first other element's") through the end of `react`'s doc comment (line 347, the ` */` after "ability slot, which its splash carries."), i.e. `findReaction`, the interim `useUpMark` and `react`'s comment, becomes
 
 ```ts
 /**
@@ -1818,7 +1819,7 @@ becomes
   }
 ```
 
-5. The `hit` event: after its `    reaction,` add `    pairs: pair?.n,` (the first `hit` push only; Soulfrost's execute pseudo-hit below keeps no `pairs`, so its label stays plain).
+5. The `hit` event: after its `    reaction,` add `    ...(pair ? { pairs: pair.n } : {}),` (as `hurtHero`'s `blocked`: a hit that didn't react carries no `pairs` key; the first `hit` push only; Soulfrost's execute pseudo-hit below keeps no `pairs`, so its label stays plain).
 
 6. After `  if (m.dummy && m.hp <= 0) m.hp = m.maxHp;` add `  // A kill consumes nothing: what reads the corpse sees its stacks as they were.` above `  if (m.hp <= 0) {`; and the statuses
 
@@ -1921,7 +1922,7 @@ Expected: 72 files, 1176 tests, all green; no type errors.
 cd /c/Projects/Alloy
 npx prettier --write packages/engine/src/types/arpg.ts packages/engine/src/arpg/world.ts packages/engine/src/data/schemas.ts packages/engine/src/arpg/combat.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-reactions.test.ts
 git add packages/engine/src/types/arpg.ts packages/engine/src/arpg/world.ts packages/engine/src/data/schemas.ts packages/engine/src/data/arpg.json packages/engine/src/arpg/combat.ts packages/engine/tests/delve-stacks.test.ts packages/engine/tests/delve-reactions.test.ts
-git commit -m "feat(engine): stacks pair off into reactions, behind a per-foe lockout" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(engine): stacks pair off into reactions, behind a per-foe lockout" -m "Pacing rails (tests/delve-pacing.test.ts) not run: the stacks model is whole only after Task 5 (they pass on the scratch copy)." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1931,7 +1932,7 @@ git commit -m "feat(engine): stacks pair off into reactions, behind a per-foe lo
 The spec's steps 4 and 6 and its Reaction strength table. A damage reaction (Melt, Shatter, Overload, Combust, Crystallize: `DAMAGE_REACTIONS`) takes every pair, `n`, and adds its bonus once per pair, `hit × (1 + (mult − 1) × n × catalyst)`; Overload's blast is `hit × overloadMult × n × catalyst`. The other ten are effects: they fire once and take one pair (the spec's `c`), so the rest of both statuses stay on the foe. `findPair` returns the pairs a reaction takes, so `react`, `consumePairs` and the events' `pairs` all read one number. Catalyst now scales the bonus, not the whole hit (with one pair and no Catalyst the numbers are today's). The element texts say stacks. With this the pacing rails hold again.
 
 **Files:**
-- Modify: `packages/engine/src/arpg/combat.ts` (after Task 4: above `findPair` `:300`, its doc `:303-304` and return `:327`; `react` `:349-371`, `:390`, `:437`; `hitMonster` `:515`)
+- Modify: `packages/engine/src/arpg/combat.ts` (after Task 4: above `findPair` `:312`, its doc `:315-316` and return `:339`; `react` `:361-383`, `:402`, `:449`; `hitMonster` `:528`; the text anchors below are what count)
 - Modify: `packages/engine/src/types/delve.ts` (the `reactions` docs)
 - Modify: `packages/engine/src/data/arpg.json:50`, `:76`, `:81`, `:86`, `:96` (hand-edit)
 - Modify: `packages/engine/tests/delve-stacks.test.ts` (a new `describe`)
@@ -2246,19 +2247,18 @@ git commit -m "feat(engine): damage reactions take and scale with every pair, ef
 
 ### Task 6: The gate
 
-Measure the finished engine against the spec's pacing rails and the DPS Lab's hard gates, and print the report the balance review reads, on the build the client will use. Nothing here changes the repo unless a rail or a hard gate fails (then only `delve.stacks`, in the spec's order). The sim is deterministic, so every number below is what this plan's code gives; a different number means the code differs from the plan.
+Measure the finished engine against the spec's pacing rails and the DPS Lab's hard gates, and print the report the balance review reads, on the build the client will use. Nothing here changes the repo: if a rail or a hard gate fails, the plan stops for the controller's decision. The sim is deterministic, so every number below is what this plan's code gives; a different number means the code differs from the plan.
 
 **Files:**
 - Build: `packages/engine/dist/` (not tracked)
 - Scratch (never committed): `<before>/after-seeds40.json` and `<before>/after-depth10.json`, which the scripts write
-- Modify only if a rail or a hard gate fails: `packages/engine/src/data/balance.json` (`delve.stacks`)
 
 - [ ] **Step 1: Build the engine**
 
 Run: `(cd packages/engine && pnpm build)`
 Expected: tsup's "ESM ⚡️ Build success", "CJS ⚡️ Build success" and "DTS ⚡️ Build success".
 
-The client now reads the new `StatusState` from this build, so `(cd packages/client && npx tsc --noEmit -p .)` fails until Task 7 (on the removed `StatusState` fields in `ArenaRenderer.ts`, `draw-world.ts` and `reactions.test.ts`). Don't run the client here.
+The client now reads the new `StatusState` from this build, so `(cd packages/client && npx tsc --noEmit -p .)` fails until Task 7, on the removed `StatusState` fields in `ArenaRenderer.ts` (lines 782 and 784) and `draw-world.ts` (lines 401–440); `reactions.test.ts`'s fake status is cast, so it compiles. Don't run the client here.
 
 - [ ] **Step 2: The pacing rails**
 
@@ -2279,7 +2279,7 @@ seconds per floor: 30.76 (8–60)
 
 (HEAD for comparison: first dives 11, 11, 11, 12, mean 11.25; dive 6 31.75, dive 12 37.75; Frost 7.5 → 33; 6.25 legendaries; 6 of 6; sweep median 28, 22–41; 25.75 s a floor.) The tight rail is seed 4's first dive, which ends at depth 3, the floor.
 
-If a rail or a hard gate (Step 3) fails, tune inside `delve.stacks` only, in the spec's order: the per-stack values, then `reactionLockout` (2 s at most), then `freezeAt`, then `basicFinisher` (3 at most), then `cap`/`duration`. Re-run `(cd packages/engine && npx vitest run tests/delve-pacing.test.ts)` after each change, then Steps 1–3 again, and update the numbers in `tests/delve-stacks.test.ts`'s "loads the stack numbers". **If the knobs can't meet them, stop and report before touching anything outside `delve.stacks`.**
+If a rail fails, or a number differs from these, **stop and report it**; don't retune. (For the controller's decision: the spec's tuning order is the per-stack values, then `reactionLockout`, 2 s at most, then `freezeAt`, then `basicFinisher`, 3 at most, then `cap`/`duration`, and nothing outside `delve.stacks` without asking.)
 
 - [ ] **Step 3: The DPS Lab before/after**
 
@@ -2289,7 +2289,7 @@ Run: `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-
 Expected (about 20 s): `setups 1224` (every basic attack, one dummy and the pack, and every single-element ability, one dummy).
 
 Run: `(node /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/stacks-before/gate.mjs packages/engine/dist/index.js)`
-Expected (about 10 s):
+Expected (it re-runs the whole DPS Lab grid, 9,144 setups: about 10 s, longer on a busy machine; slow isn't failing):
 
 ```
 Hard gates
@@ -2350,7 +2350,7 @@ How to read it. The four hard gates (the spec's DPS Lab section) must pass; ever
 The client reads the rebuilt engine; restart Vite so it doesn't serve the stale bundle. Run the PowerShell block under "Dev server on 5288" in the header.
 Expected: `True`.
 
-No commit: this task changes nothing in the repo (unless Step 2 tuned `delve.stacks`: then commit `packages/engine/src/data/balance.json` and `packages/engine/tests/delve-stacks.test.ts` as `fix(engine): tune delve.stacks for the pacing rails`, with the trailer).
+No commit: this task changes nothing in the repo.
 
 **The scripts' texts** (for `<before>` only; never in the repo):
 
@@ -3074,10 +3074,10 @@ and the Delve section's bullet that begins `- **Pair reactions** (spec:` (line 8
 - **Elemental stacks and pair reactions** (specs: `docs/superpowers/specs/2026-09-28-delve-elemental-stacks-design.md`, over `docs/superpowers/specs/2026-09-28-delve-pair-reactions-design.md`): every hit applies **stacks** of each element status it carries (`StatusState.stacks`, 0 to `stacks.cap` per element, and one timer per element, `stackUntil`, that any new stack of it refreshes; at the timer they all lapse together, at the top of `monstersTick`). A blow applies `basicBlow`, a finisher `basicFinisher`, an ability's direct hit its weight's `byWeight` (`ResolvedAbility.stacks`), anything else `tick`; the count rides `HitOpts.stacks` (`Projectile.stacks` for shots), and `applyStatus(…, n)` maps a status to its element through `BASIC_STATUS`'s inverse (`applyStacks` in `arpg/combat.ts`). The count is the status and its strength, along a diminishing curve (`stacks.curve`, cumulative, 1 to 3.5 over five stacks; past its end each stack adds its last step; `stackIntensity`): a burn deals `burnRef × firePerStack × curve` a second and poison `poisonRef × poisonPerStack × curve`, shock and hex add `perStack × curve` damage taken, frost slows linearly per stack (capped) and freezes on *crossing* `freezeAt` (checked once per hit, `crossFreeze`), and Earth's stacks (the rattle) come only from a stagger by a source that includes Earth (`HitOpts.rattles`); `isBurning` and the rest read `stacks[el] > 0`, and `hasMark` also counts a bare freeze as frost. Every pair of elements reacts, both ways: a hit pairs its element's stacks off against the first other element, in `MANA_TYPES` order, with stacks from earlier hits (a bare freeze is one frost stack to a partner; `findPair`). A damage reaction (Melt, Shatter, Overload, Combust, Crystallize: `DAMAGE_REACTIONS`) takes every pair, the smaller count, and adds its bonus once per pair (Overload's blast grows per pair; `react(…, n)`); the other ten fire once and take one pair, so the rest of both statuses stay. `consumePairs` takes the pairs off both sides (a freeze ends when frost was the partner, except under Superconduct), and no reaction fires on that foe for `reactionLockout` (`StatusState.reactionLockUntil`); a killing reaction consumes nothing. The table is `arpg.json → reactions` (`elements`, `cooldown`; `registry.getReactionFor(a, b)`), checked by one `ReactionIdSchema` that the save's `reactionsSeen` uses too, and each effect is one `case` in `react`. The eight added in v0.44.0: Obsidian (a barrier, `HeroEntity.barrier`, soaking in `shieldHero` after the Defensive and before the Ward), Lightning Rod (`refundDodgeCharge`, `quickUntil`), Sunder (`sunderUntil`), Seedling and Siphon (an orb and motes, which the Training Grounds get too), Crystallize, Blackout and Galvanize; the five buff ones wait `reactionCooldown` (`HeroEntity.reactionReadyAt`). Numbers: `balance.json → delve.stacks` and `delve.reactions`. The client draws the stack pips under each foe and the lasting states in `fx/draw-world.ts`, the moment in `arena/fx/reactions.ts` ("MELT! ×2" from the `hit` event's `pairs`), and the barrier and Galvanize on the HUD through the snapshot; the Training meter counts pairs. `tests/delve-pacing.test.ts` also sweeps all 15 pairs, forced (`AutopilotOptions.secondary`).
 ```
 
-In the stacks spec, `**Status:** Draft.` becomes (one line; these are Task 6's numbers, so use yours if Task 6 tuned anything):
+In the stacks spec, `**Status:** Draft.` becomes (one line, with Task 6's numbers):
 
 ```markdown
-**Status:** Built in v0.45.0. The gate kept the starting `firePerStack` 0.35, `shockPerStack` 0.08, `hexPerStack` 0.06 and `reactionLockout` 1 s, and raised `poisonPerStack` from 0.6 to 1.7: at 0.6 the Balanced mana Nature Bolt lost 24% and the best fused Burst grew to ×3.29 the best single-element one (+35%), and the Nature Burst is the only single-element Burst a per-stack value can lift past that (a 2 s lockout alone still left +25%; 1.6 left +10.5%). Hard gates, depth 10, one dummy: the worst single-element basic −0.6% (Frost, sword), the worst Balanced mana Bolt, Burst or Nova −0.1% (the Frost Bolt), the Nature+Fire Burst in the pack at most ×1.31 its pre-stacks figure, and the fused/single Burst ratio ×2.45 → ×2.62 (+7.1%). Reported (40-seed means): single-element basics Fire +11% to +49%, Storm +8% to +15%, Shadow +5% to +11%, Nature +18% to +125% (the maul in the pack), Frost and Earth within 1.4%; pair basics from −51% to +109% a row (Frost+Earth, Storm+Nature and Earth+Nature gain most; Fire+Shadow and Shadow+Nature rows lose most); the basics top 30 trades Fire+Shadow and Fire+Storm for Storm+Nature and Earth+Nature on one dummy, and loses Fire+Shadow, Fire+Earth and Frost+Earth in the pack; single-element abilities' medians Fire +3.6%, Storm +6.5%, Shadow +4.9%, Nature +5.1%, Frost and Earth 0% (Fire and Nature Novas and Barrages up to ×4.4; Swift and Light ones, mostly charge-paid, down to −20%); fused Bursts Frost+Fire ×2.5 and Frost+Earth ×2.7, Frost+Nature −30% and Fire+Nature −18%, the rest +2% to +23%. The pacing rails hold: first dives 11, 11, 11, 3; the 15-pair sweep's median 29 (22–40).
+**Status:** Built in v0.45.0. The gate kept the starting `firePerStack` 0.35, `shockPerStack` 0.08, `hexPerStack` 0.06 and `reactionLockout` 1 s, and raised `poisonPerStack` from 0.6 to 1.7: at 0.6 the Balanced mana Nature Bolt lost 24% and the best fused Burst grew to ×3.29 the best single-element one (+35%), and the Nature Burst is the only single-element Burst a per-stack value can lift past that (at 1.0, even a 2 s lockout left +25%; 1.6 left +10.5%). Hard gates, depth 10, one dummy: the worst single-element basic −0.6% (Frost, sword), the worst Balanced mana Bolt, Burst or Nova −0.1% (the Frost Bolt), the Nature+Fire Burst in the pack at most ×1.31 its pre-stacks figure, and the fused/single Burst ratio ×2.45 → ×2.62 (+7.1%). Reported (40-seed means): single-element basics Fire +11% to +49%, Storm +8% to +15%, Shadow +5% to +11%, Nature +18% to +125% (the maul in the pack), Frost and Earth within 1.4%; pair basics from −51% to +109% a row (Frost+Earth, Storm+Nature and Earth+Nature gain most; Fire+Shadow and Shadow+Nature rows lose most); the basics top 30 trades Fire+Shadow and Fire+Storm for Storm+Nature and Earth+Nature on one dummy, and loses Fire+Shadow, Fire+Earth and Frost+Earth in the pack; single-element abilities' medians Fire +3.6%, Storm +6.5%, Shadow +4.9%, Nature +5.1%, Frost and Earth 0% (Fire and Nature Novas and Barrages up to ×4.4; Swift and Light ones, mostly charge-paid, down to −20%); fused Bursts Frost+Fire ×2.5 and Frost+Earth ×2.7, Frost+Nature −30% and Fire+Nature −18%, the rest +2% to +23%. The pacing rails hold: first dives 11, 11, 11, 3; the 15-pair sweep's median 29 (22–40).
 ```
 
 In the pair reactions spec, after the heading `## Marks` and its blank line, add this line and a blank line:
