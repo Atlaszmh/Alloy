@@ -438,6 +438,39 @@ export interface DelveBalance {
     freezeImmunity: number;
     rootImmunity: number;
   };
+  /** Elemental stacks: what each hit applies, and what each count does (see the elemental stacks spec). */
+  stacks: {
+    /** Most stacks of one element on a foe (Nature's doubles with Plaguebearer). */
+    cap: number;
+    /** Seconds each element's stacks last; a new stack of it starts the timer again. */
+    duration: Record<ManaType, number>;
+    /** An ability's direct hit, by weight: Swift, Light, Balanced, Heavy, Crushing. */
+    byWeight: number[];
+    basicBlow: number;
+    /** A combo's finisher, and its discharge of the secondary. */
+    basicFinisher: number;
+    /** Every other hit that applies statuses: zone ticks, embers, chain jumps, retaliation… */
+    tick: number;
+    /**
+     * How strong 1, 2, 3… stacks of a status are, in per-stack units (cumulative); past its end
+     * each stack adds its last step (Plaguebearer's poison).
+     */
+    curve: number[];
+    /** Frost stacks whose crossing freezes. */
+    freezeAt: number;
+    /** A burn deals its ref × this × `curve` per second. */
+    firePerStack: number;
+    frostSlowPerStack: number;
+    frostSlowCap: number;
+    /** Extra damage taken: this × `curve` (doubled by Tempest). */
+    shockPerStack: number;
+    /** Extra damage taken: this × `curve`. */
+    hexPerStack: number;
+    /** Poison deals its ref × this × `curve` per second. */
+    poisonPerStack: number;
+    /** Seconds after a reaction on a foe before another can fire on it. */
+    reactionLockout: number;
+  };
   reactions: {
     meltMult: number;
     shatterMult: number;

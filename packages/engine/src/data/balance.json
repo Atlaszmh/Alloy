@@ -140,6 +140,13 @@
       "poisonDps": 0.12, "poisonDuration": 4, "poisonMaxStacks": 5, "rootDuration": 1.5, "rootBossMult": 0.4,
       "staggerImmunity": 1.2, "freezeImmunity": 1.5, "rootImmunity": 2
     },
+    "stacks": {
+      "cap": 5, "duration": { "fire": 3, "frost": 3, "storm": 4, "earth": 2, "shadow": 6, "nature": 4 },
+      "byWeight": [1, 1, 2, 3, 3], "basicBlow": 1, "basicFinisher": 2, "tick": 1,
+      "curve": [1, 1.8, 2.45, 3.0, 3.5],
+      "freezeAt": 3, "firePerStack": 0.35, "frostSlowPerStack": 0.2, "frostSlowCap": 0.6,
+      "shockPerStack": 0.08, "hexPerStack": 0.06, "poisonPerStack": 1.7, "reactionLockout": 1
+    },
     "reactions": {
       "meltMult": 2, "shatterMult": 2.5, "overloadMult": 1.2, "overloadRadius": 2.6, "superconductFreeze": 1.5, "soulfireHeal": 0.3,
       "combustMult": 1.6, "combustRadius": 2, "blightRadius": 2.5,
