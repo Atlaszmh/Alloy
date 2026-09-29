@@ -1,7 +1,7 @@
 # Delve Ability System Design
 
 **Date:** 2026-09-25
-**Status:** Built in v0.33.0 (approach A). Details below were settled by Claude while the owner was away, for review.
+**Status:** Built in v0.33.0 (approach A). Details below were settled by Claude while the owner was away, for review. Statuses became per-element stacks in v0.45.0 (`2026-09-28-delve-elemental-stacks-design.md`): the status table below is historical.
 **Replaces:** the 3-slot spell bar and its 15 fixed spells (`arpg.json → skills`), per-element mana pools, and attunement-gated spell unlocks.
 **Engine:** `packages/engine/src/arpg/`, `src/delve/`, `src/data/arpg.json`, `balance.json → delve.abilities`
 **Client:** `packages/client/src/features/delve/` (arena HUD, renderer, camp)

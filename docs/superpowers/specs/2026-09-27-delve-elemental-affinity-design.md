@@ -1,7 +1,7 @@
 # Delve Elemental Affinity Design
 
 **Date:** 2026-09-27
-**Status:** Built in v0.43.0. The reaction-partner bind and the one-reaction pacing rail are superseded by `2026-09-28-delve-pair-reactions-design.md` (v0.44.0): every pair reacts now.
+**Status:** Built in v0.43.0. The reaction-partner bind and the one-reaction pacing rail are superseded by `2026-09-28-delve-pair-reactions-design.md` (v0.44.0): every pair reacts now. The 30% basic status roll described below is gone since v0.45.0 (`2026-09-28-delve-elemental-stacks-design.md`): every blow applies a stack of its element.
 
 **Engine:** `packages/engine/src/`
 - `delve/pair.ts` (new)
