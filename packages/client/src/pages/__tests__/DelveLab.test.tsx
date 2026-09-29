@@ -36,6 +36,10 @@ function result(key: string, dps: number, casts = 3): LabRow {
 }
 const rowKeys = () => screen.getAllByTestId('lab-row').map((r) => r.getAttribute('data-key'));
 
+/**
+ * The tests share the module-level session cache: none replies with the whole grid at the
+ * default depth and pack, so every later test still creates a worker on load.
+ */
 function renderLab() {
   render(
     <MemoryRouter>
@@ -114,5 +118,17 @@ describe('DelveLab', () => {
     fireEvent.click(screen.getByTestId('lab-pack'));
     expect(FakeWorker.all).toHaveLength(3);
     expect(screen.queryByTestId('lab-progress')).toBeNull();
+  });
+
+  it('moving focus off the slider commits the depth too (a controller only nudges it)', () => {
+    renderLab();
+    fireEvent.change(screen.getByTestId('lab-depth'), { target: { value: '15' } });
+    expect(FakeWorker.all).toHaveLength(1);
+    fireEvent.blur(screen.getByTestId('lab-depth'));
+    expect(FakeWorker.all).toHaveLength(2);
+    expect(latest().requests).toEqual([{ depth: 15, pack: false }]);
+    // Losing focus without a change starts no run.
+    fireEvent.blur(screen.getByTestId('lab-depth'));
+    expect(FakeWorker.all).toHaveLength(2);
   });
 });

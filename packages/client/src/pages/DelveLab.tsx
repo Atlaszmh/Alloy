@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { dpsCombos, dpsKey, type DpsOptions, type DpsSetup } from '@alloy/engine';
 import { MAX_DEPTH } from '@/stores/sandboxStore';
@@ -49,9 +49,11 @@ export function DelveLab() {
   const [rows, setRows] = useState<LabRow[]>([]);
 
   // The whole grid at this depth and pack, unless the session has it already. Each request gets
-  // a fresh worker: a synchronous one can't see a newer message mid-run. (Under StrictMode, in
-  // dev, this effect runs twice on load: one worker is made, terminated and made again.)
-  useEffect(() => {
+  // a fresh worker: a synchronous one can't see a newer message mid-run. A layout effect, so the
+  // reset lands before paint and no frame shows the last run's rows under the new controls.
+  // (Under StrictMode, in dev, this effect runs twice on load: one worker is made, terminated
+  // and made again.)
+  useLayoutEffect(() => {
     const kept = recall(depth, pack, keys);
     if (kept.length === keys.length) {
       setRows(kept);
@@ -146,6 +148,7 @@ export function DelveLab() {
         </div>
         <label className="flex items-center gap-2 text-xs text-stone-300">
           Depth
+          {/* Commits on release, a key up, or losing focus: a controller only nudges the value. */}
           <input
             type="range"
             min={1}
@@ -154,6 +157,7 @@ export function DelveLab() {
             onChange={(e) => setSlider(Number(e.target.value))}
             onPointerUp={(e) => setDepth(Number(e.currentTarget.value))}
             onKeyUp={(e) => setDepth(Number(e.currentTarget.value))}
+            onBlur={(e) => setDepth(Number(e.currentTarget.value))}
             data-testid="lab-depth"
           />
           <b className="w-5 text-right text-stone-100">{slider}</b>
