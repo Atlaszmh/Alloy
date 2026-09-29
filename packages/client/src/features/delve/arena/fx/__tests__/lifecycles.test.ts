@@ -4,12 +4,15 @@ import { MANA_HEX } from '../../palette';
 import { Lifecycles } from '../lifecycles';
 
 const fx = () => ({ burst: vi.fn(), disperse: vi.fn() });
+/** A one-move Frost chain; the Defensive's is up while `defend` names its move. */
+const frost = { moves: [{ element: 'frost' }], hold: [null] };
+const ward = { form: 'ward', until: 5, move: 0, stage: 0 };
 function world(over: Partial<ArpgWorld>): ArpgWorld {
   return {
     t: 1,
     projectiles: [],
     zones: [],
-    hero: { x: 0, y: 0, defend: null, abilities: [{ element: 'frost' }, { element: 'frost' }] },
+    hero: { x: 0, y: 0, defend: null, chains: [frost, frost] },
     ...over,
   } as unknown as ArpgWorld;
 }
@@ -37,8 +40,8 @@ describe('Lifecycles', () => {
         hero: {
           x: 0,
           y: 0,
-          defend: { form: 'ward', until: 5 },
-          abilities: [{}, { element: 'frost' }],
+          defend: ward,
+          chains: [frost, frost],
         } as never,
       }),
       f as never,
@@ -50,14 +53,29 @@ describe('Lifecycles', () => {
     expect(f.disperse).toHaveBeenCalledWith(0, -0.3, 1, MANA_HEX.frost, 30);
   });
 
+  it("a guard dissolves in its own element, not the next Defensive move's winding up", () => {
+    const l = new Lifecycles();
+    const f = fx();
+    const guarded = {
+      x: 0,
+      y: 0,
+      defend: ward,
+      chains: [frost, { moves: [{ element: 'frost' }, { element: 'fire' }], hold: [null, null] }],
+      windup: { slot: 1, step: 1, stage: 0 },
+    };
+    l.update(world({ hero: guarded as never }), f as never, 1);
+    l.update(world({}), f as never, 1.1);
+    expect(f.disperse).toHaveBeenCalledWith(0, -0.3, 1, MANA_HEX.frost, 30);
+  });
+
   it('leaves a landing Burst or Barrage (they explode) and a guard that stays up', () => {
     const l = new Lifecycles();
     const f = fx();
     const guarded = {
       x: 0,
       y: 0,
-      defend: { form: 'ward', until: 5 },
-      abilities: [{}, { element: 'frost' }],
+      defend: ward,
+      chains: [frost, frost],
     } as never;
     l.update(
       world({ zones: [{ ...zone, detonateAt: 1.4 }] as never, hero: guarded }),

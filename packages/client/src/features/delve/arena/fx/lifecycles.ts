@@ -1,6 +1,6 @@
 import type { ArpgWorld } from '@alloy/engine';
 import { MANA_HEX } from '../palette';
-import { elem, shotColor } from './draw-world';
+import { elem, guardMove, shotColor } from './draw-world';
 import type { ManaFx } from './mana-fx';
 
 type Fx = Pick<ManaFx, 'burst' | 'disperse'>;
@@ -53,7 +53,7 @@ export class Lifecycles {
     const h = w.hero;
     const guarding = !!h.defend && w.t < h.defend.until;
     if (this.guard !== null && !guarding) fx.disperse(h.x, h.y - 0.3, 1, this.guard, 30);
-    const el = h.abilities[1]?.element;
+    const el = guardMove(h)?.element;
     this.guard = guarding && el ? MANA_HEX[el] : null;
   }
 

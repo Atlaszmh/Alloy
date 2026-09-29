@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Graphics } from 'pixi.js';
-import type { ArpgEvent, Drop } from '@alloy/engine';
-import { drawDrop, dropPop, pickupColor, pruneViews } from '../arena/ArenaRenderer';
+import type { ArpgEvent, ArpgWorld, Drop } from '@alloy/engine';
+import { drawDrop, dropPop, holdPing, pickupColor, pruneViews } from '../arena/ArenaRenderer';
 import { MANA_HEX } from '../arena/palette';
 
 /** A Graphics stand-in that records the colours it fills. */
@@ -63,5 +63,23 @@ describe('the arena renderer', () => {
     expect(pickup({ mana: 'nature' })).toBe(MANA_HEX.nature);
     expect(pickup({})).toBe(0xf87171);
     expect(pickup({ dropKind: 'mote', mana: 'shadow' })).toBe(MANA_HEX.shadow);
+  });
+
+  it("a hold's stage pings a ring in the held move's element (a held blow's for the basic), wider at stage 2", () => {
+    const w = {
+      hero: {
+        chains: [{ moves: [{ element: 'frost' }], hold: [null] }],
+        hold: { slot: 0, step: 0, start: 0, aim: null },
+        windup: null,
+        swing: { step: 1 },
+        stats: { weapon: { blows: [{ element: 'fire' }, { element: 'storm' }] } },
+      },
+    } as unknown as ArpgWorld;
+    const ability = holdPing(w, { slot: 0, stage: 1 });
+    expect(ability.color).toBe(MANA_HEX.frost);
+    expect(ability.r).toBeCloseTo(1.2);
+    const blow = holdPing(w, { slot: null, stage: 2 });
+    expect(blow.color).toBe(MANA_HEX.storm);
+    expect(blow.r).toBeCloseTo(1.6);
   });
 });

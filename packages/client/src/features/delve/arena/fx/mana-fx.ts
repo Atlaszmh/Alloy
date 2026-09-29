@@ -1,4 +1,4 @@
-import type { ManaType, Vec } from '@alloy/engine';
+import type { ManaType, MoveKind, Vec } from '@alloy/engine';
 import { PX, manaArc, manaDust, manaLine, manaRing, px } from './mana-pixels';
 import {
   drawInfusion,
@@ -126,17 +126,17 @@ export function spawnCount(rate: number, dt: number, rand = Math.random): number
 }
 
 /**
- * Where a basic finisher discharges the secondary: a ring at the blade's tip
- * (`reach` out along `dir`, sized by heft), round the hero at `reach` for a
- * full-circle blow, or, for a shot (no tip), a flare at the hand (r 0.6).
- * `arc` is in radians.
+ * Where a heavy or hold basic blow rings out in its element: a ring at the
+ * blade's tip (`reach` out along `dir`, sized by heft), round the hero at
+ * `reach` for a full-circle blow, or, for a shot (no tip), a flare at the hand
+ * (r 0.6); none for a light or medium blow. `arc` is in radians.
  */
 export function finisherRing(
-  e: { x: number; y: number; dir: Vec; heft: number; melee: boolean; finisher: boolean },
+  e: { x: number; y: number; dir: Vec; heft: number; melee: boolean; moveKind: MoveKind },
   arc: number,
   reach: number,
 ): RingShape | null {
-  if (!e.finisher) return null;
+  if (e.moveKind !== 'heavy' && e.moveKind !== 'hold') return null;
   if (!e.melee) {
     const hand = handPoint(e.x, e.y, e.dir);
     return { kind: 'ring', x: hand.x, y: hand.y, r: 0.6 };

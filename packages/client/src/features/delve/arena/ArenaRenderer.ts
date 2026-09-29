@@ -1,16 +1,17 @@
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import type {
-  ArpgEvent,
-  ArpgWorld,
-  BiomeDef,
-  Drop,
-  ManaType,
-  MonsterEntity,
-  Vec,
+import {
+  activeMove,
+  type ArpgEvent,
+  type ArpgWorld,
+  type BiomeDef,
+  type Drop,
+  type ManaType,
+  type MonsterEntity,
+  type Vec,
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
 import { ManaFx, finisherRing } from './fx/mana-fx';
-import { INFUSION_BUDGET, basicMotif, type InfusionBudget } from './fx/infusion';
+import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
@@ -25,6 +26,7 @@ import {
   drawProjectiles,
   drawTelegraphs,
   drawZones,
+  guardMove,
   type AimView,
 } from './fx/draw-world';
 
@@ -352,10 +354,12 @@ export class ArenaRenderer {
           break;
         case 'basic': {
           this.kickCamera(e.dir, e.heft);
+          // The row the blow struck with (a manual hold blow's: its stage's).
           const wpn = w.hero.stats.weapon;
-          const s = wpn.combo[e.step] ?? wpn.combo[0];
+          const s = wpn.feel[e.moveKind];
           const arc = Math.min(360, s.arc ?? wpn.arc) * (Math.PI / 180);
           const range = wpn.range + (s.reach ?? 0) + 0.2;
+          const heavy = e.moveKind === 'heavy' || e.moveKind === 'hold';
           if (e.melee)
             this.fx.swing(
               e.x,
@@ -364,18 +368,12 @@ export class ArenaRenderer {
               arc,
               range,
               elemColor(e.element),
-              {
-                heft: e.heft,
-                reverse: e.step % 2 === 1,
-                finisher: e.finisher,
-                // Ordinary blows wear the secondary's motif; the finisher is its body.
-                infusion: basicMotif(wpn, e.element),
-              },
+              { heft: e.heft, reverse: e.step % 2 === 1, finisher: heavy },
             );
           else this.fx.fling(e.x, e.y, e.dir, elemColor(e.element), 6, 7);
-          // The finisher discharges the secondary: at the tip, round a full circle, or at the hand.
+          // Heavy and hold blows ring out in their own element: at the tip, round a full circle, or at the hand.
           const ring = finisherRing(e, arc, range);
-          if (ring && wpn.infusion) this.fx.infuse('finisher', wpn.infusion, ring);
+          if (ring) this.fx.infuse('finisher', e.element, ring);
           break;
         }
         case 'cast': {
@@ -413,6 +411,11 @@ export class ArenaRenderer {
         case 'buff':
           this.fx.ring(w.hero.x, w.hero.y, 1.6, MANA_HEX[e.element], true, 0.4);
           break;
+        case 'holdStage': {
+          const ping = holdPing(w, e);
+          this.fx.ring(w.hero.x, w.hero.y - 0.3, ping.r, ping.color, false, 0.25);
+          break;
+        }
         case 'wardBreak':
           this.fx.ring(e.x, e.y, 2.4, MANA_HEX[e.element], false, 0.5);
           this.fx.burst(e.x, e.y, 0xffffff, 16, 5);
@@ -527,7 +530,7 @@ export class ArenaRenderer {
   }
 
   private guardColor(w: ArpgWorld): number {
-    const guard = w.hero.abilities[1];
+    const guard = guardMove(w.hero);
     return guard ? MANA_HEX[guard.element] : MANA_HEX.shadow;
   }
 
@@ -652,7 +655,7 @@ export class ArenaRenderer {
 
   private syncHero(w: ArpgWorld): void {
     const h = w.hero;
-    const aura = h.stats.weapon.element ? MANA_HEX[h.stats.weapon.element] : 0xd4a834;
+    const aura = MANA_HEX[h.stats.weapon.blows[0].element];
     // Dust kicked up along a dodge.
     if (h.dodge && w.t < h.dodge.until) this.fx.burst(h.x, h.y + 0.35, 0xd6d3d1, 1, 1.2);
     this.hero.position.set(h.x, h.y);
@@ -883,6 +886,22 @@ export class ArenaRenderer {
     for (const t of this.textPool) t.destroy();
     this.textPool = [];
   }
+}
+
+/**
+ * A hold reaching a stage pings a ring round the hero, wider at stage 2, in
+ * the held move's element (an ability's hold) or the held blow's (slot null).
+ */
+export function holdPing(
+  w: ArpgWorld,
+  e: { slot: number | null; stage: number },
+): { r: number; color: number } {
+  const h = w.hero;
+  const element =
+    e.slot === null
+      ? h.stats.weapon.blows[h.swing?.step ?? 0]?.element
+      : activeMove(h, e.slot)?.element;
+  return { r: 0.8 + 0.4 * e.stage, color: elemColor(element) };
 }
 
 /** A pickup's sparkle: the item's rarity, else the drop's mana (a mote, a Seedling orb), else red. */

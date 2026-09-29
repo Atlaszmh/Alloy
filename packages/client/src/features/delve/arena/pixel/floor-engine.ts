@@ -129,7 +129,7 @@ export function snapshotArena(
     dt,
     events: events.filter(onFloor),
     bodies,
-    hero: { x: w.hero.x, y: w.hero.y, element: w.hero.stats.weapon.element },
+    hero: { x: w.hero.x, y: w.hero.y, element: w.hero.stats.weapon.blows[0].element },
     projectiles: w.projectiles.map((p) => ({
       x: p.x,
       y: p.y,

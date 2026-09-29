@@ -1,13 +1,16 @@
 import type { Graphics } from 'pixi.js';
 import {
   MANA_TYPES,
+  activeMove,
+  chainMove,
   type ArpgWorld,
   type ManaType,
   type Projectile,
+  type ResolvedAbility,
   type Vec,
   type Zone,
 } from '@alloy/engine';
-import { basicMotif, drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
+import { drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
 import type { AimMarker } from '../aim-gestures';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
@@ -219,10 +222,18 @@ export function drawTelegraphs(ground: Graphics, w: ArpgWorld, time: number): vo
   }
 }
 
+/**
+ * The Defensive move whose effect is up (`h.defend`, at its stage), even while
+ * the chain's next move winds up, else null.
+ */
+export function guardMove(h: ArpgWorld['hero']): ResolvedAbility | null {
+  return h.defend ? chainMove(h.chains[1], h.defend.move, h.defend.stage) : null;
+}
+
 /** The hero's footing: a pixel ring on the ground with a notch showing where it faces. */
 export function drawFooting(ground: Graphics, w: ArpgWorld, time: number): void {
   const h = w.hero;
-  const color = h.stats.weapon.element ? MANA_HEX[h.stats.weapon.element] : 0xd4a834;
+  const color = MANA_HEX[h.stats.weapon.blows[0].element];
   const pulse = 0.55 + Math.sin(time * 4) * 0.15;
   manaEllipse(ground, h.x, h.y + 0.42, 0.78, 0.34, color, time, pulse);
   for (let k = 0; k < 3; k++) {
@@ -267,7 +278,7 @@ export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
       time,
     });
   }
-  const guard = h.abilities[1];
+  const guard = guardMove(h);
   if (h.defend && w.t < h.defend.until && guard) {
     const color = MANA_HEX[guard.element];
     if (h.defend.form === 'ward' && h.ward) {
@@ -296,7 +307,7 @@ export function drawGuard(air: Graphics, w: ArpgWorld, time: number): void {
     }
   }
   if (h.windup) {
-    const ab = h.abilities[h.windup.slot];
+    const ab = activeMove(h, h.windup.slot);
     // The ring shows a channel only; a conjure is the anticipation (drawAnticipation).
     if (ab && ab.channel > 0 && w.t >= h.windup.conjureUntil) {
       const color = MANA_HEX[ab.element];
@@ -458,12 +469,6 @@ export function drawAim(air: Graphics, w: ArpgWorld, aim: AimView | null, time: 
   }
 }
 
-/** A hero shot's infusion: its ability's second element, or for a basic shot the weapon's (none when the shot is that element: a finisher's discharge). Embers have none. */
-function shotInfusion(w: ArpgWorld, p: Projectile): ManaType | null {
-  if (p.owner !== 'hero' || p.form === 'ember') return null;
-  return p.ability ? (p.ability.elements[1] ?? null) : basicMotif(w.hero.stats.weapon, p.element);
-}
-
 /**
  * The infusion pass's persistent carriers, drawn after ManaFx's transient
  * ones and in priority order: the hero's Defensive aura (a ring, seeded by its
@@ -478,13 +483,14 @@ export function drawInfusions(
 ): void {
   const air = { air: layers.air };
   const h = w.hero;
-  const aura = h.abilities[1]?.elements[1];
+  const aura = guardMove(h)?.elements[1];
   if (aura && h.defend && w.t < h.defend.until && (h.defend.form !== 'ward' || h.ward)) {
     const fade = Math.min(1, (h.defend.until - w.t) / 0.3);
     drawInfusion(air, aura, { kind: 'ring', x: h.x, y: h.y - 0.3, r: 1 }, time, 1, fade, budget);
   }
   for (const p of w.projectiles) {
-    const el = shotInfusion(w, p);
+    // An ability shot's second element (a basic shot has one element; embers none).
+    const el = p.owner === 'hero' && p.form !== 'ember' ? p.ability?.elements[1] : undefined;
     if (!el) continue;
     const orb = { kind: 'orb' as const, x: p.x, y: p.y, r: shotSize(p), vx: p.vx, vy: p.vy };
     drawInfusion(air, el, orb, time, p.id, 1, budget);

@@ -4,7 +4,6 @@ import { MANA_TYPES, type ManaType } from '@alloy/engine';
 import {
   EARTH_CRACK,
   SHADOW_SMOKE,
-  basicMotif,
   drawInfusion,
   eventSeed,
   type InfusionBudget,
@@ -210,13 +209,5 @@ describe('drawInfusion', () => {
     expect(eventSeed(3, 4, 1)).toBe(eventSeed(3, 4, 1));
     expect(eventSeed(3, 4, 1)).not.toBe(eventSeed(3, 4, 1.5));
     expect(eventSeed(3, 4, 1)).not.toBe(eventSeed(4, 3, 1));
-  });
-});
-
-describe('basicMotif', () => {
-  it("draws the weapon's infusion on a blow of another element, and none on a blow of that element", () => {
-    expect(basicMotif({ infusion: 'storm' }, 'fire')).toBe('storm');
-    expect(basicMotif({ infusion: 'storm' }, 'storm')).toBeNull(); // a finisher's discharge
-    expect(basicMotif({ infusion: null }, 'fire')).toBeNull();
   });
 });

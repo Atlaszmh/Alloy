@@ -66,7 +66,8 @@ describe('the hand', () => {
       y: 5,
       facing: { x: 1, y: 0 },
       swing: null,
-      abilities: [{ element: 'frost', heft: 0.45, combo: [1] }],
+      hold: null,
+      chains: [{ moves: [{ element: 'frost', heft: 0.45, last: false }], hold: [null] }],
       windup: {
         slot: 0,
         aim: null,
@@ -77,7 +78,7 @@ describe('the hand', () => {
         conjureUntil: 1.3,
         chargePaid: 0,
       },
-      stats: { weapon: { combo: [], element: null } },
+      stats: { weapon: { blows: [], feel: {} } },
     },
   } as unknown as ArpgWorld;
 
@@ -208,13 +209,16 @@ describe('infused transient carriers', () => {
 describe('the infusion pass: persistent carriers', () => {
   const two = { elements: ['fire', 'storm'] };
   const one = { elements: ['fire'] };
+  /** A one-move chain of that move. */
+  const chain = (move: object) => ({ moves: [move], hold: [null] });
   const plainHero = {
     x: 5,
     y: 5,
     defend: null,
     ward: null,
-    abilities: [one, one],
-    stats: { weapon: { infusion: null } },
+    windup: null,
+    hold: null,
+    chains: [chain(one), chain(one)],
   };
   const world = (over: object) =>
     ({ t: 1, projectiles: [], zones: [], hero: plainHero, ...over }) as unknown as ArpgWorld;
@@ -246,13 +250,9 @@ describe('the infusion pass: persistent carriers', () => {
     ).toBe(0);
   });
 
-  it("gives a basic shot the weapon's infusion, unless the shot is that element already", () => {
-    const basic = shot({ form: null, ability: null, element: 'fire' });
-    expect(used(world({ projectiles: [basic] }))).toBe(0);
-    const infused = { ...plainHero, stats: { weapon: { infusion: 'nature' } } };
-    expect(used(world({ projectiles: [basic], hero: infused }))).toBeGreaterThan(0);
-    // A finisher's shot is the secondary's own body: no motif on top.
-    expect(used(world({ projectiles: [{ ...basic, element: 'nature' }], hero: infused }))).toBe(0);
+  it('draws no motif on a basic shot: a blow has one element', () => {
+    for (const element of ['fire', 'nature'])
+      expect(used(world({ projectiles: [shot({ form: null, ability: null, element })] }))).toBe(0);
   });
 
   it("draws a fusion's lingering ground and a thrown Burst in flight, not a Barrage target", () => {
@@ -279,17 +279,23 @@ describe('the infusion pass: persistent carriers', () => {
   it("rings the hero with the Defensive's second element while its buff lasts", () => {
     const guarded = {
       ...plainHero,
-      defend: { form: 'ward', until: 3 },
+      defend: { form: 'ward', until: 3, move: 0, stage: 0 },
       ward: { hp: 1, max: 1 },
-      abilities: [one, two],
+      chains: [chain(one), chain(two)],
     };
+    const blink = (until: number) => ({ form: 'blink', until, move: 0, stage: 0 });
     expect(used(world({ hero: guarded }))).toBeGreaterThan(0);
     expect(used(world({ hero: { ...guarded, ward: null } }))).toBe(0); // a broken Ward
-    expect(
-      used(world({ hero: { ...guarded, defend: { form: 'blink', until: 3 } } })),
-    ).toBeGreaterThan(0);
-    expect(used(world({ hero: { ...guarded, defend: { form: 'blink', until: 0.5 } } }))).toBe(0);
-    expect(used(world({ hero: { ...guarded, abilities: [one, one] } }))).toBe(0); // one element
+    expect(used(world({ hero: { ...guarded, defend: blink(3) } }))).toBeGreaterThan(0);
+    expect(used(world({ hero: { ...guarded, defend: blink(0.5) } }))).toBe(0);
+    expect(used(world({ hero: { ...guarded, chains: [chain(one), chain(one)] } }))).toBe(0); // one element
+    // The chain's next Defensive move (one element) winding up leaves the Ward's ring as it is.
+    const next = {
+      ...guarded,
+      chains: [chain(one), { moves: [two, one], hold: [null, null] }],
+      windup: { slot: 1, step: 1, stage: 0 },
+    };
+    expect(used(world({ hero: next }))).toBeGreaterThan(0);
   });
 
   const rim = {
@@ -312,9 +318,9 @@ describe('the infusion pass: persistent carriers', () => {
   it('gives the ground layer to zone rims only: never the aura, shots or lobs', () => {
     const hero = {
       ...plainHero,
-      defend: { form: 'ward', until: 3 },
+      defend: { form: 'ward', until: 3, move: 0, stage: 0 },
       ward: { hp: 1, max: 1 },
-      abilities: [one, two],
+      chains: [chain(one), chain(two)],
     };
     const lob = { ...rim, id: 10, source: 'burst', detonateAt: 1.5, fromX: 2, fromY: 2 };
     const spy = vi.mocked(drawInfusion);
@@ -332,9 +338,16 @@ describe('the infusion pass: persistent carriers', () => {
 });
 
 describe('finisherRing', () => {
-  const blow = { x: 2, y: 3, dir: { x: 0, y: -1 }, heft: 1, melee: true, finisher: true };
+  const blow = {
+    x: 2,
+    y: 3,
+    dir: { x: 0, y: -1 },
+    heft: 1,
+    melee: true,
+    moveKind: 'heavy' as const,
+  };
 
-  it('rings the tip of a melee finisher, or the hero for a full circle', () => {
+  it('rings the tip of a heavy or hold blow, or the hero for a full circle', () => {
     expect(finisherRing(blow, Math.PI / 2, 1.6)).toEqual({
       kind: 'ring',
       x: 2,
@@ -342,13 +355,16 @@ describe('finisherRing', () => {
       r: 1.2,
     });
     expect(finisherRing(blow, Math.PI * 2, 1.6)).toEqual({ kind: 'ring', x: 2, y: 3, r: 1.6 });
+    expect(finisherRing({ ...blow, moveKind: 'hold' }, Math.PI * 2, 1.6)).not.toBeNull();
   });
 
-  it('flares at the hand for a ranged finisher; none for a plain blow', () => {
+  it('flares at the hand for a ranged heavy blow; none for a light or medium one', () => {
     const flare = finisherRing({ ...blow, melee: false }, Math.PI / 2, 1.6)!;
     expect(flare).toMatchObject({ kind: 'ring', x: 2, r: 0.6 });
     expect(flare.y).toBeCloseTo(3 - 0.3 - HAND); // chest height, HAND toward the aim (up)
-    expect(finisherRing({ ...blow, finisher: false }, Math.PI / 2, 1.6)).toBeNull();
-    expect(finisherRing({ ...blow, melee: false, finisher: false }, Math.PI / 2, 1.6)).toBeNull();
+    for (const moveKind of ['light', 'medium'] as const) {
+      expect(finisherRing({ ...blow, moveKind }, Math.PI / 2, 1.6)).toBeNull();
+      expect(finisherRing({ ...blow, melee: false, moveKind }, Math.PI / 2, 1.6)).toBeNull();
+    }
   });
 });
