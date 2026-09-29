@@ -130,29 +130,25 @@ export interface Vec {
 export type MonsterKind = 'normal' | 'elite' | 'boss';
 
 export interface StatusState {
-  burnDps: number;
-  burnUntil: number;
+  /** Elemental stacks per element (0 to the cap): the count is the status and its strength. */
+  stacks: Record<ManaType, number>;
+  /** When each element's stacks lapse, all together; a new stack of it pushes this back. */
+  stackUntil: Record<ManaType, number>;
+  /** The strongest applying hit × `status.burnDps`: a burn deals `firePerStack` × `curve` of it a second. */
+  burnRef: number;
   burnTickAt: number;
-  /** The ability slot whose burn set its damage (undefined: a basic's, or no slot's); its ticks carry it. */
+  /** The ability slot whose burn set `burnRef` (undefined: a basic's, or no slot's); its ticks carry it. */
   burnSlot: number | undefined;
-  chillStacks: number;
-  chillUntil: number;
   freezeUntil: number;
-  shockUntil: number;
-  hexUntil: number;
   staggerUntil: number;
-  /** Earth's mark: an Earth source staggered the foe (even if immunity refused the stagger). */
-  rattledUntil: number;
   /** Sunder: every hit on the foe deals more until this time. */
   sunderUntil: number;
   blindUntil: number;
   brandUntil: number;
-  poisonStacks: number;
-  /** Damage per second per stack. */
-  poisonDps: number;
-  poisonUntil: number;
+  /** The strongest applying hit × `status.poisonDps`: poison deals `poisonPerStack` × `curve` of it a second. */
+  poisonRef: number;
   poisonTickAt: number;
-  /** The ability slot whose poison set its damage (see `burnSlot`). */
+  /** The ability slot whose poison set `poisonRef` (see `burnSlot`). */
   poisonSlot: number | undefined;
   rootUntil: number;
   /** Crowd-control immunity after a stagger, freeze or root ends, so spam can't lock a foe. */

@@ -190,7 +190,7 @@ export {
 } from './arpg/world.js';
 export type { FloorOptions } from './arpg/world.js';
 export { stepWorld } from './arpg/step.js';
-export { basicStep, BASIC_STATUS } from './arpg/basic.js';
+export { basicStep } from './arpg/basic.js';
 export { botInput } from './arpg/bot.js';
 export { castAbility, abilityReady, canAfford, pressStep } from './arpg/abilities/cast.js';
 export {
@@ -199,7 +199,7 @@ export {
   defaultAbilities,
   stepHeft,
 } from './arpg/abilities/resolve.js';
-export { makeCtx } from './arpg/combat.js';
+export { makeCtx, BASIC_STATUS } from './arpg/combat.js';
 export {
   createSandboxWorld,
   setSandboxToggles,

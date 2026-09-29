@@ -72,10 +72,9 @@ describe('ability events carry the infusion', () => {
     const events: ArpgEvent[] = [];
     const ctx = makeCtx(registry, w, events);
     const [a, b] = w.monsters;
-    a.status.burnUntil = w.t + 5;
+    a.status.stacks.fire = 1;
     hitMonster(ctx, a, 1, 'storm', { source: 'skill' }); // Overload
-    b.status.poisonUntil = w.t + 5;
-    b.status.poisonStacks = 2;
+    b.status.stacks.nature = 2;
     hitMonster(ctx, b, 1, 'fire', { source: 'skill' }); // Combust
     a.status.brandUntil = w.t + 5;
     killMonster(ctx, a); // Hellfire Brand

@@ -15,9 +15,9 @@ import {
   isShocked,
   isSundered,
   makeCtx,
+  BASIC_STATUS,
   type SimCtx,
 } from '../src/arpg/combat.js';
-import { BASIC_STATUS } from '../src/arpg/basic.js';
 import { shieldHero } from '../src/arpg/abilities/defend.js';
 import { refundDodgeCharge } from '../src/arpg/dodge.js';
 import { hitOpts } from '../src/arpg/abilities/impact.js';
@@ -115,7 +115,7 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
   blight: (f) => {
     // Each affliction spreads only if the foe has it: no empty poison from a hexed foe.
     if (f.marked === 'nature') expect(isPoisoned(f.ctx, f.o)).toBe(true);
-    else expect(f.o.status.poisonUntil).toBe(0);
+    else expect(f.o.status.stacks.nature).toBe(0);
     expect(isHexed(f.ctx, f.o)).toBe(f.marked === 'shadow');
   },
   obsidian: (f) => {
@@ -162,7 +162,7 @@ const EFFECTS: Partial<Record<ReactionId, (f: Fired) => void>> = {
   },
   crystallize: (f) => {
     expect(f.dealt / f.plain).toBeCloseTo(bal.reactions.crystallizeMult);
-    expect(f.o.status.chillStacks).toBe(1);
+    expect(f.o.status.stacks.frost).toBe(bal.stacks.tick);
     expect(isChilled(f.ctx, f.o)).toBe(true);
     expect(f.events).toContainEqual({
       kind: 'explode',
@@ -224,7 +224,7 @@ describe('the reaction table', () => {
 });
 
 describe('balance: the reactions', () => {
-  it("loads the new eight's numbers, their cooldown and Earth's rattle", () => {
+  it("loads the new eight's numbers, their cooldown and how long Earth's stacks last", () => {
     expect(bal.reactions).toMatchObject({
       obsidianSoak: 0.5,
       obsidianCap: 0.3,
@@ -241,7 +241,7 @@ describe('balance: the reactions', () => {
       galvanizeSeconds: 1,
       reactionCooldown: 1.5,
     });
-    expect(bal.status.rattleDuration).toBe(2);
+    expect(bal.stacks.duration.earth).toBe(2);
   });
 });
 
@@ -260,17 +260,18 @@ describe('marks', () => {
     expect(marks()).toEqual([...MANA_TYPES]);
   });
 
-  it('an Earth stagger rattles, even when immunity refuses the stagger; it lapses after rattleDuration', () => {
+  it('an Earth stagger rattles, even when immunity refuses the stagger; it lapses with Earth stacks', () => {
     const { w, ctx, m } = setup([dummy(13, 20), dummy(16, 20)]);
     const plain = w.monsters[1];
     m.status.staggerImmuneUntil = 1e9;
     applyStatus(ctx, m, 'stagger', 0, true);
     expect(m.status.staggerUntil).toBe(0);
-    expect(m.status.rattledUntil).toBeCloseTo(w.t + bal.status.rattleDuration);
+    expect(m.status.stacks.earth).toBe(bal.stacks.tick);
+    expect(m.status.stackUntil.earth).toBeCloseTo(w.t + bal.stacks.duration.earth);
     applyStatus(ctx, plain, 'stagger', 0);
     expect(plain.status.staggerUntil).toBeGreaterThan(w.t);
     expect(isRattled(ctx, plain)).toBe(false);
-    run(w, bal.status.rattleDuration + 0.1);
+    run(w, bal.stacks.duration.earth + 0.1);
     expect(isRattled(ctx, m)).toBe(false);
   });
 
@@ -395,7 +396,7 @@ describe('every pair reacts, both ways', () => {
     } else if (id === 'superconduct' && hit === 'storm') {
       // Storm takes the chill and leaves the freeze (freezing again would be refused).
       expect(isChilled(ctx, m)).toBe(false);
-      expect(m.status.chillStacks).toBe(0);
+      expect(m.status.stacks.frost).toBe(0);
       expect(isFrozen(ctx, m)).toBe(true);
     } else expect(hasMark(ctx, m, marked)).toBe(false);
     // A buff reaction starts its own cooldown.
@@ -602,9 +603,10 @@ describe('Sunder', () => {
     const fireHit = hitMonster(plain.ctx, plain.m, 100, 'fire', { source: 'skill' });
     const { w, ctx, m } = setup();
     applyStatus(ctx, m, 'hex', 0);
-    // The sundering hit gets the hex it used up, not Sunder.
+    // The sundering hit gets the hex stack it used up, not Sunder.
     expect(hitMonster(ctx, m, 100, 'earth', { source: 'skill' })).toBeCloseTo(
-      hitMonster(plain.ctx, plain.m, 100, 'earth', { source: 'skill' }) * (1 + bal.status.hexBonus),
+      hitMonster(plain.ctx, plain.m, 100, 'earth', { source: 'skill' }) *
+        (1 + bal.stacks.hexPerStack),
     );
     expect(isSundered(ctx, m)).toBe(true);
     expect(hitMonster(ctx, m, 100, 'fire', { source: 'skill' })).toBeCloseTo(

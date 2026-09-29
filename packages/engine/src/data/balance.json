@@ -134,10 +134,8 @@
       "realignDust": 60, "realignScrap": 200
     },
     "status": {
-      "burnDps": 0.35, "burnDuration": 3, "chillSlow": 0.4, "chillDuration": 3, "chillToFreeze": 2, "freezeDuration": 1.6,
-      "shockBonus": 0.2, "shockDuration": 4, "hexBonus": 0.15, "hexDuration": 6, "staggerDuration": 0.6, "rattleDuration": 2,
-      "blindMiss": 0.5, "blindDuration": 4,
-      "poisonDps": 0.12, "poisonDuration": 4, "poisonMaxStacks": 5, "rootDuration": 1.5, "rootBossMult": 0.4,
+      "burnDps": 0.35, "freezeDuration": 1.6, "staggerDuration": 0.6, "blindMiss": 0.5, "blindDuration": 4,
+      "poisonDps": 0.12, "rootDuration": 1.5, "rootBossMult": 0.4,
       "staggerImmunity": 1.2, "freezeImmunity": 1.5, "rootImmunity": 2
     },
     "stacks": {

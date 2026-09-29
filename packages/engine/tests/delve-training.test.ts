@@ -226,7 +226,7 @@ describe('training dummies', () => {
     hitMonster(ctx, d, 1000, 'fire', { source: 'skill', applies: ['burn'] });
     expect(d.dead).toBe(false);
     expect(d.hp).toBe(d.maxHp);
-    expect(d.status.burnUntil).toBeGreaterThan(w.t);
+    expect(d.status.stacks.fire).toBeGreaterThan(0);
     expect(events.map((e) => e.kind)).not.toContain('death');
     expect(w.kills).toBe(0);
     run(w, STEP);
@@ -313,8 +313,8 @@ describe('training dummies', () => {
     const w = sandbox();
     const [d] = spawnDummies(registry, w, { layout: 'single', element: 'frost' });
     Object.assign(d, { x: 16, y: 30, hp: 5, kbx: 3, kby: -2, lastHitAt: w.t });
-    d.status.burnUntil = w.t + 3;
-    d.status.chillStacks = 1;
+    d.status.stacks.fire = 2;
+    d.status.stacks.frost = 1;
     resetDummies(w);
     expect(d).toMatchObject({ x: HX, y: DUMMY_Y, hp: d.maxHp, kbx: 0, kby: 0, lastHitAt: -1 });
     expect(d.status).toEqual(emptyStatus());

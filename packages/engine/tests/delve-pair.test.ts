@@ -606,14 +606,16 @@ describe('basic attacks with a pair', () => {
       const f = strikeWorld(sword, FIRE_STORM, true);
       f.rng = new SeededRNG(seed);
       firstBlow(f);
-      expect(f.monsters[0].status.shockUntil).toBeGreaterThan(f.t);
-      expect(f.monsters[0].status.burnUntil).toBe(0);
+      expect(f.monsters[0].status.stacks.storm).toBeGreaterThan(0);
+      expect(f.monsters[0].status.stacks.fire).toBe(0);
     }
   });
 
   it('fire blows, then a storm finisher on a burning foe: Overload', () => {
     const w = strikeWorld(sword, FIRE_STORM, true);
-    w.monsters[0].status.burnUntil = 1e9;
+    const s = w.monsters[0].status;
+    s.stacks.fire = 1;
+    s.stackUntil.fire = 1e9;
     expect(only(firstBlow(w), 'reaction').map((e) => e.reaction)).toContain('overload');
   });
 

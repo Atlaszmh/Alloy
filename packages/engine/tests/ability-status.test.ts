@@ -14,18 +14,22 @@ describe('poison', () => {
     const { w, ctx } = setup();
     const m = w.monsters[0];
     for (let i = 0; i < 7; i++) applyStatus(ctx, m, 'poison', 100);
-    expect(m.status.poisonStacks).toBe(bal.status.poisonMaxStacks);
+    expect(m.status.stacks.nature).toBe(bal.stacks.cap);
     const before = m.hp;
     const events = run(w, 1.1);
     const ticks = events.filter((e) => e.kind === 'hit' && e.element === 'nature');
     expect(ticks.length).toBeGreaterThanOrEqual(2);
-    expect(before - m.hp).toBeCloseTo(100 * bal.status.poisonDps * bal.status.poisonMaxStacks, 0);
+    const atCap = bal.stacks.curve[bal.stacks.cap - 1];
+    expect(before - m.hp).toBeCloseTo(
+      100 * bal.status.poisonDps * bal.stacks.poisonPerStack * atCap,
+      0,
+    );
   });
 
   it('wears off after its duration', () => {
     const { w, ctx } = setup();
     applyStatus(ctx, w.monsters[0], 'poison', 100);
-    run(w, bal.status.poisonDuration + 0.6);
+    run(w, bal.stacks.duration.nature + 0.6);
     const hp = w.monsters[0].hp;
     run(w, 1);
     expect(w.monsters[0].hp).toBe(hp);
@@ -35,7 +39,7 @@ describe('poison', () => {
     const { w, ctx } = setup();
     w.hero.stats.attunement.nature = bal.mana.masteryThreshold;
     for (let i = 0; i < 12; i++) applyStatus(ctx, w.monsters[0], 'poison', 100);
-    expect(w.monsters[0].status.poisonStacks).toBe(bal.status.poisonMaxStacks * 2);
+    expect(w.monsters[0].status.stacks.nature).toBe(bal.stacks.cap * 2);
   });
 });
 
@@ -87,7 +91,7 @@ describe('new reactions', () => {
     hitMonster(ctx, a, 50, 'fire', { source: 'skill' });
     expect(events.some((e) => e.kind === 'reaction' && e.reaction === 'combust')).toBe(true);
     expect(b.hp).toBeLessThan(b.maxHp);
-    expect(a.status.poisonStacks).toBe(0);
+    expect(a.status.stacks.nature).toBe(0);
   });
 
   it('Blight: shadow on a poisoned foe spreads its poison to neighbours', () => {
@@ -96,7 +100,7 @@ describe('new reactions', () => {
     for (let i = 0; i < 3; i++) applyStatus(ctx, a, 'poison', 100);
     hitMonster(ctx, a, 10, 'shadow', { source: 'skill' });
     expect(events.some((e) => e.kind === 'reaction' && e.reaction === 'blight')).toBe(true);
-    expect(b.status.poisonStacks).toBe(3);
-    expect(far.status.poisonStacks).toBe(0);
+    expect(b.status.stacks.nature).toBe(3);
+    expect(far.status.stacks.nature).toBe(0);
   });
 });

@@ -189,7 +189,7 @@ describe('abilities in the sim', () => {
     stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, STEP);
     run(w, 1.5);
     expect(w.monsters[0].hp).toBeLessThan(1e6);
-    expect(w.monsters[0].status.burnUntil).toBeGreaterThan(0);
+    expect(w.monsters[0].status.stacks.fire).toBeGreaterThan(0);
   });
 });
 
@@ -212,7 +212,7 @@ describe('elemental reactions', () => {
     const melted = hitMonster(ctx, m, 100, 'fire', { source: 'skill' });
     expect(melted).toBeCloseTo(base * bal.reactions.meltMult);
     expect(reactionOf(ctx.events)).toMatchObject({ reaction: 'melt' });
-    expect(m.status.chillUntil).toBe(0);
+    expect(m.status.stacks.frost).toBe(0);
   });
 
   it('Shatter: earth on a frozen foe', () => {

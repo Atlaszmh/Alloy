@@ -7,14 +7,15 @@ import type {
   Projectile,
   Vec,
 } from '../types/arpg.js';
+import { MANA_TYPES } from '../types/mana.js';
 import {
   healHero,
   hitMonster,
   hurtHero,
-  isChilled,
   isRooted,
   isStunned,
   makeCtx,
+  stackIntensity,
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
@@ -428,19 +429,24 @@ function monstersTick(ctx: SimCtx, dt: number): void {
   for (const m of world.monsters) {
     if (m.dead) continue;
     const s = m.status;
+    // An element's stacks lapse together at its timer (a dummy's too).
+    for (const e of MANA_TYPES) if (world.t >= s.stackUntil[e]) s.stacks[e] = 0;
 
-    if (world.t < s.burnUntil && world.t >= s.burnTickAt) {
+    if (s.stacks.fire > 0 && world.t >= s.burnTickAt) {
       s.burnTickAt += 0.5;
-      hitMonster(ctx, m, s.burnDps * 0.5, 'fire', {
+      const perSecond = s.burnRef * bal.stacks.firePerStack * stackIntensity(ctx, s.stacks.fire);
+      hitMonster(ctx, m, perSecond * 0.5, 'fire', {
         source: 'dot',
         noReact: true,
         slot: s.burnSlot,
       });
       if (m.dead) continue;
     }
-    if (world.t < s.poisonUntil && world.t >= s.poisonTickAt) {
+    if (s.stacks.nature > 0 && world.t >= s.poisonTickAt) {
       s.poisonTickAt += 0.5;
-      hitMonster(ctx, m, s.poisonDps * s.poisonStacks * 0.5, 'nature', {
+      const perSecond =
+        s.poisonRef * bal.stacks.poisonPerStack * stackIntensity(ctx, s.stacks.nature);
+      hitMonster(ctx, m, perSecond * 0.5, 'nature', {
         source: 'dot',
         noReact: true,
         slot: s.poisonSlot,
@@ -476,8 +482,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
-    const slow = isChilled(ctx, m) ? 1 - bal.status.chillSlow : 1;
-    const speed = m.speed * slow;
+    const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
+    const speed = m.speed * (1 - chill);
 
     if (m.kind === 'boss' && world.t >= m.nextSpecialAt && m.windupUntil === 0) bossSpecial(ctx, m);
 

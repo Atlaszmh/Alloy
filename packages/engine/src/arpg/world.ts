@@ -37,24 +37,19 @@ export interface FloorOptions {
 }
 
 export function emptyStatus(): StatusState {
+  const none = () => ({ fire: 0, frost: 0, storm: 0, earth: 0, shadow: 0, nature: 0 });
   return {
-    burnDps: 0,
-    burnUntil: 0,
+    stacks: none(),
+    stackUntil: none(),
+    burnRef: 0,
     burnTickAt: 0,
     burnSlot: undefined,
-    chillStacks: 0,
-    chillUntil: 0,
     freezeUntil: 0,
-    shockUntil: 0,
-    hexUntil: 0,
     staggerUntil: 0,
-    rattledUntil: 0,
     sunderUntil: 0,
     blindUntil: 0,
     brandUntil: 0,
-    poisonStacks: 0,
-    poisonDps: 0,
-    poisonUntil: 0,
+    poisonRef: 0,
     poisonTickAt: 0,
     poisonSlot: undefined,
     rootUntil: 0,

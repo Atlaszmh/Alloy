@@ -1,7 +1,7 @@
 import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
 import type { DelveBalance } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
-import { hitMonster, type SimCtx } from './combat.js';
+import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { startPush } from './action.js';
 import { surging } from './abilities/defend.js';
@@ -13,15 +13,6 @@ import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js
  * movement. See the combat weight spec.
  */
 
-/** The status each element's basic blows may apply (a finisher's discharge always applies it). */
-export const BASIC_STATUS: Record<ManaType, StatusId> = {
-  fire: 'burn',
-  frost: 'chill',
-  storm: 'shock',
-  earth: 'stagger',
-  shadow: 'hex',
-  nature: 'poison',
-};
 const BASIC_STATUS_CHANCE = 0.3;
 
 function haste(ctx: SimCtx): number {

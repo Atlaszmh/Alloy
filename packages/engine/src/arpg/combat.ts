@@ -53,96 +53,137 @@ export interface HitOpts {
   slot?: number;
   /** 0–1: how hard the hit lands (client feel; 0 for ticks, DoTs, chains). */
   heft?: number;
-  /** The source includes Earth: a stagger it applies rattles the foe (Earth's mark). */
+  /** The source includes Earth: its stagger adds Earth stacks. */
   rattles?: boolean;
+  /**
+   * Stacks the hit applies of each element status in `applies` (default `stacks.tick`; see
+   * the elemental stacks spec).
+   */
+  stacks?: number;
 }
 
 const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
 
-export function isBurning(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.burnUntil;
+/** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
+export const BASIC_STATUS: Record<ManaType, StatusId> = {
+  fire: 'burn',
+  frost: 'chill',
+  storm: 'shock',
+  earth: 'stagger',
+  shadow: 'hex',
+  nature: 'poison',
+};
+/** BASIC_STATUS's inverse: the element whose stacks a status adds. */
+const STATUS_ELEMENT: Partial<Record<StatusId, ManaType>> = Object.fromEntries(
+  MANA_TYPES.map((e) => [BASIC_STATUS[e], e]),
+);
+
+export function isBurning(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.fire > 0;
 }
-export function isChilled(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.chillUntil;
+export function isChilled(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.frost > 0;
 }
 export function isFrozen(ctx: SimCtx, m: MonsterEntity): boolean {
   return ctx.world.t < m.status.freezeUntil;
 }
-export function isShocked(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.shockUntil;
+export function isShocked(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.storm > 0;
 }
-export function isHexed(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.hexUntil;
+export function isHexed(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.shadow > 0;
 }
 export function isStunned(ctx: SimCtx, m: MonsterEntity): boolean {
   return isFrozen(ctx, m) || ctx.world.t < m.status.staggerUntil;
 }
-export function isPoisoned(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.poisonUntil && m.status.poisonStacks > 0;
+export function isPoisoned(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.nature > 0;
 }
 export function isRooted(ctx: SimCtx, m: MonsterEntity): boolean {
   return ctx.world.t < m.status.rootUntil;
 }
-export function isRattled(ctx: SimCtx, m: MonsterEntity): boolean {
-  return ctx.world.t < m.status.rattledUntil;
+export function isRattled(_ctx: SimCtx, m: MonsterEntity): boolean {
+  return m.status.stacks.earth > 0;
 }
 export function isSundered(ctx: SimCtx, m: MonsterEntity): boolean {
   return ctx.world.t < m.status.sunderUntil;
 }
 
-/** Whether `m` carries `element`'s mark: the status a reaction of that element needs. */
+/** Whether `m` has stacks of `element`; for frost, a bare freeze counts too. */
 export function hasMark(ctx: SimCtx, m: MonsterEntity, element: ManaType): boolean {
-  switch (element) {
-    case 'fire':
-      return isBurning(ctx, m);
-    case 'frost':
-      return isChilled(ctx, m) || isFrozen(ctx, m);
-    case 'storm':
-      return isShocked(ctx, m);
-    case 'earth':
-      return isRattled(ctx, m);
-    case 'shadow':
-      return isHexed(ctx, m);
-    case 'nature':
-      return isPoisoned(ctx, m);
-  }
+  return m.status.stacks[element] > 0 || (element === 'frost' && isFrozen(ctx, m));
 }
 
-/** Poison stack cap (doubled by the Nature mastery). */
-function poisonCap(ctx: SimCtx): number {
-  return ctx.bal.status.poisonMaxStacks * (mastery(ctx, 'nature') ? 2 : 1);
+/** Most stacks of `element` a foe holds (Nature's doubled by its mastery). */
+function stackCap(ctx: SimCtx, element: ManaType): number {
+  return ctx.bal.stacks.cap * (element === 'nature' && mastery(ctx, 'nature') ? 2 : 1);
 }
 
 /**
- * Give `m` at least `stacks` poison stacks of `dps` each, refreshing the duration.
- * `slot` gets the ticks when this poison sets their damage.
+ * How strong `n` stacks of a status are, in per-stack units: `stacks.curve[n - 1]`, each stack
+ * past the curve's end adding its last step (Plaguebearer's poison).
  */
-function poison(
+export function stackIntensity(ctx: SimCtx, n: number): number {
+  const c = ctx.bal.stacks.curve;
+  if (n <= 0) return 0;
+  if (n <= c.length) return c[n - 1];
+  const last = c[c.length - 1];
+  return last + (n - c.length) * (last - c[c.length - 2]);
+}
+
+/**
+ * `n` more stacks of `element` on `m` (to the cap), starting the element's timer again. A
+ * burn's or poison's `ref` (damage per stack) and `slot` take over when the element had no
+ * stacks, or when `ref` is at least the current one. A spread onto a foe that already has as
+ * many passes `n` ≤ 0: it adds none, but the timer and the ref still refresh.
+ */
+function applyStacks(
   ctx: SimCtx,
   m: MonsterEntity,
-  stacks: number,
-  dps: number,
+  element: ManaType,
+  n: number,
+  ref: number,
   slot: number | undefined,
 ): void {
   const s = m.status;
   const t = ctx.world.t;
-  const active = isPoisoned(ctx, m);
-  if (!active) s.poisonTickAt = t + 0.5;
-  if (!active || dps >= s.poisonDps) s.poisonSlot = slot;
-  s.poisonStacks = Math.min(poisonCap(ctx), Math.max(active ? s.poisonStacks : 0, stacks));
-  s.poisonDps = active ? Math.max(s.poisonDps, dps) : dps;
-  s.poisonUntil = t + ctx.bal.status.poisonDuration;
+  const active = s.stacks[element] > 0;
+  if (!active && n <= 0) return;
+  s.stacks[element] = Math.min(stackCap(ctx, element), s.stacks[element] + Math.max(0, n));
+  s.stackUntil[element] = t + ctx.bal.stacks.duration[element];
+  if (element === 'fire') {
+    if (!active) s.burnTickAt = t + 0.5;
+    if (!active || ref >= s.burnRef) {
+      s.burnRef = ref;
+      s.burnSlot = slot;
+    }
+  } else if (element === 'nature') {
+    if (!active) s.poisonTickAt = t + 0.5;
+    if (!active || ref >= s.poisonRef) {
+      s.poisonRef = ref;
+      s.poisonSlot = slot;
+    }
+  }
 }
 
-/**
- * Plague's and Blight's spread: the foe's poison and hex (each only if it has
- * it) pass to its neighbours.
- */
+/** A spread: `o` takes at least `m`'s stacks of `element`, with its burn's or poison's ref and slot. */
+function spreadStacks(ctx: SimCtx, m: MonsterEntity, o: MonsterEntity, element: ManaType): void {
+  const s = m.status;
+  if (s.stacks[element] <= 0) return;
+  const [ref, slot] =
+    element === 'fire'
+      ? [s.burnRef, s.burnSlot]
+      : element === 'nature'
+        ? [s.poisonRef, s.poisonSlot]
+        : [0, undefined];
+  applyStacks(ctx, o, element, s.stacks[element] - o.status.stacks[element], ref, slot);
+}
+
+/** Plague's and Blight's spread: the foe's nature and shadow stacks pass to its neighbours. */
 function spreadAffliction(ctx: SimCtx, m: MonsterEntity): void {
   for (const o of nearby(ctx, m, ctx.bal.reactions.blightRadius)) {
-    if (isPoisoned(ctx, m))
-      poison(ctx, o, m.status.poisonStacks, m.status.poisonDps, m.status.poisonSlot);
-    if (isHexed(ctx, m)) o.status.hexUntil = Math.max(o.status.hexUntil, m.status.hexUntil);
+    spreadStacks(ctx, m, o, 'nature');
+    spreadStacks(ctx, m, o, 'shadow');
   }
 }
 
@@ -174,8 +215,10 @@ function aggroPack(ctx: SimCtx, m: MonsterEntity): void {
 }
 
 /**
- * Apply `status`; with `rattles` (an Earth source) a stagger also rattles the foe.
- * `slot`: the ability applying it; a burn's or poison's ticks carry it when it sets their damage.
+ * Apply `status` outside a hit (a hit's own go through `hitMonster`): `n` stacks of its
+ * element (a stagger's Earth stacks only with `rattles`, an Earth source), and frost crossing
+ * `stacks.freezeAt` freezes. `slot`: the ability applying it; a burn's or poison's ticks carry
+ * it when it sets their damage.
  */
 export function applyStatus(
   ctx: SimCtx,
@@ -184,53 +227,51 @@ export function applyStatus(
   hitAmount: number,
   rattles = false,
   slot?: number,
+  n = ctx.bal.stacks.tick,
+): void {
+  const frost = m.status.stacks.frost;
+  addStatus(ctx, m, status, hitAmount, rattles, slot, n);
+  crossFreeze(ctx, m, frost);
+}
+
+/** Frost's count crossing `stacks.freezeAt` since `before` freezes the foe (immunity may refuse). */
+function crossFreeze(ctx: SimCtx, m: MonsterEntity, before: number): void {
+  const at = ctx.bal.stacks.freezeAt;
+  if (before < at && m.status.stacks.frost >= at) freeze(ctx, m, ctx.bal.status.freezeDuration);
+}
+
+/** `applyStatus` without the freeze check: a hit checks once, after all of its statuses. */
+function addStatus(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  status: StatusId,
+  hitAmount: number,
+  rattles: boolean | undefined,
+  slot: number | undefined,
+  n: number,
 ): void {
   const st = ctx.bal.status;
   const t = ctx.world.t;
   const boss = m.kind === 'boss';
   const ccScale = boss ? 0.4 : 1;
   const s = m.status;
+  const element = STATUS_ELEMENT[status];
+  // The element's stacks; a stagger's Earth stacks only from an Earth source (immunity doesn't refuse them).
+  if (element && (status !== 'stagger' || rattles)) {
+    const perStack = element === 'fire' ? st.burnDps : element === 'nature' ? st.poisonDps : 0;
+    applyStacks(ctx, m, element, n, hitAmount * perStack, slot);
+  }
   switch (status) {
-    case 'burn': {
-      const dps = hitAmount * st.burnDps;
-      // A weaker refresh keeps the stronger burn's slot: its damage is what ticks.
-      if (t >= s.burnUntil || dps >= s.burnDps) s.burnSlot = slot;
-      s.burnDps = t < s.burnUntil ? Math.max(s.burnDps, dps) : dps;
-      if (t >= s.burnUntil) s.burnTickAt = t + 0.5;
-      s.burnUntil = t + st.burnDuration;
-      break;
-    }
-    case 'chill': {
-      s.chillStacks = t < s.chillUntil ? s.chillStacks + 1 : 1;
-      s.chillUntil = t + st.chillDuration;
-      if (s.chillStacks >= st.chillToFreeze) {
-        s.chillStacks = 0;
-        freeze(ctx, m, st.freezeDuration);
-      }
-      break;
-    }
     case 'freeze':
-      freeze(ctx, m, st.freezeDuration);
-      break;
-    case 'shock':
-      s.shockUntil = t + st.shockDuration;
-      break;
-    case 'hex':
-      s.hexUntil = t + st.hexDuration;
+      // Glacier: frost up to the threshold, so the hit crosses it.
+      applyStacks(ctx, m, 'frost', ctx.bal.stacks.freezeAt - s.stacks.frost, 0, slot);
       break;
     case 'stagger':
-      // Earth's mark outlasts the stagger, and immunity doesn't refuse it.
-      if (rattles) s.rattledUntil = t + st.rattleDuration;
       if (t < s.staggerImmuneUntil) break;
       s.staggerUntil = Math.max(s.staggerUntil, t + st.staggerDuration * ccScale);
       s.staggerImmuneUntil = s.staggerUntil + st.staggerImmunity;
       m.windupUntil = 0;
       break;
-    case 'poison': {
-      const active = isPoisoned(ctx, m);
-      poison(ctx, m, active ? s.poisonStacks + 1 : 1, hitAmount * st.poisonDps, slot);
-      break;
-    }
     case 'root':
       if (t < s.rootImmuneUntil) break;
       s.rootUntil = Math.max(s.rootUntil, t + st.rootDuration * (boss ? st.rootBossMult : 1));
@@ -290,37 +331,13 @@ function findReaction(
 }
 
 /**
- * Clear the mark that set `reaction` off. Earth's Shatter breaks only the
- * freeze; Storm's Superconduct takes only the chill (the freeze it would
- * add again is refused by immunity, so the foe stays frozen).
+ * Clear the mark that set `reaction` off: its element's stacks. Earth's Shatter
+ * breaks only the freeze; Storm's Superconduct takes only the stacks (the freeze
+ * it would add again is refused by immunity, so the foe stays frozen).
  */
 function useUpMark(m: MonsterEntity, mark: ManaType, reaction: ReactionId): void {
-  const s = m.status;
-  switch (mark) {
-    case 'fire':
-      s.burnUntil = 0;
-      break;
-    case 'frost':
-      if (reaction !== 'shatter') {
-        s.chillUntil = 0;
-        s.chillStacks = 0;
-      }
-      if (reaction !== 'superconduct') s.freezeUntil = 0;
-      break;
-    case 'storm':
-      s.shockUntil = 0;
-      break;
-    case 'earth':
-      s.rattledUntil = 0;
-      break;
-    case 'shadow':
-      s.hexUntil = 0;
-      break;
-    case 'nature':
-      s.poisonStacks = 0;
-      s.poisonUntil = 0;
-      break;
-  }
+  if (mark !== 'frost' || reaction !== 'shatter') m.status.stacks[mark] = 0;
+  if (mark === 'frost' && reaction !== 'superconduct') m.status.freezeUntil = 0;
 }
 
 /**
@@ -476,12 +493,15 @@ export function hitMonster(
   }
   if (opts.source === 'basic' && m.traits.includes('armored'))
     amount *= 1 - bal.monster.traits.armoredReduction;
-  if (isShocked(ctx, m)) amount *= 1 + bal.status.shockBonus * (mastery(ctx, 'storm') ? 2 : 1);
-  if (isHexed(ctx, m)) amount *= 1 + bal.status.hexBonus;
+  const stacks = m.status.stacks;
+  const tempest = mastery(ctx, 'storm') ? 2 : 1;
+  amount *= 1 + bal.stacks.shockPerStack * stackIntensity(ctx, stacks.storm) * tempest;
+  amount *= 1 + bal.stacks.hexPerStack * stackIntensity(ctx, stacks.shadow);
   if (isSundered(ctx, m)) amount *= 1 + bal.reactions.sunderBonus;
   if (isFrozen(ctx, m) && mastery(ctx, 'frost')) amount *= 1.3;
 
   // Elemental reactions: this hit's element meets another element's mark on the foe.
+  const frostBefore = stacks.frost;
   let reaction: ReactionId | undefined;
   const found = element && !opts.noReact ? findReaction(ctx, m, element) : null;
   if (found) {
@@ -551,8 +571,12 @@ export function hitMonster(
     return amount;
   }
 
-  for (const s of opts.applies ?? []) applyStatus(ctx, m, s, amount, opts.rattles, opts.slot);
-  if (riposte) applyStatus(ctx, m, 'stagger', amount);
+  const k = opts.stacks ?? bal.stacks.tick;
+  for (const s of opts.applies ?? []) addStatus(ctx, m, s, amount, opts.rattles, opts.slot, k);
+  // The riposte staggers; it adds no stacks.
+  if (riposte) addStatus(ctx, m, 'stagger', amount, false, undefined, 0);
+  // Frost freezes only if the hit's final count crossed the threshold.
+  crossFreeze(ctx, m, frostBefore);
 
   if (opts.knockback && opts.kbFrom) {
     const resist = m.kind === 'boss' ? 0.15 : m.kind === 'elite' ? 0.5 : 1;
@@ -628,7 +652,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
-  if (t < m.status.hexUntil && mastery(ctx, 'shadow')) healHero(ctx, h.stats.maxHp * 0.04, 'kill');
+  if (isHexed(ctx, m) && mastery(ctx, 'shadow')) healHero(ctx, h.stats.maxHp * 0.04, 'kill');
   // Nightstalker: kills hurry the Defensive along.
   const guard = h.abilities[1];
   if (h.stats.legendaries.nightstalker && guard) {
@@ -637,15 +661,9 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   }
 
   // Fire mastery: flames spread from burning corpses.
-  if (t < m.status.burnUntil && mastery(ctx, 'fire')) {
-    for (const o of world.monsters) {
-      if (o.dead || dist(o.x, o.y, m.x, m.y) > 2.5) continue;
-      if (t >= o.status.burnUntil || m.status.burnDps >= o.status.burnDps)
-        o.status.burnSlot = m.status.burnSlot;
-      o.status.burnDps = Math.max(o.status.burnDps, m.status.burnDps);
-      if (t >= o.status.burnUntil) o.status.burnTickAt = t + 0.5;
-      o.status.burnUntil = t + bal.status.burnDuration;
-    }
+  if (isBurning(ctx, m) && mastery(ctx, 'fire')) {
+    for (const o of world.monsters)
+      if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5) spreadStacks(ctx, m, o, 'fire');
   }
 
   if (!world.sandbox) dropLoot(ctx, m);

@@ -206,7 +206,7 @@ describe('knobs', () => {
     applyStatus(ctx, w.monsters[0], 'hex', 0);
     press(w, 0, { x: 13, y: 29 });
     expect(w.monsters).toHaveLength(1);
-    expect(w.monsters[0].status.hexUntil).toBeGreaterThan(w.t);
+    expect(w.monsters[0].status.stacks.shadow).toBe(1);
   });
 
   it('scatter: Wildfire lands off the aim point', () => {

@@ -409,27 +409,14 @@ export interface DelveBalance {
     realignScrap: number;
   };
   status: {
-    /** Burn deals this fraction of the igniting hit per second. */
+    /** A burn's ref: this fraction of the igniting hit (see `stacks.firePerStack`). */
     burnDps: number;
-    burnDuration: number;
-    chillSlow: number;
-    chillDuration: number;
-    /** Chill stacks needed to freeze. */
-    chillToFreeze: number;
     freezeDuration: number;
-    shockBonus: number;
-    shockDuration: number;
-    hexBonus: number;
-    hexDuration: number;
     staggerDuration: number;
-    /** Seconds Earth's mark (rattled) lasts after an Earth source staggers a foe. */
-    rattleDuration: number;
     blindMiss: number;
     blindDuration: number;
-    /** Each poison stack deals this fraction of the hit per second. */
+    /** A poison's ref: this fraction of the applying hit (see `stacks.poisonPerStack`). */
     poisonDps: number;
-    poisonDuration: number;
-    poisonMaxStacks: number;
     rootDuration: number;
     /** Bosses are rooted for this fraction of `rootDuration`. */
     rootBossMult: number;
@@ -495,7 +482,7 @@ export interface DelveBalance {
     seedlingHeal: number;
     /** Siphon: three motes worth this share of the mana pool between them. */
     siphonMana: number;
-    /** Crystallize: the hit × this, and one chill stack on foes within `crystallizeRadius`. */
+    /** Crystallize: the hit × this, and `stacks.tick` frost stacks on foes within `crystallizeRadius`. */
     crystallizeMult: number;
     crystallizeRadius: number;
     /** Blackout: the foe and foes within this radius are blinded. */
