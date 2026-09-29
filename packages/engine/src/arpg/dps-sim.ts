@@ -57,7 +57,6 @@ export interface DpsResult {
 }
 
 export const DPS_SECONDS = 30;
-/** Seconds between samples. */
 /** Seconds between the samples of `DpsResult.series`. */
 export const DPS_SAMPLE = 0.5;
 /** Edge to edge: the hero and the nearest dummy. */

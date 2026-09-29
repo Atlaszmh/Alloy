@@ -168,10 +168,7 @@ export function chainFromBuild(registry: DataRegistry, build: AbilityBuild): Cha
 }
 
 /** Version 4 builds as the three ability chains. */
-export function buildChains(
-  registry: DataRegistry,
-  builds: AbilityBuilds,
-): Pick<Chains, AbilitySlot> {
+function buildChains(registry: DataRegistry, builds: AbilityBuilds): Pick<Chains, AbilitySlot> {
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
     chainFromBuild(registry, builds[slot]),
   );

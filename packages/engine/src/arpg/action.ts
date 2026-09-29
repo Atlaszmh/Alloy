@@ -1,4 +1,4 @@
-import type { HeroEntity, Vec } from '../types/arpg.js';
+import type { ArpgWorld, HeroEntity, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 import { clamp } from './geometry.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -107,4 +107,12 @@ export function cancelWindup(h: HeroEntity, t: number): void {
   h.cooldowns[w.slot][w.step] = t;
   h.charge[w.slot] = Math.min(chargeCap(h.chains[w.slot]), h.charge[w.slot] + w.chargePaid);
   h.windup = null;
+}
+
+/** Drop a charging hold, unpaid, marking its slot so its release (the button let go) is swallowed. */
+export function dropHold(world: ArpgWorld): void {
+  const hold = world.hero.hold;
+  if (!hold) return;
+  world.holdDropped = hold.slot;
+  world.hero.hold = null;
 }

@@ -19,7 +19,7 @@ import {
 } from '../types/ability.js';
 import { manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
-import { cancelWindup } from './action.js';
+import { cancelWindup, dropHold } from './action.js';
 import { dist } from './geometry.js';
 
 export interface FloorOptions {
@@ -266,10 +266,7 @@ export function refreshWorldHero(
     h.push = null; // its step-in goes with it
   }
   // A changed slot's hold is dropped, unpaid.
-  if (h.hold && changed[h.hold.slot]) {
-    world.holdDropped = h.hold.slot;
-    h.hold = null;
-  }
+  if (h.hold && changed[h.hold.slot]) dropHold(world);
   if (changed[1]) {
     h.defend = null;
     h.ward = null;

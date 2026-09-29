@@ -26,7 +26,7 @@ import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
-import { cancelSwing, pushTick } from './action.js';
+import { cancelSwing, dropHold, pushTick } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
@@ -63,10 +63,7 @@ export function stepWorld(
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
   // Nothing is paid until a hold fires: dropping one costs nothing.
-  if (input.cancelHold && world.hero.hold) {
-    world.holdDropped = world.hero.hold.slot;
-    world.hero.hold = null;
-  }
+  if (input.cancelHold) dropHold(world);
   if (world.heroDead) return events;
 
   const ctx = makeCtx(registry, world, events);
@@ -200,7 +197,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (h.swing && t >= h.swing.strikeAt - 1e-9) {
     // A manual hold blow holds at its strike point while the attack stays held.
     if (input.attack !== undefined && h.stats.weapon.blows[h.swing.step].kind === 'hold')
-      basicHoldTick(ctx, input.attack, dt);
+      basicHoldTick(ctx, input.attack, dt, input.attackAim ?? null);
     else strike(ctx);
   }
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.

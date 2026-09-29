@@ -592,7 +592,9 @@ describe('toggles', () => {
       strikeAt: 1,
       cycle: 1,
       committed: true,
+      held: null,
     };
+    h.hold = { slot: 0, step: 0, start: 0, aim: null };
     h.push = { fromX: 13, fromY: 26, dx: 0, dy: -1, start: 0, until: 1, stopId: null };
     h.recoverUntil = w.t + 5;
     h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };
@@ -608,6 +610,7 @@ describe('toggles', () => {
       phoenixAvailable: true,
       phoenixUsed: false,
       windup: null,
+      hold: null,
       swing: null,
       push: null,
       dodge: null,

@@ -10,7 +10,7 @@ import {
   type DpsSetup,
 } from '../src/arpg/dps-sim.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
-import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
+import type { ArpgEvent, ArpgInput, ArpgWorld } from '../src/types/arpg.js';
 import { arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
 
 type Hit = Extract<ArpgEvent, { kind: 'hit' }>;
@@ -85,26 +85,37 @@ describe('hit attribution', () => {
   });
 });
 
-/** The sims' events, collected while `tap.on` is set (`stepWorld` itself is unchanged). */
-const tap = vi.hoisted(() => ({ on: false, events: [] as ArpgEvent[] }));
+/**
+ * The sims' events, and each step's input, the slot whose hold runs after it and its events,
+ * collected while `tap.on` is set (`stepWorld` itself is unchanged).
+ */
+const tap = vi.hoisted(() => ({
+  on: false,
+  events: [] as ArpgEvent[],
+  steps: [] as { input: ArpgInput; hold: number | null; events: ArpgEvent[] }[],
+}));
 vi.mock('../src/arpg/step.js', async (importOriginal) => {
   const step = await importOriginal<typeof import('../src/arpg/step.js')>();
   return {
     ...step,
     stepWorld: (...args: Parameters<typeof step.stepWorld>) => {
       const events = step.stepWorld(...args);
-      if (tap.on) tap.events.push(...events);
+      if (tap.on) {
+        tap.events.push(...events);
+        tap.steps.push({ input: args[2], hold: args[1].hero.hold?.slot ?? null, events });
+      }
       return events;
     },
   };
 });
 
-/** Run `f`, collecting every event its sims step through. */
-function recorded<T>(f: () => T): { out: T; events: ArpgEvent[] } {
+/** Run `f`, collecting every event its sims step through, and each step (see `tap`). */
+function recorded<T>(f: () => T): { out: T; events: ArpgEvent[]; steps: typeof tap.steps } {
   tap.events = [];
+  tap.steps = [];
   tap.on = true;
   try {
-    return { out: f(), events: tap.events };
+    return { out: f(), events: tap.events, steps: tap.steps };
   } finally {
     tap.on = false;
   }
@@ -263,18 +274,22 @@ describe('simulateDps', () => {
   });
 
   it('holds a hold move to full charge each press', () => {
-    const { out, events } = recorded(() =>
+    const { out, steps } = recorded(() =>
       simulateDps(registry, setup('ability|bolt|fire|none|hold|mana'), ONE),
     );
     expect(out.casts).toBeGreaterThan(0);
     expect(out.casts).toBeLessThanOrEqual(DPS_SECONDS / bal.chains.holdTime);
-    const kinds = events.filter(
-      (e) => e.kind === 'holdStage' || (e.kind === 'cast' && e.slot === 0),
-    );
-    // Each cast comes after its hold reached stage 2.
-    kinds.forEach((e, i) => {
-      if (e.kind === 'cast') expect(kinds[i - 1]).toMatchObject({ kind: 'holdStage', stage: 2 });
-    });
+    // Each cast comes after a full charge's steps with its button held and its hold running (a
+    // release at stage 2 would come after 0.66 of them). The button stays held between holds too.
+    const full = Math.ceil(bal.chains.holdTime / bal.arena.step);
+    let run = 0;
+    const runs: number[] = [];
+    for (const { input, hold, events } of steps) {
+      if (events.some((e) => e.kind === 'cast' && e.slot === 0)) runs.push(run);
+      run = input.holding === 0 && hold === 0 ? run + 1 : 0;
+    }
+    expect(runs).toHaveLength(out.casts);
+    for (const r of runs) expect(r).toBeGreaterThanOrEqual(full);
   });
 
   it('deals more deeper', () => {

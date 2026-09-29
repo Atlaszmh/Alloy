@@ -988,6 +988,56 @@ describe('basics', () => {
     expect(basics(events)[0].moveKind).toBe('hold');
   });
 
+  it("a tapped hold blow keeps a medium blow's timing, though its strike point falls between ticks", () => {
+    const tapped = (kind: MoveKind) => {
+      const w = strikeWorld(sword, { basic: [{ kind, element: 'fire' }] });
+      const events = stepWorld(registry, w, { move: still, attack: false, attackTap: true }, STEP);
+      const sw = w.hero.swing!;
+      for (let i = 0; i < 60 && basics(events).length === 0; i++)
+        events.push(...stepWorld(registry, w, { move: still, attack: false }, STEP));
+      expect(basics(events)[0].moveKind).toBe('medium');
+      return { sw, next: w.hero.nextAttackAt };
+    };
+    const hold = tapped('hold');
+    const medium = tapped('medium');
+    // The tap strikes on the first tick past its strike point, a part of a tick late.
+    const ticks = (hold.sw.strikeAt - hold.sw.start) / STEP;
+    expect(Math.abs(ticks - Math.round(ticks))).toBeGreaterThan(0.01);
+    expect(hold.sw.start).toBe(medium.sw.start);
+    expect(hold.next).toBeCloseTo(medium.next, 9);
+  });
+
+  it("a held blow re-aims as it strikes, at the nearest foe or the attack's aim; a tap strikes where it began", () => {
+    const staff = { weapon: gear('fire', 'weapon', 'staff') };
+    /** The heading of a hold blow's shot whose foe, ahead, moves round to the hero's right before it strikes. */
+    const heading = (held: boolean, aim: { x: number; y: number } | null = null) => {
+      const w = strikeWorld(
+        staff,
+        { basic: [{ kind: 'hold', element: 'fire' }] },
+        false,
+        dummy(13, 30),
+      );
+      const press = held
+        ? { move: still, attack: true }
+        : { move: still, attack: false, attackTap: true };
+      stepWorld(registry, w, press, STEP);
+      const sw = w.hero.swing!;
+      expect(sw.dir.y).toBeCloseTo(-1);
+      if (held) while (w.t < sw.strikeAt + 0.4) stepWorld(registry, w, press, STEP);
+      Object.assign(w.monsters[0], { x: 19, y: 36 });
+      const events: ArpgEvent[] = [];
+      for (let i = 0; i < 60 && basics(events).length === 0; i++)
+        events.push(
+          ...stepWorld(registry, w, { move: still, attack: false, attackAim: aim }, STEP),
+        );
+      const shot = w.projectiles.find((p) => p.owner === 'hero')!;
+      return Math.atan2(shot.vy, shot.vx);
+    };
+    expect(heading(true)).toBeCloseTo(0); // at the foe, now to its right
+    expect(heading(true, { x: 7, y: 36 })).toBeCloseTo(Math.PI); // at the aim, to its left
+    expect(heading(false)).toBeCloseTo(-Math.PI / 2); // a tap: ahead, as it began
+  });
+
   it('an automatic hold blow plays the hold row straight: a slow, hard blow with its stacks', () => {
     const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
     const f = w.hero.stats.weapon.feel;

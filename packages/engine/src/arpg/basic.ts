@@ -1,6 +1,6 @@
 import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
 import { HOLD_STAGE_KINDS } from '../types/ability.js';
-import type { DelveBalance } from '../types/delve.js';
+import type { ComboStepDef, DelveBalance, HeroWeapon } from '../types/delve.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { startPush } from './action.js';
@@ -36,6 +36,23 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
   return best;
 }
 
+/** A swing on row `s`: a committed melee blow's lunge, its reach, and how far it looks for a foe. */
+function swingReach(w: HeroWeapon, s: ComboStepDef, committed: boolean, manual: boolean) {
+  const melee = w.kind === 'melee';
+  const lunge = melee && committed ? Math.max(0, s.move) : 0;
+  const reach = w.range + (melee ? (s.reach ?? 0) : 0);
+  return { lunge, reach, acquire: (committed ? reach + lunge : w.range) + (manual ? 1 : 0) };
+}
+
+/** Toward `aim` if given, else toward the nearest foe within `acquire`, else along `fallback`. */
+function aimAt(ctx: SimCtx, aim: Vec | null, acquire: number, fallback: Vec) {
+  const h = ctx.world.hero;
+  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
+  const to = aim ?? target;
+  const dir = to ? dirTo(h.x, h.y, to.x, to.y) : fallback;
+  return { target, dir: dir.x === 0 && dir.y === 0 ? fallback : dir };
+}
+
 /** The blow of the basic chain the next swing makes: the chain restarts after a pause. */
 export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
   if (t - h.lastBasicAt > h.stats.attackInterval + bal.hero.basicComboGrace) return 0;
@@ -64,19 +81,9 @@ export function startSwing(
   h.attackCount = step;
   const blow = w.blows[step];
   const s = manual && blow.kind === 'hold' ? w.feel.medium : blow;
-  const melee = w.kind === 'melee';
-  const lunge = melee && committed ? Math.max(0, s.move) : 0;
-  const reach = w.range + (melee ? (s.reach ?? 0) : 0);
-  const acquire = (committed ? reach + lunge : w.range) + (manual ? 1 : 0);
-  const target = aim ? null : nearestMonster(ctx, h.x, h.y, acquire);
+  const { lunge, reach, acquire } = swingReach(w, s, committed, manual);
+  const { target, dir } = aimAt(ctx, aim, acquire, { ...h.facing });
   if (!target && !manual) return false;
-
-  let dir = aim
-    ? dirTo(h.x, h.y, aim.x, aim.y)
-    : target
-      ? dirTo(h.x, h.y, target.x, target.y)
-      : { ...h.facing };
-  if (dir.x === 0 && dir.y === 0) dir = { ...h.facing };
   if (committed || !h.moving) h.facing = dir;
   const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
   const startup = cycle * s.startup;
@@ -105,16 +112,30 @@ export function startSwing(
 /**
  * A manual hold blow at its strike point: while the attack stays held it
  * charges (stages by `holdStages`, saying so), and it strikes with its
- * stage's row when the attack lets go or at `holdMax` (stage 2).
+ * stage's row when the attack lets go or at `holdMax` (stage 2). A blow held
+ * past its strike point re-aims as it strikes, as a manual swing aims (on the
+ * medium row it began with): toward `aim`, else the nearest foe, else where it
+ * was aimed. A tap (let go by its strike point) strikes where it began.
  */
-export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number): void {
+export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec | null): void {
   const { world, bal } = ctx;
-  const sw = world.hero.swing!;
+  const h = world.hero;
+  const sw = h.swing!;
   const t = world.t;
   sw.held ??= t;
   const { stage } = holdCharge(bal, sw.held, t);
-  if (t - sw.held >= bal.chains.holdMax - 1e-9) return strike(ctx, 2);
-  if (!held) return strike(ctx, stage);
+  const full = t - sw.held >= bal.chains.holdMax - 1e-9;
+  if (full || !held) {
+    if (t > sw.held + 1e-9) {
+      const w = h.stats.weapon;
+      const { acquire } = swingReach(w, w.feel.medium, true, true);
+      const { target, dir } = aimAt(ctx, aim, acquire, sw.dir);
+      sw.dir = dir;
+      sw.targetId = target?.id ?? null;
+      h.facing = dir;
+    }
+    return strike(ctx, full ? 2 : stage);
+  }
   if (stage > holdCharge(bal, sw.held, t - dt).stage)
     ctx.events.push({ kind: 'holdStage', slot: null, stage });
 }
@@ -245,9 +266,11 @@ export function strike(ctx: SimCtx, stage: number | null = null): void {
     dir,
   });
   if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
-  // A held blow takes its time from its stage's row; its startup was spent holding.
+  // A held blow takes its time from its stage's row; its startup was spent holding. A tap
+  // (struck on the tick it reached its strike point) keeps a medium blow's timing.
   const cycle = stage === null ? sw.cycle : (h.stats.attackInterval * s.time) / haste(ctx);
-  if (stage !== null) h.nextAttackAt = world.t + cycle * (1 - s.startup);
+  if (stage !== null && world.t > sw.held! + 1e-9)
+    h.nextAttackAt = world.t + cycle * (1 - s.startup);
   if (sw.committed)
     h.recoverUntil = Math.min(h.nextAttackAt, world.t + cycle * bal.feel.basicRecovery);
 }
