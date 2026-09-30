@@ -75,6 +75,27 @@ describe('AbilitiesPanel', () => {
     expect(chains().primary.moves[0].kind).toBe('heavy');
   });
 
+  it("says each move's beat, and a hold's full-charge time and beat, by the weapon's tempo", () => {
+    const readout = () => screen.getByTestId('ability-readout');
+    const { unmount } = render(<AbilitiesPanel />);
+    // The Primary's first move, a light Bolt, on the starting sword (tempo 1).
+    expect(readout()).toHaveTextContent(/cooldown, then a 0\.25s beat/);
+    fireEvent.click(screen.getByTestId('kind-hold'));
+    // A tap plays as a medium; a full charge as a hold.
+    expect(readout()).toHaveTextContent(/cooldown, then a 0\.4s beat/);
+    expect(readout()).toHaveTextContent(/Fully charged \(1s\): .+ mana, then a 0\.8s beat/);
+    unmount();
+    // On a maul (tempo 1.3), the charge and every beat take longer.
+    const p = store().profile;
+    store().setProfile({
+      ...p,
+      equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, baseId: 'maul' } },
+    });
+    render(<AbilitiesPanel />);
+    expect(readout()).toHaveTextContent(/cooldown, then a 0\.52s beat/);
+    expect(readout()).toHaveTextContent(/Fully charged \(1\.3s\): .+ mana, then a 1\.04s beat/);
+  });
+
   it('adds, reorders and removes moves within the cap, never below one', () => {
     const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
     store().setChain('primary', { moves: [bolt], payment: 'mana' });

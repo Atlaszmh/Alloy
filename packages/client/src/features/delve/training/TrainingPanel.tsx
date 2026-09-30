@@ -93,7 +93,7 @@ const SWITCHES: [keyof SandboxToggles, string, string][] = [
   [
     'noCooldowns',
     'No cooldowns',
-    'An ability can go again as soon as it lands; charge refills as it lands.',
+    'Cooldowns are off and charge stays full; each move still waits its beat.',
   ],
   [
     'invulnerable',

@@ -39,6 +39,26 @@ describe('ItemDetailSheet', () => {
     expect(screen.getByTestId('attune-note')).toHaveTextContent('powers abilities');
   });
 
+  it("shows a weapon's tempo, and none on other gear", () => {
+    const weapon = (baseId: string) =>
+      generateItem(
+        registry,
+        { uid: baseId, ilvl: 3, rarity: 'magic', slot: 'weapon', baseId, mana: 'fire' },
+        new SeededRNG(4),
+      );
+    put(weapon('maul'), weapon('wand'), weapon('sword'), helm('fire'));
+    const tempo = (uid: string) => {
+      const { unmount } = render(<ItemDetailSheet uid={uid} onClose={() => {}} />);
+      const text = screen.queryByTestId('item-tempo')?.textContent ?? null;
+      unmount();
+      return text;
+    };
+    expect(tempo('maul')).toBe('Tempo 1.3×: slower holds and chain beats');
+    expect(tempo('wand')).toBe('Tempo 0.8×: quicker holds and chain beats');
+    expect(tempo('sword')).toBe('Tempo 1×: standard holds and chain beats');
+    expect(tempo('h1')).toBeNull();
+  });
+
   it('greys attunement outside the pair, and shows the Mana Dust salvage gives', () => {
     put(
       helm('frost', 'h1', [

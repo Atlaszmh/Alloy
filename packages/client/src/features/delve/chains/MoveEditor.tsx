@@ -1,7 +1,9 @@
 import {
   MOVE_KINDS,
+  beatFor,
   blowNumbers,
   moveNumbers,
+  playedKind,
   type AbilitySlot,
   type Blow,
   type HeroBlow,
@@ -31,7 +33,14 @@ function Heading({ children }: { children: string }) {
   );
 }
 
-/** Plain-language numbers for a resolved move (at its place in the chain); a hold's full charge too. */
+/** Seconds as the readout says them: 0.4, 1.04. */
+const secs = (s: number) => `${+s.toFixed(2)}s`;
+
+/**
+ * Plain-language numbers for a resolved move (at its place in the chain) and
+ * the beat after it; a hold's full charge too, with its time and its beat (by
+ * the weapon's tempo).
+ */
 function Readout({
   ab,
   full,
@@ -50,6 +59,8 @@ function Readout({
   const { hit, radius } = moveNumbers(stats, bal, ab);
   const maxHp = stats.maxHp;
   const lines: string[] = [];
+  const beat = (a: ResolvedAbility) =>
+    `then a ${secs(beatFor(bal, a.slot, playedKind(a), stats.tempo))} beat`;
   const f = ab.form.id;
   if (f === 'ward')
     lines.push(
@@ -81,12 +92,12 @@ function Readout({
       ? `Charge ${Math.round(ab.chargeNeed)}${windup}`
       : `${Math.round(ab.cost)} mana${windup}`;
   lines.push(
-    `${pay} · ${ab.payment === 'charge' ? 'no cooldown' : `${ab.cooldown.toFixed(ab.cooldown < 2 ? 2 : 0)}s cooldown`}`,
+    `${pay} · ${ab.payment === 'charge' ? 'no cooldown' : `${ab.cooldown.toFixed(ab.cooldown < 2 ? 2 : 0)}s cooldown`}, ${beat(ab)}`,
     `${ab.stacks} ${ab.stacks === 1 ? 'stack' : 'stacks'} a hit`,
   );
   if (full)
     lines.push(
-      `Fully charged (${bal.chains.holdTime}s): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}`,
+      `Fully charged (${secs(bal.chains.holdTime * stats.tempo)}): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}, ${beat(full)}`,
     );
   // A mana cost the pool can't hold: the move's, else a hold's full charge (the engine would
   // let go at the highest stage the pool pays).

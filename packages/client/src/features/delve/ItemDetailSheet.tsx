@@ -109,7 +109,8 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const isUpgrade = cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
   const mana = manaStyle(registry, item.mana);
   const attuneDelta = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
-  const attack = registry.getDelveData().bases.find((b) => b.id === item.baseId)?.attack;
+  const base = registry.getDelveData().bases.find((b) => b.id === item.baseId);
+  const attack = base?.attack;
   const diving = isDiveActive(profile);
   const dust = salvageDust(registry, item, profile.pair);
   const ownMana = inPair(profile, item.mana);
@@ -259,6 +260,13 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
               {attack && (
                 <span className="rounded bg-white/5 px-1.5 py-0.5">
                   {attack.kind === 'bolt' ? '🎯 Ranged' : '⚔️ Melee'}
+                </span>
+              )}
+              {base?.tempo !== undefined && (
+                <span className="rounded bg-white/5 px-1.5 py-0.5" data-testid="item-tempo">
+                  Tempo {base.tempo}×:{' '}
+                  {base.tempo > 1 ? 'slower' : base.tempo < 1 ? 'quicker' : 'standard'} holds and
+                  chain beats
                 </span>
               )}
               <span className="rounded bg-white/5 px-1.5 py-0.5">iLvl {item.ilvl}</span>

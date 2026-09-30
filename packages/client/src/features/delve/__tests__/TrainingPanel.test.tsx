@@ -101,6 +101,13 @@ describe('TrainingPanel', () => {
     expect(screen.getByTestId('dummies-full')).toBeInTheDocument();
   });
 
+  it('No cooldowns says the beats stay on', () => {
+    renderPanel('toggles');
+    expect(
+      screen.getByText('Cooldowns are off and charge stays full; each move still waits its beat.'),
+    ).toBeInTheDocument();
+  });
+
   it("the sheet's Close answers the controller's B; Back to the Anvil carries no marker", () => {
     const { onClose, onExit } = renderPanel('toggles');
     const close = screen.getByTestId('training-panel-close');
