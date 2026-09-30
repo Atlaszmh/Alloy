@@ -43,11 +43,20 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   | epic, legendary | all four |
 
   A weapon's moveset holds exactly the chains its rarity carries. Unarmed carries `basic` and `primary`.
-- **An absent skill.** An uncarried skill has no chain: the hero's `chains[slot]` is null, and every reader treats that as no skill.
+  - **Checked at load.** `carries` sits in `balance.json`, so it can be retuned. `parseDelveProfile` checks each weapon's chains against its rarity at load, next to the missing-moveset fill: a chain the rarity no longer carries is dropped, and a newly carried one gets its base default.
+- **An absent skill.** An uncarried skill has no chain: the hero's `chains[slot]` is null. `HeroEntity.chains` becomes `(ResolvedChain | null)[]`, keeping every index position, since cooldowns, charge, beats and the HUD all index by slot. Every reader treats null as no skill.
   - `castAbility`, `startHold` and `abilityReady` refuse it.
   - Its key, HUD button and pad button do nothing; the HUD hides the button.
   - The bot skips it, Power counts nothing for it, and `gainCharge` fills no meter for it.
-  - The chain builder shows its tab locked: "Carried by magic weapons and better", or "…epic…" for the Ultimate.
+  - The chain builder shows its tab locked, with its own icon: "Carried by magic weapons and better", or "…epic…" for the Ultimate. `setChain`, `setChains` and `addSlot` on it refuse with the same text.
+  - **Every reader that indexes the chains unguarded must handle null.** These throw today on a missing chain:
+    - Galvanize (`combat.ts`);
+    - `gainCharge` (`defend.ts`), the Training Grounds' charge top-ups (`step.ts`, `sandbox.ts`);
+    - the hero's setup and `refreshWorldHero` (`world.ts`);
+    - `pressStep`, `nextMove` and `pressMove` (`cast.ts`), with their callers in `arena-pad.ts`, `input.ts` and `useArenaCore.ts` (`aimedMove`, the HUD snapshot);
+    - `estimateCombat`: skip the Defensive's guard and mitigation, not only the damage;
+    - `ChainEditor`'s tab icons, and `ArenaHud`, which keeps null entries by index rather than filtering.
+  - **Dead legendaries.** A worn legendary tied to a skill the weapon lacks (Nightstalker, the Defensive's; Rimeheart's Nova zone, the Ultimate's) does nothing, and its item sheet says "needs a Defensive" or "needs an Ultimate". Accepted.
 - **Base slots.** Base slots are 1 for `primary`, `defensive` and `ultimate`. For `basic` it's the length of the weapon base's `defaultChain`; unarmed, `hero.defaultChain`'s (3). A weapon's **extra slots** are, summed over its chains, `slots − base`.
 - **The hero's chains.** `heroChains(registry, equipped, pair)` gives the equipped weapon's `moveset.chains`. Unarmed, it gives a computed default moveset at base slots, never stored, in the pair's primary, or `'fire'` before the choice. It takes the gear rather than the profile, so `profileStats`, `heroPower` and `compareItem` lose their `chains` parameter.
 - **`profile.chains` and `profile.chainCaps` go.** Every reader moves to `heroChains` or the equipped weapon's moveset:
@@ -143,7 +152,9 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
     - Any overflow past 5 comes back as Links.
     - Moves past the new slot count (a basic chain onto a lower-base weapon) are dropped from the end.
   - **Chains the target can't carry** (a lower rarity) stay behind: their extra slots come back as Links, and their moves are gone. The price counts only the extras that move.
-  - **The target's own extra slots** come back as Links.
+  - **Skills the target carries but the source doesn't** (a higher rarity) keep the target's own chain, slots and moves.
+  - **The target's own extra slots, on the chains your moveset replaces,** come back as Links.
+  - **Valued as a home,** the target is your chains on the skills they share, plus its own on the others.
   - **The old weapon** returns to the bag at its base slots, with default moves in its own mana.
   - **Price:** `transferScrap` (30) for each of the source's extra slots.
   - **Refusals:** mid-dive, and when it can't be paid for.
@@ -170,7 +181,7 @@ Nothing about gear changes.
 - **A dive that ends** by death or extraction unlocks, because `isDiveActive` covers only `fighting` and `choosing`.
 
 ### The Training Grounds
-Unchanged: their own chains, 5 slots, free and instant. Load my build copies the equipped weapon's moveset.
+Unchanged: their own chains, 5 slots, free and instant, always all four. Load my build copies the equipped weapon's chains, and fills the skills it doesn't carry with the sandbox's current chains.
 
 ## Migration (save v6)
 - **Item schema.** `moveset` is added to the shared `GearItemSchema` as optional, so v3, v4 and v5 saves still parse.
