@@ -64,13 +64,16 @@ export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
  * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
  * reach, else straight ahead. A committed swing roots the hero, lunges and
  * ends any recovery; a manual hold blow starts as a medium one (it holds at
- * its strike point: see `basicHoldTick`). Returns whether a swing started.
+ * its strike point: see `basicHoldTick`). With a press waiting (see the chain
+ * feel spec), only a blow that strikes by `deadline` (the tick the press
+ * fires) starts. Returns whether a swing started.
  */
 export function startSwing(
   ctx: SimCtx,
   manual: boolean,
   committed: boolean,
   aim: Vec | null = null,
+  deadline = Infinity,
 ): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
@@ -78,15 +81,16 @@ export function startSwing(
   if (t < h.nextAttackAt) return false;
   const w = h.stats.weapon;
   const step = basicStep(h, t, bal);
-  h.attackCount = step;
   const blow = w.blows[step];
   const s = manual && blow.kind === 'hold' ? w.feel.medium : blow;
+  const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
+  const startup = cycle * s.startup;
+  if (t + startup > deadline + 1e-9) return false;
+  h.attackCount = step;
   const { lunge, reach, acquire } = swingReach(w, s, committed, manual);
   const { target, dir } = aimAt(ctx, aim, acquire, { ...h.facing });
   if (!target && !manual) return false;
   if (committed || !h.moving) h.facing = dir;
-  const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
-  const startup = cycle * s.startup;
   h.swing = {
     step,
     dir,

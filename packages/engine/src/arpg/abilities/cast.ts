@@ -2,7 +2,7 @@ import type { AbilityCast, ResolvedAbility } from '../../types/ability.js';
 import type { ArpgWorld, HeroEntity, Vec } from '../../types/arpg.js';
 import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
-import { cancelSwing, pushTick, startPush } from '../action.js';
+import { cancelSwing, pushTick, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
 import { beatFor, chainMove, playedKind, stepBonus, stepHeft } from './resolve.js';
@@ -178,16 +178,16 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
 
 /**
  * Holding `slot`: its next move, a hold, starts charging when the hero is free
- * as a press needs (a swing winding up gives way), its slot's beat is over and
- * its first stage is affordable. Nothing is paid yet; the hero faces what it
- * aims at.
+ * as a press needs (a swing winding up gives way, but one striking this tick
+ * lands first), its slot's beat is over and its first stage is affordable.
+ * Nothing is paid yet; the hero faces what it aims at.
  */
 function startHold(ctx: SimCtx, slot: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
   const chain = h.chains[slot];
-  if (!chain || h.windup || inBeat(h, slot, t)) return;
+  if (!chain || h.windup || inBeat(h, slot, t) || swingStrikes(h, t)) return;
   const step = pressStep(h, slot, t, bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (ab.kind !== 'hold' || t < h.cooldowns[slot][step]) return;

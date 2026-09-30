@@ -342,3 +342,170 @@ describe('beats', () => {
     expect(w.queuedCasts).toEqual([]);
   });
 });
+
+describe('the basic swing while a press waits', () => {
+  /** Basic attacks on (a sword, or `equipped`) at a foe in reach, the Primary two medium Bolts; the weapon idle until armed. */
+  const fighter = (equipped?: EquippedGear, moves?: Move[]) => {
+    const w = beater(moves, { equipped });
+    w.monsters = arena([dummy(13, 34.4)]).monsters;
+    w.hero.nextAttackAt = 1e9;
+    return w;
+  };
+  /** Seconds from a swing of the chain's first blow to its strike. */
+  const startup = (w: ArpgWorld) => {
+    const b = w.hero.stats.weapon.blows[0];
+    return w.hero.stats.attackInterval * b.time * b.startup;
+  };
+  /** Step, the weapon idle, until a swing starting next tick would strike after `at`. */
+  const idleUntilPast = (w: ArpgWorld, at: number, input = {}) => {
+    while (w.t + STEP + startup(w) <= at) stepWorld(registry, w, { move: still, ...input }, STEP);
+  };
+  /** Step until `done`: the swings that start, and the blows and wind-ups in order. */
+  const watch = (w: ArpgWorld, done: () => boolean, input = {}) => {
+    let swings = 0;
+    const order: string[] = [];
+    for (let i = 0; i < 300 && !done(); i++) {
+      const before = w.hero.swing;
+      for (const e of stepWorld(registry, w, { move: still, ...input }, STEP))
+        if (e.kind === 'basic' || e.kind === 'windup') order.push(e.kind);
+      if (w.hero.swing && w.hero.swing !== before) swings++;
+    }
+    return { swings, order, at: w.t };
+  };
+  const windingUp = (w: ArpgWorld) => () => w.hero.windup !== null;
+  const arm = (w: ArpgWorld) => {
+    w.hero.nextAttackAt = w.t;
+  };
+
+  it("a swing that strikes by the press's tick starts and lands first; one that wouldn't doesn't start", () => {
+    const fits = fighter();
+    press(fits, 0);
+    const end = fits.hero.beatUntil[0];
+    pressOnly(fits, 0);
+    watch(fits, () => fits.hero.push === null); // the Bolt's recoil
+    expect(end - fits.t).toBeGreaterThan(startup(fits) + STEP);
+    arm(fits);
+    const a = watch(fits, windingUp(fits));
+    expect(a.order).toEqual(['basic', 'windup']);
+    tickAfter(a.at, end);
+
+    const late = fighter();
+    press(late, 0);
+    const lateEnd = late.hero.beatUntil[0];
+    pressOnly(late, 0);
+    idleUntilPast(late, lateEnd);
+    arm(late);
+    const b = watch(late, windingUp(late));
+    expect(b).toMatchObject({ swings: 0, order: ['windup'] });
+    tickAfter(b.at, lateEnd);
+  });
+
+  it('the same for a press waiting on its move cooling after the beat', () => {
+    const cooling = () => {
+      const w = fighter();
+      press(w, 0);
+      const ready = w.hero.beatUntil[0] + 0.19;
+      w.hero.cooldowns[0][1] = ready;
+      pressOnly(w, 0);
+      return { w, ready };
+    };
+    // Too late for the beat alone, in time for the cooldown.
+    const fits = cooling();
+    idleUntilPast(fits.w, fits.w.hero.beatUntil[0]);
+    arm(fits.w);
+    const a = watch(fits.w, windingUp(fits.w));
+    expect(a.order).toEqual(['basic', 'windup']);
+    tickAfter(a.at, fits.ready);
+
+    const late = cooling();
+    idleUntilPast(late.w, late.ready);
+    arm(late.w);
+    expect(watch(late.w, windingUp(late.w))).toMatchObject({ swings: 0, order: ['windup'] });
+  });
+
+  it("a held ability button waiting on its beat or cooldown counts as a press; a dropped hold's doesn't", () => {
+    /** Swings that start before slot 0's beat (or, `cooling`, the Ward's cooldown) ends. */
+    const swings = (input: object, o: { dropped?: boolean; cooling?: boolean } = {}) => {
+      const w = fighter();
+      const slot = o.cooling ? 1 : 0;
+      press(w, slot);
+      if (o.cooling) {
+        run(w, w.hero.beatUntil[1] - w.t + STEP);
+        w.hero.cooldowns[1][0] = w.t + 0.5;
+      }
+      const ready = Math.max(w.hero.beatUntil[slot], w.hero.cooldowns[slot][0]);
+      idleUntilPast(w, ready, input);
+      if (o.dropped) w.holdDropped = slot;
+      arm(w);
+      return watch(w, () => w.t + STEP >= ready - 1e-9, input).swings;
+    };
+    expect(swings({ holding: 0 })).toBe(0);
+    expect(swings({})).toBe(1);
+    expect(swings({ holding: 0 }, { dropped: true })).toBe(1);
+    expect(swings({ holding: 1 }, { cooling: true })).toBe(0);
+    expect(swings({}, { cooling: true })).toBe(1);
+  });
+
+  it('a blow due in the tick the press fires lands first, the press a tick later; so does a held hold', () => {
+    const w = fighter();
+    press(w, 0);
+    const end = w.hero.beatUntil[0];
+    pressOnly(w, 0);
+    idleUntilPast(w, end - STEP);
+    arm(w);
+    const times: Record<string, number> = {};
+    for (let i = 0; i < 60 && !w.hero.windup; i++)
+      for (const e of stepWorld(registry, w, { move: still }, STEP)) times[e.kind] ??= w.t;
+    tickAfter(times.basic, end);
+    expect(times.windup - times.basic).toBeCloseTo(STEP);
+
+    const h = fighter(undefined, [m('medium'), m('hold')]);
+    press(h, 0);
+    const hEnd = h.hero.beatUntil[0];
+    const holding = { holding: 0 };
+    idleUntilPast(h, hEnd - STEP, holding);
+    arm(h);
+    let struck = -1;
+    for (let i = 0; i < 60 && !h.hero.hold; i++)
+      if (stepWorld(registry, h, { move: still, ...holding }, STEP).some((e) => e.kind === 'basic'))
+        struck = h.t;
+    tickAfter(struck, hEnd);
+    expect(h.hero.hold!.start - struck).toBeCloseTo(STEP);
+  });
+
+  it("a manual attack tap held back by a waiting press doesn't age", () => {
+    const w = fighter(MAUL);
+    press(w, 0);
+    const end = w.hero.beatUntil[0];
+    pressOnly(w, 0);
+    const manual = { attack: false };
+    watch(w, () => w.hero.push === null, manual);
+    // Held back from now to the beat's end: longer than the buffer.
+    expect(end - w.t).toBeLessThan(startup(w));
+    expect(end - w.t).toBeGreaterThan(bal.feel.buffer + STEP);
+    arm(w);
+    stepWorld(registry, w, { move: still, ...manual, attackTap: true }, STEP);
+    const r = watch(w, () => w.hero.swing !== null, manual);
+    expect(r).toMatchObject({ swings: 1, order: ['windup'] });
+  });
+
+  it('no swing that starts while a press waits is cut by it: mashing Q fills the beats with blows', () => {
+    const w = fighter();
+    w.hero.nextAttackAt = 0;
+    const waited = new Set<object>();
+    let cut = 0;
+    let blows = 0;
+    for (let i = 0; i < Math.round(6 / STEP); i++) {
+      const before = w.hero.swing;
+      const waiting = w.queuedCasts.length > 0;
+      const events = stepWorld(registry, w, { move: still, cast: { slot: 0 } }, STEP);
+      const struck = events.some((e) => e.kind === 'basic');
+      if (struck) blows++;
+      if (before && waited.has(before) && w.hero.swing !== before && !struck) cut++;
+      if (w.hero.swing && w.hero.swing !== before && waiting) waited.add(w.hero.swing);
+    }
+    expect(waited.size).toBeGreaterThan(0);
+    expect(blows).toBeGreaterThan(0);
+    expect(cut).toBe(0);
+  });
+});

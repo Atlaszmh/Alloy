@@ -26,7 +26,7 @@ import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
-import { cancelSwing, dropHold, pushTick } from './action.js';
+import { cancelSwing, dropHold, pushTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
@@ -143,18 +143,21 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const dashing = isDashing(ctx);
   const t = world.t;
   const busy = dashing || !!h.windup || !!h.hold;
-  // The waiting presses (one per slot) wait out a wind-up, a hold, a dash and their slot's
-  // beat without ageing: each gets `buffer` from then.
+  // The waiting presses (one per slot) wait out a wind-up, a hold, a dash, their slot's beat and
+  // the tick a swing strikes without ageing: each gets `buffer` from then.
+  const striking = swingStrikes(h, t);
   for (const q of world.queuedCasts)
-    if (busy || inBeat(h, q.cast.slot, t)) q.until = Math.max(q.until, t + bal.feel.buffer);
+    if (busy || striking || inBeat(h, q.cast.slot, t))
+      q.until = Math.max(q.until, t + bal.feel.buffer);
   world.queuedCasts = world.queuedCasts.filter((q) => t <= q.until);
   // Of those whose slot is ready (its beat over, its move off cooldown), the one pressed first
-  // fires. One on cooldown stays (ageing) and fires if the cooldown ends in time.
+  // fires. One on cooldown stays (ageing) and fires if the cooldown ends in time. A swing
+  // striking this tick lands first: the press waits a tick.
   const ready = (slot: number) =>
     !!h.chains[slot] &&
     !inBeat(h, slot, t) &&
     t >= h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)];
-  const q = busy ? undefined : world.queuedCasts.find((p) => ready(p.cast.slot));
+  const q = busy || striking ? undefined : world.queuedCasts.find((p) => ready(p.cast.slot));
   if (q) {
     world.queuedCasts = world.queuedCasts.filter((p) => p !== q);
     castAbility(ctx, q.cast);
@@ -202,19 +205,24 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   }
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.
   if (input.attack === undefined) world.queuedAttack = null;
-  // A tap held by a dash, a wind-up, a hold, a swing, a push or the weapon's cycle doesn't age either.
+  // While a press waits, a swing starts only if its blow strikes by the tick the press fires.
+  const due = pressDue(ctx, input.holding);
+  const deadline = due === Infinity ? Infinity : t + Math.ceil((due - t) / dt - 1e-6) * dt;
+  // A tap held by a dash, a wind-up, a hold, a swing, a push, the weapon's cycle or a waiting
+  // press doesn't age either.
   if (
     world.queuedAttack &&
-    (dashing || h.windup || h.hold || h.swing || h.push || t < h.nextAttackAt)
+    (dashing || h.windup || h.hold || h.swing || h.push || t < h.nextAttackAt || due !== Infinity)
   )
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
   // A swing waits for a push (a lunge, a step-in or a recoil) to finish, so it never swallows one.
   if (!h.swing && !h.windup && !h.hold && !h.push && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
-    if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05);
+    if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05, null, deadline);
     else {
       const tap = world.queuedAttack && t <= world.queuedAttack.until ? world.queuedAttack : null;
-      if ((input.attack || tap) && startSwing(ctx, true, true, input.attackAim ?? tap?.aim ?? null))
+      const aim = input.attackAim ?? tap?.aim ?? null;
+      if ((input.attack || tap) && startSwing(ctx, true, true, aim, deadline))
         world.queuedAttack = null;
     }
   }
@@ -230,6 +238,33 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);
+}
+
+/**
+ * When the first press waiting now will fire: the later of its slot's beat end
+ * and its next move's cooldown (the earliest over every waiting press). A held
+ * ability button whose slot waits on either counts as a waiting press (the
+ * player means to use that slot next), unless its hold was dropped. Infinity
+ * with none (see the chain feel spec).
+ */
+function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const t = world.t;
+  const readyAt = (slot: number) =>
+    h.chains[slot]
+      ? Math.max(
+          h.beatUntil[slot],
+          h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)],
+        )
+      : Infinity;
+  let due = Infinity;
+  for (const q of world.queuedCasts) due = Math.min(due, readyAt(q.cast.slot));
+  if (holding !== null && holding !== undefined && holding !== world.holdDropped) {
+    const held = readyAt(holding);
+    if (held > t) due = Math.min(due, held);
+  }
+  return due;
 }
 
 // ── Projectiles ────────────────────────────────────────────────────────────

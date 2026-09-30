@@ -91,6 +91,14 @@ export function pushTick(ctx: SimCtx, finish = false): boolean {
   return true;
 }
 
+/**
+ * A basic swing in its startup strikes this tick. A press or a hold that would
+ * start now waits a tick, so the blow lands first (see the chain feel spec).
+ */
+export function swingStrikes(h: HeroEntity, t: number): boolean {
+  return !!h.swing && h.swing.held === null && t >= h.swing.strikeAt - 1e-9;
+}
+
 /** Drop a basic swing still in its startup: no blow, no string step, and the weapon is ready again. */
 export function cancelSwing(ctx: SimCtx): void {
   const h = ctx.world.hero;
