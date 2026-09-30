@@ -14,6 +14,7 @@ import {
   type DpsOptions,
   type DpsSetup,
 } from '../src/arpg/dps-sim.js';
+import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld } from '../src/types/arpg.js';
 import { arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
@@ -292,15 +293,22 @@ describe('simulateDps', () => {
     const lands = steps.flatMap((st, i) =>
       st.events.some((e) => e.kind === 'cast' && e.slot === 0) ? [i * bal.arena.step] : [],
     );
-    const moves = resolveChain(
-      registry,
-      computeHeroStats({}, registry),
-      'primary',
-      s.chains.primary,
-    ).moves;
+    // The sim's hero: its weapon and pair.
+    const { baseId, primary, secondary } = s.weapon;
+    const weapon = sandboxWeapon(registry, {
+      baseId,
+      mana: primary,
+      rarity: 'common',
+      ilvl: ONE.depth,
+    });
+    const stats = computeHeroStats({ weapon }, registry, {
+      pair: { primary, secondary },
+      basic: s.chains.basic,
+    });
+    const moves = resolveChain(registry, stats, 'primary', s.chains.primary).moves;
     // Full mana at the start: the chain's first three gaps are its beats and wind-ups.
     for (let i = 0; i < 3; i++) {
-      const least = beatFor(bal, 'primary', moves[i].kind, 1) + moves[i + 1].castTime;
+      const least = beatFor(bal, 'primary', moves[i].kind, stats.tempo) + moves[i + 1].castTime;
       expect(lands[i + 1] - lands[i]).toBeGreaterThanOrEqual(least - 1e-6);
       expect(lands[i + 1] - lands[i]).toBeLessThan(least + 3 * bal.arena.step);
     }

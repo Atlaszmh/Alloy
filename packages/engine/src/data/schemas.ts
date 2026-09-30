@@ -493,9 +493,15 @@ export const DelveDataSchema = z.object({
       }),
     )
     .min(1)
-    .refine(
-      (bases) => bases.every((b) => b.slot !== 'weapon' || b.tempo !== undefined),
-      'every weapon base needs a tempo',
+    .superRefine((bases, ctx) =>
+      bases.forEach((b, i) => {
+        if ((b.slot === 'weapon') !== (b.tempo !== undefined))
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [i, 'tempo'],
+            message: `${b.id}: ${b.slot === 'weapon' ? 'a weapon base needs a tempo' : 'only a weapon base has a tempo'}`,
+          });
+      }),
     ),
   affixes: z
     .array(

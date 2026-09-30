@@ -10,17 +10,11 @@ import { refreshWorldHero } from '../src/arpg/world.js';
 import {
   computeHeroStats,
   damagePerUse,
+  estimateCombat,
   useInterval,
   valuedMove,
 } from '../src/delve/hero-stats.js';
-import {
-  ABILITY_SLOTS,
-  MOVE_KINDS,
-  type AbilityPayment,
-  type AbilitySlot,
-  type Move,
-  type MoveKind,
-} from '../src/types/ability.js';
+import type { AbilityPayment, AbilitySlot, Move, MoveKind } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
 import {
@@ -38,6 +32,7 @@ import {
   run,
   strikeWorld,
   type ArenaOpts,
+  type ChainOpts,
 } from './fixtures/arena.js';
 
 // See the chain feel spec. The fixture arena's hero stands at (13, 36) facing up (−y);
@@ -129,6 +124,20 @@ describe('balance: tempo, hold stages and beats', () => {
     expect(bases((b) => b)).toBe(true);
     expect(bases(({ tempo: _tempo, ...b }) => b)).toBe(false);
     expect(bases((b) => ({ ...b, tempo: 0 }))).toBe(false);
+  });
+
+  it('names the base missing its tempo, and refuses a tempo on a base that is no weapon', () => {
+    const parse = (id: string, edit: (b: Record<string, unknown>) => Record<string, unknown>) =>
+      DelveDataSchema.safeParse({
+        ...delveData,
+        bases: delveData.bases.map((b) => (b.id === id ? edit(b) : b)),
+      });
+    const maul = delveData.bases.findIndex((b) => b.id === 'maul');
+    const missing = parse('maul', ({ tempo: _tempo, ...b }) => b);
+    expect(missing.error?.issues.map((i) => i.path)).toEqual([['bases', maul, 'tempo']]);
+    const armor = delveData.bases.findIndex((b) => b.slot !== 'weapon');
+    const worn = parse(delveData.bases[armor].id, (b) => ({ ...b, tempo: 1 }));
+    expect(worn.error?.issues.map((i) => i.path)).toEqual([['bases', armor, 'tempo']]);
   });
 });
 
@@ -230,13 +239,7 @@ describe('holds by tempo', () => {
 describe('beats', () => {
   const beatOf = (w: ArpgWorld, slot = 0) => w.hero.beatUntil[slot] - w.hero.beatFrom[slot];
 
-  it("each kind's and slot's beat, by tempo; a tap on a hold takes the medium's, a full charge the hold's", () => {
-    for (const kind of MOVE_KINDS)
-      for (const slot of ABILITY_SLOTS)
-        for (const tempo of [0.8, 1, 1.3])
-          expect(beatFor(bal, slot, kind, tempo)).toBeCloseTo(
-            bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo,
-          );
+  it("each kind's and slot's beat, by tempo; a hold's by its stage: a tap's the medium's, a half charge the heavy's, a full charge the hold's", () => {
     const light = beater([m('light')], { equipped: MAUL });
     press(light, 0);
     expect(beatOf(light)).toBeCloseTo(0.25 * 1.3);
@@ -250,6 +253,9 @@ describe('beats', () => {
     const tap = beater([m('hold')]);
     press(tap, 0);
     expect(beatOf(tap)).toBeCloseTo(bal.chains.beat.medium);
+    const half = beater([m('hold')]);
+    holdFor(half, 0, 0.6);
+    expect(beatOf(half)).toBeCloseTo(bal.chains.beat.heavy);
     const full = beater([m('hold')]);
     holdFor(full, 0, bal.chains.holdTime);
     expect(beatOf(full)).toBeCloseTo(bal.chains.beat.hold);
@@ -275,6 +281,19 @@ describe('beats', () => {
     expect(w.queuedCasts.map((q) => q.cast.slot)).toEqual([0]);
     expect(castSlots(until(w, windup(0)).events)).toEqual([1]);
     expect(w.queuedCasts).toEqual([]);
+  });
+
+  it('waiting presses fire in press order; a re-press of a slot goes last', () => {
+    const order = (presses: number[]) => {
+      const w = beater();
+      w.hero.charge[2] = 100;
+      pressOnly(w, 0);
+      // Pressed while Q winds up, all in the same moment.
+      for (const slot of presses) stepWorld(registry, w, { move: still, cast: { slot } }, 0);
+      return castSlots(run(w, 3));
+    };
+    expect(order([1, 2])).toEqual([0, 1, 2]);
+    expect(order([1, 2, 1])).toEqual([0, 2, 1]);
   });
 
   it('a press whose move is still cooling after the beat ages through the buffer, as before', () => {
@@ -340,6 +359,8 @@ describe('beats', () => {
       chainsWith({ primary: { moves: [m('heavy'), m('medium')] } }),
     );
     expect(inBeat(w.hero, 0, w.t)).toBe(false);
+    // The restart window counts from now, not from the cleared beat's end.
+    expect(w.hero.comboAt[0]).toBeLessThanOrEqual(w.t);
     expect(w.queuedCasts).toEqual([]);
     expect(w.hero.beatUntil[1]).toBe(ward);
   });
@@ -458,6 +479,29 @@ describe('the basic swing while a press waits', () => {
     expect(swings({}, { cooling: true })).toBe(1);
   });
 
+  it("a blow striking on a waiting press's last buffered tick doesn't cost the press its buffer", () => {
+    const w = fighter();
+    press(w, 0);
+    watch(w, () => !inBeat(w.hero, 0, w.t) && w.hero.push === null);
+    // A swing starts, then Q is pressed with its move cooling.
+    arm(w);
+    stepWorld(registry, w, { move: still }, STEP);
+    const strikeAt = w.hero.swing!.strikeAt;
+    w.hero.cooldowns[0][1] = 1e9;
+    pressOnly(w, 0);
+    // The move comes off cooldown on the last tick the press would wait, as the blow strikes.
+    const until = w.queuedCasts[0].until;
+    let last = w.t;
+    while (last + STEP <= until) last += STEP;
+    tickAfter(last, strikeAt);
+    w.hero.cooldowns[0][1] = last;
+    const times: Record<string, number> = {};
+    for (let i = 0; i < 30; i++)
+      for (const e of stepWorld(registry, w, { move: still }, STEP)) times[e.kind] ??= w.t;
+    expect(times.basic).toBeCloseTo(last);
+    expect(times.windup).toBeCloseTo(last + STEP);
+  });
+
   it('a blow due in the tick the press fires lands first, the press a tick later; so does a held hold', () => {
     const w = fighter();
     press(w, 0);
@@ -483,6 +527,19 @@ describe('the basic swing while a press waits', () => {
         struck = h.t;
     tickAfter(struck, hEnd);
     expect(h.hero.hold!.start - struck).toBeCloseTo(STEP);
+  });
+
+  it("a press that will run out before its move cools doesn't hold a swing back", () => {
+    const w = fighter(MAUL);
+    press(w, 0);
+    watch(w, () => !inBeat(w.hero, 0, w.t) && w.hero.push === null);
+    // The press ages from now; its move cools just past its buffer, before the maul's blow.
+    const ready = w.t + bal.feel.buffer + 0.05;
+    expect(ready).toBeLessThan(w.t + STEP + startup(w));
+    w.hero.cooldowns[0][1] = ready;
+    arm(w);
+    pressOnly(w, 0);
+    expect(w.hero.swing).not.toBeNull();
   });
 
   it("a manual attack tap held back by a waiting press doesn't age", () => {
@@ -543,6 +600,14 @@ describe('repeat presses', () => {
     pressOnly(tap, 0);
     run(tap, 1);
     expect(tap.hero.comboStep[0]).toBe(1);
+  });
+
+  it("a repeat press dropped at a hold doesn't take the tick's one press from the next ready one", () => {
+    const w = beater([m('hold')]);
+    stepWorld(registry, w, { move: still, cast: { slot: 0, repeat: true } }, 0);
+    const events = stepWorld(registry, w, { move: still, cast: { slot: 1 } }, STEP);
+    expect(windup(1)(events)).toBe(true);
+    expect(w.queuedCasts).toEqual([]);
   });
 
   it('a repeat press refused for mana or charge is dropped without a noMana event', () => {
@@ -683,10 +748,25 @@ describe('Power', () => {
     );
   });
 
-  it("a Defensive hold's effect is its full charge's", () => {
-    const ward = resolved('defensive', [{ kind: 'hold', form: 'ward', elements: ['frost'] }]);
+  it("a Defensive hold's effect is its full charge's, in survival too", () => {
+    const moves: Move[] = [{ kind: 'hold', form: 'ward', elements: ['frost'] }];
+    const ward = resolved('defensive', moves);
     const guard = valuedMove(ward, 0);
     expect(guard).toBe(chainMove(ward, 0, 2));
     expect(guard.effect).toBeGreaterThan(ward.moves[0].effect);
+    // Survival counts it: the Ward's life over its uptime, against a Defensive that adds none.
+    const ehp = (defensive: ChainOpts) =>
+      estimateCombat(stats, registry, 5, chainsWith({ defensive })).ehp;
+    const uptime = Math.min(1, guard.duration / useInterval(bal, ward, stats.tempo, 1e9, 1e9));
+    expect(uptime).toBeLessThan(1);
+    expect(ehp({ moves }) / ehp({ form: 'surge' })).toBeCloseTo(1 + 2 * guard.effect * uptime);
+  });
+
+  it("the weapon's tempo slows the abilities Power counts", () => {
+    // A cast-paid Primary: no mana to wait for, so its cadence sets its pace.
+    const chains = chainsWith({ primary: { payment: 'cast' } });
+    const power = (tempo: number) => estimateCombat({ ...stats, tempo }, registry, 5, chains).dps;
+    expect(power(1.3)).toBeLessThan(power(1));
+    expect(power(0.8)).toBeGreaterThan(power(1));
   });
 });

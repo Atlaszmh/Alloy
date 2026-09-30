@@ -158,12 +158,20 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
     !!h.chains[slot] &&
     !inBeat(h, slot, t) &&
     t >= h.cooldowns[slot][pressStep(h, slot, t, window)];
-  const q = busy || striking ? undefined : world.queuedCasts.find((p) => ready(p.cast.slot));
-  if (q) {
-    world.queuedCasts = world.queuedCasts.filter((p) => p !== q);
-    // A repeat press never fires a hold move: it's dropped, and the held button charges it.
-    if (!q.cast.repeat || nextMove(h, q.cast.slot, t, window).kind !== 'hold')
+  if (!busy && !striking) {
+    // A repeat press never fires a hold move: once ready it's dropped (the held button charges
+    // it), leaving the tick's one press to the next ready one.
+    world.queuedCasts = world.queuedCasts.filter(
+      (p) =>
+        !p.cast.repeat ||
+        !ready(p.cast.slot) ||
+        nextMove(h, p.cast.slot, t, window).kind !== 'hold',
+    );
+    const q = world.queuedCasts.find((p) => ready(p.cast.slot));
+    if (q) {
+      world.queuedCasts = world.queuedCasts.filter((p) => p !== q);
       castAbility(ctx, q.cast);
+    }
   }
   // A hold starts, charges, or fires.
   holdTick(ctx, input.holding, dt, dashing);
@@ -245,10 +253,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
 /**
  * When the first press waiting now will fire: the later of its slot's beat end
- * and its next move's cooldown (the earliest over every waiting press). A held
- * ability button whose slot waits on either counts as a waiting press (the
- * player means to use that slot next), unless its hold was dropped. Infinity
- * with none (see the chain feel spec).
+ * and its next move's cooldown (the earliest over every waiting press that
+ * lives that long). A held ability button whose slot waits on either counts as
+ * a waiting press (the player means to use that slot next), unless its hold was
+ * dropped. Infinity with none (see the chain feel spec).
  */
 function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
   const { world, bal } = ctx;
@@ -261,8 +269,14 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
           h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)],
         )
       : Infinity;
+  const busy = isDashing(ctx) || !!h.windup || !!h.hold;
   let due = Infinity;
-  for (const q of world.queuedCasts) due = Math.min(due, readyAt(q.cast.slot));
+  for (const q of world.queuedCasts) {
+    const at = readyAt(q.cast.slot);
+    // An ageing press that runs out before its slot is ready never fires.
+    if (!busy && !inBeat(h, q.cast.slot, t) && q.until < at) continue;
+    due = Math.min(due, at);
+  }
   if (holding !== null && holding !== undefined && holding !== world.holdDropped) {
     const held = readyAt(holding);
     if (held > t) due = Math.min(due, held);
