@@ -33,7 +33,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 
 ### The moveset
 - **On the weapon.** A weapon item carries `moveset: { chains: Chains; slots: Record<ChainSkill, number> }`. Each chain holds 1 to `slots[skill]` moves, and `slots[skill]` runs from its base up to `chains.cap` (5).
-- **Base slots.** Base slots are 1 for `primary`, `defensive` and `ultimate`. For `basic` it's the length of the weapon base's `defaultChain`. A weapon's **extra slots** are, summed over its chains, `slots − base`.
+- **Base slots.** Base slots are 1 for `primary`, `defensive` and `ultimate`. For `basic` it's the length of the weapon base's `defaultChain`; unarmed, `hero.defaultChain`'s (3). A weapon's **extra slots** are, summed over its chains, `slots − base`.
 - **The hero's chains.** `heroChains(registry, equipped, pair)` gives the equipped weapon's `moveset.chains`. Unarmed, it gives a computed default moveset at base slots, never stored, in the pair's primary, or `'fire'` before the choice. It takes the gear rather than the profile, so `profileStats`, `heroPower` and `compareItem` lose their `chains` parameter.
 - **`profile.chains` and `profile.chainCaps` go.** Every reader moves to `heroChains` or the equipped weapon's moveset:
   - Engine:
@@ -81,9 +81,9 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 
   They are spread uniformly at random over the four chains, never past 5. Each holds its chain's default move in the item's `mana`.
 - **The roll runs after everything else.** `generateItem` rolls the moveset last, from `rng.fork('moveset')`, which never advances the item's RNG. So every item's stats, and every later drop, come out exactly as today.
-  - The starting gear and `sandboxWeapon` (common, 0 extra) get base movesets.
+  - The starting gear and the DPS Lab's `sandboxWeapon` (common, 0 extra) get base movesets. The Training Grounds' picker may choose any rarity, whose extra slots don't matter: the sandbox uses its own chains.
   - The DPS Lab, which builds its chains explicitly, stays identical.
-- **Fusing.** Fusing three items (`fuseItems`) refunds the inputs' weapon extra slots as Links, exactly as salvaging them would. A fused weapon rolls its own moveset for its rarity.
+- **Fusing.** Fusing three items refunds the inputs' weapon extra slots as Links, exactly as salvaging them would. The refund lives in the profile op, `fuseGear` in `delve/profile.ts`, and its result reports `links` for the forge's toast; `smithing.ts`'s `fuseItems` still returns only the item. A fused weapon rolls its own moveset for its rarity.
 - **Non-weapon gear** is unchanged.
 
 ### Links and slots
@@ -93,17 +93,25 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   - `DiveState` gains `linksEarned`, defaulting to 0 like `dustEarned`, so the dive summary and the salvage toast can show them.
 - **Adding a slot.** `addSlot(registry, profile, skill)` adds one slot to a chain of the equipped weapon and appends its default move.
   - **Cost:** by the new slot's position, `slotLinks` (the 2nd slot 1, the 3rd 2, the 4th 3, the 5th 4) plus `slotScrap` at the same index. A sword's 4th basic slot costs 3 Links.
-  - **The new move:** for an ability chain, the default kind at its position, with the chain's last move's form, elements and nothing else. For a basic chain, the weapon's default kind at its position (or medium), in the last blow's element.
+  - **The new move goes at the chain's end.** Its kind is the default kind at that position: the form's `defaultChain`, or for a basic chain the weapon's `defaultChain`, or medium past its end.
+  - **Its form and elements** are the last move's, as long as they're all in the pair; otherwise it takes the pair's primary. So `addSlot` never makes a new off-pair move.
+  - It never touches a slot the chain isn't using (a chain shorter than its slots).
   - **Refusals:** mid-dive, when unarmed, at 5 slots, and when it can't be paid for.
 
 ### Changes and their price
-- **One price function** is shared by the engine's charge and the builder's preview: `movesetEditPrice(registry, old, next)`, a Mana Dust total. Compare the old and new chain position by position:
-  - **Kind or form changed:** a position whose kind or form differs costs `editDust` (5). So a reorder swap costs 2 moves.
-  - **Elements changed:** a position whose elements differ costs `elementDust` (15).
-  - **A new position** (the chain grew) costs `editDust`, plus `elementDust` if any of its elements appears nowhere in the old chain. So removing a move and re-adding it doesn't dodge the element price.
-  - **A removed position** costs `editDust`.
-  - **A changed payment** costs `editDust`.
-  - **Free edits:** every edit costs 0 until the hero's first dive (`stats.dives === 0`).
+- **One price function** is shared by the engine's charge and the builder's preview: `movesetEditPrice(registry, old, next)`, a Mana Dust total. It matches moves by identity, not by position, so reordering or removing never looks like changing a move. A move is its kind, form and elements; a basic blow is its kind and element. The matching runs in steps:
+  1. A move at the same position in both chains is unchanged, and free.
+  2. Each remaining new move that equals a remaining old move is a moved move, and costs `editDust` (5). A ◂▸ swap costs 10.
+  3. The rest pair up in order:
+     - a changed kind or form costs `editDust`;
+     - changed elements cost `elementDust` (15);
+     - both changed cost both.
+  4. What's left over:
+     - a new move with no counterpart costs `editDust`, plus `elementDust` unless its elements equal some old move's;
+     - an old move with no counterpart (a removal) costs `editDust`.
+  5. A changed payment costs `editDust`.
+  - **The caller applies the first-dive freebie:** `setChain` and the builder's preview charge 0 until the hero's first dive (`stats.dives === 0`).
+  - **A known dodge, accepted as small:** removing a move and then, in a second edit, adding one in an element already in the chain costs 10 against 15 for an in-place change.
 - **`setChain`** edits the equipped weapon's chain.
   - **It returns a `ProfileActionResult`,** like the other refusing ops, instead of throwing.
   - **It refuses:**
@@ -111,10 +119,10 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
     - when unarmed;
     - when it can't be paid for;
     - past the chain's slots;
-    - a position whose elements changed to include any element outside the pair (so an unchanged off-pair position is kept, but neither new nor copied moves can be off-pair);
+    - a chain that holds any off-pair element set more times than the old chain did. So off-pair moves can be kept, moved and removed, but never added, copied or given a new off-pair element;
     - today's other refusals.
   - **The autopilot's `bindBest`** pays for its edit, and skips it when it can't.
-- **The Anvil's chain builder** works on a draft. Edits pile up, the price shows (`movesetEditPrice`), and **Apply** (paid) or **Revert** settles them. Off-pair moves show their element chip marked and can't be picked for new moves. The Training Grounds' builder stays instant and free.
+- **The Anvil's chain builder** works on a draft. Edits pile up, the price shows (`movesetEditPrice`, summed over the chains changed), and **Apply** (paid) or **Revert** settles them. Apply is all or nothing: if the total can't be paid, nothing applies. The builder also holds Add slot, with its price. Off-pair moves show their element chip marked and can't be picked for new moves. The Training Grounds' builder stays instant and free.
 - **Transfer.** `transferMoveset(registry, profile, uid)` moves the equipped weapon's moveset onto a weapon in the bag and equips it.
   - **Each chain keeps its extra count on the new weapon:** its slots become the new base plus the source's extra, capped at 5.
     - Any overflow past 5 comes back as Links.
@@ -130,7 +138,7 @@ A weapon can be valued two ways:
 - **As a home:** with your equipped moveset moved onto it.
 
 Where each is used:
-- **The ▲ upgrade mark, `salvageCandidates` and the autopilot's fusion spares** value weapons as a home, so a good base is never marked junk.
+- **The ▲ upgrade mark, `salvageCandidates` and the autopilot's fusion spares** value weapons as a home, so a good base is never marked junk. An unarmed hero has no moveset to move, so it values weapons as-is.
 - **The item sheet** shows both, as-is and "with your moveset", the latter with the transfer price.
 - **"Equip best" (`equipBest`)** equips non-weapon gear only. A weapon changes through the item sheet's Equip (as-is) or Transfer.
 
@@ -141,7 +149,7 @@ A weapon's sheet shows its moveset: each chain's slots (e.g. "Primary 2/5") and 
 Nothing about gear changes.
 - **Refused while `isDiveActive`:** `equipItem`, `unequipSlot`, `equipBest`, `setChain`, `addSlot`, `transferMoveset` and `reattuneItem` (salvage and the forge are already between dives). `chooseStartingMana` stays allowed, for a migrated save mid-dive.
 - **Loot** still goes to the bag mid-fight, with its ▲ mark.
-- **The arena's controls:** Equip and Equip best (`LootTray`, `PickupFeed`), and the item sheet's Equip, Unequip, Transfer and Add slot, give way to "Equip at the Anvil" while a dive runs.
+- **The arena's controls:** Equip and Equip best (`LootTray`, `PickupFeed`), and the item sheet's Equip, Unequip and Transfer, give way to "Equip at the Anvil" while a dive runs. The chain builder is already locked mid-dive, Add slot included.
 - **The bind prompt** shows only at the Anvil.
 - **A dive that ends** by death or extraction unlocks, because `isDiveActive` covers only `fighting` and `choosing`.
 
@@ -156,7 +164,8 @@ Unchanged: their own chains, 5 slots, free and instant. Load my build copies the
   - **The equipped weapon** gets `moveset.chains` equal to the profile's chains, and `slots` equal to each chain's length, raised to at least its base.
   - **Every other weapon** gets base defaults.
   - **The profile** loses `chains` and `chainCaps` and gains `links: 0`.
-  - **Nothing is lost,** with one exception: an **unarmed** v5 save with built chains resets them to the unarmed defaults, since no weapon holds them. It's rare, and a toast says so.
+  - **Nothing is lost,** with one exception: an **unarmed** v5 save with built chains resets them to the unarmed defaults, since no weapon holds them. It's rare, and a toast says so: `ParsedDelveProfile` gains `movesetReset: boolean`, and the store adds its notice alongside `fixNotices`.
+  - **Step order.** The v4 → v5 path's `fixChainsToPair` runs on the v5 shape first, then the save converts to v6. Or the plan keeps a v5-shaped fix.
 - **Older saves.** A frozen `DelveProfileV5Schema` keeps v5 readable, and older saves migrate through v5 as today.
 
 ## Engine surface
