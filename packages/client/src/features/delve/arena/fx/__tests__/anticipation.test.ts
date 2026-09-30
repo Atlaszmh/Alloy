@@ -12,7 +12,10 @@ const FEEL = {
   hold: { ...ROW, heft: 1 },
 };
 const BLOW = { ...ROW, kind: 'light', element: 'fire', attunePower: 1 };
-const { holdTime } = getDelveRegistry().getDelveBalance().chains;
+const {
+  chains: { holdTime },
+  feel: { stepSeconds },
+} = getDelveRegistry().getDelveBalance();
 /** A wind-up's form, as the lean reads it (`windupDir`: only a directional form turns past its aim). */
 const BOLT = { id: 'bolt' };
 
@@ -54,9 +57,10 @@ describe('windingUp', () => {
   });
 
   it("reports a wind-up with its move's heft (+0.2 for a chain's last), toward where it aims", () => {
-    const winding = (last: boolean, from = { x: 5, y: 5 }) =>
+    const winding = (last: boolean, from = { x: 5, y: 5 }, facing = { x: 0, y: -1 }) =>
       windingUp(
         world({
+          facing,
           chains: [
             {
               moves: [{ form: BOLT, element: 'frost', heft: 0.45, last, castTime: 0.4 }],
@@ -84,11 +88,14 @@ describe('windingUp', () => {
     expect(winding(true).heft).toBeCloseTo(0.65);
     // Begun below its aim point, now past it: it leans along the press's way, as the hero faces.
     expect(winding(false, { x: 5, y: 12 }).dir).toEqual({ x: 0, y: -1 });
+    // Aimed where it began (a self-centred form): it leans the way the hero faces.
+    expect(winding(false, { x: 5, y: 9 }, { x: -1, y: 0 }).dir).toEqual({ x: -1, y: 0 });
   });
 
   it('follows an automatic swing on the move too, and ignores idle heroes', () => {
     const moving = windingUp(world({ swing: { ...swing, committed: false } } as never))!;
     expect(moving.progress).toBeCloseTo(0.5);
+    expect(moving.dir).toEqual(swing.dir);
     expect(windingUp(world({}))).toBeNull();
   });
 
@@ -189,7 +196,8 @@ describe('windingUp', () => {
   });
 
   it('a hold blow let go stops gathering: its leap is no wind-up', () => {
-    const leaping = { ...swing, strikeAt: 1.1, held: 0.2, released: 2 };
+    // Let go now: it strikes as its leap lands, stepSeconds on.
+    const leaping = { ...swing, strikeAt: 1 + stepSeconds, held: 0.2, released: 2 };
     expect(windingUp(world({ swing: leaping } as never))).toBeNull();
   });
 });

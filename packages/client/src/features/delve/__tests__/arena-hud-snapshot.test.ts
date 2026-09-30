@@ -5,6 +5,7 @@ import {
   createDelveProfile,
   createSandboxWorld,
   defaultChains,
+  sandboxWeapon,
   setChain,
   startDive,
   stepWorld,
@@ -110,7 +111,17 @@ describe('arena HUD snapshot', () => {
       basicNextKind: sword.hero.stats.weapon.blows[0].kind,
       basicHold: null,
     });
-    const w = sandbox({}, { basic: [{ kind: 'hold', element: 'fire' }] });
+    // A sword: its heavy row lunges minLeap or more further than its medium (unarmed's doesn't).
+    const w = sandbox();
+    const weapon = sandboxWeapon(registry, {
+      baseId: 'sword',
+      mana: 'fire',
+      rarity: 'common',
+      ilvl: 5,
+    });
+    w.hero.stats = computeHeroStats({ weapon }, registry, {
+      basic: [{ kind: 'hold', element: 'fire' }],
+    });
     for (let i = 0; i < 90 && (w.hero.swing?.held ?? null) === null; i++)
       stepWorld(registry, w, { move: still, attack: true }, STEP);
     for (let i = 0; i < Math.round(0.6 / STEP); i++)
@@ -118,7 +129,7 @@ describe('arena HUD snapshot', () => {
     const hud = snapshot(w);
     expect(hud.basicNextKind).toBe('hold');
     expect(hud.basicHold!.stage).toBe(1);
-    // Let go at stage 1: an unarmed heavy lunges further than a medium, so it leaps first.
+    // Let go at stage 1: the sword's heavy lunges further than its medium, so it leaps first.
     stepWorld(registry, w, { move: still, attack: false }, STEP);
     expect(w.hero.swing).toMatchObject({ released: 1 });
     expect(snapshot(w).basicHold).toBeNull();

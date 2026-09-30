@@ -123,7 +123,9 @@ export function frameInput(
     cast = repeat ? { slot, aim, repeat } : { slot, aim };
   }
   const stick = pad?.aimDir && (pad.attackHeld || mem.attackHeld) ? pad.aimDir : null;
-  mem.attackHeld = !!pad?.attackHeld || (mem.attackHeld && h.swing?.held != null);
+  // Held on through a blow at its strike point, not through its leap (as the HUD's charge).
+  mem.attackHeld =
+    !!pad?.attackHeld || (mem.attackHeld && h.swing?.held != null && h.swing.released === null);
   const out: ArpgInput = {
     move: pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : moveVector(input),
     cast,

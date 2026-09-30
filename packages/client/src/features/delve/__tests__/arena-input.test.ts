@@ -332,6 +332,31 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(aim(false)).toEqual({ x: 5, y: 6 });
   });
 
+  it("the pad's attack stays held through a held blow, not through its leap", () => {
+    const w = world();
+    const input = createArenaInput();
+    const mem = padMemory();
+    /** RB let go on a frame whose hero holds a blow at its strike point, released or not. */
+    const stillHeld = (released: number | null) => {
+      w.hero.swing = {
+        step: 0,
+        dir: { x: 0, y: -1 },
+        targetId: null,
+        start: 0,
+        strikeAt: 0,
+        cycle: 1,
+        committed: true,
+        held: 0,
+        released,
+      };
+      mem.attackHeld = true;
+      frameInput(registry, w, input, pad(), mem, opts);
+      return mem.attackHeld;
+    };
+    expect(stillHeld(null)).toBe(true);
+    expect(stillHeld(2)).toBe(false);
+  });
+
   it('RB let go on a frame that runs no tick: the next frame still aims with the stick, and the held blow strikes along it', () => {
     const w = createSandboxWorld(registry, {
       depth: 5,
