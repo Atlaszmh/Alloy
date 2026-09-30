@@ -5,6 +5,7 @@ import {
   holdCharge,
   holdFull,
   stepHeft,
+  windupDir,
   type ArpgWorld,
   type Vec,
 } from '@alloy/engine';
@@ -30,17 +31,20 @@ function toward(w: ArpgWorld, at: Vec): Vec {
 }
 
 /**
- * The action the hero is winding up right now (a committed swing, an ability
- * or a hold charging), or null. A blow winds up in its own element; a hold
- * (an ability's, or a manual blow held at its strike point) gathers with its
- * charge, as heavy as the stage it has reached, toward `aim` (the aim
- * marker's point, where its release will go) while one shows. A released
- * hold's wind-up carries on from what the charge already counted of it.
+ * The action the hero is winding up right now (a swing in its startup, an
+ * ability or a hold charging), or null. A blow winds up in its own element; a
+ * hold (an ability's, or a manual blow held at its strike point) gathers with
+ * its charge, as heavy as the stage it has reached, toward `aim` (the aim
+ * marker's point, where its release will go) while one shows; a hold blow's
+ * ends as it is let go (its leap is no wind-up). A released hold's wind-up
+ * carries on from what the charge already counted of it. A wind-up leans the
+ * way the hero faces it (`windupDir`).
  */
 export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | null {
   const h = w.hero;
   const bal = getDelveRegistry().getDelveBalance();
-  if (h.swing?.committed) {
+  if (h.swing) {
+    if (h.swing.released !== null) return null;
     const wpn = h.stats.weapon;
     const blow = wpn.blows[h.swing.step];
     const color = MANA_HEX[blow.element];
@@ -74,7 +78,7 @@ export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | nul
     // Out of the move's whole wind-up: a released hold's starts part-way, where its charge left it.
     const left = (h.windup.until - w.t) / Math.max(1e-6, ab.castTime);
     return {
-      dir: toward(w, h.windup.at),
+      dir: windupDir(h, h.windup) ?? { ...h.facing },
       heft: stepHeft(ab),
       progress: Math.min(1, Math.max(0, 1 - left)),
       color: MANA_HEX[ab.element],

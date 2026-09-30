@@ -102,7 +102,7 @@ describe('arena HUD snapshot', () => {
     expect(hud.abilities[1].ready).toBe(false);
   });
 
-  it("shows the basic chain's next blow and a manual hold blow's charge", () => {
+  it("shows the basic chain's next blow and a manual hold blow's charge until it is let go", () => {
     const sword = sandbox();
     expect(snapshot(sword)).toMatchObject({
       basicChainStep: 0,
@@ -118,6 +118,10 @@ describe('arena HUD snapshot', () => {
     const hud = snapshot(w);
     expect(hud.basicNextKind).toBe('hold');
     expect(hud.basicHold!.stage).toBe(1);
+    // Let go at stage 1: an unarmed heavy lunges further than a medium, so it leaps first.
+    stepWorld(registry, w, { move: still, attack: false }, STEP);
+    expect(w.hero.swing).toMatchObject({ released: 1 });
+    expect(snapshot(w).basicHold).toBeNull();
   });
 
   it("shows a slot's beat as its wait (the longer of it and the move's cooldown), flagged as a beat", () => {

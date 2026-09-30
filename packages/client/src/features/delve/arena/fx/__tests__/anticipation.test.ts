@@ -13,6 +13,8 @@ const FEEL = {
 };
 const BLOW = { ...ROW, kind: 'light', element: 'fire', attunePower: 1 };
 const { holdTime } = getDelveRegistry().getDelveBalance().chains;
+/** A wind-up's form, as the lean reads it (`windupDir`: only a directional form turns past its aim). */
+const BOLT = { id: 'bolt' };
 
 function world(over: Partial<ArpgWorld['hero']>): ArpgWorld {
   return {
@@ -40,10 +42,11 @@ const swing = {
   strikeAt: 1.1,
   committed: true,
   held: null,
+  released: null,
 };
 
 describe('windingUp', () => {
-  it('reports a committed swing with its heft and progress', () => {
+  it('reports a swing in its startup with its heft and progress', () => {
     const a = windingUp(world({ swing } as never))!;
     expect(a.heft).toBeCloseTo(0.8);
     expect(a.progress).toBeCloseTo(0.5);
@@ -51,16 +54,20 @@ describe('windingUp', () => {
   });
 
   it("reports a wind-up with its move's heft (+0.2 for a chain's last), toward where it aims", () => {
-    const winding = (last: boolean) =>
+    const winding = (last: boolean, from = { x: 5, y: 5 }) =>
       windingUp(
         world({
           chains: [
-            { moves: [{ element: 'frost', heft: 0.45, last, castTime: 0.4 }], hold: [null] },
+            {
+              moves: [{ form: BOLT, element: 'frost', heft: 0.45, last, castTime: 0.4 }],
+              hold: [null],
+            },
           ],
           windup: {
             slot: 0,
             aim: null,
             at: { x: 5, y: 9 },
+            from,
             start: 0.9,
             until: 1.3,
             step: 0,
@@ -75,10 +82,13 @@ describe('windingUp', () => {
     expect(a.progress).toBeCloseTo(0.25);
     expect(a.color).toBe(MANA_HEX.frost);
     expect(winding(true).heft).toBeCloseTo(0.65);
+    // Begun below its aim point, now past it: it leans along the press's way, as the hero faces.
+    expect(winding(false, { x: 5, y: 12 }).dir).toEqual({ x: 0, y: -1 });
   });
 
-  it('ignores an uncommitted swing and idle heroes', () => {
-    expect(windingUp(world({ swing: { ...swing, committed: false } } as never))).toBeNull();
+  it('follows an automatic swing on the move too, and ignores idle heroes', () => {
+    const moving = windingUp(world({ swing: { ...swing, committed: false } } as never))!;
+    expect(moving.progress).toBeCloseTo(0.5);
     expect(windingUp(world({}))).toBeNull();
   });
 
@@ -138,7 +148,13 @@ describe('windingUp', () => {
 
   it("a released hold's wind-up carries on from what the charge counted, rather than starting over", () => {
     // Stage 1 of a 0.5 s wind-up, released after 0.3 s of charge: 0.2 s left, 0.1 s of it gone.
-    const stage = (castTime: number) => ({ element: 'fire', heft: 0.6, last: false, castTime });
+    const stage = (castTime: number) => ({
+      form: BOLT,
+      element: 'fire',
+      heft: 0.6,
+      last: false,
+      castTime,
+    });
     const a = windingUp(
       world({
         chains: [{ moves: [stage(0.3)], hold: [[stage(0.3), stage(0.5), stage(0.7)]] }],
@@ -146,6 +162,7 @@ describe('windingUp', () => {
           slot: 0,
           aim: null,
           at: { x: 9, y: 5 },
+          from: { x: 5, y: 5 },
           start: 0.9,
           until: 1.1,
           step: 0,
@@ -169,5 +186,10 @@ describe('windingUp', () => {
     expect(slow.heft).toBeCloseTo(FEEL.medium.heft); // stage 0
     const full = windingUp(world({ swing: { ...held, held: 1 - holdTime } } as never))!;
     expect(full.heft).toBeCloseTo(FEEL.hold.heft); // stage 2: full power at 100%
+  });
+
+  it('a hold blow let go stops gathering: its leap is no wind-up', () => {
+    const leaping = { ...swing, strikeAt: 1.1, held: 0.2, released: 2 };
+    expect(windingUp(world({ swing: leaping } as never))).toBeNull();
   });
 });

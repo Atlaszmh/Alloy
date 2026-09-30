@@ -209,6 +209,7 @@ export {
   activeMove,
   holdCharge,
   inBeat,
+  windupDir,
 } from './arpg/abilities/cast.js';
 export {
   resolveAbility,

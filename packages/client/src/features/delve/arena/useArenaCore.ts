@@ -191,7 +191,8 @@ export function snapshot(world: ArpgWorld): ArenaHud {
   const channel = w && (activeMove(h, w.slot)?.channel ?? 0) > 0 && t >= w.conjureUntil ? w : null;
   const busy = !!channel || !!h.hold;
   const blow = basicStep(h, t, bal);
-  const held = h.swing?.held ?? null;
+  // A hold blow's charge shows until it is let go (not through its leap).
+  const held = h.swing?.released === null ? h.swing.held : null;
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
