@@ -191,6 +191,7 @@
       "motionPerWeight": 0.3,
       "recoilSeconds": 0.08,
       "stepSeconds": 0.15,
+      "minLeap": 0.25,
       "actionMove": 0.6,
       "sideSteer": 0.3,
       "lungeHold": 0.6,

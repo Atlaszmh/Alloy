@@ -423,7 +423,7 @@ describe('the basic swing while a press waits', () => {
     press(fits, 0);
     const end = fits.hero.beatUntil[0];
     pressOnly(fits, 0);
-    watch(fits, () => fits.hero.pushes.length === 0); // the Bolt's recoil
+    watch(fits, () => !fits.hero.pushes.some((p) => p.kind === 'step')); // the Bolt's recoil
     expect(end - fits.t).toBeGreaterThan(startup(fits) + STEP);
     arm(fits);
     const a = watch(fits, windingUp(fits));
@@ -510,7 +510,7 @@ describe('the basic swing while a press waits', () => {
   it("a blow striking on a waiting press's last buffered tick doesn't cost the press its buffer", () => {
     const w = fighter();
     press(w, 0);
-    watch(w, () => !inBeat(w.hero, 0, w.t) && w.hero.pushes.length === 0);
+    watch(w, () => !inBeat(w.hero, 0, w.t) && !w.hero.pushes.some((p) => p.kind === 'step'));
     // A swing starts, then Q is pressed with its move cooling.
     arm(w);
     stepWorld(registry, w, { move: still }, STEP);
@@ -560,7 +560,7 @@ describe('the basic swing while a press waits', () => {
   it("a press that will run out before its move cools doesn't hold a swing back", () => {
     const w = fighter(MAUL);
     press(w, 0);
-    watch(w, () => !inBeat(w.hero, 0, w.t) && w.hero.pushes.length === 0);
+    watch(w, () => !inBeat(w.hero, 0, w.t) && !w.hero.pushes.some((p) => p.kind === 'step'));
     // The press ages from now; its move cools just past its buffer, before the maul's blow.
     const ready = w.t + bal.feel.buffer + 0.05;
     expect(ready).toBeLessThan(w.t + STEP + startup(w));
@@ -576,7 +576,7 @@ describe('the basic swing while a press waits', () => {
     const end = w.hero.beatUntil[0];
     pressOnly(w, 0);
     const manual = { attack: false };
-    watch(w, () => w.hero.pushes.length === 0, manual);
+    watch(w, () => !w.hero.pushes.some((p) => p.kind === 'step'), manual);
     // Held back from now to the beat's end: longer than the buffer.
     expect(end - w.t).toBeLessThan(startup(w));
     expect(end - w.t).toBeGreaterThan(bal.feel.buffer + STEP);

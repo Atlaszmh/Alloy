@@ -247,6 +247,8 @@ export interface FeelBalance {
   recoilSeconds: number;
   /** How long a blow's step (its step back, side step and hop) takes, from the strike; a hold blow's leap too. */
   stepSeconds: number;
+  /** A charged hold blow's leap shorter than this is skipped: it strikes as it is let go. */
+  minLeap: number;
   /** Move speed multiplier while a swing, a charging hold blow, a wind-up or a charging hold runs. */
   actionMove: number;
   /** The steering's lateral part (of a full stick) that picks a side step's side. */

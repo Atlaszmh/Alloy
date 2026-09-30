@@ -112,9 +112,12 @@ function slice(ctx: SimCtx, p: Push, k: number, steer: Vec | null): boolean {
 export function pushesTick(ctx: SimCtx, steer: Vec | null): void {
   const { world } = ctx;
   const h = world.hero;
-  h.pushes = h.pushes.filter((p) =>
-    slice(ctx, p, Math.min(1, Math.max(0, (world.t - p.start) / (p.until - p.start))), steer),
-  );
+  const kept: Push[] = [];
+  for (const p of h.pushes) {
+    const k = Math.min(1, Math.max(0, (world.t - p.start) / (p.until - p.start)));
+    if (slice(ctx, p, k, steer)) kept.push(p);
+  }
+  h.pushes = kept;
 }
 
 /**

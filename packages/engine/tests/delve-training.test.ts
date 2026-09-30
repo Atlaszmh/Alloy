@@ -598,7 +598,7 @@ describe('toggles', () => {
       committed: true,
       held: null,
     };
-    h.hold = { slot: 0, step: 0, start: 0, aim: null, full: 1, max: 2 };
+    h.hold = { slot: 0, step: 0, start: 0, aim: null, from: { x: 0, y: 0 }, full: 1, max: 2 };
     h.pushes = [
       {
         kind: 'step',

@@ -127,10 +127,10 @@ export function startSwing(
  * past its strike point re-aims as it strikes, as a manual swing aims (on the
  * medium row it began with): toward `aim`, else the nearest foe, else where it
  * was aimed. A tap (let go by its strike point) strikes where it began. One let
- * go at stage 1 or 2 whose row lunges further than medium's leaps the rest
- * first, over `stepSeconds` toward where it re-aimed, stopping at its foe (the
- * re-aimed target, else the first ahead), and strikes as it lands (see the
- * weapon flow spec).
+ * go at stage 1 or 2 whose row lunges at least `minLeap` further than
+ * medium's leaps the rest first, over `stepSeconds` toward where it re-aimed,
+ * stopping at its foe (the re-aimed target, else the first ahead), and strikes
+ * as it lands (see the weapon flow spec).
  */
 export function basicHoldTick(
   ctx: SimCtx,
@@ -162,7 +162,8 @@ export function basicHoldTick(
     const at = full ? 2 : stage;
     const row = w.feel[HOLD_STAGE_KINDS[at]];
     const leap = at > 0 ? row.move - w.feel.medium.move : 0;
-    if (leap <= 0) return strike(ctx, steer, at);
+    // A leap shorter than `minLeap` (unarmed's) isn't worth its delay: it strikes now.
+    if (leap < bal.feel.minLeap - 1e-9) return strike(ctx, steer, at);
     const { reach } = swingReach(w, row, true);
     const foe = target ?? foeAhead(ctx, sw.dir, reach + leap, row.arc ?? w.arc);
     startPush(ctx, 'lunge', sw.dir, leap, bal.feel.stepSeconds, foe?.id ?? null);

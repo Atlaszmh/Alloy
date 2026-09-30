@@ -4,12 +4,14 @@ import { startPush } from '../src/arpg/action.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { dirTo, dist } from '../src/arpg/geometry.js';
 import { stepWorld } from '../src/arpg/step.js';
+import { refreshWorldHero } from '../src/arpg/world.js';
 import { MOVE_KINDS, type FormId, type MoveKind } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
 import {
   arena,
   bal,
+  chainsWith,
   damaged,
   dodge,
   dummy,
@@ -37,6 +39,7 @@ describe('data: weapon styles', () => {
     expect(bal.feel.stepSeconds).toBe(0.15);
     expect(bal.feel.actionMove).toBe(0.6);
     expect(bal.feel.sideSteer).toBe(0.3);
+    expect(bal.feel.minLeap).toBe(0.25);
   });
 
   it("each weapon's moves, side steps, hops and sway", () => {
@@ -127,6 +130,74 @@ describe('pushes', () => {
     run(w, 2 * STEP);
     expect(w.hero.x - x0).toBeCloseTo(0.4, 5);
     expect(w.hero.pushes).toEqual([]);
+  });
+
+  /** A sword swing's lunge at a foe up ahead, with a blow's step running beside it. */
+  const lungeAndStep = () => {
+    const w = arena([dummy(13, 0)]);
+    place(w, 1.0);
+    run(w, STEP);
+    startPush(makeCtx(registry, w, []), 'step', { x: 1, y: 0 }, 0.5, 0.5);
+    expect(kinds(w)).toEqual(['lunge', 'step']);
+    return w;
+  };
+
+  it("a weapon swap drops the swing's lunge and keeps a running step", () => {
+    const w = lungeAndStep();
+    const dagger = computeHeroStats({ weapon: gear('fire', 'weapon', 'dagger') }, registry);
+    refreshWorldHero(registry, w, dagger, chainsWith());
+    expect(w.hero.swing).toBeNull();
+    expect(kinds(w)).toEqual(['step']);
+  });
+
+  it('a dodge clears every push', () => {
+    const w = lungeAndStep();
+    dodge(w);
+    expect(w.hero.pushes).toEqual([]);
+  });
+
+  it("a wind-up's landing finishes its step-in unprojected: steering against it doesn't shorten it", () => {
+    const w = arena([dummy(13, 20)], { noBasic: true, primary: { form: 'strike' } });
+    pressOnly(w, 0, { x: 13, y: 20 });
+    const stepIn = w.hero.pushes.find((p) => p.kind === 'stepIn')!;
+    const back = { x: 0, y: 1 };
+    let before = { done: 0, movedY: 0 };
+    for (let i = 0; i < 60 && w.hero.windup; i++) {
+      before = { done: stepIn.done, movedY: stepIn.movedY };
+      stepWorld(registry, w, { move: back }, STEP);
+    }
+    expect(w.hero.windup).toBeNull();
+    // Steered against, its slices moved nothing; the landing takes the rest in full.
+    expect(before.done).toBeLessThan(1);
+    expect(stepIn.movedY - before.movedY).toBeCloseTo(stepIn.dy * (1 - before.done), 9);
+    expect(stepIn.movedY).toBeLessThan(0);
+  });
+
+  it('the contact cut never cuts the steering', () => {
+    // A swing's lunge at a foe just outside the contact gap; the hero steers into the gap.
+    const w = arena([dummy(13, 0)]);
+    place(w, bal.feel.contactGap + 0.05);
+    run(w, STEP);
+    expect(kinds(w)).toEqual(['lunge']);
+    const y0 = w.hero.y;
+    stepWorld(registry, w, { move: { x: 0, y: -1 } }, STEP);
+    expect(w.hero.pushes).toEqual([]);
+    expect(y0 - w.hero.y).toBeCloseTo(w.hero.stats.moveSpeed * STEP * bal.feel.actionMove, 9);
+  });
+
+  it('a push into the arena edge is clamped while another covers its distance', () => {
+    const w = arena([], { noBasic: true });
+    const ctx = makeCtx(registry, w, []);
+    w.hero.x = w.hero.radius + 0.1;
+    const y0 = w.hero.y;
+    startPush(ctx, 'step', { x: -1, y: 0 }, 1, 4 * STEP);
+    startPush(ctx, 'step', { x: 0, y: -1 }, 0.4, 4 * STEP);
+    const [wall, up] = w.hero.pushes;
+    run(w, 4 * STEP);
+    expect(w.hero.x).toBe(w.hero.radius);
+    expect(wall.movedX).toBeCloseTo(-0.1, 9);
+    expect(y0 - w.hero.y).toBeCloseTo(0.4, 9);
+    expect(up.movedY).toBeCloseTo(-0.4, 9);
   });
 });
 
@@ -286,6 +357,23 @@ describe('past the aim point', () => {
     expect(z.y).toBeCloseTo(35.8, 9);
   });
 
+  it('a directional hold walked past its aim while charging fires along the way it began', () => {
+    // Let go during its conjure (a wind-up follows) and at full charge (it fires at once).
+    for (const ticks of [1, Math.round(bal.chains.holdTime / STEP)]) {
+      const w = arena([dummy(13, 34), dummy(1, 1)], { noBasic: true, primary: { kind: 'hold' } });
+      stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+      expect(w.hero.hold!.aim).not.toBeNull();
+      // Its foe dies (nothing to re-aim at: it fires at the hold's aim), and the hero is past it.
+      w.monsters[0].dead = true;
+      w.hero.y = 30;
+      for (let i = 1; i < ticks; i++) stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+      for (let i = 0; i < 30 && w.projectiles.length === 0; i++)
+        stepWorld(registry, w, { move: still }, STEP);
+      expect(w.projectiles[0].vy, `${ticks}`).toBeLessThan(0);
+      expect(w.projectiles[0].vx).toBeCloseTo(0, 9);
+    }
+  });
+
   it('a successful auto-aim at the landing still turns toward the nearest foe', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
     pressOnly(w, 0);
@@ -427,9 +515,9 @@ describe("a hold blow's leap", () => {
   const struck = (events: ArpgEvent[]) => events.find((e) => e.kind === 'basic');
   /**
    * A manual hold blow held to full charge at a sturdy foe `gap` from the hero's edge,
-   * straight up (a second foe far off keeps the floor from clearing), then let go.
+   * straight up (a second foe far off keeps the floor from clearing).
    */
-  const released = (equipped: EquippedGear, gap: number) => {
+  const charged = (equipped: EquippedGear, gap: number) => {
     const w = strikeWorld(equipped, { basic: [{ kind: 'hold', element: 'fire' }] }, false);
     w.monsters.push({ ...arena([dummy(3, 5)]).monsters[0], id: 2000 });
     place(w, gap);
@@ -437,6 +525,11 @@ describe("a hold blow's leap", () => {
     for (let i = 0; i < 60 && w.hero.swing?.held == null; i++) stepWorld(registry, w, attack, STEP);
     const full = bal.chains.holdTime * w.hero.stats.tempo;
     for (let i = 0; i < Math.round(full / STEP); i++) stepWorld(registry, w, attack, STEP);
+    return w;
+  };
+  /** `charged`, then let go: it leaps. */
+  const released = (equipped: EquippedGear, gap: number) => {
+    const w = charged(equipped, gap);
     const y0 = w.hero.y;
     expect(struck(stepWorld(registry, w, letGo, STEP))).toBeUndefined();
     expect(w.hero.swing).toMatchObject({ released: 2 });
@@ -472,6 +565,21 @@ describe("a hold blow's leap", () => {
     for (let i = 0; i < Math.round((bal.feel.stepSeconds + STEP) / STEP); i++)
       stepWorld(registry, w, letGo, STEP);
     expect(w.hero.y - y1).toBeCloseTo(hold.hop!, 5);
+  });
+
+  it('a leap shorter than minLeap is skipped: an unarmed blow strikes as it is let go', () => {
+    const { medium, hold } = bal.hero.feel;
+    expect(hold.move - medium.move).toBeGreaterThan(0);
+    expect(hold.move - medium.move).toBeLessThan(bal.feel.minLeap);
+    const w = charged({}, 0.3);
+    const y0 = w.hero.y;
+    expect(struck(stepWorld(registry, w, letGo, STEP))).toBeDefined();
+    expect(w.hero.y).toBe(y0);
+    // Every weapon's leap is at least minLeap.
+    for (const b of weapons) {
+      const leap = b.feel!.hold.move - b.feel!.medium.move;
+      if (leap > 0) expect(leap, b.id).toBeGreaterThanOrEqual(bal.feel.minLeap);
+    }
   });
 
   it('a press, a repeat press and a held hold move wait for it to land', () => {
@@ -523,12 +631,31 @@ describe("a hold blow's leap", () => {
     expect(w.hero.swing).toBeNull();
     expect(land(w)).toBe(Infinity);
   });
+
+  it('turning automatic mid-leap while steering lands as the manual blow does, its target killed or not', () => {
+    const right = { x: 1, y: 0 };
+    for (const kill of [false, true]) {
+      const after = (attack: boolean | undefined) => {
+        const { w, t0 } = released(MAUL, 1.5);
+        if (kill) w.monsters[0].dead = true;
+        const at = land(w, { move: right, attack });
+        return { at: at - t0, recover: w.hero.recoverUntil - t0 };
+      };
+      const manual = after(false);
+      expect(manual.at, `${kill}`).toBeGreaterThanOrEqual(bal.feel.stepSeconds - 1e-9);
+      expect(manual.at, `${kill}`).toBeLessThan(bal.feel.stepSeconds + STEP);
+      const auto = after(undefined);
+      expect(auto.at, `${kill}`).toBeCloseTo(manual.at, 9);
+      expect(auto.recover, `${kill}`).toBeCloseTo(manual.recover, 9);
+    }
+  });
 });
 
 describe('determinism', () => {
   it('steps, side steps, leaps and casts on the move are the same at 30, 60 and 120 frames a second', () => {
     const fight = (frames: number) => {
       const out: unknown[] = [];
+      let leaping = 0;
       for (const baseId of ['staff', 'bow', 'maul']) {
         const w = strikeWorld(
           { weapon: gear('fire', 'weapon', baseId) },
@@ -547,20 +674,22 @@ describe('determinism', () => {
         for (let k = 0; k < Math.round(6 / STEP); k++) {
           const move = k % 60 < 30 ? { x: 1, y: 0 } : { x: -0.6, y: 0.6 };
           const attack = k % 50 < 40;
-          const input = { move, attack, cast: k % 45 === 0 ? { slot: 0 } : null };
+          const input = { move, attack, cast: k % 50 === 46 ? { slot: 0 } : null };
           // The presses go on a tick's first frame; movement and the attack on every frame.
           for (let f = 0; f < frames; f++)
             out.push(...stepWorld(registry, w, f === 0 ? input : { move, attack }, STEP / frames));
+          if (w.hero.swing?.released != null) leaping++;
         }
         out.push([w.hero.x, w.hero.y, w.hero.swaySide]);
       }
-      return out;
+      return { out, leaping };
     };
     const at30 = fight(1);
-    const count = (kind: string) => at30.filter((e) => (e as ArpgEvent).kind === kind).length;
+    const count = (kind: string) => at30.out.filter((e) => (e as ArpgEvent).kind === kind).length;
     expect(count('basic')).toBeGreaterThan(5);
     expect(count('cast')).toBeGreaterThan(5);
-    expect(fight(2)).toEqual(at30);
-    expect(fight(4)).toEqual(at30);
+    expect(at30.leaping).toBeGreaterThan(0);
+    expect(fight(2).out).toEqual(at30.out);
+    expect(fight(4).out).toEqual(at30.out);
   });
 });

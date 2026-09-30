@@ -218,6 +218,7 @@ function startHold(ctx: SimCtx, slot: number): void {
     step,
     start: t,
     aim,
+    from: { x: h.x, y: h.y },
     full: holdFull(bal, tempo),
     max: bal.chains.holdMax * tempo,
   };
@@ -248,14 +249,17 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   const left = Math.max(0, ab.castTime - held);
   pay(ctx, hold.slot, hold.step, ab, t + left);
   if (left < 1e-9) {
-    if (!fire(ctx, hold.slot, aim, hold.step, s)) fire(ctx, hold.slot, at, hold.step, s);
+    const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from: hold.from, at });
+    if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s))
+      fire(ctx, hold.slot, along ?? at, hold.step, s);
     return;
   }
   h.windup = {
     slot: hold.slot,
     aim,
     at,
-    from: { x: h.x, y: h.y },
+    // Where the hold began: the hero may have walked past its aim while it charged.
+    from: hold.from,
     start: t,
     until: t + left,
     step: hold.step,
@@ -308,17 +312,26 @@ export function holdTick(
 }
 
 type Windup = NonNullable<HeroEntity['windup']>;
+type Aimed = Pick<Windup, 'slot' | 'step' | 'stage' | 'from' | 'at'>;
 
 /**
  * Whether the hero has walked past a directional wind-up's `at`: the way to
  * `at` has turned 90° or more from the way from where the wind-up began (or
  * the hero stands on it). Never for a placed or self-centred form.
  */
-function passedAim(h: HeroEntity, w: Windup): boolean {
+function passedAim(h: HeroEntity, w: Aimed): boolean {
   if (!DIRECTIONAL.has(chainMove(h.chains[w.slot], w.step, w.stage).form.id)) return false;
   const first = dirTo(w.from.x, w.from.y, w.at.x, w.at.y);
   const now = dirTo(h.x, h.y, w.at.x, w.at.y);
   return (first.x !== 0 || first.y !== 0) && now.x * first.x + now.y * first.y <= 0;
+}
+
+/**
+ * Where a directional form the hero has walked past fires: along the press's
+ * way, at the press's distance; else null.
+ */
+function alongAim(h: HeroEntity, w: Aimed): Vec | null {
+  return passedAim(h, w) ? { x: h.x + w.at.x - w.from.x, y: h.y + w.at.y - w.from.y } : null;
 }
 
 /**
@@ -350,7 +363,7 @@ export function castTick(ctx: SimCtx): void {
   h.windup = null;
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   finishPushes(ctx, 'stepIn');
-  const along = passedAim(h, w) ? { x: h.x + at.x - w.from.x, y: h.y + at.y - w.from.y } : null;
+  const along = alongAim(h, w);
   if (!fire(ctx, slot, aim && (along ?? aim), step, stage))
     fire(ctx, slot, along ?? at, step, stage);
 }

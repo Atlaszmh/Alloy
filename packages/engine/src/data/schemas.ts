@@ -948,6 +948,7 @@ const DelveBalanceSchema = z.object({
     motionPerWeight: z.number().min(0),
     recoilSeconds: z.number().positive(),
     stepSeconds: z.number().positive(),
+    minLeap: z.number().positive(),
     actionMove: z.number().min(0).max(1),
     sideSteer: z.number().min(0).max(1),
     lungeHold: z.number().min(0).max(1),

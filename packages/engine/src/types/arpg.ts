@@ -365,16 +365,18 @@ export interface HeroEntity {
   /**
    * A hold move charging while its button is held (see the moves and chains
    * spec): the slot, the chain's move, when it began, and what it aimed at then
-   * (null: nothing in reach). Nothing is paid until it fires. `full` and `max`
-   * are the seconds to its full charge and to its auto-fire (`holdTime` and
-   * `holdMax` × the tempo), fixed when it began, so a weapon swap mid-charge
-   * doesn't make it jump.
+   * (null: nothing in reach), and where the hero stood then (`from`, its
+   * wind-up's, for the past-the-aim-point rule). Nothing is paid until it
+   * fires. `full` and `max` are the seconds to its full charge and to its
+   * auto-fire (`holdTime` and `holdMax` × the tempo), fixed when it began, so a
+   * weapon swap mid-charge doesn't make it jump.
    */
   hold: {
     slot: number;
     step: number;
     start: number;
     aim: Vec | null;
+    from: Vec;
     full: number;
     max: number;
   } | null;
