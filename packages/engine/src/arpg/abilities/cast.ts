@@ -50,15 +50,20 @@ export function activeMove(h: HeroEntity, slot: number): ResolvedAbility | null 
   return null;
 }
 
-/** A hold's charge at `t` (0..1 over `holdTime`) and its stage (by `holdStages`). */
+/**
+ * A hold's charge at `t` (0..1 over `full`, the seconds to its full charge:
+ * `HeroEntity.hold.full`, or `holdTime` × the tempo for a hold blow) and its
+ * stage (by `holdStages`: stage 2 at full charge).
+ */
 export function holdCharge(
   bal: DelveBalance,
   start: number,
   t: number,
+  full: number,
 ): { charge: number; stage: number } {
-  const c = bal.chains;
-  const charge = Math.min(1, (t - start) / c.holdTime + 1e-9);
-  return { charge, stage: charge >= c.holdStages[1] ? 2 : charge >= c.holdStages[0] ? 1 : 0 };
+  const stages = bal.chains.holdStages;
+  const charge = Math.min(1, (t - start) / full + 1e-9);
+  return { charge, stage: charge >= stages[1] ? 2 : charge >= stages[0] ? 1 : 0 };
 }
 
 /** Fire move `step` of the slot's chain (a hold at `stage`) now, then its recoil and recovery. */
@@ -180,7 +185,15 @@ function startHold(ctx: SimCtx, slot: number): void {
   const aim = aimPoint(ctx, ab, null);
   const dir = aim ? dirTo(h.x, h.y, aim.x, aim.y) : null;
   if (dir && (dir.x !== 0 || dir.y !== 0)) h.facing = dir;
-  h.hold = { slot, step, start: t, aim };
+  const tempo = h.stats.tempo;
+  h.hold = {
+    slot,
+    step,
+    start: t,
+    aim,
+    full: bal.chains.holdTime * tempo,
+    max: bal.chains.holdMax * tempo,
+  };
 }
 
 /**
@@ -229,7 +242,7 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
  * The hold, each step: holding a slot whose next move is a hold starts one
  * (not while the slot's dropped hold's button stays held: `holdDropped`).
  * While it runs, its release (a press of its slot: the button let go) fires it
- * at its stage; past `holdMax` it fires by itself at stage 2 (and marks the
+ * at its stage; past its `max` it fires by itself at stage 2 (and marks the
  * slot, as a drop does); the button let go with no release (a lost release)
  * fires it at its stage. Meanwhile the hero stays rooted, each new stage says
  * so, and the slot's combo window is paused.
@@ -251,14 +264,15 @@ export function holdTick(
     return;
   }
   const t = world.t;
-  const { stage } = holdCharge(bal, h.hold.start, t);
+  const { start, full, max } = h.hold;
+  const { stage } = holdCharge(bal, start, t, full);
   if (release) releaseHold(ctx, release.aim ?? null, stage);
-  else if (t - h.hold.start >= bal.chains.holdMax - 1e-9) {
+  else if (t - start >= max - 1e-9) {
     world.holdDropped = h.hold.slot;
     releaseHold(ctx, null, 2);
   } else if (holding !== h.hold.slot) releaseHold(ctx, null, stage);
   else {
-    if (stage > holdCharge(bal, h.hold.start, t - dt).stage)
+    if (stage > holdCharge(bal, start, t - dt, full).stage)
       ctx.events.push({ kind: 'holdStage', slot: h.hold.slot, stage });
     h.comboAt[h.hold.slot] += dt;
   }

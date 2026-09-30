@@ -594,7 +594,7 @@ describe('toggles', () => {
       committed: true,
       held: null,
     };
-    h.hold = { slot: 0, step: 0, start: 0, aim: null };
+    h.hold = { slot: 0, step: 0, start: 0, aim: null, full: 1, max: 2 };
     h.push = { fromX: 13, fromY: 26, dx: 0, dy: -1, start: 0, until: 1, stopId: null };
     h.recoverUntil = w.t + 5;
     h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };

@@ -109,7 +109,7 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
     if (slot === null) return { move, attack: true, attackAim: aim };
     if (h.windup) return { move };
     if (h.hold) {
-      const full = holdCharge(bal, h.hold.start, world.t).charge >= 1;
+      const full = holdCharge(bal, h.hold.start, world.t, h.hold.full).charge >= 1;
       return { move, holding: slot, cast: full ? { slot, aim } : null };
     }
     if (nextMove(h, slot, world.t, bal.abilities.comboWindow).kind === 'hold')

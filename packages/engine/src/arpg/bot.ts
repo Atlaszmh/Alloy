@@ -64,7 +64,8 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   // A hold charges until full, then lets go.
   if (h.hold) {
     input.holding = h.hold.slot;
-    if (holdCharge(ctx.bal, h.hold.start, world.t).charge >= 1) input.cast = { slot: h.hold.slot };
+    const { charge } = holdCharge(ctx.bal, h.hold.start, world.t, h.hold.full);
+    if (charge >= 1) input.cast = { slot: h.hold.slot };
     return input;
   }
 

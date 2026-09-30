@@ -647,10 +647,11 @@ describe('holds', () => {
       [0, 2],
     ]);
     const c = bal.chains;
-    expect(holdCharge(bal, start, start + c.holdStages[0] * c.holdTime - 0.01).stage).toBe(0);
-    expect(holdCharge(bal, start, start + c.holdStages[0] * c.holdTime + 0.01).stage).toBe(1);
-    expect(holdCharge(bal, start, start + c.holdStages[1] * c.holdTime + 0.01).stage).toBe(2);
-    expect(holdCharge(bal, start, start + c.holdTime).charge).toBe(1);
+    const at = (s: number) => holdCharge(bal, start, start + s, c.holdTime);
+    expect(at(c.holdStages[0] * c.holdTime - 0.01).stage).toBe(0);
+    expect(at(c.holdStages[0] * c.holdTime + 0.01).stage).toBe(1);
+    expect(at(c.holdTime - 0.01).stage).toBe(1);
+    expect(at(c.holdTime)).toEqual({ charge: 1, stage: 2 });
   });
 
   it("its release fires the stage's move at once, paying its cost and setting its cooldown and stacks", () => {

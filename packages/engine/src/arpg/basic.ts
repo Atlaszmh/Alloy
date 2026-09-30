@@ -111,8 +111,9 @@ export function startSwing(
 
 /**
  * A manual hold blow at its strike point: while the attack stays held it
- * charges (stages by `holdStages`, saying so), and it strikes with its
- * stage's row when the attack lets go or at `holdMax` (stage 2). A blow held
+ * charges over `holdTime` × the hero's tempo (stages by `holdStages`, saying
+ * so), and it strikes with its stage's row when the attack lets go or at
+ * `holdMax` × the tempo (stage 2). A blow held
  * past its strike point re-aims as it strikes, as a manual swing aims (on the
  * medium row it began with): toward `aim`, else the nearest foe, else where it
  * was aimed. A tap (let go by its strike point) strikes where it began.
@@ -123,8 +124,10 @@ export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec |
   const sw = h.swing!;
   const t = world.t;
   sw.held ??= t;
-  const { stage } = holdCharge(bal, sw.held, t);
-  const full = t - sw.held >= bal.chains.holdMax - 1e-9;
+  // The hero's tempo now: a weapon swap drops the swing.
+  const fullTime = bal.chains.holdTime * h.stats.tempo;
+  const { stage } = holdCharge(bal, sw.held, t, fullTime);
+  const full = t - sw.held >= bal.chains.holdMax * h.stats.tempo - 1e-9;
   if (full || !held) {
     if (t > sw.held + 1e-9) {
       const w = h.stats.weapon;
@@ -136,7 +139,7 @@ export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec |
     }
     return strike(ctx, full ? 2 : stage);
   }
-  if (stage > holdCharge(bal, sw.held, t - dt).stage)
+  if (stage > holdCharge(bal, sw.held, t - dt, fullTime).stage)
     ctx.events.push({ kind: 'holdStage', slot: null, stage });
 }
 
