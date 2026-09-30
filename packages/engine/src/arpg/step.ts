@@ -225,8 +225,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (h.swing && t >= h.swing.strikeAt - 1e-9) {
     // A manual hold blow holds at its strike point while the attack stays held.
     if (input.attack !== undefined && h.stats.weapon.blows[h.swing.step].kind === 'hold')
-      basicHoldTick(ctx, input.attack, dt, input.attackAim ?? null);
-    else strike(ctx);
+      basicHoldTick(ctx, input.attack, dt, input.attackAim ?? null, v);
+    else strike(ctx, v);
   }
   // Taps only matter in manual mode: one left when the input turns automatic is dropped.
   if (input.attack === undefined) world.queuedAttack = null;

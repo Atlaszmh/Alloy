@@ -230,6 +230,7 @@ export function createHeroEntity(
     phoenixUsed: false,
     lastHitAt: -1,
     moving: false,
+    swaySide: 1,
   };
 }
 

@@ -612,6 +612,7 @@ describe('toggles', () => {
         movedY: 0,
       },
     ];
+    h.swaySide = -1;
     h.recoverUntil = w.t + 5;
     h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };
     h.defend = { form: 'ward', until: w.t + 5, move: 0, stage: 0 };
@@ -629,6 +630,7 @@ describe('toggles', () => {
       hold: null,
       swing: null,
       pushes: [],
+      swaySide: 1,
       dodge: null,
       defend: null,
       ward: null,

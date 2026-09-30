@@ -435,7 +435,10 @@ export interface HeroEntity {
   phoenixAvailable: boolean;
   phoenixUsed: boolean;
   lastHitAt: number;
+  /** Steering (above 0.05) and not dashing. */
   moving: boolean;
+  /** The side (1 or −1) the last side step took (see the weapon flow spec). */
+  swaySide: number;
 }
 
 export interface ArpgInput {

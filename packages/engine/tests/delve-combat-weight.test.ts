@@ -337,7 +337,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.facing).toEqual(w.hero.swing!.dir);
   });
 
-  it('automatic swings on the move walk slowed and leave no recovery', () => {
+  it('automatic swings on the move walk slowed, lunge and leave no recovery', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
     const x0 = w.hero.x;
@@ -347,7 +347,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
     const pace = w.hero.stats.moveSpeed * STEP;
     expect(w.hero.x - x0).toBeCloseTo(pace * (1 + bal.feel.actionMove), 4);
-    expect(w.hero.pushes).toEqual([]);
+    expect(w.hero.pushes.map((p) => p.kind)).toEqual(['lunge']);
     // Past the strike: no recovery slow.
     const events = until(w, () => w.hero.swing === null, { move: { x: 1, y: 0 } });
     expect(basics(events)).toHaveLength(1);
@@ -487,19 +487,16 @@ describe('weapon strings', () => {
     expect(w.hero.nextAttackAt).toBeLessThanOrEqual(w.t);
   });
 
-  it('a committed shot recoils after the release; one on the move does not', () => {
-    const wand = { weapon: gear('fire', 'weapon', 'wand') };
-    const w = arena([dummy(13, 30)], { equipped: wand });
-    const y0 = w.hero.y;
-    until(w, () => w.hero.attackCount >= 1);
-    run(w, bal.feel.recoilSeconds + STEP);
-    expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.blows[0].move, 2);
-
-    const m = arena([dummy(13, 30)], { equipped: wand });
-    const my0 = m.hero.y;
-    until(m, () => m.hero.attackCount >= 1, { move: { x: 1, y: 0 } });
-    run(m, bal.feel.recoilSeconds + STEP, { x: 1, y: 0 });
-    expect(m.hero.y).toBeCloseTo(my0, 6);
+  it('a shot steps back after its release, standing or on the move', () => {
+    const bow = { weapon: gear('fire', 'weapon', 'bow') };
+    for (const move of [still, { x: 1, y: 0 }]) {
+      const w = arena([dummy(13, 30)], { equipped: bow });
+      const y0 = w.hero.y;
+      until(w, () => w.hero.attackCount >= 1, { move });
+      run(w, bal.feel.stepSeconds + STEP, move);
+      // Straight back from the foe above: square to the steering, so all of it applies.
+      expect(w.hero.y - y0).toBeCloseTo(-w.hero.stats.weapon.blows[0].move, 2);
+    }
   });
 
   it("the staff's great orb bursts over a crowd", () => {

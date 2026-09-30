@@ -173,18 +173,20 @@ function weapon(id: string) {
   return { feel: base.feel!, chain: base.defaultChain!, arc: base.attack!.arc ?? 90 };
 }
 
-/** A row without its step (`side`, `hop`: the weapon flow spec's, pinned in delve-weapon-flow.test.ts). */
-function stepless({ side: _side, hop: _hop, ...row }: ComboStepDef): ComboStepDef {
+/**
+ * A row without its motion (`move`, `side`, `hop`: the weapon flow spec's
+ * table, pinned in delve-weapon-flow.test.ts).
+ */
+function motionless({ move: _move, side: _side, hop: _hop, ...row }: ComboStepDef) {
   return row;
 }
 
-/** Every number of a row, with its defaults filled in and rounded (so 0.35 × 1.5 is 0.525). */
+/** Every number of a row but its motion, with its defaults filled in and rounded (so 0.35 × 1.5 is 0.525). */
 function numbers(row: ComboStepDef, arc: number) {
   const r = (x: number) => +x.toFixed(6);
   return {
     time: r(row.time),
     startup: r(row.startup),
-    move: r(row.move),
     power: r(row.power),
     heft: r(row.heft),
     arc: r(row.arc ?? arc),
@@ -205,9 +207,9 @@ describe('data: feel tables and default chains', () => {
     for (const [id, string] of Object.entries(STRINGS)) {
       const { feel, chain } = weapon(id);
       expect(
-        chain.map((k) => stepless(feel[k])),
+        chain.map((k) => motionless(feel[k])),
         id,
-      ).toEqual(string);
+      ).toEqual(string.map(motionless));
     }
     expect(weapon('dagger').chain).toEqual(['light', 'light', 'medium', 'heavy']);
     expect(weapon('maul').chain).toEqual(['medium', 'heavy']);
@@ -215,7 +217,7 @@ describe('data: feel tables and default chains', () => {
       expect(weapon(id).chain, id).toEqual(['light', 'light', 'heavy']);
   });
 
-  it('a medium row the string lacks is halfway between light and heavy in every number', () => {
+  it('a medium row the string lacks is halfway between light and heavy in every number but its motion', () => {
     for (const id of ['sword', 'axe', 'staff', 'wand', 'bow', 'unarmed']) {
       const { feel, arc } = weapon(id);
       const [light, medium, heavy] = [feel.light, feel.medium, feel.heavy].map((row) =>
@@ -239,7 +241,6 @@ describe('data: feel tables and default chains', () => {
           time: medium.time * 0.85,
           startup: medium.startup * 0.9,
           heft: medium.heft * 0.75,
-          move: medium.move * 0.8,
         },
         360,
       ),

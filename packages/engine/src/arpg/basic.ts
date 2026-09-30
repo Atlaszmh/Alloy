@@ -11,9 +11,10 @@ import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js
 
 /**
  * The basic attack: each blow of the hero's basic chain (its kind's row, in
- * its element) has a startup (a committed melee blow lunges in), a strike,
- * and a recovery that slows movement. See the combat weight and the moves and
- * chains specs.
+ * its element) has a startup (a forward `move` lunges in), a strike, then its
+ * step (a step back, a side step, a hop), and a recovery that slows movement
+ * after a committed blow. See the combat weight, the moves and chains, and the
+ * weapon flow specs.
  */
 
 function haste(ctx: SimCtx): number {
@@ -37,12 +38,14 @@ function foeAhead(ctx: SimCtx, dir: Vec, range: number, arcDeg: number): Monster
   return best;
 }
 
-/** A swing on row `s`: a committed melee blow's lunge, its reach, and how far it looks for a foe. */
-function swingReach(w: HeroWeapon, s: ComboStepDef, committed: boolean, manual: boolean) {
-  const melee = w.kind === 'melee';
-  const lunge = melee && committed ? Math.max(0, s.move) : 0;
-  const reach = w.range + (melee ? (s.reach ?? 0) : 0);
-  return { lunge, reach, acquire: (committed ? reach + lunge : w.range) + (manual ? 1 : 0) };
+/**
+ * A swing on row `s`: its lunge (a forward `move`), its reach, and how far it
+ * looks for a foe: its reach plus its lunge, plus 1 for a manual swing.
+ */
+function swingReach(w: HeroWeapon, s: ComboStepDef, manual: boolean) {
+  const lunge = Math.max(0, s.move);
+  const reach = w.range + (w.kind === 'melee' ? (s.reach ?? 0) : 0);
+  return { lunge, reach, acquire: reach + lunge + (manual ? 1 : 0) };
 }
 
 /** Toward `aim` if given, else toward the nearest foe within `acquire`, else along `fallback`. */
@@ -63,8 +66,9 @@ export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
 /**
  * Start the next blow of the chain when the weapon is ready. Automatic: only
  * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
- * reach, else straight ahead. The hero faces it; a committed swing lunges and
- * ends any recovery; a manual hold blow starts as a medium one (it holds at
+ * reach, else straight ahead. The hero faces it, and it lunges (planted for
+ * `lungeHold` of its startup, then in, stopping at its foe); a committed swing
+ * ends any recovery. A manual hold blow starts as a medium one (it holds at
  * its strike point: see `basicHoldTick`). With a press waiting (see the chain
  * feel spec), only a blow that strikes by `deadline` (the tick the press
  * fires) starts. Returns whether a swing started.
@@ -88,7 +92,7 @@ export function startSwing(
   const startup = cycle * s.startup;
   if (t + startup > deadline + 1e-9) return false;
   h.attackCount = step;
-  const { lunge, reach, acquire } = swingReach(w, s, committed, manual);
+  const { lunge, reach, acquire } = swingReach(w, s, manual);
   const { target, dir } = aimAt(ctx, aim, acquire, { ...h.facing });
   if (!target && !manual) return false;
   h.facing = dir;
@@ -123,7 +127,13 @@ export function startSwing(
  * medium row it began with): toward `aim`, else the nearest foe, else where it
  * was aimed. A tap (let go by its strike point) strikes where it began.
  */
-export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec | null): void {
+export function basicHoldTick(
+  ctx: SimCtx,
+  held: boolean,
+  dt: number,
+  aim: Vec | null,
+  steer: Vec,
+): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const sw = h.swing!;
@@ -136,13 +146,13 @@ export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec |
   if (full || !held) {
     if (t > sw.held + 1e-9) {
       const w = h.stats.weapon;
-      const { acquire } = swingReach(w, w.feel.medium, true, true);
+      const { acquire } = swingReach(w, w.feel.medium, true);
       const { target, dir } = aimAt(ctx, aim, acquire, sw.dir);
       sw.dir = dir;
       sw.targetId = target?.id ?? null;
       h.facing = dir;
     }
-    return strike(ctx, full ? 2 : stage);
+    return strike(ctx, steer, full ? 2 : stage);
   }
   if (stage > holdCharge(bal, sw.held, t - dt, fullTime).stage)
     ctx.events.push({ kind: 'holdStage', slot: null, stage });
@@ -150,10 +160,12 @@ export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec |
 
 /**
  * Land the swing's blow from where the hero stands now: in its element, with
- * its power and its kind's stacks. A held blow (`stage`) strikes with that
- * stage's row (medium, heavy, hold) and takes its time from it.
+ * its power and its kind's stacks, then start its step. A held blow (`stage`)
+ * strikes with that stage's row (medium, heavy, hold) and takes its time from
+ * it. `steer` is the stick (length up to 1): its part square to the blow picks
+ * the side step's side.
  */
-export function strike(ctx: SimCtx, stage: number | null = null): void {
+export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const sw = h.swing;
@@ -254,9 +266,8 @@ export function strike(ctx: SimCtx, stage: number | null = null): void {
         noReact: i === 1,
       });
     }
-    if (sw.committed && s.move < 0)
-      startPush(ctx, 'step', { x: -dir.x, y: -dir.y }, -s.move, bal.feel.recoilSeconds);
   }
+  blowStep(ctx, s, dir, steer);
 
   const tgt =
     sw.targetId !== null ? world.monsters.find((m) => m.id === sw.targetId && !m.dead) : null;
@@ -281,6 +292,31 @@ export function strike(ctx: SimCtx, stage: number | null = null): void {
     h.nextAttackAt = world.t + cycle * (1 - s.startup);
   if (sw.committed)
     h.recoverUntil = Math.min(h.nextAttackAt, world.t + cycle * bal.feel.basicRecovery);
+}
+
+/**
+ * A blow's step, from its strike over `stepSeconds`: its step back (a negative
+ * `move`) and hop away from `dir`, and its side step square to it, as one push
+ * with no stop. The side is the steering's when its part square to `dir` is at
+ * least `sideSteer`, else the weapon's `sway`: `alternate` flips from the
+ * last side taken, `orbit` keeps it. See the weapon flow spec.
+ */
+function blowStep(ctx: SimCtx, s: ComboStepDef, dir: Vec, steer: Vec): void {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const back = Math.max(0, -s.move) + (s.hop ?? 0);
+  let side = 0;
+  if (s.side) {
+    // Square to the blow: (−dir.y, dir.x) is side 1.
+    const lateral = -steer.x * dir.y + steer.y * dir.x;
+    if (Math.abs(lateral) >= bal.feel.sideSteer - 1e-9) h.swaySide = Math.sign(lateral);
+    else if (h.stats.weapon.sway === 'alternate') h.swaySide = -h.swaySide;
+    side = s.side * h.swaySide;
+  }
+  const x = -dir.x * back - dir.y * side;
+  const y = -dir.y * back + dir.x * side;
+  const len = Math.hypot(x, y);
+  if (len > 1e-9) startPush(ctx, 'step', { x: x / len, y: y / len }, len, bal.feel.stepSeconds);
 }
 
 /** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */

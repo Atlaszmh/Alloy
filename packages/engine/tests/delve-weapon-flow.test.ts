@@ -4,7 +4,7 @@ import { startPush } from '../src/arpg/action.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { dirTo } from '../src/arpg/geometry.js';
 import { stepWorld } from '../src/arpg/step.js';
-import { MOVE_KINDS, type FormId } from '../src/types/ability.js';
+import { MOVE_KINDS, type FormId, type MoveKind } from '../src/types/ability.js';
 import type { ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
 import {
   arena,
@@ -37,7 +37,16 @@ describe('data: weapon styles', () => {
     expect(bal.feel.sideSteer).toBe(0.3);
   });
 
-  it("each weapon's side steps, hops and sway", () => {
+  it("each weapon's moves, side steps, hops and sway", () => {
+    expect(byKind('move')).toEqual({
+      dagger: [0.25, 0.3, 0.7, 0.9],
+      sword: [0.4, 0.8, 1.2, 1.6],
+      axe: [0.3, 0.4, 0.9, 1.2],
+      maul: [0.15, 0.3, 1.6, 2.0],
+      staff: NONE,
+      wand: NONE,
+      bow: [-0.4, -0.6, -0.9, -1.2],
+    });
     expect(byKind('side')).toEqual({
       dagger: NONE,
       sword: NONE,
@@ -282,5 +291,129 @@ describe('past the aim point', () => {
     w.hero.y = 28;
     run(w, 0.3);
     expect(damaged(w.monsters[0])).toBe(true);
+  });
+});
+
+describe('weapon styles', () => {
+  /** A `baseId` hero whose basic chain is `kinds`, one sturdy foe `gap` from its edge straight up. */
+  const fighter = (baseId: string, kinds: MoveKind[], gap: number) => {
+    const w = strikeWorld(
+      { weapon: gear('fire', 'weapon', baseId) },
+      { basic: kinds.map((kind) => ({ kind, element: 'fire' as const })) },
+      false,
+      dummy(13, 0),
+    );
+    place(w, gap);
+    return w;
+  };
+  /** Step until the next blow lands and its step (if any) has run out. */
+  const blowAndStep = (w: ArpgWorld, move: Vec = still) => {
+    let struck = false;
+    for (let i = 0; i < 300 && !struck; i++)
+      struck = stepWorld(registry, w, { move }, STEP).some((e) => e.kind === 'basic');
+    run(w, bal.feel.stepSeconds + STEP, move);
+  };
+
+  it("a melee blow lunges its kind's move, stopping at contact", () => {
+    for (const baseId of ['dagger', 'sword', 'axe', 'maul'])
+      for (const kind of ['light', 'medium', 'heavy'] as const) {
+        const { move, hop = 0 } = registry.getGearBase(baseId).feel![kind];
+        // In reach once the lunge is done, but short of contact (a dagger's heavy then hops back).
+        const w = fighter(baseId, [kind], move + 0.3);
+        const y0 = w.hero.y;
+        blowAndStep(w);
+        expect(y0 - w.hero.y, `${baseId} ${kind}`).toBeCloseTo(move - hop, 5);
+      }
+    // A maul's slam leaps 1.6, but only to its foe's contact gap.
+    const w = fighter('maul', ['heavy'], 1);
+    const y0 = w.hero.y;
+    blowAndStep(w);
+    expect(y0 - w.hero.y).toBeCloseTo(1 - bal.feel.contactGap, 5);
+  });
+
+  it("a bow steps back its kind's move after the release", () => {
+    for (const kind of ['light', 'medium', 'heavy'] as const) {
+      const w = fighter('bow', [kind], 5);
+      const y0 = w.hero.y;
+      blowAndStep(w);
+      expect(w.hero.y - y0, kind).toBeCloseTo(-w.hero.stats.weapon.feel[kind].move, 5);
+    }
+  });
+
+  it("a blow's step survives the chain's next cast", () => {
+    const w = fighter('bow', ['light'], 5);
+    for (let i = 0; i < 60 && w.hero.pushes.length === 0; i++)
+      stepWorld(registry, w, { move: still }, STEP);
+    const [step] = w.hero.pushes;
+    expect(step.kind).toBe('step');
+    pressOnly(w, 0);
+    expect(w.hero.windup).not.toBeNull();
+    expect(w.hero.pushes).toContain(step);
+    run(w, bal.feel.stepSeconds + STEP);
+    expect(step.movedY).toBeCloseTo(-w.hero.stats.weapon.feel.light.move, 5);
+  });
+
+  it('a dagger hops back after its heavy blow; steering at the foe drops the hop', () => {
+    const hop = (move: Vec) => {
+      const w = fighter('dagger', ['heavy'], 1);
+      for (let i = 0; i < 60 && !w.hero.pushes.some((p) => p.kind === 'step'); i++)
+        stepWorld(registry, w, { move }, STEP);
+      const step = w.hero.pushes.find((p) => p.kind === 'step')!;
+      run(w, bal.feel.stepSeconds + STEP, move);
+      return step.movedY;
+    };
+    expect(hop(still)).toBeCloseTo(registry.getGearBase('dagger').feel!.heavy.hop!, 5);
+    expect(hop({ x: 0, y: -1 })).toBeCloseTo(0, 9);
+  });
+
+  it('a staff alternates its side step; a wand keeps its side, circling', () => {
+    const sides = (baseId: string) => {
+      const w = fighter(baseId, ['light'], 4);
+      const out: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const x = w.hero.x;
+        blowAndStep(w);
+        out.push(Math.sign(w.hero.x - x));
+        expect(w.hero.swaySide).toBe(out[i]);
+      }
+      return out;
+    };
+    // Facing up, side 1 is to the right (+x).
+    expect(sides('staff')).toEqual([-1, 1, -1]);
+    expect(sides('wand')).toEqual([1, 1, 1]);
+  });
+
+  it("the steering's part square to the blow picks the side from sideSteer up, and is recorded", () => {
+    /** A first light blow's side step, aimed straight up, the hero then steering at the foe, part sideways. */
+    const side = (baseId: string, lateral: number) => {
+      const w = fighter(baseId, ['light'], 4);
+      stepWorld(registry, w, { move: still }, STEP);
+      const move = { x: lateral, y: -Math.sqrt(1 - lateral * lateral) };
+      for (let i = 0; i < 60 && !w.hero.pushes.some((p) => p.kind === 'step'); i++)
+        stepWorld(registry, w, { move }, STEP);
+      const step = w.hero.pushes.find((p) => p.kind === 'step')!;
+      run(w, bal.feel.stepSeconds + STEP, move);
+      return { swaySide: w.hero.swaySide, moved: step.movedX };
+    };
+    // Facing up, side 1 is to the right. By its sway a staff's first step goes left, a wand's right.
+    expect(side('staff', 0.25).swaySide).toBe(-1);
+    expect(side('staff', bal.feel.sideSteer)).toMatchObject({ swaySide: 1 });
+    expect(side('staff', 0.5).moved).toBeCloseTo(
+      registry.getGearBase('staff').feel!.light.side!,
+      5,
+    );
+    expect(side('wand', -0.25).swaySide).toBe(1);
+    expect(side('wand', -0.5)).toMatchObject({ swaySide: -1 });
+  });
+
+  it('an automatic swing started on the move lunges and acquires at reach plus its lunge', () => {
+    const w = fighter('sword', ['light'], 0);
+    const { range } = w.hero.stats.weapon;
+    const { move } = w.hero.stats.weapon.feel.light;
+    // Its edge past the weapon's range from the hero's centre, inside range plus the lunge.
+    place(w, range + move / 2 - w.hero.radius);
+    stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
+    expect(w.hero.swing).toMatchObject({ committed: false, targetId: w.monsters[0].id });
+    expect(kinds(w)).toEqual(['lunge']);
   });
 });
