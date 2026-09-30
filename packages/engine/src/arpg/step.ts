@@ -3,6 +3,7 @@ import type {
   ArpgEvent,
   ArpgInput,
   ArpgWorld,
+  HeroEntity,
   MonsterEntity,
   Projectile,
   Vec,
@@ -27,6 +28,7 @@ import {
   inBeat,
   nextMove,
   pressStep,
+  windupDir,
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
@@ -34,7 +36,7 @@ import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
-import { cancelSwing, dropHold, endPushes, pushesTick, swingStrikes } from './action.js';
+import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
@@ -187,35 +189,38 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
-  // Automatic swings commit only while the hero stands still: moving releases one (the blow
-  // still lands at its strike, from wherever the hero is), and one whose foe is gone is dropped.
+  // Automatic swings commit only while the hero stands still: moving during the startup clears
+  // that, so the blow leaves no recovery (it still lunges and lands). One whose foe is gone is
+  // dropped.
   if (input.attack === undefined && h.swing) {
     const target = h.swing.targetId;
     if (target !== null && !world.monsters.some((m) => m.id === target && !m.dead))
       cancelSwing(ctx);
-    else if (h.swing.committed && speed > 0.05) {
-      h.swing.committed = false;
-      endPushes(h, 'lunge');
-    }
+    else if (speed > 0.05) h.swing.committed = false;
   }
 
-  // Movement: a push carries the hero; a wind-up, a hold or a committed swing roots it; a
-  // recovery slows it.
+  // Movement, once a tick (see the weapon flow spec): the steering at the hero's pace, slowed
+  // while it acts or recovers (the slower wins); then each push's slice, less any part against
+  // the steering. Acting, the hero faces its action (steering strafes); else its steering.
   const surge = surging(ctx);
-  const pushed = !dashing && h.pushes.length > 0;
-  if (pushed) pushesTick(ctx, null);
-  const rooted = !!h.windup || !!h.hold || !!h.swing?.committed;
-  h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
-  if (h.moving) {
-    const slow = t < h.recoverUntil ? bal.feel.recoveryMove : 1;
-    // Lightning Rod quickens the step, on top of Surge and any recovery.
+  h.moving = speed > 0.05 && !dashing;
+  const heading = h.moving ? { x: v.x / speed, y: v.y / speed } : null;
+  const acting = !!h.swing || !!h.windup || !!h.hold;
+  if (heading) {
+    const slow = Math.min(
+      acting ? bal.feel.actionMove : 1,
+      t < h.recoverUntil ? bal.feel.recoveryMove : 1,
+    );
+    // Lightning Rod quickens the step, on top of Surge and any slowing.
     const quick = t < h.quickUntil ? 1 + bal.reactions.lightningRodMove : 1;
     const pace =
       h.stats.moveSpeed * (surge ? 1 + bal.abilities.defend.surgeMove : 1) * quick * slow;
     h.x = clamp(h.x + v.x * pace * dt, h.radius, world.width - h.radius);
     h.y = clamp(h.y + v.y * pace * dt, h.radius, world.height - h.radius);
-    h.facing = { x: v.x / speed, y: v.y / speed };
   }
+  if (!dashing) pushesTick(ctx, heading);
+  if (acting) h.facing = actionFacing(h) ?? h.facing;
+  else if (heading) h.facing = heading;
 
   if (h.swing && t >= h.swing.strikeAt - 1e-9) {
     // A manual hold blow holds at its strike point while the attack stays held.
@@ -257,6 +262,19 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
   defendTick(ctx, dt);
+}
+
+/**
+ * The way the hero faces while it acts: its swing's, its wind-up's
+ * (`windupDir`), or toward its hold's aim; null for an action with no way (a
+ * self-centred wind-up, a hold with nothing to aim at), which keeps the facing.
+ */
+function actionFacing(h: HeroEntity): Vec | null {
+  if (h.swing) return h.swing.dir;
+  if (h.windup) return windupDir(h, h.windup);
+  if (!h.hold?.aim) return null;
+  const d = dirTo(h.x, h.y, h.hold.aim.x, h.hold.aim.y);
+  return d.x === 0 && d.y === 0 ? null : d;
 }
 
 /**

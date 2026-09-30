@@ -63,7 +63,7 @@ export function basicStep(h: HeroEntity, t: number, bal: DelveBalance): number {
 /**
  * Start the next blow of the chain when the weapon is ready. Automatic: only
  * at a foe in reach. Manual: toward `aim` if given, else the nearest foe in
- * reach, else straight ahead. A committed swing roots the hero, lunges and
+ * reach, else straight ahead. The hero faces it; a committed swing lunges and
  * ends any recovery; a manual hold blow starts as a medium one (it holds at
  * its strike point: see `basicHoldTick`). With a press waiting (see the chain
  * feel spec), only a blow that strikes by `deadline` (the tick the press
@@ -91,7 +91,7 @@ export function startSwing(
   const { lunge, reach, acquire } = swingReach(w, s, committed, manual);
   const { target, dir } = aimAt(ctx, aim, acquire, { ...h.facing });
   if (!target && !manual) return false;
-  if (committed || !h.moving) h.facing = dir;
+  h.facing = dir;
   h.swing = {
     step,
     dir,

@@ -614,7 +614,7 @@ describe('holds', () => {
   const casts = (events: ArpgEvent[]) =>
     events.filter((e): e is Extract<ArpgEvent, { kind: 'cast' }> => e.kind === 'cast');
 
-  it('holding starts a charge only when the next move is a hold: rooted, and paying nothing yet', () => {
+  it('holding starts a charge only when the next move is a hold: walking slowed, and paying nothing yet', () => {
     const plain = holder([m('medium')]);
     holdStep(plain);
     expect(plain.hero.hold).toBeNull();
@@ -628,7 +628,7 @@ describe('holds', () => {
     expect(w.hero.hold).toMatchObject({ slot: 0, step: 0, start: w.t });
     expect(w.hero.hold!.aim).toMatchObject({ x: 13, y: 30 });
     holdStep(w, 0, { x: 1, y: 0 });
-    expect(w.hero.x).toBe(x);
+    expect(w.hero.x - x).toBeCloseTo(2 * w.hero.stats.moveSpeed * STEP * bal.feel.actionMove, 5);
     expect(w.hero.mana).toBe(mana);
     expect(activeMove(w.hero, 0)?.kind).toBe('hold');
   });

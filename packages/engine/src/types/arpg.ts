@@ -340,12 +340,18 @@ export interface HeroEntity {
    */
   beatFrom: number[];
   beatUntil: number[];
-  /** An ability winding up (every ability conjures; cast payment channels too); the hero can't walk or attack meanwhile (a forward form's step-in still moves it). */
+  /**
+   * An ability winding up (every ability conjures; cast payment channels too):
+   * the hero can't attack meanwhile, and walks slowed, facing it (see the
+   * weapon flow spec).
+   */
   windup: {
     slot: number;
     aim: Vec | null;
     /** Where the press aimed (the fallback if auto-aim finds nothing at landing). */
     at: Vec;
+    /** Where the hero stood when the wind-up began. */
+    from: Vec;
     start: number;
     until: number;
     /** The chain's move, chosen at the press, and its hold stage (a released hold's; else 0). */
@@ -372,7 +378,7 @@ export interface HeroEntity {
     full: number;
     max: number;
   } | null;
-  /** A basic attack in its startup: the blow lands at `strikeAt`. */
+  /** A basic attack in its startup: the blow lands at `strikeAt`; the hero walks slowed meanwhile, facing `dir`. */
   swing: {
     step: number;
     dir: Vec;
@@ -381,14 +387,14 @@ export interface HeroEntity {
     strikeAt: number;
     /** Seconds this blow takes, startup included (its share of the attack interval). */
     cycle: number;
-    /** Committed swings root the hero, lunge and leave a recovery (automatic swings on the move don't). */
+    /** A committed swing leaves a recovery (moving during an automatic swing's startup clears it). */
     committed: boolean;
     /** A manual hold blow held at its strike point: since when (else null). */
     held: number | null;
   } | null;
   /** Each running push (a lunge, a step-in, a step or a recoil), in the order they began. */
   pushes: Push[];
-  /** Movement is slowed until this time (after a strike or a landed ability). */
+  /** Movement is slowed until this time (after a committed strike or a landed ability). */
   recoverUntil: number;
   /**
    * The active defensive (Ward, Armor, Surge; Blink's trail effects): the chain's

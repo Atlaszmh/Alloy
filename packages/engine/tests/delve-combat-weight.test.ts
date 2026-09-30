@@ -261,7 +261,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(y0 - w.hero.y).toBeCloseTo(0.25 - bal.feel.contactGap, 3);
   });
 
-  it('a manual swing ignores movement through its startup, then slows it in recovery only', () => {
+  it('a manual swing slows movement through its startup, then more in its recovery', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
     const right = { move: { x: 1, y: 0 }, attack: false };
@@ -269,11 +269,11 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.swing?.committed).toBe(true);
     const x0 = w.hero.x;
     stepWorld(registry, w, right, STEP);
-    expect(w.hero.x).toBe(x0);
+    const pace = w.hero.stats.moveSpeed * STEP;
+    expect(w.hero.x - x0).toBeCloseTo(pace * bal.feel.actionMove, 4);
     until(w, () => w.hero.swing === null, right);
     const x1 = w.hero.x;
     stepWorld(registry, w, right, STEP);
-    const pace = w.hero.stats.moveSpeed * STEP;
     expect(w.hero.x - x1).toBeCloseTo(pace * bal.feel.recoveryMove, 4);
     until(w, () => w.t >= w.hero.recoverUntil, right);
     expect(w.t).toBeLessThan(w.hero.nextAttackAt);
@@ -282,23 +282,25 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.x - x2).toBeCloseTo(pace, 4);
   });
 
-  it('moving releases an automatic swing: full speed, no more lunge, the blow still lands, no recovery', () => {
+  it('moving during an automatic swing: slowed, the lunge goes on, the blow lands, no recovery', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.6);
+    const y0 = w.hero.y;
     run(w, STEP);
     expect(w.hero.swing?.committed).toBe(true);
     expect(w.hero.pushes).toHaveLength(1);
     const x0 = w.hero.x;
-    const y0 = w.hero.y;
     const right = { move: { x: 1, y: 0 } };
     stepWorld(registry, w, right, STEP);
     expect(w.hero.swing?.committed).toBe(false);
-    expect(w.hero.pushes).toEqual([]);
+    expect(w.hero.pushes).toHaveLength(1);
     const pace = w.hero.stats.moveSpeed * STEP;
-    expect(w.hero.x - x0).toBeCloseTo(pace, 4);
+    expect(w.hero.x - x0).toBeCloseTo(pace * bal.feel.actionMove, 4);
     expect(w.hero.y).toBe(y0);
     const events = until(w, () => w.hero.swing === null, right);
     expect(basics(events)).toHaveLength(1);
+    // The lunge, straight up, is square to the steering: all of it applies.
+    expect(y0 - w.hero.y).toBeCloseTo(w.hero.stats.weapon.blows[0].move, 2);
     expect(w.hero.recoverUntil).toBeLessThanOrEqual(w.t);
     const x1 = w.hero.x;
     stepWorld(registry, w, right, STEP);
@@ -324,24 +326,27 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.x - x0).toBeCloseTo(w.hero.stats.moveSpeed * STEP, 4);
   });
 
-  it('a committed shot roots the hero through its startup, with no push involved', () => {
+  it('a committed shot slows the hero through its startup, facing its aim', () => {
     const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
     stepWorld(registry, w, { move: still, attack: true }, STEP);
     expect(w.hero.swing?.committed).toBe(true);
     expect(w.hero.pushes).toEqual([]);
     const x0 = w.hero.x;
     stepWorld(registry, w, { move: { x: 1, y: 0 }, attack: true }, STEP);
-    expect(w.hero.x).toBe(x0);
+    expect(w.hero.x - x0).toBeCloseTo(w.hero.stats.moveSpeed * STEP * bal.feel.actionMove, 4);
+    expect(w.hero.facing).toEqual(w.hero.swing!.dir);
   });
 
-  it('automatic swings on the move neither root, lunge nor slow', () => {
+  it('automatic swings on the move walk slowed and leave no recovery', () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
     const x0 = w.hero.x;
+    // The first tick walks at full pace, then the swing starts.
     stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
     expect(w.hero.swing?.committed).toBe(false);
     stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
-    expect(w.hero.x - x0).toBeCloseTo(2 * w.hero.stats.moveSpeed * STEP, 4);
+    const pace = w.hero.stats.moveSpeed * STEP;
+    expect(w.hero.x - x0).toBeCloseTo(pace * (1 + bal.feel.actionMove), 4);
     expect(w.hero.pushes).toEqual([]);
     // Past the strike: no recovery slow.
     const events = until(w, () => w.hero.swing === null, { move: { x: 1, y: 0 } });

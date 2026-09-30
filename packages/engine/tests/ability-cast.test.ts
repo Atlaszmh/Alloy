@@ -57,7 +57,7 @@ describe('mana payment', () => {
 });
 
 describe('cast payment', () => {
-  it('roots the hero through the wind-up, lands after it and blocks other casts', () => {
+  it('slows the hero through the wind-up, lands after it and blocks other casts', () => {
     const w = arena([dummy(11, 36), dummy(13, 30)], {
       noBasic: true,
       ultimate: { payment: 'cast' },
@@ -69,7 +69,7 @@ describe('cast payment', () => {
     expect(damaged(w.monsters[0])).toBe(false);
     const y = w.hero.y;
     stepWorld(registry, w, { move: { x: 0, y: -1 }, cast: { slot: 0 } }, STEP);
-    expect(w.hero.y).toBe(y);
+    expect(y - w.hero.y).toBeCloseTo(w.hero.stats.moveSpeed * STEP * bal.feel.actionMove, 5);
     expect(w.projectiles).toHaveLength(0);
     // The Q pressed meanwhile waits in the buffer and fires, after its own conjure, once the Nova lands.
     const later = run(w, castTime + 0.3);

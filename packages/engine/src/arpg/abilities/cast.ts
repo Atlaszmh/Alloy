@@ -172,6 +172,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     slot,
     aim,
     at,
+    from: { x: h.x, y: h.y },
     start: t,
     until: t + ab.castTime,
     step,
@@ -254,6 +255,7 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
     slot: hold.slot,
     aim,
     at,
+    from: { x: h.x, y: h.y },
     start: t,
     until: t + left,
     step: hold.step,
@@ -270,8 +272,9 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
  * While it runs, its release (a press of its slot: the button let go) fires it
  * at its stage; past its `max` it fires by itself at stage 2 (and marks the
  * slot, as a drop does); the button let go with no release (a lost release)
- * fires it at its stage. Meanwhile the hero stays rooted and each new stage
- * says so. A held button, charging or aiming, pauses its slot's restart window.
+ * fires it at its stage. Meanwhile the hero walks slowed, facing its aim, and
+ * each new stage says so. A held button, charging or aiming, pauses its
+ * slot's restart window.
  */
 export function holdTick(
   ctx: SimCtx,
@@ -302,6 +305,19 @@ export function holdTick(
     if (stage > holdCharge(bal, start, t - dt, full).stage)
       ctx.events.push({ kind: 'holdStage', slot: h.hold.slot, stage });
   }
+}
+
+type Windup = NonNullable<HeroEntity['windup']>;
+
+/**
+ * The way a wind-up faces: toward its `at`; null for one aimed where it began
+ * (a self-centred form) or with the hero standing on its `at`, which keeps
+ * the hero's facing.
+ */
+export function windupDir(h: HeroEntity, w: Windup): Vec | null {
+  if (w.from.x === w.at.x && w.from.y === w.at.y) return null;
+  const d = dirTo(h.x, h.y, w.at.x, w.at.y);
+  return d.x === 0 && d.y === 0 ? null : d;
 }
 
 /**
