@@ -75,8 +75,10 @@ describe('balance: delve.chains', () => {
       holdStageWeight: [0, 1, 2],
       holdTime: 1,
       holdMax: 2,
-      holdStages: [0.33, 0.66],
+      holdStages: [0.5, 1],
       stepBonus: 0.15,
+      beat: { light: 0.25, medium: 0.4, heavy: 0.6, hold: 0.8 },
+      beatSlot: { primary: 1, defensive: 0.75, ultimate: 1.5 },
     });
     expect(bal.stacks.basicByKind).toEqual({ light: 1, medium: 1, heavy: 2, hold: 2 });
     expect(MOVE_KINDS).toEqual(['light', 'medium', 'heavy', 'hold']);
@@ -634,7 +636,7 @@ describe('holds', () => {
     expect(w.hero.hold).not.toBeNull();
   });
 
-  it('reaches stage 1 at 0.33 of holdTime and stage 2 at 0.66, saying so each time', () => {
+  it('reaches stage 1 halfway through holdTime and stage 2 at full charge, saying so each time', () => {
     const w = holder();
     const events: ArpgEvent[] = [];
     for (let i = 0; i < Math.round(1.2 / STEP); i++) events.push(...holdStep(w));

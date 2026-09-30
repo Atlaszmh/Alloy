@@ -481,6 +481,7 @@ export const DelveDataSchema = z.object({
           .optional(),
         feel: perKind(ComboStepSchema).optional(),
         defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN).optional(),
+        tempo: z.number().positive().optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -491,7 +492,11 @@ export const DelveDataSchema = z.object({
         ),
       }),
     )
-    .min(1),
+    .min(1)
+    .refine(
+      (bases) => bases.every((b) => b.slot !== 'weapon' || b.tempo !== undefined),
+      'every weapon base needs a tempo',
+    ),
   affixes: z
     .array(
       z.object({
@@ -674,6 +679,7 @@ const DelveBalanceSchema = z.object({
     basicComboGrace: z.number().min(0),
     feel: perKind(ComboStepSchema),
     defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN),
+    tempo: z.number().positive(),
     minAttackInterval: z.number().positive(),
     critCap: z.number().positive(),
     dodgeCap: z.number().positive(),
@@ -897,8 +903,14 @@ const DelveBalanceSchema = z.object({
       holdStageWeight: z.array(z.number().int().min(-2).max(2)).length(3),
       holdTime: z.number().positive(),
       holdMax: z.number().positive(),
-      holdStages: z.array(z.number().gt(0).lt(1)).length(2),
+      holdStages: z.array(z.number().gt(0).lte(1)).length(2),
       stepBonus: z.number().min(0),
+      beat: perKind(z.number().positive()),
+      beatSlot: z.object({
+        primary: z.number().positive(),
+        defensive: z.number().positive(),
+        ultimate: z.number().positive(),
+      }),
     })
     .refine((c) => c.holdStages[0] < c.holdStages[1], 'holdStages must rise')
     .refine((c) => c.holdMax >= c.holdTime, 'holdMax must be at least holdTime'),

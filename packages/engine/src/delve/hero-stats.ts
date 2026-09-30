@@ -214,6 +214,7 @@ export function computeHeroStats(
       bal.hero.minAttackInterval,
       baseInterval / (1 + totals.attackSpeedPct / 100),
     ),
+    tempo: armed?.tempo ?? bal.hero.tempo,
     critChance: Math.min(bal.hero.critCap, bal.hero.baseCritChance + totals.critChance) / 100,
     critMultiplier: (bal.hero.baseCritMultiplier + totals.critDamage) / 100,
     dodge: Math.min(bal.hero.dodgeCap, totals.dodge) / 100,

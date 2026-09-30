@@ -66,6 +66,8 @@ export interface GearBaseDef {
   feel?: Record<MoveKind, ComboStepDef>;
   /** Weapons only: the basic chain a new hero gets (else the hero's). */
   defaultChain?: MoveKind[];
+  /** Weapons only (every weapon has one): scales every hold's charge and every chain beat (1 = the sword's). */
+  tempo?: number;
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -272,6 +274,8 @@ export interface DelveBalance {
     feel: Record<MoveKind, ComboStepDef>;
     /** Unarmed: the default basic chain. */
     defaultChain: MoveKind[];
+    /** Unarmed: the tempo (see `GearBaseDef.tempo`). */
+    tempo: number;
     minAttackInterval: number;
     critCap: number;
     dodgeCap: number;
@@ -506,14 +510,21 @@ export interface DelveBalance {
     kindWeight: Record<Exclude<MoveKind, 'hold'>, number>;
     /** A hold's three stages' weights. */
     holdStageWeight: number[];
-    /** Seconds a hold takes to charge fully. */
+    /** Seconds a hold takes to charge fully, times the hero's tempo. */
     holdTime: number;
-    /** A hold still charging this many seconds after it began fires by itself at stage 2. */
+    /** A hold still charging this many seconds (times the tempo) after it began fires by itself at stage 2. */
     holdMax: number;
-    /** The charge (0..1) at which a hold reaches stage 1, then stage 2. */
+    /** The charge (0..1) at which a hold reaches stage 1, then stage 2 (full power: 1, the full charge). */
     holdStages: number[];
     /** Move `i` (from 0) lands at power × (1 + this × i) and size × (1 + this × i / 2). */
     stepBonus: number;
+    /**
+     * The beat: seconds a slot waits after a move lands before its chain's next
+     * move, by the kind the move played as, times `beatSlot` and the hero's
+     * tempo (`beatFor`; see the chain feel spec).
+     */
+    beat: Record<MoveKind, number>;
+    beatSlot: Record<AbilitySlot, number>;
   };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {
@@ -572,6 +583,11 @@ export interface HeroStats {
   damageMult: number;
   /** Seconds between basic attacks after attack speed. */
   attackInterval: number;
+  /**
+   * The weapon's tempo (the hero's unarmed): every hold's charge and auto-fire
+   * time and every chain beat scale by it. Gear modifiers would multiply in here.
+   */
+  tempo: number;
   /** 0–1 */
   critChance: number;
   /** e.g. 1.5 = 150% */
