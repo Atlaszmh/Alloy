@@ -388,6 +388,18 @@ describe('past the aim point', () => {
     }
   });
 
+  it('a self-centred hold keeps the facing while the hero walks as it charges', () => {
+    const w = arena([dummy(1, 1)], { noBasic: true, ultimate: { kind: 'hold', payment: 'mana' } });
+    stepWorld(registry, w, { move: still, holding: 2 }, STEP);
+    expect(w.hero.hold).not.toBeNull();
+    const up = { x: 0, y: -1 };
+    for (let i = 0; i < 10; i++) {
+      stepWorld(registry, w, { move: up, holding: 2 }, STEP);
+      expect(w.hero.hold).not.toBeNull();
+      expect(w.hero.facing).toEqual(up);
+    }
+  });
+
   it('a self-centred hold let go early while walking keeps the facing through its wind-up', () => {
     const w = arena([dummy(1, 1)], { noBasic: true, ultimate: { kind: 'hold', payment: 'mana' } });
     stepWorld(registry, w, { move: still, holding: 2 }, STEP);

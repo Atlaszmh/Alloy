@@ -269,13 +269,15 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
 /**
  * The way the hero faces while it acts: its swing's, its wind-up's
  * (`windupDir`), or toward its hold's aim; null for an action with no way (a
- * self-centred wind-up, a hold with nothing to aim at), which keeps the facing.
+ * self-centred wind-up or hold, a hold with nothing to aim at), which keeps the facing.
  */
 function actionFacing(h: HeroEntity): Vec | null {
   if (h.swing) return h.swing.dir;
   if (h.windup) return windupDir(h, h.windup);
-  if (!h.hold?.aim) return null;
-  const d = dirTo(h.x, h.y, h.hold.aim.x, h.hold.aim.y);
+  const hold = h.hold;
+  // A self-centred hold (aimed where it began) keeps the facing, as its wind-up does.
+  if (!hold?.aim || (hold.aim.x === hold.from.x && hold.aim.y === hold.from.y)) return null;
+  const d = dirTo(h.x, h.y, hold.aim.x, hold.aim.y);
   return d.x === 0 && d.y === 0 ? null : d;
 }
 
