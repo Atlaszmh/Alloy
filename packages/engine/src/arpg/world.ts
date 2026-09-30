@@ -19,7 +19,7 @@ import {
 } from '../types/ability.js';
 import { manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
-import { cancelWindup, clearBeat, dropHold } from './action.js';
+import { cancelWindup, clearBeat, dropHold, endPushes } from './action.js';
 import { dist } from './geometry.js';
 
 export interface FloorOptions {
@@ -210,7 +210,7 @@ export function createHeroEntity(
     windup: null,
     hold: null,
     swing: null,
-    push: null,
+    pushes: [],
     recoverUntil: 0,
     defend: null,
     ward: null,
@@ -258,7 +258,7 @@ export function refreshWorldHero(
   if (stats.weapon.baseId !== h.stats.weapon.baseId || kinds(stats) !== kinds(h.stats)) {
     if (h.swing) {
       h.swing = null;
-      h.push = null;
+      endPushes(h, 'lunge');
     }
     h.attackCount = 0;
     h.nextAttackAt = Math.min(h.nextAttackAt, world.t);
@@ -266,7 +266,7 @@ export function refreshWorldHero(
   const changed = ABILITY_SLOTS.map((slot, i) => !sameChain(h.chains[i], chains[slot]));
   if (h.windup && changed[h.windup.slot]) {
     cancelWindup(h, world.t);
-    h.push = null; // its step-in goes with it
+    endPushes(h, 'stepIn'); // its step-in goes with it
   }
   // A changed slot's hold is dropped, unpaid, and its beat and waiting press go.
   if (h.hold && changed[h.hold.slot]) dropHold(world);

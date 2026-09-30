@@ -599,7 +599,19 @@ describe('toggles', () => {
       held: null,
     };
     h.hold = { slot: 0, step: 0, start: 0, aim: null, full: 1, max: 2 };
-    h.push = { fromX: 13, fromY: 26, dx: 0, dy: -1, start: 0, until: 1, stopId: null };
+    h.pushes = [
+      {
+        kind: 'step',
+        dx: 0,
+        dy: -1,
+        start: 0,
+        until: 1,
+        stopId: null,
+        done: 0,
+        movedX: 0,
+        movedY: 0,
+      },
+    ];
     h.recoverUntil = w.t + 5;
     h.dodge = { dir: { x: 1, y: 0 }, fromX: 13, fromY: 26, start: 0, until: 1, perfect: false };
     h.defend = { form: 'ward', until: w.t + 5, move: 0, stage: 0 };
@@ -616,7 +628,7 @@ describe('toggles', () => {
       windup: null,
       hold: null,
       swing: null,
-      push: null,
+      pushes: [],
       dodge: null,
       defend: null,
       ward: null,

@@ -131,11 +131,11 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
         if (e.kind === 'hit' && (slot === null || e.slot === slot)) damage += e.amount;
         if (acted(e)) casts++;
       }
-      // Positions are held: knockback, pulls and pushes never drift anyone out of reach. A push
-      // begun in the tick another ended starts from that push's end, so the hero sits at most one
-      // push-length off `start` for its duration (a lunge still clamps at contact).
-      h.x = start.x;
-      h.y = start.y;
+      // Positions are held: knockback, pulls and pushes never drift anyone out of reach. The hero
+      // goes back to its start plus what its running pushes have moved it, so a lunge still plays
+      // out (stopping at contact) and the hero is back at its start once they end.
+      h.x = start.x + h.pushes.reduce((a, p) => a + p.movedX, 0);
+      h.y = start.y + h.pushes.reduce((a, p) => a + p.movedY, 0);
       for (const m of dummies) {
         m.x = m.dummy!.homeX;
         m.y = m.dummy!.homeY;

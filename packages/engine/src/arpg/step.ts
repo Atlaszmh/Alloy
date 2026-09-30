@@ -34,7 +34,7 @@ import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
-import { cancelSwing, dropHold, pushTick, swingStrikes } from './action.js';
+import { cancelSwing, dropHold, endPushes, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
 const ITEM_PICKUP_DELAY = 0.35;
@@ -195,14 +195,15 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
       cancelSwing(ctx);
     else if (h.swing.committed && speed > 0.05) {
       h.swing.committed = false;
-      h.push = null;
+      endPushes(h, 'lunge');
     }
   }
 
   // Movement: a push carries the hero; a wind-up, a hold or a committed swing roots it; a
   // recovery slows it.
   const surge = surging(ctx);
-  const pushed = !dashing && pushTick(ctx);
+  const pushed = !dashing && h.pushes.length > 0;
+  if (pushed) pushesTick(ctx, null);
   const rooted = !!h.windup || !!h.hold || !!h.swing?.committed;
   h.moving = speed > 0.05 && !dashing && !pushed && !rooted;
   if (h.moving) {
@@ -227,15 +228,14 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // While a press waits, a swing starts only if its blow strikes by the tick the press fires.
   const due = pressDue(ctx, input.holding);
   const deadline = due === Infinity ? Infinity : t + Math.ceil((due - t) / dt - 1e-6) * dt;
-  // A tap held by a dash, a wind-up, a hold, a swing, a push, the weapon's cycle or a waiting
-  // press doesn't age either.
+  // A tap held by a dash, a wind-up, a hold, a swing, the weapon's cycle or a waiting press
+  // doesn't age either.
   if (
     world.queuedAttack &&
-    (dashing || h.windup || h.hold || h.swing || h.push || t < h.nextAttackAt || due !== Infinity)
+    (dashing || h.windup || h.hold || h.swing || t < h.nextAttackAt || due !== Infinity)
   )
     world.queuedAttack.until = Math.max(world.queuedAttack.until, t + bal.feel.buffer);
-  // A swing waits for a push (a lunge, a step-in or a recoil) to finish, so it never swallows one.
-  if (!h.swing && !h.windup && !h.hold && !h.push && !dashing) {
+  if (!h.swing && !h.windup && !h.hold && !dashing) {
     // Automatic unless the input says whether the attack is held (manual mode).
     if (input.attack === undefined) startSwing(ctx, false, speed <= 0.05, null, deadline);
     else {

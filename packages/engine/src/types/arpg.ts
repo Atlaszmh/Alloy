@@ -284,6 +284,32 @@ export interface Drop {
   dead: boolean;
 }
 
+/**
+ * What made a push, which decides what ends it: `lunge` a swing's (a hold
+ * blow's leap too), `stepIn` a form's over its conjure, `step` a blow's step
+ * after its strike or a form's recoil (see the weapon flow spec).
+ */
+export type PushKind = 'lunge' | 'stepIn' | 'step';
+
+/**
+ * Motion an action adds on top of the steering: `dx`, `dy` (its direction
+ * times its distance) from `start` to `until`, each tick's slice by its
+ * progress (`done`, 0..1). `movedX`, `movedY` are what it has actually
+ * moved the hero, after the steering's projection, clamping and cuts.
+ */
+export interface Push {
+  kind: PushKind;
+  dx: number;
+  dy: number;
+  start: number;
+  until: number;
+  /** Stop at this foe's contact gap (a lunge, a step-in), or null. */
+  stopId: number | null;
+  done: number;
+  movedX: number;
+  movedY: number;
+}
+
 export interface HeroEntity {
   x: number;
   y: number;
@@ -360,17 +386,8 @@ export interface HeroEntity {
     /** A manual hold blow held at its strike point: since when (else null). */
     held: number | null;
   } | null;
-  /** Motion an action imposes (a lunge, a step-in or a recoil), placed by progress; it replaces move input. */
-  push: {
-    fromX: number;
-    fromY: number;
-    dx: number;
-    dy: number;
-    start: number;
-    until: number;
-    /** Stop at this foe's edge (a lunge), or null. */
-    stopId: number | null;
-  } | null;
+  /** Each running push (a lunge, a step-in, a step or a recoil), in the order they began. */
+  pushes: Push[];
   /** Movement is slowed until this time (after a strike or a landed ability). */
   recoverUntil: number;
   /**

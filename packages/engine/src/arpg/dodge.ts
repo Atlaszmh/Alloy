@@ -34,7 +34,7 @@ export function tryDodge(ctx: SimCtx, move: Vec): boolean {
 
   // A dodge drops a swing still winding up, and any push or recovery.
   cancelSwing(ctx);
-  h.push = null;
+  h.pushes = [];
   h.recoverUntil = t;
   // Bailing out of a wind-up keeps the mana spent but frees the ability again (and refunds charge);
   // a hold is dropped unpaid.

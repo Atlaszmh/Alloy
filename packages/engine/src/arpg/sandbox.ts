@@ -279,7 +279,7 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.windup = null;
   h.hold = null;
   h.swing = null;
-  h.push = null;
+  h.pushes = [];
   h.recoverUntil = t;
   h.dodge = null;
   h.defend = null;

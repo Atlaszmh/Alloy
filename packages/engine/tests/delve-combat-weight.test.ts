@@ -13,7 +13,7 @@ import type { AbilityPayment, AbilitySlot, Move } from '../src/types/ability.js'
 import type { ArpgEvent, ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { makeCtx } from '../src/arpg/combat.js';
-import { pushTick, startPush } from '../src/arpg/action.js';
+import { pushesTick, startPush } from '../src/arpg/action.js';
 import { dist } from '../src/arpg/geometry.js';
 import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
@@ -149,11 +149,11 @@ describe('pushes and buffered input', () => {
     const w = arena([], { noBasic: true });
     const ctx = makeCtx(registry, w, []);
     const y0 = w.hero.y;
-    startPush(ctx, { x: 0, y: -1 }, 0.3, STEP / 2);
+    startPush(ctx, 'step', { x: 0, y: -1 }, 0.3, STEP / 2);
     w.t += STEP;
-    expect(pushTick(ctx)).toBe(true);
+    pushesTick(ctx, null);
     expect(y0 - w.hero.y).toBeCloseTo(0.3, 5);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
   });
 
   it('a push toward a foe stops exactly at the contact gap', () => {
@@ -162,15 +162,15 @@ describe('pushes and buffered input', () => {
     m.y = w.hero.y - w.hero.radius - m.radius - 1;
     const y0 = w.hero.y;
     const ctx = makeCtx(registry, w, []);
-    startPush(ctx, { x: 0, y: -1 }, 2, 0.2, m.id);
+    startPush(ctx, 'lunge', { x: 0, y: -1 }, 2, 0.2, m.id);
     for (let i = 0; i < 10; i++) {
       w.t += STEP;
-      pushTick(ctx);
+      pushesTick(ctx, null);
     }
     const gap = Math.abs(w.hero.y - m.y) - m.radius - w.hero.radius;
     expect(gap).toBeCloseTo(bal.feel.contactGap, 4);
     expect(y0 - w.hero.y).toBeCloseTo(1 - bal.feel.contactGap, 4);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
   });
 
   it('presses made while the display is frozen (dt 0) are kept', () => {
@@ -193,15 +193,16 @@ describe('pushes and buffered input', () => {
     place(w, 1.6);
     const y0 = w.hero.y;
     run(w, STEP);
-    const lunge = w.hero.push!;
+    const [lunge] = w.hero.pushes;
     until(w, () => w.t >= lunge.start + 2 * STEP);
-    expect(w.hero.push?.stopId).toBe(w.monsters[0].id);
+    expect(w.hero.pushes).toEqual([lunge]);
+    expect(lunge).toMatchObject({ kind: 'lunge', stopId: w.monsters[0].id });
     const y1 = w.hero.y;
     expect(y0 - y1).toBeGreaterThan(0);
     w.monsters[0].dead = true;
     until(w, () => w.hero.swing === null);
     expect(w.hero.y).toBe(y1);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
   });
 });
 
@@ -286,13 +287,13 @@ describe('basic attacks: startup, strike, recovery', () => {
     place(w, 1.6);
     run(w, STEP);
     expect(w.hero.swing?.committed).toBe(true);
-    expect(w.hero.push).not.toBeNull();
+    expect(w.hero.pushes).toHaveLength(1);
     const x0 = w.hero.x;
     const y0 = w.hero.y;
     const right = { move: { x: 1, y: 0 } };
     stepWorld(registry, w, right, STEP);
     expect(w.hero.swing?.committed).toBe(false);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
     const pace = w.hero.stats.moveSpeed * STEP;
     expect(w.hero.x - x0).toBeCloseTo(pace, 4);
     expect(w.hero.y).toBe(y0);
@@ -314,7 +315,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     w.monsters[0].dead = true;
     const events = stepWorld(registry, w, { move: still }, STEP);
     expect(w.hero.swing).toBeNull();
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
     events.push(...run(w, sw.strikeAt - w.t + 0.1));
     expect(basics(events)).toHaveLength(0);
     expect(w.hero.attackCount).toBe(0);
@@ -327,7 +328,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
     stepWorld(registry, w, { move: still, attack: true }, STEP);
     expect(w.hero.swing?.committed).toBe(true);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
     const x0 = w.hero.x;
     stepWorld(registry, w, { move: { x: 1, y: 0 }, attack: true }, STEP);
     expect(w.hero.x).toBe(x0);
@@ -341,7 +342,7 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.swing?.committed).toBe(false);
     stepWorld(registry, w, { move: { x: 1, y: 0 } }, STEP);
     expect(w.hero.x - x0).toBeCloseTo(2 * w.hero.stats.moveSpeed * STEP, 4);
-    expect(w.hero.push).toBeNull();
+    expect(w.hero.pushes).toEqual([]);
     // Past the strike: no recovery slow.
     const events = until(w, () => w.hero.swing === null, { move: { x: 1, y: 0 } });
     expect(basics(events)).toHaveLength(1);
@@ -350,16 +351,17 @@ describe('basic attacks: startup, strike, recovery', () => {
     expect(w.hero.x - x1).toBeCloseTo(w.hero.stats.moveSpeed * STEP, 4);
   });
 
-  it("an automatic swing on the move waits out an ability's push and keeps its recovery", () => {
+  it("an automatic swing on the move doesn't wait for a push, and keeps an ability's recovery", () => {
     const w = arena([dummy(13, 30)], { equipped: { weapon: gear('fire', 'weapon', 'wand') } });
     const y0 = w.hero.y;
-    startPush(makeCtx(registry, w, []), { x: 0, y: 1 }, 0.1, 0.1);
+    startPush(makeCtx(registry, w, []), 'step', { x: 0, y: 1 }, 0.1, 0.1);
     // The recovery outlasts the push and the shot, so the shot's start and strike leave it alone.
     const recoverUntil = (w.hero.recoverUntil = w.t + 0.5);
     const move = { move: { x: 1, y: 0 } };
-    until(w, () => w.hero.swing !== null, move);
-    expect(w.hero.push).toBeNull();
+    stepWorld(registry, w, move, STEP);
     expect(w.hero.swing!.committed).toBe(false);
+    expect(w.hero.pushes).toHaveLength(1);
+    until(w, () => w.hero.pushes.length === 0, move);
     expect(w.hero.y - y0).toBeCloseTo(0.1, 5);
     const events = until(w, () => w.hero.swing === null, move);
     expect(basics(events)).toHaveLength(1);
@@ -696,21 +698,17 @@ describe('casting: conjure, motion, recovery', () => {
     expect(c.hero.y - y1).toBeCloseTo(-moveOf(c, 0, 1).motion * stepBonus(bal, 1).size, 2);
   });
 
-  it("with basics on, the sword waits for a bolt's recoil to finish before it swings", () => {
+  it("with basics on, the sword swings through a bolt's recoil, which still covers its distance", () => {
     const w = arena([dummy(13, 0)]);
     place(w, 1.0);
-    const y0 = w.hero.y;
     const bolt = moveOf(w, 0);
     press(w, 0);
-    // The recoil pushes the hero back (away from the foe above), and nothing swings meanwhile.
-    const recoil = w.hero.push!;
+    // The recoil pushes the hero back (away from the foe above); the sword swings at once.
+    const recoil = w.hero.pushes.find((p) => p.kind === 'step')!;
     expect(recoil.dy).toBeGreaterThan(0);
-    expect(w.hero.swing).toBeNull();
-    until(w, () => w.hero.push !== recoil);
-    expect(w.hero.y - y0).toBeCloseTo(-bolt.motion, 5);
-    // Then the sword swings again.
-    until(w, () => w.hero.swing !== null);
-    expect(w.hero.swing!.start).toBeGreaterThanOrEqual(recoil.until - 1e-9);
+    expect(w.hero.swing!.start).toBeLessThan(recoil.until);
+    until(w, () => !w.hero.pushes.includes(recoil));
+    expect(recoil.movedY).toBeCloseTo(-bolt.motion, 5);
   });
 
   it('a strike steps in over its conjure and hits from there', () => {
@@ -756,8 +754,8 @@ describe('casting: conjure, motion, recovery', () => {
     pressOnly(w, 0, { x: 13, y: 20 });
     expect(w.hero.swing).toBeNull();
     expect(w.hero.windup).not.toBeNull();
-    // Its own step-in survives the cancel.
-    expect(w.hero.push).not.toBeNull();
+    // The swing's lunge goes with it; the strike's own step-in runs.
+    expect(w.hero.pushes.map((p) => p.kind)).toEqual(['stepIn']);
   });
 
   it('a press made just before the cooldown ends fires when it is ready', () => {

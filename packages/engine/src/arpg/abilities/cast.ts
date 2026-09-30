@@ -2,7 +2,7 @@ import type { AbilityCast, ResolvedAbility } from '../../types/ability.js';
 import type { ArpgWorld, HeroEntity, Vec } from '../../types/arpg.js';
 import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
-import { cancelSwing, pushTick, startPush, swingStrikes } from '../action.js';
+import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
 import { beatFor, chainMove, holdFull, playedKind, stepBonus, stepHeft } from './resolve.js';
@@ -116,7 +116,7 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
     const d = dirTo(h.x, h.y, res.tx, res.ty);
     const size = stepBonus(bal, ab.index).size;
     if (d.x !== 0 || d.y !== 0)
-      startPush(ctx, { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
+      startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
   return true;
@@ -135,9 +135,11 @@ function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from:
  * Press an ability: its chain's next move. Fails, costing nothing, while
  * another is winding up, in its slot's beat, on that move's cooldown,
  * uncharged, unaffordable (with a `noMana` event unless it's a repeat press,
- * and the chain doesn't advance) or with nothing to aim at. Otherwise it pays now, drops a basic swing still winding up, and winds
- * up for its conjure (stepping in, for forward forms) plus any channel; its
- * cooldown counts from the press plus the channel.
+ * and the chain doesn't advance) or with nothing to aim at. Otherwise it pays
+ * now, drops a basic swing still winding up (with its lunge: other pushes,
+ * such as a blow's step, run on), and winds up for its conjure (stepping in,
+ * for forward forms) plus any channel; its cooldown counts from the press plus
+ * the channel.
  */
 export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   const { world, bal } = ctx;
@@ -161,7 +163,6 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   // It goes ahead: a swing still winding up gives way first, so the step-in below survives.
   // (A tap on a hold move, with no hold running, is its stage 0 with its full wind-up.)
   cancelSwing(ctx);
-  h.push = null;
   h.recoverUntil = t;
   const chargePaid = chain.payment === 'charge' ? ab.chargeNeed : 0;
   pay(ctx, slot, step, ab, t + ab.channel);
@@ -182,7 +183,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
     const stop = nearestMonster(ctx, at.x, at.y, 1.5);
     // Never past the aim point, where the form would re-aim from and turn round.
     const reach = Math.min(ab.motion * stepBonus(bal, ab.index).size, dist(h.x, h.y, at.x, at.y));
-    startPush(ctx, dir, reach, ab.conjure, stop?.id ?? null);
+    startPush(ctx, 'stepIn', dir, reach, ab.conjure, stop?.id ?? null);
   }
   ctx.events.push({ kind: 'windup', slot, until: h.windup.until, heft: stepHeft(ab) });
   return true;
@@ -206,7 +207,6 @@ function startHold(ctx: SimCtx, slot: number): void {
   if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return;
   if (!canAfford(world, ab)) return;
   cancelSwing(ctx);
-  h.push = null;
   h.recoverUntil = t;
   const aim = aimPoint(ctx, ab, null);
   const dir = aim ? dirTo(h.x, h.y, aim.x, aim.y) : null;
@@ -315,6 +315,6 @@ export function castTick(ctx: SimCtx): void {
   const { slot, aim, at, step, stage } = h.windup;
   h.windup = null;
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
-  pushTick(ctx, true);
+  finishPushes(ctx, 'stepIn');
   if (!fire(ctx, slot, aim, step, stage)) fire(ctx, slot, at, step, stage);
 }

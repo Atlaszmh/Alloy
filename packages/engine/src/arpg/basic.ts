@@ -3,7 +3,7 @@ import { HOLD_STAGE_KINDS } from '../types/ability.js';
 import type { ComboStepDef, DelveBalance, HeroWeapon } from '../types/delve.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
-import { startPush } from './action.js';
+import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { surging } from './abilities/defend.js';
@@ -109,7 +109,7 @@ export function startSwing(
     const foe = target ?? foeAhead(ctx, dir, reach + lunge, s.arc ?? w.arc);
     // Planted for the first part of the startup, then the lunge.
     const hold = startup * bal.feel.lungeHold;
-    startPush(ctx, dir, lunge, startup - hold, foe?.id ?? null, hold);
+    startPush(ctx, 'lunge', dir, lunge, startup - hold, foe?.id ?? null, hold);
   }
   return true;
 }
@@ -163,8 +163,8 @@ export function strike(ctx: SimCtx, stage: number | null = null): void {
   const blow = w.blows[sw.step];
   const kind = stage === null ? blow.kind : HOLD_STAGE_KINDS[stage];
   const s = stage === null ? blow : w.feel[kind];
-  // The lunge belongs to the swing and ends with it (no other push runs during a swing).
-  h.push = null;
+  // The lunge belongs to the swing and ends with it.
+  endPushes(h, 'lunge');
   const last = sw.step === w.blows.length - 1;
   h.attackCount++;
   h.lastBasicAt = world.t;
@@ -255,7 +255,7 @@ export function strike(ctx: SimCtx, stage: number | null = null): void {
       });
     }
     if (sw.committed && s.move < 0)
-      startPush(ctx, { x: -dir.x, y: -dir.y }, -s.move, bal.feel.recoilSeconds);
+      startPush(ctx, 'step', { x: -dir.x, y: -dir.y }, -s.move, bal.feel.recoilSeconds);
   }
 
   const tgt =
