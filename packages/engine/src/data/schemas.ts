@@ -450,6 +450,8 @@ const ComboStepSchema = z.object({
   time: z.number().positive(),
   startup: z.number().gt(0).lt(1),
   move: z.number(),
+  side: z.number().min(0).optional(),
+  hop: z.number().min(0).optional(),
   power: z.number().positive(),
   heft: z.number().min(0).max(1),
   arc: z.number().positive().max(360).optional(),
@@ -482,6 +484,7 @@ export const DelveDataSchema = z.object({
         feel: perKind(ComboStepSchema).optional(),
         defaultChain: z.array(MoveKindSchema).min(1).max(MAX_CHAIN).optional(),
         tempo: z.number().positive().optional(),
+        sway: z.enum(['alternate', 'orbit']).optional(),
         weight: z.number().positive(),
         implicits: z.array(
           z.object({
@@ -944,6 +947,9 @@ const DelveBalanceSchema = z.object({
     basicRecovery: z.number().min(0).max(1),
     motionPerWeight: z.number().min(0),
     recoilSeconds: z.number().positive(),
+    stepSeconds: z.number().positive(),
+    actionMove: z.number().min(0).max(1),
+    sideSteer: z.number().min(0).max(1),
     lungeHold: z.number().min(0).max(1),
     contactGap: z.number().min(0),
     buffer: z.number().min(0),

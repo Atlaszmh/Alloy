@@ -32,8 +32,15 @@ export interface ComboStepDef {
   time: number;
   /** Share of the cycle before the strike (the startup). */
   startup: number;
-  /** Units of motion: a lunge over the startup (melee) or a recoil after the release (negative, ranged). */
+  /**
+   * Units of motion along the attack: a lunge over the startup (positive), or a
+   * step back after the strike (negative). See the weapon flow spec.
+   */
   move: number;
+  /** Units of a sideways step after the strike (default 0); see `HeroWeapon.sway`. */
+  side?: number;
+  /** Units of a hop back, away from the attack, after the strike (default 0). */
+  hop?: number;
   /** Damage multiplier. */
   power: number;
   /** 0–1: how hard it lands (hit-stop, camera kick; never the rules). */
@@ -54,6 +61,13 @@ export interface ComboStepDef {
   speed?: number;
 }
 
+/**
+ * Which side a blow's side step takes when the steering doesn't pick one:
+ * `alternate` flips each blow (the staff), `orbit` keeps the last side (the
+ * wand, circling its target).
+ */
+export type WeaponSway = 'alternate' | 'orbit';
+
 export interface GearBaseDef {
   id: string;
   slot: GearSlot;
@@ -68,6 +82,8 @@ export interface GearBaseDef {
   defaultChain?: MoveKind[];
   /** Weapons only (every weapon has one): scales every hold's charge and every chain beat (1 = the sword's). */
   tempo?: number;
+  /** Weapons only: the side a blow's side step takes when the steering doesn't pick one (default `alternate`). */
+  sway?: WeaponSway;
   weight: number;
   implicits: ImplicitTemplate[];
 }
@@ -227,8 +243,14 @@ export interface FeelBalance {
   basicRecovery: number;
   /** Ability motion grows by this per weight step. */
   motionPerWeight: number;
-  /** How long a recoil push takes. */
+  /** How long a form's recoil push takes. */
   recoilSeconds: number;
+  /** How long a blow's step (its step back, side step and hop) takes, from the strike; a hold blow's leap too. */
+  stepSeconds: number;
+  /** Move speed multiplier while a swing, a charging hold blow, a wind-up or a charging hold runs. */
+  actionMove: number;
+  /** The steering's lateral part (of a full stick) that picks a side step's side. */
+  sideSteer: number;
   /** Share of a basic blow's startup spent planted before its lunge moves. */
   lungeHold: number;
   /** A lunge stops when the gap between the hero's and the foe's edges is this small. */
@@ -568,6 +590,8 @@ export interface HeroWeapon {
   arc: number;
   speed: number;
   pierce: boolean;
+  /** The side a side step takes when the steering doesn't pick one. */
+  sway: WeaponSway;
   /** A blow's row by its kind (a manual hold blow's stages read medium, heavy and hold). */
   feel: Record<MoveKind, ComboStepDef>;
   /** The basic chain, one entry per blow (see the moves and chains spec). */

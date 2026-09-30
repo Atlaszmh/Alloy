@@ -173,6 +173,11 @@ function weapon(id: string) {
   return { feel: base.feel!, chain: base.defaultChain!, arc: base.attack!.arc ?? 90 };
 }
 
+/** A row without its step (`side`, `hop`: the weapon flow spec's, pinned in delve-weapon-flow.test.ts). */
+function stepless({ side: _side, hop: _hop, ...row }: ComboStepDef): ComboStepDef {
+  return row;
+}
+
 /** Every number of a row, with its defaults filled in and rounded (so 0.35 × 1.5 is 0.525). */
 function numbers(row: ComboStepDef, arc: number) {
   const r = (x: number) => +x.toFixed(6);
@@ -200,7 +205,7 @@ describe('data: feel tables and default chains', () => {
     for (const [id, string] of Object.entries(STRINGS)) {
       const { feel, chain } = weapon(id);
       expect(
-        chain.map((k) => feel[k]),
+        chain.map((k) => stepless(feel[k])),
         id,
       ).toEqual(string);
     }

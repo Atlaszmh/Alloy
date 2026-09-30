@@ -190,10 +190,21 @@ export function computeHeroStats(
         arc: armed.attack.arc ?? 90,
         speed: armed.attack.speed ?? 12,
         pierce: armed.attack.pierce ?? false,
+        sway: armed.sway ?? 'alternate',
         feel,
         blows,
       }
-    : { baseId: null, kind: 'melee', range: 1.4, arc: 90, speed: 0, pierce: false, feel, blows };
+    : {
+        baseId: null,
+        kind: 'melee',
+        range: 1.4,
+        arc: 90,
+        speed: 0,
+        pierce: false,
+        sway: 'alternate',
+        feel,
+        blows,
+      };
   const baseInterval = weaponBase?.attackInterval ?? bal.hero.unarmedInterval;
 
   const glass = legendaries.glass_cannon ?? 0;
