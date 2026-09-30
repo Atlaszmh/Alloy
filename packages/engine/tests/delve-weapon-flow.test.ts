@@ -4,11 +4,12 @@ import { startPush } from '../src/arpg/action.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { dirTo } from '../src/arpg/geometry.js';
 import { stepWorld } from '../src/arpg/step.js';
-import { MOVE_KINDS } from '../src/types/ability.js';
+import { MOVE_KINDS, type FormId } from '../src/types/ability.js';
 import type { ArpgInput, ArpgWorld, Vec } from '../src/types/arpg.js';
 import {
   arena,
   bal,
+  damaged,
   dummy,
   gear,
   moveOf,
@@ -225,5 +226,61 @@ describe('no rooting', () => {
     expect(h.hero.hold).toMatchObject({ aim: null });
     stepRight(h, { holding: 0 });
     expect(h.hero.facing).toEqual({ x: 0, y: -1 });
+  });
+});
+
+describe('past the aim point', () => {
+  /** A `form` Primary aimed 0.2 ahead, the hero steering on up through its wind-up. */
+  const walkPast = (form: FormId) => {
+    const w = arena([dummy(13, 20)], { noBasic: true, primary: { form } });
+    pressOnly(w, 0, { x: 13, y: 35.8 });
+    for (let i = 0; i < 60 && w.hero.windup; i++)
+      stepWorld(registry, w, { move: { x: 0, y: -1 } }, STEP);
+    expect(w.hero.y).toBeLessThan(35.8);
+    return w;
+  };
+
+  it("a directional form fires along the press's way once the hero has walked past its aim", () => {
+    const [bolt] = walkPast('bolt').projectiles;
+    expect(bolt.vy).toBeLessThan(0);
+    expect(bolt.vx).toBeCloseTo(0, 9);
+  });
+
+  it("so does one fired at the press's aim when auto-aim finds nothing at the landing", () => {
+    // The foe it aimed at is gone by the landing (another, far off, keeps the floor going).
+    const w = arena([dummy(13, 30), dummy(1, 1)], { noBasic: true });
+    pressOnly(w, 0);
+    w.monsters[0].dead = true;
+    w.hero.y = 28;
+    run(w, 0.3);
+    expect(w.projectiles[0].vy).toBeLessThan(0);
+  });
+
+  it("past it, a directional wind-up faces along the press's way; a placed one turns to its aim", () => {
+    const facing = (form: FormId) => {
+      const w = arena([dummy(13, 20)], { noBasic: true, primary: { form } });
+      pressOnly(w, 0, { x: 13, y: 35.8 });
+      for (let i = 0; i < 60 && w.hero.windup && w.hero.y >= 35.8; i++)
+        stepWorld(registry, w, { move: { x: 0, y: -1 } }, STEP);
+      expect(w.hero.windup).not.toBeNull();
+      return w.hero.facing;
+    };
+    expect(facing('bolt')).toEqual({ x: 0, y: -1 });
+    expect(facing('burst')).toEqual({ x: 0, y: 1 });
+  });
+
+  it('a placed form still lands at its aim point', () => {
+    const z = walkPast('burst').zones.find((q) => q.source === 'burst')!;
+    expect(z.x).toBeCloseTo(13, 9);
+    expect(z.y).toBeCloseTo(35.8, 9);
+  });
+
+  it('a successful auto-aim at the landing still turns toward the nearest foe', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    pressOnly(w, 0);
+    // Past the foe it aimed at: the Bolt turns round and hits it.
+    w.hero.y = 28;
+    run(w, 0.3);
+    expect(damaged(w.monsters[0])).toBe(true);
   });
 });

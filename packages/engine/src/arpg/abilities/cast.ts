@@ -6,7 +6,7 @@ import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
 import { beatFor, chainMove, holdFull, playedKind, stepBonus, stepHeft } from './resolve.js';
-import { aimPoint, nearestMonster } from './targeting.js';
+import { aimPoint, DIRECTIONAL, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
 
@@ -310,12 +310,26 @@ export function holdTick(
 type Windup = NonNullable<HeroEntity['windup']>;
 
 /**
- * The way a wind-up faces: toward its `at`; null for one aimed where it began
- * (a self-centred form) or with the hero standing on its `at`, which keeps
- * the hero's facing.
+ * Whether the hero has walked past a directional wind-up's `at`: the way to
+ * `at` has turned 90° or more from the way from where the wind-up began (or
+ * the hero stands on it). Never for a placed or self-centred form.
+ */
+function passedAim(h: HeroEntity, w: Windup): boolean {
+  if (!DIRECTIONAL.has(chainMove(h.chains[w.slot], w.step, w.stage).form.id)) return false;
+  const first = dirTo(w.from.x, w.from.y, w.at.x, w.at.y);
+  const now = dirTo(h.x, h.y, w.at.x, w.at.y);
+  return (first.x !== 0 || first.y !== 0) && now.x * first.x + now.y * first.y <= 0;
+}
+
+/**
+ * The way a wind-up faces: toward its `at`, or, a directional form's once the
+ * hero has walked past it, along the way from where it began; null for one
+ * aimed where it began (a self-centred form) or with the hero standing on a
+ * placed form's `at`, which keeps the hero's facing.
  */
 export function windupDir(h: HeroEntity, w: Windup): Vec | null {
   if (w.from.x === w.at.x && w.from.y === w.at.y) return null;
+  if (passedAim(h, w)) return dirTo(w.from.x, w.from.y, w.at.x, w.at.y);
   const d = dirTo(h.x, h.y, w.at.x, w.at.y);
   return d.x === 0 && d.y === 0 ? null : d;
 }
@@ -323,14 +337,20 @@ export function windupDir(h: HeroEntity, w: Windup): Vec | null {
 /**
  * Land a finished wind-up: its press-time move (a released hold's stage).
  * Auto-aim is chosen again now; if nothing is left to aim at, it lands where
- * the press aimed.
+ * the press aimed. A directional form fired at that aim (a manual one, or
+ * that fallback) once the hero has walked past it goes along the press's way
+ * instead of turning round (see the weapon flow spec); placed forms land at
+ * `at` wherever the hero stands.
  */
 export function castTick(ctx: SimCtx): void {
   const h = ctx.world.hero;
-  if (!h.windup || ctx.world.t < h.windup.until - 1e-9) return;
-  const { slot, aim, at, step, stage } = h.windup;
+  const w = h.windup;
+  if (!w || ctx.world.t < w.until - 1e-9) return;
+  const { slot, aim, at, step, stage } = w;
   h.windup = null;
   // A step-in finishes before the blow lands, so it hits from where the step took the hero.
   finishPushes(ctx, 'stepIn');
-  if (!fire(ctx, slot, aim, step, stage)) fire(ctx, slot, at, step, stage);
+  const along = passedAim(h, w) ? { x: h.x + at.x - w.from.x, y: h.y + at.y - w.from.y } : null;
+  if (!fire(ctx, slot, aim && (along ?? aim), step, stage))
+    fire(ctx, slot, along ?? at, step, stage);
 }

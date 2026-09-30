@@ -56,7 +56,8 @@ export function spawnProjectile(
   return proj;
 }
 
-const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
+/** Forms fired along a way from the hero (the rest are placed, self-centred or Blink). */
+export const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
 const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
 
 /**
