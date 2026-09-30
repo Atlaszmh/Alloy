@@ -52,8 +52,13 @@ Each weapon's `feel` rows in `delve.json` hold these per kind, as starting value
   - Otherwise the weapon's `sway` rule (new, on the weapon base) picks it: `alternate` (the staff) flips side each blow, and `orbit` (the wand) keeps the last side, so the hero circles the target.
   - Every side step records the side it took in `HeroEntity.swaySide` (1 or −1, starting at 1), so `alternate` flips from the side actually taken. `world.ts` sets it, and `respawnHero` resets it.
 - **A manual hold blow** starts on the medium row, as today, and so lunges medium's `move` during its startup.
-  - **The leap.** Released at stage 1 or 2, when its stage row's `move` is larger than medium's, it leaps before it strikes. The extra distance, toward the re-aimed direction, runs over `stepSeconds` as a `lunge` push stopping at the re-aimed target's contact gap.
-  - **Then the blow.** It strikes at the leap's end: the swing's `strikeAt` moves to the release plus `stepSeconds`, and the swing counts as in its startup until then. Its stage row's step follows that strike.
+  - **The leap.** Released at stage 1 or 2, when its stage row's `move` is larger than medium's, it leaps before it strikes. The extra distance, toward the re-aimed direction, runs over `stepSeconds` as a `lunge` push. It stops at the contact gap of the re-aimed target, or else of the first foe ahead (`foeAhead`, as `startSwing` does).
+  - **Then the blow.**
+    - The swing records its release: `HeroEntity.swing.released`, the stage it was let go at, new.
+    - Its `strikeAt` moves to the release plus `stepSeconds`. At that tick it strikes with `strike(ctx, released)` directly, without going back to `basicHoldTick`, so pressing the attack again during the leap, or switching to automatic, changes nothing.
+    - Its stage row's step follows that strike.
+  - **Presses during the leap.** A leaping swing counts as striking, the way `swingStrikes` counts a blow about to land: a waiting press, a hold-to-repeat press and a held hold move all wait until it lands, so no press throws away a charged blow. A dodge still cancels it, as today.
+  - **The HUD.** Its charge readout (`useArenaCore.ts`, from `swing.held`) clears on release.
   - A charged maul therefore goes release, leap, slam. The leap stops at its foe and never shoves it.
   - Its timing counts from the strike, as today's held blow counts from its release.
 - **Acquisition.** Every swing now looks for a foe within reach plus its lunge (plus 1 for a manual swing), as a committed swing does today, so a swing on the move reaches as far as one standing. The larger heavy lunges (maul 0.7 → 1.6, axe 0.5 → 0.9) widen this; it's a pacing lever, measured below.
@@ -98,6 +103,7 @@ Each weapon's `feel` rows in `delve.json` hold these per kind, as starting value
   - The rule: if steering carries the hero past the aim point, the form fires along the press's direction and doesn't turn round. "Past" means the direction from the hero to `at` has turned more than 90° from the direction from where the wind-up began.
   - `HeroEntity.windup` gains `from`, the hero's position when the wind-up began.
   - It covers every wind-up, a released hold's included.
+  - It applies only when the form fires at `at`: a manual aim, or the fallback when auto-aim finds nothing at fire. A successful auto-aim at fire still turns toward the nearest foe.
 - **Unchanged:** Blink's dash, the Defensive effects, and each form's reach and aim.
 
 ## Engine surface
@@ -107,7 +113,7 @@ Each weapon's `feel` rows in `delve.json` hold these per kind, as starting value
 - **Types and schemas:**
   - `ComboStepDef` and `ComboStepSchema` gain `side` and `hop`; this covers `hero.feel` too.
   - `GearBaseDef` and `HeroWeapon` gain `sway`, carried by `computeHeroStats` (`hero-stats.ts`).
-  - `HeroEntity` has `pushes` in place of `push`, plus `swaySide`, and `HeroEntity.windup` gains `from`.
+  - `HeroEntity` has `pushes` in place of `push`, plus `swaySide`. `HeroEntity.windup` gains `from`, and `HeroEntity.swing` gains `released`.
 - **Code:**
   - `action.ts`: pushes, slices, contact stop, `cancelSwing`.
   - `basic.ts`: the lunge on every swing, the strike's step, a hold blow's release lunge, acquisition.
@@ -155,7 +161,8 @@ Each weapon's `feel` rows in `delve.json` hold these per kind, as starting value
     - 289, 295, 317, 330, 344 and 361;
     - 699–713: "the sword waits for a bolt's recoil", which is now false;
     - 760: "its own step-in survives".
-  - `delve-chains.test.ts` (around 612, 626).
+  - `delve-chains.test.ts` (around 612, 626, and 1039: a charged sword blow now leaps, then strikes `stepSeconds` after its release).
+  - `delve-chain-feel.test.ts` (around 199): a maul hold blow that fires by itself now strikes `stepSeconds` after `holdMax × 1.3`.
   - `delve-chain-feel.test.ts` (around 424, 511, 561, 577): they time off `hero.push === null` after a Bolt's recoil.
   - `delve-training.test.ts` (around 602): it builds `h.push` for `respawnHero`.
   - The client's `anticipation.test.ts`: `committed` false is ignored.
