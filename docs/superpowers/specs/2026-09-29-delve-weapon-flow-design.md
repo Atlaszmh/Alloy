@@ -1,6 +1,8 @@
 # Delve weapon flow: blows and casts that move with the fight
 
-**Status:** approved design, 2026-09-29. It follows v0.47.0 (`2026-09-29-delve-chain-feel-design.md`) and ships as v0.48.0.
+**Status:** approved design, 2026-09-29. It follows v0.47.0 (`2026-09-29-delve-chain-feel-design.md`) and ships as v0.48.0, built at the starting values below: nothing was tuned. Measured before (v0.47.0) and after (the DPS Lab grid at depth 10, one dummy and the pack, one seed; the pacing rails at `tests/delve-pacing.test.ts`'s seeds):
+- **DPS Lab.** The basic grid is identical: all 504 rows, to the hundredth. The ability grid moves in 1,683 of its 8,640 rows, all of them Bolt, Volley or Lance (the forms that recoil): the median of those +0.5% (1,124 up, 559 down), from −54.8% to +140.6%, the grid's total +0.8%. By payment and kind every median is +0.0%; the spread is widest in cast rows (light −54.8%, heavy up to +140.6%, default chains −37.6% to +71.6%) and charge holds (−34.6% to +101.8%). Casts per row barely move: basics no longer wait out a recoil, so they swing (and feed mana) sooner and their stacks meet the ability's at other moments, which moves its reactions. No row stopped dealing damage.
+- **Pacing.** Every rail holds. First dives 12, 12, 5, 3 (mean 8) → 11, 11, 11, 13 (mean 11.5, under its ceiling of 12); dive 6 and dive 12 means 27.75, 35.75 → 25.5, 35; Frost dive 1 → dive 12, 10 → 26.5 before and 8.5 → 32.5 after; legendaries at dive 12, 4.75 → 6; the own pair's reaction 6 of 6 both; the 15-pair sweep at dive 6, median 28 (18–41) → 27 (21–37); seconds a floor 29.09 → 20.89.
 
 ## Why
 
