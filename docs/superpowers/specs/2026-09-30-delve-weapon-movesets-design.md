@@ -94,13 +94,13 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 - **Adding a slot.** `addSlot(registry, profile, skill)` adds one slot to a chain of the equipped weapon and appends its default move.
   - **Cost:** by the new slot's position, `slotLinks` (the 2nd slot 1, the 3rd 2, the 4th 3, the 5th 4) plus `slotScrap` at the same index. A sword's 4th basic slot costs 3 Links.
   - **The new move goes at the chain's end.** Its kind is the default kind at that position: the form's `defaultChain`, or for a basic chain the weapon's `defaultChain`, or medium past its end.
-  - **Its form and elements** are the last move's, as long as they're all in the pair; otherwise it takes the pair's primary. So `addSlot` never makes a new off-pair move.
+  - **Its form** is the last move's. **Its elements** are the last move's when they're all in the pair; otherwise they fall back to the pair's primary. So `addSlot` never makes a new off-pair move.
   - It never touches a slot the chain isn't using (a chain shorter than its slots).
   - **Refusals:** mid-dive, when unarmed, at 5 slots, and when it can't be paid for.
 
 ### Changes and their price
 - **One price function** is shared by the engine's charge and the builder's preview: `movesetEditPrice(registry, old, next)`, a Mana Dust total. It matches moves by identity, not by position, so reordering or removing never looks like changing a move. A move is its kind, form and elements; a basic blow is its kind and element. The matching runs in steps:
-  1. A move at the same position in both chains is unchanged, and free.
+  1. The longest run of moves the two chains share in order (a longest common subsequence) is unchanged, and free. So removing or inserting a move costs only that move, never the moves behind it.
   2. Each remaining new move that equals a remaining old move is a moved move, and costs `editDust` (5). A ◂▸ swap costs 10.
   3. The rest pair up in order:
      - a changed kind or form costs `editDust`;
@@ -122,7 +122,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
     - a chain that holds any off-pair element set more times than the old chain did. So off-pair moves can be kept, moved and removed, but never added, copied or given a new off-pair element;
     - today's other refusals.
   - **The autopilot's `bindBest`** pays for its edit, and skips it when it can't.
-- **The Anvil's chain builder** works on a draft. Edits pile up, the price shows (`movesetEditPrice`, summed over the chains changed), and **Apply** (paid) or **Revert** settles them. Apply is all or nothing: if the total can't be paid, nothing applies. The builder also holds Add slot, with its price. Off-pair moves show their element chip marked and can't be picked for new moves. The Training Grounds' builder stays instant and free.
+- **The Anvil's chain builder** works on a draft. Edits pile up, the price shows (`movesetEditPrice`, summed over the chains changed), and **Apply** (paid) or **Revert** settles them. Apply is all or nothing through one engine op, `setChains(registry, profile, partial)`. It checks every changed chain's refusals and the total price, then commits them all; if any is refused or the total can't be paid, nothing applies. `setChain` stays as the one-chain case of it. The builder also holds Add slot, with its price. Off-pair moves show their element chip marked and can't be picked for new moves. The Training Grounds' builder stays instant and free.
 - **Transfer.** `transferMoveset(registry, profile, uid)` moves the equipped weapon's moveset onto a weapon in the bag and equips it.
   - **Each chain keeps its extra count on the new weapon:** its slots become the new base plus the source's extra, capped at 5.
     - Any overflow past 5 comes back as Links.
