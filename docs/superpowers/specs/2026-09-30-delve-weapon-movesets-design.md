@@ -27,7 +27,8 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 | Slot parts | **Links.** Salvaging a weapon gives one Link per extra slot. A slot costs Links at a rising price (1, 2, 3, 4) plus scrap. |
 | Off-pair elements | **Nothing changes on its own.** A weapon's move keeps its element even outside the pair: it still casts and reacts, but draws no attunement power. Changing an element is a paid edit. |
 | Changes | Edits cost a little Mana Dust per move, and element changes cost more. A transfer to another weapon costs scrap per extra slot. |
-| During a dive | **All gear is locked.** Loot goes to the bag, and every equip and build change happens at the Anvil. |
+| During a dive | **All gear is locked.** Loot goes to the bag, and every equip and build change happens at the Anvil, except one power-up at each stop between depths. |
+| Stops between depths | **One power-up per depth cleared,** on the door screen. Each stop offers 2 or 3 of four kinds at random: equip an item from the bag, add a slot, adjust one move, or upgrade an item. Take one (or skip) at its normal price; equipping is free. |
 | Balance | Measure pacing before and after. If a rail breaks, stop and bring the numbers to the user rather than tune. |
 
 ## Design
@@ -116,7 +117,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   - `BagInsertResult`, `BankResult` and the store's `salvage` return value gain `links`.
   - `DiveState` gains `linksEarned`, defaulting to 0 like `dustEarned`, so the dive summary and the salvage toast can show them.
 - **Adding a slot.** `addSlot(registry, profile, skill)` adds one slot to a chain of the equipped weapon and appends its default move.
-  - **Cost:** by the new slot's position, `slotLinks` (the 2nd slot 1, the 3rd 2, the 4th 3, the 5th 4) plus `slotScrap` at the same index. A sword's 4th basic slot costs 3 Links.
+  - **Cost:** by the new slot's position, `slotLinks` (the 2nd slot 1, the 3rd 2, the 4th 3, the 5th 4) plus `slotScrap` at the same index (20, 40, 60, 80 scrap). A sword's 4th basic slot costs 3 Links.
   - **The new move goes at the chain's end.** Its kind is the default kind at that position: the form's `defaultChain`, or for a basic chain the weapon's `defaultChain`, or medium past its end.
   - **Its form** is the last move's. **Its elements** are the last move's when they're all in the pair; otherwise they fall back to the pair's primary. So `addSlot` never makes a new off-pair move.
   - It never touches a slot the chain isn't using (a chain shorter than its slots).
@@ -125,7 +126,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 ### Changes and their price
 - **One price function** is shared by the engine's charge and the builder's preview: `movesetEditPrice(registry, old, next)`, a Mana Dust total. It matches moves by identity, not by position, so reordering or removing never looks like changing a move. A move is its kind, form and elements; a basic blow is its kind and element. The matching runs in steps:
   1. The longest run of moves the two chains share in order (a longest common subsequence) is unchanged, and free. So removing or inserting a move costs only that move, never the moves behind it.
-  2. Each remaining new move that equals a remaining old move is a moved move, and costs `editDust` (5). A ◂▸ swap costs 10.
+  2. Each remaining new move that equals a remaining old move is a moved move, and costs `editDust` (5). A ◂▸ swap costs 5: one of the two moves is in the longest shared run.
   3. The rest pair up in order:
      - a changed kind or form costs `editDust`;
      - changed elements cost `elementDust` (15);
@@ -174,11 +175,31 @@ A weapon's sheet shows its moveset: each chain's slots (e.g. "Primary 2/5") and 
 
 ### During a dive
 Nothing about gear changes.
-- **Refused while `isDiveActive`:** `equipItem`, `unequipSlot`, `equipBest`, `setChain`, `addSlot`, `transferMoveset` and `reattuneItem` (salvage and the forge are already between dives). `chooseStartingMana` stays allowed, for a migrated save mid-dive.
+- **Refused while `isDiveActive`:** `equipItem`, `unequipSlot`, `equipBest`, `setChain`, `addSlot`, `transferMoveset` and `reattuneItem` (salvage and the forge are already between dives), except the one op a stop's `takeStop` runs. `chooseStartingMana` stays allowed, for a migrated save mid-dive.
 - **Loot** still goes to the bag mid-fight, with its ▲ mark.
 - **The arena's controls:** Equip and Equip best (`LootTray`, `PickupFeed`), and the item sheet's Equip, Unequip and Transfer, give way to "Equip at the Anvil" while a dive runs. The chain builder is already locked mid-dive, Add slot included.
 - **The bind prompt** shows only at the Anvil.
 - **A dive that ends** by death or extraction unlocks, because `isDiveActive` covers only `fighting` and `choosing`.
+
+### Stops between depths
+- **When.** After a depth is cleared, the door screen (`choosing`) holds a **stop**: `DiveState.stop: { offers: StopKind[]; taken: boolean } | null`. `completeFloor` rolls it from the dive seed's fork `stop:${depth}`, so it's deterministic.
+- **The four kinds:**
+  - `equip`: equip one item from the bag, as-is. It's free, and a weapon brings its own moveset. Transfers stay at the Anvil.
+  - `slot`: `addSlot` on one chain, at its normal price.
+  - `move`: change one move of one chain (an edit of exactly one position), at its normal `movesetEditPrice`.
+  - `upgrade`: one forge upgrade of one item, equipped or in the bag, at its normal price.
+- **The offer.** Of the kinds that can apply right now (a bag item to equip; a chain below 5 slots, Links affordable; a weapon to edit; an item below its max upgrade), the stop offers 2 or 3 at random, or all of them if fewer apply. If none applies, there's no stop.
+- **Taking one.**
+  - One action per stop: `takeStop(registry, profile, kind, args)` checks the kind is offered and not yet taken, runs the op with the dive lock lifted for that one op, and marks the stop taken.
+  - Skipping is choosing a door.
+  - A refused op (e.g. unaffordable) leaves the stop open.
+- **The dive lock** refuses everything else at a stop, as before.
+- **The autopilot** takes a stop by preference:
+  1. equip the best item as-is, if one beats its current gear;
+  2. otherwise upgrade its cheapest affordable item;
+  3. otherwise add an affordable slot;
+  4. otherwise skip.
+- **The client.** The door screen shows the stop above the doors: the offered kinds as cards. Choosing one opens its picker (bag items; a chain; the chain builder limited to one move; an item to upgrade), with the price, then returns to the doors. Pad navigable.
 
 ### The Training Grounds
 Unchanged: their own chains, 5 slots, free and instant, always all four. Load my build copies the equipped weapon's chains, and fills the skills it doesn't carry with the sandbox's current chains.
