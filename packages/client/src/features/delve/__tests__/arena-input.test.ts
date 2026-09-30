@@ -210,9 +210,9 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     move: { x: 0, y: 0 },
     aimDir: null,
     aimTilt: 0,
-    cast: null,
-    castHeld: null,
-    holding: null,
+    cast: [],
+    held: [],
+    repeat: [],
     dodge: false,
     potion: false,
     attackHeld: false,
@@ -229,9 +229,11 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     const input = createArenaInput();
     const mem = padMemory();
     input.aiming = { slot: 1, since: 0, at: null };
-    expect(frameInput(registry, w, input, pad({ holding: 0 }), mem, opts).holding).toBe(1);
+    expect(frameInput(registry, w, input, pad({ cast: [0], held: [0] }), mem, opts).holding).toBe(
+      1,
+    );
     input.aiming = null;
-    expect(frameInput(registry, w, input, pad({ holding: 0 }), mem, opts).holding).toBe(0);
+    expect(frameInput(registry, w, input, pad({ held: [0] }), mem, opts).holding).toBe(0);
     expect(frameInput(registry, w, input, null, mem, opts).holding).toBeNull();
   });
 
@@ -271,9 +273,29 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     });
     const input = createArenaInput();
     const mem = padMemory();
-    expect(frameInput(registry, w, input, pad({ cast: 0, holding: 0 }), mem, opts).cast).toBeNull();
-    expect(frameInput(registry, w, input, pad({ holding: 0 }), mem, opts).cast).toBeNull();
+    expect(
+      frameInput(registry, w, input, pad({ cast: [0], held: [0] }), mem, opts).cast,
+    ).toBeNull();
+    expect(frameInput(registry, w, input, pad({ held: [0] }), mem, opts).cast).toBeNull();
     expect(frameInput(registry, w, input, pad(), mem, opts).cast).toEqual({ slot: 0, aim: null });
+  });
+
+  it("a key's press made in the pad press's frame goes the next frame; a repeat is marked and gives way", () => {
+    const w = world();
+    const input = createArenaInput();
+    const mem = padMemory();
+    const frame = (acts: Partial<ArenaPadActions>) =>
+      frameInput(registry, w, input, pad(acts), mem, opts).cast;
+    input.cast = { slot: 1, aim: null };
+    expect(frame({ cast: [2], held: [2] })).toEqual({ slot: 2, aim: null });
+    expect(frame({})).toEqual({ slot: 1, aim: null });
+    expect(frame({})).toBeNull();
+    // Hold-to-repeat's press says so, and gives way to a key's.
+    expect(frame({ cast: [1], held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null });
+    expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null, repeat: true });
+    input.cast = { slot: 2, aim: null };
+    expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 2, aim: null });
+    expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null, repeat: true });
   });
 
   it('the right stick aims the attack only while the pad drives it: RB held, or let go this frame', () => {

@@ -1,11 +1,4 @@
-import {
-  abilityReady,
-  makeCtx,
-  nextMove,
-  type ArpgWorld,
-  type DataRegistry,
-  type Vec,
-} from '@alloy/engine';
+import { pressMove, type ArpgWorld, type DataRegistry, type Vec } from '@alloy/engine';
 import type { PadButton, PadState } from './gamepad';
 import { DEFAULT_CONTROLS, type ControlsConfig } from '@/features/controls/controls';
 
@@ -22,12 +15,12 @@ export interface ArenaPadActions {
   aimDir: Vec | null;
   /** How far the right stick is tilted, 0..1. */
   aimTilt: number;
-  /** Ability slot pressed this frame (0 Primary, 1 Defensive, 2 Ultimate). */
-  cast: number | null;
-  /** Ability slot held down with hold-to-repeat on: cast again whenever it's ready. */
-  castHeld: number | null;
-  /** Ability slot whose button is held (repeat or not): a hold move charges while it is. */
-  holding: number | null;
+  /** Ability slots pressed this frame (0 Primary, 1 Defensive, 2 Ultimate), in slot order. */
+  cast: number[];
+  /** Ability slots whose buttons are held, in slot order. */
+  held: number[];
+  /** Of those, the ones with hold-to-repeat on. */
+  repeat: number[];
   dodge: boolean;
   potion: boolean;
   /** The attack button held: manual basic attacks. */
@@ -46,18 +39,18 @@ export function padToArena(
 ): ArenaPadActions {
   const tilt = Math.hypot(state.right.x, state.right.y);
   const is = (b: PadButton | null, set: (b: PadButton) => boolean) => b !== null && set(b);
-  const cast = ABILITY_ACTIONS.findIndex((a) => is(cfg.pad[a], (b) => pressed.has(b)));
-  const held = ABILITY_ACTIONS.findIndex(
-    (a) => cfg.repeat[a] && is(cfg.pad[a], (b) => state.buttons[b]),
-  );
-  const holding = ABILITY_ACTIONS.findIndex((a) => is(cfg.pad[a], (b) => state.buttons[b]));
+  /** The ability slots whose button passes `on` (and, with `repeat`, has hold-to-repeat on). */
+  const slots = (on: (b: PadButton) => boolean, repeat = false) =>
+    ABILITY_ACTIONS.flatMap((a, i) =>
+      (!repeat || cfg.repeat[a]) && is(cfg.pad[a], on) ? [i] : [],
+    );
   return {
     move: state.left,
     aimDir: tilt > 0 ? { x: state.right.x / tilt, y: state.right.y / tilt } : null,
     aimTilt: tilt,
-    cast: cast >= 0 ? cast : null,
-    castHeld: held >= 0 ? held : null,
-    holding: holding >= 0 ? holding : null,
+    cast: slots((b) => pressed.has(b)),
+    held: slots((b) => state.buttons[b]),
+    repeat: slots((b) => state.buttons[b], true),
     dodge: is(cfg.pad.dodge, (b) => pressed.has(b)),
     potion: is(cfg.pad.potion, (b) => pressed.has(b)),
     attackHeld: is(cfg.pad.attack, (b) => state.buttons[b]),
@@ -67,41 +60,65 @@ export function padToArena(
 }
 
 /**
- * The ability slot the controller casts this frame, read from the world (not
- * the HUD snapshot). A slot whose next move is a hold, or whose hold is
- * charging, casts on its button's release (`released`: the slot held last
- * frame and not now), never on the press and never by repeat: the held
- * button charges it. Any other casts on the press, which always tries (so an
- * unaffordable one still says so), or with repeat on, again whenever it's ready,
- * but not while the button that dropped its slot's hold stays held
- * (`holdDropped`): after a hold fires by itself, the next move waits for a press.
+ * Whether a slot's button casts on its release: its hold is charging, or the
+ * move a press now would cast is a hold (during the slot's own wind-up, the
+ * move after the winding one: `pressMove`).
+ */
+function castsOnRelease(registry: DataRegistry, world: ArpgWorld, slot: number): boolean {
+  const h = world.hero;
+  const window = registry.getDelveBalance().abilities.comboWindow;
+  return h.hold?.slot === slot || pressMove(h, slot, world.t, window).kind === 'hold';
+}
+
+/** A controller cast: its slot, and whether hold-to-repeat made it (`AbilityCast.repeat`). */
+export interface PadCast {
+  slot: number;
+  repeat: boolean;
+}
+
+/**
+ * The ability the controller casts this frame, read from the world (not the
+ * HUD snapshot). A slot whose button casts on its release (`castsOnRelease`)
+ * casts when it lets go (`released`: the slot held last frame and not now),
+ * never on the press (unless `tap`: pressed with a higher slot in one frame, it
+ * taps, as a key does) and never by repeat: the held button charges it. Any
+ * other casts on the press, which always tries (so an unaffordable one still
+ * says so), or with repeat on (`castHeld`), early: whenever its slot has no
+ * press waiting, including during a wind-up, a beat or a cooldown (the press
+ * waits in the buffer), but not while the button that dropped its slot's hold
+ * stays held (`holdDropped`): after a hold fires by itself, the next move
+ * waits for a press.
  */
 export function padCast(
   registry: DataRegistry,
   world: ArpgWorld,
-  acts: Pick<ArenaPadActions, 'cast' | 'castHeld'>,
+  acts: { cast: number | null; castHeld: number | null },
   released: number | null,
-): number | null {
-  const h = world.hero;
-  const comboWindow = registry.getDelveBalance().abilities.comboWindow;
-  const isHold = (slot: number) =>
-    h.hold?.slot === slot || nextMove(h, slot, world.t, comboWindow).kind === 'hold';
-  if (released !== null && isHold(released)) return released;
-  if (acts.cast !== null) return isHold(acts.cast) ? null : acts.cast;
+  tap = false,
+): PadCast | null {
+  const onRelease = (slot: number) => castsOnRelease(registry, world, slot);
+  if (released !== null && onRelease(released)) return { slot: released, repeat: false };
+  if (acts.cast !== null)
+    return tap || !onRelease(acts.cast) ? { slot: acts.cast, repeat: false } : null;
   const held = acts.castHeld;
   return held !== null &&
-    !isHold(held) &&
+    !onRelease(held) &&
     world.holdDropped !== held &&
-    abilityReady(makeCtx(registry, world, []), held)
-    ? held
+    !world.queuedCasts.some((q) => q.cast.slot === held)
+    ? { slot: held, repeat: true }
     : null;
 }
 
 /** What the pad remembers from the frame before. */
 export interface PadMemory {
-  /** The ability slot held then: once it no longer is, its button has let go. */
+  /**
+   * The pad's `holding`: the latest ability button pressed, while it stays
+   * held. Once it isn't (let go, or another button pressed), it has released.
+   */
   holding: number | null;
-  /** A press that came as another slot's hold released: it casts now. */
+  /** The ability buttons held, earliest pressed first: hold-to-repeat follows the latest. */
+  order: number[];
+  /** A press that waits a frame (a chord's, or the higher of two in one frame): it casts now. */
   carried: number | null;
   /**
    * The attack button held then, or let go with its held blow not yet struck:
@@ -111,29 +128,53 @@ export interface PadMemory {
 }
 
 export function padMemory(): PadMemory {
-  return { holding: null, carried: null, attackHeld: false };
+  return { holding: null, order: [], carried: null, attackHeld: false };
+}
+
+/** The controller's part of a frame's input: its cast (`padCast`), and the slot it is holding. */
+export interface PadFrame {
+  cast: PadCast | null;
+  holding: number | null;
 }
 
 /**
- * This frame's controller cast (`padCast`) with the pad's memory of the frame
- * before: the slot held then and not now has released. `holding` names one
- * slot, so a chord (another button pressed while a hold charges) brings a
- * release and a press in one frame: the release casts now and the press the
- * frame after, rather than being lost.
+ * This frame's controller cast and `holding`, with the pad's memory of the
+ * frame before. `holding` is the latest ability button pressed while it stays
+ * held; an earlier button counts again only when it is pressed again. So a
+ * second button pressed while another's hold charges brings that hold's
+ * release (it casts now) and its own press, which follows next frame (the
+ * chord's carry), whichever slots they are. Two pressed in one frame count in
+ * slot order: the lower's press goes now (a tap on a hold, as a key's), the
+ * higher becomes `holding` and its press follows next frame, unless its next
+ * move is a hold (the button charges it). Hold-to-repeat streams the latest
+ * held repeat button, falling back to an earlier one still held.
  */
 export function padFrameCast(
   registry: DataRegistry,
   world: ArpgWorld,
-  acts: Pick<ArenaPadActions, 'cast' | 'castHeld' | 'holding'>,
+  acts: Pick<ArenaPadActions, 'cast' | 'held' | 'repeat'>,
   mem: PadMemory,
-): number | null {
-  const released = mem.holding !== null && acts.holding !== mem.holding ? mem.holding : null;
-  const press = acts.cast ?? mem.carried;
-  mem.holding = acts.holding;
+): PadFrame {
+  const pressed = acts.cast;
+  mem.order = [
+    ...mem.order.filter((s) => acts.held.includes(s) && !pressed.includes(s)),
+    ...pressed,
+  ];
+  const latest = pressed.length > 0 ? pressed[pressed.length - 1] : null;
+  const holding =
+    latest ?? (mem.holding !== null && acts.held.includes(mem.holding) ? mem.holding : null);
+  const released = mem.holding !== null && mem.holding !== holding ? mem.holding : null;
+  mem.holding = holding;
+  const carried = mem.carried;
   mem.carried = null;
-  const slot = padCast(registry, world, { cast: press, castHeld: acts.castHeld }, released);
-  if (slot !== null && slot === released && press !== null && press !== slot) mem.carried = press;
-  return slot;
+  const press = pressed.length > 0 ? pressed[0] : carried;
+  const castHeld = [...mem.order].reverse().find((s) => acts.repeat.includes(s)) ?? null;
+  const cast = padCast(registry, world, { cast: press, castHeld }, released, pressed.length > 1);
+  // A chord: the release casts now, the press next frame.
+  if (cast?.slot === released && press !== null && press !== released) mem.carried = press;
+  // Two at once: the higher follows next frame, unless it charges a hold.
+  else if (pressed.length > 1 && !castsOnRelease(registry, world, latest!)) mem.carried = latest;
+  return { cast, holding };
 }
 
 /**

@@ -4,11 +4,16 @@ import {
   computeHeroStats,
   createSandboxWorld,
   defaultChains,
+  inBeat,
   makeCtx,
   spawnDummies,
   stepWorld,
   type ArpgEvent,
   type ArpgWorld,
+  type Chain,
+  type Chains,
+  type FormId,
+  type MoveKind,
 } from '@alloy/engine';
 import { edges, radialDeadzone, readPad, type GamepadLike } from '../gamepad';
 import {
@@ -86,19 +91,23 @@ describe('padToArena (triggers fire, bumpers support)', () => {
       return padToArena(next, edges(prev, next));
     };
     expect(act([6]).dodge).toBe(true); // LT
-    expect(act([7]).cast).toBe(0); // RT press
-    expect(act([7]).castHeld).toBe(0); // RT held keeps casting
-    expect(act([7]).holding).toBe(0); // and charges a hold move
-    expect(act([4]).holding).toBe(1);
-    expect(act([]).holding).toBeNull();
-    expect(act([4]).cast).toBe(1); // LB
-    expect(act([11]).cast).toBe(2); // R3
+    expect(act([7]).cast).toEqual([0]); // RT press
+    expect(act([7]).held).toEqual([0]); // held (a hold move charges)
+    expect(act([7]).repeat).toEqual([0]); // with hold-to-repeat on
+    expect(act([4]).held).toEqual([1]);
+    expect(act([4]).repeat).toEqual([]);
+    expect(act([]).held).toEqual([]);
+    expect(act([4]).cast).toEqual([1]); // LB
+    expect(act([11]).cast).toEqual([2]); // R3
+    // Every button pressed and held, in slot order.
+    expect(act([11, 4]).cast).toEqual([1, 2]);
+    expect(act([11, 4, 7]).held).toEqual([0, 1, 2]);
     expect(act([5]).attackHeld).toBe(true); // RB
     expect(act([13]).potion).toBe(true); // D-pad down
     expect(act([9]).menu).toBe(true);
     for (const face of [0, 1, 2, 3]) {
       const a = act([face]);
-      expect([a.cast, a.dodge, a.potion, a.attackHeld]).toEqual([null, false, false, false]);
+      expect([a.cast, a.dodge, a.potion, a.attackHeld]).toEqual([[], false, false, false]);
     }
   });
 
@@ -141,15 +150,21 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
       toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
     });
   const none = { cast: null, castHeld: null };
+  const pressOf = (slot: number) => ({ slot, repeat: false });
+  const repeatOf = (slot: number) => ({ slot, repeat: true });
 
-  it('a press casts a non-hold next move, and repeat casts it again once ready', () => {
+  it('a press casts a non-hold next move; repeat presses early, whenever none of its slot waits', () => {
     const w = world();
-    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toBe(0);
-    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBe(0);
+    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toEqual(pressOf(0));
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toEqual(repeatOf(0));
     expect(padCast(registry, w, none, 0)).toBeNull(); // its release does nothing
+    // On cooldown, repeat still presses: the press waits in the buffer. One waiting, it stops.
     w.hero.cooldowns[0][0] = w.t + 1;
+    expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toEqual(repeatOf(0));
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0, repeat: true } }, STEP);
+    expect(w.queuedCasts).toHaveLength(1);
     expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
-    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toBe(0); // a press always tries
+    expect(padCast(registry, w, { cast: 0, castHeld: 0 }, null)).toEqual(pressOf(0)); // a press always tries
   });
 
   it("a hold next move ignores the press and repeat, and casts on the button's release", () => {
@@ -161,7 +176,7 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
     stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP);
     expect(w.hero.hold?.slot).toBe(0);
-    expect(padCast(registry, w, none, 0)).toBe(0);
+    expect(padCast(registry, w, none, 0)).toEqual(pressOf(0));
     expect(padCast(registry, w, none, 1)).toBeNull(); // the Ward isn't a hold
   });
 
@@ -183,19 +198,53 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     expect(padCast(registry, w, { cast: null, castHeld: 0 }, null)).toBeNull();
   });
 
-  /** One frame on the pad: its cast (`padFrameCast`) into a step of `w`, `holding`'s button held. */
-  const frame = (w: ArpgWorld, mem: PadMemory, cast: number | null, holding: number | null) => {
-    const slot = padFrameCast(registry, w, { cast, castHeld: null, holding }, mem);
+  /**
+   * One frame on the pad: `pressed` go down, `held` are down (`repeat` of them with hold-to-repeat
+   * on); its cast (`padFrameCast`) into a step of `w`, with its `holding`.
+   */
+  const frame = (
+    w: ArpgWorld,
+    mem: PadMemory,
+    pressed: number[],
+    held: number[],
+    repeat: number[] = [],
+  ) => {
+    const f = padFrameCast(registry, w, { cast: pressed, held, repeat }, mem);
     const step = {
       move: { x: 0, y: 0 },
-      holding,
-      cast: slot === null ? null : { slot, aim: null },
+      holding: f.holding,
+      cast: f.cast && { slot: f.cast.slot, aim: null, repeat: f.cast.repeat },
     };
-    const casts = stepWorld(registry, w, step, STEP).flatMap((e) =>
-      e.kind === 'cast' ? [e.slot] : [],
-    );
-    return { slot, casts };
+    const events = stepWorld(registry, w, step, STEP);
+    const casts = events.flatMap((e) => (e.kind === 'cast' ? [e.slot] : []));
+    return {
+      slot: f.cast?.slot ?? null,
+      repeat: !!f.cast?.repeat,
+      holding: f.holding,
+      events,
+      casts,
+    };
   };
+  /** A sandbox (mana enough for anything) with these chains over Fire's defaults. */
+  const arena = (over: Partial<Chains> = {}) => {
+    const w = createSandboxWorld(registry, {
+      depth: 5,
+      stats: computeHeroStats({}, registry),
+      chains: { ...defaultChains(registry, 'fire', null), ...over },
+      toggles: { infiniteMana: true, noCooldowns: false, invulnerable: false },
+    });
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.charge = [100, 100, 100];
+    return w;
+  };
+  /** A one-move Fire chain. */
+  const one = (kind: MoveKind, form: FormId): Chain => ({
+    moves: [{ kind, form, elements: ['fire'] }],
+    payment: 'mana',
+  });
+  const HOLD_NOVA = one('hold', 'nova');
+  const HOLD_WARD = one('hold', 'ward');
+  const NOVA = one('medium', 'nova');
 
   it('padFrameCast: a hold casts on the frame its button goes up', () => {
     const w = world();
@@ -203,30 +252,140 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     w.hero.comboStep[0] = 0;
     w.hero.comboAt[0] = w.t;
     const mem = padMemory();
-    const frames = [0, 0, 0, null].map((held, i) => frame(w, mem, i === 0 ? 0 : null, held));
+    const frames = [[0], [0], [0], []].map((held, i) => frame(w, mem, i === 0 ? [0] : [], held));
     expect(frames.map((f) => f.slot)).toEqual([null, null, null, 0]);
   });
 
-  it('padFrameCast: a chord keeps both presses, the release first', () => {
-    // The Ultimate a Nova that holds (on R3), the Defensive a Ward (on LB).
+  it("padFrameCast: a second button releases a charging hold, whichever slots they are; the first doesn't come back", () => {
+    // R3's Nova charging, then LB; and LB's Ward charging, then R3.
+    for (const [first, second, over] of [
+      [2, 1, { ultimate: HOLD_NOVA }],
+      [1, 2, { defensive: HOLD_WARD, ultimate: NOVA }],
+    ] as const) {
+      const w = arena(over);
+      const mem = padMemory();
+      for (let i = 0; i < 15; i++) frame(w, mem, i === 0 ? [first] : [], [first]);
+      expect(w.hero.hold?.slot).toBe(first);
+      // The second goes down with the first still held: the first's hold releases this frame,
+      // and the second's press casts the next.
+      const both = [first, second].sort();
+      const frames = Array.from({ length: 60 }, (_, i) =>
+        frame(w, mem, i === 0 ? [second] : [], both),
+      );
+      expect(frames.slice(0, 3).map((f) => f.slot)).toEqual([first, second, null]);
+      expect(frames.flatMap((f) => f.casts)).toEqual([first, second]);
+      // The second lets go, the first still held: it doesn't count again until pressed again.
+      const after = Array.from({ length: 60 }, () => frame(w, mem, [], [first]));
+      expect(after.every((f) => f.holding === null && f.slot === null)).toBe(true);
+      expect(w.hero.hold).toBeNull();
+    }
+  });
+
+  it('padFrameCast: two presses in one frame go in slot order, the higher holding', () => {
+    // LB and R3 at once: the Ward now, the Nova next frame.
+    const plain = arena({ ultimate: NOVA });
+    const mem = padMemory();
+    const first = frame(plain, mem, [1, 2], [1, 2]);
+    expect([first.slot, first.holding]).toEqual([1, 2]);
+    const rest = Array.from({ length: 60 }, () => frame(plain, mem, [], [1, 2]));
+    expect([...first.casts, ...rest.flatMap((f) => f.casts)]).toEqual([1, 2]);
+
+    // With a hold Nova, the held R3 charges it instead of pressing.
+    const held = arena({ ultimate: HOLD_NOVA });
+    const hmem = padMemory();
+    frame(held, hmem, [1, 2], [1, 2]);
+    const charging = Array.from({ length: 30 }, () => frame(held, hmem, [], [1, 2]));
+    expect(charging.flatMap((f) => f.casts)).toEqual([1]);
+    expect(held.hero.hold?.slot).toBe(2);
+
+    // The lower's hold move taps at stage 0, as a key tap does.
+    const tap = arena({ defensive: HOLD_WARD, ultimate: NOVA });
+    const tmem = padMemory();
+    expect(frame(tap, tmem, [1, 2], [1, 2]).slot).toBe(1);
+    expect(tap.hero.windup?.slot).toBe(1);
+    expect(tap.hero.windup?.stage).toBe(0);
+  });
+
+  it('hold-to-repeat follows the latest held repeat button, falling back to an earlier one still held', () => {
+    const w = arena();
+    const mem = padMemory();
+    // Each frame's cast without stepping, so nothing waits: RT streams, LB (repeat off) is
+    // pressed once, and RT streams on while LB is held and after.
+    const cast = (pressed: number[], held: number[], repeat: number[]) =>
+      padFrameCast(registry, w, { cast: pressed, held, repeat }, mem).cast;
+    expect(cast([0], [0], [0])).toEqual(pressOf(0));
+    expect(cast([], [0], [0])).toEqual(repeatOf(0));
+    expect(cast([1], [0, 1], [0])).toEqual(pressOf(1));
+    expect(cast([], [0, 1], [0])).toEqual(repeatOf(0));
+    // With LB's repeat on too, the latest streams; let go, RT again.
+    expect(cast([], [0, 1], [0, 1])).toEqual(repeatOf(1));
+    expect(cast([], [0], [0])).toEqual(repeatOf(0));
+  });
+
+  it("repeat presses early: during a wind-up, and the press waits out the landing's beat", () => {
+    const w = arena();
+    const mem = padMemory();
+    const rt = () => frame(w, mem, [], [0], [0]);
+    frame(w, mem, [0], [0], [0]);
+    expect(w.hero.windup?.slot).toBe(0);
+    // During the wind-up, a marked press goes out and waits.
+    const during = rt();
+    expect(during.repeat).toBe(true);
+    expect(w.queuedCasts.map((q) => q.cast)).toEqual([{ slot: 0, aim: null, repeat: true }]);
+    // It waits through the landing and the beat, and fires at the beat's end.
+    let end = 0;
+    for (let i = 0; i < 60 && !inBeat(w.hero, 0, w.t); i++) rt();
+    end = w.hero.beatUntil[0];
+    expect(w.queuedCasts).toHaveLength(1);
+    for (let i = 0; i < 60 && !w.hero.windup; i++) rt();
+    expect(w.t).toBeGreaterThanOrEqual(end - 1e-6);
+    expect(w.t).toBeLessThan(end + 2 * STEP);
+  });
+
+  it('RT held through a light-then-hold chain charges the hold', () => {
+    const w = world();
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    const mem = padMemory();
+    const frames = [frame(w, mem, [0], [0], [0])];
+    for (let i = 0; i < 60 && !w.hero.hold; i++) frames.push(frame(w, mem, [], [0], [0]));
+    expect(w.hero.hold?.slot).toBe(0);
+    // Only the light cast: the hold charges, then fires when RT lets go.
+    expect(frames.flatMap((f) => f.casts)).toEqual([0]);
+    expect(frame(w, mem, [], []).slot).toBe(0);
+  });
+
+  it('repeat on an empty pool stays quiet: no noMana, though a fresh press says so', () => {
     const w = createSandboxWorld(registry, {
       depth: 5,
       stats: computeHeroStats({}, registry),
-      chains: {
-        ...defaultChains(registry, 'fire', null),
-        ultimate: { moves: [{ kind: 'hold', form: 'nova', elements: ['fire'] }], payment: 'mana' },
-      },
-      // Mana enough for both.
-      toggles: { infiniteMana: true, noCooldowns: false, invulnerable: false },
+      chains: defaultChains(registry, 'fire', null),
+      toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
     });
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.mana = 0;
+    w.hero.manaRegen = 0;
+    w.hero.nextAttackAt = 1e9;
     const mem = padMemory();
-    for (let i = 0; i < 15; i++) frame(w, mem, i === 0 ? 2 : null, 2);
-    expect(w.hero.hold?.slot).toBe(2);
-    // LB goes down with R3 still held: `holding` names the Defensive now, so the Nova releases
-    // this frame, and the Ward's press casts the next.
-    const frames = Array.from({ length: 60 }, (_, i) => frame(w, mem, i === 0 ? 1 : null, 1));
-    expect(frames.slice(0, 3).map((f) => f.slot)).toEqual([2, 1, null]);
-    expect(frames.flatMap((f) => f.casts)).toEqual([2, 1]);
+    const first = frame(w, mem, [0], [0], [0]);
+    expect(first.events.filter((e) => e.kind === 'noMana')).toHaveLength(1);
+    const held = Array.from({ length: 30 }, () => frame(w, mem, [], [0], [0]));
+    expect(held.some((f) => f.repeat)).toBe(true);
+    expect(held.flatMap((f) => f.events).some((e) => e.kind === 'noMana')).toBe(false);
+  });
+
+  it("a pad press during a light's wind-up, with a hold next, starts the hold's charge rather than tapping it", () => {
+    const w = world();
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    // The light winds up (a key's press); RT goes down meanwhile and stays held.
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0, aim: null } }, STEP);
+    expect(w.hero.windup?.step).toBe(0);
+    const mem = padMemory();
+    const pressed = frame(w, mem, [0], [0]);
+    expect(pressed.slot).toBeNull();
+    const frames = [pressed];
+    for (let i = 0; i < 60 && !w.hero.hold; i++) frames.push(frame(w, mem, [], [0]));
+    expect(w.hero.hold).toMatchObject({ slot: 0, step: 1 });
+    expect(frames.flatMap((f) => f.casts)).toEqual([0]); // the light's, and no tap
   });
 });
 
@@ -239,11 +398,11 @@ describe('custom controls', () => {
       const next = readPad(fakePad(held));
       return padToArena(next, edges(prev, next), cfg);
     };
-    expect(act([0]).cast).toBe(0); // A is now the Primary
-    expect(act([0]).castHeld).toBeNull(); // with repeat off
-    expect(act([7]).cast).toBeNull(); // RT is unbound now
-    expect(act([4]).castHeld).toBe(1); // LB Defensive repeats
-    expect(act([0]).holding).toBe(0); // held, repeat or not
+    expect(act([0]).cast).toEqual([0]); // A is now the Primary
+    expect(act([0]).repeat).toEqual([]); // with repeat off
+    expect(act([7]).cast).toEqual([]); // RT is unbound now
+    expect(act([4]).repeat).toEqual([1]); // LB Defensive repeats
+    expect(act([0]).held).toEqual([0]); // held, repeat or not
   });
 
   it('reads the sticks with the configured deadzones', () => {

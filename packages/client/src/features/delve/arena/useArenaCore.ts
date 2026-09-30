@@ -419,7 +419,7 @@ export function useArenaCore(
     /**
      * The controller's part of this frame (see gamepad-hub), or null with none
      * or while paused; Menu opens the dive menu. `frameInput` turns it into the
-     * step's input (a press, or a hold's release: see `padFrameCast`).
+     * step's input (a press, a hold's release, `holding`: see `padFrameCast`).
      */
     function padFrame(paused: boolean): ArenaPadActions | null {
       const state = padState();
