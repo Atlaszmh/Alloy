@@ -26,6 +26,8 @@ The references are Hades and Windblown.
 | Weapon combos | **Per-weapon strings**, melee and ranged. |
 | Scope | **Plan A**: the engine models each action as startup → strike → recovery with one strike moment. Per-tick sweeping hitboxes, multi-hit moves and sprite attack poses are later work. The per-step data leaves room for them. |
 
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): the Hades commit gives way to flow. No action roots the hero: while a swing (startup to strike), a manual hold blow charging, a wind-up or a charging hold runs, it walks at `actionMove` (0.6×) of its pace (a recovery's slower `recoveryMove` wins), facing the action, so steering strafes. The dodge still cancels anything.
+
 ## The action model (engine)
 
 Every basic attack and every ability runs through three phases.
@@ -41,6 +43,8 @@ Every basic attack and every ability runs through three phases.
 - Only a wind-up or a dash **holds** an ability press in the buffer. A swing's startup is cancelled by one instead (see Cancels).
 - A recoil push (after a release) moves the hero but doesn't commit: presses fire during it.
 
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): nothing roots the hero: a wind-up and a dash still hold presses, but a swing's `committed` flag now only decides whether it leaves a recovery (moving during an automatic swing's startup clears it).
+
 ### Hero state
 
 - `swing: { step, dir, targetId, start, strikeAt, cycle, committed } | null`: a basic attack in its startup. `committed` is decided when the swing starts, and an automatic swing is released when the hero moves (see Automatic mode).
@@ -51,6 +55,8 @@ Every basic attack and every ability runs through three phases.
   - A swing's lunge belongs to the swing and ends with it.
 - `recoverUntil`: slowed movement until this time.
 - `windup` (existing) gains `step` (the press-combo step, chosen at the press) and `conjureUntil` (the end of the conjure part; any channel follows).
+
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): `HeroEntity.pushes` replaces `push`: a list of running pushes, each `{ kind, dx, dy, start, until, stopId, done, movedX, movedY }` (`lunge`, `stepIn` or `step`). Each tick the hero first moves by its steering, then each push adds its slice (its progress change times its displacement; none in a lunge's planted part), clamped to the arena, less any part against the steering; one with a stop foe is cut at that foe's contact gap. A cast no longer clears pushes: `cancelSwing` and the strike end the swing's lunge, a wind-up landing finishes its own step-in, and a dodge clears them all.
 
 ### `heroTick` order
 
@@ -69,6 +75,8 @@ Every basic attack and every ability runs through three phases.
 7. **New swing**: if there is no swing or wind-up, no push is still moving the hero (a lunge, an ability step-in or a recoil), the hero isn't dashing, `t ≥ nextAttackAt`, and the mode wants to attack, start one.
 8. **Mana regen, lull charge, `defendTick`** (unchanged).
 
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): in step 5 nothing roots: the steering moves the hero (slowed while it acts or recovers), then every push adds its slice on top; `h.moving` means steering and not dashing. In step 7 a new swing no longer waits for a push to finish.
+
 ### Cancels
 
 - **Dodge** cancels any phase:
@@ -79,6 +87,8 @@ Every basic attack and every ability runs through three phases.
   - **During a swing's startup** (lunge included): if the cast can go ahead, the swing is cancelled first (as the dodge does: no hit, no step, lunge ended, `nextAttackAt = t`) and then the cast starts. If it can't, the swing is untouched, so mashing Q on cooldown never stops the basics.
   - **During any recovery or recoil:** it casts now and ends them.
 - **Basic attack:** none during a wind-up, and none while a push is still moving the hero, so a lunge never swallows an ability's recoil or step-in (it costs at most `recoilSeconds` after a recoil). During an ability's recovery it may start once `nextAttackAt` allows and the push has ended. A committed swing ends the recovery; an automatic one on the move doesn't.
+
+  > **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): a swing no longer waits for a push: pushes add up, so a recoil or a blow's step runs on through the next swing.
 - **Weapon swap** (`refreshWorldHero`) to a different weapon base drops a swing in progress (and its lunge), resets the string to its first step and readies the weapon (`nextAttackAt` no later than now). Gear with the same weapon base leaves the swing alone.
 
 ### Input buffer
@@ -108,6 +118,8 @@ It still strikes at `strikeAt`, from wherever the hero is by then. A committed a
 
 So a planted fight gets the full weight, while kiting and running past foes play as they do today. The bot uses automatic mode, and its ranged retreat keeps firing.
 
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): every swing, committed or not, lunges and acquires within `range + reach + move` (+1 for a manual swing). Moving during an automatic swing's startup clears `committed` only for the recovery: its lunge runs on, blended with the steering.
+
 ## Basic attacks: weapon combo strings
 
 > **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): a weapon's string is its default basic chain (`GearBaseDef.defaultChain`) over a feel row per kind (`GearBaseDef.feel`: light, medium, heavy, hold; unarmed, `balance.json → delve.hero.feel` and `defaultChain`), derived so the default chain plays the string below blow for blow; the player can build a chain of up to five blows, each a kind and an element of the pair.
@@ -128,6 +140,8 @@ The string advances one step at each strike and resets after `attackInterval + b
 | `size`, `explode`, `speed` | Ranged: projectile size multiplier, burst radius, speed multiplier. |
 
 **Timing.** At the start, `strikeAt = start + cycle × startup` and `nextAttackAt = start + cycle`. A committed melee blow's lunge starts at `start + cycle × startup × lungeHold` and ends at the strike. At the strike, a committed swing sets `recoverUntil = min(nextAttackAt, strikeAt + cycle × basicRecovery)`, where `basicRecovery` is 0.35. The rest of the cycle is free movement.
+
+> **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): a forward `move` is every swing's lunge, committed or not. A negative `move`, a `side` and a `hop` (new, per kind) make the blow's step: one push from the strike over `stepSeconds` (0.15), the step back and the hop away from the attack, the side step square to it (the steering's side, else the weapon's `sway`). `recoilSeconds` is only for the forms' recoils.
 
 **Direction.** The swing's direction is set when it starts (aim, else the target, else the facing) and doesn't track afterwards. The lunge closes the gap instead.
 
@@ -276,6 +290,7 @@ The simulation stays fixed-step and deterministic. All of this changes only the 
   - Heft ≥ 0.7 also adds shake.
 - **Anticipation:**
   - During a committed swing's startup or a wind-up, the hero sprite leans 1 px back from the aim (2 px at heft ≥ 0.7; no lift, which would cancel the lean of a blow aimed up). It snaps forward at the strike.
+    - **Superseded** by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): the lean follows any swing in its startup, committed or not, and a hold blow's ends as it is let go.
   - The **hand** is 0.6 units from the hero toward the aim, at chest height (past the sprite's edge). Casts fling their mana from it.
   - Mana pixels gather at the hand, more with heft, at a rate per second (none while the display is frozen).
   - Heavy conjures (heft ≥ 0.7) spiral in and grow a pixel orb at the hand.

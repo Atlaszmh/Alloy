@@ -317,7 +317,7 @@ Form base values are listed in `arpg.json → forms` and copied in the plan.
   - resolver maths: weight, payment, knob merging, fusion lookup;
   - each form's executor: hits, combo steps, aim versus auto-aim, placed forms at the aim point;
   - the charge meter (fills from damage and in lulls; fires at full);
-  - cast wind-up (roots, delays, waits for other buttons);
+  - cast wind-up (roots, delays, waits for other buttons; superseded by `2026-09-29-delve-weapon-flow-design.md` (v0.48.0): a wind-up no longer roots, the hero walks at `actionMove`, facing it);
   - Ward absorbs and bursts, Armor reduces and retaliates;
   - poison stacking, Root, Combust, Blight;
   - v2 → v3 save migration; `setAbility` validation.
