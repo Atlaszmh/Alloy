@@ -58,7 +58,8 @@ Each weapon's `feel` rows in `delve.json` hold these per kind, as starting value
     - Its `strikeAt` moves to the release plus `stepSeconds`. At that tick it strikes with `strike(ctx, released)` directly, without going back to `basicHoldTick`, so pressing the attack again during the leap, or switching to automatic, changes nothing.
     - Its stage row's step follows that strike.
   - **Presses during the leap.** A leaping swing counts as striking, the way `swingStrikes` counts a blow about to land: a waiting press, a hold-to-repeat press and a held hold move all wait until it lands, so no press throws away a charged blow. A dodge still cancels it, as today.
-  - **The HUD.** Its charge readout (`useArenaCore.ts`, from `swing.held`) clears on release.
+  - **The HUD and the lean.** Both end their charge at release: the HUD's charge readout (`useArenaCore.ts`, from `swing.held`) clears, and the anticipation lean's held branch (`anticipation.ts`) stops.
+  - **A foe that dies mid-leap.** If the stop foe dies during the leap, the leap ends and the blow still lands at `strikeAt`. A test pins this.
   - A charged maul therefore goes release, leap, slam. The leap stops at its foe and never shoves it.
   - Its timing counts from the strike, as today's held blow counts from its release.
 - **Acquisition.** Every swing now looks for a foe within reach plus its lunge (plus 1 for a manual swing), as a committed swing does today, so a swing on the move reaches as far as one standing. The larger heavy lunges (maul 0.7 → 1.6, axe 0.5 → 0.9) widen this; it's a pacing lever, measured below.
