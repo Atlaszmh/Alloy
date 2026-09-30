@@ -46,6 +46,18 @@ export function nextMove(h: HeroEntity, slot: number, t: number, window: number)
   return h.chains[slot].moves[pressStep(h, slot, t, window)];
 }
 
+/**
+ * The move a press made now will cast: during the slot's own wind-up, the one
+ * after the winding move (the wind-up lands before the press fires); else
+ * `nextMove`.
+ */
+export function pressMove(h: HeroEntity, slot: number, t: number, window: number): ResolvedAbility {
+  const moves = h.chains[slot].moves;
+  return h.windup?.slot === slot
+    ? moves[(h.windup.step + 1) % moves.length]
+    : nextMove(h, slot, t, window);
+}
+
 /** The slot's move winding up, holding or, for the Defensive, the one whose effect is up; else null. */
 export function activeMove(h: HeroEntity, slot: number): ResolvedAbility | null {
   const chain = h.chains[slot];
@@ -122,8 +134,8 @@ function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from:
 /**
  * Press an ability: its chain's next move. Fails, costing nothing, while
  * another is winding up, in its slot's beat, on that move's cooldown,
- * uncharged, unaffordable (with a `noMana` event, and the chain doesn't
- * advance) or with nothing to aim at. Otherwise it pays now, drops a basic swing still winding up, and winds
+ * uncharged, unaffordable (with a `noMana` event unless it's a repeat press,
+ * and the chain doesn't advance) or with nothing to aim at. Otherwise it pays now, drops a basic swing still winding up, and winds
  * up for its conjure (stepping in, for forward forms) plus any channel; its
  * cooldown counts from the press plus the channel.
  */
@@ -139,7 +151,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   if (t < h.cooldowns[slot][step]) return false;
   if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
   if (!canAfford(world, ab)) {
-    ctx.events.push({ kind: 'noMana', slot });
+    if (!cast.repeat) ctx.events.push({ kind: 'noMana', slot });
     return false;
   }
   const aim = cast.aim ?? null;
@@ -258,8 +270,8 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
  * While it runs, its release (a press of its slot: the button let go) fires it
  * at its stage; past its `max` it fires by itself at stage 2 (and marks the
  * slot, as a drop does); the button let go with no release (a lost release)
- * fires it at its stage. Meanwhile the hero stays rooted, each new stage says
- * so, and the slot's combo window is paused.
+ * fires it at its stage. Meanwhile the hero stays rooted and each new stage
+ * says so. A held button, charging or aiming, pauses its slot's restart window.
  */
 export function holdTick(
   ctx: SimCtx,
@@ -271,6 +283,7 @@ export function holdTick(
   const h = world.hero;
   const release = world.queuedRelease;
   world.queuedRelease = null;
+  if (holding !== null && holding !== undefined && h.chains[holding]) h.comboAt[holding] += dt;
   if (world.holdDropped !== null && holding !== world.holdDropped) world.holdDropped = null;
   if (!h.hold) {
     if (holding !== null && holding !== undefined && !dashing && holding !== world.holdDropped)
@@ -288,7 +301,6 @@ export function holdTick(
   else {
     if (stage > holdCharge(bal, start, t - dt, full).stage)
       ctx.events.push({ kind: 'holdStage', slot: h.hold.slot, stage });
-    h.comboAt[h.hold.slot] += dt;
   }
 }
 

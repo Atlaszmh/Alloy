@@ -128,6 +128,12 @@ export interface Knobs {
 export interface AbilityCast {
   slot: number;
   aim?: Vec | null;
+  /**
+   * A repeat press (the pad's hold-to-repeat, the DPS sim's held button), made
+   * early to wait in the buffer: at a hold move it's dropped (the held button
+   * charges it), and refused for mana it makes no `noMana` event.
+   */
+  repeat?: boolean;
 }
 
 /** A move compiled to plain numbers; the combat code reads only this. */

@@ -205,6 +205,7 @@ export {
   canAfford,
   pressStep,
   nextMove,
+  pressMove,
   activeMove,
   holdCharge,
   inBeat,

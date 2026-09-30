@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
-import { defaultBasic, defaultChains } from '../src/arpg/abilities/resolve.js';
+import {
+  beatFor,
+  defaultBasic,
+  defaultChains,
+  resolveChain,
+} from '../src/arpg/abilities/resolve.js';
 import {
   DPS_SECONDS,
   dpsCombos,
@@ -86,23 +91,29 @@ describe('hit attribution', () => {
 });
 
 /**
- * The sims' events, and each step's input, the slot whose hold runs after it and its events,
- * collected while `tap.on` is set (`stepWorld` itself is unchanged).
+ * The sims' events, and each step's input, whether a wind-up ran before it, the slot whose hold
+ * runs after it and its events, collected while `tap.on` is set (`stepWorld` itself is unchanged).
  */
 const tap = vi.hoisted(() => ({
   on: false,
   events: [] as ArpgEvent[],
-  steps: [] as { input: ArpgInput; hold: number | null; events: ArpgEvent[] }[],
+  steps: [] as {
+    input: ArpgInput;
+    windup: boolean;
+    hold: number | null;
+    events: ArpgEvent[];
+  }[],
 }));
 vi.mock('../src/arpg/step.js', async (importOriginal) => {
   const step = await importOriginal<typeof import('../src/arpg/step.js')>();
   return {
     ...step,
     stepWorld: (...args: Parameters<typeof step.stepWorld>) => {
+      const windup = args[1].hero.windup !== null;
       const events = step.stepWorld(...args);
       if (tap.on) {
         tap.events.push(...events);
-        tap.steps.push({ input: args[2], hold: args[1].hero.hold?.slot ?? null, events });
+        tap.steps.push({ input: args[2], windup, hold: args[1].hero.hold?.slot ?? null, events });
       }
       return events;
     },
@@ -273,14 +284,36 @@ describe('simulateDps', () => {
     ]);
   });
 
+  it("presses early, marked a repeat: each move goes its beat after the last one's landing", () => {
+    const s = setup('ability|bolt|fire|none|default|mana');
+    const { steps } = recorded(() => simulateDps(registry, s, ONE));
+    // Pressed during a wind-up, the press waits in the buffer.
+    expect(steps.some((st) => st.windup && st.input.cast?.repeat)).toBe(true);
+    const lands = steps.flatMap((st, i) =>
+      st.events.some((e) => e.kind === 'cast' && e.slot === 0) ? [i * bal.arena.step] : [],
+    );
+    const moves = resolveChain(
+      registry,
+      computeHeroStats({}, registry),
+      'primary',
+      s.chains.primary,
+    ).moves;
+    // Full mana at the start: the chain's first three gaps are its beats and wind-ups.
+    for (let i = 0; i < 3; i++) {
+      const least = beatFor(bal, 'primary', moves[i].kind, 1) + moves[i + 1].castTime;
+      expect(lands[i + 1] - lands[i]).toBeGreaterThanOrEqual(least - 1e-6);
+      expect(lands[i + 1] - lands[i]).toBeLessThan(least + 3 * bal.arena.step);
+    }
+  });
+
   it('holds a hold move to full charge each press', () => {
     const { out, steps } = recorded(() =>
       simulateDps(registry, setup('ability|bolt|fire|none|hold|mana'), ONE),
     );
     expect(out.casts).toBeGreaterThan(0);
     expect(out.casts).toBeLessThanOrEqual(DPS_SECONDS / bal.chains.holdTime);
-    // Each cast comes after a full charge's steps with its button held and its hold running (a
-    // release at stage 2 would come after 0.66 of them). The button stays held between holds too.
+    // Each cast comes after a full charge's steps with its button held and its hold running (stage
+    // 2 is the full charge). The button stays held between holds too.
     const full = Math.ceil(bal.chains.holdTime / bal.arena.step);
     let run = 0;
     const runs: number[] = [];

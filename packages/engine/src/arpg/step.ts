@@ -19,7 +19,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { castAbility, castTick, holdTick, inBeat, pressStep } from './abilities/cast.js';
+import { castAbility, castTick, holdTick, inBeat, nextMove, pressStep } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -153,14 +153,17 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // Of those whose slot is ready (its beat over, its move off cooldown), the one pressed first
   // fires. One on cooldown stays (ageing) and fires if the cooldown ends in time. A swing
   // striking this tick lands first: the press waits a tick.
+  const window = bal.abilities.comboWindow;
   const ready = (slot: number) =>
     !!h.chains[slot] &&
     !inBeat(h, slot, t) &&
-    t >= h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)];
+    t >= h.cooldowns[slot][pressStep(h, slot, t, window)];
   const q = busy || striking ? undefined : world.queuedCasts.find((p) => ready(p.cast.slot));
   if (q) {
     world.queuedCasts = world.queuedCasts.filter((p) => p !== q);
-    castAbility(ctx, q.cast);
+    // A repeat press never fires a hold move: it's dropped, and the held button charges it.
+    if (!q.cast.repeat || nextMove(h, q.cast.slot, t, window).kind !== 'hold')
+      castAbility(ctx, q.cast);
   }
   // A hold starts, charges, or fires.
   holdTick(ctx, input.holding, dt, dashing);

@@ -9,7 +9,7 @@ import {
 } from '../types/ability.js';
 import type { ArpgEvent, ArpgInput } from '../types/arpg.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
-import { holdCharge, nextMove } from './abilities/cast.js';
+import { holdCharge, pressMove } from './abilities/cast.js';
 import { defaultBasic, defaultChains } from './abilities/resolve.js';
 import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
@@ -102,19 +102,20 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   const slot = hold === 'attack' ? null : hold.slot;
   const bal = registry.getDelveBalance();
   const move = { x: 0, y: 0 };
-  // The held button, each tick: the attack; or the ability pressed, a refused press (no mana)
-  // dropped and pressed again, one on cooldown waiting. Nothing is pressed while a wind-up runs
-  // (the press would only wait for it), and a hold move is held to full charge, then let go.
+  // The held button, each tick: the attack; or the ability, as the pad's hold-to-repeat holds
+  // it: a repeat press made early (during a wind-up, a beat or a cooldown) waits in the buffer,
+  // one refused for mana is dropped and pressed again, and a hold move is held to full charge,
+  // then let go.
   const input = (): ArpgInput => {
     if (slot === null) return { move, attack: true, attackAim: aim };
-    if (h.windup) return { move };
     if (h.hold) {
       const full = holdCharge(bal, h.hold.start, world.t, h.hold.full).charge >= 1;
       return { move, holding: slot, cast: full ? { slot, aim } : null };
     }
-    if (nextMove(h, slot, world.t, bal.abilities.comboWindow).kind === 'hold')
+    const waiting = world.queuedCasts.some((q) => q.cast.slot === slot);
+    if (waiting || pressMove(h, slot, world.t, bal.abilities.comboWindow).kind === 'hold')
       return { move, holding: slot };
-    return { move, cast: { slot, aim } };
+    return { move, holding: slot, cast: { slot, aim, repeat: true } };
   };
   const acted = (e: ArpgEvent) =>
     slot === null ? e.kind === 'basic' : e.kind === 'cast' && e.slot === slot;

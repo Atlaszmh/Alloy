@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import balanceData from '../src/data/balance.json';
 import delveData from '../src/data/delve.json';
 import { BalanceConfigSchema, DelveDataSchema } from '../src/data/schemas.js';
-import { inBeat, nextMove } from '../src/arpg/abilities/cast.js';
+import { inBeat, nextMove, pressMove } from '../src/arpg/abilities/cast.js';
 import { beatFor } from '../src/arpg/abilities/resolve.js';
 import { respawnHero } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -507,5 +507,123 @@ describe('the basic swing while a press waits', () => {
     expect(waited.size).toBeGreaterThan(0);
     expect(blows).toBeGreaterThan(0);
     expect(cut).toBe(0);
+  });
+});
+
+describe('repeat presses', () => {
+  it("a waiting repeat press that would fire a hold move is dropped, and the held button's charge starts that tick", () => {
+    const w = beater([m('light'), m('hold')]);
+    pressOnly(w, 0);
+    // Pressed during the light's wind-up (the hold is next), with the button held.
+    const held = { holding: 0 };
+    stepWorld(registry, w, { move: still, ...held, cast: { slot: 0, repeat: true } }, STEP);
+    expect(w.queuedCasts.map((q) => q.cast)).toEqual([{ slot: 0, repeat: true }]);
+    const { events } = until(w, () => !w.hero.windup && w.hero.beatUntil[0] > w.t, held);
+    const end = w.hero.beatUntil[0];
+    const rest = until(w, () => w.hero.hold !== null, held);
+    tickAfter(rest.at, end);
+    expect(w.queuedCasts).toEqual([]);
+    expect(castSlots([...events, ...rest.events])).toEqual([0]);
+
+    // An ordinary press there taps the hold instead.
+    const tap = beater([m('light'), m('hold')]);
+    pressOnly(tap, 0);
+    pressOnly(tap, 0);
+    run(tap, 1);
+    expect(tap.hero.comboStep[0]).toBe(1);
+  });
+
+  it('a repeat press refused for mana or charge is dropped without a noMana event', () => {
+    const noMana = (repeat: boolean) => {
+      const w = beater();
+      w.hero.mana = 1;
+      w.hero.manaRegen = 0;
+      const events = stepWorld(registry, w, { move: still, cast: { slot: 0, repeat } }, STEP);
+      expect(w.queuedCasts).toEqual([]);
+      return events.some((e) => e.kind === 'noMana');
+    };
+    expect(noMana(true)).toBe(false);
+    expect(noMana(false)).toBe(true);
+
+    const w = beater();
+    w.hero.charge[2] = 0;
+    const events = stepWorld(registry, w, { move: still, cast: { slot: 2, repeat: true } }, STEP);
+    expect(w.queuedCasts).toEqual([]);
+    expect(events.some((e) => e.kind === 'noMana' || e.kind === 'windup')).toBe(false);
+  });
+
+  it("a press during the slot's own wind-up reads the move after the winding one", () => {
+    const w = beater([m('light'), m('hold')]);
+    pressOnly(w, 0);
+    expect(w.hero.windup?.step).toBe(0);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).kind).toBe('light');
+    expect(pressMove(w.hero, 0, w.t, WINDOW).kind).toBe('hold');
+    expect(pressMove(w.hero, 1, w.t, WINDOW)).toBe(nextMove(w.hero, 1, w.t, WINDOW));
+  });
+});
+
+describe('aiming', () => {
+  it("a held button pauses its slot's restart window, however long it aims", () => {
+    const w = beater();
+    press(w, 0);
+    for (let i = 0; i < Math.round((WINDOW + 1) / STEP); i++)
+      stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(1);
+    run(w, w.hero.comboAt[0] - w.t + WINDOW + 0.1);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(0);
+  });
+
+  it("a charging hold's window is paused once a tick, not twice", () => {
+    const w = beater([m('light'), m('hold')]);
+    press(w, 0);
+    until(w, () => w.hero.hold !== null, { holding: 0 });
+    const before = w.hero.comboAt[0];
+    for (let i = 0; i < 10; i++) stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+    expect(w.hero.comboAt[0] - before).toBeCloseTo(10 * STEP);
+  });
+});
+
+describe('determinism', () => {
+  it('a scripted fight gives the same events at 30, 60 and 120 frames a second', () => {
+    const fight = (frames: number) => {
+      const w = arena([dummy(13, 34.4), dummy(12, 33), dummy(14, 33)], {
+        primary: {
+          moves: [m('light'), m('medium'), m('medium'), m('heavy')],
+        },
+        ultimate: { moves: [{ kind: 'hold', form: 'nova', elements: ['fire'] }] },
+      });
+      w.hero.charge[2] = 100;
+      const events: ArpgEvent[] = [];
+      for (let k = 0; k < Math.round(8 / STEP); k++) {
+        const input = {
+          move: k >= 150 && k < 160 ? { x: 1, y: 0 } : still,
+          holding: k >= 200 && k < 250 ? 2 : k % 40 < 20 ? 0 : null,
+          cast:
+            k === 250
+              ? { slot: 2 }
+              : k === 100
+                ? { slot: 1 }
+                : k % 7 === 0
+                  ? { slot: 0, repeat: k % 2 === 0 }
+                  : null,
+          dodge: k === 155,
+        };
+        // The presses go on a tick's first frame; movement and holding on every frame.
+        for (let f = 0; f < frames; f++)
+          events.push(
+            ...stepWorld(
+              registry,
+              w,
+              f === 0 ? input : { move: input.move, holding: input.holding },
+              STEP / frames,
+            ),
+          );
+      }
+      return events;
+    };
+    const at30 = fight(1);
+    expect(at30.filter((e) => e.kind === 'cast').length).toBeGreaterThan(5);
+    expect(fight(2)).toEqual(at30);
+    expect(fight(4)).toEqual(at30);
   });
 });
