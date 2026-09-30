@@ -24,7 +24,7 @@ The final review of v0.46.0 found four more rough edges:
 | How is a chain paced? | A **per-slot beat, buffered**. After a move lands, that slot's next move waits a beat set by the move's kind and its slot. Presses during the beat wait and fire when it ends. Other slots and the dodge stay free. |
 | What sets hold times and beats? | **One tempo stat.** Each weapon base has a tempo that scales every hold's charge time and every beat, for basics and abilities. Future modifiers adjust the same stat. |
 | How does the HUD show a beat? | **Like a short cooldown.** The button shows the cooldown sweep while the beat runs. |
-| What does the basic attack do while a press waits on a beat? | **It swings only if the blow lands in time.** With a press waiting, a basic swing starts only if its blow strikes before that beat ends; otherwise the hero waits. |
+| What does the basic attack do while a press waits on a beat? | **It swings only if the blow lands in time.** With a press waiting, a basic swing starts only if its blow strikes before the press fires; otherwise the hero waits. |
 | Pad chords | They match the keys: a second ability button releases a charging hold, whichever slots they are. |
 | Aiming | While a skill's button is held to aim, its chain's restart window pauses. |
 | Power | Power and item comparisons count beats and value hold moves as charged. |
@@ -57,13 +57,13 @@ The final review of v0.46.0 found four more rough edges:
   - stage 1 arrives at half the charge;
   - stage 2, full power, arrives exactly when the charge is full.
 - **Auto-fire.** A hold fires by itself at `holdMax` × tempo; `holdMax` stays 2.0 s. This covers ability holds and a manual hold blow of the basic attack alike.
-- **Both times are fixed when the charge starts.** The full-charge and auto-fire times are kept on the hold (`HeroEntity.hold`) or on the swing (for a hold blow). A weapon swap mid-charge (the Training Grounds swap weapons live) doesn't make the charge jump.
-- **`holdCharge`.** It takes the hold's full-charge time instead of reading `bal.chains.holdTime`, and returns the charge (0..1) and the stage. Its callers are:
-  - the engine's `holdTick` and `releaseHold` (`abilities/cast.ts`) and `basicHoldTick` (`basic.ts`);
+- **An ability hold's times are fixed when its charge starts.** The full-charge and auto-fire times are kept on `HeroEntity.hold`, so a weapon swap mid-charge doesn't make the charge jump (the Training Grounds swap weapons live). A manual hold blow reads the hero's current tempo: a weapon swap already drops the swing.
+- **`holdCharge`.** It takes the full-charge time instead of reading `bal.chains.holdTime`, and returns the charge (0..1) and the stage. Its callers are:
+  - the engine's `holdTick`, which hands the stage to `releaseHold`, and `basicHoldTick`;
   - the bot and the DPS sim;
   - the client: the HUD snapshot, `aimedMove` and `padAimView` (`useArenaCore.ts`), the anticipation FX and the readout.
 
-  The auto-fire checks (`cast.ts` `holdTick`, `basic.ts` `basicHoldTick`) read the hold's own auto-fire time.
+  The auto-fire checks (`holdTick` and `basicHoldTick`) read the hold's own auto-fire time, or `holdMax` × tempo for a hold blow.
 - **HUD bar.** It shows one tick, at the halfway stage; its end is full power.
 - **Bot and DPS Lab.** Both still release at full charge, which is now stage 2, so no charge time is wasted.
 
@@ -77,28 +77,40 @@ The final review of v0.46.0 found four more rough edges:
 - **State.** `HeroEntity.beatUntil[slot]` and `HeroEntity.beatFrom[slot]` hold the beat's end and start, so the HUD knows its full length.
 - **Refusals.** `castAbility` and `startHold` refuse a slot until its beat ends, and so does `abilityReady` (which the bot uses). The HUD snapshot works out readiness itself and includes the beat (see HUD).
 - **One buffer per slot.** Today `world.queuedCast` holds one press, and any new press replaces it. That would let a press waiting out Q's beat be lost to an E press, so the buffer becomes per slot: each slot keeps its own waiting press and its expiry.
-  - **Firing.** Each tick, of the waiting presses whose slot is free, the one pressed first fires. A slot is free when its beat is over and its next move's cooldown is up, and the hero isn't winding up, holding or dashing. The dequeue checks all of this before taking the press, so a refusal never eats it.
-  - **Ageing.** A waiting press doesn't age while the hero is winding up, holding or dashing, or while its slot's beat runs. It gets `feel.buffer` from when it is free. After the beat, a press whose move is still on cooldown ages as a cooldown-held press does today, firing only if the cooldown ends within the buffer.
-  - **Releases.** A press of the slot whose hold runs is still that hold's release, and a dropped hold's release is still swallowed. These go through the per-slot buffer as today.
+  - **Firing.** Each tick, of the waiting presses whose slot is ready, the one pressed first fires. A slot is ready when:
+    - its beat is over;
+    - its next move's cooldown is up;
+    - the hero isn't winding up, holding or dashing.
+
+    The dequeue checks these before taking the press, so a beat, a cooldown or a busy hero never uses one up. A refusal inside `castAbility` for mana, charge or nothing to aim at still uses the press up, as today.
+  - **Ageing.** A waiting press doesn't age while the hero is winding up, holding or dashing, or while its slot's beat runs. After that it has `feel.buffer` to fire. A press whose move is still on cooldown ages through that buffer as a cooldown-held press does today, firing only if the cooldown ends in time.
+  - **Releases bypass the buffer, as today.** A press of the slot whose hold runs is that hold's release (`queuedRelease`), and a dropped hold's release is swallowed (`holdDropped`). Both are decided when the input arrives.
   - **Aim.** A waiting press keeps its aim. An aimed press lands where the player aimed when pressing. An auto-aimed press picks its target when it fires.
 - **Holding through a beat.** Holding a hold move's button through the beat starts the charge when the beat ends.
 - **Per slot.** The beat holds only its own slot. Other slots, the dodge and the basic attack stay free. A dodge neither ends nor shortens a beat.
-- **The basic swing while a press waits.** While any press waits on its slot's beat, a basic swing (automatic or manual) starts only if its strike point comes before that beat ends. With several waiting, the earliest beat end counts. Otherwise no swing starts until the press has fired. The swing strikes before the press fires, so no swing is ever cut off mid-lunge, and longer beats still fill with a basic hit.
+- **The basic swing while a press waits.** While any press waits to fire, a basic swing (automatic or manual) starts only if its strike comes no later than the tick that press will fire. A press may be waiting on its slot's beat or on its move's cooldown.
+  - **When a press will fire:** the later of its beat's end and its move's cooldown end. With several waiting, the earliest counts.
+  - **Held hold moves count.** A held hold move whose beat is running counts as a waiting press, because its charge starts at the beat's end, and that would drop a swing still in startup.
+  - **Same tick.** A strike due in the same tick a waiting press fires lands first.
+  - **Otherwise** no swing starts until the press has fired or expired.
+
+  So no swing is ever cut off mid-lunge, and longer beats still fill with a basic hit. A manual hold blow still charging when the press fires is dropped unstruck, as an ability press drops it today.
 - **The restart window counts from the beat's end.** `fire` sets `comboAt[slot]` to the landing time plus the beat. So a long beat never resets the chain, and during the beat the next press still reads the chain's next move: every reader goes through `pressStep`, where `t − comboAt` is negative until the beat ends.
 - **Chain edits and respawns.** A chain changed mid-fight (`refreshWorldHero`) clears that slot's beat and its waiting press. `respawnHero` clears them all.
 - **Nightstalker** reads the Defensive's chain step through `pressStep` (`combat.ts`). It is unchanged.
 - **Charge payment.** A charge-paid chain's charge keeps filling during a beat.
 - **Galvanize** cuts cooldowns, not beats.
-- **The Training Grounds.** "No cooldowns" leaves beats on. They're the rhythm the user tunes there, and the sandbox starts with No cooldowns on. Its hint changes from "An ability can go again as soon as it lands" to "Cooldowns are off; each move still waits its beat".
+- **The Training Grounds.** "No cooldowns" leaves beats on. They're the rhythm the user tunes there, and the sandbox starts with No cooldowns on. Its hint changes from "An ability can go again as soon as it lands" to "Cooldowns are off and charge stays full; each move still waits its beat".
 - **Basic attacks** get no beat: the weapon's swing cycle already paces them.
 - **Worked example.** On a sword (tempo 1), mashing Q through the Bolt chain lands the moves about 0.45, 0.6 and 0.7 s apart: today's gaps plus each beat. That's about 1.75 s from the light to the heavy, up from 0.7 s. The heavy's 0.6 s beat then comes before the chain loops.
 
 ### HUD
 - **The sweep.** While a slot's beat runs, its button shows the cooldown sweep for the beat, and `ready` is false.
   - The HUD snapshot's `cooldown` and `cooldownTotal` cover whichever wait is longer: the next move's cooldown or the slot's beat.
-  - A new `beat` flag says when it's the beat. The button then draws the sweep without the countdown number, and animates it in CSS over the beat's length from `beatFrom`, since the HUD refreshes only every 80 ms.
+  - A new `beat` flag says when it's the beat. The button then draws the sweep without the countdown number.
+  - **Smoothing.** The HUD refreshes only every 80 ms, so the sweep glides between snapshots as the hold bar does: an 80 ms linear transition. The sweep's angle is a registered CSS custom property (`@property`), so the conic gradient can transition. Because it follows the snapshots, it follows game time through slow motion, hit-stop, the perfect-dodge slow-down and pause.
 - **Galvanize.** Its spark shows only on a real cooldown, not during a beat.
-- **Readiness.** The next move's glyph lights when the slot is ready.
+- **Readiness.** The button's ready glow returns when the beat ends, as it does after a cooldown.
 
 ### Readout
 - The builder's readout gains the move's beat, e.g. "then a 0.4s beat", from `beatFor` with the hero's tempo.
@@ -110,8 +122,12 @@ The final review of v0.46.0 found four more rough edges:
 - **Pad chords.**
   - **The rule.** The pad's `holding` is the latest ability button pressed, while it stays held. An earlier button counts again only when it is pressed again.
   - **What happens.** A second ability button pressed while another's hold charges sends the first's release. The second's press follows on the next frame, as the chord carry does today. This works for any pair of slots, and is how keys and HUD buttons already behave.
-  - **Where the order lives.** `PadMemory` keeps the press order. Two presses in the same frame count in slot order: the lower slot is sent as a press first and the higher becomes `holding`.
-  - **Hold-to-repeat.** `castHeld` follows the same button.
+  - **Where the order lives.** `padToArena` has no memory, so the choice of `holding` and `castHeld` moves into `padFrameCast`, with the press order kept in `PadMemory`. `frameInput` reads the result.
+  - **Two presses in one frame** count in slot order:
+    - the lower slot's press goes first. A hold move taps at stage 0, as a key tap does.
+    - the higher slot becomes `holding`. Its own press follows on the next frame (the chord carry), unless its next move is a hold.
+  - **Hold-to-repeat.** `castHeld` repeats the latest held repeat button, falling back to an earlier one still held. So RT keeps streaming its Primary when LB is tapped. Repeat never fires hold moves, so the fallback can't start a charge.
+  - **Repeat into a beat.** Repeat presses once only the beat holds the slot back (the move is otherwise ready). The press then waits in the buffer, and the swing rule sees it. Today repeat waits for `abilityReady`, which would leave no press waiting during the beat.
 - **Aiming.** While a slot's button is held (the engine's `holding`), its restart window doesn't run: `comboAt[slot]` moves on by `dt`. This covers both a charging hold and aiming a move that isn't a hold. However long the player aims, the chain doesn't reset. The rule replaces today's `comboAt += dt` in `holdTick`, so a charging hold's window isn't advanced twice.
 
 ### Power
@@ -120,7 +136,7 @@ The final review of v0.46.0 found four more rough edges:
 - **Hold moves** are valued at full charge:
   - its damage and cost are the stage-2 move's;
   - its cadence is max(`holdTime × tempo`, the stage-2 move's `castTime`) plus the full charge's beat. The wind-up can outlast the charge, e.g. a cast-paid Ultimate's 2.4 s.
-  - its cooldown counts from the landing.
+  - its cooldown term is max(`holdTime × tempo`, the stage-2 move's `castTime`) plus the stage-2 move's cooldown, because the cooldown counts from the landing. This replaces today's cooldown plus channel.
 - **A Defensive hold's effect.** When the Defensive's first move is a hold, its effect (Ward, Armor or Surge, and its duration) is read from its stage-2 move (`chainMove(defensive, 0, 2)`).
 - **Consistency.** Item comparisons use the same estimate, so they follow.
 
@@ -156,7 +172,13 @@ The final review of v0.46.0 found four more rough edges:
     - a dodge not ending a beat;
     - the restart window from the beat's end;
     - a changed chain clearing its beat and its waiting press.
-  - The basic swing: one that would land in time strikes before the waiting press fires, and one that wouldn't doesn't start. Nothing is cut mid-lunge.
+  - The basic swing:
+    - one that would land in time strikes before the waiting press fires, and one that wouldn't doesn't start;
+    - the same for a press waiting on a cooldown after its beat;
+    - a held hold move waiting on its beat counts as a waiting press;
+    - a strike due in the tick the press fires lands first.
+
+    Nothing is cut mid-lunge.
   - The aiming pause, and a charging hold's window paused once.
   - Power:
     - the cadence term;
@@ -164,6 +186,7 @@ The final review of v0.46.0 found four more rough edges:
     - a Defensive hold's effect at stage 2.
   - Determinism: a scripted sequence gives the same events at any frame rate.
 - **Engine (existing tests this changes):**
+  - The `press` fixture (`tests/fixtures/arena.ts`) steps only while a wind-up runs. It learns to wait out its slot's beat, which fixes most tests that press a slot twice: `ability-cast`, `ability-forms` (the Strike slam), `delve-chains` (its chain stepping and `queuedCast` checks), `delve-combat-weight` and `delve-training`.
   - `delve-chains`: the `holdStages` fixtures and the 0.33/0.66 stage test.
   - `delve-combat-weight`: its buffer tests, now per slot.
   - `delve-training`: "no cooldowns: the same ability fires again right after it lands" becomes "right after its beat".
@@ -174,14 +197,20 @@ The final review of v0.46.0 found four more rough edges:
   - The hold bar's single tick.
   - The readout's hold time and beats.
   - The tempo line on a weapon's sheet.
-  - Pad chords in either slot order, including the earlier button not coming back when the later one lets go.
-  - Hold-to-repeat following the latest button.
-- **Client (existing tests this changes):** `gamepad.test.ts`'s `holding` by slot order.
+  - Pad chords:
+    - in either slot order, including the earlier button not coming back when the later one lets go;
+    - two presses in one frame.
+  - Hold-to-repeat:
+    - following the latest button and falling back to an earlier one still held (RT keeps streaming when LB is tapped);
+    - pressing into a beat, so the press waits in the buffer.
+- **Client (existing tests this changes):**
+  - `gamepad.test.ts`'s `holding` by slot order.
+  - The fixtures that build `HeroEntity.hold`, which gains its timing fields: `anticipation.test.ts` and `arena-renderer.test.ts`.
 - **E2E:** the Delve specs pass. G04's "held RT steps through the chain" allows for the beats.
 
 ## Balance
 - Beats cut damage wherever a skill is limited by time rather than mana, most of all with the cast payment. Play limited by mana changes less. The swing rule gives back some basic hits, and some mana, during longer beats.
-- **DPS Lab:** report its grid before and after (one dummy and the pack, depth 10); no gate. Its ability rows all use a sword (tempo 1), so also spot-check a maul and a wand.
+- **DPS Lab:** report its grid before and after (one dummy and the pack, depth 10); no gate. Its ability rows all use a sword (tempo 1), so also spot-check a maul and a wand with a one-off script; the Lab gains no option.
 - **Pacing:** the rails in `tests/delve-pacing.test.ts` must hold. The new Power estimate also moves the autopilot's gear choices. If a rail breaks, stop and report the numbers. The fix is the user's call: shorter beats, stronger skills, or a changed rail.
 
 ## Docs and version
