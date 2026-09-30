@@ -156,7 +156,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   - **The target's own extra slots, on the chains your moveset replaces,** come back as Links.
   - **Valued as a home,** the target is your chains on the skills they share, plus its own on the others.
   - **The old weapon** returns to the bag at its base slots, with default moves in its own mana.
-  - **Price:** `transferScrap` (30) for each of the source's extra slots.
+  - **Price:** `transferScrap` (30) for each extra slot that moves.
   - **Refusals:** mid-dive, and when it can't be paid for.
 
 ### Valuing weapons
