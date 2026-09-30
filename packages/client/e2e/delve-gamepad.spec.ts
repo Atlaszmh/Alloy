@@ -161,7 +161,8 @@ test.describe('Delve with a controller', () => {
       pad.buttons[7] = { pressed: true, value: 1 };
     });
     // Two or more Bolts outpace the regen while RT is held, stepping through the
-    // chain (polling while held, since game time runs slow when the machine is busy).
+    // chain, each waiting out the last one's beat (polling while held, since game
+    // time runs slow when the machine is busy).
     await expect.poll(mana, { timeout: ARENA_READY }).toBeLessThan(before - 6);
     await expect
       .poll(() => primary.getAttribute('aria-label'), { timeout: ARENA_READY })
