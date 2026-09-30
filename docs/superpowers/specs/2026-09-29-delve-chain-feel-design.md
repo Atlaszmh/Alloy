@@ -143,6 +143,7 @@ The final review of v0.46.0 found four more rough edges:
   - **Repeat presses are marked** (`AbilityCast.repeat`), both the pad's and the DPS sim's early presses.
     - **A hold move.** When a waiting repeat press would fire a hold move, it's dropped, and the held button's `holding` starts the charge instead. That covers the hold after a light that was still winding up when the press went out: during a wind-up, `nextMove` still reads the winding move. It also covers a waiting press whose chain restarted in the meantime.
     - **No mana or charge.** A repeat press refused for mana or charge is dropped without a `noMana` event, so holding RT on an empty pool stays quiet, as it does today.
+  - **A pad press during a wind-up** decides press or release from the move it will cast. During the wind-up that's the move after the winding one, not `nextMove`'s winding move. So pressing RT while a light winds up, with a hold next, starts the hold's charge as a held key does, instead of tapping it. v0.46.0 had the same gap.
 - **Aiming.** While a slot's button is held (the engine's `holding`), its restart window doesn't run: `comboAt[slot]` moves on by `dt`. This covers both a charging hold and aiming a move that isn't a hold. However long the player aims, the chain doesn't reset. The rule replaces today's `comboAt += dt` in `holdTick`, so a charging hold's window isn't advanced twice.
 
 ### Power
@@ -191,8 +192,11 @@ The final review of v0.46.0 found four more rough edges:
     - one that would land in time strikes before the waiting press fires, and one that wouldn't doesn't start;
     - the same for a press waiting on a cooldown after its beat;
     - a held ability button waiting on its beat or cooldown counts as a waiting press, but a slot whose hold was dropped doesn't;
-    - a strike due in the tick the press would fire lands first, with the press a tick later;
+    - a strike due in the tick the press would fire lands first, with the press a tick later, and the same for a held hold move's start;
     - a manual tap held back by the rule doesn't age.
+  - Repeat presses (`AbilityCast.repeat`):
+    - a waiting repeat press that would fire a hold move is dropped, and `holding` starts the charge that tick;
+    - a repeat press refused for mana or charge makes no `noMana` event.
 
     No swing that started while a press waited is cut by it.
   - `respawnHero` clears every beat and waiting press.
@@ -223,6 +227,7 @@ The final review of v0.46.0 found four more rough edges:
     - RT held through a light-then-hold chain charges the hold, since the marked repeat press is dropped at the hold;
     - repeat on an empty pool makes no `noMana` event.
   - Mixed input: a key press in a pad press's frame carries to the next frame.
+  - A pad press during a light's wind-up, with a hold next, starts the hold's charge.
 - **Client (existing tests this changes):**
   - `gamepad.test.ts`: its `holding` by slot order, the `ArenaPadActions` shape (around 90-93 and 242-245), and repeat waiting out a cooldown (around 150-151), which now presses during it.
   - The fixtures that build `HeroEntity.hold`, which gains its timing fields: `anticipation.test.ts` and `arena-renderer.test.ts`.
