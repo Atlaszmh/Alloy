@@ -191,8 +191,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   const speed = Math.hypot(v.x, v.y);
   // Automatic swings commit only while the hero stands still: moving during the startup clears
   // that, so the blow leaves no recovery (it still lunges and lands). One whose foe is gone is
-  // dropped.
-  if (input.attack === undefined && h.swing) {
+  // dropped. A released hold blow's leap goes on whatever the input does now.
+  if (input.attack === undefined && h.swing && h.swing.released === null) {
     const target = h.swing.targetId;
     if (target !== null && !world.monsters.some((m) => m.id === target && !m.dead))
       cancelSwing(ctx);
@@ -223,8 +223,10 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   else if (heading) h.facing = heading;
 
   if (h.swing && t >= h.swing.strikeAt - 1e-9) {
-    // A manual hold blow holds at its strike point while the attack stays held.
-    if (input.attack !== undefined && h.stats.weapon.blows[h.swing.step].kind === 'hold')
+    // A released hold blow strikes as its leap lands; a manual hold blow holds at its strike
+    // point while the attack stays held.
+    if (h.swing.released !== null) strike(ctx, v, h.swing.released);
+    else if (input.attack !== undefined && h.stats.weapon.blows[h.swing.step].kind === 'hold')
       basicHoldTick(ctx, input.attack, dt, input.attackAim ?? null, v);
     else strike(ctx, v);
   }

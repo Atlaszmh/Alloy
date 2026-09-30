@@ -391,6 +391,12 @@ export interface HeroEntity {
     committed: boolean;
     /** A manual hold blow held at its strike point: since when (else null). */
     held: number | null;
+    /**
+     * A manual hold blow let go at stage 1 or 2 whose row lunges further than
+     * medium's: the stage it was let go at. It leaps the rest, then strikes at
+     * `strikeAt` (see the weapon flow spec). Else null.
+     */
+    released: number | null;
   } | null;
   /** Each running push (a lunge, a step-in, a step or a recoil), in the order they began. */
   pushes: Push[];

@@ -215,7 +215,9 @@ describe('holds by tempo', () => {
     expect(stages.slice(0, 2).map(([s]) => s)).toEqual([1, 2]);
     tickAfter(stages[0][1], 0.5 * bal.chains.holdTime * 1.3);
     tickAfter(stages[1][1], bal.chains.holdTime * 1.3);
-    tickAfter(struck, bal.chains.holdMax * 1.3);
+    // It fires at holdMax, then leaps (a maul's hold lunges further than its medium) and
+    // strikes as it lands (see the weapon flow spec).
+    tickAfter(struck - bal.feel.stepSeconds, bal.chains.holdMax * 1.3);
   });
 
   it("a weapon swap mid-charge doesn't make the charge jump", () => {

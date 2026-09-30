@@ -1057,9 +1057,19 @@ describe('basics', () => {
     expect(events.filter((e) => e.kind === 'holdStage')).toEqual([
       { kind: 'holdStage', slot: null, stage: 1 },
     ]);
+    // A heavy lunges further than a medium: let go, it leaps the rest, then strikes as it
+    // lands, `stepSeconds` later (see the weapon flow spec).
     const release = stepWorld(registry, w, { move: still, attack: false }, STEP);
-    expect(basics(release)[0]).toMatchObject({ moveKind: 'heavy', heft: f.heavy.heft });
-    // Its startup was spent holding: the rest of the heavy row's cycle follows the release.
+    expect(basics(release)).toHaveLength(0);
+    expect(w.hero.swing).toMatchObject({ released: 1 });
+    const letGo = w.t;
+    const landing: ArpgEvent[] = [];
+    for (let i = 0; i < 30 && basics(landing).length === 0; i++)
+      landing.push(...stepWorld(registry, w, { move: still, attack: false }, STEP));
+    expect(basics(landing)[0]).toMatchObject({ moveKind: 'heavy', heft: f.heavy.heft });
+    expect(w.t - letGo).toBeGreaterThanOrEqual(bal.feel.stepSeconds - 1e-6);
+    expect(w.t - letGo).toBeLessThan(bal.feel.stepSeconds + STEP);
+    // Its startup was spent holding: the rest of the heavy row's cycle follows the strike.
     expect(w.hero.nextAttackAt).toBeCloseTo(w.t + iv * f.heavy.time * (1 - f.heavy.startup));
     expect(w.monsters[0].status.stacks.fire).toBe(bal.stacks.basicByKind.heavy);
   });

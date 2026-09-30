@@ -128,11 +128,13 @@ export function finishPushes(ctx: SimCtx, kind: PushKind): void {
 }
 
 /**
- * A basic swing in its startup strikes this tick. A press or a hold that would
- * start now waits a tick, so the blow lands first (see the chain feel spec).
+ * A basic swing in its startup strikes this tick, or a released hold blow is
+ * leaping (it strikes as it lands). A press or a hold that would start now
+ * waits, so the blow lands first (see the chain feel and weapon flow specs).
  */
 export function swingStrikes(h: HeroEntity, t: number): boolean {
-  return !!h.swing && h.swing.held === null && t >= h.swing.strikeAt - 1e-9;
+  const sw = h.swing;
+  return !!sw && (sw.released !== null || (sw.held === null && t >= sw.strikeAt - 1e-9));
 }
 
 /** Drop a basic swing still in its startup (and its lunge): no blow, no string step, and the weapon is ready again. */

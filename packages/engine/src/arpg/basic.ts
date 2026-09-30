@@ -105,6 +105,7 @@ export function startSwing(
     cycle,
     committed,
     held: null,
+    released: null,
   };
   h.nextAttackAt = t + cycle;
   // An automatic swing on the move leaves an ability's recovery alone.
@@ -125,7 +126,11 @@ export function startSwing(
  * `holdMax` × the tempo (stage 2). A blow held
  * past its strike point re-aims as it strikes, as a manual swing aims (on the
  * medium row it began with): toward `aim`, else the nearest foe, else where it
- * was aimed. A tap (let go by its strike point) strikes where it began.
+ * was aimed. A tap (let go by its strike point) strikes where it began. One let
+ * go at stage 1 or 2 whose row lunges further than medium's leaps the rest
+ * first, over `stepSeconds` toward where it re-aimed, stopping at its foe (the
+ * re-aimed target, else the first ahead), and strikes as it lands (see the
+ * weapon flow spec).
  */
 export function basicHoldTick(
   ctx: SimCtx,
@@ -144,15 +149,26 @@ export function basicHoldTick(
   const { stage } = holdCharge(bal, sw.held, t, fullTime);
   const full = t - sw.held >= bal.chains.holdMax * h.stats.tempo - 1e-9;
   if (full || !held) {
+    const w = h.stats.weapon;
+    let target: MonsterEntity | null = null;
     if (t > sw.held + 1e-9) {
-      const w = h.stats.weapon;
       const { acquire } = swingReach(w, w.feel.medium, true);
-      const { target, dir } = aimAt(ctx, aim, acquire, sw.dir);
-      sw.dir = dir;
+      const aimed = aimAt(ctx, aim, acquire, sw.dir);
+      target = aimed.target;
+      sw.dir = aimed.dir;
       sw.targetId = target?.id ?? null;
-      h.facing = dir;
+      h.facing = sw.dir;
     }
-    return strike(ctx, steer, full ? 2 : stage);
+    const at = full ? 2 : stage;
+    const row = w.feel[HOLD_STAGE_KINDS[at]];
+    const leap = at > 0 ? row.move - w.feel.medium.move : 0;
+    if (leap <= 0) return strike(ctx, steer, at);
+    const { reach } = swingReach(w, row, true);
+    const foe = target ?? foeAhead(ctx, sw.dir, reach + leap, row.arc ?? w.arc);
+    startPush(ctx, 'lunge', sw.dir, leap, bal.feel.stepSeconds, foe?.id ?? null);
+    sw.released = at;
+    sw.strikeAt = t + bal.feel.stepSeconds;
+    return;
   }
   if (stage > holdCharge(bal, sw.held, t - dt, fullTime).stage)
     ctx.events.push({ kind: 'holdStage', slot: null, stage });
