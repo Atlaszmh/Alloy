@@ -178,7 +178,8 @@ describe('the aim marker of a key or button held to aim', () => {
       payment: 'mana',
     });
     const STEP = registry.getDelveBalance().arena.step;
-    for (let i = 0; i < Math.round(0.8 / STEP); i++)
+    // Charged fully: stage 2.
+    for (let i = 0; i < Math.round(1.1 / STEP); i++)
       stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP);
     expect(w.hero.hold?.slot).toBe(0);
     const view = aimView(w, aiming, point, 1000)!;

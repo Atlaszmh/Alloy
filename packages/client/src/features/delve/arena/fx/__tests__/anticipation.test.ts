@@ -26,7 +26,7 @@ function world(over: Partial<ArpgWorld['hero']>): ArpgWorld {
       hold: null,
       defend: null,
       chains: [],
-      stats: { weapon: { blows: [BLOW], feel: FEEL } },
+      stats: { weapon: { blows: [BLOW], feel: FEEL }, tempo: 1 },
       ...over,
     },
   } as unknown as ArpgWorld;
@@ -94,23 +94,43 @@ describe('windingUp', () => {
 
   it('a hold gathers with its charge, as heavy as the stage it has reached', () => {
     const stage = (heft: number) => ({ element: 'nature', heft, last: false });
-    const a = windingUp(
-      world({
-        chains: [{ moves: [stage(0.45)], hold: [[stage(0.45), stage(0.6), stage(0.9)]] }],
-        hold: { slot: 0, step: 0, start: 1 - 0.5 * holdTime, aim: { x: 9, y: 5 } },
-      } as never),
-    )!;
+    const holding = (full: number) =>
+      windingUp(
+        world({
+          chains: [{ moves: [stage(0.45)], hold: [[stage(0.45), stage(0.6), stage(0.9)]] }],
+          hold: {
+            slot: 0,
+            step: 0,
+            start: 1 - 0.5 * holdTime,
+            aim: { x: 9, y: 5 },
+            full,
+            max: 2 * full,
+          },
+        } as never),
+      )!;
+    const a = holding(holdTime);
     expect(a.progress).toBeCloseTo(0.5);
     expect(a.heft).toBeCloseTo(0.6); // stage 1
     expect(a.dir).toEqual({ x: 1, y: 0 });
     expect(a.color).toBe(MANA_HEX.nature);
+    // Its own charge time (a slower tempo's, fixed when it began): half as far, still stage 0.
+    const slow = holding(2 * holdTime);
+    expect(slow.progress).toBeCloseTo(0.25);
+    expect(slow.heft).toBeCloseTo(0.45);
   });
 
   it('a hold leans toward the aim marker while one shows, the point its release will take', () => {
     const stage = { element: 'nature', heft: 0.45, last: false };
     const w = world({
       chains: [{ moves: [stage], hold: [[stage, stage, stage]] }],
-      hold: { slot: 0, step: 0, start: 1 - 0.5 * holdTime, aim: { x: 9, y: 5 } },
+      hold: {
+        slot: 0,
+        step: 0,
+        start: 1 - 0.5 * holdTime,
+        aim: { x: 9, y: 5 },
+        full: holdTime,
+        max: 2 * holdTime,
+      },
     } as never);
     expect(windingUp(w, { x: 5, y: 1 })!.dir).toEqual({ x: 0, y: -1 });
     expect(windingUp(w, null)!.dir).toEqual({ x: 1, y: 0 });
@@ -138,10 +158,16 @@ describe('windingUp', () => {
     expect(a.progress).toBeCloseTo(0.8);
   });
 
-  it("a manual blow held at its strike point gathers with its charge, as its stage's row", () => {
+  it("a manual blow held at its strike point gathers with its charge over holdTime × the tempo, as its stage's row", () => {
     const held = { ...swing, strikeAt: 0.1, held: 1 - 0.8 * holdTime };
     const a = windingUp(world({ swing: held } as never))!;
     expect(a.progress).toBeCloseTo(0.8);
-    expect(a.heft).toBeCloseTo(FEEL.hold.heft); // stage 2
+    expect(a.heft).toBeCloseTo(FEEL.heavy.heft); // stage 1
+    const stats = { weapon: { blows: [BLOW], feel: FEEL }, tempo: 2 };
+    const slow = windingUp(world({ swing: held, stats } as never))!;
+    expect(slow.progress).toBeCloseTo(0.4);
+    expect(slow.heft).toBeCloseTo(FEEL.medium.heft); // stage 0
+    const full = windingUp(world({ swing: { ...held, held: 1 - holdTime } } as never))!;
+    expect(full.heft).toBeCloseTo(FEEL.hold.heft); // stage 2: full power at 100%
   });
 });

@@ -43,6 +43,7 @@ const BOLT: AbilityHud = {
   cost: 8,
   cooldown: 0,
   cooldownTotal: 5,
+  beat: false,
   charge: null,
   chainStep: 0,
   chainLength: 1,
@@ -84,6 +85,9 @@ describe('the ability buttons', () => {
     expect(dots.map((d) => d.getAttribute('data-chain'))).toEqual(['step', 'next', 'step', 'step']);
     expect(button.querySelector('[data-kind="hold"]')).toHaveTextContent('◉');
     expect(button.querySelector('[data-hold]')).toHaveAttribute('data-stage', '1');
+    // One tick, at the halfway stage: the bar's end is full power.
+    const ticks = [...button.querySelectorAll('[data-tick]')] as HTMLElement[];
+    expect(ticks.map((t) => t.style.left)).toEqual(['50%']);
     // The hold dims the others as a channel does, never its own button.
     expect(button.style.opacity).toBe('1');
     expect(screen.getByTestId('ability-1').style.opacity).toBe('0.5');
@@ -272,6 +276,46 @@ describe('the reactions on the HUD', () => {
     expect(screen.queryByTestId('hp-barrier')).toBeNull();
   });
 
+  it('sweeps while a move cools, with its seconds, and while the slot waits out its beat, without', () => {
+    const sweep = (slot: number) =>
+      screen.getByTestId(`ability-${slot}`).querySelector('[data-sweep]') as HTMLElement | null;
+    const cooling: AbilityHud = { ...BOLT, cooldown: 2.5, cooldownTotal: 5, ready: false };
+    const beating: AbilityHud = { ...cooling, cooldown: 0.3, cooldownTotal: 0.6, beat: true };
+    render(bar({ abilities: [cooling, beating, BOLT] }));
+    expect(sweep(0)).toHaveAttribute('data-sweep', 'cooldown');
+    expect(sweep(0)!.style.getPropertyValue('--delve-sweep')).toBe('180deg');
+    expect(screen.getByTestId('ability-0')).toHaveTextContent('2.5');
+    expect(sweep(1)).toHaveAttribute('data-sweep', 'beat');
+    expect(sweep(1)!.style.getPropertyValue('--delve-sweep')).toBe('180deg');
+    expect(screen.getByTestId('ability-1')).not.toHaveTextContent('0.3');
+    expect(screen.getByTestId('ability-1')).toHaveAttribute('data-ready', 'false');
+    expect(sweep(2)).toBeNull();
+  });
+
+  it('the sweep glides between refreshes while it empties, and snaps when it rises', () => {
+    const at = (cooldown: number) =>
+      bar({
+        abilities: [
+          { ...BOLT, cooldown, cooldownTotal: 0.6, beat: true, ready: false },
+          BOLT,
+          BOLT,
+        ],
+      });
+    const sweep = () =>
+      screen.getByTestId('ability-0').querySelector('[data-sweep]') as HTMLElement;
+    const { rerender } = render(at(0.6));
+    expect(sweep().style.transition).toBe('none');
+    rerender(at(0.3));
+    expect(sweep().style.getPropertyValue('--delve-sweep')).toBe('180deg');
+    expect(sweep().style.transition).toBe('--delve-sweep 80ms linear');
+    // A refresh at the same angle (a pause, a hit-stop) doesn't cut the glide short.
+    rerender(at(0.3));
+    expect(sweep().style.transition).toBe('--delve-sweep 80ms linear');
+    // A new beat starts: the sweep jumps back up at once.
+    rerender(at(0.6));
+    expect(sweep().style.transition).toBe('none');
+  });
+
   it('sparks the buttons still cooling down for 0.4 s after Galvanize', () => {
     const cooling: AbilityHud = { ...BOLT, cooldown: 3, ready: false };
     const abilities = [cooling, { ...cooling, cooldown: 0, ready: true }];
@@ -284,6 +328,9 @@ describe('the reactions on the HUD', () => {
     rerender(galvanize(9.5));
     expect(spark(0)).toBeNull();
     rerender(galvanize(null));
+    expect(spark(0)).toBeNull();
+    // Galvanize cuts cooldowns, not beats: a beat gets no spark.
+    rerender(bar({ abilities: [{ ...cooling, beat: true }], galvanizedAt: 9.8, t: 10 }));
     expect(spark(0)).toBeNull();
   });
 });
@@ -314,5 +361,6 @@ describe('AttackButton', () => {
     expect(button.querySelectorAll('[data-chain]')).toHaveLength(2);
     expect(button.querySelector('[data-kind="hold"]')).toHaveTextContent('◉');
     expect(button.querySelector('[data-hold]')).toHaveAttribute('data-stage', '2');
+    expect(button.querySelectorAll('[data-tick]')).toHaveLength(1);
   });
 });

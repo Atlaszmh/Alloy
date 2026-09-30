@@ -44,7 +44,8 @@ export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | nul
     const blow = wpn.blows[h.swing.step];
     const color = MANA_HEX[blow.element];
     if (h.swing.held !== null) {
-      const { charge, stage } = holdCharge(bal, h.swing.held, w.t);
+      const full = bal.chains.holdTime * h.stats.tempo;
+      const { charge, stage } = holdCharge(bal, h.swing.held, w.t, full);
       const heft = wpn.feel[HOLD_STAGE_KINDS[stage]].heft ?? 0.3;
       return { dir: h.swing.dir, heft, progress: charge, color };
     }
@@ -57,7 +58,7 @@ export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | nul
     };
   }
   if (h.hold) {
-    const { charge, stage } = holdCharge(bal, h.hold.start, w.t);
+    const { charge, stage } = holdCharge(bal, h.hold.start, w.t, h.hold.full);
     const ab = chainMove(h.chains[h.hold.slot], h.hold.step, stage);
     const at = aim ?? h.hold.aim;
     return {

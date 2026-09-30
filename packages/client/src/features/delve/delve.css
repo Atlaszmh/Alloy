@@ -157,6 +157,18 @@
   inherits: false;
 }
 
+/* An ability button waiting (a cooldown or its beat): a dark sweep over `--delve-sweep`, an
+   angle registered so the sweep can glide between the HUD's refreshes. */
+@property --delve-sweep {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.delve-sweep {
+  background: conic-gradient(rgba(0, 0, 0, 0.72) var(--delve-sweep), transparent 0deg);
+}
+
 @keyframes delve-spin {
   to {
     --delve-angle: 360deg;

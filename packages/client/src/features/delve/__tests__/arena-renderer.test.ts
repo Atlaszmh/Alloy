@@ -69,7 +69,7 @@ describe('the arena renderer', () => {
     const w = {
       hero: {
         chains: [{ moves: [{ element: 'frost' }], hold: [null] }],
-        hold: { slot: 0, step: 0, start: 0, aim: null },
+        hold: { slot: 0, step: 0, start: 0, aim: null, full: 1, max: 2 },
         windup: null,
         swing: { step: 1 },
         stats: { weapon: { blows: [{ element: 'fire' }, { element: 'storm' }] } },

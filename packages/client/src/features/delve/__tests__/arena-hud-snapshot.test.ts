@@ -92,10 +92,10 @@ describe('arena HUD snapshot', () => {
       chainStep: 1,
       cooldown: 0,
     });
-    for (let i = 0; i < Math.round(0.5 / STEP); i++)
+    for (let i = 0; i < Math.round(0.6 / STEP); i++)
       stepWorld(registry, w, { move: still, holding: 0 }, STEP);
     hud = snapshot(w);
-    expect(hud.abilities[0].hold!.charge).toBeCloseTo(0.5, 1);
+    expect(hud.abilities[0].hold!.charge).toBeCloseTo(0.57, 1);
     expect(hud.abilities[0].hold!.stage).toBe(1);
     expect(hud.abilities[0].chainStep).toBe(1); // the window waits for the release
     expect(hud.busy).toBe(true);
@@ -113,11 +113,30 @@ describe('arena HUD snapshot', () => {
     const w = sandbox({}, { basic: [{ kind: 'hold', element: 'fire' }] });
     for (let i = 0; i < 90 && (w.hero.swing?.held ?? null) === null; i++)
       stepWorld(registry, w, { move: still, attack: true }, STEP);
-    for (let i = 0; i < Math.round(0.5 / STEP); i++)
+    for (let i = 0; i < Math.round(0.6 / STEP); i++)
       stepWorld(registry, w, { move: still, attack: true }, STEP);
     const hud = snapshot(w);
     expect(hud.basicNextKind).toBe('hold');
     expect(hud.basicHold!.stage).toBe(1);
+  });
+
+  it("shows a slot's beat as its wait (the longer of it and the move's cooldown), flagged as a beat", () => {
+    const w = sandbox();
+    w.t = 10;
+    w.hero.beatFrom[0] = 9.8;
+    w.hero.beatUntil[0] = 10.4;
+    let bolt = snapshot(w).abilities[0];
+    expect(bolt).toMatchObject({ beat: true, ready: false });
+    expect(bolt.cooldown).toBeCloseTo(0.4);
+    expect(bolt.cooldownTotal).toBeCloseTo(0.6);
+    // A cooldown that outlasts the beat shows instead, with its own length.
+    w.hero.cooldowns[0][0] = 11;
+    bolt = snapshot(w).abilities[0];
+    expect(bolt).toMatchObject({ beat: false, cooldown: 1, ready: false });
+    expect(bolt.cooldownTotal).toBeCloseTo(w.hero.chains[0].moves[0].cooldown);
+    // Over, and the button is ready again.
+    w.t = 11;
+    expect(snapshot(w).abilities[0]).toMatchObject({ beat: false, cooldown: 0, ready: true });
   });
 
   it("carries Obsidian's barrier and when Galvanize last fired", () => {

@@ -62,9 +62,14 @@ export interface AbilityHud {
   elements: ManaType[];
   payment: 'mana' | 'charge' | 'cast';
   cost: number;
-  /** Seconds until the next move is ready (0 = ready). */
+  /**
+   * Seconds until the next move can go (0 = ready): the longer of its cooldown
+   * and the slot's beat, and that wait's whole length.
+   */
   cooldown: number;
   cooldownTotal: number;
+  /** The wait is the slot's beat, not a cooldown: the button sweeps without a countdown. */
+  beat: boolean;
   /** Charge-paid: the meter over the next move's need, 0..1; otherwise null. */
   charge: number | null;
   /** The chain's move the next press makes (0-based), the chain's length, and that move's kind. */
@@ -194,7 +199,10 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     abilities: h.chains.map((chain, i) => {
       const step = pressStep(h, i, t, comboWindow);
       const ab = chain.moves[step];
-      const cooldown = Math.max(0, h.cooldowns[i][step] - t);
+      // The longer wait shows: the next move's cooldown, or the slot's beat.
+      const cooling = Math.max(0, h.cooldowns[i][step] - t);
+      const beat = Math.max(0, h.beatUntil[i] - t) > cooling;
+      const cooldown = beat ? h.beatUntil[i] - t : cooling;
       const charged = ab.payment !== 'charge' || h.charge[i] >= ab.chargeNeed - 1e-9;
       const affordable = canAfford(world, ab);
       return {
@@ -206,13 +214,17 @@ export function snapshot(world: ArpgWorld): ArenaHud {
         payment: ab.payment,
         cost: ab.cost,
         cooldown,
-        cooldownTotal: Math.max(0.01, ab.channel + ab.cooldown),
+        cooldownTotal: Math.max(
+          0.01,
+          beat ? h.beatUntil[i] - h.beatFrom[i] : ab.channel + ab.cooldown,
+        ),
+        beat,
         charge:
           ab.payment === 'charge' ? Math.min(1, h.charge[i] / Math.max(1e-9, ab.chargeNeed)) : null,
         chainStep: step,
         chainLength: chain.moves.length,
         nextKind: ab.kind,
-        hold: h.hold?.slot === i ? holdCharge(bal, h.hold.start, t) : null,
+        hold: h.hold?.slot === i ? holdCharge(bal, h.hold.start, t, h.hold.full) : null,
         // Only a channel shows: a conjure is anticipation in the arena, not a HUD bar.
         windup:
           channel?.slot === i
@@ -234,7 +246,7 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     basicChainStep: blow,
     basicChainLength: h.stats.weapon.blows.length,
     basicNextKind: h.stats.weapon.blows[blow].kind,
-    basicHold: held !== null ? holdCharge(bal, held, t) : null,
+    basicHold: held !== null ? holdCharge(bal, held, t, bal.chains.holdTime * h.stats.tempo) : null,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,
@@ -253,8 +265,9 @@ export function snapshot(world: ArpgWorld): ArenaHud {
 function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
   const h = world.hero;
   const bal = getDelveRegistry().getDelveBalance();
-  return h.hold?.slot === slot
-    ? chainMove(h.chains[slot], h.hold.step, holdCharge(bal, h.hold.start, world.t).stage)
+  const hold = h.hold?.slot === slot ? h.hold : null;
+  return hold
+    ? chainMove(h.chains[slot], hold.step, holdCharge(bal, hold.start, world.t, hold.full).stage)
     : nextMove(h, slot, world.t, bal.abilities.comboWindow);
 }
 

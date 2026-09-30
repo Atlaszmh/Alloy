@@ -1,4 +1,11 @@
-import { forwardRef, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react';
 import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
@@ -180,11 +187,13 @@ const GALVANIZE_SPARK = 0.4;
 
 /**
  * A hold's charge filling above its button over a track that shows on any
- * floor, ticked at the stages (`data-stage`: the stage reached). The fill
- * glides between the HUD's refreshes.
+ * floor, ticked at the stages short of its end (`data-stage`: the stage
+ * reached); its end is full power. The fill glides between the HUD's refreshes.
  */
 function HoldBar({ hold, color }: { hold: { charge: number; stage: number }; color: string }) {
-  const stages = getDelveRegistry().getDelveBalance().chains.holdStages;
+  const stages = getDelveRegistry()
+    .getDelveBalance()
+    .chains.holdStages.filter((s) => s < 1);
   return (
     <span
       className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/60 ring-1 ring-white/30"
@@ -203,6 +212,7 @@ function HoldBar({ hold, color }: { hold: { charge: number; stage: number }; col
       {stages.map((s) => (
         <span
           key={s}
+          data-tick
           className="absolute inset-y-0 w-px bg-white/70"
           style={{ left: `${s * 100}%` }}
         />
@@ -246,7 +256,8 @@ interface Press {
 
 /**
  * One ability button: its chain's next move, the step dots, that move's kind
- * and a hold's charge. A tap, or a press let go in place, casts auto-aimed;
+ * and a hold's charge, and a sweep while it waits (a cooldown, with its
+ * seconds, or the slot's beat). A tap, or a press let go in place, casts auto-aimed;
  * dragging out shows the aim marker in the arena and releasing casts there;
  * out and back onto the button cancels (a charging hold unpaid). While it's
  * held a hold move charges. The bar's buttons share one press (`press`), as
@@ -281,6 +292,13 @@ function AbilityButton({
   const color2 = manaStyle(registry, ab.elements[ab.elements.length - 1]).color;
   const cooling = ab.cooldown > 0.05;
   const cdFrac = cooling ? Math.min(1, ab.cooldown / ab.cooldownTotal) : 0;
+  // The sweep glides between the HUD's refreshes while it empties, and snaps when it rises (a
+  // refresh at the same angle, in a pause or a hit-stop, keeps the glide going).
+  const lastSweep = useRef(0);
+  const glide = cdFrac <= lastSweep.current;
+  useEffect(() => {
+    lastSweep.current = cdFrac;
+  });
   const size = slot === 2 ? 72 : 64;
 
   const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -380,13 +398,17 @@ function AbilityButton({
         )}
         {cdFrac > 0 && (
           <span
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: `conic-gradient(rgba(0,0,0,0.72) ${cdFrac * 360}deg, transparent 0deg)`,
-            }}
+            className="delve-sweep absolute inset-0 rounded-full"
+            data-sweep={ab.beat ? 'beat' : 'cooldown'}
+            style={
+              {
+                '--delve-sweep': `${cdFrac * 360}deg`,
+                transition: glide ? '--delve-sweep 80ms linear' : 'none',
+              } as CSSProperties
+            }
           />
         )}
-        {cooling && (
+        {cooling && !ab.beat && (
           <span className="delve-display absolute text-base font-bold text-white">
             {ab.cooldown >= 10 ? Math.ceil(ab.cooldown) : ab.cooldown.toFixed(1)}
           </span>
@@ -417,7 +439,7 @@ function AbilityButton({
           {hint}
         </span>
       )}
-      {galvanized && cooling && (
+      {galvanized && cooling && !ab.beat && (
         <span
           data-spark
           aria-hidden

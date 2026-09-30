@@ -170,10 +170,11 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     spawnDummies(registry, w, { layout: 'single', element: null });
     w.hero.comboStep[0] = 0;
     w.hero.comboAt[0] = w.t;
-    // Held past holdMax, the Lance fires by itself and lands; the button stays held.
+    // Held past holdMax, the Lance fires by itself, lands and waits out its beat; the button
+    // stays held.
     const { holdMax } = registry.getDelveBalance().chains;
     const events: ArpgEvent[] = [];
-    for (let i = 0; i < Math.round((holdMax + 0.5) / STEP); i++)
+    for (let i = 0; i < Math.round((holdMax + 1.5) / STEP); i++)
       events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP));
     expect(events.filter((e) => e.kind === 'cast')).toHaveLength(1);
     expect(w.holdDropped).toBe(0);
