@@ -114,6 +114,8 @@ Each toggle is checked where its rule lives:
   - `pay` sets no cooldown and the charge lockout is skipped, so an ability can fire again as soon as it lands.
   - Charge-paid abilities stay charged while it's on: `heroTick` fills their charge every tick, and switching it on (or a world created with it on) fills them at once.
   - The channel still plays, so its timing can be tested.
+
+  > **Superseded** by `2026-09-29-delve-chain-feel-design.md` (v0.47.0): No cooldowns leaves the beats on. After a move lands its slot still waits its beat, so the same ability fires again right after its beat, not as soon as it lands; the switch's hint reads "Cooldowns are off and charge stays full; each move still waits its beat".
 - **Invulnerable:**
   - In `hurtHero`, the life lost becomes 0 and the hero never dies.
   - The `heroHit` event still carries the would-be damage, with a new `blocked: true` flag. The renderer shows it as a grey number with no red flash.
