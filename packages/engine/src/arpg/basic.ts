@@ -5,6 +5,7 @@ import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
+import { holdFull } from './abilities/resolve.js';
 import { surging } from './abilities/defend.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
@@ -129,7 +130,7 @@ export function basicHoldTick(ctx: SimCtx, held: boolean, dt: number, aim: Vec |
   const t = world.t;
   sw.held ??= t;
   // The hero's tempo now: a weapon swap drops the swing.
-  const fullTime = bal.chains.holdTime * h.stats.tempo;
+  const fullTime = holdFull(bal, h.stats.tempo);
   const { stage } = holdCharge(bal, sw.held, t, fullTime);
   const full = t - sw.held >= bal.chains.holdMax * h.stats.tempo - 1e-9;
   if (full || !held) {

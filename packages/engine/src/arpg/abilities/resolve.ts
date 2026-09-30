@@ -222,6 +222,11 @@ export function beatFor(
   return bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo;
 }
 
+/** Seconds a hold (an ability's or a hold blow's) takes to reach full charge at `tempo`. */
+export function holdFull(bal: DelveBalance, tempo: number): number {
+  return bal.chains.holdTime * tempo;
+}
+
 /**
  * A move's numbers as the sim uses them: its hit before the foe's modifiers
  * (weapon damage × damage × power, with the step bonus's power, but for a

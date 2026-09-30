@@ -19,7 +19,15 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { castAbility, castTick, holdTick, inBeat, nextMove, pressStep } from './abilities/cast.js';
+import {
+  canAfford,
+  castAbility,
+  castTick,
+  holdTick,
+  inBeat,
+  nextMove,
+  pressStep,
+} from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -256,7 +264,8 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
  * and its next move's cooldown (the earliest over every waiting press that
  * lives that long). A held ability button whose slot waits on either counts as
  * a waiting press (the player means to use that slot next), unless its hold was
- * dropped. Infinity with none (see the chain feel spec).
+ * dropped or the move it would cast can't be paid for (its repeat press would be
+ * refused, and basic hits fill the pool). Infinity with none (see the chain feel spec).
  */
 function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
   const { world, bal } = ctx;
@@ -269,6 +278,13 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
           h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)],
         )
       : Infinity;
+  const payable = (slot: number) => {
+    const chain = h.chains[slot];
+    if (!chain) return false;
+    const ab = nextMove(h, slot, t, bal.abilities.comboWindow);
+    if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
+    return canAfford(world, ab);
+  };
   const busy = isDashing(ctx) || !!h.windup || !!h.hold;
   let due = Infinity;
   for (const q of world.queuedCasts) {
@@ -277,7 +293,12 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
     if (!busy && !inBeat(h, q.cast.slot, t) && q.until < at) continue;
     due = Math.min(due, at);
   }
-  if (holding !== null && holding !== undefined && holding !== world.holdDropped) {
+  if (
+    holding !== null &&
+    holding !== undefined &&
+    holding !== world.holdDropped &&
+    payable(holding)
+  ) {
     const held = readyAt(holding);
     if (held > t) due = Math.min(due, held);
   }

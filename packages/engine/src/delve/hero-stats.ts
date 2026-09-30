@@ -14,6 +14,7 @@ import {
   defaultBasic,
   defaultChains,
   followBasic,
+  holdFull,
   playedKind,
   resolveChain,
   stepBonus,
@@ -352,7 +353,7 @@ export function useInterval(
     chain.moves.map((move, i) => {
       const ab = valuedMove(chain, i);
       const hold = move.kind === 'hold';
-      const windup = hold ? Math.max(bal.chains.holdTime * tempo, ab.castTime) : ab.castTime;
+      const windup = hold ? Math.max(holdFull(bal, tempo), ab.castTime) : ab.castTime;
       const cooldown = hold ? windup + ab.cooldown : ab.cooldown + ab.channel;
       const pay =
         chain.payment === 'charge'

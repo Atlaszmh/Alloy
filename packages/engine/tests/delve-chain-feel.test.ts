@@ -3,7 +3,7 @@ import balanceData from '../src/data/balance.json';
 import delveData from '../src/data/delve.json';
 import { BalanceConfigSchema, DelveDataSchema } from '../src/data/schemas.js';
 import { inBeat, nextMove, pressMove } from '../src/arpg/abilities/cast.js';
-import { beatFor, chainMove, resolveChain } from '../src/arpg/abilities/resolve.js';
+import { beatFor, chainMove, holdFull, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { respawnHero } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
@@ -156,6 +156,12 @@ describe('holds by tempo', () => {
   /** A one-hold Fire Bolt chain on a sword (or `equipped`), basic attacks off, a foe up the arena. */
   const holder = (equipped?: EquippedGear) =>
     arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'hold' }, equipped });
+
+  it('reach full charge at holdTime × tempo (holdFull)', () => {
+    expect(holdFull(bal, 1)).toBe(bal.chains.holdTime);
+    expect(holdFull(bal, 1.3)).toBeCloseTo(bal.chains.holdTime * 1.3);
+    expect(holdFull({ ...bal, chains: { ...bal.chains, holdTime: 2 } }, 0.8)).toBeCloseTo(1.6);
+  });
 
   it('reaches stage 1 at half its time and full power at 100%, scaled by tempo', () => {
     for (const [w, tempo] of [
@@ -477,6 +483,26 @@ describe('the basic swing while a press waits', () => {
     expect(swings({ holding: 0 }, { dropped: true })).toBe(1);
     expect(swings({ holding: 1 }, { cooling: true })).toBe(0);
     expect(swings({}, { cooling: true })).toBe(1);
+  });
+
+  it("a held button whose next move can't be paid for holds no swing back", () => {
+    /** Swings that start before `slot`'s beat ends, held, with the pool (or its charge) emptied. */
+    const swings = (slot: number) => {
+      const w = fighter();
+      w.hero.charge[2] = 1e9;
+      press(w, slot);
+      w.hero.manaRegen = 0;
+      w.hero.charge[slot] = 0;
+      w.hero.cooldowns[slot].fill(0);
+      // A mana-paid move a point short; a charge-paid one with a full pool.
+      w.hero.mana = slot === 0 ? nextMove(w.hero, 0, w.t, WINDOW).cost - 1 : w.hero.manaMax;
+      const ready = w.hero.beatUntil[slot];
+      idleUntilPast(w, ready, { holding: slot });
+      arm(w);
+      return watch(w, () => w.t + STEP >= ready - 1e-9, { holding: slot }).swings;
+    };
+    expect(swings(0)).toBe(1);
+    expect(swings(2)).toBe(1);
   });
 
   it("a blow striking on a waiting press's last buffered tick doesn't cost the press its buffer", () => {

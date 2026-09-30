@@ -2,6 +2,7 @@ import {
   MOVE_KINDS,
   beatFor,
   blowNumbers,
+  holdFull,
   moveNumbers,
   playedKind,
   type AbilitySlot,
@@ -97,7 +98,7 @@ function Readout({
   );
   if (full)
     lines.push(
-      `Fully charged (${secs(bal.chains.holdTime * stats.tempo)}): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}, ${beat(full)}`,
+      `Fully charged (${secs(holdFull(bal, stats.tempo))}): hits for ${formatNumber(moveNumbers(stats, bal, full).hit)}, ${full.payment === 'charge' ? `Charge ${Math.round(full.chargeNeed)}` : `${Math.round(full.cost)} mana`}, ${beat(full)}`,
     );
   // A mana cost the pool can't hold: the move's, else a hold's full charge (the engine would
   // let go at the highest stage the pool pays).

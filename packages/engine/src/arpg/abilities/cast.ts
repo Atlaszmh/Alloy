@@ -5,7 +5,7 @@ import type { SimCtx } from '../combat.js';
 import { cancelSwing, pushTick, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
-import { beatFor, chainMove, playedKind, stepBonus, stepHeft } from './resolve.js';
+import { beatFor, chainMove, holdFull, playedKind, stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
@@ -217,7 +217,7 @@ function startHold(ctx: SimCtx, slot: number): void {
     step,
     start: t,
     aim,
-    full: bal.chains.holdTime * tempo,
+    full: holdFull(bal, tempo),
     max: bal.chains.holdMax * tempo,
   };
 }

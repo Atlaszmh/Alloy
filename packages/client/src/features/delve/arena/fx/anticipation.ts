@@ -3,6 +3,7 @@ import {
   activeMove,
   chainMove,
   holdCharge,
+  holdFull,
   stepHeft,
   type ArpgWorld,
   type Vec,
@@ -44,8 +45,7 @@ export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | nul
     const blow = wpn.blows[h.swing.step];
     const color = MANA_HEX[blow.element];
     if (h.swing.held !== null) {
-      const full = bal.chains.holdTime * h.stats.tempo;
-      const { charge, stage } = holdCharge(bal, h.swing.held, w.t, full);
+      const { charge, stage } = holdCharge(bal, h.swing.held, w.t, holdFull(bal, h.stats.tempo));
       const heft = wpn.feel[HOLD_STAGE_KINDS[stage]].heft ?? 0.3;
       return { dir: h.swing.dir, heft, progress: charge, color };
     }

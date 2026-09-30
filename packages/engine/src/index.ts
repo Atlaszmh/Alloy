@@ -218,6 +218,7 @@ export {
   chargeCap,
   stepBonus,
   beatFor,
+  holdFull,
   playedKind,
   moveNumbers,
   blowNumbers,
