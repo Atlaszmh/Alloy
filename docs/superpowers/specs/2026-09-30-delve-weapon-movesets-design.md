@@ -21,6 +21,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 | Question | Decision |
 |---|---|
 | Where the moveset lives | **On the weapon.** Each weapon carries its own four chains, with a slot count per chain. |
+| Which chains a weapon carries | **By rarity.** Common and uncommon carry Basic and Primary. Magic and rare add the Defensive. Epic and legendary add the Ultimate. The starting weapon is common, so a new hero begins with Basic and Primary. |
 | Starting slots | Primary, Defensive and Ultimate start at **1 slot**. The basic chain starts at its **weapon's string length** (sword 3, maul 2, dagger 4). Every chain grows to **5**. |
 | Drops | **Extra slots by rarity**, spread over the chains, holding default moves. |
 | Slot parts | **Links.** Salvaging a weapon gives one Link per extra slot. A slot costs Links at a rising price (1, 2, 3, 4) plus scrap. |
@@ -32,7 +33,21 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 ## Design
 
 ### The moveset
-- **On the weapon.** A weapon item carries `moveset: { chains: Chains; slots: Record<ChainSkill, number> }`. Each chain holds 1 to `slots[skill]` moves, and `slots[skill]` runs from its base up to `chains.cap` (5).
+- **On the weapon.** A weapon item carries `moveset: { chains: Partial<Chains>; slots: Partial<Record<ChainSkill, number>> }`. Each chain holds 1 to `slots[skill]` moves, and `slots[skill]` runs from its base up to `chains.cap` (5).
+- **Which chains a weapon carries.** Rarity decides (`balance.json → delve.movesets.carries`):
+
+  | Rarity | Chains carried |
+  |---|---|
+  | common, uncommon | `basic`, `primary` |
+  | magic, rare | `basic`, `primary`, `defensive` |
+  | epic, legendary | all four |
+
+  A weapon's moveset holds exactly the chains its rarity carries. Unarmed carries `basic` and `primary`.
+- **An absent skill.** An uncarried skill has no chain: the hero's `chains[slot]` is null, and every reader treats that as no skill.
+  - `castAbility`, `startHold` and `abilityReady` refuse it.
+  - Its key, HUD button and pad button do nothing; the HUD hides the button.
+  - The bot skips it, Power counts nothing for it, and `gainCharge` fills no meter for it.
+  - The chain builder shows its tab locked: "Carried by magic weapons and better", or "…epic…" for the Ultimate.
 - **Base slots.** Base slots are 1 for `primary`, `defensive` and `ultimate`. For `basic` it's the length of the weapon base's `defaultChain`; unarmed, `hero.defaultChain`'s (3). A weapon's **extra slots** are, summed over its chains, `slots − base`.
 - **The hero's chains.** `heroChains(registry, equipped, pair)` gives the equipped weapon's `moveset.chains`. Unarmed, it gives a computed default moveset at base slots, never stored, in the pair's primary, or `'fire'` before the choice. It takes the gear rather than the profile, so `profileStats`, `heroPower` and `compareItem` lose their `chains` parameter.
 - **`profile.chains` and `profile.chainCaps` go.** Every reader moves to `heroChains` or the equipped weapon's moveset:
@@ -79,7 +94,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   | epic | 2–3 |
   | legendary | 3–4 |
 
-  They are spread uniformly at random over the four chains, never past 5. Each holds its chain's default move in the item's `mana`.
+  They are spread uniformly at random over the chains the weapon carries, never past 5. Each holds its chain's default move in the item's `mana`.
 - **The roll runs after everything else.** `generateItem` rolls the moveset last, from `rng.fork('moveset')`, which never advances the item's RNG. So every item's stats, and every later drop, come out exactly as today.
   - The starting gear and the DPS Lab's `sandboxWeapon` (common, 0 extra) get base movesets. The Training Grounds' picker may choose any rarity, whose extra slots don't matter: the sandbox uses its own chains.
   - The DPS Lab, which builds its chains explicitly, stays identical.
@@ -127,6 +142,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   - **Each chain keeps its extra count on the new weapon:** its slots become the new base plus the source's extra, capped at 5.
     - Any overflow past 5 comes back as Links.
     - Moves past the new slot count (a basic chain onto a lower-base weapon) are dropped from the end.
+  - **Chains the target can't carry** (a lower rarity) stay behind: their extra slots come back as Links, and their moves are gone. The price counts only the extras that move.
   - **The target's own extra slots** come back as Links.
   - **The old weapon** returns to the bag at its base slots, with default moves in its own mana.
   - **Price:** `transferScrap` (30) for each of the source's extra slots.
@@ -164,7 +180,8 @@ Unchanged: their own chains, 5 slots, free and instant. Load my build copies the
   - **The equipped weapon** gets `moveset.chains` equal to the profile's chains, and `slots` equal to each chain's length, raised to at least its base.
   - **Every other weapon** gets base defaults.
   - **The profile** loses `chains` and `chainCaps` and gains `links: 0`.
-  - **Nothing is lost,** with one exception: an **unarmed** v5 save with built chains resets them to the unarmed defaults, since no weapon holds them. It's rare, and a toast says so: `ParsedDelveProfile` gains `movesetReset: boolean`, and the store adds its notice alongside `fixNotices`.
+  - **The equipped weapon keeps only the chains its rarity carries.** A chain it can't carry, such as a common weapon's Defensive and Ultimate, is dropped: its moves go, and its moves beyond one slot come back as Links. A toast says what went and why.
+  - **Otherwise nothing is lost,** with one exception: an **unarmed** v5 save with built chains resets them to the unarmed defaults, since no weapon holds them. It's rare, and a toast says so: `ParsedDelveProfile` gains `movesetReset: boolean`, and the store adds its notice alongside `fixNotices`.
   - **Step order.** The v4 → v5 path's `fixChainsToPair` runs on the v5 shape first, then the save converts to v6. Or the plan keeps a v5-shaped fix.
 - **Older saves.** A frozen `DelveProfileV5Schema` keeps v5 readable, and older saves migrate through v5 as today.
 
@@ -188,7 +205,7 @@ Unchanged: their own chains, 5 slots, free and instant. Load my build copies the
   - `playFloor` no longer equips mid-floor.
 
 ## Balance and gates
-- **Pacing will drop.** New heroes start with 1-move ability chains, the autopilot no longer gears up mid-dive, and Mana Dust (only from off-pair salvage) now also pays for edits.
+- **Pacing will drop.** New heroes start with only Basic and Primary, with 1-move ability chains; the Defensive waits for a magic weapon and the Ultimate for an epic one. Moreover, the autopilot no longer gears up mid-dive, and Mana Dust (only from off-pair salvage) now also pays for edits.
   - Capture `runAutopilot` numbers before any change.
   - Every rail in `tests/delve-pacing.test.ts` must hold. If one breaks, stop and report the numbers. The fix is the user's call: slot costs, drop slots, starting slots, dust prices, or a changed rail.
 - **The DPS Lab grid** must come out identical.
@@ -196,6 +213,9 @@ Unchanged: their own chains, 5 slots, free and instant. Load my build copies the
 ## Testing
 - **Engine:**
   - base slots per weapon;
+  - chains carried by rarity, an absent skill refused everywhere, and the HUD hiding it;
+  - a transfer onto a lower rarity leaving chains behind, with their Links;
+  - migration dropping uncarried chains, with its toast;
   - drop slots by rarity (uncommon included), and determinism: every other item stat unchanged against v0.48.0;
   - fusing's Link refund;
   - salvage and a full-bag melt giving Links;
