@@ -202,6 +202,21 @@ describe('the aim marker of a key or button held to aim', () => {
     );
     expect(view.radius).toBeGreaterThan(fourth.radius);
   });
+
+  it("during the slot's own wind-up, the move a press then casts: the one after the winding one", () => {
+    const w = world({
+      moves: [
+        { kind: 'medium', form: 'bolt', elements: ['fire'] },
+        { kind: 'medium', form: 'burst', elements: ['fire'] },
+      ],
+      payment: 'mana',
+    });
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    const STEP = registry.getDelveBalance().arena.step;
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0, aim: null } }, STEP);
+    expect(w.hero.windup?.step).toBe(0);
+    expect(aimView(w, aiming, point, 1000)?.marker).toBe('circle');
+  });
 });
 
 describe("frameInput: each step's input from the keys, the HUD and the pad", () => {

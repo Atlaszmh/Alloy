@@ -80,7 +80,7 @@ export interface PadCast {
  * The ability the controller casts this frame, read from the world (not the
  * HUD snapshot). A slot whose button casts on its release (`castsOnRelease`)
  * casts when it lets go (`released`: the slot held last frame and not now),
- * never on the press (unless `tap`: pressed with a higher slot in one frame, it
+ * never on the press (unless `tap`: its button isn't the one held last, so it
  * taps, as a key does) and never by repeat: the held button charges it. Any
  * other casts on the press, which always tries (so an unaffordable one still
  * says so), or with repeat on (`castHeld`), early: whenever its slot has no
@@ -118,8 +118,16 @@ export interface PadMemory {
   holding: number | null;
   /** The ability buttons held, earliest pressed first: hold-to-repeat follows the latest. */
   order: number[];
-  /** A press that waits a frame (a chord's, or the higher of two in one frame): it casts now. */
-  carried: number | null;
+  /**
+   * Presses that wait, one going a frame (a chord's, or all but the lowest of
+   * several in one frame), in the order they go.
+   */
+  carried: number[];
+  /**
+   * The slot whose latest press cast on the press itself: its release casts
+   * only a hold it charges, never a second move.
+   */
+  sent: number | null;
   /**
    * The attack button held then, or let go with its held blow not yet struck:
    * the tick that strikes it still aims with the stick.
@@ -128,7 +136,7 @@ export interface PadMemory {
 }
 
 export function padMemory(): PadMemory {
-  return { holding: null, order: [], carried: null, attackHeld: false };
+  return { holding: null, order: [], carried: [], sent: null, attackHeld: false };
 }
 
 /** The controller's part of a frame's input: its cast (`padCast`), and the slot it is holding. */
@@ -143,11 +151,13 @@ export interface PadFrame {
  * held; an earlier button counts again only when it is pressed again. So a
  * second button pressed while another's hold charges brings that hold's
  * release (it casts now) and its own press, which follows next frame (the
- * chord's carry), whichever slots they are. Two pressed in one frame count in
- * slot order: the lower's press goes now (a tap on a hold, as a key's), the
- * higher becomes `holding` and its press follows next frame, unless its next
- * move is a hold (the button charges it). Hold-to-repeat streams the latest
- * held repeat button, falling back to an earlier one still held.
+ * chord's carry), whichever slots they are. Several pressed in one frame count
+ * in slot order: the lowest's press goes now (a tap on a hold, as a key's),
+ * the rest follow one a frame (the others tap too), and the highest becomes
+ * `holding`: its press casts unless its next move is a hold (the button
+ * charges it). A button whose press cast lets go quietly (`sent`), unless its
+ * hold charges: a quick tap never casts twice. Hold-to-repeat streams the
+ * latest held repeat button, falling back to an earlier one still held.
  */
 export function padFrameCast(
   registry: DataRegistry,
@@ -156,24 +166,32 @@ export function padFrameCast(
   mem: PadMemory,
 ): PadFrame {
   const pressed = acts.cast;
+  // A repeat button already held when the pad first sees it (pressed while a menu owned the pad)
+  // counts as the earliest, for repeat only: `holding` still needs a press.
+  const unseen = acts.repeat.filter((s) => !mem.order.includes(s) && !pressed.includes(s));
   mem.order = [
+    ...unseen,
     ...mem.order.filter((s) => acts.held.includes(s) && !pressed.includes(s)),
     ...pressed,
   ];
   const latest = pressed.length > 0 ? pressed[pressed.length - 1] : null;
   const holding =
     latest ?? (mem.holding !== null && acts.held.includes(mem.holding) ? mem.holding : null);
-  const released = mem.holding !== null && mem.holding !== holding ? mem.holding : null;
+  const up = mem.holding !== null && mem.holding !== holding ? mem.holding : null;
+  // A button whose press cast lets go without casting, unless its hold charges.
+  const released = up !== null && (mem.sent !== up || world.hero.hold?.slot === up) ? up : null;
   mem.holding = holding;
-  const carried = mem.carried;
-  mem.carried = null;
-  const press = pressed.length > 0 ? pressed[0] : carried;
+  // The presses waiting go first, then this frame's in slot order; a slot pressed again goes last.
+  const queue = [...mem.carried.filter((s) => !pressed.includes(s)), ...pressed];
+  const press = queue.length > 0 ? queue[0] : null;
   const castHeld = [...mem.order].reverse().find((s) => acts.repeat.includes(s)) ?? null;
-  const cast = padCast(registry, world, { cast: press, castHeld }, released, pressed.length > 1);
-  // A chord: the release casts now, the press next frame.
-  if (cast?.slot === released && press !== null && press !== released) mem.carried = press;
-  // Two at once: the higher follows next frame, unless it charges a hold.
-  else if (pressed.length > 1 && !castsOnRelease(registry, world, latest!)) mem.carried = latest;
+  // A press whose button isn't `holding` can't cast on its release: it taps, as a key does.
+  const cast = padCast(registry, world, { cast: press, castHeld }, released, press !== holding);
+  if (press !== null)
+    mem.sent = cast?.slot === press && !cast.repeat ? press : mem.sent === press ? null : mem.sent;
+  // One press goes a frame: a chord's release casts first, and the presses follow.
+  mem.carried =
+    cast !== null && cast.slot === released && press !== released ? queue : queue.slice(1);
   return { cast, holding };
 }
 

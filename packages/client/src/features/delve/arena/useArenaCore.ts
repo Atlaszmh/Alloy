@@ -10,7 +10,7 @@ import {
   chainMove,
   holdCharge,
   moveNumbers,
-  nextMove,
+  pressMove,
   pressStep,
   type ArpgEvent,
   type ArpgWorld,
@@ -261,14 +261,18 @@ export function snapshot(world: ArpgWorld): ArenaHud {
   };
 }
 
-/** The move a slot's button would fire: its hold at the stage it has reached while one charges, else its next move. */
+/**
+ * The move a slot's button would fire: its hold at the stage it has reached
+ * while one charges, else the move a press now casts (`pressMove`: during the
+ * slot's own wind-up, the one after the winding move).
+ */
 function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
   const h = world.hero;
   const bal = getDelveRegistry().getDelveBalance();
   const hold = h.hold?.slot === slot ? h.hold : null;
   return hold
     ? chainMove(h.chains[slot], hold.step, holdCharge(bal, hold.start, world.t, hold.full).stage)
-    : nextMove(h, slot, world.t, bal.abilities.comboWindow);
+    : pressMove(h, slot, world.t, bal.abilities.comboWindow);
 }
 
 /**

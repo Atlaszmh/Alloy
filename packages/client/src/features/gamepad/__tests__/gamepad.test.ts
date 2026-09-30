@@ -306,6 +306,27 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     expect(tap.hero.windup?.stage).toBe(0);
   });
 
+  it('padFrameCast: three presses in one frame all cast, one a frame; so do a release and two presses', () => {
+    const all = arena({ ultimate: NOVA });
+    const mem = padMemory();
+    const frames = Array.from({ length: 60 }, (_, i) =>
+      frame(all, mem, i === 0 ? [0, 1, 2] : [], [0, 1, 2]),
+    );
+    expect(frames.slice(0, 3).map((f) => f.slot)).toEqual([0, 1, 2]);
+    expect(frames.flatMap((f) => f.casts).sort()).toEqual([0, 1, 2]);
+
+    // RT's Bolt charging, then LB and R3 at once: the release, then each press.
+    const chord = arena({ primary: one('hold', 'bolt'), ultimate: NOVA });
+    const cmem = padMemory();
+    for (let i = 0; i < 15; i++) frame(chord, cmem, i === 0 ? [0] : [], [0]);
+    expect(chord.hero.hold?.slot).toBe(0);
+    const after = Array.from({ length: 60 }, (_, i) =>
+      frame(chord, cmem, i === 0 ? [1, 2] : [], [0, 1, 2]),
+    );
+    expect(after.slice(0, 3).map((f) => f.slot)).toEqual([0, 1, 2]);
+    expect(after.flatMap((f) => f.casts).sort()).toEqual([0, 1, 2]);
+  });
+
   it('hold-to-repeat follows the latest held repeat button, falling back to an earlier one still held', () => {
     const w = arena();
     const mem = padMemory();
@@ -320,6 +341,13 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     // With LB's repeat on too, the latest streams; let go, RT again.
     expect(cast([], [0, 1], [0, 1])).toEqual(repeatOf(1));
     expect(cast([], [0], [0])).toEqual(repeatOf(0));
+  });
+
+  it('a repeat button already held when the pad first sees it (pressed in a menu) repeats, but holds nothing', () => {
+    const w = arena();
+    const mem = padMemory();
+    const f = padFrameCast(registry, w, { cast: [], held: [0, 1], repeat: [0] }, mem);
+    expect(f).toEqual({ cast: repeatOf(0), holding: null });
   });
 
   it("repeat presses early: during a wind-up, and the press waits out the landing's beat", () => {
@@ -386,6 +414,32 @@ describe('padCast (a hold casts on its release, read from the world)', () => {
     for (let i = 0; i < 60 && !w.hero.hold; i++) frames.push(frame(w, mem, [], [0]));
     expect(w.hero.hold).toMatchObject({ slot: 0, step: 1 });
     expect(frames.flatMap((f) => f.casts)).toEqual([0]); // the light's, and no tap
+  });
+
+  it("an RT tap that cast its light doesn't cast again on its release, though a hold is next", () => {
+    const tapped = (chord: boolean) => {
+      const w = world();
+      spawnDummies(registry, w, { layout: 'single', element: null });
+      w.hero.nextAttackAt = 1e9;
+      const mem = padMemory();
+      const frames = [frame(w, mem, [0], [0])];
+      expect(w.hero.windup?.step).toBe(0);
+      // Let go in the light's wind-up; or, a chord, LB goes down with RT still held.
+      frames.push(chord ? frame(w, mem, [1], [0, 1]) : frame(w, mem, [], []));
+      for (let i = 0; i < 90; i++) frames.push(frame(w, mem, [], chord ? [0, 1] : []));
+      return frames.flatMap((f) => f.casts);
+    };
+    expect(tapped(false)).toEqual([0]);
+    expect(tapped(true)).toEqual([0, 1]);
+
+    // A press held back in the wind-up (the hold next) still taps the hold on a quick release.
+    const w = world();
+    spawnDummies(registry, w, { layout: 'single', element: null });
+    w.hero.nextAttackAt = 1e9;
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0, aim: null } }, STEP);
+    const mem = padMemory();
+    expect(frame(w, mem, [0], [0]).slot).toBeNull();
+    expect(frame(w, mem, [], []).slot).toBe(0);
   });
 });
 
