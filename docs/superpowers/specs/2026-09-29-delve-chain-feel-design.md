@@ -1,6 +1,9 @@
 # Delve chain feel: tempo, holds and beats
 
-**Status:** approved design, 2026-09-29. It follows v0.46.0 (`2026-09-29-delve-moves-and-chains-design.md`) and ships as v0.47.0.
+**Status:** approved design, 2026-09-29. It follows v0.46.0 (`2026-09-29-delve-moves-and-chains-design.md`) and ships as v0.47.0, built at the starting values below: nothing was tuned. Measured before (v0.46.0) and after (the DPS Lab grid at depth 10, one dummy and the pack, one seed; the pacing rails at `tests/delve-pacing.test.ts`'s seeds):
+- **DPS Lab.** Basics unchanged (504 rows, +0.0%). Mana rows: light, medium and heavy median +0.0%, hold −3.3%, default chains +0.0% (Bolt −5.0%, Volley −7.2%, Lance −2.7%, Burst −2.4%; Strike, Nova, Barrage and Maelstrom +0.0%), the worst row −47.1% (a heavy). Cast rows lose the most, as expected: light −2.0%, medium −5.5%, heavy −17.0% (worst −84.2%), hold −3.4%, default chains −27.7% (worst −71.3%). Charge rows: every one-move kind median +0.0%, default chains +15.1% (up to +1480% in the pack), because the held button now pauses the restart window, so a slow-charging chain steps through its moves instead of starting over (without `holding` those rows match v0.46.0 exactly). No row stopped dealing damage.
+- **Spot-check** (each form's default chain and a hold, Fire and Fire+Frost, both layouts): a maul's holds −16.8% (mana) and −17.1% (cast), its default chains +0.0% (mana) and −14.8% (cast); a wand's default chains +0.0% (mana) and −26.9% (cast), its mana holds +8.5%; the sword's holds −3.4%.
+- **Pacing rails hold.** First dives 12, 12, 5, 3, mean 8 (before 12, 11, 5, 4); dive 6 27.75 and dive 12 35.75 (before 28.75, 40.75); Frost 10 → 26.5 (before 10.5 → 27.5); 4.75 legendaries (before 6.25); own pair's reaction 6 of 6; the 15-pair sweep's median 28, 18–41, allowed 16.8–44.8 (before 32, 26–40); 29.09 s a floor (before 24.91). The margins are thin: seed 4's first dive sits on its rail (3), and the sweep's Storm+Fire (18) is 1.2 above the floor.
 
 ## Why
 
