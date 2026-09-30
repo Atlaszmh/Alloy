@@ -67,6 +67,26 @@ describe('DelveCamp', () => {
     expect(p.chains.defensive.moves[0].elements).toEqual(['frost']);
   });
 
+  it('Restart Delve (dev) wipes the save on a second press, back to the mana choice', () => {
+    const s = useDelveStore.getState();
+    s.startDive(1);
+    s.setProfile({ ...useDelveStore.getState().profile, scrap: 500 });
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('restart-delve'));
+    // The first press only asks.
+    expect(useDelveStore.getState().profile.scrap).toBe(500);
+    expect(screen.getByTestId('restart-delve')).toHaveTextContent(/wipe/i);
+    fireEvent.click(screen.getByTestId('restart-delve'));
+    const p = useDelveStore.getState().profile;
+    expect(p).toMatchObject({ scrap: 0, dive: null, pair: { primary: null } });
+    expect(p.stats.dives).toBe(0);
+    expect(screen.getByTestId('mana-choice')).toBeInTheDocument();
+  });
+
   it('asks nothing once the mana is chosen', () => {
     render(
       <MemoryRouter>

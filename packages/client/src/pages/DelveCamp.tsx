@@ -35,6 +35,7 @@ export function DelveCamp() {
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
   useDelveNotices();
 
   // A finished dive's summary was shown on the run screen — clear it here.
@@ -277,6 +278,23 @@ export function DelveCamp() {
                 ))}
               </div>
             </div>
+          )}
+
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              className="delve-chip self-center"
+              onClick={() => {
+                if (!confirmRestart) return setConfirmRestart(true);
+                setConfirmRestart(false);
+                setTab('bag');
+                useDelveStore.getState().resetProfile();
+              }}
+              onBlur={() => setConfirmRestart(false)}
+              data-testid="restart-delve"
+            >
+              {confirmRestart ? '⚠ Press again to wipe this save' : '↺ Restart Delve (dev)'}
+            </button>
           )}
         </div>
       </div>
