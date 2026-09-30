@@ -3,12 +3,24 @@ import balanceData from '../src/data/balance.json';
 import delveData from '../src/data/delve.json';
 import { BalanceConfigSchema, DelveDataSchema } from '../src/data/schemas.js';
 import { inBeat, nextMove, pressMove } from '../src/arpg/abilities/cast.js';
-import { beatFor } from '../src/arpg/abilities/resolve.js';
+import { beatFor, chainMove, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { respawnHero } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
-import { computeHeroStats } from '../src/delve/hero-stats.js';
-import { ABILITY_SLOTS, MOVE_KINDS, type Move, type MoveKind } from '../src/types/ability.js';
+import {
+  computeHeroStats,
+  damagePerUse,
+  useInterval,
+  valuedMove,
+} from '../src/delve/hero-stats.js';
+import {
+  ABILITY_SLOTS,
+  MOVE_KINDS,
+  type AbilityPayment,
+  type AbilitySlot,
+  type Move,
+  type MoveKind,
+} from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
 import {
@@ -625,5 +637,56 @@ describe('determinism', () => {
     expect(at30.filter((e) => e.kind === 'cast').length).toBeGreaterThan(5);
     expect(fight(2)).toEqual(at30);
     expect(fight(4)).toEqual(at30);
+  });
+});
+
+describe('Power', () => {
+  const stats = computeHeroStats({ weapon: gear('fire') }, registry);
+  const resolved = (slot: AbilitySlot, moves: Move[], payment: AbilityPayment = 'mana') =>
+    resolveChain(registry, stats, slot, { moves, payment });
+
+  it("counts each move's cadence, its wind-up plus its beat, beside its cooldown and its cost", () => {
+    const bolt = resolved('primary', [m('medium')]);
+    const ab = bolt.moves[0];
+    // Plenty of mana: the cadence outlasts the cooldown.
+    expect(ab.castTime + 0.4).toBeGreaterThan(ab.cooldown);
+    expect(useInterval(bal, bolt, 1, 1e9, 1)).toBeCloseTo(ab.castTime + 0.4);
+    expect(useInterval(bal, bolt, 1.3, 1e9, 1)).toBeCloseTo(ab.castTime + 0.4 * 1.3);
+    // Short of mana, the cost sets it.
+    expect(useInterval(bal, bolt, 1, ab.cost / 5, 1)).toBeCloseTo(5);
+  });
+
+  it('values a hold at full charge: a cast-paid Ultimate that winds up longer than it charges', () => {
+    const ult = resolved('ultimate', [{ kind: 'hold', form: 'nova', elements: ['fire'] }], 'cast');
+    const full = ult.hold[0]![2];
+    expect(valuedMove(ult, 0)).toBe(full);
+    expect(full.castTime).toBeGreaterThan(bal.chains.holdTime);
+    // Its cooldown counts from the landing; its beat follows it too.
+    const beat = beatFor(bal, 'ultimate', 'hold', 1);
+    expect(useInterval(bal, ult, 1, 1e9, 1e9)).toBeCloseTo(
+      full.castTime + Math.max(full.cooldown, beat),
+    );
+    // Its damage is the full charge's, not the tap's.
+    const tap = { ...ult, hold: [null] };
+    expect(damagePerUse(ult, 10, stats, bal) / damagePerUse(tap, 10, stats, bal)).toBeCloseTo(
+      full.power / ult.moves[0].power,
+    );
+  });
+
+  it('a hold charged quicker than it winds up counts its charge time, by tempo', () => {
+    const bolt = resolved('primary', [m('hold')]);
+    const full = bolt.hold[0]![2];
+    expect(full.castTime).toBeLessThan(bal.chains.holdTime);
+    const beat = beatFor(bal, 'primary', 'hold', 1.3);
+    expect(useInterval(bal, bolt, 1.3, 1e9, 1)).toBeCloseTo(
+      bal.chains.holdTime * 1.3 + Math.max(full.cooldown, beat),
+    );
+  });
+
+  it("a Defensive hold's effect is its full charge's", () => {
+    const ward = resolved('defensive', [{ kind: 'hold', form: 'ward', elements: ['frost'] }]);
+    const guard = valuedMove(ward, 0);
+    expect(guard).toBe(chainMove(ward, 0, 2));
+    expect(guard.effect).toBeGreaterThan(ward.moves[0].effect);
   });
 });

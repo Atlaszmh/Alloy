@@ -4,13 +4,17 @@ import {
   type AbilitySlot,
   type Blow,
   type Chains,
+  type ResolvedAbility,
   type ResolvedChain,
 } from '../types/ability.js';
 import {
   basicLoadout,
+  beatFor,
+  chainMove,
   defaultBasic,
   defaultChains,
   followBasic,
+  playedKind,
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
@@ -293,18 +297,24 @@ const TARGETS: Record<string, number> = {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
+/** The move Power values at step `i` of a chain: a hold move at its full charge (stage 2). */
+export function valuedMove(chain: ResolvedChain, i: number): ResolvedAbility {
+  return chain.moves[i].kind === 'hold' ? chainMove(chain, i, 2) : chain.moves[i];
+}
+
 /**
  * Damage of one use of a chain, averaged over its moves (each with its step
- * bonus), counting jumps, lingering ground and repeats.
+ * bonus, a hold at full charge), counting jumps, lingering ground and repeats.
  */
-function damagePerUse(
+export function damagePerUse(
   chain: ResolvedChain,
   hit: number,
   stats: HeroStats,
   bal: DelveBalance,
 ): number {
   return mean(
-    chain.moves.map((ab) => {
+    chain.moves.map((_, i) => {
+      const ab = valuedMove(chain, i);
       const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
       const repeats =
         ab.form.id === 'barrage'
@@ -324,14 +334,33 @@ function damagePerUse(
   );
 }
 
-/** Seconds between uses, averaged over the chain's moves, when used as often as the payment allows. */
-function useInterval(chain: ResolvedChain, manaIncome: number, chargeRate: number): number {
+/**
+ * Seconds between uses, averaged over the chain's moves, when used as often as
+ * its cooldowns, its payment and its cadence allow. The cadence is a move's
+ * wind-up plus its beat (see the chain feel spec). A hold is valued at full
+ * charge: its wind-up is the longer of its charge (`holdTime` × the tempo) and
+ * its stage-2 wind-up, and its cooldown counts from its landing.
+ */
+export function useInterval(
+  bal: DelveBalance,
+  chain: ResolvedChain,
+  tempo: number,
+  manaIncome: number,
+  chargeRate: number,
+): number {
   return mean(
-    chain.moves.map((ab) =>
-      chain.payment === 'charge'
-        ? Math.max(ab.cooldown, ab.chargeNeed / Math.max(0.1, chargeRate))
-        : Math.max(ab.cooldown + ab.channel, ab.cost / Math.max(0.1, manaIncome)),
-    ),
+    chain.moves.map((move, i) => {
+      const ab = valuedMove(chain, i);
+      const hold = move.kind === 'hold';
+      const windup = hold ? Math.max(bal.chains.holdTime * tempo, ab.castTime) : ab.castTime;
+      const cooldown = hold ? windup + ab.cooldown : ab.cooldown + ab.channel;
+      const pay =
+        chain.payment === 'charge'
+          ? ab.chargeNeed / Math.max(0.1, chargeRate)
+          : ab.cost / Math.max(0.1, manaIncome);
+      const cadence = windup + beatFor(bal, ab.slot, playedKind(ab), tempo);
+      return Math.max(cooldown, pay, cadence);
+    }),
   );
 }
 
@@ -376,21 +405,21 @@ export function estimateCombat(
   const pool = manaPool(stats, registry);
   const manaIncome = pool.regen + bal.mana.basicAttackGain / strikeInterval;
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
+  const every = (chain: ResolvedChain, income: number, rate: number) =>
+    useInterval(bal, chain, stats.tempo, income, rate);
   const primaryDps =
-    damagePerUse(primary, hit, stats, bal) / useInterval(primary, manaIncome * 0.7, dps / unit);
+    damagePerUse(primary, hit, stats, bal) / every(primary, manaIncome * 0.7, dps / unit);
   // Abilities share the hero's time and mana; count them at partial efficiency.
   dps += primaryDps * 0.75;
   const chargeRate = dps / unit;
   dps +=
-    (damagePerUse(ultimate, hit, stats, bal) /
-      useInterval(ultimate, manaIncome * 0.3, chargeRate)) *
-    0.8;
+    (damagePerUse(ultimate, hit, stats, bal) / every(ultimate, manaIncome * 0.3, chargeRate)) * 0.8;
 
   let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
   let bonusLife = 0;
-  const guardEvery = useInterval(defensive, manaIncome * 0.3, chargeRate);
-  // The Defensive's effect: its first move's.
-  const guard = defensive.moves[0];
+  const guardEvery = every(defensive, manaIncome * 0.3, chargeRate);
+  // The Defensive's effect: its first move's (a hold's at full charge).
+  const guard = valuedMove(defensive, 0);
   const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
   const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
   if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
