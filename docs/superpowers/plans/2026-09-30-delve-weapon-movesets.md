@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The chains live on the weapon. Each weapon carries the chains its rarity allows (common and uncommon: Basic and Primary; magic and rare add the Defensive; epic and legendary all four), with a slot count per chain that grows to 5; drops roll extra slots by rarity; salvaging a weapon gives Links, which buy slots; edits cost Mana Dust, priced by one shared function; a transfer moves a moveset onto another weapon for scrap; weapons are valued as they are and as a home for your moveset; all gear is locked mid-dive; the save becomes version 6; and the autopilot plays by the new rules. This plan builds the engine (Tasks 1–9) and the spec's balance gate (Task 10), **where it stops**: a pacing rail breaks, and the spec makes the fix the user's call (see the next section). It is stage 4a of the skill roadmap, and ships as v0.49.0 once the client chunks follow.
+**Goal:** The chains live on the weapon. Each weapon carries the chains its rarity allows (common and uncommon: Basic and Primary; magic and rare add the Defensive; epic and legendary all four), with a slot count per chain that grows to 5; drops roll extra slots by rarity; salvaging a weapon gives Links, which buy slots; edits cost Mana Dust, priced by one shared function; a transfer moves a moveset onto another weapon for scrap; weapons are valued as they are and as a home for your moveset; all gear is locked mid-dive but for one power-up at each stop between depths; the save becomes version 6; and the autopilot plays by the new rules. This plan builds the engine (Tasks 1–11) and the spec's balance gate (Task 12), **where it stops**: a pacing rail breaks, and the spec makes the fix the user's call (see the next section). It is stage 4a of the skill roadmap, and ships as v0.49.0 once the client chunks follow.
 
-**Architecture:** The engine owns it. Data first (`balance.json → delve.movesets`: `carries`, `extraSlots`, `slotLinks`, `slotScrap`, `editDust`, `elementDust`, `transferScrap`), then `GearItem.moveset` (`Moveset`: `chains: Partial<Chains>`, `slots`). `src/loot/moveset.ts` holds the pure parts: which chains a rarity carries, base slots, default moves, a drop's roll (`rollMoveset`, from `rng.fork('moveset')` after every other roll, so nothing else a drop rolls changes), a weapon's extra slots, `heroChains` (the equipped weapon's chains, or the unarmed default) and `movesetTransfer`. `HeroEntity.chains` becomes `(ResolvedChain | null)[]`: an uncarried skill is a null chain that every sim reader passes over. The profile loses `chains` and `chainCaps` and gains `links` (save v6: `parseDelveProfile` migrates version 5 and fits every weapon to the data at load). `src/delve/moveset.ts` holds the profile ops: `movesetEditPrice`, `setChains`/`setChain` (results, not throws), `addSlot`, `transferMoveset`. `compareItem` values a weapon as a home by default (`WeaponValue`); `equipBest` leaves weapons alone; the dive lock refuses every gear op mid-dive. `followBasic` retires from the Delve (the Training Grounds keep it).
+**Architecture:** The engine owns it. Data first (`balance.json → delve.movesets`: `carries`, `extraSlots`, `slotLinks`, `slotScrap`, `editDust`, `elementDust`, `transferScrap`), then `GearItem.moveset` (`Moveset`: `chains: Partial<Chains>`, `slots`). `src/loot/moveset.ts` holds the pure parts: which chains a rarity carries, base slots, default moves, a drop's roll (`rollMoveset`, from `rng.fork('moveset')` after every other roll, so nothing else a drop rolls changes), a weapon's extra slots, `heroChains` (the equipped weapon's chains, or the unarmed default) and `movesetTransfer`. `HeroEntity.chains` becomes `(ResolvedChain | null)[]`: an uncarried skill is a null chain that every sim reader passes over. The profile loses `chains` and `chainCaps` and gains `links` (save v6: `parseDelveProfile` migrates version 5 and fits every weapon to the data at load). `src/delve/moveset.ts` holds the profile ops: `movesetEditPrice`, `setChains`/`setChain` (results, not throws), `addSlot`, `transferMoveset`. `compareItem` values a weapon as a home by default (`WeaponValue`); `equipBest` leaves weapons alone; the dive lock refuses every gear op mid-dive. `src/delve/stops.ts` holds the stops: `completeFloor` rolls `DiveState.stop` (`rollStop`), and `takeStop` runs its one op with the lock lifted. `followBasic` retires from the Delve (the Training Grounds keep it).
 
 **Tech Stack:** TypeScript 5.7, Vitest 3 (engine: Node), Zod 3.
 
-**Spec:** `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md` at `7ad1a1c` (the requirements; read it first).
+**Spec:** `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md` at `7d9e2e6` (the requirements; read it first; its "Stops between depths" section came after the first gate).
 
 ---
 
@@ -16,21 +16,24 @@
 
 The spec's Balance section: "Every rail in `tests/delve-pacing.test.ts` must hold. If one breaks, stop and report the numbers. The fix is the user's call: slot costs, drop slots, starting slots, dust prices, or a changed rail."
 
-Everything below was built and run on a scratch copy of HEAD `7ad1a1c`, at the spec's values (and the one value it left open, `slotScrap`: see "Where the spec left room"). **One rail breaks: the first dive.** Tasks 1–7 hold every rail. Task 8's dive lock ends the autopilot's habit of equipping upgrades as they drop mid-dive, so a new hero fights its whole first dive with the starting common sword, a Basic chain and a one-move Primary: every seed's first dive now dies at depth 3 (Power at death 761–836, against 3,789–8,748 before), a mean of 3 against the rail's 4. Task 9 (the autopilot's transfers and Links between dives) brings the later dives back near their old depths, but not the first. Every other rail holds.
+Everything below was built and run on a scratch copy of HEAD `7ad1a1c` (the engine sources are the same at `7d9e2e6`), at the spec's values. **One rail breaks: the first dive**, twice over:
+- **The first gate** (this plan's first version stopped there): Tasks 1–7 hold every rail. Task 8's dive lock ends the autopilot's habit of equipping upgrades as they drop mid-dive, so a new hero fights its whole first dive with the starting common sword, a Basic chain and a one-move Primary: every seed's first dive dies at depth 3 (Power at death 761–836, against 3,789–8,748 before), a mean of 3 against the rail's 4. Task 9 (the autopilot's transfers and Links between dives) brings the later dives back near their old depths, but not the first.
+- **The user's answer**, stops between depths (Tasks 10 and 11): one power-up on each door screen, which the autopilot takes (it equips its best bag item as it is). The later dives now nearly match (dive 12's mean 34 against 35), and the first dives' Power at death rises to 1,022–1,352, but every seed still dies at depth 3: one equip per stop can't match the dozens of drops the bot equipped mid-dive before. Every other rail holds.
 
 So this plan is the engine and the gate:
 - **Tasks 1–7** keep the whole engine suite green.
-- **Tasks 8 and 9** each commit with exactly one failing test, the first-dive rail (`first dive gets past the opening floors but stalls around the first boss`: `expected 3 to be greater than or equal to 4`); their commit bodies say so. Any other failure, or any number that differs from this plan's, means the code differs from the plan's: stop and find out why.
-- **Task 10** measures, records the numbers in the spec's status line, and **stops**: bring the numbers to the user. The client (the builder's draft, price and Apply, Add slot, off-pair marks, locked tabs, the weapon sheet's moveset with both valuations and Transfer, Links in the header, the dive summary and toasts, the gear controls hidden mid-dive, the bind texts, the HUD and pad for absent skills, the Training Grounds' Load my build, the store's save v6 and its toasts, the E2E), CLAUDE.md, the superseded notes and the version bump are planned once the user has chosen the fix, in chunks appended to this plan.
+- **Tasks 8 to 11** each commit with exactly one failing test, the first-dive rail (`first dive gets past the opening floors but stalls around the first boss`: `expected 3 to be greater than or equal to 4`); their commit bodies say so. Any other failure, or any number that differs from this plan's, means the code differs from the plan's: stop and find out why.
+- **Task 12** measures, records the numbers in the spec's status line, and **stops**: bring the numbers to the user. The client (the builder's draft, price and Apply, Add slot, off-pair marks, locked tabs, the weapon sheet's moveset with both valuations and Transfer, Links in the header, the dive summary and toasts, the gear controls hidden mid-dive, the bind texts, the door screen's stop cards and pickers, the HUD and pad for absent skills, the Training Grounds' Load my build, the store's save v6 and its toasts, the E2E), CLAUDE.md, the superseded notes and the version bump are planned once the user has chosen the fix, in chunks appended to this plan.
 
-| | Before (v0.48.0) | After Task 7 | After Task 9 |
-|---|---|---|---|
-| Pacing: first dives (each ≥ 3, mean 4–12) | 11, 11, 11, 13 (mean 11.5) | 3, 11, 3, 12 (mean 7.25) | 3, 3, 3, 3 (**mean 3: breaks**) |
-| Pacing: dive 6, dive 12 means | 25.5, 35 | 23, 31 | 18.25, 31.5 |
-| Pacing: Frost dive 1 → dive 12 | 8.5 → 32.5 | 7.5 → 31.5 | 3 → 25 |
-| Pacing: legendaries at dive 12; own pair's reaction | 6; 6 of 6 | 5; 6 of 6 | 5; 6 of 6 |
-| Pacing: the 15-pair sweep at dive 6 | median 27, 21–37 (allowed 16.2–43.2) | median 22, 18–29 (allowed 13.2–35.2) | median 23, 20–28 (allowed 13.8–36.8) |
-| Pacing: seconds a floor (8–60) | 20.89 | 30.88 | 28.26 |
+| | Before (v0.48.0) | After Task 7 | After Task 9 (no stops) | After Task 11 (stops) |
+|---|---|---|---|---|
+| Pacing: first dives (each ≥ 3, mean 4–12) | 11, 11, 11, 13 (mean 11.5) | 3, 11, 3, 12 (mean 7.25) | 3, 3, 3, 3 (**mean 3: breaks**) | 3, 3, 3, 3 (**mean 3: breaks**) |
+| First dives' Power at death | 3,789–8,748 | | 761–836 | 1,022–1,352 |
+| Pacing: dive 6, dive 12 means | 25.5, 35 | 23, 31 | 18.25, 31.5 | 24.25, 34 |
+| Pacing: Frost dive 1 → dive 12 | 8.5 → 32.5 | 7.5 → 31.5 | 3 → 25 | 4 → 29.5 |
+| Pacing: legendaries at dive 12; own pair's reaction | 6; 6 of 6 | 5; 6 of 6 | 5; 6 of 6 | 6; 6 of 6 |
+| Pacing: the 15-pair sweep at dive 6 | median 27, 21–37 (allowed 16.2–43.2) | median 22, 18–29 (allowed 13.2–35.2) | median 23, 20–28 (allowed 13.8–36.8) | median 22, 15–28 (allowed 13.2–35.2) |
+| Pacing: seconds a floor (8–60) | 20.89 | 30.88 | 28.26 | 33.81 |
 
 The DPS Lab grid (depth 10, one dummy and the pack, one seed, 9,144 runs) comes out **identical**, row for row, as the spec's gate asks; and v0.48.0's items, 291 of them over every rarity and a run of encounter drops, hash the same with their movesets left out (`delve-movesets.test.ts` pins it).
 
@@ -38,8 +41,8 @@ The DPS Lab grid (depth 10, one dummy and the pack, one seed, 9,144 runs) comes 
 
 ## Where the spec left room
 
-- **`slotScrap`.** The spec names it ("`slotLinks` … plus `slotScrap` at the same index") but gives no numbers. This plan uses `[20, 40, 60, 80]`: the Links price times 20, beside a transfer's 30 scrap a slot. A tuning knob like the rest; the first dive, the rail that breaks, never meets it.
-- **The ◂▸ swap.** The spec's pricing steps make a longest common subsequence free and charge `editDust` for "each remaining new move that equals a remaining old move". A swap of two adjacent moves leaves one of them in the common run, so it moves one move: **5**, not the "10" the spec's example says (a remnant of its earlier, position-based rule). The plan follows the steps; its test pins 5.
+- **`slotScrap`** is `[20, 40, 60, 80]` and **a ◂▸ swap costs 5** (one of the two moves is in the longest shared run): both open at the first gate, both confirmed in the spec at `7d9e2e6`.
+- **Stops.** `takeStop(registry, profile, action)` takes one `StopAction` (`{ kind: 'equip', uid }`, `{ kind: 'slot', skill }`, `{ kind: 'move', skill, index, move }`, `{ kind: 'upgrade', uid }`) in place of the spec's `(kind, args)`, so each kind's arguments are typed. A kind applies (`stopKinds`) on the profile after the floor's loot is banked: `equip` with any bag item, `slot` when some chain's next slot's Links are there (scrap is checked when it's taken, as the spec lists only Links), `move` with a weapon, `upgrade` with any item below its max (its price is checked when it's taken). The offers keep the kinds' order (`STOP_KINDS`: equip, slot, move, upgrade). The lock is lifted by running the op on the profile with its dive set aside, then putting the dive back with the stop taken. `move` is "an edit of exactly one position": a whole index the chain holds (`Adjust a move the chain holds`), a move of the chain's shape (`Not a primary move`: a blow for an ability chain, or a move for the basic chain) and a changed one (`Change the move`), so a stop can't be spent on nothing. Its other refusals: `No stop here`, `This stop's power-up is taken`, `Not offered at this stop`, and each op's own. The autopilot's "upgrade its cheapest affordable item" means its equipped items (the ones its forge visits upgrade), and its "equip the best item as-is, if one beats its current gear" compares as it is (`compareItem(…, 'asIs')`).
 - **Where the prices live.** `movesetEditPrice(registry, old, next)` takes chain maps (`Partial<Chains>`) and sums the chains `next` holds, so the builder's preview can pass the draft's changed chains and `setChains` its whole edit. `editPrice(registry, profile, next)` applies the first-dive freebie (0 while `stats.dives === 0`). A move's identity is its kind, form and elements in order (a blow: kind and element); "elements equal some old move's" compares the ordered list with every old move of the chain.
 - **Off-pair sets.** "An off-pair element set" is counted as a set (sorted), so re-ordering a fused move's elements keeps its set (and still costs `elementDust`, being a changed element list). Before the choice nothing is off-pair.
 - **Refusal texts.** Moves mid-dive: `Chains can only change between dives` (today's text) for `setChains` and `addSlot`; `Transfer your moveset between dives`; unarmed: `Equip a weapon to build your moves` (the spec's); uncarried: `Carried by magic weapons and better` / `…epic…` (`carriedByText`, the locked tab's text too); `A chain holds 1 to N moves`; `Unknown form X` and `Not a primary chain` (a chain of the wrong shape: untyped input, which `setChains` refuses rather than throws on); `Pick from your two elements` (off-pair); `Not enough Mana Dust`, `Not enough Links`, `Not enough scrap`; at the cap: `This chain has every slot`; a transfer target that isn't a bag weapon: `Transfer onto a weapon in your bag`. Gear mid-dive: `equipItem` and `unequipSlot` throw `Equip at the Anvil, between dives` (they throw their other refusals too), and `equipBest` changes nothing.
@@ -57,7 +60,7 @@ The DPS Lab grid (depth 10, one dummy and the pack, one seed, 9,144 runs) comes 
 
 **Conventions:**
 - Windows 11. The Bash tool runs POSIX sh; PowerShell is also available (use it for process management).
-- Branch `claude/alloy-loot-gear-system-6upsy5` (already checked out). **One commit per task** (Task 10 makes one docs commit). Every commit message ends with a blank line and the trailer `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`; the commit blocks below pass it as the last `-m`.
+- Branch `claude/alloy-loot-gear-system-6upsy5` (already checked out). **One commit per task** (Task 12 makes one docs commit). Every commit message ends with a blank line and the trailer `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`; the commit blocks below pass it as the last `-m`.
 - Stage files by path. Never `git add -A` or `git add .` at the repo root: three unrelated untracked plan docs (`docs/superpowers/plans/2026-05-01-*.md`) exist and must stay out.
 - **Don't push**: the controller pushes after a final review. Never open a PR.
 - **Run every command from the repo root.** The shell's working directory persists between commands, so every command line below runs in a subshell (`(cd packages/engine && npx vitest run …)`), and every commit block starts with `cd /c/Projects/Alloy`.
@@ -65,9 +68,9 @@ The DPS Lab grid (depth 10, one dummy and the pack, one seed, 9,144 runs) comes 
 - **Line endings:** in the working tree, `packages/engine/src/delve/profile-schema.ts`, `dive.ts`, `autopilot.ts` and `packages/engine/src/loot/item-generator.ts` are CRLF (git stores them LF: `core.autocrlf` is on); every other file here is LF. Keep each file's endings (the Edit tool does; don't rewrite a file with a script that normalises them).
 - **One stray byte.** Line 160 of `packages/engine/tests/delve-chain-feel.test.ts` holds a raw Latin-1 `×` (`0xD7`). This plan never edits that file; if an editor rewrites it, put the byte back: `node -e "const f='packages/engine/tests/delve-chain-feel.test.ts',fs=require('fs'),b=fs.readFileSync(f),i=b.indexOf(Buffer.from([0xef,0xbf,0xbd]));if(i>=0)fs.writeFileSync(f,Buffer.concat([b.subarray(0,i),Buffer.from([0xd7]),b.subarray(i+3)]))"`.
 - **How the edits read.** "Replace: A with: B" is one Edit (old A, new B). "Replace the lines from `A` up to (not including) `B` with: C" is one Edit whose old text runs from the start of the line that reads `A` (ignoring its indentation) to the end of the line before the one that reads `B`, and whose new text is C (a blank line at C's end stays); "…to the end of the file" runs to the file's last line (which keeps its final newline); "Delete the lines from `A` up to (not including) `B`." removes them. Each `A` and `B` is the only line in the file that reads so, at that point. "Append at the end of the file:" adds a blank line and the block after the last line. "Create `f`:" is a Write. Every anchor is unique in its file at that point, in the order given, so apply each file's edits top to bottom (the scratch copy checked, by applying every edit of this plan in order to HEAD, that each task gives exactly the tested files).
-- **Import cycles.** `delve/profile.ts`, `pair.ts`, `dive.ts`, `hero-stats.ts` and the new `delve/moveset.ts` import each other: only ever read such an import inside a function (they keep to function declarations). `loot/moveset.ts` imports nothing from `delve/`.
+- **Import cycles.** `delve/profile.ts`, `pair.ts`, `dive.ts`, `hero-stats.ts` and the new `delve/moveset.ts` and `delve/stops.ts` import each other: only ever read such an import inside a function (they keep to function declarations). `loot/moveset.ts` imports nothing from `delve/`.
 - Engine `tsc` covers `src` only (Vitest doesn't type-check, so a test reading a field that no longer exists passes vacuously: this plan updates every such read).
-- **The client isn't touched, and stays green.** It consumes the engine's bundle (`packages/engine/dist`), which no task here rebuilds: Task 10 builds a measuring copy into `packages/engine/node_modules/.movesets-measure` (ignored by git, and where the bundle still finds `zod`) and deletes it. Against the new bundle the client would fail its typecheck (60 errors in 24 files: the store, the Anvil's panels, the arena's readers of `chains`, and their tests), which is the client chunks' work.
+- **The client isn't touched, and stays green.** It consumes the engine's bundle (`packages/engine/dist`), which no task here rebuilds: Task 12 builds a measuring copy into `packages/engine/node_modules/.movesets-measure` (ignored by git, and where the bundle still finds `zod`) and deletes it. Against the new bundle the client would fail its typecheck (60 errors in 24 files: the store, the Anvil's panels, the arena's readers of `chains`, and their tests), which is the client chunks' work.
 - **Every engine task runs the whole suite** (about 20 s; the pacing rails run while the files load). From Task 8 on, exactly one test fails, the first-dive rail; see the section above.
 - Engine test geometry: the fixture arena's hero starts at (13, 36) facing up; `dummy(x, y)` is a sturdy foe (1e6 life) that doesn't fight back; the fixture's starting weapon is a common Fire sword; its chains are one medium move each (a Fire Bolt, a Frost Ward, a charged Fire Nova), or exactly `ArenaOpts.chains` when given (Task 2).
 
@@ -78,9 +81,9 @@ The DPS Lab grid (depth 10, one dummy and the pack, one seed, 9,144 runs) comes 
 | One engine test file | `(cd packages/engine && npx vitest run tests/<file>.test.ts)` |
 | All engine tests | `(cd packages/engine && npx vitest run)` |
 | Engine typecheck | `(cd packages/engine && npx tsc --noEmit -p .)` |
-| The measuring build (Task 10) | `(cd packages/engine && npx tsup --out-dir node_modules/.movesets-measure)` |
+| The measuring build (Task 12) | `(cd packages/engine && npx tsup --out-dir node_modules/.movesets-measure)` |
 
-**For the client chunks to come** (not used by Tasks 1–10; kept here so those chunks share them): the dev server on 5288 (PowerShell; stops whatever owns the port, starts a detached Vite, waits for a 200 and prints `True`):
+**For the client chunks to come** (not used by this plan's Tasks 1–12; kept here so those chunks share them): the dev server on 5288 (PowerShell; stops whatever owns the port, starts a detached Vite, waits for a 200 and prints `True`):
 
 ```powershell
 try { $ids = (Get-NetTCPConnection -LocalPort 5288 -State Listen -ErrorAction Stop).OwningProcess | Select-Object -Unique; foreach ($id in $ids) { Stop-Process -Id $id -Force -Confirm:$false } } catch {}
@@ -104,7 +107,7 @@ export default defineConfig({
 });
 ```
 
-**The measurement's files** live in the plan author's scratchpad, `C:\Users\hahnz\AppData\Local\Temp\claude\c--Projects-Alloy\239f61fd-0a16-4600-a17d-7efef362f2cc\scratchpad\movesets-before` (called `<before>` below; in the Bash tool, `/c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/movesets-before`). They were made from the engine at HEAD (v0.48.0) and must not be regenerated after Task 1 starts: `before-depth10.json` (the DPS Lab grid), `pacing-before.txt` and `first-dives-before.txt`, with the scripts `snapshot.mjs`, `identical.mjs`, `pacing.mjs`, `first-dives.mjs`, `items-hash.mjs` and `v5-saves.mjs` (which made Task 5's fixture). The folder also holds the plan author's own after-files; Task 10 overwrites them with yours. The scripts' texts are in Task 10, in case the folder is gone; Task 1 checks the before files and remakes them from HEAD if they are missing.
+**The measurement's files** live in the plan author's scratchpad, `C:\Users\hahnz\AppData\Local\Temp\claude\c--Projects-Alloy\239f61fd-0a16-4600-a17d-7efef362f2cc\scratchpad\movesets-before` (called `<before>` below; in the Bash tool, `/c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/movesets-before`). They were made from the engine at HEAD (v0.48.0) and must not be regenerated after Task 1 starts: `before-depth10.json` (the DPS Lab grid), `pacing-before.txt` and `first-dives-before.txt`, with the scripts `snapshot.mjs`, `identical.mjs`, `pacing.mjs`, `first-dives.mjs`, `stop-trace.mjs`, `items-hash.mjs` and `v5-saves.mjs` (which made Task 5's fixture). The folder also holds the plan author's own after-files; Task 12 overwrites them with yours. The scripts' texts are in Task 12, in case the folder is gone; Task 1 checks the before files and remakes them from HEAD if they are missing.
 
 ## File map
 
@@ -114,26 +117,28 @@ export default defineConfig({
 |---|---|
 | `src/data/balance.json` | `delve.movesets` (hand-edit, never format) |
 | `src/data/schemas.ts` | `movesets`' schema |
-| `src/types/delve.ts` | `DelveBalance.movesets`; `DelveProfile` version 6: `links`, no `chains` or `chainCaps`; `DiveState.linksEarned` |
+| `src/types/delve.ts` | `DelveBalance.movesets`; `DelveProfile` version 6: `links`, no `chains` or `chainCaps`; `DiveState.linksEarned`; `StopKind`, `DiveStop`, `DiveState.stop` |
 | `src/types/gear.ts` | `Moveset`, `GearItem.moveset?` |
 | `src/types/arpg.ts` | `HeroEntity.chains: (ResolvedChain \| null)[]` |
 | `src/loot/moveset.ts` (new) | carried chains, base slots, default moves, `rollMoveset`, `extraSlots`, `movesetOf`, `heroChains`, `carriedByText`, `movesetTransfer` |
 | `src/loot/item-generator.ts` | a weapon drop's moveset, rolled last (CRLF, never format) |
-| `src/delve/profile-schema.ts` | `MovesetSchema` on `GearItemSchema`, `DiveSchema.linksEarned`, a frozen `DelveProfileV5Schema`, version 6 (CRLF, never format) |
+| `src/delve/profile-schema.ts` | `MovesetSchema` on `GearItemSchema`, `DiveSchema.linksEarned` and `stop`, a frozen `DelveProfileV5Schema`, version 6 (CRLF, never format) |
 | `src/delve/profile.ts` | version 6: create, `withMoveset`, the migration (`fromV5`, `fitMovesets`), `ParsedDelveProfile.dropped`/`movesetReset`, Links from salvage and fusing, the dive lock on `equipItem`/`unequipSlot`/`equipBest`, `equipBest` without weapons; `setChain` moves out |
 | `src/delve/moveset.ts` (new) | `movesetEditPrice`, `editPrice`, `setChains`, `setChain`, `slotPrice`, `addSlot`, `transferMoveset` |
 | `src/delve/pair.ts` | `profileStats` from `heroChains`; `fixChainsToPair(registry, …)` on the equipped weapon; `chooseStartingMana` rebuilds the weapon; bind, overtake and realign stop following the basic chain; `followBasicTo` goes |
 | `src/delve/hero-stats.ts` | `estimateCombat` with absent skills; `compareItem`/`heroPower` without `chains`, a weapon valued as a home (`WeaponValue`) |
-| `src/delve/dive.ts` | `beginFloor` from `heroChains`; `linksEarned`; `BankResult.links` (CRLF, never format) |
-| `src/delve/autopilot.ts` | no mid-floor equipping; transfers, Links on slots; the fused Primary built last and paid for (CRLF, never format) |
+| `src/delve/dive.ts` | `beginFloor` from `heroChains`; `linksEarned`; `BankResult.links`; `completeFloor` rolls the stop, `chooseDoor` ends it (CRLF, never format) |
+| `src/delve/stops.ts` (new) | `STOP_KINDS`, `stopKinds`, `rollStop`, `takeStop` |
+| `src/delve/autopilot.ts` | no mid-floor equipping; transfers, Links on slots; the fused Primary built last and paid for; `takeBestStop` (CRLF, never format) |
 | `src/arpg/world.ts`, `abilities/cast.ts`, `abilities/defend.ts`, `step.ts`, `sandbox.ts`, `combat.ts`, `action.ts`, `bot.ts`, `dps-sim.ts` | null chains |
 | `src/index.ts` | the new exports |
 | `tests/delve-movesets.test.ts` (new) | the spec's engine tests |
+| `tests/delve-stops.test.ts` (new) | the stops' tests, and the autopilot's |
 | `tests/fixtures/arena.ts` | `ArenaOpts.chains`; `asV5`, `chainsOf`, `withChains` |
 | `tests/fixtures/delve-v5-saves.json` (new) | five real version 5 saves from the v0.48.0 engine |
 | `tests/{delve-pair,delve-chains,delve-dive,delve-profile-abilities,delve-reactions}.test.ts` | updated to the new rules |
 
-`tests/delve-pacing.test.ts` needs no edit (its first-dive rail is the one that breaks). The client, CLAUDE.md, the specs' superseded notes and `packages/client/package.json` are the chunks to come. **Docs:** the spec's status line (Task 10).
+`tests/delve-pacing.test.ts` needs no edit (its first-dive rail is the one that breaks). The client, CLAUDE.md, the specs' superseded notes and `packages/client/package.json` are the chunks to come. **Docs:** the spec's status line (Task 12).
 
 ---
 
@@ -155,12 +160,12 @@ Data, types and the pure moveset module; a weapon drop rolls its moveset last. N
 
 - [ ] **Step 1: Check the measurement's "before" files**
 
-Task 10 compares against the engine at HEAD, which exists only until this task's edits.
+Task 12 compares against the engine at HEAD, which exists only until this task's edits.
 
 Run: `(ls /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/movesets-before)`
 Expected, among others: `before-depth10.json`, `first-dives-before.txt`, `pacing-before.txt`, `first-dives.mjs`, `identical.mjs`, `items-hash.mjs`, `pacing.mjs`, `snapshot.mjs`, `v5-saves.mjs`.
 
-If any of the three before files is missing, make them now from HEAD (first write any missing script from the texts in Task 10): `(cd packages/engine && npx tsup --out-dir node_modules/.movesets-measure)`, then from `<before>`, with `M=C:/Projects/Alloy/packages/engine/node_modules/.movesets-measure/index.js`: `node snapshot.mjs $M before-depth10.json` (prints `runs 9144 …`, about 10 s), `node pacing.mjs $M > pacing-before.txt` (about a minute) and `node first-dives.mjs $M > first-dives-before.txt`; then `(rm -rf packages/engine/node_modules/.movesets-measure)`. `pacing-before.txt` must read as the "Before" column of the header's table (Task 10 prints it).
+If any of the three before files is missing, make them now from HEAD (first write any missing script from the texts in Task 12): `(cd packages/engine && npx tsup --out-dir node_modules/.movesets-measure)`, then from `<before>`, with `M=C:/Projects/Alloy/packages/engine/node_modules/.movesets-measure/index.js`: `node snapshot.mjs $M before-depth10.json` (prints `runs 9144 …`, about 10 s), `node pacing.mjs $M > pacing-before.txt` (about a minute) and `node first-dives.mjs $M > first-dives-before.txt`; then `(rm -rf packages/engine/node_modules/.movesets-measure)`. `pacing-before.txt` must read as the "Before" column of the header's table (Task 10 prints it).
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -3615,7 +3620,7 @@ Expected: PASS, 198 tests in 5 files.
 - [ ] **Step 5: The whole engine**
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; 1374 tests pass in 77 files. The pacing rails hold (a new hero now starts with a common sword's Basic chain and one-move Primary, and no Defensive or Ultimate): Task 10 prints the numbers.
+Expected: no type errors; 1374 tests pass in 77 files. The pacing rails hold (a new hero now starts with a common sword's Basic chain and one-move Primary, and no Defensive or Ultimate): Task 12 prints the numbers.
 
 - [ ] **Step 6: Commit**
 
@@ -3636,7 +3641,7 @@ The spec's migration rules, over Task 4's plain one:
 - **Every load fits every weapon to the data** (`fitMovesets`, equipped and bag): a weapon without a moveset gets its base defaults in its own mana; a chain its rarity no longer carries is dropped; a newly carried one gets its base default; a basic slot count below its weapon's string rises to it.
 - A version 4 or older save still converts through version 5's shape, then to version 6, and only then is fixed to the pair: a move of a dropped chain gets no fix notice.
 
-The tests read five real version 5 saves, made by the v0.48.0 engine with the scratchpad's `v5-saves.mjs` (its text is in Task 10): a new hero; a bound Fire+Storm hero with a built two-move cast Lance Primary and a rare axe in the bag; an unarmed hero with a built Primary; a magic dagger mid-dive whose Ultimate has two moves; and an epic maul whose basic chain is one blow.
+The tests read five real version 5 saves, made by the v0.48.0 engine with the scratchpad's `v5-saves.mjs` (its text is in Task 12): a new hero; a bound Fire+Storm hero with a built two-move cast Lance Primary and a rare axe in the bag; an unarmed hero with a built Primary; a magic dagger mid-dive whose Ultimate has two moves; and an epic maul whose basic chain is one blow.
 
 **Files:**
 - Create: `packages/engine/tests/fixtures/delve-v5-saves.json` (never format)
@@ -5439,7 +5444,7 @@ Expected: PASS, 52 tests.
 - [ ] **Step 5: The whole engine**
 
 Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; 1404 tests pass in 77 files. **This is the last task every pacing rail holds in** (Task 10 lists them as "After Task 7").
+Expected: no type errors; 1404 tests pass in 77 files. **This is the last task every pacing rail holds in** (Task 12 lists them as "After Task 7").
 
 - [ ] **Step 6: Commit**
 
@@ -5818,7 +5823,7 @@ Expected: no type errors; 1406 tests pass and exactly one fails, in `tests/delve
 cd /c/Projects/Alloy
 (cd packages/engine && npx prettier --write src/delve/hero-stats.ts src/delve/profile.ts src/index.ts tests/delve-movesets.test.ts tests/delve-dive.test.ts tests/delve-pair.test.ts)
 git add packages/engine/src/delve/hero-stats.ts packages/engine/src/delve/profile.ts packages/engine/src/index.ts packages/engine/tests/delve-movesets.test.ts packages/engine/tests/delve-dive.test.ts packages/engine/tests/delve-pair.test.ts
-git commit -m "feat(engine): weapons valued as a home for your moveset; all gear locked mid-dive" -m "The first-dive pacing rail fails from here, as the spec expects pacing to drop: with no mid-dive equipping every first dive ends at depth 3 (mean 3 against the rail's 4). The plan's Task 10 records the numbers and stops for the user's call." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+git commit -m "feat(engine): weapons valued as a home for your moveset; all gear locked mid-dive" -m "The first-dive pacing rail fails from here, as the spec expects pacing to drop: with no mid-dive equipping every first dive ends at depth 3 (mean 3 against the rail's 4). The plan's Task 12 records the numbers and stops for the user's call." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 ### Task 9: The autopilot transfers, fills slots and pays for its edits
@@ -6041,14 +6046,797 @@ Expected: no type errors; 1409 tests pass and exactly one fails, the same first-
 cd /c/Projects/Alloy
 (cd packages/engine && npx prettier --write tests/delve-movesets.test.ts)
 git add packages/engine/src/delve/autopilot.ts packages/engine/tests/delve-movesets.test.ts
-git commit -m "feat(engine): the autopilot transfers its moveset, fills slots with Links, and never equips mid-floor" -m "The first-dive pacing rail still fails (mean 3 against 4); every other rail holds. See the plan's Task 10." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+git commit -m "feat(engine): the autopilot transfers its moveset, fills slots with Links, and never equips mid-floor" -m "The first-dive pacing rail still fails (mean 3 against 4); every other rail holds. See the plan's Task 12." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
-## Chunk 10: Balance: the gate
+## Chunk 10: Engine: stops between depths
 
-### Task 10: Measure before and after, record it, and stop
+### Task 10: One power-up at each stop between depths
 
-No tuning (the spec: measure, and if a rail breaks, stop). This task builds a measuring copy of the engine (the client's bundle stays as it is), measures the DPS Lab grid, the pacing rails, the first dives and v0.48.0's items against the "before" files Task 1 checked, records them in the spec's status line, and **stops**. The numbers are deterministic: each must match the plan's; if one differs, find out why before going on (the sim is deterministic, so a difference means the code differs from the plan's).
+The spec's "Stops between depths" (added at `7d9e2e6`): after a depth is cleared, the door screen holds a stop, `DiveState.stop: { offers: StopKind[]; taken: boolean } | null`. `completeFloor` rolls it (`rollStop`, in a new module, `src/delve/stops.ts`) from the dive seed's fork `stop:<depth>`: of the kinds that apply to the banked profile right now (`stopKinds`: `equip` with a bag item; `slot` with a chain of the equipped weapon below its cap whose next slot's Links the hero has; `move` with a weapon equipped; `upgrade` with an item, equipped or in the bag, below its max), 2 or 3 at random, all of them when fewer apply, none: no stop. `takeStop(registry, profile, action)` (`StopAction`: `{ kind: 'equip', uid }`, `{ kind: 'slot', skill }`, `{ kind: 'move', skill, index, move }` or `{ kind: 'upgrade', uid }`) checks that the stop is open and offers the kind, runs the one op at its normal price with the dive lock lifted for it alone (the op runs on the profile with its dive set aside), and marks the stop taken; a refused op leaves it open. Equipping is free and a weapon brings its own moveset; `move` changes one move of one chain through `setChain`, priced by `movesetEditPrice` (a whole index the chain holds, a move of the chain's shape, and a changed one); `upgrade` is `upgradeGear`. The dive lock refuses everything else, as before. A door ends the stop (`chooseDoor` clears it), a new dive starts without one, and a save whose dive has none reads as `null`.
+
+**Files:**
+- Create: `packages/engine/src/delve/stops.ts`
+- Create: `packages/engine/tests/delve-stops.test.ts`
+- Modify: `packages/engine/src/types/delve.ts:668,687` (`StopKind`, `DiveStop`, `DiveState.stop`)
+- Modify: `packages/engine/src/delve/profile-schema.ts:168` (`DiveSchema.stop`; CRLF, never format)
+- Modify: `packages/engine/src/delve/dive.ts:11,49,222,271` (the roll, and clearing it; CRLF, never format)
+- Modify: `packages/engine/src/index.ts:174`
+- Modify: `packages/engine/tests/delve-movesets.test.ts:450` (a migrated dive holds no stop)
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `packages/engine/tests/delve-stops.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
+import { addSlot } from '../src/delve/moveset.js';
+import {
+  createDelveProfile,
+  equipItem,
+  parseDelveProfile,
+  unequipSlot,
+} from '../src/delve/profile.js';
+import { STOP_KINDS, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
+import { generateItem } from '../src/loot/item-generator.js';
+import { upgradeCost } from '../src/loot/smithing.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
+import type { DelveProfile, DiveStop, StopKind } from '../src/types/delve.js';
+import type { GearItem } from '../src/types/gear.js';
+import { bal, chainsOf, registry, run } from './fixtures/arena.js';
+
+// See the weapon movesets spec's "Stops between depths".
+
+const ring = (uid: string, seed = 1): GearItem =>
+  generateItem(
+    registry,
+    { uid, ilvl: 2, rarity: 'magic', slot: 'ring', mana: 'fire' },
+    new SeededRNG(seed),
+  );
+
+/** A Fire hero with a ring in the bag. */
+const hero = (): DelveProfile => ({
+  ...createDelveProfile(registry, 3, { primary: 'fire' }),
+  bag: [ring('r1')],
+});
+
+/** `p` diving, on the door screen after depth 1, holding `stop`. */
+function atStop(p: DelveProfile, stop: DiveStop | null): DelveProfile {
+  const diving = startDive(registry, p, 1);
+  const dive = diving.dive!;
+  return {
+    ...diving,
+    dive: { ...dive, phase: 'choosing', depthsCleared: 1, doorChoices: ['winding'], stop },
+  };
+}
+
+const ALL: DiveStop = { offers: [...STOP_KINDS], taken: false };
+
+describe('the stop after a cleared depth', () => {
+  it('holds 2 or 3 of the kinds that apply, the same from the same dive', () => {
+    const p = startDive(registry, hero(), 1);
+    const clear = () => {
+      const world = beginFloor(registry, p);
+      const ctx = makeCtx(registry, world, []);
+      for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
+      run(world, 5);
+      return completeFloor(registry, p, world).profile;
+    };
+    const once = clear();
+    expect(once.dive!.phase).toBe('choosing');
+    const stop = once.dive!.stop!;
+    expect(stop.taken).toBe(false);
+    expect(stop.offers.length).toBeGreaterThanOrEqual(2);
+    expect(stop.offers.length).toBeLessThanOrEqual(3);
+    for (const k of stop.offers) expect(stopKinds(registry, once)).toContain(k);
+    expect(clear().dive!.stop).toEqual(stop);
+  });
+
+  it('offers only what applies: a bag item, an affordable slot, a weapon, an item below its max', () => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    expect(stopKinds(registry, p)).toEqual(['move', 'upgrade']); // no bag, no Links
+    expect(stopKinds(registry, { ...p, bag: [ring('r1')], links: 1 })).toEqual([...STOP_KINDS]);
+    const maxed = (i: GearItem): GearItem => ({ ...i, upgrade: bal.forge.maxUpgrade });
+    const bare = unequipSlot(registry, p, 'weapon');
+    const spent: DelveProfile = {
+      ...bare,
+      bag: [],
+      equipped: { chest: maxed(bare.equipped.chest!) },
+    };
+    expect(stopKinds(registry, spent)).toEqual([]);
+    expect(rollStop(registry, spent, startDive(registry, spent, 1).dive!)).toBeNull();
+  });
+
+  it('offers 2 or 3 at random in the kinds order, all of them when only two apply', () => {
+    const p = { ...hero(), links: 5 };
+    const counts = new Set<number>();
+    const seen = new Set<StopKind>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const dive = { ...startDive(registry, p, 1).dive!, seed };
+      const stop = rollStop(registry, p, dive)!;
+      counts.add(stop.offers.length);
+      stop.offers.forEach((k) => seen.add(k));
+      expect(stop.offers).toEqual(STOP_KINDS.filter((k) => stop.offers.includes(k)));
+    }
+    expect([...counts].sort()).toEqual([2, 3]);
+    expect([...seen].sort()).toEqual([...STOP_KINDS].sort());
+    const two = createDelveProfile(registry, 3, { primary: 'fire' });
+    const dive = startDive(registry, two, 1).dive!;
+    expect(rollStop(registry, two, dive)).toEqual({ offers: ['move', 'upgrade'], taken: false });
+    // One kind that applies: that one alone.
+    const bare = unequipSlot(registry, two, 'weapon');
+    const one = { ...bare, bag: [] };
+    expect(rollStop(registry, one, dive)).toEqual({ offers: ['upgrade'], taken: false });
+  });
+});
+
+describe('takeStop', () => {
+  it('equips a bag item for free with the lock lifted, and marks the stop taken', () => {
+    const p = atStop(hero(), ALL);
+    const res = takeStop(registry, p, { kind: 'equip', uid: 'r1' });
+    expect(res.ok).toBe(true);
+    expect(res.item!.uid).toBe('r1');
+    expect(res.profile.equipped.ring!.uid).toBe('r1');
+    expect(res.profile.scrap).toBe(p.scrap);
+    expect(res.profile.dive).toEqual({ ...p.dive, stop: { ...ALL, taken: true } });
+    expect(takeStop(registry, res.profile, { kind: 'upgrade', uid: 'r1' }).reason).toBe(
+      "This stop's power-up is taken",
+    );
+  });
+
+  it('adds a slot, adjusts one move, or upgrades an item, each at its normal price', () => {
+    const p = { ...atStop(hero(), ALL), links: 5, scrap: 1000, manaDust: 50 };
+    const slot = takeStop(registry, p, { kind: 'slot', skill: 'primary' });
+    expect(slot.profile).toMatchObject({ links: 4, scrap: 980 });
+    expect(slot.profile.equipped.weapon!.moveset!.slots.primary).toBe(2);
+    const bolt = chainsOf(p).primary!.moves[0];
+    const move = takeStop(registry, p, {
+      kind: 'move',
+      skill: 'primary',
+      index: 0,
+      move: { ...bolt, kind: 'heavy' },
+    });
+    expect(chainsOf(move.profile).primary!.moves[0].kind).toBe('heavy');
+    expect(move.profile.manaDust).toBe(50 - bal.movesets.editDust);
+    const chest = p.equipped.chest!;
+    const up = takeStop(registry, p, { kind: 'upgrade', uid: chest.uid });
+    expect(up.profile.equipped.chest!.upgrade).toBe(1);
+    expect(up.profile.scrap).toBe(1000 - upgradeCost(registry, chest)!);
+    for (const r of [slot, move, up]) expect(r.profile.dive!.stop!.taken).toBe(true);
+  });
+
+  it('refuses a kind not offered, no stop, and leaves the stop open when the op is refused', () => {
+    const p = atStop(hero(), { offers: ['equip', 'slot'], taken: false });
+    expect(takeStop(registry, p, { kind: 'upgrade', uid: 'r1' }).reason).toBe(
+      'Not offered at this stop',
+    );
+    const poor = takeStop(registry, p, { kind: 'slot', skill: 'primary' });
+    expect(poor).toMatchObject({ ok: false, reason: 'Not enough Links', profile: p });
+    const fighting = startDive(registry, hero(), 1);
+    expect(takeStop(registry, fighting, { kind: 'equip', uid: 'r1' }).reason).toBe('No stop here');
+    const moved = atStop(hero(), ALL);
+    const far = takeStop(registry, moved, {
+      kind: 'move',
+      skill: 'primary',
+      index: 3,
+      move: chainsOf(moved).primary!.moves[0],
+    });
+    expect(far.reason).toBe('Adjust a move the chain holds');
+    const bolt = chainsOf(moved).primary!.moves[0];
+    const at = (index: number, move: object) =>
+      takeStop(registry, moved, { kind: 'move', skill: 'primary', index, move: move as never })
+        .reason;
+    expect(at(0.5, { ...bolt, kind: 'heavy' })).toBe('Adjust a move the chain holds');
+    expect(at(0, bolt)).toBe('Change the move');
+    expect(at(0, { kind: 'heavy', element: 'fire' })).toBe('Not a primary move');
+    const nothing = takeStop(registry, moved, {
+      kind: 'move',
+      skill: 'defensive',
+      index: 0,
+      move: { kind: 'medium', form: 'ward', elements: ['fire'] },
+    });
+    expect(nothing.reason).toBe('Carried by magic weapons and better');
+    expect(takeStop(registry, moved, { kind: 'equip', uid: 'nope' }).reason).toBe(
+      'Item not in bag: nope',
+    );
+  });
+
+  it('the dive lock refuses everything else at a stop; a door ends it and a new dive starts without one', () => {
+    const p = { ...atStop(hero(), ALL), links: 5, scrap: 1000 };
+    expect(() => equipItem(registry, p, 'r1')).toThrow('Equip at the Anvil, between dives');
+    expect(addSlot(registry, p, 'primary').reason).toBe('Chains can only change between dives');
+    const next = chooseDoor(registry, p, 'winding');
+    expect(next.dive!.stop).toBeNull();
+    expect(startDive(registry, hero(), 1).dive!.stop).toBeNull();
+  });
+
+  it('the save keeps the stop; a dive saved without one reads as none', () => {
+    const p = atStop(hero(), { offers: ['equip', 'move'], taken: true });
+    const json = (x: unknown) => JSON.parse(JSON.stringify(x));
+    expect(parseDelveProfile(registry, json(p))!.profile.dive!.stop).toEqual(p.dive!.stop);
+    const { stop: _stop, ...older } = p.dive!;
+    expect(parseDelveProfile(registry, json({ ...p, dive: older }))!.profile.dive!.stop).toBeNull();
+  });
+});
+```
+
+
+In `packages/engine/tests/delve-movesets.test.ts`:
+
+Replace:
+
+```ts
+    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0 });
+  });
+```
+
+with:
+
+```ts
+    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, stop: null });
+  });
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `(cd packages/engine && npx vitest run tests/delve-stops.test.ts tests/delve-movesets.test.ts)`
+Expected: FAIL, both files: `delve-stops.test.ts` doesn't load (`Error: Cannot find module '../src/delve/stops.js'`), and in `delve-movesets.test.ts` 1 test fails of 58 (the migrated dive: `expected { seed: 1862841992, …(16) } to deeply equal { seed: 1862841992, …(17) }`, no `stop` yet).
+
+- [ ] **Step 3: The stop**
+
+In `packages/engine/src/types/delve.ts`:
+
+Replace:
+
+```ts
+
+export interface DiveState {
+```
+
+with:
+
+```ts
+
+/** A stop's power-up: equip a bag item, add a slot, adjust one move, or upgrade an item. */
+export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade';
+
+/** A stop between depths (see the weapon movesets spec): the kinds offered, and whether one is taken. */
+export interface DiveStop {
+  offers: StopKind[];
+  taken: boolean;
+}
+
+export interface DiveState {
+```
+
+Replace:
+
+```ts
+  linksEarned: number;
+  found: Record<Rarity, number>;
+```
+
+with:
+
+```ts
+  linksEarned: number;
+  /** The door screen's stop: the power-up offered after the depth just cleared (null: none). */
+  stop: DiveStop | null;
+  found: Record<Rarity, number>;
+```
+
+In `packages/engine/src/delve/profile-schema.ts`:
+
+Replace:
+
+```ts
+  linksEarned: z.number().int().min(0).default(0),
+  found: PerRarityCount,
+```
+
+with:
+
+```ts
+  linksEarned: z.number().int().min(0).default(0),
+  stop: z
+    .object({
+      offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade'])),
+      taken: z.boolean(),
+    })
+    .nullable()
+    .default(null),
+  found: PerRarityCount,
+```
+
+Create `packages/engine/src/delve/stops.ts`:
+
+```ts
+import type { DataRegistry } from '../data/registry.js';
+import { carriedByText, movesetOf } from '../loot/moveset.js';
+import { upgradeCost } from '../loot/smithing.js';
+import { SeededRNG } from '../rng/seeded-rng.js';
+import {
+  CHAIN_SKILLS,
+  type Blow,
+  type Chains,
+  type ChainSkill,
+  type Move,
+} from '../types/ability.js';
+import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
+import { GEAR_SLOTS, type GearItem } from '../types/gear.js';
+import { addSlot, setChain, slotPrice } from './moveset.js';
+import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
+
+/**
+ * Stops between depths (see the weapon movesets spec): after a depth is
+ * cleared, the door screen holds one power-up, taken with the dive lock lifted
+ * for that one op. dive.ts imports this module back: keep to function declarations.
+ */
+
+/** The four kinds, in the order a stop lists them. */
+export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade'] as const;
+
+/** What a stop's player takes: the kind and what it acts on. */
+export type StopAction =
+  | { kind: 'equip'; uid: string }
+  | { kind: 'slot'; skill: ChainSkill }
+  | { kind: 'move'; skill: ChainSkill; index: number; move: Move | Blow }
+  | { kind: 'upgrade'; uid: string };
+
+/**
+ * The kinds that can apply to `profile` now: `equip` with an item in the bag;
+ * `slot` with a chain of the equipped weapon below its cap whose next slot's
+ * Links the hero has; `move` with a weapon equipped; `upgrade` with an item,
+ * equipped or in the bag, below its max upgrade.
+ */
+export function stopKinds(registry: DataRegistry, profile: DelveProfile): StopKind[] {
+  const weapon = profile.equipped.weapon;
+  const items = [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag].filter(
+    (i): i is GearItem => !!i,
+  );
+  const applies: Record<StopKind, boolean> = {
+    equip: profile.bag.length > 0,
+    slot:
+      !!weapon &&
+      CHAIN_SKILLS.some((s) => {
+        const price = slotPrice(registry, weapon, s);
+        return !!price && price.links <= profile.links;
+      }),
+    move: !!weapon,
+    upgrade: items.some((i) => upgradeCost(registry, i) !== null),
+  };
+  return STOP_KINDS.filter((k) => applies[k]);
+}
+
+/**
+ * The stop after `dive`'s depth is cleared (`completeFloor`): 2 or 3 of the
+ * kinds that apply, at random from the dive seed's fork `stop:<depth>`, or all
+ * of them when fewer apply; none apply, no stop.
+ */
+export function rollStop(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  dive: DiveState,
+): DiveStop | null {
+  const kinds = stopKinds(registry, profile);
+  if (kinds.length === 0) return null;
+  const rng = new SeededRNG(dive.seed).fork(`stop:${dive.depth}`);
+  const count = rng.nextInt(2, 3);
+  const pool = [...kinds];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = rng.nextInt(0, i);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const picked = new Set(pool.slice(0, count));
+  return { offers: kinds.filter((k) => picked.has(k)), taken: false };
+}
+
+/** A move as it is: its kind, form and elements (a blow: its kind and element). */
+function moveKey(m: Move | Blow): string {
+  return 'element' in m ? `${m.kind}|${m.element}` : `${m.kind}|${m.form}|${m.elements.join('+')}`;
+}
+
+/** A chain with move `index` replaced by `move` (its payment kept). */
+function withMove(chain: Chains[ChainSkill], index: number, move: Move | Blow): Chains[ChainSkill] {
+  if (Array.isArray(chain)) return chain.map((b, i) => (i === index ? (move as Blow) : b));
+  return { ...chain, moves: chain.moves.map((m, i) => (i === index ? (move as Move) : m)) };
+}
+
+/** The stop's one op on `profile` (whose dive the caller has lifted). */
+function runStop(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  action: StopAction,
+): ProfileActionResult {
+  switch (action.kind) {
+    case 'equip':
+      try {
+        const next = equipItem(registry, profile, action.uid);
+        const item = GEAR_SLOTS.map((s) => next.equipped[s]).find((i) => i?.uid === action.uid);
+        return { ok: true, profile: next, item };
+      } catch (e) {
+        return { ok: false, profile, reason: (e as Error).message };
+      }
+    case 'slot':
+      return addSlot(registry, profile, action.skill);
+    case 'move': {
+      const weapon = profile.equipped.weapon;
+      if (!weapon) return { ok: false, profile, reason: 'Equip a weapon to build your moves' };
+      const chain = movesetOf(registry, weapon).chains[action.skill];
+      if (!chain) return { ok: false, profile, reason: carriedByText(registry, action.skill) };
+      const moves: (Move | Blow)[] = Array.isArray(chain) ? chain : chain.moves;
+      const { index, move } = action;
+      if (!Number.isInteger(index) || index < 0 || index >= moves.length)
+        return { ok: false, profile, reason: 'Adjust a move the chain holds' };
+      if (Array.isArray(chain) === 'form' in move)
+        return { ok: false, profile, reason: `Not a ${action.skill} move` };
+      if (moveKey(move) === moveKey(moves[index]))
+        return { ok: false, profile, reason: 'Change the move' };
+      return setChain(registry, profile, action.skill, withMove(chain, index, move));
+    }
+    case 'upgrade':
+      return upgradeGear(registry, profile, action.uid);
+  }
+}
+
+/**
+ * Take the stop's power-up: its kind must be offered and the stop not yet
+ * taken. The op runs at its normal price with the dive lock lifted for it
+ * alone (equipping is free, and a weapon brings its own moveset); `move`
+ * changes one move of one chain. A refused op leaves the stop open; one taken
+ * marks it taken. Skipping is choosing a door.
+ */
+export function takeStop(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  action: StopAction,
+): ProfileActionResult {
+  const dive = profile.dive;
+  const stop = dive?.phase === 'choosing' ? dive.stop : null;
+  if (!dive || !stop) return { ok: false, profile, reason: 'No stop here' };
+  if (stop.taken) return { ok: false, profile, reason: "This stop's power-up is taken" };
+  if (!stop.offers.includes(action.kind))
+    return { ok: false, profile, reason: 'Not offered at this stop' };
+  const res = runStop(registry, { ...profile, dive: null }, action);
+  if (!res.ok) return { ...res, profile };
+  return { ...res, profile: { ...res.profile, dive: { ...dive, stop: { ...stop, taken: true } } } };
+}
+```
+
+
+In `packages/engine/src/delve/dive.ts`:
+
+Replace:
+
+```ts
+import { heroChains } from '../loot/moveset.js';
+import { pairElements } from './hero-stats.js';
+```
+
+with:
+
+```ts
+import { heroChains } from '../loot/moveset.js';
+import { rollStop } from './stops.js';
+import { pairElements } from './hero-stats.js';
+```
+
+Replace:
+
+```ts
+    linksEarned: 0,
+    found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
+```
+
+with:
+
+```ts
+    linksEarned: 0,
+    stop: null,
+    found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
+```
+
+Replace:
+
+```ts
+  nextDive = { ...nextDive, doorChoices: rollDoorChoices(registry, nextDive) };
+
+```
+
+with:
+
+```ts
+  nextDive = {
+    ...nextDive,
+    doorChoices: rollDoorChoices(registry, nextDive),
+    stop: rollStop(registry, banked.profile, nextDive),
+  };
+
+```
+
+Replace:
+
+```ts
+      doorChoices: [],
+      phase: 'fighting',
+```
+
+with:
+
+```ts
+      doorChoices: [],
+      stop: null,
+      phase: 'fighting',
+```
+
+In `packages/engine/src/index.ts`:
+
+Replace:
+
+```ts
+} from './delve/moveset.js';
+export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
+```
+
+with:
+
+```ts
+} from './delve/moveset.js';
+export { STOP_KINDS, stopKinds, rollStop, takeStop } from './delve/stops.js';
+export type { StopAction } from './delve/stops.js';
+export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
+```
+
+- [ ] **Step 4: Run the tests again**
+
+Run: `(cd packages/engine && npx vitest run tests/delve-stops.test.ts tests/delve-movesets.test.ts)`
+Expected: PASS, 66 tests in 2 files.
+
+- [ ] **Step 5: The whole engine**
+
+Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
+Expected: no type errors; 1417 tests pass and exactly one fails, the first-dive rail with `expected 3 to be greater than or equal to 4` (1 failed | 77 passed files, 1 failed | 1417 passed tests of 1418): the autopilot doesn't take stops yet (Task 11).
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /c/Projects/Alloy
+(cd packages/engine && npx prettier --write src/delve/stops.ts src/types/delve.ts src/index.ts tests/delve-stops.test.ts tests/delve-movesets.test.ts)
+git add packages/engine/src/delve/stops.ts packages/engine/src/types/delve.ts packages/engine/src/delve/profile-schema.ts packages/engine/src/delve/dive.ts packages/engine/src/index.ts packages/engine/tests/delve-stops.test.ts packages/engine/tests/delve-movesets.test.ts
+git commit -m "feat(engine): a stop between depths: one power-up on the door screen, taken with the dive lock lifted for it" -m "The first-dive pacing rail still fails (mean 3 against 4); see the plan's Task 12." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+```
+
+## Chunk 11: Engine: the autopilot takes stops, and the balance gate
+
+### Task 11: The autopilot takes a stop
+
+`takeBestStop(registry, profile)`, the spec's preference at a stop: equip the bag item that beats its gear the most as it is (`compareItem(…, 'asIs')`); otherwise upgrade its cheapest affordable equipped item; otherwise add an affordable slot, in `SLOT_ORDER`; otherwise skip (the door). `runAutopilot` takes it on each door screen before choosing a door. A weapon equipped at a stop brings its own moves, and re-fusing its Primary after the dive is a paid edit the bot may not afford, so the pair test that pinned a fused Primary after one dive now pins it where it holds (right after the bind) and keeps the reaction's check on the dive.
+
+**Files:**
+- Modify: `packages/engine/src/delve/autopilot.ts:34,181,248` (CRLF, never format)
+- Modify: `packages/engine/src/index.ts:209`
+- Modify: `packages/engine/tests/delve-stops.test.ts` (an import, and a new block at the end)
+- Modify: `packages/engine/tests/delve-pair.test.ts:1209`
+
+- [ ] **Step 1: Write the failing tests**
+
+In `packages/engine/tests/delve-stops.test.ts`:
+
+Replace:
+
+```ts
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
+```
+
+with:
+
+```ts
+import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { takeBestStop } from '../src/delve/autopilot.js';
+import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
+```
+
+Append at the end of the file:
+
+```ts
+describe('the autopilot at a stop', () => {
+  const stopOf = (...offers: StopKind[]): DiveStop => ({ offers, taken: false });
+  const plain = (uid: string): GearItem =>
+    generateItem(
+      registry,
+      { uid, ilvl: 1, rarity: 'common', slot: 'ring', mana: 'fire' },
+      new SeededRNG(2),
+    );
+
+  it('equips the bag item that beats its gear the most, as it is, for free', () => {
+    const p = { ...atStop(hero(), stopOf('equip', 'upgrade')), scrap: 1000 };
+    const both = { ...p, bag: [plain('weak'), ...p.bag] };
+    const after = takeBestStop(registry, both);
+    expect(after.equipped.ring!.uid).toBe('r1');
+    expect(after.scrap).toBe(1000);
+    expect(after.dive!.stop!.taken).toBe(true);
+  });
+
+  it('else upgrades its cheapest affordable equipped item', () => {
+    const p0 = atStop(hero(), stopOf('equip', 'upgrade'));
+    // A copy of its own sword beats nothing, so it upgrades instead. The sword, once upgraded,
+    // costs more than the cuirass: the cuirass goes first, and only while scrap covers it.
+    const sword = { ...p0.equipped.weapon!, upgrade: 3 };
+    const chest = p0.equipped.chest!;
+    const cost = upgradeCost(registry, chest)!;
+    expect(upgradeCost(registry, sword)!).toBeGreaterThan(cost);
+    const p = {
+      ...p0,
+      equipped: { ...p0.equipped, weapon: sword },
+      bag: [{ ...sword, uid: 'twin' }],
+      scrap: cost,
+    };
+    const after = takeBestStop(registry, p);
+    expect(after.equipped.chest!.upgrade).toBe(1);
+    expect(after.scrap).toBe(0);
+    expect(takeBestStop(registry, { ...p, scrap: cost - 1 })).toEqual({ ...p, scrap: cost - 1 });
+  });
+
+  it('else adds an affordable slot, the Primary first; else skips', () => {
+    const p = { ...atStop(hero(), stopOf('slot', 'move')), links: 5, scrap: 1000 };
+    expect(takeBestStop(registry, p).equipped.weapon!.moveset!.slots.primary).toBe(2);
+    const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
+    expect(takeBestStop(registry, broke)).toBe(broke);
+  });
+});
+```
+
+In `packages/engine/tests/delve-pair.test.ts`:
+
+Replace the lines from `const { profile } = runAutopilot(registry, {` up to (not including) `it('lets an overtaking secondary swap in, and rebuilds its Primary to match', () => {` with:
+
+```ts
+    const after = (dives: number) =>
+      runAutopilot(registry, { seed: 1, dives, primary: 'storm', secondary: 'earth' }).profile;
+    const start = after(0);
+    expect(start.pair).toEqual({ primary: 'storm', secondary: 'earth' });
+    expect(primaryElements(start)).toEqual(['storm+earth']);
+    // A weapon equipped at a stop brings its own moves; the reaction was found all the same.
+    expect(after(1).reactionsSeen).toContain('lightning_rod');
+  });
+
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `(cd packages/engine && npx vitest run tests/delve-stops.test.ts tests/delve-pair.test.ts)`
+Expected: FAIL, 3 failed and 60 passed (63): the new block's tests, with `(0 , takeBestStop) is not a function`. The pair test passes before and after (the bot takes no stops yet).
+
+- [ ] **Step 3: The stop policy**
+
+In `packages/engine/src/delve/autopilot.ts`:
+
+Replace:
+
+```ts
+import { addSlot, setChain, transferMoveset } from './moveset.js';
+import type { ChainSkill } from '../types/ability.js';
+```
+
+with:
+
+```ts
+import { addSlot, setChain, transferMoveset } from './moveset.js';
+import { takeStop, type StopAction } from './stops.js';
+import type { ChainSkill } from '../types/ability.js';
+```
+
+Replace:
+
+```ts
+/**
+ * Between dives: move the moveset to a better weapon, equip upgrades, fuse
+```
+
+with:
+
+```ts
+/**
+ * At a stop between depths, by preference: equip the bag item that beats its
+ * gear the most as it is; else upgrade its cheapest affordable equipped item;
+ * else add an affordable slot (in `SLOT_ORDER`); else skip (the door).
+ */
+export function takeBestStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const stop = profile.dive?.stop;
+  if (!stop || stop.taken) return profile;
+  const take = (action: StopAction) => {
+    const res = takeStop(registry, profile, action);
+    return res.ok ? res.profile : null;
+  };
+  if (stop.offers.includes('equip')) {
+    const depth = referenceDepth(profile);
+    let best: { uid: string; pct: number } | null = null;
+    for (const item of profile.bag) {
+      const pct = compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs').powerPct;
+      if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
+    }
+    const equipped = best && take({ kind: 'equip', uid: best.uid });
+    if (equipped) return equipped;
+  }
+  if (stop.offers.includes('upgrade')) {
+    let cheapest: { uid: string; cost: number } | null = null;
+    for (const slot of GEAR_SLOTS) {
+      const item = profile.equipped[slot];
+      const cost = item ? upgradeCost(registry, item) : null;
+      if (item && cost !== null && cost <= profile.scrap && (!cheapest || cost < cheapest.cost))
+        cheapest = { uid: item.uid, cost };
+    }
+    const upgraded = cheapest && take({ kind: 'upgrade', uid: cheapest.uid });
+    if (upgraded) return upgraded;
+  }
+  if (stop.offers.includes('slot'))
+    for (const skill of SLOT_ORDER) {
+      const slotted = take({ kind: 'slot', skill });
+      if (slotted) return slotted;
+    }
+  return profile;
+}
+
+/**
+ * Between dives: move the moveset to a better weapon, equip upgrades, fuse
+```
+
+Replace:
+
+```ts
+      if (p.dive.depth >= maxDepth) {
+        p = extractDive(registry, p);
+```
+
+with:
+
+```ts
+      p = takeBestStop(registry, p);
+      if (p.dive!.depth >= maxDepth) {
+        p = extractDive(registry, p);
+```
+
+In `packages/engine/src/index.ts`:
+
+Replace:
+
+```ts
+export { runAutopilot } from './delve/autopilot.js';
+export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
+```
+
+with:
+
+```ts
+export { runAutopilot, takeBestStop } from './delve/autopilot.js';
+export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
+```
+
+- [ ] **Step 4: Run the tests again**
+
+Run: `(cd packages/engine && npx vitest run tests/delve-stops.test.ts tests/delve-pair.test.ts)`
+Expected: PASS, 63 tests in 2 files.
+
+- [ ] **Step 5: The whole engine**
+
+Run: `(cd packages/engine && npx tsc --noEmit -p . && npx vitest run)`
+Expected: no type errors; 1420 tests pass and exactly one fails, the first-dive rail with `expected 3 to be greater than or equal to 4` (1 failed | 77 passed files, 1 failed | 1420 passed tests of 1421).
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /c/Projects/Alloy
+(cd packages/engine && npx prettier --write src/index.ts tests/delve-stops.test.ts tests/delve-pair.test.ts)
+git add packages/engine/src/delve/autopilot.ts packages/engine/src/index.ts packages/engine/tests/delve-stops.test.ts packages/engine/tests/delve-pair.test.ts
+git commit -m "feat(engine): the autopilot takes a stop: equip the best item as it is, else upgrade, else a slot" -m "The first-dive pacing rail still fails (mean 3 against 4); every other rail holds. See the plan's Task 12." -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+```
+
+### Task 12: Measure before and after, record it, and stop
+
+No tuning (the spec: measure, and if a rail breaks, stop). This task builds a measuring copy of the engine (the client's bundle stays as it is), measures the DPS Lab grid, the pacing rails, the first dives, their stops and v0.48.0's items against the "before" files Task 1 checked, records them in the spec's status line, and **stops**. The numbers are deterministic: each must match the plan's; if one differs, find out why before going on (the sim is deterministic, so a difference means the code differs from the plan's).
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md:3` (the status line; LF, never format)
@@ -6082,12 +6870,12 @@ Expected, exactly (about a minute):
 
 ```text
 first dive: 3, 3, 3, 3 (each ≥ 3), mean 3 (4–12)
-dive 6 mean 18.25, dive 12 mean 31.5 (> dive 1 + 5, > dive 6)
-frost: dive 1 3, dive 12 25 (≥ dive 1 + 5)
-legendaries owned at dive 12: 5 (≥ 1, < 12)
+dive 6 mean 24.25, dive 12 mean 34 (> dive 1 + 5, > dive 6)
+frost: dive 1 4, dive 12 29.5 (≥ dive 1 + 5)
+legendaries owned at dive 12: 6 (≥ 1, < 12)
 own pair's reaction found: 6 of 6
-sweep at dive 6: median 23, 20–28 (allowed 13.8–36.8): fire+frost 23, earth+frost 28, storm+fire 26, frost+storm 21, fire+shadow 26, fire+nature 23, shadow+nature 21, fire+earth 23, storm+earth 26, earth+shadow 26, earth+nature 22, frost+shadow 20, frost+nature 22, storm+shadow 21, storm+nature 22
-seconds per floor: 28.26 (8–60)
+sweep at dive 6: median 22, 15–28 (allowed 13.2–35.2): fire+frost 22, earth+frost 22, storm+fire 15, frost+storm 21, fire+shadow 18, fire+nature 22, shadow+nature 21, fire+earth 23, storm+earth 24, earth+shadow 20, earth+nature 26, frost+shadow 18, frost+nature 22, storm+shadow 28, storm+nature 27
+seconds per floor: 33.81 (8–60)
 ```
 
 and `pacing-before.txt` reads:
@@ -6108,10 +6896,10 @@ Run: `(cd /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a
 Expected, exactly (each seed's first two dives: where they start and end, how, and the Power after):
 
 ```text
-1 1→3 dead power 761 | 1→5 dead power 1466
-2 1→3 dead power 773 | 1→5 dead power 2019
-3 1→3 dead power 836 | 1→4 dead power 1980
-4 1→3 dead power 761 | 1→4 extracted power 1692
+1 1→3 dead power 1266 | 1→5 dead power 2867
+2 1→3 dead power 1352 | 1→5 dead power 2402
+3 1→3 dead power 1022 | 1→5 dead power 2087
+4 1→3 dead power 1166 | 1→5 dead power 2913
 ```
 
 and `first-dives-before.txt` reads:
@@ -6121,6 +6909,16 @@ and `first-dives-before.txt` reads:
 2 1→11 dead power 5103 | 11→21 dead power 23500
 3 1→11 dead power 4109 | 11→17 dead power 21670
 4 1→13 dead power 8748 | 11→19 dead power 16630
+```
+
+Run: `(cd /c/Users/hahnz/AppData/Local/Temp/claude/c--Projects-Alloy/239f61fd-0a16-4600-a17d-7efef362f2cc/scratchpad/movesets-before && node stop-trace.mjs C:/Projects/Alloy/packages/engine/node_modules/.movesets-measure/index.js | tee stop-trace-after.txt)`
+Expected, exactly (each seed's first dive, taking the first door each time: each cleared depth's life left, bag (rarity and slot initials), Links, scrap, the stop's offers, whether the autopilot took one, and Power before and after it):
+
+```text
+seed 1: d1 hp50% bag[cruguwchcb] links0 scrap19 offers equip/move/upgrade took power 787->881 | d2 hp51% bag[cruguwcbcbcwcarcchcruccguruwcbchuacwcg] links0 scrap53 offers equip/move/upgrade took power 860->1294 | d3 died
+seed 2: d1 hp74% bag[uacacwcc] links0 scrap16 offers equip/move took power 802->910 | d2 hp34% bag[cacwccuhcacgmccgcgcrewcauaebrwubcb] links0 scrap41 offers equip/move/upgrade took power 893->2290 | d5 died
+seed 3: d1 hp43% bag[uwcwchmrcrcbcw] links0 scrap19 offers equip/upgrade took power 869->965 | d2 hp57% bag[uwcwmrcrcbcwuhmrubcrcccwuacheachmgmacgmw] links0 scrap42 offers equip/move/upgrade took power 940->1294 | d3 died
+seed 4: d1 hp80% bag[uauacccwuc] links0 scrap18 offers equip/move/upgrade took power 787->882 | d2 hp60% bag[uacccwuccgmweguwcacc] links0 scrap35 offers equip/move took power 866->1185 | d3 died
 ```
 
 - [ ] **Step 4: Remove the measuring build**
@@ -6140,10 +6938,10 @@ Replace:
 with:
 
 ```markdown
-**Status:** approved design, 2026-09-30. It is stage 4a of the skill roadmap, and it ships as v0.49.0. The engine is built at the values below (and `slotScrap` [20, 40, 60, 80], which this spec left open); nothing was tuned. Measured before (v0.48.0) and after (the DPS Lab grid at depth 10, one dummy and the pack, one seed; the pacing rails at `tests/delve-pacing.test.ts`'s seeds):
+**Status:** approved design, 2026-09-30. It is stage 4a of the skill roadmap, and it ships as v0.49.0. The engine is built at the values below, stops between depths included; nothing was tuned. Measured before (v0.48.0) and after (the DPS Lab grid at depth 10, one dummy and the pack, one seed; the pacing rails at `tests/delve-pacing.test.ts`'s seeds):
 - **DPS Lab.** Identical: all 9,144 rows, row for row. v0.48.0's items (291, over every rarity and a run of encounter drops) roll the same but for their movesets.
-- **Pacing: the first-dive rail breaks.** First dives 11, 11, 11, 13 (mean 11.5) → 3, 3, 3, 3 (mean 3, against the rail's 4): the dive lock ends the autopilot's mid-dive equipping, so a new hero fights its whole first dive with the starting common sword, a basic chain and a one-move Primary, and every seed dies at depth 3 (Power at death 761–836, against 3,789–8,748 before; its second dive reaches 4–5). Before the dive lock (with the chains on the weapon, the priced edits and the engine's slots, Links and transfers, before the autopilot used them) every rail held: first dives 3, 11, 3, 12 (mean 7.25). Every other rail holds after: dive 6 and dive 12 means 25.5, 35 → 18.25, 31.5; Frost dive 1 → dive 12, 8.5 → 32.5 before and 3 → 25 after; legendaries at dive 12, 6 → 5; the own pair's reaction 6 of 6 both; the 15-pair sweep at dive 6, median 27 (21–37) → 23 (20–28); seconds a floor 20.89 → 28.26.
-- **Waiting on the user's call**, as the Balance section says: slot costs, drop slots, starting slots, dust prices, or a changed rail. The client, the docs and the version follow it.
+- **Pacing: the first-dive rail breaks.** First dives 11, 11, 11, 13 (mean 11.5) → 3, 3, 3, 3 (mean 3, against the rail's 4). The dive lock ends the autopilot's mid-dive equipping; the stops after depths 1 and 2 give it one power-up each (it equips its best bag item as it is), which lifts its Power at death from 761–836 (without stops) to 1,022–1,352, against 3,789–8,748 before, but every seed still dies at depth 3; its second dive reaches depth 5. Before the dive lock (with the chains on the weapon, the priced edits and the engine's slots, Links and transfers, before the autopilot used them) every rail held: first dives 3, 11, 3, 12 (mean 7.25). Every other rail holds after: dive 6 and dive 12 means 25.5, 35 → 24.25, 34; Frost dive 1 → dive 12, 8.5 → 32.5 before and 4 → 29.5 after; legendaries at dive 12, 6 → 6; the own pair's reaction 6 of 6 both; the 15-pair sweep at dive 6, median 27 (21–37) → 22 (15–28, allowed 13.2–35.2); seconds a floor 20.89 → 33.81.
+- **Waiting on the user's call**, as the Balance section says: slot costs, drop slots, starting slots, dust prices, the stops, or a changed rail. The client, the docs and the version follow it.
 ```
 
 - [ ] **Step 6: Commit**
@@ -6151,12 +6949,12 @@ with:
 ```bash
 cd /c/Projects/Alloy
 git add docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md
-git commit -m "docs: the weapon movesets spec's measured before and after: the DPS grid identical, the first-dive pacing rail breaks" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+git commit -m "docs: the weapon movesets spec's measured before and after: the DPS grid identical, the first-dive pacing rail breaks even with stops" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 - [ ] **Step 7: Stop, and bring the numbers to the user**
 
-Don't tune anything, and don't start the client. Report the before and after numbers above (the status line has them), and the spec's options for the fix: slot costs, drop slots, starting slots, dust prices, or a changed rail. Ask the user to confirm two numbers with it: `slotScrap` [20, 40, 60, 80], which the spec left open, and the ◂▸ swap's price, 5 by the spec's pricing steps against the 10 its example says (see "Where the spec left room"); the docs chunk corrects the spec's sentence to whichever holds. The client chunks (the builder's draft, price and Apply, Add slot, the off-pair marks, the locked tabs, the weapon sheet's moveset with both valuations and Transfer, Links in the header, the dive summary and the toasts, the gear controls hidden mid-dive, the bind texts, the HUD and the pad for absent skills, the Training Grounds' Load my build, the store's save v6 and its migration toasts, the E2E), then CLAUDE.md, the superseded notes, `chore(client): bump version to 0.49.0` and the full verification, are planned once the user has chosen.
+Don't tune anything, and don't start the client. Report the before and after numbers above (the status line has them) and what the stop trace shows: one power-up per stop can't make up for the dozens of drops the autopilot used to equip mid-dive; and a stop's offers ignore what the hero can pay but for a slot's Links (the spec's rule), so a new hero's stop often offers a move it has no Mana Dust for. The fix is the user's call (the spec's options: slot costs, drop slots, starting slots, dust prices, the stops, or a changed rail). The client chunks (the builder's draft, price and Apply, Add slot, the off-pair marks, the locked tabs, the weapon sheet's moveset with both valuations and Transfer, Links in the header, the dive summary and the toasts, the gear controls hidden mid-dive, the bind texts, the door screen's stop cards and pickers, the HUD and the pad for absent skills, the Training Grounds' Load my build, the store's save v6 and its migration toasts, the E2E), then CLAUDE.md, the superseded notes, `chore(client): bump version to 0.49.0` and the full verification, are planned once the user has chosen.
 
 **The scripts** (in `<before>`; write any that is missing from these texts):
 
@@ -6252,6 +7050,44 @@ const registry = E.createDefaultRegistry();
 for (const seed of [1, 2, 3, 4]) {
   const { reports } = E.runAutopilot(registry, { seed, dives: 2 });
   console.log(seed, reports.map((r) => `${r.startDepth}→${r.endDepth} ${r.result} power ${r.power}`).join(' | '));
+}
+```
+
+`stop-trace.mjs`:
+
+```js
+// The first dive of each pacing seed, floor by floor (taking the first door each time): what each stop offered, what the autopilot took, and Power.
+// Usage: node stop-trace.mjs <engine dist/index.js>
+import { pathToFileURL } from 'node:url';
+const E = await import(pathToFileURL(process.argv[2]).href);
+const registry = E.createDefaultRegistry();
+for (const seed of [1, 2, 3, 4]) {
+  let p = E.createDelveProfile(registry, seed, { primary: 'fire' });
+  p = E.startDive(registry, p, 1);
+  const log = [];
+  while (p.dive.phase === 'fighting' || p.dive.phase === 'choosing') {
+    if (p.dive.phase === 'fighting') {
+      const world = E.beginFloor(registry, p);
+      while (!world.heroDead && world.t < 240) {
+        E.stepWorld(registry, world, E.botInput(registry, world), 1 / 30);
+        if (world.pending.items.length > 0) p = E.bankWorld(registry, p, world).profile;
+        if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
+      }
+      const hp = Math.round((100 * world.hero.hp) / world.hero.stats.maxHp);
+      if (world.heroDead || !world.cleared) { p = E.failFloor(registry, p, world).profile; log.push(`d${p.dive.depth} died`); break; }
+      p = E.completeFloor(registry, p, world).profile;
+      const stop = p.dive.stop;
+      const before = E.profilePower(registry, p);
+      const bag = p.bag.map((i) => `${i.rarity[0]}${i.slot[0]}`).join('');
+      const after = E.takeBestStop(registry, p);
+      const took = after === p ? 'skip' : after.dive.stop.taken ? 'took' : '?';
+      log.push(`d${p.dive.depth} hp${hp}% bag[${bag}] links${p.links} scrap${p.scrap} offers ${stop ? stop.offers.join('/') : 'none'} ${took} power ${before}->${E.profilePower(registry, after)}`);
+      p = after;
+      continue;
+    }
+    p = E.chooseDoor(registry, p, p.dive.doorChoices[0]);
+  }
+  console.log(`seed ${seed}: ${log.join(' | ')}`);
 }
 ```
 
