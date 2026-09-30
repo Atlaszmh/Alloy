@@ -188,7 +188,13 @@ Nothing about gear changes.
   - `slot`: `addSlot` on one chain, at its normal price.
   - `move`: change one move of one chain (an edit of exactly one position), at its normal `movesetEditPrice`.
   - `upgrade`: one forge upgrade of one item, equipped or in the bag, at its normal price.
-- **The offer.** Of the kinds that can apply right now (a bag item to equip; a chain below 5 slots, Links affordable; a weapon to edit; an item below its max upgrade), the stop offers 2 or 3 at random, or all of them if fewer apply. If none applies, there's no stop.
+- **The offer.** A kind applies only if the hero can take and pay for at least its cheapest action right now:
+  - `equip`: a bag item;
+  - `slot`: a carried chain below 5 slots, whose Links and scrap are affordable;
+  - `move`: a weapon to edit, and at least `editDust` in Mana Dust (or free edits);
+  - `upgrade`: an item below its max upgrade whose price is affordable.
+
+  Of the kinds that apply, the stop offers 2 or 3 at random, or all of them if fewer apply. If none applies, there's no stop.
 - **Taking one.**
   - One action per stop: `takeStop(registry, profile, kind, args)` checks the kind is offered and not yet taken, runs the op with the dive lock lifted for that one op, and marks the stop taken.
   - Skipping is choosing a door.
@@ -237,6 +243,7 @@ Unchanged: their own chains, 5 slots, free and instant, always all four. Load my
   - `playFloor` no longer equips mid-floor.
 
 ## Balance and gates
+- **The first dive is a short scouting run (the user's decision).** With gear locked and one power-up per depth, a new hero's first dive ends around depth 3, and every later dive goes deeper. The first-dive rail changes from "each at least 3, mean 4 to 12" to "each at least 3, mean 3 to 12". The other rails stand. Measured with stops, before this change: dive 6 averaged 24.25 and dive 12 34, against 25.5 and 35 before.
 - **Pacing will drop.** New heroes start with only Basic and Primary, with 1-move ability chains; the Defensive waits for a magic weapon and the Ultimate for an epic one. Moreover, the autopilot no longer gears up mid-dive, and Mana Dust (only from off-pair salvage) now also pays for edits.
   - Capture `runAutopilot` numbers before any change.
   - Every rail in `tests/delve-pacing.test.ts` must hold. If one breaks, stop and report the numbers. The fix is the user's call: slot costs, drop slots, starting slots, dust prices, or a changed rail.
