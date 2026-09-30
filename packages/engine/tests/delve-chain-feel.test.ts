@@ -197,7 +197,13 @@ describe('holds by tempo', () => {
   });
 
   it('a manual hold blow charges and fires by itself the same way', () => {
-    const w = strikeWorld(MAUL, { basic: [{ kind: 'hold', element: 'fire' }] });
+    // Its foe a little off, past where a leap is skipped.
+    const w = strikeWorld(
+      MAUL,
+      { basic: [{ kind: 'hold', element: 'fire' }] },
+      false,
+      dummy(13, 33),
+    );
     const attack = () => stepWorld(registry, w, { move: still, attack: true }, STEP);
     for (let i = 0; i < 60 && w.hero.swing?.held == null; i++) attack();
     const held = w.hero.swing!.held!;

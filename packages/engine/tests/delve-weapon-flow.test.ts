@@ -374,6 +374,35 @@ describe('past the aim point', () => {
     }
   });
 
+  it('a hold released with a fresh manual aim fires at it, from where it was let go', () => {
+    // The aim is behind the hero but ahead of where the hold began: it still fires back at it.
+    for (const ticks of [1, Math.round(bal.chains.holdTime / STEP)]) {
+      const w = arena([dummy(13, 20), dummy(1, 1)], { noBasic: true, primary: { kind: 'hold' } });
+      for (let i = 0; i < ticks; i++) stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+      w.hero.y = 30;
+      stepWorld(registry, w, { move: still, cast: { slot: 0, aim: { x: 13, y: 33 } } }, STEP);
+      for (let i = 0; i < 30 && w.projectiles.length === 0; i++)
+        stepWorld(registry, w, { move: still }, STEP);
+      expect(w.projectiles[0].vy, `${ticks}`).toBeGreaterThan(0);
+      expect(w.projectiles[0].vx).toBeCloseTo(0, 9);
+    }
+  });
+
+  it('a self-centred hold let go early while walking keeps the facing through its wind-up', () => {
+    const w = arena([dummy(1, 1)], { noBasic: true, ultimate: { kind: 'hold', payment: 'mana' } });
+    stepWorld(registry, w, { move: still, holding: 2 }, STEP);
+    // It walked on while it charged.
+    w.hero.y = 34;
+    const up = { x: 0, y: -1 };
+    w.hero.facing = up;
+    stepWorld(registry, w, { move: up, cast: { slot: 2, aim: null } }, STEP);
+    expect(w.hero.windup).not.toBeNull();
+    for (let i = 0; i < 60 && w.hero.windup; i++) {
+      expect(w.hero.facing).toEqual(up);
+      stepWorld(registry, w, { move: up }, STEP);
+    }
+  });
+
   it('a successful auto-aim at the landing still turns toward the nearest foe', () => {
     const w = arena([dummy(13, 30)], { noBasic: true });
     pressOnly(w, 0);
@@ -580,6 +609,14 @@ describe("a hold blow's leap", () => {
       const leap = b.feel!.hold.move - b.feel!.medium.move;
       if (leap > 0) expect(leap, b.id).toBeGreaterThanOrEqual(bal.feel.minLeap);
     }
+  });
+
+  it('a charged blow let go already at contact strikes as it is let go; one 2 away still leaps', () => {
+    const w = charged(MAUL, bal.feel.contactGap);
+    const y0 = w.hero.y;
+    expect(struck(stepWorld(registry, w, letGo, STEP))).toBeDefined();
+    expect(w.hero.y).toBe(y0);
+    released(MAUL, 2);
   });
 
   it('a press, a repeat press and a held hold move wait for it to land', () => {

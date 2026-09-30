@@ -245,11 +245,13 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   if (!canAfford(world, ab)) return;
   const at = aimPoint(ctx, ab, aim) ?? hold.aim;
   if (!at) return;
+  // A fresh aim (manual, or auto-aim now) aims from here; only the hold's own aim dates from its start.
+  const from = at === hold.aim ? hold.from : { x: h.x, y: h.y };
   const held = t - hold.start;
   const left = Math.max(0, ab.castTime - held);
   pay(ctx, hold.slot, hold.step, ab, t + left);
   if (left < 1e-9) {
-    const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from: hold.from, at });
+    const along = alongAim(h, { slot: hold.slot, step: hold.step, stage: s, from, at });
     if (!fire(ctx, hold.slot, aim && (along ?? aim), hold.step, s))
       fire(ctx, hold.slot, along ?? at, hold.step, s);
     return;
@@ -258,8 +260,8 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
     slot: hold.slot,
     aim,
     at,
-    // Where the hold began: the hero may have walked past its aim while it charged.
-    from: hold.from,
+    // Where the hold began, for its own aim: the hero may have walked past it while it charged.
+    from,
     start: t,
     until: t + left,
     step: hold.step,

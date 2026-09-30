@@ -1043,7 +1043,13 @@ describe('basics', () => {
   });
 
   it("a manual hold blow holds at its strike point while the attack stays held, then strikes with its stage's row", () => {
-    const w = strikeWorld(sword, { basic: [{ kind: 'hold', element: 'fire' }] });
+    // Its foe a little off, past where a leap is skipped.
+    const w = strikeWorld(
+      sword,
+      { basic: [{ kind: 'hold', element: 'fire' }] },
+      false,
+      dummy(13, 33.5),
+    );
     const f = w.hero.stats.weapon.feel;
     const iv = w.hero.stats.attackInterval;
     const held = { move: still, attack: true };

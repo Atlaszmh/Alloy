@@ -130,7 +130,8 @@ export function startSwing(
  * go at stage 1 or 2 whose row lunges at least `minLeap` further than
  * medium's leaps the rest first, over `stepSeconds` toward where it re-aimed,
  * stopping at its foe (the re-aimed target, else the first ahead), and strikes
- * as it lands (see the weapon flow spec).
+ * as it lands, unless that foe is already within `minLeap` of contact (see the
+ * weapon flow spec).
  */
 export function basicHoldTick(
   ctx: SimCtx,
@@ -166,6 +167,13 @@ export function basicHoldTick(
     if (leap < bal.feel.minLeap - 1e-9) return strike(ctx, steer, at);
     const { reach } = swingReach(w, row, true);
     const foe = target ?? foeAhead(ctx, sw.dir, reach + leap, row.arc ?? w.arc);
+    // Nor is one whose foe is already within `minLeap` of contact.
+    if (
+      foe &&
+      dist(h.x, h.y, foe.x, foe.y) - foe.radius - h.radius - bal.feel.contactGap <=
+        bal.feel.minLeap + 1e-9
+    )
+      return strike(ctx, steer, at);
     startPush(ctx, 'lunge', sw.dir, leap, bal.feel.stepSeconds, foe?.id ?? null);
     sw.released = at;
     sw.strikeAt = t + bal.feel.stepSeconds;
