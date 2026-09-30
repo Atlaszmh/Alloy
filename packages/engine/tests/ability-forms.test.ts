@@ -41,7 +41,8 @@ describe('primary forms', () => {
     expect(sizes).toEqual([0, 1, 2, 3, 0].map((i) => moveOf(w, 0, i).radius * step(i)));
     expect(sizes[3]).toBeGreaterThan(sizes[2]);
     expect(sizes[2]).toBeGreaterThan(sizes[1]);
-    run(w, bal.abilities.comboWindow + 0.1);
+    // The restart window counts from the beat's end.
+    run(w, w.hero.beatUntil[0] - w.t + bal.abilities.comboWindow + 0.1);
     press(w, 0);
     expect(w.hero.comboStep[0]).toBe(0);
   });

@@ -19,7 +19,7 @@ import {
 } from '../types/ability.js';
 import { manaPool } from '../delve/hero-stats.js';
 import { chargeCap, resolveChain } from './abilities/resolve.js';
-import { cancelWindup, dropHold } from './action.js';
+import { cancelWindup, clearBeat, dropHold } from './action.js';
 import { dist } from './geometry.js';
 
 export interface FloorOptions {
@@ -205,6 +205,8 @@ export function createHeroEntity(
     charge: [0, 0, 0],
     comboStep: [0, 0, 0],
     comboAt: [-Infinity, -Infinity, -Infinity],
+    beatFrom: [0, 0, 0],
+    beatUntil: [0, 0, 0],
     windup: null,
     hold: null,
     swing: null,
@@ -236,8 +238,9 @@ export function createHeroEntity(
  * pool resizes, keeping the life fraction and current mana (clamped). Charge
  * (clamped to each chain's largest need), combos (clamped to a shortened
  * chain) and each move's cooldown carry over. A slot whose chain changed
- * drops its wind-up (as a dodge does) and its hold, and a new Defensive ends
- * the old one's buff and Ward at once, without bursting.
+ * drops its wind-up (as a dodge does), its hold, its beat and its waiting
+ * press, and a new Defensive ends the old one's buff and Ward at once, without
+ * bursting.
  */
 export function refreshWorldHero(
   registry: DataRegistry,
@@ -265,8 +268,11 @@ export function refreshWorldHero(
     cancelWindup(h, world.t);
     h.push = null; // its step-in goes with it
   }
-  // A changed slot's hold is dropped, unpaid.
+  // A changed slot's hold is dropped, unpaid, and its beat and waiting press go.
   if (h.hold && changed[h.hold.slot]) dropHold(world);
+  changed.forEach((c, i) => {
+    if (c) clearBeat(world, i);
+  });
   if (changed[1]) {
     h.defend = null;
     h.ward = null;
@@ -337,8 +343,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     pending: { items: [], scrap: 0, kills: 0, reactions: [] },
     totalMonsters: 0,
     bossId: null,
-    queuedCast: null,
-    queuedCastUntil: 0,
+    queuedCasts: [],
     queuedRelease: null,
     holdDropped: null,
     queuedAttack: null,

@@ -207,6 +207,7 @@ export {
   nextMove,
   activeMove,
   holdCharge,
+  inBeat,
 } from './arpg/abilities/cast.js';
 export {
   resolveAbility,
@@ -215,6 +216,8 @@ export {
   chainMove,
   chargeCap,
   stepBonus,
+  beatFor,
+  playedKind,
   moveNumbers,
   blowNumbers,
   mergeKnobs,

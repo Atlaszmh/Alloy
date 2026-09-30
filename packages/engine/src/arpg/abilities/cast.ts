@@ -5,7 +5,7 @@ import type { SimCtx } from '../combat.js';
 import { cancelSwing, pushTick, startPush } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
-import { chainMove, stepBonus, stepHeft } from './resolve.js';
+import { beatFor, chainMove, playedKind, stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
@@ -15,11 +15,16 @@ export function canAfford(world: ArpgWorld, ab: ResolvedAbility): boolean {
   return !!world.sandbox?.infiniteMana || world.hero.mana >= ab.cost;
 }
 
+/** Whether the slot's beat still runs at `t` (its next move waits for its end). */
+export function inBeat(h: HeroEntity, slot: number, t: number): boolean {
+  return t < h.beatUntil[slot] - 1e-9;
+}
+
 /** Can the slot's next move be used right now (ignoring targets)? For the HUD and bots. */
 export function abilityReady(ctx: SimCtx, slot: number): boolean {
   const h = ctx.world.hero;
   const chain = h.chains[slot];
-  if (!chain || h.windup || h.hold) return false;
+  if (!chain || h.windup || h.hold || inBeat(h, slot, ctx.world.t)) return false;
   const step = pressStep(h, slot, ctx.world.t, ctx.bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (ctx.world.t < h.cooldowns[slot][step]) return false;
@@ -28,8 +33,9 @@ export function abilityReady(ctx: SimCtx, slot: number): boolean {
 }
 
 /**
- * The chain's move a press at `t` casts: the one after the last landed within
- * `window` of it (wrapping after the last move), else the first.
+ * The chain's move a press at `t` casts: the one after the last landed, while
+ * `t` is within `window` of its beat's end (wrapping after the last move),
+ * else the first.
  */
 export function pressStep(h: HeroEntity, slot: number, t: number, window: number): number {
   return t - h.comboAt[slot] <= window ? (h.comboStep[slot] + 1) % h.chains[slot].moves.length : 0;
@@ -66,15 +72,22 @@ export function holdCharge(
   return { charge, stage: charge >= stages[1] ? 2 : charge >= stages[0] ? 1 : 0 };
 }
 
-/** Fire move `step` of the slot's chain (a hold at `stage`) now, then its recoil and recovery. */
+/**
+ * Fire move `step` of the slot's chain (a hold at `stage`) now, then its
+ * recoil and recovery. Its slot's beat starts: the chain's next move waits for
+ * its end, and the restart window counts from there.
+ */
 function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 0): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
   const ab = chainMove(h.chains[slot], step, stage);
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
+  const beat = beatFor(bal, ab.slot, playedKind(ab), h.stats.tempo);
   h.comboStep[slot] = step;
-  h.comboAt[slot] = world.t;
+  h.comboAt[slot] = world.t + beat;
+  h.beatFrom[slot] = world.t;
+  h.beatUntil[slot] = world.t + beat;
   ctx.events.push({
     kind: 'cast',
     slot,
@@ -108,9 +121,9 @@ function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from:
 
 /**
  * Press an ability: its chain's next move. Fails, costing nothing, while
- * another is winding up, on that move's cooldown, uncharged, unaffordable
- * (with a `noMana` event, and the chain doesn't advance) or with nothing to aim
- * at. Otherwise it pays now, drops a basic swing still winding up, and winds
+ * another is winding up, in its slot's beat, on that move's cooldown,
+ * uncharged, unaffordable (with a `noMana` event, and the chain doesn't
+ * advance) or with nothing to aim at. Otherwise it pays now, drops a basic swing still winding up, and winds
  * up for its conjure (stepping in, for forward forms) plus any channel; its
  * cooldown counts from the press plus the channel.
  */
@@ -120,7 +133,7 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
   const t = world.t;
   const slot = cast.slot;
   const chain = h.chains[slot];
-  if (!chain || h.windup || h.hold) return false;
+  if (!chain || h.windup || h.hold || inBeat(h, slot, t)) return false;
   const step = pressStep(h, slot, t, bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (t < h.cooldowns[slot][step]) return false;
@@ -165,15 +178,16 @@ export function castAbility(ctx: SimCtx, cast: AbilityCast): boolean {
 
 /**
  * Holding `slot`: its next move, a hold, starts charging when the hero is free
- * as a press needs (a swing winding up gives way) and its first stage is
- * affordable. Nothing is paid yet; the hero faces what it aims at.
+ * as a press needs (a swing winding up gives way), its slot's beat is over and
+ * its first stage is affordable. Nothing is paid yet; the hero faces what it
+ * aims at.
  */
 function startHold(ctx: SimCtx, slot: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
   const t = world.t;
   const chain = h.chains[slot];
-  if (!chain || h.windup) return;
+  if (!chain || h.windup || inBeat(h, slot, t)) return;
   const step = pressStep(h, slot, t, bal.abilities.comboWindow);
   const ab = chain.moves[step];
   if (ab.kind !== 'hold' || t < h.cooldowns[slot][step]) return;

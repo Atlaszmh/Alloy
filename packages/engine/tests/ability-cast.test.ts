@@ -25,13 +25,17 @@ describe('mana payment', () => {
     w.hero.manaRegen = 0;
     const mana = w.hero.mana;
     const cost = moveOf(w, 0).cost;
+    const pressed = w.t + STEP;
     const events = press(w, 0);
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0 && e.name === 'Fire Bolt')).toBe(
       true,
     );
     expect(w.hero.mana).toBeCloseTo(mana - cost, 0);
+    // Its cooldown counts from the press (its beat, from the landing, outlasts it here).
+    expect(w.hero.cooldowns[0][0]).toBeCloseTo(pressed + moveOf(w, 0).cooldown);
+    w.hero.cooldowns[0][0] = w.t + 5;
     expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(false);
-    run(w, moveOf(w, 0).cooldown);
+    run(w, 5);
     expect(press(w, 0).some((e) => e.kind === 'cast')).toBe(true);
   });
 

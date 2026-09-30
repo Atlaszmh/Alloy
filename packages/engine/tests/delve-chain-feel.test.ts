@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest';
 import balanceData from '../src/data/balance.json';
 import delveData from '../src/data/delve.json';
 import { BalanceConfigSchema, DelveDataSchema } from '../src/data/schemas.js';
+import { inBeat, nextMove } from '../src/arpg/abilities/cast.js';
+import { beatFor } from '../src/arpg/abilities/resolve.js';
+import { respawnHero } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { ABILITY_SLOTS, MOVE_KINDS, type Move, type MoveKind } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
 import {
@@ -12,16 +16,42 @@ import {
   arena,
   bal,
   chainsWith,
+  dodge,
   dummy,
   gear,
+  holdFor,
+  press,
+  pressOnly,
   registry,
+  run,
   strikeWorld,
+  type ArenaOpts,
 } from './fixtures/arena.js';
 
 // See the chain feel spec. The fixture arena's hero stands at (13, 36) facing up (−y);
 // `dummy(x, y)` is a sturdy Fire foe that doesn't fight back.
 
 const still = { x: 0, y: 0 };
+const WINDOW = bal.abilities.comboWindow;
+/** A move of `kind`: a Fire Bolt. */
+const m = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+/** Basic attacks off, a foe up the arena, the Primary a chain of `moves` (two mediums by default). */
+const beater = (moves: Move[] = [m('medium'), m('medium')], o: ArenaOpts = {}) =>
+  arena([dummy(13, 30)], { noBasic: true, primary: { moves }, ...o });
+/** Step (with `input`) until `done` says so of a step's events: every event, and the time then. */
+function until(w: ArpgWorld, done: (events: ArpgEvent[]) => boolean, input = {}) {
+  const events: ArpgEvent[] = [];
+  for (let i = 0; i < 300; i++) {
+    const e = stepWorld(registry, w, { move: still, ...input }, STEP);
+    events.push(...e);
+    if (done(e)) return { events, at: w.t };
+  }
+  throw new Error('never came');
+}
+const windup = (slot: number) => (events: ArpgEvent[]) =>
+  events.some((e) => e.kind === 'windup' && e.slot === slot);
+const castSlots = (events: ArpgEvent[]) =>
+  events.flatMap((e) => (e.kind === 'cast' ? [e.slot] : []));
 const MAUL: EquippedGear = {
   weapon: gear('fire', 'weapon', 'maul'),
   chest: gear('earth', 'chest'),
@@ -182,5 +212,133 @@ describe('holds by tempo', () => {
     );
     expect(stages.map(([s]) => s)).toEqual([1, 2]);
     tickAfter(stages[1][1], bal.chains.holdTime);
+  });
+});
+
+describe('beats', () => {
+  const beatOf = (w: ArpgWorld, slot = 0) => w.hero.beatUntil[slot] - w.hero.beatFrom[slot];
+
+  it("each kind's and slot's beat, by tempo; a tap on a hold takes the medium's, a full charge the hold's", () => {
+    for (const kind of MOVE_KINDS)
+      for (const slot of ABILITY_SLOTS)
+        for (const tempo of [0.8, 1, 1.3])
+          expect(beatFor(bal, slot, kind, tempo)).toBeCloseTo(
+            bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo,
+          );
+    const light = beater([m('light')], { equipped: MAUL });
+    press(light, 0);
+    expect(beatOf(light)).toBeCloseTo(0.25 * 1.3);
+    const ult = beater([m('medium')], { ultimate: { kind: 'heavy' } });
+    ult.hero.charge[2] = 100;
+    press(ult, 2);
+    expect(beatOf(ult, 2)).toBeCloseTo(0.6 * 1.5);
+    const ward = beater();
+    press(ward, 1);
+    expect(beatOf(ward, 1)).toBeCloseTo(0.4 * 0.75);
+    const tap = beater([m('hold')]);
+    press(tap, 0);
+    expect(beatOf(tap)).toBeCloseTo(bal.chains.beat.medium);
+    const full = beater([m('hold')]);
+    holdFor(full, 0, bal.chains.holdTime);
+    expect(beatOf(full)).toBeCloseTo(bal.chains.beat.hold);
+  });
+
+  it("a press during the beat waits and fires at the beat's end", () => {
+    const w = beater();
+    press(w, 0);
+    const end = w.hero.beatUntil[0];
+    expect(inBeat(w.hero, 0, w.t)).toBe(true);
+    pressOnly(w, 0);
+    expect(w.hero.windup).toBeNull();
+    expect(w.queuedCasts.map((q) => q.cast.slot)).toEqual([0]);
+    tickAfter(until(w, windup(0)).at, end);
+  });
+
+  it('a Q press waiting on its beat survives an E press, and both fire', () => {
+    const w = beater();
+    press(w, 0);
+    pressOnly(w, 0);
+    const events = pressOnly(w, 1);
+    expect(windup(1)(events)).toBe(true);
+    expect(w.queuedCasts.map((q) => q.cast.slot)).toEqual([0]);
+    expect(castSlots(until(w, windup(0)).events)).toEqual([1]);
+    expect(w.queuedCasts).toEqual([]);
+  });
+
+  it('a press whose move is still cooling after the beat ages through the buffer, as before', () => {
+    const cooling = (extra: number) => {
+      const w = beater();
+      press(w, 0);
+      w.hero.cooldowns[0][1] = w.hero.beatUntil[0] + extra;
+      pressOnly(w, 0);
+      return w;
+    };
+    const soon = cooling(bal.feel.buffer / 2);
+    const ready = soon.hero.cooldowns[0][1];
+    tickAfter(until(soon, windup(0)).at, ready);
+    const late = cooling(bal.feel.buffer + 0.2);
+    expect(windup(0)(run(late, 1))).toBe(false);
+    expect(late.queuedCasts).toEqual([]);
+  });
+
+  it("a hold held through the beat starts charging at the beat's end", () => {
+    const w = beater([m('light'), m('hold')]);
+    press(w, 0);
+    const end = w.hero.beatUntil[0];
+    until(w, () => w.hero.hold !== null, { holding: 0 });
+    tickAfter(w.hero.hold!.start, end);
+  });
+
+  it('other slots and the dodge stay free during a beat, and a dodge neither ends nor shortens it', () => {
+    const e = beater();
+    press(e, 0);
+    expect(windup(1)(pressOnly(e, 1))).toBe(true);
+    expect(inBeat(e.hero, 0, e.t)).toBe(true);
+
+    const d = beater();
+    press(d, 0);
+    const end = d.hero.beatUntil[0];
+    expect(dodge(d, { x: 1, y: 0 }).some((ev) => ev.kind === 'dodge')).toBe(true);
+    expect(d.hero.beatUntil[0]).toBe(end);
+    pressOnly(d, 0);
+    tickAfter(until(d, windup(0)).at, end);
+  });
+
+  it("the restart window counts from the beat's end; during the beat a press reads the chain's next move", () => {
+    const w = beater();
+    press(w, 0);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(1);
+    run(w, w.hero.beatUntil[0] - w.t + WINDOW - 0.1);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(1);
+    run(w, 0.2);
+    expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(0);
+  });
+
+  it('a changed chain clears its beat and its waiting press; the other slots keep theirs', () => {
+    const w = beater();
+    press(w, 1);
+    press(w, 0);
+    pressOnly(w, 0);
+    const ward = w.hero.beatUntil[1];
+    expect(inBeat(w.hero, 1, w.t)).toBe(true);
+    refreshWorldHero(
+      registry,
+      w,
+      w.hero.stats,
+      chainsWith({ primary: { moves: [m('heavy'), m('medium')] } }),
+    );
+    expect(inBeat(w.hero, 0, w.t)).toBe(false);
+    expect(w.queuedCasts).toEqual([]);
+    expect(w.hero.beatUntil[1]).toBe(ward);
+  });
+
+  it('a respawn clears every beat and waiting press', () => {
+    const w = beater();
+    press(w, 1);
+    press(w, 0);
+    pressOnly(w, 0);
+    respawnHero(registry, w);
+    for (const slot of [0, 1, 2]) expect(inBeat(w.hero, slot, w.t)).toBe(false);
+    expect(w.queuedCasts).toEqual([]);
   });
 });

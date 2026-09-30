@@ -302,9 +302,18 @@ export interface HeroEntity {
   cooldowns: number[][];
   /** Per slot: charge units banked (a charge-paid chain's meter). */
   charge: number[];
-  /** Per slot: the move of the last cast and when it landed (a press's move is chosen from these). */
+  /**
+   * Per slot: the move of the last cast, and when its chain's restart window
+   * starts: its landing plus its beat (a press's move is chosen from these).
+   */
   comboStep: number[];
   comboAt: number[];
+  /**
+   * Per slot: the beat after the last move landed, from `beatFrom` to
+   * `beatUntil`; the slot's next move waits for its end (see the chain feel spec).
+   */
+  beatFrom: number[];
+  beatUntil: number[];
   /** An ability winding up (every ability conjures; cast payment channels too); the hero can't walk or attack meanwhile (a forward form's step-in still moves it). */
   windup: {
     slot: number;
@@ -599,6 +608,12 @@ export interface SandboxToggles {
   invulnerable: boolean;
 }
 
+/** An ability press waiting to fire (see `ArpgWorld.queuedCasts`). */
+export interface QueuedCast {
+  cast: AbilityCast;
+  until: number;
+}
+
 export interface ArpgWorld {
   t: number;
   accumulator: number;
@@ -621,10 +636,12 @@ export interface ArpgWorld {
   pending: WorldPending;
   totalMonsters: number;
   bossId: number | null;
-  /** One-shot inputs waiting for the next simulation step. */
-  queuedCast: AbilityCast | null;
-  /** The queued cast is dropped after this time: the end of whatever kept the hero busy, plus the buffer. */
-  queuedCastUntil: number;
+  /**
+   * Ability presses waiting to fire, at most one per slot, in the order they
+   * were pressed. Each is dropped after its `until`: the end of whatever held
+   * it (a wind-up, a hold, a dash, its slot's beat), plus the buffer.
+   */
+  queuedCasts: QueuedCast[];
   /** A press of the slot whose hold runs: its release, for the next step. */
   queuedRelease: AbilityCast | null;
   /**
@@ -633,7 +650,7 @@ export interface ArpgWorld {
    * lets go, its release is swallowed and no new hold starts.
    */
   holdDropped: number | null;
-  /** A manual attack tap waiting for the weapon (see `queuedCastUntil`). */
+  /** A manual attack tap waiting for the weapon (see `queuedCasts`). */
   queuedAttack: { until: number; aim: Vec | null } | null;
   queuedPotion: boolean;
   queuedDodge: boolean;

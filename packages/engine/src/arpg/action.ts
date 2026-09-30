@@ -109,6 +109,17 @@ export function cancelWindup(h: HeroEntity, t: number): void {
   h.windup = null;
 }
 
+/**
+ * End the slot's beat now and drop its waiting press (a changed chain, a
+ * respawn); its restart window counts from now at the latest.
+ */
+export function clearBeat(world: ArpgWorld, slot: number): void {
+  const h = world.hero;
+  h.beatUntil[slot] = Math.min(h.beatUntil[slot], world.t);
+  h.comboAt[slot] = Math.min(h.comboAt[slot], world.t);
+  world.queuedCasts = world.queuedCasts.filter((q) => q.cast.slot !== slot);
+}
+
 /** Drop a charging hold, unpaid, marking its slot so its release (the button let go) is swallowed. */
 export function dropHold(world: ArpgWorld): void {
   const hold = world.hero.hold;

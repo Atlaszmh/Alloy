@@ -19,7 +19,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clamp, clampLen, dirTo, dist } from './geometry.js';
-import { castAbility, castTick, holdTick, pressStep } from './abilities/cast.js';
+import { castAbility, castTick, holdTick, inBeat, pressStep } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { impact } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -47,14 +47,15 @@ export function stepWorld(
   const events: ArpgEvent[] = [];
   // Presses are kept `buffer` seconds; `heroTick` stops them aging while something holds them.
   const buffer = registry.getDelveBalance().feel.buffer;
-  if (input.cast) {
+  const cast = input.cast;
+  if (cast) {
     // A press of the slot whose hold runs is its release; a dropped hold's release is
-    // swallowed; another slot's press waits its turn.
-    if (world.hero.hold?.slot === input.cast.slot) world.queuedRelease = input.cast;
-    else if (world.holdDropped === input.cast.slot) world.holdDropped = null;
+    // swallowed; any other press waits in the buffer, replacing its slot's older press.
+    if (world.hero.hold?.slot === cast.slot) world.queuedRelease = cast;
+    else if (world.holdDropped === cast.slot) world.holdDropped = null;
     else {
-      world.queuedCast = input.cast;
-      world.queuedCastUntil = world.t + buffer;
+      world.queuedCasts = world.queuedCasts.filter((q) => q.cast.slot !== cast.slot);
+      world.queuedCasts.push({ cast, until: world.t + buffer });
     }
   }
   // Taps only matter in manual mode (automatic attacks need no press).
@@ -141,23 +142,22 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   }
   const dashing = isDashing(ctx);
   const t = world.t;
-  // A queued press waits out a wind-up, a hold or a dash; anything else lets it through.
-  // A press held so doesn't age: it gets `buffer` from when the hero is free.
-  if (world.queuedCast !== null && (dashing || h.windup || h.hold))
-    world.queuedCastUntil = Math.max(world.queuedCastUntil, t + bal.feel.buffer);
-  if (world.queuedCast !== null && t > world.queuedCastUntil) world.queuedCast = null;
-  // A press whose move is on cooldown stays queued (ageing) and fires if the cooldown ends in time.
-  const q = world.queuedCast;
-  if (
-    q !== null &&
-    !dashing &&
-    !h.windup &&
-    !h.hold &&
-    !!h.chains[q.slot] &&
-    t >= h.cooldowns[q.slot][pressStep(h, q.slot, t, bal.abilities.comboWindow)]
-  ) {
-    world.queuedCast = null;
-    castAbility(ctx, q);
+  const busy = dashing || !!h.windup || !!h.hold;
+  // The waiting presses (one per slot) wait out a wind-up, a hold, a dash and their slot's
+  // beat without ageing: each gets `buffer` from then.
+  for (const q of world.queuedCasts)
+    if (busy || inBeat(h, q.cast.slot, t)) q.until = Math.max(q.until, t + bal.feel.buffer);
+  world.queuedCasts = world.queuedCasts.filter((q) => t <= q.until);
+  // Of those whose slot is ready (its beat over, its move off cooldown), the one pressed first
+  // fires. One on cooldown stays (ageing) and fires if the cooldown ends in time.
+  const ready = (slot: number) =>
+    !!h.chains[slot] &&
+    !inBeat(h, slot, t) &&
+    t >= h.cooldowns[slot][pressStep(h, slot, t, bal.abilities.comboWindow)];
+  const q = busy ? undefined : world.queuedCasts.find((p) => ready(p.cast.slot));
+  if (q) {
+    world.queuedCasts = world.queuedCasts.filter((p) => p !== q);
+    castAbility(ctx, q.cast);
   }
   // A hold starts, charges, or fires.
   holdTick(ctx, input.holding, dt, dashing);

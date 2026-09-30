@@ -9,6 +9,7 @@ import {
   type FormId,
   type Knobs,
   type Move,
+  type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
 } from '../../types/ability.js';
@@ -200,6 +201,25 @@ export function chargeCap(chain: ResolvedChain): number {
 export function stepBonus(bal: DelveBalance, index: number): { power: number; size: number } {
   const b = bal.chains.stepBonus * index;
   return { power: 1 + b, size: 1 + b / 2 };
+}
+
+/** The kind a move plays as: a hold's stage's (`HOLD_STAGE_KINDS`: a tap on one plays as a medium). */
+export function playedKind(ab: ResolvedAbility): MoveKind {
+  return ab.kind === 'hold' ? HOLD_STAGE_KINDS[ab.stage] : ab.kind;
+}
+
+/**
+ * The beat after a move lands: the seconds its slot waits before the chain's
+ * next move can start, by the kind it played as (`playedKind`), its slot and
+ * the hero's tempo (see the chain feel spec).
+ */
+export function beatFor(
+  bal: DelveBalance,
+  slot: AbilitySlot,
+  kind: MoveKind,
+  tempo: number,
+): number {
+  return bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo;
 }
 
 /**

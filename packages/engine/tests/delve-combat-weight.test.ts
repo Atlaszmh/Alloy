@@ -178,8 +178,8 @@ describe('pushes and buffered input', () => {
     stepWorld(registry, w, { move: { x: 0, y: 0 }, attack: false, attackTap: true }, 0);
     stepWorld(registry, w, { move: { x: 0, y: 0 }, cast: { slot: 0 } }, 0);
     expect(w.queuedAttack).toMatchObject({ aim: null });
-    expect(w.queuedCast).toEqual({ slot: 0 });
-    expect(w.queuedCastUntil).toBeGreaterThan(w.t);
+    expect(w.queuedCasts.map((q) => q.cast)).toEqual([{ slot: 0 }]);
+    expect(w.queuedCasts[0].until).toBeGreaterThan(w.t);
   });
 
   it('a tap in automatic mode is not recorded', () => {
@@ -765,7 +765,7 @@ describe('casting: conjure, motion, recovery', () => {
     w.hero.cooldowns[0][0] = w.t + 1.5 * STEP;
     const events = pressOnly(w, 0);
     expect(w.hero.windup).toBeNull();
-    expect(w.queuedCast).toEqual({ slot: 0, aim: null });
+    expect(w.queuedCasts.map((q) => q.cast)).toEqual([{ slot: 0, aim: null }]);
     events.push(...run(w, 2 * STEP));
     expect(events.some((e) => e.kind === 'windup' && e.slot === 0)).toBe(true);
   });
@@ -776,7 +776,7 @@ describe('casting: conjure, motion, recovery', () => {
     const events = pressOnly(w, 0);
     events.push(...run(w, 1));
     expect(events.some((e) => e.kind === 'windup')).toBe(false);
-    expect(w.queuedCast).toBeNull();
+    expect(w.queuedCasts).toEqual([]);
   });
 
   it("a press queued on cooldown doesn't cancel a swing", () => {
@@ -786,7 +786,7 @@ describe('casting: conjure, motion, recovery', () => {
     const sw = w.hero.swing!;
     w.hero.cooldowns[0][0] = sw.strikeAt + STEP;
     pressOnly(w, 0);
-    expect(w.queuedCast).not.toBeNull();
+    expect(w.queuedCasts).toHaveLength(1);
     const events = until(w, () => w.hero.swing === null);
     expect(basics(events)).toHaveLength(1);
   });
@@ -815,8 +815,7 @@ describe('casting: conjure, motion, recovery', () => {
     const events = run(w, moveOf(w, 2).castTime + 0.3);
     expect(events.some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
     const s = arena([dummy(13, 30)], { noBasic: true });
-    s.queuedCast = { slot: 0 };
-    s.queuedCastUntil = s.t - 1;
+    s.queuedCasts = [{ cast: { slot: 0 }, until: s.t - 1 }];
     expect(run(s, 0.5).some((e) => e.kind === 'cast')).toBe(false);
   });
 });

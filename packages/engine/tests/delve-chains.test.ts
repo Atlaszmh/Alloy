@@ -383,7 +383,8 @@ describe('chain play', () => {
       expect(shots[k].damage / shots[0].damage).toBeCloseTo(1 + sb * i);
       expect(shots[k].size / shots[0].size).toBeCloseTo(1 + (sb * i) / 2);
     });
-    run(w, WINDOW + 0.1);
+    // The restart window counts from the beat's end.
+    run(w, w.hero.beatUntil[0] - w.t + WINDOW + 0.1);
     expect(nextMove(w.hero, 0, w.t, WINDOW).index).toBe(0);
     press(w, 0);
     expect(w.hero.comboStep[0]).toBe(0);
@@ -465,7 +466,7 @@ describe('chain play', () => {
     w.hero.cooldowns[0][0] = w.t + 5;
     pressOnly(w, 0);
     expect(w.hero.windup).toBeNull();
-    expect(w.queuedCast).not.toBeNull();
+    expect(w.queuedCasts).toHaveLength(1);
   });
 
   it("refuses a move it can't afford (noMana), and the chain doesn't advance", () => {
@@ -885,7 +886,7 @@ describe('holds', () => {
     stepWorld(registry, w, { move: still, holding: 0, cast: { slot: 1 } }, STEP);
     for (let i = 0; i < Math.round(0.6 / STEP); i++) holdStep(w);
     expect(w.hero.windup).toBeNull();
-    expect(w.queuedCast).toMatchObject({ slot: 1 });
+    expect(w.queuedCasts.map((q) => q.cast)).toMatchObject([{ slot: 1 }]);
     const events = holdFor(w, 0, 0);
     events.push(...run(w, 0.5));
     expect(casts(events).map((e) => e.slot)).toEqual([0, 1]);

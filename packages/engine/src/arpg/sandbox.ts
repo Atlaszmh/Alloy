@@ -13,6 +13,7 @@ import type { HeroStats, MonsterDef, SandboxBalance } from '../types/delve.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { baseDisplayName, generateItem } from '../loot/item-generator.js';
+import { clearBeat } from './action.js';
 import { livingBossId } from './combat.js';
 import { chargeCap } from './abilities/resolve.js';
 import { clamp } from './geometry.js';
@@ -263,8 +264,9 @@ export function fillCharge(world: ArpgWorld): void {
 
 /**
  * The hero fell with Invulnerable off: back at once where it fell, with full
- * life and potions and Phoenix ready, every action and buff cleared, and a
- * second of invulnerability so a crowd can't kill it again at once. Monsters stay.
+ * life and potions and Phoenix ready, every action, beat, waiting press and
+ * buff cleared, and a second of invulnerability so a crowd can't kill it again
+ * at once. Monsters stay.
  */
 export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   const h = world.hero;
@@ -286,6 +288,7 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.quickUntil = 0;
   h.reactionReadyAt = {};
   h.invulnUntil = t + 1;
+  h.chains.forEach((_, i) => clearBeat(world, i));
 }
 
 /**

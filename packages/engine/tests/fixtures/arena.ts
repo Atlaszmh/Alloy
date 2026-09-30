@@ -152,10 +152,15 @@ export function pressOnly(w: ArpgWorld, slot: number, aim?: { x: number; y: numb
   return stepWorld(registry, w, { move: { x: 0, y: 0 }, cast }, STEP);
 }
 
-/** Press an ability (0 Primary, 1 Defensive, 2 Ultimate) and run until its wind-up lands, returning every event. */
+/**
+ * Press an ability (0 Primary, 1 Defensive, 2 Ultimate) and run until its wind-up lands (a press
+ * made during its slot's beat waits for the beat's end first), returning every event.
+ */
 export function press(w: ArpgWorld, slot: number, aim?: { x: number; y: number }): ArpgEvent[] {
   const events = pressOnly(w, slot, aim);
-  for (let i = 0; i < 300 && w.hero.windup; i++)
+  const waiting = () =>
+    w.hero.beatUntil[slot] > w.t + 1e-9 && w.queuedCasts.some((q) => q.cast.slot === slot);
+  for (let i = 0; i < 300 && (w.hero.windup || waiting()); i++)
     events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP));
   return events;
 }

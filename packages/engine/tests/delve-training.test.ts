@@ -511,23 +511,27 @@ describe('toggles', () => {
     expect(w.hero.charge[2]).toBe(moveOf(w, 2).chargeNeed);
   });
 
-  it('no cooldowns: the same ability fires again right after it lands, and charge stays full', () => {
+  it('no cooldowns: the same ability fires again right after its beat, and charge stays full', () => {
     const on = sandbox({ ...ALL_OFF, noCooldowns: true, infiniteMana: true });
     const off = sandbox({ ...ALL_OFF, infiniteMana: true });
     for (const w of [on, off]) {
       w.hero.nextAttackAt = 1e9;
       spawnDummies(registry, w, { layout: 'single', element: null });
-      press(w, 0);
-      pressOnly(w, 0);
+      press(w, 1);
+      pressOnly(w, 1);
     }
-    expect(on.hero.windup?.slot).toBe(0);
-    expect(off.hero.windup).toBeNull(); // 0.45 s cooldown
+    // The beat stays on: the press waits for its end.
+    expect(on.hero.windup).toBeNull();
+    for (const w of [on, off]) run(w, w.hero.beatUntil[1] - w.t);
+    expect(on.hero.windup?.slot).toBe(1);
+    expect(off.hero.windup).toBeNull(); // a 10 s cooldown
 
     const u = sandbox({ ...ALL_OFF, noCooldowns: true }); // the Ultimate is a charge-paid Nova
     const need = moveOf(u, 2).chargeNeed;
     press(u, 2);
     expect(u.hero.charge[2]).toBe(need);
     pressOnly(u, 2);
+    run(u, u.hero.beatUntil[2] - u.t);
     expect(u.hero.windup?.slot).toBe(2);
   });
 
