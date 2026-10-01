@@ -1206,17 +1206,13 @@ describe('the autopilot and the pair', () => {
   });
 
   it('binds a given secondary before the first dive, and its fused Primary finds their reaction', () => {
-    const { profile } = runAutopilot(registry, {
-      seed: 1,
-      dives: 1,
-      primary: 'storm',
-      secondary: 'earth',
-    });
-    expect([profile.pair.primary, profile.pair.secondary].sort()).toEqual(['earth', 'storm']);
-    expect(primaryElements(profile).map((e) => e.split('+').sort().join('+'))).toEqual([
-      'earth+storm',
-    ]);
-    expect(profile.reactionsSeen).toContain('lightning_rod');
+    const after = (dives: number) =>
+      runAutopilot(registry, { seed: 1, dives, primary: 'storm', secondary: 'earth' }).profile;
+    const start = after(0);
+    expect(start.pair).toEqual({ primary: 'storm', secondary: 'earth' });
+    expect(primaryElements(start)).toEqual(['storm+earth']);
+    // A weapon equipped at a stop brings its own moves; the reaction was found all the same.
+    expect(after(1).reactionsSeen).toContain('lightning_rod');
   });
 
   it('lets an overtaking secondary swap in, and rebuilds its Primary to match', () => {

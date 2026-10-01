@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hitMonster, makeCtx } from '../src/arpg/combat.js';
+import { takeBestStop } from '../src/delve/autopilot.js';
 import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
 import { addSlot } from '../src/delve/moveset.js';
 import {
@@ -195,5 +196,51 @@ describe('takeStop', () => {
     expect(parseDelveProfile(registry, json(p))!.profile.dive!.stop).toEqual(p.dive!.stop);
     const { stop: _stop, ...older } = p.dive!;
     expect(parseDelveProfile(registry, json({ ...p, dive: older }))!.profile.dive!.stop).toBeNull();
+  });
+});
+
+describe('the autopilot at a stop', () => {
+  const stopOf = (...offers: StopKind[]): DiveStop => ({ offers, taken: false });
+  const plain = (uid: string): GearItem =>
+    generateItem(
+      registry,
+      { uid, ilvl: 1, rarity: 'common', slot: 'ring', mana: 'fire' },
+      new SeededRNG(2),
+    );
+
+  it('equips the bag item that beats its gear the most, as it is, for free', () => {
+    const p = { ...atStop(hero(), stopOf('equip', 'upgrade')), scrap: 1000 };
+    const both = { ...p, bag: [plain('weak'), ...p.bag] };
+    const after = takeBestStop(registry, both);
+    expect(after.equipped.ring!.uid).toBe('r1');
+    expect(after.scrap).toBe(1000);
+    expect(after.dive!.stop!.taken).toBe(true);
+  });
+
+  it('else upgrades its cheapest affordable equipped item', () => {
+    const p0 = atStop(hero(), stopOf('equip', 'upgrade'));
+    // A copy of its own sword beats nothing, so it upgrades instead. The sword, once upgraded,
+    // costs more than the cuirass: the cuirass goes first, and only while scrap covers it.
+    const sword = { ...p0.equipped.weapon!, upgrade: 3 };
+    const chest = p0.equipped.chest!;
+    const cost = upgradeCost(registry, chest)!;
+    expect(upgradeCost(registry, sword)!).toBeGreaterThan(cost);
+    const p = {
+      ...p0,
+      equipped: { ...p0.equipped, weapon: sword },
+      bag: [{ ...sword, uid: 'twin' }],
+      scrap: cost,
+    };
+    const after = takeBestStop(registry, p);
+    expect(after.equipped.chest!.upgrade).toBe(1);
+    expect(after.scrap).toBe(0);
+    expect(takeBestStop(registry, { ...p, scrap: cost - 1 })).toEqual({ ...p, scrap: cost - 1 });
+  });
+
+  it('else adds an affordable slot, the Primary first; else skips', () => {
+    const p = { ...atStop(hero(), stopOf('slot', 'move')), links: 5, scrap: 1000 };
+    expect(takeBestStop(registry, p).equipped.weapon!.moveset!.slots.primary).toBe(2);
+    const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
+    expect(takeBestStop(registry, broke)).toBe(broke);
   });
 });

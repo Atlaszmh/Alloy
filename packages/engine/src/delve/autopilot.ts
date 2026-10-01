@@ -31,6 +31,7 @@ import {
   upgradeGear,
 } from './profile.js';
 import { addSlot, setChain, transferMoveset } from './moveset.js';
+import { takeStop, type StopAction } from './stops.js';
 import type { ChainSkill } from '../types/ability.js';
 
 /**
@@ -178,6 +179,47 @@ function spendLinks(registry: DataRegistry, profile: DelveProfile): DelveProfile
 }
 
 /**
+ * At a stop between depths, by preference: equip the bag item that beats its
+ * gear the most as it is; else upgrade its cheapest affordable equipped item;
+ * else add an affordable slot (in `SLOT_ORDER`); else skip (the door).
+ */
+export function takeBestStop(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const stop = profile.dive?.stop;
+  if (!stop || stop.taken) return profile;
+  const take = (action: StopAction) => {
+    const res = takeStop(registry, profile, action);
+    return res.ok ? res.profile : null;
+  };
+  if (stop.offers.includes('equip')) {
+    const depth = referenceDepth(profile);
+    let best: { uid: string; pct: number } | null = null;
+    for (const item of profile.bag) {
+      const pct = compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs').powerPct;
+      if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
+    }
+    const equipped = best && take({ kind: 'equip', uid: best.uid });
+    if (equipped) return equipped;
+  }
+  if (stop.offers.includes('upgrade')) {
+    let cheapest: { uid: string; cost: number } | null = null;
+    for (const slot of GEAR_SLOTS) {
+      const item = profile.equipped[slot];
+      const cost = item ? upgradeCost(registry, item) : null;
+      if (item && cost !== null && cost <= profile.scrap && (!cheapest || cost < cheapest.cost))
+        cheapest = { uid: item.uid, cost };
+    }
+    const upgraded = cheapest && take({ kind: 'upgrade', uid: cheapest.uid });
+    if (upgraded) return upgraded;
+  }
+  if (stop.offers.includes('slot'))
+    for (const skill of SLOT_ORDER) {
+      const slotted = take({ kind: 'slot', skill });
+      if (slotted) return slotted;
+    }
+  return profile;
+}
+
+/**
  * Between dives: move the moveset to a better weapon, equip upgrades, fuse
  * spare triples, melt junk, spend Links on slots, and pour scrap into upgrades.
  */
@@ -247,7 +289,8 @@ export function runAutopilot(
         seconds += played.seconds;
         continue;
       }
-      if (p.dive.depth >= maxDepth) {
+      p = takeBestStop(registry, p);
+      if (p.dive!.depth >= maxDepth) {
         p = extractDive(registry, p);
         result = 'capped';
         break;
