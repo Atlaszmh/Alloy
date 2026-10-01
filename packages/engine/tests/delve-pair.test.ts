@@ -637,8 +637,18 @@ describe('the pair ops', () => {
       { kind: 'medium', form: 'bolt', elements: ['storm'] },
       { kind: 'heavy', form: 'bolt', elements: ['fire'] },
     ];
+    // A Defensive and an Ultimate too (`withChains` sets any skill), one Fire move each.
+    const one = (form: 'ward' | 'nova'): Chain => ({
+      moves: [{ kind: 'medium', form, elements: ['fire'] }],
+      payment: 'mana',
+    });
     const p: DelveProfile = {
-      ...withChains(hero, { basic, primary: { moves, payment: 'mana' } }),
+      ...withChains(hero, {
+        basic,
+        primary: { moves, payment: 'mana' },
+        defensive: one('ward'),
+        ultimate: one('nova'),
+      }),
       pair: was,
     };
     const to = (primary: ManaType, secondary: ManaType) =>
@@ -670,6 +680,8 @@ describe('the pair ops', () => {
       ['primary', 0, ['fire'], ['storm', 'nature']],
       ['primary', 1, ['storm'], ['nature']],
       ['primary', 2, ['fire'], ['storm']],
+      ['defensive', 0, ['fire'], ['storm']],
+      ['ultimate', 0, ['fire'], ['storm']],
     ]);
     // Fire+Storm → Frost+Fire: Fire's role goes to Frost, Storm's to Fire.
     const ff = to('frost', 'fire');
@@ -684,6 +696,8 @@ describe('the pair ops', () => {
       ['primary', 0, ['storm'], ['frost', 'fire']],
       ['primary', 1, ['storm'], ['fire']],
       ['primary', 2, ['fire'], ['frost']],
+      ['defensive', 0, ['fire'], ['frost']],
+      ['ultimate', 0, ['fire'], ['frost']],
     ]);
     // Fire+Storm → Fire+Frost: only Storm's moves and blows change.
     const fr = to('fire', 'frost');

@@ -103,7 +103,7 @@ describe('data: movesets', () => {
     expect(bal.chains.cap).toEqual({ basic: 5, primary: 5, defensive: 5, ultimate: 5 });
   });
 
-  it('refuses a rarity that carries no basic chain or less than the rarity below, or extra slots that fall', () => {
+  it('refuses a rarity that carries no basic chain or less than the rarity below, a legendary short of all four, or extra slots that fall', () => {
     const withMovesets = (movesets: object) => ({
       ...balanceData,
       delve: { ...balanceData.delve, movesets: { ...balanceData.delve.movesets, ...movesets } },
@@ -112,6 +112,15 @@ describe('data: movesets', () => {
     expect(BalanceConfigSchema.safeParse(withMovesets({ carries })).success).toBe(false);
     const shrinks = { ...balanceData.delve.movesets.carries, rare: ['basic', 'primary'] };
     expect(BalanceConfigSchema.safeParse(withMovesets({ carries: shrinks })).success).toBe(false);
+    const noUltimate = Object.fromEntries(
+      Object.entries(balanceData.delve.movesets.carries).map(([r, s]) => [
+        r,
+        s.filter((skill) => skill !== 'ultimate'),
+      ]),
+    );
+    expect(BalanceConfigSchema.safeParse(withMovesets({ carries: noUltimate })).success).toBe(
+      false,
+    );
     const extraSlots = { ...balanceData.delve.movesets.extraSlots, rare: [2, 1] };
     expect(BalanceConfigSchema.safeParse(withMovesets({ extraSlots })).success).toBe(false);
     expect(BalanceConfigSchema.safeParse(balanceData).success).toBe(true);
@@ -517,9 +526,9 @@ describe('save v6: the migration from version 5', () => {
         ...common,
         moveset: {
           chains: { ...moveset.chains, defensive: rare.moveset!.chains.defensive },
-          slots: { ...moveset.slots, defensive: 1 },
+          slots: { ...moveset.slots, defensive: 3 },
         },
-      }, // a chain its rarity doesn't carry
+      }, // a chain its rarity doesn't carry, with 2 extra slots
       {
         ...rare,
         moveset: {
@@ -528,9 +537,12 @@ describe('save v6: the migration from version 5', () => {
         },
       }, // a Defensive to add, a basic slot count to raise
     ];
-    const fitted = parseDelveProfile(registry, json({ ...p, bag }))!.profile.bag;
+    const loaded = parseDelveProfile(registry, json({ ...p, bag }))!.profile;
+    const fitted = loaded.bag;
     expect(fitted[0].moveset).toEqual(defaultMoveset(registry, bare, 'storm'));
     expect(fitted[1].moveset).toEqual(moveset);
+    // The dropped Defensive's extra slots come back as Links, as salvaging would give.
+    expect(loaded.links).toBe(p.links + 2);
     expect(fitted[2].moveset!.chains.defensive).toEqual(
       defaultMoveset(registry, rare, 'storm').chains.defensive,
     );
@@ -573,6 +585,13 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(price(chain(A, B), chain(A, bolt('medium', 'storm')))).toBe(X);
     expect(price(chain(A, B), chain(A, bolt('medium', 'fire', 'storm')))).toBe(X);
     expect(price(chain(A, B), chain(A, bolt('heavy', 'storm', 'fire')))).toBe(E + X);
+  });
+
+  it('the rest pair up at the least total price, not by position', () => {
+    // Remove the light Fire Bolt and make the heavy Storm Bolt light: E + E (in order, 15 + 5).
+    expect(price(chain(A, C), chain(bolt('light', 'storm')))).toBe(2 * E);
+    // Make the heavy Fire Bolt Storm and add a light Storm Bolt: X + (E + X) (in order, 20 + 20).
+    expect(price(chain(bolt('heavy', 'fire')), chain(bolt('light', 'storm'), C))).toBe(E + 2 * X);
   });
 
   it('a move left over: a new one costs editDust and, with elements no old move has, elementDust; a removal editDust', () => {
@@ -793,6 +812,8 @@ describe('slots: addSlot', () => {
     let full = p;
     for (let i = 0; i < 4; i++) full = addSlot(registry, full, 'primary').profile;
     expect(full.equipped.weapon!.moveset!.slots.primary).toBe(5);
+    // The 2nd to 5th slots: 1 + 2 + 3 + 4 Links and 20 + 40 + 60 + 80 scrap.
+    expect(full).toMatchObject({ links: 89, scrap: 9799 });
     expect(reason(full)).toBe('This chain has every slot');
     expect(reason({ ...p, links: 0 })).toBe('Not enough Links');
     expect(reason({ ...p, scrap: 19 })).toBe('Not enough scrap');
@@ -1038,6 +1059,15 @@ describe('the dive lock', () => {
       reason: forge,
     });
     expect(salvageItems(registry, diving, ['h'])).toMatchObject({ profile: diving, count: 0 });
+    // The door screen is still the dive: the same lock.
+    const choosing = { ...diving, dive: { ...diving.dive!, phase: 'choosing' as const } };
+    expect(() => equipItem(registry, choosing, 'axe')).toThrow(anvil);
+    expect(equipBest(registry, choosing)).toEqual({ profile: choosing, equipped: [] });
+    expect(setChain(registry, choosing, 'primary', primary).ok).toBe(false);
+    expect(addSlot(registry, choosing, 'primary').ok).toBe(false);
+    expect(transferMoveset(registry, choosing, 'axe').ok).toBe(false);
+    expect(upgradeGear(registry, choosing, 'h')).toMatchObject({ ok: false, reason: forge });
+    expect(salvageItems(registry, choosing, ['h'])).toMatchObject({ count: 0 });
     // But auto-salvage of new loot still runs, so a full bag never blocks pickups.
     const auto = setAutoSalvage(diving, 'magic', true);
     expect(addLootToBag(registry, auto, [{ ...helm, uid: 'h2' }]).salvaged).toHaveLength(1);
@@ -1086,6 +1116,13 @@ describe('the autopilot between dives', () => {
     expect(slots(13)).toEqual({ basic: 4, primary: 5, defensive: 1, ultimate: 1 });
     // 10 for the Primary; the basic chain's 3 can't be paid, so the last 2 buy the Ultimate's and the Defensive's.
     expect(slots(12)).toEqual({ basic: 3, primary: 5, defensive: 2, ultimate: 2 });
+  });
+
+  it('changes nothing on a dive still open: every op refuses, and it never loops', () => {
+    const p = startDive(registry, { ...veteran(), links: 5, scrap: 1000, manaDust: 99 }, 1);
+    const after = betweenDives(registry, p);
+    expect(after.equipped).toEqual(p.equipped);
+    expect(after).toMatchObject({ links: 5, scrap: 1000, manaDust: 99 });
   });
 
   it('pays for its fused Primary, and skips the edit when it cannot', () => {

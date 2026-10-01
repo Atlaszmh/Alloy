@@ -11,6 +11,7 @@ import {
   CHAIN_SKILLS,
   MOVE_KINDS,
   type Blow,
+  type Chain,
   type Chains,
   type ChainSkill,
   type Move,
@@ -36,7 +37,7 @@ function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
 }
 
 /** A chain's moves or blows. */
-function movesOf(chain: Chains[ChainSkill] | undefined): (Move | Blow)[] {
+export function movesOf(chain: Chains[ChainSkill] | undefined): (Move | Blow)[] {
   if (!chain) return [];
   return Array.isArray(chain) ? chain : chain.moves;
 }
@@ -47,8 +48,59 @@ function elementsOf(m: Move | Blow): ManaType[] {
 }
 
 /** A move as it is: its kind, its form and its elements (a blow: its kind and element). */
-function moveKey(m: Move | Blow): string {
+export function moveKey(m: Move | Blow): string {
   return 'element' in m ? `${m.kind}|${m.element}` : `${m.kind}|${m.form}|${m.elements.join('+')}`;
+}
+
+/** Whether two chains hold the same moves in order (by `moveKey`) and the same payment. */
+export function sameChain(
+  a: Chains[ChainSkill] | undefined,
+  b: Chains[ChainSkill] | undefined,
+): boolean {
+  if (!a || !b) return a === b;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const [x, y] = [movesOf(a), movesOf(b)];
+  if (!Array.isArray(a) && (a as Chain).payment !== (b as Chain).payment) return false;
+  return x.length === y.length && x.every((m, i) => moveKey(m) === moveKey(y[i]));
+}
+
+/** `chain` with move `index` replaced by `move` (its payment kept). */
+export function withMove(
+  chain: Chains[ChainSkill],
+  index: number,
+  move: Move | Blow,
+): Chains[ChainSkill] {
+  if (Array.isArray(chain)) return chain.map((b, i) => (i === index ? (move as Blow) : b));
+  return { ...chain, moves: chain.moves.map((m, i) => (i === index ? (move as Move) : m)) };
+}
+
+/** An element set as the off-pair rule counts it: sorted, so a fusion's order doesn't matter. */
+function elementSet(els: readonly ManaType[]): string {
+  return [...els].sort().join('+');
+}
+
+/**
+ * Whether a move holding `own` may take the elements `next` (the builder's
+ * chips): all in `allowed` (the pair), or its own set kept. An off-pair set is
+ * kept, never taken: `setChains` refuses a chain holding more of one than before.
+ */
+export function takesElements(
+  allowed: readonly ManaType[],
+  own: readonly ManaType[],
+  next: readonly ManaType[],
+): boolean {
+  return next.every((e) => allowed.includes(e)) || elementSet(next) === elementSet(own);
+}
+
+/** Legendary powers that ride one skill: Nightstalker's (combat.ts), Rimeheart's (resolve.ts). */
+const LEGENDARY_NEEDS = new Map<string, ChainSkill>([
+  ['nightstalker', 'defensive'],
+  ['rimeheart', 'ultimate'],
+]);
+
+/** The skill legendary `id`'s power needs (on a weapon without it, it does nothing), or null. */
+export function legendaryNeeds(id: string): ChainSkill | null {
+  return LEGENDARY_NEEDS.get(id) ?? null;
 }
 
 /** Index pairs of a longest common subsequence of `a` and `b` (by key). */
@@ -66,6 +118,36 @@ function commonRun(a: string[], b: string[]): [number, number][] {
     else j++;
   }
   return pairs;
+}
+
+/**
+ * The least total of pairing each move of the shorter list with one of the
+ * longer (`pair(old, new)`), the longer list's unpaired moves costing `left`
+ * each: every assignment is tried (a side holds at most 5 moves, so at most 120).
+ */
+function leastPairing(
+  old: (Move | Blow)[],
+  now: (Move | Blow)[],
+  pair: (o: Move | Blow, m: Move | Blow) => number,
+  left: (m: Move | Blow, isOld: boolean) => number,
+): number {
+  const swap = old.length > now.length;
+  const [short, long] = swap ? [now, old] : [old, now];
+  const used = long.map(() => false);
+  const go = (i: number): number => {
+    if (i === short.length)
+      return long.reduce((sum, m, j) => sum + (used[j] ? 0 : left(m, swap)), 0);
+    let best = Infinity;
+    for (let j = 0; j < long.length; j++) {
+      if (used[j]) continue;
+      used[j] = true;
+      const cost = swap ? pair(long[j], short[i]) : pair(short[i], long[j]);
+      best = Math.min(best, cost + go(i + 1));
+      used[j] = false;
+    }
+    return best;
+  };
+  return go(0);
 }
 
 /** The Mana Dust one chain's edit costs (see `movesetEditPrice`). */
@@ -90,19 +172,16 @@ function chainEditPrice(
     price += editDust;
     return false;
   });
-  // 3. The rest pair up in order: a changed kind or form, changed elements, or both.
-  const paired = Math.min(restOld.length, restNew.length);
-  for (let i = 0; i < paired; i++) {
-    const [o, m] = [restOld[i], restNew[i]];
-    const shape = (x: Move | Blow) => ('form' in x ? `${x.kind}|${x.form}` : x.kind);
-    if (shape(o) !== shape(m)) price += editDust;
-    if (elementsOf(o).join('+') !== elementsOf(m).join('+')) price += elementDust;
-  }
+  // 3. The rest pair up at the least total price: a changed kind or form, or elements, or both.
+  const shape = (x: Move | Blow) => ('form' in x ? `${x.kind}|${x.form}` : x.kind);
+  const els = (x: Move | Blow) => elementsOf(x).join('+');
+  const paired = (o: Move | Blow, m: Move | Blow) =>
+    (shape(o) !== shape(m) ? editDust : 0) + (els(o) !== els(m) ? elementDust : 0);
   // 4. What's left: a new move (its elements free when some old move has them), or a removal.
-  const known = new Set(was.map((o) => elementsOf(o).join('+')));
-  for (const m of restNew.slice(paired))
-    price += editDust + (known.has(elementsOf(m).join('+')) ? 0 : elementDust);
-  price += editDust * (restOld.length - paired);
+  const known = new Set(was.map(els));
+  const left = (m: Move | Blow, isOld: boolean) =>
+    editDust + (isOld || known.has(els(m)) ? 0 : elementDust);
+  price += leastPairing(restOld, restNew, paired, left);
   // 5. A changed payment.
   if (old && !Array.isArray(old) && !Array.isArray(next) && old.payment !== next.payment)
     price += editDust;
@@ -113,7 +192,7 @@ function chainEditPrice(
  * The Mana Dust turning `old` into `next` costs, over every chain `next`
  * holds (see the weapon movesets spec): moves matched by what they are, not
  * where they stand. The longest run the two share in order is free; a move
- * that only moved costs `editDust`; the rest pair up in order, a changed kind
+ * that only moved costs `editDust`; the rest pair up at the least total price, a changed kind
  * or form costing `editDust` and changed elements `elementDust`; a move left
  * over costs `editDust` (a new one `elementDust` more, unless some old move
  * has its elements); a changed payment costs `editDust`. The caller applies
@@ -147,7 +226,7 @@ function offPairSets(profile: DelveProfile, chain: Chains[ChainSkill] | undefine
   for (const m of movesOf(chain)) {
     const els = elementsOf(m);
     if (els.every((e) => inPair(profile, e))) continue;
-    const key = [...els].sort().join('+');
+    const key = elementSet(els);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

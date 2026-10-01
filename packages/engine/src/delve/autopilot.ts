@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { Rarity } from '../types/gear.js';
+import type { GearItem, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, emptyManaMap, type ManaType } from '../types/mana.js';
 import { upgradeCost } from '../loot/smithing.js';
@@ -17,7 +17,7 @@ import {
   startDepthOptions,
   startDive,
 } from './dive.js';
-import { compareItem, itemAttunement } from './hero-stats.js';
+import { compareItem, itemAttunement, type WeaponValue } from './hero-stats.js';
 import { heroChains } from '../loot/moveset.js';
 import { bindSecondary, resolveOvertake } from './pair.js';
 import {
@@ -149,20 +149,46 @@ export function betweenDives(registry: DataRegistry, profile: DelveProfile): Del
 /** The skills the bot adds slots to, in order: each as far as its Links and scrap go. */
 const SLOT_ORDER: ChainSkill[] = ['primary', 'basic', 'ultimate', 'defensive'];
 
+/** The bag item `pick` allows that raises Power the most (a weapon valued `value`), or null. */
+function bestGain(
+  registry: DataRegistry,
+  p: DelveProfile,
+  value: WeaponValue,
+  pick: (item: GearItem) => boolean = () => true,
+): string | null {
+  const depth = referenceDepth(p);
+  let best: { uid: string; pct: number } | null = null;
+  for (const item of p.bag) {
+    if (!pick(item)) continue;
+    const pct = compareItem(p.equipped, item, registry, depth, p.pair, value).powerPct;
+    if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
+  }
+  return best?.uid ?? null;
+}
+
+/** The equipped item whose next upgrade costs least (on a tie, the first in `GEAR_SLOTS`). */
+function cheapestUpgrade(
+  registry: DataRegistry,
+  p: DelveProfile,
+): { uid: string; cost: number } | null {
+  let cheapest: { uid: string; cost: number } | null = null;
+  for (const slot of GEAR_SLOTS) {
+    const item = p.equipped[slot];
+    const cost = item ? upgradeCost(registry, item) : null;
+    if (item && cost !== null && (!cheapest || cost < cheapest.cost))
+      cheapest = { uid: item.uid, cost };
+  }
+  return cheapest;
+}
+
 /**
  * Move the moveset onto the bag weapon that makes the best home (valued with
  * it moved: `compareItem`'s default), when that raises Power and it can pay.
  */
 function transferBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
-  const depth = referenceDepth(p);
-  let best: { uid: string; pct: number } | null = null;
-  for (const item of p.bag) {
-    if (item.slot !== 'weapon') continue;
-    const pct = compareItem(p.equipped, item, registry, depth, p.pair).powerPct;
-    if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
-  }
-  if (!best) return p;
-  const res = transferMoveset(registry, p, best.uid);
+  const uid = bestGain(registry, p, 'home', (item) => item.slot === 'weapon');
+  if (!uid) return p;
+  const res = transferMoveset(registry, p, uid);
   return res.ok ? res.profile : p;
 }
 
@@ -191,24 +217,14 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
     return res.ok ? res.profile : null;
   };
   if (stop.offers.includes('equip')) {
-    const depth = referenceDepth(profile);
-    let best: { uid: string; pct: number } | null = null;
-    for (const item of profile.bag) {
-      const pct = compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs').powerPct;
-      if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
-    }
-    const equipped = best && take({ kind: 'equip', uid: best.uid });
+    const best = bestGain(registry, profile, 'asIs');
+    const equipped = best && take({ kind: 'equip', uid: best });
     if (equipped) return equipped;
   }
   if (stop.offers.includes('upgrade')) {
-    let cheapest: { uid: string; cost: number } | null = null;
-    for (const slot of GEAR_SLOTS) {
-      const item = profile.equipped[slot];
-      const cost = item ? upgradeCost(registry, item) : null;
-      if (item && cost !== null && cost <= profile.scrap && (!cheapest || cost < cheapest.cost))
-        cheapest = { uid: item.uid, cost };
-    }
-    const upgraded = cheapest && take({ kind: 'upgrade', uid: cheapest.uid });
+    const cheapest = cheapestUpgrade(registry, profile);
+    const upgraded =
+      cheapest && cheapest.cost <= profile.scrap && take({ kind: 'upgrade', uid: cheapest.uid });
     if (upgraded) return upgraded;
   }
   if (stop.offers.includes('slot'))
@@ -250,13 +266,7 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
   p = spendLinks(registry, p);
 
   for (;;) {
-    let cheapest: { uid: string; cost: number } | null = null;
-    for (const slot of GEAR_SLOTS) {
-      const item = p.equipped[slot];
-      if (!item) continue;
-      const cost = upgradeCost(registry, item);
-      if (cost !== null && (!cheapest || cost < cheapest.cost)) cheapest = { uid: item.uid, cost };
-    }
+    const cheapest = cheapestUpgrade(registry, p);
     if (!cheapest || cheapest.cost > p.scrap) break;
     const res = upgradeGear(registry, p, cheapest.uid);
     if (!res.ok) break; // the forge refuses mid-dive (an open dive)

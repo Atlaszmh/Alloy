@@ -145,6 +145,33 @@ describe('takeStop', () => {
     for (const r of [slot, move, up]) expect(r.profile.dive!.stop!.taken).toBe(true);
   });
 
+  it("upgrades a bag item, which counts for the offer when no worn item's upgrade is affordable", () => {
+    const p0 = hero();
+    const maxed = (i: GearItem): GearItem => ({ ...i, upgrade: bal.forge.maxUpgrade });
+    const cost = upgradeCost(registry, p0.bag[0])!;
+    const p = {
+      ...p0,
+      equipped: { weapon: maxed(p0.equipped.weapon!), chest: maxed(p0.equipped.chest!) },
+      scrap: cost,
+    };
+    expect(stopKinds(registry, p)).toContain('upgrade');
+    expect(stopKinds(registry, { ...p, scrap: cost - 1 })).not.toContain('upgrade');
+    const up = takeStop(registry, atStop(p, ALL), { kind: 'upgrade', uid: 'r1' });
+    expect(up.ok).toBe(true);
+    expect(up.profile.bag[0].upgrade).toBe(1);
+    expect(up.profile.scrap).toBe(0);
+  });
+
+  it('adjusts one move of a longer chain, leaving its other moves as they were', () => {
+    const p = { ...atStop(hero(), ALL), manaDust: 50 };
+    const basic = chainsOf(p).basic!;
+    expect(basic).toHaveLength(3);
+    const held = { ...basic[1], kind: 'hold' as const };
+    const res = takeStop(registry, p, { kind: 'move', skill: 'basic', index: 1, move: held });
+    expect(res.ok).toBe(true);
+    expect(chainsOf(res.profile).basic).toEqual([basic[0], held, basic[2]]);
+  });
+
   it('refuses a kind not offered, no stop, and leaves the stop open when the op is refused', () => {
     const p = atStop(hero(), { offers: ['equip', 'slot'], taken: false });
     expect(takeStop(registry, p, { kind: 'upgrade', uid: 'r1' }).reason).toBe(
@@ -169,6 +196,9 @@ describe('takeStop', () => {
     expect(at(0.5, { ...bolt, kind: 'heavy' })).toBe('Adjust a move the chain holds');
     expect(at(0, bolt)).toBe('Change the move');
     expect(at(0, { kind: 'heavy', element: 'fire' })).toBe('Not a primary move');
+    // Malformed input is refused, never thrown on.
+    for (const bad of [null, undefined, 7, {}, { kind: 'heavy', form: 'bolt' }])
+      expect(at(0, bad as never)).toBe('Change the move');
     const nothing = takeStop(registry, moved, {
       kind: 'move',
       skill: 'defensive',
@@ -240,6 +270,12 @@ describe('the autopilot at a stop', () => {
   it('else adds an affordable slot, the Primary first; else skips', () => {
     const p = { ...atStop(hero(), stopOf('slot', 'move')), links: 5, scrap: 1000 };
     expect(takeBestStop(registry, p).equipped.weapon!.moveset!.slots.primary).toBe(2);
+    const both = { ...atStop(hero(), stopOf('slot', 'upgrade')), links: 5, scrap: 1000 };
+    const upgraded = takeBestStop(registry, both); // an upgrade before a slot
+    const { weapon, chest } = upgraded.equipped;
+    expect(weapon!.upgrade + chest!.upgrade).toBe(1);
+    expect(upgraded).toMatchObject({ links: 5 });
+    expect(weapon!.moveset!.slots.primary).toBe(1);
     const broke = { ...atStop(hero(), stopOf('move', 'upgrade')), scrap: 0 };
     expect(takeBestStop(registry, broke)).toBe(broke);
   });

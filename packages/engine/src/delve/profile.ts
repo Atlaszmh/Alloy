@@ -26,6 +26,7 @@ import {
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
 import { isDiveActive } from './dive.js';
+import { sameChain } from './moveset.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
 import { baseSlots, carriedSkills, defaultChain, extraSlots, movesetOf } from '../loot/moveset.js';
 import {
@@ -162,17 +163,25 @@ type ProfileV5 = Omit<DelveProfile, 'version' | 'links'> & {
 /**
  * Every weapon's moveset fitted to the data: a weapon without one gets its
  * base defaults in its own mana; a chain its rarity no longer carries is
- * dropped, a newly carried one gets its base default; and a basic chain's
- * slots are raised to its weapon's string.
+ * dropped, its extra slots back as Links (as salvaging would give); a newly
+ * carried one gets its base default; and a basic chain's slots are raised to
+ * its weapon's string. (A base whose string grew absorbs extras it can't tell
+ * from its new base: the old base isn't stored, so those give no Links.)
  */
 function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let links = 0;
   const fit = (item: GearItem): GearItem => {
     if (item.slot !== 'weapon') return item;
     const old = movesetOf(registry, item);
+    const carried = carriedSkills(registry, item.rarity);
     const moveset: Moveset = { chains: {}, slots: {} };
-    for (const skill of carriedSkills(registry, item.rarity)) {
+    for (const skill of CHAIN_SKILLS) {
       const base = baseSlots(registry, item.baseId, skill);
       const chain = old.chains[skill];
+      if (!carried.includes(skill)) {
+        links += Math.max(0, (old.slots[skill] ?? base) - base);
+        continue;
+      }
       const set = moveset.chains as Record<ChainSkill, unknown>;
       set[skill] = chain ?? defaultChain(registry, skill, item.baseId, item.mana, base);
       moveset.slots[skill] = chain ? Math.max(old.slots[skill]!, base) : base;
@@ -184,7 +193,8 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
     const item = profile.equipped[slot];
     if (item) equipped[slot] = fit(item);
   }
-  return { ...profile, equipped, bag: profile.bag.map(fit) };
+  const bag = profile.bag.map(fit);
+  return { ...profile, equipped, bag, links: profile.links + links };
 }
 
 /** A chain's length: its blows or its moves. */
@@ -199,7 +209,10 @@ function chainLength(chain: Chains[ChainSkill]): number {
  * back as Links); every other weapon gets its base defaults. An unarmed save
  * keeps no chains: the unarmed defaults follow the pair.
  */
-function fromV5(registry: DataRegistry, old: ProfileV5): ParsedDelveProfile {
+function fromV5(
+  registry: DataRegistry,
+  old: Omit<ProfileV5, 'chainCaps'> & Partial<Pick<ProfileV5, 'chainCaps'>>,
+): ParsedDelveProfile {
   const { chains, chainCaps: _caps, ...rest } = old;
   const weapon = old.equipped.weapon;
   const dropped: ChainSkill[] = [];
@@ -226,7 +239,7 @@ function fromV5(registry: DataRegistry, old: ProfileV5): ParsedDelveProfile {
     ...defaultChains(registry, primary, null),
     basic: defaultBasic(registry, null, primary, old.pair.secondary),
   };
-  const movesetReset = !weapon && JSON.stringify(chains) !== JSON.stringify(unarmed);
+  const movesetReset = !weapon && CHAIN_SKILLS.some((s) => !sameChain(chains[s], unarmed[s]));
   const profile = fitMovesets(registry, { ...rest, version: 6, links, equipped });
   return { profile, fixed: [], dropped, movesetReset };
 }
@@ -287,12 +300,7 @@ export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedD
         ...buildChains(registry, abilities),
       }
     : defaultChains(registry, element, weapon?.baseId ?? null);
-  const res = fromV5(registry, {
-    ...rest,
-    version: 5,
-    chains,
-    chainCaps: { ...registry.getDelveBalance().chains.cap },
-  } as ProfileV5);
+  const res = fromV5(registry, { ...rest, version: 5, chains } as Omit<ProfileV5, 'chainCaps'>);
   const { profile, fixed } = fixChainsToPair(registry, res.profile);
   return { ...res, profile, fixed };
 }
@@ -534,10 +542,10 @@ export function salvageCandidates(
     .map((i) => i.uid);
 }
 
-/**
- * Greedily equip any bag item that raises Power, but for weapons: a weapon
- * changes by hand (Equip, as it is, or Transfer). Nothing mid-dive.
- */
+/** The slots `equipBest` fills: every one but the weapon's (it changes by hand: Equip, or Transfer). */
+export const EQUIP_BEST_SLOTS: readonly GearSlot[] = GEAR_SLOTS.filter((s) => s !== 'weapon');
+
+/** Greedily equip any bag item that raises Power, in `EQUIP_BEST_SLOTS`. Nothing mid-dive. */
 export function equipBest(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -546,8 +554,7 @@ export function equipBest(
   let current = profile;
   const changed = new Map<GearSlot, GearItem>();
   for (let pass = 0; pass < 2; pass++) {
-    for (const slot of GEAR_SLOTS) {
-      if (slot === 'weapon') continue;
+    for (const slot of EQUIP_BEST_SLOTS) {
       let best: GearItem | null = null;
       let bestPower = profilePower(registry, current);
       for (const item of current.bag) {

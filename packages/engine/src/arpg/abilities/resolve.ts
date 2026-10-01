@@ -6,7 +6,6 @@ import {
   type Blow,
   type Chain,
   type Chains,
-  type FormId,
   type Knobs,
   type Move,
   type MoveKind,
@@ -14,6 +13,7 @@ import {
   type ResolvedChain,
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
+import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
 import type {
   DelveBalance,
   DelveProfile,
@@ -278,9 +278,7 @@ export function defaultBasic(
   primary: ManaType,
   secondary: ManaType | null = null,
 ): Blow[] {
-  const kinds =
-    (weaponBaseId ? registry.getGearBase(weaponBaseId).defaultChain : undefined) ??
-    registry.getDelveBalance().hero.defaultChain;
+  const kinds = weaponString(registry, weaponBaseId);
   return kinds.map((kind, i) => ({
     kind,
     element: secondary && i === kinds.length - 1 ? secondary : primary,
@@ -351,22 +349,28 @@ export function followBasic(
 }
 
 /**
- * A new (or reset) hero's chains, all of `element`: each slot's form's default
- * chain (Bolt, Ward, Nova) with today's payments, and the weapon's default basic chain.
+ * A new (or reset) hero's chains, all of `element`: each slot's default form's
+ * whole default chain with its payment (`DEFAULT_FORMS`: a Bolt, a Ward and a
+ * charged Nova), and the weapon's default basic chain.
  */
 export function defaultChains(
   registry: DataRegistry,
   element: ManaType,
   weaponBaseId: string | null,
 ): Chains {
-  const chain = (form: FormId, payment: AbilityPayment): Chain => ({
-    moves: registry.getForm(form).defaultChain.map((kind) => ({ kind, form, elements: [element] })),
-    payment,
-  });
+  const chain = (slot: AbilitySlot): Chain => {
+    const { form, payment } = DEFAULT_FORMS[slot];
+    const moves = registry.getForm(form).defaultChain.map((kind) => ({
+      kind,
+      form,
+      elements: [element],
+    }));
+    return { moves, payment };
+  };
   return {
     basic: defaultBasic(registry, weaponBaseId, element),
-    primary: chain('bolt', 'mana'),
-    defensive: chain('ward', 'mana'),
-    ultimate: chain('nova', 'charge'),
+    primary: chain('primary'),
+    defensive: chain('defensive'),
+    ultimate: chain('ultimate'),
   };
 }

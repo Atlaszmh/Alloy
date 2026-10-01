@@ -165,6 +165,7 @@ const DiveSchema = z.object({
   scrapEarned: z.number().min(0),
   dustEarned: z.number().int().min(0).default(0),
   linksEarned: z.number().int().min(0).default(0),
+  // A stop between depths: its kinds are `STOP_KINDS` (delve/stops.ts).
   stop: z
     .object({
       offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade'])),
@@ -262,7 +263,10 @@ export const DelveProfileV5Schema = DelveProfileV4Schema.omit({ abilities: true 
 });
 
 /** Version 6: the chains live on the weapon, and Links (see the weapon movesets spec). */
-export const DelveProfileSchema = DelveProfileV5Schema.omit({ chains: true, chainCaps: true }).extend({
+export const DelveProfileSchema = DelveProfileV5Schema.omit({
+  chains: true,
+  chainCaps: true,
+}).extend({
   version: z.literal(6),
   links: z.number().int().min(0),
 });

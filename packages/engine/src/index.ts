@@ -157,6 +157,7 @@ export {
   salvageItems,
   salvageCandidates,
   equipBest,
+  EQUIP_BEST_SLOTS,
   upgradeGear,
   reforgeGear,
   fuseGear,
@@ -170,6 +171,12 @@ export {
   addSlot,
   slotPrice,
   transferMoveset,
+  movesOf,
+  moveKey,
+  sameChain,
+  withMove,
+  takesElements,
+  legendaryNeeds,
 } from './delve/moveset.js';
 export { STOP_KINDS, stopKinds, rollStop, takeStop } from './delve/stops.js';
 export type { StopAction } from './delve/stops.js';

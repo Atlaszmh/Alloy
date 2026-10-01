@@ -129,7 +129,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
 - **One price function** is shared by the engine's charge and the builder's preview: `movesetEditPrice(registry, old, next)`, a Mana Dust total. It matches moves by identity, not by position, so reordering or removing never looks like changing a move. A move is its kind, form and elements; a basic blow is its kind and element. The matching runs in steps:
   1. The longest run of moves the two chains share in order (a longest common subsequence) is unchanged, and free. So removing or inserting a move costs only that move, never the moves behind it.
   2. Each remaining new move that equals a remaining old move is a moved move, and costs `editDust` (5). A ◂▸ swap costs 5: one of the two moves is in the longest shared run.
-  3. The rest pair up in order:
+  3. The rest pair up at the least total price (every pairing is tried, step 4's leftovers included; a chain holds at most 5 moves). So [light Fire, heavy Storm] → [light Storm] costs 10 (remove the light Fire, make the heavy Storm light), not 20 by position:
      - a changed kind or form costs `editDust`;
      - changed elements cost `elementDust` (15);
      - both changed cost both.

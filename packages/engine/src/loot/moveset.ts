@@ -36,11 +36,17 @@ export const DEFAULT_FORMS: Record<AbilitySlot, { form: FormId; payment: Ability
 };
 
 /** The skills a weapon of `rarity` carries (unarmed, null: basic and primary). */
-export function carriedSkills(registry: DataRegistry, rarity: Rarity | null): ChainSkill[] {
+export function carriedSkills(
+  registry: DataRegistry,
+  rarity: Rarity | null,
+): readonly ChainSkill[] {
   return rarity ? registry.getDelveBalance().movesets.carries[rarity] : ['basic', 'primary'];
 }
 
-/** The least rarity that carries `skill` (null for one every rarity carries). */
+/**
+ * The least rarity that carries `skill`, or null for one every rarity carries
+ * (the balance's schema has the legendary carry all four, so some rarity does).
+ */
 export function carriedFrom(registry: DataRegistry, skill: ChainSkill): Rarity | null {
   const carries = registry.getDelveBalance().movesets.carries;
   if (RARITY_ORDER.every((r) => carries[r].includes(skill))) return null;
@@ -49,11 +55,19 @@ export function carriedFrom(registry: DataRegistry, skill: ChainSkill): Rarity |
 
 /**
  * Why a weapon can't hold `skill`: "Carried by magic weapons and better" (the
- * locked tab's text, and the ops' refusal). Only for a skill some rarity
- * doesn't carry (the balance's schema keeps `carries` growing with rarity).
+ * locked tab's text, and the ops' refusal). The balance's schema keeps
+ * `carries` growing with rarity; a skill every rarity carries (missing only
+ * from a hand-edited save) reads "Not carried by this weapon".
  */
 export function carriedByText(registry: DataRegistry, skill: ChainSkill): string {
-  return `Carried by ${carriedFrom(registry, skill)} weapons and better`;
+  const from = carriedFrom(registry, skill);
+  return from ? `Carried by ${from} weapons and better` : 'Not carried by this weapon';
+}
+
+/** A weapon's basic string, the kinds of its default basic chain (unarmed, null: the hero's). */
+export function weaponString(registry: DataRegistry, baseId: string | null): readonly MoveKind[] {
+  const base = baseId ? registry.getGearBase(baseId).defaultChain : undefined;
+  return base ?? registry.getDelveBalance().hero.defaultChain;
 }
 
 /** The kinds a skill's default chain plays: its default form's, or the weapon's basic string. */
@@ -63,8 +77,7 @@ function defaultKinds(
   baseId: string | null,
 ): readonly MoveKind[] {
   if (skill !== 'basic') return registry.getForm(DEFAULT_FORMS[skill].form).defaultChain;
-  const base = baseId ? registry.getGearBase(baseId).defaultChain : undefined;
-  return base ?? registry.getDelveBalance().hero.defaultChain;
+  return weaponString(registry, baseId);
 }
 
 /**

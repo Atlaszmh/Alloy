@@ -2,16 +2,10 @@ import type { DataRegistry } from '../data/registry.js';
 import { carriedByText, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
-import {
-  CHAIN_SKILLS,
-  type Blow,
-  type Chains,
-  type ChainSkill,
-  type Move,
-} from '../types/ability.js';
+import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem } from '../types/gear.js';
-import { addSlot, setChain, slotPrice } from './moveset.js';
+import { addSlot, moveKey, movesOf, setChain, slotPrice, withMove } from './moveset.js';
 import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
 
 /**
@@ -21,7 +15,7 @@ import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
  */
 
 /** The four kinds, in the order a stop lists them. */
-export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade'] as const;
+export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade'];
 
 /** What a stop's player takes: the kind and what it acts on. */
 export type StopAction =
@@ -86,15 +80,10 @@ export function rollStop(
   return { offers: kinds.filter((k) => picked.has(k)), taken: false };
 }
 
-/** A move as it is: its kind, form and elements (a blow: its kind and element). */
-function moveKey(m: Move | Blow): string {
-  return 'element' in m ? `${m.kind}|${m.element}` : `${m.kind}|${m.form}|${m.elements.join('+')}`;
-}
-
-/** A chain with move `index` replaced by `move` (its payment kept). */
-function withMove(chain: Chains[ChainSkill], index: number, move: Move | Blow): Chains[ChainSkill] {
-  if (Array.isArray(chain)) return chain.map((b, i) => (i === index ? (move as Blow) : b));
-  return { ...chain, moves: chain.moves.map((m, i) => (i === index ? (move as Move) : m)) };
+/** Whether untyped input has a move's shape (a form and elements) or a blow's (an element). */
+function moveShaped(move: unknown): move is Move | Blow {
+  if (!move || typeof move !== 'object') return false;
+  return 'form' in move ? Array.isArray((move as Move).elements) : 'element' in move;
 }
 
 /** The stop's one op on `profile` (whose dive the caller has lifted). */
@@ -119,10 +108,11 @@ function runStop(
       if (!weapon) return { ok: false, profile, reason: 'Equip a weapon to build your moves' };
       const chain = movesetOf(registry, weapon).chains[action.skill];
       if (!chain) return { ok: false, profile, reason: carriedByText(registry, action.skill) };
-      const moves: (Move | Blow)[] = Array.isArray(chain) ? chain : chain.moves;
+      const moves = movesOf(chain);
       const { index, move } = action;
       if (!Number.isInteger(index) || index < 0 || index >= moves.length)
         return { ok: false, profile, reason: 'Adjust a move the chain holds' };
+      if (!moveShaped(move)) return { ok: false, profile, reason: 'Change the move' };
       if (Array.isArray(chain) === 'form' in move)
         return { ok: false, profile, reason: `Not a ${action.skill} move` };
       if (moveKey(move) === moveKey(moves[index]))

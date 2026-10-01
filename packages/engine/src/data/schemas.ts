@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ReactionId } from '../types/arpg.js';
-import { MAX_CHAIN, type MoveKind } from '../types/ability.js';
+import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
+import { RARITY_ORDER } from '../types/gem.js';
 
 // --- Shared Schemas ---
 
@@ -930,14 +931,16 @@ const DelveBalanceSchema = z.object({
         .array(z.enum(['basic', 'primary', 'defensive', 'ultimate']))
         .refine((s) => s.includes('basic'), 'every weapon carries basic')
         .refine((s) => new Set(s).size === s.length, 'each skill once'),
-    ).refine(
-      (c) =>
-        (['uncommon', 'magic', 'rare', 'epic', 'legendary'] as const).every((r, i) => {
-          const lower = c[(['common', 'uncommon', 'magic', 'rare', 'epic'] as const)[i]];
-          return lower.every((s) => c[r].includes(s));
-        }),
-      'a rarity carries every chain the rarity below it does',
-    ),
+    )
+      .refine(
+        (c) =>
+          RARITY_ORDER.slice(1).every((r, i) => c[RARITY_ORDER[i]].every((s) => c[r].includes(s))),
+        'a rarity carries every chain the rarity below it does',
+      )
+      .refine(
+        (c) => CHAIN_SKILLS.every((s) => c.legendary.includes(s)),
+        'the legendary carries all four chains',
+      ),
     extraSlots: perRarity(
       z
         .tuple([z.number().int().min(0), z.number().int().min(0)])
