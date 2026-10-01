@@ -129,31 +129,52 @@ const tap = vi.hoisted(() => ({
     windup: boolean;
     hold: number | null;
     events: ArpgEvent[];
+    /** The hero's mana and charge meters before the step. */
+    mana: number;
+    charge: number[];
   }[],
+  /** The world the last step ran on. */
+  world: null as ArpgWorld | null,
 }));
 vi.mock('../src/arpg/step.js', async (importOriginal) => {
   const step = await importOriginal<typeof import('../src/arpg/step.js')>();
   return {
     ...step,
     stepWorld: (...args: Parameters<typeof step.stepWorld>) => {
-      const windup = args[1].hero.windup !== null;
+      const h = args[1].hero;
+      const windup = h.windup !== null;
+      const [mana, charge] = [h.mana, [...h.charge]];
       const events = step.stepWorld(...args);
       if (tap.on) {
+        tap.world = args[1];
         tap.events.push(...events);
-        tap.steps.push({ input: args[2], windup, hold: args[1].hero.hold?.slot ?? null, events });
+        tap.steps.push({
+          input: args[2],
+          windup,
+          hold: h.hold?.slot ?? null,
+          events,
+          mana,
+          charge,
+        });
       }
       return events;
     },
   };
 });
 
-/** Run `f`, collecting every event its sims step through, and each step (see `tap`). */
-function recorded<T>(f: () => T): { out: T; events: ArpgEvent[]; steps: typeof tap.steps } {
+/** Run `f`, collecting every event its sims step through, each step and the last world (see `tap`). */
+function recorded<T>(f: () => T): {
+  out: T;
+  events: ArpgEvent[];
+  steps: typeof tap.steps;
+  world: ArpgWorld | null;
+} {
   tap.events = [];
   tap.steps = [];
+  tap.world = null;
   tap.on = true;
   try {
-    return { out: f(), events: tap.events, steps: tap.steps };
+    return { out: f(), events: tap.events, steps: tap.steps, world: tap.world };
   } finally {
     tap.on = false;
   }
@@ -520,5 +541,59 @@ describe('runeComboSetups', () => {
       expect(s.dims.elements).toBe(reacts ? 'fire+frost' : 'fire');
       expect(byKey.get(s.base!)?.dims).toEqual({ ...s.dims, rune: 'none', tier: 'none' });
     }
+  });
+});
+
+describe('the sustained mode (see the rune costs spec)', () => {
+  const STARVED: DpsOptions = { ...PACK, sustained: 'starved' };
+  const SUPPORTED: DpsOptions = { ...PACK, sustained: 'supported' };
+  /** The hero a run ends with, and its first step's mana and charge. */
+  const ran = (key: string, o: DpsOptions) => {
+    const { world, steps } = recorded(() => simulateDps(registry, setup(key), { ...o, seed: 0 }));
+    return { hero: world!.hero, first: steps[0] };
+  };
+
+  it('starts the pool and every charge meter empty, starved or supported; full mana starts full', () => {
+    for (const o of [STARVED, SUPPORTED])
+      expect(ran('ability|nova|fire|none|medium|charge', o).first).toMatchObject({
+        mana: 0,
+        charge: [0, 0, 0],
+      });
+    const full = ran('ability|bolt|fire|none|medium|mana', PACK);
+    expect(full.first.mana).toBe(full.hero.manaMax);
+  });
+
+  it("starved is the Lab's hero as built; supported has a pool of 120 regenerating 10.4, Drain III on every blow and a Fire move's runes eased 45%", () => {
+    const starved = ran('rune|echo|bolt|fire|III', STARVED).hero;
+    expect(starved.manaMax).toBe(63);
+    expect(starved.manaRegen).toBeCloseTo(4.2);
+    expect(starved.stats.weapon.blows.every((b) => b.runes.length === 0)).toBe(true);
+    expect(starved.chains[0]!.moves[0].ease).toBeCloseTo(0.03);
+    const supported = ran('rune|echo|bolt|fire|III', SUPPORTED).hero;
+    expect(supported.manaMax).toBe(120);
+    expect(supported.manaRegen).toBeCloseTo(10.4);
+    for (const b of supported.stats.weapon.blows)
+      expect(b.runes).toEqual([{ id: 'drain', tier: 3 }]);
+    for (const m of supported.chains[0]!.moves) expect(m.ease).toBeCloseTo(0.45);
+    // A Fire + Frost move eases by their mean attunement, 10.
+    const both = ran('rune|volatile|bolt|fire+frost|III', SUPPORTED).hero;
+    expect(both.chains[0]!.moves[0].ease).toBeCloseTo(0.3);
+  });
+
+  it('a basic-view row comes out the same starved as at full mana: a basic attack spends none', () => {
+    for (const key of ['basic|sword|fire|none', 'basic|bow|storm|fire'])
+      expect(simulateDps(registry, setup(key), STARVED)).toEqual(
+        simulateDps(registry, setup(key), PACK),
+      );
+  });
+
+  it('a runed row casts less starved than at full mana, and less than its baseline starved', () => {
+    const casts = (key: string, o: DpsOptions) => simulateDps(registry, setup(key), o).casts;
+    expect(casts('rune|echo|bolt|fire|III', STARVED)).toBeLessThan(
+      casts('rune|echo|bolt|fire|III', PACK),
+    );
+    expect(casts('rune|echo|bolt|fire|III', STARVED)).toBeLessThan(
+      casts('rune|none|bolt|fire|none', STARVED),
+    );
   });
 });

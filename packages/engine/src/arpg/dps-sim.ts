@@ -16,7 +16,8 @@ import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
 import { runeFits } from '../loot/runes.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
-import type { RuneDef, RuneTier } from '../types/rune.js';
+import type { HeroStats } from '../types/delve.js';
+import type { RuneDef, RuneRef, RuneTier } from '../types/rune.js';
 
 /**
  * The DPS Lab's sim (a dev tool; see the DPS Lab spec): one loadout on the
@@ -54,6 +55,12 @@ export interface DpsOptions {
    * `RUNE_SEEDS` of them; every other row is one run on seed 0.
    */
   seed?: number;
+  /**
+   * Sustained mana (see the rune costs spec): the pool and every charge meter start empty, and
+   * the basics, swinging on their own, refill them. 'starved' is the setup's hero as built;
+   * 'supported' adds `SUPPORTED`'s mana (`labHero`). Absent: full mana.
+   */
+  sustained?: 'starved' | 'supported';
 }
 
 export interface DpsResult {
@@ -76,6 +83,18 @@ const GAP = 0.4;
 const NO_TOGGLES = { infiniteMana: false, noCooldowns: false, invulnerable: false };
 
 /**
+ * The supported hero's mana (see the rune costs spec), a dive-12 hero's who built for it:
+ * attunement added to the setup's first element and to its second, one Mana Regen affix at its
+ * top roll (×1.3), and Drain III in every basic blow.
+ */
+const SUPPORTED = {
+  first: 14,
+  second: 5,
+  manaRegenMult: 1.3,
+  drain: { id: 'drain', tier: 3 } satisfies RuneRef,
+};
+
+/**
  * The rune view averages this many combat seeds (see the runes spec's gate): a Barrage rains
  * its impacts at random and lands twice in a run, so one seed swings a rune's ratio.
  */
@@ -95,7 +114,17 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   return { series, dps: series[series.length - 1], casts: mean(runs.map((r) => r.casts)) };
 }
 
-function runDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult {
+/**
+ * The hero a run fights as: a plain common weapon of the setup's base at item level = depth, on
+ * its pair, with its chains. Supported (`DpsOptions.sustained`) adds `SUPPORTED`'s mana: its
+ * attunement to the first element and to the second (without one, Frost; Fire on a Frost hero),
+ * its Mana Regen, and Drain III in every blow beside the blow's own runes.
+ */
+export function labHero(
+  registry: DataRegistry,
+  setup: DpsSetup,
+  o: DpsOptions,
+): { stats: HeroStats; chains: Chains } {
   const { baseId, primary, secondary } = setup.weapon;
   const weapon = sandboxWeapon(registry, {
     baseId,
@@ -103,18 +132,39 @@ function runDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResu
     rarity: 'common',
     ilvl: o.depth,
   });
+  const extra = { pair: { primary, secondary }, basic: setup.chains.basic };
+  if (o.sustained !== 'supported')
+    return { stats: computeHeroStats({ weapon }, registry, extra), chains: setup.chains };
+  const basic = setup.chains.basic.map((b) => ({
+    ...b,
+    runes: [...(b.runes ?? []), SUPPORTED.drain],
+  }));
+  const second = secondary ?? (primary === 'frost' ? 'fire' : 'frost');
+  const stats = computeHeroStats({ weapon }, registry, {
+    ...extra,
+    basic,
+    attunement: { [primary]: SUPPORTED.first, [second]: SUPPORTED.second },
+  });
+  return {
+    stats: { ...stats, manaRegenMult: SUPPORTED.manaRegenMult },
+    chains: { ...setup.chains, basic },
+  };
+}
+
+function runDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult {
   const world = createSandboxWorld(registry, {
     depth: o.depth,
-    stats: computeHeroStats({ weapon }, registry, {
-      pair: { primary, secondary },
-      basic: setup.chains.basic,
-    }),
-    chains: setup.chains,
+    ...labHero(registry, setup, o),
     toggles: NO_TOGGLES,
   });
   // The sandbox's own combat stream is `SeededRNG(1).fork('combat')`: seed k is the same from k + 1.
   if (o.seed) world.rng = new SeededRNG(1 + o.seed).fork('combat');
   const h = world.hero;
+  // Sustained: the pool and every charge meter start empty.
+  if (o.sustained) {
+    h.mana = 0;
+    h.charge.fill(0);
+  }
   const start = { x: h.x, y: h.y };
   const dummies = spawnDummies(registry, world, {
     layout: o.pack ? 'clump' : 'single',
