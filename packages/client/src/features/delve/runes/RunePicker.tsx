@@ -1,0 +1,193 @@
+import { useId, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { runeText, type RuneRef, type RuneTarget, type RuneTier } from '@alloy/engine';
+import { getDelveRegistry } from '../registry';
+import { RuneGlyph } from './RuneGlyph';
+import { TIERS, TIER_NUMERAL, dormantText, runeName } from './rune-style';
+
+export interface RunePickerProps {
+  /** Runes that fit the move and aren't on it; count null = unlimited (Training Grounds). */
+  candidates: readonly { rune: RuneRef; count: number | null }[];
+  /** A filled socket's rune, shown with Pull. */
+  current?: RuneRef | null;
+  /** "Pull · destroys it", or "Pull · ⚙ 50, back to your pouch". */
+  pullText?: string;
+  /** Training Grounds: pick the tier in the picker (I–V chips). */
+  tierChoice?: boolean;
+  /** The move the socket is on: the texts follow its rules (Multi-shot's cut on a Volley). */
+  on?: RuneTarget;
+  /** The current rune does nothing on this move now: dimmed, with its reason. */
+  dormant?: boolean;
+  /** A pick, then `onClose`. */
+  onPick: (rune: RuneRef) => void;
+  /** A pull, then `onClose`. */
+  onPull?: () => void;
+  onClose: () => void;
+}
+
+/** A rune's effect and its trade-off, as the engine words them at its tier (and on its move). */
+function RuneEffect({ rune, on, id }: { rune: RuneRef; on?: RuneTarget; id?: string }) {
+  const { effect, tradeoff } = runeText(getDelveRegistry(), rune, on);
+  return (
+    <span id={id} className="text-[11px] leading-snug text-stone-400">
+      {effect}
+      {tradeoff && ' · '}
+      {tradeoff && <span className="text-amber-200/80">{tradeoff}</span>}
+    </span>
+  );
+}
+
+/**
+ * A socket's picker, over the builder: a filled socket's rune with Pull, then
+ * the runes that fit the move and aren't on it, each with its effect and
+ * trade-off at its tier and its count. The Training Grounds pick the tier here
+ * (I–V chips). A modal dialog in a portal (the last pad scope): Back has the
+ * focus, Escape and the backdrop close it, and closing it (a pick, a pull or
+ * Back) returns the focus to the control that opened it.
+ */
+export function RunePicker({
+  candidates,
+  current = null,
+  pullText,
+  tierChoice = false,
+  on,
+  dormant = false,
+  onPick,
+  onPull,
+  onClose,
+}: RunePickerProps) {
+  const registry = getDelveRegistry();
+  const id = useId();
+  // The control that had the focus as the picker first rendered: its opener.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+  const [tier, setTier] = useState<RuneTier>(1);
+  const close = () => {
+    onClose();
+    opener?.focus();
+  };
+  // With a tier choice, one row per rune, at the chosen tier.
+  const rows = tierChoice
+    ? candidates
+        .filter((c, i) => candidates.findIndex((d) => d.rune.id === c.rune.id) === i)
+        .map((c) => ({ rune: { id: c.rune.id, tier }, count: c.count }))
+    : candidates;
+  const title = current ? runeName(registry, current) : 'Socket a rune';
+  return createPortal(
+    <div
+      className="delve-sheet-backdrop fixed inset-0 select-none text-white"
+      onClick={(e) => {
+        e.stopPropagation();
+        close();
+      }}
+      data-testid="rune-picker"
+      data-pad-scope
+    >
+      <div
+        className="delve-sheet flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.stopPropagation();
+          close();
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-center justify-between">
+          <span className="delve-display text-lg font-bold text-amber-200">{title}</span>
+          <button
+            type="button"
+            className="delve-btn px-3 py-1 text-sm"
+            onClick={close}
+            autoFocus
+            data-pad-back
+            data-testid="rune-picker-close"
+          >
+            Back
+          </button>
+        </div>
+        {current && (
+          <div className="delve-panel flex flex-col gap-1.5 p-2" data-testid="rune-current">
+            <div className="flex items-center gap-2">
+              <RuneGlyph rune={current} dormant={dormant} />
+              <RuneEffect rune={current} on={on} />
+            </div>
+            {dormant && (
+              <span className="text-[11px] text-amber-200/90" data-testid="rune-dormant">
+                {dormantText(registry.getRune(current.id))}
+              </span>
+            )}
+            {onPull && (
+              <button
+                type="button"
+                className="delve-btn delve-btn-danger text-sm"
+                onClick={() => {
+                  onPull();
+                  close();
+                }}
+                data-testid="rune-pull"
+              >
+                {pullText ?? 'Pull'}
+              </button>
+            )}
+          </div>
+        )}
+        {tierChoice && (
+          <div className="flex flex-wrap gap-1.5">
+            {TIERS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="delve-chip"
+                aria-pressed={tier === t}
+                aria-label={`Tier ${TIER_NUMERAL[t]}`}
+                onClick={() => setTier(t)}
+                data-testid={`rune-tier-${t}`}
+              >
+                {TIER_NUMERAL[t]}
+              </button>
+            ))}
+          </div>
+        )}
+        {current && rows.length > 0 && (
+          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+            Replace with
+          </div>
+        )}
+        {rows.length === 0 && (
+          <div className="text-xs text-stone-400" data-testid="rune-none">
+            {tierChoice ? 'No rune fits this move.' : 'No rune in your pouch fits this move.'}
+          </div>
+        )}
+        <div className="flex flex-col gap-2">
+          {rows.map(({ rune, count }) => {
+            const key = `${rune.id}-${rune.tier}`;
+            return (
+              <button
+                key={key}
+                type="button"
+                className="delve-btn flex flex-col gap-0.5 text-left text-sm"
+                onClick={() => {
+                  onPick(rune);
+                  close();
+                }}
+                aria-label={`${runeName(registry, rune)}${count === null ? '' : ` ×${count}`}`}
+                aria-describedby={`${id}-${key}`}
+                data-testid={`rune-pick-${rune.id}`}
+              >
+                <span className="flex items-center gap-2">
+                  <RuneGlyph rune={rune} />
+                  <span className="flex-1">{runeName(registry, rune)}</span>
+                  {count !== null && <span className="text-xs text-stone-400">×{count}</span>}
+                </span>
+                <RuneEffect rune={rune} on={on} id={`${id}-${key}`} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
