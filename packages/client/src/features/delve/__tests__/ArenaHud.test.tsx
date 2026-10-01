@@ -3,6 +3,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AttackButton, SkillBar, Vitals, keyHints, padHints } from '../arena/ArenaHud';
 import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from '../arena/useArena';
+import { getDelveRegistry } from '../registry';
+import { FAMILY_STYLE } from '../runes/rune-style';
+
+/** The first rune of a family in the data. */
+const runeOf = (family: string) =>
+  getDelveRegistry()
+    .getRunes()
+    .find((r) => r.family === family)!;
 
 function hud(over: Partial<ArenaHud> = {}): ArenaHud {
   return {
@@ -20,6 +28,7 @@ function hud(over: Partial<ArenaHud> = {}): ArenaHud {
     basicChainLength: 3,
     basicNextKind: 'light',
     basicHold: null,
+    basicRunes: [],
     potions: 3,
     monstersLeft: 5,
     monstersTotal: 8,
@@ -52,6 +61,7 @@ const BOLT: AbilityHud = {
   windup: null,
   affordable: true,
   ready: true,
+  runes: [],
 };
 
 function bar(over: Partial<ArenaHud>, on: Partial<Parameters<typeof SkillBar>[0]> = {}) {
@@ -92,6 +102,21 @@ describe('the ability buttons', () => {
     expect(button.style.opacity).toBe('1');
     expect(screen.getByTestId('ability-1').style.opacity).toBe('0.5');
     expect(screen.getByTestId('ability-1').querySelector('[data-chain]')).toBeNull();
+  });
+
+  it("shows a dot per rune acting on the next move, in its family's colour; none without", () => {
+    const shape = runeOf('shape');
+    const sustain = runeOf('sustain');
+    const runes = [
+      { id: shape.id, tier: 3 as const },
+      { id: sustain.id, tier: 1 as const },
+    ];
+    render(bar({ abilities: [{ ...BOLT, runes }, BOLT] }));
+    const dots = [...screen.getByTestId('ability-0').querySelectorAll('[data-rune]')];
+    expect(dots.map((d) => d.getAttribute('data-rune'))).toEqual([shape.id, sustain.id]);
+    expect(dots[0]).toHaveStyle({ background: FAMILY_STYLE.shape.color });
+    expect(dots[1]).toHaveStyle({ background: FAMILY_STYLE.sustain.color });
+    expect(screen.getByTestId('ability-1').querySelector('[data-rune]')).toBeNull();
   });
 
   it("hides the button of a skill the weapon doesn't carry; the others keep their slots", () => {
@@ -369,5 +394,21 @@ describe('AttackButton', () => {
     expect(button.querySelector('[data-kind="hold"]')).toHaveTextContent('◉');
     expect(button.querySelector('[data-hold]')).toHaveAttribute('data-stage', '2');
     expect(button.querySelectorAll('[data-tick]')).toHaveLength(1);
+  });
+});
+
+describe('AttackButton runes', () => {
+  it('shows a dot per rune acting on the next blow; none without', () => {
+    const tempo = runeOf('tempo');
+    const { rerender } = render(
+      <AttackButton hud={hud({ basicRunes: [{ id: tempo.id, tier: 2 }] })} onAttack={() => {}} />,
+    );
+    const button = screen.getByTestId('attack-button');
+    expect(button.querySelectorAll('[data-rune]')).toHaveLength(1);
+    expect(button.querySelector('[data-rune]')).toHaveStyle({
+      background: FAMILY_STYLE.tempo.color,
+    });
+    rerender(<AttackButton hud={hud()} onAttack={() => {}} />);
+    expect(button.querySelector('[data-rune]')).toBeNull();
   });
 });
