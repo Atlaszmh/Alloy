@@ -15,6 +15,7 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
+import { runeKnobs } from '../../loot/runes.js';
 import type {
   DelveBalance,
   DelveProfile,
@@ -134,12 +135,17 @@ export function resolveAbility(
   if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
-  const knobs = mergeKnobs(
+  const own = [
     ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
-  );
-
+  ];
+  // Its runes merge last. A Pierce on a move that already passes every foe (an Earth Bolt)
+  // would do nothing, so it's left out, trade-off and all: dormant, like a rune that doesn't fit.
+  const socketed = runeKnobs(registry, move.runes, { form: move.form });
+  const pierces = mergeKnobs(...own).pierce === Infinity;
+  const acts = socketed.knobs.map((k) => !(pierces && k.pierce !== undefined));
+  const knobs = mergeKnobs(...own, ...socketed.knobs.filter((_, i) => acts[i]));
   const w = moveWeight(bal, move.kind, stage);
   const W = ab.weight;
   const s = ab.slots[slot];
@@ -200,7 +206,7 @@ export function resolveAbility(
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,
     knobs,
-    runes: [],
+    runes: socketed.active.filter((_, i) => acts[i]),
   };
 }
 
