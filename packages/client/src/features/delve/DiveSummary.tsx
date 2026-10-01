@@ -110,6 +110,12 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
               · ✦ {formatNumber(dive.dustEarned)} Mana Dust from salvage
             </span>
           )}
+          {dive.linksEarned > 0 && (
+            <span data-testid="dive-links">
+              {' '}
+              · 🔗 {dive.linksEarned} Link{dive.linksEarned > 1 ? 's' : ''} from salvaged weapons
+            </span>
+          )}
         </div>
       </div>
 

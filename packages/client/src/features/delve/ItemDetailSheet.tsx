@@ -1,13 +1,18 @@
 import { useMemo, useRef, useState } from 'react';
 import {
+  CHAIN_SKILLS,
   attuneElement,
   baseDisplayName,
+  carriedByText,
+  carriedSkills,
   compareItem,
   findItem,
   inPair,
   isDiveActive,
   itemAffinityAttunement,
   itemStatLines,
+  movesetOf,
+  movesetTransfer,
   pairElements,
   reattuneCost,
   referenceDepth,
@@ -15,15 +20,21 @@ import {
   salvageDust,
   salvageValue,
   upgradeCost,
+  type Blow,
+  type GearItem,
   type HeroStatKey,
+  type ItemComparison,
   type ManaType,
+  type Move,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
+import { KIND_LABEL, SKILL_NAME, blowText } from './chains/chain-text';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
@@ -39,6 +50,69 @@ import {
 interface ItemDetailSheetProps {
   uid: string;
   onClose: () => void;
+  /** Open the chain builder (the Anvil): the equipped weapon's sheet links to it. */
+  onBuild?: () => void;
+}
+
+/** Legendaries whose power rides one skill: worn without it, that power does nothing. */
+const LEGENDARY_NEEDS: Record<string, 'defensive' | 'ultimate'> = {
+  nightstalker: 'defensive',
+  rimeheart: 'ultimate',
+};
+const NEEDS_TEXT = { defensive: 'Needs a Defensive', ultimate: 'Needs an Ultimate' };
+
+/** A move as the moveset lists it: "medium Fire Bolt", "heavy Fire+Nature Burst". */
+function moveName(registry: ReturnType<typeof getDelveRegistry>, m: Move | Blow): string {
+  if ('element' in m) return blowText(registry, m);
+  const els = m.elements.map((e) => manaStyle(registry, e).name).join('+');
+  return `${KIND_LABEL[m.kind]} ${els} ${registry.getForm(m.form).name}`;
+}
+
+/** A weapon's moveset: each chain it carries with its slots ("Primary 2/5") and moves. */
+function MovesetView({ item }: { item: GearItem }) {
+  const registry = getDelveRegistry();
+  const { chains, slots } = movesetOf(registry, item);
+  const cap = registry.getDelveBalance().chains.cap;
+  const carried = carriedSkills(registry, item.rarity);
+  return (
+    <div
+      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-xs"
+      data-testid="item-moveset"
+    >
+      <div className="delve-display text-[11px] font-bold uppercase tracking-widest text-amber-300/80">
+        Moveset
+      </div>
+      {CHAIN_SKILLS.map((s) => {
+        const chain = chains[s];
+        if (!carried.includes(s) || !chain)
+          return (
+            <div key={s} className="text-stone-500" data-testid={`moveset-${s}`}>
+              {SKILL_NAME[s]}: {carriedByText(registry, s).toLowerCase()}
+            </div>
+          );
+        const moves: (Move | Blow)[] = Array.isArray(chain) ? chain : chain.moves;
+        return (
+          <div key={s} className="text-stone-300" data-testid={`moveset-${s}`}>
+            <b className="text-stone-100">
+              {SKILL_NAME[s]} {slots[s]}/{cap[s]}
+            </b>{' '}
+            · {moves.map((m) => moveName(registry, m)).join(' · ')}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Power, Damage and Toughness against what's worn. */
+function DeltaRow({ cmp }: { cmp: ItemComparison }) {
+  return (
+    <div className="flex">
+      <DeltaCell label="Power" value={cmp.powerPct} />
+      <DeltaCell label="Damage" value={cmp.dpsPct} />
+      <DeltaCell label="Toughness" value={cmp.ehpPct} />
+    </div>
+  );
 }
 
 function DeltaCell({ label, value }: { label: string; value: number }) {
@@ -71,7 +145,7 @@ function NotMine() {
   );
 }
 
-export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
+export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const store = useDelveStore.getState;
@@ -88,6 +162,9 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const isEquipped = found?.where === 'equipped';
   const depth = referenceDepth(profile);
 
+  const worn = profile.equipped.weapon;
+  // A bag weapon, while armed, is valued twice: as it is, and as a home for your moveset.
+  const twoWays = !!item && !isEquipped && item.slot === 'weapon' && !!worn;
   const cmp = useMemo(
     () =>
       item && !isEquipped
@@ -95,6 +172,14 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
         : null,
     [item, isEquipped, profile.equipped, profile.pair, registry, depth],
   );
+  const asIs = useMemo(
+    () =>
+      item && twoWays
+        ? compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs')
+        : null,
+    [item, twoWays, profile.equipped, profile.pair, registry, depth],
+  );
+  const transfer = item && twoWays ? movesetTransfer(registry, worn!, item) : null;
 
   if (!item) return null;
   const color = RARITY_COLOR[item.rarity];
@@ -105,7 +190,9 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const rfCost = reforgeCost(registry, item);
   const raCost = reattuneCost(registry, item);
   const salvage = salvageValue(registry, item);
-  const isUpgrade = cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
+  // Equip takes a weapon as it is.
+  const equipCmp = asIs ?? cmp;
+  const isUpgrade = equipCmp !== null && equipCmp.powerPct > UPGRADE_EPSILON;
   const mana = manaStyle(registry, item.mana);
   const attuneDelta = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const base = registry.getDelveData().bases.find((b) => b.id === item.baseId);
@@ -121,6 +208,11 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
   const unbound =
     !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
+  // A legendary power tied to a skill the equipped weapon doesn't carry.
+  const needs = item.legendary ? LEGENDARY_NEEDS[item.legendary.id] : undefined;
+  const dead = !!needs && !carriedSkills(registry, worn?.rarity ?? null).includes(needs);
+  // Your moveset would make the weapon an upgrade (Transfer's mark, as Equip's is as it is).
+  const homeUpgrade = !!transfer && cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
 
   const flashStats = () => {
     statsRef.current?.animate?.(
@@ -155,6 +247,20 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
       onClose();
     } catch {
       say('Bag is full', false);
+    }
+  };
+
+  const onTransfer = () => {
+    const res = store().transfer(item.uid);
+    if (res.ok) {
+      playSound('combineMerge');
+      vibrate('success');
+      const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
+      showToast(`Your moveset moved onto ${item.name}${links}`);
+      onClose();
+    } else {
+      playSound('combineFail');
+      say(res.reason ?? 'Cannot transfer', false);
     }
   };
 
@@ -206,9 +312,10 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
       setConfirmSalvage(true);
       return;
     }
-    const { scrap } = store().salvage([item.uid]);
+    const { scrap, links } = store().salvage([item.uid]);
     playSound('orbRemove');
     vibrate('light');
+    if (links > 0) showToast(`+${links} Link${links > 1 ? 's' : ''} from its extra slots`);
     if (scrap > 0) onClose();
   };
 
@@ -305,11 +412,24 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
                 'Empty slot — pure gain'
               )}
             </div>
-            <div className="flex">
-              <DeltaCell label="Power" value={cmp.powerPct} />
-              <DeltaCell label="Damage" value={cmp.dpsPct} />
-              <DeltaCell label="Toughness" value={cmp.ehpPct} />
-            </div>
+            {asIs && transfer ? (
+              <>
+                <div className="text-center text-[10px] uppercase tracking-wider text-stone-500">
+                  As it is
+                </div>
+                <div data-testid="compare-as-is">
+                  <DeltaRow cmp={asIs} />
+                </div>
+                <div className="mt-1 text-center text-[10px] uppercase tracking-wider text-stone-500">
+                  With your moveset · ⚙ {formatNumber(transfer.scrap)} to move it
+                </div>
+                <div data-testid="compare-home">
+                  <DeltaRow cmp={cmp} />
+                </div>
+              </>
+            ) : (
+              <DeltaRow cmp={cmp} />
+            )}
             {attuneDelta.length > 0 && (
               <div
                 className="mt-1.5 flex flex-wrap justify-center gap-x-3 text-xs"
@@ -407,9 +527,29 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
                 ★ {registry.getLegendary(item.legendary.id).name}
               </div>
               {legendaryText(registry, item.legendary.id, item.legendary.value)}
+              {dead && needs && (
+                <div
+                  className="mt-1 text-xs font-semibold text-amber-200"
+                  data-testid="legendary-dead"
+                >
+                  {NEEDS_TEXT[needs]}: your weapon doesn't carry one.
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        {item.slot === 'weapon' && <MovesetView item={item} />}
+        {isEquipped && item.slot === 'weapon' && onBuild && (
+          <button
+            type="button"
+            className="delve-chip mt-2"
+            onClick={onBuild}
+            data-testid="open-builder"
+          >
+            Build its moves in the chain builder ›
+          </button>
+        )}
 
         {message && (
           <div
@@ -485,6 +625,16 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
           <button className="delve-btn" onClick={onLock}>
             {item.locked ? 'Unlock' : 'Lock'}
           </button>
+          {transfer && !diving && (
+            <button
+              className={`delve-btn col-span-2 ${homeUpgrade ? 'delve-btn-green' : ''}`}
+              onClick={onTransfer}
+              data-testid="transfer-button"
+            >
+              {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · ⚙ {formatNumber(transfer.scrap)}
+              {transfer.links > 0 && ` · +${transfer.links} Link${transfer.links === 1 ? '' : 's'}`}
+            </button>
+          )}
         </div>
         {reattuneTo.length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5" data-testid="reattune">
@@ -517,7 +667,8 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
           </div>
         )}
         <div className="mt-3 text-center text-[11px] text-stone-500">
-          ⚙ {formatNumber(profile.scrap)} scrap · ✦ {formatNumber(profile.manaDust)} Mana Dust
+          ⚙ {formatNumber(profile.scrap)} scrap · ✦ {formatNumber(profile.manaDust)} Mana Dust · 🔗{' '}
+          {profile.links} Link{profile.links === 1 ? '' : 's'}
         </div>
       </div>
       {binding && !isEquipped && (

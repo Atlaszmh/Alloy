@@ -12,6 +12,7 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
+import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
@@ -99,6 +100,8 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
       return;
     }
     setResult(res.item);
+    if (res.links)
+      showToast(`+${res.links} Link${res.links > 1 ? 's' : ''} from the weapons' extra slots`);
     playSound(res.item.rarity === 'legendary' ? 'lootLegendary' : 'combineMerge');
     vibrate(res.item.rarity === 'legendary' ? 'heavy' : 'success');
     requestAnimationFrame(() => {

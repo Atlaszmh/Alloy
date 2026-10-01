@@ -93,6 +93,22 @@ describe('DelveCamp', () => {
     expect(chains.defensive).toBeUndefined();
   });
 
+  it('shows the Links beside the scrap', () => {
+    act(() =>
+      useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile, links: 3 }),
+    );
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('links-count')).toHaveTextContent('🔗 3 Links');
+    act(() =>
+      useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile, links: 1 }),
+    );
+    expect(screen.getByTestId('links-count')).toHaveTextContent(/^🔗 1 Link$/);
+  });
+
   it('Restart Delve (dev) wipes the save on a second press, back to the mana choice', () => {
     const s = useDelveStore.getState();
     s.startDive(1);

@@ -12,13 +12,13 @@ beforeAll(() => {
     };
 });
 
-function summary(dustEarned: number) {
+function summary(dustEarned: number, linksEarned = 0) {
   const registry = getDelveRegistry();
   const dive = startDive(registry, createDelveProfile(registry, 1, { primary: 'fire' }), 1).dive!;
   const noop = () => {};
   render(
     <DiveSummary
-      dive={{ ...dive, phase: 'extracted', dustEarned }}
+      dive={{ ...dive, phase: 'extracted', dustEarned, linksEarned }}
       biomeName="Test"
       onCamp={noop}
       onAgain={noop}
@@ -33,8 +33,14 @@ describe('DiveSummary', () => {
     expect(screen.getByTestId('dive-dust')).toHaveTextContent('✦ 7 Mana Dust from salvage');
   });
 
-  it('says nothing about Mana Dust when there was none', () => {
+  it('says nothing about Mana Dust or Links when there were none', () => {
     summary(0);
     expect(screen.queryByTestId('dive-dust')).toBeNull();
+    expect(screen.queryByTestId('dive-links')).toBeNull();
+  });
+
+  it('shows the Links salvaged weapons gave this dive', () => {
+    summary(0, 2);
+    expect(screen.getByTestId('dive-links')).toHaveTextContent('🔗 2 Links from salvaged weapons');
   });
 });

@@ -108,6 +108,9 @@ export function DelveCamp() {
             </div>
             <div className="flex flex-col items-end gap-1 text-xs text-stone-300">
               <span data-testid="scrap-count">⚙ {formatNumber(profile.scrap)} scrap</span>
+              <span data-testid="links-count">
+                🔗 {formatNumber(profile.links)} Link{profile.links === 1 ? '' : 's'}
+              </span>
               <span>Deepest · {profile.bestDepth}</span>
               <span style={{ color: '#fb923c' }}>
                 ★ {codexFound}/{codexTotal} legendaries
@@ -143,14 +146,15 @@ export function DelveCamp() {
                 every menu.
               </p>
               <p>
-                🔥 Each skill is a chain of moves: build your basic attack, Primary, Defensive and
-                Ultimate in the <b className="text-violet-300">Abilities</b> tab, each move a kind
-                (light, medium, heavy, or a hold you charge), a form and one or two elements. Each
-                press casts the chain's next move, each harder than the last; a pause starts it
-                over. Gear attunes you to its element and powers those moves.
+                🔥 Each skill is a chain of moves, carried by your weapon: build them in the{' '}
+                <b className="text-violet-300">Abilities</b> tab, each move a kind (light, medium,
+                heavy, or a hold you charge), a form and one or two elements. Each press casts the
+                chain's next move, each harder than the last; a pause starts it over. Better weapons
+                carry more skills, and Links from salvaged weapons buy more slots. Gear attunes you
+                to its element and powers those moves.
               </p>
               <p>
-                💎 Loot bursts from monsters: walk over it. A green{' '}
+                💎 Loot bursts from monsters: walk over it, and equip it here between dives. A green{' '}
                 <b className="text-green-400">▲</b> means it's an upgrade.
               </p>
               <p>
@@ -318,7 +322,16 @@ export function DelveCamp() {
         </div>
       </div>
 
-      {selected && <ItemDetailSheet uid={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <ItemDetailSheet
+          uid={selected}
+          onClose={() => setSelected(null)}
+          onBuild={() => {
+            setSelected(null);
+            setTab('abilities');
+          }}
+        />
+      )}
       {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
       {profile.pair.primary === null && <ManaChoice />}
       <ToastContainer />

@@ -14,6 +14,7 @@ import {
   setAutoSalvage,
   setChains as engineSetChains,
   addSlot as engineAddSlot,
+  transferMoveset,
   bindSecondary as engineBindSecondary,
   chooseStartingMana,
   realign as engineRealign,
@@ -252,6 +253,8 @@ interface DelveStore {
   revertDraft: () => void;
   /** Add a slot to a chain of the equipped weapon, for Links and scrap (dropping its draft). */
   addSlot: (skill: ChainSkill) => ProfileActionResult;
+  /** Move the equipped weapon's moveset onto bag weapon `uid` and equip it, for scrap. */
+  transfer: (uid: string) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
 }
 
@@ -439,6 +442,12 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         const { [skill]: _gone, ...chains } = draft.chains;
         set({ chainDraft: { ...draft, chains } });
       }
+      return res;
+    },
+
+    transfer: (uid) => {
+      const res = applyResult(transferMoveset(registry(), get().profile, uid));
+      if (res.ok) set({ newUids: withoutUids(get().newUids, [uid]) });
       return res;
     },
   };

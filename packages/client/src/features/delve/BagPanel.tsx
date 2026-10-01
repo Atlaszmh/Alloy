@@ -53,12 +53,15 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
   };
 
   const onSalvageJunk = () => {
-    const { scrap, dust } = useDelveStore.getState().salvage(junk);
+    const { scrap, dust, links } = useDelveStore.getState().salvage(junk);
     if (scrap > 0) {
       playSound('gemScatter');
       vibrate('medium');
       const dustText = dust > 0 ? ` · +${formatNumber(dust)} Mana Dust` : '';
-      showToast(`Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}`);
+      const linkText = links > 0 ? ` · +${links} Link${links > 1 ? 's' : ''}` : '';
+      showToast(
+        `Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}${linkText}`,
+      );
     }
   };
 

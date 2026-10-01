@@ -5,6 +5,7 @@ import {
   defaultMoveset,
   generateItem,
   heroChains,
+  referenceDepth,
   SeededRNG,
   type GearItem,
   type ManaType,
@@ -15,7 +16,7 @@ import { ForgePanel } from '../ForgePanel';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
-import { UPGRADE_EPSILON } from '../format';
+import { UPGRADE_EPSILON, formatDelta } from '../format';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -206,7 +207,7 @@ describe('ItemDetailSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('mid-dive Equip and Unequip give way to "Equip at the Anvil"', () => {
+  it('mid-dive Equip, Unequip and Transfer give way to "Equip at the Anvil"', () => {
     put(helm('storm'), rareSword('w1'));
     store().startDive(1);
     const sheet = (uid: string) => render(<ItemDetailSheet uid={uid} onClose={() => {}} />);
@@ -219,7 +220,135 @@ describe('ItemDetailSheet', () => {
     expect(screen.getByTestId('equip-locked')).toBeInTheDocument();
     view.unmount();
     sheet('w1');
+    expect(screen.queryByTestId('transfer-button')).toBeNull();
     expect(screen.getByTestId('equip-locked')).toBeInTheDocument();
+  });
+
+  it("a weapon's sheet shows its moveset: each chain's slots and moves, and what it can't carry", () => {
+    const onBuild = vi.fn();
+    render(
+      <ItemDetailSheet
+        uid={store().profile.equipped.weapon!.uid}
+        onClose={() => {}}
+        onBuild={onBuild}
+      />,
+    );
+    expect(screen.getByTestId('moveset-basic')).toHaveTextContent(
+      'Basic 3/5 · light Fire blow · light Fire blow · heavy Fire blow',
+    );
+    expect(screen.getByTestId('moveset-primary')).toHaveTextContent(
+      'Primary 1/5 · light Fire Bolt',
+    );
+    expect(screen.getByTestId('moveset-defensive')).toHaveTextContent(
+      'Defensive: carried by magic weapons and better',
+    );
+    expect(screen.getByTestId('moveset-ultimate')).toHaveTextContent(
+      'Ultimate: carried by epic weapons and better',
+    );
+    // The equipped weapon's sheet links to the chain builder.
+    fireEvent.click(screen.getByTestId('open-builder'));
+    expect(onBuild).toHaveBeenCalled();
+  });
+
+  it('a bag weapon is valued as it is and with your moveset; Transfer moves your moveset onto it for scrap', () => {
+    const p = store().profile;
+    const sword = p.equipped.weapon!;
+    const mine = { ...sword, moveset: defaultMoveset(registry, sword, 'fire', { primary: 2 }) };
+    store().setProfile({
+      ...p,
+      equipped: { ...p.equipped, weapon: mine },
+      bag: [rareSword('w1', { primary: 2 })],
+    });
+    render(
+      <>
+        <ItemDetailSheet uid="w1" onClose={() => {}} />
+        <ToastContainer />
+      </>,
+    );
+    expect(screen.getByTestId('compare-as-is')).toHaveTextContent('Power');
+    expect(screen.getByTestId('compare-home')).toHaveTextContent('Power');
+    expect(screen.getByTestId('item-compare')).toHaveTextContent(
+      'With your moveset · ⚙ 30 to move it',
+    );
+    // Your Primary's extra slot moves (30 scrap); the target's own extra Primary slot comes back.
+    expect(screen.getByTestId('transfer-button')).toHaveTextContent(
+      /Transfer my moveset here · ⚙ 30 · \+1 Link$/,
+    );
+    fireEvent.click(screen.getByTestId('transfer-button'));
+    expect(screen.getByRole('status')).toHaveTextContent('Not enough scrap');
+    act(() => store().setProfile({ ...store().profile, scrap: 30 }));
+    fireEvent.click(screen.getByTestId('transfer-button'));
+    const now = store().profile;
+    expect(now.equipped.weapon!.uid).toBe('w1');
+    expect(now.equipped.weapon!.moveset!.chains.primary).toEqual(mine.moveset.chains.primary);
+    expect(now.equipped.weapon!.moveset!.slots).toMatchObject({ primary: 2, defensive: 1 });
+    expect(now.bag.find((i) => i.uid === sword.uid)!.moveset!.slots.primary).toBe(1);
+    expect(now).toMatchObject({ scrap: 0, links: 1 });
+    expect(screen.getByText(/Your moveset moved onto .+ · \+1 Link$/)).toBeInTheDocument();
+  });
+
+  it('each valuation shows its own delta: Equip is marked as it is, Transfer as a home', () => {
+    const p = store().profile;
+    const sword = p.equipped.weapon!;
+    // A built-up common sword against a plain uncommon one: worse as it is, better as a home.
+    const mine = {
+      ...sword,
+      moveset: defaultMoveset(registry, sword, 'fire', { primary: 5, basic: 5 }),
+    };
+    const plain = generateItem(
+      registry,
+      { uid: 'w2', ilvl: 2, rarity: 'uncommon', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    const equipped = { ...p.equipped, weapon: mine };
+    store().setProfile({ ...p, equipped, bag: [plain] });
+    const depth = referenceDepth(store().profile);
+    const asIs = compareItem(equipped, plain, registry, depth, p.pair, 'asIs').powerPct;
+    const home = compareItem(equipped, plain, registry, depth, p.pair).powerPct;
+    expect(asIs).toBeLessThan(-UPGRADE_EPSILON);
+    expect(home).toBeGreaterThan(UPGRADE_EPSILON);
+    render(<ItemDetailSheet uid="w2" onClose={() => {}} />);
+    expect(screen.getByTestId('compare-as-is')).toHaveTextContent(`Power▼ ${formatDelta(asIs)}`);
+    expect(screen.getByTestId('compare-home')).toHaveTextContent(`Power▲ ${formatDelta(home)}`);
+    expect(screen.getByTestId('equip-button')).toHaveTextContent(/^Equip$/);
+    // Four Primary and two basic extra slots move: 6 × 30 scrap.
+    expect(screen.getByTestId('transfer-button')).toHaveTextContent(
+      /^▲ Transfer my moveset here · ⚙ 180$/,
+    );
+    expect(screen.getByTestId('transfer-button')).toHaveClass('delve-btn-green');
+  });
+
+  it('a legendary whose power rides a skill the weapon lacks says it needs it', () => {
+    const boots = generateItem(
+      registry,
+      { uid: 'b1', ilvl: 3, rarity: 'legendary', slot: 'boots', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    put({ ...boots, legendary: { id: 'nightstalker', value: 30, roll: 0.5 } });
+    const { unmount } = render(<ItemDetailSheet uid="b1" onClose={() => {}} />);
+    expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
+      "Needs a Defensive: your weapon doesn't carry one",
+    );
+    unmount();
+    // A rare weapon carries a Defensive.
+    const p = store().profile;
+    store().setProfile({ ...p, equipped: { ...p.equipped, weapon: rareSword('w1') } });
+    render(<ItemDetailSheet uid="b1" onClose={() => {}} />);
+    expect(screen.queryByTestId('legendary-dead')).toBeNull();
+  });
+
+  it('salvaging a weapon with extra slots says the Links it gave', () => {
+    put(rareSword('w1', { primary: 3 }));
+    render(
+      <>
+        <ItemDetailSheet uid="w1" onClose={() => {}} />
+        <ToastContainer />
+      </>,
+    );
+    fireEvent.click(screen.getByTestId('salvage-button'));
+    fireEvent.click(screen.getByTestId('salvage-button')); // a rare asks twice
+    expect(store().profile.links).toBe(2);
+    expect(screen.getByText('+2 Links from its extra slots')).toBeInTheDocument();
   });
 
   it('Equip best never asks, and leaves weapons alone', () => {
