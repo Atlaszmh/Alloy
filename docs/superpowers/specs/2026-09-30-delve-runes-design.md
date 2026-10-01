@@ -1,6 +1,6 @@
 # Delve runes: sockets on moves, 14 runes over shared knobs, tiers and fusing
 
-**Status:** approved design, 2026-09-30. It is stage 4b of the skill roadmap, and it ships as v0.51.0 with save version 7. It builds on stage 4a (weapon movesets and slots, v0.49.0–v0.50.0; `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md`). The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. All numbers are starting points for the DPS Lab gate; nothing has been measured yet.
+**Status:** approved design, 2026-09-30. It is stage 4b of the skill roadmap, and it ships as v0.51.0 with save version 7. It builds on stage 4a (weapon movesets and slots, v0.49.0–v0.50.0; `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md`). The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. All numbers are starting points for the DPS Lab gate; nothing has been measured yet. Revised after the spec review: every change is marked **(review)**, here and in the index.
 
 Stage 4 is three projects, in this order:
 - **4a:** weapon movesets and slots (shipped).
@@ -47,28 +47,32 @@ Stage 4 is three projects, in this order:
 - **`RuneId` is a plain string**, checked against the registry at load, not a TypeScript union. *A new rune is a data row and needs no type change.*
 
 ### The 14 runes
-Each rune's numbers are per tier, I → V. Where the decisions gave only the ends, the spec spreads them evenly. **Decided in the spec: the tier tables below.** *Even steps between the user's ends, with counts rounded to whole foes or shots.*
+Each rune's numbers are per tier, I → V. Where the decisions gave only the ends, the spec spreads them evenly. **Decided in the spec (review): the tier tables below.** *Exact even steps between the user's ends for every fraction (no rounding: Multi-shot's 68.75%, Guard's 4.25%), and whole counts (shards, shots, jumps) rounded down; Saturate's +2 at IV–V is the decisions' own.*
 
 | Family | Rune | Tier I → V | Trade-off | Fits (forms) | Fits (blows) |
 |---|---|---|---|---|---|
 | Shape | **Split** | shards 2, 2, 3, 3, 4 at 30, 35, 40, 45, 50% power | — | Bolt, Volley, Barrage | bow, wand |
-| Shape | **Multi-shot** | +1, +1, +2, +2, +3 shots | each shot 65, 69, 73, 77, 80% power | Bolt, Volley, Lance, Barrage | bow, wand |
-| Shape | **Pierce** | passes 1, 2, 3, 4, 5 foes | 90% power | Bolt, Volley | wand |
+| Shape | **Multi-shot** | +1, +1, +2, +2, +3 shots | each shot 65, 68.75, 72.5, 76.25, 80% power; on Volley and Barrage half that cut: 82.5, 84.375, 86.25, 88.125, 90% | Bolt, Volley, Lance, Barrage | bow, wand |
+| Shape | **Pierce** | passes 1, 2, 3, 4, 5 foes | 90% power | Bolt, Volley | staff, wand |
 | Shape | **Chain** | +1, +1, +2, +2, +3 jumps | — | Bolt, Volley, Lance, Burst, Strike, Ward, Nova, Barrage, Maelstrom | all seven |
 | Shape | **Widen** | area ×1.2, 1.3, 1.4, 1.5, 1.6 | 90% power | Burst, Nova, Maelstrom, Strike, Ward | dagger, sword, axe, maul |
 | Tempo | **Quick** | beat and cooldown ×0.9, 0.85, 0.8, 0.75, 0.7 | 90% power | all twelve | all seven |
 | Tempo | **Echo** | repeats after 0.4 s at 30, 37.5, 45, 52.5, 60% | — | Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom | all seven |
 | Tempo | **Heavy** | power ×1.15, 1.225, 1.3, 1.375, 1.45, staggers | beat and wind-up ×1.2 | Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom | all seven |
 | Elemental | **Saturate** | +1, +1, +1, +2, +2 stacks per direct hit | — | every form but Surge and Armor | all seven |
-| Elemental | **Linger** | a zone for 1.5, 2, 2.5, 3, 3.5 s (ticks at 20% of the hit) | — | Bolt, Lance, Burst, Strike, Nova, Barrage | all seven, heavy and hold blows only |
-| Elemental | **Catalyst** | reactions it sets off +15, 24, 33, 41, 50% | — | every form but Surge | all seven |
+| Elemental | **Linger** | a zone for 1.5, 2, 2.5, 3, 3.5 s (ticks at 20% of the hit) | — | Bolt, Lance, Burst, Strike, Nova | all seven, heavy and hold blows only |
+| Elemental | **Volatile** | reactions it sets off +15, 23.75, 32.5, 41.25, 50% | — | every form but Surge | all seven |
 | Sustain | **Leech** | lifesteal 2, 3, 4, 5, 6% | — | every form but Surge | all seven |
-| Sustain | **Siphon** | +1, +1.5, +2, +2.5, +3 mana per foe hit, up to 5 foes a cast | — | every form but Surge | all seven |
-| Sustain | **Guard** | on landing, a 3 s shield of 3, 4, 5.5, 7, 8% max life | — | all twelve | all seven |
+| Sustain | **Drain** | +1, +1.5, +2, +2.5, +3 mana per foe hit, up to 5 foe-hits a cast | — | every form but Surge | all seven |
+| Sustain | **Guard** | on landing, a 3 s shield of 3, 4.25, 5.5, 6.75, 8% max life | — | all twelve | all seven |
+
+- **Decided in the spec (review): the mana rune is Drain and the reaction-damage rune is Volatile.** *"Siphon" is already a reaction and "Catalyst" already a legendary; the knobs keep their names (`manaOnHit`, `catalyst`).*
 
 The seven weapons are dagger, sword, axe and maul (melee) and staff, wand and bow (shots). The fits lists follow the decisions' table, narrowed only where the code makes a rune do nothing:
-- **Decided in the spec: Pierce leaves out Lance, bow and staff blows.** *A Lance already hits every foe on its line, a bow's shots already pierce every foe (`attack.pierce: true`), and a staff's shots that burst end at their burst (`burstShot` kills the shot); Pierce would do nothing on them.*
-- **Decided in the spec: Linger leaves out Volley and Maelstrom.** *Each Volley dart would leave its own zone (five per cast), and a Maelstrom is already a zone; "landing forms" are the ones that land once.*
+- **Decided in the spec: Pierce leaves out Lance and bow blows.** *A Lance already hits every foe on its line, and a bow's shots already pierce every foe (`attack.pierce: true`); Pierce would do nothing on them.*
+- **Decided in the spec (review): Pierce fits staff blows, dormant on the rows that burst.** A staff's light shot pierces; its medium, heavy and hold shots burst (`explode`), and `burstShot` ends a shot at its burst, so there Pierce is dormant, as a kind restriction leaves a rune dormant (`runeActive`: a rune that sets `pierce` is dormant on a blow whose row has `explode`). *It matches the dormant-by-kind rule instead of leaving staff out.*
+- **Pierce on a move that already pierces every foe** (an Earth Bolt or dart: `Infinity + n`) does nothing; the builder shows it dormant when the move resolves with infinite pierce without it. **Decided in the spec (review).** *There is nothing further to pass.*
+- **Decided in the spec (review): Linger leaves out Volley, Barrage and Maelstrom.** *Each lands many times per cast (Volley's darts, Barrage's impacts, Maelstrom's ticks), so a zone per landing would be many zones per cast; "landing forms" are the ones that land once.*
 - **Decided in the spec: Chain leaves out Blink and Armor.** *Neither goes through a path that jumps (Blink's trail and Armor's strike-back call `hitMonster` directly); adding one is a new mechanic.*
 - **Decided in the spec: Saturate leaves out Armor; every "any hit" rune leaves out Surge.** *Surge has no hit (`power: 0`), and Armor's strike-back isn't a direct hit, so extra direct-hit stacks would never apply.*
 - **"Attack moves"** (Echo, Heavy) are the Primary's and the Ultimate's eight forms. *The Defensive's forms re-buff or teleport the hero; repeating them is not a damage repeat.*
@@ -80,15 +84,16 @@ A rune does nothing on its own: each tier is a set of **knob** values merged int
 
 **Reused knobs** (no new code in the sim): `power` (every trade-off, Heavy's power, Multi-shot's per-shot power), `area` (Widen), `applies` (Heavy's `stagger`), `chain` (Chain), `zone` (Linger), `lifesteal` (Leech).
 
-**Changed knob: `pierce`.** Today `Knobs.pierce` is a boolean (Earth and one fusion set it). It becomes a count: `pierce: number`, the foes a shot passes, `Infinity` for all. In data it is `true` (all) or a whole number. `mergeKnobs` adds (`true` adds `Infinity`). `Projectile.pierce` becomes the same count, spent one per foe passed: `step.ts`'s `if (!p.pierce) p.dead = true` becomes "dead when `p.pierce <= 0`, else `p.pierce--`", and the end-of-flight burst keeps today's test (`p.pierce === 0`). A weapon's `attack.pierce: true` maps to `Infinity`. *A count is the only way to say "passes 3 foes"; `true` → `Infinity` keeps every existing shot identical.*
-- The client reads `p.pierce` as truthy in `fx/draw-world.ts` (fine as a number) and types it `boolean` in `pixel/floor-engine.ts` (`pierce: p.pierce > 0`).
+**Changed knob: `pierce`.** Today `Knobs.pierce` is a boolean (Earth and one fusion set it). It becomes a count: `pierce: number`, the foes a shot passes, `Infinity` for all. In data it is `true` (all) or a whole number. `mergeKnobs` adds (`true` adds `Infinity`). *A count is the only way to say "passes 3 foes"; `true` → `Infinity` keeps every existing shot identical.*
+- **Decided in the spec (review): `Projectile.pierce` stays a boolean, "spawned piercing", and a new `Projectile.pierceLeft: number` counts down.** A shot spawns with `pierce: pierceLeft > 0`. `step.ts`'s `if (!p.pierce) p.dead = true` becomes "dead when `p.pierceLeft <= 0`, else `p.pierceLeft--`"; the end-of-flight burst keeps today's test on `p.pierce`, so a shot spawned piercing never bursts at the end of its flight, even with its count spent. *Today's non-piercing shots burst at the end and piercing ones don't; keeping the spawn flag keeps that exactly, and the client, which reads `p.pierce` as a boolean (`fx/draw-world.ts`, `pixel/floor-engine.ts`), needs no change.*
+- Where `basic.ts` passes the weapon's `HeroWeapon.pierce` (a boolean, the bow's) into a shot, it becomes `pierceLeft: Infinity` or 0 (plus the blow's own `pierce` knob), and `pierce: pierceLeft > 0`.
 
 **New knobs**, each with a neutral value (no effect), a merge rule and one place that reads it:
 
 | Knob | Type | Neutral | Merge | Read in |
 |---|---|---|---|---|
 | `split` | `{ count: number; power: number } \| null` | `null` | the larger `count` wins, with its `power` | `impact.ts` (`impact`), `step.ts` (a basic shot's hit) |
-| `extraShots` | `number` | 0 | add | `resolve.ts` (Volley's and Barrage's `count`), `forms.ts` (Bolt, Lance), `basic.ts` (shots) |
+| `extraShots` | `{ count: number; power: number } \| null` | `null` | counts add, powers multiply | `resolve.ts` (Volley's and Barrage's `count`, and every shot's power cut), `forms.ts` (Bolt, Lance), `basic.ts` (shots) |
 | `echo` | `number` (fraction of power) | 0 | max | `cast.ts` (`fire`) and `basic.ts` (`strike`) queue it; `abilities/echo.ts` runs it |
 | `quick` | `{ beat: number; cooldown: number; windup: number }` | all 1 | multiply each | `resolve.ts` (cooldown, conjure, channel), `moveBeat` (`cast.ts`'s `fire`, `useInterval`, the builder's readout), `basic.ts` (a blow's cycle and startup) |
 | `stacksBonus` | `number` | 0 | add | `resolve.ts` (`ResolvedAbility.stacks`), `basic.ts` (a blow's stacks) |
@@ -98,6 +103,8 @@ A rune does nothing on its own: each tier is a set of **knob** values merged int
 
 - **Decided in the spec: `quick` is three multipliers, not one fraction.** *Quick shortens the beat and the cooldown, and Heavy lengthens the beat and the wind-up; one knob with three parts carries both without a ninth knob.*
 - **Decided in the spec: `echo` is a power fraction, its delay a balance value (`delve.runes.echoDelay`, 0.4 s).** *Every echo waits the same; the rune scales only how hard it lands.*
+- **Decided in the spec (review): `extraShots` carries its own per-shot power, `{ count, power }`, not a `power` factor.** The resolver applies the cut in full on Bolt, Lance and shot blows, and half of it on Volley and Barrage, whose extra shots add to `count` (`power' = 1 − (1 − power) / 2`). *Volley's darts home and Barrage's impacts rain on the target area, so their extra shots land more surely than a fan's; the review's call halves their cut, one knob still carries it, and the data stays one row per tier (`{ "extraShots": { "count": 1, "power": 0.65 } }`).*
+- **Decided in the spec (review): the `zone` merge becomes the longer `seconds` and the larger `tickPower`, field by field** (today: the longer zone wins whole). So Linger under Magma or Rimebloom lasts the longer of the two and ticks at the stronger. *A short rune zone would otherwise do nothing under a fusion's, or a long weak one would cut the fusion's ticks; the one combination that merges two zones today (Rimeheart's 3 s × 0.15 with Rimebloom's 3 s × 0.2) comes out the same.*
 - **Hit-time knobs ride `HitOpts`.** `hitOpts(ab, …)` in `impact.ts` already copies `lifesteal` into `leech`; it gains `catalyst` and `manaOnHit`. One helper, `knobHitOpts(k: Knobs)`, returns those three, so ability hits, Armor's strike-back and basic blows build them the same way.
 
 ### Each rune in the sim
@@ -107,7 +114,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
 |---|---|---|---|
 | Split | each impact that hits a foe sheds shards | — | its hit sheds shards |
 | Multi-shot | a fan (Bolt, Lance) or more darts and impacts (Volley, Barrage) | — | a fan of shots |
-| Pierce | its shots pass foes | — | passes foes (wand) |
+| Pierce | its shots pass foes | — | passes foes (wand; staff's light shot) |
 | Chain | jumps from the first foe hit | jumps from the first foe struck | jumps from the foe hit |
 | Widen | radius × area | reach × area (arc unchanged) | — |
 | Quick | beat × , cooldown × | cycle × | cycle × |
@@ -115,54 +122,63 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
 | Heavy | power, stagger, beat and wind-up × 1.2 | power, stagger, cycle and startup × 1.2 | the same |
 | Saturate | + stacks on direct hits | + stacks | + stacks |
 | Linger | a zone where it lands | a zone ahead (heavy and hold) | a zone at the hit (heavy and hold) |
-| Catalyst | its reactions | its reactions | its reactions |
+| Volatile | its reactions | its reactions | its reactions |
 | Leech | lifesteal on its hits | lifesteal | lifesteal |
-| Siphon | mana per foe hit | mana per foe hit | mana per foe hit |
+| Drain | mana per foe hit | mana per foe hit | mana per foe hit |
 | Guard | when it fires | when it connects | when it fires at a foe in range |
 
 **Decided in the spec: the details below.** *Each is the least new code that does what the rune's line says, and each reuses a path the sim already has.*
 
 - **Split.**
   - An ability's: in `impact`, every non-tick impact that hits at least one foe spawns `split.count` shards from the impact point, evenly spaced round a circle starting along the hero → impact direction (no RNG). They skip the foes the impact hit (their `hitIds` start with them), fly at `delve.runes.shardSpeed` (12) for `shardRange` (4), and each lands as one `impact` of radius 0 at `damage × split.power`.
-  - A shard's impact is direct (it can crit, applies the move's stacks) but sheds no shards, jumps no chain, leaves no zone, echoes nothing and makes no embers: `ImpactOpts.shard: true`, and the shard's `Projectile.form` is `'shard'`. *Shards of shards would multiply without end, and a zone per shard is noise.*
+  - **Decided in the spec (review): what a shard is.** *Shards of shards would multiply without end, and a zone or a ground burst per shard is noise.*
+    - It spawns with `pierce: false`, `pierceLeft: 0` and `form: 'shard'`.
+    - Its impact is direct (it can crit, applies the move's stacks) with `ImpactOpts.shard: true`, which implies `noScatter` and sheds no shards, jumps no chain, leaves no zone and makes no embers.
+    - An ability's shard carries a copy of its move with `split`, `extraShots`, `echo`, `zone`, `chain` and `guardOnLand` cleared; a basic shard carries no `knobs` at all. So nothing re-splits.
+    - It skips the end-of-flight ground burst: a shard that reaches `shardRange` just ends.
   - So a Bolt splits where it bursts, each Volley dart where it lands, each Barrage impact that hits.
-  - A basic shot's: on its first foe hit (plain or bursting), the same shards as basic projectiles (`ability: null`), carrying the blow's element, its `applies`, and `stacks.tick`.
+  - A basic shot's: on its first foe hit, the same shards as basic projectiles (`ability: null`), carrying the blow's element, its `applies`, and `stacks.tick`. They skip the foe it hit. **Decided in the spec (review): a shot that bursts sheds them after its burst, and they skip every foe the burst hit.** *None of Split's fits bursts today (bow and wand rows have no `explode`), but the knob is generic.*
   - A `runeFx` event (`effect: 'split'`) marks it.
 - **Multi-shot.**
-  - Bolt and Lance: `1 + extraShots` of them in a fan, at Volley's 0.22 rad steps. Bolts hit on their own (a foe in two bolts' way takes both); a Lance's beams share one hit set, so a foe is struck once per cast. *Beams are instant lines that overlap at the hero; a point-blank foe would take every one.*
-  - Volley and Barrage: `extraShots` adds to `ResolvedAbility.count` in `resolveAbility` (Volley's darts by kind, Barrage's impacts).
-  - Bow and wand blows: `1 + extraShots` shots in the same fan.
-  - **Every shot, the first included, is at the rune's `power`.** *That is what "each −35%" means, and it keeps the knob a plain `power` factor.*
+  - Bolt and Lance: `1 + extraShots.count` of them in a fan, at Volley's 0.22 rad steps. Bolts hit on their own (a foe in two bolts' way takes both); a Lance's beams share one hit set, so a foe is struck once per cast. *Beams are instant lines that overlap at the hero; a point-blank foe would take every one.*
+  - **Decided in the spec (review): a Lance fan chains and lingers per beam.** Each beam that hits jumps from its farthest foe and leaves its zone at its first, as one Lance does today; the shared hit set means a later beam's jumps skip foes an earlier beam struck. *Each beam is a Lance; only the double hit at the hero is shared.*
+  - Volley and Barrage: `extraShots.count` adds to `ResolvedAbility.count` in `resolveAbility` (Volley's darts by kind, Barrage's impacts), at half the power cut (see the knob).
+  - Bow and wand blows: `1 + extraShots.count` shots in the same fan.
+  - **Every shot, the first included, is at the cut power.** *That is what "each −35%" means.*
+  - **Decided in the spec (review): Twin Fang's extra shot stays one shot and carries no runes.** *It already applies no stacks and pairs nothing; it is the legendary's echo, not the blow's shot.*
 - **Pierce.** The count above: a Bolt or a dart passes that many foes, impacting on each (as Earth's piercing Bolt does today), then dies on the next.
-- **Chain.** Abilities: as today (`chainFrom`), the Storm mastery's +2 included. Blows: `chainFrom`'s body becomes `chainJumps(ctx, first, damage, element, jumps, opts, hit)`, which both call. A melee blow jumps from the first foe struck; a shot from the foe it hit.
+- **Chain.** Abilities: as today (`chainFrom`), the Storm mastery's +2 included. Blows: `chainFrom`'s body becomes `chainJumps(ctx, first, damage, element, jumps, opts, hit)`, which both call; it keeps today's per-jump knockback origin (`kbFrom` = the foe it jumps from). A melee blow jumps from the first foe struck; a shot from the foe it hit.
+  - **Decided in the spec (review): blow chains get the Storm mastery's +2 too, by the same rule as abilities (when the jumps are above 0).** *`chainJumps` holds the rule, so it can't differ.*
   - **Decided in the spec: jumps fall off at the shared `abilities.chainPower` (0.7).** *Storm, Stormcaller and the rune then follow one rule; the decisions' "60%" goes to the DPS Lab gate as an open question rather than a second fall-off.*
 - **Widen.** Abilities: `area` already scales `radius` (a Strike's reach, a Ward's burst). Melee blows: reach × `area`; the arc stays.
 - **Quick and Heavy (`quick`).**
   - Abilities: `cooldown × quick.cooldown` (a charge payment's lockout too); `conjure`, `channel` and `castTime × quick.windup`; the beat through `moveBeat(bal, ab, tempo) = beatFor(bal, ab.slot, playedKind(ab), tempo) × ab.knobs.quick.beat`, which replaces `beatFor` in `fire`, `useInterval` and the builder's readout. A hold's charge time (`holdTime × tempo`) is untouched; its wind-up after release scales.
-  - Blows: the swing's cycle × `quick.beat` and its startup × `quick.windup` (at most the cycle).
+  - **Decided in the spec (review): blows.** The swing's `cycle = base cycle × quick.beat` and its `startup = base cycle × s.startup × quick.windup`, capped at `cycle`. `strike`'s recompute of a held blow's cycle (`attackInterval × s.time / haste`) takes the same `× quick.beat`, and its remaining time the same startup rule. *The base cycle is today's `attackInterval × s.time / haste`; scaling startup from it keeps Heavy's +20% wind-up separate from its +20% beat.*
   - Quick I is `{ beat: 0.9, cooldown: 0.9 }`; Heavy is `{ beat: 1.2, windup: 1.2 }` at every tier.
 - **Echo.**
-  - An ability's: when `fire` lands a move with `echo > 0`, it queues `{ at: t + echoDelay, slot, ability, aim: the landing point }` on `ArpgWorld.echoes`. `echoTick` (called right after `castTick`) runs it through `executeForm` with a copy of the move whose `power × echo` and whose `echo` and `guardOnLand` are 0. The copy keeps its stage, its index (so its step bonus), its `last` (a Strike still slams), its extra shots and its split.
+  - An ability's: when `fire` lands a move with `echo > 0`, it queues `{ at: t + echoDelay, slot, ability, aim: the landing point, blow: null, stage: null, dir: null }` on `ArpgWorld.echoes`. `echoTick` (called right after `castTick`) runs it through `executeForm` with a copy of the move whose `power × echo` and whose `echo` and `guardOnLand` are 0. The copy keeps its stage, its index (so its step bonus), its `last` (a Strike still slams), its extra shots and its split.
   - It costs nothing and starts no beat, cooldown or recoil, makes no `cast` event, and leaves the hero's facing as it was (saved and restored round `executeForm`). It fires from where the hero stands toward the landing point; a self-centred form (Nova) goes off round the hero.
   - A hold's echo repeats the stage that fired.
-  - A blow's: `strike` queues `{ at, blow: step, dir }`. Its damage half moves into `landBlow(ctx, blow, row, dir, powerMult)`, which `strike` and the echo both call. An echo re-strikes from where the hero stands now, along `dir`. It doesn't move the hero, gain mana, advance the chain, or fire Twin Fang.
+  - A blow's: `strike` queues `{ at, slot: null, ability: null, aim: null, blow: step, stage, dir }`, `stage` being the held blow's stage (null for a blow not held), so a hold blow's echo replays the stage it struck at. Its damage half moves into `landBlow(ctx, blow, row, dir, powerMult)`, which `strike` and the echo both call. An echo re-strikes from where the hero stands now, along `dir`. It doesn't move the hero, gain mana, advance the chain, or fire Twin Fang.
   - A `runeFx` event (`effect: 'echo'`) marks it.
   - *A repeat of the move as it landed is the plainest reading of "repeats", and routing it through the same `executeForm` and `landBlow` keeps every other knob working on the echo.*
 - **Saturate.** `ResolvedAbility.stacks += stacksBonus`, and a blow's `basicByKind` stacks + `stacksBonus`. Direct hits only: ticks, jumps and splashes keep `stacks.tick`. *"Any hit" is the fit list; the extra stack is on the hit the move aimed.*
 - **Linger.**
-  - Abilities: `zone` is merged like Rimeheart's, so `leaveZone` already places it where the move lands (the longer zone wins). `tickPower` is 0.2 at every tier.
+  - Abilities: `zone` is merged like Rimeheart's, so `leaveZone` already places it where the move lands (the field-by-field zone merge above). `tickPower` is 0.2 at every tier.
   - Heavy and hold blows: a hero zone with `ability: null` at the strike (melee: ahead at half the reach, as Strike's; a shot: at the hit), radius 1.2, ticking every 0.5 s for `hit × 0.2`. In `zonesTick`, a hero zone without an ability ticks each foe inside with `hitMonster(…, { source: 'basic', canCrit: false, applies: [BASIC_STATUS[element]] })`. *Today every hero zone has an ability, so `ability: null` needs no new field.*
-- **Catalyst.** `react` takes the hit's `opts.catalyst`, and its factor becomes `1 + legendaries.catalyst / 100 + opts.catalyst`. It scales what it scales today: the damage reactions' bonus per pair and Soulfire. The ten effect reactions don't change.
+- **Volatile** (the `catalyst` knob). `react` takes the hit's `opts.catalyst`, and its factor becomes `1 + legendaries.catalyst / 100 + opts.catalyst`. It scales what it scales today: the damage reactions' bonus per pair and Soulfire. The ten effect reactions don't change.
   - **Decided in the spec: it adds to the Catalyst legendary rather than multiplying.** *Both are "+X% reaction damage"; adding keeps one stat line honest.*
   - A `runeFx` event (`effect: 'catalyst'`) marks a damage reaction or Soulfire the rune boosted.
 - **Leech.** `lifesteal` is already `HitOpts.leech` for abilities; blows and their shots now pass theirs too.
-- **Siphon.**
-  - `hitMonster`, for a `basic` or `skill` hit with `manaOnHit`, adds that much mana while the cast's budget lasts. `HeroEntity.siphoned: number[]` holds the foes counted per skill (primary, defensive, ultimate, then basic at index 3, the hit's `slot ?? 3`), and the budget is `delve.runes.siphonFoes` (5). Each foe hit counts once against it: direct hits, ticks, jumps and shards alike; burns, poisons and reaction splashes never.
-  - `fire` resets its slot's count, and `strike` resets the basic one.
-  - **Decided in the spec: the cap is 5 foe-hits per cast, counted per slot since it last fired.** *A cast has no identity in the sim today (one `ResolvedAbility` serves every cast of a move); a per-slot count reset on each fire is one array, and a lingering Maelstrom from an earlier cast just shares the new cast's budget.*
+- **Drain** (the `manaOnHit` knob).
+  - `hitMonster`, for a `basic` or `skill` hit with `manaOnHit`, adds that much mana while the cast's budget lasts. `HeroEntity.siphoned: number[]` holds the foe-hits counted per skill (primary, defensive, ultimate, then basic at index 3, the hit's `slot ?? 3`), and the budget is `delve.runes.siphonFoes` (5).
+  - **Decided in the spec (review): the cap is 5 foe-hits per cast, not 5 distinct foes.** Every hit on a foe counts one, the same foe again included: direct hits, ticks, jumps and shards alike; burns, poisons and reaction splashes never. *Counting hits needs no per-cast set of foe ids.*
+  - `fire` resets its slot's count **before** `executeForm` (a Lance's or a Strike's hits land inside it), and `strike` resets the basic one before its blow lands.
+  - **Decided in the spec: counted per slot since it last fired.** *A cast has no identity in the sim today (one `ResolvedAbility` serves every cast of a move); a per-slot count reset on each fire is one array, and a lingering Maelstrom from an earlier cast just shares the new cast's budget.*
 - **Guard.**
   - On landing it puts up a shield of `guardOnLand × maxHp` for `delve.runes.guardSeconds` (3) through `guardLand(ctx, knobs)` in `defend.ts`. An ability lands when `fire` succeeds (the Defensive included), a melee blow when it connects, a shot when it fires at a foe in range (the same `landed` that grants mana).
-  - **Decided in the spec: Guard feeds Obsidian's barrier, `HeroEntity.barrier`.** The larger of the two wins; a smaller one only extends the time, to `max(until, t + 3)`. So it soaks after the Defensive's reductions (Armor, Earth) and before the Ward, where Obsidian's barrier already sits in `shieldHero`. *It reuses the barrier's soak, break event and HUD as they are, and a second shield layer would only add an order question.*
+  - **Decided in the spec: Guard feeds Obsidian's barrier, `HeroEntity.barrier`,** so it soaks after the Defensive's reductions (Armor, Earth) and before the Ward, where Obsidian's barrier already sits in `shieldHero`. *It reuses the barrier's soak, break event and HUD as they are, and a second shield layer would only add an order question.*
+  - **Decided in the spec (review): Guard never extends a barrier larger than its own value.** When Guard's value is at least the barrier's remaining life (or there is none), it sets the barrier to its value for a fresh 3 s; against a larger barrier it does nothing. Obsidian's own rule (the larger wins, a smaller extends) is unchanged. *Otherwise a dagger's 8% Guard would keep a 30% Obsidian barrier alive forever.*
   - On fast blows it simply stays topped up at its value; it never stacks.
 
 ### Adding a rune
@@ -189,7 +205,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
 
   - `tiers` holds five knob sets, the trade-off included (Pierce's is `"power": 0.9` at every tier). They are validated by the same `KnobsSchema` as elements and fusions, so a misspelled knob fails at load.
   - `fits.forms` lists form ids; `fits.weapons` lists weapon base ids whose basic blows it fits; `fits.kinds`, optional, limits the blows it acts on (Linger: `["heavy", "hold"]`).
-  - `effect` and `tradeoff` are templates. `{path}` prints a knob value of the tier, `{path:%}` it × 100 with a %, `{path:±%}` (it − 1) × 100 signed with a %, and `{runes.key}` a `delve.runes` balance value (Siphon's "up to {runes.siphonFoes} foes a cast"). Quick reads "Beat {quick.beat:±%}, cooldown {quick.cooldown:±%}" → "Beat −20%, cooldown −20%". `runeText(registry, ref)` fills them; the client never formats rune numbers itself.
+  - `effect` and `tradeoff` are templates. `{path}` prints a knob value of the tier, `{path:%}` it × 100 with a %, `{path:±%}` (it − 1) × 100 signed with a %, and `{runes.key}` a `delve.runes` balance value (Drain's "up to {runes.siphonFoes} foe-hits a cast"). Quick reads "Beat {quick.beat:±%}, cooldown {quick.cooldown:±%}" → "Beat −20%, cooldown −20%". `runeText(registry, ref)` fills them; the client never formats rune numbers itself.
 - **A new rune from existing knobs** is one row in `runes.json`, nothing else: it drops, sockets, prices, fuses, shows, and is valued by Power and swept by the DPS Lab.
 - **A rune that needs a new knob** adds:
   1. the field on `Knobs`, its neutral value in `NEUTRAL` and its rule in `mergeKnobs` (`resolve.ts`);
@@ -218,20 +234,30 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
   | epic | 1–2 |
   | legendary | 2–3 |
 
-  - **Decided in the spec: the table above.** *It sits a step below `extraSlots` (magic 0–1, rare 1–2, epic 2–3, legendary 3–4), so slots stay the main drop reward and "start with zero" holds through uncommon.*
+  - **Decided in the spec (review): the table above.** *From rare up it sits one below `extraSlots` (rare 1–2, epic 2–3, legendary 3–4), magic matches it (0–1), and common and uncommon roll none, so slots stay the main drop reward and "start with zero" holds through uncommon.*
   - The roll runs after the moveset's, from `rng.fork('sockets')` in `generateItem`. Every item stat, every moveset and every later drop come out exactly as today.
-- **Parts come back.** Wherever an open socket goes away other than through the builder's Apply (salvage, fuse inputs, a transfer that drops or caps it, a load-time trim), it comes back as **one Link**, and a rune in it goes back to the pouch.
-  - **Decided in the spec: one Link per open socket, and nothing but a pull or a removal ever destroys a rune.** *It is 4a's rule for extra slots; auto-salvage and transfers should never silently eat a rune.*
-  - `weaponParts(registry, weapon) → { links, runes }` is extra slots plus open sockets, and the socketed runes. `addLootToBag`, `salvageItems` and `fuseGear` use it in place of `extraSlots`; their results gain `runes: RuneRef[]`, for the toast ("2 runes back to your pouch").
+- **Parts come back, by the pull mode.** Wherever an open socket or its rune goes away other than through the builder's Apply, the parts rule applies:
+  - the open socket always comes back as **one Link**, in both modes;
+  - the rune in it follows the pull mode: in `destroy` it is **destroyed**; in `pay` it goes back to the pouch **free** (no pull price).
+  - It covers: a salvaged weapon, fuse inputs, a transfer that drops a move or caps its sockets or can't fit a blow's rune, `chooseStartingMana`'s rebuild, and the load-time trims (which use the balance's mode).
+  - **Decided in the spec (review): the parts rule follows the pull mode.** *In destroy mode, salvaging or transferring would otherwise be a free way to pull; the Links refund stays in both modes, as 4a's extra slots refund.*
+  - `weaponParts(registry, weapon) → { links, runes }` is extra slots plus open sockets, and the socketed runes. `addLootToBag`, `salvageItems` and `fuseGear` use it in place of `extraSlots`, and take `opts.unsocket`; their results (`BagInsertResult`, `salvageItems`' result, `fuseGear`'s `ProfileActionResult`) gain `runes: RuneRef[]` (back to the pouch) and `destroyed: RuneRef[]`, for the toast ("2 runes back to your pouch", "destroys Split III").
 
 ### Changing runes: the draft and its price
 Socketing, pulling and opening sockets go through the Anvil's draft with every other move edit, and Apply settles them all through `setChains`.
 
-- **Moves need identity.** Dust pricing matches moves by what they are (4a's `movesetEditPrice`), but a rune belongs to one particular move, and two moves can be alike. So `setChains` takes **origins**: `ChainOrigins = Partial<Record<ChainSkill, (number | null)[]>>`, where `origins[skill][j]` is the index in the saved chain that the new move `j` came from, or null for a new move.
+- **Moves need identity.** A rune belongs to one particular move, and two moves can be alike. So `setChains` takes **origins**: `ChainOrigins = Partial<Record<ChainSkill, (number | null)[]>>`, where `origins[skill][j]` is the index in the saved chain that the new move `j` came from, or null for a new move.
   - Without origins for a chain, it is positional: move `j` came from saved move `j`, if any. That covers every caller that edits in place: the stop's `move`, the autopilot, `socketRune`.
+  - Origins for a skill that `chains` doesn't hold are ignored.
   - The builder reports them: `ChainEditor`'s `onChange(skill, chain, map)` gives, for each new move, the index in the chain it was handed (◂▸ moves it, × drops it, + gives null, an edit keeps it). The store composes that with the draft's origins.
   - `setChains` refuses origins that repeat an index or point past the saved chain ("Bad origins").
-  - **Decided in the spec: explicit origins.** *Matching by value would let a pull and a socket elsewhere net out as a free move, and would pick the wrong one of two identical moves; the builder already knows exactly where each card came from.*
+  - **Decided in the spec (review): explicit origins price everything, Dust included.** Whenever origins are given, the Dust is priced per origin pair (below), and a rune that ends up on another move than the one it was on is a **pull** (by the mode) **plus a socket**. *Matching by value would let a card be moved and edited back for nothing, a pull and a socket elsewhere net out as a free move, and two identical moves be confused; with origins the price follows exactly what the builder did.*
+- **Dust with origins** (`movesetEditPrice(registry, old, next, origins?)`; without origins, 4a's matching as today):
+  1. the moves whose origins form the longest increasing run are in place, free; every other move with an origin **moved**, `editDust`;
+  2. each origin pair whose kind or form changed, `editDust`; whose elements changed, `elementDust`, charged once per new element set per Apply as in 4a;
+  3. a new move (null origin), `editDust`, its elements charged once per new set; a saved move no new move came from, `editDust`;
+  4. a changed payment, `editDust`.
+  - `editPrice(registry, profile, next, origins?)` passes them through, with the first-dive freebie as before.
 - **The rune diff** (`runeChange`), per chain, for each new move `j` from saved move `o`:
   - sockets past `o`'s are **opened**, priced by their index;
   - at each socket index both have: the same rune is unchanged; otherwise the old rune is **pulled** and the new one is **socketed**;
@@ -243,53 +269,58 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
     - `destroy`: free, and the rune is gone;
     - `pay`: `pullScrap[tier − 1]` scrap, and the rune goes back to the pouch;
   - **opening** costs Links and scrap by index;
-  - **Dust** is `movesetEditPrice` as today, unchanged. `moveKey` ignores runes, so a rune change alone costs no Dust.
+  - **Dust** as above. `moveKey` ignores runes, so a rune change alone costs no Dust.
   - **Decided in the spec: pay mode costs 15, 30, 50, 80, 120 scrap by tier I–V.** *A tier-III pull (50) is about one socket's scrap; the mode is a test toggle, and the gate will tell.*
   - **The first-dive freebie covers Dust only.** Sockets cost Links and scrap from the start, as slots do.
-- **The pouch must hold what is socketed.** For each rune and tier, `socketed − (pay ? pulled : 0) ≤ pouch`. In pay mode a rune pulled in one Apply can be socketed elsewhere in the same Apply (its move costs the pull price); in destroy mode it can't.
+- **The pouch must hold what is socketed.** For each rune and tier, `socketed − (pay ? pulled : 0) ≤ pouch`. In pay mode a rune pulled in one Apply can be socketed elsewhere in the same Apply (paying its pull price); in destroy mode it can't.
+- **Links are netted.** **Decided in the spec (review):** an Apply needs `links − refundLinks` Links, the sockets of removed moves paying for sockets opened in the same Apply, and the label shows that net amount (a refund beyond the cost shows as "🔗 +2"). The hero's Links after Apply are always `before − links + refundLinks`, whatever order the edits were made in. *It conserves Links exactly, so a batch is never cheaper or dearer than the same edits applied one by one.*
 - **Refusals** (all or nothing, with 4a's):
   - a socket count above the weapon rarity's cap;
   - fewer sockets on a kept move;
   - a rune that doesn't fit its move's form or weapon ("Split doesn't fit a Burst"). So **changing a move's form is refused while a socketed rune wouldn't fit it**, the user's rule. Element and kind changes keep runes;
   - **the same rune twice on one move, at any tier** ("A move takes one Split"). The same rune on different moves is fine;
   - an unknown rune id;
-  - not enough runes in the pouch, Links or scrap.
-- **`DraftPrice`.** The builder shows one total, `draftPrice(…) → { dust, links, scrap, refundLinks, destroys, returns }`, from the same functions `setChains` charges with. Apply reads "Apply · ✦ 15 · 🔗 2 · ⚙ 40"; in destroy mode, with anything destroyed, it adds "· destroys Multi-shot III".
-- **The pull rule.** `unsocketMode(registry, override?) = override ?? balance.delve.runes.unsocket` (`'destroy'` as shipped). Every op that can pull takes `opts.unsocket`, defaulting to the balance.
+  - not enough runes in the pouch, net Links or scrap.
+- **`DraftPrice`.** The builder shows one total, `draftPrice(…) → { dust, links, scrap, refundLinks, destroys, returns }`, from the same functions `setChains` charges with. Apply reads "Apply · ✦ 15 · 🔗 2 · ⚙ 40" (the net Links); in destroy mode, with anything destroyed, it adds "· destroys Multi-shot III".
+- **The pull rule.** `unsocketMode(registry, override?) = override ?? balance.delve.runes.unsocket` (`'destroy'` as shipped). Every op that can pull or return parts takes `opts.unsocket`, defaulting to the balance.
   - The client passes the dev override: a chip beside "↺ Restart Delve (dev)" reading "Pull: destroys" / "Pull: pays", dev builds only, kept in localStorage `alloy:delve:unsocket`.
   - **Decided in the spec: the override lives in localStorage.** *It survives reloads while testing, and production builds never read it.*
-- **`sameChain`** (`delve/moveset.ts`) compares runes too, so a rune-only change makes the draft dirty, blocks a new dive like any draft, and refreshes the Training Grounds' hero (`world.ts`'s own `sameChain` also compares runes).
+- **`sameChain`** (`delve/moveset.ts`) compares runes too, so a rune-only change makes the draft dirty, blocks a new dive like any draft, and refreshes the Training Grounds' hero.
+  - **Decided in the spec (review): `world.ts`'s own `sameChain` (a `ResolvedChain` against a `Chain`) compares the raw sockets,** each move's `runes` array as saved (null sockets included, by id and tier), not the resolved `ResolvedAbility.runes`. *The resolved list drops dormant and empty sockets, so it can't tell an open socket from none; the raw array is what changed.*
 
 ### Moving moves between weapons
 - **Reordering** carries a move's sockets and runes (the origins).
 - **Transfer** (`movesetTransfer`) moves each kept move's sockets with it.
   - **Price:** `movesets.transferScrap` (30) per open socket that moves, on top of the 30 per extra slot. **Decided in the spec: the same 30.** *The user asked for "per open socket, like extra slots".*
-  - **What comes back** (one Link per socket, runes to the pouch):
+  - **What comes back** (one Link per socket; runes by the parts rule):
     - sockets past the target rarity's cap, from the end, with their runes;
     - the sockets and runes of moves the transfer drops (past the new slot count, or on a chain the target can't carry);
     - the target's own sockets and runes on the chains it replaces.
-  - **Basic blows.** A blow's rune that doesn't fit the target weapon (Split moving from a bow to a sword) goes back to the pouch, and its socket stays open.
-  - `MovesetTransfer` gains `sockets` (moved and priced) and `runes` (back to the pouch).
+  - **Basic blows.** A blow's rune that doesn't fit the target weapon (Split moving from a bow to a sword) leaves by the parts rule, and its socket stays open.
+  - `MovesetTransfer` gains `sockets` (moved and priced), `runes` (leaving) and `transferMoveset` takes `opts.unsocket` to settle them.
 - **Equipping** a weapon as-is brings its own moveset with its runes. The old weapon goes to the bag with its own.
-- **`chooseStartingMana`, realign, bind, overtake and re-attune.** Realign maps elements and keeps runes. `chooseStartingMana` rebuilds the weapon at base, its parts coming back by the rule above (in practice a fresh hero has none).
+- **`chooseStartingMana`, realign, bind, overtake and re-attune.** Realign maps elements and keeps runes. `chooseStartingMana` rebuilds the weapon at base, its parts leaving by the parts rule (in practice a fresh hero has none).
+- **The Training Grounds' `followBasic`.** **Decided in the spec (review):** when it resets a default basic chain to the new weapon's default, each new blow keeps the runes of the old blow at its position, minus any that don't fit the new weapon; a blow past the old chain's end has none. Its heir branch (`{ ...b, element }`) already keeps them. *The sandbox is free and unrestricted, so keeping what still fits loses the least of a test setup.*
 
 ### Tiers, drops and fusing
 - **Tier by depth.** `tierDepths: [1, 7, 13, 21, 31]` gives the highest tier whose depth is reached; then `tierUp` (0.2) gives one tier higher, at most V.
 - **Drop chances.** `dropChance: { normal: 0.03, elite: 0.15, boss: 1 }`. For normal and elite foes it is × the door's `dropMult` (at most 1). A boss always drops exactly one.
   - **Decided in the spec: the door's drop multiplier scales rune chances; magic find doesn't.** *Doors already promise "more drops"; magic find is about rarity, and runes have none.*
   - **Decided in the spec: which rune is uniform over `runes.json`, and a boss rolls at its depth (not depth + 1, as its items' item level).** *No weighting until play shows which runes feel scarce; one depth rule is simpler.*
-- **On the floor.** `rollRuneDrop(registry, { depth, kind, dropMult }, rng)` runs in `killMonster` after `dropLoot`, through `dropRune` in a new `arpg/rune-drops.ts`. It spawns a `Drop` of kind `'rune'` with `rune: RuneRef`.
-  - Picked up by walking over it, like an item (no magnet; vacuumed once the floor clears). The bot fetches it as it fetches items (`bot.ts`).
+- **On the floor.** `rollRuneDrop(registry, { depth, kind, dropMult }, rng)` runs in `killMonster` after `dropLoot`, through `dropRune` in a new `arpg/rune-drops.ts`, called inside `killMonster`'s existing `!world.sandbox` guard, so the Training Grounds and the DPS Lab drop none. It spawns a `Drop` of kind `'rune'` with `rune: RuneRef`.
+  - Picked up by walking over it, like an item: `dropsTick`'s magnet (`d.kind !== 'item'` today) excludes `'rune'` too; it is vacuumed once the floor clears. The bot fetches it as it fetches items (`bot.ts`).
   - Pickup pushes it onto `world.pending.runes`; `bankWorld` adds them to `profile.runes`, `BankResult.runes` lists them, and `DiveState.runesEarned` counts them for the summary.
   - **Decided in the spec: walked over like an item.** *"Bursts onto the floor like loot" in the decisions, and a pickup the player chooses to go for reads as loot, not as a mote.*
 - **Fusing.** `fuseRunes(registry, profile, ref)` turns `fuseCount` (3) of `ref` into one of `ref.tier + 1` for `fuseScrap[ref.tier − 1]` scrap. Tier V doesn't fuse. Refused mid-dive (with the forge), short of runes or scrap.
-  - **Decided in the spec: 20, 40, 80, 160 scrap to make tier II, III, IV, V.** *Doubling per tier tracks the rune's worth; a III for 40 scrap matches one socket's second step.*
+  - **Decided in the spec: 20, 40, 80, 160 scrap to make tier II, III, IV, V.** *Doubling per tier tracks the rune's worth; a III for 40 scrap matches one socket's second step.* **(review): the decisions' "plus scrap" is this cost, confirmed.**
   - Deterministic: fusing rolls nothing.
 
 ### Stops: the fifth kind
 - `StopKind` gains `'rune'`: socket one pouch rune into an open empty socket of the equipped weapon. It is free.
 - **It applies** when some move of the equipped weapon has an empty socket and some pouch rune fits that move and isn't already on it.
 - **Taking it:** `StopAction` gains `{ kind: 'rune'; skill; index; socket; rune }`. `takeStop` runs `socketRune` (one `setChains` with positional origins) with the dive lock lifted for it.
+  - **Decided in the spec (review): it refuses a socket that is filled or not yet open** ("Socket a rune into an empty socket"). *The stop socketes; it never pulls or opens.*
+- **The `'move'` stop and runes.** **Decided in the spec (review):** `runStop`'s `move` copies the saved move's `runes` onto the new move and ignores any the client sent. *The stop changes one move's kind, form or elements; a client couldn't slip a socket or a rune through it. Its form change is still refused while a rune wouldn't fit.*
 - **Order.** `STOP_KINDS` becomes `['equip', 'slot', 'move', 'upgrade', 'rune']`. `rollStop` is unchanged: when `'rune'` doesn't apply, every stop rolls exactly as today.
 - **The autopilot** takes a stop by preference: equip, then rune, then upgrade, then slot, then skip.
   - **Decided in the spec: a rune second.** *It is free and always a gain, so it beats a scrap-priced upgrade.*
@@ -297,18 +328,19 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
 - `DiveSchema`'s stop `offers` enum gains `'rune'`.
 
 ### Power and the autopilot
-- **Power** reads the knobs the move resolved with, so most of it comes for free: `power`, `area`, `chain`, `zone` and `count` (Volley's and Barrage's extra shots) are already in `damagePerUse`. The cooldown and wind-up come in through `ResolvedAbility`, and the beat through `moveBeat` in `useInterval`. The new terms in `damagePerUse`, per move, are:
-  - extra shots on Bolt and Lance: × `(1 + 0.5 × extraShots)`;
+- **Power** reads the knobs the move resolved with, so most of it comes for free: `power` (the shot cuts included), `area`, `chain`, `zone` and Barrage's `count` are already in `damagePerUse`. The cooldown and wind-up come in through `ResolvedAbility`, and the beat through `moveBeat` in `useInterval`. The new terms in `damagePerUse`, per move, are:
+  - extra shots on Bolt and Lance: × `(1 + 0.5 × extraShots.count)`;
+  - **Volley's count (review):** × `count ÷ (count − extraShots.count)`. `repeats` counts only Barrage's impacts today, and Volley is valued by `TARGETS` alone; this term values the added darts and is exactly 1 for a Volley without the rune, so no hero's Power changes without runes;
   - split: + `0.5 × count × power` per hit;
-  - pierce: + `0.25 × min(pierce, 3)` targets;
+  - **pierce (review):** + `0.25 × min(pierce, 3)` targets, counting only a finite pierce (a rune's). An Earth move's `Infinity` adds nothing, so heroes without runes keep their Power and the v0.50.0 pacing baseline holds;
   - echo: × `(1 + echo)`;
   - catalyst: × `(1 + 0.2 × catalyst)`;
   - saturate: × `(1 + 0.05 × stacksBonus)`.
 
   The new terms in `estimateCombat`:
-  - siphon: + `manaOnHit × min(targets, 5) / useInterval` to mana income;
-  - guard: + `maxHp × guardOnLand × min(1, 3 / interval) × 2` to bonus life, as a Ward's;
-  - leech: + its share of the skill's DPS to `sustain`.
+  - Drain: + `manaOnHit × min(targets, 5) / useInterval` to mana income;
+  - Guard: + `maxHp × guardOnLand × min(1, 3 / interval) × 2` to bonus life, as a Ward's;
+  - Leech: + its share of the skill's DPS to `sustain`.
 
   The blows get the same terms (power, area on melee cleave, extra shots, split, echo, quick on the time).
   - **Decided in the spec: the constants 0.5 (an extra shot or shard finds a foe half the time), 0.25 a pierced foe, 0.2 reaction share and 0.05 per stack.** *Power is a heuristic like `TARGETS`; these keep a rune's Power change in line with its DPS Lab ratio, and the gate checks it.*
@@ -328,14 +360,15 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
   - the move's readout names the beat with `moveBeat`.
 
   All of it edits the draft. Apply shows the `DraftPrice` total and what it destroys.
-- **The Forge tab** (`ForgePanel.tsx`) gains a Runes section, `RunePouch`: every rune held, by tier, with **Fuse 3 → 1** and its scrap price where three are held. Locked mid-dive like the rest of the forge.
-- **The item sheet** (`ItemDetailSheet.tsx`): a weapon's moveset lists each move's sockets and runes, read-only (`SocketRow` locked). A transfer's price line adds its sockets; its notes list the runes that come back.
+- **The Forge tab** (`ForgePanel.tsx`) gains a Runes section, `RunePouchPanel`: every rune held, by tier, with **Fuse 3 → 1** and its scrap price where three are held. Locked mid-dive like the rest of the forge.
+- **The item sheet** (`ItemDetailSheet.tsx`): a weapon's moveset lists each move's sockets and runes, read-only (`SocketRow` locked). A transfer's price line adds its sockets; its notes list the runes that leave and whether they come back or are destroyed.
 - **The header** shows nothing new; the pouch lives on the Forge tab. The dive summary and pickup feed name runes found ("Split III").
 - **The arena:**
   - extra shots, shards, echoes, zones and the Guard shield come out as projectiles, `explode`, zones and the barrier, which already render;
   - a new `runeFx` event draws the rune's glyph as a brief mana-pixel flash at its point (`arena/fx/runes.ts`, like `fx/reactions.ts`);
   - a rune on the floor draws as its glyph in its family's colour (`ArenaRenderer`'s drop sprites), with a pickup sound.
-- **The HUD pip.** `AbilityHud` gains `runes: RuneRef[]`, the active runes of the move the next press casts (`pressMove`). `ArenaHud`'s `AbilityButton` shows one small dot per rune in its family's colour along the button's top edge; none when it holds none. The basic attack has no button, so no pip.
+- **The HUD pip.** `AbilityHud` gains `runes: RuneRef[]`, the active runes of the move the next press casts (`pressMove`). `ArenaHud`'s `AbilityButton` shows one small dot per rune in its family's colour along the button's top edge; none when it holds none.
+  - **(review):** the manual attack's ⚔️ button (shown with manual attacks on phones) gets the same dots for the blow the next swing makes (`basicStep`), from a new `ArenaHud.basicRunes: RuneRef[]`.
   - **Decided in the spec: dots by family for the next move, not glyphs.** *A button is about 56 px; three glyphs would crowd the step and kind marks, and the next move is what a press will do.*
   - Family colours: Shape cyan, Tempo amber, Elemental violet, Sustain green.
 - **The Training Grounds** (`stores/sandboxStore.ts`, `pages/DelveTraining.tsx`):
@@ -349,18 +382,19 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
 - Rune drops roll on their own stream, `ArpgWorld.runeRng = rng.fork(\`runes:${opts.loot.nextUid}\`)`, created in `createFloorWorld` beside `lootRng`. Their chance, choice, tier and spawn position all come from it, so item drops, motes and orbs come out exactly as today.
   - A rune drop takes an entity id (`world.nextId`), which renumbers later spawns. Nothing in the sim reads ids for order or chance.
 - Socket rolls use `rng.fork('sockets')` after the moveset (see Sockets).
-- Shards are evenly spaced, echoes replay the landed move, Guard and Siphon roll nothing: no new `world.rng` draws. A hero without runes plays exactly as today, so the DPS Lab's grid comes out identical.
+- Shards are evenly spaced, echoes replay the landed move, Guard and Drain roll nothing: **no new `world.rng` draws when no rune is socketed** (an echo's or a shard's hits roll their crits like any hit). A hero without runes plays exactly as today, so the DPS Lab's grid comes out identical.
 
 ## Save version 7
 - **Schemas** (`delve/profile-schema.ts`):
   - `RuneRefSchema = { id: string, tier: 1–5 }`;
-  - `MoveSchema` and `BlowSchema` gain `runes: z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional()`, refined so no rune id repeats on a move. The shared `GearItemSchema` takes them, so v3–v6 saves still parse;
+  - `MoveSchema` and `BlowSchema` gain `runes: z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional()`. The shared `GearItemSchema` takes them, so v3–v6 saves still parse;
+  - **Decided in the spec (review): no "no repeated id" refine in the schema;** `fitMovesets` fixes a repeat instead (the later socket emptied, its rune leaving by the parts rule). *A schema refine would reject the whole save over one bad socket.*
   - `RunePouchSchema = z.record(z.string(), z.array(z.number().int().min(0)).length(5))`;
   - the current schema freezes as `DelveProfileV6Schema`, and `DelveProfileSchema` is `DelveProfileV6Schema.extend({ version: z.literal(7), runes: RunePouchSchema })`;
   - the dive's `runesEarned` defaults to 0, and the stop's `offers` enum gains `'rune'`.
 - **v6 → v7:** `{ ...v6, version: 7, runes: {} }`. Older saves migrate through v6 as today.
-- **At load** (`fitMovesets`, which has the registry): a socket holding an unknown rune id is emptied, sockets past the rarity's cap are trimmed (their runes to the pouch, the sockets as Links), and pouch entries for unknown ids are dropped.
-  - **Decided in the spec: no careful migration, but nothing is lost silently once runes exist.** *The user waived migration for v6 saves (they hold none); a renamed rune in later data shouldn't brick a save.*
+- **At load** (`fitMovesets`, which has the registry): a socket holding an unknown rune id is emptied, a repeated rune id on a move is emptied, sockets past the rarity's cap are trimmed from the end, and pouch entries for unknown ids are dropped. Trimmed sockets come back as Links and their runes leave by the parts rule, in the balance's mode.
+  - **Decided in the spec: no careful migration, but nothing breaks a save once runes exist.** *The user waived migration for v6 saves (they hold none); a renamed rune in later data shouldn't brick a save.*
 - `createDelveProfile` writes version 7 with `runes: {}`. The store's key stays `alloy:delve:v2`.
 
 ## Where the code changes
@@ -371,13 +405,13 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
 | Data | `engine/src/data/runes.json` (new), `data/schemas.ts`, `data/loader.ts`, `data/registry.ts`, `data/balance.json` | the 14 rows, `RuneDefSchema`, `KnobsSchema`'s new fields, `delve.runes`, `ArpgData.runes`, `getRunes` / `getRune` / `findRune` |
 | Rune helpers | `engine/src/loot/runes.ts` (new) | `runeFits`, `runeActive`, `runeKnobs`, `runeText`, `socketCap`, `socketPrice`, `rollSockets`, `runeTierAt`, `rollRuneDrop`, `weaponParts`, pouch helpers |
 | Resolve | `arpg/abilities/resolve.ts`, `delve/hero-stats.ts` | `NEUTRAL`, `mergeKnobs`, runes merged into `resolveAbility` and the blows (`HeroBlow.knobs`), `count`, `stacks`, `quick`, `moveBeat` |
-| Sim | `arpg/abilities/impact.ts`, `forms.ts`, `cast.ts`, `defend.ts`, `echo.ts` (new), `arpg/basic.ts`, `arpg/step.ts`, `arpg/combat.ts`, `arpg/world.ts`, `arpg/abilities/targeting.ts` | split, extra shots, pierce count, blow chain and zones, echo queue, Guard, Siphon, Catalyst, `knobHitOpts`, `world.ts`'s `sameChain` |
-| Drops | `arpg/rune-drops.ts` (new), `combat.ts` (one call), `step.ts` (pickup case), `delve/dive.ts` (`bankWorld`), `loot/item-generator.ts` (socket roll) | rune drops and banking |
-| Economy | `delve/runes.ts` (new), `delve/moveset.ts`, `loot/moveset.ts`, `delve/profile.ts`, `delve/profile-schema.ts`, `delve/stops.ts`, `delve/pair.ts` | `setChains` options, `runeChange`, `draftPrice`, `openSocket`, `socketRune`, `fuseRunes`, transfer, salvage and fuse parts, save v7, the stop's fifth kind |
-| Power, bot | `delve/hero-stats.ts`, `delve/autopilot.ts`, `arpg/bot.ts`, `arpg/dps-sim.ts` | the Power terms, the rune policy, rune pickups, the Lab's rune view |
-| Client (presentational) | `client/src/features/delve/runes/` (new): `RuneGlyph.tsx`, `SocketRow.tsx`, `RunePicker.tsx`, `RunePouch.tsx`, `rune-style.ts` | the pieces, from contract types only |
-| Client (wiring) | `stores/delveStore.ts`, `stores/sandboxStore.ts`, `features/delve/chains/ChainEditor.tsx`, `MoveEditor.tsx`, `chain-text.ts`, `AbilitiesPanel.tsx`, `ForgePanel.tsx`, `ItemDetailSheet.tsx`, `StopPanel.tsx`, `DiveSummary.tsx`, `LootTray.tsx` / `PickupFeed.tsx`, `pages/DelveCamp.tsx`, `pages/DelveTraining.tsx`, `features/delve/lab/` | the draft's origins and price, the pouch, fusing, sheets, stops, the dev chip, Training, the Lab view |
-| Client (arena) | `features/delve/arena/fx/runes.ts` (new), `ArenaRenderer.ts`, `arena-sounds.ts`, `useArenaCore.ts`, `ArenaHud.tsx`, `pixel/floor-engine.ts` | `runeFx` flashes, rune drops, HUD pips, the pierce type |
+| Sim | `arpg/abilities/impact.ts`, `forms.ts`, `cast.ts`, `defend.ts`, `echo.ts` (new), `arpg/basic.ts`, `arpg/step.ts`, `arpg/combat.ts`, `arpg/world.ts`, `arpg/abilities/targeting.ts` | split, extra shots, pierce count, blow chain and zones, echo queue, Guard, Drain, Volatile, `knobHitOpts`, `world.ts`'s `sameChain` |
+| Drops | `arpg/rune-drops.ts` (new), `combat.ts` (one call), `step.ts` (pickup case, magnet), `delve/dive.ts` (`bankWorld`), `loot/item-generator.ts` (socket roll) | rune drops and banking |
+| Economy | `delve/runes.ts` (new), `delve/moveset.ts`, `loot/moveset.ts`, `delve/profile.ts`, `delve/profile-schema.ts`, `delve/stops.ts`, `delve/pair.ts` | `setChains` options, Dust with origins, `runeChange`, `draftPrice`, `openSocket`, `socketRune`, `fuseRunes`, transfer, salvage and fuse parts, save v7, the stop's fifth kind |
+| Power, bot, Lab | `delve/hero-stats.ts`, `delve/autopilot.ts`, `arpg/bot.ts`, `arpg/dps-sim.ts`, `client/src/features/delve/lab/` | the Power terms, the rune policy, rune pickups, the Lab's rune view (engine and page) |
+| Client (presentational) | `client/src/features/delve/runes/` (new): `RuneGlyph.tsx`, `SocketRow.tsx`, `RunePicker.tsx`, `RunePouchPanel.tsx`, `rune-style.ts` | the pieces, from contract types only |
+| Client (wiring) | `stores/delveStore.ts`, `stores/sandboxStore.ts`, `features/delve/chains/ChainEditor.tsx`, `MoveEditor.tsx`, `chain-text.ts`, `AbilitiesPanel.tsx`, `ForgePanel.tsx`, `ItemDetailSheet.tsx`, `StopPanel.tsx`, `DiveSummary.tsx`, `LootTray.tsx`, `features/delve/arena/PickupFeed.tsx`, `pages/DelveCamp.tsx`, `pages/DelveTraining.tsx` | the draft's origins and price, the pouch, fusing, sheets, stops, the dev chip, Training |
+| Client (arena) | `features/delve/arena/fx/runes.ts` (new), `ArenaRenderer.ts`, `arena-sounds.ts`, `useArenaCore.ts`, `ArenaHud.tsx` | `runeFx` flashes, rune drops, HUD pips |
 | Docs | `CLAUDE.md`, `packages/client/package.json` | the Delve section's runes paragraph, v0.51.0 |
 
 ## Build waves
@@ -448,13 +482,15 @@ export interface Blow { kind: MoveKind; element: ManaType; runes?: (RuneRef | nu
 
 export interface QuickKnob { beat: number; cooldown: number; windup: number; }
 export interface SplitKnob { count: number; power: number; }
+/** Extra shots and each shot's power (the cut is halved on Volley and Barrage). */
+export interface ShotsKnob { count: number; power: number; }
 
 export interface Knobs {
   // …today's fields, with:
   /** Foes a shot passes (Infinity: all). */
   pierce: number;
   split: SplitKnob | null;
-  extraShots: number;
+  extraShots: ShotsKnob | null;
   /** Fraction of power the move or blow repeats at, `delve.runes.echoDelay` later (0: none). */
   echo: number;
   quick: QuickKnob;
@@ -478,14 +514,15 @@ export interface ResolvedAbility {
 }
 ```
 
-`ElementTraitDef.knobs` and `FusionDef.knobs` become `KnobsData`. `mergeKnobs(...parts: KnobsData[])` gets the new fields' merge rules (the knob table), and `NEUTRAL` their neutral values. `resolveAbility` sets `runes: []`.
+`ElementTraitDef.knobs` and `FusionDef.knobs` become `KnobsData`. `mergeKnobs(...parts: KnobsData[])` gets the new fields' merge rules (the knob table) and the field-by-field `zone` rule, and `NEUTRAL` their neutral values; **`NEUTRAL` is exported** (`computeHeroStats` and the tests need it). `resolveAbility` sets `runes: []`.
 
 **Types** (`types/arpg.ts`, `types/delve.ts`):
 
 ```ts
 export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune';
 // Drop: rune?: RuneRef
-// Projectile: pierce: number; form: FormId | 'ember' | 'shard' | null; knobs?: Knobs  // a basic shot's blow knobs
+// Projectile: pierce: boolean (unchanged: spawned piercing); pierceLeft: number (new);
+//   form: FormId | 'ember' | 'shard' | null; knobs?: Knobs  // a basic shot's blow knobs
 // Zone: unchanged (a hero zone with ability null is a blow's Linger)
 // WorldPending: runes: RuneRef[]
 // ArpgWorld: runeRng: SeededRNG; echoes: Echo[]
@@ -495,11 +532,12 @@ export interface Echo {
   slot: number | null;
   ability: ResolvedAbility | null;
   aim: Vec | null;
-  /** A blow's: its step in the basic chain and its way. */
+  /** A blow's: its step in the basic chain, the stage it struck at (null: not held), and its way. */
   blow: number | null;
+  stage: number | null;
   dir: Vec | null;
 }
-// HeroEntity: siphoned: number[]  // foes counted per skill since it last fired: primary, defensive, ultimate, basic
+// HeroEntity: siphoned: number[]  // foe-hits counted per skill since it last fired: primary, defensive, ultimate, basic
 // ArpgEvent: | { kind: 'runeFx'; effect: 'split' | 'echo' | 'catalyst'; x: number; y: number; element: ManaType | null }
 // ArpgEvent 'pickup': rune?: RuneRef
 // HitOpts (combat.ts): catalyst?: number; manaOnHit?: number
@@ -512,9 +550,18 @@ export interface Echo {
 // StopKind: 'equip' | 'slot' | 'move' | 'upgrade' | 'rune'
 // BankResult: runes: RuneRef[]
 // ProfileActionResult (delve/profile.ts): runes?: RuneRef[]  // back to the pouch; destroyed?: RuneRef[]
+// BagInsertResult (delve/profile.ts): runes: RuneRef[]; destroyed: RuneRef[]
+// salvageItems' result: runes: RuneRef[]; destroyed: RuneRef[]
+//   (wave 0 adds the fields, always empty; B fills them)
 ```
 
-World and hero setup (`world.ts`) initialises `runeRng`, `echoes: []`, `pending.runes: []` and `siphoned: [0, 0, 0, 0]`; `computeHeroStats` gives each blow `knobs: NEUTRAL` and `runes: []`. Projectile spawns pass `pierce: 0` or `Infinity` where they passed `false` or `true` (the step.ts check reads `p.pierce > 0`), which keeps every shot identical.
+**Wiring that keeps wave 0 green:**
+- World and hero setup (`world.ts`) initialises `runeRng`, `echoes: []`, `pending.runes: []` and `siphoned: [0, 0, 0, 0]`; `computeHeroStats` gives each blow `knobs: NEUTRAL` and `runes: []`.
+- Every projectile spawn passes `pierceLeft: Infinity` where it passes `pierce: true` and 0 where `false`; `basic.ts` maps `HeroWeapon.pierce` (a boolean) the same way. `step.ts` spends `pierceLeft` and keeps its end-of-flight test on `p.pierce`, so every shot is identical. The client reads `p.pierce` as a boolean as before, so `pixel/floor-engine.ts` needs no change.
+- `tests/ability-resolve.test.ts:203` (`expect(k.pierce).toBe(true)`) becomes `toBe(Infinity)`, and the neutral-knobs test there takes the new fields.
+- `stopKinds`' `applies` record gains `rune: false` (B fills it), and `startDive` writes `runesEarned: 0` beside `linksEarned`.
+- `fitMovesets` gets its load-time checks inline: unknown ids and repeated ids emptied, sockets past the cap trimmed, pouch entries for unknown ids dropped, the parts returned by the parts rule in the balance's mode. **Decided in the spec (review): inline in wave 0, not handed to B.** *It is a few lines over the save shape wave 0 defines, and B then only uses it.*
+- `src/index.ts` pre-exports every new module and symbol (`types/rune.ts`, `loot/runes.ts`, `delve/runes.ts`, `arpg/abilities/echo.ts`, `arpg/rune-drops.ts`, `NEUTRAL`, `moveBeat`, `knobHitOpts`, `guardLand`) in wave 0, so A and B never both edit it.
 
 **Data:**
 - `src/data/runes.json`: the 14 rows of the rune table, in that order.
@@ -591,7 +638,7 @@ export interface SetChainsOptions { origins?: ChainOrigins; unsocket?: UnsocketM
 export interface RuneChange {
   links: number;          // sockets opened
   scrap: number;          // sockets opened, and pulls in 'pay'
-  refundLinks: number;    // sockets of removed moves
+  refundLinks: number;    // sockets of removed moves (netted against `links`)
   socketed: RuneRef[];    // out of the pouch
   pulled: RuneRef[];      // destroyed ('destroy') or back to the pouch ('pay')
 }
@@ -614,9 +661,27 @@ export function socketRune(
 export function fusePrice(registry: DataRegistry, ref: RuneRef): number | null; // null at tier V
 export function fuseRunes(registry: DataRegistry, profile: DelveProfile, ref: RuneRef): ProfileActionResult;
 
-// delve/moveset.ts (B): today's signature plus options
+// delve/moveset.ts (B): today's signatures plus origins and options
+export function movesetEditPrice(
+  registry: DataRegistry, old: Partial<Chains>, next: Partial<Chains>, origins?: ChainOrigins,
+): number;
+export function editPrice(
+  registry: DataRegistry, profile: DelveProfile, next: Partial<Chains>, origins?: ChainOrigins,
+): number;
 export function setChains(
   registry: DataRegistry, profile: DelveProfile, chains: Partial<Chains>, opts?: SetChainsOptions,
+): ProfileActionResult;
+export function transferMoveset(
+  registry: DataRegistry, profile: DelveProfile, uid: string, opts?: { unsocket?: UnsocketMode },
+): ProfileActionResult;
+
+// delve/profile.ts (B): today's signatures plus the pull mode for the parts rule
+export function salvageItems(
+  registry: DataRegistry, profile: DelveProfile, uids: string[], opts?: { unsocket?: UnsocketMode },
+): { profile: DelveProfile; scrap: number; dust: number; links: number; count: number;
+     runes: RuneRef[]; destroyed: RuneRef[] };
+export function fuseGear(
+  registry: DataRegistry, profile: DelveProfile, uids: string[], opts?: { unsocket?: UnsocketMode },
 ): ProfileActionResult;
 
 // arpg/abilities/resolve.ts (wave 0: written, not stubbed; see below)
@@ -635,13 +700,13 @@ export function dropRune(ctx: SimCtx, m: MonsterEntity): void;
 `moveBeat` is declared in wave 0 as `beatFor(...) × ab.knobs.quick.beat` (trivially correct with neutral knobs), and its callers switch to it in wave 0 too, so A and D read one function.
 
 ### Wave 1 (3 agents, worktrees)
-- **A: the sim.** Fills `runeKnobs` into `resolveAbility` (merged after the legendaries; `count += extraShots` for Volley and Barrage; `stacks += stacksBonus`; `quick` into cooldown, conjure, channel and castTime; `runes: active`) and into the blows in `computeHeroStats` (`knobs`, `runes`). Then every handler in "Each rune in the sim": `impact.ts`, `forms.ts`, `cast.ts`, `defend.ts`, `echo.ts`, `basic.ts` (`landBlow`, blow chain, Linger, shots' `knobs`), `step.ts` (pierce count, shards, a basic shot's knobs, `echoTick`, blow zones), `combat.ts` (`knobHitOpts`, Catalyst in `react`, Siphon), `targeting.ts` (`spawnProjectile` takes optional `hitIds`), and `world.ts`'s `sameChain` with runes.
+- **A: the sim.** Fills `runeKnobs` into `resolveAbility` (merged after the legendaries; `count += extraShots.count` and the halved cut for Volley and Barrage, the full cut elsewhere; `stacks += stacksBonus`; `quick` into cooldown, conjure, channel and castTime; `runes: active`) and into the blows in `computeHeroStats` (`knobs`, `runes`). Then every handler in "Each rune in the sim": `impact.ts`, `forms.ts`, `cast.ts`, `defend.ts`, `echo.ts`, `basic.ts` (`landBlow`, blow chain, Linger, shots' `knobs`, the cycle and startup rule), `step.ts` (`pierceLeft`, shards, a basic shot's knobs, `echoTick`, blow zones), `combat.ts` (`knobHitOpts`, Volatile in `react`, Drain), `targeting.ts` (`spawnProjectile` takes optional `hitIds`), `world.ts`'s `sameChain` on raw sockets, and the Training Grounds' `followBasic` keeping blow runes.
   - **Files it owns:** those, plus `tests/delve-rune-sim.test.ts`.
-  - **Tests alone:** builds heroes with hand-made chains carrying runes (`createHeroEntity` with a resolved chain, as `tests/fixtures/arena.ts` does) and steps the sandbox world. One test per rune per target it fits (ability, melee, shot), plus: neutral knobs change nothing (a fixed-seed run's events identical with and without empty sockets); shards don't split; an echo doesn't echo; a Guard and an Obsidian barrier merge; Siphon's cap; a dormant Linger.
-- **B: the economy.** `loot/runes.ts`'s rolls and parts, `delve/runes.ts`, `setChains`'s options (`runeChange` charged with the Dust, its refusals), `sameChain` with runes, `movesetTransfer`'s sockets and runes, `addLootToBag` / `salvageItems` / `fuseGear` with `weaponParts`, the socket roll in `generateItem`, `world.runeRng` drops (`arpg/rune-drops.ts` and its one call at the end of `killMonster`), the `'rune'` pickup case in `step.ts`'s pickups, `bankWorld`, the stop's fifth kind, `fitMovesets`' trims returning parts.
+  - **Tests alone:** builds heroes with hand-made chains carrying runes (`createHeroEntity` with a resolved chain, as `tests/fixtures/arena.ts` does) and steps the sandbox world. One test per rune per target it fits (ability, melee, shot), plus: neutral knobs change nothing (a fixed-seed run's events identical with and without empty sockets); shards don't split, scatter or burst at the end of flight; an echo doesn't echo, and a hold blow's echo replays its stage; Guard never extends a larger barrier; Drain's cap counts foe-hits and resets before the cast's hits; a dormant Linger and a dormant Pierce (a staff's bursting row, an Earth Bolt); a shot spawned piercing never bursts at the end of flight.
+- **B: the economy.** `loot/runes.ts`'s rolls and parts, `delve/runes.ts`, `movesetEditPrice` and `editPrice` with origins, `setChains`'s options (`runeChange` charged with the Dust, its refusals, net Links), `sameChain` with runes, `movesetTransfer`'s sockets and runes, `addLootToBag` / `salvageItems` / `fuseGear` / `transferMoveset` with `weaponParts` and the parts rule, `chooseStartingMana`'s parts, the socket roll in `generateItem`, `world.runeRng` drops (`arpg/rune-drops.ts` and its one call inside `killMonster`'s `!world.sandbox` guard), the `'rune'` pickup case and the magnet exclusion in `step.ts`'s `dropsTick`, `bankWorld`, the stop's fifth kind and the `'move'` stop's rune copy.
   - **Files it owns:** those, plus `tests/delve-runes.test.ts`.
-  - **Merge points with A:** `combat.ts` (B adds one line in `killMonster`; A edits `hitMonster` and `react`), `step.ts` (B's pickup case; A's projectile and zone ticks), and `delve/moveset.ts`'s `sameChain` (B owns it). Both rebase on wave 0 and touch disjoint functions.
-  - **Tests alone:** every price and refusal in "Changing runes", both modes, origins (reorder carries runes, removal refunds, a bad origin refused), transfer, salvage and fuse parts, fusing, drop chances and tiers (a seeded sweep), item determinism (every v0.50.0 item stat and moveset identical, sockets aside), the stop's kind and its `rollStop` identity when it doesn't apply, save v7 load and trims.
+  - **Merge points with A:** `combat.ts` (B adds one line in `killMonster`; A edits `hitMonster` and `react`), `step.ts` (B's `dropsTick` changes; A's projectile and zone ticks), and `delve/moveset.ts`'s `sameChain` (B owns it). Both rebase on wave 0 and touch disjoint functions; neither edits `src/index.ts`.
+  - **Tests alone:** every price and refusal in "Changing runes", both modes; origins (reorder carries runes, removal refunds, a bad origin refused, a moved card costs `editDust` even when edited back, a rune changing moves is a pull plus a socket, origins for a skill not in `chains` ignored); net Links conserved against the same edits one by one; transfer, salvage, fuse and `chooseStartingMana` parts in both modes; fusing; drop chances and tiers (a seeded sweep), none in the sandbox; item determinism (every v0.50.0 item stat and moveset identical, sockets aside); the stops (`'rune'` refusing a filled or unopened socket, `'move'` keeping the saved runes, `rollStop` unchanged without `'rune'`); save v7 load and trims.
 - **C: client presentational components** (`client/src/features/delve/runes/`), from the contract types and `runeText` / `runeFits` only, no store:
 
   ```tsx
@@ -670,7 +735,8 @@ export function dropRune(ctx: SimCtx, m: MonsterEntity): void;
     onPull?: () => void;
     onClose: () => void;
   }
-  export interface RunePouchProps {
+  // The component is RunePouchPanel, so it never shadows the engine's `RunePouch` type.
+  export interface RunePouchPanelProps {
     pouch: RunePouch;
     fuseCount: number;
     fusePrice: (ref: RuneRef) => number | null;
@@ -681,17 +747,19 @@ export function dropRune(ctx: SimCtx, m: MonsterEntity): void;
   // rune-style.ts: FAMILY_STYLE: Record<RuneFamily, { color: string; label: string }>
   ```
 
-  Pad navigable (`data-pad-scope` on the picker, `data-pad-back` on its close). Its tests render each with fixture runes from the default registry.
+  **Decided in the spec (review): the pouch component is `RunePouchPanel`.** *The engine's type is `RunePouch`; one name for two things would need an import alias in every file that uses both.* Pad navigable (`data-pad-scope` on the picker, `data-pad-back` on its close). Its tests render each with fixture runes from the default registry.
 
 ### Wave 2 (3 agents)
-- **D: Power, the autopilot, the DPS Lab.** The Power terms (`damagePerUse`, `estimateCombat`, the blows), the autopilot's rune policy and stop preference, `bot.ts`'s rune pickups, and the Lab's rune view: `dpsCombos` adds `view: 'rune'` rows.
-  - For each rune, each form it fits among the Primary's and Ultimate's: the form's default chain in Fire, paid with mana, every move with one socket holding the rune at tier III, `dims: { rune, on: form, tier: 'III' }`.
-  - For each weapon it fits: the weapon's default basic chain in Fire with every blow socketed, `dims: { rune, on: weapon, tier: 'III' }`.
-  - A `rune: 'none'` row per form and weapon as the baseline.
+- **D: Power, the autopilot, the DPS Lab.** D alone owns the Lab, engine and page. The Power terms (`damagePerUse`, `estimateCombat`, the blows), the autopilot's rune policy and stop preference, `bot.ts`'s rune pickups, and the Lab's rune view: `dpsCombos` adds `view: 'rune'` rows.
+  - For each rune, each form it fits among the Primary's and Ultimate's: the form's default chain, paid with mana, every move with one socket holding the rune at tier III, `dims: { rune, on: form, elements, tier: 'III' }`.
+  - For each weapon it fits: the weapon's default basic chain with every blow socketed, `dims: { rune, on: weapon, elements, tier: 'III' }`.
+  - The element set is Fire, except for **Volatile and Saturate, which run on Fire + Frost** (moves `['fire', 'frost']`; basics with a Frost secondary), so their reactions (Melt) actually fire and their gate can fail.
+  - A `rune: 'none'` row per form and weapon, in each element set used, as the baseline.
+  - `runeComboSetups(registry, form)`: every three-rune set of the runes fitting a form, tier III, all three on every move, for the combo gate (wave 3). Not in the grid.
   - The Lab page (`features/delve/lab/`) gets the third view with a "× none" ratio column.
-  - **Decided in the spec: Fire only, tier III, every move socketed.** *The gate is about the rune, not the element; one element keeps the axis to about 185 rows.*
-  - **Tests alone:** after A, a rune's Power change has the sign and rough size of its Lab ratio; the autopilot fuses, opens and sockets (a seeded profile); `dpsCombos`' old rows are unchanged and `dpsKey`s stay unique.
-- **E: client wiring.** `delveStore` (`chainDraft.origins`, `draftChanges` with runes, `draftPrice` for the Apply label, `applyDraft` passing origins and `unsocketMode`, `fuseRunes`, the dev override, rune toasts from `runes` and `destroyed`), `ChainEditor` / `MoveEditor` (`onChange(skill, chain, map)`, `SocketRow` on each card, `RunePicker`, a `runes?: ChainRunes` prop), `ForgePanel` (`RunePouch`), `ItemDetailSheet`, `StopPanel`'s `RunePick`, `DiveSummary` / `PickupFeed`, the dev chip in `DelveCamp`, and the Training Grounds (`sandboxStore` schemas with `runes`, unrestricted sockets, Load my build).
+  - **Decided in the spec (review): Fire only (Fire + Frost for Volatile and Saturate), tier III, every move socketed.** *The gate is about the rune, not the element, but a reaction rune on one element never reacts and would pass a ceiling it can't test; this keeps the axis to about 200 rows.*
+  - **Tests alone:** after A, a rune's Power change has the sign of its Lab ratio and its size within ±25% of it (Guard, Leech and Drain checked for sign only, since their worth is life and mana, not DPS); the autopilot fuses, opens and sockets (a seeded profile); `dpsCombos`' old rows are unchanged and `dpsKey`s stay unique.
+- **E: client wiring.** `delveStore` (`chainDraft.origins`, `draftChanges` with runes, `draftPrice` for the Apply label with net Links, `applyDraft` passing origins and `unsocketMode`, `fuseRunes`, the dev override, rune toasts from `runes` and `destroyed`), `ChainEditor` / `MoveEditor` (`onChange(skill, chain, map)`, `SocketRow` on each card, `RunePicker`, a `runes?: ChainRunes` prop), `ForgePanel` (`RunePouchPanel`), `ItemDetailSheet`, `StopPanel`'s `RunePick`, `DiveSummary` and `features/delve/arena/PickupFeed.tsx`, the dev chip in `DelveCamp`, and the Training Grounds (`sandboxStore` schemas with `runes`, unrestricted sockets, Load my build). E doesn't touch the Lab.
 
   ```ts
   export interface ChainRunes {
@@ -707,87 +775,99 @@ export function dropRune(ctx: SimCtx, m: MonsterEntity): void;
   }
   ```
 
-  - **Tests alone:** store tests (origins composed through reorder, remove and add; Apply all or nothing; dev override), component tests for the builder's sockets and the Forge pouch.
-- **F: the arena.** `fx/runes.ts` flashes for `runeFx`, rune drops in `ArenaRenderer` and `arena-sounds.ts`, `AbilityHud.runes` in `useArenaCore.ts`, the pips in `ArenaHud.tsx`, and `floor-engine.ts`'s pierce type.
+  - **Tests alone:** store tests (origins composed through reorder, remove and add; Apply all or nothing; net Links in the label; dev override), component tests for the builder's sockets and the Forge pouch.
+- **F: the arena.** `fx/runes.ts` flashes for `runeFx`, rune drops in `ArenaRenderer` and `arena-sounds.ts`, `AbilityHud.runes` and `ArenaHud.basicRunes` in `useArenaCore.ts`, and the pips on the ability buttons and the ⚔️ button in `ArenaHud.tsx`.
   - **Tests alone:** fx tests with synthetic `runeFx` and `drop` events, and an `ArenaHud` test with a snapshot holding runes.
 
 ### Wave 3 (gate and finish)
-The DPS Lab gate and the pacing rails (below), the E2E spec, `CLAUDE.md`, and v0.51.0. If a ceiling breaks, stop and report the numbers to the user before tuning.
+The DPS Lab gate (single runes and combos) and the pacing rails (below), the E2E spec, `CLAUDE.md`, and v0.51.0. If a ceiling breaks, stop and report the numbers to the user before tuning.
 
 ## Balance and gates
 - **Before anything changes,** capture v0.50.0's `runAutopilot` numbers and the DPS Lab grid.
 - **The DPS Lab's existing grid must come out identical**, row for row: a hero with no runes plays exactly as before.
-- **The rune view's ceiling:** no rune more than doubles a move's damage at tier III. Each rune row's DPS ÷ its `none` row must be at most 2.0, both on one dummy and on the pack. The ratios go in the release notes; a breach stops the build for the user's call.
+- **The single-rune ceiling:** no rune more than doubles a move's damage at tier III. Each rune row's DPS ÷ its `none` row (same form or weapon, same element set) must be at most **2.0**, both on one dummy and on the pack.
+- **The combo ceiling (review):** for each form, the highest-ratio set of three runes among those that fit it, at tier III (searched over every such set with `runeComboSetups`, at most 286 per form), must be at most **3.0×** its `none` row, on one dummy and on the pack. A one-off run in wave 3 (a skipped-by-default vitest file, or the Lab's worker), not CI. **Decided in the spec (review).** *Runes stack on a move; a ceiling on singles alone would miss a pair that multiplies.*
+- The ratios go in the release notes; a breach stops the build for the user's call.
 - **Pacing:** every rail in `tests/delve-pacing.test.ts` must hold, with the autopilot using runes. Runes add Links (socket drops salvaged) and power, so dives may go deeper; if a rail breaks, report the numbers. The fix is the user's call: drop chances, socket prices, tier numbers, or a changed rail.
 
 ## Testing
 - **Engine:**
   - data: every rune row valid, fits ids real, templates filled, all 14 present;
-  - knobs: `mergeKnobs`' rule for each new knob; `pierce` true → Infinity; neutral knobs leave a fixed-seed fight identical;
-  - each rune on each target it fits (ability, melee blow, shot blow); dormant Linger; shards don't split, chain, linger or echo; echo doesn't echo and starts no beat; Guard and Obsidian share the barrier; Siphon's cap and reset; Catalyst adds to the legendary;
-  - `moveBeat` with Quick and Heavy; a blow's cycle and startup;
+  - knobs: `mergeKnobs`' rule for each new knob and the field-by-field zone; `pierce` true → Infinity; neutral knobs leave a fixed-seed fight identical;
+  - each rune on each target it fits (ability, melee blow, shot blow); dormant Linger and Pierce; shards don't split, chain, linger, echo, scatter or burst at the end; a Lance fan's chain and zone per beam; Twin Fang's shot without runes; echo doesn't echo and starts no beat, and a hold blow's echo replays its stage; Guard never extends a larger barrier; Drain's cap (foe-hits) and reset before the cast; Volatile adds to the legendary; blow chains with the Storm mastery;
+  - `moveBeat` with Quick and Heavy; a blow's cycle and startup, a held blow's recompute;
   - sockets: price by index, the rarity cap, can't close, drops by rarity, determinism of items;
-  - the draft: origins (reorder, remove, add), socket free, pull in both modes, removal refunds and pulls, the same rune twice refused, a form change refused for a non-fitting rune, a kind or element change keeping runes, pouch accounting in both modes, all or nothing;
-  - transfer (sockets moved and priced, the target's cap, dropped moves' parts, blow runes that don't fit), salvage and fuse parts;
+  - the draft: origins (reorder, remove, add, ignored for an absent skill), Dust per origin pair, socket free, pull in both modes, a rune changing moves as pull plus socket, removal refunds and pulls, net Links conserved, the same rune twice refused, a form change refused for a non-fitting rune, a kind or element change keeping runes, pouch accounting in both modes, all or nothing;
+  - transfer (sockets moved and priced, the target's cap, dropped moves' parts, blow runes that don't fit), salvage, fuse and `chooseStartingMana` parts, each in both modes;
   - fusing (price, tier V, short);
-  - drops: chances by kind and door, tier by depth and tierUp, the rune stream leaving item drops unchanged, banking and `runesEarned`;
-  - the stop's fifth kind: when it applies, taking it, `rollStop` unchanged without it;
-  - Power: each new term's sign; the autopilot's policy;
-  - save v7: a v6 save loads with an empty pouch; unknown ids emptied; trims return parts.
+  - drops: chances by kind and door, tier by depth and tierUp, the rune stream leaving item drops unchanged, none in the sandbox, no magnet, banking and `runesEarned`;
+  - the stop's fifth kind: when it applies, taking it, refusing a filled or unopened socket, `rollStop` unchanged without it; the `'move'` stop keeping the saved runes;
+  - Power: each new term's sign and the ±25% check; no change without runes (Earth's infinite pierce included); the autopilot's policy;
+  - save v7: a v6 save loads with an empty pouch; unknown and repeated ids emptied; trims return parts by the mode.
 - **Client:**
   - the components (wave C);
-  - the builder's sockets, picker, pull text, Apply total and "destroys" note, origins through edits, the Training Grounds' unrestricted picker;
+  - the builder's sockets, picker, pull text, Apply total (net Links) and "destroys" note, origins through edits, the Training Grounds' unrestricted picker and `followBasic` keeping runes;
   - the Forge pouch and fusing; the item sheet's sockets; the stop's rune pick;
   - the dev chip (dev only);
-  - the HUD pips; the `runeFx` flash.
+  - the HUD pips (ability buttons and ⚔️); the `runeFx` flash.
 - **E2E** (`e2e/delve-runes.spec.ts`): a seeded save with a pouch and a weapon with open sockets; socket a rune in the builder and Apply; see the HUD pip in a dive (autopilot on); fuse three on the Forge tab. The other Delve specs pass.
 
 ## Docs and version
-- **CLAUDE.md:** the Delve section gets a runes paragraph: sockets on moves, the pouch, the knobs and where their handlers live, how to add a rune, the draft's origins and price, the pull rule and its dev toggle, drops and fusing, the stop's fifth kind, save v7.
+- **CLAUDE.md:** the Delve section gets a runes paragraph: sockets on moves, the pouch, the knobs and where their handlers live, how to add a rune, the draft's origins and price, the pull rule, the parts rule and the dev toggle, drops and fusing, the stop's fifth kind, save v7.
 - **Version:** `chore(client): bump version to 0.51.0`.
 
 ## Open questions
 These don't block the build; each is for the DPS Lab gate or for play.
 - **Chain's fall-off.** The decisions say jumps at 60%; the spec uses the shared 0.7. If Chain is weak or strong at the gate, a per-knob fall-off is one more field.
-- **Pierce on Lance, bow and staff.** They're out of the fits list because the rune would do nothing there. If the user wants it there, it needs a new meaning (a longer Lance, staff shots that burst and fly on).
+- **Pierce on Lance and bow.** They're out of the fits list because the rune would do nothing there. If the user wants it there, it needs a new meaning (a longer Lance).
 - **Rune drop weighting.** Drops are uniform, so a melee hero finds Split and Multi-shot that fit only a Bolt, Volley, Barrage or a bow or wand. Fusing absorbs some of it; weighting toward what the hero carries is a later option.
 - **Socket Links.** Salvaged sockets come back as Links, adding to 4a's Link income. Watch the pacing rails.
-- **Guard on fast weapons.** A dagger keeps an 8% barrier up all the time at tier V. Fine as a starting point; the gate's pacing will show.
+- **Guard on fast weapons.** A dagger keeps an 8% barrier up all the time at tier V (never a larger one). Fine as a starting point; the gate's pacing will show.
 - **Echo on Maelstrom.** A second storm at up to 60% for 6 s is a lot of damage per cast; the gate checks it.
 
 ## Decided in the spec (index)
+Items marked **(review)** were added or changed after the spec review; the coordinator will flag them to the user.
+
 1. Socket price: 1 Link + 20 scrap, then 2 + 40, then 3 + 60.
-2. Socket drops: common and uncommon 0, magic and rare 0–1, epic 1–2, legendary 2–3.
+2. **(review)** Socket drops: common and uncommon 0, magic and rare 0–1, epic 1–2, legendary 2–3 (one below `extraSlots` from rare up, magic level with it).
 3. Pay mode's pull price: 15, 30, 50, 80, 120 scrap by tier; the rune goes back to the pouch.
-4. Fusing: 20, 40, 80, 160 scrap to make tier II, III, IV, V; tier V doesn't fuse.
-5. The draft: socketing free; pulls per the mode; opened sockets cost Links and scrap on Apply; Dust unchanged; the freebie covers Dust only.
-6. Move identity by explicit origins from the builder (positional by default).
+4. **(review)** Fusing: 20, 40, 80, 160 scrap to make tier II, III, IV, V; tier V doesn't fuse. The decisions' "plus scrap" is this cost, confirmed.
+5. The draft: socketing free; pulls per the mode; opened sockets cost Links and scrap on Apply; the freebie covers Dust only.
+6. **(review)** Move identity by explicit origins from the builder (positional by default; ignored for a skill not in `chains`). With origins, Dust is priced per origin pair (a moved card costs `editDust` even if edited back), and a rune that changes moves is a pull plus a socket.
 7. A removed move's sockets come back as one Link each; its runes are pulled.
 8. Sockets can't be closed.
 9. Kind and element changes keep runes; a kind restriction leaves a rune dormant; a form change is refused while a rune wouldn't fit.
 10. The same rune twice on one move is refused at any tier; on different moves it's fine.
-11. Echo repeats the move as it landed (stage, step bonus, extra shots, split) after 0.4 s at the echo fraction, free, without a beat, cooldown, cast event, Guard or a further echo; a blow's echo re-strikes where the hero stands.
-12. Split sheds shards from every impact that hits, evenly spaced, skipping the foes hit; shards don't split, chain, linger, echo or make embers.
-13. Extra shots fan at 0.22 rad; every shot, the first included, at the rune's power; Volley and Barrage add to `count`; a Lance's beams share one hit set.
-14. `pierce` becomes a count (true = Infinity); Lance, bow and staff blows are out of Pierce's fits.
-15. Siphon: 5 foe-hits per cast, counted per skill since it last fired; DoTs and splashes don't count.
-16. Guard feeds Obsidian's barrier: the larger wins, a smaller extends; it soaks after the Defensive, before the Ward.
-17. `quick` is three multipliers: Quick the beat and cooldown, Heavy the beat and wind-up ×1.2; blows scale cycle and startup; a hold's charge is untouched.
-18. Catalyst adds to the legendary's factor in `react`, scaling the damage reactions' bonus and Soulfire.
-19. Melee versus shot: the per-rune table above (Widen reach on melee only; Split, Multi-shot and Pierce on shots only).
-20. Fits narrowed where the code does nothing: Linger without Volley and Maelstrom, Chain without Blink and Armor, Saturate without Armor, every hit rune without Surge.
-21. Chain's jumps use the shared `chainPower` (0.7).
-22. Linger's zones tick at 20% of the hit; a blow's Linger is a hero zone with no ability, ticking as a basic hit.
-23. The tier tables: even steps between the decisions' ends.
-24. The stop's fifth kind, `'rune'`: offered with an empty socket and a fitting pouch rune; free; the autopilot takes it second, after equip.
-25. Determinism: rune drops on `rng.fork('runes:<nextUid>')`, sockets on `rng.fork('sockets')`, no new `world.rng` draws.
-26. Drops: the door's `dropMult` scales rune chances, magic find doesn't; the rune is uniform; a boss rolls at its depth; picked up by walking over it, like an item.
-27. Parts come back: one Link per open socket and every rune to the pouch on salvage, fuse, transfer drops and trims.
-28. Transfer: 30 scrap per open socket that moves; runes past the target's cap or not fitting its blows go to the pouch.
-29. The HUD pip: one dot per active rune of the next move, by family colour.
-30. The DPS Lab axis: view `'rune'`, tier III, Fire, every move socketed, each fitting form's default chain and each fitting weapon's basic chain, against a `'none'` row.
-31. Power's constants: 0.5 per extra shot or shard, 0.25 per pierced foe, 0.2 reaction share, 0.05 per stack.
+11. **(review)** Echo repeats the move as it landed (stage, step bonus, extra shots, split) after 0.4 s at the echo fraction, free, without a beat, cooldown, cast event, Guard or a further echo; a blow's echo re-strikes where the hero stands, and `Echo.stage` replays a hold blow's stage.
+12. **(review)** Split sheds shards from every impact that hits, evenly spaced, skipping the foes hit (after a burst, every foe the burst hit); shards spawn with no pierce, carry no splitting knobs, don't scatter, chain, linger, echo, make embers or burst at the end of flight.
+13. **(review)** Multi-shot: `extraShots` is `{ count, power }`; Bolt, Lance and shot blows fan at 0.22 rad with the full cut; Volley and Barrage add to `count` with half the cut (82.5% → 90%); a Lance's beams share one hit set and chain and linger per beam; Twin Fang's shot stays one, without runes.
+14. **(review)** `Knobs.pierce` becomes a count (true = Infinity); `Projectile.pierce` stays the spawn flag and `pierceLeft` counts down, so a piercing shot never bursts at the end of flight; Lance and bow are out of Pierce's fits; staff blows fit, dormant on the bursting rows; extra Pierce on an infinite pierce is dormant.
+15. **(review)** Drain (was Siphon): 5 foe-hits per cast (hits, not distinct foes), counted per skill and reset before `executeForm`; DoTs and splashes don't count.
+16. **(review)** Guard feeds Obsidian's barrier, soaking after the Defensive and before the Ward, and never extends a barrier larger than its own value.
+17. **(review)** `quick` is three multipliers: Quick the beat and cooldown, Heavy the beat and wind-up ×1.2; a blow's `cycle = base × beat` and `startup = base cycle × s.startup × windup`, capped at the cycle, in `strike`'s held-blow recompute too; a hold's charge is untouched.
+18. **(review)** Volatile (was Catalyst) adds to the Catalyst legendary's factor in `react`, scaling the damage reactions' bonus and Soulfire.
+19. Melee versus shot: the per-rune table (Widen reach on melee only; Split, Multi-shot and Pierce on shots only).
+20. **(review)** Fits narrowed where the code does nothing: Linger without Volley, Barrage and Maelstrom (many landings per cast), Chain without Blink and Armor, Saturate without Armor, every hit rune without Surge.
+21. **(review)** Chain's jumps use the shared `chainPower` (0.7) and keep the per-jump `kbFrom`; blow chains get the Storm mastery's +2 by the same rule.
+22. **(review)** Linger's zones tick at 20% of the hit; the `zone` merge is the longer seconds and the larger tick power, field by field; a blow's Linger is a hero zone with no ability, ticking as a basic hit.
+23. **(review)** The tier tables: exact even steps for fractions (Multi-shot 68.75%, Guard 4.25%), whole counts rounded down, Saturate's IV–V the decisions' own.
+24. **(review)** The stop's fifth kind, `'rune'`: offered with an empty socket and a fitting pouch rune; free; refuses a filled or unopened socket; the autopilot takes it second, after equip. The `'move'` stop keeps the saved move's runes.
+25. **(review)** Determinism: rune drops on `rng.fork('runes:<nextUid>')`, sockets on `rng.fork('sockets')`, no new `world.rng` draws when no rune is socketed.
+26. **(review)** Drops: the door's `dropMult` scales rune chances, magic find doesn't; the rune is uniform; a boss rolls at its depth; walked over like an item (no magnet); none in the sandbox (`dropRune` inside `!world.sandbox`).
+27. **(review)** The parts rule follows the pull mode: an open socket that leaves (salvage, fuse, transfer drops and caps, `chooseStartingMana`, load-time trims) always comes back as one Link; its rune is destroyed in destroy mode and returns to the pouch free in pay mode.
+28. **(review)** Transfer: 30 scrap per open socket that moves; runes past the target's cap or not fitting its blows leave by the parts rule.
+29. **(review)** The HUD pip: one dot per active rune of the next move, by family colour, on the ability buttons and on the ⚔️ manual attack button (the next blow).
+30. **(review)** The DPS Lab axis: view `'rune'`, tier III, Fire (Fire + Frost for Volatile and Saturate), every move socketed, each fitting form's default chain and each fitting weapon's basic chain, against a `'none'` row; single runes at most 2.0×.
+31. **(review)** Power's constants: 0.5 per extra shot or shard, 0.25 per finitely pierced foe (an infinite pierce adds nothing), 0.2 reaction share, 0.05 per stack; a Volley count term (`count ÷ (count − extraShots.count)`, 1 without the rune).
 32. The autopilot: fuse, then open sockets (slots first), then socket by Power gain.
 33. `runes` optional on `Move` and `Blow`; the pouch an array of 5 counts per id; `RuneId` a plain string.
 34. The dev override lives in localStorage `alloy:delve:unsocket`.
-35. Load-time trims: unknown rune ids emptied, sockets past the cap trimmed with their parts returned.
+35. **(review)** Load-time trims: unknown and repeated rune ids emptied, sockets past the cap trimmed, parts returned by the parts rule; no repeat-id refine in the schema; done inline in wave 0's `fitMovesets`.
+36. **(review)** Names: the mana rune is **Drain** and the reaction-damage rune is **Volatile**, clear of the Siphon reaction and the Catalyst legendary; the knobs keep `manaOnHit` and `catalyst`.
+37. **(review)** The combo gate: each form's best three-rune set at tier III at most 3.0× its `none` row.
+38. **(review)** Links are netted on Apply: removal refunds pay for sockets opened in the same Apply, the label shows the net, and Links are conserved.
+39. **(review)** `world.ts`'s `sameChain` compares the raw sockets (each move's `runes` array as saved).
+40. **(review)** The Training Grounds' `followBasic` keeps blow runes by position when it resets to the default chain, minus any that don't fit the new weapon.
+41. **(review)** The pouch component is `RunePouchPanel`, clear of the `RunePouch` type.
+42. **(review)** Wave 0 also: `NEUTRAL` exported; every new module pre-exported from `src/index.ts`; `rune: false` in `stopKinds`; `runesEarned: 0` in `startDive`; `tests/ability-resolve.test.ts:203` updated; the bow's `HeroWeapon.pierce` mapped to `pierceLeft`; `BagInsertResult` and `salvageItems` gaining `runes` and `destroyed`; no client pierce change needed.
+43. **(review)** D's Power check: the sign of a rune's Lab ratio and its size within ±25%; Guard, Leech and Drain for sign only.
