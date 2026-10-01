@@ -6,7 +6,6 @@ import { MANA_TYPES, emptyManaMap, type ManaType } from '../types/mana.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { botInput } from '../arpg/bot.js';
 import { stepWorld } from '../arpg/step.js';
-import { refreshWorldHero } from '../arpg/world.js';
 import {
   bankWorld,
   beginFloor,
@@ -20,7 +19,7 @@ import {
 } from './dive.js';
 import { compareItem, itemAttunement } from './hero-stats.js';
 import { heroChains } from '../loot/moveset.js';
-import { bindSecondary, profileStats, resolveOvertake } from './pair.js';
+import { bindSecondary, resolveOvertake } from './pair.js';
 import {
   createDelveProfile,
   equipBest,
@@ -31,12 +30,14 @@ import {
   salvageItems,
   upgradeGear,
 } from './profile.js';
-import { setChain } from './moveset.js';
+import { addSlot, setChain, transferMoveset } from './moveset.js';
+import type { ChainSkill } from '../types/ability.js';
 
 /**
  * Plays whole dives with the arena bot, like a sensible player: fights every
- * floor, equips upgrades as they drop, picks doors, extracts when spent, and
- * forges between dives. Used by the pacing test and for balance sweeps.
+ * floor (its gear locked, loot to the bag), picks doors, extracts when spent,
+ * and between dives moves its moveset to a better weapon, equips upgrades,
+ * forges and adds slots. Used by the pacing test and for balance sweeps.
  */
 
 export interface AutopilotOptions {
@@ -80,14 +81,7 @@ function playFloor(
   const world = beginFloor(registry, p);
   while (!world.heroDead && world.t < maxSeconds) {
     stepWorld(registry, world, botInput(registry, world), STEP);
-    if (world.pending.items.length > 0) {
-      p = bankWorld(registry, p, world).profile;
-      const best = equipBest(registry, p);
-      if (best.equipped.length > 0) {
-        p = best.profile;
-        refreshWorldHero(registry, world, profileStats(registry, p), heroChains(registry, p.equipped, p.pair));
-      }
-    }
+    if (world.pending.items.length > 0) p = bankWorld(registry, p, world).profile;
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
   }
   if (world.heroDead || !world.cleared) {
@@ -151,9 +145,44 @@ export function betweenDives(registry: DataRegistry, profile: DelveProfile): Del
   return fusePrimary(registry, visitForge(registry, bound));
 }
 
-/** Between dives: fuse spare triples, melt junk, and pour scrap into upgrades. */
+/** The skills the bot adds slots to, in order: each as far as its Links and scrap go. */
+const SLOT_ORDER: ChainSkill[] = ['primary', 'basic', 'ultimate', 'defensive'];
+
+/**
+ * Move the moveset onto the bag weapon that makes the best home (valued with
+ * it moved: `compareItem`'s default), when that raises Power and it can pay.
+ */
+function transferBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
+  const depth = referenceDepth(p);
+  let best: { uid: string; pct: number } | null = null;
+  for (const item of p.bag) {
+    if (item.slot !== 'weapon') continue;
+    const pct = compareItem(p.equipped, item, registry, depth, p.pair).powerPct;
+    if (pct > (best?.pct ?? 0)) best = { uid: item.uid, pct };
+  }
+  if (!best) return p;
+  const res = transferMoveset(registry, p, best.uid);
+  return res.ok ? res.profile : p;
+}
+
+/**
+ * Spend Links on slots in `SLOT_ORDER`: each skill's next slot while it can
+ * pay, then the next skill's (a slot it can't afford passes to the next).
+ */
+function spendLinks(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (const skill of SLOT_ORDER)
+    for (let res = addSlot(registry, p, skill); res.ok; res = addSlot(registry, p, skill))
+      p = res.profile;
+  return p;
+}
+
+/**
+ * Between dives: move the moveset to a better weapon, equip upgrades, fuse
+ * spare triples, melt junk, spend Links on slots, and pour scrap into upgrades.
+ */
 function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  let p = equipBest(registry, profile).profile;
+  let p = equipBest(registry, transferBest(registry, profile)).profile;
   const depth = referenceDepth(p);
 
   for (const rarity of FUSE_RARITIES) {
@@ -176,6 +205,7 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
   }
 
   p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
+  p = spendLinks(registry, p);
 
   for (;;) {
     let cheapest: { uid: string; cost: number } | null = null;
@@ -186,7 +216,9 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
       if (cost !== null && (!cheapest || cost < cheapest.cost)) cheapest = { uid: item.uid, cost };
     }
     if (!cheapest || cheapest.cost > p.scrap) break;
-    p = upgradeGear(registry, p, cheapest.uid).profile;
+    const res = upgradeGear(registry, p, cheapest.uid);
+    if (!res.ok) break; // the forge refuses mid-dive (an open dive)
+    p = res.profile;
   }
   return p;
 }

@@ -14,6 +14,7 @@ import {
   heroChains,
 } from '../src/loot/moveset.js';
 import { GearItemSchema } from '../src/delve/profile-schema.js';
+import { betweenDives } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import {
   addSlot,
@@ -1050,5 +1051,56 @@ describe('the dive lock', () => {
       expect(equipBest(registry, over).equipped.map((i) => i.uid)).toEqual(['h']);
       expect(upgradeGear(registry, over, 'h').ok).toBe(true);
     }
+  });
+});
+
+describe('the autopilot between dives', () => {
+  /** A Fire hero after its first dive, wielding `w` (the starter sword by default). */
+  const veteran = (w?: GearItem): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const weapon = w ?? p.equipped.weapon!;
+    return { ...p, equipped: { ...p.equipped, weapon }, stats: { ...p.stats, dives: 1 } };
+  };
+
+  it('moves its moveset onto the bag weapon that makes the best home, when it can pay', () => {
+    const p0 = veteran();
+    const sword = slotted(p0.equipped.weapon!, { basic: 3, primary: 2 }); // 1 extra: 30 scrap
+    const better = { ...p0.equipped.weapon!, uid: 'better', upgrade: 5 };
+    const p = { ...veteran(sword), bag: [better] };
+    const after = betweenDives(registry, { ...p, scrap: 1000 });
+    expect(after.equipped.weapon!.uid).toBe('better');
+    expect(after.equipped.weapon!.moveset!.chains).toEqual(sword.moveset!.chains);
+    expect(betweenDives(registry, { ...p, scrap: 0 }).equipped.weapon!.uid).toBe(sword.uid);
+  });
+
+  it('spends Links in the order Primary, basic chain, Ultimate, Defensive, each as far as it can pay', () => {
+    const epic = weapon('epic', 1, 'sword');
+    const base = {
+      ...veteran(slotted(epic, { basic: 3, primary: 1, defensive: 1, ultimate: 1 })),
+      scrap: 9999,
+    };
+    const slots = (links: number) =>
+      betweenDives(registry, { ...base, links }).equipped.weapon!.moveset!.slots;
+    expect(slots(1)).toEqual({ basic: 3, primary: 2, defensive: 1, ultimate: 1 });
+    // 1 + 2 + 3 + 4 for the Primary's four, then 3 for the sword's 4th basic slot.
+    expect(slots(13)).toEqual({ basic: 4, primary: 5, defensive: 1, ultimate: 1 });
+    // 10 for the Primary; the basic chain's 3 can't be paid, so the last 2 buy the Ultimate's and the Defensive's.
+    expect(slots(12)).toEqual({ basic: 3, primary: 5, defensive: 2, ultimate: 2 });
+  });
+
+  it('pays for its fused Primary, and skips the edit when it cannot', () => {
+    const helm = generateItem(
+      registry,
+      { uid: 'h', ilvl: 2, rarity: 'common', slot: 'helm', mana: 'storm' },
+      new SeededRNG(3),
+    );
+    const p = { ...veteran(), bag: [helm] };
+    const primary = (q: DelveProfile) => chainsOf(q).primary!.moves.map((m) => m.elements);
+    const poor = betweenDives(registry, p);
+    expect(poor.pair.secondary).toBe('storm');
+    expect(primary(poor)).toEqual([['fire']]);
+    const paid = betweenDives(registry, { ...p, manaDust: bal.movesets.elementDust });
+    expect(primary(paid)).toEqual([['fire', 'storm']]);
+    expect(paid.manaDust).toBe(0);
   });
 });
