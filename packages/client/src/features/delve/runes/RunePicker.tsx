@@ -1,13 +1,23 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { runeText, type RuneRef, type RuneTarget, type RuneTier } from '@alloy/engine';
+import {
+  runeText,
+  type AbilityPayment,
+  type RunePriceTerms,
+  type RuneRef,
+  type RuneTarget,
+  type RuneTier,
+} from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { RuneGlyph } from './RuneGlyph';
 import { TIERS, TIER_NUMERAL, dormantText, runeName } from './rune-style';
 
 export interface RunePickerProps {
-  /** Runes that fit the move and aren't on it; count null = unlimited (Training Grounds). */
-  candidates: readonly { rune: RuneRef; count: number | null }[];
+  /**
+   * Runes that fit the move and aren't on it; count null = unlimited (Training Grounds);
+   * dormant: it would do nothing in this socket (dimmed, with no price).
+   */
+  candidates: readonly { rune: RuneRef; count: number | null; dormant?: boolean }[];
   /** A filled socket's rune, shown with Pull. */
   current?: RuneRef | null;
   /** "Pull · destroys it", or "Pull · ⚙ 50, back to your pouch". */
@@ -18,6 +28,10 @@ export interface RunePickerProps {
   on?: RuneTarget;
   /** The current rune does nothing on this move now: dimmed, with its reason. */
   dormant?: boolean;
+  /** The chain's payment: each price in its words (the basic chain has none). */
+  payment?: AbilityPayment;
+  /** The move's `ResolvedAbility.ease`: each price eased by it. */
+  ease?: number;
   /** A pick, then `onClose`. */
   onPick: (rune: RuneRef) => void;
   /** A pull, then `onClose`. */
@@ -42,22 +56,41 @@ export function useRunePickerOpen(): boolean {
   return useSyncExternalStore(onPickers, () => openPickers > 0);
 }
 
-/** A rune's effect and its trade-off, as the engine words them at its tier (and on its move). */
-function RuneEffect({ rune, on, id }: { rune: RuneRef; on?: RuneTarget; id?: string }) {
-  const { effect, tradeoff } = runeText(getDelveRegistry(), rune, on);
+/**
+ * A rune's effect, its trade-off and its price, as the engine words them at its tier (and on
+ * its move, in its chain's payment, eased by the move's ease). A dimmed rune shows no price.
+ */
+function RuneEffect({
+  rune,
+  on,
+  terms,
+  dimmed = false,
+  id,
+}: {
+  rune: RuneRef;
+  on?: RuneTarget;
+  terms: RunePriceTerms;
+  dimmed?: boolean;
+  id?: string;
+}) {
+  const { effect, tradeoff, cost } = runeText(getDelveRegistry(), rune, on, terms);
+  const price = dimmed ? null : cost;
   return (
     <span id={id} className="text-[11px] leading-snug text-stone-400">
       {effect}
       {tradeoff && ' · '}
       {tradeoff && <span className="text-amber-200/80">{tradeoff}</span>}
+      {price && ' · '}
+      {price && <span className="text-amber-200/80">{price}</span>}
     </span>
   );
 }
 
 /**
  * A socket's picker, over the builder: a filled socket's rune with Pull, then
- * the runes that fit the move and aren't on it, each with its effect and
- * trade-off at its tier and its count. The Training Grounds pick the tier here
+ * the runes that fit the move and aren't on it, each with its effect,
+ * trade-off and price at its tier and its count (a rune that would do nothing
+ * there dimmed, with no price). The Training Grounds pick the tier here
  * (I–V chips). A modal dialog in a portal (the last pad scope): Back has the
  * focus, Escape and the backdrop close it, and closing it (a pick, a pull or
  * Back) returns the focus to the control that opened it.
@@ -69,6 +102,8 @@ export function RunePicker({
   tierChoice = false,
   on,
   dormant = false,
+  payment,
+  ease,
   onPick,
   onPull,
   onClose,
@@ -78,6 +113,7 @@ export function RunePicker({
   // The control that had the focus as the picker first rendered: its opener.
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
   const [tier, setTier] = useState<RuneTier>(1);
+  const terms: RunePriceTerms = { payment, ease };
   useLayoutEffect(() => {
     countPicker(1);
     return () => countPicker(-1);
@@ -90,7 +126,7 @@ export function RunePicker({
   const rows = tierChoice
     ? candidates
         .filter((c, i) => candidates.findIndex((d) => d.rune.id === c.rune.id) === i)
-        .map((c) => ({ rune: { id: c.rune.id, tier }, count: c.count }))
+        .map((c) => ({ rune: { id: c.rune.id, tier }, count: c.count, dormant: c.dormant }))
     : candidates;
   const title = current ? runeName(registry, current) : 'Socket a rune';
   return createPortal(
@@ -132,7 +168,7 @@ export function RunePicker({
           <div className="delve-panel flex flex-col gap-1.5 p-2" data-testid="rune-current">
             <div className="flex items-center gap-2">
               <RuneGlyph rune={current} dormant={dormant} />
-              <RuneEffect rune={current} on={on} />
+              <RuneEffect rune={current} on={on} terms={terms} dimmed={dormant} />
             </div>
             {dormant && (
               <span className="text-[11px] text-amber-200/90" data-testid="rune-dormant">
@@ -182,7 +218,7 @@ export function RunePicker({
           </div>
         )}
         <div className="flex flex-col gap-2">
-          {rows.map(({ rune, count }) => {
+          {rows.map(({ rune, count, dormant: idle }) => {
             const key = `${rune.id}-${rune.tier}`;
             return (
               <button
@@ -198,11 +234,11 @@ export function RunePicker({
                 data-testid={`rune-pick-${rune.id}`}
               >
                 <span className="flex items-center gap-2">
-                  <RuneGlyph rune={rune} />
+                  <RuneGlyph rune={rune} dormant={idle} />
                   <span className="flex-1">{runeName(registry, rune)}</span>
                   {count !== null && <span className="text-xs text-stone-400">×{count}</span>}
                 </span>
-                <RuneEffect rune={rune} on={on} id={`${id}-${key}`} />
+                <RuneEffect rune={rune} on={on} terms={terms} dimmed={idle} id={`${id}-${key}`} />
               </button>
             );
           })}

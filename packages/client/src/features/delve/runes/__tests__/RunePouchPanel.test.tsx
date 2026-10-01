@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { RunePouch, RuneRef } from '@alloy/engine';
 import { RunePouchPanel } from '../RunePouchPanel';
+import { pricedRegistry } from './priced-registry';
 
 /** `delve.runes.fuseScrap` (20, 40, 80, 160 to make II to V); tier V doesn't fuse. */
 const fusePrice = (r: RuneRef) => [20, 40, 80, 160][r.tier - 1] ?? null;
@@ -58,6 +59,16 @@ describe('RunePouchPanel (the Forge tab)', () => {
     expect(fuse).toHaveAccessibleDescription('A dive is under way: fuse runes between dives.');
     fireEvent.click(fuse);
     expect(onFuse).not.toHaveBeenCalled();
+  });
+
+  it('prices each rune beside its effect: its full load, uneased (no move known)', () => {
+    pricedRegistry();
+    panel();
+    expect(screen.getByTestId('pouch-split-1')).toHaveTextContent(
+      'Splits into 2 shards on hit, each at 30% power · +27% cost',
+    );
+    expect(screen.getByTestId('pouch-split-3')).toHaveTextContent('+45% cost');
+    expect(screen.getByText('+35% cost')).toHaveClass('text-amber-200/80'); // Quick V
   });
 
   it('an empty pouch says where runes come from', () => {

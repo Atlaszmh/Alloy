@@ -16,8 +16,9 @@ export interface RunePouchPanelProps {
 }
 
 /**
- * The Forge tab's runes: every rune held, by tier, with its count and effect,
- * and Fuse 3 → 1 at its scrap price where enough are held (never at tier V).
+ * The Forge tab's runes: every rune held, by tier, with its count, effect and
+ * raw price (its full load: no move, no ease), and Fuse 3 → 1 at its scrap
+ * price where enough are held (never at tier V).
  * Locked mid-dive, as the rest of the forge; a fuse it can't pay says why.
  */
 export function RunePouchPanel({
@@ -57,6 +58,7 @@ export function RunePouchPanel({
         const key = `${rune.id}-${rune.tier}`;
         const price = n >= fuseCount ? fusePrice(rune) : null;
         const short = price !== null && price > scrap;
+        const text = runeText(registry, rune);
         return (
           <div key={key} className="flex items-center gap-2" data-testid={`pouch-${key}`}>
             <RuneGlyph rune={rune} />
@@ -65,7 +67,9 @@ export function RunePouchPanel({
                 {runeName(registry, rune)} ×{n}
               </span>
               <span className="text-[11px] leading-snug text-stone-400">
-                {runeText(registry, rune).effect}
+                {text.effect}
+                {text.cost && ' · '}
+                {text.cost && <span className="text-amber-200/80">{text.cost}</span>}
               </span>
             </span>
             {price !== null && (
