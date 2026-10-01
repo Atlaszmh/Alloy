@@ -83,11 +83,21 @@ describe('lab-model', () => {
   it('keeps results for the session by depth, pack and key', () => {
     const a = row({ id: 'a' }, 1);
     const b = row({ id: 'b' }, 2);
-    remember(7, true, [b]);
-    expect(recall(7, true, ['a', 'b'])).toEqual([b]);
-    expect(recall(7, false, ['a', 'b'])).toEqual([]);
-    remember(7, true, [a]);
-    expect(recall(7, true, ['a', 'b'])).toEqual([a, b]);
+    remember(7, true, undefined, [b]);
+    expect(recall(7, true, undefined, ['a', 'b'])).toEqual([b]);
+    expect(recall(7, false, undefined, ['a', 'b'])).toEqual([]);
+    remember(7, true, undefined, [a]);
+    expect(recall(7, true, undefined, ['a', 'b'])).toEqual([a, b]);
+  });
+
+  it('keeps one key apart under each mana option (full, starved, supported)', () => {
+    const full = row({ id: 'c' }, 1);
+    const starved = row({ id: 'c' }, 2);
+    remember(8, false, undefined, [full]);
+    remember(8, false, 'starved', [starved]);
+    expect(recall(8, false, undefined, ['c'])).toEqual([full]);
+    expect(recall(8, false, 'starved', ['c'])).toEqual([starved]);
+    expect(recall(8, false, 'supported', ['c'])).toEqual([]);
   });
 
   it('shows DPS to a tenth below 100, whole above', () => {

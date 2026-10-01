@@ -139,6 +139,29 @@ describe('DelveLab', () => {
     expect(screen.queryByTestId('lab-progress')).toBeNull();
   });
 
+  it('the Mana select runs the grid starved or supported, each kept apart for the session', () => {
+    renderLab();
+    const mana = screen.getByTestId('lab-mana');
+    expect(mana).toHaveValue('full');
+    expect(
+      within(mana)
+        .getAllByRole('option')
+        .map((o) => o.getAttribute('value')),
+    ).toEqual(['full', 'starved', 'supported']);
+    fireEvent.change(mana, { target: { value: 'starved' } });
+    expect(latest().requests).toEqual([{ depth: 10, pack: false, sustained: 'starved' }]);
+    latest().reply(grid.map((s) => result(dpsKey(s), 2)));
+    expect(screen.queryByTestId('lab-progress')).toBeNull();
+    fireEvent.change(mana, { target: { value: 'supported' } });
+    expect(latest().requests).toEqual([{ depth: 10, pack: false, sustained: 'supported' }]);
+    expect(screen.getByTestId('lab-progress')).toBeInTheDocument();
+    // Back to starved: the session kept that run, so no worker is needed.
+    const workers = FakeWorker.all.length;
+    fireEvent.change(mana, { target: { value: 'starved' } });
+    expect(FakeWorker.all).toHaveLength(workers);
+    expect(screen.queryByTestId('lab-progress')).toBeNull();
+  });
+
   it('moving focus off the slider commits the depth too (a controller only nudges it)', () => {
     renderLab();
     fireEvent.change(screen.getByTestId('lab-depth'), { target: { value: '15' } });

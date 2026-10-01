@@ -22,6 +22,13 @@ import {
 import '@/features/delve/delve.css';
 
 type View = DpsSetup['view'];
+/** The Mana select's options: full mana, or sustained (`DpsOptions.sustained`; the rune costs spec). */
+type Mana = 'full' | NonNullable<DpsOptions['sustained']>;
+const MANAS: [Mana, string][] = [
+  ['full', 'Full'],
+  ['starved', 'Starved'],
+  ['supported', 'Supported'],
+];
 
 const VIEWS: [View, string][] = [
   ['basic', 'Basics'],
@@ -45,19 +52,21 @@ export function DelveLab() {
   const [slider, setSlider] = useState(10);
   const [depth, setDepth] = useState(10);
   const [pack, setPack] = useState(false);
+  const [mana, setMana] = useState<Mana>('full');
+  const sustained = mana === 'full' ? undefined : mana;
   const [colorBy, setColorBy] = useState(BY_LINE);
   const [off, setOff] = useState<LabFilter>({});
   /** The ticked rows, or null for the top 8. */
   const [ticks, setTicks] = useState<ReadonlySet<string> | null>(null);
   const [rows, setRows] = useState<LabRow[]>([]);
 
-  // The whole grid at this depth and pack, unless the session has it already. Each request gets
+  // The whole grid at this depth, pack and mana, unless the session has it already. Each request gets
   // a fresh worker: a synchronous one can't see a newer message mid-run. A layout effect, so the
   // reset lands before paint and no frame shows the last run's rows under the new controls.
   // (Under StrictMode, in dev, this effect runs twice on load: one worker is made, terminated
   // and made again.)
   useLayoutEffect(() => {
-    const kept = recall(depth, pack, keys);
+    const kept = recall(depth, pack, sustained, keys);
     if (kept.length === keys.length) {
       setRows(kept);
       return;
@@ -67,17 +76,17 @@ export function DelveLab() {
       type: 'module',
     });
     worker.onmessage = (e: MessageEvent<LabRow[]>) => {
-      remember(depth, pack, e.data);
+      remember(depth, pack, sustained, e.data);
       setRows((prev) => [...prev, ...e.data]);
     };
     // A throw inside simulateDps would otherwise leave the progress bar stuck in silence.
     worker.onerror = (e) => console.error('DPS Lab worker', e.message);
-    worker.postMessage({ depth, pack } satisfies DpsOptions);
+    worker.postMessage({ depth, pack, sustained } satisfies DpsOptions);
     return () => {
       worker.onmessage = null;
       worker.terminate();
     };
-  }, [depth, pack, keys]);
+  }, [depth, pack, sustained, keys]);
 
   const groups = useMemo(() => dimGroups(grid.filter((s) => s.view === view)), [grid, view]);
   const columns = useMemo(() => groups.map((g) => g.key), [groups]);
@@ -177,6 +186,21 @@ export function DelveLab() {
             data-testid="lab-pack"
           />
           Pack of 5
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-stone-300">
+          Mana
+          <select
+            className={SELECT}
+            value={mana}
+            onChange={(e) => setMana(e.target.value as Mana)}
+            data-testid="lab-mana"
+          >
+            {MANAS.map(([m, label]) => (
+              <option key={m} value={m}>
+                {label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex items-center gap-1.5 text-xs text-stone-300">
           Colour by

@@ -1,4 +1,10 @@
-import { MANA_TYPES, type DpsResult, type DpsSetup, type ManaType } from '@alloy/engine';
+import {
+  MANA_TYPES,
+  type DpsOptions,
+  type DpsResult,
+  type DpsSetup,
+  type ManaType,
+} from '@alloy/engine';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 
@@ -90,16 +96,31 @@ export function formatDps(dps: number): string {
   return dps.toFixed(dps < 100 ? 1 : 0);
 }
 
-/** Every result this session, keyed `depth|pack|dpsKey`, so flipping back is instant. */
+/**
+ * Every result this session, keyed `depth|pack|sustained|dpsKey` (`full` for full mana), so
+ * flipping back is instant.
+ */
 const kept = new Map<string, LabRow>();
+const keyOf = (depth: number, pack: boolean, sustained: DpsOptions['sustained'], key: string) =>
+  `${depth}|${pack}|${sustained ?? 'full'}|${key}`;
 
-export function remember(depth: number, pack: boolean, rows: readonly LabRow[]): void {
-  for (const r of rows) kept.set(`${depth}|${pack}|${r.key}`, r);
+export function remember(
+  depth: number,
+  pack: boolean,
+  sustained: DpsOptions['sustained'],
+  rows: readonly LabRow[],
+): void {
+  for (const r of rows) kept.set(keyOf(depth, pack, sustained, r.key), r);
 }
 
 /** The results kept for these options, in the order of `keys` (the ones not run yet left out). */
-export function recall(depth: number, pack: boolean, keys: readonly string[]): LabRow[] {
-  return keys.flatMap((key) => kept.get(`${depth}|${pack}|${key}`) ?? []);
+export function recall(
+  depth: number,
+  pack: boolean,
+  sustained: DpsOptions['sustained'],
+  keys: readonly string[],
+): LabRow[] {
+  return keys.flatMap((key) => kept.get(keyOf(depth, pack, sustained, key)) ?? []);
 }
 
 /**
