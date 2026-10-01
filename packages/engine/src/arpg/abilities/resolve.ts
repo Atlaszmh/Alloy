@@ -198,7 +198,7 @@ export function resolveAbility(
     heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
     heavyKnockback: Math.max(0, w) * F.heavyKnockback,
     heavyStagger: w >= 2,
-    stacks: bal.stacks.byWeight[wi],
+    stacks: bal.stacks.byWeight[wi] + knobs.stacksBonus,
     motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
     chargeNeed: payment === 'charge' ? s.cost * (1 + W.cost * needWeight) * ab.chargeRatio : 0,
     range: form.range ?? 0,
@@ -317,7 +317,7 @@ export function blowNumbers(
 ): { hit: number; stacks: number } {
   return {
     hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power * blow.knobs.power,
-    stacks: bal.stacks.basicByKind[blow.kind],
+    stacks: bal.stacks.basicByKind[blow.kind] + blow.knobs.stacksBonus,
   };
 }
 

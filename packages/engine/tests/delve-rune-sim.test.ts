@@ -383,3 +383,33 @@ describe('Quick and Heavy (the quick knob)', () => {
     expect(rest([R('heavy')])).toBeCloseTo((base - base * row.startup) * 1.2);
   });
 });
+
+describe('Saturate (the stacksBonus knob)', () => {
+  it("an ability: its direct hits apply more stacks; its jumps keep a tick's", () => {
+    const stacksOn = (runes: RuneRef[]) => {
+      const w = world([dummy(13, 30), dummy(16, 30)], { primary: { runes } });
+      press(w, 0);
+      run(w, 1);
+      return w.monsters.map((m) => m.status.stacks.fire);
+    };
+    expect(stacksOn([R('chain')])).toEqual([2, 1]);
+    expect(stacksOn([R('chain'), R('saturate')])).toEqual([3, 1]);
+    expect(moveOf(world([], { primary: { runes: [R('saturate', 4)] } }), 0).stacks).toBe(4);
+  });
+
+  it('a blow: its kind’s stacks and the bonus', () => {
+    const w = blowWorld([light([R('saturate')])]);
+    firstBlow(w);
+    expect(w.monsters[0].status.stacks.fire).toBe(2);
+    expect(blowNumbers(w.hero.stats, bal, w.hero.stats.weapon.blows[0]).stacks).toBe(2);
+  });
+
+  it('a shot blow: its shot brings the bonus', () => {
+    const w = blowWorld([light([R('saturate')])], [dummy(13, 30)], {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    firstBlow(w);
+    until(w, 'hit');
+    expect(w.monsters[0].status.stacks.fire).toBe(2);
+  });
+});

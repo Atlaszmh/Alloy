@@ -280,7 +280,7 @@ export function landBlow(
   if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
   if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
   for (const a of k.applies) if (!applies.includes(a)) applies.push(a);
-  const stacks = bal.stacks.basicByKind[kind];
+  const stacks = bal.stacks.basicByKind[kind] + k.stacksBonus;
   // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
   const rattles = element === 'earth' || !!surge?.elements.includes('earth');
   const knobbed = knobHitOpts(k);
