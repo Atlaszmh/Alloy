@@ -22,6 +22,8 @@ import {
   resolveChain,
   salvageDust,
   salvageValue,
+  socketCap,
+  unsocketMode,
   upgradeCost,
   type AbilitySlot,
   type Blow,
@@ -31,7 +33,7 @@ import {
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { partsText, runeNames, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -39,6 +41,7 @@ import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
 import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
+import { ItemSockets } from './runes/ItemSockets';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
@@ -106,6 +109,7 @@ function MovesetView({ item }: { item: GearItem }) {
           </div>
         );
       })}
+      <ItemSockets chains={chains} cap={socketCap(registry, item.rarity)} />
     </div>
   );
 }
@@ -154,6 +158,7 @@ function NotMine() {
 export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const unsocket = useDelveStore((s) => s.unsocket);
   const store = useDelveStore.getState;
   const [reforgeMode, setReforgeMode] = useState(false);
   const [reforgeIdx, setReforgeIdx] = useState<number | null>(null);
@@ -211,6 +216,8 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const base = registry.getDelveData().bases.find((b) => b.id === item.baseId);
   const attack = base?.attack;
   const diving = isDiveActive(profile);
+  // What a transfer's leaving runes become: destroyed, or back to the pouch.
+  const pull = unsocketMode(registry, unsocket);
   const dust = salvageDust(registry, item, profile.pair);
   const ownMana = inPair(profile, item.mana);
   const notMine = (stat: HeroStatKey) => {
@@ -269,7 +276,8 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
       playSound('combineMerge');
       vibrate('success');
       const links = res.links ? ` · +${res.links} Link${res.links > 1 ? 's' : ''}` : '';
-      showToast(`Your moveset moved onto ${item.name}${links}`);
+      const parts = partsText(registry, res.runes, res.destroyed);
+      showToast(`Your moveset moved onto ${item.name}${links}${parts ? ` · ${parts}` : ''}`);
       onClose();
     } else {
       playSound('combineFail');
@@ -325,10 +333,12 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
       setConfirmSalvage(true);
       return;
     }
-    const { scrap, links } = store().salvage([item.uid]);
+    const { scrap, links, runes, destroyed } = store().salvage([item.uid]);
     playSound('orbRemove');
     vibrate('light');
     if (links > 0) showToast(`+${links} Link${links > 1 ? 's' : ''} from its extra slots`);
+    const parts = partsText(registry, runes, destroyed);
+    if (parts) showToast(parts);
     if (scrap > 0) onClose();
   };
 
@@ -435,6 +445,8 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
                 </div>
                 <div className="mt-1 text-center text-[10px] uppercase tracking-wider text-stone-500">
                   With your moveset · ⚙ {formatNumber(transfer.scrap)} to move it
+                  {transfer.sockets > 0 &&
+                    `, its ${transfer.sockets} socket${transfer.sockets === 1 ? '' : 's'} included`}
                 </div>
                 <div data-testid="compare-home">
                   <DeltaRow cmp={cmp} />
@@ -654,6 +666,16 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
               data-testid="transfer-leaves"
             >
               Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+            </div>
+          )}
+          {transfer && !diving && transfer.runes.length > 0 && (
+            <div
+              className="col-span-2 text-center text-[11px] text-amber-200/90"
+              data-testid="transfer-runes"
+            >
+              {pull === 'destroy'
+                ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
+                : `${runeNames(registry, transfer.runes)} back to your pouch`}
             </div>
           )}
         </div>
