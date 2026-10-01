@@ -15,7 +15,7 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
-import { extraShotPower, runeFits, runeKnobs } from '../../loot/runes.js';
+import { extraShotPower, loadEase, runeFits, runeKnobs, runeLoad } from '../../loot/runes.js';
 import type { RuneRef } from '../../types/rune.js';
 import type {
   DelveBalance,
@@ -150,6 +150,13 @@ export function resolveAbility(
   const pierces = mergeKnobs(...own).pierce === Infinity;
   const acts = socketed.knobs.map((k) => !(pierces && k.pierce !== undefined));
   const knobs = mergeKnobs(...own, ...socketed.knobs.filter((_, i) => acts[i]));
+  const runes = socketed.active.filter((_, i) => acts[i]);
+  // Its runes' load (see the rune costs spec): their shares added, eased by its attunement. It
+  // raises the price in the chain's own payment: the mana, the charge need, or a cast's channel
+  // and mana. No cooldown moves.
+  const ease = loadEase(registry, stats, move.elements);
+  const load = runes.reduce((sum, r) => sum + runeLoad(registry, r, move.form), 0) * (1 - ease);
+  const C = bal.runes.load;
   const w = moveWeight(bal, move.kind, stage);
   const W = ab.weight;
   const s = ab.slots[slot];
@@ -177,7 +184,7 @@ export function resolveAbility(
   // Quick and Heavy (`quick`): the wind-up and the cooldown scale here, the beat in `moveBeat`.
   const q = knobs.quick;
   const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup;
-  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup : 0;
+  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup * (1 + load * C.cast) : 0;
 
   return {
     slot,
@@ -195,7 +202,8 @@ export function resolveAbility(
     fusion,
     power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower * cut,
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
-    cost: payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
+    // Manaweaver, the cast's half and the load multiply, in that order.
+    cost: payment === 'charge' ? 0 : (cast ? manaCost * ab.castManaMult : manaCost) * (1 + load),
     cooldown:
       (payment === 'charge'
         ? ab.chargeLockout
@@ -209,7 +217,10 @@ export function resolveAbility(
     heavyStagger: w >= 2,
     stacks: bal.stacks.byWeight[wi] + knobs.stacksBonus,
     motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
-    chargeNeed: payment === 'charge' ? s.cost * (1 + W.cost * needWeight) * ab.chargeRatio : 0,
+    chargeNeed:
+      payment === 'charge'
+        ? s.cost * (1 + W.cost * needWeight) * ab.chargeRatio * (1 + load * C.charge)
+        : 0,
     range: form.range ?? 0,
     radius: (form.radius ?? 0) * size * knobs.area,
     speed: (form.speed ?? 0) * (1 - W.speed * w),
@@ -218,7 +229,9 @@ export function resolveAbility(
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,
     knobs,
-    runes: socketed.active.filter((_, i) => acts[i]),
+    runes,
+    load,
+    ease,
   };
 }
 
@@ -254,6 +267,11 @@ export function chainMove(chain: ResolvedChain, step: number, stage = 0): Resolv
 /** The most charge a chain's meter holds: its largest need. */
 export function chargeCap(chain: ResolvedChain): number {
   return Math.max(...chain.moves.map((m) => m.chargeNeed));
+}
+
+/** A move's mana cost before its runes' load (0 for a charge move): Drain's cap reads it. */
+export function baseCost(ab: ResolvedAbility): number {
+  return ab.cost / (1 + ab.load);
 }
 
 /** The step bonus of the move at `index`: its power and size factors. */

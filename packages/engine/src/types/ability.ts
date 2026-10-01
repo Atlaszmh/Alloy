@@ -240,6 +240,16 @@ export interface ResolvedAbility {
   knobs: Knobs;
   /** The runes acting on it (fitting and not dormant), in socket order. */
   runes: RuneRef[];
+  /**
+   * Its runes' load (see the rune costs spec): Σ `runeLoad` over `runes` × (1 − ease), before
+   * the payment's conversion. 0 without runes.
+   */
+  load: number;
+  /**
+   * How much its attunement eases its runes' load: min(easeCap, easePerAttune × its average
+   * attunement). Set with or without runes.
+   */
+  ease: number;
 }
 
 /** A slot's chain compiled: its moves (a hold's at stage 0) and each hold move's three stages. */
