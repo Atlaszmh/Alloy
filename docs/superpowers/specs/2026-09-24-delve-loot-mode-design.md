@@ -37,6 +37,8 @@ rarity-colored beam; walk over it to pick it up. Mana motes, health orbs and scr
 toward you, and the whole floor is vacuumed up when the last monster dies.
 - Picked-up gear lands in a **pickup feed** on the right edge with ▲/▼ badges. Tap to
   inspect, or "▲ Equip" to put on every upgrade without leaving the fight.
+
+  > **Superseded** by `2026-09-30-delve-weapon-movesets-design.md` (v0.49.0): gear is locked while a dive runs. Loot still lands in the bag with its ▲ mark, but equipping waits for the Anvil ("Equip at the Anvil"), except one power-up at each stop between depths, which can equip one bag item.
 - **Potion**: 3 per dive, heals 40% (F / Space, or the 🧪 button).
 
 **Minutes: the dive.** A dive descends through **depths**. Each depth is one arena floor

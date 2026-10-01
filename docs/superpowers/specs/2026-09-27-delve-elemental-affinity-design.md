@@ -132,6 +132,8 @@ Every op returns `ProfileActionResult` (`{ ok, profile, reason }`, like smithing
 
 > **Superseded** by `2026-09-29-delve-moves-and-chains-design.md` (v0.46.0): each blow of the basic chain strikes with its own element of the pair (the default chain's last blow the secondary once bound) and that element's attunement powers it (`HeroBlow.attunePower`); the finisher's discharge and `HeroWeapon.element`, `infusion`, `blowPower` and `finisherPower` are gone. A basic chain still on its default follows the weapon and the pair (`followBasic`): equipping or unequipping a weapon, a bind, a realign and an overtake make it the new default, while a chain the player built keeps its blows.
 
+> **Superseded** again by `2026-09-30-delve-weapon-movesets-design.md` (v0.49.0): nothing re-colours a weapon's moves on its own, and `followBasic` retires from the Delve (the Training Grounds keep it); a weapon's default blows are all in its mana.
+
 With `weapon.infusion` set (a bound secondary):
 
 - **Ordinary blows** (every step but the string's last) strike with the primary, at `× weapon.blowPower`, with the usual 30% primary status roll.
@@ -205,6 +207,8 @@ With `weapon.infusion` set (a bound secondary):
   - **Bind:** binds, then equips. **Not now:** equips (stats only). The choice is remembered for the session (not saved), so it doesn't ask again.
   - "Equip best" never prompts.
   - During a dive, such an equip just equips, with a toast: "Bind Storm between dives to draw power from it".
+
+  > **Superseded** by `2026-09-30-delve-weapon-movesets-design.md` (v0.49.0): gear is locked while a dive runs, so the bind prompt shows only at the Anvil. Nothing re-colours a weapon's moves on its own: a bind, an overtake, equipping and re-attuning leave them as they are (a move may keep an element outside the pair: it casts and reacts, but draws no attunement), and `followBasic` retires from the Delve (the Training Grounds keep it). Only a realign maps the equipped weapon's moves by role, and `chooseStartingMana` rebuilds the weapon's moveset at its base slots in the chosen mana.
 - **Item cards:** base attunement and `*Attune` lines outside the pair are greyed ("not your element"). The salvage preview shows its Mana Dust.
 - **Smithing sheet:** gains **Re-attune**, a choice of your pair's elements other than the item's, showing the Mana Dust cost.
 - **Abilities panel:** in the Delve, the element picker offers only the pair.

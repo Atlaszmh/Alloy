@@ -198,7 +198,7 @@ Nothing about gear changes.
 
   Of the kinds that apply, the stop offers 2 or 3 at random, or all of them if fewer apply. If none applies, there's no stop.
 - **Taking one.**
-  - One action per stop: `takeStop(registry, profile, kind, args)` checks the kind is offered and not yet taken, runs the op with the dive lock lifted for that one op, and marks the stop taken.
+  - One action per stop: `takeStop(registry, profile, action)` (a `StopAction`: the kind and what it acts on) checks the kind is offered and not yet taken, runs the op with the dive lock lifted for that one op, and marks the stop taken.
   - Skipping is choosing a door.
   - A refused op (e.g. unaffordable) leaves the stop open.
 - **The dive lock** refuses everything else at a stop, as before.
