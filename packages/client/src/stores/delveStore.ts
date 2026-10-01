@@ -14,6 +14,12 @@ import {
   setAutoSalvage,
   setChains as engineSetChains,
   addSlot as engineAddSlot,
+  addToPouch,
+  draftPrice,
+  movesOf,
+  runeChange,
+  takeFromPouch,
+  unsocketMode,
   transferMoveset,
   takeStop as engineTakeStop,
   bindSecondary as engineBindSecondary,
@@ -26,6 +32,7 @@ import {
   heroChains,
   sameChain,
   type ChainFix,
+  type ChainOrigins,
   type Chains,
   type ChainSkill,
   type DataRegistry,
@@ -37,10 +44,17 @@ import {
   type ParsedDelveProfile,
   type ProfileActionResult,
   type Rarity,
+  type DraftPrice,
+  type RunePouch,
+  type RuneRef,
+  type SetChainsOptions,
   type StopAction,
+  type UnsocketMode,
 } from '@alloy/engine';
-import { SKILL_NAME } from '@/features/delve/chains/chain-text';
+import { SKILL_NAME, listed } from '@/features/delve/chains/chain-text';
+import { formatNumber } from '@/features/delve/format';
 import { getDelveRegistry } from '@/features/delve/registry';
+import { runeName } from '@/features/delve/runes/rune-style';
 import { createHmrStore } from './hmr-store';
 
 /**
@@ -51,12 +65,25 @@ import { createHmrStore } from './hmr-store';
 export const DELVE_SAVE_KEY = 'alloy:delve:v2';
 /** Device preference: basic attacks on a button ("1") instead of automatic. */
 export const MANUAL_ATTACK_KEY = 'alloy:delve:manualAttack';
+/** Dev builds: the pull rule chosen on the Anvil's chip ("destroy" or "pay"). */
+export const UNSOCKET_KEY = 'alloy:delve:unsocket';
 
 function loadManualAttack(): boolean {
   try {
     return localStorage.getItem(MANUAL_ATTACK_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+/** The pull rule this device chose (dev builds only; production never reads it), or null. */
+function loadUnsocket(): UnsocketMode | null {
+  if (!import.meta.env.DEV) return null;
+  try {
+    const mode = localStorage.getItem(UNSOCKET_KEY);
+    return mode === 'destroy' || mode === 'pay' ? mode : null;
+  } catch {
+    return null;
   }
 }
 
@@ -95,11 +122,6 @@ function freshSeed(): number {
 }
 
 const manaName = (registry: DataRegistry, m: ManaType) => registry.getArpgData().mana[m].name;
-
-/** "a", "a and b", "a, b and c". */
-function listed(items: string[]): string {
-  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('');
-}
 
 const manaNames = (registry: DataRegistry, els: ManaType[]) =>
   listed(els.map((m) => manaName(registry, m)));
@@ -180,6 +202,15 @@ export interface ChainDraft {
   uid: string;
   pair: ManaPair;
   chains: Partial<Chains>;
+  /** For each chain in `chains`, the saved move each of its moves came from (null: a new one). */
+  origins: ChainOrigins;
+}
+
+/** `origins` for the skills `chains` holds. */
+function originsFor(origins: ChainOrigins, chains: Partial<Chains>): ChainOrigins {
+  return Object.fromEntries(
+    CHAIN_SKILLS.filter((s) => chains[s] && origins[s]).map((s) => [s, origins[s]]),
+  );
 }
 
 /**
@@ -204,6 +235,75 @@ export function draftChanges(
   );
 }
 
+/** Apply's options: the draft's origins and the pull rule (the dev override, else the balance's). */
+function applyOpts(draft: ChainDraft | null, unsocket: UnsocketMode | null): SetChainsOptions {
+  return { origins: draft?.origins ?? {}, unsocket: unsocket ?? undefined };
+}
+
+/** What Apply would do with the draft: the Anvil's builder and its Delve button both show it. */
+export interface DraftApply {
+  /** The chains it would set: the draft's that differ from the weapon's. */
+  changes: Partial<Chains>;
+  opts: SetChainsOptions;
+  /** The total, from the engine's `draftPrice`; null with nothing pending, or when it refuses. */
+  price: DraftPrice | null;
+  /** The engine's `setChains` as a dry run: whether Apply goes through, and why not. */
+  dry: ProfileActionResult | null;
+  /** The pouch once Apply has taken what it sockets (and, paying, given back what it pulls). */
+  pouch: RunePouch;
+}
+
+export function draftApply(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  draft: ChainDraft | null,
+  unsocket: UnsocketMode | null,
+): DraftApply {
+  const changes = draftChanges(registry, profile, draft);
+  const opts = applyOpts(draft, unsocket);
+  if (Object.keys(changes).length === 0)
+    return { changes, opts, price: null, dry: null, pouch: profile.runes };
+  const price = draftPrice(registry, profile, changes, opts);
+  const change = runeChange(registry, profile, changes, opts);
+  let pouch = profile.runes;
+  if (!('refused' in change)) {
+    const back = unsocketMode(registry, unsocket) === 'pay' ? change.pulled : [];
+    // Short of a rune, Apply refuses; the picker shows the pouch as it is.
+    pouch = takeFromPouch(addToPouch(pouch, back), change.socketed) ?? pouch;
+  }
+  return {
+    changes,
+    opts,
+    price: 'refused' in price ? null : price,
+    dry: engineSetChains(registry, profile, changes, opts),
+    pouch,
+  };
+}
+
+/** Runes by name: "Split III", "Split III and Quick I". */
+export function runeNames(registry: DataRegistry, refs: readonly RuneRef[]): string {
+  return listed(refs.map((r) => runeName(registry, r)));
+}
+
+/**
+ * Apply's label with the draft's total: "Apply · ✦ 15 · 🔗 2 · ⚙ 40 · destroys Split III". Links
+ * are netted (the sockets of moves removed pay for those opened): a refund beyond them reads
+ * "🔗 +1".
+ */
+export function applyLabel(registry: DataRegistry, price: DraftPrice | null): string {
+  if (!price) return 'Apply';
+  const links = price.links - price.refundLinks;
+  return [
+    'Apply',
+    price.dust > 0 ? `✦ ${price.dust}` : null,
+    links !== 0 ? `🔗 ${links > 0 ? links : `+${-links}`}` : null,
+    price.scrap > 0 ? `⚙ ${formatNumber(price.scrap)}` : null,
+    price.destroys.length > 0 ? `destroys ${runeNames(registry, price.destroys)}` : null,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */
@@ -218,6 +318,8 @@ interface DelveStore {
   bindDeclined: ManaType[];
   /** The chain builder's unapplied edits (never saved; a dive can't start over them). */
   chainDraft: ChainDraft | null;
+  /** Dev builds: the pull rule chosen on the Anvil's chip (null: the balance's). */
+  unsocket: UnsocketMode | null;
 
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
@@ -250,8 +352,12 @@ interface DelveStore {
   pushDiveDrops: (uids: string[]) => void;
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
   setChains: (chains: Partial<Chains>) => ProfileActionResult;
-  /** Put a chain into the builder's draft (a chain back as it was leaves it). */
-  editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
+  /**
+   * Put a chain into the builder's draft (a chain back as it was leaves it). `map`: for each of
+   * its moves, the index in the chain the builder showed (null: a new move); missing, each move
+   * stays where it was.
+   */
+  editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S], map?: (number | null)[]) => void;
   /** Pay for the draft's changes and set them (`setChains`); a refusal keeps the draft. */
   applyDraft: () => ProfileActionResult;
   revertDraft: () => void;
@@ -262,6 +368,8 @@ interface DelveStore {
   /** Take the door screen's power-up. */
   takeStop: (action: StopAction) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
+  /** Dev builds: choose the pull rule, kept on this device. */
+  setUnsocket: (mode: UnsocketMode) => void;
 }
 
 function withoutUids(map: Record<string, true>, uids: string[]): Record<string, true> {
@@ -305,6 +413,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       : [],
     bindDeclined: [],
     chainDraft: null,
+    unsocket: loadUnsocket(),
 
     setProfile: (profile) => commit(profile),
 
@@ -421,22 +530,49 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ manualAttack: on });
     },
 
+    setUnsocket: (mode) => {
+      try {
+        localStorage.setItem(UNSOCKET_KEY, mode);
+      } catch {
+        /* storage unavailable: keep it for this session */
+      }
+      set({ unsocket: mode });
+    },
+
     setChains: (chains) => applyResult(engineSetChains(registry(), get().profile, chains)),
 
-    editDraft: (skill, chain) => {
+    editDraft: (skill, chain, map) => {
       const { profile, chainDraft } = get();
       const weapon = profile.equipped.weapon;
       if (!weapon) return;
-      const chains = { ...draftChanges(registry(), profile, chainDraft), [skill]: chain };
+      const changes = draftChanges(registry(), profile, chainDraft);
+      // The builder's map is over the chain it showed (the draft's, else the saved one):
+      // composed with the draft's own origins, it gives each move's index in the saved chain.
+      const shown = changes[skill] ?? heroChains(registry(), profile.equipped, profile.pair)[skill];
+      const from: (number | null)[] =
+        (changes[skill] ? chainDraft?.origins[skill] : undefined) ??
+        movesOf(shown).map((_, i) => i);
+      const handed = map ?? movesOf(chain).map((_, j) => j);
+      const origins = {
+        ...originsFor(chainDraft?.origins ?? {}, changes),
+        [skill]: handed.map((k) => (k === null ? null : (from[k] ?? null))),
+      };
       // Only what differs from the weapon is kept: an edit undone by hand leaves nothing.
-      const next = { uid: weapon.uid, pair: profile.pair, chains };
-      set({ chainDraft: { ...next, chains: draftChanges(registry(), profile, next) } });
+      const next = {
+        uid: weapon.uid,
+        pair: profile.pair,
+        chains: { ...changes, [skill]: chain },
+        origins,
+      };
+      const chains = draftChanges(registry(), profile, next);
+      set({ chainDraft: { ...next, chains, origins: originsFor(origins, chains) } });
     },
 
     applyDraft: () => {
-      const { profile, chainDraft } = get();
+      const { profile, chainDraft, unsocket } = get();
+      const changes = draftChanges(registry(), profile, chainDraft);
       const res = applyResult(
-        engineSetChains(registry(), profile, draftChanges(registry(), profile, chainDraft)),
+        engineSetChains(registry(), profile, changes, applyOpts(chainDraft, unsocket)),
       );
       if (res.ok) set({ chainDraft: null });
       return res;
@@ -450,7 +586,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const draft = get().chainDraft;
       if (res.ok && draft?.chains[skill]) {
         const { [skill]: _gone, ...chains } = draft.chains;
-        set({ chainDraft: { ...draft, chains } });
+        set({ chainDraft: { ...draft, chains, origins: originsFor(draft.origins, chains) } });
       }
       return res;
     },

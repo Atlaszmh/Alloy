@@ -4,10 +4,13 @@ import {
   generateItem,
   heroChains,
   SeededRNG,
+  pouchCount,
   type ChainFix,
   type Chains,
+  type DelveProfile,
   type GearSlot,
   type ManaType,
+  type RuneRef,
 } from '@alloy/engine';
 import {
   useDelveStore,
@@ -18,6 +21,9 @@ import {
   loadDelveProfile,
   movesetNotices,
   overtakeNotice,
+  UNSOCKET_KEY,
+  applyLabel,
+  draftApply,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
@@ -408,5 +414,131 @@ describe('delveStore', () => {
     expect(overtakeNotice(registry, 'storm', 'fire')).toBe(
       'Storm now outweighs Fire: Storm is your primary',
     );
+  });
+});
+
+const split = { id: 'split', tier: 1 } as const;
+const s = () => useDelveStore.getState();
+
+/** A fresh store module, as on a page load: the override it reads back. */
+async function freshUnsocket() {
+  (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
+    'delveStore',
+  );
+  vi.resetModules();
+  return (await import('./delveStore')).useDelveStore.getState().unsocket;
+}
+
+describe('delveStore: runes in the draft', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    s().resetProfile(1234, 'fire');
+    useDelveStore.setState({ unsocket: null });
+  });
+
+  /**
+   * The starting sword (common: one socket a move) with a two-Bolt Primary, each Bolt's sockets
+   * as given (none open when missing), and the profile's `over`.
+   */
+  function bolts(runes: ((RuneRef | null)[] | undefined)[], over: Partial<DelveProfile> = {}) {
+    const p = s().profile;
+    const sword = p.equipped.weapon!;
+    const moveset = defaultMoveset(registry, sword, 'fire', { primary: 2 });
+    const primary = moveset.chains.primary!;
+    const moves = primary.moves.map((m, i) => (runes[i] ? { ...m, runes: runes[i] } : m));
+    const weapon = {
+      ...sword,
+      moveset: { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } },
+    };
+    s().setProfile({ ...p, ...over, equipped: { ...p.equipped, weapon } });
+  }
+  const view = () => draftApply(registry, s().profile, s().chainDraft, s().unsocket);
+
+  it('with nothing pending, Apply has no total', () => {
+    expect(view()).toMatchObject({ changes: {}, price: null, dry: null });
+    expect(applyLabel(registry, null)).toBe('Apply');
+  });
+
+  it('socketing a pouch rune is free: Apply takes it from the pouch', () => {
+    bolts([[null]], { runes: { split: [1, 0, 0, 0, 0] } });
+    const primary = chains().primary;
+    const [first, second] = primary.moves;
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [split] }, second] });
+    expect(s().chainDraft?.origins).toEqual({ primary: [0, 1] });
+    expect(view().price).toMatchObject({ dust: 0, links: 0, scrap: 0, refundLinks: 0 });
+    expect(pouchCount(view().pouch, split)).toBe(0); // what the picker has left to offer
+    expect(applyLabel(registry, view().price)).toBe('Apply');
+    expect(s().applyDraft().ok).toBe(true);
+    expect(chains().primary.moves[0].runes).toEqual([split]);
+    expect(pouchCount(s().profile.runes, split)).toBe(0);
+  });
+
+  it("composes the builder's maps into origins; moved and moved back, nothing is left", () => {
+    bolts([[split], [null]]);
+    const primary = chains().primary;
+    const [a, b] = primary.moves;
+    s().editDraft('primary', { ...primary, moves: [b, a] }, [1, 0]); // ▸ on the first
+    expect(s().chainDraft?.origins).toEqual({ primary: [1, 0] });
+    const added = { kind: 'light' as const, form: 'bolt' as const, elements: ['fire' as const] };
+    s().editDraft('primary', { ...primary, moves: [b, a, added] }, [0, 1, null]); // +
+    expect(s().chainDraft?.origins).toEqual({ primary: [1, 0, null] });
+    s().editDraft('primary', { ...primary, moves: [b, a] }, [0, 1]); // × on the new one
+    s().editDraft('primary', { ...primary, moves: [a, b] }, [1, 0]); // ◂ back
+    expect(s().chainDraft?.chains).toEqual({});
+    expect(s().chainDraft?.origins).toEqual({});
+  });
+
+  it('a removed move refunds its socket as a Link, netted in the label; its rune goes by the rule', () => {
+    bolts([[split], [null]]);
+    const primary = chains().primary;
+    s().editDraft('primary', { ...primary, moves: [primary.moves[1]] }, [1]); // × on the Split Bolt
+    expect(view().price).toMatchObject({ links: 0, refundLinks: 1, destroys: [split] });
+    expect(applyLabel(registry, view().price)).toBe('Apply · 🔗 +1 · destroys Split I');
+    expect(s().applyDraft().ok).toBe(true);
+    expect(chains().primary.moves).toEqual([primary.moves[1]]);
+    expect(s().profile.links).toBe(1);
+  });
+
+  it('a new socket costs Links and scrap by its index, and Apply needs them', () => {
+    bolts([], { links: 0, scrap: 20 });
+    const primary = chains().primary;
+    const [first, second] = primary.moves;
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [null] }, second] });
+    expect(view().price).toMatchObject({ links: 1, scrap: 20 });
+    expect(applyLabel(registry, view().price)).toBe('Apply · 🔗 1 · ⚙ 20');
+    expect(view().dry).toMatchObject({ ok: false, reason: expect.stringMatching(/Links/) });
+    s().setProfile({ ...s().profile, links: 1 });
+    expect(s().applyDraft().ok).toBe(true);
+    expect(s().profile).toMatchObject({ links: 0, scrap: 0 });
+  });
+
+  it('the dev override sets the pull rule: paying, a pull costs scrap and the rune comes back', () => {
+    bolts([[split]], { scrap: 100 });
+    s().setUnsocket('pay');
+    expect(localStorage.getItem(UNSOCKET_KEY)).toBe('pay');
+    const primary = chains().primary;
+    const [first, second] = primary.moves;
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [null] }, second] });
+    expect(view().price).toMatchObject({ scrap: 15, destroys: [], returns: [split] });
+    expect(applyLabel(registry, view().price)).toBe('Apply · ⚙ 15');
+    expect(pouchCount(view().pouch, split)).toBe(1); // free to socket elsewhere in this Apply
+    expect(s().applyDraft().ok).toBe(true);
+    expect(s().profile.scrap).toBe(85);
+    expect(pouchCount(s().profile.runes, split)).toBe(1);
+  });
+
+  it('reads the override back on this device, in dev builds only', async () => {
+    localStorage.setItem(UNSOCKET_KEY, 'pay');
+    expect(await freshUnsocket()).toBe('pay');
+    localStorage.setItem(UNSOCKET_KEY, 'free'); // not a rule
+    expect(await freshUnsocket()).toBeNull();
+    const dev = import.meta.env.DEV;
+    import.meta.env.DEV = false as unknown as boolean;
+    try {
+      localStorage.setItem(UNSOCKET_KEY, 'pay');
+      expect(await freshUnsocket()).toBeNull();
+    } finally {
+      import.meta.env.DEV = dev;
+    }
   });
 });

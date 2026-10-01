@@ -38,6 +38,11 @@ export function blowText(
   return `${KIND_LABEL[blow.kind]} ${manaStyle(registry, blow.element).name} blow`;
 }
 
+/** "a", "a and b", "a, b and c". */
+export function listed(items: readonly string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('');
+}
+
 /** A chain's names in order: "light Fire Bolt · medium Fire Bolt". */
 export function chainText(names: readonly string[]): string {
   return names.join(' · ');
