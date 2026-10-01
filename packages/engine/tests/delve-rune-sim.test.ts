@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   NEUTRAL,
+  baseCost,
   blowNumbers,
   defaultBasic,
   followBasic,
   mergeKnobs,
 } from '../src/arpg/abilities/resolve.js';
+import { nextMove } from '../src/arpg/abilities/cast.js';
 import { shedShards } from '../src/arpg/abilities/impact.js';
 import { landBlow } from '../src/arpg/basic.js';
 import { applyStatus, hurtHero, makeCtx } from '../src/arpg/combat.js';
@@ -13,7 +15,7 @@ import { stepWorld } from '../src/arpg/step.js';
 import { respawnHero } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
-import type { Blow } from '../src/types/ability.js';
+import type { Blow, ResolvedAbility } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
 import type { EquippedGear } from '../src/types/gear.js';
 import type { RuneRef, RuneTier } from '../src/types/rune.js';
@@ -107,6 +109,8 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
   it('Widen: a Nova reaches further (radius × area) at its power cut', () => {
     const at = (runes: RuneRef[]) => {
       const w = world([dummy(13, 28)], { ultimate: { payment: 'mana', runes } });
+      // A pool that pays the loaded Nova (see the rune costs spec).
+      w.hero.manaMax = w.hero.mana = 200;
       press(w, 2);
       return { w, ab: moveOf(w, 2) };
     };
@@ -337,10 +341,15 @@ describe('Quick and Heavy (the quick knob)', () => {
     expect(heavy.beat / plain.beat).toBeCloseTo(1.2);
     expect(heavy.windup / plain.windup).toBeCloseTo(1.2);
     expect(heavy.cooldown).toBeCloseTo(plain.cooldown);
-    // A cast payment's channel and a charge payment's lockout scale too.
+    // A cast payment's channel and a charge payment's lockout scale too (the channel by the
+    // rune's load as well: see the rune costs spec).
     const castPaid = (runes: RuneRef[]) =>
       moveOf(world([], { primary: { payment: 'cast', runes } }), 0);
-    expect(castPaid([R('heavy')]).castTime / castPaid([]).castTime).toBeCloseTo(1.2);
+    const [heavyCast, plainCast] = [castPaid([R('heavy')]), castPaid([])];
+    expect(heavyCast.conjure / plainCast.conjure).toBeCloseTo(1.2);
+    expect(heavyCast.channel / plainCast.channel).toBeCloseTo(
+      1.2 * (1 + heavyCast.load * bal.runes.load.cast),
+    );
     const nova = (runes: RuneRef[]) => moveOf(world([], { ultimate: { runes } }), 2).cooldown;
     expect(nova([R('quick')])).toBeCloseTo(bal.abilities.chargeLockout * 0.8);
   });
@@ -853,8 +862,10 @@ describe('Drain (the manaOnHit knob)', () => {
   it('an ability: mana per foe hit, up to drainFoes foe-hits a cast', () => {
     const nova = (runes: RuneRef[]) => {
       const w = world(pack, { ultimate: { payment: 'mana', runes } });
+      // A pool that pays the loaded Nova; each cast's own price is added back below.
+      w.hero.manaMax = w.hero.mana = 200;
       const events = press(w, 2);
-      return { mana: w.hero.mana, hits: skillHits(events, 2).length };
+      return { mana: w.hero.mana + moveOf(w, 2).cost, hits: skillHits(events, 2).length };
     };
     const plain = nova([]);
     const drain = nova([R('drain')]);
@@ -869,9 +880,9 @@ describe('Drain (the manaOnHit knob)', () => {
       });
       w.hero.drained[0] = bal.runes.drainFoes;
       press(w, 0);
-      return w.hero.mana;
+      return w.hero.mana + moveOf(w, 0).cost;
     };
-    // Drain I: 1 a foe-hit, under the medium Lance's half of its cost (4).
+    // Drain I: 1 a foe-hit, under the medium Lance's half of its cost before its load (4).
     expect(lance([R('drain', 1)]) - lance([])).toBeCloseTo(3 * 1);
   });
 
@@ -894,7 +905,7 @@ describe('Drain (the manaOnHit knob)', () => {
       const w = world([dummy(13, 30)], { primary: { form: 'volley', runes } });
       w.hero.mana = 20;
       const events = [...press(w, 0), ...run(w, 1)];
-      return { mana: w.hero.mana, hits: skillHits(events).length };
+      return { mana: w.hero.mana + moveOf(w, 0).cost, hits: skillHits(events).length };
     };
     const drain = volley([R('drain', 1)]);
     expect(drain.hits).toBe(3);
@@ -1070,15 +1081,20 @@ describe('the balance pass: Linger leaves at most lingerZones zones a cast', () 
 describe('the balance pass: Drain gives back at most drainShare of a cast’s mana', () => {
   const line = () => [dummy(13, 33), dummy(13, 31), dummy(13, 29)];
 
-  it('an ability: at most half its own mana cost a cast, however many foes it hits', () => {
+  it('an ability: at most half its own mana cost before its load a cast, however many foes it hits', () => {
     const lance = (runes: RuneRef[]) => {
       const w = world(line(), { primary: { form: 'lance', runes } });
       press(w, 0);
-      return { mana: w.hero.mana, cost: moveOf(w, 0).cost };
+      const ab = moveOf(w, 0);
+      return { mana: w.hero.mana + ab.cost, ab };
     };
     const plain = lance([]);
-    // Three foes at Drain III would be 6; a medium Lance costs 8, so 4 comes back.
-    expect(lance([R('drain')]).mana - plain.mana).toBeCloseTo(plain.cost * bal.runes.drainShare);
+    const drain = lance([R('drain')]);
+    // Three foes at Drain III would be 6; a medium Lance costs 8 before Drain's own load, so 4
+    // comes back (the rune costs spec: `baseCost`).
+    expect(drain.ab.cost).toBeGreaterThan(plain.ab.cost);
+    expect(baseCost(drain.ab)).toBeCloseTo(plain.ab.cost);
+    expect(drain.mana - plain.mana).toBeCloseTo(baseCost(drain.ab) * bal.runes.drainShare);
   });
 
   it('a blow: at most half the mana a blow brings', () => {
@@ -1091,5 +1107,68 @@ describe('the balance pass: Drain gives back at most drainShare of a cast’s ma
     expect(blow([R('drain', 5)]) - blow([])).toBeCloseTo(
       bal.mana.basicAttackGain * bal.runes.drainShare,
     );
+  });
+});
+
+describe('the price in the sim (see the rune costs spec)', () => {
+  const still = { x: 0, y: 0 };
+  /** The Primary, a medium Fire Bolt holding `runes`, its pool's regen stopped. */
+  const priced = (runes: RuneRef[], o: ArenaOpts = {}) => {
+    const w = world([dummy(13, 30)], { ...o, primary: { runes, ...o.primary } });
+    w.hero.manaRegen = 0;
+    return w;
+  };
+
+  it('refuses a move the pool covers only before its load (noMana), paying nothing', () => {
+    const w = priced([R('echo')]);
+    const ab = moveOf(w, 0);
+    w.hero.mana = baseCost(ab) + 0.1;
+    const events = press(w, 0);
+    expect(events.some((e) => e.kind === 'noMana' && e.slot === 0)).toBe(true);
+    expect(events.some((e) => e.kind === 'cast')).toBe(false);
+    expect(w.hero.mana).toBeCloseTo(baseCost(ab) + 0.1);
+    // With its loaded price in the pool, it casts.
+    w.hero.mana = ab.cost;
+    expect(press(w, 0).some((e) => e.kind === 'cast' && e.slot === 0)).toBe(true);
+  });
+
+  it("a held button whose loaded move the pool can't pay holds no swing back (pressDue)", () => {
+    /** Swings that start before the Primary's beat ends, its button held, with `mana` in the pool. */
+    const swings = (mana: (ab: ResolvedAbility) => number) => {
+      const w = arena([dummy(13, 34.4)], { primary: { runes: [R('echo')] } });
+      w.hero.nextAttackAt = 1e9;
+      press(w, 0);
+      w.hero.manaRegen = 0;
+      w.hero.cooldowns[0].fill(0);
+      w.hero.mana = mana(nextMove(w.hero, 0, w.t, bal.abilities.comboWindow)!);
+      const ready = w.hero.beatUntil[0];
+      const b = w.hero.stats.weapon.blows[0];
+      const startup = w.hero.stats.attackInterval * b.time * b.startup;
+      // Idle until a swing starting next tick would strike after the beat's end, then arm it.
+      while (w.t + STEP + startup <= ready)
+        stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+      w.hero.nextAttackAt = w.t;
+      let n = 0;
+      while (w.t + STEP < ready - 1e-9) {
+        const before = w.hero.swing;
+        stepWorld(registry, w, { move: still, holding: 0 }, STEP);
+        if (w.hero.swing && w.hero.swing !== before) n++;
+      }
+      return n;
+    };
+    // Paid for, the held button holds the swing back for its press; short of the load, it doesn't.
+    expect(swings((ab) => ab.cost)).toBe(0);
+    expect(swings((ab) => baseCost(ab) + 0.1)).toBe(1);
+  });
+
+  it('a hold whose full charge the pool covers only before its load lets go at stage 1', () => {
+    const w = priced([R('leech', 1)], { primary: { kind: 'hold' } });
+    const [, stage1, stage2] = w.hero.chains[0]!.hold[0]!;
+    const start = baseCost(stage2) + 0.1;
+    w.hero.mana = start;
+    expect(stage1.cost).toBeLessThan(start);
+    expect(stage2.cost).toBeGreaterThan(start);
+    holdFor(w, 0, bal.chains.holdTime * w.hero.stats.tempo + 0.1);
+    expect(w.hero.mana).toBeCloseTo(start - stage1.cost);
   });
 });

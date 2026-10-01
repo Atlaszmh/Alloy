@@ -62,9 +62,9 @@ describe('rune costs: the data', () => {
     expect(ok({ ...split, load: [0.36, 0.27, 0.45, 0.54, 0.63] })).toBe(false);
   });
 
-  it('ships delve.runes.load with every slot at 0, so every load is 0', () => {
+  it('ships delve.runes.load with every slot at 1', () => {
     expect(registry.getDelveBalance().runes.load).toEqual({
-      bySlot: { primary: 0, defensive: 0, ultimate: 0 },
+      bySlot: { primary: 1, defensive: 1, ultimate: 1 },
       byForm: {},
       charge: 1,
       cast: 1,
@@ -384,7 +384,8 @@ describe('basicIncome and manaSupport', () => {
       [undefined, 158.57566058873041, 1573],
     ];
     for (const [chains, dps, power] of cases) {
-      const e = estimateCombat(hero, registry, 10, chains);
+      // The chains are runed: v0.51.0's numbers are theirs with the loads zeroed.
+      const e = estimateCombat(hero, unloaded, 10, chains);
       expect(e.power).toBe(power);
       expect(e.dps).toBeCloseTo(dps, 9);
     }

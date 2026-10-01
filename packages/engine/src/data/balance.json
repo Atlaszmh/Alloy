@@ -197,7 +197,7 @@
       "tierDepths": [1, 7, 13, 21, 31], "tierUp": 0.2,
       "echoDelay": 0.4, "guardSeconds": 3, "drainFoes": 5, "drainShare": 0.5, "shardSpeed": 12, "shardRange": 4,
       "load": {
-        "bySlot": { "primary": 0, "defensive": 0, "ultimate": 0 }, "byForm": {},
+        "bySlot": { "primary": 1, "defensive": 1, "ultimate": 1 }, "byForm": {},
         "charge": 1, "cast": 1, "easePerAttune": 0.03, "easeCap": 0.6
       }
     },

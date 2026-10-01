@@ -62,6 +62,10 @@ function registryWith(change: (bal: DelveBalance) => void): DataRegistry {
     d.arpg,
   );
 }
+/** The runes without their price: every load zeroed (see the rune costs spec). */
+const unloaded = registryWith((b) => {
+  b.runes.load.bySlot = { primary: 0, defensive: 0, ultimate: 0 };
+});
 
 /** A profile's estimate, as `heroPower` makes it: its pair's stats and its weapon's chains. */
 function estimate(p: DelveProfile, depth: number) {
@@ -223,18 +227,27 @@ describe('Power values a rune as the DPS Lab measures it (tier III, depth 10)', 
     60_000,
   );
 
-  it('Guard and Leech add life; Drain never costs DPS, and adds it where mana binds', () => {
+  it('Guard and Leech add life where their move is cast; Drain adds DPS on some setup', () => {
     const estimateOf = (s: DpsSetup) => estimateCombat(heroOf(s), registry, DEPTH, s.chains);
+    /** Whether the pool pays every move of the held skill (a blow always: blows are free). */
+    const cast = (s: DpsSetup) => {
+      if (s.hold === 'attack') return true;
+      const skill = ABILITY_SLOTS[s.hold.slot];
+      const stats = heroOf(s);
+      const chain = resolveChain(registry, stats, skill, s.chains[skill]);
+      return !valuedChain(chain, manaPool(stats, registry).max).includes(null);
+    };
     let drained = 0;
     for (const s of socketed) {
       if (!SIGN_ONLY.includes(s.dims.rune)) continue;
       const [now, before] = [estimateOf(s), estimateOf(byKey.get(s.base!)!)];
-      if (s.dims.rune !== 'drain') expect(now.ehp, dpsKey(s)).toBeGreaterThan(before.ehp);
-      else {
-        expect(now.dps, dpsKey(s)).toBeGreaterThanOrEqual(before.dps);
+      if (s.dims.rune === 'drain') {
         if (now.dps > before.dps) drained++;
-      }
+      } else if (cast(s)) expect(now.ehp, dpsKey(s)).toBeGreaterThan(before.ehp);
+      // A runed mana Ultimate the depth-10 pool can't hold is never cast: it adds no life.
+      else expect(now.ehp, dpsKey(s)).toBe(before.ehp);
     }
+    // Drain's own load can outweigh its refund (the rune costs spec), but not everywhere.
     expect(drained).toBeGreaterThan(0);
   });
 });
@@ -323,15 +336,16 @@ describe('the autopilot and runes', () => {
         payment: 'mana',
       },
     });
-    // No rune to put in: no socket opens, and the Links stay (the scrap goes to upgrades).
-    const empty = betweenDives(registry, { ...full, links: 17, scrap: 340 });
+    // With the runes' price zeroed, so every Leech and Guard nets Power (the price is the next
+    // test's). No rune to put in: no socket opens, and the Links stay (the scrap goes to upgrades).
+    const empty = betweenDives(unloaded, { ...full, links: 17, scrap: 340 });
     expect(sockets(empty, 'primary')).toEqual([0, 0, 0, 0, 0]);
     expect(empty.links).toBe(17);
     // The first sockets (1 Link + 20 scrap each), then second ones (2 + 40), each filled as it
     // opens: none on the fourth and fifth Wards, where neither rune adds Power, so the Primary's
     // and the basic chain's first moves take a second.
     const runes = { leech: [20, 0, 0, 0, 0], guard: [20, 0, 0, 0, 0] };
-    const after = betweenDives(registry, { ...full, links: 17, scrap: 340, runes });
+    const after = betweenDives(unloaded, { ...full, links: 17, scrap: 340, runes });
     expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
     expect(sockets(after, 'basic')).toEqual([2, 1, 1, 1, 1]);
     expect(sockets(after, 'defensive')).toEqual([1, 1, 1, 0, 0]);
@@ -372,6 +386,18 @@ describe('the autopilot and runes', () => {
     expect(primaryRunes(after)).toEqual([III('echo')]);
     expect(after.scrap).toBe(1000);
     expect(after.dive!.stop!.taken).toBe(true);
+  });
+
+  it("opens no Primary socket for a rune whose price outweighs it: the Primary's loads × 10", () => {
+    const p = { ...bolt(veteran(), []), links: 5, scrap: 200, runes: { echo: [0, 0, 1, 0, 0] } };
+    const opened = (r: DataRegistry) =>
+      sockets(betweenDives(r, p), 'primary').reduce((a, n) => a + n, 0);
+    // At the shipped loads Echo III nets Power on the Bolt, so a socket opens for it.
+    expect(opened(registry)).toBe(1);
+    const dear = registryWith((b) => {
+      b.runes.load.bySlot.primary = 10;
+    });
+    expect(opened(dear)).toBe(0);
   });
 
   it('values a transfer without the runes it would destroy (a rare holds two sockets a move)', () => {
@@ -457,5 +483,37 @@ describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
       estimateCombat(s, small, DEPTH, { ...rest, defensive: ward('medium') }).ehp,
     ).toBeGreaterThan(without.ehp);
     expect(estimateCombat(s, small, DEPTH, { ...rest, defensive: ward('heavy') })).toEqual(without);
+  });
+
+  it('a runed Primary: its v0.51.0 Power with the loads zeroed, and less with them', () => {
+    // Echo, Heavy and Linger III on every move of a Bolt's default chain (mana-bound at a pool of 66).
+    const runes = ['echo', 'heavy', 'linger'].map(III);
+    const runed = withChains(starter, {
+      primary: {
+        moves: (['light', 'medium', 'medium', 'heavy'] as const).map((kind) => ({
+          ...bolt(kind),
+          runes,
+        })),
+        payment: 'mana',
+      },
+    });
+    const at = (r: DataRegistry) =>
+      estimateCombat(profileStats(r, runed), r, DEPTH, chainsOf(runed));
+    expect(at(unloaded)).toEqual({ dps: 97.61729476678113, ehp: 162.01086642686363, power: 1258 });
+    expect(at(registry).dps).toBeLessThan(at(unloaded).dps);
+    expect(at(registry).power).toBeLessThan(at(unloaded).power);
+  });
+
+  it('a runed mana Ultimate the pool can no longer hold lowers Power: a medium Nova (60) with Leech I at a pool of 66', () => {
+    const runedNova = (runes: RuneRef[]): Chain => ({
+      moves: [{ kind: 'medium', form: 'nova', elements: ['fire'], runes }],
+      payment: 'mana',
+    });
+    const leech = [{ id: 'leech', tier: 1 as const }];
+    expect(chain('ultimate', runedNova([]).moves).moves[0].cost).toBeLessThanOrEqual(pool);
+    expect(chain('ultimate', runedNova(leech).moves).moves[0].cost).toBeGreaterThan(pool);
+    const power = (c: Chain) =>
+      estimateCombat(stats, registry, DEPTH, { ...chainsOf(starter), ultimate: c }).power;
+    expect(power(runedNova(leech))).toBeLessThan(power(runedNova([])));
   });
 });

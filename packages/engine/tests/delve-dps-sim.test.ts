@@ -17,12 +17,35 @@ import {
   type DpsSetup,
 } from '../src/arpg/dps-sim.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
+import { loadAndValidateData } from '../src/data/loader.js';
+import { DataRegistry } from '../src/data/registry.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import { runeFits } from '../src/loot/runes.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld } from '../src/types/arpg.js';
+import type { DelveBalance } from '../src/types/delve.js';
 import { arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
 
 type Hit = Extract<ArpgEvent, { kind: 'hit' }>;
+
+/** The default data with its Delve balance changed by `change`. */
+function registryWith(change: (bal: DelveBalance) => void): DataRegistry {
+  const d = loadAndValidateData();
+  change(d.balance.delve!);
+  return new DataRegistry(
+    d.affixes,
+    d.combinations,
+    d.synergies,
+    d.baseItems,
+    d.balance,
+    d.recipes,
+    d.delve,
+    d.arpg,
+  );
+}
+/** The runes without their price: every load zeroed (see the rune costs spec). */
+const unloaded = registryWith((b) => {
+  b.runes.load.bySlot = { primary: 0, defensive: 0, ultimate: 0 };
+});
 
 /** The hits of one source (the Training meter buckets by source first). */
 function hitsFrom(events: ArpgEvent[], source: Hit['source']): Hit[] {
@@ -432,7 +455,8 @@ describe('the rune view (see the runes spec)', () => {
   });
 
   it('averages RUNE_SEEDS combat seeds: a Barrage rains its impacts at random', () => {
-    const s = setup('rune|multishot|barrage|fire|III');
+    // The baseline: a runed mana Ultimate costs more than the depth-10 pool (the rune costs spec).
+    const s = setup('rune|none|barrage|fire|none');
     const seeds = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
       simulateDps(registry, s, { ...ONE, seed }),
     );
@@ -451,9 +475,24 @@ describe('the rune view (see the runes spec)', () => {
     expect(ratio(PACK)).toBeLessThan(1.6);
   });
 
-  it('a rune changes what the held button deals: Echo III on a Bolt beats its baseline', () => {
-    const dps = (key: string) => simulateDps(registry, setup(key), ONE).dps;
-    expect(dps('rune|echo|bolt|fire|III')).toBeGreaterThan(dps('rune|none|bolt|fire|none') * 1.2);
+  it('a rune changes what the held button deals: Echo III on a Bolt beats its baseline, and its price takes some back', () => {
+    const ratio = (r: typeof registry) =>
+      simulateDps(r, setup('rune|echo|bolt|fire|III'), ONE).dps /
+      simulateDps(r, setup('rune|none|bolt|fire|none'), ONE).dps;
+    expect(ratio(unloaded)).toBeGreaterThan(1.2);
+    expect(ratio(registry)).toBeLessThan(ratio(unloaded));
+  });
+
+  it('a rune-less row is the same with the loads zeroed', () => {
+    for (const key of [
+      'ability|bolt|fire|none|default|mana',
+      'ability|nova|frost|fire|hold|charge',
+      'ability|lance|storm|none|heavy|cast',
+      'rune|none|volley|fire|none',
+    ])
+      expect(simulateDps(registry, setup(key), PACK)).toEqual(
+        simulateDps(unloaded, setup(key), PACK),
+      );
   });
 });
 
