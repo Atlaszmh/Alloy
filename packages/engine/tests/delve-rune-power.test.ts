@@ -107,7 +107,7 @@ describe('Power without runes', () => {
         'mana',
         stats,
       );
-    expect(move('volley', [III('multishot')]).count).toBe(move('volley', []).count + 2);
+    expect(move('volley', [III('multishot')]).count).toBe(move('volley', []).count + 1);
     expect(move('bolt', [III('multishot')]).power).toBeCloseTo(move('bolt', []).power * 0.725);
   });
 });

@@ -68,9 +68,9 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
     const heavy = moveOf(world([], { primary: { runes: [R('heavy')] } }), 0);
     expect(heavy.power / plain.power).toBeCloseTo(1.3);
     expect(heavy.knobs.applies).toEqual(['burn', 'stagger']);
-    const pierce = moveOf(world([], { primary: { runes: [R('pierce', 2)] } }), 0);
+    const pierce = moveOf(world([], { primary: { runes: [R('pierce', 4)] } }), 0);
     expect(pierce.knobs.pierce).toBe(2);
-    expect(pierce.power / plain.power).toBeCloseTo(0.9);
+    expect(pierce.power / plain.power).toBeCloseTo(0.675);
     // Linger under Magma (Fire + Earth: 3 s at 0.25): the longer zone, at the stronger tick.
     const magma = world([], { primary: { elements: ['fire', 'earth'], runes: [R('linger', 5)] } });
     expect(moveOf(magma, 0).knobs.zone).toEqual({ seconds: 3.5, tickPower: 0.25, perCast: 3 });
@@ -86,7 +86,7 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
 
   it('Pierce: a Bolt passes that many foes, bursting on each, and dies on the next', () => {
     const w = world([dummy(13, 33), dummy(13, 31), dummy(13, 29), dummy(13, 27)], {
-      primary: { runes: [R('pierce', 2)] },
+      primary: { runes: [R('pierce', 4)] },
     });
     press(w, 0);
     run(w, 1);
@@ -95,7 +95,7 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
 
   it('Chain: the Bolt jumps from the first foe it bursts on', () => {
     const w = world([dummy(13, 30), dummy(16, 30), dummy(19, 30)], {
-      primary: { runes: [R('chain')] },
+      primary: { runes: [R('chain', 4)] },
     });
     const events = [...press(w, 0), ...run(w, 1)];
     const chain = events.find((e) => e.kind === 'chain');
@@ -110,8 +110,8 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
       return { w, ab: moveOf(w, 2) };
     };
     const plain = at([]);
-    const wide = at([R('widen')]);
-    expect(wide.ab.radius / plain.ab.radius).toBeCloseTo(1.4);
+    const wide = at([R('widen', 5)]);
+    expect(wide.ab.radius / plain.ab.radius).toBeCloseTo(1.25);
     expect(wide.ab.power / plain.ab.power).toBeCloseTo(0.9);
     expect(plain.w.monsters[0].hp).toBe(plain.w.monsters[0].maxHp);
     expect(wide.w.monsters[0].hp).toBeLessThan(wide.w.monsters[0].maxHp);
@@ -167,7 +167,7 @@ describe('basic blows carry their runes (computeHeroStats)', () => {
     expect(light.knobs.zone).toBeNull();
     expect(heavy.runes).toEqual([R('linger'), R('chain')]);
     expect(heavy.knobs.zone).toEqual({ seconds: 2.5, tickPower: 0.2, perCast: 3 });
-    expect(heavy.knobs.chain).toBe(2);
+    expect(heavy.knobs.chain).toBe(1);
     expect(blowsOf('sword', [{ kind: 'light', element: 'fire' }])[0].knobs).toEqual(NEUTRAL);
   });
 
@@ -177,7 +177,7 @@ describe('basic blows carry their runes (computeHeroStats)', () => {
       { kind: 'medium', element: 'fire', runes: [R('pierce')] },
     ]);
     expect(light.runes).toEqual([R('pierce')]);
-    expect(light.knobs.pierce).toBe(3);
+    expect(light.knobs.pierce).toBe(1);
     expect(medium.runes).toEqual([]);
     expect(medium.knobs.pierce).toBe(0);
   });
@@ -270,7 +270,7 @@ describe("a blow's runes where it lands (landBlow)", () => {
       return w.monsters[0].hp < w.monsters[0].maxHp;
     };
     expect(reaches([])).toBe(false);
-    expect(reaches([R('widen')])).toBe(true);
+    expect(reaches([R('widen', 5)])).toBe(true);
   });
 
   it('Leech: a blow heals a share of its damage', () => {
@@ -292,9 +292,9 @@ describe("a blow's runes where it lands (landBlow)", () => {
       run(w, 1);
       return w.monsters.map((m) => m.hp < m.maxHp);
     };
-    expect(shoot('wand', light([R('pierce', 2)]))).toEqual([true, true, true, false]);
+    expect(shoot('wand', light([R('pierce', 4)]))).toEqual([true, true, true, false]);
     expect(shoot('wand', light())).toEqual([true, false, false, false]);
-    const medium: Blow = { kind: 'medium', element: 'fire', runes: [R('pierce', 2)] };
+    const medium: Blow = { kind: 'medium', element: 'fire', runes: [R('pierce', 4)] };
     expect(shoot('staff', medium)).toEqual([true, false, false, false]);
   });
 
@@ -430,17 +430,18 @@ describe('Multi-shot (the extraShots knob)', () => {
     moveOf(world([], { ultimate: { form: 'barrage', runes } }), 2);
 
   it('adds to Volley’s darts and Barrage’s impacts; the cut is full on a Bolt, half on Volley, none on Barrage', () => {
-    expect(primary('volley', [R('multishot')]).count).toBe(primary('volley').count + 2);
-    expect(primary('volley', [R('multishot')]).power / primary('volley').power).toBeCloseTo(0.8625);
-    expect(barrage([R('multishot')]).count).toBe(barrage().count + 2);
-    expect(barrage([R('multishot')]).power).toBeCloseTo(barrage().power);
-    expect(primary('bolt', [R('multishot')]).count).toBe(primary('bolt').count);
-    expect(primary('bolt', [R('multishot')]).power / primary('bolt').power).toBeCloseTo(0.725);
+    const IV = [R('multishot', 4)];
+    expect(primary('volley', IV).count).toBe(primary('volley').count + 2);
+    expect(primary('volley', IV).power / primary('volley').power).toBeCloseTo(0.88125);
+    expect(barrage(IV).count).toBe(barrage().count + 2);
+    expect(barrage(IV).power).toBeCloseTo(barrage().power);
+    expect(primary('bolt', IV).count).toBe(primary('bolt').count);
+    expect(primary('bolt', IV).power / primary('bolt').power).toBeCloseTo(0.7625);
   });
 
   it('a Bolt fans its extra bolts; a Volley fires its extra darts', () => {
     const fired = (form: 'bolt' | 'volley') => {
-      const w = world([dummy(13, 28)], { primary: { form, runes: [R('multishot')] } });
+      const w = world([dummy(13, 28)], { primary: { form, runes: [R('multishot', 4)] } });
       press(w, 0);
       return w.projectiles.filter((p) => p.form === form);
     };
@@ -463,7 +464,7 @@ describe('Multi-shot (the extraShots knob)', () => {
       return { w, events, near: hitsOn(0), aside: hitsOn(1) };
     };
     expect(cast([])).toMatchObject({ near: 1, aside: 0 });
-    const fan = cast([R('multishot'), R('linger')]);
+    const fan = cast([R('multishot', 4), R('linger')]);
     expect(fan.events.filter((e) => e.kind === 'beam')).toHaveLength(3);
     expect(fan).toMatchObject({ near: 1, aside: 1 });
     expect(fan.w.zones.filter((z) => z.owner === 'hero' && z.ability)).toHaveLength(2);
@@ -478,14 +479,14 @@ describe('Multi-shot (the extraShots knob)', () => {
       return w.projectiles.filter((p) => p.owner === 'hero');
     };
     const plain = shots([]);
-    const fan = shots([R('multishot')]);
+    const fan = shots([R('multishot', 4)]);
     expect(plain).toHaveLength(1);
     expect(fan).toHaveLength(3);
-    for (const p of fan) expect(p.damage / plain[0].damage).toBeCloseTo(0.725);
+    for (const p of fan) expect(p.damage / plain[0].damage).toBeCloseTo(0.7625);
   });
 
   it("Twin Fang's extra shot stays one, without runes", () => {
-    const w = blowWorld([light([R('multishot')])], [dummy(13, 30)], {
+    const w = blowWorld([light([R('multishot', 4)])], [dummy(13, 30)], {
       weapon: gear('fire', 'weapon', 'wand'),
     });
     w.hero.stats.legendaries.twin_fang = 50;
@@ -607,7 +608,7 @@ describe('Chain on blows (chainJumps)', () => {
   const line = [dummy(13, 34.5), dummy(13, 31.5), dummy(13, 28.5), dummy(13, 25.5)];
 
   it('a melee blow jumps from the first foe it strikes', () => {
-    const w = blowWorld([light([R('chain')])], line);
+    const w = blowWorld([light([R('chain', 4)])], line);
     expect(chained(w, firstBlow(w))).toEqual({ points: [3], hit: [true, true, true, false] });
     const plain = blowWorld([light()], line);
     expect(chained(plain, firstBlow(plain))).toEqual({
@@ -626,7 +627,7 @@ describe('Chain on blows (chainJumps)', () => {
   });
 
   it('a shot blow jumps from the foe it hits', () => {
-    const w = blowWorld([light([R('chain')])], line.slice(1), {
+    const w = blowWorld([light([R('chain', 4)])], line.slice(1), {
       weapon: gear('fire', 'weapon', 'wand'),
     });
     const events = [...firstBlow(w), ...until(w, 'chain')];
@@ -998,11 +999,11 @@ describe('the balance pass: shape runes add, they do not multiply', () => {
       const events = [...press(w, 0), ...run(w, 1)];
       return { w, events };
     };
-    const chain = cast([R('pierce'), R('chain')]);
+    const chain = cast([R('pierce', 4), R('chain')]);
     expect(chain.w.monsters.slice(0, 3).every((m) => m.hp < m.maxHp)).toBe(true);
     expect(chain.events.filter((e) => e.kind === 'chain')).toHaveLength(1);
-    expect(heroZones(cast([R('pierce'), R('linger')]).w)).toHaveLength(1);
-    const split = cast([R('pierce'), R('split')]);
+    expect(heroZones(cast([R('pierce', 4), R('linger')]).w)).toHaveLength(1);
+    const split = cast([R('pierce', 4), R('split')]);
     expect(split.events.filter((e) => e.kind === 'runeFx' && e.effect === 'split')).toHaveLength(1);
   });
 

@@ -250,11 +250,20 @@ describe('data: runes', () => {
     expect(at('multishot').map((t) => t.extraShots)).toEqual([
       { count: 1, power: 0.65 },
       { count: 1, power: 0.6875 },
-      { count: 2, power: 0.725 },
+      { count: 1, power: 0.725 },
       { count: 2, power: 0.7625 },
-      { count: 3, power: 0.8 },
+      { count: 2, power: 0.8 },
     ]);
-    expect(at('pierce')).toEqual([1, 2, 3, 4, 5].map((pierce) => ({ pierce, power: 0.9 })));
+    // The balance pass: Pierce passes fewer foes at a steeper cut, Chain jumps less, Widen grows less.
+    expect(at('pierce')).toEqual([
+      { pierce: 1, power: 0.6 },
+      { pierce: 1, power: 0.625 },
+      { pierce: 1, power: 0.65 },
+      { pierce: 2, power: 0.675 },
+      { pierce: 2, power: 0.7 },
+    ]);
+    expect(at('chain').map((t) => t.chain)).toEqual([1, 1, 1, 2, 2]);
+    expect(at('widen')).toEqual([1.05, 1.1, 1.15, 1.2, 1.25].map((area) => ({ area, power: 0.9 })));
     expect(at('heavy')[2]).toEqual({
       power: 1.3,
       applies: ['stagger'],
