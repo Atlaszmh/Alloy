@@ -1,29 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
-  CHAIN_SKILLS,
   baseDisplayName,
-  carriedByText,
   carriedSkills,
   inPair,
   isDiveActive,
   itemAffinityAttunement,
   itemStatLines,
-  movesetOf,
   movesetTransfer,
   pairElements,
-  profileStats,
   reattuneCost,
   reforgeCost,
-  resolveChain,
   salvageDust,
   salvageValue,
-  socketCap,
   unsocketMode,
   upgradeCost,
   weaponParts,
-  type AbilitySlot,
-  type Blow,
-  type GearItem,
   type ManaType,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
@@ -33,12 +24,12 @@ import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
-import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
-import { ItemSockets } from './runes/ItemSockets';
+import { SKILL_NAME } from './chains/chain-text';
 import { useItemComparison } from './items/useItemComparison';
 import { PowerDelta } from './items/PowerDelta';
 import { AffixLine, ImplicitLine } from './items/ItemStatLines';
 import { LegendaryBox } from './items/LegendaryBox';
+import { MovesetView } from './items/MovesetView';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
@@ -53,51 +44,6 @@ interface ItemDetailSheetProps {
   onClose: () => void;
   /** Open the chain builder (the Anvil): the equipped weapon's sheet links to it. */
   onBuild?: () => void;
-}
-
-/**
- * A weapon's moveset: each chain it carries with its slots ("Primary 2/5") and
- * moves, named as the chain builder names them ("medium Wildfire Burst").
- */
-function MovesetView({ item }: { item: GearItem }) {
-  const registry = getDelveRegistry();
-  const profile = useDelveStore((s) => s.profile);
-  // Only the moves' names are read: the hero's stats resolve them as well as any.
-  const stats = useMemo(() => profileStats(registry, profile), [registry, profile]);
-  const { chains, slots } = movesetOf(registry, item);
-  const cap = registry.getDelveBalance().chains.cap;
-  const carried = carriedSkills(registry, item.rarity);
-  return (
-    <div
-      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-xs"
-      data-testid="item-moveset"
-    >
-      <div className="delve-display text-[11px] font-bold uppercase tracking-widest text-amber-300/80">
-        Moveset
-      </div>
-      {CHAIN_SKILLS.map((s) => {
-        const chain = chains[s];
-        if (!carried.includes(s) || !chain)
-          return (
-            <div key={s} className="text-stone-500" data-testid={`moveset-${s}`}>
-              {SKILL_NAME[s]}: {carriedByText(registry, s).toLowerCase()}
-            </div>
-          );
-        const names = Array.isArray(chain)
-          ? chain.map((b: Blow) => blowText(registry, b))
-          : resolveChain(registry, stats, s as AbilitySlot, chain).moves.map(moveText);
-        return (
-          <div key={s} className="text-stone-300" data-testid={`moveset-${s}`}>
-            <b className="text-stone-100">
-              {SKILL_NAME[s]} {slots[s]}/{cap[s]}
-            </b>{' '}
-            · {chainText(names)}
-          </div>
-        );
-      })}
-      <ItemSockets chains={chains} cap={socketCap(registry, item.rarity)} />
-    </div>
-  );
 }
 
 export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps) {
