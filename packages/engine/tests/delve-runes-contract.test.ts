@@ -473,20 +473,6 @@ describe('rune helpers: sockets and the pouch', () => {
   });
 });
 
-// Stubs in wave 0 ("not built yet"); wave 1B builds them and may delete these lines.
-describe('wave 1B: delve/runes.ts and arpg/rune-drops.ts', () => {
-  it.todo('unsocketMode: the override, else balance.delve.runes.unsocket');
-  it.todo(
-    'runeChange and draftPrice: sockets opened, runes socketed and pulled, net Links, refusals',
-  );
-  it.todo('openSocket, socketRune, fusePrice and fuseRunes');
-  it.todo('bankWorld banks pending.runes into the pouch and returns them (no longer runes: [])');
-  it.todo(
-    "stopKinds offers 'rune' when an empty socket and a fitting pouch rune exist (no longer false)",
-  );
-  it.todo('dropRune: a rune Drop from rollRuneDrop on world.runeRng, none in the sandbox');
-});
-
 describe('the sim and the index: the contract is in place', () => {
   it('sets up a world and a hero with no echoes, no runes pending, nothing drained and a rune stream', () => {
     const w = arena([dummy(13, 30)]);

@@ -2,11 +2,14 @@ import type { DataRegistry } from '../data/registry.js';
 import { carriedByText, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
+import { runeFits, socketsOf } from '../loot/runes.js';
 import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, DiveState, DiveStop, StopKind } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem } from '../types/gear.js';
+import type { RuneRef } from '../types/rune.js';
 import { addSlot, moveKey, movesOf, setChain, slotPrice, withMove } from './moveset.js';
 import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
+import { runeTargetOf, socketRune } from './runes.js';
 
 /**
  * Stops between depths (see the weapon movesets spec): after a depth is
@@ -14,22 +17,24 @@ import { equipItem, upgradeGear, type ProfileActionResult } from './profile.js';
  * for that one op. dive.ts imports this module back: keep to function declarations.
  */
 
-/** The four kinds, in the order a stop lists them. */
-export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade'];
+/** The five kinds, in the order a stop lists them. */
+export const STOP_KINDS: readonly StopKind[] = ['equip', 'slot', 'move', 'upgrade', 'rune'];
 
 /** What a stop's player takes: the kind and what it acts on. */
 export type StopAction =
   | { kind: 'equip'; uid: string }
   | { kind: 'slot'; skill: ChainSkill }
   | { kind: 'move'; skill: ChainSkill; index: number; move: Move | Blow }
-  | { kind: 'upgrade'; uid: string };
+  | { kind: 'upgrade'; uid: string }
+  | { kind: 'rune'; skill: ChainSkill; index: number; socket: number; rune: RuneRef };
 
 /**
  * The kinds whose cheapest action `profile` can take and pay for now: `equip`
  * with an item in the bag; `slot` with a chain of the equipped weapon below
  * its cap whose next slot's Links and scrap the hero has; `move` with a weapon
  * equipped and `editDust` in Mana Dust (or free edits, before the first dive);
- * `upgrade` with an item, equipped or in the bag, whose next upgrade it can pay.
+ * `upgrade` with an item, equipped or in the bag, whose next upgrade it can
+ * pay; `rune` with an empty socket and a pouch rune for it (`canSocket`).
  */
 export function stopKinds(registry: DataRegistry, profile: DelveProfile): StopKind[] {
   const weapon = profile.equipped.weapon;
@@ -46,9 +51,32 @@ export function stopKinds(registry: DataRegistry, profile: DelveProfile): StopKi
       }),
     move: !!weapon && canEdit(registry, profile),
     upgrade: items.some((i) => (upgradeCost(registry, i) ?? Infinity) <= profile.scrap),
-    rune: false,
+    rune: canSocket(registry, profile),
   };
   return STOP_KINDS.filter((k) => applies[k]);
+}
+
+/**
+ * Whether some move or blow of the equipped weapon has an empty socket that a
+ * pouch rune fits (by the move's form, or the weapon's blows) and isn't on
+ * that move already.
+ */
+function canSocket(registry: DataRegistry, profile: DelveProfile): boolean {
+  const weapon = profile.equipped.weapon;
+  if (!weapon) return false;
+  const held = Object.keys(profile.runes).filter((id) => profile.runes[id].some((n) => n > 0));
+  const { chains } = movesetOf(registry, weapon);
+  return CHAIN_SKILLS.some((skill) =>
+    movesOf(chains[skill]).some((m) => {
+      const sockets = socketsOf(m);
+      if (!sockets.includes(null)) return false;
+      return held.some((id) => {
+        const def = registry.findRune(id);
+        if (!def || sockets.some((r) => r?.id === id)) return false;
+        return runeFits(def, runeTargetOf(weapon.baseId, m));
+      });
+    }),
+  );
 }
 
 /** Whether one move's edit is affordable: free edits (before the first dive), or `editDust` in Mana Dust. */
@@ -118,10 +146,27 @@ function runStop(
         return { ok: false, profile, reason: `Not a ${action.skill} move` };
       if (moveKey(move) === moveKey(moves[index]))
         return { ok: false, profile, reason: 'Change the move' };
-      return setChain(registry, profile, action.skill, withMove(chain, index, move));
+      // The saved move's sockets and runes stay; any the client sent are ignored.
+      const { runes: _sent, ...shape } = move;
+      const saved = moves[index].runes;
+      const next = (saved ? { ...shape, runes: saved } : shape) as Move | Blow;
+      return setChain(registry, profile, action.skill, withMove(chain, index, next));
     }
     case 'upgrade':
       return upgradeGear(registry, profile, action.uid);
+    case 'rune': {
+      const weapon = profile.equipped.weapon;
+      if (!weapon) return { ok: false, profile, reason: 'Equip a weapon to build your moves' };
+      const chain = movesetOf(registry, weapon).chains[action.skill];
+      if (!chain) return { ok: false, profile, reason: carriedByText(registry, action.skill) };
+      const { index, socket } = action;
+      const move = Number.isInteger(index) ? movesOf(chain)[index] : undefined;
+      if (!move) return { ok: false, profile, reason: 'Socket a rune into a move the chain holds' };
+      // The stop sockets: it never pulls a rune or opens a socket.
+      if (socketsOf(move)[socket] !== null)
+        return { ok: false, profile, reason: 'Socket a rune into an empty socket' };
+      return socketRune(registry, profile, action.skill, index, socket, action.rune);
+    }
   }
 }
 
@@ -129,8 +174,9 @@ function runStop(
  * Take the stop's power-up: its kind must be offered and the stop not yet
  * taken. The op runs at its normal price with the dive lock lifted for it
  * alone (equipping is free, and a weapon brings its own moveset); `move`
- * changes one move of one chain. A refused op leaves the stop open; one taken
- * marks it taken. Skipping is choosing a door.
+ * changes one move of one chain (its sockets and runes stay as saved); `rune`
+ * sockets a pouch rune into an empty socket, free. A refused op leaves the
+ * stop open; one taken marks it taken. Skipping is choosing a door.
  */
 export function takeStop(
   registry: DataRegistry,

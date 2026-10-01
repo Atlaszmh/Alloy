@@ -6,6 +6,7 @@ import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
 import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { setSandboxToggles } from '../src/arpg/sandbox.js';
+import { STOP_KINDS, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
 import { chooseStartingMana } from '../src/delve/pair.js';
 import {
   addLootToBag,
@@ -36,7 +37,7 @@ import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/abi
 import type { ArpgWorld, Drop, DropKind, MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
-import type { DelveProfile } from '../src/types/delve.js';
+import type { DelveProfile, StopKind } from '../src/types/delve.js';
 import type { RunePouch, RuneRef } from '../src/types/rune.js';
 import { arena, bal, chainsOf, dummy, registry, run } from './fixtures/arena.js';
 
@@ -903,5 +904,111 @@ describe('rune drops in the world', () => {
     const again = bankWorld(registry, res.profile, w);
     expect(again.runes).toEqual([]);
     expect(again.profile.dive!.runesEarned).toBe(3);
+  });
+});
+
+describe("the stop's fifth kind: socket a rune", () => {
+  /** `p` diving, on the door screen after depth 1, its stop offering `offers`. */
+  const atStop = (p: DelveProfile, offers: StopKind[] = [...STOP_KINDS]): DelveProfile => {
+    const diving = startDive(registry, p, 1);
+    const stop = { offers, taken: false };
+    const dive = { ...diving.dive!, phase: 'choosing' as const, depthsCleared: 1, stop };
+    return { ...diving, dive: { ...dive, doorChoices: ['winding'] } };
+  };
+
+  it('applies with an empty socket and a pouch rune that fits its move and is not on it', () => {
+    expect(STOP_KINDS).toEqual(['equip', 'slot', 'move', 'upgrade', 'rune']);
+    const p = ready(); // the first Bolt: Split I and an empty socket; Chain I in the pouch
+    expect(stopKinds(registry, p)).toContain('rune');
+    expect(stopKinds(registry, { ...p, runes: {} })).not.toContain('rune');
+    // Only Split: it is on that move already. Only Widen: it fits no Bolt and no bow blow.
+    expect(stopKinds(registry, { ...p, runes: { split: [2, 0, 0, 0, 0] } })).not.toContain('rune');
+    expect(stopKinds(registry, { ...p, runes: { widen: [1, 0, 0, 0, 0] } })).not.toContain('rune');
+    expect(stopKinds(registry, { ...p, runes: { chain: [0, 0, 0, 0, 0] } })).not.toContain('rune');
+    // No empty socket left: none.
+    const full = setChains(registry, p, {
+      primary: withRunes(primaryOf(p), 0, [SPLIT_I, CHAIN_I]),
+    }).profile;
+    expect(stopKinds(registry, { ...full, runes: p.runes })).not.toContain('rune');
+    // A blow's empty socket counts too.
+    const blow = openSocket(registry, full, 'basic', 0).profile;
+    expect(stopKinds(registry, { ...blow, runes: p.runes })).toContain('rune');
+  });
+
+  it('sockets the rune for free with the lock lifted, and marks the stop taken', () => {
+    const p = atStop(ready());
+    const res = takeStop(registry, p, {
+      kind: 'rune',
+      skill: 'primary',
+      index: 0,
+      socket: 1,
+      rune: CHAIN_I,
+    });
+    expect(res.ok).toBe(true);
+    expect(primaryOf(res.profile).moves[0].runes).toEqual([SPLIT_I, CHAIN_I]);
+    expect(res.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 });
+    expect(res.profile.runes.chain).toEqual([0, 0, 0, 0, 0]);
+    expect(res.profile.dive!.stop!.taken).toBe(true);
+  });
+
+  it('refuses a filled socket, one not yet open, and what socketing refuses; the stop stays open', () => {
+    const p = atStop(ready());
+    const take = (index: number, socket: number, rune: RuneRef) =>
+      takeStop(registry, p, { kind: 'rune', skill: 'primary', index, socket, rune });
+    expect(take(0, 0, CHAIN_I)).toMatchObject({
+      ok: false,
+      profile: p,
+      reason: 'Socket a rune into an empty socket',
+    });
+    expect(take(2, 0, CHAIN_I).reason).toBe('Socket a rune into an empty socket');
+    expect(take(0, 0.5, CHAIN_I).reason).toBe('Socket a rune into an empty socket');
+    expect(take(5, 0, CHAIN_I).reason).toBe('Socket a rune into a move the chain holds');
+    expect(take(0, 1, { id: 'widen', tier: 1 }).reason).toBe("Widen doesn't fit a Bolt");
+    expect(take(0, 1, { id: 'split', tier: 1 }).reason).toBe('A move takes one Split');
+    expect(take(0, 1, { id: 'chain', tier: 2 }).reason).toBe('Not enough runes in your pouch');
+    const elsewhere = atStop(ready(), ['equip', 'move']);
+    const action = { kind: 'rune', skill: 'primary', index: 0, socket: 1, rune: CHAIN_I } as const;
+    expect(takeStop(registry, elsewhere, action).reason).toBe('Not offered at this stop');
+  });
+
+  it("the 'move' stop keeps the saved move's runes, whatever the client sends", () => {
+    const p = atStop(ready());
+    const bolt = primaryOf(p).moves[0];
+    const sent = { ...bolt, kind: 'heavy' as const, runes: [CHAIN_I, ECHO_I] };
+    const res = takeStop(registry, p, { kind: 'move', skill: 'primary', index: 0, move: sent });
+    expect(res.ok).toBe(true);
+    expect(primaryOf(res.profile).moves[0]).toEqual({ ...bolt, kind: 'heavy' });
+    expect(res.profile.runes).toEqual(p.runes);
+    // Its form change is still refused while a rune wouldn't fit.
+    const lance = { ...bolt, form: 'lance' as const };
+    const formed = takeStop(registry, p, { kind: 'move', skill: 'primary', index: 0, move: lance });
+    expect(formed.reason).toBe("Split doesn't fit a Lance");
+    // A move without sockets stays without.
+    const plain = primaryOf(p).moves[2];
+    const third = takeStop(registry, p, {
+      kind: 'move',
+      skill: 'primary',
+      index: 2,
+      move: { ...plain, kind: 'heavy', runes: [null] },
+    });
+    expect(primaryOf(third.profile).moves[2]).toEqual({ ...plain, kind: 'heavy' });
+  });
+
+  it('rolls every stop as it did when the rune kind does not apply', () => {
+    const ring = generateItem(
+      registry,
+      { uid: 'r1', ilvl: 2, rarity: 'magic', slot: 'ring', mana: 'fire' },
+      new SeededRNG(1),
+    );
+    const p = { ...createDelveProfile(registry, 3, { primary: 'fire' }), bag: [ring] };
+    const q = { ...p, links: 5, scrap: 1000 };
+    const offers = Array.from({ length: 40 }, (_, i) => {
+      const stop = rollStop(registry, q, { ...startDive(registry, q, 1).dive!, seed: i + 1 })!;
+      return stop.offers.map((k) => k[0]).join('');
+    });
+    // v0.50.0's stops for these forty seeds.
+    expect(offers.join(' ')).toBe(
+      'smu em mu esu esm mu esm es smu emu emu mu su es mu esu su su mu es eu su emu sm esu emu emu su es mu em smu smu esm esu su mu sm es es',
+    );
   });
 });
