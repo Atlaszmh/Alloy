@@ -3,6 +3,7 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { MonsterKind } from '../types/arpg.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
+import { RUNE_TIERS, type RuneRef, type RuneTier } from '../types/rune.js';
 import { generateItem, rollRarity } from './item-generator.js';
 
 export interface DropContext {
@@ -79,4 +80,36 @@ export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng
     items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana, pair: ctx.pair }, rng));
   }
   return { items, pity, nextUid };
+}
+
+/**
+ * A rune's tier at `depth` (see the runes spec): the highest whose
+ * `runes.tierDepths` entry the depth reaches, then one higher `runes.tierUp`
+ * of the time, at most V. It draws once, whatever the depth.
+ */
+export function runeTierAt(registry: DataRegistry, depth: number, rng: SeededRNG): RuneTier {
+  const { tierDepths, tierUp } = registry.getDelveBalance().runes;
+  const reached = Math.max(1, tierDepths.filter((d) => depth >= d).length);
+  const up = rng.next() < tierUp ? 1 : 0;
+  return Math.min(RUNE_TIERS, reached + up) as RuneTier;
+}
+
+/**
+ * A slain foe's rune, or null (see the runes spec): a boss drops one at
+ * `runes.dropChance.boss`, a normal or elite foe at its kind's chance × the
+ * door's `dropMult`, at most 1 (magic find plays no part). The rune is uniform
+ * over the data, its tier by depth (`runeTierAt`).
+ */
+export function rollRuneDrop(
+  registry: DataRegistry,
+  ctx: { depth: number; kind: MonsterKind; dropMult: number },
+  rng: SeededRNG,
+): RuneRef | null {
+  const { dropChance } = registry.getDelveBalance().runes;
+  const chance =
+    ctx.kind === 'boss' ? dropChance.boss : Math.min(1, dropChance[ctx.kind] * ctx.dropMult);
+  if (rng.next() >= chance) return null;
+  const runes = registry.getRunes();
+  const { id } = runes[rng.nextInt(0, runes.length - 1)];
+  return { id, tier: runeTierAt(registry, ctx.depth, rng) };
 }

@@ -44,6 +44,9 @@ function atStop(p: DelveProfile, stop: DiveStop | null): DelveProfile {
 
 const ALL: DiveStop = { offers: [...STOP_KINDS], taken: false };
 
+/** The kinds before runes: what a hero with an empty pouch can be offered. */
+const FOUR: StopKind[] = ['equip', 'slot', 'move', 'upgrade'];
+
 describe('the stop after a cleared depth', () => {
   it('holds 2 or 3 of the kinds that apply, the same from the same dive', () => {
     const p = startDive(registry, { ...hero(), scrap: 1000, manaDust: 50 }, 1);
@@ -70,12 +73,12 @@ describe('the stop after a cleared depth', () => {
     expect(upgradeCost(registry, p.equipped.chest!)).toBe(10);
     expect(stopKinds(registry, p)).toEqual([]); // no bag, Links, scrap or Mana Dust
     const rich = { ...p, bag: [ring('r1')], links: 1, scrap: 20, manaDust: bal.movesets.editDust };
-    expect(stopKinds(registry, rich)).toEqual([...STOP_KINDS]);
+    expect(stopKinds(registry, rich)).toEqual(FOUR);
     expect(stopKinds(registry, { ...rich, links: 0 })).toEqual(['equip', 'move', 'upgrade']);
     expect(stopKinds(registry, { ...rich, scrap: 19 })).toEqual(['equip', 'move', 'upgrade']);
     expect(stopKinds(registry, { ...rich, scrap: 9 })).toEqual(['equip', 'move']);
     expect(stopKinds(registry, { ...rich, manaDust: 4 })).toEqual(['equip', 'slot', 'upgrade']);
-    expect(stopKinds(registry, { ...rich, manaDust: 0, stats: p0.stats })).toEqual([...STOP_KINDS]);
+    expect(stopKinds(registry, { ...rich, manaDust: 0, stats: p0.stats })).toEqual(FOUR);
     const maxed = (i: GearItem): GearItem => ({ ...i, upgrade: bal.forge.maxUpgrade });
     const bare = unequipSlot(registry, p, 'weapon');
     const spent: DelveProfile = {
@@ -99,7 +102,7 @@ describe('the stop after a cleared depth', () => {
       expect(stop.offers).toEqual(STOP_KINDS.filter((k) => stop.offers.includes(k)));
     }
     expect([...counts].sort()).toEqual([2, 3]);
-    expect([...seen].sort()).toEqual([...STOP_KINDS].sort());
+    expect([...seen].sort()).toEqual([...FOUR].sort());
     const two = { ...createDelveProfile(registry, 3, { primary: 'fire' }), scrap: 1000 };
     const dive = startDive(registry, two, 1).dive!;
     expect(rollStop(registry, two, dive)).toEqual({ offers: ['move', 'upgrade'], taken: false });
