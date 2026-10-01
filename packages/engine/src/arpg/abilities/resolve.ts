@@ -165,8 +165,10 @@ export function resolveAbility(
 
   const F = bal.feel;
   const wi = w + 2;
-  const conjure = F.conjure[wi] * F.conjureSlot[slot];
-  const channel = cast ? s.castTime * (1 + W.castTime * w) : 0;
+  // Quick and Heavy (`quick`): the wind-up and the cooldown scale here, the beat in `moveBeat`.
+  const q = knobs.quick;
+  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup;
+  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup : 0;
 
   return {
     slot,
@@ -186,9 +188,9 @@ export function resolveAbility(
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
     cost: payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
     cooldown:
-      payment === 'charge'
+      (payment === 'charge'
         ? ab.chargeLockout
-        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
+        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult) * q.cooldown,
     castTime: conjure + channel,
     conjure,
     recovery: slot === 'defensive' ? 0 : F.recovery[wi],

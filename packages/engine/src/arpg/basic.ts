@@ -89,8 +89,12 @@ export function startSwing(
   const step = basicStep(h, t, bal);
   const blow = w.blows[step];
   const s = manual && blow.kind === 'hold' ? w.feel.medium : blow;
-  const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
-  const startup = cycle * s.startup;
+  // Quick and Heavy (`quick`): the cycle × its beat; the startup, from the base cycle, × its
+  // wind-up, at most the cycle.
+  const q = blow.knobs.quick;
+  const base = (h.stats.attackInterval * s.time) / haste(ctx);
+  const cycle = base * q.beat;
+  const startup = Math.min(cycle, base * s.startup * q.windup);
   if (t + startup > deadline + 1e-9) return false;
   h.attackCount = step;
   const { lunge, reach, acquire } = swingReach(w, s, manual);
@@ -232,11 +236,14 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
     dir,
   });
   if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
-  // A held blow takes its time from its stage's row; its startup was spent holding. A tap
-  // (struck on the tick it reached its strike point) keeps a medium blow's timing.
-  const cycle = stage === null ? sw.cycle : (h.stats.attackInterval * s.time) / haste(ctx);
+  // A held blow takes its time from its stage's row (by the swing's `quick` rule); its startup
+  // was spent holding. A tap (struck on the tick it reached its strike point) keeps a medium
+  // blow's timing.
+  const q = blow.knobs.quick;
+  const cycle =
+    stage === null ? sw.cycle : ((h.stats.attackInterval * s.time) / haste(ctx)) * q.beat;
   if (stage !== null && world.t > sw.held! + 1e-9)
-    h.nextAttackAt = world.t + cycle * (1 - s.startup);
+    h.nextAttackAt = world.t + cycle * Math.max(0, 1 - (s.startup * q.windup) / q.beat);
   if (sw.committed)
     h.recoverUntil = Math.min(h.nextAttackAt, world.t + cycle * bal.feel.basicRecovery);
 }

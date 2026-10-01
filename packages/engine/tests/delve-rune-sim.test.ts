@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NEUTRAL, blowNumbers, defaultBasic, followBasic } from '../src/arpg/abilities/resolve.js';
 import { landBlow } from '../src/arpg/basic.js';
 import { makeCtx } from '../src/arpg/combat.js';
+import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { Blow } from '../src/types/ability.js';
@@ -303,5 +304,82 @@ describe("a blow's runes where it lands (landBlow)", () => {
     expect(heavy.w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
     const leech = shot([R('leech', 5)]);
     expect(leech.healed).toBeCloseTo(leech.hit.amount * (leech.w.hero.stats.lifesteal + 0.06));
+  });
+});
+
+describe('Quick and Heavy (the quick knob)', () => {
+  /** Press the Primary (a medium Fire Bolt with `runes`) and land it: its wind-up, beat and cooldown. */
+  const cast = (runes: RuneRef[], opts: ArenaOpts = {}) => {
+    const w = world([dummy(13, 30)], { primary: { runes }, ...opts });
+    pressOnly(w, 0);
+    const windup = w.hero.windup!.until - w.hero.windup!.start;
+    press(w, 0);
+    return { windup, beat: w.hero.beatUntil[0] - w.t, cooldown: moveOf(w, 0).cooldown };
+  };
+
+  it('an ability: Quick shortens its beat and cooldown, Heavy lengthens its beat and wind-up', () => {
+    const plain = cast([]);
+    const quick = cast([R('quick')]);
+    const heavy = cast([R('heavy')]);
+    expect(quick.beat / plain.beat).toBeCloseTo(0.8);
+    expect(quick.cooldown / plain.cooldown).toBeCloseTo(0.8);
+    expect(quick.windup).toBeCloseTo(plain.windup);
+    expect(heavy.beat / plain.beat).toBeCloseTo(1.2);
+    expect(heavy.windup / plain.windup).toBeCloseTo(1.2);
+    expect(heavy.cooldown).toBeCloseTo(plain.cooldown);
+    // A cast payment's channel and a charge payment's lockout scale too.
+    const castPaid = (runes: RuneRef[]) =>
+      moveOf(world([], { primary: { payment: 'cast', runes } }), 0);
+    expect(castPaid([R('heavy')]).castTime / castPaid([]).castTime).toBeCloseTo(1.2);
+    const nova = (runes: RuneRef[]) => moveOf(world([], { ultimate: { runes } }), 2).cooldown;
+    expect(nova([R('quick')])).toBeCloseTo(bal.abilities.chargeLockout * 0.8);
+  });
+
+  it("leaves a hold's charge time alone", () => {
+    const hold = (runes: RuneRef[]) => {
+      const w = world([dummy(13, 30)], { primary: { kind: 'hold', runes } });
+      stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 0 }, STEP);
+      return w.hero.hold!.full;
+    };
+    expect(hold([R('heavy')])).toBe(hold([]));
+  });
+
+  it('a blow (melee or shot): its cycle × the beat, its startup (from the base cycle) × the wind-up', () => {
+    for (const baseId of ['sword', 'wand']) {
+      const swing = (runes: RuneRef[]) => {
+        const w = blowWorld([light(runes)], [dummy(13, 34.5)], {
+          weapon: gear('fire', 'weapon', baseId),
+        });
+        run(w, STEP);
+        const sw = w.hero.swing!;
+        return { cycle: sw.cycle, startup: sw.strikeAt - sw.start };
+      };
+      const plain = swing([]);
+      const quick = swing([R('quick')]);
+      const heavy = swing([R('heavy')]);
+      expect(quick.cycle / plain.cycle).toBeCloseTo(0.8);
+      expect(quick.startup).toBeCloseTo(plain.startup);
+      expect(heavy.cycle / plain.cycle).toBeCloseTo(1.2);
+      expect(heavy.startup / plain.startup).toBeCloseTo(1.2);
+    }
+  });
+
+  it("a held blow's recomputed cycle takes the same rule: the rest after its strike", () => {
+    /** Hold a manual hold blow past full charge, let go, and measure the rest after it strikes. */
+    const rest = (runes: RuneRef[]) => {
+      const w = blowWorld([{ kind: 'hold', element: 'fire', runes }]);
+      const events: ArpgEvent[] = [];
+      for (let i = 0; i < 300 && !events.some((e) => e.kind === 'basic'); i++) {
+        const attack = w.t < 1.5;
+        events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 }, attack }, STEP));
+      }
+      return w.hero.nextAttackAt - w.t;
+    };
+    const w = blowWorld([{ kind: 'hold', element: 'fire' }]);
+    const row = w.hero.stats.weapon.feel.hold;
+    const base = w.hero.stats.attackInterval * row.time;
+    expect(rest([])).toBeCloseTo(base * (1 - row.startup));
+    expect(rest([R('quick')])).toBeCloseTo(base * 0.8 - base * row.startup);
+    expect(rest([R('heavy')])).toBeCloseTo((base - base * row.startup) * 1.2);
   });
 });
