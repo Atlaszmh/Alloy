@@ -19,6 +19,7 @@ import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import {
   addSlot,
   movesetEditPrice,
+  movesOf,
   setChain,
   setChains,
   slotPrice,
@@ -49,7 +50,13 @@ import { fillCharge, setSandboxToggles } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { compareItem, computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
-import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
+import {
+  CHAIN_SKILLS,
+  type Blow,
+  type Chain,
+  type Chains,
+  type Move,
+} from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
@@ -553,7 +560,7 @@ describe('save v6: the migration from version 5', () => {
   });
 });
 
-describe('the edit price (movesetEditPrice)', () => {
+describe('the edit price (movesetEditPrice): by origin', () => {
   const E = bal.movesets.editDust;
   const X = bal.movesets.elementDust;
   const bolt = (kind: Move['kind'], ...elements: ManaType[]): Move => ({
@@ -562,25 +569,27 @@ describe('the edit price (movesetEditPrice)', () => {
     elements,
   });
   const chain = (...moves: Move[]): Chain => ({ moves, payment: 'mana' });
-  const price = (old: Chain, next: Chain) =>
-    movesetEditPrice(registry, { primary: old }, { primary: next });
+  const price = (old: Chain, next: Chain, origins?: (number | null)[]) =>
+    movesetEditPrice(
+      registry,
+      { primary: old },
+      { primary: next },
+      origins && { primary: origins },
+    );
   const A = bolt('light', 'fire');
   const B = bolt('medium', 'fire');
   const C = bolt('heavy', 'storm');
 
-  it('the run the chains share is free: removing or inserting a move costs only that move', () => {
+  it('prices what the builder did: removing or inserting a move costs only that move', () => {
     expect(price(chain(A, B, C), chain(A, B, C))).toBe(0);
-    expect(price(chain(A, B, C), chain(A, C))).toBe(E);
-    expect(price(chain(A, B, C), chain(B, C))).toBe(E);
-    expect(price(chain(A, C), chain(A, B, C))).toBe(E); // Fire is an old move's element
+    expect(price(chain(A, B, C), chain(A, C), [0, 2])).toBe(E);
+    expect(price(chain(A, B, C), chain(B, C), [1, 2])).toBe(E);
+    expect(price(chain(A, C), chain(A, B, C), [0, null, 1])).toBe(E); // Fire is an old move's element
   });
 
-  it('a move that only moved costs editDust; a ◂▸ swap moves one', () => {
-    expect(price(chain(A, B, C), chain(B, C, A))).toBe(E);
-    expect(price(chain(A, B), chain(B, A))).toBe(E);
-  });
-
-  it('the rest pair up in order: a changed kind or form, changed elements, or both', () => {
+  it('without origins, move j came from saved move j: an edit in place', () => {
+    // B edited into C (its kind and elements), and the saved C removed.
+    expect(price(chain(A, B, C), chain(A, C))).toBe(E + X + E);
     expect(price(chain(A, B), chain(A, bolt('heavy', 'fire')))).toBe(E);
     expect(price(chain(A, B), chain(A, { ...B, form: 'lance' }))).toBe(E);
     expect(price(chain(A, B), chain(A, bolt('medium', 'storm')))).toBe(X);
@@ -588,16 +597,16 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(price(chain(A, B), chain(A, bolt('heavy', 'storm', 'fire')))).toBe(E + X);
   });
 
-  it('the rest pair up at the least total price, not by position', () => {
-    // Remove the light Fire Bolt and make the heavy Storm Bolt light: E + E (in order, 15 + 5).
-    expect(price(chain(A, C), chain(bolt('light', 'storm')))).toBe(2 * E);
-    // Make the heavy Fire Bolt Storm and add a light Storm Bolt: X + E, Storm charged once (in order, 20 + 20).
-    expect(price(chain(bolt('heavy', 'fire')), chain(bolt('light', 'storm'), C))).toBe(E + X);
-    // Leaving a pair unmatched when that's cheaper: remove the heavy Storm Bolt, add a heavy Fire one (Fire is known).
-    expect(price(chain(A, C), chain(A, bolt('heavy', 'fire')))).toBe(2 * E);
+  it('a card that moved costs editDust, even one edited back: the longest rising run stays free', () => {
+    expect(price(chain(A, B, C), chain(B, C, A), [1, 2, 0])).toBe(E);
+    expect(price(chain(A, B), chain(B, A), [1, 0])).toBe(E);
+    // Two cards alike swapped: still a move.
+    expect(price(chain(A, A), chain(A, A), [1, 0])).toBe(E);
+    // A card removed and one alike added: a removal and a new move.
+    expect(price(chain(A, B), chain(A, B), [0, null])).toBe(2 * E);
   });
 
-  it('a new element set is charged once per Apply, so a batch never costs more than its edits one by one', () => {
+  it('a new element set is charged once per Apply, however many moves take it', () => {
     const fire: Blow = { kind: 'light', element: 'fire' };
     const storm: Blow = { kind: 'light', element: 'storm' };
     const blows = (old: Blow[], next: Blow[]) =>
@@ -605,13 +614,13 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(blows([fire], [fire, storm])).toBe(E + X);
     expect(blows([fire, storm], [fire, storm, storm])).toBe(E);
     expect(blows([fire], [fire, storm, storm])).toBe(2 * E + X);
-    // Two moves changed to one new element: Storm charged once, the second removed and re-added.
-    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm')))).toBe(
-      X + 2 * E,
+    // Two moves re-coloured to one new set, and a new move in it: Storm charged once.
+    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm'), C))).toBe(
+      X + E,
     );
   });
 
-  it('is 0 only for the same chain and never beats doing it in two Applies (random triples)', () => {
+  it('is 0 only for the same chain in place, and never beats doing it in two Applies (random triples, origins composed)', () => {
     const rng = new SeededRNG(7);
     const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
     const kinds: Move['kind'][] = ['light', 'heavy', 'hold'];
@@ -636,15 +645,30 @@ describe('the edit price (movesetEditPrice)', () => {
         kind: pick(kinds),
         element: pick(['fire', 'storm', 'frost'] as const),
       }));
+    /** Random origins from `from` moves to `to`: each new move a fresh saved index, or null. */
+    const randomOrigins = (from: number, to: number): (number | null)[] => {
+      const free = Array.from({ length: from }, (_, i) => i);
+      return Array.from({ length: to }, () =>
+        free.length === 0 || rng.next() < 0.3
+          ? null
+          : free.splice(rng.nextInt(0, free.length - 1), 1)[0],
+      );
+    };
+    const length = (x: Partial<Chains>) => movesOf(x.basic ?? x.primary).length;
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     let bad = 0;
     for (let n = 0; n < 4000; n++) {
       const basic = n % 2 === 0;
+      const skill = basic ? 'basic' : 'primary';
       const [a, b, c] = basic
         ? [randomBlows(), randomBlows(), randomBlows()].map((x) => ({ basic: x }))
         : [randomChain(), randomChain(), randomChain()].map((x) => ({ primary: x }));
-      const p = (x: typeof a, y: typeof a) => movesetEditPrice(registry, x, y);
-      if (p(a, c) > p(a, b) + p(b, c)) bad++;
+      const ab = randomOrigins(length(a), length(b));
+      const bc = randomOrigins(length(b), length(c));
+      const ac = bc.map((o) => (o === null ? null : ab[o]));
+      const p = (x: Partial<Chains>, y: Partial<Chains>, o?: (number | null)[]) =>
+        movesetEditPrice(registry, x, y, o && { [skill]: o });
+      if (p(a, c, ac) > p(a, b, ab) + p(b, c, bc)) bad++;
       if ((p(a, b) === 0) !== same(a, b)) bad++;
     }
     expect(bad).toBe(0);
@@ -656,17 +680,23 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(price(chain(A, B, C), chain(A))).toBe(2 * E);
   });
 
-  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing', () => {
+  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing, nor do their origins', () => {
     expect(price(chain(A), { moves: [A], payment: 'cast' })).toBe(E);
     const fire: Blow = { kind: 'light', element: 'fire' };
     const heavy: Blow = { kind: 'heavy', element: 'fire' };
-    const blows = (old: Blow[], next: Blow[]) =>
-      movesetEditPrice(registry, { basic: old }, { basic: next });
-    expect(blows([fire, fire, heavy], [fire, heavy])).toBe(E);
+    const blows = (old: Blow[], next: Blow[], origins?: (number | null)[]) =>
+      movesetEditPrice(registry, { basic: old }, { basic: next }, origins && { basic: origins });
+    expect(blows([fire, fire, heavy], [fire, heavy], [0, 2])).toBe(E);
     expect(blows([fire, fire, heavy], [fire, fire, { ...heavy, element: 'frost' }])).toBe(X);
     const old = { basic: [fire], primary: chain(A) };
     expect(movesetEditPrice(registry, old, { primary: chain(B) })).toBe(E);
     expect(movesetEditPrice(registry, old, { basic: [heavy], primary: chain(B) })).toBe(2 * E);
+    expect(movesetEditPrice(registry, old, { primary: chain(B) }, { basic: [null] })).toBe(E);
+  });
+
+  it('a rune is no part of the Dust: a socket or a rune alone costs none', () => {
+    const socketed: Move = { ...A, runes: [{ id: 'quick', tier: 1 }, null] };
+    expect(price(chain(A), chain(socketed))).toBe(0);
   });
 });
 
@@ -758,13 +788,15 @@ describe('edits: setChain and setChains', () => {
       moves: [{ kind: 'heavy', form: 'bolt', elements: ['fire'] }],
       payment: 'mana',
     };
-    const both = setChains(registry, p, { basic, primary });
+    // The basic chain keeps its heavy blow (the builder's origins); the Primary edits in place.
+    const origins = { basic: [2] };
+    const both = setChains(registry, p, { basic, primary }, { origins });
     expect(both.ok).toBe(true);
     expect(chainsOf(both.profile)).toEqual({ basic, primary });
     // Two blows removed and a kind changed: 3 × editDust.
     expect(both.profile.manaDust).toBe(20 - 3 * bal.movesets.editDust);
     const poor = { ...p, manaDust: 3 * bal.movesets.editDust - 1 };
-    expect(setChains(registry, poor, { basic, primary })).toMatchObject({
+    expect(setChains(registry, poor, { basic, primary }, { origins })).toMatchObject({
       ok: false,
       profile: poor,
       reason: 'Not enough Mana Dust',
@@ -777,6 +809,49 @@ describe('edits: setChain and setChains', () => {
       ok: false,
       profile: p,
     });
+  });
+});
+
+describe('edits by origin', () => {
+  const E = bal.movesets.editDust;
+  /** A Fire hero past its first dive, with Mana Dust to spare. */
+  const veteran = (): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    return { ...p, manaDust: 99, stats: { ...p.stats, dives: 1 } };
+  };
+
+  it('setChains prices by the origins it is given, and refuses bad ones', () => {
+    const p = veteran();
+    const blows = chainsOf(p).basic!; // the sword's light, light, heavy
+    const swapped = [blows[2], blows[0], blows[1]];
+    // The heavy moved to the front: one move.
+    const moved = setChains(registry, p, { basic: swapped }, { origins: { basic: [2, 0, 1] } });
+    expect(moved.profile.manaDust).toBe(99 - E);
+    expect(chainsOf(moved.profile).basic).toEqual(swapped);
+    // Without origins, in place: the first light became heavy, and the heavy light.
+    expect(setChains(registry, p, { basic: swapped }).profile.manaDust).toBe(99 - 2 * E);
+    for (const basic of [
+      [0, 0, 1],
+      [0, 1],
+      [0, 1, 3],
+      [0, 1, -1],
+      [0.5, 1, 2],
+    ])
+      expect(setChains(registry, p, { basic: swapped }, { origins: { basic } })).toMatchObject({
+        ok: false,
+        profile: p,
+        reason: 'Bad origins',
+      });
+    // Origins for a skill the edit leaves out are ignored.
+    const origins = { basic: [2, 0, 1], primary: [7] };
+    expect(setChains(registry, p, { basic: swapped }, { origins }).ok).toBe(true);
+  });
+
+  it('the first dive is still free, whatever moved', () => {
+    const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
+    const blows = chainsOf(fresh).basic!;
+    const res = setChains(registry, fresh, { basic: [blows[2]] }, { origins: { basic: [2] } });
+    expect(res.profile.manaDust).toBe(0);
   });
 });
 
