@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import balanceData from '../src/data/balance.json';
 import runesData from '../src/data/runes.json';
 import { BalanceConfigSchema, RunesSchema } from '../src/data/schemas.js';
+import type { DataRegistry } from '../src/data/registry.js';
+import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { loadEase, runeLoad } from '../src/loot/runes.js';
+import type { DelveBalance, HeroStats } from '../src/types/delve.js';
+import type { RuneRef } from '../src/types/rune.js';
 import { registry } from './fixtures/arena.js';
 
 /**
@@ -72,5 +77,45 @@ describe('rune costs: the data', () => {
     expect(ok({ charge: -1 })).toBe(false);
     expect(ok({ byForm: { bolt: -0.5 } })).toBe(false);
     expect(ok({ bySlot: { primary: 1, defensive: 1 } })).toBe(false);
+  });
+});
+
+const III = (id: string): RuneRef => ({ id, tier: 3 });
+
+/** The default data with `delve.runes.load` changed. */
+function withLoad(load: Partial<DelveBalance['runes']['load']>): DataRegistry {
+  const bal = registry.getDelveBalance();
+  const next = { ...bal, runes: { ...bal.runes, load: { ...bal.runes.load, ...load } } };
+  return Object.assign(Object.create(registry) as DataRegistry, { getDelveBalance: () => next });
+}
+const loaded = withLoad({ bySlot: { primary: 1, defensive: 1, ultimate: 1 } });
+const unloaded = withLoad({ bySlot: { primary: 0, defensive: 0, ultimate: 0 } });
+
+/** An unarmed hero attuned `fire` to Fire and `frost` to Frost. */
+const bare = computeHeroStats({}, registry);
+function at(fire: number, frost = 0): HeroStats {
+  return { ...bare, attunement: { ...bare.attunement, fire, frost } };
+}
+
+describe('runeLoad and loadEase', () => {
+  it("runeLoad is the tier's load × its slot's factor × its form's (1 when unlisted)", () => {
+    const r = withLoad({
+      bySlot: { primary: 0.5, defensive: 1, ultimate: 1 },
+      byForm: { lance: 2 },
+    });
+    expect(runeLoad(r, III('echo'), 'bolt')).toBeCloseTo(0.45 * 0.5);
+    expect(runeLoad(r, III('echo'), 'lance')).toBeCloseTo(0.45 * 0.5 * 2);
+    expect(runeLoad(r, { id: 'echo', tier: 5 }, 'nova')).toBeCloseTo(0.63);
+    expect(runeLoad(r, { id: 'quick', tier: 1 }, 'ward')).toBeCloseTo(0.15);
+    expect(runeLoad(unloaded, { id: 'pierce', tier: 5 }, 'bolt')).toBe(0);
+  });
+
+  it("loadEase is easePerAttune × the move's mean attunement, at most easeCap", () => {
+    expect(loadEase(registry, at(0), ['fire'])).toBe(0);
+    expect(loadEase(registry, at(1), ['fire'])).toBeCloseTo(0.03);
+    expect(loadEase(registry, at(15), ['fire'])).toBeCloseTo(0.45);
+    expect(loadEase(registry, at(25), ['fire'])).toBe(0.6);
+    expect(loadEase(registry, at(15, 5), ['fire', 'frost'])).toBeCloseTo(0.3);
+    expect(loadEase(withLoad({ easeCap: 0.2 }), at(15), ['fire'])).toBe(0.2);
   });
 });

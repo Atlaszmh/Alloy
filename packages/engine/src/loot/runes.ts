@@ -1,6 +1,8 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { Blow, FormId, KnobsData, Move } from '../types/ability.js';
+import type { HeroStats } from '../types/delve.js';
 import type { Rarity } from '../types/gear.js';
+import type { ManaType } from '../types/mana.js';
 import {
   MAX_SOCKETS,
   RUNE_TIERS,
@@ -66,6 +68,32 @@ export function runeKnobs(
 export function extraShotPower(power: number, form: FormId | null): number {
   if (form === 'volley') return 1 - (1 - power) / 2;
   return form === 'barrage' ? 1 : power;
+}
+
+/**
+ * One rune's share of a move's load on `form` (see the rune costs spec): its
+ * tier's `load` × its form's slot factor (`bySlot`) × its form factor
+ * (`byForm`, 1 for a form it doesn't list), before the move's easing.
+ */
+export function runeLoad(registry: DataRegistry, ref: RuneRef, form: FormId): number {
+  const c = registry.getDelveBalance().runes.load;
+  const slot = registry.getForm(form).slot;
+  return registry.getRune(ref.id).load[ref.tier - 1] * c.bySlot[slot] * (c.byForm[form] ?? 1);
+}
+
+/**
+ * The ease a hero's attunement gives a move of `elements` (see the rune costs
+ * spec): `easePerAttune` × their mean attunement (as `attunePower` averages
+ * it), at most `easeCap`. The move's load is its runes' shares × (1 − ease).
+ */
+export function loadEase(
+  registry: DataRegistry,
+  stats: HeroStats,
+  elements: readonly ManaType[],
+): number {
+  const c = registry.getDelveBalance().runes.load;
+  const attune = elements.reduce((sum, e) => sum + stats.attunement[e], 0) / elements.length;
+  return Math.min(c.easeCap, c.easePerAttune * attune);
 }
 
 /** A number as rune texts print it: float noise rounded off, at most three decimals. */
