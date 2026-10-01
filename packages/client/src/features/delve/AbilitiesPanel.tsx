@@ -5,25 +5,31 @@ import {
   addSlot,
   baseSlots,
   carriedByText,
-  editPrice,
   heroChains,
   isDiveActive,
   manaPool,
   movesetOf,
   pairElements,
   profileStats,
+  movesOf,
   setChains,
   slotPrice,
+  socketCap,
+  socketPrice,
+  socketsOf,
+  unsocketMode,
+  withMove,
   type ChainSkill,
   type HeroStats,
   type ManaType,
 } from '@alloy/engine';
-import { draftChanges, useDelveStore } from '@/stores/delveStore';
+import { applyLabel, draftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
 import { ManaPanel } from './ManaPanel';
-import { ChainEditor } from './chains/ChainEditor';
+import { ChainEditor, type ChainRunes } from './chains/ChainEditor';
+import { listed } from './chains/chain-text';
 
 /** Attunement per element (all six, or just `elements`) with the mastery threshold, and the one mana pool it feeds. */
 export function AttunementBars({
@@ -140,20 +146,27 @@ export function Chip({
  * The Anvil's workshop: the equipped weapon's chains, edited as a draft (kept
  * in the store, so it outlives the tab) whose price shows (free until the
  * first dive) and which Apply pays for, all or nothing, or Revert drops; each
- * chain's slots, with Add slot's price; and your Mana view. Read-only while a
- * dive is under way, and unarmed (the unarmed default shows).
+ * chain's slots, with Add slot's price; each move's sockets and runes, which
+ * the draft carries too; and your Mana view. Read-only while a dive is under
+ * way, and unarmed (the unarmed default shows).
  */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const draft = useDelveStore((s) => s.chainDraft);
+  const unsocket = useDelveStore((s) => s.unsocket);
   const { equipped, pair } = profile;
   const weapon = equipped.weapon;
   const [message, setMessage] = useState<string | null>(null);
   const id = useId();
   const saved = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
-  // The skills whose draft differs from the weapon's, and the chains shown.
-  const changed = useMemo(() => draftChanges(registry, profile, draft), [registry, profile, draft]);
+  // The draft against the weapon: the skills it changes, Apply's options and total, the
+  // engine's dry run and the pouch it leaves; and the chains shown.
+  const view = useMemo(
+    () => draftApply(registry, profile, draft, unsocket),
+    [registry, profile, draft, unsocket],
+  );
+  const changed = view.changes;
   const chains = useMemo(() => ({ ...saved, ...changed }), [saved, changed]);
   // Unarmed, the default chains sit at their base slots (the bare hands' string for the basic one).
   const slots = weapon
@@ -177,10 +190,43 @@ export function AbilitiesPanel() {
   const elements = pairElements(pair);
   const locked = isDiveActive(profile) || !weapon;
   const pending = Object.keys(changed).length > 0;
-  const price = pending ? editPrice(registry, profile, changed) : 0;
-  // The engine's own op as a dry run: whether Apply goes through, and why not.
-  const applying = pending ? setChains(registry, profile, changed) : null;
+  const { price, dry: applying } = view;
   const applyWhy = applying && !applying.ok ? applying.reason : null;
+  // What Apply spends, each against what the hero holds (Links netted: the sockets of moves
+  // removed pay for those opened).
+  const links = price ? price.links - price.refundLinks : 0;
+  const costs = [
+    price && price.dust > 0
+      ? `✦ ${price.dust} Mana Dust (you have ✦ ${formatNumber(profile.manaDust)})`
+      : null,
+    links > 0 ? `🔗 ${links} Link${links === 1 ? '' : 's'} (you have 🔗 ${profile.links})` : null,
+    price && price.scrap > 0
+      ? `⚙ ${formatNumber(price.scrap)} scrap (you have ⚙ ${formatNumber(profile.scrap)})`
+      : null,
+  ].filter((c) => c !== null);
+  const mode = unsocketMode(registry, unsocket);
+  const pullScrap = registry.getDelveBalance().runes.pullScrap;
+  // The weapon's sockets in the builder: the pouch the draft leaves, the rarity's cap, the price
+  // by index, the pull rule's text, and the engine's own op run dry with one more socket on a
+  // move: why "+ socket" is off (a draft Apply already refuses says so itself).
+  const runes: ChainRunes | undefined = weapon && {
+    pouch: view.pouch,
+    socketCap: socketCap(registry, weapon.rarity),
+    socketPrice: (open) => socketPrice(registry, open),
+    weaponBaseId: weapon.baseId,
+    pullText: (r) =>
+      mode === 'destroy'
+        ? 'Pull · destroys it'
+        : `Pull · ⚙ ${pullScrap[r.tier - 1]}, back to your pouch`,
+    openWhy: (skill, index) => {
+      const chain = chains[skill];
+      if (!chain || (applying && !applying.ok)) return null;
+      const m = movesOf(chain)[index];
+      const next = withMove(chain, index, { ...m, runes: [...socketsOf(m), null] });
+      const res = setChains(registry, profile, { ...changed, [skill]: next }, view.opts);
+      return res.ok ? null : (res.reason ?? null);
+    },
+  };
   const cap = registry.getDelveBalance().chains.cap;
 
   const onApply = () => {
@@ -247,9 +293,11 @@ export function AbilitiesPanel() {
           data-testid="chain-draft"
         >
           <span className="flex-1 text-xs text-stone-300" data-testid="chain-price">
-            {profile.stats.dives === 0
-              ? 'Changes are free until your first dive'
-              : `Changes cost ✦ ${price} Mana Dust (you have ✦ ${formatNumber(profile.manaDust)})`}
+            {costs.length > 0
+              ? `Changes cost ${listed(costs)}`
+              : profile.stats.dives === 0
+                ? 'Changes are free until your first dive'
+                : 'Changes are free'}
           </span>
           <button
             type="button"
@@ -270,7 +318,7 @@ export function AbilitiesPanel() {
             aria-describedby={applyWhy ? `${id}-apply` : undefined}
             data-testid="chain-apply"
           >
-            Apply{price > 0 ? ` · ✦ ${price}` : ''}
+            {applyLabel(registry, price)}
           </button>
           {applyWhy && (
             <span
@@ -301,12 +349,13 @@ export function AbilitiesPanel() {
         lockedText={weapon ? undefined : 'Equip a weapon to build your moves.'}
         absentText={(s) => carriedByText(registry, s)}
         footer={slotRow}
-        onChange={(skill, chain) => {
-          useDelveStore.getState().editDraft(skill, chain);
+        onChange={(skill, chain, map) => {
+          useDelveStore.getState().editDraft(skill, chain, map);
           setMessage(null);
         }}
         elements={elements.length > 0 ? elements : undefined}
         mana={<ManaPanel stats={stats} />}
+        runes={runes}
       />
     </div>
   );

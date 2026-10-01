@@ -2,14 +2,13 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   MANA_TYPES,
-  editPrice,
   isDiveActive,
   profilePower,
   profileStats,
-  setChains,
   startDepthOptions,
+  unsocketMode,
 } from '@alloy/engine';
-import { draftChanges, useDelveStore } from '@/stores/delveStore';
+import { applyLabel, draftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer } from '@/components/Toast';
@@ -35,6 +34,7 @@ export function DelveCamp() {
   const profile = useDelveStore((s) => s.profile);
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
   const draft = useDelveStore((s) => s.chainDraft);
+  const unsocket = useDelveStore((s) => s.unsocket);
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -62,13 +62,17 @@ export function DelveCamp() {
     [equipped, pair, registry],
   );
   // The chain builder's unapplied changes: a new dive waits until they're applied or discarded.
-  const changes = useMemo(() => draftChanges(registry, profile, draft), [registry, profile, draft]);
-  const unapplied = Object.keys(changes).length;
+  // The builder's Apply, here too: its total, and the engine's op as a dry run (why it can't go).
+  const view = useMemo(
+    () => draftApply(registry, profile, draft, unsocket),
+    [registry, profile, draft, unsocket],
+  );
+  const unapplied = Object.keys(view.changes).length;
   const blocked = unapplied > 0 && !active;
-  // The builder's Apply, here too: its price, and the engine's op as a dry run (why it can't go).
-  const price = blocked ? editPrice(registry, profile, changes) : 0;
-  const applying = blocked ? setChains(registry, profile, changes) : null;
+  const applying = blocked ? view.dry : null;
   const applyWhy = applying && !applying.ok ? applying.reason : null;
+  // Dev builds: what pulling a rune does here (the balance's rule until the chip picks one).
+  const pull = unsocketMode(registry, unsocket);
 
   const onDelve = () => {
     if (!active && !useDelveStore.getState().startDive(starts.includes(start) ? start : 1)) return;
@@ -236,7 +240,7 @@ export function DelveCamp() {
                     aria-describedby={applyWhy ? `${id}-apply` : undefined}
                     data-testid="draft-apply"
                   >
-                    Apply{price > 0 ? ` · ✦ ${price}` : ''}
+                    {applyLabel(registry, view.price)}
                   </button>
                   <button
                     type="button"
@@ -355,20 +359,32 @@ export function DelveCamp() {
           )}
 
           {import.meta.env.DEV && (
-            <button
-              type="button"
-              className="delve-chip self-center"
-              onClick={() => {
-                if (!confirmRestart) return setConfirmRestart(true);
-                setConfirmRestart(false);
-                setTab('bag');
-                useDelveStore.getState().resetProfile();
-              }}
-              onBlur={() => setConfirmRestart(false)}
-              data-testid="restart-delve"
-            >
-              {confirmRestart ? '⚠ Press again to wipe this save' : '↺ Restart Delve (dev)'}
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                className="delve-chip"
+                onClick={() => {
+                  if (!confirmRestart) return setConfirmRestart(true);
+                  setConfirmRestart(false);
+                  setTab('bag');
+                  useDelveStore.getState().resetProfile();
+                }}
+                onBlur={() => setConfirmRestart(false)}
+                data-testid="restart-delve"
+              >
+                {confirmRestart ? '⚠ Press again to wipe this save' : '↺ Restart Delve (dev)'}
+              </button>
+              <button
+                type="button"
+                className="delve-chip"
+                onClick={() =>
+                  useDelveStore.getState().setUnsocket(pull === 'destroy' ? 'pay' : 'destroy')
+                }
+                data-testid="unsocket-chip"
+              >
+                {pull === 'destroy' ? 'Pull: destroys' : 'Pull: pays'}
+              </button>
+            </div>
           )}
         </div>
       </div>

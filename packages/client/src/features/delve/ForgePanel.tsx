@@ -5,17 +5,22 @@ import {
   isDiveActive,
   nextRarity,
   upgradeCost,
+  fusePrice,
   GEAR_SLOTS,
   type GearItem,
   type Rarity,
+  type RuneRef,
+  type RuneTier,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { partsText, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
+import { RunePouchPanel } from './runes/RunePouchPanel';
+import { runeName } from './runes/rune-style';
 
 const FUSABLE: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
 
@@ -102,6 +107,8 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     setResult(res.item);
     if (res.links)
       showToast(`+${res.links} Link${res.links > 1 ? 's' : ''} from the weapons' extra slots`);
+    const parts = partsText(registry, res.runes, res.destroyed);
+    if (parts) showToast(parts);
     playSound(res.item.rarity === 'legendary' ? 'lootLegendary' : 'combineMerge');
     vibrate(res.item.rarity === 'legendary' ? 'heavy' : 'success');
     requestAnimationFrame(() => {
@@ -137,6 +144,20 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     } else {
       playSound('combineFail');
     }
+  };
+
+  const fuseCount = registry.getDelveBalance().runes.fuseCount;
+  const onFuseRunes = (ref: RuneRef) => {
+    const res = useDelveStore.getState().fuseRunes(ref);
+    if (!res.ok) {
+      playSound('combineFail');
+      showToast(res.reason ?? 'Cannot fuse');
+      return;
+    }
+    playSound('combineMerge');
+    vibrate('success');
+    const made = { ...ref, tier: (ref.tier + 1) as RuneTier };
+    showToast(`Fused ${fuseCount} ${runeName(registry, ref)} into ${runeName(registry, made)}`);
   };
 
   // The forge waits for the dive to end, as all gear does (a stop's upgrade aside).
@@ -277,6 +298,18 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
             );
           })}
         </div>
+      </section>
+
+      {/* Runes: the pouch, fused 3 → 1 (socketed in the chain builder) */}
+      <section data-testid="forge-runes">
+        <RunePouchPanel
+          pouch={profile.runes}
+          fuseCount={fuseCount}
+          fusePrice={(ref) => fusePrice(registry, ref)}
+          scrap={profile.scrap}
+          locked={false}
+          onFuse={onFuseRunes}
+        />
       </section>
     </div>
   );

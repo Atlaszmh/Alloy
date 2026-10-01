@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   CHAIN_SKILLS,
   MANA_TYPES,
   manaPool,
   resolveChain,
+  socketsOf,
   type AbilityPayment,
   type Blow,
   type Chain,
@@ -12,12 +13,24 @@ import {
   type HeroStats,
   type ManaType,
   type Move,
+  type RunePouch,
+  type RuneRef,
 } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 import { AttunementBars, Chip } from '../AbilitiesPanel';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
-import { KIND_ICON, SKILL_NAME, blowText, chainText, moveText } from './chain-text';
+import { RunePicker } from '../runes/RunePicker';
+import { SocketRow } from '../runes/SocketRow';
+import {
+  KIND_ICON,
+  SKILL_NAME,
+  blowText,
+  chainText,
+  moveText,
+  runeCandidates,
+  runeTarget,
+} from './chain-text';
 import { MoveEditor } from './MoveEditor';
 
 const SKILL_KEY: Record<ChainSkill, string | null> = {
@@ -51,13 +64,34 @@ export interface ChainEditorProps {
   fixedShape?: boolean;
   /** Shown under the chosen skill's cards (the Anvil's Add slot). */
   footer?: (skill: ChainSkill) => ReactNode;
-  onChange: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
+  /**
+   * A change to one chain, with `map`: for each of its moves, the index in the chain handed in
+   * that it came from (◂ ▸ move it, × drops it, + gives null, an edit keeps it).
+   */
+  onChange: <S extends ChainSkill>(skill: S, chain: Chains[S], map: (number | null)[]) => void;
+  /** The sockets and runes on each move (the Anvil, the Training Grounds); none without it. */
+  runes?: ChainRunes;
   /** The elements an ability's move can take (the Delve: your pair); all six when absent. */
   elements?: readonly ManaType[];
   /** The elements a basic blow can take (your pair); `elements` when absent. */
   blowElements?: readonly ManaType[];
   /** Shown in place of the attunement bars (the Anvil's Mana view). */
   mana?: ReactNode;
+}
+
+/** The runes a chain builder offers (see the runes spec, "The client"). */
+export interface ChainRunes {
+  /** Pouch counts, or 'any' (Training Grounds: every rune, every tier). */
+  pouch: RunePouch | 'any';
+  /** Most sockets a move may open (the weapon's rarity's; 3 in the Training Grounds). */
+  socketCap: number;
+  /** The next socket's price when a move has `open`; null: free. */
+  socketPrice: (open: number) => { links: number; scrap: number } | null;
+  /** The weapon whose blows the basic chain's runes must fit. */
+  weaponBaseId: string | null;
+  pullText: (rune: RuneRef) => string;
+  /** Why "+ socket" on move `index` of `skill` is off (the engine's dry run), or null. */
+  openWhy?: (skill: ChainSkill, index: number) => string | null;
 }
 
 /** Move `from` of `list` to `to` (the others keep their order). */
@@ -73,12 +107,15 @@ function offPair(m: Move | Blow, allowed: readonly ManaType[]): boolean {
   return ('element' in m ? [m.element] : m.elements).some((e) => !allowed.includes(e));
 }
 
-/** A copy of `m` in `allowed` elements only: its own where allowed, else the first allowed. */
+/**
+ * A new move like `m`, in `allowed` elements only (its own where allowed, else the first
+ * allowed), with no sockets: a new move starts at none.
+ */
 function fitted(m: Move | Blow, allowed: readonly ManaType[]): Move | Blow {
   if ('element' in m)
-    return { ...m, element: allowed.includes(m.element) ? m.element : allowed[0] };
+    return { kind: m.kind, element: allowed.includes(m.element) ? m.element : allowed[0] };
   const kept = m.elements.filter((e) => allowed.includes(e));
-  return { ...m, elements: kept.length > 0 ? kept : [allowed[0]] };
+  return { kind: m.kind, form: m.form, elements: kept.length > 0 ? kept : [allowed[0]] };
 }
 
 /**
@@ -87,8 +124,10 @@ function fitted(m: Move | Blow, allowed: readonly ManaType[]): Move | Blow {
  * shows locked. A card opens its move below: its kind, its form and its
  * elements. ◂ ▸ reorder, × removes (never the last), + adds a copy of the
  * chosen move (in the allowed elements). A move outside them is marked
- * off-pair. The Anvil binds it to a draft of the weapon's moveset; the
- * Training Grounds to their own loadout. See the moves and chains spec.
+ * off-pair. With `runes`, each card shows its sockets: a tap opens the rune
+ * picker (socket, pull or replace), and "+ socket" opens one on the chosen
+ * move. The Anvil binds it to a draft of the weapon's moveset; the Training
+ * Grounds to their own loadout. See the moves and chains spec, and the runes spec.
  */
 export function ChainEditor({
   chains,
@@ -104,6 +143,7 @@ export function ChainEditor({
   elements = MANA_TYPES,
   blowElements = elements,
   mana,
+  runes,
 }: ChainEditorProps) {
   const registry = getDelveRegistry();
   const data = registry.getArpgData();
@@ -113,6 +153,9 @@ export function ChainEditor({
   // place): the first of these selectors that finds an enabled control.
   const cards = useRef<HTMLDivElement>(null);
   const [focusOn, setFocusOn] = useState<string[] | null>(null);
+  // The chosen move's socket whose rune picker is open.
+  const [socket, setSocket] = useState<number | null>(null);
+  const id = useId();
   const pool = manaPool(stats, registry).max;
   const slot = skill === 'basic' ? null : skill;
   const chain = slot ? (chains[slot] ?? null) : null;
@@ -127,12 +170,33 @@ export function ChainEditor({
   const allowed = slot ? elements : blowElements;
   const weapon = stats.weapon.baseId ? registry.getGearBase(stats.weapon.baseId).name : 'Fist';
 
-  const commit = (next: (Move | Blow)[], payment = chain?.payment) => {
+  // Each move's index in the chain handed in: the map a change reports (an edit keeps them all).
+  const order: (number | null)[] = entries.map((_, j) => j);
+  const commit = (next: (Move | Blow)[], payment = chain?.payment, map = order) => {
     if (locked) return;
     playSound('buttonClick');
-    if (skill === 'basic') onChange('basic', next as Blow[]);
-    else onChange(skill, { moves: next as Move[], payment: payment! } as Chain);
+    if (skill === 'basic') onChange('basic', next as Blow[], map);
+    else onChange(skill, { moves: next as Move[], payment: payment! } as Chain, map);
   };
+  // The sockets of move `i` whose rune does nothing there now: socketed, but missing from the
+  // runes the engine resolved it with.
+  const dormant = (i: number): number[] => {
+    const on = (resolved ? resolved.moves[i]?.runes : stats.weapon.blows[i]?.runes) ?? [];
+    return socketsOf(entries[i]).flatMap((r, s) =>
+      r && !on.some((a) => a.id === r.id) ? [s] : [],
+    );
+  };
+  // The chosen move's sockets: the next one's price (undefined at the cap, null when free), why
+  // the engine would refuse it, the socket whose picker is open, and a change to them.
+  const move: Move | Blow | undefined = entries[index];
+  const sockets = move ? socketsOf(move) : [];
+  const nextSocket =
+    runes && sockets.length < runes.socketCap ? runes.socketPrice(sockets.length) : undefined;
+  const openWhy =
+    runes && nextSocket !== undefined && !locked ? (runes.openWhy?.(skill, index) ?? null) : null;
+  const current = socket === null ? null : (sockets[socket] ?? null);
+  const setSockets = (next: (RuneRef | null)[]) =>
+    commit(entries.map((e, j) => (j === index ? { ...e, runes: next } : e)));
   const pick = (s: ChainSkill) => {
     setSkill(s);
     setPicked(0);
@@ -239,7 +303,7 @@ export function ChainEditor({
                   disabled={locked || i === 0}
                   aria-label={`Move ${names[i]} earlier`}
                   onClick={() => {
-                    commit(moved(entries, i, i - 1));
+                    commit(moved(entries, i, i - 1), undefined, moved(order, i, i - 1));
                     setPicked(i - 1);
                     setFocusOn([`[data-earlier="${i - 1}"]`, card(i - 1)]);
                   }}
@@ -254,7 +318,7 @@ export function ChainEditor({
                   disabled={locked || i === entries.length - 1}
                   aria-label={`Move ${names[i]} later`}
                   onClick={() => {
-                    commit(moved(entries, i, i + 1));
+                    commit(moved(entries, i, i + 1), undefined, moved(order, i, i + 1));
                     setPicked(i + 1);
                     setFocusOn([`[data-later="${i + 1}"]`, card(i + 1)]);
                   }}
@@ -270,7 +334,11 @@ export function ChainEditor({
                   aria-label={`Remove ${names[i]}`}
                   onClick={() => {
                     const next = Math.max(0, i === index ? i - 1 : index > i ? index - 1 : index);
-                    commit(entries.filter((_, j) => j !== i));
+                    commit(
+                      entries.filter((_, j) => j !== i),
+                      undefined,
+                      order.filter((j) => j !== i),
+                    );
                     setPicked(next);
                     setFocusOn([card(next)]);
                   }}
@@ -279,6 +347,21 @@ export function ChainEditor({
                   ×
                 </button>
               </span>
+              {runes && (
+                <div data-testid={`sockets-${i}`}>
+                  <SocketRow
+                    runes={socketsOf(e)}
+                    cap={runes.socketCap}
+                    nextPrice={null}
+                    dormant={dormant(i)}
+                    locked={locked}
+                    onSocketTap={(s) => {
+                      setPicked(i);
+                      setSocket(s);
+                    }}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -290,7 +373,7 @@ export function ChainEditor({
             disabled={locked}
             aria-label="Add a move"
             onClick={() => {
-              commit([...entries, fitted(entries[index], allowed)]);
+              commit([...entries, fitted(entries[index], allowed)], undefined, [...order, null]);
               setPicked(entries.length);
               setFocusOn([card(entries.length)]);
             }}
@@ -298,6 +381,34 @@ export function ChainEditor({
           >
             +
           </button>
+        )}
+        {runes && runes.socketCap > 0 && move && (
+          <div
+            className="flex w-full flex-wrap items-center gap-2 text-xs text-stone-400"
+            data-testid="socket-bar"
+          >
+            <span data-testid="socket-count">
+              Sockets {sockets.length}/{runes.socketCap}
+            </span>
+            {nextSocket !== undefined && (
+              <button
+                type="button"
+                className="delve-chip"
+                disabled={locked || !!openWhy}
+                onClick={() => setSockets([...sockets, null])}
+                aria-describedby={openWhy ? `${id}-socket` : undefined}
+                data-testid="socket-open"
+              >
+                + socket
+                {nextSocket && ` · 🔗 ${nextSocket.links} · ⚙ ${nextSocket.scrap}`}
+              </button>
+            )}
+            {openWhy && (
+              <span id={`${id}-socket`} className="text-amber-200/80" data-testid="socket-open-why">
+                {openWhy}
+              </span>
+            )}
+          </div>
         )}
       </div>
       {!absent && footer?.(skill)}
@@ -394,6 +505,26 @@ export function ChainEditor({
           })}
         </div>
       </section>
+      {runes && move && socket !== null && (
+        <RunePicker
+          candidates={runeCandidates(
+            registry,
+            runeTarget(move, runes.weaponBaseId),
+            sockets.filter((_, k) => k !== socket),
+            runes.pouch,
+          )}
+          current={current}
+          pullText={current ? runes.pullText(current) : undefined}
+          tierChoice={runes.pouch === 'any'}
+          on={runeTarget(move, runes.weaponBaseId)}
+          dormant={dormant(index).includes(socket)}
+          onPick={(rune) => setSockets(sockets.map((r, k) => (k === socket ? rune : r)))}
+          onPull={
+            current ? () => setSockets(sockets.map((r, k) => (k === socket ? null : r))) : undefined
+          }
+          onClose={() => setSocket(null)}
+        />
+      )}
     </div>
   );
 }

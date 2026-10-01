@@ -4,6 +4,9 @@ import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { ItemTile } from '../ItemTile';
 import { UPGRADE_EPSILON } from '../format';
+import { countRunes } from '../chains/chain-text';
+import { RuneGlyph } from '../runes/RuneGlyph';
+import { runeName } from '../runes/rune-style';
 
 const TILE = 46;
 const SHOWN = 4;
@@ -15,7 +18,7 @@ interface PickupFeedProps {
 }
 
 /**
- * The last few items picked up this dive, stacked on the right edge of the
+ * The last few items picked up this dive (and the runes, by name), stacked on the right edge of the
  * arena. Tap one to inspect it mid-fight; ▲ marks an upgrade, to equip at the
  * Anvil (gear is locked while a dive runs), ◇ a weapon better only once your
  * moveset moves onto it (Transfer).
@@ -25,6 +28,7 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
   const profile = useDelveStore((s) => s.profile);
   const diveDrops = useDelveStore((s) => s.diveDrops);
   const newUids = useDelveStore((s) => s.newUids);
+  const diveRunes = useDelveStore((s) => s.diveRunes);
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
   const seen = useRef<Set<string> | null>(null);
   const depth = referenceDepth(profile);
@@ -86,7 +90,7 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
     }
   }, [diveDrops]);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && diveRunes.length === 0) return null;
 
   return (
     <div
@@ -110,6 +114,19 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
           ◇ {potential} potential: Transfer at the Anvil
         </span>
       )}
+      {countRunes(diveRunes)
+        .slice(0, SHOWN)
+        .map(({ rune, count }) => (
+          <span
+            key={`${rune.id}-${rune.tier}`}
+            className="delve-display flex items-center gap-1 text-[10px] uppercase tracking-wider text-violet-200"
+            data-testid="feed-rune"
+          >
+            <RuneGlyph rune={rune} size="sm" />
+            {runeName(registry, rune)}
+            {count > 1 && ` ×${count}`}
+          </span>
+        ))}
       {visible.map(({ item, equipped, delta }) => (
         <div key={item.uid} className="pointer-events-auto">
           <ItemTile

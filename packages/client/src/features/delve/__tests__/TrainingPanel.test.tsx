@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { sandboxWeapon } from '@alloy/engine';
 import { MAX_DUMMY_GROUPS, useSandboxStore } from '@/stores/sandboxStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
@@ -87,6 +87,23 @@ describe('TrainingPanel', () => {
     expect(screen.getAllByTestId(/^element-/)).toHaveLength(2);
     fireEvent.click(screen.getByTestId('element-storm'));
     expect(useSandboxStore.getState().chains.basic[0].element).toBe('storm');
+  });
+
+  it('the Abilities tab sockets any rune at any tier, free, up to three a move', () => {
+    renderPanel('abilities', 'dock');
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 0/3');
+    expect(screen.getByTestId('socket-open')).toHaveTextContent(/^\+ socket$/);
+    fireEvent.click(screen.getByTestId('socket-open'));
+    fireEvent.click(
+      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: empty' }),
+    );
+    const picker = within(screen.getByTestId('rune-picker'));
+    fireEvent.click(picker.getByRole('button', { name: 'Tier III' }));
+    fireEvent.click(picker.getByRole('button', { name: 'Split III' }));
+    expect(useSandboxStore.getState().chains.primary.moves[0].runes).toEqual([
+      { id: 'split', tier: 3 },
+    ]);
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/3');
   });
 
   it('adds dummies through the arena, and stops at the cap', () => {
