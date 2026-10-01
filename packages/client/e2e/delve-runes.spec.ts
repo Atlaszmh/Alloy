@@ -1,13 +1,21 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
+  baseCost,
   beginFloor,
   completeFloor,
   createDefaultRegistry,
   createDelveProfile,
+  defaultMoveset,
+  loadText,
+  manaPool,
+  manaSupport,
   movesetOf,
+  profileStats,
+  resolveChain,
   runeText,
   startDive,
   stopKinds,
+  type Chain,
   type DataRegistry,
   type DelveProfile,
   type GearItem,
@@ -16,13 +24,18 @@ import {
 
 /**
  * Runes (see the runes spec): a seeded save with sockets and a pouch; the Anvil's picker and
- * Apply, the HUD's pips in a dive, the stop's fifth kind, and fusing on the Forge tab.
+ * Apply, the HUD's pips in a dive, the stop's fifth kind, and fusing on the Forge tab. Their
+ * costs (the rune costs spec): the builder's prices, easing and mana support, the pool's
+ * warning, and the DPS Lab's Mana select.
  */
 
 const SAVE_KEY = 'alloy:delve:v2';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 const QUICK_III: RuneRef = { id: 'quick', tier: 3 };
+const ECHO_III: RuneRef = { id: 'echo', tier: 3 };
+/** The DPS Lab's first rows: its worker loads the engine, slowly when many browsers run at once. */
+const LAB_READY = 30_000;
 
 /** `weapon` with its Primary's first move holding `runes` (one entry per open socket). */
 function socketed(registry: DataRegistry, weapon: GearItem, runes: (RuneRef | null)[]): GearItem {
@@ -175,5 +188,103 @@ test.describe('Delve runes', () => {
     await expect(pouch.getByTestId('pouch-split-1')).toHaveCount(0);
     await expect(page.getByTestId('scrap-count')).toHaveText('⚙ 0 scrap');
     await expect.poll(async () => (await saved(page)).runes.split).toEqual([0, 1, 0, 0, 0]);
+  });
+
+  test('R05: the builder prices a rune, eases it by attunement and shows the mana support', async ({
+    page,
+  }) => {
+    const registry = createDefaultRegistry();
+    // Echo III on the starting sword's Fire Bolt (Fire attunement 2); Quick III in the pouch.
+    const profile = heroWith(registry, [ECHO_III], { runes: { quick: [0, 0, 1, 0, 0] } });
+    const stats = profileStats(registry, profile);
+    const chain = movesetOf(registry, profile.equipped.weapon!).chains.primary!;
+    const resolved = resolveChain(registry, stats, 'primary', chain);
+    const bolt = resolved.moves[0];
+    // The loads are on and the hero's attunement eases them: else this test shows nothing.
+    expect(bolt.payment).toBe('mana');
+    expect(bolt.load).toBeGreaterThan(0);
+    expect(bolt.ease).toBeGreaterThan(0);
+    const terms = { payment: bolt.payment, ease: bolt.ease };
+    const support = manaSupport(registry, stats, resolved);
+    await seed(page, profile);
+    await page.goto('/delve');
+    await page.getByTestId('tab-abilities').click();
+
+    // The move's readout: its loaded cost, the runes' share of it, and what attunement takes off.
+    const readout = page.getByTestId('ability-readout');
+    await expect(readout).toContainText(`${Math.round(bolt.cost)} mana`);
+    await expect(readout).toContainText(`(runes: ${loadText(registry, bolt.load, 'mana')})`);
+    await expect(readout.getByTestId('rune-ease')).toHaveText(
+      `Attunement eases rune cost by ${Math.round(bolt.ease * 100)}%`,
+    );
+    // The chain's spend against the build's refill, as the engine counts them.
+    await expect(page.getByTestId('mana-support')).toHaveText(
+      `Spends ${Math.round(support.spend)}/s · your build refills ${Math.round(support.refill)}/s`,
+    );
+
+    // The picker: the socketed rune's price and a candidate's, eased as the move is.
+    await page.getByTestId('chain-cards').getByTestId('socket-0').click();
+    const picker = page.getByTestId('rune-picker');
+    await expect(picker.getByTestId('rune-current')).toContainText(
+      runeText(registry, ECHO_III, { form: 'bolt' }, terms).cost!,
+    );
+    await expect(picker.getByTestId('rune-pick-quick')).toContainText(
+      runeText(registry, QUICK_III, { form: 'bolt' }, terms).cost!,
+    );
+    await picker.getByTestId('rune-picker-close').click();
+    await expect(picker).toBeHidden();
+
+    // The pouch: a rune's raw price, with no move to ease it.
+    await page.getByTestId('tab-forge').click();
+    await expect(page.getByTestId('pouch-quick-3')).toContainText(
+      runeText(registry, QUICK_III).cost!,
+    );
+  });
+
+  test("R06: a runed mana move the pool can't hold is flagged in the builder", async ({ page }) => {
+    const registry = createDefaultRegistry();
+    // An epic sword carries an Ultimate: a medium Fire Nova paid with mana, Echo III socketed.
+    const base = createDelveProfile(registry, 4242, { primary: 'fire' });
+    const sword: GearItem = { ...base.equipped.weapon!, rarity: 'epic' };
+    const moveset = defaultMoveset(registry, sword, 'fire');
+    const ultimate: Chain = {
+      moves: [{ kind: 'medium', form: 'nova', elements: ['fire'], runes: [ECHO_III] }],
+      payment: 'mana',
+    };
+    const weapon = { ...sword, moveset: { ...moveset, chains: { ...moveset.chains, ultimate } } };
+    const profile: DelveProfile = { ...base, equipped: { ...base.equipped, weapon } };
+    const stats = profileStats(registry, profile);
+    const pool = manaPool(stats, registry).max;
+    const nova = resolveChain(registry, stats, 'ultimate', ultimate).moves[0];
+    // Only the runes' load puts it past the pool.
+    expect(baseCost(nova)).toBeLessThanOrEqual(pool);
+    expect(nova.cost).toBeGreaterThan(pool);
+    await seed(page, profile);
+    await page.goto('/delve');
+    await page.getByTestId('tab-abilities').click();
+    await page.getByTestId('chain-skill-ultimate').click();
+    await expect(page.getByTestId('cost-warning')).toHaveText(
+      `Needs ${Math.round(nova.cost)} mana; your pool holds ${Math.round(pool)}.`,
+    );
+  });
+
+  test('R07: the DPS Lab runs its grid starved and supported (dev builds)', async ({ page }) => {
+    const failures: string[] = [];
+    page.on('pageerror', (e) => failures.push(e.message));
+    page.on('console', (m) => {
+      if (m.type() === 'error' && m.text().startsWith('DPS Lab worker')) failures.push(m.text());
+    });
+    await page.goto('/delve/lab');
+    const mana = page.getByTestId('lab-mana');
+    await expect(mana).toHaveValue('full');
+    await expect(page.getByTestId('lab-row').first()).toBeVisible({ timeout: LAB_READY });
+    for (const sustained of ['starved', 'supported']) {
+      await mana.selectOption(sustained);
+      await expect(mana).toHaveValue(sustained);
+      // A fresh run under the option: the progress bar is back, and its rows fill the table.
+      await expect(page.getByTestId('lab-progress')).toBeVisible();
+      await expect(page.getByTestId('lab-row').first()).toBeVisible({ timeout: LAB_READY });
+    }
+    expect(failures).toEqual([]);
   });
 });
