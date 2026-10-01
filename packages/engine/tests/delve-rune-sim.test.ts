@@ -7,7 +7,7 @@ import {
   mergeKnobs,
 } from '../src/arpg/abilities/resolve.js';
 import { landBlow } from '../src/arpg/basic.js';
-import { makeCtx } from '../src/arpg/combat.js';
+import { applyStatus, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
@@ -733,5 +733,54 @@ describe('Echo (the echo knob)', () => {
     const echo = w.projectiles.filter((p) => p.owner === 'hero' && p.id !== shot.id);
     expect(echo).toHaveLength(1);
     expect(echo[0].damage).toBeCloseTo(shot.damage * 0.45);
+  });
+});
+
+describe('Volatile (the catalyst knob)', () => {
+  /** The Melt hit of a Fire move or blow on a foe holding 2 Frost stacks, and the events. */
+  const melt = (w: ArpgWorld, act: () => ArpgEvent[], legendary = 0) => {
+    w.hero.stats.legendaries.catalyst = legendary;
+    applyStatus(makeCtx(registry, w, []), w.monsters[0], 'chill', 0, false, undefined, 2);
+    const events = act();
+    return { events, hit: events.find((e) => e.kind === 'hit' && e.reaction === 'melt')! };
+  };
+  const bolt = (runes: RuneRef[], legendary = 0) => {
+    const w = world([dummy(13, 30)], { primary: { runes } });
+    return melt(w, () => [...press(w, 0), ...run(w, 1)], legendary);
+  };
+
+  it('adds to the factor of the reactions a move sets off, and marks them', () => {
+    // A medium Fire Bolt brings 2 stacks: Melt takes 2 pairs, each adding (2 − 1) × the factor.
+    const plain = bolt([]);
+    const volatile = bolt([R('volatile')]);
+    expect(volatile.hit.amount / plain.hit.amount).toBeCloseTo((1 + 2 * 1.325) / (1 + 2));
+    expect(volatile.events.find((e) => e.kind === 'runeFx')).toMatchObject({
+      effect: 'volatile',
+      element: 'fire',
+    });
+    expect(plain.events.some((e) => e.kind === 'runeFx')).toBe(false);
+  });
+
+  it("adds to the Catalyst legendary's %, rather than multiplying", () => {
+    const legendary = bolt([], 20);
+    const both = bolt([R('volatile')], 20);
+    expect(both.hit.amount / legendary.hit.amount).toBeCloseTo((1 + 2 * 1.525) / (1 + 2 * 1.2));
+  });
+
+  it("a blow's reactions too, melee or shot", () => {
+    for (const [baseId, y] of [
+      ['sword', 34.5],
+      ['wand', 32],
+    ] as const) {
+      const blowMelt = (runes: RuneRef[]) => {
+        const w = blowWorld([light(runes)], [dummy(13, y)], {
+          weapon: gear('fire', 'weapon', baseId),
+        });
+        return melt(w, () => [...firstBlow(w), ...run(w, 0.5)]);
+      };
+      // A light blow brings 1 stack: one pair.
+      const ratio = blowMelt([R('volatile')]).hit.amount / blowMelt([]).hit.amount;
+      expect(ratio).toBeCloseTo(2.325 / 2);
+    }
   });
 });

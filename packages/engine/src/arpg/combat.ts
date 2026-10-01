@@ -377,7 +377,8 @@ function consumePairs(
 /**
  * A reaction's effect on `m` with `n` pairs, before they come off. Returns the
  * hit's amount after it: a damage reaction adds its bonus once per pair, scaled
- * by Catalyst. `slot`: the hit's ability slot, which its splash carries.
+ * by Catalyst (the legendary's %, plus the hit's Volatile, `volatile`). `slot`:
+ * the hit's ability slot, which its splash carries.
  */
 function react(
   ctx: SimCtx,
@@ -386,11 +387,12 @@ function react(
   amount: number,
   slot: number | undefined,
   n: number,
+  volatile: number,
 ): number {
   const r = ctx.bal.reactions;
   const h = ctx.world.hero;
   const t = ctx.world.t;
-  const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100;
+  const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100 + volatile;
   const boost = (mult: number) => 1 + (mult - 1) * n * catalyst;
   switch (id) {
     case 'melt':
@@ -546,10 +548,13 @@ export function hitMonster(
   const pair = element && !opts.noReact ? findPair(ctx, m, element, k) : null;
   if (pair) {
     reaction = pair.def.id;
-    amount = react(ctx, m, reaction, amount, opts.slot, pair.n);
+    amount = react(ctx, m, reaction, amount, opts.slot, pair.n, opts.catalyst ?? 0);
     m.status.reactionLockUntil = world.t + bal.stacks.reactionLockout;
     if (pair.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
     noteReaction(ctx, reaction, m, pair.n);
+    // Volatile marks a reaction it scaled: a damage reaction, or Soulfire.
+    if (opts.catalyst && (DAMAGE_REACTIONS.has(reaction) || reaction === 'soulfire'))
+      ctx.events.push({ kind: 'runeFx', effect: 'volatile', x: m.x, y: m.y, element });
     if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
   }
 
