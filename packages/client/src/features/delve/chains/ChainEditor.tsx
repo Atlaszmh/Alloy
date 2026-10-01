@@ -3,6 +3,7 @@ import {
   CHAIN_SKILLS,
   MANA_TYPES,
   manaPool,
+  manaSupport,
   resolveChain,
   runeTargetOf,
   socketsOf,
@@ -169,6 +170,12 @@ export function ChainEditor({
     ? resolved.moves.map(moveText)
     : entries.map((b) => blowText(registry, b as Blow));
   const allowed = slot ? elements : blowElements;
+  // A mana or cast chain's spend a second at its cadence against what the build brings back
+  // (the engine's estimate, which Power shares), in whole numbers: amber when it spends more.
+  const support =
+    resolved && resolved.payment !== 'charge' ? manaSupport(registry, stats, resolved) : null;
+  const spends = Math.round(support?.spend ?? 0);
+  const refills = Math.round(support?.refill ?? 0);
   const weapon = stats.weapon.baseId ? registry.getGearBase(stats.weapon.baseId).name : 'Fist';
 
   // Each move's index in the chain handed in: the map a change reports (an edit keeps them all).
@@ -412,6 +419,14 @@ export function ChainEditor({
           </div>
         )}
       </div>
+      {support && (
+        <div
+          className={`text-xs ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
+          data-testid="mana-support"
+        >
+          Spends {spends}/s · your build refills {refills}/s
+        </div>
+      )}
       {!absent && footer?.(skill)}
 
       <fieldset

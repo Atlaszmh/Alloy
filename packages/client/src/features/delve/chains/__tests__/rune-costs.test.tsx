@@ -3,7 +3,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import {
   computeHeroStats,
   defaultChains,
+  manaSupport,
+  resolveChain,
   type AbilityPayment,
+  type AbilitySlot,
+  type Chain,
   type Chains,
   type HeroStats,
   type ManaType,
@@ -175,5 +179,61 @@ describe("the readout's rune price", () => {
     expect(screen.getByTestId('cost-warning')).toHaveTextContent(
       'Needs 87 mana; your pool holds 66.',
     );
+  });
+});
+
+describe('the mana support line', () => {
+  const heavyRuned: Move = {
+    kind: 'heavy',
+    form: 'bolt',
+    elements: ['fire'],
+    runes: [
+      { id: 'echo', tier: 3 },
+      { id: 'heavy', tier: 3 },
+      { id: 'linger', tier: 3 },
+    ],
+  };
+  const ward: Chain = {
+    moves: [{ kind: 'medium', form: 'ward', elements: ['fire'] }],
+    payment: 'mana',
+  };
+  const line = () => screen.getByTestId('mana-support');
+  /** The engine's numbers for a chain, as the line words them, and whether it spends more. */
+  const words = (stats: HeroStats, slot: AbilitySlot, chain: Chain) => {
+    const { spend, refill } = manaSupport(
+      registry,
+      stats,
+      resolveChain(registry, stats, slot, chain),
+    );
+    return {
+      text: `Spends ${Math.round(spend)}/s · your build refills ${Math.round(refill)}/s`,
+      short: Math.round(spend) > Math.round(refill),
+    };
+  };
+
+  it("weighs a mana or cast chain's spend against the build's refill, amber when it spends more", () => {
+    const stats = hero({});
+    const primary = [heavyRuned, heavyRuned, heavyRuned];
+    const { rerender } = render(editor({ primary, stats, over: { defensive: ward } }));
+    const fed = words(stats, 'primary', { moves: primary, payment: 'mana' });
+    expect(fed.short).toBe(true); // three runed heavies on a bare hero: more than comes back
+    expect(line().textContent).toBe(fed.text);
+    expect(line()).toHaveClass('text-amber-200/90');
+    rerender(editor({ primary, payment: 'cast', stats, over: { defensive: ward } }));
+    expect(line().textContent).toBe(
+      words(stats, 'primary', { moves: primary, payment: 'cast' }).text,
+    );
+    fireEvent.click(screen.getByTestId('chain-skill-defensive'));
+    const calm = words(stats, 'defensive', ward);
+    expect(calm.short).toBe(false); // a Ward's 25 mana every 10 s
+    expect(line().textContent).toBe(calm.text);
+    expect(line()).not.toHaveClass('text-amber-200/90');
+  });
+
+  it('shows none for a charge chain or the basic chain', () => {
+    render(editor({ primary: [heavyRuned], payment: 'charge' }));
+    expect(screen.queryByTestId('mana-support')).toBeNull();
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    expect(screen.queryByTestId('mana-support')).toBeNull();
   });
 });
