@@ -1,24 +1,43 @@
 import { writeFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { resolveAbility } from '../src/arpg/abilities/resolve.js';
+import { resolveAbility, resolveChain } from '../src/arpg/abilities/resolve.js';
 import { botInput } from '../src/arpg/bot.js';
 import { dpsCombos, dpsKey, simulateDps, type DpsSetup } from '../src/arpg/dps-sim.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
+import { loadAndValidateData } from '../src/data/loader.js';
+import { DataRegistry } from '../src/data/registry.js';
 import { betweenDives, takeBestStop } from '../src/delve/autopilot.js';
 import { startDive } from '../src/delve/dive.js';
-import { compareItem, computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import {
+  compareItem,
+  computeHeroStats,
+  damagePerUse,
+  estimateCombat,
+  manaPool,
+  useInterval,
+  valuedChain,
+  valuedMove,
+} from '../src/delve/hero-stats.js';
 import { movesOf } from '../src/delve/moveset.js';
 import { bindSecondary, profileStats } from '../src/delve/pair.js';
 import { createDelveProfile, referenceDepth } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { pouchCount, socketsOf } from '../src/loot/runes.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { ABILITY_SLOTS, type Chains, type ChainSkill } from '../src/types/ability.js';
-import type { DelveProfile, DiveStop } from '../src/types/delve.js';
+import {
+  ABILITY_SLOTS,
+  type AbilitySlot,
+  type Chain,
+  type Chains,
+  type ChainSkill,
+  type Move,
+  type MoveKind,
+} from '../src/types/ability.js';
+import type { DelveBalance, DelveProfile, DiveStop } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import type { RuneRef } from '../src/types/rune.js';
-import { arena, chainsOf, dummy, gear, registry, withChains } from './fixtures/arena.js';
+import { arena, bal, chainsOf, dummy, gear, registry, withChains } from './fixtures/arena.js';
 
 /**
  * Power and runes (see the runes spec's "Power and the autopilot"): Power is
@@ -27,6 +46,22 @@ import { arena, chainsOf, dummy, gear, registry, withChains } from './fixtures/a
 
 const DEPTH = 10;
 const III = (id: string): RuneRef => ({ id, tier: 3 });
+
+/** The default data with its Delve balance changed by `change`. */
+function registryWith(change: (bal: DelveBalance) => void): DataRegistry {
+  const d = loadAndValidateData();
+  change(d.balance.delve!);
+  return new DataRegistry(
+    d.affixes,
+    d.combinations,
+    d.synergies,
+    d.baseItems,
+    d.balance,
+    d.recipes,
+    d.delve,
+    d.arpg,
+  );
+}
 
 /** A profile's estimate, as `heroPower` makes it: its pair's stats and its weapon's chains. */
 function estimate(p: DelveProfile, depth: number) {
@@ -355,5 +390,72 @@ describe('the autopilot and runes', () => {
     const lost = value([null, null, III('echo')]);
     expect(lost.power).toBe(kept.power);
     expect(lost.newPower).toBeLessThan(kept.newPower);
+  });
+});
+
+describe('Power and the pool (valuedChain; see the rune costs spec)', () => {
+  /** A starting Fire hero: attunement 2, so a pool of 66. */
+  const starter = createDelveProfile(registry, 3, { primary: 'fire' });
+  const stats = profileStats(registry, starter);
+  const pool = manaPool(stats, registry).max;
+  const chain = (slot: AbilitySlot, moves: Move[], payment: Chain['payment'] = 'mana') =>
+    resolveChain(registry, stats, slot, { moves, payment });
+  const bolt = (kind: MoveKind): Move => ({ kind, form: 'bolt', elements: ['fire'] });
+  const nova = (kind: MoveKind): Move => ({ kind, form: 'nova', elements: ['fire'] });
+
+  it('with no pool, is valuedMove for every move (a hold at full charge)', () => {
+    const c = chain('primary', [bolt('light'), bolt('hold'), bolt('heavy')]);
+    expect(valuedChain(c)).toEqual(c.moves.map((_, i) => valuedMove(c, i)));
+  });
+
+  it("cuts after the first move the pool can't pay: it deals nothing and waits out the restart window", () => {
+    // A light Bolt costs 5.6 and a heavy one 10.4: a pool of 8 pays the first only.
+    const c = chain('primary', [bolt('light'), bolt('heavy'), bolt('light')]);
+    expect(valuedChain(c, 8)).toEqual([c.moves[0], null]);
+    const first = chain('primary', [bolt('light')]);
+    expect(useInterval(bal, c, stats.tempo, 1e9, 1, 8)).toBeCloseTo(
+      (useInterval(bal, first, stats.tempo, 1e9, 1) + bal.abilities.comboWindow) / 2,
+    );
+    expect(damagePerUse(c, 10, stats, bal, 8)).toBeCloseTo(damagePerUse(first, 10, stats, bal) / 2);
+    // A chain whose first move the pool can't pay deals nothing.
+    expect(valuedChain(c, 5)).toEqual([null]);
+    expect(damagePerUse(c, 10, stats, bal, 5)).toBe(0);
+  });
+
+  it('values a hold at the highest stage the pool affords, and as nothing when its stage 0 is past it', () => {
+    // A mana hold Nova's stages cost 60, 78 and 96.
+    const c = chain('ultimate', [nova('hold')]);
+    const [s0, s1, s2] = c.hold[0]!;
+    expect(valuedChain(c, pool)).toEqual([s0]);
+    expect(valuedChain(c, 80)).toEqual([s1]);
+    expect(valuedChain(c)).toEqual([s2]);
+    expect(valuedChain(c, 59)).toEqual([null]);
+  });
+
+  it("values a mana Ultimate the pool can't hold as none: a heavy Nova (78) at a pool of 66", () => {
+    const { ultimate: _, ...rest } = chainsOf(starter);
+    const heavy: Chain = { moves: [nova('heavy')], payment: 'mana' };
+    expect(chain('ultimate', heavy.moves).moves[0].cost).toBeGreaterThan(pool);
+    expect(estimateCombat(stats, registry, DEPTH, { ...rest, ultimate: heavy })).toEqual(
+      estimateCombat(stats, registry, DEPTH, rest),
+    );
+  });
+
+  it("gives no Defensive effect when the pool can't pay its first move", () => {
+    // A pool of 20 + 3 × 2 = 26 against a medium mana Ward's 25 and a heavy one's 32.5.
+    const small = registryWith((b) => {
+      b.mana.basePool = 20;
+    });
+    const s = profileStats(small, starter);
+    const ward = (kind: MoveKind): Chain => ({
+      moves: [{ kind, form: 'ward', elements: ['fire'] }],
+      payment: 'mana',
+    });
+    const { defensive: _, ...rest } = chainsOf(starter);
+    const without = estimateCombat(s, small, DEPTH, rest);
+    expect(
+      estimateCombat(s, small, DEPTH, { ...rest, defensive: ward('medium') }).ehp,
+    ).toBeGreaterThan(without.ehp);
+    expect(estimateCombat(s, small, DEPTH, { ...rest, defensive: ward('heavy') })).toEqual(without);
   });
 });

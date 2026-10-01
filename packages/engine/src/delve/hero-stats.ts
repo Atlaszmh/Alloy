@@ -387,10 +387,11 @@ function blowRunes(k: KnobSet, cleave: number, bal: DelveBalance): number {
  * foes × its impacts), at most `drainFoes`, and at most `drainShare` of its
  * cost before its runes' load (`baseCost`), as the sim caps it.
  */
-function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
+function drainPerUse(chain: ResolvedChain, bal: DelveBalance, pool = Infinity): number {
   return mean(
-    chain.moves.map((_, i) => {
-      const ab = valuedMove(chain, i);
+    // A move the pool can't pay drains nothing (`valuedChain`).
+    valuedChain(chain, pool).map((ab) => {
+      if (!ab) return 0;
       const hits = TARGETS[ab.form.id] * repeatsOf(ab);
       return Math.min(
         ab.knobs.manaOnHit * Math.min(hits, bal.runes.drainFoes),
@@ -400,9 +401,9 @@ function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
   );
 }
 
-/** Each move's Guard: the share of life it shields on landing. */
-function guards(chain: ResolvedChain): number[] {
-  return chain.moves.map((_, i) => valuedMove(chain, i).knobs.guardOnLand);
+/** Each move's Guard: the share of life it shields on landing (none from a move the pool can't pay). */
+function guards(chain: ResolvedChain, pool = Infinity): number[] {
+  return valuedChain(chain, pool).map((ab) => ab?.knobs.guardOnLand ?? 0);
 }
 
 /**
@@ -415,15 +416,19 @@ function guardShare(values: number[], interval: number, bal: DelveBalance): numb
   return Math.max(...values.map((v) => v * Math.min(1, bal.runes.guardSeconds / between)));
 }
 
-/** A chain's lifesteal from its runes alone, averaged over its moves (a rune's lifesteal adds). */
-function runeLeech(registry: DataRegistry, chain: ResolvedChain | null): number {
+/**
+ * A chain's lifesteal from its runes alone, averaged over its moves (a rune's
+ * lifesteal adds; a move the pool can't pay adds none).
+ */
+function runeLeech(registry: DataRegistry, chain: ResolvedChain | null, pool = Infinity): number {
   if (!chain) return 0;
   return mean(
-    chain.moves.map((_, i) =>
-      valuedMove(chain, i).runes.reduce(
-        (sum, r) => sum + (registry.getRune(r.id).tiers[r.tier - 1].lifesteal ?? 0),
-        0,
-      ),
+    valuedChain(chain, pool).map(
+      (ab) =>
+        ab?.runes.reduce(
+          (sum, r) => sum + (registry.getRune(r.id).tiers[r.tier - 1].lifesteal ?? 0),
+          0,
+        ) ?? 0,
     ),
   );
 }
@@ -434,19 +439,41 @@ export function valuedMove(chain: ResolvedChain, i: number): ResolvedAbility {
 }
 
 /**
- * Damage of one use of a chain, averaged over its moves (each with its step
- * bonus, a hold at full charge), counting jumps, lingering ground and repeats,
- * and its runes through their knobs (`reach`, `shots`, `boost`).
+ * The moves Power values, in order: each at its valued stage (a hold at the highest stage
+ * the pool affords, up to full charge), cut after the first move the pool can't pay,
+ * which is null. With `pool` Infinity it is today's `valuedMove` for every move.
+ */
+export function valuedChain(chain: ResolvedChain, pool = Infinity): (ResolvedAbility | null)[] {
+  const out: (ResolvedAbility | null)[] = [];
+  for (const [i, move] of chain.moves.entries()) {
+    // A hold lets go at the highest stage the pool pays (`releaseHold`); one whose stage 0 it
+    // can't pay never starts (`startHold`), as a move over the pool is never cast.
+    const stages = chain.hold[i] ?? [move];
+    let s = stages.length - 1;
+    while (s >= 0 && stages[s].cost > pool) s--;
+    out.push(s >= 0 ? stages[s] : null);
+    if (s < 0) break;
+  }
+  return out;
+}
+
+/**
+ * Damage of one use of a chain, averaged over its moves as the pool plays them
+ * (`valuedChain`: each with its step bonus, a hold at the highest stage the
+ * pool affords; a move the pool can't pay deals nothing), counting jumps,
+ * lingering ground and repeats, and its runes through their knobs (`reach`,
+ * `shots`, `boost`).
  */
 export function damagePerUse(
   chain: ResolvedChain,
   hit: number,
   stats: HeroStats,
   bal: DelveBalance,
+  pool = Infinity,
 ): number {
   return mean(
-    chain.moves.map((_, i) => {
-      const ab = valuedMove(chain, i);
+    valuedChain(chain, pool).map((ab) => {
+      if (!ab) return 0;
       const k = ab.knobs;
       const targets = TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5);
       const step = stepBonus(bal, ab.index).power;
@@ -461,7 +488,9 @@ export function damagePerUse(
  * its cooldowns, its payment and its cadence allow. The cadence is a move's
  * wind-up plus its beat (see the chain feel spec). A hold is valued at full
  * charge: its wind-up is the longer of its charge (`holdTime` × the tempo) and
- * its stage-2 wind-up, and its cooldown counts from its landing.
+ * its stage's wind-up, and its cooldown counts from its landing. The moves are
+ * the pool's (`valuedChain`): a move it can't pay waits out the restart window
+ * (`comboWindow`), and the chain starts over.
  */
 export function useInterval(
   bal: DelveBalance,
@@ -469,11 +498,12 @@ export function useInterval(
   tempo: number,
   manaIncome: number,
   chargeRate: number,
+  pool = Infinity,
 ): number {
   return mean(
-    chain.moves.map((move, i) => {
-      const ab = valuedMove(chain, i);
-      const hold = move.kind === 'hold';
+    valuedChain(chain, pool).map((ab) => {
+      if (!ab) return bal.abilities.comboWindow;
+      const hold = ab.kind === 'hold';
       const windup = hold ? Math.max(holdFull(bal, tempo), ab.castTime) : ab.castTime;
       const cooldown = hold ? windup + ab.cooldown : ab.cooldown + ab.channel;
       const pay =
@@ -591,13 +621,14 @@ export function estimateCombat(
   });
   const pool = manaPool(stats, registry);
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
+  // Each chain as the sim plays it against the pool (`valuedChain`).
   const every = (chain: ResolvedChain, income: number, rate: number) =>
-    useInterval(bal, chain, stats.tempo, income, rate);
+    useInterval(bal, chain, stats.tempo, income, rate, pool.max);
   // Drain: mana per foe-hit, the blows' on each strike and each skill's on each use, over its
   // interval at the income before Drain (one pass).
   const income = pool.regen + bal.mana.basicAttackGain / strikeInterval;
   const drained = (chain: ResolvedChain | null, share: number) => {
-    const perUse = chain ? drainPerUse(chain, bal) : 0;
+    const perUse = chain ? drainPerUse(chain, bal, pool.max) : 0;
     return perUse > 0 ? perUse / every(chain!, income * share, dps / unit) : 0;
   };
   const manaIncome =
@@ -606,13 +637,13 @@ export function estimateCombat(
     drained(ultimate, 0.3) +
     drained(defensive, 0.3);
   const primaryEvery = primary ? every(primary, manaIncome * 0.7, dps / unit) : 0;
-  const primaryDps = primary ? damagePerUse(primary, hit, stats, bal) / primaryEvery : 0;
+  const primaryDps = primary ? damagePerUse(primary, hit, stats, bal, pool.max) / primaryEvery : 0;
   // Abilities share the hero's time and mana; count them at partial efficiency.
   dps += primaryDps * 0.75;
   const chargeRate = dps / unit;
   const ultimateEvery = ultimate ? every(ultimate, manaIncome * 0.3, chargeRate) : 0;
   const ultimateDps = ultimate
-    ? (damagePerUse(ultimate, hit, stats, bal) / ultimateEvery) * 0.8
+    ? (damagePerUse(ultimate, hit, stats, bal, pool.max) / ultimateEvery) * 0.8
     : 0;
   dps += ultimateDps;
 
@@ -621,17 +652,22 @@ export function estimateCombat(
   const guardEvery = defensive ? every(defensive, manaIncome * 0.3, chargeRate) : 0;
   let defensiveDps = 0;
   if (defensive) {
-    // The Defensive's effect: its first move's (a hold's at full charge).
-    const guard = valuedMove(defensive, 0);
-    const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
-    const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
-    if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
-    if (guard.elements.includes('earth'))
-      mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
-    if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
-    if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
-    if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
-    defensiveDps = (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+    // The Defensive's effect: its first move's (a hold's at the highest stage the pool affords).
+    // A first move the pool can't pay is never cast: no effect at all.
+    const guard = valuedChain(defensive, pool.max)[0];
+    if (guard) {
+      const guardFor =
+        guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
+      const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
+      if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
+      if (guard.elements.includes('earth'))
+        mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
+      if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
+      if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
+      if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
+    }
+    defensiveDps =
+      (damagePerUse(defensive, hit, stats, bal, pool.max) / Math.max(1, guardEvery)) * 0.5;
     dps += defensiveDps;
   }
   // Guard: a barrier of its share of life for `guardSeconds` each time its move lands, the
@@ -642,9 +678,9 @@ export function estimateCombat(
       strikeInterval,
       bal,
     ),
-    primary ? guardShare(guards(primary), primaryEvery, bal) : 0,
-    ultimate ? guardShare(guards(ultimate), ultimateEvery, bal) : 0,
-    defensive ? guardShare(guards(defensive), guardEvery, bal) : 0,
+    primary ? guardShare(guards(primary, pool.max), primaryEvery, bal) : 0,
+    ultimate ? guardShare(guards(ultimate, pool.max), ultimateEvery, bal) : 0,
+    defensive ? guardShare(guards(defensive, pool.max), guardEvery, bal) : 0,
   );
   bonusLife += stats.maxHp * shield * 2;
 
@@ -653,9 +689,9 @@ export function estimateCombat(
   // ability isn't counted, as before runes).
   const leech =
     basicDps * mean(blows.map((b) => b.knobs.lifesteal)) +
-    primaryDps * 0.75 * runeLeech(registry, primary) +
-    ultimateDps * runeLeech(registry, ultimate) +
-    defensiveDps * runeLeech(registry, defensive);
+    primaryDps * 0.75 * runeLeech(registry, primary, pool.max) +
+    ultimateDps * runeLeech(registry, ultimate, pool.max) +
+    defensiveDps * runeLeech(registry, defensive, pool.max);
   const sustain = dps * stats.lifesteal + leech;
   const phoenix = 1 + ((L.phoenix_plume ?? 0) / 100) * 0.5;
   const ehp =
