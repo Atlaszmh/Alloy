@@ -6,6 +6,7 @@ import {
   followBasic,
   mergeKnobs,
 } from '../src/arpg/abilities/resolve.js';
+import { shedShards } from '../src/arpg/abilities/impact.js';
 import { landBlow } from '../src/arpg/basic.js';
 import { applyStatus, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -575,6 +576,26 @@ describe('Split (the split knob)', () => {
     expect(shards).toHaveLength(2);
     for (const p of shards) expect(p.hitIds).toEqual(w.monsters.map((m) => m.id));
   });
+
+  it('a shard that strikes a new foe hits only that foe, and pulls nothing (Magnetism)', () => {
+    // Foe A sheds the shards; the second (along +x) strikes B, 0.8 away, close enough that an
+    // impact the shard's size round B would reach A too.
+    const w = world([dummy(13, 30), dummy(13.8, 30)], {
+      primary: { elements: ['storm', 'earth'] },
+    });
+    const ability = moveOf(w, 0);
+    expect(ability.knobs.pull).toBe(true);
+    const [a, b] = w.monsters;
+    shedShards(makeCtx(registry, w, []), a.x, a.y, { count: 4, power: 1 }, 100, [a], {
+      ability,
+      element: ability.element,
+      applies: ability.knobs.applies,
+    });
+    run(w, 0.5);
+    expect([a.x, a.y]).toEqual([13, 30]);
+    expect(a.hp).toBe(a.maxHp);
+    expect(b.hp).toBeLessThan(b.maxHp);
+  });
 });
 
 describe('Chain on blows (chainJumps)', () => {
@@ -706,6 +727,18 @@ describe('Echo (the echo knob)', () => {
     expect(basicHits(events)[0].amount).toBeCloseTo(hit.amount * 0.45);
     expect(events.filter((e) => e.kind === 'basic')).toHaveLength(0);
     expect([w.hero.attackCount, w.hero.mana]).toEqual([attackCount, mana]);
+  });
+
+  it("a blow's echo doesn't go off once its blow has lost its Echo (a gear or chain change)", () => {
+    const w = blowWorld([light([R('echo')])]);
+    firstBlow(w);
+    w.hero.nextAttackAt = 1e9;
+    expect(w.echoes).toHaveLength(1);
+    w.hero.stats = computeHeroStats(SWORD, registry, { basic: [light()] });
+    const events = run(w, 1);
+    expect(events.filter((e) => e.kind === 'runeFx')).toHaveLength(0);
+    expect(basicHits(events)).toHaveLength(0);
+    expect(w.echoes).toHaveLength(0);
   });
 
   it("a hold blow's echo replays the stage it struck at", () => {

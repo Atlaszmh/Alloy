@@ -183,8 +183,6 @@ export interface ImpactOpts {
   silent?: boolean;
   /** How hard direct hits land (defaults to the ability's). */
   heft?: number;
-  /** A Split shard's impact: no scatter or explosion event; no shards, chain, zone or embers. */
-  shard?: boolean;
 }
 
 /** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
@@ -208,8 +206,7 @@ export function impact(
 ): MonsterEntity[] {
   const { world } = ctx;
   const k = ab.knobs;
-  // A Split shard's impact doesn't scatter, nor show an explosion (its flight is its look).
-  if (k.scatter > 0 && !o.tick && !o.noScatter && !o.shard) {
+  if (k.scatter > 0 && !o.tick && !o.noScatter) {
     const reach = k.scatter * radius * ctx.bal.abilities.scatterReach;
     const a = world.rng.next() * Math.PI * 2;
     const r = reach * (0.3 + 0.7 * world.rng.next());
@@ -219,7 +216,7 @@ export function impact(
   }
   if (k.pull) pull(ctx, x, y, radius * 2.2, o.tick ? 0.15 : 0.75);
   // A tick (a zone tick, an ember) draws no infusion.
-  if (!o.silent && !o.shard)
+  if (!o.silent)
     ctx.events.push({
       kind: 'explode',
       x,
@@ -237,8 +234,7 @@ export function impact(
     const first = hits.reduce((a, b) => (dist(x, y, a.x, a.y) <= dist(x, y, b.x, b.y) ? a : b));
     chainFrom(ctx, ab, first, damage, new Set(hits.map((m) => m.id)), o.tick);
   }
-  // A shard leaves no zone, makes no embers and sheds no shards.
-  if (!o.tick && !o.shard) {
+  if (!o.tick) {
     leaveZone(ctx, ab, x, y, radius, damage);
     embers(ctx, ab, x, y, damage);
     // Split: an impact that hit sheds shards, each carrying the move without the knobs that
@@ -270,9 +266,9 @@ export function impact(
  * Split: `split.count` shards from (x, y), evenly spaced round a circle that
  * starts along the way from the hero to (x, y) (no RNG), each at `damage` ×
  * `split.power`, skipping the foes in `hit`, flying `shardSpeed` for
- * `shardRange` and ending there. An ability's shard (`carry.ability`) lands as
- * one impact the shard's size; a basic shot's hits as a basic shot (a tick's
- * stacks). A `runeFx` marks it.
+ * `shardRange` and ending there. An ability's shard (`carry.ability`) hits only
+ * the foe it touches, as the move's direct hit; a basic shot's hits as a basic
+ * shot (a tick's stacks). A `runeFx` marks it.
  */
 export function shedShards(
   ctx: SimCtx,
@@ -305,7 +301,7 @@ export function shedShards(
       pierce: false,
       pierceLeft: 0,
       maxDist: bal.runes.shardRange,
-      explodeRadius: carry.ability ? SHARD_RADIUS : 0,
+      explodeRadius: 0,
       applies: carry.applies,
       knockback: 0,
       heft: 0,

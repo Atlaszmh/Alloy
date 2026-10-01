@@ -33,7 +33,7 @@ import {
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
 import { echoTick } from './abilities/echo.js';
-import { impact, knobHitOpts } from './abilities/impact.js';
+import { hitOpts, impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
@@ -380,12 +380,20 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
       if (m.dead || p.hitIds.includes(m.id)) continue;
       if (dist(p.x, p.y, m.x, m.y) > p.radius + m.radius) continue;
       p.hitIds.push(m.id);
-      if (p.ability)
+      // A Split shard strikes only the foe it touches: no area, pull, zone or event of its own.
+      if (p.ability && p.form === 'shard')
+        hitMonster(
+          ctx,
+          m,
+          p.damage,
+          p.ability.element,
+          hitOpts(p.ability, from, false, true, p.heft),
+        );
+      else if (p.ability)
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',
           heft: p.heft,
-          shard: p.form === 'shard',
         });
       else if (p.explodeRadius > 0) {
         burstShot(ctx, p, m);

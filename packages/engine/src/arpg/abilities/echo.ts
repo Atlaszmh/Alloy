@@ -44,7 +44,8 @@ export function echoTick(ctx: SimCtx): void {
         });
     } else if (e.blow !== null && e.dir) {
       const blow = h.stats.weapon.blows[e.blow];
-      if (!blow) continue;
+      // A gear or chain change since it was queued may have taken the blow's Echo.
+      if (!blow || blow.knobs.echo <= 0) continue;
       const kind = e.stage === null ? blow.kind : HOLD_STAGE_KINDS[e.stage];
       landBlow(ctx, blow, kind, e.dir, blow.knobs.echo);
       ctx.events.push({ kind: 'runeFx', effect: 'echo', x: h.x, y: h.y, element: blow.element });
