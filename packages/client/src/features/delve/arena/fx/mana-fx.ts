@@ -96,6 +96,18 @@ interface Infused {
   life: number;
 }
 
+/** A rune's glyph flashing over its point (fx/runes.ts). */
+interface Glyph {
+  x: number;
+  y: number;
+  /** Rows of cells, '#' lit, each a 2×2-pixel block. */
+  rows: readonly string[];
+  color: number;
+  /** Its lit cells: what drawing it takes off the frame's budget. */
+  cells: number;
+  age: number;
+}
+
 /**
  * How long each transient carrier lasts, and how strongly it draws (a heavy
  * or hold blow's ring, in the blow's own element, at 1.5).
@@ -108,6 +120,10 @@ const INFUSED: Record<InfusedKind, { life: number; strength: number }> = {
 
 const MAX_PARTICLES = 500;
 const SWEEP_SECONDS = 0.1;
+/** A rune glyph's flash: how long it lasts, the share of that it is white, and the pixels it rises. */
+export const GLYPH_LIFE = 0.45;
+const GLYPH_WHITE = 0.15;
+const GLYPH_RISE = 4;
 
 /** How far toward the aim a cast leaves the hero's hand (world units), at chest height. */
 export const HAND = 0.6;
@@ -157,6 +173,7 @@ export class ManaFx {
   private swings: Swing[] = [];
   private beams: Beam[] = [];
   private infusions: Infused[] = [];
+  private glyphs: Glyph[] = [];
   /** Display seconds so far: seeds each transient motif by when it was made. */
   private now = 0;
 
@@ -167,6 +184,7 @@ export class ManaFx {
     this.swings = [];
     this.beams = [];
     this.infusions = [];
+    this.glyphs = [];
   }
 
   /** Sparks and debris: pixels thrown out in every direction. */
@@ -348,10 +366,22 @@ export class ManaFx {
   }
 
   /**
+   * A rune's glyph flashing at (x, y) for `GLYPH_LIFE`: `rows` of cells ('#'
+   * lit), each a 2×2-pixel block, centred on the point; white at first, then
+   * `color`, rising as it fades. It is drawn in the infusion pass, so its
+   * cells come off the frame's budget.
+   */
+  glyph(x: number, y: number, rows: readonly string[], color: number): void {
+    const cells = rows.join('').split('#').length - 1;
+    this.glyphs.push({ x, y, rows, color, cells, age: 0 });
+  }
+
+  /**
    * Advance and draw everything: the effects on the air layer, then the
-   * infusion pass's first carriers (fx/infusion.ts) in priority order: heavy
-   * and hold blows' rings, blasts, beams and sweeps, then blink trails. Only
-   * blasts and blink trails lie on the ground, so only they get its layer.
+   * infusion pass's first carriers (fx/infusion.ts) in priority order: the
+   * runes' glyphs, heavy and hold blows' rings, blasts, beams and sweeps,
+   * then blink trails. Only blasts and blink trails lie on the ground, so
+   * only they get its layer.
    */
   draw(layers: Required<InfusionLayers>, dt: number, time: number, budget: InfusionBudget): void {
     const g = layers.air;
@@ -467,7 +497,24 @@ export class ManaFx {
     }
     this.beams = this.beams.filter((b) => b.age < b.life);
 
-    // The infusion pass starts here, with these first-priority carriers.
+    // The infusion pass starts here, with these first-priority carriers: the runes' glyphs first,
+    // each drawn whole while the budget covers its cells (else skipped that frame).
+    for (const gl of this.glyphs) {
+      gl.age += dt;
+      if (gl.age >= GLYPH_LIFE || gl.cells > budget.left) continue;
+      budget.left -= gl.cells;
+      const p = gl.age / GLYPH_LIFE;
+      // White as it flashes, then its colour, rising a whole pixel at a time as it fades.
+      const color = p < GLYPH_WHITE ? 0xffffff : gl.color;
+      const alpha = Math.min(1, 1.6 * (1 - p));
+      const x0 = gl.x - gl.rows[0].length * PX;
+      const y0 = gl.y - gl.rows.length * PX - Math.round(p * GLYPH_RISE) * PX;
+      gl.rows.forEach((row, j) => {
+        for (let i = 0; i < row.length; i++)
+          if (row[i] === '#') px(g, x0 + 2 * i * PX, y0 + 2 * j * PX, color, alpha, 2);
+      });
+    }
+    this.glyphs = this.glyphs.filter((gl) => gl.age < GLYPH_LIFE);
     for (const f of this.infusions) f.age += dt;
     const air = { air: g };
     const transient = (kind: InfusedKind, l: InfusionLayers) => {

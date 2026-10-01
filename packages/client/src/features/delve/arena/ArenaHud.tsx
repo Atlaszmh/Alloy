@@ -6,10 +6,11 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react';
-import type { BiomeDef, DiveState, Vec } from '@alloy/engine';
+import type { BiomeDef, DiveState, RuneRef, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
 import { KIND_ICON, moveText } from '../chains/chain-text';
+import { FAMILY_STYLE } from '../runes/rune-style';
 import { DRAG_PX, classifyPress, isOverButton } from './aim-gestures';
 import { keyLabel, padHint, type ControlsConfig } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from './useArena';
@@ -239,6 +240,30 @@ function ChainDots({ step, length, color }: { step: number; length: number; colo
 }
 
 /**
+ * The runes acting on the next move (or blow): a dot each in its family's
+ * colour along the button's top edge (`data-rune`: its id); none without.
+ */
+function RunePips({ runes }: { runes: readonly RuneRef[] }) {
+  if (runes.length === 0) return null;
+  const registry = getDelveRegistry();
+  return (
+    <span
+      className="pointer-events-none absolute -top-1 left-1/2 flex -translate-x-1/2 gap-0.5"
+      aria-hidden
+    >
+      {runes.map((r, k) => (
+        <span
+          key={k}
+          data-rune={r.id}
+          className="h-1.5 w-1.5 rounded-full ring-1 ring-black/70"
+          style={{ background: FAMILY_STYLE[registry.getRune(r.id).family].color }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
  * A press on an ability button: its slot and pointer, where and when it
  * began, where it is now (`at`, `on` its button), and whether it has been off
  * the button since (`left`: back on it, that's a cancel).
@@ -425,6 +450,7 @@ function AbilityButton({
         )}
       </span>
       <ChainDots step={ab.chainStep} length={ab.chainLength} color={color} />
+      <RunePips runes={ab.runes} />
       {ab.hold !== null && <HoldBar hold={ab.hold} color={color} />}
       {ab.windup !== null && (
         <span className="absolute -top-2 left-1 right-1 h-1 overflow-hidden rounded-full bg-black/70">
@@ -507,6 +533,7 @@ export function AttackButton({
         </span>
       )}
       {hud && <ChainDots step={hud.basicChainStep} length={hud.basicChainLength} color="#fde047" />}
+      {hud && <RunePips runes={hud.basicRunes} />}
       {hud?.basicHold && <HoldBar hold={hud.basicHold} color="#fde047" />}
     </button>
   );

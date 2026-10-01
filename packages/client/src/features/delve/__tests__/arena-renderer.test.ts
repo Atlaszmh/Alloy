@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import type { Graphics } from 'pixi.js';
-import type { ArpgEvent, ArpgWorld, Drop } from '@alloy/engine';
-import { drawDrop, dropPop, holdPing, pickupColor, pruneViews } from '../arena/ArenaRenderer';
-import { MANA_HEX } from '../arena/palette';
+import type { ArpgEvent, ArpgWorld, Drop, GearItem } from '@alloy/engine';
+import {
+  drawDrop,
+  dropLabel,
+  dropPop,
+  holdPing,
+  pickupColor,
+  pruneViews,
+} from '../arena/ArenaRenderer';
+import { MANA_HEX, RARITY_HEX } from '../arena/palette';
+import { runeHex } from '../arena/fx/runes';
+import { getDelveRegistry } from '../registry';
 
 /** A Graphics stand-in that records the colours it fills. */
 function recorder() {
@@ -81,5 +90,32 @@ describe('the arena renderer', () => {
     const blow = holdPing(w, { slot: null, stage: 2 });
     expect(blow.color).toBe(MANA_HEX.storm);
     expect(blow.r).toBeCloseTo(1.6);
+  });
+});
+
+describe('runes on the floor', () => {
+  const split = { id: 'split', tier: 3 as const };
+
+  it('draw as a stone in their family colour, named with their tier, and sparkle so when picked up', () => {
+    const stone = recorder();
+    drawDrop(stone.g, drop({ kind: 'rune', rune: split }), 1, 1);
+    expect(stone.fills).toContain(runeHex(split));
+    expect(stone.fills).not.toContain(0xfcd34d); // not the scrap coin
+    const def = getDelveRegistry().getRune('split');
+    expect(dropLabel(drop({ kind: 'rune', rune: split }))).toEqual({
+      text: `${def.icon} Split III`,
+      color: runeHex(split),
+    });
+    expect(
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'rune', amount: 0, rune: split }),
+    ).toBe(runeHex(split));
+  });
+
+  it('names rare, epic and legendary items and runes, nothing else', () => {
+    const item = (rarity: GearItem['rarity']) =>
+      drop({ kind: 'item', item: { name: 'Sunfang', rarity } as GearItem });
+    expect(dropLabel(item('legendary'))).toEqual({ text: 'Sunfang', color: RARITY_HEX.legendary });
+    expect(dropLabel(item('magic'))).toBeNull();
+    expect(dropLabel(drop({}))).toBeNull();
   });
 });

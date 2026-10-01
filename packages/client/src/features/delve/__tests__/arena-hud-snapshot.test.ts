@@ -182,3 +182,36 @@ describe('arena HUD snapshot', () => {
     });
   });
 });
+
+describe('arena HUD snapshot: runes', () => {
+  /** A rune's id by its name in the data. */
+  const idOf = (name: string) => registry.getRunes().find((r) => r.name === name)!.id;
+
+  it('carries the runes acting on each next move and on the next blow, never a dormant one', () => {
+    const split = { id: idOf('Split'), tier: 3 as const };
+    const widen = { id: idOf('Widen'), tier: 1 as const }; // doesn't fit a Bolt
+    const chain = { id: idOf('Chain'), tier: 2 as const };
+    const w = sandbox({
+      primary: {
+        moves: [{ kind: 'light', form: 'bolt', elements: ['fire'], runes: [split, widen, null] }],
+        payment: 'mana',
+      },
+    });
+    let hud = snapshot(w);
+    expect(hud.abilities[0]!.runes).toEqual([split]);
+    expect(hud.abilities[2]!.runes).toEqual([]);
+    expect(hud.basicRunes).toEqual([]);
+    // A sword's blow: Chain fits every weapon, Split only a bow's or a wand's.
+    const weapon = sandboxWeapon(registry, {
+      baseId: 'sword',
+      mana: 'fire',
+      rarity: 'common',
+      ilvl: 5,
+    });
+    w.hero.stats = computeHeroStats({ weapon }, registry, {
+      basic: [{ kind: 'light', element: 'fire', runes: [chain, split] }],
+    });
+    hud = snapshot(w);
+    expect(hud.basicRunes).toEqual([chain]);
+  });
+});
