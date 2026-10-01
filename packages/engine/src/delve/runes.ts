@@ -201,7 +201,10 @@ export function runeChange(
  * The draft's one total, as Apply would charge it (see the runes spec): the
  * Mana Dust (`editPrice`, by the origins), the Links and scrap the sockets and
  * pulls cost (`runeChange`), the Links removed moves give back, and the runes
- * a pull destroys ('destroy') or returns ('pay'); or why Apply would refuse.
+ * a pull destroys ('destroy') or returns ('pay'); or `runeChange`'s refusal
+ * (unarmed, bad origins, a socket refusal, closed sockets, a short pouch). It
+ * doesn't check the chains themselves (`setChains`' refusals) or whether the
+ * hero can afford the total.
  */
 export function draftPrice(
   registry: DataRegistry,

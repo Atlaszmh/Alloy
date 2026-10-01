@@ -1006,7 +1006,8 @@ const DelveBalanceSchema = z.object({
   runes: z.object({
     socketCap: perRarity(z.number().int().min(0).max(MAX_SOCKETS)),
     // By the sockets the move already has: the first socket's price first.
-    socketLinks: z.array(z.number().int().min(0)).length(MAX_SOCKETS),
+    // At least 1: a removed move gives back a flat Link per socket.
+    socketLinks: z.array(z.number().int().min(1)).length(MAX_SOCKETS),
     socketScrap: z.array(z.number().int().min(0)).length(MAX_SOCKETS),
     socketDrops: perRarity(
       z

@@ -164,7 +164,7 @@ export function takeFromPouch(pouch: RunePouch, refs: readonly RuneRef[]): RuneP
   const next = { ...pouch };
   for (const { id, tier } of refs) {
     const counts = [...(next[id] ?? Array<number>(RUNE_TIERS).fill(0))];
-    if (counts[tier - 1] <= 0) return null;
+    if (!(counts[tier - 1] > 0)) return null;
     counts[tier - 1]--;
     next[id] = counts;
   }

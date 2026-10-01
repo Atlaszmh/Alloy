@@ -322,6 +322,8 @@ describe('balance: delve.runes', () => {
     expect(ok({})).toBe(true);
     expect(ok({ socketCap: { ...balanceData.delve.runes.socketCap, legendary: 4 } })).toBe(false);
     expect(ok({ socketLinks: [1, 2] })).toBe(false);
+    // A free socket would let a removal's flat 1-Link refund mint Links.
+    expect(ok({ socketLinks: [0, 2, 3] })).toBe(false);
     expect(ok({ socketScrap: [20, 40, 60, 80] })).toBe(false);
     expect(ok({ pullScrap: [15, 30, 50, 80] })).toBe(false);
     expect(ok({ fuseScrap: [20, 40, 80, 160, 320] })).toBe(false);
@@ -458,6 +460,7 @@ describe('rune helpers: sockets and the pouch', () => {
       quick: [0, 0, 1, 0, 0],
     });
     expect(takeFromPouch(more, [{ id: 'split', tier: 2 }])).toBeNull();
+    expect(takeFromPouch(more, [{ id: 'split', tier: 7 as RuneTier }])).toBeNull();
     expect(
       takeFromPouch(pouch, [
         { id: 'split', tier: 1 },
