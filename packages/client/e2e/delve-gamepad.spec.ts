@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultRegistry, createDelveProfile } from '@alloy/engine';
+import { createDefaultRegistry, createDelveProfile, defaultMoveset } from '@alloy/engine';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -12,10 +12,16 @@ const ARENA_READY = 30_000;
 
 const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13, left: 14, right: 15 } as const;
 
-async function setup(page: Page, autopilot: boolean): Promise<void> {
-  const save = JSON.stringify(
-    createDelveProfile(createDefaultRegistry(), 4242, { primary: 'fire' }),
-  );
+/** A fire hero's save, its sword's Primary at `primarySlots` slots of default moves. */
+async function setup(page: Page, autopilot: boolean, primarySlots = 1): Promise<void> {
+  const registry = createDefaultRegistry();
+  const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
+  const sword = profile.equipped.weapon!;
+  const moveset = defaultMoveset(registry, sword, 'fire', { primary: primarySlots });
+  const save = JSON.stringify({
+    ...profile,
+    equipped: { ...profile.equipped, weapon: { ...sword, moveset } },
+  });
   await page.addInitScript(
     ([value, bot]) => {
       const w = window as unknown as { __pad: unknown };
@@ -141,7 +147,7 @@ test.describe('Delve with a controller', () => {
   test('G04: holding RT with the right stick aimed keeps casting the Primary, through its chain', async ({
     page,
   }) => {
-    await setup(page, false);
+    await setup(page, false, 2); // a light Bolt, then a medium one
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     const bar = page.getByTestId('mana-bar');
@@ -220,8 +226,13 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.right);
     await tap(page, BUTTON.a);
     await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
+    // The weapon carries the chains.
     const blow = () =>
-      page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!).chains.basic[1]);
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem('alloy:delve:v2')!).equipped.weapon.moveset.chains
+            .basic[1],
+      );
     expect((await blow()).kind).toBe('light');
     // Down past the card's reorder buttons to its kind chips (twice; on a phone the
     // fixed tab bar sits in between, one press more).
@@ -233,6 +244,10 @@ test.describe('Delve with a controller', () => {
     const chip = await focused();
     expect(chip).toMatch(/^kind-(medium|heavy|hold)$/);
     await tap(page, BUTTON.a);
+    // A draft until Apply.
+    await expect(page.getByTestId('chain-apply')).toBeVisible();
+    expect((await blow()).kind).toBe('light');
+    await page.getByTestId('chain-apply').click();
     await expect.poll(async () => (await blow()).kind).toBe(chip.slice('kind-'.length));
   });
 

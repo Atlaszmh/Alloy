@@ -3,6 +3,7 @@ import {
   bindSecondary,
   createDefaultRegistry,
   createDelveProfile,
+  type DelveProfile,
   type ManaType,
 } from '@alloy/engine';
 
@@ -10,16 +11,21 @@ const SAVE_KEY = 'alloy:delve:v2';
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 
-/** Seed a deterministic Delve save (a fire hero, and `secondary` bound if given) and let the engine bot play the arena. */
+/**
+ * Seed a deterministic Delve save (a fire hero, `secondary` bound if given, `over` on top) and
+ * let the engine bot play the arena.
+ */
 async function seedProfile(
   page: Page,
   seed = 4242,
   autopilot = true,
   secondary?: ManaType,
+  over: Partial<DelveProfile> = {},
 ): Promise<void> {
   const registry = createDefaultRegistry();
   let profile = createDelveProfile(registry, seed, { primary: 'fire' });
   if (secondary) profile = bindSecondary(registry, profile, secondary).profile;
+  profile = { ...profile, ...over };
   const save = JSON.stringify(profile);
   await page.addInitScript(
     ([key, value, bot]) => {
@@ -58,14 +64,9 @@ test.describe('Delve loot loop', () => {
       'aria-label',
       /^Primary: (light|medium|heavy) Fire Bolt$/,
     );
-    await expect(page.getByTestId('ability-1')).toHaveAttribute(
-      'aria-label',
-      'Defensive: medium Fire Ward',
-    );
-    await expect(page.getByTestId('ability-2')).toHaveAttribute(
-      'aria-label',
-      'Ultimate: medium Fire Nova',
-    );
+    // The starting sword is common: it carries no Defensive or Ultimate, so they have no button.
+    await expect(page.getByTestId('ability-1')).toHaveCount(0);
+    await expect(page.getByTestId('ability-2')).toHaveCount(0);
     await expect(page.getByTestId('mana-bar')).toBeVisible();
     await expect(page.getByTestId('dodge-button')).toBeVisible();
 
@@ -85,7 +86,9 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('delve-howto')).toHaveCount(0);
   });
 
-  test('D02: loot drops mid-dive and can be inspected and equipped', async ({ page }) => {
+  test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
+    page,
+  }) => {
     await seedProfile(page);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
@@ -98,17 +101,42 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toBeVisible();
     await expect(page.getByTestId('item-name')).not.toBeEmpty();
     await expect(page.getByTestId('item-compare')).toBeVisible();
+    // Gear is locked mid-dive.
+    await expect(page.getByTestId('equip-button')).toHaveCount(0);
+    await expect(sheet.getByTestId('equip-locked')).toHaveText('Equip at the Anvil');
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(sheet).toBeHidden();
+
+    // Abandon the dive (items are kept), and equip it at the Anvil (answering an off-pair
+    // item's bind prompt).
+    await page.getByRole('button', { name: 'Dive menu' }).click();
+    await page.getByRole('button', { name: 'Abandon dive (lose bounty)' }).click();
+    await expect(page.getByTestId('delve-camp')).toBeVisible();
+    await page.getByTestId('bag-item').first().click();
     await page.getByTestId('equip-button').click();
+    const notNow = page.getByTestId('bind-prompt-not-now');
+    if (await notNow.isVisible()) await notNow.click();
     await expect(sheet).toBeHidden();
   });
 
-  test('D03: taking a door leads to the next depth', async ({ page }) => {
+  test('D03: the door screen offers a power-up, and a door leads to the next depth', async ({
+    page,
+  }) => {
     await seedProfile(page);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: 60_000 });
+    // The stop offers a power-up: the first card's picker opens and goes back, and skipping it is
+    // taking a door.
+    const stop = page.getByTestId('stop');
+    await expect(stop).toBeVisible();
+    await stop.locator('[data-testid^="stop-"]').first().click();
+    const picker = page.getByTestId('stop-picker');
+    await expect(picker).toBeVisible();
+    await picker.getByRole('button', { name: 'Back' }).click();
+    await expect(picker).toBeHidden();
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
@@ -162,21 +190,26 @@ test.describe('Delve loot loop', () => {
   });
 
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
-    await seedProfile(page, 4242, true, 'nature');
+    await seedProfile(page, 4242, true, 'nature', { links: 1, scrap: 20 });
     await page.goto('/delve');
+    await expect(page.getByTestId('links-count')).toHaveText('🔗 1 Link');
     await expect(page.getByTestId('mana-strip')).toContainText('Abilities');
     await page.getByTestId('mana-strip').click();
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
-    // The Primary's first move becomes a Wildfire Burst; the chain keeps its other moves.
+    // The Primary's one move becomes a Wildfire Burst: a draft, free before the first dive.
     await page.getByTestId('form-burst').click();
     await page.getByTestId('infusion-nature').click();
     await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
-    await expect(page.getByTestId('abilities-summary')).toHaveText(
-      'light Wildfire Burst · medium Fire Bolt · medium Fire Bolt · heavy Fire Bolt',
-    );
-    // A fifth move fills the cap: no more + card.
-    await page.getByTestId('move-add').click();
-    await expect(page.getByTestId('move-4')).toBeVisible();
+    await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
+    await page.getByTestId('chain-apply').click();
+    await expect(page.getByTestId('chain-draft')).toHaveCount(0);
+    const summary = page.getByTestId('abilities-summary');
+    await expect(summary).toHaveText('light Wildfire Burst');
+    // A Link and 20 scrap buy a second slot, holding the chain's next default move.
+    await expect(page.getByTestId('chain-slots')).toHaveText('Slots 1/5');
+    await page.getByTestId('add-slot').click();
+    await expect(summary).toHaveText('light Wildfire Burst · medium Wildfire Burst');
+    await expect(page.getByTestId('chain-slots')).toHaveText('Slots 2/5');
     await expect(page.getByTestId('move-add')).toHaveCount(0);
     await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
     await page.getByTestId('tab-forge').click();
@@ -203,10 +236,9 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('tab-abilities').click();
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toContainText('Frost Bolt');
+    // The common sword carries Basic and Primary: the others show locked.
     await page.getByTestId('chain-skill-defensive').click();
-    await expect(summary).toContainText('Frost Ward');
-    await page.getByTestId('chain-skill-ultimate').click();
-    await expect(summary).toContainText('Frost Nova');
+    await expect(summary).toContainText('Carried by magic weapons and better');
     await page.getByTestId('slot-weapon').click();
     await expect(page.getByTestId('item-mana')).toContainText('Frost');
   });
