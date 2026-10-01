@@ -179,4 +179,21 @@ describe('keepFocus: the pad never loses the focus', () => {
     keepFocus();
     expect(document.activeElement).toBe(first);
   });
+
+  it('never scrolls to the control it focuses: a sheet still sliding in would drag the page under it', () => {
+    setDevice('gamepad');
+    const b = button(0, 2000);
+    let scrolled = false;
+    b.scrollIntoView = () => (scrolled = true);
+    const focus = b.focus.bind(b);
+    let opts: FocusOptions | undefined;
+    b.focus = (o?: FocusOptions) => {
+      opts = o;
+      focus(o);
+    };
+    keepFocus();
+    expect(document.activeElement).toBe(b);
+    expect(scrolled).toBe(false);
+    expect(opts).toEqual({ preventScroll: true });
+  });
 });

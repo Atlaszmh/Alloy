@@ -76,6 +76,7 @@ const lastFocus = new WeakMap<HTMLElement | Document, { el: HTMLElement; at: DOM
  * visible control in the current scope (it unmounted, or a scope opened) goes
  * back to the scope's last focused control, else the one nearest where it
  * was, else the first. Under the keys or the mouse the focus is left alone.
+ * It never scrolls: a sheet still sliding in would drag the page under it.
  */
 export function keepFocus(): void {
   const s = scope();
@@ -92,6 +93,7 @@ export function keepFocus(): void {
   if (useInputDeviceStore.getState().device !== 'gamepad') return;
   const els = candidates();
   if (els.length === 0) return;
+  const focus = (el: HTMLElement) => el.focus({ preventScroll: true });
   const last = lastFocus.get(s);
   if (!last) return focus(els[0]);
   if (els.includes(last.el)) return focus(last.el);
