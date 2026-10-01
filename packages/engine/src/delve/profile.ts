@@ -624,7 +624,7 @@ export function salvageItems(
   };
 }
 
-/** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`. */
+/** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`, and no weapon holding runes. */
 export function salvageCandidates(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -638,6 +638,7 @@ export function salvageCandidates(
         !item.locked &&
         item.rarity !== 'legendary' &&
         rarityIndex(item.rarity) <= cap &&
+        weaponParts(registry, item).runes.length === 0 &&
         compareItem(profile.equipped, item, registry, depth, profile.pair).powerPct <= 0,
     )
     .map((i) => i.uid);

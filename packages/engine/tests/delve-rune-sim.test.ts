@@ -10,6 +10,7 @@ import { shedShards } from '../src/arpg/abilities/impact.js';
 import { landBlow } from '../src/arpg/basic.js';
 import { applyStatus, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
+import { respawnHero } from '../src/arpg/sandbox.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { Blow } from '../src/types/ability.js';
@@ -702,6 +703,24 @@ describe('Echo (the echo knob)', () => {
     expect(w.hero.facing).toEqual({ x: 1, y: 0 });
     expect(w.echoes).toHaveLength(0);
     run(w, 1);
+    expect(w.echoes).toHaveLength(0);
+  });
+
+  it("an ability's queued echo goes with a hot-swap of its slot, and with a respawn", () => {
+    const echoing = chainsWith({ primary: { runes: [R('echo')] } });
+    const w = world([dummy(13, 30)], { chains: echoing });
+    press(w, 0);
+    expect(w.echoes).toHaveLength(1);
+    refreshWorldHero(registry, w, w.hero.stats, echoing);
+    expect(w.echoes).toHaveLength(1);
+    refreshWorldHero(registry, w, w.hero.stats, chainsWith());
+    expect(w.echoes).toHaveLength(0);
+    expect(run(w, 1).filter((e) => e.kind === 'runeFx')).toHaveLength(0);
+    refreshWorldHero(registry, w, w.hero.stats, echoing);
+    run(w, 2);
+    press(w, 0);
+    expect(w.echoes).toHaveLength(1);
+    respawnHero(registry, w);
     expect(w.echoes).toHaveLength(0);
   });
 

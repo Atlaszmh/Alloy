@@ -260,8 +260,8 @@ export function createHeroEntity(
  * pool resizes, keeping the life fraction and current mana (clamped). Charge
  * (clamped to each chain's largest need), combos (clamped to a shortened
  * chain) and each move's cooldown carry over. A slot whose chain changed
- * drops its wind-up (as a dodge does), its hold, its beat and its waiting
- * press, and a new Defensive ends the old one's buff and Ward at once, without
+ * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
+ * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
  */
 export function refreshWorldHero(
@@ -295,6 +295,7 @@ export function refreshWorldHero(
   changed.forEach((c, i) => {
     if (c) clearBeat(world, i);
   });
+  world.echoes = world.echoes.filter((e) => e.slot === null || !changed[e.slot]);
   if (changed[1]) {
     h.defend = null;
     h.ward = null;

@@ -56,21 +56,25 @@ export function nextMove(
 }
 
 /**
- * The move a press made now will cast: during the slot's own wind-up, the one
+ * The step a press made now will cast: during the slot's own wind-up, the one
  * after the winding move (the wind-up lands before the press fires); else
- * `nextMove` (null for a skill the weapon doesn't carry).
+ * `pressStep`.
  */
+export function pressIndex(h: HeroEntity, slot: number, t: number, window: number): number {
+  const moves = h.chains[slot]?.moves;
+  return moves && h.windup?.slot === slot
+    ? (h.windup.step + 1) % moves.length
+    : pressStep(h, slot, t, window);
+}
+
+/** The move a press made now will cast, at `pressIndex` (null for a skill the weapon doesn't carry). */
 export function pressMove(
   h: HeroEntity,
   slot: number,
   t: number,
   window: number,
 ): ResolvedAbility | null {
-  const moves = h.chains[slot]?.moves;
-  if (!moves) return null;
-  return h.windup?.slot === slot
-    ? moves[(h.windup.step + 1) % moves.length]
-    : nextMove(h, slot, t, window);
+  return h.chains[slot]?.moves[pressIndex(h, slot, t, window)] ?? null;
 }
 
 /** The slot's move winding up, holding or, for the Defensive, the one whose effect is up; else null. */

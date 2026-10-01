@@ -237,6 +237,7 @@ export {
   canAfford,
   pressStep,
   nextMove,
+  pressIndex,
   pressMove,
   activeMove,
   holdCharge,

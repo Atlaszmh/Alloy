@@ -42,7 +42,13 @@ import {
   upgradeGear,
 } from '../src/delve/profile.js';
 import V5 from './fixtures/delve-v5-saves.json';
-import { abilityReady, nextMove, pressMove, pressStep } from '../src/arpg/abilities/cast.js';
+import {
+  abilityReady,
+  nextMove,
+  pressIndex,
+  pressMove,
+  pressStep,
+} from '../src/arpg/abilities/cast.js';
 import { gainCharge } from '../src/arpg/abilities/defend.js';
 import { botInput } from '../src/arpg/bot.js';
 import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
@@ -73,6 +79,7 @@ import {
   dummy,
   gear,
   press,
+  pressOnly,
   registry,
   run,
   withChains,
@@ -350,6 +357,17 @@ describe('an absent skill (a null chain)', () => {
     expect(nextMove(w.hero, 1, w.t, 1)).toBeNull();
     expect(pressMove(w.hero, 2, w.t, 1)).toBeNull();
     expect(casts(press(w, 0))).toEqual([0, 0]);
+  });
+
+  it("names the move a press now casts: during the slot's wind-up, the one after it (pressIndex)", () => {
+    const heavy = { kind: 'heavy' as const, form: 'bolt' as const, elements: ['fire' as const] };
+    const chains = { primary: { moves: [heavy, heavy], payment: 'mana' as const } };
+    const w = arena([dummy(13, 30)], { chains, noBasic: true });
+    pressOnly(w, 0);
+    expect(w.hero.windup?.step).toBe(0);
+    expect(pressIndex(w.hero, 0, w.t, 1)).toBe(1);
+    expect(pressMove(w.hero, 0, w.t, 1)).toBe(w.hero.chains[0]!.moves[1]);
+    expect(pressIndex(w.hero, 2, w.t, 1)).toBe(0);
   });
 
   it("fills no charge meter for it, nor do the Training Grounds' top-ups", () => {

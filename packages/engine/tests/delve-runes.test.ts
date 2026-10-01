@@ -11,8 +11,10 @@ import { chooseStartingMana } from '../src/delve/pair.js';
 import {
   addLootToBag,
   createDelveProfile,
+  equipItem,
   fuseGear,
   parseDelveProfile,
+  salvageCandidates,
   salvageItems,
   setAutoSalvage,
   unequipSlot,
@@ -250,6 +252,27 @@ describe('the parts rule', () => {
       runes: [],
       destroyed: [],
     });
+  });
+
+  it('Salvage junk never picks a weapon holding runes, though a better one replaced it', () => {
+    const better = generateItem(
+      registry,
+      { uid: 'b', ilvl: 30, rarity: 'epic', slot: 'weapon', baseId: 'sword', mana: 'storm' },
+      new SeededRNG(7),
+    );
+    const start = hero();
+    const wield = (w: GearItem) =>
+      equipItem(
+        registry,
+        { ...start, equipped: { ...start.equipped, weapon: w }, bag: [better] },
+        'b',
+      );
+    const p = wield(socketedSword());
+    expect(p.bag.map((i) => i.uid)).toEqual(['w']);
+    expect(salvageCandidates(registry, p, 'epic')).toEqual([]);
+    // The same weapon without runes is junk.
+    const plain = { ...socketedSword(), moveset: undefined };
+    expect(salvageCandidates(registry, wield(plain), 'epic')).toEqual(['w']);
   });
 
   it("fusing gives the inputs' parts back by the rule; the fused weapon rolls its own", () => {
