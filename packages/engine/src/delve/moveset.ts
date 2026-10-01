@@ -22,6 +22,7 @@ import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
 import { inPair } from './pair.js';
 import { withMoveset, type ProfileActionResult } from './profile.js';
+import { settleParts, type SetChainsOptions } from './runes.js';
 
 /**
  * Editing a weapon's moveset (see the weapon movesets spec): its chains'
@@ -391,15 +392,17 @@ export function addSlot(
 
 /**
  * Move the equipped weapon's moveset onto weapon `uid` in the bag and equip
- * it, for scrap (`movesetTransfer`); its Links come back. The old weapon goes
- * to the bag at its base slots, its moves the defaults in its own mana.
- * Refuses mid-dive, unarmed, for anything but a bag weapon, and when it can't
- * be paid for.
+ * it, for scrap (`movesetTransfer`: its extra slots and open sockets); its
+ * Links come back, and the runes that leave go by the parts rule
+ * (`opts.unsocket`, else the balance's). The old weapon goes to the bag at its
+ * base slots, its moves the defaults in its own mana. Refuses mid-dive,
+ * unarmed, for anything but a bag weapon, and when it can't be paid for.
  */
 export function transferMoveset(
   registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): ProfileActionResult {
   if (isDiveActive(profile)) return refuse(profile, 'Transfer your moveset between dives');
   const source = profile.equipped.weapon;
@@ -410,16 +413,20 @@ export function transferMoveset(
   if (profile.scrap < t.scrap) return refuse(profile, 'Not enough scrap');
   const item = { ...target, moveset: t.moveset };
   const old = { ...source, moveset: defaultMoveset(registry, source, source.mana) };
+  const settled = settleParts(registry, profile.runes, t.runes, opts.unsocket);
   return {
     ok: true,
     item,
     links: t.links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
     profile: {
       ...profile,
       equipped: { ...profile.equipped, weapon: item },
       bag: [...profile.bag.filter((i) => i.uid !== uid), old],
       scrap: profile.scrap - t.scrap,
       links: profile.links + t.links,
+      runes: settled.pouch,
     },
   };
 }

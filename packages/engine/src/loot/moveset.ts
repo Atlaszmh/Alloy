@@ -16,7 +16,7 @@ import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import type { ManaType } from '../types/mana.js';
 import type { RuneRef } from '../types/rune.js';
-import { socketCap, socketsOf } from './runes.js';
+import { runeFits, socketCap, socketsOf } from './runes.js';
 
 /**
  * Weapon movesets (see the weapon movesets spec): which chains a weapon
@@ -270,12 +270,21 @@ export interface MovesetTransfer {
   moveset: Moveset;
   /** Extra slots that move: the price counts these. */
   moved: number;
+  /** Open sockets that move (on the moves the target keeps, within its cap): the price counts these too. */
+  sockets: number;
   /**
    * Links back: the extras past the cap, the extras of chains the target
-   * can't carry, and the target's own extras on the chains replaced.
+   * can't carry, and the target's own extras on the chains replaced; and one
+   * for each open socket that doesn't move (past the target's cap, on a move
+   * the transfer drops, or the target's own on the chains replaced).
    */
   links: number;
-  /** Scrap: `transferScrap` for each extra slot that moves. */
+  /**
+   * The runes that leave, by the parts rule: those in the sockets that don't
+   * move, and a kept blow's rune that doesn't fit the target weapon (its socket moves, empty).
+   */
+  runes: RuneRef[];
+  /** Scrap: `transferScrap` for each extra slot and each open socket that moves. */
   scrap: number;
 }
 
@@ -285,7 +294,11 @@ export interface MovesetTransfer {
  * Links), its moves past the new slots dropped from the end; a chain the
  * target can't carry stays behind, its extras back as Links; the target's own
  * extras on the chains replaced come back as Links; and a skill only the
- * target carries keeps the target's chain.
+ * target carries keeps the target's chain. Sockets go with their moves (see
+ * the runes spec): a kept move's sockets past the target's cap come back from
+ * the end, and so do all of a dropped move's and of the target's replaced
+ * moves, each as a Link with its rune leaving; a kept blow's rune that
+ * doesn't fit the target weapon leaves too, its socket staying open.
  */
 export function movesetTransfer(
   registry: DataRegistry,
@@ -296,30 +309,61 @@ export function movesetTransfer(
   const from = movesetOf(registry, source);
   const onto = movesetOf(registry, target);
   const carried = carriedSkills(registry, target.rarity);
+  const cap = socketCap(registry, target.rarity);
   const chains = { ...onto.chains };
   const slots = { ...onto.slots };
   let moved = 0;
+  let sockets = 0;
   let links = 0;
+  const runes: RuneRef[] = [];
+  /** Sockets that don't move: a Link each, their runes leaving. */
+  const leave = (gone: (RuneRef | null)[]) => {
+    links += gone.length;
+    for (const r of gone) if (r) runes.push({ ...r });
+  };
+  /** A move the target keeps: its sockets within the cap, and a blow's runes that fit the target. */
+  const keep = <M extends Move | Blow>(m: M): M => {
+    const copy = copyMove(m);
+    const own = socketsOf(copy);
+    if (own.length === 0) return copy;
+    leave(own.slice(cap));
+    copy.runes = own.slice(0, cap).map((r) => {
+      if (!r || 'form' in copy) return r;
+      const def = registry.findRune(r.id);
+      if (def && runeFits(def, { weapon: target.baseId, kind: copy.kind })) return r;
+      runes.push(r);
+      return null;
+    });
+    sockets += copy.runes.length;
+    return copy;
+  };
   for (const skill of CHAIN_SKILLS) {
     const chain = from.chains[skill];
     if (!chain) continue;
     const extra = from.slots[skill]! - baseSlots(registry, source.baseId, skill);
     if (!carried.includes(skill)) {
       links += extra;
+      for (const m of chainMoves(chain)) leave(socketsOf(m));
       continue;
     }
     const base = baseSlots(registry, target.baseId, skill);
     const n = Math.min(base + extra, bal.chains.cap[skill]);
     links += base + extra - n + (onto.slots[skill]! - base);
     moved += n - base;
+    for (const m of chainMoves(onto.chains[skill])) leave(socketsOf(m));
+    for (const m of chainMoves(chain).slice(n)) leave(socketsOf(m));
     const kept = Array.isArray(chain)
-      ? chain.slice(0, n).map((b) => ({ ...b }))
-      : {
-          ...chain,
-          moves: chain.moves.slice(0, n).map((m) => ({ ...m, elements: [...m.elements] })),
-        };
+      ? chain.slice(0, n).map(keep)
+      : { ...chain, moves: chain.moves.slice(0, n).map(keep) };
     (chains as Record<ChainSkill, unknown>)[skill] = kept;
     slots[skill] = n;
   }
-  return { moveset: { chains, slots }, moved, links, scrap: moved * bal.movesets.transferScrap };
+  return {
+    moveset: { chains, slots },
+    moved,
+    sockets,
+    links,
+    runes,
+    scrap: (moved + sockets) * bal.movesets.transferScrap,
+  };
 }
