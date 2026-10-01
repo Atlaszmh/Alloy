@@ -4,6 +4,7 @@ import {
   beginFloor,
   completeFloor,
   failFloor,
+  heroChains,
   profileStats,
   type ArpgWorld,
   type GearItem,
@@ -48,11 +49,12 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
-  const { equipped, pair, chains } = profile;
+  const { equipped, pair } = profile;
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair, chains }),
-    [equipped, pair, chains, registry],
+    () => profileStats(registry, { equipped, pair }),
+    [equipped, pair, registry],
   );
+  const chains = useMemo(() => heroChains(registry, equipped, pair), [equipped, pair, registry]);
   const loadout = useMemo(() => ({ stats, chains }), [stats, chains]);
 
   function bank(world: ArpgWorld) {

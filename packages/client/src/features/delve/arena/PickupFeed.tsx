@@ -1,9 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { compareItem, findItem, referenceDepth, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { playSound } from '@/shared/utils/sound-manager';
-import { vibrate } from '@/shared/utils/haptics';
-import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from '../registry';
 import { ItemTile } from '../ItemTile';
 import { UPGRADE_EPSILON } from '../format';
@@ -19,8 +16,8 @@ interface PickupFeedProps {
 
 /**
  * The last few items picked up this dive, stacked on the right edge of the
- * arena. Tap one to inspect it mid-fight; ▲ marks an upgrade, and one tap
- * equips every upgrade without leaving the floor.
+ * arena. Tap one to inspect it mid-fight; ▲ marks an upgrade, to equip at the
+ * Anvil (gear is locked while a dive runs).
  */
 export function PickupFeed({ onSelect, top }: PickupFeedProps) {
   const registry = getDelveRegistry();
@@ -42,8 +39,7 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
         equipped,
         delta: equipped
           ? null
-          : compareItem(profile.equipped, found.item, registry, depth, profile.chains, profile.pair)
-              .powerPct,
+          : compareItem(profile.equipped, found.item, registry, depth, profile.pair).powerPct,
       });
     }
     return out;
@@ -82,15 +78,6 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
 
   if (rows.length === 0) return null;
 
-  const onEquipUpgrades = () => {
-    const equipped = useDelveStore.getState().equipBest();
-    if (equipped.length > 0) {
-      playSound('orbConfirm');
-      vibrate('success');
-      showToast(`Equipped ${equipped.length} upgrade${equipped.length > 1 ? 's' : ''}`);
-    }
-  };
-
   return (
     <div
       className="pointer-events-none absolute right-2 z-20 flex flex-col items-end gap-1.5"
@@ -98,13 +85,12 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
       data-testid="pickup-feed"
     >
       {upgrades > 0 && (
-        <button
-          className="delve-btn delve-btn-green pointer-events-auto px-2 py-1 text-[11px]"
-          onClick={onEquipUpgrades}
-          data-testid="equip-upgrades"
+        <span
+          className="delve-display text-[10px] uppercase tracking-wider text-green-300"
+          data-testid="upgrades-locked"
         >
-          ▲ Equip {upgrades}
-        </button>
+          ▲ {upgrades} to equip at the Anvil
+        </span>
       )}
       {visible.map(({ item, equipped, delta }) => (
         <div key={item.uid} className="pointer-events-auto">

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
-import { defaultChains, sandboxWeapon } from '@alloy/engine';
+import { sandboxWeapon } from '@alloy/engine';
 import { MAX_DUMMY_GROUPS, useSandboxStore } from '@/stores/sandboxStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { attachKeyboard, createArenaInput } from '../arena/input';
@@ -168,7 +168,6 @@ describe('TrainingPanel', () => {
     };
     useSandboxStore.getState().loadMyBuild({
       equipped: { weapon },
-      chains: defaultChains(registry, 'fire', 'sword'),
       pair: { primary: 'fire', secondary: null },
     });
     renderPanel('loadout');

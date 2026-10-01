@@ -335,7 +335,8 @@ const LoadoutTab = memo(function LoadoutTab() {
         Load my build
       </button>
       <p className="text-[11px] text-stone-500">
-        Copies your equipped gear, chains and pair in. Nothing here ever changes your save.
+        Copies your equipped gear, your weapon's chains and your pair in. Nothing here ever changes
+        your save.
       </p>
     </div>
   );

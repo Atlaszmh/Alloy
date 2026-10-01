@@ -1,8 +1,13 @@
 import { useMemo } from 'react';
 import {
+  CHAIN_SKILLS,
   MANA_TYPES,
+  baseSlots,
+  carriedByText,
+  heroChains,
   isDiveActive,
   manaPool,
+  movesetOf,
   pairElements,
   profileStats,
   type HeroStats,
@@ -125,24 +130,37 @@ export function Chip({
   );
 }
 
-/** The Anvil's workshop: the save's chains from your two elements, and your Mana view; read-only while a dive is under way. */
+/**
+ * The Anvil's workshop: the equipped weapon's chains from your two elements,
+ * each change applied as it is made, and your Mana view; read-only while a
+ * dive is under way, and unarmed (the unarmed default shows).
+ */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const { equipped, pair, chains } = profile;
+  const { equipped, pair } = profile;
+  const weapon = equipped.weapon;
+  const chains = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  // Unarmed, the default chains sit at their base slots (the bare hands' string for the basic one).
+  const slots = weapon
+    ? movesetOf(registry, weapon).slots
+    : Object.fromEntries(
+        CHAIN_SKILLS.filter((s) => chains[s]).map((s) => [s, baseSlots(registry, null, s)]),
+      );
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair, chains }),
-    [equipped, pair, chains, registry],
+    () => profileStats(registry, { equipped, pair }),
+    [equipped, pair, registry],
   );
   const elements = pairElements(pair);
   return (
     <ChainEditor
       chains={chains}
-      caps={profile.chainCaps}
+      caps={slots}
       stats={stats}
       reactionsSeen={profile.reactionsSeen}
-      locked={isDiveActive(profile)}
-      onChange={(skill, chain) => useDelveStore.getState().setChain(skill, chain)}
+      locked={isDiveActive(profile) || !weapon}
+      absentText={(s) => carriedByText(registry, s)}
+      onChange={(skill, chain) => useDelveStore.getState().setChains({ [skill]: chain })}
       elements={elements.length > 0 ? elements : undefined}
       mana={<ManaPanel stats={stats} />}
     />

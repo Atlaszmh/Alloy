@@ -19,7 +19,6 @@ import {
   type ManaType,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
@@ -92,9 +91,9 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   const cmp = useMemo(
     () =>
       item && !isEquipped
-        ? compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
+        ? compareItem(profile.equipped, item, registry, depth, profile.pair)
         : null,
-    [item, isEquipped, profile.equipped, profile.pair, profile.chains, registry, depth],
+    [item, isEquipped, profile.equipped, profile.pair, registry, depth],
   );
 
   if (!item) return null;
@@ -139,12 +138,11 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
   };
 
   const onEquip = () => {
-    if (unbound && !diving && !store().bindDeclined.includes(item.mana)) {
+    if (unbound && !store().bindDeclined.includes(item.mana)) {
       setBinding(true);
       return;
     }
     store().equip(item.uid);
-    if (unbound && diving) showToast(`Bind ${mana.name} between dives to draw power from it`);
     playSound('orbPlace');
     vibrate('medium');
     onClose();
@@ -425,7 +423,14 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
 
         {/* Actions */}
         <div className="mt-4 grid grid-cols-2 gap-2">
-          {isEquipped ? (
+          {diving ? (
+            <div
+              className="delve-panel flex items-center justify-center p-2 text-center text-xs text-amber-200"
+              data-testid="equip-locked"
+            >
+              Equip at the Anvil
+            </div>
+          ) : isEquipped ? (
             <button className="delve-btn" onClick={onUnequip}>
               Unequip
             </button>
@@ -438,34 +443,45 @@ export function ItemDetailSheet({ uid, onClose }: ItemDetailSheetProps) {
               {isUpgrade ? '▲ Equip' : 'Equip'}
             </button>
           )}
-          <button
-            className="delve-btn delve-btn-gold"
-            onClick={onUpgrade}
-            disabled={upCost === null}
-            data-testid="upgrade-button"
-          >
-            {upCost === null ? 'Max +10' : `Upgrade ⚙ ${formatNumber(upCost)}`}
-          </button>
-          {affixes.length > 0 &&
-            (reforgeMode ? (
-              <button className="delve-btn" onClick={onReforge} disabled={reforgeIdx === null}>
-                {reforgeIdx === null ? 'Pick an affix' : `Reforge ⚙ ${formatNumber(rfCost)}`}
+          {diving ? (
+            <div
+              className="delve-panel flex items-center justify-center p-2 text-center text-xs text-amber-200"
+              data-testid="forge-locked"
+            >
+              Forge and salvage at the Anvil
+            </div>
+          ) : (
+            <>
+              <button
+                className="delve-btn delve-btn-gold"
+                onClick={onUpgrade}
+                disabled={upCost === null}
+                data-testid="upgrade-button"
+              >
+                {upCost === null ? 'Max +10' : `Upgrade ⚙ ${formatNumber(upCost)}`}
               </button>
-            ) : (
-              <button className="delve-btn" onClick={() => setReforgeMode(true)}>
-                Reforge…
+              {affixes.length > 0 &&
+                (reforgeMode ? (
+                  <button className="delve-btn" onClick={onReforge} disabled={reforgeIdx === null}>
+                    {reforgeIdx === null ? 'Pick an affix' : `Reforge ⚙ ${formatNumber(rfCost)}`}
+                  </button>
+                ) : (
+                  <button className="delve-btn" onClick={() => setReforgeMode(true)}>
+                    Reforge…
+                  </button>
+                ))}
+              <button
+                className="delve-btn delve-btn-danger"
+                onClick={onSalvage}
+                disabled={isEquipped || item.locked}
+                data-testid="salvage-button"
+              >
+                {confirmSalvage
+                  ? 'Tap again to melt'
+                  : `Salvage +${formatNumber(salvage)}${dust > 0 ? ` · ✦ ${dust}` : ''}`}
               </button>
-            ))}
-          <button
-            className="delve-btn delve-btn-danger"
-            onClick={onSalvage}
-            disabled={isEquipped || item.locked}
-            data-testid="salvage-button"
-          >
-            {confirmSalvage
-              ? 'Tap again to melt'
-              : `Salvage +${formatNumber(salvage)}${dust > 0 ? ` · ✦ ${dust}` : ''}`}
-          </button>
+            </>
+          )}
           <button className="delve-btn" onClick={onLock}>
             {item.locked ? 'Unlock' : 'Lock'}
           </button>

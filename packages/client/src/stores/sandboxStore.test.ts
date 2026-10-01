@@ -126,7 +126,7 @@ describe('sandboxStore', () => {
     expect(store().dummies).toHaveLength(MAX_DUMMY_GROUPS);
   });
 
-  it('Load my build copies the real weapon, the other gear and the chains, and clears the extras', () => {
+  it("Load my build copies the real weapon, the other gear and the weapon's chains, and clears the extras", () => {
     const profile = createDelveProfile(registry, 7);
     const bow = generateItem(
       registry,
@@ -140,7 +140,7 @@ describe('sandboxStore', () => {
     expect(s.loadedWeapon).toEqual(bow);
     expect(s.weapon).toEqual({ baseId: 'bow', mana: 'storm', rarity: 'legendary' });
     expect(s.gear).toEqual({ chest: profile.equipped.chest });
-    expect(s.chains).toEqual(profile.chains);
+    expect(s.chains).toEqual(bow.moveset!.chains); // a legendary carries all four
     expect(s.legendaries).toEqual({});
     expect(s.attunement).toEqual({});
     expect(sandboxEquipped(registry, s).weapon).toEqual(bow);
@@ -152,6 +152,19 @@ describe('sandboxStore', () => {
     s.setWeapon({ baseId: 'bow', mana: 'storm', rarity: 'rare' });
     expect(store().loadedWeapon).toBeNull();
     expect(sandboxEquipped(registry, store()).weapon?.legendary).toBeUndefined();
+  });
+
+  it("Load my build keeps the sandbox's chains for the skills the weapon doesn't carry", () => {
+    const profile = createDelveProfile(registry, 7, { primary: 'frost' });
+    const before = store().chains;
+    store().loadMyBuild(profile); // a common sword: Basic and Primary
+    const sword = profile.equipped.weapon!.moveset!.chains;
+    expect(store().chains).toEqual({
+      basic: sword.basic,
+      primary: sword.primary,
+      defensive: before.defensive,
+      ultimate: before.ultimate,
+    });
   });
 
   it('Load my build without a weapon leaves the hero unarmed', () => {

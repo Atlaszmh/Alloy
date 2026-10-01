@@ -12,7 +12,8 @@ import {
   reforgeGear,
   fuseGear,
   setAutoSalvage,
-  setChain as engineSetChain,
+  setChains as engineSetChains,
+  addSlot as engineAddSlot,
   bindSecondary as engineBindSecondary,
   chooseStartingMana,
   realign as engineRealign,
@@ -137,6 +138,31 @@ export function fixNotices(registry: DataRegistry, fixed: ChainFix[], pair: Mana
   });
 }
 
+/**
+ * What the move to weapon movesets (save version 6) changed: the chains the
+ * equipped weapon can't carry went (`dropped`, their extra moves back as
+ * `links`), or an unarmed save's built chains were reset (`reset`).
+ */
+export function movesetNotices(dropped: ChainSkill[], reset: boolean, links: number): string[] {
+  const out: string[] = [];
+  if (dropped.length > 0) {
+    const names = listed(dropped.map((s) => SKILL_NAME[s]));
+    const many = dropped.length > 1;
+    const back =
+      links > 0
+        ? `, and ${many ? 'their' : 'its'} ${links} extra move${links === 1 ? '' : 's'} came back as ${links} Link${links === 1 ? '' : 's'}`
+        : '';
+    out.push(
+      `Your chains live on your weapon now, and yours can't carry your ${names}: ${many ? 'they' : 'it'} went${back}`,
+    );
+  }
+  if (reset)
+    out.push(
+      'Your chains live on your weapon now: with no weapon equipped, yours were reset to the defaults',
+    );
+  return out;
+}
+
 /** "Storm now outweighs Fire: Storm is your primary" (`now` is the new primary). */
 export function overtakeNotice(registry: DataRegistry, now: ManaType, was: ManaType): string {
   const name = manaName(registry, now);
@@ -175,7 +201,7 @@ interface DelveStore {
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
   /** Melt bag items; what they gave. */
-  salvage: (uids: string[]) => { scrap: number; dust: number };
+  salvage: (uids: string[]) => { scrap: number; dust: number; links: number };
   equipBest: () => GearItem[];
   upgrade: (uid: string) => ProfileActionResult;
   reforge: (uid: string, affixIndex: number) => ProfileActionResult;
@@ -184,8 +210,10 @@ interface DelveStore {
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
-  /** Set a skill's chain (throws on an invalid one). */
-  setChain: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
+  /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
+  setChains: (chains: Partial<Chains>) => ProfileActionResult;
+  /** Add a slot to a chain of the equipped weapon, for Links and scrap. */
+  addSlot: (skill: ChainSkill) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
 }
 
@@ -221,6 +249,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
           ...(loaded.gainedPair && loaded.profile.pair.primary && !loaded.profile.pair.secondary
             ? [BIND_HINT]
             : []),
+          ...movesetNotices(loaded.dropped, loaded.movesetReset, loaded.profile.links),
           ...fixNotices(getDelveRegistry(), loaded.fixed, loaded.profile.pair),
         ]
       : [],
@@ -280,7 +309,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       const res = salvageItems(registry(), get().profile, uids);
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
-      return { scrap: res.scrap, dust: res.dust };
+      return { scrap: res.scrap, dust: res.dust, links: res.links };
     },
 
     equipBest: () => {
@@ -337,8 +366,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       set({ manualAttack: on });
     },
 
-    setChain: (skill, chain) => {
-      commit(engineSetChain(registry(), get().profile, skill, chain));
-    },
+    setChains: (chains) => applyResult(engineSetChains(registry(), get().profile, chains)),
+
+    addSlot: (skill) => applyResult(engineAddSlot(registry(), get().profile, skill)),
   };
 });

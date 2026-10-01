@@ -1,5 +1,11 @@
 import { useMemo } from 'react';
-import { estimateCombat, profileStats, referenceDepth, type GearSlot } from '@alloy/engine';
+import {
+  estimateCombat,
+  heroChains,
+  profileStats,
+  referenceDepth,
+  type GearSlot,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
@@ -37,11 +43,12 @@ export function PaperDoll({
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newUids = useDelveStore((s) => s.newUids);
-  const { equipped, pair, chains } = profile;
+  const { equipped, pair } = profile;
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair, chains }),
-    [equipped, pair, chains, registry],
+    () => profileStats(registry, { equipped, pair }),
+    [equipped, pair, registry],
   );
+  const chains = useMemo(() => heroChains(registry, equipped, pair), [equipped, pair, registry]);
   const est = useMemo(
     () => estimateCombat(stats, registry, referenceDepth(profile), chains),
     [stats, registry, profile, chains],

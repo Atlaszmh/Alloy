@@ -90,7 +90,8 @@ export interface ArenaHud {
   maxHp: number;
   mana: number;
   manaMax: number;
-  abilities: AbilityHud[];
+  /** By slot; null for a skill the weapon doesn't carry (its button hides). */
+  abilities: (AbilityHud | null)[];
   /** An ability is channelling or a hold is charging (presses wait for it). */
   busy: boolean;
   dodgeCharges: number;
@@ -133,8 +134,11 @@ export interface ArenaMode {
   worldKey: string | null;
   /** The world for the current (non-null) key. */
   createWorld: () => ArpgWorld;
-  /** The hero's stats and chains, hot-swapped whenever this object changes: memoise it. */
-  loadout: { stats: HeroStats; chains: Chains };
+  /**
+   * The hero's stats and chains (a skill without one has no button), hot-swapped whenever this
+   * object changes: memoise it.
+   */
+  loadout: { stats: HeroStats; chains: Partial<Chains> };
   /**
    * On every frame the core steps the world (never while paused, never after
    * the world is finished); true once the mode is done with it, and the core
@@ -199,6 +203,7 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     mana: h.mana,
     manaMax: h.manaMax,
     abilities: h.chains.map((chain, i) => {
+      if (!chain) return null;
       const step = pressStep(h, i, t, comboWindow);
       const ab = chain.moves[step];
       // The longer wait shows: the next move's cooldown, or the slot's beat.
@@ -268,12 +273,12 @@ export function snapshot(world: ArpgWorld): ArenaHud {
  * while one charges, else the move a press now casts (`pressMove`: during the
  * slot's own wind-up, the one after the winding move).
  */
-function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
+function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility | null {
   const h = world.hero;
   const bal = getDelveRegistry().getDelveBalance();
   const hold = h.hold?.slot === slot ? h.hold : null;
   return hold
-    ? chainMove(h.chains[slot], hold.step, holdCharge(bal, hold.start, world.t, hold.full).stage)
+    ? chainMove(h.chains[slot]!, hold.step, holdCharge(bal, hold.start, world.t, hold.full).stage)
     : pressMove(h, slot, world.t, bal.abilities.comboWindow);
 }
 
@@ -287,6 +292,7 @@ function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility {
 export function aimView(world: ArpgWorld, a: Aiming, point: Vec, now: number): AimView | null {
   if (a.onButton || now - a.since < TAP_MS) return null;
   const ab = aimedMove(world, a.slot);
+  if (!ab) return null;
   return {
     marker: aimMarkerFor(ab.form.id),
     point,
@@ -440,6 +446,7 @@ export function useArenaCore(
       const state = padState();
       if (!state || (state.right.x === 0 && state.right.y === 0)) return null;
       const ab = aimedMove(world, 0);
+      if (!ab) return null;
       const tilt = Math.hypot(state.right.x, state.right.y);
       const dir = { x: state.right.x / tilt, y: state.right.y / tilt };
       const marker = aimMarkerFor(ab.form.id);

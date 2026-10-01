@@ -1,11 +1,4 @@
-import {
-  basicLoadout,
-  bindSecondary,
-  equipItem,
-  isDefaultBasic,
-  profilePower,
-  type GearItem,
-} from '@alloy/engine';
+import { bindSecondary, equipItem, profilePower, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -14,8 +7,8 @@ import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
 
 /**
- * Equipping gear outside the pair while no second element is bound (between
- * dives): bind its element and equip, or equip it for its stats only and not
+ * Equipping gear outside the pair while no second element is bound (at the
+ * Anvil, between dives): bind its element and equip, or equip it for its stats only and not
  * be asked about that element again this session ("Not now" is remembered per
  * element: a "Not now" on Storm still asks about Nature). Shows the Power
  * either way. Bind has the focus, for the controller.
@@ -27,8 +20,6 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
   const worn = equipItem(registry, profile, item.uid);
   const statsOnly = profilePower(registry, worn);
   const bound = profilePower(registry, bindSecondary(registry, worn, item.mana).profile);
-  // Only a basic chain still on its default gives the secondary its last blow.
-  const onDefault = isDefaultBasic(registry, profile.chains.basic, basicLoadout(profile)!);
 
   const finish = (bind: boolean) => {
     const store = useDelveStore.getState();
@@ -66,10 +57,9 @@ export function BindPrompt({ item, onDone }: { item: GearItem; onDone: () => voi
           {st.icon} Bind {st.name} as your second element?
         </div>
         <p className="text-sm text-stone-300">
-          {onDefault
-            ? `Your basic chain's last blow will strike with ${st.name}, your abilities can use it, and its gear will attune you.`
-            : `Your abilities can use ${st.name} and its gear will attune you; your basic chain keeps the blows you built (add ${st.name} on the Basic tab).`}{' '}
-          After that, only a Realign changes it.
+          Your moves and blows can use {st.name} and its gear will attune you; your chains keep the
+          ones they have (add {st.name} in the chain builder). After that, only a Realign changes
+          it.
         </p>
         <div className="flex text-center text-xs text-stone-400">
           <div className="flex-1" data-testid="bind-prompt-bound">

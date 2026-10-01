@@ -615,20 +615,23 @@ export function SkillBar({
           </span>
         )}
       </button>
-      {hud?.abilities.map((ab, i) => (
-        <AbilityButton
-          key={i}
-          slot={i}
-          ab={ab}
-          busy={hud.busy}
-          galvanized={galvanized}
-          hint={hints?.abilities[i]}
-          press={press}
-          onCast={onCast}
-          onAim={onAim}
-          onCancel={onCancel}
-        />
-      ))}
+      {/* A skill the weapon doesn't carry has no button; the others keep their slots. */}
+      {hud?.abilities.map((ab, i) =>
+        !ab ? null : (
+          <AbilityButton
+            key={i}
+            slot={i}
+            ab={ab}
+            busy={hud.busy}
+            galvanized={galvanized}
+            hint={hints?.abilities[i]}
+            press={press}
+            onCast={onCast}
+            onAim={onAim}
+            onCancel={onCancel}
+          />
+        ),
+      )}
     </div>
   );
 }

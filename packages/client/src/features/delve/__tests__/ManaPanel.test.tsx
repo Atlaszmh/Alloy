@@ -35,16 +35,12 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(2); // the pair's bars only
   });
 
-  it('says a bind gives the last blow only while the basic chain is its default', () => {
+  it('says a bind leaves the chains their moves', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
-    const { unmount } = render(<AbilitiesPanel />);
-    expect(screen.getByTestId('bind-section')).toHaveTextContent(
-      "your basic chain's last blow strikes with it",
-    );
-    unmount();
-    store().setChain('basic', [{ kind: 'heavy', element: 'fire' }]);
     render(<AbilitiesPanel />);
-    expect(screen.getByTestId('bind-section')).toHaveTextContent('keeps the blows you built');
+    expect(screen.getByTestId('bind-section')).toHaveTextContent(
+      'your moves and blows can use it, and your chains keep the ones they have',
+    );
     expect(screen.getByTestId('bind-section')).not.toHaveTextContent('last blow');
   });
 
@@ -59,7 +55,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('mana-dust')).toHaveTextContent(`✦ ${realignDust} Mana Dust`);
     expect(screen.getByTestId('realign-section')).toHaveTextContent(
-      'your moves and blows follow the new pair',
+      "your equipped weapon's moves and blows follow the new pair",
     );
     expect(screen.getByTestId('realign-button')).toBeDisabled(); // nothing changed yet
     fireEvent.click(screen.getByTestId('realign-secondary-nature'));

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   checkFusion,
   fuseCost,
+  isDiveActive,
   nextRarity,
   upgradeCost,
   GEAR_SLOTS,
@@ -134,6 +135,19 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
       playSound('combineFail');
     }
   };
+
+  // The forge waits for the dive to end, as all gear does (a stop's upgrade aside).
+  if (isDiveActive(profile))
+    return (
+      <div className="flex flex-col gap-4" data-testid="forge-panel">
+        <div
+          className="delve-panel p-3 text-center text-xs text-amber-200"
+          data-testid="forge-locked"
+        >
+          A dive is under way: forge and salvage between dives.
+        </div>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-4" data-testid="forge-panel">

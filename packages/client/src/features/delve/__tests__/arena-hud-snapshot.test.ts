@@ -5,8 +5,8 @@ import {
   createDelveProfile,
   createSandboxWorld,
   defaultChains,
+  defaultMoveset,
   sandboxWeapon,
-  setChain,
   startDive,
   stepWorld,
   type Chains,
@@ -31,24 +31,28 @@ function sandbox(over: Partial<Chains> = {}, extra: HeroStatsExtra = {}, infinit
 
 describe('arena HUD snapshot', () => {
   it('a channelled ability dims the buttons only once its channel starts, not in its conjure', () => {
-    let p = createDelveProfile(registry, 99);
-    p = setChain(registry, p, 'primary', {
+    // A new hero whose sword is epic (all four skills), its Primary a cast Bolt.
+    const p = createDelveProfile(registry, 99);
+    const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
+    const moveset = defaultMoveset(registry, weapon, 'fire');
+    moveset.chains.primary = {
       moves: [{ kind: 'medium', form: 'bolt', elements: ['fire'] }],
       payment: 'cast',
-    });
-    const w = beginFloor(registry, startDive(registry, p, 1));
+    };
+    const armed = { ...p, equipped: { ...p.equipped, weapon: { ...weapon, moveset } } };
+    const w = beginFloor(registry, startDive(registry, armed, 1));
     w.hero.nextAttackAt = 1e9;
     stepWorld(registry, w, { move: still, cast: { slot: 0, aim: null } }, STEP);
     const wu = w.hero.windup!;
     expect(w.t).toBeLessThan(wu.conjureUntil);
     let hud = snapshot(w);
     expect(hud.busy).toBe(false);
-    expect(hud.abilities[1].ready).toBe(true);
+    expect(hud.abilities[1]!.ready).toBe(true);
     while (w.t < wu.conjureUntil) stepWorld(registry, w, { move: still }, STEP);
     hud = snapshot(w);
     expect(hud.busy).toBe(true);
-    expect(hud.abilities[0].windup).toBeGreaterThanOrEqual(0);
-    expect(hud.abilities[1].ready).toBe(false);
+    expect(hud.abilities[0]!.windup).toBeGreaterThanOrEqual(0);
+    expect(hud.abilities[1]!.ready).toBe(false);
   });
 
   it('under Infinite mana a move dearer than the whole pool shows as affordable, as the engine casts it', () => {
@@ -57,11 +61,11 @@ describe('arena HUD snapshot', () => {
       payment: 'mana' as const,
     };
     const on = sandbox({ ultimate }, {}, true);
-    expect(on.hero.chains[2].moves[0].cost).toBeGreaterThan(on.hero.manaMax);
-    expect(snapshot(on).abilities[2].affordable).toBe(true);
+    expect(on.hero.chains[2]!.moves[0].cost).toBeGreaterThan(on.hero.manaMax);
+    expect(snapshot(on).abilities[2]!.affordable).toBe(true);
     const off = sandbox({ ultimate });
     off.hero.mana = off.hero.manaMax;
-    expect(snapshot(off).abilities[2].affordable).toBe(false);
+    expect(snapshot(off).abilities[2]!.affordable).toBe(false);
   });
 
   it("shows each chain's next move: its name, kind and step, its own cooldown, and a hold's charge", () => {
@@ -96,11 +100,11 @@ describe('arena HUD snapshot', () => {
     for (let i = 0; i < Math.round(0.6 / STEP); i++)
       stepWorld(registry, w, { move: still, holding: 0 }, STEP);
     hud = snapshot(w);
-    expect(hud.abilities[0].hold!.charge).toBeCloseTo(0.57, 1);
-    expect(hud.abilities[0].hold!.stage).toBe(1);
-    expect(hud.abilities[0].chainStep).toBe(1); // the window waits for the release
+    expect(hud.abilities[0]!.hold!.charge).toBeCloseTo(0.57, 1);
+    expect(hud.abilities[0]!.hold!.stage).toBe(1);
+    expect(hud.abilities[0]!.chainStep).toBe(1); // the window waits for the release
     expect(hud.busy).toBe(true);
-    expect(hud.abilities[1].ready).toBe(false);
+    expect(hud.abilities[1]!.ready).toBe(false);
   });
 
   it("shows the basic chain's next blow and a manual hold blow's charge until it is let go", () => {
@@ -140,18 +144,28 @@ describe('arena HUD snapshot', () => {
     w.t = 10;
     w.hero.beatFrom[0] = 9.8;
     w.hero.beatUntil[0] = 10.4;
-    let bolt = snapshot(w).abilities[0];
+    let bolt = snapshot(w).abilities[0]!;
     expect(bolt).toMatchObject({ beat: true, ready: false });
     expect(bolt.cooldown).toBeCloseTo(0.4);
     expect(bolt.cooldownTotal).toBeCloseTo(0.6);
     // A cooldown that outlasts the beat shows instead, with its own length.
     w.hero.cooldowns[0][0] = 11;
-    bolt = snapshot(w).abilities[0];
+    bolt = snapshot(w).abilities[0]!;
     expect(bolt).toMatchObject({ beat: false, cooldown: 1, ready: false });
-    expect(bolt.cooldownTotal).toBeCloseTo(w.hero.chains[0].moves[0].cooldown);
+    expect(bolt.cooldownTotal).toBeCloseTo(w.hero.chains[0]!.moves[0].cooldown);
     // Over, and the button is ready again.
     w.t = 11;
     expect(snapshot(w).abilities[0]).toMatchObject({ beat: false, cooldown: 0, ready: true });
+  });
+
+  it("a skill the weapon doesn't carry has no entry, and its slot keeps its place", () => {
+    // A new hero's common sword: Basic and Primary only.
+    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    const hud = snapshot(w);
+    expect(hud.abilities).toHaveLength(3);
+    expect(hud.abilities[0]).toMatchObject({ name: 'Fire Bolt' });
+    expect(hud.abilities[1]).toBeNull();
+    expect(hud.abilities[2]).toBeNull();
   });
 
   it("carries Obsidian's barrier and when Galvanize last fired", () => {

@@ -67,7 +67,7 @@ export function padToArena(
 function castsOnRelease(registry: DataRegistry, world: ArpgWorld, slot: number): boolean {
   const h = world.hero;
   const window = registry.getDelveBalance().abilities.comboWindow;
-  return h.hold?.slot === slot || pressMove(h, slot, world.t, window).kind === 'hold';
+  return h.hold?.slot === slot || pressMove(h, slot, world.t, window)?.kind === 'hold';
 }
 
 /** A controller cast: its slot, and whether hold-to-repeat made it (`AbilityCast.repeat`). */

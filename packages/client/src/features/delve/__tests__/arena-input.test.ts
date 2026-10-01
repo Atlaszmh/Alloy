@@ -1,11 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  beginFloor,
   chainMove,
   computeHeroStats,
+  createDelveProfile,
   createSandboxWorld,
   defaultChains,
   moveNumbers,
   spawnDummies,
+  startDive,
   stepWorld,
   type Chain,
   type Move,
@@ -165,6 +168,13 @@ describe('the aim marker of a key or button held to aim', () => {
   const point = { x: 20, y: 10 };
   const aiming = { slot: 0, since: 0, at: { x: 1, y: 1 } };
 
+  it("none for a skill the weapon doesn't carry", () => {
+    // A new hero's common sword: no Defensive.
+    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    expect(aimView(w, { ...aiming, slot: 1 }, point, 1000)).toBeNull();
+    expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line' });
+  });
+
   it("none before a tap's time, nor while a HUD press is still on its button; then at the pointer", () => {
     const w = world();
     expect(aimView(w, aiming, point, TAP_MS - 1)).toBeNull();
@@ -184,8 +194,8 @@ describe('the aim marker of a key or button held to aim', () => {
     expect(w.hero.hold?.slot).toBe(0);
     const view = aimView(w, aiming, point, 1000)!;
     expect(view.marker).toBe('circle');
-    expect(view.radius).toBeCloseTo(chainMove(w.hero.chains[0], 0, 2).radius);
-    expect(view.radius).toBeGreaterThan(w.hero.chains[0].moves[0].radius);
+    expect(view.radius).toBeCloseTo(chainMove(w.hero.chains[0]!, 0, 2).radius);
+    expect(view.radius).toBeGreaterThan(w.hero.chains[0]!.moves[0].radius);
   });
 
   it("a later move's circle has its step's size: a Burst as move 4", () => {
@@ -194,7 +204,7 @@ describe('the aim marker of a key or button held to aim', () => {
     // Pressed to its third move: the next press is its fourth.
     w.hero.comboStep[0] = 2;
     w.hero.comboAt[0] = w.t;
-    const fourth = w.hero.chains[0].moves[3];
+    const fourth = w.hero.chains[0]!.moves[3];
     const view = aimView(w, aiming, point, 1000)!;
     expect(view.marker).toBe('circle');
     expect(view.radius).toBeCloseTo(
@@ -279,6 +289,24 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       potion: false,
       attackTap: false,
     });
+  });
+
+  it("the pad's button of a skill the weapon doesn't carry casts nothing", () => {
+    // A new hero's common sword: no Defensive.
+    const w = beginFloor(registry, startDive(registry, createDelveProfile(registry, 99), 1));
+    const input = createArenaInput();
+    expect(frameInput(registry, w, input, pad({ cast: [1] }), padMemory(), opts).cast).toBeNull();
+    expect(frameInput(registry, w, input, pad({ cast: [0] }), padMemory(), opts).cast).toEqual({
+      slot: 0,
+      aim: null,
+    });
+    // A key's press in the same frame as that button's goes now, and only once.
+    input.cast = { slot: 0, aim: null };
+    expect(frameInput(registry, w, input, pad({ cast: [1] }), padMemory(), opts).cast).toEqual({
+      slot: 0,
+      aim: null,
+    });
+    expect(input.cast).toBeNull();
   });
 
   it("the pad's release reaches padCast: a hold casts on the frame its button goes up", () => {

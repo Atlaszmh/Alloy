@@ -63,7 +63,7 @@ export function windingUp(w: ArpgWorld, aim: Vec | null = null): WindingUp | nul
   }
   if (h.hold) {
     const { charge, stage } = holdCharge(bal, h.hold.start, w.t, h.hold.full);
-    const ab = chainMove(h.chains[h.hold.slot], h.hold.step, stage);
+    const ab = chainMove(h.chains[h.hold.slot]!, h.hold.step, stage);
     const at = aim ?? h.hold.aim;
     return {
       dir: at ? toward(w, at) : { ...h.facing },

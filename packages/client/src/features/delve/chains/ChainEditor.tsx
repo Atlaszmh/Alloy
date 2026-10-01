@@ -33,15 +33,18 @@ const PAYMENTS: [AbilityPayment, string, string][] = [
 ];
 
 export interface ChainEditorProps {
-  chains: Chains;
-  /** Most moves each skill's chain may hold. */
-  caps: Record<ChainSkill, number>;
+  /** Each skill's chain; a skill without one (the weapon doesn't carry it) shows locked. */
+  chains: Partial<Chains>;
+  /** Most moves each skill's chain may hold (the Delve: the weapon's slots). */
+  caps: Partial<Record<ChainSkill, number>>;
   /** The hero the chains resolve against: legendaries, cooldowns, damage, life, attunement, pool. */
   stats: HeroStats;
   /** Reactions shown by name; the rest show as ???. */
   reactionsSeen: readonly string[];
   /** Read-only (a dive is under way). */
   locked: boolean;
+  /** Why a skill has no chain (the text its locked tab shows). */
+  absentText?: (skill: ChainSkill) => string;
   onChange: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
   /** The elements an ability's move can take (the Delve: your pair); all six when absent. */
   elements?: readonly ManaType[];
@@ -61,10 +64,11 @@ function moved<T>(list: readonly T[], from: number, to: number): T[] {
 
 /**
  * The chain builder: each skill (the basic attack, then the Primary, Defensive
- * and Ultimate) is a row of move cards, up to its cap. A card opens its move
- * below: its kind, its form and its elements. ◂ ▸ reorder, × removes (never the
- * last), + adds a copy of the chosen move. The Anvil binds it to the save; the
- * Training Grounds to its own loadout. See the moves and chains spec.
+ * and Ultimate) is a row of move cards, up to its cap; a skill without a chain
+ * shows locked. A card opens its move below: its kind, its form and its
+ * elements. ◂ ▸ reorder, × removes (never the last), + adds a copy of the
+ * chosen move. The Anvil binds it to the equipped weapon's moveset; the
+ * Training Grounds to their own loadout. See the moves and chains spec.
  */
 export function ChainEditor({
   chains,
@@ -72,6 +76,7 @@ export function ChainEditor({
   stats,
   reactionsSeen,
   locked,
+  absentText,
   onChange,
   elements = MANA_TYPES,
   blowElements = elements,
@@ -87,13 +92,15 @@ export function ChainEditor({
   const [focusOn, setFocusOn] = useState<string[] | null>(null);
   const pool = manaPool(stats, registry).max;
   const slot = skill === 'basic' ? null : skill;
-  const chain = slot ? chains[slot] : null;
-  const entries: (Move | Blow)[] = chain ? chain.moves : chains.basic;
+  const chain = slot ? (chains[slot] ?? null) : null;
+  // A skill the weapon doesn't carry: its locked text, and no cards.
+  const absent = !chains[skill];
+  const entries: (Move | Blow)[] = chain ? chain.moves : absent ? [] : chains.basic!;
   const index = Math.min(picked, entries.length - 1);
-  const resolved = slot ? resolveChain(registry, stats, slot, chains[slot]) : null;
+  const resolved = chain && slot ? resolveChain(registry, stats, slot, chain) : null;
   const names = resolved
     ? resolved.moves.map(moveText)
-    : chains.basic.map((b) => blowText(registry, b));
+    : entries.map((b) => blowText(registry, b as Blow));
   const weapon = stats.weapon.baseId ? registry.getGearBase(stats.weapon.baseId).name : 'Fist';
 
   const commit = (next: (Move | Blow)[], payment = chain?.payment) => {
@@ -136,20 +143,26 @@ export function ChainEditor({
               {SKILL_KEY[s] && <span className="hidden sm:inline"> · {SKILL_KEY[s]}</span>}
             </span>
             <span className="text-lg leading-none">
-              {s === 'basic' ? '⚔️' : registry.getForm(chains[s].moves[0].form).icon}
+              {s === 'basic'
+                ? '⚔️'
+                : chains[s]
+                  ? registry.getForm(chains[s].moves[0].form).icon
+                  : '🔒'}
             </span>
             <span className="text-[11px] font-semibold text-stone-200">
-              {(s === 'basic' ? chains.basic : chains[s].moves).length} of {caps[s]}
+              {chains[s]
+                ? `${(s === 'basic' ? chains.basic! : chains[s].moves).length} of ${caps[s]}`
+                : 'Locked'}
             </span>
           </button>
         ))}
       </div>
 
       <div className="text-xs text-stone-400" data-testid="abilities-summary">
-        {chainText(names)}
+        {absent ? `🔒 ${absentText?.(skill) ?? ''}` : chainText(names)}
       </div>
 
-      {locked && (
+      {locked && !absent && (
         <div
           className="delve-panel p-2 text-center text-xs text-amber-200"
           data-testid="abilities-locked"
@@ -236,7 +249,7 @@ export function ChainEditor({
             </div>
           );
         })}
-        {entries.length < caps[skill] && (
+        {!absent && entries.length < (caps[skill] ?? 0) && (
           <button
             type="button"
             className="delve-panel flex w-20 items-center justify-center p-1.5 text-2xl text-stone-400"
@@ -256,21 +269,24 @@ export function ChainEditor({
       </div>
 
       <fieldset
+        hidden={absent}
         disabled={locked}
         className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0"
         style={{ opacity: locked ? 0.55 : 1 }}
       >
-        <MoveEditor
-          slot={slot}
-          move={entries[index]}
-          resolved={resolved?.moves[index] ?? null}
-          full={resolved?.hold[index]?.[2] ?? null}
-          blow={slot ? null : stats.weapon.blows[index]}
-          stats={stats}
-          pool={pool}
-          elements={slot ? elements : blowElements}
-          onChange={(next) => commit(entries.map((e, i) => (i === index ? next : e)))}
-        />
+        {!absent && (
+          <MoveEditor
+            slot={slot}
+            move={entries[index]}
+            resolved={resolved?.moves[index] ?? null}
+            full={resolved?.hold[index]?.[2] ?? null}
+            blow={slot ? null : stats.weapon.blows[index]}
+            stats={stats}
+            pool={pool}
+            elements={slot ? elements : blowElements}
+            onChange={(next) => commit(entries.map((e, i) => (i === index ? next : e)))}
+          />
+        )}
 
         {chain && (
           <section className="flex flex-col gap-1.5">

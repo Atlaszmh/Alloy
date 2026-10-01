@@ -113,9 +113,12 @@ export function frameInput(
   const frame = pad ? padFrameCast(registry, world, pad, mem) : null;
   // A repeat gives way to a key's or a button's press (it repeats again later).
   const padCast = frame?.cast && !(frame.cast.repeat && press) ? frame.cast : null;
-  if (pad && padCast) {
+  const comboWindow = registry.getDelveBalance().abilities.comboWindow;
+  // A skill the weapon doesn't carry has no move: its button casts nothing.
+  const ab = padCast && pressMove(h, padCast.slot, world.t, comboWindow);
+  const padTook = !!(pad && padCast && ab);
+  if (pad && padCast && ab) {
     const { slot, repeat } = padCast;
-    const ab = pressMove(h, slot, world.t, registry.getDelveBalance().abilities.comboWindow);
     const placed = aimMarkerFor(ab.form.id) === 'circle';
     const aim = pad.aimDir
       ? stickAimPoint(h, pad.aimDir, pad.aimTilt, ab.range, placed, o.aimReach)
@@ -146,7 +149,7 @@ export function frameInput(
       : {}),
   };
   // A key's or HUD button's press made while the pad's took the frame goes next frame.
-  input.cast = padCast ? press : null;
+  input.cast = padTook ? press : null;
   input.cancelHold = false;
   input.potion = false;
   input.dodge = false;

@@ -64,7 +64,11 @@ describe('DelveCamp', () => {
     const p = useDelveStore.getState().profile;
     expect(p.pair).toEqual({ primary: 'frost', secondary: null });
     expect(p.equipped.weapon!.mana).toBe('frost');
-    expect(p.chains.defensive.moves[0].elements).toEqual(['frost']);
+    // Its weapon carries a Basic and a Primary, both in Frost.
+    const chains = p.equipped.weapon!.moveset!.chains;
+    expect(chains.primary!.moves[0].elements).toEqual(['frost']);
+    expect(chains.basic!.map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
+    expect(chains.defensive).toBeUndefined();
   });
 
   it('Restart Delve (dev) wipes the save on a second press, back to the mana choice', () => {

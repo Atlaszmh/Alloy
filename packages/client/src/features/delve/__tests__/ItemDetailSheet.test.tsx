@@ -1,11 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
-import { generateItem, SeededRNG, type GearItem, type ManaType } from '@alloy/engine';
+import {
+  compareItem,
+  defaultMoveset,
+  generateItem,
+  heroChains,
+  SeededRNG,
+  type GearItem,
+  type ManaType,
+} from '@alloy/engine';
 import { ItemDetailSheet } from '../ItemDetailSheet';
 import { BagPanel } from '../BagPanel';
+import { ForgePanel } from '../ForgePanel';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
+import { UPGRADE_EPSILON } from '../format';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -16,6 +26,15 @@ const helm = (mana: ManaType, uid = 'h1', affixes: GearItem['affixes'] = []): Ge
   affixes,
 });
 const put = (...bag: GearItem[]) => store().setProfile({ ...store().profile, bag });
+/** A rare sword (Basic, Primary and Defensive) with `slots` over its base. */
+const rareSword = (uid: string, slots = {}): GearItem => {
+  const w = generateItem(
+    registry,
+    { uid, ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+    new SeededRNG(4),
+  );
+  return { ...w, moveset: defaultMoveset(registry, w, 'fire', slots) };
+};
 
 describe('ItemDetailSheet', () => {
   beforeEach(() => {
@@ -87,6 +106,16 @@ describe('ItemDetailSheet', () => {
     expect(screen.queryByTestId('reattune-storm')).toBeNull(); // its own element now
   });
 
+  it('mid-dive Upgrade, Reforge and Salvage give way to "Forge and salvage at the Anvil"', () => {
+    put(helm('fire', 'h1', [{ stat: 'fireAttune', value: 2, roll: 0.5 }]));
+    store().startDive(1);
+    render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
+    expect(screen.getByTestId('forge-locked')).toHaveTextContent('Forge and salvage at the Anvil');
+    expect(screen.queryByTestId('upgrade-button')).toBeNull();
+    expect(screen.queryByTestId('salvage-button')).toBeNull();
+    expect(screen.queryByText('Reforge…')).toBeNull();
+  });
+
   it('Re-attune waits for the dive to end', () => {
     put(helm('frost'));
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
@@ -117,19 +146,17 @@ describe('ItemDetailSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('the bind prompt gives the last blow only while the basic chain is its default', () => {
+  it('the bind prompt says the chains keep their moves, and binding leaves them alone', () => {
     put(helm('storm'));
-    const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
-    expect(screen.getByTestId('bind-prompt')).toHaveTextContent(
-      "Your basic chain's last blow will strike with Storm",
-    );
-    unmount();
-    store().setChain('basic', [{ kind: 'heavy', element: 'fire' }]);
+    const before = heroChains(registry, store().profile.equipped, store().profile.pair);
     render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
     fireEvent.click(screen.getByTestId('equip-button'));
-    expect(screen.getByTestId('bind-prompt')).toHaveTextContent('keeps the blows you built');
+    expect(screen.getByTestId('bind-prompt')).toHaveTextContent(
+      'Your moves and blows can use Storm and its gear will attune you; your chains keep the ones they have',
+    );
     expect(screen.getByTestId('bind-prompt')).not.toHaveTextContent('last blow');
+    fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
+    expect(heroChains(registry, store().profile.equipped, store().profile.pair)).toEqual(before);
   });
 
   it('Not now equips for its stats only, and the prompt stays away this session', () => {
@@ -179,27 +206,52 @@ describe('ItemDetailSheet', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('mid-dive such gear just equips, with a toast', () => {
-    put(helm('storm'));
+  it('mid-dive Equip and Unequip give way to "Equip at the Anvil"', () => {
+    put(helm('storm'), rareSword('w1'));
     store().startDive(1);
-    render(
-      <>
-        <ItemDetailSheet uid="h1" onClose={() => {}} />
-        <ToastContainer />
-      </>,
-    );
-    fireEvent.click(screen.getByTestId('equip-button'));
-    expect(screen.queryByTestId('bind-prompt')).toBeNull();
-    expect(store().profile.equipped.helm?.uid).toBe('h1');
-    expect(screen.getByText('Bind Storm between dives to draw power from it')).toBeInTheDocument();
+    const sheet = (uid: string) => render(<ItemDetailSheet uid={uid} onClose={() => {}} />);
+    let view = sheet('h1');
+    expect(screen.queryByTestId('equip-button')).toBeNull();
+    expect(screen.getByTestId('equip-locked')).toHaveTextContent('Equip at the Anvil');
+    view.unmount();
+    view = sheet(store().profile.equipped.weapon!.uid);
+    expect(screen.queryByText('Unequip')).toBeNull();
+    expect(screen.getByTestId('equip-locked')).toBeInTheDocument();
+    view.unmount();
+    sheet('w1');
+    expect(screen.getByTestId('equip-locked')).toBeInTheDocument();
   });
 
-  it('Equip best never asks', () => {
-    put(helm('storm')); // an empty helm slot: an upgrade
+  it('Equip best never asks, and leaves weapons alone', () => {
+    put(helm('storm'), rareSword('w1', { primary: 5 })); // an empty helm slot: an upgrade
+    // The sword is an upgrade too, which Equip best still leaves to its sheet.
+    const { equipped, pair } = store().profile;
+    expect(
+      compareItem(equipped, store().profile.bag[1], registry, 1, pair).powerPct,
+    ).toBeGreaterThan(UPGRADE_EPSILON);
     render(<BagPanel onSelect={() => {}} />);
+    expect(screen.getByTestId('equip-best')).toHaveTextContent('▲ Equip best (1)');
     fireEvent.click(screen.getByTestId('equip-best'));
     expect(screen.queryByTestId('bind-prompt')).toBeNull();
     expect(store().profile.equipped.helm?.uid).toBe('h1');
+    expect(store().profile.equipped.weapon?.uid).not.toBe('w1');
     expect(store().profile.pair.secondary).toBeNull();
+  });
+
+  it("mid-dive the bag's Equip best and Salvage junk wait for the dive to end", () => {
+    put(helm('storm'));
+    store().startDive(1);
+    render(<BagPanel onSelect={() => {}} />);
+    expect(screen.getByTestId('equip-best')).toBeDisabled();
+    expect(screen.getByTestId('equip-best')).toHaveTextContent('Equip between dives');
+    expect(screen.getByTestId('salvage-junk')).toBeDisabled();
+    expect(screen.getByTestId('salvage-junk')).toHaveTextContent('Salvage between dives');
+  });
+
+  it('mid-dive the Forge tab waits for the dive to end', () => {
+    store().startDive(1);
+    render(<ForgePanel onSelect={() => {}} />);
+    expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
+    expect(screen.queryByTestId('fuse-button')).toBeNull();
   });
 });

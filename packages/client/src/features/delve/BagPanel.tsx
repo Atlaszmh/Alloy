@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   compareItem,
+  isDiveActive,
   referenceDepth,
   salvageCandidates,
   rarityIndex,
@@ -27,8 +28,7 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
     return profile.bag
       .map((item) => ({
         item,
-        delta: compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
-          .powerPct,
+        delta: compareItem(profile.equipped, item, registry, depth, profile.pair).powerPct,
       }))
       .sort(
         (a, b) =>
@@ -36,9 +36,11 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
           b.delta - a.delta ||
           b.item.ilvl - a.item.ilvl,
       );
-  }, [profile.bag, profile.equipped, profile.pair, profile.chains, registry, depth]);
+  }, [profile.bag, profile.equipped, profile.pair, registry, depth]);
 
-  const upgrades = rows.filter((r) => r.delta > UPGRADE_EPSILON).length;
+  // Equip best leaves weapons alone: a weapon changes through its sheet (Equip or Transfer).
+  const upgrades = rows.filter((r) => r.delta > UPGRADE_EPSILON && r.item.slot !== 'weapon').length;
+  const diving = isDiveActive(profile);
   const junk = useMemo(() => salvageCandidates(registry, profile, 'magic'), [registry, profile]);
 
   const onEquipBest = () => {
@@ -64,20 +66,20 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
     <div className="flex flex-col gap-3" data-testid="bag-panel">
       <div className="flex gap-2">
         <button
-          className={`delve-btn flex-1 text-sm ${upgrades > 0 ? 'delve-btn-green' : ''}`}
-          disabled={upgrades === 0}
+          className={`delve-btn flex-1 text-sm ${upgrades > 0 && !diving ? 'delve-btn-green' : ''}`}
+          disabled={upgrades === 0 || diving}
           onClick={onEquipBest}
           data-testid="equip-best"
         >
-          ▲ Equip best{upgrades > 0 ? ` (${upgrades})` : ''}
+          {diving ? 'Equip between dives' : `▲ Equip best${upgrades > 0 ? ` (${upgrades})` : ''}`}
         </button>
         <button
           className="delve-btn flex-1 text-sm"
-          disabled={junk.length === 0}
+          disabled={junk.length === 0 || diving}
           onClick={onSalvageJunk}
           data-testid="salvage-junk"
         >
-          Salvage junk{junk.length > 0 ? ` (${junk.length})` : ''}
+          {diving ? 'Salvage between dives' : `Salvage junk${junk.length > 0 ? ` (${junk.length})` : ''}`}
         </button>
       </div>
 

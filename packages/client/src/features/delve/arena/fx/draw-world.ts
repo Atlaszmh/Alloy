@@ -227,7 +227,7 @@ export function drawTelegraphs(ground: Graphics, w: ArpgWorld, time: number): vo
  * the chain's next move winds up, else null.
  */
 export function guardMove(h: ArpgWorld['hero']): ResolvedAbility | null {
-  return h.defend ? chainMove(h.chains[1], h.defend.move, h.defend.stage) : null;
+  return h.defend ? chainMove(h.chains[1]!, h.defend.move, h.defend.stage) : null;
 }
 
 /** The hero's footing: a pixel ring on the ground with a notch showing where it faces. */

@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+  defaultMoveset,
   generateItem,
+  heroChains,
   SeededRNG,
   type ChainFix,
+  type Chains,
   type GearSlot,
   type ManaType,
 } from '@alloy/engine';
@@ -13,21 +16,35 @@ import {
   MANUAL_ATTACK_KEY,
   fixNotices,
   loadDelveProfile,
+  movesetNotices,
   overtakeNotice,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
 const registry = getDelveRegistry();
+/** The hero's chains, as its equipped weapon carries them. */
+const chains = () => {
+  const { equipped, pair } = useDelveStore.getState().profile;
+  return heroChains(registry, equipped, pair) as Chains;
+};
+
+/** Equip the starting sword made epic (all four skills), its chains the defaults but for `over`. */
+function epicSword(over: Partial<Chains> = {}) {
+  const p = useDelveStore.getState().profile;
+  const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
+  const moveset = defaultMoveset(registry, weapon, 'fire');
+  useDelveStore.getState().setProfile({
+    ...p,
+    equipped: {
+      ...p.equipped,
+      weapon: { ...weapon, moveset: { ...moveset, chains: { ...moveset.chains, ...over } } },
+    },
+  });
+}
 
 /** The store's save as version 3 (builds, no pair): a Frost Ward and Fire's Bolt and Nova. */
 function v3Save() {
-  const {
-    pair: _pair,
-    manaDust: _dust,
-    chains: _chains,
-    chainCaps: _caps,
-    ...rest
-  } = useDelveStore.getState().profile;
+  const { pair: _pair, manaDust: _dust, links: _links, ...rest } = useDelveStore.getState().profile;
   const build = (form: string, elements: string[], payment = 'mana') => ({
     form,
     elements,
@@ -86,7 +103,7 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().newUids.x1).toBeUndefined();
   });
 
-  it('salvage returns the scrap and Mana Dust gained', () => {
+  it('salvage returns the scrap, Mana Dust and Links gained', () => {
     const item = generateItem(
       registry,
       { uid: 'x2', ilvl: 3, rarity: 'magic', slot: 'ring' },
@@ -95,10 +112,21 @@ describe('delveStore', () => {
     const s = useDelveStore.getState();
     // Frost is outside the fire hero's pair, so it melts into Mana Dust too.
     s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }] });
-    const { scrap, dust } = useDelveStore.getState().salvage(['x2']);
+    const { scrap, dust, links } = useDelveStore.getState().salvage(['x2']);
     expect(scrap).toBeGreaterThan(0);
     expect(dust).toBe(registry.getDelveBalance().pair.salvageDust.magic);
+    expect(links).toBe(0); // not a weapon
     expect(useDelveStore.getState().profile).toMatchObject({ scrap, manaDust: dust });
+    // A weapon gives a Link for each slot past its base.
+    const sword = useDelveStore.getState().profile.equipped.weapon!;
+    const roomy = {
+      ...sword,
+      uid: 'x3',
+      moveset: defaultMoveset(registry, sword, 'fire', { primary: 3 }),
+    };
+    s.setProfile({ ...useDelveStore.getState().profile, bag: [roomy] });
+    expect(useDelveStore.getState().salvage(['x3']).links).toBe(2);
+    expect(useDelveStore.getState().profile.links).toBe(2);
   });
 
   it('upgrade reports failure reasons', () => {
@@ -117,26 +145,39 @@ describe('delveStore', () => {
     expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('0');
   });
 
-  it('sets a chain and persists it', () => {
+  it("sets the weapon's chains and persists them", () => {
     const chain = {
       moves: [{ kind: 'heavy' as const, form: 'burst' as const, elements: ['fire' as const] }],
       payment: 'cast' as const,
     };
-    useDelveStore.getState().setChain('primary', chain);
-    expect(useDelveStore.getState().profile.chains.primary).toEqual(chain);
-    expect(loadDelveProfile()?.profile.chains.primary).toEqual(chain);
-    useDelveStore.getState().setChain('basic', [{ kind: 'hold', element: 'fire' }]);
-    expect(loadDelveProfile()?.profile.chains.basic).toEqual([{ kind: 'hold', element: 'fire' }]);
+    const basic = [{ kind: 'hold' as const, element: 'fire' as const }];
+    expect(useDelveStore.getState().setChains({ primary: chain, basic }).ok).toBe(true);
+    expect(chains().primary).toEqual(chain);
+    const saved = loadDelveProfile()!.profile.equipped.weapon!.moveset!.chains;
+    expect(saved).toMatchObject({ primary: chain, basic });
   });
 
-  it('refuses a form from another slot', () => {
-    expect(() =>
-      useDelveStore.getState().setChain('primary', {
-        moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }],
-        payment: 'mana',
-      }),
-    ).toThrow(/primary/);
-    expect(useDelveStore.getState().profile.chains.primary.moves[0].form).toBe('bolt');
+  it('refuses a form from another slot, and changes nothing', () => {
+    const res = useDelveStore.getState().setChains({
+      basic: [{ kind: 'hold', element: 'fire' }],
+      primary: { moves: [{ kind: 'medium', form: 'nova', elements: ['fire'] }], payment: 'mana' },
+    });
+    expect(res).toMatchObject({ ok: false, reason: 'Nova is not a primary form' });
+    expect(chains().primary.moves[0].form).toBe('bolt');
+    expect(chains().basic).toHaveLength(3);
+  });
+
+  it('adds a slot for Links and scrap', () => {
+    const s = () => useDelveStore.getState();
+    expect(s().addSlot('primary')).toMatchObject({ ok: false, reason: 'Not enough Links' });
+    s().setProfile({ ...s().profile, links: 1, scrap: 20 });
+    expect(s().addSlot('primary').ok).toBe(true);
+    expect(s().profile).toMatchObject({ links: 0, scrap: 0 });
+    expect(chains().primary.moves).toHaveLength(2);
+    expect(s().addSlot('defensive')).toMatchObject({
+      ok: false,
+      reason: 'Carried by magic weapons and better',
+    });
   });
 
   it('a reset takes a primary; without one the choice is still to make', () => {
@@ -149,10 +190,12 @@ describe('delveStore', () => {
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
     const loaded = loadDelveProfile()!;
     expect(loaded.profile).toMatchObject({
-      version: 5,
+      version: 6,
       pair: { primary: 'fire', secondary: null },
     });
-    expect(loaded.fixed.map((f) => [f.skill, f.index])).toEqual([['defensive', 0]]);
+    // The common sword carries no Defensive: the Frost Ward went with it, and nothing needed a fix.
+    expect(loaded.dropped).toEqual(['defensive', 'ultimate']);
+    expect(loaded.fixed).toEqual([]);
     expect(loaded.gainedPair).toBe(true);
   });
 
@@ -166,13 +209,14 @@ describe('delveStore', () => {
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([
       BIND_HINT,
-      "Your Ward's 1st move used Frost, which isn't in your pair; it now uses Fire",
+      // One move each: nothing came back as Links.
+      "Your chains live on your weapon now, and yours can't carry your Defensive and Ultimate: they went",
     ]);
-    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(5);
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(6);
   });
 
   it('a save that already has its pair (version 4 or 5) gets no bind hint', async () => {
-    const { chains: _chains, chainCaps: _caps, ...v4 } = useDelveStore.getState().profile;
+    const { links: _links, ...v4 } = useDelveStore.getState().profile;
     const bolt = { form: 'bolt', elements: ['fire'], weight: 0, payment: 'mana' };
     const abilities = {
       primary: bolt,
@@ -180,7 +224,7 @@ describe('delveStore', () => {
       ultimate: { ...bolt, form: 'nova' },
     };
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify({ ...v4, version: 4, abilities }));
-    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 5 } });
+    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 6 } });
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(useDelveStore.getState().profile));
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',
@@ -234,19 +278,18 @@ describe('delveStore', () => {
   });
 
   it('realign charges and says which moves it changed; re-attune spends Mana Dust', () => {
+    epicSword({
+      ultimate: {
+        moves: [{ kind: 'medium', form: 'maelstrom', elements: ['storm'] }],
+        payment: 'charge',
+      },
+    });
     const s = useDelveStore.getState();
     s.setProfile({
       ...s.profile,
       pair: { primary: 'fire', secondary: 'storm' },
       manaDust: 500,
       scrap: 500,
-      chains: {
-        ...s.profile.chains,
-        ultimate: {
-          moves: [{ kind: 'medium', form: 'maelstrom', elements: ['storm'] }],
-          payment: 'charge',
-        },
-      },
     });
     expect(useDelveStore.getState().realign({ secondary: 'frost' }).ok).toBe(true);
     expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: 'frost' });
@@ -259,7 +302,7 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().reattune(uid, 'frost').ok).toBe(true);
     expect(useDelveStore.getState().profile.equipped.weapon!.mana).toBe('frost');
     expect(useDelveStore.getState().profile.manaDust).toBe(
-      dust - registry.getDelveBalance().pair.reattuneDust.common,
+      dust - registry.getDelveBalance().pair.reattuneDust.epic,
     );
   });
 
@@ -268,11 +311,26 @@ describe('delveStore', () => {
     expect(s().bindSecondary('storm').ok).toBe(true);
     s().setProfile({ ...s().profile, manaDust: 500, scrap: 500 });
     expect(s().realign({ primary: 'frost' }).ok).toBe(true);
-    // The default basic chain follows the pair silently; each ability chain says so once.
+    // The weapon's every chain says so once, the basic one too.
     expect(s().takeNotices()).toEqual([
-      "Your Bolt's 1st, 2nd, 3rd and 4th moves used Fire, which isn't in your pair; they now use Frost",
-      "Your Ward's 1st move used Fire, which isn't in your pair; it now uses Frost",
-      "Your Nova's 1st move used Fire, which isn't in your pair; it now uses Frost",
+      "Your basic attack's 1st, 2nd and 3rd blows used Fire, which isn't in your pair; they now use Frost",
+      "Your Bolt's 1st move used Fire, which isn't in your pair; it now uses Frost",
+    ]);
+  });
+
+  it('says what the move to weapon movesets dropped or reset', () => {
+    expect(movesetNotices([], false, 0)).toEqual([]);
+    expect(movesetNotices(['ultimate'], false, 0)).toEqual([
+      "Your chains live on your weapon now, and yours can't carry your Ultimate: it went",
+    ]);
+    expect(movesetNotices(['ultimate'], false, 1)).toEqual([
+      "Your chains live on your weapon now, and yours can't carry your Ultimate: it went, and its 1 extra move came back as 1 Link",
+    ]);
+    expect(movesetNotices(['defensive', 'ultimate'], false, 3)).toEqual([
+      "Your chains live on your weapon now, and yours can't carry your Defensive and Ultimate: they went, and their 3 extra moves came back as 3 Links",
+    ]);
+    expect(movesetNotices([], true, 0)).toEqual([
+      'Your chains live on your weapon now: with no weapon equipped, yours were reset to the defaults',
     ]);
   });
 

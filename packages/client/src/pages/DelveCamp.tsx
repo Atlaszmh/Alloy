@@ -52,10 +52,10 @@ export function DelveCamp() {
   const codexFound = Object.keys(profile.codex).length;
   const codexTotal = registry.getDelveData().legendaries.length;
   const firstTime = profile.stats.dives === 0;
-  const { equipped, pair, chains } = profile;
+  const { equipped, pair } = profile;
   const attunement = useMemo(
-    () => profileStats(registry, { equipped, pair, chains }).attunement,
-    [equipped, pair, chains, registry],
+    () => profileStats(registry, { equipped, pair }).attunement,
+    [equipped, pair, registry],
   );
 
   const onDelve = () => {

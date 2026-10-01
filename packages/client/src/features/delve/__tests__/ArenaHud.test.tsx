@@ -94,6 +94,13 @@ describe('the ability buttons', () => {
     expect(screen.getByTestId('ability-1').querySelector('[data-chain]')).toBeNull();
   });
 
+  it("hides the button of a skill the weapon doesn't carry; the others keep their slots", () => {
+    render(bar({ abilities: [BOLT, null, { ...BOLT, name: 'Fire Nova' }] }));
+    expect(screen.getByTestId('ability-0')).toBeInTheDocument();
+    expect(screen.queryByTestId('ability-1')).toBeNull();
+    expect(screen.getByTestId('ability-2')).toHaveAccessibleName('Ultimate: light Fire Nova');
+  });
+
   it('a press aims (a hold move charges meanwhile), a release casts, and a lost pointer cancels', () => {
     const onCast = vi.fn();
     const onAim = vi.fn();

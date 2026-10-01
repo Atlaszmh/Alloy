@@ -12,6 +12,7 @@ import {
   defaultBasic,
   defaultChains,
   followBasic,
+  heroChains,
   sandboxWeapon,
   type AbilitySlot,
   type Chains,
@@ -258,8 +259,11 @@ interface SandboxStore extends SandboxLoadout {
   setPrimary: (mana: ManaType) => void;
   /** Pick the secondary (null = none; the primary is ignored); the basic chain follows the pair. */
   setSecondary: (mana: ManaType | null) => void;
-  /** Copy the save's gear, chains and pair in (its powers and attunement then come from the items). */
-  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'chains' | 'pair'>) => void;
+  /**
+   * Copy the save's gear, its weapon's chains and its pair in (its powers and attunement then
+   * come from the items); a skill the weapon doesn't carry keeps the sandbox's chain.
+   */
+  loadMyBuild: (profile: Pick<DelveProfile, 'equipped' | 'pair'>) => void;
   reset: () => void;
 }
 
@@ -337,7 +341,10 @@ export const useSandboxStore = createHmrStore<SandboxStore>('sandboxStore', (set
         weapon: weapon ? choiceOf(weapon) : null,
         loadedWeapon: weapon ?? null,
         gear,
-        chains: profile.chains,
+        chains: {
+          ...get().chains,
+          ...heroChains(getDelveRegistry(), profile.equipped, profile.pair),
+        },
         legendaries: {},
         attunement: {},
         // Your pair: the loaded weapon keeps its real mana (the weapon check relies on it).

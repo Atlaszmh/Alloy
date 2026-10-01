@@ -2,9 +2,7 @@ import { useState } from 'react';
 import {
   GEAR_SLOTS,
   MANA_TYPES,
-  basicLoadout,
   bindSecondary,
-  isDefaultBasic,
   isDiveActive,
   overtakeProgress,
   profilePower,
@@ -122,10 +120,9 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
       {!secondary && (
         <div className="flex flex-col gap-1.5" data-testid="bind-section">
           <div className="text-xs text-stone-400">
-            {isDefaultBasic(registry, profile.chains.basic, basicLoadout(profile)!)
-              ? "Bind a second element: your basic chain's last blow strikes with it and your abilities can use it."
-              : 'Bind a second element: your abilities can use it, and your basic chain keeps the blows you built (add the element on the Basic tab).'}{' '}
-            Power now {formatNumber(profilePower(registry, profile))}.
+            Bind a second element: your moves and blows can use it, and your chains keep the ones
+            they have (add the element in the chain builder). Power now{' '}
+            {formatNumber(profilePower(registry, profile))}.
           </div>
           {candidates.length === 0 ? (
             <div className="text-xs text-stone-500">Find gear of another element to bind it.</div>
@@ -173,7 +170,7 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
         <div className="flex flex-col gap-1.5" data-testid="realign-section">
           <div className="text-xs text-stone-400">
             Realign: change your pair for ✦ {cost.realignDust} Mana Dust and ⚙ {cost.realignScrap}{' '}
-            scrap. Gear stays as it is; your moves and blows follow the new pair.
+            scrap. Gear stays as it is; your equipped weapon's moves and blows follow the new pair.
           </div>
           {(['primary', 'secondary'] as const).map((role) => (
             <div key={role} className="flex flex-wrap items-center gap-1.5">

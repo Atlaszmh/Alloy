@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { compareItem, findItem, referenceDepth, type GearItem } from '@alloy/engine';
+import { compareItem, findItem, isDiveActive, referenceDepth, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -51,14 +51,17 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         equipped,
         delta: equipped
           ? null
-          : compareItem(profile.equipped, found.item, registry, depth, profile.chains, profile.pair)
-              .powerPct,
+          : compareItem(profile.equipped, found.item, registry, depth, profile.pair).powerPct,
       });
     }
     return out;
   }, [diveDrops, profile, registry, depth]);
 
-  const upgrades = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON).length;
+  // Mid-dive every upgrade waits for the Anvil; after it, Equip upgrades
+  // leaves weapons alone (a weapon changes through its sheet).
+  const better = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON);
+  const diving = isDiveActive(profile);
+  const upgrades = better.filter((r) => r.item.slot !== 'weapon').length;
   const overflow = rows.length > capacity ? rows.length - (capacity - 1) : 0;
   const visible = overflow > 0 ? rows.slice(0, capacity - 1) : rows;
 
@@ -111,7 +114,12 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         <span className="delve-display text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400">
           Loot {rows.length > 0 && <span className="text-stone-500">· {rows.length}</span>}
         </span>
-        {upgrades > 0 && (
+        {better.length > 0 && diving && (
+          <span className="text-[11px] text-amber-200" data-testid="upgrades-locked">
+            ▲ {better.length} to equip at the Anvil
+          </span>
+        )}
+        {upgrades > 0 && !diving && (
           <button
             className="delve-btn delve-btn-green px-2.5 py-1 text-xs"
             onClick={onEquipUpgrades}
