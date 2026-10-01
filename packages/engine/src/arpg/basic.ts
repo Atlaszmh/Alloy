@@ -9,7 +9,7 @@ import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
-import { chainJumps, knobHitOpts, shedShards } from './abilities/impact.js';
+import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
@@ -216,8 +216,10 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
   const dir = sw.dir;
   // Mana only for an attack at something: a blow that connects, or a shot with a foe in range.
-  // Drain's budget is the blow's: it counts from before its hits land.
+  // Drain's and Linger's budgets are the blow's: they count from before its hits land.
   h.drained[3] = 0;
+  h.drainLeft[3] = bal.mana.basicAttackGain * bal.runes.drainShare;
+  h.zonesLeft[3] = blow.knobs.zone?.perCast ?? 0;
   const landed = landBlow(ctx, blow, kind, dir, 1, {
     twin: last ? twinPct : 0,
     targetId: sw.targetId,
@@ -439,6 +441,7 @@ function blowZone(
   zone: ZoneKnob,
 ): void {
   const { world } = ctx;
+  if (!spendZone(ctx, 3, zone)) return;
   world.zones.push({
     id: world.nextId++,
     owner: 'hero',

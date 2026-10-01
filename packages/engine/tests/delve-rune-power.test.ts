@@ -107,7 +107,7 @@ describe('Power without runes', () => {
         'mana',
         stats,
       );
-    expect(move('volley', [III('multishot')]).count).toBe(move('volley', []).count + 2);
+    expect(move('volley', [III('multishot')]).count).toBe(move('volley', []).count + 1);
     expect(move('bolt', [III('multishot')]).power).toBeCloseTo(move('bolt', []).power * 0.725);
   });
 });
@@ -261,7 +261,7 @@ describe('the autopilot and runes', () => {
     expect(after.scrap).toBe(0); // 20 for the II, 40 for the III
   });
 
-  it('opens sockets with the Links the slots leave: the cheapest first, the Primary first', () => {
+  it('opens sockets with the Links the slots leave, each for a pouch rune that goes in: the cheapest first, the Primary first', () => {
     const magic = generateItem(
       registry,
       { uid: 'm', ilvl: 5, rarity: 'magic', slot: 'weapon', baseId: 'sword', mana: 'fire' },
@@ -288,12 +288,20 @@ describe('the autopilot and runes', () => {
         payment: 'mana',
       },
     });
-    // 15 first sockets (1 Link + 20 scrap each), then the Primary's first move's second (2 + 40).
-    const after = betweenDives(registry, { ...full, links: 17, scrap: 340 });
+    // No rune to put in: no socket opens, and the Links stay (the scrap goes to upgrades).
+    const empty = betweenDives(registry, { ...full, links: 17, scrap: 340 });
+    expect(sockets(empty, 'primary')).toEqual([0, 0, 0, 0, 0]);
+    expect(empty.links).toBe(17);
+    // The first sockets (1 Link + 20 scrap each), then second ones (2 + 40), each filled as it
+    // opens: none on the fourth and fifth Wards, where neither rune adds Power, so the Primary's
+    // and the basic chain's first moves take a second.
+    const runes = { leech: [20, 0, 0, 0, 0], guard: [20, 0, 0, 0, 0] };
+    const after = betweenDives(registry, { ...full, links: 17, scrap: 340, runes });
     expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
-    expect(sockets(after, 'basic')).toEqual([1, 1, 1, 1, 1]);
-    expect(sockets(after, 'defensive')).toEqual([1, 1, 1, 1, 1]);
+    expect(sockets(after, 'basic')).toEqual([2, 1, 1, 1, 1]);
+    expect(sockets(after, 'defensive')).toEqual([1, 1, 1, 0, 0]);
     expect(after).toMatchObject({ links: 0, scrap: 0 });
+    expect(after.runes.leech[0] + after.runes.guard[0]).toBe(40 - 15);
   });
 
   it('sockets the pouch rune that raises Power most, and keeps the rest', () => {

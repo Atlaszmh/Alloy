@@ -390,7 +390,10 @@ function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
     chain.moves.map((_, i) => {
       const ab = valuedMove(chain, i);
       const hits = TARGETS[ab.form.id] * repeatsOf(ab);
-      return ab.knobs.manaOnHit * Math.min(hits, bal.runes.drainFoes);
+      return Math.min(
+        ab.knobs.manaOnHit * Math.min(hits, bal.runes.drainFoes),
+        ab.cost * bal.runes.drainShare,
+      );
     }),
   );
 }
@@ -539,7 +542,14 @@ export function estimateCombat(
   };
   const manaIncome =
     income +
-    mean(blows.map((b) => b.knobs.manaOnHit * Math.min(cleave, bal.runes.drainFoes))) /
+    mean(
+      blows.map((b) =>
+        Math.min(
+          b.knobs.manaOnHit * Math.min(cleave, bal.runes.drainFoes),
+          bal.mana.basicAttackGain * bal.runes.drainShare,
+        ),
+      ),
+    ) /
       strikeInterval +
     drained(primary, 0.7) +
     drained(ultimate, 0.3) +

@@ -66,11 +66,14 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.pierce += p.pierce === true ? Infinity : p.pierce || 0;
     k.knockback += p.knockback ?? 0;
     k.lifesteal += p.lifesteal ?? 0;
-    if (p.zone)
+    if (p.zone) {
+      const caps = [k.zone?.perCast, p.zone.perCast].filter((c) => c !== undefined);
       k.zone = {
         seconds: Math.max(k.zone?.seconds ?? 0, p.zone.seconds),
         tickPower: Math.max(k.zone?.tickPower ?? 0, p.zone.tickPower),
+        ...(caps.length > 0 ? { perCast: Math.min(...caps) } : {}),
       };
+    }
     k.pull ||= p.pull ?? false;
     k.execute = Math.max(k.execute, p.execute ?? 0);
     k.scatter = Math.max(k.scatter, p.scatter ?? 0);

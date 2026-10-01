@@ -599,6 +599,11 @@ export interface DelveBalance {
     guardSeconds: number;
     /** Foe-hits a cast's Drain counts. */
     drainFoes: number;
+    /**
+     * Most mana Drain gives back a cast, as a share of the move's own mana cost (a blow's: of
+     * the mana a blow brings, `mana.basicAttackGain`).
+     */
+    drainShare: number;
     /** A shard's speed, and how far it flies. */
     shardSpeed: number;
     shardRange: number;

@@ -1,6 +1,6 @@
 # Delve runes: sockets on moves, 14 runes over shared knobs, tiers and fusing
 
-**Status:** approved design, 2026-09-30. It is stage 4b of the skill roadmap, and it ships as v0.51.0 with save version 7. It builds on stage 4a (weapon movesets and slots, v0.49.0–v0.50.0; `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md`). The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. All numbers are starting points for the DPS Lab gate; nothing has been measured yet. Revised after the spec review and the re-review: every change is marked **(review)** or **(review 2)**, here and in the index.
+**Status:** approved design, 2026-09-30. It is stage 4b of the skill roadmap, and it ships as v0.51.0 with save version 7. It builds on stage 4a (weapon movesets and slots, v0.49.0–v0.50.0; `docs/superpowers/specs/2026-09-30-delve-weapon-movesets-design.md`). The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. All numbers are starting points for the DPS Lab gate; nothing has been measured yet. Revised after the spec review and the re-review: every change is marked **(review)** or **(review 2)**, here and in the index. Tuned at the balance pass (2026-10-01, the user's decisions after the first gate): every change is marked **(balance)**, here and in the index, and "Balance and gates" records the pass.
 
 Stage 4 is three projects, in this order:
 - **4a:** weapon movesets and slots (shipped).
@@ -52,18 +52,18 @@ Each rune's numbers are per tier, I → V. Where the decisions gave only the end
 | Family | Rune | Tier I → V | Trade-off | Fits (forms) | Fits (blows) |
 |---|---|---|---|---|---|
 | Shape | **Split** | shards 2, 2, 3, 3, 4 at 30, 35, 40, 45, 50% power | — | Bolt, Volley, Barrage | bow, wand |
-| Shape | **Multi-shot** | +1, +1, +2, +2, +3 shots | each shot 65, 68.75, 72.5, 76.25, 80% power; on Volley half that cut: 82.5, 84.375, 86.25, 88.125, 90%; on Barrage no cut | Bolt, Volley, Lance, Barrage | bow, wand |
-| Shape | **Pierce** | passes 1, 2, 3, 4, 5 foes | 90% power | Bolt, Volley | staff, wand |
-| Shape | **Chain** | +1, +1, +2, +2, +3 jumps | — | Bolt, Volley, Lance, Burst, Strike, Ward, Nova, Barrage, Maelstrom | all seven |
-| Shape | **Widen** | area ×1.2, 1.3, 1.4, 1.5, 1.6 | 90% power | Burst, Nova, Maelstrom, Strike, Ward | dagger, sword, axe, maul |
+| Shape | **Multi-shot** | +1, +1, +1, +2, +2 shots **(balance)** | each shot 65, 68.75, 72.5, 76.25, 80% power; on Volley half that cut: 82.5, 84.375, 86.25, 88.125, 90%; on Barrage no cut | Bolt, Volley, Lance, Barrage | bow, wand |
+| Shape | **Pierce** | passes 1, 1, 1, 2, 2 foes; past its first foe a shot only hits **(balance)** | 60, 62.5, 65, 67.5, 70% power **(balance)** | Bolt, Volley | staff, wand |
+| Shape | **Chain** | +1, +1, +1, +2, +2 jumps **(balance)** | — | Bolt, Volley, Lance, Burst, Strike, Ward, Nova, Barrage, Maelstrom | all seven |
+| Shape | **Widen** | area ×1.05, 1.1, 1.15, 1.2, 1.25 **(balance)** | 90% power | Burst, Nova, Maelstrom, Strike, Ward | dagger, sword, axe, maul |
 | Tempo | **Quick** | beat and cooldown ×0.9, 0.85, 0.8, 0.75, 0.7 | 90% power | all twelve | all seven |
 | Tempo | **Echo** | repeats after 0.4 s at 30, 37.5, 45, 52.5, 60% | — | Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom | all seven |
 | Tempo | **Heavy** | power ×1.15, 1.225, 1.3, 1.375, 1.45, staggers | beat and wind-up ×1.2 | Bolt, Volley, Lance, Burst, Strike, Nova, Barrage, Maelstrom | all seven |
 | Elemental | **Saturate** | +1, +1, +1, +2, +2 stacks per direct hit | — | every form but Surge and Armor | all seven |
-| Elemental | **Linger** | a zone for 1.5, 2, 2.5, 3, 3.5 s (ticks at 20% of the hit) | — | Bolt, Lance, Burst, Strike, Nova | all seven, heavy and hold blows only |
+| Elemental | **Linger** | a zone for 1.5, 2, 2.5, 3, 3.5 s (ticks at 20% of the hit); at most one a shot and three a cast **(balance)** | — | Bolt, Lance, Burst, Strike, Nova | all seven, heavy and hold blows only |
 | Elemental | **Volatile** | reactions it sets off +15, 23.75, 32.5, 41.25, 50% | — | every form but Surge | all seven |
 | Sustain | **Leech** | lifesteal 2, 3, 4, 5, 6% | — | every form but Surge | all seven |
-| Sustain | **Drain** | +1, +1.5, +2, +2.5, +3 mana per foe hit, up to 5 foe-hits a cast | — | every form but Surge | all seven |
+| Sustain | **Drain** | +1, +1.5, +2, +2.5, +3 mana per foe hit, up to 5 foe-hits and half the move's mana cost a cast (a blow: half a blow's mana) **(balance)** | — | every form but Surge | all seven |
 | Sustain | **Guard** | on landing, a 3 s shield of 3, 4.25, 5.5, 6.75, 8% max life | — | all twelve | all seven |
 
 - **Decided in the spec (review): the mana rune is Drain and the reaction-damage rune is Volatile.** *"Siphon" is already a reaction and "Catalyst" already a legendary; the knobs keep their names (`manaOnHit`, `catalyst`).*
@@ -147,9 +147,11 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
   - **Every shot, the first included, is at the cut power** (half the cut on Volley, none on Barrage). *That is what "each −35%" means.*
   - **Decided in the spec (review): Twin Fang's extra shot stays one shot and carries no runes.** *It already applies no stacks and pairs nothing; it is the legendary's echo, not the blow's shot.*
 - **Pierce.** The count above: a Bolt or a dart passes that many foes, impacting on each (as Earth's piercing Bolt does today), then dies on the next.
+  - **(balance): shape runes add, they don't multiply.** Past its first foe, a shot that a Pierce rune carries on (a finite count) still bursts on each foe it passes, but its Chain jumps, its Linger zone and its Split shards come off its first foe only (`ImpactOpts.through`, set in `step.ts` when the shot has hit before and its `pierceLeft` is finite). A jump already spawns nothing (`chainJumps` only hits), and a shard nothing (above). An Earth shot's endless pierce (`Infinity`) keeps today's impact at every foe, so no hero without runes changes. *Of the two rules the user offered (a foe reached through Pierce or Chain spawns nothing further; or one per-cast budget for every extra target), this one needs no budget and leaves the no-rune grid identical: a shared budget would also cut a Storm Volley's per-dart jumps. Multi-shot's extra shots still each pierce and jump; the tier numbers hold those sets under the ceilings.*
 - **Chain.** Abilities: as today (`chainFrom`), the Storm mastery's +2 included. Blows: `chainFrom`'s body becomes `chainJumps(ctx, first, damage, element, jumps, opts, hit)`, which both call; it keeps today's per-jump knockback origin (`kbFrom` = the foe it jumps from). A melee blow jumps from the first foe struck; a shot from the foe it hit.
   - **Decided in the spec (review): blow chains get the Storm mastery's +2 too, by the same rule as abilities (when the jumps are above 0).** *`chainJumps` holds the rule, so it can't differ.*
   - **Decided in the spec: jumps fall off at the shared `abilities.chainPower` (0.7).** *Storm, Stormcaller and the rune then follow one rule; the decisions' "60%" goes to the DPS Lab gate as an open question rather than a second fall-off.*
+  - **(balance):** the user's lever "Chain falls off faster" is taken as fewer jumps (tier III +1, was +2): a rune-only fall-off would need a new knob field, and the shared 0.7 is Storm's too, so changing it would change heroes without runes.
 - **Widen.** Abilities: `area` already scales `radius` (a Strike's reach, a Ward's burst). Melee blows: reach × `area`; the arc stays.
 - **Quick and Heavy (`quick`).**
   - Abilities: `cooldown × quick.cooldown` (a charge payment's lockout too); `conjure`, `channel` and `castTime × quick.windup`; the beat through `moveBeat(bal, ab, tempo) = beatFor(bal, ab.slot, playedKind(ab), tempo) × ab.knobs.quick.beat`, which replaces `beatFor` in `fire`, `useInterval` and the builder's readout. A hold's charge time (`holdTime × tempo`) is untouched; its wind-up after release scales.
@@ -166,6 +168,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
 - **Linger.**
   - Abilities: `zone` is merged like Rimeheart's, so `leaveZone` already places it where the move lands (the field-by-field zone merge above). `tickPower` is 0.2 at every tier.
   - Heavy and hold blows: a hero zone with `ability: null` at the strike (melee: ahead at half the reach, as Strike's; a shot: at the hit), radius 1.2, ticking every 0.5 s for `hit × 0.2`. In `zonesTick`, a hero zone without an ability ticks each foe inside with `hitMonster(…, { source: 'basic', canCrit: false, applies: [BASIC_STATUS[element]] })`. *Today every hero zone has an ability, so `ability: null` needs no new field.*
+  - **(balance): at most one zone a shot and three a cast.** One a shot is the Pierce rule's (above). Three a cast rides on the zone knob: `ZoneKnob.perCast` (Linger's rows: 3; merged as the smaller where either has one), counted per skill like Drain (`HeroEntity.zonesLeft`, set from `perCast` as `fire` fires or `strike` lands, spent by `spendZone` in `leaveZone` and `blowZone`), so an Echo's zones come out of its cast's three. An element's or a fusion's zone has no `perCast` and is never capped (a Magma Barrage still leaves seven). *Measured on a heavy Bolt at Linger V with Multi-shot V and Pierce V on 20 dummies: 22 zones a cast and 98 alive at once before, 3 and 15 after.*
 - **Volatile** (the `catalyst` knob). `react` takes the hit's `opts.catalyst`, and its factor becomes `1 + legendaries.catalyst / 100 + opts.catalyst`. It scales what it scales today: the damage reactions' bonus per pair and Soulfire. The ten effect reactions don't change.
   - **Decided in the spec: it adds to the Catalyst legendary rather than multiplying.** *Both are "+X% reaction damage"; adding keeps one stat line honest.*
   - A `runeFx` event (`effect: 'volatile'`) marks a damage reaction or Soulfire the rune boosted.
@@ -175,6 +178,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
   - **Decided in the spec (review): the cap is 5 foe-hits per cast, not 5 distinct foes.** Every hit on a foe counts one, the same foe again included: direct hits, ticks, jumps and shards alike; burns, poisons and reaction splashes never. *Counting hits needs no per-cast set of foe ids.*
   - `fire` resets its slot's count **before** `executeForm` (a Lance's or a Strike's hits land inside it), and `strike` resets the basic one before its blow lands.
   - **Decided in the spec: counted per slot since it last fired.** *A cast has no identity in the sim today (one `ResolvedAbility` serves every cast of a move); a per-slot count reset on each fire is one array, and a lingering Maelstrom from an earlier cast just shares the new cast's budget.*
+  - **(balance): at most half the move's own mana cost a cast** (`delve.runes.drainShare`, 0.5), and a basic blow at most half the mana a blow brings (`mana.basicAttackGain` × 0.5, so 2.5). `HeroEntity.drainLeft` holds the mana left per skill, set beside `drained` (`ab.cost × drainShare` in `fire`); each counted foe-hit gives `min(manaOnHit, drainLeft)`. A move paid with charge costs no mana, so Drain gives it none. Power's Drain terms take the same cap. *Before, Drain III gave a Volley 6 of its 8 mana a cast, and Drain V a light Burst 214% of its cost.*
 - **Guard.**
   - On landing it puts up a shield of `guardOnLand × maxHp` for `delve.runes.guardSeconds` (3) through `guardLand(ctx, knobs)` in `defend.ts`. An ability lands when `fire` succeeds (the Defensive included), a melee blow when it connects, a shot when it fires at a foe in range (the same `landed` that grants mana).
   - **Decided in the spec: Guard feeds Obsidian's barrier, `HeroEntity.barrier`,** so it soaks after the Defensive's reductions (Armor, Earth) and before the Ward, where Obsidian's barrier already sits in `shieldHero`. *It reuses the barrier's soak, break event and HUD as they are, and a second shield layer would only add an order question.*
@@ -346,12 +350,14 @@ Socketing, pulling and opening sockets go through the Anvil's draft with every o
 
   The blows get the same terms (power, area on melee cleave, extra shots, split, echo, quick on the time).
   - **Decided in the spec: the constants 0.5 (an extra shot or shard finds a foe half the time), 0.25 a pierced foe, 0.2 reaction share and 0.05 per stack.** *Power is a heuristic like `TARGETS`; these keep a rune's Power change in line with its DPS Lab ratio, and the gate checks it.*
-- **The autopilot's rune policy** (`delve/autopilot.ts`, between dives, after 4a's transfer, fuse, salvage and slots):
-  1. **fuse** every triple, lowest tier first, so twos can cascade;
-  2. **open sockets** with the Links slots left over: the cheapest first, the Primary's moves first, then Basic, Ultimate and Defensive, each chain from its first move;
-  3. **socket** each empty socket, greedily, with the pouch rune that raises `profilePower` most (fitting and not already on the move). It overwrites a socketed rune only when another gains Power, paying per the mode.
+- **The autopilot's rune policy** (`delve/autopilot.ts`, between dives, after 4a's transfer, fuse and salvage) **(balance)**:
+  1. **slots** up to three a chain (`SOCKETS_AFTER`), in 4a's order;
+  2. **open sockets**, each only where a pouch rune that fits it raises `profilePower`, filled at once (`bestRune`): the cheapest first, the Primary's moves first, then Basic, Ultimate and Defensive, each chain from its first move; an empty socket is Links for nothing;
+  3. the **4th and 5th slots** with the Links left;
+  4. **socket** each socket, greedily, with the pouch rune that raises `profilePower` most (fitting and not already on the move). It overwrites a socketed rune only when another gains Power, paying per the mode;
+  5. **fuse** only the copies left over, lowest tier first, so twos can cascade, and socket again (a fused tier can beat a socketed one).
   - **(review 2):** valuing a transfer, it counts the runes the parts rule would destroy (destroy mode) as lost: a transfer is taken only when its Power gain beats the Power those runes give now.
-  - **Decided in the spec: slots before sockets.** *A slot adds a whole move; the user's order of investment is slots, then their sockets.*
+  - **Decided in the spec: slots before sockets.** *A slot adds a whole move; the user's order of investment is slots, then their sockets.* **(balance):** before a chain's 4th and 5th slots, as measured: with every slot first, the pacing seeds' pouches held 20–43 runes at dive 12 over 3–32 sockets; with sockets after the 3rd, 5–19 over 26–42, dive 12's mean 34.5 → 36 and every rail holding (after the 2nd the dives ran deeper, 38.25; after the 4th the 15-pair sweep's lowest pair fell to 14 against its floor of 13.8).
 - **`playFloor`** picks up rune drops (`bot.ts`).
 
 ### The client
@@ -792,11 +798,28 @@ The DPS Lab gate (single runes and combos) and the pacing rails (below), the E2E
 ## Balance and gates
 - **Before anything changes,** capture v0.50.0's `runAutopilot` numbers and the DPS Lab grid.
 - **The DPS Lab's existing grid must come out identical**, row for row: a hero with no runes plays exactly as before.
-- **The single-rune ceiling:** no rune more than doubles a move's damage at tier III. Each rune row's DPS ÷ its `none` row (same form or weapon, same element set) must be at most **2.0**, both on one dummy and on the pack.
+- **The single-rune ceiling:** no rune more than doubles a move's damage at tier III. Each rune row's DPS ÷ its `none` row (same form or weapon, same element set) must be at most **2.0** on one dummy and **2.5** on the pack **(balance: pack-aware; a shape rune's worth is on the other foes)**.
 - **Expected (review 2):** Multi-shot on Barrage is a plain gain (tier III, 9 impacts for 7: about 1.29× on the pack); on Volley a gain at every tier (tier III, 5 darts at 86.25% for 3: about 1.44× when they all home on one dummy).
-- **The combo ceiling (review, review 2):** for each form and each weapon's basic chain, the highest-ratio set of three runes among those that fit it, at tier III (searched over every such set with `runeComboSetups`, at most 286 each), must be at most **3.0×** its `none` row, on one dummy and on the pack. A combo containing Volatile or Saturate runs on Fire + Frost (against a Fire + Frost `none` row), any other on Fire. A one-off run in wave 3 (a skipped-by-default vitest file, or the Lab's worker), not CI. **Decided in the spec (review).** *Runes stack on a move; a ceiling on singles alone would miss a pair that multiplies.*
+- **The combo ceiling (review, review 2):** for each form and each weapon's basic chain, the highest-ratio set of three runes among those that fit it, at tier III (searched over every such set with `runeComboSetups`, at most 286 each), must be at most **3.0×** its `none` row on one dummy and **4.0×** on the pack **(balance)**. A combo containing Volatile or Saturate runs on Fire + Frost (against a Fire + Frost `none` row), any other on Fire. A one-off run in wave 3 (a skipped-by-default vitest file, or the Lab's worker), not CI. **Decided in the spec (review).** *Runes stack on a move; a ceiling on singles alone would miss a pair that multiplies.*
 - The ratios go in the release notes; a breach stops the build for the user's call.
 - **Pacing:** every rail in `tests/delve-pacing.test.ts` must hold, with the autopilot using runes. Runes add Links (socket drops salvaged) and power, so dives may go deeper; if a rail breaks, report the numbers. The fix is the user's call: drop chances, socket prices, tier numbers, or a changed rail.
+
+### The balance pass (2026-10-01)
+The first gate failed (14 singles and 363 sets over 2.0× / 3.0×; the worst, Multi-shot + Pierce + Chain on a Volley in the pack, at 12.46×). The user's decisions, as built:
+- **The ceilings** are pack-aware: one dummy 2.0× a rune and 3.0× a set, the pack 2.5× and 4.0×.
+- **How the rune view measures** (`arpg/dps-sim.ts`; the basic and ability views are unchanged, row for row):
+  - **An ability's burn counts while its own hits keep it.** A burn belongs to the slot whose hit set its strength, and the basic attack, swinging on its own under a held ability, keeps its stacks alive all fight. So a rune that lifted the ability's per-hit burn above the basics' took over the basics' burn for the whole run: Heavy on a Barrage read 3.07× on one dummy (burn ticks 72 → 239: the Barrage's burn ref 14 over the sword's 12), and a Fire Nova was credited ~30 hits a cast, most of them burn the basics kept up. On Fire + Frost the basics' Frost blow melts the Nova's burn within a second, and that Melt is theirs, so the Fire + Frost Nova's ~4 hits a cast were its own. A rune row now counts a burn or poison tick only within the element's stack duration of the held button's last hit on that foe. Not a sim bug: the game deals the same damage; only the credit moved.
+  - **Eight combat seeds, averaged** (`RUNE_SEEDS`; seed 0 the sandbox's own; `DpsOptions.seed` runs one). A Barrage lands twice in 30 s and rains its impacts at random, so one seed swung a rune's ratio 0.7–4×.
+- **Shape runes add, they don't multiply** (the Pierce rule above), and **Pierce, Chain, Widen and Multi-shot are tuned down** (the table).
+- **Drain** gives back at most half a cast's mana; **Linger** leaves at most one zone a shot and three a cast (above).
+- **The autopilot** opens sockets only for runes that go in, fuses only the leftovers, and opens sockets before a chain's 4th and 5th slots (above).
+- **Drain on a Volley (1.36×)** is mana, not hits: the held Primary is mana-bound in the Lab (60 mana to start, the basics' income), and Drain lets it cast at its beat (52 casts in 30 s for 40). The cap halves the refund (6 → 4 of 8), but 4 a cast still keeps a Volley above its cost for the Lab's 30 s, so the ratio stands.
+
+**Measured** after the pass (depth 10; the gate's scripts `rune-gate.mjs`, `probes.mjs` and `pacing.mjs`):
+- **No runes, no change:** the grid's 9,144 v0.50.0 rows identical; the items hash unchanged (291 items).
+- **Singles, tier III (one dummy / pack; first gate → after):** Split 1.00 / 1.45 → 1.00 / 1.41; Multi-shot 3.62 / 2.01 → 1.28 / 1.28; Pierce 0.96 / 4.58 → 0.87 / 1.95; Chain 1.00 / 2.28 → 1.00 / 1.72; Widen 0.90 / 2.81 → 0.90 / 1.80; Quick 1.11 / 1.17 → 1.18 / 1.22; Echo 1.74 / 1.77 → 1.45 / 1.43; Heavy 3.07 / 2.18 → 1.52 / 1.48; Saturate 1.33 / 1.33 → 1.34 / 1.33; Linger 1.53 / 1.55 → 1.79 / 1.93; Volatile 1.22 / 1.23 → 1.21 / 1.23; Leech and Guard 1.00; Drain 1.40 → 1.36. None over.
+- **Sets (5,564 runs):** the worst in the pack Pierce + Echo + Heavy on a Volley, 3.78× (was 12.46×). **Over: five, all on a Nova on one dummy with Linger:** Heavy + Linger + Volatile 5.97×, Heavy + Saturate + Linger 5.12×, Echo + Linger + Volatile 5.11×, Echo + Saturate + Linger 4.35× (Fire + Frost) and Echo + Heavy + Linger 3.04× (Fire). The Nova is an Ultimate that lands twice in 30 s, so on one dummy its baseline is two blasts (Fire + Frost: 5.7 DPS); Linger turns it into a 2.5 s field whose ticks set off Melts against the basics' Frost stacks. The whole fight gains 19 DPS on 63 (+31%), which against the Nova's own 5.7 still reads 4.4× counted fight-wide; halving Linger's tick or its seconds leaves it above 3.0×. On the pack the same sets read 3.2–3.4×. Left for the user's call: Nova out of Linger's fits, or a per-cast measure for Ultimates.
+- **Pacing (v0.50.0 → the first gate → after):** first dives 3, 3, 3, 3 throughout; dive 6 and dive 12 means 23.5, 30 → 23.5, 33.75 → 24.75, 36; Frost dive 1 → dive 12, 4 → 29.5, then 3.5 → 32.5, then 3.5 → 32.5; legendaries at dive 12, 6.5 → 5.25 → 6; the own pair's reaction 6 of 6 throughout; the 15-pair sweep's median 22 (19–32) → 24 (18–29) → 22 (18–30, allowed 13.2–35.2); seconds a floor 35.03 → 33.49 → 27.98. Every rail holds. At dive 12 the four seeds' weapons hold 26, 42, 38 and 26 sockets, all filled, with 8, 9, 19 and 5 runes left in the pouch.
 
 ## Testing
 - **Engine:**
@@ -827,7 +850,8 @@ The DPS Lab gate (single runes and combos) and the pacing rails (below), the E2E
 
 ## Open questions
 These don't block the build; each is for the DPS Lab gate or for play.
-- **Chain's fall-off.** The decisions say jumps at 60%; the spec uses the shared 0.7. If Chain is weak or strong at the gate, a per-knob fall-off is one more field.
+- **Chain's fall-off.** The decisions say jumps at 60%; the spec uses the shared 0.7. If Chain is weak or strong at the gate, a per-knob fall-off is one more field. **(balance):** the pass cut its jumps instead (tier III +1).
+- **(balance) A Nova with Linger on one dummy** stays over the combo ceiling (see the balance pass).
 - **Pierce on Lance and bow.** They're out of the fits list because the rune would do nothing there. If the user wants it there, it needs a new meaning (a longer Lance).
 - **Rune drop weighting.** Drops are uniform, so a melee hero finds Split and Multi-shot that fit only a Bolt, Volley, Barrage or a bow or wand. Fusing absorbs some of it; weighting toward what the hero carries is a later option.
 - **Socket Links.** Salvaged sockets come back as Links, adding to 4a's Link income. Watch the pacing rails.
@@ -893,3 +917,10 @@ Items marked **(review)** were added or changed after the spec review, and **(re
 54. **(review 2)** Internal names follow the runes: `HeroEntity.drained`, `delve.runes.drainFoes`, `runeFx` effect `'volatile'`.
 55. **(review 2)** `basicRunes` lives on the HUD snapshot type `ArenaHud` in `useArenaCore.ts`, beside `AbilityHud`.
 56. **(review 2)** The "Reused knobs" line: Multi-shot's per-shot power is `extraShots.power`, not `power`.
+57. **(balance)** Pack-aware ceilings: one dummy 2.0× a rune and 3.0× a set; the pack 2.5× and 4.0×.
+58. **(balance)** The rune view counts an ability's burn and poison only while its own hits keep them up, and averages eight combat seeds; the other views are unchanged.
+59. **(balance)** Shape runes add, they don't multiply: past its first foe, a rune-pierced shot only hits (no jumps, zone or shards); an Earth shot's endless pierce is unchanged.
+60. **(balance)** Pierce passes 1, 1, 1, 2, 2 foes at 60–70% power; Chain +1, +1, +1, +2, +2; Widen ×1.05–1.25; Multi-shot +1, +1, +1, +2, +2.
+61. **(balance)** Drain: at most `drainShare` (half) of the move's mana cost a cast; a blow at most half a blow's mana.
+62. **(balance)** Linger: `ZoneKnob.perCast` (3), counted per skill, an Echo's included; one zone a shot from the Pierce rule; elements' and fusions' zones uncapped.
+63. **(balance)** The autopilot: slots to three a chain, then sockets only for runes that go in, then the 4th and 5th slots; it fuses only the leftovers.

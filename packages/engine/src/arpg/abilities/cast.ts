@@ -109,8 +109,10 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   const h = world.hero;
   // Only a slot with a chain winds up or holds.
   const ab = chainMove(h.chains[slot]!, step, stage);
-  // Drain's budget is the cast's: it counts from before the move's hits land.
+  // Drain's and Linger's budgets are the cast's: they count from before the move's hits land.
   h.drained[slot] = 0;
+  h.drainLeft[slot] = ab.cost * bal.runes.drainShare;
+  h.zonesLeft[slot] = ab.knobs.zone?.perCast ?? 0;
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
   const beat = moveBeat(bal, ab, h.stats.tempo);

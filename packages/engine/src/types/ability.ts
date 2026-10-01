@@ -103,6 +103,11 @@ export interface ZoneKnob {
   seconds: number;
   /** Damage per 0.5 s tick, as a multiple of the ability's hit. */
   tickPower: number;
+  /**
+   * Most zones a cast leaves, its echo's included, and one a shot (Linger's: see the runes
+   * spec's balance pass). Absent: no limit (an element's or a fusion's zone).
+   */
+  perCast?: number;
 }
 
 /** Quick's and Heavy's timing: multipliers on the beat, the cooldown and the wind-up. */

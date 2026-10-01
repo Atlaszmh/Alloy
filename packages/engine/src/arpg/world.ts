@@ -250,6 +250,8 @@ export function createHeroEntity(
     moving: false,
     swaySide: 1,
     drained: [0, 0, 0, 0],
+    drainLeft: [0, 0, 0, 0],
+    zonesLeft: [0, 0, 0, 0],
   };
 }
 

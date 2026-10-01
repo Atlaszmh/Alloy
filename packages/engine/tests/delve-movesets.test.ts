@@ -1234,7 +1234,7 @@ describe('the autopilot between dives', () => {
     expect(betweenDives(registry, { ...p, scrap: 0 }).equipped.weapon!.uid).toBe(sword.uid);
   });
 
-  it('spends Links in the order Primary, basic chain, Ultimate, Defensive, each as far as it can pay', () => {
+  it('spends Links in the order Primary, basic chain, Ultimate, Defensive: each to three slots, then (after sockets) the rest', () => {
     const epic = weapon('epic', 1, 'sword');
     const base = {
       ...veteran(slotted(epic, { basic: 3, primary: 1, defensive: 1, ultimate: 1 })),
@@ -1243,10 +1243,12 @@ describe('the autopilot between dives', () => {
     const slots = (links: number) =>
       betweenDives(registry, { ...base, links }).equipped.weapon!.moveset!.slots;
     expect(slots(1)).toEqual({ basic: 3, primary: 2, defensive: 1, ultimate: 1 });
-    // 1 + 2 + 3 + 4 for the Primary's four, then 3 for the sword's 4th basic slot.
-    expect(slots(13)).toEqual({ basic: 4, primary: 5, defensive: 1, ultimate: 1 });
-    // 10 for the Primary; the basic chain's 3 can't be paid, so the last 2 buy the Ultimate's and the Defensive's.
-    expect(slots(12)).toEqual({ basic: 3, primary: 5, defensive: 2, ultimate: 2 });
+    // 1 + 2 each for the Primary's, the Ultimate's and the Defensive's 2nd and 3rd slots (9), then
+    // 3 for the Primary's 4th; its 5th (4) can't be paid, nor the basic chain's 4th (3).
+    expect(slots(13)).toEqual({ basic: 3, primary: 4, defensive: 3, ultimate: 3 });
+    // 9 + 3 + 4 brings the Primary to five; 3 more, the basic chain's 4th.
+    expect(slots(16)).toEqual({ basic: 3, primary: 5, defensive: 3, ultimate: 3 });
+    expect(slots(19)).toEqual({ basic: 4, primary: 5, defensive: 3, ultimate: 3 });
   });
 
   it('changes nothing on a dive still open: every op refuses, and it never loops', () => {

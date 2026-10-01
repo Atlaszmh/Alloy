@@ -585,11 +585,13 @@ export function hitMonster(
     if (leech > 0) healHero(ctx, amount * leech, 'lifesteal');
     addCharge(ctx, amount, opts.slot);
     // Drain: mana per foe hit while the cast's budget lasts (`drainFoes` foe-hits since its
-    // skill last fired; the basic attack's at index 3).
+    // skill last fired, and `drainLeft` mana; the basic attack's at index 3).
     const drain = opts.slot ?? 3;
-    if (opts.manaOnHit && h.drained[drain] < bal.runes.drainFoes) {
+    if (opts.manaOnHit && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
+      const gain = Math.min(opts.manaOnHit, h.drainLeft[drain]);
       h.drained[drain]++;
-      h.mana = Math.min(h.manaMax, h.mana + opts.manaOnHit);
+      h.drainLeft[drain] -= gain;
+      h.mana = Math.min(h.manaMax, h.mana + gain);
     }
   }
 

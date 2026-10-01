@@ -8,6 +8,7 @@ import {
 } from '../src/arpg/abilities/resolve.js';
 import {
   DPS_SECONDS,
+  RUNE_SEEDS,
   dpsCombos,
   dpsKey,
   runeComboSetups,
@@ -424,10 +425,30 @@ describe('the rune view (see the runes spec)', () => {
     expect([...new Set(frost.map((x) => x.dims.rune))]).toEqual(['saturate', 'volatile']);
   });
 
-  it("a baseline plays as the ability view's default chain", () => {
-    expect(simulateDps(registry, setup('rune|none|bolt|fire|none'), ONE)).toEqual(
+  it("a baseline plays as the ability view's default chain (its first seed)", () => {
+    expect(simulateDps(registry, setup('rune|none|bolt|fire|none'), { ...ONE, seed: 0 })).toEqual(
       simulateDps(registry, setup('ability|bolt|fire|none|default|mana'), ONE),
     );
+  });
+
+  it('averages RUNE_SEEDS combat seeds: a Barrage rains its impacts at random', () => {
+    const s = setup('rune|multishot|barrage|fire|III');
+    const seeds = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
+      simulateDps(registry, s, { ...ONE, seed }),
+    );
+    expect(new Set(seeds.map((r) => r.dps)).size).toBeGreaterThan(1);
+    const mean = seeds.reduce((a, r) => a + r.dps, 0) / RUNE_SEEDS;
+    expect(simulateDps(registry, s, ONE).dps).toBeCloseTo(mean, 6);
+  });
+
+  it("counts a burn's ticks only while the held button's own hits keep it up, not the basics'", () => {
+    // Heavy lifts a Barrage's burn above the sword's, so the burn the basics keep alive all
+    // fight would be the Barrage's; counted while its own hits keep it, Heavy is its power.
+    const ratio = (o: DpsOptions) =>
+      simulateDps(registry, setup('rune|heavy|barrage|fire|III'), o).dps /
+      simulateDps(registry, setup('rune|none|barrage|fire|none'), o).dps;
+    expect(ratio(ONE)).toBeLessThan(1.6);
+    expect(ratio(PACK)).toBeLessThan(1.6);
   });
 
   it('a rune changes what the held button deals: Echo III on a Bolt beats its baseline', () => {

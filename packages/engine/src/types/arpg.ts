@@ -469,6 +469,10 @@ export interface HeroEntity {
    * Defensive, the Ultimate, then the basic attack (see the runes spec).
    */
   drained: number[];
+  /** The mana Drain may still give back per skill this cast (`runes.drainShare`), as `drained`. */
+  drainLeft: number[];
+  /** The capped zones (`ZoneKnob.perCast`, Linger's) each skill may still leave this cast, as `drained`. */
+  zonesLeft: number[];
 }
 
 export interface ArpgInput {
