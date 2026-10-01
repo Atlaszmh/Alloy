@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   abilityReady,
   computeHeroStats,
@@ -27,6 +27,8 @@ import {
 import { getDelveRegistry } from '@/features/delve/registry';
 import { DEFAULT_CONTROLS, bindPad } from '@/features/controls/controls';
 import { pickNext, type NavRect } from '../spatial-nav';
+import { startGamepad } from '../gamepad-hub';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
 /** A standard-mapping pad with the given buttons held and stick axes. */
 function fakePad(held: number[] = [], axes: number[] = [0, 0, 0, 0]): GamepadLike {
@@ -486,5 +488,77 @@ describe('pickNext (spatial focus)', () => {
 
   it('stays put at the edge', () => {
     expect(pickNext(grid[0], grid, 'left')).toBeNull();
+  });
+});
+
+describe('the hub claims the input lock for the pad on a change, not a steady state', () => {
+  let frames: FrameRequestCallback[] = [];
+  let pad: GamepadLike | null = null;
+  let stop = () => {};
+  /** Run one animation frame: the hub reads the pad once. */
+  const tick = () => {
+    const run = frames;
+    frames = [];
+    for (const cb of run) cb(0);
+  };
+  const device = () => useInputDeviceStore.getState().device;
+  const mouse = () => useInputDeviceStore.getState().setDevice('keyboard');
+  /** RT resting half down (past its threshold), the left stick at `axes`. */
+  const resting = (held: number[] = [], axes = [0, 0, 0, 0]): GamepadLike => ({
+    ...fakePad(held, axes),
+    buttons: fakePad(held).buttons.map((b, i) => (i === 7 ? { pressed: false, value: 0.6 } : b)),
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      value: () => (pad ? [pad] : []),
+    });
+    pad = null;
+    stop = startGamepad(() => {});
+    tick(); // no pad: the hub forgets the last one
+  });
+  afterEach(() => {
+    stop();
+    vi.unstubAllGlobals();
+    mouse();
+  });
+
+  it('a button press claims it; a trigger or a stick held still does not', () => {
+    pad = resting([], [0.7, 0, 0, 0]);
+    tick(); // first seen: the pad is in use
+    expect(device()).toBe('gamepad');
+    mouse();
+    tick();
+    tick();
+    expect(device()).toBe('keyboard');
+    pad = resting([0], [0.7, 0, 0, 0]); // A pressed
+    tick();
+    expect(device()).toBe('gamepad');
+    mouse();
+    pad = resting([], [0.7, 0, 0, 0]); // A let go: no claim
+    tick();
+    expect(device()).toBe('keyboard');
+  });
+
+  it('a stick claims it moving out of its deadzone or well away from where it lay, not drifting a little', () => {
+    pad = fakePad([], [0.7, 0, 0, 0]);
+    tick();
+    mouse();
+    pad = fakePad([], [0.72, 0.05, 0, 0]); // a nudge
+    tick();
+    expect(device()).toBe('keyboard');
+    pad = fakePad([], [0, 0.7, 0, 0]); // swung round
+    tick();
+    expect(device()).toBe('gamepad');
+    mouse();
+    pad = fakePad(); // let go to the centre: no claim
+    tick();
+    expect(device()).toBe('keyboard');
+    pad = fakePad([], [0, 0, 0.4, 0]); // the right stick, just out of its deadzone
+    tick();
+    expect(device()).toBe('gamepad');
   });
 });

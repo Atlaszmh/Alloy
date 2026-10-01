@@ -1,19 +1,31 @@
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';
-import { edges, firstPad, isActive, readPad, type PadButton, type PadState } from './gamepad';
+import {
+  edges,
+  firstPad,
+  padClaims,
+  readPad,
+  restAfter,
+  type PadButton,
+  type PadRest,
+  type PadState,
+} from './gamepad';
 
 /**
  * The one place the controller is read: once per animation frame. Each press
  * goes to exactly one owner, decided when it happens: the arena while a fight
  * is live (queued until its game loop takes it), otherwise the menu
  * navigation. Reading twice would let one press act twice (close a menu, then
- * reopen it).
+ * reopen it). It also claims the input lock (`inputDeviceStore`) for the
+ * pad on a change (`padClaims`), never on a steady state.
  */
 
 type NavHandler = (state: PadState, pressed: Set<PadButton>, now: number) => void;
 
 let prev: PadState | null = null;
 let current: PadState | null = null;
+const CENTRE = { x: 0, y: 0 };
+let rest: PadRest = { left: CENTRE, right: CENTRE };
 let arenaLive = false;
 const arenaPresses = new Set<PadButton>();
 let nav: NavHandler | null = null;
@@ -54,12 +66,15 @@ function frame(now: number): void {
   const pad = firstPad();
   if (!pad) {
     prev = current = null;
+    rest = { left: CENTRE, right: CENTRE };
     return;
   }
   current = readPad(pad, useControlsStore.getState().config.deadzone);
   const pressed = edges(prev, current);
   prev = current;
-  if (isActive(current)) useInputDeviceStore.getState().setDevice('gamepad');
+  const lock = useInputDeviceStore.getState();
+  if (lock.device !== 'gamepad' && padClaims(pressed, current, rest)) lock.setDevice('gamepad');
+  rest = restAfter(rest, current, useInputDeviceStore.getState().device === 'gamepad');
   if (capture && pressed.size > 0) {
     const onButton = capture;
     capture = null;

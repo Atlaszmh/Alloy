@@ -114,7 +114,7 @@ async function tapAndReadCharges(page: Page, button: number): Promise<string | n
 }
 
 test.describe('Delve with a controller', () => {
-  test('G01: Menu opens the dive menu; D-pad and A toggle a setting; B resumes', async ({
+  test('G01: Menu opens the dive menu, its first control focused; A toggles it; B resumes', async ({
     page,
   }) => {
     await setup(page, true);
@@ -126,7 +126,7 @@ test.describe('Delve with a controller', () => {
     const toggle = page.getByTestId('attack-mode-toggle');
     await expect(toggle).toBeVisible();
     await expect(toggle).toContainText('Auto');
-    await tap(page, BUTTON.down);
+    // The pad has the input lock: the focus goes straight to the menu's first control.
     await expect(toggle).toBeFocused();
     await tap(page, BUTTON.a);
     await expect(toggle).toContainText('Manual');

@@ -247,19 +247,76 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
   });
   /** Screen px to world units: a tenth. */
   const toWorld = (p: Vec) => ({ x: p.x / 10, y: p.y / 10 });
-  const opts = { manual: true, aimReach: 1, toWorld };
+  /** The pad has the input lock (most of these drive it); `keys` has the keyboard. */
+  const opts = { manual: true, aimReach: 1, toWorld, device: 'gamepad' as const };
+  const keys = { ...opts, device: 'keyboard' as const };
 
-  it('a key or HUD button held wins `holding` over the pad', () => {
+  it('respects only the device with the input lock: the pad, or the keys, mouse and HUD', () => {
     const w = world();
     const input = createArenaInput();
     const mem = padMemory();
+    input.keys = { x: 1, y: 0 };
     input.aiming = { slot: 1, since: 0, at: null };
-    expect(frameInput(registry, w, input, pad({ cast: [0], held: [0] }), mem, opts).holding).toBe(
-      1,
-    );
-    input.aiming = null;
-    expect(frameInput(registry, w, input, pad({ held: [0] }), mem, opts).holding).toBe(0);
-    expect(frameInput(registry, w, input, null, mem, opts).holding).toBeNull();
+    input.attackHeld = true;
+    input.attackAim = { x: 50, y: 60 };
+    const acts = pad({ move: { x: 0, y: -1 }, cast: [0], held: [0], attackHeld: true });
+    // The keyboard's: the pad's stick and buttons count for nothing.
+    expect(frameInput(registry, w, input, acts, mem, keys)).toMatchObject({
+      move: { x: 1, y: 0 },
+      cast: null,
+      holding: 1,
+      attackAim: { x: 5, y: 6 },
+    });
+    // The pad's: the keys' movement and aiming count for nothing, and are let go.
+    const out = frameInput(registry, w, input, acts, mem, opts);
+    expect(out).toMatchObject({ move: { x: 0, y: -1 }, cast: { slot: 0, aim: null }, holding: 0 });
+    expect(out.attackAim).toBeNull();
+    expect(input).toMatchObject({ keys: { x: 0, y: 0 }, aiming: null, attackHeld: false });
+    // A key's press meanwhile goes nowhere (a real one takes the lock first).
+    input.cast = { slot: 2, aim: null };
+    input.dodge = true;
+    const next = frameInput(registry, w, input, pad({ held: [0] }), mem, opts);
+    expect(next).toMatchObject({ cast: null, dodge: false });
+    expect(input.cast).toBeNull();
+  });
+
+  it('a switch drops a charging hold unpaid and lets go of what the other side held: no surprise cast', () => {
+    const w = world({
+      moves: [{ kind: 'hold', form: 'bolt', elements: ['fire'] }],
+      payment: 'mana',
+    });
+    const STEP = registry.getDelveBalance().arena.step;
+    const input = createArenaInput();
+    const mem = padMemory();
+    /** One frame with the lock on `o.device`, stepped: its input, and the casts it made. */
+    const frame = (acts: Partial<ArenaPadActions>, o: typeof opts | typeof keys) => {
+      const out = frameInput(registry, w, input, pad(acts), mem, o);
+      const casts = stepWorld(registry, w, out, STEP).filter((e) => e.kind === 'cast');
+      return { out, casts };
+    };
+    // Q held on the keyboard charges the Primary's hold...
+    input.aiming = { slot: 0, since: 0, at: null };
+    for (let i = 0; i < 5; i++) frame({}, keys);
+    expect(w.hero.hold?.slot).toBe(0);
+    // ...the pad takes the lock: the hold drops unpaid, nothing casts, and Q's release later is quiet.
+    const switched = frame({ move: { x: 1, y: 0 } }, opts);
+    expect(switched.out).toMatchObject({ cancelHold: true, cast: null, holding: null });
+    expect(switched.casts).toEqual([]);
+    expect(w.hero.hold).toBeNull();
+    expect(input.aiming).toBeNull();
+    // RT charges it on the pad...
+    frame({ cast: [0], held: [0] }, opts);
+    for (let i = 0; i < 5; i++) frame({ held: [0] }, opts);
+    expect(w.hero.hold?.slot).toBe(0);
+    // ...the mouse takes the lock with RT still down: dropped, nothing casts.
+    const back = frame({ held: [0] }, keys);
+    expect(back.out).toMatchObject({ cancelHold: true, cast: null, holding: null });
+    expect(back.casts).toEqual([]);
+    expect(w.hero.hold).toBeNull();
+    // The pad takes it back with RT still down (a stick moved): RT counts as already seen,
+    // so it holds nothing, and its release casts nothing.
+    expect(frame({ held: [0], move: { x: 1, y: 0 } }, opts).out.holding).toBeNull();
+    expect(frame({}, opts).casts).toEqual([]);
   });
 
   it('sends each press once: cancelHold, a cast, a dodge, a potion and an attack tap', () => {
@@ -273,7 +330,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       potion: true,
       attackTap: true,
     });
-    const first = frameInput(registry, w, input, null, mem, opts);
+    const first = frameInput(registry, w, input, null, mem, keys);
     expect(first).toMatchObject({
       cancelHold: true,
       cast: { slot: 2, aim: { x: 3, y: 4 } },
@@ -281,7 +338,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       potion: true,
       attackTap: true,
     });
-    const next = frameInput(registry, w, input, null, mem, opts);
+    const next = frameInput(registry, w, input, null, mem, keys);
     expect(next).toMatchObject({
       cancelHold: false,
       cast: null,
@@ -300,13 +357,6 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       slot: 0,
       aim: null,
     });
-    // A key's press in the same frame as that button's goes now, and only once.
-    input.cast = { slot: 0, aim: null };
-    expect(frameInput(registry, w, input, pad({ cast: [1] }), padMemory(), opts).cast).toEqual({
-      slot: 0,
-      aim: null,
-    });
-    expect(input.cast).toBeNull();
   });
 
   it("the pad's release reaches padCast: a hold casts on the frame its button goes up", () => {
@@ -323,21 +373,13 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(frameInput(registry, w, input, pad(), mem, opts).cast).toEqual({ slot: 0, aim: null });
   });
 
-  it("a key's press made in the pad press's frame goes the next frame; a repeat is marked and gives way", () => {
+  it("hold-to-repeat's press says so", () => {
     const w = world();
     const input = createArenaInput();
     const mem = padMemory();
     const frame = (acts: Partial<ArenaPadActions>) =>
       frameInput(registry, w, input, pad(acts), mem, opts).cast;
-    input.cast = { slot: 1, aim: null };
-    expect(frame({ cast: [2], held: [2] })).toEqual({ slot: 2, aim: null });
-    expect(frame({})).toEqual({ slot: 1, aim: null });
-    expect(frame({})).toBeNull();
-    // Hold-to-repeat's press says so, and gives way to a key's.
     expect(frame({ cast: [1], held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null });
-    expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null, repeat: true });
-    input.cast = { slot: 2, aim: null };
-    expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 2, aim: null });
     expect(frame({ held: [1], repeat: [1] })).toEqual({ slot: 1, aim: null, repeat: true });
   });
 
@@ -346,18 +388,16 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     const h = w.hero;
     const input = createArenaInput();
     const mem = padMemory();
-    input.attackHeld = true;
-    input.attackAim = { x: 50, y: 60 };
     const stick = { aimDir: { x: 1, y: 0 }, aimTilt: 1 };
     const aim = (rb: boolean) =>
       frameInput(registry, w, input, pad({ ...stick, attackHeld: rb }), mem, opts).attackAim;
-    // The mouse attacks, the stick tilted by the way: the mouse aims.
-    expect(aim(false)).toEqual({ x: 5, y: 6 });
+    // The stick tilted by the way, RB not held: the basics auto-aim.
+    expect(aim(false)).toBeNull();
     // RB attacks: the stick aims, and on the frame RB lets go too.
     const along = { x: h.x + h.stats.weapon.range, y: h.y };
     expect(aim(true)).toEqual(along);
     expect(aim(false)).toEqual(along);
-    expect(aim(false)).toEqual({ x: 5, y: 6 });
+    expect(aim(false)).toBeNull();
   });
 
   it("the pad's attack stays held through a held blow, not through its leap", () => {

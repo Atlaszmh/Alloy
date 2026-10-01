@@ -36,6 +36,7 @@ import {
 } from './input';
 import { TAP_MS, aimMarkerFor } from './aim-gestures';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';
 import {
   padMemory,
@@ -397,6 +398,7 @@ export function useArenaCore(
               manual: manualRef.current,
               aimReach: useControlsStore.getState().config.aimReach,
               toWorld: (p) => renderer.screenToWorld(p.x, p.y),
+              device: useInputDeviceStore.getState().device,
             });
             const wasDead = world.heroDead;
             const events = stepWorld(
@@ -441,10 +443,11 @@ export function useArenaCore(
       return acts;
     }
 
-    /** While the right stick is tilted, show where the Primary's next move (or its hold) would go. */
+    /** While the pad has the input lock and its right stick is tilted, show where the Primary's next move (or its hold) would go. */
     function padAimView(world: ArpgWorld) {
       const state = padState();
-      if (!state || (state.right.x === 0 && state.right.y === 0)) return null;
+      if (!state || useInputDeviceStore.getState().device !== 'gamepad') return null;
+      if (state.right.x === 0 && state.right.y === 0) return null;
       const ab = aimedMove(world, 0);
       if (!ab) return null;
       const tilt = Math.hypot(state.right.x, state.right.y);

@@ -11,10 +11,12 @@ import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
   padFrameCast,
+  padMemory,
   stickAimPoint,
   type ArenaPadActions,
   type PadMemory,
 } from '@/features/gamepad/arena-pad';
+import type { InputDevice } from '@/stores/inputDeviceStore';
 
 /** An ability press. `aim` is a screen point (client px), or null to auto-aim. */
 export interface CastPress {
@@ -50,6 +52,8 @@ export interface ArenaInput {
   attackHeld: boolean;
   attackTap: boolean;
   attackAim: Vec | null;
+  /** The input lock as of the last frame (`frameInput`): a switch to or from the pad lets go of the other side. */
+  device: InputDevice;
 }
 
 export function createArenaInput(): ArenaInput {
@@ -65,6 +69,7 @@ export function createArenaInput(): ArenaInput {
     attackHeld: false,
     attackTap: false,
     attackAim: null,
+    device: 'keyboard',
   };
 }
 
@@ -78,24 +83,30 @@ export function holdingSlot(input: ArenaInput): number | null {
   return input.aiming?.slot ?? null;
 }
 
-/** How `frameInput` reads the controls: manual attacks, the stick's aim reach, screen px to world units. */
+/**
+ * How `frameInput` reads the controls: manual attacks, the stick's aim reach,
+ * screen px to world units, and the input lock (`inputDeviceStore`).
+ */
 export interface FrameOpts {
   manual: boolean;
   aimReach: number;
   toWorld: (screen: Vec) => Vec;
+  device: InputDevice;
 }
 
 /**
- * One step's input from the keys, mouse and HUD (`input`) and the controller
- * (`pad`, null when there is none; `mem`, what it remembers from the frame
- * before). The pad's press (`padFrameCast`, aimed by the right stick) wins over
- * a key's or a button's, which then waits for the next frame; a key's or a
- * button's wins over hold-to-repeat's (marked), which goes again later; a key
- * or button held wins `holding` over the pad's (`padFrameCast`); the
- * stick aims the attack only while the pad drives it: the attack button held,
- * or let go this frame or with its held blow not yet struck (the tick that
- * strikes it re-aims it, and a frame may run none). Each press (a cast,
- * `cancelHold`, a dodge, a potion, an attack tap) goes once, then resets.
+ * One step's input from the device with the input lock (`o.device`): the
+ * controller (`pad`, null when there is none; `mem`, what it remembers from
+ * the frame before) while it is 'gamepad', else the keys, mouse and HUD
+ * (`input`); the other side counts for nothing. A switch between them lets go
+ * of what the other side held (the keys' movement and aiming, the pad's
+ * memory: its buttons still held count as already seen) and drops a charging
+ * hold unpaid, so it never casts a move nobody asked for. The pad's press
+ * (`padFrameCast`) is aimed by the right stick, which aims the attack only
+ * while the pad drives it: the attack button held, or let go this frame or
+ * with its held blow not yet struck (the tick that strikes it re-aims it, and
+ * a frame may run none). Each press (a cast, `cancelHold`, a dodge, a potion,
+ * an attack tap) goes once, then resets.
  */
 export function frameInput(
   registry: DataRegistry,
@@ -106,55 +117,91 @@ export function frameInput(
   o: FrameOpts,
 ): ArpgInput {
   const h = world.hero;
+  const padLive = o.device === 'gamepad';
+  const switched = padLive !== (input.device === 'gamepad');
+  input.device = o.device;
+  if (switched && padLive)
+    Object.assign(input, {
+      keys: { x: 0, y: 0 },
+      pointer: { x: 0, y: 0 },
+      aiming: null,
+      attackHeld: false,
+      attackAim: null,
+    });
+  else if (switched) Object.assign(mem, padMemory());
+  const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
+  out.cancelHold = (switched && !!h.hold) || (!padLive && input.cancelHold);
+  input.cast = null;
+  input.cancelHold = false;
+  input.potion = false;
+  input.dodge = false;
+  input.attackTap = false;
+  return out;
+}
+
+/** The keys', mouse's and HUD's part: a key or button held is `holding`. */
+function keysInput(input: ArenaInput, o: FrameOpts): ArpgInput {
   const press = input.cast;
-  let cast: AbilityCast | null = press
-    ? { slot: press.slot, aim: press.aim ? o.toWorld(press.aim) : null }
-    : null;
-  const frame = pad ? padFrameCast(registry, world, pad, mem) : null;
-  // A repeat gives way to a key's or a button's press (it repeats again later).
-  const padCast = frame?.cast && !(frame.cast.repeat && press) ? frame.cast : null;
+  return {
+    move: moveVector(input),
+    cast: press ? { slot: press.slot, aim: press.aim ? o.toWorld(press.aim) : null } : null,
+    holding: holdingSlot(input),
+    potion: input.potion,
+    dodge: input.dodge,
+    ...(o.manual
+      ? {
+          attack: input.attackHeld || input.attackTap,
+          attackTap: input.attackTap,
+          attackAim: input.attackAim ? o.toWorld(input.attackAim) : null,
+        }
+      : {}),
+  };
+}
+
+/** The controller's part (none with no pad). */
+function padInput(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  pad: ArenaPadActions | null,
+  mem: PadMemory,
+  o: FrameOpts,
+): ArpgInput {
+  const h = world.hero;
+  if (!pad) {
+    const none = { move: { x: 0, y: 0 }, cast: null, holding: null };
+    return o.manual ? { ...none, attack: false, attackTap: false, attackAim: null } : none;
+  }
+  const frame = padFrameCast(registry, world, pad, mem);
   const comboWindow = registry.getDelveBalance().abilities.comboWindow;
   // A skill the weapon doesn't carry has no move: its button casts nothing.
-  const ab = padCast && pressMove(h, padCast.slot, world.t, comboWindow);
-  const padTook = !!(pad && padCast && ab);
-  if (pad && padCast && ab) {
-    const { slot, repeat } = padCast;
+  const ab = frame.cast && pressMove(h, frame.cast.slot, world.t, comboWindow);
+  let cast: AbilityCast | null = null;
+  if (frame.cast && ab) {
+    const { slot, repeat } = frame.cast;
     const placed = aimMarkerFor(ab.form.id) === 'circle';
     const aim = pad.aimDir
       ? stickAimPoint(h, pad.aimDir, pad.aimTilt, ab.range, placed, o.aimReach)
       : null;
     cast = repeat ? { slot, aim, repeat } : { slot, aim };
   }
-  const stick = pad?.aimDir && (pad.attackHeld || mem.attackHeld) ? pad.aimDir : null;
+  const stick = pad.aimDir && (pad.attackHeld || mem.attackHeld) ? pad.aimDir : null;
   // Held on through a blow at its strike point, not through its leap (as the HUD's charge).
   mem.attackHeld =
-    !!pad?.attackHeld || (mem.attackHeld && h.swing?.held != null && h.swing.released === null);
-  const out: ArpgInput = {
-    move: pad && (pad.move.x !== 0 || pad.move.y !== 0) ? pad.move : moveVector(input),
+    pad.attackHeld || (mem.attackHeld && h.swing?.held != null && h.swing.released === null);
+  return {
+    move: pad.move,
     cast,
-    holding: holdingSlot(input) ?? frame?.holding ?? null,
-    cancelHold: input.cancelHold,
-    potion: input.potion || !!pad?.potion,
-    dodge: input.dodge || !!pad?.dodge,
+    holding: frame.holding,
+    potion: pad.potion,
+    dodge: pad.dodge,
     ...(o.manual
       ? {
-          attack: input.attackHeld || input.attackTap || !!pad?.attackHeld,
-          attackTap: input.attackTap || !!pad?.attackTap,
-          attackAim: stick
-            ? stickAimPoint(h, stick, 1, h.stats.weapon.range, false)
-            : input.attackAim
-              ? o.toWorld(input.attackAim)
-              : null,
+          attack: pad.attackHeld,
+          attackTap: pad.attackTap,
+          attackAim: stick ? stickAimPoint(h, stick, 1, h.stats.weapon.range, false) : null,
         }
       : {}),
   };
-  // A key's or HUD button's press made while the pad's took the frame goes next frame.
-  input.cast = padTook ? press : null;
-  input.cancelHold = false;
-  input.potion = false;
-  input.dodge = false;
-  input.attackTap = false;
-  return out;
 }
 
 /** The arrow keys always move, whatever else is bound. */

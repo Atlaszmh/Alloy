@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
 import type { PadState } from './gamepad';
 import { startGamepad } from './gamepad-hub';
 import { pickNext, type NavDir, type NavRect } from './spatial-nav';
@@ -10,8 +10,9 @@ import { pickNext, type NavDir, type NavRect } from './spatial-nav';
  * (left/right adjust a focused slider or list), A presses it, B presses the
  * visible `[data-pad-back]`, LB/RB step through the `[data-pad-tabs]` tabs
  * and Menu presses `[data-pad-menu]`. The last visible
- * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it. It also
- * records keyboard, mouse and touch use, for button hints and the focus ring.
+ * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
+ * pad has the input lock the focus never gets lost (`keepFocus`). It also lets
+ * the keys, the mouse and touch claim the lock (`claimDevices`).
  */
 
 const FOCUSABLE =
@@ -24,13 +25,83 @@ function visible(el: HTMLElement): boolean {
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 }
 
-function scope(): ParentNode {
+/** How far (px) the mouse must travel to claim the input lock: a bump on the desk doesn't. */
+export const MOUSE_CLAIM_PX = 16;
+
+/**
+ * The keys, the mouse and touch claim the input lock (`inputDeviceStore`, the
+ * pad's own claim is in gamepad-hub): a key press, a click, the wheel or the
+ * mouse travelling past `MOUSE_CLAIM_PX` claims 'keyboard', a touch 'touch'.
+ * The claiming event still acts. Returns a cleanup function.
+ */
+export function claimDevices(): () => void {
+  const setDevice = (d: InputDevice) => useInputDeviceStore.getState().setDevice(d);
+  /** Where the mouse lay when another device had the lock, or null before it moves. */
+  let from: { x: number; y: number } | null = null;
+  const onKey = () => setDevice('keyboard');
+  const onWheel = () => setDevice('keyboard');
+  const onDown = (e: PointerEvent) => setDevice(e.pointerType === 'touch' ? 'touch' : 'keyboard');
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') return;
+    const at = { x: e.clientX, y: e.clientY };
+    if (useInputDeviceStore.getState().device === 'keyboard' || !from) from = at;
+    else if (Math.hypot(at.x - from.x, at.y - from.y) > MOUSE_CLAIM_PX) setDevice('keyboard');
+  };
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('pointerdown', onDown, true);
+  window.addEventListener('wheel', onWheel, { capture: true, passive: true });
+  window.addEventListener('pointermove', onMove, { capture: true, passive: true });
+  return () => {
+    window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('wheel', onWheel, true);
+    window.removeEventListener('pointermove', onMove, true);
+  };
+}
+
+function scope(): HTMLElement | Document {
   const scopes = [...document.querySelectorAll<HTMLElement>('[data-pad-scope]')].filter(visible);
   return scopes.at(-1) ?? document;
 }
 
 function candidates(): HTMLElement[] {
   return [...scope().querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+}
+
+/** The focus last seen in each scope, and where it was (it may have gone since). */
+const lastFocus = new WeakMap<HTMLElement | Document, { el: HTMLElement; at: DOMRect }>();
+
+/**
+ * Run each frame: while the pad has the input lock, a focus that isn't on a
+ * visible control in the current scope (it unmounted, or a scope opened) goes
+ * back to the scope's last focused control, else the one nearest where it
+ * was, else the first. Under the keys or the mouse the focus is left alone.
+ */
+export function keepFocus(): void {
+  const s = scope();
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLElement &&
+    s.contains(active) &&
+    active.matches(FOCUSABLE) &&
+    visible(active)
+  ) {
+    lastFocus.set(s, { el: active, at: active.getBoundingClientRect() });
+    return;
+  }
+  if (useInputDeviceStore.getState().device !== 'gamepad') return;
+  const els = candidates();
+  if (els.length === 0) return;
+  const last = lastFocus.get(s);
+  if (!last) return focus(els[0]);
+  if (els.includes(last.el)) return focus(last.el);
+  const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  const was = centre(last.at);
+  const dist = (el: HTMLElement) => {
+    const c = centre(el.getBoundingClientRect());
+    return Math.hypot(c.x - was.x, c.y - was.y);
+  };
+  focus(els.reduce((best, el) => (dist(el) < dist(best) ? el : best)));
 }
 
 function rectOf(el: HTMLElement, i: number): NavRect {
@@ -114,12 +185,7 @@ function dpadDir(state: PadState): NavDir | null {
 
 export function useGamepadNav(): void {
   useEffect(() => {
-    const setDevice = useInputDeviceStore.getState().setDevice;
-    const onKey = () => setDevice('keyboard');
-    const onPointer = (e: PointerEvent) =>
-      setDevice(e.pointerType === 'touch' ? 'touch' : 'keyboard');
-    window.addEventListener('keydown', onKey, true);
-    window.addEventListener('pointerdown', onPointer, true);
+    const unclaim = claimDevices();
 
     let heldDir: NavDir | null = null;
     let repeatAt = 0;
@@ -152,11 +218,11 @@ export function useGamepadNav(): void {
       if (pressed.has('lb')) stepTabs(-1);
       if (pressed.has('rb')) stepTabs(1);
       if (pressed.has('menu')) press('[data-pad-menu]');
+      keepFocus();
     });
     return () => {
       stop();
-      window.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('pointerdown', onPointer, true);
+      unclaim();
     };
   }, []);
 }

@@ -80,15 +80,30 @@ export function edges(prev: PadState | null, next: PadState): Set<PadButton> {
   return out;
 }
 
-/** Any input at all (a held button or a tilted stick): the pad is in use. */
-export function isActive(state: PadState): boolean {
-  return (
-    state.left.x !== 0 ||
-    state.left.y !== 0 ||
-    state.right.x !== 0 ||
-    state.right.y !== 0 ||
-    PAD_BUTTONS.some((b) => state.buttons[b])
-  );
+/** How far (0..1) a stick out of its deadzone must move from where it lay to claim the input lock. */
+export const STICK_CLAIM = 0.25;
+
+/** Where each stick lay: followed while the pad has the input lock, else back at the centre when let go. */
+export type PadRest = Pick<PadState, 'left' | 'right'>;
+
+const centred = (v: Vec) => v.x === 0 && v.y === 0;
+
+/**
+ * Whether the pad claims the input lock this frame: a button pressed
+ * (`pressed`), or a stick pushed out of its deadzone or moved well away from
+ * where it lay (`rest`). A stick held still, or a trigger resting half down,
+ * doesn't, so the mouse or the keys keep the lock.
+ */
+export function padClaims(pressed: Set<PadButton>, next: PadState, rest: PadRest): boolean {
+  const moved = (from: Vec, to: Vec) =>
+    !centred(to) && (centred(from) || Math.hypot(to.x - from.x, to.y - from.y) > STICK_CLAIM);
+  return pressed.size > 0 || moved(rest.left, next.left) || moved(rest.right, next.right);
+}
+
+/** Where the sticks lie after this frame (see `PadRest`). */
+export function restAfter(rest: PadRest, next: PadState, locked: boolean): PadRest {
+  const settle = (from: Vec, to: Vec) => (locked || centred(to) ? to : from);
+  return { left: settle(rest.left, next.left), right: settle(rest.right, next.right) };
 }
 
 /** The first connected pad with the standard mapping, if any. */
