@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AttackButton, SkillBar, Vitals, keyHints, padHints } from '../arena/ArenaHud';
+import { AttackButton, SkillBar, Vitals, floatPay, keyHints, padHints } from '../arena/ArenaHud';
 import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import type { AbilityHud, ArenaHud } from '../arena/useArena';
 import { getDelveRegistry } from '../registry';
@@ -410,5 +410,46 @@ describe('AttackButton runes', () => {
     });
     rerender(<AttackButton hud={hud()} onAttack={() => {}} />);
     expect(button.querySelector('[data-rune]')).toBeNull();
+  });
+});
+
+describe('mana on the HUD', () => {
+  it('writes the mana bar as current / max, whole numbers, keeping its label', () => {
+    render(<Vitals hud={hud({ mana: 37.8, manaMax: 60.4 })} />);
+    const bar = screen.getByTestId('mana-bar');
+    expect(bar).toHaveTextContent('37 / 60');
+    expect(bar).toHaveAttribute('aria-label', 'Mana 37 of 60');
+  });
+
+  it("floats each skill's spend above its own button: mana, then charge, rounded; nothing for 0", () => {
+    const original = Element.prototype.animate;
+    const anims: { onfinish: (() => void) | null }[] = [];
+    const animate = vi.fn(() => {
+      const a = { onfinish: null as (() => void) | null };
+      anims.push(a);
+      return a as unknown as Animation;
+    });
+    Element.prototype.animate = animate;
+    render(bar({ abilities: [BOLT, BOLT, { ...BOLT, payment: 'charge', charge: 0 }] }));
+    const floats = (slot: number) =>
+      [...screen.getByTestId(`ability-${slot}`).querySelectorAll('[data-pay]')] as HTMLElement[];
+
+    floatPay({ kind: 'pay', slot: 0, mana: 16.4, charge: 0 });
+    expect(floats(0).map((f) => f.textContent)).toEqual(['−16']);
+    expect(floats(1)).toEqual([]);
+    floatPay({ kind: 'pay', slot: 2, mana: 0, charge: 78.2 });
+    expect(floats(2).map((f) => f.textContent)).toEqual(['−78 ⚡']);
+    expect(floats(0)[0].style.color).not.toBe(floats(2)[0].style.color);
+
+    floatPay({ kind: 'pay', slot: 1, mana: 0.4, charge: 0 });
+    expect(floats(1)).toEqual([]);
+
+    // At most three live per button; each goes when its animation ends.
+    for (let i = 0; i < 3; i++) floatPay({ kind: 'pay', slot: 0, mana: 8, charge: 0 });
+    expect(floats(0)).toHaveLength(3);
+    anims.forEach((a) => a.onfinish?.());
+    expect(floats(0)).toHaveLength(0);
+    expect(floats(2)).toHaveLength(0);
+    Element.prototype.animate = original;
   });
 });

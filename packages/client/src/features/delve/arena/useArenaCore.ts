@@ -26,6 +26,7 @@ import {
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
+import { floatPay } from './ArenaHud';
 import type { AimView } from './fx/draw-world';
 import { loadDelveSprites } from './sprites';
 import {
@@ -485,6 +486,7 @@ export function useArenaCore(
       onUiRef.current({ kind: 'events', events });
       for (const e of events) {
         if (e.kind === 'noMana') onUiRef.current({ kind: 'noMana', slot: e.slot });
+        if (e.kind === 'pay') floatPay(e);
         if (e.kind === 'perfectDodge') {
           slowUntilRef.current = performance.now() + SLOWMO_MS;
           rumble('perfect');
