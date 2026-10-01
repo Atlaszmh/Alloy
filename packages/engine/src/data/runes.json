@@ -200,13 +200,13 @@
       "kinds": ["heavy", "hold"]
     },
     "tiers": [
-      { "zone": { "seconds": 1.5, "tickPower": 0.2 } },
-      { "zone": { "seconds": 2, "tickPower": 0.2 } },
-      { "zone": { "seconds": 2.5, "tickPower": 0.2 } },
-      { "zone": { "seconds": 3, "tickPower": 0.2 } },
-      { "zone": { "seconds": 3.5, "tickPower": 0.2 } }
+      { "zone": { "seconds": 1.5, "tickPower": 0.2, "perCast": 3 } },
+      { "zone": { "seconds": 2, "tickPower": 0.2, "perCast": 3 } },
+      { "zone": { "seconds": 2.5, "tickPower": 0.2, "perCast": 3 } },
+      { "zone": { "seconds": 3, "tickPower": 0.2, "perCast": 3 } },
+      { "zone": { "seconds": 3.5, "tickPower": 0.2, "perCast": 3 } }
     ],
-    "effect": "Leaves a zone for {zone.seconds} s, ticking at {zone.tickPower:%} of the hit",
+    "effect": "Leaves a zone for {zone.seconds} s, ticking at {zone.tickPower:%} of the hit (at most {zone.perCast} a cast)",
     "tradeoff": null
   },
   {
@@ -299,7 +299,7 @@
       { "manaOnHit": 2.5 },
       { "manaOnHit": 3 }
     ],
-    "effect": "+{manaOnHit} mana per foe hit, up to {runes.drainFoes} foe-hits a cast",
+    "effect": "+{manaOnHit} mana per foe hit, up to {runes.drainFoes} foe-hits and {runes.drainShare:%} of its mana cost a cast",
     "tradeoff": null
   },
   {

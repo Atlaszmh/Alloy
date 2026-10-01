@@ -73,7 +73,7 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
     expect(pierce.power / plain.power).toBeCloseTo(0.9);
     // Linger under Magma (Fire + Earth: 3 s at 0.25): the longer zone, at the stronger tick.
     const magma = world([], { primary: { elements: ['fire', 'earth'], runes: [R('linger', 5)] } });
-    expect(moveOf(magma, 0).knobs.zone).toEqual({ seconds: 3.5, tickPower: 0.25 });
+    expect(moveOf(magma, 0).knobs.zone).toEqual({ seconds: 3.5, tickPower: 0.25, perCast: 3 });
   });
 
   it('leaves out a Pierce on a move that already passes every foe (an Earth Bolt): dormant, trade-off and all', () => {
@@ -166,7 +166,7 @@ describe('basic blows carry their runes (computeHeroStats)', () => {
     expect(light.runes).toEqual([R('chain')]);
     expect(light.knobs.zone).toBeNull();
     expect(heavy.runes).toEqual([R('linger'), R('chain')]);
-    expect(heavy.knobs.zone).toEqual({ seconds: 2.5, tickPower: 0.2 });
+    expect(heavy.knobs.zone).toEqual({ seconds: 2.5, tickPower: 0.2, perCast: 3 });
     expect(heavy.knobs.chain).toBe(2);
     expect(blowsOf('sword', [{ kind: 'light', element: 'fire' }])[0].knobs).toEqual(NEUTRAL);
   });
@@ -851,7 +851,8 @@ describe('Drain (the manaOnHit knob)', () => {
       press(w, 0);
       return w.hero.mana;
     };
-    expect(lance([R('drain')]) - lance([])).toBeCloseTo(3 * 2);
+    // Drain I: 1 a foe-hit, under the medium Lance's half of its cost (4).
+    expect(lance([R('drain', 1)]) - lance([])).toBeCloseTo(3 * 1);
   });
 
   it('a blow: mana per foe struck, its budget reset as it lands', () => {
@@ -875,9 +876,9 @@ describe('Drain (the manaOnHit knob)', () => {
       const events = [...press(w, 0), ...run(w, 1)];
       return { mana: w.hero.mana, hits: skillHits(events).length };
     };
-    const drain = volley([R('drain')]);
+    const drain = volley([R('drain', 1)]);
     expect(drain.hits).toBe(3);
-    expect(drain.mana - volley([]).mana).toBeCloseTo(3 * 2);
+    expect(drain.mana - volley([]).mana).toBeCloseTo(3 * 1);
   });
 
   it('a shot blow: mana for the foe its shot hits', () => {
@@ -1010,5 +1011,65 @@ describe('the balance pass: shape runes add, they do not multiply', () => {
     press(w, 0);
     run(w, 1);
     expect(heroZones(w)).toHaveLength(3);
+  });
+});
+
+describe('the balance pass: Linger leaves at most lingerZones zones a cast', () => {
+  /** A wall of foes across the hero's way: every bolt of a fan finds one. */
+  const wall = () => [11, 12, 13, 14, 15].map((x) => dummy(x, 32));
+  const heroZones = (w: ArpgWorld) =>
+    w.zones.filter((z) => z.owner === 'hero' && z.ability && !z.detonateAt);
+
+  it('a Multi-shot V fan of four bolts leaves three, and its echo none more', () => {
+    const fan = world(wall(), { primary: { runes: [R('multishot', 5), R('linger')] } });
+    press(fan, 0);
+    run(fan, 0.3);
+    expect(moveOf(fan, 0).knobs.zone?.perCast).toBe(3);
+    expect(heroZones(fan)).toHaveLength(3);
+    const echoed = world(wall(), {
+      primary: { runes: [R('multishot', 5), R('linger'), R('echo')] },
+    });
+    press(echoed, 0);
+    run(echoed, 1);
+    expect(heroZones(echoed)).toHaveLength(3);
+  });
+
+  it('a new cast has its own three', () => {
+    const w = world(wall(), { primary: { runes: [R('multishot', 5), R('linger')] } });
+    press(w, 0);
+    run(w, 0.3);
+    w.hero.mana = w.hero.manaMax;
+    for (let i = 0; i < 90 && heroZones(w).length < 6; i++) {
+      pressOnly(w, 0);
+      run(w, STEP);
+    }
+    expect(heroZones(w)).toHaveLength(6);
+  });
+});
+
+describe('the balance pass: Drain gives back at most drainShare of a cast’s mana', () => {
+  const line = () => [dummy(13, 33), dummy(13, 31), dummy(13, 29)];
+
+  it('an ability: at most half its own mana cost a cast, however many foes it hits', () => {
+    const lance = (runes: RuneRef[]) => {
+      const w = world(line(), { primary: { form: 'lance', runes } });
+      press(w, 0);
+      return { mana: w.hero.mana, cost: moveOf(w, 0).cost };
+    };
+    const plain = lance([]);
+    // Three foes at Drain III would be 6; a medium Lance costs 8, so 4 comes back.
+    expect(lance([R('drain')]).mana - plain.mana).toBeCloseTo(plain.cost * bal.runes.drainShare);
+  });
+
+  it('a blow: at most half the mana a blow brings', () => {
+    const blow = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)]);
+      w.hero.mana = 0;
+      firstBlow(w);
+      return w.hero.mana;
+    };
+    expect(blow([R('drain', 5)]) - blow([])).toBeCloseTo(
+      bal.mana.basicAttackGain * bal.runes.drainShare,
+    );
   });
 });

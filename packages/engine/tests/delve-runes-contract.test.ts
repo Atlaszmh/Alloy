@@ -109,6 +109,12 @@ describe('knobs: the new fields and their merge rules', () => {
       { zone: { seconds: 3, tickPower: 0.15 } },
     ).zone;
     expect(zone).toEqual({ seconds: 3, tickPower: 0.2 });
+    // Linger's cap rides along: the smaller, where either has one.
+    const capped = mergeKnobs(
+      { zone: { seconds: 1.5, tickPower: 0.2, perCast: 3 } },
+      { zone: { seconds: 3, tickPower: 0.15 } },
+    ).zone;
+    expect(capped).toEqual({ seconds: 3, tickPower: 0.2, perCast: 3 });
   });
 
   it('starts every merge from NEUTRAL and never changes it', () => {
@@ -258,7 +264,7 @@ describe('data: runes', () => {
     expect(at('saturate').map((t) => t.stacksBonus)).toEqual([1, 1, 1, 2, 2]);
     expect(at('volatile').map((t) => t.catalyst)).toEqual([0.15, 0.2375, 0.325, 0.4125, 0.5]);
     expect(at('guard').map((t) => t.guardOnLand)).toEqual([0.03, 0.0425, 0.055, 0.0675, 0.08]);
-    expect(at('linger')[0]).toEqual({ zone: { seconds: 1.5, tickPower: 0.2 } });
+    expect(at('linger')[0]).toEqual({ zone: { seconds: 1.5, tickPower: 0.2, perCast: 3 } });
     expect(registry.getRune('linger').fits.kinds).toEqual(['heavy', 'hold']);
     expect(registry.getRune('pierce').fits).toEqual({
       forms: ['bolt', 'volley'],
@@ -308,6 +314,7 @@ describe('balance: delve.runes', () => {
       echoDelay: 0.4,
       guardSeconds: 3,
       drainFoes: 5,
+      drainShare: 0.5,
       shardSpeed: 12,
       shardRange: 4,
     });
@@ -403,7 +410,9 @@ describe('rune helpers: text', () => {
       tradeoff: 'Beat and wind-up +20%',
     });
     expect(text('guard', 2).effect).toBe('On landing, a 3 s shield of 4.25% max life');
-    expect(text('drain', 2).effect).toBe('+1.5 mana per foe hit, up to 5 foe-hits a cast');
+    expect(text('drain', 2).effect).toBe(
+      '+1.5 mana per foe hit, up to 5 foe-hits and 50% of its mana cost a cast',
+    );
     expect(text('echo', 1).effect).toBe('Repeats 0.4 s later at 30% power');
   });
 

@@ -3,6 +3,7 @@ import {
   type Knobs,
   type ResolvedAbility,
   type SplitKnob,
+  type ZoneKnob,
 } from '../../types/ability.js';
 import type { MonsterEntity, StatusId, Vec } from '../../types/arpg.js';
 import type { ManaType } from '../../types/mana.js';
@@ -105,6 +106,18 @@ export function chainFrom(
   const opts = hitOpts(ab, first, tick, false);
   chainJumps(ctx, first, damage, ab.element, ab.knobs.chain, opts, hit);
 }
+/**
+ * Whether skill `slot` (3: the basic attack) may leave `zone` now: a capped zone (Linger's,
+ * `perCast`) spends one of the cast's (`HeroEntity.zonesLeft`); an uncapped one always may.
+ */
+export function spendZone(ctx: SimCtx, slot: number, zone: ZoneKnob): boolean {
+  if (zone.perCast === undefined) return true;
+  const left = ctx.world.hero.zonesLeft;
+  if (left[slot] <= 0) return false;
+  left[slot]--;
+  return true;
+}
+
 /** Lingering ground (Magma, Rimebloom, Wildfire…) where an ability lands. */
 export function leaveZone(
   ctx: SimCtx,
@@ -115,7 +128,7 @@ export function leaveZone(
   damage: number,
 ): void {
   const zone = ab.knobs.zone;
-  if (!zone) return;
+  if (!zone || !spendZone(ctx, slotIndex(ab), zone)) return;
   const { world } = ctx;
   world.zones.push({
     id: world.nextId++,
