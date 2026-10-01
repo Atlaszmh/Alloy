@@ -58,19 +58,22 @@ export function useRunePickerOpen(): boolean {
 
 /**
  * A rune's effect, its trade-off and its price, as the engine words them at its tier (and on
- * its move, in its chain's payment, eased by the move's ease). A dimmed rune shows no price.
+ * its move, in its chain's payment, eased by the move's ease). A dimmed rune shows no price,
+ * and `why` (a dormant candidate's reason) after its words.
  */
 function RuneEffect({
   rune,
   on,
   terms,
   dimmed = false,
+  why,
   id,
 }: {
   rune: RuneRef;
   on?: RuneTarget;
   terms: RunePriceTerms;
   dimmed?: boolean;
+  why?: string;
   id?: string;
 }) {
   const { effect, tradeoff, cost } = runeText(getDelveRegistry(), rune, on, terms);
@@ -82,6 +85,8 @@ function RuneEffect({
       {tradeoff && <span className="text-amber-200/80">{tradeoff}</span>}
       {price && ' · '}
       {price && <span className="text-amber-200/80">{price}</span>}
+      {why && ' · '}
+      {why && <span className="text-amber-200/90">{why}</span>}
     </span>
   );
 }
@@ -229,7 +234,7 @@ export function RunePicker({
                   onPick(rune);
                   close();
                 }}
-                aria-label={`${runeName(registry, rune)}${count === null ? '' : ` ×${count}`}`}
+                aria-label={`${runeName(registry, rune)}${count === null ? '' : ` ×${count}`}${idle ? ', dormant' : ''}`}
                 aria-describedby={`${id}-${key}`}
                 data-testid={`rune-pick-${rune.id}`}
               >
@@ -238,7 +243,14 @@ export function RunePicker({
                   <span className="flex-1">{runeName(registry, rune)}</span>
                   {count !== null && <span className="text-xs text-stone-400">×{count}</span>}
                 </span>
-                <RuneEffect rune={rune} on={on} terms={terms} dimmed={idle} id={`${id}-${key}`} />
+                <RuneEffect
+                  rune={rune}
+                  on={on}
+                  terms={terms}
+                  dimmed={idle}
+                  why={idle ? dormantText(registry.getRune(rune.id)) : undefined}
+                  id={`${id}-${key}`}
+                />
               </button>
             );
           })}

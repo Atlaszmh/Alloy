@@ -16,6 +16,7 @@ import {
 } from '@alloy/engine';
 import { ChainEditor } from '../ChainEditor';
 import { pricedRegistry } from '../../runes/__tests__/priced-registry';
+import { dormantText } from '../../runes/rune-style';
 
 const registry = pricedRegistry();
 
@@ -97,6 +98,10 @@ describe("the builder's rune picker: prices", () => {
     tapSocket();
     expect(picker().getByRole('img', { name: 'Pierce III, dormant' })).toBeInTheDocument();
     expect(picker().getByTestId('rune-pick-pierce')).not.toHaveTextContent('% cost');
+    // Announced dormant, its reason in the description, so the missing price is explained.
+    expect(
+      picker().getByRole('button', { name: /Pierce III.*dormant/ }),
+    ).toHaveAccessibleDescription(new RegExp(`· ${dormantText(registry.getRune('pierce'))}$`));
     expect(picker().getByTestId('rune-pick-heavy')).toHaveTextContent('+30% cost');
   });
 
@@ -151,6 +156,19 @@ describe("the readout's rune price", () => {
     rerender(editor({ primary: [runed()], stats: hero({}) }));
     expect(payLine()).toHaveTextContent('(runes: +195% cost)');
     expect(screen.queryByTestId('rune-ease')).toBeNull();
+  });
+
+  it('names no easing where the runes cost nothing (a slot whose factor is 0)', () => {
+    const load = registry.getDelveBalance().runes.load;
+    const was = load.bySlot;
+    load.bySlot = { ...was, primary: 0 };
+    try {
+      render(editor({ primary: [runed()] }));
+      expect(readout()).not.toHaveTextContent('runes:');
+      expect(screen.queryByTestId('rune-ease')).toBeNull();
+    } finally {
+      load.bySlot = was;
+    }
   });
 
   it('names no runes and no easing for a move without runes', () => {

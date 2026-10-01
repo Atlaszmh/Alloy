@@ -438,15 +438,21 @@ function RunePick({ take }: { take: Take }) {
   const rows = CHAIN_SKILLS.flatMap((skill) => {
     const chain = chains[skill];
     if (!chain) return [];
+    const resolved = Array.isArray(chain)
+      ? null
+      : resolveChain(registry, stats, skill as AbilitySlot, chain);
     const names = Array.isArray(chain)
       ? chain.map((b) => blowText(registry, b))
-      : resolveChain(registry, stats, skill as AbilitySlot, chain).moves.map(moveText);
+      : resolved!.moves.map(moveText);
+    // An ability move's ease prices its runes (a blow has none).
     return movesOf(chain).flatMap((move, index) =>
-      socketsOf(move).includes(null) ? [{ skill, index, move, name: names[index] }] : [],
+      socketsOf(move).includes(null)
+        ? [{ skill, index, move, name: names[index], ease: resolved?.moves[index].ease }]
+        : [],
     );
   });
   const picked = at && rows.find((r) => r.skill === at.skill && r.index === at.index);
-  // An ability move's saved chain: its payment and the move's ease price the runes (a blow has neither).
+  // An ability move's saved chain: its payment words the runes' prices (a blow has none).
   const ability =
     at && picked && picked.skill !== 'basic'
       ? { slot: picked.skill, chain: chains[picked.skill]! }
@@ -488,11 +494,7 @@ function RunePick({ take }: { take: Take }) {
           )}
           on={runeTargetOf(weapon.baseId, picked.move)}
           payment={ability?.chain.payment}
-          ease={
-            ability
-              ? resolveChain(registry, stats, ability.slot, ability.chain).moves[at.index].ease
-              : undefined
-          }
+          ease={picked.ease}
           onPick={(rune) => setChosen({ kind: 'rune', ...at, rune })}
           onClose={() => setAt(null)}
         />

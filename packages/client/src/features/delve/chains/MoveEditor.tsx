@@ -100,7 +100,7 @@ function Readout({
       : `${Math.round(ab.cost)} mana${windup}${runed}`;
   // How much the move's attunement takes off its runes' load, and whether that is the cap.
   const ease =
-    ab.runes.length > 0 && ab.ease > 0
+    ab.load > 0 && ab.ease > 0
       ? `Attunement eases rune cost by ${Math.round(ab.ease * 100)}%${ab.ease >= bal.runes.load.easeCap ? ' (the most it can)' : ''}`
       : null;
   lines.push(

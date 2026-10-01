@@ -102,6 +102,7 @@ export function markIdle(
   return candidates.map((c) => {
     if (!at) return { ...c, dormant: false };
     const move = at.chain.moves[at.index];
+    // Dormancy doesn't depend on tier, so the Training Grounds' tier-I candidates mark every tier.
     const runes = socketsOf(move).map((r, k) => (k === at.socket ? c.rune : r));
     const ab = resolveAbility(registry, at.slot, { ...move, runes }, at.chain.payment, stats);
     return { ...c, dormant: !ab.runes.some((r) => r.id === c.rune.id) };
