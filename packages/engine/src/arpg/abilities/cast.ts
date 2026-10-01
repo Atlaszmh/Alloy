@@ -4,6 +4,7 @@ import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
 import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
+import { guardLand } from './defend.js';
 import { queueEcho } from './echo.js';
 import { executeForm } from './forms.js';
 import { chainMove, holdFull, moveBeat, stepBonus, stepHeft } from './resolve.js';
@@ -136,6 +137,7 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
       startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
+  guardLand(ctx, ab.knobs);
   // Echo: the move again, as it landed, toward where it landed.
   if (ab.knobs.echo > 0)
     queueEcho(ctx, {

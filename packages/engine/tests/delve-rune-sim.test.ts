@@ -7,7 +7,7 @@ import {
   mergeKnobs,
 } from '../src/arpg/abilities/resolve.js';
 import { landBlow } from '../src/arpg/basic.js';
-import { applyStatus, makeCtx } from '../src/arpg/combat.js';
+import { applyStatus, hurtHero, makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
@@ -857,5 +857,59 @@ describe('Drain (the manaOnHit knob)', () => {
       return w.hero.mana;
     };
     expect(shot([R('drain')]) - shot([])).toBeCloseTo(2);
+  });
+});
+
+describe('Guard (the guardOnLand knob)', () => {
+  it("an ability that fires puts up a barrier of its share of max life for guardSeconds (the Defensive's too)", () => {
+    const w = world([dummy(13, 30)], { primary: { runes: [R('guard', 5)] } });
+    press(w, 0);
+    expect(w.hero.barrier).toEqual({
+      hp: w.hero.stats.maxHp * 0.08,
+      max: w.hero.stats.maxHp * 0.08,
+      until: w.t + bal.runes.guardSeconds,
+    });
+    const ward = world([], { defensive: { runes: [R('guard')] } });
+    press(ward, 1);
+    expect(ward.hero.barrier?.hp).toBeCloseTo(ward.hero.stats.maxHp * 0.055);
+    // It soaks a hit before the hero's life.
+    const life = w.hero.hp;
+    hurtHero(makeCtx(registry, w, []), 1, null, null, { unavoidable: true });
+    expect(w.hero.hp).toBe(life);
+    expect(w.hero.barrier!.hp).toBeCloseTo(w.hero.stats.maxHp * 0.08 - 1);
+  });
+
+  it('never keeps a larger barrier alive; a smaller one takes its value for a fresh guardSeconds', () => {
+    const cast = (share: number) => {
+      const w = world([dummy(13, 30)], { primary: { runes: [R('guard', 5)] } });
+      const hp = w.hero.stats.maxHp * share;
+      w.hero.barrier = { hp, max: hp, until: 1 };
+      press(w, 0);
+      return { w, barrier: w.hero.barrier! };
+    };
+    expect(cast(0.3).barrier).toMatchObject({ until: 1 });
+    const small = cast(0.01);
+    expect(small.barrier.hp).toBeCloseTo(small.w.hero.stats.maxHp * 0.08);
+    expect(small.barrier.until).toBeCloseTo(small.w.t + bal.runes.guardSeconds);
+  });
+
+  it('a melee blow when it connects; a whiff puts up none', () => {
+    const hit = blowWorld([light([R('guard')])]);
+    firstBlow(hit);
+    expect(hit.hero.barrier?.hp).toBeCloseTo(hit.hero.stats.maxHp * 0.055);
+    const whiff = blowWorld([light([R('guard')])], []);
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < 60 && !events.some((e) => e.kind === 'basic'); i++)
+      events.push(...stepWorld(registry, whiff, { move: { x: 0, y: 0 }, attack: true }, STEP));
+    expect(events.some((e) => e.kind === 'basic')).toBe(true);
+    expect(whiff.hero.barrier).toBeNull();
+  });
+
+  it('a shot blow when it fires at a foe in range', () => {
+    const w = blowWorld([light([R('guard')])], [dummy(13, 30)], {
+      weapon: gear('fire', 'weapon', 'bow'),
+    });
+    firstBlow(w);
+    expect(w.hero.barrier?.hp).toBeCloseTo(w.hero.stats.maxHp * 0.055);
   });
 });

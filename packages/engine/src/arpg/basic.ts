@@ -7,7 +7,7 @@ import { angleBetween, dirTo, dist } from './geometry.js';
 import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
-import { surging } from './abilities/defend.js';
+import { guardLand, surging } from './abilities/defend.js';
 import { queueEcho } from './abilities/echo.js';
 import { chainJumps, knobHitOpts, shedShards } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
@@ -239,7 +239,10 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
     moveKind: kind,
     dir,
   });
-  if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+  if (landed) {
+    h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+    guardLand(ctx, blow.knobs);
+  }
   // Echo: the blow again (a held blow at its stage), along its way, from where the hero stands then.
   if (blow.knobs.echo > 0)
     queueEcho(ctx, {

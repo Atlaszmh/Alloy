@@ -15,11 +15,19 @@ export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
 }
 
 /**
- * Guard: on landing, a shield of `guardOnLand` × max life for
- * `delve.runes.guardSeconds`, fed into Obsidian's barrier (see the runes spec).
+ * Guard (`guardOnLand`): a move or a blow that lands puts up a shield of that
+ * fraction of max life for `delve.runes.guardSeconds`, as Obsidian's barrier
+ * (it soaks after the Defensive's reductions and before the Ward). It never
+ * keeps a larger barrier alive: holding at least the barrier's life left (or
+ * with none up), it sets the barrier to its value for a fresh `guardSeconds`;
+ * against a larger one it does nothing.
  */
-export function guardLand(_ctx: SimCtx, _knobs: Knobs): void {
-  throw new Error('not built yet');
+export function guardLand(ctx: SimCtx, knobs: Knobs): void {
+  if (knobs.guardOnLand <= 0) return;
+  const h = ctx.world.hero;
+  const hp = h.stats.maxHp * knobs.guardOnLand;
+  if (h.barrier && h.barrier.hp > hp) return;
+  h.barrier = { hp, max: hp, until: ctx.world.t + ctx.bal.runes.guardSeconds };
 }
 
 /** The Surge while it is up, else null. */

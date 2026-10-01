@@ -548,18 +548,6 @@ describe('the sim and the index: the contract is in place', () => {
   });
 });
 
-// Stubs in wave 0 ("not built yet"); wave 1A builds them and may delete these lines.
-describe('wave 1A: the sim', () => {
-  it.todo('knobHitOpts: leech, catalyst and manaOnHit from the knobs');
-  it.todo(
-    'guardLand: a guardOnLand × max life barrier for guardSeconds, never shrinking a larger one',
-  );
-  it.todo('queueEcho and echoTick: the move or blow again after echoDelay, at its echo fraction');
-  it.todo(
-    "resolveAbility merges a move's active runes (ResolvedAbility.runes, runeKnobs), and blows merge theirs (HeroBlow.knobs, no longer NEUTRAL)",
-  );
-});
-
 describe('save v7', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
   const fresh = () => createDelveProfile(registry, 1, { primary: 'fire' });
