@@ -187,6 +187,16 @@
       "slotLinks": [1, 2, 3, 4], "slotScrap": [20, 40, 60, 80],
       "editDust": 5, "elementDust": 15, "transferScrap": 30
     },
+    "runes": {
+      "socketCap": { "common": 1, "uncommon": 1, "magic": 2, "rare": 2, "epic": 3, "legendary": 3 },
+      "socketLinks": [1, 2, 3], "socketScrap": [20, 40, 60],
+      "socketDrops": { "common": [0, 0], "uncommon": [0, 0], "magic": [0, 1], "rare": [0, 1], "epic": [1, 2], "legendary": [2, 3] },
+      "unsocket": "destroy", "pullScrap": [15, 30, 50, 80, 120],
+      "fuseCount": 3, "fuseScrap": [20, 40, 80, 160],
+      "dropChance": { "normal": 0.03, "elite": 0.15, "boss": 1 },
+      "tierDepths": [1, 7, 13, 21, 31], "tierUp": 0.2,
+      "echoDelay": 0.4, "guardSeconds": 3, "drainFoes": 5, "shardSpeed": 12, "shardRange": 4
+    },
     "dodge": {
       "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,
       "perfectWindow": 0.15, "riposteWindow": 1.5

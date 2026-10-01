@@ -2,6 +2,7 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
+import type { RuneDef } from './rune.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -124,6 +125,8 @@ export interface ArpgData {
   fusions: FusionDef[];
   reactions: ReactionDef[];
   masteries: MasteryDef[];
+  /** `runes.json`'s runes (see the runes spec). */
+  runes: RuneDef[];
 }
 
 // ── World runtime ──────────────────────────────────────────────────────────

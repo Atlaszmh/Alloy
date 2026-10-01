@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ReactionId } from '../types/arpg.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
 import { RARITY_ORDER } from '../types/gem.js';
+import { MAX_SOCKETS, RUNE_FAMILIES, RUNE_TIERS } from '../types/rune.js';
 
 // --- Shared Schemas ---
 
@@ -618,6 +619,34 @@ const KnobsSchema = z
   .partial()
   .strict();
 
+/**
+ * One rune of `runes.json` (see the runes spec): its five tiers' knobs, the
+ * trade-off included. A test holds its fit ids to the data.
+ */
+const RuneDefSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    icon: z.string(),
+    family: z.enum(RUNE_FAMILIES as [string, ...string[]]),
+    fits: z
+      .object({
+        forms: z.array(z.string()),
+        weapons: z.array(z.string()),
+        kinds: z.array(MoveKindSchema).min(1).optional(),
+      })
+      .strict(),
+    tiers: z.array(KnobsSchema).length(RUNE_TIERS),
+    effect: z.string(),
+    tradeoff: z.string().nullable(),
+  })
+  .strict();
+
+/** `runes.json`: every rune once. */
+export const RunesSchema = z
+  .array(RuneDefSchema)
+  .refine((rs) => new Set(rs.map((r) => r.id)).size === rs.length, 'rune ids must differ');
+
 export const ArpgDataSchema = z.object({
   mana: perMana(z.object({ name: z.string(), icon: z.string(), color: z.string() })),
   weakness: perMana(ManaTypeSchema),
@@ -973,6 +1002,34 @@ const DelveBalanceSchema = z.object({
     editDust: z.number().int().min(0),
     elementDust: z.number().int().min(0),
     transferScrap: z.number().int().min(0),
+  }),
+  runes: z.object({
+    socketCap: perRarity(z.number().int().min(0).max(MAX_SOCKETS)),
+    // By the sockets the move already has: the first socket's price first.
+    socketLinks: z.array(z.number().int().min(0)).length(MAX_SOCKETS),
+    socketScrap: z.array(z.number().int().min(0)).length(MAX_SOCKETS),
+    socketDrops: perRarity(
+      z
+        .tuple([z.number().int().min(0), z.number().int().min(0)])
+        .refine(([lo, hi]) => lo <= hi, 'least before most'),
+    ),
+    unsocket: z.enum(['destroy', 'pay']),
+    pullScrap: z.array(z.number().int().min(0)).length(RUNE_TIERS),
+    fuseCount: z.number().int().min(2),
+    // By the tier a fuse makes: II, III, IV, V.
+    fuseScrap: z.array(z.number().int().min(0)).length(RUNE_TIERS - 1),
+    dropChance: z.object({
+      normal: z.number().min(0).max(1),
+      elite: z.number().min(0).max(1),
+      boss: z.number().min(0).max(1),
+    }),
+    tierDepths: z.array(z.number().int().min(1)).length(RUNE_TIERS),
+    tierUp: z.number().min(0).max(1),
+    echoDelay: z.number().positive(),
+    guardSeconds: z.number().positive(),
+    drainFoes: z.number().int().positive(),
+    shardSpeed: z.number().positive(),
+    shardRange: z.number().positive(),
   }),
   dodge: z
     .object({

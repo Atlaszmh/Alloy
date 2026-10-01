@@ -1,7 +1,8 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
 import type { AbilitySlot, ChainSkill, Knobs, MoveKind } from './ability.js';
-import type { RuneRef } from './rune.js';
+import type { RuneRef, UnsocketMode } from './rune.js';
+import type { MonsterKind } from './arpg.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -567,6 +568,40 @@ export interface DelveBalance {
     elementDust: number;
     /** Scrap a transfer costs for each extra slot that moves. */
     transferScrap: number;
+  };
+  /** Runes: sockets and their prices, the pull rule, fusing, drops and the knobs' numbers (see the runes spec). */
+  runes: {
+    /** Most sockets a move may open, by its weapon's rarity (at most `MAX_SOCKETS`). */
+    socketCap: Record<Rarity, number>;
+    /** Links the next socket costs, by the sockets the move already has. */
+    socketLinks: number[];
+    /** Scrap the next socket costs, by the sockets the move already has. */
+    socketScrap: number[];
+    /** Open sockets a weapon drop rolls, least and most, by rarity. */
+    socketDrops: Record<Rarity, [number, number]>;
+    /** What a pull does as shipped (a dev toggle overrides it). */
+    unsocket: UnsocketMode;
+    /** Scrap a pull costs in 'pay' mode, by the rune's tier. */
+    pullScrap: number[];
+    /** Runes of one id and tier that fuse into one of the next tier. */
+    fuseCount: number;
+    /** Scrap a fuse costs, by the tier it makes: II, III, IV, V. */
+    fuseScrap: number[];
+    /** A foe's chance to drop a rune, by its kind (normal and elite × the door's `dropMult`, at most 1). */
+    dropChance: Record<MonsterKind, number>;
+    /** The depth each tier starts at, I to V. */
+    tierDepths: number[];
+    /** Chance a drop comes one tier higher (at most V). */
+    tierUp: number;
+    /** Seconds before an echo repeats its move or blow. */
+    echoDelay: number;
+    /** Seconds Guard's shield lasts. */
+    guardSeconds: number;
+    /** Foe-hits a cast's Drain counts. */
+    drainFoes: number;
+    /** A shard's speed, and how far it flies. */
+    shardSpeed: number;
+    shardRange: number;
   };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {

@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { BalanceConfigSchema, RunesSchema } from '../src/data/schemas.js';
+import balanceData from '../src/data/balance.json';
+import runesData from '../src/data/runes.json';
 import {
   NEUTRAL,
   beatFor,
@@ -159,5 +162,133 @@ describe("a shot's pierce count", () => {
       });
     expect(shot(true).pierceLeft).toBe(Infinity);
     expect(shot(false).pierceLeft).toBe(0);
+  });
+});
+
+describe('data: runes', () => {
+  const runes = registry.getRunes();
+
+  it("loads the spec's 14 runes in its order, each with five tiers", () => {
+    expect(runes.map((r) => r.id)).toEqual([
+      'split',
+      'multishot',
+      'pierce',
+      'chain',
+      'widen',
+      'quick',
+      'echo',
+      'heavy',
+      'saturate',
+      'linger',
+      'volatile',
+      'leech',
+      'drain',
+      'guard',
+    ]);
+    expect(runes.map((r) => r.family)).toEqual([
+      ...Array(5).fill('shape'),
+      ...Array(3).fill('tempo'),
+      ...Array(3).fill('elemental'),
+      ...Array(3).fill('sustain'),
+    ]);
+    for (const r of runes) expect(r.tiers).toHaveLength(5);
+  });
+
+  it('fits only real forms and weapon bases', () => {
+    const forms = new Set(registry.getArpgData().forms.map((f) => f.id));
+    const weapons = new Set(registry.getGearBasesForSlot('weapon').map((b) => b.id));
+    for (const r of runes) {
+      for (const f of r.fits.forms) expect(forms.has(f)).toBe(true);
+      for (const w of r.fits.weapons) expect(weapons.has(w)).toBe(true);
+    }
+  });
+
+  it("holds the spec's tier tables", () => {
+    const at = (id: string) => registry.getRune(id).tiers;
+    expect(at('multishot').map((t) => t.extraShots)).toEqual([
+      { count: 1, power: 0.65 },
+      { count: 1, power: 0.6875 },
+      { count: 2, power: 0.725 },
+      { count: 2, power: 0.7625 },
+      { count: 3, power: 0.8 },
+    ]);
+    expect(at('pierce')).toEqual([1, 2, 3, 4, 5].map((pierce) => ({ pierce, power: 0.9 })));
+    expect(at('heavy')[2]).toEqual({
+      power: 1.3,
+      applies: ['stagger'],
+      quick: { beat: 1.2, windup: 1.2 },
+    });
+    expect(at('quick')[4]).toEqual({ quick: { beat: 0.7, cooldown: 0.7 }, power: 0.9 });
+    expect(at('saturate').map((t) => t.stacksBonus)).toEqual([1, 1, 1, 2, 2]);
+    expect(at('volatile').map((t) => t.catalyst)).toEqual([0.15, 0.2375, 0.325, 0.4125, 0.5]);
+    expect(at('guard').map((t) => t.guardOnLand)).toEqual([0.03, 0.0425, 0.055, 0.0675, 0.08]);
+    expect(at('linger')[0]).toEqual({ zone: { seconds: 1.5, tickPower: 0.2 } });
+    expect(registry.getRune('linger').fits.kinds).toEqual(['heavy', 'hold']);
+    expect(registry.getRune('pierce').fits).toEqual({
+      forms: ['bolt', 'volley'],
+      weapons: ['staff', 'wand'],
+    });
+  });
+
+  it('finds a rune by id, and refuses an unknown one', () => {
+    expect(registry.getRune('split')).toMatchObject({ name: 'Split', icon: '✳️', family: 'shape' });
+    expect(registry.findRune('nope')).toBeUndefined();
+    expect(() => registry.getRune('nope')).toThrow('Rune not found: nope');
+  });
+
+  it('refuses four tiers, an unknown family, a misspelled knob or a repeated id', () => {
+    const [split, multishot] = runesData;
+    const bad = (rows: unknown[]) => RunesSchema.safeParse(rows).success;
+    expect(bad(runesData)).toBe(true);
+    expect(bad([{ ...split, tiers: split.tiers.slice(0, 4) }])).toBe(false);
+    expect(bad([{ ...split, family: 'arcane' }])).toBe(false);
+    expect(bad([{ ...split, tiers: [...split.tiers.slice(1), { splitt: 1 }] }])).toBe(false);
+    expect(bad([{ ...split, tiers: [...split.tiers.slice(1), { pierce: 0 }] }])).toBe(false);
+    expect(bad([split, { ...multishot, id: 'split' }])).toBe(false);
+  });
+});
+
+describe('balance: delve.runes', () => {
+  it("loads the spec's numbers", () => {
+    expect(bal.runes).toEqual({
+      socketCap: { common: 1, uncommon: 1, magic: 2, rare: 2, epic: 3, legendary: 3 },
+      socketLinks: [1, 2, 3],
+      socketScrap: [20, 40, 60],
+      socketDrops: {
+        common: [0, 0],
+        uncommon: [0, 0],
+        magic: [0, 1],
+        rare: [0, 1],
+        epic: [1, 2],
+        legendary: [2, 3],
+      },
+      unsocket: 'destroy',
+      pullScrap: [15, 30, 50, 80, 120],
+      fuseCount: 3,
+      fuseScrap: [20, 40, 80, 160],
+      dropChance: { normal: 0.03, elite: 0.15, boss: 1 },
+      tierDepths: [1, 7, 13, 21, 31],
+      tierUp: 0.2,
+      echoDelay: 0.4,
+      guardSeconds: 3,
+      drainFoes: 5,
+      shardSpeed: 12,
+      shardRange: 4,
+    });
+  });
+
+  it('refuses a cap past MAX_SOCKETS and price tables of the wrong length', () => {
+    const withRunes = (runes: object) => ({
+      ...balanceData,
+      delve: { ...balanceData.delve, runes: { ...balanceData.delve.runes, ...runes } },
+    });
+    const ok = (runes: object) => BalanceConfigSchema.safeParse(withRunes(runes)).success;
+    expect(ok({})).toBe(true);
+    expect(ok({ socketCap: { ...balanceData.delve.runes.socketCap, legendary: 4 } })).toBe(false);
+    expect(ok({ socketLinks: [1, 2] })).toBe(false);
+    expect(ok({ socketScrap: [20, 40, 60, 80] })).toBe(false);
+    expect(ok({ pullScrap: [15, 30, 50, 80] })).toBe(false);
+    expect(ok({ fuseScrap: [20, 40, 80, 160, 320] })).toBe(false);
+    expect(ok({ unsocket: 'keep' })).toBe(false);
   });
 });
