@@ -1,6 +1,8 @@
 # Delve weapon movesets: chains live on the weapon, with slots you earn
 
-**Status:** approved design, 2026-09-30. It is stage 4a of the skill roadmap, and it ships as v0.49.0.
+**Status:** approved design, 2026-09-30. It is stage 4a of the skill roadmap, and it ships as v0.49.0. The engine is built at the values below, stops between depths included; nothing was tuned. Measured before (v0.48.0) and after (the DPS Lab grid at depth 10, one dummy and the pack, one seed; the pacing rails at `tests/delve-pacing.test.ts`'s seeds):
+- **DPS Lab.** Identical: all 9,144 rows, row for row. v0.48.0's items (291, over every rarity and a run of encounter drops) roll the same but for their movesets.
+- **Pacing: every rail holds**, the first-dive rail as the Balance section changes it ("each at least 3, mean 3 to 12"). First dives 11, 11, 11, 13 (mean 11.5) → 3, 3, 3, 3 (mean 3): the dive lock ends the autopilot's mid-dive equipping, and the stops between its depths (each offering an equip and an upgrade, the equip taken) lift its Power at death from 761–836 (without stops) to 1,022–1,352, against 3,789–8,748 before; every second dive goes deeper (to depths 5 to 7). Dive 6 and dive 12 means 25.5, 35 → 22.25, 31.5; Frost dive 1 → dive 12, 8.5 → 32.5 before and 4 → 29.5 after; legendaries at dive 12, 6 → 6; the own pair's reaction 6 of 6 both; the 15-pair sweep at dive 6, median 27 (21–37) → 21 (18–26, allowed 12.6–33.6); seconds a floor 20.89 → 34.73.
 
 Stage 4 is three projects, in this order:
 - **4a (this spec):** weapon movesets and slots.
