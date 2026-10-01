@@ -53,6 +53,8 @@ export interface RuneChange {
   socketed: RuneRef[];
   /** Destroyed ('destroy') or back to the pouch ('pay'). */
   pulled: RuneRef[];
+  /** The pouch once Apply has taken what is socketed (and, in 'pay', given back what is pulled). */
+  pouch: RunePouch;
 }
 
 export interface DraftPrice {
@@ -62,6 +64,8 @@ export interface DraftPrice {
   refundLinks: number;
   destroys: RuneRef[];
   returns: RuneRef[];
+  /** The pouch Apply leaves (`RuneChange.pouch`). */
+  pouch: RunePouch;
 }
 
 /** What a pull does: `override` (the client's dev toggle) or the balance's `runes.unsocket`. */
@@ -154,7 +158,13 @@ export function runeChange(
   const { pullScrap } = registry.getDelveBalance().runes;
   const pay = unsocketMode(registry, opts.unsocket) === 'pay';
   const saved = movesetOf(registry, weapon).chains;
-  const change: RuneChange = { links: 0, scrap: 0, refundLinks: 0, socketed: [], pulled: [] };
+  const change: Omit<RuneChange, 'pouch'> = {
+    links: 0,
+    scrap: 0,
+    refundLinks: 0,
+    socketed: [],
+    pulled: [],
+  };
   const add = (into: RuneRef[], r: RuneRef | null) => {
     if (r) into.push({ id: r.id, tier: r.tier });
   };
@@ -192,16 +202,17 @@ export function runeChange(
     });
   }
   if (pay) for (const r of change.pulled) change.scrap += pullScrap[r.tier - 1];
-  const pouch = pay ? addToPouch(profile.runes, change.pulled) : profile.runes;
-  if (!takeFromPouch(pouch, change.socketed)) return { refused: 'Not enough runes in your pouch' };
-  return change;
+  const back = pay ? addToPouch(profile.runes, change.pulled) : profile.runes;
+  const pouch = takeFromPouch(back, change.socketed);
+  if (!pouch) return { refused: 'Not enough runes in your pouch' };
+  return { ...change, pouch };
 }
 
 /**
  * The draft's one total, as Apply would charge it (see the runes spec): the
  * Mana Dust (`editPrice`, by the origins), the Links and scrap the sockets and
- * pulls cost (`runeChange`), the Links removed moves give back, and the runes
- * a pull destroys ('destroy') or returns ('pay'); or `runeChange`'s refusal
+ * pulls cost (`runeChange`), the Links removed moves give back, the runes a
+ * pull destroys ('destroy') or returns ('pay'), and the pouch it leaves; or `runeChange`'s refusal
  * (unarmed, bad origins, a socket refusal, closed sockets, a short pouch). It
  * doesn't check the chains themselves (`setChains`' refusals) or whether the
  * hero can afford the total.
@@ -222,6 +233,7 @@ export function draftPrice(
     refundLinks: change.refundLinks,
     destroys: pay ? [] : change.pulled,
     returns: pay ? change.pulled : [],
+    pouch: change.pouch,
   };
 }
 

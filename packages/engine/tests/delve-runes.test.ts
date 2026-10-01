@@ -3,7 +3,7 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { baseSlots, carriedSkills, defaultMoveset } from '../src/loot/moveset.js';
 import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
-import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
+import { bankWorld, beginFloor, failFloor, startDive } from '../src/delve/dive.js';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { setSandboxToggles } from '../src/arpg/sandbox.js';
 import { STOP_KINDS, rollStop, stopKinds, takeStop } from '../src/delve/stops.js';
@@ -468,6 +468,7 @@ describe('the draft: sockets and runes through setChains', () => {
       refundLinks: 0,
       destroys: [],
       returns: [],
+      pouch: setChains(registry, p, { primary: c }).profile.runes,
     });
     const res = setChains(registry, p, { primary: c });
     expect(res).toMatchObject({ ok: true, runes: [], destroyed: [] });
@@ -504,6 +505,9 @@ describe('the draft: sockets and runes through setChains', () => {
     expect(paid).toMatchObject({ ok: true, runes: [QUICK_II], destroyed: [] });
     expect(paid.profile.scrap).toBe(470);
     expect(paid.profile.runes.quick).toEqual([0, 1, 0, 0, 0]);
+    expect(draftPrice(registry, p, { primary: c }, PAY)).toMatchObject({
+      pouch: paid.profile.runes,
+    });
     // Overwriting is a pull and a socket: Quick II out, Echo I in from the pouch.
     const over = setChains(registry, p, { primary: withRunes(primaryOf(p), 1, [ECHO_I]) });
     expect(over).toMatchObject({ ok: true, destroyed: [QUICK_II] });
@@ -536,6 +540,7 @@ describe('the draft: sockets and runes through setChains', () => {
       refundLinks: 2,
       destroys: [SPLIT_I],
       returns: [],
+      pouch: p.runes,
     });
     const res = setChains(registry, p, { primary: removed }, { origins });
     expect(res.profile).toMatchObject({ links: 10 - 1 + 2, scrap: 480, manaDust: 100 - E });
@@ -559,6 +564,7 @@ describe('the draft: sockets and runes through setChains', () => {
       refundLinks: 0,
       destroys: [SPLIT_I],
       returns: [],
+      pouch: setChains(registry, p, { primary: c }).profile.runes,
     });
     const res = setChains(registry, p, { primary: c });
     expect(res.profile.runes.split).toEqual([1, 0, 0, 0, 0]);
@@ -904,6 +910,23 @@ describe('rune drops in the world', () => {
     const again = bankWorld(registry, res.profile, w);
     expect(again.runes).toEqual([]);
     expect(again.profile.dive!.runesEarned).toBe(3);
+  });
+
+  it("banking settles an auto-salvaged weapon's runes by the pull mode it is given, and so does a floor's end", () => {
+    const { p, w } = floor();
+    const auto = setAutoSalvage(p, 'rare', true);
+    w.pending.items = [socketedSword()];
+    expect(bankWorld(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({
+      chain: [0, 1, 0, 0, 0],
+      split: [1, 0, 0, 0, 0],
+    });
+    w.pending.items = [socketedSword()];
+    expect(failFloor(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({
+      chain: [0, 1, 0, 0, 0],
+      split: [1, 0, 0, 0, 0],
+    });
+    w.pending.items = [socketedSword()];
+    expect(bankWorld(registry, auto, w).profile.runes).toEqual({});
   });
 });
 
