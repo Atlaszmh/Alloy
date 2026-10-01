@@ -1,6 +1,6 @@
 # Delve rune costs: each rune's load raises its move's price in its chain's own payment
 
-**Status:** approved design, 2026-10-01. It follows the runes (stage 4b, v0.51.0; `docs/superpowers/specs/2026-09-30-delve-runes-design.md`) and ships as **v0.52.0 with no save change**. The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. The starting loads come from the runes gate's last measurement (depth 10, eight combat seeds, `gate-final`). The new gate measures them again, and the loads are what gets tuned. **Revised after the spec** (the user's change to the gate, and the review): every change is marked **(revision)**, here and in the index. **Revised again** (the user's choice, "Attunement eases rune cost"): every change is marked **(revision 2)**. The predicted ratios below come from a prototype of the gate. It ran the shipped sim (v0.51.0's build) with each runed chain's mana costs scaled by its eased load, and it reproduces the runes gate's unloaded ratios exactly.
+**Status:** approved design, 2026-10-01; built as v0.52.0, its gate and pacing measured under "Balance and gates" (**Measured**). It follows the runes (stage 4b, v0.51.0; `docs/superpowers/specs/2026-09-30-delve-runes-design.md`) and ships as **v0.52.0 with no save change**. The user's decisions are settled; this spec grounds them in the code and settles the details they left open. Every such detail is marked **Decided in the spec**, with a one-line reason, and listed again at the end. The starting loads come from the runes gate's last measurement (depth 10, eight combat seeds, `gate-final`). The new gate measures them again, and the loads are what gets tuned. **Revised after the spec** (the user's change to the gate, and the review): every change is marked **(revision)**, here and in the index. **Revised again** (the user's choice, "Attunement eases rune cost"): every change is marked **(revision 2)**. The predicted ratios below come from a prototype of the gate. It ran the shipped sim (v0.51.0's build) with each runed chain's mana costs scaled by its eased load, and it reproduces the runes gate's unloaded ratios exactly.
 
 ## Why
 The runes made a move stronger and asked nothing back once socketed. In the user's words: "even high powered runes are too cheap to play. There should be an additional mana cost, cooldown, charge consumption, or combination in order to balance out the power that runes provide. As players gear up … they should have to consider the costs to balance out the power. A fully runed primary should be MUCH more powerful than a rune-less one, but it should also cost more mana to use, forcing the player to consider balancing as they work thru their customizations." **(revision)** And on the gate: "It should be something the player needs to plan or build around. Want a strong ability? Better make sure your gear and mana can support it." **(revision 2)** The first prototype showed half-gain loads leaving a starved runed Primary 1.4–1.9× ahead, with support adding only 0.24–0.39. So the user chose to make support itself the lever: attunement eases a rune's cost.
@@ -403,7 +403,39 @@ So a mana-bound Primary's Power falls by about its `(1 + load)`, and a rune is w
   3. **(revision 2)** `easePerAttune` (and `easeCap`), if supported misses while starved is in its trap. *Easing moves only the supported side (a starting hero is eased 3%), so it opens or closes the gap without touching the band.*
   4. The rows of the runes in the failing sets.
   - **If a form can't meet the supported floor and the band together, stop and report the numbers to the user**, as the runes gate did.
-- **Measured** after the build goes in the release notes: each form's set and ratios for both builds, the singles' and the combos' maxima against the ceilings, and the pacing rails at each stage.
+- **Measured** at v0.52.0: the DPS Lab at depth 10, eight combat seeds (`RUNE_COST_GATE=1 npx vitest run tests/delve-rune-costs-gate.test.ts`), and the pacing rails at `tests/delve-pacing.test.ts`'s seeds. The starting loads and easing, nothing tuned (`bySlot` 1, `byForm` `{}`, `charge` and `cast` 1, `easePerAttune` 0.03, `easeCap` 0.6): the gate passed on its first run, and the merged build re-runs it to the same numbers.
+  - **The sustained gate, pack.** Starved and supported are loaded, with unloaded in brackets:
+
+    | Form | Set | Mana per press, starved / supported | Full mana, unloaded → loaded | Starved | Supported |
+    |---|---|---|---|---|---|
+    | Bolt | Echo + Heavy + Linger | 2.89× / 2.07× | 2.56 → 1.08 | **1.01** (2.42) | **1.77** (2.26) |
+    | Lance | Echo + Heavy + Linger | 2.89× / 2.07× | 2.40 → 1.13 | **1.07** (2.44) | **1.62** (2.09) |
+    | Burst | Echo + Heavy + Linger | 2.89× / 2.07× | 2.61 → 1.21 | **1.13** (2.62) | **1.74** (2.25) |
+    | Strike | Echo + Heavy + Linger | 2.89× / 2.07× | 2.60 → 1.21 | **1.18** (2.64) | **1.89** (2.33) |
+    | Volley | Pierce + Echo + Heavy | 2.89× / 2.07× | 3.78 → 1.35 | **1.34** (3.68) | **2.07** (2.71) |
+
+  - **One dummy** (reported). Each form reads full mana unloaded → loaded; starved (unloaded); supported (unloaded):
+    - Bolt 2.81 → 1.19; 1.11 (2.49); 1.83 (2.40).
+    - Lance 2.55 → 1.16; 1.10 (2.64); 1.77 (2.27).
+    - Burst 2.57 → 1.17; 1.10 (2.63); 1.76 (2.26).
+    - Strike 2.49 → 1.19; 1.14 (2.61); 1.83 (2.20).
+    - Volley 1.27 → 0.45; 0.45 (1.22); 0.68 (0.90).
+  - **Supported clears 1.5× on every form:** 1.62–2.07× on the pack, lowest on Lance.
+  - **Starved:** 1.01–1.18× on the pack for Bolt, Lance, Burst and Strike (the target is about 0.9–1.2×; Volley 1.34×, accepted above).
+  - **The price bites:** the mana per press is 2.89× starved (band 2.0–3.0×) and 2.07× supported, and every loaded ratio is below its unloaded one.
+  - **The ceilings, unloaded** (`bySlot` zeroed, as at v0.51.0):
+    - singles at most 1.79× on one dummy (Linger on Nova) and 1.95× on the pack (Pierce on Volley);
+    - sets at most 3.78× on the pack (Pierce + Echo + Heavy on Volley), with the one-dummy Nova-with-Linger sets as at v0.51.0 (5.97× at most, Heavy + Linger + Volatile).
+    - Loaded at full mana, the same maxima read 1.34× / 1.80× (singles) and 2.95× / 3.42× (sets); every one now a weapon's free blows (Echo on the wand and Saturate on the axe, Widen on the axe; Echo + Saturate + Volatile on the maul, Widen + Echo + Saturate on the axe), and the best Primary set on the pack 1.35× (Volley).
+  - **Pacing** (v0.51.0 → Power's pool rule → the loads):
+    - first dives 3, 3, 3, 3 → 3, 3, 3, 3 → 3, 3, 3, 3;
+    - dive 6 and dive 12 means 24.25, 36 → 24.25, 36 → 25.75, 35.5;
+    - Frost, dive 1 → dive 12: 3.5 → 35.5, then 3.5 → 35.5, then 3.5 → 34.5;
+    - legendaries at dive 12: 5.75 → 5.75 → 6.75;
+    - the own pair's reaction: 6 of 6 → 6 of 6 → 6 of 6;
+    - the 15-pair sweep's median: 24 (21–31) → 24 (21–31) → 25 (18–36; allowed 15.0–40.0);
+    - seconds a floor: 29.80 → 29.80 → 30.12.
+    - At dive 12, the four seeds' weapons hold 95 runes socketed in 95 sockets (13, 25, 34 and 23; 129 under Power's pool rule alone): Multishot 12, Leech 11, Volatile 10, Linger 10, Heavy 9, Quick 8, Saturate 7, Echo 6, Drain 6, Chain 6, Widen 5, Guard 4, Split 1 (`rune-use.mjs`, the deepest depths 29, 36, 36 and 41).
 
 ## Pacing
 - **Before anything changes,** capture v0.51.0's `runAutopilot` numbers at HEAD. The last recorded run (2026-10-01, after the runes fixes, `pacing-fix`):
