@@ -2,6 +2,25 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Re-anchored onto wave 1 (4e3f449+)
+
+Checked against `runes/wave1` at `4e3f449` (wave 0 `b216703` + 1A `11e78d0` + 1B `a660405` + 1C `d5d8419`): all 49 edits applied in order with `apply.mjs` to a `git archive` copy with **no mismatch**, and every `Run:` step executed there (engine suite at the base: **1564 tests in 81 files**; client 801 in 96). No edit needed rewriting. What was checked, and what changed here:
+
+1. **Cross-area needs 1 and 2 are approved:** this area edits `src/arpg/bot.ts` (Task 3) and adds `runeComboSetups` to `src/index.ts`'s dps-sim export line (Task 1). At `4e3f449` neither is done yet: `bot.ts:94` still reads `d.kind === 'item'`, and `index.ts:282` is the export line Task 1 replaces.
+2. **Wave 1A, as assumed:**
+   - `HeroBlow.power` stays the feel row's: `computeHeroStats` spreads `...row` and keeps the runes' merge in `HeroBlow.knobs` (`NEUTRAL` without) and `HeroBlow.runes`. The sim applies a blow's power knob and Multi-shot's per-shot power where the blow lands (`basic.ts`: `shot = base * (k.extraShots?.power ?? 1)`); `blowNumbers` (the builder's readout) multiplies `blow.knobs.power` too, which Power doesn't read.
+   - `ResolvedAbility.power` carries Multi-shot's cut (`extraShotPower`: in full on a Bolt or Lance, half on a Volley, none on a Barrage), and `count` adds the extra shots on **Volley and Barrage** alike. `quick` scales `cooldown`, `conjure` and `channel` (so `castTime`), and `stacksBonus` adds to `stacks`.
+   - New in 1A, harmless here: a Pierce on a move that already passes every foe (an Earth Bolt) is left out of `knobs` and `runes` (dormant), so Power never counts it.
+   - Task 2's third test (the resolver pins) passes at `4e3f449`.
+3. **Wave 1B, as assumed:** `movesetTransfer(...)` (in `loot/moveset.ts`) returns a `moveset` holding no leaving rune and lists those in `.runes` (Task 4's transfer test passes before Task 4's code); `takeStop` (in `delve/stops.ts`) takes `{ kind: 'rune'; skill; index; socket; rune }`; `fuseRunes`, `openSocket`, `setChain`/`setChains` typecheck as called.
+4. **Power without runes is unchanged:** Task 2's goldens (v0.50.0's numbers) pass on the merged engine.
+5. **The ±25% gate test fails on the merged sim, as Task 2 Step 4 allows.** Its 34 misses at `4e3f449` replace the trial's guesses in Step 4 below. While it fails, every later run of `delve-rune-power.test.ts` and of the whole engine has that one failure more than this plan's counts (Task 3 Step 2: 2 failed and 4 passed; Task 4 Step 2: 6 failed and 6 passed; the end: 1581 passed, 1 failed, of 1582 = 1564 + 18). Every other count and expected failure matched; the pacing rails hold with the autopilot using runes (Tasks 3 and 4).
+6. **Client:** Task 5's counts match (the Lab's files 18 → 21 tests; the client 801 → 804).
+
+This plan's files don't overlap plans 06 or 07.
+
+---
+
 **Goal:** Socketed runes count where the hero is valued and where it is played by machine. Power (`delve/hero-stats.ts`) values every rune knob with the spec's constants. The autopilot fuses, opens sockets and sockets its best runes between dives, and takes a stop's `'rune'` power-up second. The arena bot fetches rune drops. The DPS Lab gains the rune axis: the engine's `dpsCombos` gets a `'rune'` view and `runeComboSetups` (the combo gate's sets), and the Lab page shows a **Runes** view with a "× none" ratio column. Wave 3 runs the gate; this area provides the means and their tests.
 
 **Architecture:** Power reads the knobs each move resolved with (`ResolvedAbility.knobs`, `HeroBlow.knobs`), so a future rune that sets an existing knob is valued with no change here. `damagePerUse` gains the move terms (`reach`, `shots`, `boost`). `estimateCombat` gains the blows' terms (`blowRunes`, Quick on their time), Drain's mana, Guard's barrier and Leech's sustain. Every term is exactly 1 (a factor) or 0 (a sum) without runes, so a hero without runes keeps its Power bit for bit. The autopilot's policy is four small functions over the contract's ops (`fuseRunes`, `openSocket`, `setChain`, `takeStop`), with no new rules of its own. The Lab's rune rows carry their baseline's key (`DpsSetup.base`), so the page computes ratios without naming a dimension.
@@ -56,12 +75,12 @@ Line endings: `autopilot.ts` is CRLF (keep it, and never run Prettier on it); ev
 
 ## Cross-area needs
 
-1. **`packages/engine/src/arpg/bot.ts`** (Task 3). The spec's wave-2 D line names "`bot.ts`'s rune pickups", but the overview's Owns column for D leaves it out: it sat under wave 1 A's `src/arpg/**`. No wave-2 area touches it. **Ask:** add `src/arpg/bot.ts` to D's Owns. Task 3 is written for that. The whole change is one line:
+1. **`packages/engine/src/arpg/bot.ts`** (Task 3). The spec's wave-2 D line names "`bot.ts`'s rune pickups", but the overview's Owns column for D leaves it out: it sat under wave 1 A's `src/arpg/**`. No wave-2 area touches it. **Approved:** D owns `src/arpg/bot.ts`. Task 3 is written for that. The whole change is one line:
 
    In `packages/engine/src/arpg/bot.ts`, replace `      (d) => !d.dead && d.kind === 'item' && dist(h.x, h.y, d.x, d.y) < 6,` with `      (d) => !d.dead && (d.kind === 'item' || d.kind === 'rune') && dist(h.x, h.y, d.x, d.y) < 6,`
 
    If wave 1 already made it (Task 3, Step 0 checks), skip Task 3.
-2. **`packages/engine/src/index.ts`** (Task 1). Wave 0 owns it, and no wave-2 area edits it. Wave 3's gate script (`08-wave3-gate-e2e-docs.md`, `rune-gate.mjs`) calls `runeComboSetups` from the built engine, so it must be re-exported. The spec's wave-0 export list doesn't name it, and wave 0 can't export it without a stub in `dps-sim.ts`, which is D's file. **Ask:** let D make the edit, in Task 1, Step 3: replace `export { simulateDps, dpsCombos, dpsKey, DPS_SECONDS, DPS_SAMPLE } from './arpg/dps-sim.js';` with the same export plus `runeComboSetups` after `dpsKey`. Prettier lays it out one name a line. The Lab page needs no other export: it finds each row's baseline through `DpsSetup.base`, which the existing `DpsSetup` type export carries.
+2. **`packages/engine/src/index.ts`** (Task 1). Wave 0 owns it, and no wave-2 area edits it. Wave 3's gate script (`08-wave3-gate-e2e-docs.md`, `rune-gate.mjs`) calls `runeComboSetups` from the built engine, so it must be re-exported. The spec's wave-0 export list doesn't name it, and wave 0 can't export it without a stub in `dps-sim.ts`, which is D's file. **Approved:** D makes the edit, in Task 1, Step 3: replace `export { simulateDps, dpsCombos, dpsKey, DPS_SECONDS, DPS_SAMPLE } from './arpg/dps-sim.js';` with the same export plus `runeComboSetups` after `dpsKey`. Prettier lays it out one name a line. The Lab page needs no other export: it finds each row's baseline through `DpsSetup.base`, which the existing `DpsSetup` type export carries.
 
 ## What this area assumes of waves 0 and 1
 
@@ -1018,11 +1037,50 @@ Expected: PASS, 5 tests (about 3 s: about 250 Lab runs at about 3 ms each).
 
 If the ±25% test still fails, its message lists each miss with both ratios. That is the spec's check of its own constants (0.5, 0.25, 0.2, 0.05) and of Power's older terms that runes now reach. **The numbers are the user's call**: stop and report the list. Don't tune the constants or the yardstick.
 
-A trial of the resolver's merge on wave 0's draft, with none of wave 1 A's sim handlers, showed which misses come from Power's older terms rather than this task's:
-- **Linger on a form:** Power ×2.00 (the `zone` term, as for Magma) against a Lab ratio of about ×1.5 on one dummy.
-- **Widen on a Burst, Nova or Maelstrom:** Power ×1.10 (the `area` term) against ×0.90 on the pack. The pack's clump sits inside those radii already, so the wider radius reaches nobody new and only the 90% trade-off shows.
+At `4e3f449` (wave 1 merged, this task's code applied) the test lists these 34 misses, in this order:
 
-Expect those whatever wave 1 does. Other likely misses are Multi-shot on a Bolt (the fan may all land on one dummy: Lab near ×2.2 against Power's ×1.45) and Chain on blows (Power ×1.5 to ×2.2, where a melee cleave already reaches the clump).
+```
+rune|split|volley|fire|III: Power ×1.33, Lab ×1.81 (pack)
+rune|split|bow|fire|III: Power ×1.43, Lab ×1.04 (pack)
+rune|multishot|lance|fire|III: Power ×1.45, Lab ×0.73 (pack)
+rune|multishot|barrage|fire|III: Power ×1.29, Lab ×3.62 (one dummy)
+rune|pierce|bolt|fire|III: Power ×1.27, Lab ×3.01 (pack)
+rune|pierce|volley|fire|III: Power ×1.27, Lab ×4.58 (pack)
+rune|pierce|staff|fire|III: Power ×1.32, Lab ×2.18 (pack)
+rune|pierce|wand|fire|III: Power ×1.57, Lab ×2.82 (pack)
+rune|chain|bolt|fire|III: Power ×1.65, Lab ×1.31 (pack)
+rune|chain|volley|fire|III: Power ×1.65, Lab ×2.20 (pack)
+rune|chain|lance|fire|III: Power ×1.47, Lab ×1.00 (pack)
+rune|chain|burst|fire|III: Power ×1.41, Lab ×1.00 (pack)
+rune|chain|strike|fire|III: Power ×1.52, Lab ×1.09 (pack)
+rune|chain|nova|fire|III: Power ×1.30, Lab ×1.00 (pack)
+rune|chain|barrage|fire|III: Power ×1.34, Lab ×0.92 (pack)
+rune|chain|maelstrom|fire|III: Power ×1.34, Lab ×1.00 (pack)
+rune|chain|sword|fire|III: Power ×1.79, Lab ×1.31 (pack)
+rune|chain|bow|fire|III: Power ×1.85, Lab ×1.26 (pack)
+rune|widen|burst|fire|III: Power ×1.10, Lab ×0.90 (pack)
+rune|widen|nova|fire|III: Power ×1.10, Lab ×0.90 (pack)
+rune|widen|maelstrom|fire|III: Power ×1.10, Lab ×0.90 (pack)
+rune|widen|dagger|fire|III: Power ×1.08, Lab ×2.81 (pack)
+rune|widen|sword|fire|III: Power ×1.08, Lab ×1.47 (pack)
+rune|widen|axe|fire|III: Power ×1.08, Lab ×2.29 (pack)
+rune|quick|barrage|fire|III: Power ×0.90, Lab ×1.11 (one dummy)
+rune|echo|nova|fire|III: Power ×1.45, Lab ×1.09 (one dummy)
+rune|heavy|barrage|fire|III: Power ×1.30, Lab ×3.07 (one dummy)
+rune|saturate|nova|fire+frost|III: Power ×1.05, Lab ×0.78 (one dummy)
+rune|linger|bolt|fire|III: Power ×2.00, Lab ×1.52 (one dummy)
+rune|linger|lance|fire|III: Power ×2.00, Lab ×1.52 (one dummy)
+rune|linger|burst|fire|III: Power ×2.00, Lab ×1.53 (one dummy)
+rune|linger|strike|fire|III: Power ×2.00, Lab ×1.49 (one dummy)
+rune|linger|nova|fire|III: Power ×2.00, Lab ×1.12 (one dummy)
+rune|linger|maul|fire|III: Power ×1.64, Lab ×1.27 (one dummy)
+```
+
+What they come from, as far as the numbers show:
+- **Power's older terms** (the trial on wave 0's draft predicted these): Linger on a form is Power ×2.00 (the `zone` term, as for Magma) against about ×1.5; Widen on a Burst, Nova or Maelstrom is Power ×1.10 (the `area` term) against ×0.90 on the pack, whose clump those radii reach already; Chain on blows is Power ×1.8 where a melee cleave reaches the clump.
+- **Barrage on one dummy is a thin yardstick:** 2 casts in 30 s, baseline 8.9 DPS on one dummy (54.8 on the pack), so a rune that tightens or adds impacts reads ×3 (Heavy ×3.07, Multi-shot ×3.62) and Quick's third cast reads ×1.11.
+- **The pack lines up for Pierce:** a Pierce III Bolt deals 681.7 on the pack against 226.2 (×3.01), where Power's `+ 0.25 × min(pierce, 3)` foes gives ×1.27.
+- **Chain on a form whose hits already reach the pack** (Lance, Burst, Nova, Maelstrom, Barrage) gains about nothing in the Lab, while Power adds its jumps.
 
 - [ ] **Step 5: The whole engine**
 

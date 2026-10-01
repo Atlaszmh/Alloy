@@ -2,6 +2,23 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Re-anchored onto wave 1 (4e3f449+)
+
+Checked against `runes/wave1` at `4e3f449` (wave 0 `b216703` + 1A `11e78d0` + 1B `a660405` + 1C `d5d8419`): every edit applied in order with `apply.mjs` to a `git archive` copy, and every `Run:` step executed there against the merged engine's bundle (the client's `@alloy/engine` pointing at wave 1's built engine). Base measured there: **N = 801 tests in F = 96 files**, as estimated. Changes made to this plan:
+
+1. **Task 6, `STOP_TEXT`: edit dropped** (the only anchor mismatch of the 143). Wave 0 already added `rune: { icon: '💠', name: 'Socket a rune', text: 'One rune from your pouch into an open socket. Free.' }` (`29140ca`), so Task 6 no longer touches `STOP_TEXT`; the icon stays wave 0's 💠, not this plan's ◈. Cross-area needs 3 and the Files rows say so.
+2. **Task 5, the Forge's fuse button: `fuse-split-1` is `rune-fuse-split-1`.** Wave 1C's `RunePouchPanel` names it `rune-fuse-<id>-<tier>` (as wave 3's E2E wants). It was the only failing test of the whole plan applied at once.
+3. **Cross-area needs 5: the id-mapping note is gone.** 1C's ids already match 08's E2E (`data-rune` on `SocketRow`'s pips, `rune-pick-<id>`, `rune-picker-close`, `rune-fuse-<id>-<tier>`).
+4. **Task 8 gains the sandbox's unknown-rune guard** (`sandboxStore.ts`, `knownRunes` in `parseSandbox`): `RuneRefSchema` accepts any id and `runeText` throws on one the registry doesn't know (`registry.getRune`), so a loaded sandbox empties those sockets by `registry.findRune`. One test more in `sandboxStore.test.ts`: the plan now ends at **N + 36** (was N + 35), Task 8's runs at 33 tests (2 failing first), and the commit and the end check's Prettier list include `sandboxStore.ts`.
+5. **Task 1 → Task 2: the test file's `quick` constant moved to Task 2's append.** Declared in Task 1 but first used in Task 2, it failed Task 1's typecheck (`TS6133: 'quick' is declared but its value is never read`).
+6. **1B's ops as built match this plan's calls.** The whole plan applied typechecks against the merged bundle (`unsocketMode`, `runeChange`, `draftPrice`, `SetChainsOptions`, `setChains`, `sameChain`, `fusePrice`, `fuseRunes`, `salvageItems`/`fuseGear`/`transferMoveset` with `opts.unsocket` and their `runes`/`destroyed`, `MovesetTransfer.sockets`/`.runes`, `ParsedDelveProfile.runesLost`, `bankWorld`'s `runes`, `StopAction`'s `{ kind: 'rune'; skill; index; socket; rune }` in `delve/stops.ts`). No signature changed.
+7. **Every step's expected FAIL and PASS was run and matches** (Tasks 1 to 8; the whole-client counts N + 7, + 12, + 21, + 24, + 27, + 29, + 32, + 36 as measured: 808 … 837 tests in 96 files). The "Checked on a scratch copy" note under Conventions describes the original check at `81b0e31`; this one supersedes it.
+8. **Line endings.** At `4e3f449` every file here is LF in the index and CRLF in a Windows working tree (`core.autocrlf=true`), `sandboxStore.ts` included; `--end-of-line auto` keeps either.
+
+No file here is edited by plans 05 or 07.
+
+---
+
 **Goal:** The runes reach the player. The Anvil's chain builder shows each move's sockets, opens one at its price ("+ socket", disabled with the engine's reason), sockets and pulls runes through the picker, and Apply settles it all with the move edits: its label holds the draft's total (Dust, net Links, scrap, and in destroy mode "destroys Split III"). The store keeps the draft's origins (where each move came from, as the builder reports it), the dev pull-rule override (a chip beside Restart Delve), the runes found this dive, fusing, and the rune toasts (load-time losses, salvage, fuse and transfer parts). The Forge tab gets the pouch with 3 → 1 fusing, the item sheet a weapon's sockets and a transfer's runes, the stop its fifth kind ("Socket a rune"), the loot tray, the pickup feed and the dive summary the runes found, and the Training Grounds any rune at any tier in up to three sockets a move, free.
 
 **Architecture:** Every rule stays in the engine; the client only asks. The store (`stores/delveStore.ts`) gains `ChainDraft.origins` (composed from `ChainEditor`'s `onChange(skill, chain, map)`), one helper that answers what Apply would do (`draftApply`: the changed chains, `SetChainsOptions`, the engine's `draftPrice`, a `setChains` dry run, and the pouch the draft leaves for the picker), Apply's label (`applyLabel`), the dev override (`unsocket`, localStorage `alloy:delve:unsocket`, read only in dev builds) passed to every op that can pull or return parts, `fuseRunes`, `diveRunes`, and the rune notices and toasts' text (`runeLostNotices`, `partsText`, `runeNames`). `ChainEditor` takes an optional `runes: ChainRunes` (the spec's interface plus an optional `openWhy`): each card gets wave 1C's `SocketRow`, the chosen move a "Sockets n/cap · + socket" bar inside `chain-cards`, and a socket tap opens wave 1C's `RunePicker` (which portals itself and returns the focus to its pip). The Anvil, the stop and the Training Grounds pass their own `ChainRunes`; the stop's `'move'` picker passes none.
@@ -41,7 +58,7 @@ grep -c "draftPrice\|runeChange\|fuseRunes\|unsocketMode\|socketCap" packages/en
 (cd packages/client && npx vitest run && npx tsc --noEmit -p .)
 ```
 
-  Expected: the grep counts at least 5; the client suite passes and the typecheck prints nothing. HEAD `81b0e31` has 781 tests in 91 files and wave 1C adds 20 in 5 (04's own count), so about 801 in 96. Call the measured count **N tests in F files**. This area ends at **N + 35 tests in F files** (it adds tests only to existing files).
+  Expected: the grep counts at least 5; the client suite passes and the typecheck prints nothing. HEAD `81b0e31` has 781 tests in 91 files and wave 1C adds 20 in 5 (04's own count), so about 801 in 96. Call the measured count **N tests in F files**. This area ends at **N + 36 tests in F files** (it adds tests only to existing files).
 
 ## Files
 
@@ -49,7 +66,8 @@ grep -c "draftPrice\|runeChange\|fuseRunes\|unsocketMode\|socketCap" packages/en
 |---|---|
 | `packages/client/src/stores/delveStore.ts` | `ChainDraft.origins` and their composition in `editDraft`; `draftApply`, `applyLabel`; the pull-rule override (`unsocket`, `setUnsocket`, `UNSOCKET_KEY`) passed to Apply, salvage, fuse and transfer; `fuseRunes`; `diveRunes`/`pushDiveRunes`; `runeLostNotices` on load; `partsText`, `runeNames` |
 | `packages/client/src/stores/delveStore.test.ts` | the draft's origins, price and Apply in both modes; the override; notices, parts, fusing, the runes found |
-| `packages/client/src/stores/sandboxStore.test.ts` | the sandbox's chains keep runes: saved, by Load my build, and through `followBasic` |
+| `packages/client/src/stores/sandboxStore.ts` | `knownRunes`: a saved rune the registry doesn't know (`findRune`) leaves its socket empty on load |
+| `packages/client/src/stores/sandboxStore.test.ts` | the sandbox's chains keep runes: saved, by Load my build, and through `followBasic`; unknown ids emptied on load |
 | `packages/client/src/features/delve/chains/chain-text.ts` | `listed` (moved from the store), `runeTarget`, `runeCandidates`, `countRunes` |
 | `packages/client/src/features/delve/chains/ChainEditor.tsx` | `ChainRunes`; `onChange`'s `map`; each card's `SocketRow`; the chosen move's sockets bar; the `RunePicker`; the + card without sockets |
 | `packages/client/src/features/delve/chains/MoveEditor.tsx` | a form a socketed rune doesn't fit is off, with a note |
@@ -61,7 +79,7 @@ grep -c "draftPrice\|runeChange\|fuseRunes\|unsocketMode\|socketCap" packages/en
 | `packages/client/src/features/delve/ItemDetailSheet.tsx` | `ItemSockets` in the moveset; a transfer's sockets and leaving runes; the salvage and transfer rune toasts |
 | `packages/client/src/features/delve/BagPanel.tsx` | Salvage junk's rune toast (CRLF, never format) |
 | `packages/client/src/features/delve/__tests__/ItemDetailSheet.test.tsx` | the sheet's sockets, a transfer's runes, the Forge's fusing (never format) |
-| `packages/client/src/features/delve/StopPanel.tsx` | `STOP_TEXT.rune` and `RunePick` |
+| `packages/client/src/features/delve/StopPanel.tsx` | `RunePick` (`STOP_TEXT.rune` is already wave 0's) |
 | `packages/client/src/features/delve/__tests__/StopPanel.test.tsx` | the stop's rune pick |
 | `packages/client/src/features/delve/LootTray.tsx` | the runes found this dive (CRLF, never format) |
 | `packages/client/src/features/delve/arena/PickupFeed.tsx` | the runes found this dive |
@@ -71,7 +89,7 @@ grep -c "draftPrice\|runeChange\|fuseRunes\|unsocketMode\|socketCap" packages/en
 | `packages/client/src/features/delve/training/TrainingPanel.tsx` | the Training Grounds' `ChainRunes`: every rune, every tier, three sockets, free |
 | `packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx` | the unrestricted socket |
 
-`sandboxStore.ts` needs no change: its saved chains go through the engine's `ChainSchema`/`BlowSchema`, which keep `runes` from wave 0; Load my build copies `heroChains`, runes included; `followBasic` is wave 1A's.
+`sandboxStore.ts` needs one change (Task 8): its saved chains go through the engine's `ChainSchema`/`BlowSchema`, which keep `runes` from wave 0 but accept any id (`RuneRefSchema.id` is a string), and `runeText` throws on an id the registry doesn't know, so `parseSandbox` empties those sockets (`knownRunes`, by `registry.findRune`). Load my build copies `heroChains`, runes included; `followBasic` is wave 1A's.
 
 **Owned outside the overview's list** (no other area touches them; the spec assigns the first three to E): `AbilitiesPanel.tsx`, `DiveSummary.tsx`, `arena/useArena.ts`, and the tests in `features/delve/__tests__/` and `pages/__tests__/` named above. See Cross-area needs, 1.
 
@@ -91,9 +109,9 @@ grep -c "draftPrice\|runeChange\|fuseRunes\|unsocketMode\|socketCap" packages/en
    ```
 
    (then `playedKind` is unused there: drop it from the import too). Task 3's beat test checks it either way. No edit below touches those lines.
-3. **Wave 0, `StopPanel.tsx`'s `STOP_TEXT`:** `Record<StopKind, …>` stops compiling once `StopKind` gains `'rune'`. If wave 0 rebuilds the bundle and needs the client's typecheck green, it adds exactly Task 6's `rune:` entry below the `upgrade:` one, and Task 6 then skips its `STOP_TEXT` edit. Otherwise Task 6 adds it (the client stays green through waves 0–1 because nothing rebuilds the client's bundle until Base above).
+3. **Wave 0, `StopPanel.tsx`'s `STOP_TEXT`:** done. Wave 0 added the `rune:` entry below the `upgrade:` one (icon 💠, "Socket a rune", the same text), so Task 6 has no `STOP_TEXT` edit.
 4. **Wave 1C:** used as 04 gives it: `SocketRow` with `nextPrice={null}` on the cards (its own "+ socket" is never shown by the builder: the chosen move's bar holds a "+ socket" that can be **disabled with the engine's reason**, which `SocketRowProps` has no room for); `RunePicker` with `on` and `dormant`; `RunePouchPanel`; `ItemSockets`; `runeName`. The bar's button keeps 1C's id, `data-testid="socket-open"`, and sits inside `chain-cards`, so wave 3's E2E finds it where it looks (08's R01, G07, T02).
-5. **Wave 3 (08's E2E):** `stop-rune-move-<skill>-<index>` groups each hold their move's `SocketRow` (Task 6), and the Training Grounds' "+ socket" is `socket-open` in `chain-cards` (Task 8). 08 also asks 1C for `data-rune` on `SocketRow`'s pips and `rune-picker-close` / `rune-fuse-*` ids, which 04 names `rune-pick-*`, `fuse-*` and has no `data-rune`: the controller maps those in the E2E (not this area's).
+5. **Wave 3 (08's E2E):** `stop-rune-move-<skill>-<index>` groups each hold their move's `SocketRow` (Task 6), and the Training Grounds' "+ socket" is `socket-open` in `chain-cards` (Task 8). Wave 1C's ids already match 08's (`data-rune` on `SocketRow`'s pips, `rune-pick-<id>`, `rune-picker-close`, `rune-fuse-<id>-<tier>`), so nothing is mapped.
 
 ## Where the spec left room
 
@@ -196,7 +214,6 @@ Append at the end of the file:
 
 ```ts
 const split = { id: 'split', tier: 1 } as const;
-const quick = { id: 'quick', tier: 1 } as const;
 const s = () => useDelveStore.getState();
 
 /** A fresh store module, as on a page load: the override it reads back. */
@@ -785,6 +802,8 @@ with:
 Append at the end of the file:
 
 ```ts
+const quick = { id: 'quick', tier: 1 } as const;
+
 describe('delveStore: runes outside the draft', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -2598,7 +2617,7 @@ describe('ItemDetailSheet and the Forge: runes', () => {
         <ToastContainer />
       </>,
     );
-    fireEvent.click(within(screen.getByTestId('forge-runes')).getByTestId('fuse-split-1'));
+    fireEvent.click(within(screen.getByTestId('forge-runes')).getByTestId('rune-fuse-split-1'));
     expect(store().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
     expect(screen.getByText('Fused 3 Split I into Split II')).toBeInTheDocument();
     expect(screen.getByTestId('pouch-split-2')).toHaveTextContent('Split II ×1');
@@ -2979,7 +2998,7 @@ git commit -m "feat(client): the Forge's rune pouch and fusing, a weapon's socke
 "Socket a rune: one rune from your pouch into an open socket. Free." Its picker lists each move of the equipped weapon with an empty socket, by its name, with its `SocketRow`; tapping an empty pip opens the `RunePicker` with the pouch runes that fit and aren't on the move; a pick takes the stop (`takeStop` with `{ kind: 'rune', skill, index, socket, rune }`), after the picker has closed, so the focus goes on to the first door.
 
 **Files:**
-- Modify: `packages/client/src/features/delve/StopPanel.tsx` (imports; `STOP_TEXT`; the picker's kinds; `RunePick`)
+- Modify: `packages/client/src/features/delve/StopPanel.tsx` (imports; the picker's kinds; `RunePick`; `STOP_TEXT.rune` is wave 0's, icon 💠)
 - Test: `packages/client/src/features/delve/__tests__/StopPanel.test.tsx`
 
 - [ ] **Step 1: Write the failing tests**
@@ -3142,25 +3161,6 @@ import { SKILL_NAME, blowText, moveText, runeCandidates, runeTarget } from './ch
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
 import { SocketRow } from './runes/SocketRow';
-```
-
-Replace:
-
-```tsx
-  upgrade: { icon: '⚒️', name: 'Upgrade', text: 'One forge upgrade of an item, for scrap.' },
-};
-```
-
-with:
-
-```tsx
-  upgrade: { icon: '⚒️', name: 'Upgrade', text: 'One forge upgrade of an item, for scrap.' },
-  rune: {
-    icon: '◈',
-    name: 'Socket a rune',
-    text: 'One rune from your pouch into an open socket. Free.',
-  },
-};
 ```
 
 Replace:
@@ -3714,6 +3714,7 @@ Every move takes up to three sockets, free; the picker offers every rune that fi
 
 **Files:**
 - Modify: `packages/client/src/features/delve/training/TrainingPanel.tsx` (imports; `TrainingAbilities`; Load my build's text)
+- Modify: `packages/client/src/stores/sandboxStore.ts` (`knownRunes` in `parseSandbox`; CRLF in the working tree)
 - Test: `packages/client/src/stores/sandboxStore.test.ts`, `packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx`
 
 - [ ] **Step 1: Write the failing tests**
@@ -3761,6 +3762,16 @@ with:
     };
     store().loadMyBuild({ ...profile, equipped: { ...profile.equipped, weapon } });
     expect(store().chains.primary.moves[0].runes).toEqual([split]);
+  });
+
+  it('a rune the game no longer knows leaves its socket empty when the loadout loads', () => {
+    const primary = SANDBOX_DEFAULTS.chains.primary;
+    const moves = [{ ...primary.moves[0], runes: [{ id: 'gone', tier: 2 }, split] }];
+    const chains = { ...SANDBOX_DEFAULTS.chains, primary: { ...primary, moves } };
+    expect(parseSandbox({ ...SANDBOX_DEFAULTS, chains }).chains.primary.moves[0].runes).toEqual([
+      null,
+      split,
+    ]);
   });
 
   it('a default basic chain that follows a new weapon keeps each blow’s runes by position, if they fit', () => {
@@ -3840,9 +3851,83 @@ with:
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `(cd packages/client && npx vitest run src/stores/sandboxStore.test.ts src/features/delve/__tests__/TrainingPanel.test.tsx)`
-Expected: FAIL, 1 failed and 31 passed (32): the Training Grounds' `Unable to find an element by: [data-testid="socket-count"]`. The two store tests pass already (the schemas, `heroChains` and `followBasic` are waves 0 and 1A's); they pin that for the sandbox. If either fails, the failure is wave 0's or 1A's: report it rather than patching the sandbox store.
+Expected: FAIL, 2 failed and 31 passed (33): the Training Grounds' `Unable to find an element by: [data-testid="socket-count"]`, and the load test's `expected [ { id: 'gone', tier: 2 }, …(1) ] to deeply equal [ null, { id: 'split', tier: 3 } ]`. The other two store tests pass already (the schemas, `heroChains` and `followBasic` are waves 0 and 1A's); they pin that for the sandbox. If either fails, the failure is wave 0's or 1A's: report it rather than patching the sandbox store.
 
 - [ ] **Step 3: The Training Grounds' sockets**
+
+In `packages/client/src/stores/sandboxStore.ts`:
+
+Replace:
+
+```ts
+  type AbilitySlot,
+  type Chains,
+```
+
+with:
+
+```ts
+  type AbilitySlot,
+  type Chain,
+  type Chains,
+```
+
+Replace:
+
+```ts
+  type Rarity,
+  type SandboxToggles,
+```
+
+with:
+
+```ts
+  type Rarity,
+  type RuneRef,
+  type SandboxToggles,
+```
+
+Replace:
+
+```ts
+/**
+ * A saved loadout; whatever is missing or bad takes its default.
+```
+
+with:
+
+```ts
+/**
+ * The chains with every rune the game doesn't know (`findRune`) taken out of its
+ * socket, which stays open: `runeText` throws on an unknown id.
+ */
+function knownRunes(registry: DataRegistry, chains: Chains): Chains {
+  const known = <T extends { runes?: (RuneRef | null)[] }>(m: T): T =>
+    m.runes ? { ...m, runes: m.runes.map((r) => (r && registry.findRune(r.id) ? r : null)) } : m;
+  const moves = (c: Chain): Chain => ({ ...c, moves: c.moves.map(known) });
+  return {
+    basic: chains.basic.map(known),
+    primary: moves(chains.primary),
+    defensive: moves(chains.defensive),
+    ultimate: moves(chains.ultimate),
+  };
+}
+
+/**
+ * A saved loadout; whatever is missing or bad takes its default.
+```
+
+Replace:
+
+```ts
+  const s = { ...parsed.data, secondary, chains };
+```
+
+with:
+
+```ts
+  const s = { ...parsed.data, secondary, chains: knownRunes(registry, chains) };
+```
 
 In `packages/client/src/features/delve/training/TrainingPanel.tsx`:
 
@@ -3968,20 +4053,20 @@ with:
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `(cd packages/client && npx vitest run src/stores/sandboxStore.test.ts src/features/delve/__tests__/TrainingPanel.test.tsx)`
-Expected: PASS, 32 tests.
+Expected: PASS, 33 tests.
 
 - [ ] **Step 5: The whole client**
 
 Run: `(cd packages/client && npx tsc --noEmit -p . && npx vitest run)`
-Expected: no type errors; N + 35 tests pass in F files.
+Expected: no type errors; N + 36 tests pass in F files.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 cd /c/Projects/alloy-wiring
-(cd packages/client && npx prettier --write --end-of-line auto src/features/delve/training/TrainingPanel.tsx src/stores/sandboxStore.test.ts src/features/delve/__tests__/TrainingPanel.test.tsx)
-git add packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/stores/sandboxStore.test.ts packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx
-git commit -m "feat(client): the Training Grounds socket any rune at any tier, free" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
+(cd packages/client && npx prettier --write --end-of-line auto src/features/delve/training/TrainingPanel.tsx src/stores/sandboxStore.ts src/stores/sandboxStore.test.ts src/features/delve/__tests__/TrainingPanel.test.tsx)
+git add packages/client/src/features/delve/training/TrainingPanel.tsx packages/client/src/stores/sandboxStore.ts packages/client/src/stores/sandboxStore.test.ts packages/client/src/features/delve/__tests__/TrainingPanel.test.tsx
+git commit -m "feat(client): the Training Grounds socket any rune at any tier, free; unknown saved runes empty their sockets" -m "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
@@ -3995,7 +4080,7 @@ cd /c/Projects/alloy-wiring
 (cd packages/client && npx tsc --noEmit -p .)
 (cd packages/client && npx vitest run)
 (pnpm -F @alloy/client build)
-(cd packages/client && npx prettier --check --end-of-line auto src/stores/delveStore.ts src/stores/delveStore.test.ts src/stores/sandboxStore.test.ts src/features/delve/chains src/features/delve/AbilitiesPanel.tsx src/features/delve/__tests__/AbilitiesPanel.test.tsx src/pages/DelveCamp.tsx src/pages/__tests__/DelveCamp.test.tsx src/features/delve/ItemDetailSheet.tsx src/features/delve/StopPanel.tsx src/features/delve/__tests__/StopPanel.test.tsx src/features/delve/arena/useArena.ts src/features/delve/arena/PickupFeed.tsx src/features/delve/DiveSummary.tsx src/features/delve/__tests__/LootTray.test.tsx src/features/delve/__tests__/DiveSummary.test.tsx src/features/delve/training/TrainingPanel.tsx src/features/delve/__tests__/TrainingPanel.test.tsx)
+(cd packages/client && npx prettier --check --end-of-line auto src/stores/delveStore.ts src/stores/delveStore.test.ts src/stores/sandboxStore.ts src/stores/sandboxStore.test.ts src/features/delve/chains src/features/delve/AbilitiesPanel.tsx src/features/delve/__tests__/AbilitiesPanel.test.tsx src/pages/DelveCamp.tsx src/pages/__tests__/DelveCamp.test.tsx src/features/delve/ItemDetailSheet.tsx src/features/delve/StopPanel.tsx src/features/delve/__tests__/StopPanel.test.tsx src/features/delve/arena/useArena.ts src/features/delve/arena/PickupFeed.tsx src/features/delve/DiveSummary.tsx src/features/delve/__tests__/LootTray.test.tsx src/features/delve/__tests__/DiveSummary.test.tsx src/features/delve/training/TrainingPanel.tsx src/features/delve/__tests__/TrainingPanel.test.tsx)
 file packages/client/src/features/delve/ForgePanel.tsx packages/client/src/features/delve/BagPanel.tsx packages/client/src/features/delve/LootTray.tsx
 git status --short
 git diff --stat <wave-1 merge>..HEAD
@@ -4003,7 +4088,7 @@ git diff --stat <wave-1 merge>..HEAD
 
 Expected:
 - the typecheck prints nothing;
-- the client suite: **N + 35 tests in F files**, all passing (7 + 5 in the store, 9 in the builder (one more changed), 3 at the Anvil, 3 on the sheet and the Forge, 2 at the stop, 3 for the runes found, 3 in the Training Grounds);
+- the client suite: **N + 36 tests in F files**, all passing (7 + 5 in the store, 9 in the builder (one more changed), 3 at the Anvil, 3 on the sheet and the Forge, 2 at the stop, 3 for the runes found, 4 in the Training Grounds);
 - the client build succeeds;
 - Prettier: "All matched files use Prettier code style!";
 - `file` still says CRLF for the three hand-edited CRLF files;

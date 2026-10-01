@@ -2,6 +2,19 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Re-anchored onto wave 1 (4e3f449+)
+
+Checked against `runes/wave1` at `4e3f449` (wave 0 `b216703` + 1A `11e78d0` + 1B `a660405` + 1C `d5d8419`): all 36 edits applied in order with `apply.mjs` to a `git archive` copy with **no mismatch**, and every `Run:` step executed there against the merged engine's bundle. Every expected FAIL and PASS matched (base 801 tests in 96 files; the end 812 in 97: 11 tests and 1 file more). Changes made to this plan:
+
+1. **`TIER_NUMERAL` comes from wave 1C's `rune-style.ts`** (beside `FAMILY_STYLE`, already imported from there), so `fx/runes.ts` no longer defines it. 1C's is a record keyed by tier (1 to 5), not an array, so `dropLabel` reads `TIER_NUMERAL[d.rune.tier]` (was `[d.rune.tier - 1]`). Task 2's `ArenaRenderer` import edit now imports it from `'../runes/rune-style'`. Applied and run: Task 2's 17 tests and the whole client pass.
+2. **Cross-area needs 2 is decided: no `basic` event for blow echoes.** The suggested `echoTick` snippet is gone.
+3. **Cross-area needs 1 and 3 hold** (1C's colours are `#rrggbb`; 1B's rune drop fires its `drop` event and the pickup carries its `rune`), worded as checked.
+4. **Prettier:** the files here are LF in the index and CRLF in a Windows working tree (`core.autocrlf=true`). The commit blocks' plain `--write` leaves them LF on disk, which the end check then passes; with no `--write` first, check with `--end-of-line auto`.
+
+This plan's files don't overlap plans 05 or 06.
+
+---
+
 **Goal:** The arena shows runes at work. A small mana-pixel glyph flashes where a rune's effect fires (`runeFx`: Split, Echo, Volatile); a rune on the floor is a stone in its family's colour, named with its tier, with its own pickup sound; and each HUD ability button, and the ⚔️ manual-attack button, wears one dot per rune acting on the move (or blow) it makes next, in the rune's family colour. Everything else a rune adds (extra shots, shards, echoes, zones, Guard's barrier) already draws through the existing paths; one test pins that.
 
 **Architecture:** Client only, no engine change. A new `fx/runes.ts` (like `fx/reactions.ts`) holds the glyphs, the family colours for Pixi and the `runeFx` handler; `ManaFx` gains one transient kind, `glyph`, drawn first in the infusion pass so its cells come off the frame's `InfusionBudget`. `ArenaRenderer` routes the `runeFx` event and draws rune drops (`drawDrop`, `dropLabel`, `pickupColor`); `arena-sounds.ts` plays theirs. The HUD snapshot (`useArenaCore.ts`) gains `AbilityHud.runes` (from `pressMove`) and `ArenaHud.basicRunes` (from `basicStep`), both read from what wave 1A resolved (`ResolvedAbility.runes`, `HeroBlow.runes`: active runes only), so the dots and the builder's dormant marks always agree. `ArenaHud.tsx` draws the dots (`RunePips`). Colours come from wave 1C's `FAMILY_STYLE`, one source for CSS and Pixi.
@@ -80,7 +93,7 @@ Read against the client at `81b0e31`; Task 1's last test pins the two shapes tha
 
 | File | Change |
 |---|---|
-| `packages/client/src/features/delve/arena/fx/runes.ts` (new) | the three effect glyphs, `familyHex`, `runeHex`, `TIER_NUMERAL`, `runeFx` |
+| `packages/client/src/features/delve/arena/fx/runes.ts` (new) | the three effect glyphs, `familyHex`, `runeHex`, `runeFx` |
 | `packages/client/src/features/delve/arena/fx/__tests__/runes.test.ts` (new) | the flashes, the colours, `ManaFx`'s glyphs and the budget, and the pin of the existing paths |
 | `packages/client/src/features/delve/arena/fx/mana-fx.ts` | `ManaFx.glyph`: a transient glyph, drawn first in the infusion pass, off the budget |
 | `packages/client/src/features/delve/arena/ArenaRenderer.ts` | the `runeFx` case; a rune drop's stone (`drawDrop`), its name (`dropLabel`, now the item labels' too), its pickup sparkle (`pickupColor`); runes lie still |
@@ -98,27 +111,9 @@ Read against the client at `81b0e31`; Task 1's last test pins the two shapes tha
 
 ## Cross-area needs
 
-1. **Wave 1C (`features/delve/runes/rune-style.ts`): `FAMILY_STYLE[family].color` is a six-digit `#rrggbb` string.** The arena reads it for Pixi through `cssToHex` (`familyHex` in `fx/runes.ts`), so the dots and the floor's stones share one colour per family. Task 1's test fails on anything else (`Number.isInteger(familyHex(f))`). If C chose another CSS form, the fix is in C's file (or in `familyHex`, one line). The spec's colours: Shape cyan, Tempo amber, Elemental violet, Sustain green.
-2. **Optional, cosmetic, not needed by this plan: a melee blow's echo has no swing smear.** The spec routes a blow's echo through `landBlow` (the damage half), and the `basic` event the renderer draws a swing from stays in `strike`, so a melee echo reads as hit sparks under the Echo glyph. If the user wants the smear, wave 1A's `echoTick` (`arpg/abilities/echo.ts`) could push the same event after the blow branch's `landBlow(…)`, with `h` the hero, `w = h.stats.weapon`, `blow = w.blows[echo.blow]`, and `kind` and `row` the kind and row it struck with (the held stage's when `echo.stage` is set). **But** `arpg/dps-sim.ts`'s `acted` (area D) counts `basic` events as swings, so it would count each echo as a use too; that needs D's `acted` to tell them apart, which the contract's event can't. So it is a question for the controller, and the client needs no change either way:
-
-   ```ts
-   ctx.events.push({
-     kind: 'basic',
-     x: h.x,
-     y: h.y,
-     tx: h.x + echo.dir.x * w.range,
-     ty: h.y + echo.dir.y * w.range,
-     element: blow.element,
-     melee: w.kind === 'melee',
-     heft: row.heft,
-     step: echo.blow,
-     moveKind: kind,
-     dir: echo.dir,
-   });
-   ```
-
-   The renderer's `basic` case would draw it as it is (and kick the camera). No sound, hit-stop or Training meter reads `basic` events.
-3. **Wave 1B (assumed, no change asked):** `dropRune` spawns through `combat.ts`'s `spawnDrop` (so a `drop` event with `dropKind: 'rune'` fires, for the drop sound), and `dropsTick`'s pickup event carries `rune: d.rune` (the contract's field; `pickupColor` reads it). If either is missing, the drop is silent or the pickup sparkles white; nothing breaks.
+1. **Wave 1C (`features/delve/runes/rune-style.ts`): `FAMILY_STYLE[family].color` is a six-digit `#rrggbb` string.** Checked at `4e3f449`: `#22d3ee`, `#fbbf24`, `#a78bfa`, `#4ade80`. The arena reads it for Pixi through `cssToHex` (`familyHex` in `fx/runes.ts`), so the dots and the floor's stones share one colour per family. Task 1's test fails on anything else (`Number.isInteger(familyHex(f))`). If C chose another CSS form, the fix is in C's file (or in `familyHex`, one line). The spec's colours: Shape cyan, Tempo amber, Elemental violet, Sustain green.
+2. **Decided: no `basic` event for a blow's echo.** A melee blow's echo lands its hits through `landBlow` with no `basic` event, so it shows as hit sparks under the Echo glyph, without a swing smear. The controller decided against an echo `basic` event (D's `dps-sim.ts` counts `basic` events as swings). Nothing to do here.
+3. **Wave 1B (checked at `4e3f449`, no change asked):** `dropRune` (`arpg/rune-drops.ts`) pushes its `Drop` and its own `drop` event with `dropKind: 'rune'` (not through `spawnDrop`, so the event has no `rarity`), for the drop sound, and `step.ts`'s pickup event carries `rune: d.rune` (the contract's field; `pickupColor` reads it). If either is missing, the drop is silent or the pickup sparkles white; nothing breaks.
 4. **The overview:** add `features/delve/arena/arena-sounds.ts` to F's "Owns" column.
 
 ---
@@ -130,7 +125,7 @@ Read against the client at `81b0e31`; Task 1's last test pins the two shapes tha
 - **A rune on the floor** "draws as its glyph in its family's colour": a dark stone outlined and glowing in the family colour, one notch per tier, and a floating name like a rare item's, "✳️ Split III" (the rune's `icon`, `name` and tier numeral), in the family colour. It lies still like an item and hops as it lands. Its drop plays `lootDrop` (an item's), its pickup `upgradeTier`, and its pickup sparkles in the family colour.
 - **`AbilityHud.runes` follows the spec's `pressMove`**, the move a press made now casts. The button's name, kind and step dots read `pressStep` (`nextMove`); the two differ only during the slot's own wind-up, where the dots already show the move after the winding one.
 - **The dots** sit centred across the button's top rim (`-top-1`), below the hold and channel bars (`-top-2`) and clear of the key hint at the right edge; `pointer-events-none`, `aria-hidden`. Each has `data-rune` (its id) for tests.
-- **Tier numerals** live in `fx/runes.ts` (`TIER_NUMERAL`). If wave 1C exports its own, Task 2 can import that one instead.
+- **Tier numerals and family colours** come from wave 1C's `features/delve/runes/rune-style.ts`: `TIER_NUMERAL` (a record keyed by tier, `TIER_NUMERAL[3]` is `'III'`) and `FAMILY_STYLE`. This area defines neither.
 
 ---
 
@@ -321,9 +316,6 @@ const EFFECT_FAMILY: Record<RuneEffect, RuneFamily> = {
 
 /** How far above its point a glyph flashes (world units), clear of the hit's sparks. */
 export const GLYPH_LIFT = 0.9;
-
-/** Tier numerals, I to V (index tier − 1). */
-export const TIER_NUMERAL = ['I', 'II', 'III', 'IV', 'V'] as const;
 
 /** A family's colour for Pixi (`FAMILY_STYLE` holds it as CSS). */
 export function familyHex(family: RuneFamily): number {
@@ -644,7 +636,8 @@ import { runeFx } from './fx/runes';
 with:
 
 ```ts
-import { TIER_NUMERAL, runeFx, runeHex } from './fx/runes';
+import { runeFx, runeHex } from './fx/runes';
+import { TIER_NUMERAL } from '../runes/rune-style';
 ```
 
 Replace:
@@ -736,7 +729,7 @@ export function dropLabel(d: Drop): { text: string; color: number } | null {
   const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
   if (!d.rune || !def) return null;
   return {
-    text: `${def.icon} ${def.name} ${TIER_NUMERAL[d.rune.tier - 1]}`,
+    text: `${def.icon} ${def.name} ${TIER_NUMERAL[d.rune.tier]}`,
     color: runeHex(d.rune),
   };
 }
