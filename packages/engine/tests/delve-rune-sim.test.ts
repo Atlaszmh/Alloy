@@ -19,6 +19,7 @@ import {
   STEP,
   arena,
   bal,
+  chainsWith,
   dummy,
   firstBlow,
   gear,
@@ -911,5 +912,42 @@ describe('Guard (the guardOnLand knob)', () => {
     });
     firstBlow(w);
     expect(w.hero.barrier?.hp).toBeCloseTo(w.hero.stats.maxHp * 0.055);
+  });
+});
+
+describe('with no rune acting, nothing changes', () => {
+  it('a fixed-seed fight plays out the same with empty sockets and dormant runes as with none', () => {
+    /** Ten seconds of a fight that bites back: basics on their own, every skill pressed in turn. */
+    const fight = (sockets: (move: 'bolt' | 'basic') => (RuneRef | null)[] | undefined) => {
+      const chains = chainsWith({
+        primary: { elements: ['earth'], runes: sockets('bolt') },
+        defensive: { runes: sockets('bolt') },
+        ultimate: { payment: 'mana', runes: sockets('bolt') },
+      });
+      const w = arena(
+        [
+          { x: 11, y: 28 },
+          { x: 15, y: 27 },
+          { x: 13, y: 24 },
+        ],
+        { chains },
+      );
+      const basic = defaultBasic(registry, 'sword', 'fire').map((b) => ({
+        ...b,
+        runes: sockets('basic'),
+      }));
+      w.hero.stats = computeHeroStats(SWORD, registry, { basic });
+      const events: ArpgEvent[] = [];
+      for (let i = 0; i < Math.round(10 / STEP); i++) {
+        const cast = i % 45 === 0 ? { slot: (i / 45) % 3 } : null;
+        events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 }, cast }, STEP));
+      }
+      return JSON.stringify(events);
+    };
+    const none = fight(() => undefined);
+    expect(fight(() => [null, null, null])).toBe(none);
+    // Pierce on an Earth Bolt (and on a Ward and a Nova, which it doesn't fit), Split on a
+    // sword's blows: none of them acts.
+    expect(fight((m) => (m === 'bolt' ? [R('pierce'), null] : [R('split')]))).toBe(none);
   });
 });
