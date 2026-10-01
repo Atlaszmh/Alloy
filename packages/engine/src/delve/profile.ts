@@ -23,14 +23,7 @@ import {
   DelveProfileV3Schema,
   DelveProfileV4Schema,
 } from './profile-schema.js';
-import {
-  chooseStartingMana,
-  fixChainsToPair,
-  followBasicTo,
-  inPair,
-  salvageDust,
-  type ChainFix,
-} from './pair.js';
+import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
 import {
   ABILITY_PAYMENTS,
@@ -375,9 +368,9 @@ export function addLootToBag(
   };
 }
 
-/** Equip a bag item; a basic chain still on its default follows a new weapon (`followBasicTo`). */
+/** Equip a bag item. */
 export function equipItem(
-  registry: DataRegistry,
+  _registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): DelveProfile {
@@ -386,11 +379,10 @@ export function equipItem(
   const previous = profile.equipped[item.slot];
   const bag = profile.bag.filter((i) => i.uid !== uid);
   if (previous) bag.push(previous);
-  const next = { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
-  return item.slot === 'weapon' ? followBasicTo(registry, profile, next) : next;
+  return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
 }
 
-/** Unequip into the bag; a basic chain still on its default follows the weapon off (unarmed). */
+/** Unequip into the bag. */
 export function unequipSlot(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -401,8 +393,7 @@ export function unequipSlot(
   if (profile.bag.length >= registry.getDelveBalance().loot.bagSize) throw new Error('Bag is full');
   const equipped = { ...profile.equipped };
   delete equipped[slot];
-  const next = { ...profile, equipped, bag: [...profile.bag, item] };
-  return slot === 'weapon' ? followBasicTo(registry, profile, next) : next;
+  return { ...profile, equipped, bag: [...profile.bag, item] };
 }
 
 export function toggleLock(profile: DelveProfile, uid: string): DelveProfile {

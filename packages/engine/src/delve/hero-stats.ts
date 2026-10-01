@@ -8,12 +8,10 @@ import {
   type ResolvedChain,
 } from '../types/ability.js';
 import {
-  basicLoadout,
   beatFor,
   chainMove,
   defaultBasic,
   defaultChains,
-  followBasic,
   holdFull,
   playedKind,
   resolveChain,
@@ -481,11 +479,7 @@ export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
   return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
 }
 
-/**
- * How equipping `item` (in its slot) would change the hero. With its chains and
- * pair, a new weapon swings the basic chain equipping it gives (a default one
- * follows the weapon: `followBasic`).
- */
+/** How equipping `item` (in its slot) would change the hero, with the same chains. */
 export function compareItem(
   equipped: EquippedGear,
   item: GearItem,
@@ -498,18 +492,10 @@ export function compareItem(
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
-  const worn = pair ? basicLoadout({ equipped, pair }) : null;
-  const nextChains =
-    chains && worn && item.slot === 'weapon'
-      ? {
-          ...chains,
-          basic: followBasic(registry, chains.basic, worn, { ...worn, weaponBaseId: item.baseId }),
-        }
-      : chains;
   const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
-  const afterStats = computeHeroStats(next, registry, pairExtra(pair, nextChains?.basic));
+  const afterStats = computeHeroStats(next, registry, pairExtra(pair, chains?.basic));
   const before = estimateCombat(beforeStats, registry, depth, chains);
-  const after = estimateCombat(afterStats, registry, depth, nextChains);
+  const after = estimateCombat(afterStats, registry, depth, chains);
 
   const attunementDelta: Partial<ManaMap> = {};
   for (const m of MANA_TYPES) {

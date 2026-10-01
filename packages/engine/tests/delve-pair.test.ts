@@ -473,8 +473,8 @@ describe('the pair ops', () => {
     const res = bindSecondary(registry, p, 'storm');
     expect(res.profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
     expect(res.profile.scrap).toBe(p.scrap);
-    // The basic chain's last blow takes the secondary, as the pair's default chain has it.
-    expect(res.profile.chains.basic.map((b) => b.element)).toEqual(['fire', 'fire', 'storm']);
+    // Every move keeps its elements.
+    expect(res.profile.chains).toEqual(p.chains);
     expect(bindSecondary(registry, res.profile, 'nature').ok).toBe(false);
   });
 
@@ -756,14 +756,19 @@ describe('the pair ops', () => {
   });
 });
 
-describe('a basic chain on its default follows the weapon and the pair', () => {
-  /** A Fire+Storm sword hero on the default chains: blows Fire, Fire, Storm. */
+describe('nothing re-colours the moves on its own', () => {
+  /** A Fire+Storm sword hero: its moves all Fire. */
   const hero = () =>
     bindSecondary(registry, createDelveProfile(registry, 3, { primary: 'fire' }), 'storm').profile;
   const built: Blow[] = [{ kind: 'heavy', element: 'fire' }];
   const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
+  const stormGear = {
+    helm: item('storm', 'helm'),
+    gloves: item('storm', 'gloves'),
+    boots: item('storm', 'boots'),
+  }; // storm 3 > 1.2 × fire 2
 
-  it('followBasic: a default chain becomes the new default; a built one keeps its blows, by role once an element leaves', () => {
+  it('followBasic (the Training Grounds): a default chain becomes the new default; a built one keeps its blows, by role once an element leaves', () => {
     const at = (weaponBaseId: string | null, primary: ManaType, secondary: ManaType | null) => ({
       weaponBaseId,
       primary,
@@ -801,105 +806,66 @@ describe('a basic chain on its default follows the weapon and the pair', () => {
     ]);
   });
 
-  it("a weapon change: the new weapon's default (unarmed too); a built chain stays", () => {
+  it('a weapon change keeps every move, unarmed too', () => {
     const p = { ...hero(), bag: [maul] };
-    expect(p.chains.basic).toEqual(defaultBasic(registry, 'sword', 'fire', 'storm'));
     const worn = equipItem(registry, p, 'maul');
-    expect(worn.chains.basic).toEqual(defaultBasic(registry, 'maul', 'fire', 'storm'));
-    const bare = unequipSlot(registry, worn, 'weapon');
-    expect(bare.chains.basic).toEqual(defaultBasic(registry, null, 'fire', 'storm'));
-    const own = equipItem(registry, setChain(registry, p, 'basic', built), 'maul');
-    expect(own.chains.basic).toEqual(built);
-    expect(unequipSlot(registry, own, 'weapon').chains.basic).toEqual(built);
-    // Before the choice nothing follows: the choice resets the chains anyway.
-    const unchosen = { ...createDelveProfile(registry, 3), bag: [maul] };
-    expect(equipItem(registry, unchosen, 'maul').chains).toEqual(unchosen.chains);
+    expect(worn.chains).toEqual(p.chains);
+    expect(unequipSlot(registry, worn, 'weapon').chains).toEqual(p.chains);
   });
 
-  it("a bind: the default's last blow takes the secondary; a built chain keeps its blows", () => {
+  it('a bind, an overtake and a re-attune leave every move as it is', () => {
     const solo = createDelveProfile(registry, 3, { primary: 'fire' });
-    expect(bindSecondary(registry, solo, 'storm').profile.chains.basic).toEqual(
-      defaultBasic(registry, 'sword', 'fire', 'storm'),
-    );
-    const own = setChain(registry, solo, 'basic', built);
-    expect(bindSecondary(registry, own, 'storm').profile.chains.basic).toEqual(built);
-  });
-
-  it('an overtake: the default on the swapped pair; a built chain stays', () => {
-    const p0 = hero();
-    const p: DelveProfile = {
-      ...p0,
-      equipped: {
-        ...p0.equipped,
-        helm: item('storm', 'helm'),
-        gloves: item('storm', 'gloves'),
-        boots: item('storm', 'boots'),
-      }, // storm 3 > 1.2 × fire 2
-    };
-    const over = resolveOvertake(registry, p);
+    const bound = bindSecondary(registry, solo, 'storm').profile;
+    expect(bound.chains).toEqual(solo.chains);
+    const own = setChain(registry, bound, 'basic', built);
+    const over = resolveOvertake(registry, { ...own, equipped: { ...own.equipped, ...stormGear } });
     expect(over.swapped).toBe(true);
-    expect(over.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm', 'fire'));
-    const own = resolveOvertake(registry, setChain(registry, p, 'basic', built));
-    expect(own.swapped).toBe(true);
-    expect(own.profile.chains.basic).toEqual(built);
+    expect(over.profile.chains).toEqual(own.chains);
+    // Re-attuning the sword to Storm changes its mana, not the moves.
+    const sword = over.profile.equipped.weapon!;
+    const cost = bal.pair.reattuneDust[sword.rarity];
+    const re = reattuneItem(registry, { ...over.profile, manaDust: cost }, sword.uid, 'storm');
+    expect(re.item!.mana).toBe('storm');
+    expect(re.profile.chains).toEqual(own.chains);
   });
 
-  it("a realign: the new pair's default, with no notice for it; a built chain is mapped, with notices", () => {
+  it('a realign maps every move by role, a default basic chain too, a notice each', () => {
     const { realignDust, realignScrap } = bal.pair;
     const p = { ...hero(), manaDust: realignDust, scrap: realignScrap };
+    // Fire's role (the primary) goes to Storm.
     const res = realign(registry, p, { primary: 'storm', secondary: 'nature' });
-    expect(res.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm', 'nature'));
-    expect(res.fixed!.map((f) => f.skill)).not.toContain('basic');
-    const swap = realign(registry, p, { primary: 'storm', secondary: 'fire' });
-    expect(swap.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm', 'fire'));
-    expect(swap.fixed).toEqual([]);
-    const own = setChain(registry, p, 'basic', [
-      { kind: 'heavy', element: 'storm' },
-      { kind: 'light', element: 'fire' },
-    ]);
-    const mapped = realign(registry, own, { primary: 'storm', secondary: 'nature' });
-    expect(mapped.profile.chains.basic).toEqual([
-      { kind: 'heavy', element: 'nature' },
-      { kind: 'light', element: 'storm' },
-    ]);
-    expect(
-      mapped.fixed!.filter((f) => f.skill === 'basic').map((f) => [f.index, f.removed]),
-    ).toEqual([
-      [0, ['storm']],
+    expect(res.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
+    expect(res.fixed!.filter((f) => f.skill === 'basic').map((f) => [f.index, f.removed])).toEqual([
+      [0, ['fire']],
       [1, ['fire']],
+      [2, ['fire']],
     ]);
+    const swap = realign(registry, p, { primary: 'storm', secondary: 'fire' });
+    expect(swap.profile.chains).toEqual(p.chains);
+    expect(swap.fixed).toEqual([]);
   });
 
-  it("a re-coloured default (the default's kinds, other elements) is a built chain", () => {
-    // The sword's light, light, heavy, all Fire on the Fire+Storm pair (the default's last is Storm).
-    const allFire = defaultBasic(registry, 'sword', 'fire');
-    const on = { weaponBaseId: 'sword', primary: 'fire', secondary: 'storm' } as const;
-    expect(isDefaultBasic(registry, allFire, on)).toBe(false);
-    const p = setChain(registry, { ...hero(), bag: [maul] }, 'basic', allFire);
-    expect(equipItem(registry, p, 'maul').chains.basic).toEqual(allFire);
-    const storm: DelveProfile = {
+  it('an off-pair move still strikes and reacts in its element, but draws no attunement power', () => {
+    const k = bal.pair.basicPowerPerAttune;
+    // A Fire hero whose last blow is Frost (as a Frost weapon's would be), wearing Frost.
+    const p0 = createDelveProfile(registry, 3, { primary: 'fire' }); // fire 2
+    const basic: Blow[] = [
+      { kind: 'light', element: 'fire' },
+      { kind: 'light', element: 'fire' },
+      { kind: 'heavy', element: 'frost' },
+    ];
+    const p = { ...p0, chains: { ...p0.chains, basic } };
+    const worn = {
       ...p,
-      equipped: {
-        ...p.equipped,
-        helm: item('storm', 'helm'),
-        gloves: item('storm', 'gloves'),
-        boots: item('storm', 'boots'),
-      },
+      equipped: { ...p.equipped, ring: item('frost', 'ring', [['frostAttune', 5]]) },
     };
-    const over = resolveOvertake(registry, storm);
-    expect(over.swapped).toBe(true);
-    expect(over.profile.chains.basic).toEqual(allFire);
-    // A bind starts from one element, where the default's kinds make the default itself. A
-    // realign maps the chain by role (its Fire blows take Storm), a fix each, rather than
-    // giving it the new pair's default.
-    const { realignDust, realignScrap } = bal.pair;
-    const res = realign(
-      registry,
-      { ...p, manaDust: realignDust, scrap: realignScrap },
-      { primary: 'storm', secondary: 'nature' },
-    );
-    expect(res.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
-    expect(res.fixed!.filter((f) => f.skill === 'basic')).toHaveLength(3);
+    const blows = profileStats(registry, worn).weapon.blows;
+    expect(blows.map((b) => b.element)).toEqual(['fire', 'fire', 'frost']);
+    expect(blows[0].attunePower).toBeCloseTo(1 + 2 * k);
+    expect(blows[2].attunePower).toBe(1);
+    const w = strikeWorld(worn.equipped, { pair: worn.pair, filterAttunement: true, basic }, true);
+    expect(only(firstBlow(w), 'hit').map((h) => h.element)).toEqual(['frost']);
+    expect(w.monsters[0].status.stacks.frost).toBeGreaterThan(0);
   });
 });
 
@@ -935,14 +901,13 @@ describe("Power values the hero's own chains", () => {
     expect(salvageCandidates(registry, withStorm, 'common')).toEqual(['fire']);
   });
 
-  it('compareItem values a weapon with the basic chain that equipping it gives', () => {
+  it('compareItem values a weapon with the chains equipping it keeps', () => {
     const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
     const built = setChain(registry, hero(), 'basic', [
       { kind: 'light', element: 'storm' },
       { kind: 'light', element: 'fire' },
       { kind: 'heavy', element: 'fire' },
     ]);
-    // The default chain follows the weapon; a built one stays.
     for (const q of [hero(), built]) {
       const bagged = { ...q, bag: [maul] };
       const cmp = compareItem(q.equipped, maul, registry, 1, q.chains, q.pair);
