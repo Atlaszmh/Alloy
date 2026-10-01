@@ -39,7 +39,7 @@ export function hitOpts(
     applies: stagger ? [...k.applies, 'stagger'] : k.applies,
     knockback: tick ? 0 : k.knockback + (direct ? ab.heavyKnockback : 0),
     kbFrom: from,
-    leech: k.lifesteal,
+    ...knobHitOpts(k),
     execute: k.execute,
     spread: k.spread,
     slot: slotIndex(ab),
@@ -164,8 +164,8 @@ export interface ImpactOpts {
 }
 
 /** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
-export function knobHitOpts(_k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
-  throw new Error('not built yet');
+export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
+  return { leech: k.lifesteal, catalyst: k.catalyst, manaOnHit: k.manaOnHit };
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { Knobs, ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
-import { abilityHit, impact } from './impact.js';
+import { abilityHit, impact, knobHitOpts } from './impact.js';
 import { chainMove, chargeCap } from './resolve.js';
 
 const DEFENSIVE = 1;
@@ -59,7 +59,7 @@ export function shieldHero(
         hitMonster(ctx, source, abilityHit(ctx, ab), ab.element, {
           source: 'skill',
           applies: ab.knobs.applies,
-          leech: ab.knobs.lifesteal,
+          ...knobHitOpts(ab.knobs),
           slot: DEFENSIVE,
           rattles,
         });

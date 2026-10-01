@@ -1,14 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { NEUTRAL, defaultBasic, followBasic } from '../src/arpg/abilities/resolve.js';
+import { NEUTRAL, blowNumbers, defaultBasic, followBasic } from '../src/arpg/abilities/resolve.js';
+import { landBlow } from '../src/arpg/basic.js';
+import { makeCtx } from '../src/arpg/combat.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
 import type { Blow } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
+import type { EquippedGear } from '../src/types/gear.js';
 import type { RuneRef, RuneTier } from '../src/types/rune.js';
 import {
   STEP,
   arena,
+  bal,
   dummy,
+  firstBlow,
   gear,
   moveOf,
   press,
@@ -212,5 +217,91 @@ describe("the Training Grounds' followBasic keeps blow runes", () => {
       kind: 'heavy',
       element: 'fire',
     });
+  });
+});
+
+const SWORD: EquippedGear = { weapon: gear('fire') };
+const light = (runes: (RuneRef | null)[] = []): Blow => ({ kind: 'light', element: 'fire', runes });
+/** The basic hits in `events`. */
+const basicHits = (events: ArpgEvent[]) =>
+  events.flatMap((e) => (e.kind === 'hit' && e.source === 'basic' ? [e] : []));
+
+/** A world whose hero swings `basic` with `equipped` (the fixture sword by default) at sturdy foes. */
+function blowWorld(
+  basic: Blow[],
+  foes: Partial<MonsterEntity>[] = [dummy(13, 34.5)],
+  equipped: EquippedGear = SWORD,
+): ArpgWorld {
+  const w = arena(foes, { equipped });
+  w.hero.stats = computeHeroStats(equipped, registry, { basic });
+  return w;
+}
+
+describe("a blow's runes where it lands (landBlow)", () => {
+  it('Heavy: a blow hits harder at its tier and staggers', () => {
+    const blowOf = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)]);
+      return { w, hit: basicHits(firstBlow(w))[0] };
+    };
+    const plain = blowOf([]);
+    const heavy = blowOf([R('heavy')]);
+    expect(heavy.hit.amount / plain.hit.amount).toBeCloseTo(1.3);
+    expect(plain.w.monsters[0].status.staggerUntil).toBe(0);
+    expect(heavy.w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
+    const hitOf = (w: ArpgWorld) =>
+      blowNumbers(w.hero.stats, bal, w.hero.stats.weapon.blows[0]).hit;
+    expect(hitOf(heavy.w) / hitOf(plain.w)).toBeCloseTo(1.3);
+  });
+
+  it('Widen: a melee blow reaches further, its arc unchanged', () => {
+    const reaches = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)], [dummy(13, 33.4)]);
+      landBlow(makeCtx(registry, w, []), w.hero.stats.weapon.blows[0], 'light', { x: 0, y: -1 }, 1);
+      return w.monsters[0].hp < w.monsters[0].maxHp;
+    };
+    expect(reaches([])).toBe(false);
+    expect(reaches([R('widen')])).toBe(true);
+  });
+
+  it('Leech: a blow heals a share of its damage', () => {
+    const w = blowWorld([light([R('leech', 5)])]);
+    w.hero.hp = w.hero.stats.maxHp / 2;
+    const events = firstBlow(w);
+    const dealt = basicHits(events).reduce((a, e) => a + e.amount, 0);
+    const healed = events.reduce((a, e) => a + (e.kind === 'heal' ? e.amount : 0), 0);
+    expect(dealt).toBeGreaterThan(0);
+    expect(healed).toBeCloseTo(dealt * (w.hero.stats.lifesteal + 0.06));
+  });
+
+  it("Pierce: a wand's shot passes that many foes; on a staff's row that bursts it does nothing", () => {
+    const line = [dummy(13, 33), dummy(13, 31), dummy(13, 29), dummy(13, 27)];
+    const shoot = (baseId: string, blow: Blow) => {
+      const w = blowWorld([blow], line, { weapon: gear('fire', 'weapon', baseId) });
+      firstBlow(w);
+      w.hero.nextAttackAt = 1e9;
+      run(w, 1);
+      return w.monsters.map((m) => m.hp < m.maxHp);
+    };
+    expect(shoot('wand', light([R('pierce', 2)]))).toEqual([true, true, true, false]);
+    expect(shoot('wand', light())).toEqual([true, false, false, false]);
+    const medium: Blow = { kind: 'medium', element: 'fire', runes: [R('pierce', 2)] };
+    expect(shoot('staff', medium)).toEqual([true, false, false, false]);
+  });
+
+  it("a shot blow's shot carries them: Heavy's power and stagger, Leech's heal", () => {
+    const WAND: EquippedGear = { weapon: gear('fire', 'weapon', 'wand') };
+    const shot = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)], [dummy(13, 30)], WAND);
+      w.hero.hp = w.hero.stats.maxHp / 2;
+      const events = [...firstBlow(w), ...until(w, 'hit')];
+      const healed = events.reduce((a, e) => a + (e.kind === 'heal' ? e.amount : 0), 0);
+      return { w, hit: basicHits(events)[0], healed };
+    };
+    const plain = shot([]);
+    const heavy = shot([R('heavy')]);
+    expect(heavy.hit.amount / plain.hit.amount).toBeCloseTo(1.3);
+    expect(heavy.w.monsters[0].status.staggerUntil).toBeGreaterThan(0);
+    const leech = shot([R('leech', 5)]);
+    expect(leech.healed).toBeCloseTo(leech.hit.amount * (leech.w.hero.stats.lifesteal + 0.06));
   });
 });

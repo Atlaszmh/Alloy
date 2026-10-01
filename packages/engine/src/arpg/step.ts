@@ -31,7 +31,7 @@ import {
   windupDir,
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
-import { impact } from './abilities/impact.js';
+import { impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
@@ -395,6 +395,7 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           rattles: p.rattles,
           stacks: p.stacks,
           noReact: p.noReact,
+          ...(p.knobs ? knobHitOpts(p.knobs) : {}),
         });
       // A piercing shot passes `pierceLeft` foes; the hit after them ends it.
       const left = p.pierceLeft ?? (p.pierce ? Infinity : 0);

@@ -314,7 +314,7 @@ export function blowNumbers(
   blow: HeroBlow,
 ): { hit: number; stacks: number } {
   return {
-    hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power,
+    hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power * blow.knobs.power,
     stacks: bal.stacks.basicByKind[blow.kind],
   };
 }
