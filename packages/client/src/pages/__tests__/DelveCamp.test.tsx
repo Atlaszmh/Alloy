@@ -2,8 +2,10 @@ import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { heroChains } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
 import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '@/features/delve/registry';
 import { moveFocus } from '@/features/gamepad/use-gamepad-nav';
 
 const mockNavigate = vi.fn();
@@ -30,6 +32,26 @@ describe('DelveCamp', () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
+  });
+
+  it('a pending chain draft shows on the Abilities tab and above the Delve button; diving drops it', () => {
+    const s = useDelveStore.getState();
+    const primary = heroChains(getDelveRegistry(), s.profile.equipped, s.profile.pair).primary!;
+    act(() =>
+      s.editDraft('primary', { ...primary, moves: [{ ...primary.moves[0], form: 'lance' }] }),
+    );
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('draft-count')).toHaveTextContent('1 unapplied change');
+    expect(screen.getByTestId('draft-warning')).toHaveTextContent(
+      'Unapplied changes: apply or revert them first',
+    );
+    fireEvent.click(screen.getByTestId('delve-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
+    expect(useDelveStore.getState().chainDraft).toBeNull();
   });
 
   it('shows waiting notices as toasts, once', () => {

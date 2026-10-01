@@ -163,12 +163,28 @@ export interface MoveEditorProps {
   blow: HeroBlow | null;
   stats: HeroStats;
   pool: number;
-  /** The elements it can take. */
+  /** The elements it can take; one it holds outside them shows marked off-pair. */
   elements: readonly ManaType[];
   onChange: (next: Move | Blow) => void;
 }
 
-/** One move of a chain: its kind, its form (none for a blow), its element(s), and its readout. */
+/** An element chip's label, marked when the element is off-pair. */
+function ElementLabel({ mana, off }: { mana: ManaType; off: boolean }) {
+  const st = manaStyle(getDelveRegistry(), mana);
+  return (
+    <>
+      {st.icon} {st.name}
+      {off && <span className="text-amber-300/80"> · off-pair</span>}
+    </>
+  );
+}
+
+/**
+ * One move of a chain: its kind, its form (none for a blow), its element(s),
+ * and its readout. An element it holds outside `elements` (a drop's, kept
+ * from off the pair) shows as a marked chip: it still casts and reacts, but
+ * draws no attunement, and no other move can take it.
+ */
 export function MoveEditor({
   slot,
   move,
@@ -184,6 +200,13 @@ export function MoveEditor({
   const data = registry.getArpgData();
   const set = (next: Partial<Move>) => onChange({ ...move, ...next } as Move | Blow);
   const trait = (m: ManaType) => data.elementTraits[m];
+  const own = 'element' in move ? [move.element] : move.elements;
+  const off = own.filter((m) => !elements.includes(m));
+  const shown = [...elements, ...off];
+  // A move may keep its off-pair set, but never take a new one (the engine refuses it).
+  const sorted = (els: readonly ManaType[]) => [...els].sort().join();
+  const takes = (els: readonly ManaType[]) =>
+    els.every((m) => elements.includes(m)) || sorted(els) === sorted(own);
 
   return (
     <div className="flex flex-col gap-3" data-testid="move-editor">
@@ -213,14 +236,15 @@ export function MoveEditor({
         <section className="flex flex-col gap-1.5">
           <Heading>Element</Heading>
           <div className="flex flex-wrap gap-1.5">
-            {elements.map((m) => (
+            {shown.map((m) => (
               <Chip
                 key={m}
                 pressed={move.element === m}
                 onClick={() => onChange({ ...move, element: m })}
                 testId={`element-${m}`}
+                disabled={!takes([m])}
               >
-                {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+                <ElementLabel mana={m} off={off.includes(m)} />
               </Chip>
             ))}
           </div>
@@ -249,19 +273,19 @@ export function MoveEditor({
           <section className="flex flex-col gap-1.5">
             <Heading>Element</Heading>
             <div className="flex flex-wrap gap-1.5">
-              {elements.map((m) => {
+              {shown.map((m) => {
                 const [main, infusion] = move.elements;
+                const els = infusion && infusion !== m ? [m, infusion] : [m];
                 return (
                   <Chip
                     key={m}
                     pressed={main === m}
-                    onClick={() =>
-                      set({ elements: infusion && infusion !== m ? [m, infusion] : [m] })
-                    }
+                    onClick={() => set({ elements: els })}
                     testId={`element-${m}`}
                     title={trait(m).text}
+                    disabled={!takes(els)}
                   >
-                    {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+                    <ElementLabel mana={m} off={off.includes(m)} />
                   </Chip>
                 );
               })}
@@ -272,10 +296,11 @@ export function MoveEditor({
                 pressed={move.elements.length === 1}
                 onClick={() => set({ elements: [move.elements[0]] })}
                 testId="infusion-none"
+                disabled={!takes([move.elements[0]])}
               >
                 None
               </Chip>
-              {elements
+              {shown
                 .filter((m) => m !== move.elements[0])
                 .map((m) => (
                   <Chip
@@ -283,6 +308,7 @@ export function MoveEditor({
                     pressed={move.elements[1] === m}
                     onClick={() => set({ elements: [move.elements[0], m] })}
                     testId={`infusion-${m}`}
+                    disabled={!takes([move.elements[0], m])}
                   >
                     {manaStyle(registry, m).icon}
                   </Chip>
@@ -318,6 +344,12 @@ export function MoveEditor({
         </>
       )}
 
+      {off.length > 0 && (
+        <div className="text-[11px] text-amber-200/90" data-testid="off-pair-note">
+          {off.map((m) => manaStyle(registry, m).name).join(' and ')} off-pair: no attunement. Keep
+          it, or pick from your two elements.
+        </div>
+      )}
       {resolved && <Readout ab={resolved} full={full} stats={stats} pool={pool} />}
       {blow && <BlowReadout blow={blow} stats={stats} />}
     </div>

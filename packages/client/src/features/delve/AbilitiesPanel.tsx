@@ -1,21 +1,25 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CHAIN_SKILLS,
   MANA_TYPES,
   baseSlots,
   carriedByText,
+  editPrice,
   heroChains,
   isDiveActive,
   manaPool,
   movesetOf,
   pairElements,
   profileStats,
+  slotPrice,
+  type ChainSkill,
   type HeroStats,
   type ManaType,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { draftChanges, useDelveStore } from '@/stores/delveStore';
+import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
-import { manaStyle } from './format';
+import { formatNumber, manaStyle } from './format';
 import { ManaPanel } from './ManaPanel';
 import { ChainEditor } from './chains/ChainEditor';
 
@@ -131,16 +135,23 @@ export function Chip({
 }
 
 /**
- * The Anvil's workshop: the equipped weapon's chains from your two elements,
- * each change applied as it is made, and your Mana view; read-only while a
+ * The Anvil's workshop: the equipped weapon's chains, edited as a draft (kept
+ * in the store, so it outlives the tab) whose price shows (free until the
+ * first dive) and which Apply pays for, all or nothing, or Revert drops; each
+ * chain's slots, with Add slot's price; and your Mana view. Read-only while a
  * dive is under way, and unarmed (the unarmed default shows).
  */
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const draft = useDelveStore((s) => s.chainDraft);
   const { equipped, pair } = profile;
   const weapon = equipped.weapon;
-  const chains = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  const [message, setMessage] = useState<string | null>(null);
+  const saved = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  // The skills whose draft differs from the weapon's, and the chains shown.
+  const changed = useMemo(() => draftChanges(registry, profile, draft), [registry, profile, draft]);
+  const chains = useMemo(() => ({ ...saved, ...changed }), [saved, changed]);
   // Unarmed, the default chains sit at their base slots (the bare hands' string for the basic one).
   const slots = weapon
     ? movesetOf(registry, weapon).slots
@@ -148,21 +159,138 @@ export function AbilitiesPanel() {
         CHAIN_SKILLS.filter((s) => chains[s]).map((s) => [s, baseSlots(registry, null, s)]),
       );
   const stats = useMemo(
-    () => profileStats(registry, { equipped, pair }),
-    [equipped, pair, registry],
+    () =>
+      profileStats(registry, {
+        pair,
+        equipped: weapon
+          ? {
+              ...equipped,
+              weapon: { ...weapon, moveset: { ...movesetOf(registry, weapon), chains } },
+            }
+          : equipped,
+      }),
+    [registry, equipped, pair, weapon, chains],
   );
   const elements = pairElements(pair);
+  const locked = isDiveActive(profile) || !weapon;
+  const pending = Object.keys(changed).length > 0;
+  const price = pending ? editPrice(registry, profile, changed) : 0;
+  const cap = registry.getDelveBalance().chains.cap;
+
+  const onApply = () => {
+    const res = useDelveStore.getState().applyDraft();
+    playSound(res.ok ? 'upgradeTier' : 'combineFail');
+    setMessage(res.ok ? null : (res.reason ?? 'Cannot apply'));
+  };
+  const onAddSlot = (skill: ChainSkill) => {
+    const res = useDelveStore.getState().addSlot(skill);
+    playSound(res.ok ? 'upgradeTier' : 'combineFail');
+    setMessage(res.ok ? null : (res.reason ?? 'Cannot add a slot'));
+  };
+
+  const slotRow = (skill: ChainSkill) => {
+    const next = weapon ? slotPrice(registry, weapon, skill) : null;
+    // Why Add slot is off (none while a dive locks the whole builder).
+    const why = !next
+      ? null
+      : changed[skill]
+        ? 'Apply or revert this chain first'
+        : profile.links < next.links
+          ? 'Not enough Links'
+          : profile.scrap < next.scrap
+            ? 'Not enough scrap'
+            : null;
+    return (
+      <div
+        className="flex flex-wrap items-center gap-2 text-xs text-stone-400"
+        data-testid="slot-row"
+      >
+        <span data-testid="chain-slots">
+          Slots {slots[skill]}/{cap[skill]}
+        </span>
+        {next && (
+          <button
+            type="button"
+            className="delve-chip"
+            disabled={locked || !!why}
+            onClick={() => onAddSlot(skill)}
+            data-testid="add-slot"
+          >
+            + Add slot · 🔗 {next.links} · ⚙ {formatNumber(next.scrap)}
+          </button>
+        )}
+        {why && !locked && (
+          <span className="text-amber-200/80" data-testid="add-slot-why">
+            {why}
+          </span>
+        )}
+        <span>
+          🔗 {profile.links} Link{profile.links === 1 ? '' : 's'} · ⚙ {formatNumber(profile.scrap)}{' '}
+          scrap
+        </span>
+      </div>
+    );
+  };
+
   return (
-    <ChainEditor
-      chains={chains}
-      caps={slots}
-      stats={stats}
-      reactionsSeen={profile.reactionsSeen}
-      locked={isDiveActive(profile) || !weapon}
-      absentText={(s) => carriedByText(registry, s)}
-      onChange={(skill, chain) => useDelveStore.getState().setChains({ [skill]: chain })}
-      elements={elements.length > 0 ? elements : undefined}
-      mana={<ManaPanel stats={stats} />}
-    />
+    <div className="flex flex-col gap-3">
+      {pending && (
+        <div
+          className="delve-panel flex flex-wrap items-center gap-2 p-2"
+          data-testid="chain-draft"
+        >
+          <span className="flex-1 text-xs text-stone-300" data-testid="chain-price">
+            {profile.stats.dives === 0
+              ? 'Changes are free until your first dive'
+              : `Changes cost ✦ ${price} Mana Dust (you have ✦ ${formatNumber(profile.manaDust)})`}
+          </span>
+          <button
+            type="button"
+            className="delve-btn px-3 py-1 text-xs"
+            onClick={() => {
+              useDelveStore.getState().revertDraft();
+              setMessage(null);
+            }}
+            data-testid="chain-revert"
+          >
+            Revert
+          </button>
+          <button
+            type="button"
+            className="delve-btn delve-btn-gold px-3 py-1 text-xs"
+            disabled={price > profile.manaDust}
+            onClick={onApply}
+            data-testid="chain-apply"
+          >
+            Apply{price > 0 ? ` · ✦ ${price}` : ''}
+          </button>
+        </div>
+      )}
+      {message && (
+        <div
+          className="text-xs font-semibold text-red-300"
+          role="status"
+          data-testid="chain-message"
+        >
+          {message}
+        </div>
+      )}
+      <ChainEditor
+        chains={chains}
+        caps={slots}
+        stats={stats}
+        reactionsSeen={profile.reactionsSeen}
+        locked={locked}
+        lockedText={weapon ? undefined : 'Equip a weapon to build your moves.'}
+        absentText={(s) => carriedByText(registry, s)}
+        footer={slotRow}
+        onChange={(skill, chain) => {
+          useDelveStore.getState().editDraft(skill, chain);
+          setMessage(null);
+        }}
+        elements={elements.length > 0 ? elements : undefined}
+        mana={<ManaPanel stats={stats} />}
+      />
+    </div>
   );
 }

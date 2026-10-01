@@ -43,8 +43,12 @@ export interface ChainEditorProps {
   reactionsSeen: readonly string[];
   /** Read-only (a dive is under way). */
   locked: boolean;
+  /** Why it is read-only; the dive's text when absent. */
+  lockedText?: string;
   /** Why a skill has no chain (the text its locked tab shows). */
   absentText?: (skill: ChainSkill) => string;
+  /** Shown under the chosen skill's cards (the Anvil's Add slot). */
+  footer?: (skill: ChainSkill) => ReactNode;
   onChange: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
   /** The elements an ability's move can take (the Delve: your pair); all six when absent. */
   elements?: readonly ManaType[];
@@ -62,12 +66,26 @@ function moved<T>(list: readonly T[], from: number, to: number): T[] {
   return next;
 }
 
+/** Whether a move holds an element outside `allowed` (off-pair, in the Delve). */
+function offPair(m: Move | Blow, allowed: readonly ManaType[]): boolean {
+  return ('element' in m ? [m.element] : m.elements).some((e) => !allowed.includes(e));
+}
+
+/** A copy of `m` in `allowed` elements only: its own where allowed, else the first allowed. */
+function fitted(m: Move | Blow, allowed: readonly ManaType[]): Move | Blow {
+  if ('element' in m)
+    return { ...m, element: allowed.includes(m.element) ? m.element : allowed[0] };
+  const kept = m.elements.filter((e) => allowed.includes(e));
+  return { ...m, elements: kept.length > 0 ? kept : [allowed[0]] };
+}
+
 /**
  * The chain builder: each skill (the basic attack, then the Primary, Defensive
  * and Ultimate) is a row of move cards, up to its cap; a skill without a chain
  * shows locked. A card opens its move below: its kind, its form and its
  * elements. ◂ ▸ reorder, × removes (never the last), + adds a copy of the
- * chosen move. The Anvil binds it to the equipped weapon's moveset; the
+ * chosen move (in the allowed elements). A move outside them is marked
+ * off-pair. The Anvil binds it to a draft of the weapon's moveset; the
  * Training Grounds to their own loadout. See the moves and chains spec.
  */
 export function ChainEditor({
@@ -76,7 +94,9 @@ export function ChainEditor({
   stats,
   reactionsSeen,
   locked,
+  lockedText = 'A dive is under way: your chains can change once you extract or fall.',
   absentText,
+  footer,
   onChange,
   elements = MANA_TYPES,
   blowElements = elements,
@@ -101,6 +121,7 @@ export function ChainEditor({
   const names = resolved
     ? resolved.moves.map(moveText)
     : entries.map((b) => blowText(registry, b as Blow));
+  const allowed = slot ? elements : blowElements;
   const weapon = stats.weapon.baseId ? registry.getGearBase(stats.weapon.baseId).name : 'Fist';
 
   const commit = (next: (Move | Blow)[], payment = chain?.payment) => {
@@ -167,13 +188,14 @@ export function ChainEditor({
           className="delve-panel p-2 text-center text-xs text-amber-200"
           data-testid="abilities-locked"
         >
-          A dive is under way: your chains can change once you extract or fall.
+          {lockedText}
         </div>
       )}
       {/* Picking a card only changes the view: the cards stay open while the chain is locked. */}
       <div ref={cards} className="flex flex-wrap items-stretch gap-1.5" data-testid="chain-cards">
         {entries.map((e, i) => {
           const els = 'element' in e ? [e.element] : e.elements;
+          const off = offPair(e, allowed);
           return (
             <div key={i} className="flex flex-col items-center gap-1">
               <button
@@ -182,7 +204,7 @@ export function ChainEditor({
                 className="delve-panel flex w-20 flex-col items-center gap-0.5 p-1.5"
                 style={{ borderColor: i === index ? '#fcd34d' : undefined }}
                 aria-pressed={i === index}
-                aria-label={names[i]}
+                aria-label={off ? `${names[i]}, off-pair` : names[i]}
                 onClick={() => setPicked(i)}
                 data-testid={`move-${i}`}
               >
@@ -198,6 +220,14 @@ export function ChainEditor({
                 <span className="text-xs leading-none">
                   {els.map((m) => manaStyle(registry, m).icon).join('')}
                 </span>
+                {off && (
+                  <span
+                    className="text-[9px] leading-none text-amber-300/80"
+                    data-testid="card-off-pair"
+                  >
+                    off-pair
+                  </span>
+                )}
               </button>
               <span className="flex gap-0.5">
                 <button
@@ -257,7 +287,7 @@ export function ChainEditor({
             disabled={locked}
             aria-label="Add a move"
             onClick={() => {
-              commit([...entries, { ...entries[index] }]);
+              commit([...entries, fitted(entries[index], allowed)]);
               setPicked(entries.length);
               setFocusOn([card(entries.length)]);
             }}
@@ -267,6 +297,7 @@ export function ChainEditor({
           </button>
         )}
       </div>
+      {!absent && footer?.(skill)}
 
       <fieldset
         hidden={absent}
@@ -283,7 +314,7 @@ export function ChainEditor({
             blow={slot ? null : stats.weapon.blows[index]}
             stats={stats}
             pool={pool}
-            elements={slot ? elements : blowElements}
+            elements={allowed}
             onChange={(next) => commit(entries.map((e, i) => (i === index ? next : e)))}
           />
         )}

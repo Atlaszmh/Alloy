@@ -7,7 +7,7 @@ import {
   profileStats,
   startDepthOptions,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { draftChanges, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer } from '@/components/Toast';
@@ -32,6 +32,7 @@ export function DelveCamp() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
+  const draft = useDelveStore((s) => s.chainDraft);
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -56,6 +57,11 @@ export function DelveCamp() {
   const attunement = useMemo(
     () => profileStats(registry, { equipped, pair }).attunement,
     [equipped, pair, registry],
+  );
+  // The chain builder's unapplied changes (a dive's start drops them).
+  const unapplied = useMemo(
+    () => Object.keys(draftChanges(registry, profile, draft)).length,
+    [registry, profile, draft],
   );
 
   const onDelve = () => {
@@ -194,6 +200,11 @@ export function DelveCamp() {
                 ))}
               </div>
             )}
+            {unapplied > 0 && !active && (
+              <div className="text-center text-xs text-amber-200" data-testid="draft-warning">
+                Unapplied changes: apply or revert them first
+              </div>
+            )}
             <button
               className="delve-btn delve-btn-gold py-4 text-2xl"
               onClick={onDelve}
@@ -240,6 +251,14 @@ export function DelveCamp() {
                 data-testid={`tab-${id}`}
               >
                 {label}
+                {id === 'abilities' && unapplied > 0 && (
+                  <span
+                    className="block text-[9px] normal-case tracking-normal text-amber-300"
+                    data-testid="draft-count"
+                  >
+                    {unapplied} unapplied change{unapplied === 1 ? '' : 's'}
+                  </span>
+                )}
               </button>
             ))}
           </div>

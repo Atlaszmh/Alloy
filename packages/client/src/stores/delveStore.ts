@@ -20,6 +20,8 @@ import {
   reattuneItem,
   resolveOvertake,
   pairElements,
+  CHAIN_SKILLS,
+  heroChains,
   type ChainFix,
   type Chains,
   type ChainSkill,
@@ -169,6 +171,35 @@ export function overtakeNotice(registry: DataRegistry, now: ManaType, was: ManaT
   return `${name} now outweighs ${manaName(registry, was)}: ${name} is your primary`;
 }
 
+/** The Anvil builder's unapplied edits (session only): one weapon's, under one pair. */
+export interface ChainDraft {
+  uid: string;
+  pair: ManaPair;
+  chains: Partial<Chains>;
+}
+
+/**
+ * The draft's chains that still differ from the equipped weapon's; none when
+ * the draft belongs to another weapon or another pair (equipping another
+ * weapon, a bind or a realign drops it).
+ */
+export function draftChanges(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  draft: ChainDraft | null,
+): Partial<Chains> {
+  const weapon = profile.equipped.weapon;
+  const { primary, secondary } = profile.pair;
+  if (!draft || !weapon || draft.uid !== weapon.uid) return {};
+  if (draft.pair.primary !== primary || draft.pair.secondary !== secondary) return {};
+  const saved = heroChains(registry, profile.equipped, profile.pair);
+  return Object.fromEntries(
+    CHAIN_SKILLS.filter(
+      (s) => draft.chains[s] && JSON.stringify(draft.chains[s]) !== JSON.stringify(saved[s]),
+    ).map((s) => [s, draft.chains[s]]),
+  );
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */
@@ -181,6 +212,8 @@ interface DelveStore {
   notices: string[];
   /** Elements whose bind prompt was answered "Not now" this session (never saved). */
   bindDeclined: ManaType[];
+  /** The chain builder's unapplied edits (never saved; a dive's start drops them). */
+  chainDraft: ChainDraft | null;
 
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
@@ -212,7 +245,12 @@ interface DelveStore {
   pushDiveDrops: (uids: string[]) => void;
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
   setChains: (chains: Partial<Chains>) => ProfileActionResult;
-  /** Add a slot to a chain of the equipped weapon, for Links and scrap. */
+  /** Put a chain into the builder's draft (a chain back as it was leaves it). */
+  editDraft: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
+  /** Pay for the draft's changes and set them (`setChains`); a refusal keeps the draft. */
+  applyDraft: () => ProfileActionResult;
+  revertDraft: () => void;
+  /** Add a slot to a chain of the equipped weapon, for Links and scrap (dropping its draft). */
   addSlot: (skill: ChainSkill) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
 }
@@ -226,7 +264,10 @@ function withoutUids(map: Record<string, true>, uids: string[]): Record<string, 
 export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get) => {
   const commit = (profile: DelveProfile) => {
     saveProfile(profile);
-    set({ profile });
+    // The chain draft belongs to one weapon: equipping another (or a transfer) drops it.
+    const draft = get()?.chainDraft;
+    const kept = !draft || profile.equipped.weapon?.uid === draft.uid;
+    set(kept ? { profile } : { profile, chainDraft: null });
   };
   const registry = () => getDelveRegistry();
   const applyResult = (res: ProfileActionResult) => {
@@ -254,17 +295,18 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         ]
       : [],
     bindDeclined: [],
+    chainDraft: null,
 
     setProfile: (profile) => commit(profile),
 
     resetProfile: (seed, primary) => {
       commit(createDelveProfile(registry(), seed ?? freshSeed(), primary ? { primary } : {}));
-      set({ newUids: {}, diveDrops: [], notices: [], bindDeclined: [] });
+      set({ newUids: {}, diveDrops: [], notices: [], bindDeclined: [], chainDraft: null });
     },
 
     startDive: (depth) => {
       commit(engineStartDive(registry(), get().profile, depth));
-      set({ diveDrops: [] });
+      set({ diveDrops: [], chainDraft: null });
     },
 
     closeDive: () => {
@@ -368,6 +410,36 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     setChains: (chains) => applyResult(engineSetChains(registry(), get().profile, chains)),
 
-    addSlot: (skill) => applyResult(engineAddSlot(registry(), get().profile, skill)),
+    editDraft: (skill, chain) => {
+      const { profile, chainDraft } = get();
+      const weapon = profile.equipped.weapon;
+      if (!weapon) return;
+      const chains = { ...draftChanges(registry(), profile, chainDraft), [skill]: chain };
+      // Only what differs from the weapon is kept: an edit undone by hand leaves nothing.
+      const next = { uid: weapon.uid, pair: profile.pair, chains };
+      set({ chainDraft: { ...next, chains: draftChanges(registry(), profile, next) } });
+    },
+
+    applyDraft: () => {
+      const { profile, chainDraft } = get();
+      const res = applyResult(
+        engineSetChains(registry(), profile, draftChanges(registry(), profile, chainDraft)),
+      );
+      if (res.ok) set({ chainDraft: null });
+      return res;
+    },
+
+    revertDraft: () => set({ chainDraft: null }),
+
+    addSlot: (skill) => {
+      const res = applyResult(engineAddSlot(registry(), get().profile, skill));
+      // The draft's edit of that chain was made on fewer slots: it goes.
+      const draft = get().chainDraft;
+      if (res.ok && draft?.chains[skill]) {
+        const { [skill]: _gone, ...chains } = draft.chains;
+        set({ chainDraft: { ...draft, chains } });
+      }
+      return res;
+    },
   };
 });
