@@ -1,5 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { Blow, FormId, KnobsData, Move } from '../types/ability.js';
+import type { AbilityPayment, Blow, FormId, KnobsData, Move } from '../types/ability.js';
 import type { HeroStats } from '../types/delve.js';
 import type { Rarity } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
@@ -129,16 +129,29 @@ function fill(
   return { text, change };
 }
 
+/** A move's price terms, which a rune's cost reads (see the rune costs spec). */
+export interface RunePriceTerms {
+  /** The chain's payment: the words. */
+  payment?: AbilityPayment;
+  /** The move's `ResolvedAbility.ease`: the eased figure. Absent: the raw figure. */
+  ease?: number;
+}
+
 /**
- * A rune's effect and trade-off at its tier, as the player reads them. With
- * `on`, the numbers are the move's (Multi-shot's cut halved on a Volley, gone
- * on a Barrage), and a trade-off that comes to no change is null.
+ * A rune's effect, trade-off and cost at its tier, as the player reads them.
+ * With `on`, the numbers are the move's (Multi-shot's cut halved on a Volley,
+ * gone on a Barrage), and a trade-off that comes to no change is null. The
+ * cost is the rune's share of the move's load (`runeLoad`, eased by
+ * `terms.ease`) in the payment's words (`loadText`); with no `on` (the pouch),
+ * its tier's raw load; null on a blow (blows are free) and at a 0 share. It
+ * doesn't know dormancy: the caller hides the cost wherever it dims the rune.
  */
 export function runeText(
   registry: DataRegistry,
   ref: RuneRef,
   on?: RuneTarget,
-): { effect: string; tradeoff: string | null } {
+  terms: RunePriceTerms = {},
+): { effect: string; tradeoff: string | null; cost: string | null } {
   const def = registry.getRune(ref.id);
   let knobs = def.tiers[ref.tier - 1];
   if (knobs.extraShots && on && 'form' in on)
@@ -150,10 +163,30 @@ export function runeText(
       },
     };
   const tradeoff = def.tradeoff === null ? null : fill(registry, def.tradeoff, knobs);
+  const share = !on
+    ? def.load[ref.tier - 1]
+    : 'form' in on
+      ? runeLoad(registry, ref, on.form) * (1 - (terms.ease ?? 0))
+      : 0;
   return {
     effect: fill(registry, def.effect, knobs).text,
     tradeoff: tradeoff?.change ? tradeoff.text : null,
+    cost: share > 0 ? loadText(registry, share, terms.payment) : null,
   };
+}
+
+/**
+ * A load as the player reads it, in the payment's own terms and whole
+ * percentages: "+25% cost" (mana, or no payment known), "+25% charge" (× the
+ * `charge` conversion), "+25% cast wind-up, +25% cost" (× `cast`, then the
+ * load). The one formatter, for a rune's share and for a move's total.
+ */
+export function loadText(registry: DataRegistry, load: number, payment?: AbilityPayment): string {
+  const c = registry.getDelveBalance().runes.load;
+  const pct = (x: number) => `+${Math.round(x * 100)}%`;
+  if (payment === 'charge') return `${pct(load * c.charge)} charge`;
+  if (payment === 'cast') return `${pct(load * c.cast)} cast wind-up, ${pct(load)} cost`;
+  return `${pct(load)} cost`;
 }
 
 /** Most sockets a move may open on a weapon of `rarity` (unarmed, null: 0). */
