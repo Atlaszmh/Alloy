@@ -1,10 +1,7 @@
 import { useRef, useState } from 'react';
 import {
-  baseDisplayName,
   carriedSkills,
-  inPair,
   isDiveActive,
-  itemAffinityAttunement,
   itemStatLines,
   movesetTransfer,
   pairElements,
@@ -22,22 +19,15 @@ import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
-import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
 import { SKILL_NAME } from './chains/chain-text';
 import { useItemComparison } from './items/useItemComparison';
+import { ItemHeader } from './items/ItemHeader';
 import { PowerDelta } from './items/PowerDelta';
 import { AffixLine, ImplicitLine } from './items/ItemStatLines';
 import { LegendaryBox } from './items/LegendaryBox';
 import { MovesetView } from './items/MovesetView';
-import {
-  RARITY_COLOR,
-  RARITY_LABEL,
-  SLOT_LABEL,
-  UPGRADE_EPSILON,
-  formatNumber,
-  manaStyle,
-} from './format';
+import { RARITY_COLOR, UPGRADE_EPSILON, formatNumber, manaStyle } from './format';
 
 interface ItemDetailSheetProps {
   uid: string;
@@ -72,7 +62,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
       : [];
 
   if (!item) return null;
-  const color = RARITY_COLOR[item.rarity];
   const lines = itemStatLines(item, registry);
   const implicits = lines.filter((l) => l.source === 'implicit');
   const affixes = lines.filter((l) => l.source === 'affix');
@@ -85,15 +74,12 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const isUpgrade = equipCmp !== null && equipCmp.powerPct > UPGRADE_EPSILON;
   const mana = manaStyle(registry, item.mana);
   const attuneDelta = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
-  const base = registry.getDelveData().bases.find((b) => b.id === item.baseId);
-  const attack = base?.attack;
   const diving = isDiveActive(profile);
   // What a transfer's leaving runes become: destroyed, or back to the pouch.
   const pull = unsocketMode(registry, unsocket);
   // What salvaging it does with its runes: asked first, whatever its rarity.
   const melts = pullText(registry, weaponParts(registry, item).runes, pull);
   const dust = salvageDust(registry, item, profile.pair);
-  const ownMana = inPair(profile, item.mana);
   const reattuneTo = pairElements(profile.pair).filter((m) => m !== item.mana);
   // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
   const unbound =
@@ -226,57 +212,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
       >
         {/* Header */}
         <div className="flex items-start gap-3">
-          <ItemTile item={item} size={72} />
-          <div className="min-w-0 flex-1">
-            <div
-              className="delve-display truncate text-xl font-bold"
-              style={{ color }}
-              data-testid="item-name"
-            >
-              {item.name}
-            </div>
-            <div className="text-xs text-stone-300">
-              {RARITY_LABEL[item.rarity]} {baseDisplayName(registry, item)} ·{' '}
-              {SLOT_LABEL[item.slot]}
-            </div>
-            <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-stone-400">
-              <span
-                className="rounded px-1.5 py-0.5 font-semibold"
-                style={
-                  ownMana
-                    ? { background: `${mana.color}22`, color: mana.color }
-                    : { background: 'rgba(255,255,255,0.05)', color: '#78716c' }
-                }
-                data-testid="item-mana"
-              >
-                {mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}
-                {!ownMana && ' · not your element'}
-              </span>
-              {attack && (
-                <span className="rounded bg-white/5 px-1.5 py-0.5">
-                  {attack.kind === 'bolt' ? '🎯 Ranged' : '⚔️ Melee'}
-                </span>
-              )}
-              {base?.tempo !== undefined && (
-                <span className="rounded bg-white/5 px-1.5 py-0.5" data-testid="item-tempo">
-                  Tempo {base.tempo}×:{' '}
-                  {base.tempo > 1 ? 'slower' : base.tempo < 1 ? 'quicker' : 'standard'} holds and
-                  chain beats
-                </span>
-              )}
-              <span className="rounded bg-white/5 px-1.5 py-0.5">iLvl {item.ilvl}</span>
-              {item.upgrade > 0 && (
-                <span className="rounded bg-amber-400/10 px-1.5 py-0.5 text-amber-200">
-                  +{item.upgrade} forged
-                </span>
-              )}
-              {isEquipped && (
-                <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-amber-300">
-                  Equipped
-                </span>
-              )}
-            </div>
-          </div>
+          <ItemHeader item={item} size="lg" />
           <button
             className="delve-btn px-3 py-1 text-sm"
             onClick={onClose}

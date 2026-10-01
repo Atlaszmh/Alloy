@@ -9,8 +9,19 @@ import { useDelveStore } from '@/stores/delveStore';
 // and Task 7 deletes this file (1A's colours and icons change the markup when they merge).
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
-/** The markup, with `useId`'s ids (which count every render in the file) blanked. */
-const html = (el: Element) => el.innerHTML.replace(/_r_[0-9a-z]+_/g, '_r_');
+/**
+ * The markup, with `useId`'s ids (which count every render in the file) blanked, and
+ * `ItemHeader`'s own row unwrapped: it holds the tile and the text column beside the
+ * sheet's close button, laid out exactly as they were.
+ */
+const html = (el: Element) =>
+  el.innerHTML
+    .replace(/_r_[0-9a-z]+_/g, '_r_')
+    .replace('<div class="flex min-w-0 flex-1 items-start gap-3">', '')
+    .replace(
+      '</div></div></div><button class="delve-btn px-3 py-1 text-sm"',
+      '</div></div><button class="delve-btn px-3 py-1 text-sm"',
+    );
 
 /** A rare Fire sword with an extra Primary slot. */
 const sword = (): GearItem => {
