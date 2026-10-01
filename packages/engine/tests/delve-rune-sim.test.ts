@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { NEUTRAL, blowNumbers, defaultBasic, followBasic } from '../src/arpg/abilities/resolve.js';
+import {
+  NEUTRAL,
+  blowNumbers,
+  defaultBasic,
+  followBasic,
+  mergeKnobs,
+} from '../src/arpg/abilities/resolve.js';
 import { landBlow } from '../src/arpg/basic.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
@@ -484,5 +490,87 @@ describe('Multi-shot (the extraShots knob)', () => {
     const shots = w.projectiles.filter((p) => p.owner === 'hero');
     expect(shots).toHaveLength(4);
     expect(shots.filter((p) => !p.knobs)).toHaveLength(1);
+  });
+});
+
+describe('Split (the split knob)', () => {
+  it("an ability: an impact that hits sheds shards from the hero's way round it, skipping the foes it hit", () => {
+    const w = world([dummy(13, 30), dummy(13, 27.5)], { primary: { runes: [R('split')] } });
+    press(w, 0);
+    const bolt = w.projectiles.find((p) => p.form === 'bolt')!;
+    expect(until(w, 'runeFx').find((e) => e.kind === 'runeFx')).toMatchObject({
+      effect: 'split',
+      element: 'fire',
+    });
+    const shards = w.projectiles.filter((p) => p.form === 'shard');
+    expect(shards).toHaveLength(3);
+    const angles = shards.map((p) => Math.atan2(p.vy, p.vx));
+    expect(angles[0]).toBeCloseTo(-Math.PI / 2);
+    expect(angles[1] - angles[0]).toBeCloseTo((2 * Math.PI) / 3);
+    for (const p of shards) {
+      expect(p.damage).toBeCloseTo(bolt.damage * 0.4);
+      expect(p.hitIds).toEqual([w.monsters[0].id]);
+      expect(p.ability?.knobs.split).toBeNull();
+    }
+    run(w, 1);
+    expect(w.monsters[1].hp).toBeLessThan(w.monsters[1].maxHp);
+  });
+
+  it("shards don't split, scatter, show an explosion, leave a zone or burst at the end of their flight", () => {
+    // A Wildfire Bolt scatters and leaves a zone where it lands; its shards do neither.
+    const w = world([dummy(13, 30), dummy(13, 27.5)], {
+      primary: { elements: ['fire', 'nature'], runes: [R('split')] },
+    });
+    const events = [...press(w, 0), ...until(w, 'runeFx')];
+    // The Bolt's own ground; then its shards fly out and end.
+    expect(w.zones.filter((z) => z.owner === 'hero' && z.ability)).toHaveLength(1);
+    const shards = new Set<number>();
+    for (let i = 0; i < 15; i++) {
+      for (const p of w.projectiles) if (p.form === 'shard') shards.add(p.id);
+      events.push(...run(w, STEP));
+    }
+    expect(shards.size).toBe(3);
+    expect(w.projectiles).toHaveLength(0);
+    expect(events.filter((e) => e.kind === 'runeFx')).toHaveLength(1);
+    // The Bolt's own burst only (Wildfire's Combusts show as Nature).
+    expect(events.filter((e) => e.kind === 'explode' && e.element === 'fire')).toHaveLength(1);
+    expect(w.zones.filter((z) => z.owner === 'hero' && z.ability)).toHaveLength(1);
+  });
+
+  it('a shot blow: its first hit sheds shards (basic shots) that skip the foe it hit', () => {
+    const w = blowWorld([light([R('split')])], [dummy(13, 30), dummy(13, 27.5)], {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    firstBlow(w);
+    w.hero.nextAttackAt = 1e9;
+    const shot = w.projectiles.find((p) => p.owner === 'hero')!;
+    until(w, 'runeFx');
+    const shards = w.projectiles.filter((p) => p.form === 'shard');
+    expect(shards).toHaveLength(3);
+    for (const p of shards) {
+      expect(p.ability).toBeNull();
+      expect(p.knobs).toBeUndefined();
+      expect(p.damage).toBeCloseTo(shot.damage * 0.4);
+      expect(p.hitIds).toEqual([w.monsters[0].id]);
+    }
+    run(w, 1);
+    expect(w.monsters[1].hp).toBeLessThan(w.monsters[1].maxHp);
+  });
+
+  it('a shot that bursts sheds them after its burst, skipping every foe the burst hit', () => {
+    // A staff's heavy shot bursts over both foes.
+    const w = blowWorld([{ kind: 'heavy', element: 'fire' }], [dummy(13, 30), dummy(13.8, 30)], {
+      weapon: gear('fire', 'weapon', 'staff'),
+    });
+    const blow = w.hero.stats.weapon.blows[0];
+    w.hero.stats.weapon.blows[0] = {
+      ...blow,
+      knobs: mergeKnobs({ split: { count: 2, power: 0.5 } }),
+    };
+    firstBlow(w);
+    until(w, 'runeFx');
+    const shards = w.projectiles.filter((p) => p.form === 'shard');
+    expect(shards).toHaveLength(2);
+    for (const p of shards) expect(p.hitIds).toEqual(w.monsters.map((m) => m.id));
   });
 });

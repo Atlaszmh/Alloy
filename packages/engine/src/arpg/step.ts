@@ -35,7 +35,7 @@ import { impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
-import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
+import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic.js';
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
@@ -382,11 +382,12 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           from,
           tick: p.form === 'ember',
           heft: p.heft,
+          shard: p.form === 'shard',
         });
       else if (p.explodeRadius > 0) {
         burstShot(ctx, p, m);
         break;
-      } else
+      } else {
         hitMonster(ctx, m, p.damage, p.element, {
           source: 'basic',
           canCrit: true,
@@ -397,6 +398,9 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           noReact: p.noReact,
           ...(p.knobs ? knobHitOpts(p.knobs) : {}),
         });
+        // A basic shot's knobs act where it first hits.
+        if (p.knobs && p.hitIds.length === 1) shotLands(ctx, p, [m]);
+      }
       // A piercing shot passes `pierceLeft` foes; the hit after them ends it.
       const left = p.pierceLeft ?? (p.pierce ? Infinity : 0);
       if (left <= 0) p.dead = true;
@@ -404,8 +408,8 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
     }
     if (!p.dead && expired) {
       p.dead = true;
-      // A bolt that reaches the end of its flight bursts on the ground.
-      if (p.ability && !p.pierce && p.form !== 'volley') {
+      // A bolt that reaches the end of its flight bursts on the ground (a Split shard just ends).
+      if (p.ability && !p.pierce && p.form !== 'volley' && p.form !== 'shard') {
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',

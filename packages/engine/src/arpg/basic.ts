@@ -7,7 +7,7 @@ import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { surging } from './abilities/defend.js';
-import { knobHitOpts } from './abilities/impact.js';
+import { knobHitOpts, shedShards } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
@@ -393,7 +393,25 @@ function blowStep(ctx: SimCtx, s: ComboStepDef, dir: Vec, steer: Vec): void {
   if (len > 1e-9) startPush(ctx, 'step', { x: x / len, y: y / len }, len, bal.feel.stepSeconds);
 }
 
-/** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */
+/**
+ * A basic shot's knobs where it lands (see `burstShot` and the projectile tick):
+ * `hit` are the foes it hit there, the one it struck first. Split's shards
+ * skip them all.
+ */
+export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntity[]): void {
+  const k = p.knobs!;
+  if (k.split)
+    shedShards(ctx, p.x, p.y, k.split, p.damage, hit, {
+      ability: null,
+      element: p.element,
+      applies: p.applies,
+    });
+}
+
+/**
+ * A basic shot with an explosion bursts over the foe it struck and every foe
+ * around it (each once); with knobs, they act after the burst (`shotLands`).
+ */
 export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | null = null): void {
   p.dead = true;
   ctx.events.push({
@@ -404,8 +422,10 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
     element: p.element,
     infusion: null,
   });
+  const hit: MonsterEntity[] = struck ? [struck] : [];
   for (const m of alive(ctx)) {
     if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
+    if (m !== struck) hit.push(m);
     hitMonster(ctx, m, p.damage, p.element, {
       source: 'basic',
       canCrit: true,
@@ -417,4 +437,5 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       ...(p.knobs ? knobHitOpts(p.knobs) : {}),
     });
   }
+  if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }

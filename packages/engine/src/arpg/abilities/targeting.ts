@@ -52,20 +52,21 @@ export function spawnProjectile(
   p: Omit<Projectile, 'id' | 'hitIds' | 'traveled' | 'dead' | 'pierceLeft'> & {
     /** Foes it may pass (default: all when `pierce`, else none). */
     pierceLeft?: number;
+    /** Foes it never hits (a Split shard skips those its impact hit). */
+    hitIds?: number[];
   },
 ): Projectile {
   const proj: Projectile = {
     ...p,
     pierceLeft: p.pierceLeft ?? (p.pierce ? Infinity : 0),
     id: ctx.world.nextId++,
-    hitIds: [],
+    hitIds: p.hitIds ? [...p.hitIds] : [],
     traveled: 0,
     dead: false,
   };
   ctx.world.projectiles.push(proj);
   return proj;
 }
-
 /** Forms fired along a way from the hero (the rest are placed, self-centred or Blink). */
 export const DIRECTIONAL = new Set(['bolt', 'volley', 'lance', 'strike']);
 const PLACED = new Set(['burst', 'barrage', 'maelstrom']);
