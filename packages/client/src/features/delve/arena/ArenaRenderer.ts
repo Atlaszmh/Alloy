@@ -15,6 +15,7 @@ import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
+import { runeFx } from './fx/runes';
 import {
   drawAim,
   drawAnticipation,
@@ -427,6 +428,9 @@ export class ArenaRenderer {
           break;
         case 'reaction':
           reactionFx(this.fx, e, w);
+          break;
+        case 'runeFx':
+          runeFx(this.fx, e);
           break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);
