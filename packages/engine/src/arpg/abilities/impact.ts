@@ -1,4 +1,4 @@
-import { ABILITY_SLOTS, type ResolvedAbility } from '../../types/ability.js';
+import { ABILITY_SLOTS, type Knobs, type ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity, Vec } from '../../types/arpg.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
@@ -159,6 +159,13 @@ export interface ImpactOpts {
   silent?: boolean;
   /** How hard direct hits land (defaults to the ability's). */
   heft?: number;
+  /** A Split shard's impact: no scatter or explosion event; no shards, chain, zone or embers. */
+  shard?: boolean;
+}
+
+/** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
+export function knobHitOpts(_k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
+  throw new Error('not built yet');
 }
 
 /**

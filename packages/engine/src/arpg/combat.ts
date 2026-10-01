@@ -47,6 +47,10 @@ export interface HitOpts {
   noReact?: boolean;
   /** Extra fraction of the damage healed (ability lifesteal). */
   leech?: number;
+  /** Added to the factor of the reactions this hit sets off (Volatile; see the runes spec). */
+  catalyst?: number;
+  /** Mana this hit gives per foe while its skill's Drain budget lasts. */
+  manaOnHit?: number;
   /** Frozen foes left below this life fraction shatter. */
   execute?: number;
   /** On a kill, the foe's poison and hex spread to its neighbours (Plague). */

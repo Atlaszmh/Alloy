@@ -11,6 +11,7 @@ import {
   resolveAbility,
   resolveChain,
 } from '../src/arpg/abilities/resolve.js';
+import * as engine from '../src/index.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
@@ -28,6 +29,7 @@ import {
   takeFromPouch,
 } from '../src/loot/runes.js';
 import type { RunePouch, RuneRef, RuneTier } from '../src/types/rune.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { MOVE_KINDS } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import { arena, bal, damaged, dummy, moveOf, press, registry, run } from './fixtures/arena.js';
@@ -461,4 +463,72 @@ describe('wave 1B: loot/runes.ts', () => {
     'rollSockets: socketDrops by rarity, spread uniformly over the moves, never past socketCap',
   );
   it.todo('weaponParts: a Link per extra slot and per open socket, and the socketed runes');
+});
+
+// Stubs in wave 0 ("not built yet"); wave 1B builds them and may delete these lines.
+describe('wave 1B: delve/runes.ts and arpg/rune-drops.ts', () => {
+  it.todo('unsocketMode: the override, else balance.delve.runes.unsocket');
+  it.todo(
+    'runeChange and draftPrice: sockets opened, runes socketed and pulled, net Links, refusals',
+  );
+  it.todo('openSocket, socketRune, fusePrice and fuseRunes');
+  it.todo('dropRune: a rune Drop from rollRuneDrop on world.runeRng, none in the sandbox');
+});
+
+describe('the sim and the index: the contract is in place', () => {
+  it('sets up a world and a hero with no echoes, no runes pending, nothing drained and a rune stream', () => {
+    const w = arena([dummy(13, 30)]);
+    expect(w.echoes).toEqual([]);
+    expect(w.pending.runes).toEqual([]);
+    expect(w.hero.drained).toEqual([0, 0, 0, 0]);
+    expect(w.runeRng).toBeInstanceOf(SeededRNG);
+    expect(w.runeRng).not.toBe(w.lootRng);
+  });
+
+  it('exports every new module and symbol from the package index', () => {
+    for (const name of [
+      'NEUTRAL',
+      'moveBeat',
+      'knobHitOpts',
+      'guardLand',
+      'queueEcho',
+      'echoTick',
+      'dropRune',
+      'runeFits',
+      'runeActive',
+      'runeKnobs',
+      'runeText',
+      'extraShotPower',
+      'socketCap',
+      'socketPrice',
+      'pouchCount',
+      'addToPouch',
+      'takeFromPouch',
+      'socketsOf',
+      'runeTierAt',
+      'rollRuneDrop',
+      'rollSockets',
+      'weaponParts',
+      'unsocketMode',
+      'runeChange',
+      'draftPrice',
+      'openSocket',
+      'socketRune',
+      'fusePrice',
+      'fuseRunes',
+      'RUNE_TIERS',
+      'MAX_SOCKETS',
+      'RUNE_FAMILIES',
+    ])
+      expect(engine, name).toHaveProperty(name);
+  });
+});
+
+// Stubs in wave 0 ("not built yet"); wave 1A builds them and may delete these lines.
+describe('wave 1A: the sim', () => {
+  it.todo('knobHitOpts: leech, catalyst and manaOnHit from the knobs');
+  it.todo(
+    'guardLand: a guardOnLand × max life barrier for guardSeconds, never shrinking a larger one',
+  );
+  it.todo('queueEcho and echoTick: the move or blow again after echoDelay, at its echo fraction');
 });

@@ -165,7 +165,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
       bestFind,
     },
   };
-  world.pending = { items: [], scrap: 0, kills: 0, reactions: [] };
+  world.pending = { items: [], scrap: 0, kills: 0, reactions: [], runes: [] };
 
   return {
     profile: next,

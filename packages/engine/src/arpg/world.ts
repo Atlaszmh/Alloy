@@ -238,6 +238,7 @@ export function createHeroEntity(
     lastHitAt: -1,
     moving: false,
     swaySide: 1,
+    drained: [0, 0, 0, 0],
   };
 }
 
@@ -330,6 +331,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     // Loot depends on how far the save has progressed, so re-entering a
     // floor re-fights the same monsters but rolls fresh drops.
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
+    runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -349,10 +351,11 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     drops: [],
     nextId: 1,
     loot: { ...opts.loot },
-    pending: { items: [], scrap: 0, kills: 0, reactions: [] },
+    pending: { items: [], scrap: 0, kills: 0, reactions: [], runes: [] },
     totalMonsters: 0,
     bossId: null,
     queuedCasts: [],
+    echoes: [],
     queuedRelease: null,
     holdDropped: null,
     queuedAttack: null,

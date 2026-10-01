@@ -1,4 +1,4 @@
-import type { ResolvedAbility } from '../../types/ability.js';
+import type { Knobs, ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
 import { abilityHit, impact } from './impact.js';
@@ -12,6 +12,14 @@ export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
   if (!h.defend || ctx.world.t >= h.defend.until) return null;
   // A Defensive's effect runs only with a Defensive chain (a new one ends it).
   return chainMove(h.chains[DEFENSIVE]!, h.defend.move, h.defend.stage);
+}
+
+/**
+ * Guard: on landing, a shield of `guardOnLand` × max life for
+ * `delve.runes.guardSeconds`, fed into Obsidian's barrier (see the runes spec).
+ */
+export function guardLand(_ctx: SimCtx, _knobs: Knobs): void {
+  throw new Error('not built yet');
 }
 
 /** The Surge while it is up, else null. */
