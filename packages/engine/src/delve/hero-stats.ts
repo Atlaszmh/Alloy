@@ -485,6 +485,64 @@ export function useInterval(
 }
 
 /**
+ * Mana a second the basics bring back at their full rate, as Power counts them
+ * (see the rune costs spec): regen, `basicAttackGain` a strike, and the blows'
+ * Drain (each blow's foe-hits at most `drainFoes`, capped at `drainShare` of a
+ * strike's gain), over the strike interval. `estimateCombat`'s mana income
+ * before its skills' Drain.
+ */
+export function basicIncome(registry: DataRegistry, stats: HeroStats): number {
+  const bal = registry.getDelveBalance();
+  // As `estimateCombat` counts the basics: its cleave and its strike interval.
+  const blows = stats.weapon.blows;
+  const melee = stats.weapon.kind === 'melee';
+  const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
+  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
+  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
+  const income = manaPool(stats, registry).regen + bal.mana.basicAttackGain / strikeInterval;
+  const blowDrain = mean(
+    blows.map((b) =>
+      Math.min(
+        b.knobs.manaOnHit * Math.min(cleave, bal.runes.drainFoes),
+        bal.mana.basicAttackGain * bal.runes.drainShare,
+      ),
+    ),
+  );
+  return income + blowDrain / strikeInterval;
+}
+
+/** A chain's mana spend a second against the build's refill (see the rune costs spec). */
+export interface ManaSupport {
+  /** Mana a second the chain spends, held at its cadence: each move's cost over the
+   *  interval its cooldown, wind-up and beat allow (`useInterval` with mana and charge
+   *  unbounded), as if the pool always paid. 0 for a charge chain. */
+  spend: number;
+  /** Mana a second the build brings back while it does: regen, the basics at their full
+   *  rate (`basicAttackGain` a strike plus the blows' Drain, as Power counts them), and
+   *  this chain's own Drain at its cadence (`drainPerUse`). */
+  refill: number;
+}
+
+/**
+ * A chain's mana support, for the builder's "Spends 14/s · your build refills
+ * 9/s" (see the rune costs spec): its moves' mean cost (a hold's at full
+ * charge) over its unbounded `useInterval`, against `basicIncome` plus its
+ * own Drain over the same interval. It ignores the pool's cap.
+ */
+export function manaSupport(
+  registry: DataRegistry,
+  stats: HeroStats,
+  chain: ResolvedChain,
+): ManaSupport {
+  const bal = registry.getDelveBalance();
+  const every = useInterval(bal, chain, stats.tempo, Infinity, Infinity);
+  return {
+    spend: mean(chain.moves.map((_, i) => valuedMove(chain, i).cost)) / every,
+    refill: basicIncome(registry, stats) + drainPerUse(chain, bal) / every,
+  };
+}
+
+/**
  * Heuristic DPS / effective-HP estimate against the reference monster, used
  * for Power and item comparisons. The basic attack, the Primary and the
  * Ultimate count toward DPS (sharing mana and time); the Defensive counts
@@ -541,16 +599,7 @@ export function estimateCombat(
     return perUse > 0 ? perUse / every(chain!, income * share, dps / unit) : 0;
   };
   const manaIncome =
-    income +
-    mean(
-      blows.map((b) =>
-        Math.min(
-          b.knobs.manaOnHit * Math.min(cleave, bal.runes.drainFoes),
-          bal.mana.basicAttackGain * bal.runes.drainShare,
-        ),
-      ),
-    ) /
-      strikeInterval +
+    basicIncome(registry, stats) +
     drained(primary, 0.7) +
     drained(ultimate, 0.3) +
     drained(defensive, 0.3);

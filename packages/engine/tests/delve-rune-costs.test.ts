@@ -9,9 +9,16 @@ import {
   resolveAbility,
   resolveChain,
 } from '../src/arpg/abilities/resolve.js';
-import { computeHeroStats } from '../src/delve/hero-stats.js';
+import {
+  basicIncome,
+  computeHeroStats,
+  estimateCombat,
+  manaPool,
+  manaSupport,
+  useInterval,
+} from '../src/delve/hero-stats.js';
 import { loadEase, runeLoad } from '../src/loot/runes.js';
-import type { AbilityPayment, AbilitySlot, Move, MoveKind } from '../src/types/ability.js';
+import type { AbilityPayment, AbilitySlot, Chain, Move, MoveKind } from '../src/types/ability.js';
 import type { DelveBalance, HeroStats } from '../src/types/delve.js';
 import type { RuneRef } from '../src/types/rune.js';
 import GOLDEN from './fixtures/rune-costs-v051.json';
@@ -293,5 +300,129 @@ describe('resolveAbility: the load and the prices', () => {
     expect(baseCost(pay('cast'))).toBeCloseTo(4);
     expect(baseCost(pay('charge'))).toBe(0);
     expect(baseCost(resolveAbility(loaded, 'primary', bolt(), 'mana', at(1)))).toBe(8);
+  });
+});
+
+describe('basicIncome and manaSupport', () => {
+  /** A common Fire sword, the arena fixture's, attuned `extra` more to Fire; its blows Drain III when `drain`. */
+  function swordHero(drain: boolean, extra = 0): HeroStats {
+    return computeHeroStats({ weapon: gear('fire') }, registry, {
+      pair: { primary: 'fire', secondary: null },
+      attunement: { fire: extra },
+      basic: (['light', 'light', 'heavy'] as const).map((kind) => ({
+        kind,
+        element: 'fire' as const,
+        ...(drain ? { runes: [III('drain')] } : {}),
+      })),
+    });
+  }
+  /** Seconds between strikes, as Power counts them. */
+  const strikeInterval = (s: HeroStats) =>
+    (s.attackInterval * s.weapon.blows.reduce((a, b) => a + b.time * b.knobs.quick.beat, 0)) /
+    s.weapon.blows.length;
+
+  it("basicIncome is regen and a strike's gain, plus the blows' Drain, over the strike interval", () => {
+    const plain = swordHero(false);
+    const drained = swordHero(true);
+    const gain = registry.getDelveBalance().mana.basicAttackGain;
+    expect(basicIncome(registry, plain)).toBeCloseTo(
+      manaPool(plain, registry).regen + gain / strikeInterval(plain),
+    );
+    // Drain III: 2 mana a foe-hit over the sword's cleave, at most half a strike's 5.
+    expect(basicIncome(registry, drained) - basicIncome(registry, plain)).toBeCloseTo(
+      2.5 / strikeInterval(drained),
+    );
+  });
+
+  it("leaves estimateCombat as it was: v0.51.0's Power exactly, its DPS to the float", () => {
+    const hero = computeHeroStats({ weapon: gear('fire') }, registry, {
+      pair: { primary: 'fire', secondary: 'frost' },
+      attunement: { fire: 14, frost: 5 },
+      basic: (['light', 'light', 'heavy'] as const).map((kind) => ({
+        kind,
+        element: 'fire' as const,
+        runes: [III('drain')],
+      })),
+    });
+    const drained: Partial<Record<AbilitySlot, Chain>> = {
+      primary: {
+        payment: 'mana',
+        moves: [
+          bolt({ kind: 'light', runes: [III('drain'), III('echo')] }),
+          bolt({ kind: 'hold', elements: ['fire', 'frost'], runes: [III('drain')] }),
+        ],
+      },
+      defensive: {
+        payment: 'mana',
+        moves: [{ kind: 'medium', form: 'ward', elements: ['frost'], runes: [III('drain')] }],
+      },
+      ultimate: {
+        payment: 'cast',
+        moves: [
+          { kind: 'heavy', form: 'nova', elements: ['fire'], runes: [III('drain'), III('heavy')] },
+        ],
+      },
+    };
+    const charged = {
+      ...drained,
+      ultimate: {
+        payment: 'charge' as const,
+        moves: [
+          {
+            kind: 'medium' as const,
+            form: 'nova' as const,
+            elements: ['fire' as const],
+            runes: [III('drain')],
+          },
+        ],
+      },
+    };
+    const cases: [Partial<Record<AbilitySlot, Chain>> | undefined, number, number][] = [
+      [drained, 77.33972432955927, 1098],
+      [charged, 122.88517595614529, 1385],
+      [undefined, 158.57566058873041, 1573],
+    ];
+    for (const [chains, dps, power] of cases) {
+      const e = estimateCombat(hero, registry, 10, chains);
+      expect(e.power).toBe(power);
+      expect(e.dps).toBeCloseTo(dps, 9);
+    }
+  });
+
+  it("spend is the moves' mean cost over their unbounded interval; refill is basicIncome without Drain on the chain", () => {
+    const stats = swordHero(false);
+    const bal = registry.getDelveBalance();
+    const chain = resolveChain(registry, stats, 'primary', {
+      payment: 'mana',
+      moves: [bolt(), bolt({ kind: 'heavy' })],
+    });
+    const every = useInterval(bal, chain, stats.tempo, Infinity, Infinity);
+    const support = manaSupport(registry, stats, chain);
+    expect(support.spend).toBeCloseTo((chain.moves[0].cost + chain.moves[1].cost) / 2 / every);
+    expect(support.refill).toBe(basicIncome(registry, stats));
+    const charge = resolveChain(registry, stats, 'primary', { payment: 'charge', moves: [bolt()] });
+    expect(manaSupport(registry, stats, charge)).toEqual({
+      spend: 0,
+      refill: basicIncome(registry, stats),
+    });
+  });
+
+  it('spends the eased load: a runed chain costs 1 + load as much, less on a better-attuned hero', () => {
+    // Echo, Linger and Pierce leave the wind-up and the beat alone, so the interval stays.
+    const runes = [III('echo'), III('linger'), III('pierce')];
+    const spend = (stats: HeroStats, withRunes: boolean) =>
+      manaSupport(
+        loaded,
+        stats,
+        resolveChain(loaded, stats, 'primary', {
+          payment: 'mana',
+          moves: [bolt(withRunes ? { runes } : {})],
+        }),
+      ).spend;
+    const starved = swordHero(false);
+    const supported = swordHero(false, 14);
+    expect(starved.attunement.fire).toBe(1);
+    expect(spend(starved, true) / spend(starved, false)).toBeCloseTo(1 + 2.35 * 0.97);
+    expect(spend(supported, true) / spend(supported, false)).toBeCloseTo(1 + 2.35 * 0.55);
   });
 });
