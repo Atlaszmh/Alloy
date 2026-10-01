@@ -17,6 +17,7 @@ import {
   manaSupport,
   useInterval,
 } from '../src/delve/hero-stats.js';
+import * as engine from '../src/index.js';
 import { loadEase, runeLoad } from '../src/loot/runes.js';
 import type { AbilityPayment, AbilitySlot, Chain, Move, MoveKind } from '../src/types/ability.js';
 import type { DelveBalance, HeroStats } from '../src/types/delve.js';
@@ -458,5 +459,12 @@ describe("Drain's cap: half the cost before the load", () => {
     expect(manaSupport(loaded, stats, resolved).refill - basicIncome(registry, stats)).toBeCloseTo(
       2.8 / every,
     );
+  });
+});
+
+describe("the contract's exports", () => {
+  it('exports runeLoad, loadEase, baseCost, basicIncome and manaSupport', () => {
+    for (const name of ['runeLoad', 'loadEase', 'baseCost', 'basicIncome', 'manaSupport'] as const)
+      expect(typeof engine[name], name).toBe('function');
   });
 });

@@ -120,6 +120,8 @@ export {
   manaPool,
   hasMastery,
   isAttuneStat,
+  basicIncome,
+  manaSupport,
 } from './delve/hero-stats.js';
 export type {
   ItemComparison,
@@ -127,6 +129,7 @@ export type {
   CombatEstimate,
   HeroStatsExtra,
   WeaponValue,
+  ManaSupport,
 } from './delve/hero-stats.js';
 export {
   isBossDepth,
@@ -250,6 +253,7 @@ export {
   moveWeight,
   chainMove,
   chargeCap,
+  baseCost,
   stepBonus,
   beatFor,
   moveBeat,
