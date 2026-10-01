@@ -1,5 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
-import { movesetOf } from '../loot/moveset.js';
+import { carriedByText, movesetOf } from '../loot/moveset.js';
 import {
   addToPouch,
   runeFits,
@@ -23,9 +23,11 @@ import {
   type RunePouch,
   type RuneRef,
   type RuneTarget,
+  type RuneTier,
   type UnsocketMode,
 } from '../types/rune.js';
-import { chainOrigins, editPrice, movesOf } from './moveset.js';
+import { isDiveActive } from './dive.js';
+import { chainOrigins, editPrice, movesOf, setChains, withMove } from './moveset.js';
 import type { ProfileActionResult } from './profile.js';
 
 /**
@@ -220,35 +222,108 @@ export function draftPrice(
   };
 }
 
+const BETWEEN_DIVES = 'Chains can only change between dives';
+const FORGE_LOCKED = 'Forge at the Anvil, between dives';
+
+function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
+  return { ok: false, profile, reason };
+}
+
+/** The equipped weapon's `skill` chain and its move `index`, or why an op can't reach them. */
+function moveAt(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  skill: ChainSkill,
+  index: number,
+): { chain: Chains[ChainSkill]; move: Move | Blow } | string {
+  if (isDiveActive(profile)) return BETWEEN_DIVES;
+  const weapon = profile.equipped.weapon;
+  if (!weapon) return UNARMED_TEXT;
+  const chain = movesetOf(registry, weapon).chains[skill];
+  if (!chain) return carriedByText(registry, skill);
+  const move = Number.isInteger(index) ? movesOf(chain)[index] : undefined;
+  if (!move) return 'Pick a move the chain holds';
+  return { chain, move };
+}
+
+/**
+ * Open the next socket on the equipped weapon's move `index` of `skill`: one
+ * `setChains` in place, so it costs `socketLinks[n]` Links and
+ * `socketScrap[n]` scrap by the `n` sockets the move has. Refuses mid-dive,
+ * unarmed, a skill the weapon doesn't carry, a move the chain doesn't hold, at
+ * the weapon rarity's cap, and when it can't be paid.
+ */
 export function openSocket(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _skill: ChainSkill,
-  _index: number,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  skill: ChainSkill,
+  index: number,
 ): ProfileActionResult {
-  throw new Error('not built yet');
+  const at = moveAt(registry, profile, skill, index);
+  if (typeof at === 'string') return refuse(profile, at);
+  const sockets = socketsOf(at.move);
+  if (sockets.length >= socketCap(registry, profile.equipped.weapon!.rarity))
+    return refuse(profile, 'This move has every socket');
+  const move = { ...at.move, runes: [...sockets, null] };
+  return setChains(registry, profile, { [skill]: withMove(at.chain, index, move) });
 }
 
+/**
+ * Socket `rune`, from the pouch, into open socket `socket` of the equipped
+ * weapon's move `index` of `skill`: one `setChains` in place, so a rune
+ * already there is pulled (`opts.unsocket`, else the balance's). Refuses
+ * mid-dive, unarmed, a socket not yet open, and whatever `setChains` refuses
+ * (a rune that doesn't fit the move, one already on it, one the pouch lacks).
+ */
 export function socketRune(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _skill: ChainSkill,
-  _index: number,
-  _socket: number,
-  _rune: RuneRef,
-  _opts?: SetChainsOptions,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  skill: ChainSkill,
+  index: number,
+  socket: number,
+  rune: RuneRef,
+  opts: SetChainsOptions = {},
 ): ProfileActionResult {
-  throw new Error('not built yet');
+  const at = moveAt(registry, profile, skill, index);
+  if (typeof at === 'string') return refuse(profile, at);
+  const sockets = socketsOf(at.move);
+  if (!Number.isInteger(socket) || socket < 0 || socket >= sockets.length)
+    return refuse(profile, 'Open this socket first');
+  if (!rune || typeof rune !== 'object') return refuse(profile, 'Pick a rune');
+  const runes = sockets.map((r, i) => (i === socket ? { id: rune.id, tier: rune.tier } : r));
+  const edit = { [skill]: withMove(at.chain, index, { ...at.move, runes }) };
+  return setChains(registry, profile, edit, { unsocket: opts.unsocket });
 }
 
-export function fusePrice(_registry: DataRegistry, _ref: RuneRef): number | null {
-  throw new Error('not built yet');
+/** The scrap fusing `fuseCount` of `ref` into one of the next tier costs (`fuseScrap`), or null at tier V. */
+export function fusePrice(registry: DataRegistry, ref: RuneRef): number | null {
+  if (ref.tier >= RUNE_TIERS) return null;
+  return registry.getDelveBalance().runes.fuseScrap[ref.tier - 1];
 }
 
+/**
+ * Fuse `fuseCount` (3) of `ref` from the pouch into one of the next tier, for
+ * scrap (`fusePrice`); nothing is rolled. Refuses mid-dive (with the forge),
+ * an unknown rune, tier V, and a pouch or scrap short of it.
+ */
 export function fuseRunes(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _ref: RuneRef,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  ref: RuneRef,
 ): ProfileActionResult {
-  throw new Error('not built yet');
+  if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
+  if (!registry.findRune(ref.id) || !Number.isInteger(ref.tier) || ref.tier < 1)
+    return refuse(profile, `Unknown rune ${ref.id}`);
+  const price = fusePrice(registry, ref);
+  if (price === null) return refuse(profile, "Tier V runes don't fuse");
+  const { fuseCount } = registry.getDelveBalance().runes;
+  const pouch = takeFromPouch(profile.runes, Array<RuneRef>(fuseCount).fill(ref));
+  if (!pouch) return refuse(profile, `Fuse ${fuseCount} of one rune and tier`);
+  if (profile.scrap < price) return refuse(profile, 'Not enough scrap');
+  const made: RuneRef = { id: ref.id, tier: (ref.tier + 1) as RuneTier };
+  return {
+    ok: true,
+    runes: [made],
+    profile: { ...profile, scrap: profile.scrap - price, runes: addToPouch(pouch, [made]) },
+  };
 }

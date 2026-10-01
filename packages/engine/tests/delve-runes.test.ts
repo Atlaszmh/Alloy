@@ -12,8 +12,16 @@ import {
   parseDelveProfile,
   salvageItems,
   setAutoSalvage,
+  unequipSlot,
 } from '../src/delve/profile.js';
-import { draftPrice, unsocketMode } from '../src/delve/runes.js';
+import {
+  draftPrice,
+  fusePrice,
+  fuseRunes,
+  openSocket,
+  socketRune,
+  unsocketMode,
+} from '../src/delve/runes.js';
 import {
   rollRuneDrop,
   rollSockets,
@@ -695,5 +703,117 @@ describe('the draft: sockets and runes through setChains', () => {
       else expect(batch.profile.links).toBe(step.links);
       expect(primaryOf(batch.profile)).toEqual(primaryOf(step));
     }
+  });
+});
+
+describe('opening a socket, socketing a rune, fusing', () => {
+  it("opens a move's next socket for Links and scrap by its index, up to the rarity's cap", () => {
+    const p = ready();
+    const one = openSocket(registry, p, 'primary', 2);
+    expect(one.ok).toBe(true);
+    expect(one.profile).toMatchObject({ links: 9, scrap: 480, manaDust: 100 });
+    expect(primaryOf(one.profile).moves[2].runes).toEqual([null]);
+    // Move 0 has two: its third costs 3 Links and 60 scrap, and then it has every socket.
+    const three = openSocket(registry, one.profile, 'primary', 0);
+    expect(three.profile).toMatchObject({ links: 6, scrap: 420 });
+    expect(openSocket(registry, three.profile, 'primary', 0).reason).toBe(
+      'This move has every socket',
+    );
+    // A blow takes them too.
+    expect(chainsOf(openSocket(registry, p, 'basic', 1).profile).basic![1].runes).toEqual([null]);
+    expect(openSocket(registry, { ...p, links: 0 }, 'primary', 2).reason).toBe('Not enough Links');
+    expect(openSocket(registry, { ...p, scrap: 0 }, 'primary', 2).reason).toBe('Not enough scrap');
+    expect(openSocket(registry, p, 'primary', 3).reason).toBe('Pick a move the chain holds');
+    // A common weapon: one socket a move, and no Defensive.
+    const fresh = { ...createDelveProfile(registry, 3, { primary: 'fire' }), links: 9, scrap: 999 };
+    const opened = openSocket(registry, fresh, 'primary', 0).profile;
+    expect(openSocket(registry, opened, 'primary', 0).reason).toBe('This move has every socket');
+    expect(openSocket(registry, fresh, 'defensive', 0).reason).toBe(
+      'Carried by magic weapons and better',
+    );
+    expect(openSocket(registry, unequipSlot(registry, fresh, 'weapon'), 'primary', 0).reason).toBe(
+      'Equip a weapon to build your moves',
+    );
+  });
+
+  it('sockets a pouch rune into an open socket; over a filled one it pulls by the mode', () => {
+    const p = ready();
+    const res = socketRune(registry, p, 'primary', 0, 1, CHAIN_I);
+    expect(res.ok).toBe(true);
+    expect(primaryOf(res.profile).moves[0].runes).toEqual([SPLIT_I, CHAIN_I]);
+    expect(res.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 });
+    expect(res.profile.runes.chain).toEqual([0, 0, 0, 0, 0]);
+    expect(socketRune(registry, p, 'primary', 1, 0, ECHO_I)).toMatchObject({
+      ok: true,
+      destroyed: [QUICK_II],
+    });
+    const paid = socketRune(registry, p, 'primary', 1, 0, ECHO_I, { unsocket: 'pay' });
+    expect(paid).toMatchObject({ ok: true, runes: [QUICK_II], destroyed: [] });
+    expect(paid.profile.scrap).toBe(470);
+    expect(socketRune(registry, p, 'primary', 2, 0, CHAIN_I).reason).toBe('Open this socket first');
+    expect(socketRune(registry, p, 'primary', 0, 1, { id: 'split', tier: 2 }).reason).toBe(
+      'A move takes one Split',
+    );
+    expect(socketRune(registry, p, 'primary', 0, 1, { id: 'widen', tier: 1 }).reason).toBe(
+      "Widen doesn't fit a Bolt",
+    );
+    expect(socketRune(registry, p, 'primary', 0, 1, { id: 'chain', tier: 3 }).reason).toBe(
+      'Not enough runes in your pouch',
+    );
+  });
+
+  it('fuses three of one rune and tier into one of the next, for scrap; tier V does not fuse', () => {
+    expect(R.fuseCount).toBe(3);
+    const tiers = [1, 2, 3, 4, 5] as const;
+    expect(tiers.map((tier) => fusePrice(registry, { id: 'split', tier }))).toEqual([
+      20,
+      40,
+      80,
+      160,
+      null,
+    ]);
+    const p = { ...ready(), runes: { split: [4, 0, 0, 3, 0] } };
+    const res = fuseRunes(registry, p, SPLIT_I);
+    expect(res).toMatchObject({ ok: true, runes: [{ id: 'split', tier: 2 }] });
+    expect(res.profile).toMatchObject({ scrap: 480, runes: { split: [1, 1, 0, 3, 0] } });
+    expect(fuseRunes(registry, res.profile, SPLIT_I).reason).toBe('Fuse 3 of one rune and tier');
+    const four = fuseRunes(registry, p, { id: 'split', tier: 4 });
+    expect(four.profile).toMatchObject({ scrap: 340, runes: { split: [4, 0, 0, 0, 1] } });
+    const fives = { ...p, runes: { split: [0, 0, 0, 0, 3] } };
+    expect(fuseRunes(registry, fives, { id: 'split', tier: 5 }).reason).toBe(
+      "Tier V runes don't fuse",
+    );
+    expect(fuseRunes(registry, { ...p, scrap: 19 }, SPLIT_I).reason).toBe('Not enough scrap');
+    expect(fuseRunes(registry, p, { id: 'nope', tier: 1 }).reason).toBe('Unknown rune nope');
+  });
+
+  it('every op on sockets and runes waits for the dive to end, the door screen included', () => {
+    const p = ready();
+    const fighting = startDive(registry, p, 1);
+    const choosing = { ...fighting, dive: { ...fighting.dive!, phase: 'choosing' as const } };
+    const moves = 'Chains can only change between dives';
+    const forge = 'Forge at the Anvil, between dives';
+    for (const q of [fighting, choosing]) {
+      expect(openSocket(registry, q, 'primary', 2)).toMatchObject({
+        ok: false,
+        profile: q,
+        reason: moves,
+      });
+      expect(socketRune(registry, q, 'primary', 0, 1, CHAIN_I).reason).toBe(moves);
+      const draft = { primary: withRunes(primaryOf(q), 2, [null]) };
+      expect(setChains(registry, q, draft).reason).toBe(moves);
+      expect(fuseRunes(registry, { ...q, runes: { split: [3, 0, 0, 0, 0] } }, SPLIT_I).reason).toBe(
+        forge,
+      );
+      const bag = { ...q, bag: ['a', 'b', 'c'].map((uid) => socketedSword(uid)) };
+      expect(transferMoveset(registry, bag, 'a').reason).toBe(
+        'Transfer your moveset between dives',
+      );
+      expect(salvageItems(registry, bag, ['a'])).toMatchObject({ count: 0, destroyed: [] });
+      expect(fuseGear(registry, bag, ['a', 'b', 'c']).reason).toBe(forge);
+    }
+    // The choice of mana stays open (a migrated save may be diving).
+    const unchosen = startDive(registry, createDelveProfile(registry, 3), 1);
+    expect(chooseStartingMana(registry, unchosen, 'frost').ok).toBe(true);
   });
 });
