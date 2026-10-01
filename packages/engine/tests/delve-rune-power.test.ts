@@ -4,13 +4,18 @@ import { resolveAbility } from '../src/arpg/abilities/resolve.js';
 import { botInput } from '../src/arpg/bot.js';
 import { dpsCombos, dpsKey, simulateDps, type DpsSetup } from '../src/arpg/dps-sim.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
-import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import { betweenDives, takeBestStop } from '../src/delve/autopilot.js';
+import { startDive } from '../src/delve/dive.js';
+import { compareItem, computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import { movesOf } from '../src/delve/moveset.js';
 import { bindSecondary, profileStats } from '../src/delve/pair.js';
-import { createDelveProfile } from '../src/delve/profile.js';
+import { createDelveProfile, referenceDepth } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
+import { pouchCount, socketsOf } from '../src/loot/runes.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { ABILITY_SLOTS, type Chains } from '../src/types/ability.js';
-import type { DelveProfile } from '../src/types/delve.js';
+import { ABILITY_SLOTS, type Chains, type ChainSkill } from '../src/types/ability.js';
+import type { DelveProfile, DiveStop } from '../src/types/delve.js';
+import type { GearItem } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import type { RuneRef } from '../src/types/rune.js';
 import { arena, chainsOf, dummy, gear, registry, withChains } from './fixtures/arena.js';
@@ -215,5 +220,132 @@ describe('the bot and rune drops', () => {
       dead: false,
     });
     expect(botInput(registry, w).move.x).toBeGreaterThan(0.9);
+  });
+});
+
+describe('the autopilot and runes', () => {
+  /** A Fire hero after its first dive (past the free edits), wielding `weapon` (its starter sword by default). */
+  const veteran = (weapon?: GearItem): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    return {
+      ...p,
+      equipped: { ...p.equipped, weapon: weapon ?? p.equipped.weapon! },
+      stats: { ...p.stats, dives: 1 },
+    };
+  };
+  /** `p` with its Primary one medium Fire Bolt whose sockets hold `runes`. */
+  const bolt = (p: DelveProfile, runes: (RuneRef | null)[]) =>
+    withChains(p, {
+      primary: {
+        moves: [{ kind: 'medium', form: 'bolt', elements: ['fire'], runes }],
+        payment: 'mana',
+      },
+    });
+  const primaryRunes = (p: DelveProfile) => chainsOf(p).primary!.moves[0].runes;
+  const sockets = (p: DelveProfile, skill: ChainSkill) =>
+    movesOf(chainsOf(p)[skill]).map((m) => socketsOf(m).length);
+  /** `p` diving, on the door screen after depth 1, holding `stop`. */
+  const atStop = (p: DelveProfile, stop: DiveStop): DelveProfile => {
+    const diving = startDive(registry, p, 1);
+    const dive = diving.dive!;
+    return {
+      ...diving,
+      dive: { ...dive, phase: 'choosing', depthsCleared: 1, doorChoices: ['winding'], stop },
+    };
+  };
+
+  it('fuses every triple, lowest tier first, so a fused rune can make a triple above it', () => {
+    const p = { ...veteran(), runes: { split: [3, 2, 0, 0, 0] }, scrap: 60 };
+    const after = betweenDives(registry, p);
+    expect(after.runes.split).toEqual([0, 0, 1, 0, 0]);
+    expect(after.scrap).toBe(0); // 20 for the II, 40 for the III
+  });
+
+  it('opens sockets with the Links the slots leave: the cheapest first, the Primary first', () => {
+    const magic = generateItem(
+      registry,
+      { uid: 'm', ilvl: 5, rarity: 'magic', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(1),
+    );
+    const five = <T>(make: () => T): T[] => Array.from({ length: 5 }, make);
+    // Every chain it carries at its cap of 5, so no Link goes to a slot; two sockets a move.
+    const full = withChains(veteran(magic), {
+      basic: five(() => ({ kind: 'medium' as const, element: 'fire' as const })),
+      primary: {
+        moves: five(() => ({
+          kind: 'medium' as const,
+          form: 'bolt' as const,
+          elements: ['fire' as const],
+        })),
+        payment: 'mana',
+      },
+      defensive: {
+        moves: five(() => ({
+          kind: 'medium' as const,
+          form: 'ward' as const,
+          elements: ['fire' as const],
+        })),
+        payment: 'mana',
+      },
+    });
+    // 15 first sockets (1 Link + 20 scrap each), then the Primary's first move's second (2 + 40).
+    const after = betweenDives(registry, { ...full, links: 17, scrap: 340 });
+    expect(sockets(after, 'primary')).toEqual([2, 1, 1, 1, 1]);
+    expect(sockets(after, 'basic')).toEqual([1, 1, 1, 1, 1]);
+    expect(sockets(after, 'defensive')).toEqual([1, 1, 1, 1, 1]);
+    expect(after).toMatchObject({ links: 0, scrap: 0 });
+  });
+
+  it('sockets the pouch rune that raises Power most, and keeps the rest', () => {
+    const p = {
+      ...bolt(veteran(), [null]),
+      runes: { echo: [0, 0, 1, 0, 0], leech: [1, 0, 0, 0, 0] },
+    };
+    const after = betweenDives(registry, p);
+    expect(primaryRunes(after)).toEqual([III('echo')]);
+    expect(after.runes).toMatchObject({ echo: [0, 0, 0, 0, 0], leech: [1, 0, 0, 0, 0] });
+  });
+
+  it('changes a socketed rune only for one that gains Power (in destroy mode the old one is gone)', () => {
+    const leeched = {
+      ...bolt(veteran(), [{ id: 'leech', tier: 1 }]),
+      runes: { echo: [0, 0, 1, 0, 0] },
+    };
+    const swapped = betweenDives(registry, leeched);
+    expect(primaryRunes(swapped)).toEqual([III('echo')]);
+    expect(pouchCount(swapped.runes, { id: 'leech', tier: 1 })).toBe(0);
+    const echoed = { ...bolt(veteran(), [III('echo')]), runes: { leech: [1, 0, 0, 0, 0] } };
+    const kept = betweenDives(registry, echoed);
+    expect(primaryRunes(kept)).toEqual([III('echo')]);
+    expect(pouchCount(kept.runes, { id: 'leech', tier: 1 })).toBe(1);
+  });
+
+  it('at a stop, sockets the rune that gains most: second after equip, before an upgrade', () => {
+    const p = atStop(
+      { ...bolt(veteran(), [null]), runes: { echo: [0, 0, 1, 0, 0] }, scrap: 1000 },
+      { offers: ['rune', 'upgrade'], taken: false },
+    );
+    const after = takeBestStop(registry, p);
+    expect(primaryRunes(after)).toEqual([III('echo')]);
+    expect(after.scrap).toBe(1000);
+    expect(after.dive!.stop!.taken).toBe(true);
+  });
+
+  it('values a transfer without the runes it would destroy (a rare holds two sockets a move)', () => {
+    const epic = generateItem(
+      registry,
+      { uid: 'e', ilvl: 10, rarity: 'epic', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    const value = (runes: (RuneRef | null)[]) => {
+      const p = bolt(veteran(epic), runes);
+      const twin = { ...p.equipped.weapon!, uid: 'twin', rarity: 'rare' as const };
+      return compareItem(p.equipped, twin, registry, referenceDepth(p), p.pair);
+    };
+    // Echo III in the first socket moves with the move; in the third, past the rare's cap, it's destroyed.
+    const kept = value([III('echo'), null, null]);
+    const lost = value([null, null, III('echo')]);
+    expect(lost.power).toBe(kept.power);
+    expect(lost.newPower).toBeLessThan(kept.newPower);
   });
 });
