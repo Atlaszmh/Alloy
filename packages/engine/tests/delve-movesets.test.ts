@@ -232,7 +232,7 @@ describe('drops: extra slots by rarity', () => {
         expect(Object.keys(m.slots).sort()).toEqual([...bal.movesets.carries[rarity]].sort());
         const extra = extraSlots(registry, w);
         seen.add(extra);
-        expect(m).toEqual(defaultMoveset(registry, w, 'storm', m.slots));
+        expect(unsocketed(m)).toEqual(defaultMoveset(registry, w, 'storm', m.slots));
         for (const skill of CHAIN_SKILLS) expect(m.slots[skill] ?? 0).toBeLessThanOrEqual(5);
       }
       expect(Math.min(...seen)).toBe(EXTRA[rarity][0]);
@@ -1272,3 +1272,15 @@ describe('the autopilot between dives', () => {
     expect(paid.manaDust).toBe(0);
   });
 });
+
+/** A moveset without its sockets (see the runes spec: weapon drops roll some, empty). */
+function unsocketed(m: Moveset): Moveset {
+  const strip = <X extends Move | Blow>({ runes: _r, ...x }: X) => x;
+  const chains = Object.fromEntries(
+    Object.entries(m.chains).map(([skill, c]) => [
+      skill,
+      Array.isArray(c) ? c.map(strip) : { ...c, moves: c!.moves.map(strip) },
+    ]),
+  );
+  return { chains, slots: m.slots };
+}

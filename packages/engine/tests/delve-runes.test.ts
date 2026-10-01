@@ -1012,3 +1012,47 @@ describe("the stop's fifth kind: socket a rune", () => {
     );
   });
 });
+
+describe('sockets on weapon drops', () => {
+  it("opens the rarity's sockets, empty, over the moves it carries, never past a move's cap", () => {
+    expect(R.socketDrops).toEqual({
+      common: [0, 0],
+      uncommon: [0, 0],
+      magic: [0, 1],
+      rare: [0, 1],
+      epic: [1, 2],
+      legendary: [2, 3],
+    });
+    for (const rarity of RARITY_ORDER) {
+      const seen = new Set<number>();
+      for (let seed = 1; seed <= 80; seed++) {
+        const m = weapon(rarity, seed).moveset!;
+        seen.add(openSockets(m));
+        for (const x of allMoves(m)) {
+          expect(socketsOf(x).length).toBeLessThanOrEqual(R.socketCap[rarity]);
+          expect(socketsOf(x).every((r) => r === null)).toBe(true);
+        }
+      }
+      expect(Math.min(...seen)).toBe(R.socketDrops[rarity][0]);
+      expect(Math.max(...seen)).toBe(R.socketDrops[rarity][1]);
+    }
+  });
+
+  it('spreads them over every chain a weapon carries, basic blows included', () => {
+    const got = new Set<string>();
+    for (let seed = 1; seed <= 60; seed++) {
+      const m = weapon('legendary', seed).moveset!;
+      for (const skill of CHAIN_SKILLS)
+        if (openSockets({ chains: { [skill]: m.chains[skill] }, slots: {} }) > 0) got.add(skill);
+    }
+    expect([...got].sort()).toEqual(['basic', 'defensive', 'primary', 'ultimate']);
+  });
+
+  it('rolls from its own stream: the same seed gives the same sockets, and the moveset under them is as before', () => {
+    expect(weapon('epic', 9).moveset).toEqual(weapon('epic', 9).moveset);
+    for (let seed = 1; seed <= 20; seed++) {
+      const w = weapon('legendary', seed);
+      expect(bare(w.moveset!)).toEqual(defaultMoveset(registry, w, 'storm', w.moveset!.slots));
+    }
+  });
+});
