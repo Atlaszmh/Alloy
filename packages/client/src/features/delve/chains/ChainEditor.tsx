@@ -23,7 +23,15 @@ import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { RunePicker } from '../runes/RunePicker';
 import { SocketRow } from '../runes/SocketRow';
-import { KIND_ICON, SKILL_NAME, blowText, chainText, moveText, runeCandidates } from './chain-text';
+import {
+  KIND_ICON,
+  SKILL_NAME,
+  blowText,
+  chainText,
+  markIdle,
+  moveText,
+  runeCandidates,
+} from './chain-text';
 import { MoveEditor } from './MoveEditor';
 
 const SKILL_KEY: Record<ChainSkill, string | null> = {
@@ -500,17 +508,24 @@ export function ChainEditor({
       </section>
       {runes && move && socket !== null && (
         <RunePicker
-          candidates={runeCandidates(
+          candidates={markIdle(
             registry,
-            runeTargetOf(runes.weaponBaseId, move),
-            sockets.filter((_, k) => k !== socket),
-            runes.pouch,
+            stats,
+            slot && chain ? { slot, chain, index, socket } : null,
+            runeCandidates(
+              registry,
+              runeTargetOf(runes.weaponBaseId, move),
+              sockets.filter((_, k) => k !== socket),
+              runes.pouch,
+            ),
           )}
           current={current}
           pullText={current ? runes.pullText(current) : undefined}
           tierChoice={runes.pouch === 'any'}
           on={runeTargetOf(runes.weaponBaseId, move)}
           dormant={dormant(index).includes(socket)}
+          payment={chain?.payment}
+          ease={resolved?.moves[index]?.ease}
           onPick={(rune) => setSockets(sockets.map((r, k) => (k === socket ? rune : r)))}
           onPull={
             current ? () => setSockets(sockets.map((r, k) => (k === socket ? null : r))) : undefined

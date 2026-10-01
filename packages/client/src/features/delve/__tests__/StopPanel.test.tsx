@@ -14,6 +14,7 @@ import { StopPanel } from '../StopPanel';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
+import { pricedRegistry } from '../runes/__tests__/priced-registry';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -222,6 +223,13 @@ describe('StopPanel (the door screen)', () => {
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.getByText('Socket a rune: done')).toBeInTheDocument();
     expect(screen.getByTestId('door-first')).toHaveFocus();
+  });
+
+  it("prices a rune in the saved chain's payment, eased by the move's attunement", () => {
+    pricedRegistry();
+    const picker = atRuneStop();
+    // Split I's 0.27, eased 6% by the starting sword's and chest's 2 Fire.
+    expect(picker.getByTestId('rune-pick-split')).toHaveTextContent('+25% cost');
   });
 
   it("Escape closes the rune picker, not the stop's", () => {
