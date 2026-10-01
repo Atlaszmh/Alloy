@@ -4,7 +4,7 @@ import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { heroChains } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
-import { useDelveStore } from '@/stores/delveStore';
+import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { moveFocus } from '@/features/gamepad/use-gamepad-nav';
 
@@ -82,6 +82,44 @@ describe('DelveCamp', () => {
     expect(apply).toHaveAttribute('aria-describedby', why.id);
     // The way out still works.
     expect(screen.getByTestId('draft-discard-delve')).toBeEnabled();
+  });
+
+  it("Apply's total holds a socket's Links and scrap, and the engine's reason", () => {
+    const s = useDelveStore.getState();
+    const primary = heroChains(getDelveRegistry(), s.profile.equipped, s.profile.pair).primary!;
+    act(() => {
+      s.setProfile({ ...s.profile, scrap: 20 });
+      s.editDraft('primary', { ...primary, moves: [{ ...primary.moves[0], runes: [null] }] });
+    });
+    renderCamp();
+    const apply = screen.getByTestId('draft-apply');
+    expect(apply).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
+    expect(apply).toBeDisabled(); // the scrap is there, but a new hero has no Links
+    expect(screen.getByTestId('draft-apply-why')).toHaveTextContent(/Links/);
+  });
+
+  it('the dev chip flips the pull rule and keeps it on this device', () => {
+    act(() => useDelveStore.setState({ unsocket: null }));
+    renderCamp();
+    const chip = screen.getByTestId('unsocket-chip');
+    expect(chip).toHaveTextContent('Pull: destroys'); // the balance's rule
+    fireEvent.click(chip);
+    expect(chip).toHaveTextContent('Pull: pays');
+    expect(useDelveStore.getState().unsocket).toBe('pay');
+    expect(localStorage.getItem(UNSOCKET_KEY)).toBe('pay');
+    fireEvent.click(chip);
+    expect(chip).toHaveTextContent('Pull: destroys');
+  });
+
+  it('a production build shows no pull chip', () => {
+    const dev = import.meta.env.DEV;
+    import.meta.env.DEV = false as unknown as boolean;
+    try {
+      renderCamp();
+      expect(screen.queryByTestId('unsocket-chip')).toBeNull();
+    } finally {
+      import.meta.env.DEV = dev;
+    }
   });
 
   it('Discard changes & delve reverts the draft and starts the dive in one press', () => {
