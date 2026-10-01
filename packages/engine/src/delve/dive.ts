@@ -7,6 +7,7 @@ import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';
+import { heroChains } from '../loot/moveset.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 
@@ -44,6 +45,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     depthsCleared: 0,
     scrapEarned: 0,
     dustEarned: 0,
+    linksEarned: 0,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -77,7 +79,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     depth: dive.depth,
     door: dive.door,
     stats,
-    chains: profile.chains,
+    chains: heroChains(registry, profile.equipped, profile.pair),
     heroHpFrac: dive.heroHpFrac,
     potions: dive.potions,
     phoenixAvailable: !dive.phoenixUsed,

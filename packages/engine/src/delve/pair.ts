@@ -1,12 +1,13 @@
 import type { DataRegistry } from '../data/registry.js';
-import { defaultChains, roleHeir } from '../arpg/abilities/resolve.js';
+import { roleHeir } from '../arpg/abilities/resolve.js';
+import { defaultMoveset, heroChains, movesetOf } from '../loot/moveset.js';
 import { ABILITY_SLOTS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import type { DelveProfile, HeroStats, ManaPair } from '../types/delve.js';
 import { GEAR_SLOTS, type GearItem, type HeroStatKey, type StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { isDiveActive } from './dive.js';
 import { computeHeroStats, pairElements, pairExtra } from './hero-stats.js';
-import { findItem, replaceItem, type ProfileActionResult } from './profile.js';
+import { findItem, replaceItem, withMoveset, type ProfileActionResult } from './profile.js';
 
 /**
  * Elemental affinity: the hero's two elements (`profile.pair`). The primary is
@@ -32,16 +33,13 @@ export function inPair(profile: Pick<DelveProfile, 'pair'>, mana: ManaType): boo
   return !profile.pair.primary || pairElements(profile.pair).includes(mana);
 }
 
-/** The hero's real stats: its gear, with its basic chain, the pair's power and the two-element limit. */
+/** The hero's real stats: its gear, with its weapon's basic chain, the pair's power and the two-element limit. */
 export function profileStats(
   registry: DataRegistry,
-  profile: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
+  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
 ): HeroStats {
-  return computeHeroStats(
-    profile.equipped,
-    registry,
-    pairExtra(profile.pair, profile.chains.basic),
-  );
+  const basic = heroChains(registry, profile.equipped, profile.pair).basic;
+  return computeHeroStats(profile.equipped, registry, pairExtra(profile.pair, basic));
 }
 
 /** Mana Dust from salvaging `item`: its rarity's share when its mana is outside the pair (none before the choice). */
@@ -50,8 +48,9 @@ export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPa
 }
 
 /**
- * Fit every move and blow to the pair. After a pair op (`was`, the pair before
- * it) that replaced an element, every element takes its old role's new element
+ * Fit the equipped weapon's every move and blow to the pair (bag weapons stay
+ * as they are; unarmed, nothing is stored to fit). After a pair op (`was`, the
+ * pair before it) that replaced an element, every element takes its old role's new element
  * (`roleHeir`): the old primary's the new primary, the old secondary's the new
  * secondary (a Fire+Storm move stays fused as Fire+Nature, and Fire+Storm to
  * Storm+Nature makes Fire Storm and Storm Nature); any other element stays if
@@ -64,11 +63,13 @@ export function salvageDust(registry: DataRegistry, item: GearItem, pair: ManaPa
  * groups a skill's fixes into its notices).
  */
 export function fixChainsToPair(
+  registry: DataRegistry,
   profile: DelveProfile,
   was?: ManaPair,
 ): { profile: DelveProfile; fixed: ChainFix[] } {
   const { primary, secondary } = profile.pair;
-  if (!primary) return { profile, fixed: [] };
+  const weapon = profile.equipped.weapon;
+  if (!primary || !weapon) return { profile, fixed: [] };
   const byRole = was ? roleHeir(was, { primary, secondary }) : null;
   const heir = (e: ManaType): ManaType | null =>
     byRole ? byRole(e) : inPair(profile, e) ? e : null;
@@ -78,16 +79,19 @@ export function fixChainsToPair(
     return out.length > 0 ? out : [primary];
   };
   const fixed: ChainFix[] = [];
-  const basic = profile.chains.basic.map((blow, index) => {
+  const moveset = movesetOf(registry, weapon);
+  const chains = { ...moveset.chains };
+  chains.basic = chains.basic?.map((blow, index) => {
     const [element] = fit([blow.element]);
     if (element === blow.element) return blow;
     const move = { ...blow, element };
     fixed.push({ skill: 'basic', index, removed: [blow.element], move });
     return move;
   });
-  const chains = { ...profile.chains, basic };
   for (const slot of ABILITY_SLOTS) {
-    const moves = chains[slot].moves.map((old, index) => {
+    const chain = chains[slot];
+    if (!chain) continue;
+    const moves = chain.moves.map((old, index) => {
       const elements = fit(old.elements);
       if (elements.join() === old.elements.join()) return old;
       const move = { ...old, elements };
@@ -99,9 +103,10 @@ export function fixChainsToPair(
       });
       return move;
     });
-    chains[slot] = { ...chains[slot], moves };
+    chains[slot] = { ...chain, moves };
   }
-  return { profile: fixed.length > 0 ? { ...profile, chains } : profile, fixed };
+  if (fixed.length === 0) return { profile, fixed };
+  return { profile: withMoveset(profile, { ...moveset, chains }), fixed };
 }
 
 /**
@@ -128,8 +133,9 @@ function attuneTo(item: GearItem, mana: ManaType): GearItem {
 
 /**
  * The one-time choice: `mana` becomes the primary, every equipped item is
- * re-attuned to it for free (the bag is left alone), and the chains start
- * over from `defaultChains` in it. Allowed mid-dive (a migrated save may be).
+ * re-attuned to it for free (the bag is left alone), and the equipped
+ * weapon's moveset starts over at its base slots, every move the default in
+ * it. Allowed mid-dive (a migrated save may be).
  */
 export function chooseStartingMana(
   registry: DataRegistry,
@@ -142,15 +148,9 @@ export function chooseStartingMana(
     const item = equipped[slot];
     if (item && item.mana !== mana) equipped[slot] = attuneTo(item, mana);
   }
-  return {
-    ok: true,
-    profile: {
-      ...profile,
-      equipped,
-      pair: { primary: mana, secondary: null },
-      chains: defaultChains(registry, mana, equipped.weapon?.baseId ?? null),
-    },
-  };
+  const weapon = equipped.weapon;
+  if (weapon) equipped.weapon = { ...weapon, moveset: defaultMoveset(registry, weapon, mana) };
+  return { ok: true, profile: { ...profile, equipped, pair: { primary: mana, secondary: null } } };
 }
 
 /** Bind a second element: free, once, between dives. Every move keeps its elements. */
@@ -169,10 +169,10 @@ export function bindSecondary(
 
 /**
  * Change a bound pair (either element, or swap them) for Mana Dust and scrap,
- * between dives. Gear stays as it is; the chains follow the new pair
- * (`fixChainsToPair`): once an element is replaced, every move and blow takes
- * its elements' roles' new elements, and each one changed comes back in
- * `fixed`.
+ * between dives. Gear stays as it is; the equipped weapon's moves follow the
+ * new pair (`fixChainsToPair`): once an element is replaced, every move and
+ * blow takes its elements' roles' new elements, and each one changed comes
+ * back in `fixed`. Bag weapons keep their moves.
  */
 export function realign(
   registry: DataRegistry,
@@ -190,6 +190,7 @@ export function realign(
   if (profile.manaDust < cost.realignDust) return refuse(profile, 'Not enough Mana Dust');
   if (profile.scrap < cost.realignScrap) return refuse(profile, 'Not enough scrap');
   const res = fixChainsToPair(
+    registry,
     {
       ...profile,
       pair: { primary, secondary },
@@ -208,7 +209,7 @@ export function realign(
  */
 export function overtakeProgress(
   registry: DataRegistry,
-  profile: Pick<DelveProfile, 'equipped' | 'pair' | 'chains'>,
+  profile: Pick<DelveProfile, 'equipped' | 'pair'>,
 ): { have: number; need: number; ready: boolean } {
   const { primary, secondary } = profile.pair;
   if (!primary || !secondary) return { have: 0, need: 0, ready: false };

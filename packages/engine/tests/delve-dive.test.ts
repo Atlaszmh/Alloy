@@ -35,6 +35,7 @@ import { stepWorld } from '../src/arpg/step.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
+import { chainsOf } from './fixtures/arena.js';
 
 const registry = createDefaultRegistry();
 const bal = registry.getDelveBalance();
@@ -62,10 +63,11 @@ function clearDepth(p: DelveProfile): DelveProfile {
 describe('profile basics', () => {
   it('starts with a fire sword and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(5);
+    expect(p.version).toBe(6);
+    expect(p.links).toBe(0);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
-    expect(p.chains.primary.moves.every((m) => m.elements.join() === 'fire')).toBe(true);
+    expect(chainsOf(p).primary!.moves.every((m) => m.elements.join() === 'fire')).toBe(true);
     expect(p.bag).toHaveLength(0);
     expect(p.dive).toBeNull();
   });
@@ -76,6 +78,8 @@ describe('profile basics', () => {
     expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(p)))).toEqual({
       profile: p,
       fixed: [],
+      dropped: [],
+      movesetReset: false,
     });
     expect(parseDelveProfile(registry, { ...p, version: 1 })).toBeNull();
     expect(parseDelveProfile(registry, null)).toBeNull();
@@ -269,16 +273,16 @@ describe('gear management', () => {
     expect(beginFloor(registry, startDive(registry, p, 1)).hero.manaMax).toBeGreaterThan(before);
   });
 
-  it('unequip moves the item into the bag; the floor still has all three abilities', () => {
+  it("unequip moves the item into the bag; the floor has the common sword's Primary, and no Defensive or Ultimate", () => {
     let p = createDelveProfile(registry, 1);
     p = unequipSlot(registry, p, 'chest');
     expect(p.equipped.chest).toBeUndefined();
     expect(p.bag).toHaveLength(1);
     p = startDive(registry, p, 1);
-    expect(beginFloor(registry, p).hero.chains.map((c) => c.moves[0].name)).toEqual([
+    expect(beginFloor(registry, p).hero.chains.map((c) => c?.moves[0].name ?? null)).toEqual([
       'Fire Bolt',
-      'Fire Ward',
-      'Fire Nova',
+      null,
+      null,
     ]);
   });
 

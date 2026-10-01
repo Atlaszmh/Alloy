@@ -41,7 +41,9 @@ import {
   STEP,
   arena,
   asV4,
+  asV5,
   bal,
+  chainsOf,
   chainsWith,
   dodge,
   dummy,
@@ -1243,9 +1245,14 @@ describe('basics', () => {
   });
 });
 
-describe('save v5', () => {
+describe('saves before version 6', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
   const hero = createDelveProfile(registry, 3, { primary: 'fire' });
+  /** The hero on an epic sword, which carries all four chains. */
+  const epic = {
+    ...hero,
+    equipped: { ...hero.equipped, weapon: { ...hero.equipped.weapon!, rarity: 'epic' as const } },
+  };
   const migrate = (v4: object) => parseDelveProfile(registry, json(v4))!;
 
   it("v4 → v5 gives each build its form's default chain, a step lighter or heavier by its weight", () => {
@@ -1289,33 +1296,34 @@ describe('save v5', () => {
     ];
     for (const [build, kinds] of cases) {
       const { profile, fixed } = migrate(asV4(hero, { ...OLD_BUILDS, primary: build }));
-      expect(profile.chains.primary, `${build.form} ${build.weight}`).toEqual({
+      expect(chainsOf(profile).primary, `${build.form} ${build.weight}`).toEqual({
         moves: kinds.map((kind) => ({ kind, form: build.form, elements: build.elements })),
         payment: build.payment,
       });
       expect(fixed).toEqual([]);
     }
     const { profile } = migrate(
-      asV4(hero, {
+      asV4(epic, {
         ...OLD_BUILDS,
         defensive: { form: 'armor', elements: ['fire'], weight: 2, payment: 'cast' },
         ultimate: { form: 'barrage', elements: ['fire'], weight: -1, payment: 'charge' },
       }),
     );
-    expect(profile).toMatchObject({ version: 5, chainCaps: bal.chains.cap });
+    expect(profile).toMatchObject({ version: 6, links: 0 });
     expect('abilities' in profile).toBe(false);
-    expect(profile.chains.defensive).toEqual({
+    expect('chainCaps' in profile).toBe(false);
+    expect(chainsOf(profile).defensive).toEqual({
       moves: [{ kind: 'heavy', form: 'armor', elements: ['fire'] }],
       payment: 'cast',
     });
-    expect(profile.chains.ultimate).toEqual({
+    expect(chainsOf(profile).ultimate).toEqual({
       moves: [{ kind: 'light', form: 'barrage', elements: ['fire'] }],
       payment: 'charge',
     });
   });
 
   it("v4 → v5 gives the weapon's default basics, the secondary last when bound; with no primary, the weapon's mana", () => {
-    const blows = (v4: object) => migrate(v4).profile.chains.basic;
+    const blows = (v4: object) => chainsOf(migrate(v4).profile).basic!;
     const bound = { ...asV4(hero), pair: { primary: 'fire', secondary: 'storm' } };
     expect(blows(bound)).toEqual([
       { kind: 'light', element: 'fire' },
@@ -1332,9 +1340,10 @@ describe('save v5', () => {
     expect(blows(frost).map((b) => b.element)).toEqual(['frost', 'frost', 'frost']);
   });
 
-  it('refuses a chain past MAX_CHAIN or empty, a form in the wrong slot, and a cap out of range', () => {
-    const p = createDelveProfile(registry, 3);
+  it('refuses a version 5 chain past MAX_CHAIN or empty, a form in the wrong slot, and a cap out of range', () => {
+    const p = asV5(createDelveProfile(registry, 3));
     const bad = (x: object) => parseDelveProfile(registry, json(x));
+    expect(bad(p)).not.toBeNull();
     const bolt = p.chains.primary.moves[0];
     const chains = (over: object) => ({ ...p, chains: { ...p.chains, ...over } });
     expect(

@@ -19,6 +19,7 @@ import {
   startDive,
 } from './dive.js';
 import { compareItem, itemAttunement } from './hero-stats.js';
+import { heroChains } from '../loot/moveset.js';
 import { bindSecondary, profileStats, resolveOvertake } from './pair.js';
 import {
   createDelveProfile,
@@ -84,7 +85,7 @@ function playFloor(
       const best = equipBest(registry, p);
       if (best.equipped.length > 0) {
         p = best.profile;
-        refreshWorldHero(registry, world, profileStats(registry, p), p.chains);
+        refreshWorldHero(registry, world, profileStats(registry, p), heroChains(registry, p.equipped, p.pair));
       }
     }
     if (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 3)) break;
@@ -128,13 +129,13 @@ function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
 }
 
 /**
- * Build every move of the Primary chain from both elements of a bound pair,
- * so it keeps finding their reaction.
+ * Build every move of the weapon's Primary chain from both elements of a
+ * bound pair, so it keeps finding their reaction.
  */
 function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   const { primary, secondary } = p.pair;
-  const chain = p.chains.primary;
-  if (!primary || !secondary) return p;
+  const chain = heroChains(registry, p.equipped, p.pair).primary;
+  if (!primary || !secondary || !chain || !p.equipped.weapon) return p;
   return setChain(registry, p, 'primary', {
     ...chain,
     moves: chain.moves.map((m) => ({ ...m, elements: [primary, secondary] })),
@@ -144,7 +145,7 @@ function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
 /**
  * Between dives, as a player would: an overtaking secondary swaps in, a second
  * element is bound (before anything is salvaged), the forge visit, and then
- * the Primary is built from both elements.
+ * the Primary of whatever weapon it wields is built from both elements.
  */
 export function betweenDives(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const bound = bindBest(registry, resolveOvertake(registry, profile).profile);
@@ -162,7 +163,7 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
         (i) =>
           i.rarity === rarity &&
           !i.locked &&
-          compareItem(p.equipped, i, registry, depth, p.chains, p.pair).powerPct <= 0,
+          compareItem(p.equipped, i, registry, depth, p.pair).powerPct <= 0,
       );
       if (spare.length < 3) break;
       const res = fuseGear(

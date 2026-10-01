@@ -178,6 +178,15 @@ export {
 } from './delve/pair.js';
 export type { ChainFix } from './delve/pair.js';
 export {
+  heroChains,
+  movesetOf,
+  defaultMoveset,
+  extraSlots,
+  baseSlots,
+  carriedSkills,
+  carriedByText,
+} from './loot/moveset.js';
+export {
   GearItemSchema,
   MoveSchema,
   BlowSchema,

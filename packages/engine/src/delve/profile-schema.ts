@@ -164,6 +164,7 @@ const DiveSchema = z.object({
   depthsCleared: z.number().int().min(0),
   scrapEarned: z.number().min(0),
   dustEarned: z.number().int().min(0).default(0),
+  linksEarned: z.number().int().min(0).default(0),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
 });
@@ -236,8 +237,8 @@ export const DelveProfileV4Schema = DelveProfileV3Schema.extend({
   reactionsSeen: z.array(ReactionIdSchema),
 });
 
-/** Version 5: each skill a chain of moves (see the moves and chains spec). */
-export const DelveProfileSchema = DelveProfileV4Schema.omit({ abilities: true }).extend({
+/** Version 5 (each skill a chain of moves on the profile), kept frozen so older saves migrate through it. */
+export const DelveProfileV5Schema = DelveProfileV4Schema.omit({ abilities: true }).extend({
   version: z.literal(5),
   chains: z.object({
     basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
@@ -251,6 +252,12 @@ export const DelveProfileSchema = DelveProfileV4Schema.omit({ abilities: true })
     defensive: CapSchema,
     ultimate: CapSchema,
   }),
+});
+
+/** Version 6: the chains live on the weapon, and Links (see the weapon movesets spec). */
+export const DelveProfileSchema = DelveProfileV5Schema.omit({ chains: true, chainCaps: true }).extend({
+  version: z.literal(6),
+  links: z.number().int().min(0),
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */

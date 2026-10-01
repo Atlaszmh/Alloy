@@ -5,6 +5,7 @@ import {
   followBasic,
   isDefaultBasic,
 } from '../src/arpg/abilities/resolve.js';
+import { UNARMED, defaultMoveset } from '../src/loot/moveset.js';
 import { betweenDives, runAutopilot } from '../src/delve/autopilot.js';
 import { bankWorld, beginFloor, heroMaxHp, startDive } from '../src/delve/dive.js';
 import {
@@ -63,12 +64,14 @@ import {
   OLD_BUILDS,
   asV4,
   bal,
+  chainsOf,
   dummy,
   firstBlow,
   gear,
   registry,
   run,
   strikeWorld,
+  withChains,
 } from './fixtures/arena.js';
 
 /** A plain item of `mana`: no implicits, and only the lines given (as affixes). */
@@ -268,20 +271,18 @@ describe('Power values the pair', () => {
 
   it('rises with primary attunement, and with secondary attunement only once bound', () => {
     const power = (pair: ManaPair, ring?: GearItem) =>
-      heroPower(ring ? { weapon, ring } : { weapon }, registry, 3, undefined, pair);
+      heroPower(ring ? { weapon, ring } : { weapon }, registry, 3, pair);
     expect(power(solo, item('fire'))).toBeGreaterThan(power(solo));
     expect(power(solo, item('storm'))).toBe(power(solo)); // unbound: no attunement, no gain
     expect(power(bound, item('storm'))).toBeGreaterThan(power(bound));
-    expect(
-      compareItem({ weapon }, item('storm'), registry, 3, undefined, solo).attunementDelta,
-    ).toEqual({});
-    expect(
-      compareItem({ weapon }, item('storm'), registry, 3, undefined, bound).attunementDelta,
-    ).toEqual({ storm: 1 });
+    expect(compareItem({ weapon }, item('storm'), registry, 3, solo).attunementDelta).toEqual({});
+    expect(compareItem({ weapon }, item('storm'), registry, 3, bound).attunementDelta).toEqual({
+      storm: 1,
+    });
   });
 });
 
-describe('save version 5', () => {
+describe('saves through version 6', () => {
   /** A version 3 save of `p`: its builds (`OLD_BUILDS`), no pair, no Mana Dust. */
   function v3Of(p: DelveProfile) {
     const { pair: _pair, manaDust: _dust, ...rest } = asV4(p);
@@ -299,10 +300,20 @@ describe('save version 5', () => {
     expect(c.defensive.moves.map((m) => m.form)).toEqual(['ward']);
   });
 
-  it('a new profile is version 5 with no pair yet and no Mana Dust, and round-trips', () => {
+  it('a new profile is version 6 with no pair yet, no Mana Dust and no Links, and round-trips', () => {
     const p = createDelveProfile(registry, 3);
-    expect(p).toMatchObject({ version: 5, pair: { primary: null, secondary: null }, manaDust: 0 });
-    expect(parseDelveProfile(registry, json(p))).toEqual({ profile: p, fixed: [] });
+    expect(p).toMatchObject({
+      version: 6,
+      pair: { primary: null, secondary: null },
+      manaDust: 0,
+      links: 0,
+    });
+    expect(parseDelveProfile(registry, json(p))).toEqual({
+      profile: p,
+      fixed: [],
+      dropped: [],
+      movesetReset: false,
+    });
   });
 
   it('refuses a secondary without a primary, or equal to it', () => {
@@ -313,20 +324,22 @@ describe('save version 5', () => {
   });
 
   it("migrates version 3: the most attunement is the primary, and each chain's moves are fixed to it", () => {
-    const p = createDelveProfile(registry, 3); // a fire sword (1), an earth cuirass (1)
-    const ring = { ...item('storm'), rarity: 'rare' as const }; // storm 2
+    const p = createDelveProfile(registry, 3); // an earth cuirass (1)
+    // An epic sword (fire 2) carries all four chains; a legendary storm ring (3) outweighs it.
+    const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
+    const ring = { ...item('storm'), rarity: 'legendary' as const };
     const old = {
       ...v3Of(p),
-      equipped: { ...p.equipped, ring },
+      equipped: { ...p.equipped, weapon, ring },
       abilities: { ...OLD_BUILDS, defensive: { ...OLD_BUILDS.defensive, elements: ['frost'] } },
     };
     const res = parseDelveProfile(registry, json(old))!;
     expect(res.profile).toMatchObject({
-      version: 5,
+      version: 6,
       pair: { primary: 'storm', secondary: null },
       manaDust: 0,
     });
-    expect(res.profile.chains.primary.moves.map((m) => m.elements)).toEqual([
+    expect(chainsOf(res.profile).primary!.moves.map((m) => m.elements)).toEqual([
       ['storm'],
       ['storm'],
       ['storm'],
@@ -359,19 +372,24 @@ describe('save version 5', () => {
 
   it("migrates version 2 through versions 3 and 4: its new primary's default chains, nothing to fix; a dive stays", () => {
     const p = startDive(registry, createDelveProfile(registry, 3), 1);
-    const ring = { ...item('storm'), rarity: 'rare' as const }; // storm 2 beats the fire sword's 1
-    const { abilities: _abilities, ...v2 } = v3Of({ ...p, equipped: { ...p.equipped, ring } });
+    // A legendary storm ring (3) beats the epic fire sword's 2; the sword carries all four chains.
+    const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
+    const ring = { ...item('storm'), rarity: 'legendary' as const };
+    const { abilities: _abilities, ...v2 } = v3Of({
+      ...p,
+      equipped: { ...p.equipped, weapon, ring },
+    });
     const res = parseDelveProfile(
       registry,
       json({ ...v2, version: 2, skillSlots: [null, null, null] }),
     )!;
-    expect(res.profile).toMatchObject({ version: 5, pair: { primary: 'storm', secondary: null } });
-    expect(res.profile.chains).toEqual(defaultChains(registry, 'storm', 'sword'));
+    expect(res.profile).toMatchObject({ version: 6, pair: { primary: 'storm', secondary: null } });
+    expect(chainsOf(res.profile)).toEqual(defaultChains(registry, 'storm', 'sword'));
     expect(res.fixed).toEqual([]);
     expect(res.profile.dive).toEqual(p.dive);
   });
 
-  it('fixChainsToPair keeps in-pair elements, gives an emptied move or a blow the primary, a fix each', () => {
+  it("fixChainsToPair keeps the weapon's in-pair elements, gives an emptied move or a blow the primary, a fix each", () => {
     const chains: Chains = {
       basic: [
         { kind: 'light', element: 'fire' },
@@ -394,12 +412,11 @@ describe('save version 5', () => {
       },
     };
     const p: DelveProfile = {
-      ...createDelveProfile(registry, 3),
+      ...withChains(createDelveProfile(registry, 3), chains),
       pair: { primary: 'fire', secondary: 'storm' },
-      chains,
     };
-    const res = fixChainsToPair(p);
-    const fixed = res.profile.chains;
+    const res = fixChainsToPair(registry, p);
+    const fixed = chainsOf(res.profile) as Chains;
     expect(fixed.basic).toEqual([chains.basic[0], { kind: 'heavy', element: 'fire' }]);
     expect(fixed.primary.moves).toEqual([
       { kind: 'medium', form: 'lance', elements: ['storm'] },
@@ -412,7 +429,10 @@ describe('save version 5', () => {
       { skill: 'primary', index: 0, removed: ['frost'], move: fixed.primary.moves[0] },
       { skill: 'defensive', index: 0, removed: ['nature'], move: fixed.defensive.moves[0] },
     ]);
-    expect(fixChainsToPair(res.profile)).toEqual({ profile: res.profile, fixed: [] });
+    expect(fixChainsToPair(registry, res.profile)).toEqual({ profile: res.profile, fixed: [] });
+    // Unarmed, nothing is stored to fit.
+    const bare = { ...p, equipped: {} };
+    expect(fixChainsToPair(registry, bare)).toEqual({ profile: bare, fixed: [] });
   });
 });
 
@@ -426,7 +446,7 @@ describe('the pair ops', () => {
     scrap,
   });
 
-  it('chooseStartingMana: the primary, equipped gear re-attuned with its lines, default chains; once', () => {
+  it("chooseStartingMana: the primary, equipped gear re-attuned with its lines, the weapon's moveset rebuilt; once", () => {
     const p0 = fresh();
     const ring = item('earth', 'ring', [
       ['earthAttune', 2],
@@ -453,7 +473,13 @@ describe('the pair ops', () => {
       ['stormPower', 5],
     ]);
     expect(res.profile.bag).toEqual([spare]);
-    expect(res.profile.chains).toEqual(defaultChains(registry, 'storm', 'sword'));
+    const sword = res.profile.equipped.weapon!;
+    expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'storm'));
+    // A weapon with extra slots starts over at its base slots too.
+    const roomy = withChains(p0, { primary: defaultChains(registry, 'fire', 'sword').primary });
+    expect(roomy.equipped.weapon!.moveset!.slots.primary).toBe(4);
+    const rebuilt = chooseStartingMana(registry, roomy, 'frost').profile.equipped.weapon!;
+    expect(rebuilt.moveset).toEqual(defaultMoveset(registry, rebuilt, 'frost'));
     expect(chooseStartingMana(registry, res.profile, 'fire')).toMatchObject({
       ok: false,
       reason: 'Your mana is already chosen',
@@ -474,23 +500,22 @@ describe('the pair ops', () => {
     expect(res.profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
     expect(res.profile.scrap).toBe(p.scrap);
     // Every move keeps its elements.
-    expect(res.profile.chains).toEqual(p.chains);
+    expect(res.profile.equipped).toEqual(p.equipped);
     expect(bindSecondary(registry, res.profile, 'nature').ok).toBe(false);
   });
 
-  it('realign: charges Mana Dust and scrap, keeps the gear, fixes the chains; refuses what it must', () => {
+  it("realign: charges Mana Dust and scrap, keeps the gear, fixes the equipped weapon's moves; refuses what it must", () => {
     const { realignDust, realignScrap } = bal.pair;
     const rich = bound(realignDust, realignScrap);
-    const primary = rich.chains.primary;
+    const primary = chainsOf(rich).primary!;
+    const fused = primary.moves.map((m) => ({ ...m, elements: ['fire', 'storm'] as ManaType[] }));
+    const spare: GearItem = {
+      ...withChains(rich, { primary: { ...primary, moves: fused } }).equipped.weapon!,
+      uid: 'spare',
+    };
     const stormy: DelveProfile = {
-      ...rich,
-      chains: {
-        ...rich.chains,
-        primary: {
-          ...primary,
-          moves: primary.moves.map((m) => ({ ...m, elements: ['fire', 'storm'] })),
-        },
-      },
+      ...withChains(rich, { primary: { ...primary, moves: fused } }),
+      bag: [spare],
     };
     const res = realign(registry, stormy, { secondary: 'nature' });
     expect(res.ok).toBe(true);
@@ -499,9 +524,14 @@ describe('the pair ops', () => {
       manaDust: 0,
       scrap: 0,
     });
-    expect(res.profile.equipped).toEqual(rich.equipped);
+    const { weapon, ...rest } = res.profile.equipped;
+    const { weapon: was, ...wasRest } = stormy.equipped;
+    expect(rest).toEqual(wasRest);
+    expect({ ...weapon, moveset: null }).toEqual({ ...was, moveset: null });
+    // A bag weapon keeps its moves.
+    expect(res.profile.bag).toEqual([spare]);
     // Storm's role (the secondary) goes to Nature: the fused moves stay fused.
-    const moves = res.profile.chains.primary.moves;
+    const moves = chainsOf(res.profile).primary!.moves;
     expect(moves.map((m) => m.elements)).toEqual(moves.map(() => ['fire', 'nature']));
     expect(res.fixed).toEqual(
       moves.map((move, index) => ({ skill: 'primary', index, removed: ['storm'], move })),
@@ -560,21 +590,21 @@ describe('the pair ops', () => {
   it("a replaced element's moves and blows take its role's new element; an overtake replaces none", () => {
     const { realignDust, realignScrap } = bal.pair;
     const rich = bound(realignDust, realignScrap);
-    const fused = rich.chains.primary.moves.map((m) => ({
+    const chains = chainsOf(rich) as Pick<Chains, 'basic' | 'primary'>;
+    const fused = chains.primary.moves.map((m) => ({
       ...m,
       elements: ['fire', 'storm'] as ManaType[],
     }));
-    const basic = rich.chains.basic.map((b, i, all) => ({
+    const basic = chains.basic.map((b, i, all) => ({
       ...b,
       element: (i === all.length - 1 ? 'storm' : 'fire') as ManaType,
     }));
-    const p: DelveProfile = {
-      ...rich,
-      chains: { ...rich.chains, basic, primary: { ...rich.chains.primary, moves: fused } },
-    };
+    const p = withChains(rich, { basic, primary: { ...chains.primary, moves: fused } });
     const kinds = (els: ManaType[]) => els.join('+');
+    const after = (next: { primary?: ManaType; secondary?: ManaType }) =>
+      chainsOf(realign(registry, p, next).profile) as Pick<Chains, 'basic' | 'primary'>;
     // The secondary goes from Storm to Nature: Storm's moves and blows take Nature.
-    const nature = realign(registry, p, { secondary: 'nature' }).profile.chains;
+    const nature = after({ secondary: 'nature' });
     expect(nature.primary.moves.map((m) => kinds(m.elements))).toEqual(
       fused.map(() => 'fire+nature'),
     );
@@ -582,7 +612,7 @@ describe('the pair ops', () => {
       basic.map((b) => (b.element === 'storm' ? 'nature' : 'fire')),
     );
     // The primary goes from Fire to Frost: Fire's take Frost.
-    const frost = realign(registry, p, { primary: 'frost' }).profile.chains;
+    const frost = after({ primary: 'frost' });
     expect(frost.primary.moves.map((m) => kinds(m.elements))).toEqual(
       fused.map(() => 'frost+storm'),
     );
@@ -591,7 +621,7 @@ describe('the pair ops', () => {
     );
     // An overtake swaps the two: nothing left the pair, so nothing changes.
     const over: DelveProfile = { ...p, pair: { primary: 'storm', secondary: 'fire' } };
-    expect(fixChainsToPair(over, p.pair)).toEqual({ profile: over, fixed: [] });
+    expect(fixChainsToPair(registry, over, p.pair)).toEqual({ profile: over, fixed: [] });
   });
 
   it('once an element leaves the pair, every element of every move and blow takes its old role', () => {
@@ -608,16 +638,15 @@ describe('the pair ops', () => {
       { kind: 'heavy', form: 'bolt', elements: ['fire'] },
     ];
     const p: DelveProfile = {
-      ...hero,
+      ...withChains(hero, { basic, primary: { moves, payment: 'mana' } }),
       pair: was,
-      chains: { ...hero.chains, basic, primary: { ...hero.chains.primary, moves } },
     };
     const to = (primary: ManaType, secondary: ManaType) =>
-      fixChainsToPair({ ...p, pair: { primary, secondary } }, was);
+      fixChainsToPair(registry, { ...p, pair: { primary, secondary } }, was);
     type Fixed = ReturnType<typeof to>;
     const elements = ({ profile }: Fixed) => ({
-      basic: profile.chains.basic.map((b) => b.element),
-      primary: profile.chains.primary.moves.map((m) => m.elements),
+      basic: chainsOf(profile).basic!.map((b) => b.element),
+      primary: chainsOf(profile).primary!.moves.map((m) => m.elements),
     });
     /** Each move or blow reported: where it is, what it dropped, what it uses now. */
     const reported = ({ fixed }: Fixed) =>
@@ -641,8 +670,6 @@ describe('the pair ops', () => {
       ['primary', 0, ['fire'], ['storm', 'nature']],
       ['primary', 1, ['storm'], ['nature']],
       ['primary', 2, ['fire'], ['storm']],
-      ['defensive', 0, ['fire'], ['storm']],
-      ['ultimate', 0, ['fire'], ['storm']],
     ]);
     // Fire+Storm → Frost+Fire: Fire's role goes to Frost, Storm's to Fire.
     const ff = to('frost', 'fire');
@@ -657,8 +684,6 @@ describe('the pair ops', () => {
       ['primary', 0, ['storm'], ['frost', 'fire']],
       ['primary', 1, ['storm'], ['fire']],
       ['primary', 2, ['fire'], ['frost']],
-      ['defensive', 0, ['fire'], ['frost']],
-      ['ultimate', 0, ['fire'], ['frost']],
     ]);
     // Fire+Storm → Fire+Frost: only Storm's moves and blows change.
     const fr = to('fire', 'frost');
@@ -673,7 +698,7 @@ describe('the pair ops', () => {
     ]);
     // A swap replaces nothing: nothing changes.
     const swap: DelveProfile = { ...p, pair: { primary: 'storm', secondary: 'fire' } };
-    expect(fixChainsToPair(swap, was)).toEqual({ profile: swap, fixed: [] });
+    expect(fixChainsToPair(registry, swap, was)).toEqual({ profile: swap, fixed: [] });
   });
 
   it("overtakeProgress: the secondary's attunement against the margin × the primary's, as resolveOvertake reads it", () => {
@@ -756,12 +781,12 @@ describe('the pair ops', () => {
   });
 });
 
-describe('nothing re-colours the moves on its own', () => {
-  /** A Fire+Storm sword hero: its moves all Fire. */
+describe("nothing re-colours a weapon's moves on its own", () => {
+  /** A Fire+Storm sword hero: its sword's moves all Fire. */
   const hero = () =>
     bindSecondary(registry, createDelveProfile(registry, 3, { primary: 'fire' }), 'storm').profile;
   const built: Blow[] = [{ kind: 'heavy', element: 'fire' }];
-  const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
+  const maul: GearItem = { ...gear('storm', 'weapon', 'maul'), uid: 'maul' };
   const stormGear = {
     helm: item('storm', 'helm'),
     gloves: item('storm', 'gloves'),
@@ -806,55 +831,58 @@ describe('nothing re-colours the moves on its own', () => {
     ]);
   });
 
-  it('a weapon change keeps every move, unarmed too', () => {
+  it("a weapon change: the new weapon's own moves; unarmed, the defaults on the pair", () => {
     const p = { ...hero(), bag: [maul] };
+    const sword = chainsOf(p);
     const worn = equipItem(registry, p, 'maul');
-    expect(worn.chains).toEqual(p.chains);
-    expect(unequipSlot(registry, worn, 'weapon').chains).toEqual(p.chains);
+    expect(chainsOf(worn)).toEqual(maul.moveset!.chains); // Storm: the maul's own mana
+    const bare = unequipSlot(registry, worn, 'weapon');
+    expect(chainsOf(bare)).toEqual(defaultMoveset(registry, UNARMED, 'fire').chains);
+    expect(chainsOf(equipItem(registry, bare, p.equipped.weapon!.uid))).toEqual(sword);
   });
 
   it('a bind, an overtake and a re-attune leave every move as it is', () => {
     const solo = createDelveProfile(registry, 3, { primary: 'fire' });
     const bound = bindSecondary(registry, solo, 'storm').profile;
-    expect(bound.chains).toEqual(solo.chains);
-    const own = setChain(registry, bound, 'basic', built);
+    expect(chainsOf(bound)).toEqual(chainsOf(solo));
+    const own = withChains(bound, { basic: built });
     const over = resolveOvertake(registry, { ...own, equipped: { ...own.equipped, ...stormGear } });
     expect(over.swapped).toBe(true);
-    expect(over.profile.chains).toEqual(own.chains);
-    // Re-attuning the sword to Storm changes its mana, not the moves.
+    expect(chainsOf(over.profile)).toEqual(chainsOf(own));
+    // Re-attuning the sword to Storm changes its mana, not its moves.
     const sword = over.profile.equipped.weapon!;
     const cost = bal.pair.reattuneDust[sword.rarity];
     const re = reattuneItem(registry, { ...over.profile, manaDust: cost }, sword.uid, 'storm');
     expect(re.item!.mana).toBe('storm');
-    expect(re.profile.chains).toEqual(own.chains);
+    expect(chainsOf(re.profile)).toEqual(chainsOf(own));
   });
 
-  it('a realign maps every move by role, a default basic chain too, a notice each', () => {
+  it("a realign maps the equipped weapon's every move by role, its default basic chain too, a notice each", () => {
     const { realignDust, realignScrap } = bal.pair;
     const p = { ...hero(), manaDust: realignDust, scrap: realignScrap };
     // Fire's role (the primary) goes to Storm.
     const res = realign(registry, p, { primary: 'storm', secondary: 'nature' });
-    expect(res.profile.chains.basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
+    expect(chainsOf(res.profile).basic).toEqual(defaultBasic(registry, 'sword', 'storm'));
     expect(res.fixed!.filter((f) => f.skill === 'basic').map((f) => [f.index, f.removed])).toEqual([
       [0, ['fire']],
       [1, ['fire']],
       [2, ['fire']],
     ]);
     const swap = realign(registry, p, { primary: 'storm', secondary: 'fire' });
-    expect(swap.profile.chains).toEqual(p.chains);
+    expect(chainsOf(swap.profile)).toEqual(chainsOf(p));
     expect(swap.fixed).toEqual([]);
   });
 
   it('an off-pair move still strikes and reacts in its element, but draws no attunement power', () => {
     const k = bal.pair.basicPowerPerAttune;
-    // A Fire hero whose last blow is Frost (as a Frost weapon's would be), wearing Frost.
+    // A Fire hero whose sword's last blow is Frost (as a Frost drop's would be), wearing Frost.
     const p0 = createDelveProfile(registry, 3, { primary: 'fire' }); // fire 2
     const basic: Blow[] = [
       { kind: 'light', element: 'fire' },
       { kind: 'light', element: 'fire' },
       { kind: 'heavy', element: 'frost' },
     ];
-    const p = { ...p0, chains: { ...p0.chains, basic } };
+    const p = withChains(p0, { basic });
     const worn = {
       ...p,
       equipped: { ...p.equipped, ring: item('frost', 'ring', [['frostAttune', 5]]) },
@@ -870,7 +898,7 @@ describe('nothing re-colours the moves on its own', () => {
 });
 
 describe("Power values the hero's own chains", () => {
-  /** A Fire+Storm sword hero on the default chains. */
+  /** A Fire+Storm sword hero: its sword's moves all Fire. */
   const hero = () =>
     bindSecondary(registry, createDelveProfile(registry, 3, { primary: 'fire' }), 'storm').profile;
   /** A ring powering `el`, of an element outside the pair (so no attunement). */
@@ -879,29 +907,26 @@ describe("Power values the hero's own chains", () => {
     uid: el,
   });
 
-  it('Equip best and salvage go by the Power of the chains', () => {
-    // Storm abilities, which Power without the chains values as the default Fire ones.
+  it("Power, Equip best and salvage go by the weapon's chains", () => {
     const h = hero();
-    const { primary, defensive, ultimate } = defaultChains(registry, 'storm', 'sword');
-    const p: DelveProfile = { ...h, chains: { ...h.chains, primary, defensive, ultimate } };
-    const wearing = (r: GearItem): DelveProfile => ({
+    const { basic, primary } = defaultChains(registry, 'storm', 'sword');
+    const stormy = withChains(h, { basic, primary });
+    const wearing = (p: DelveProfile, r: GearItem): DelveProfile => ({
       ...p,
       equipped: { ...p.equipped, ring: r },
     });
-    const chains = (r: GearItem) => profilePower(registry, wearing(r));
-    const fallback = (r: GearItem) =>
-      heroPower(wearing(r).equipped, registry, 1, undefined, p.pair);
-    expect(chains(ring('storm'))).toBeGreaterThan(chains(ring('fire')));
-    expect(fallback(ring('fire'))).toBeGreaterThan(fallback(ring('storm')));
-    const best = equipBest(registry, { ...p, bag: [ring('fire'), ring('storm')] });
+    const power = (p: DelveProfile, r: GearItem) => profilePower(registry, wearing(p, r));
+    expect(power(stormy, ring('storm'))).toBeGreaterThan(power(stormy, ring('fire')));
+    expect(power(h, ring('fire'))).toBeGreaterThan(power(h, ring('storm')));
+    const best = equipBest(registry, { ...stormy, bag: [ring('fire'), ring('storm')] });
     expect(best.equipped.map((i) => i.uid)).toEqual(['storm']);
-    const withFire = { ...wearing(ring('fire')), bag: [ring('storm')] };
+    const withFire = { ...wearing(stormy, ring('fire')), bag: [ring('storm')] };
     expect(salvageCandidates(registry, withFire, 'common')).toEqual([]);
-    const withStorm = { ...wearing(ring('storm')), bag: [ring('fire')] };
+    const withStorm = { ...wearing(stormy, ring('storm')), bag: [ring('fire')] };
     expect(salvageCandidates(registry, withStorm, 'common')).toEqual(['fire']);
   });
 
-  it('compareItem values a weapon with the chains equipping it keeps', () => {
+  it('compareItem values a weapon with its own moveset', () => {
     const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
     const built = setChain(registry, hero(), 'basic', [
       { kind: 'light', element: 'storm' },
@@ -910,10 +935,14 @@ describe("Power values the hero's own chains", () => {
     ]);
     for (const q of [hero(), built]) {
       const bagged = { ...q, bag: [maul] };
-      const cmp = compareItem(q.equipped, maul, registry, 1, q.chains, q.pair);
+      const cmp = compareItem(q.equipped, maul, registry, 1, q.pair);
       expect(cmp.power).toBe(profilePower(registry, bagged));
       expect(cmp.newPower).toBe(profilePower(registry, equipItem(registry, bagged, 'maul')));
     }
+    // The maul fights with its own blows whatever the sword held.
+    expect(compareItem(built.equipped, maul, registry, 1, built.pair).newPower).toBe(
+      compareItem(hero().equipped, maul, registry, 1, built.pair).newPower,
+    );
   });
 });
 
@@ -929,9 +958,9 @@ describe('real stats read the pair', () => {
       /two elements/,
     );
     const withNature = bindSecondary(registry, p, 'nature').profile;
-    expect(setChain(registry, withNature, 'primary', plague).chains.primary).toEqual(plague);
+    expect(chainsOf(setChain(registry, withNature, 'primary', plague)).primary).toEqual(plague);
     expect(
-      setChain(registry, createDelveProfile(registry, 3), 'primary', plague).chains.primary,
+      chainsOf(setChain(registry, createDelveProfile(registry, 3), 'primary', plague)).primary,
     ).toEqual(plague);
   });
 
@@ -1143,7 +1172,7 @@ describe('Mana Dust from salvage', () => {
 describe('the autopilot and the pair', () => {
   /** The Primary chain's element sets, one entry per distinct set. */
   const primaryElements = (p: DelveProfile) => [
-    ...new Set(p.chains.primary.moves.map((m) => m.elements.join('+'))),
+    ...new Set(chainsOf(p).primary!.moves.map((m) => m.elements.join('+'))),
   ];
 
   /** Storm gear worse than the starter sword (no damage line): junk, salvaged between dives. */

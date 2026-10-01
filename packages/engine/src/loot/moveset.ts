@@ -8,7 +8,8 @@ import type {
   FormId,
   MoveKind,
 } from '../types/ability.js';
-import type { GearItem, Moveset, Rarity } from '../types/gear.js';
+import type { ManaPair } from '../types/delve.js';
+import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import type { ManaType } from '../types/mana.js';
 
@@ -22,6 +23,9 @@ export interface MovesetOwner {
   baseId: string | null;
   rarity: Rarity | null;
 }
+
+/** No weapon: it carries the basic chain and the Primary, at the hero's own string. */
+export const UNARMED: MovesetOwner = { baseId: null, rarity: null };
 
 /** Each ability slot's default form and payment: a Bolt, a Ward and a charged Nova. */
 export const DEFAULT_FORMS: Record<AbilitySlot, { form: FormId; payment: AbilityPayment }> = {
@@ -40,6 +44,15 @@ export function carriedFrom(registry: DataRegistry, skill: ChainSkill): Rarity |
   const carries = registry.getDelveBalance().movesets.carries;
   if (RARITY_ORDER.every((r) => carries[r].includes(skill))) return null;
   return RARITY_ORDER.find((r) => carries[r].includes(skill)) ?? null;
+}
+
+/**
+ * Why a weapon can't hold `skill`: "Carried by magic weapons and better" (the
+ * locked tab's text, and the ops' refusal). Only for a skill some rarity
+ * doesn't carry (the balance's schema keeps `carries` growing with rarity).
+ */
+export function carriedByText(registry: DataRegistry, skill: ChainSkill): string {
+  return `Carried by ${carriedFrom(registry, skill)} weapons and better`;
 }
 
 /** The kinds a skill's default chain plays: its default form's, or the weapon's basic string. */
@@ -147,4 +160,19 @@ export function rollMoveset(
     slots[open[rng.nextInt(0, open.length - 1)]]++;
   }
   return defaultMoveset(registry, item, item.mana, slots);
+}
+
+/**
+ * The hero's chains: the equipped weapon's moveset's; unarmed, a default
+ * moveset at base slots (never stored) in the pair's primary, or fire before
+ * the choice. A skill the weapon doesn't carry has no chain.
+ */
+export function heroChains(
+  registry: DataRegistry,
+  equipped: EquippedGear,
+  pair: ManaPair,
+): Partial<Chains> {
+  const weapon = equipped.weapon;
+  if (weapon) return movesetOf(registry, weapon).chains;
+  return defaultMoveset(registry, UNARMED, pair.primary ?? 'fire').chains;
 }

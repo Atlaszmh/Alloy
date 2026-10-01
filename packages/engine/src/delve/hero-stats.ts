@@ -17,6 +17,7 @@ import {
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
+import { heroChains } from '../loot/moveset.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -479,23 +480,37 @@ export function pairExtra(pair?: ManaPair, basic?: Blow[]): HeroStatsExtra {
   return { ...(pair ? { pair, filterAttunement: true } : {}), basic };
 }
 
-/** How equipping `item` (in its slot) would change the hero, with the same chains. */
+/** No pair: before the choice, or a caller that counts every element. */
+const NO_PAIR: ManaPair = { primary: null, secondary: null };
+
+/** A loadout's stats and combat estimate, with the chains its weapon carries (`heroChains`). */
+function estimateLoadout(
+  equipped: EquippedGear,
+  registry: DataRegistry,
+  depth: number,
+  pair: ManaPair | undefined,
+): { stats: HeroStats; estimate: CombatEstimate } {
+  const chains = heroChains(registry, equipped, pair ?? NO_PAIR);
+  const stats = computeHeroStats(equipped, registry, pairExtra(pair, chains.basic));
+  return { stats, estimate: estimateCombat(stats, registry, depth, chains) };
+}
+
+/**
+ * How equipping `item` (in its slot) would change the hero: a weapon fights
+ * with its own moveset.
+ */
 export function compareItem(
   equipped: EquippedGear,
   item: GearItem,
   registry: DataRegistry,
   depth: number,
-  /** The hero's chains (none: the weapon's defaults). */
-  chains?: Chains,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): ItemComparison {
   const replaced = equipped[item.slot];
   const next = { ...equipped, [item.slot]: item };
-  const beforeStats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
-  const afterStats = computeHeroStats(next, registry, pairExtra(pair, chains?.basic));
-  const before = estimateCombat(beforeStats, registry, depth, chains);
-  const after = estimateCombat(afterStats, registry, depth, chains);
+  const { stats: beforeStats, estimate: before } = estimateLoadout(equipped, registry, depth, pair);
+  const { stats: afterStats, estimate: after } = estimateLoadout(next, registry, depth, pair);
 
   const attunementDelta: Partial<ManaMap> = {};
   for (const m of MANA_TYPES) {
@@ -514,16 +529,13 @@ export function compareItem(
   };
 }
 
-/** Total hero Power for a loadout at a depth. */
+/** Total hero Power for a loadout at a depth, with the chains its weapon carries. */
 export function heroPower(
   equipped: EquippedGear,
   registry: DataRegistry,
   depth: number,
-  /** The hero's chains (none: the weapon's defaults). */
-  chains?: Chains,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
 ): number {
-  const stats = computeHeroStats(equipped, registry, pairExtra(pair, chains?.basic));
-  return estimateCombat(stats, registry, depth, chains).power;
+  return estimateLoadout(equipped, registry, depth, pair).estimate.power;
 }

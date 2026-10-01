@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, Chains, ChainSkill, MoveKind } from './ability.js';
+import type { AbilitySlot, ChainSkill, MoveKind } from './ability.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -682,6 +682,8 @@ export interface DiveState {
   scrapEarned: number;
   /** Mana Dust from gear salvaged while banking this dive (auto-salvage, full bag). */
   dustEarned: number;
+  /** Links from weapons salvaged while banking this dive (auto-salvage, full bag). */
+  linksEarned: number;
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
@@ -711,7 +713,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 5;
+  version: 6;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -727,14 +729,12 @@ export interface DelveProfile {
   pity: number;
   firstBossLegendaryGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
-  /** The basic attack's and each ability slot's chain of moves (see the moves and chains spec). */
-  chains: Chains;
-  /** Most moves each skill's chain may hold (at most `MAX_CHAIN`; the balance's to start). */
-  chainCaps: Record<ChainSkill, number>;
   /** The hero's two elements. */
   pair: ManaPair;
-  /** From salvaging gear outside the pair; spent on Re-attune and Realign. */
+  /** From salvaging gear outside the pair; spent on Re-attune, Realign and edits to a moveset. */
   manaDust: number;
+  /** From salvaging weapons with extra slots; spent on a weapon's new slots (see the weapon movesets spec). */
+  links: number;
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

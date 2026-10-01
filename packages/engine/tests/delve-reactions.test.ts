@@ -739,7 +739,7 @@ describe('saves remember every reaction', () => {
     const { pair: _pair, manaDust: _dust, ...rest } = asV4(fresh);
     const v3 = { ...rest, version: 3, reactionsSeen: ['melt', 'blight'] };
     expect(parseDelveProfile(registry, JSON.parse(JSON.stringify(v3)))?.profile).toMatchObject({
-      version: 5,
+      version: 6,
       reactionsSeen: ['melt', 'blight'],
     });
   });

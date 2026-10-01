@@ -1,7 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { EquippedGear, GearItem, GearSlot, Rarity } from '../types/gear.js';
+import type { EquippedGear, GearItem, GearSlot, Moveset, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
@@ -22,12 +22,15 @@ import {
   DelveProfileV2Schema,
   DelveProfileV3Schema,
   DelveProfileV4Schema,
+  DelveProfileV5Schema,
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
+import { baseSlots, carriedByText, movesetOf } from '../loot/moveset.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
+  CHAIN_SKILLS,
   MOVE_KINDS,
   type AbilityBuild,
   type AbilityBuilds,
@@ -73,7 +76,7 @@ export function createDelveProfile(
     rng,
   );
   const profile: DelveProfile = {
-    version: 5,
+    version: 6,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -96,21 +99,27 @@ export function createDelveProfile(
     pity: 0,
     firstBossLegendaryGiven: false,
     autoSalvage: perRarity(false),
-    chains: defaultChains(registry, weapon.mana, weapon.baseId),
-    chainCaps: { ...registry.getDelveBalance().chains.cap },
     pair: { primary: null, secondary: null },
     manaDust: 0,
+    links: 0,
     reactionsSeen: [],
     dive: null,
   };
   return opts.primary ? chooseStartingMana(registry, profile, opts.primary).profile : profile;
 }
 
+/** `profile` with its equipped weapon's moveset replaced (it has a weapon). */
+export function withMoveset(profile: DelveProfile, moveset: Moveset): DelveProfile {
+  const weapon = profile.equipped.weapon!;
+  return { ...profile, equipped: { ...profile.equipped, weapon: { ...weapon, moveset } } };
+}
+
 /**
- * Set one skill's chain. Throws mid-dive, and on fewer than one move or more
- * than the skill's cap, an unknown kind, a form from another slot, anything
- * but one or two different elements (a blow: one), an element outside the
- * pair (once there is one), or an unknown payment.
+ * Set one skill's chain on the equipped weapon. Throws mid-dive, unarmed, for
+ * a skill the weapon doesn't carry, and on fewer than one move or more than
+ * the chain's slots, an unknown kind, a form from another slot, anything but
+ * one or two different elements (a blow: one), an element outside the pair
+ * (once there is one), or an unknown payment.
  */
 export function setChain<S extends ChainSkill>(
   registry: DataRegistry,
@@ -122,9 +131,13 @@ export function setChain<S extends ChainSkill>(
   if (phase === 'fighting' || phase === 'choosing') {
     throw new Error('Chains can only change between dives');
   }
+  const weapon = profile.equipped.weapon;
+  if (!weapon) throw new Error('Equip a weapon to build your moves');
+  const moveset = movesetOf(registry, weapon);
+  const cap = moveset.slots[skill];
+  if (cap === undefined) throw new Error(carriedByText(registry, skill));
   const blows = skill === 'basic' ? (chain as Blow[]) : null;
   const moves = blows ?? (chain as Chain).moves;
-  const cap = profile.chainCaps[skill];
   if (moves.length < 1 || moves.length > cap) throw new Error(`A chain holds 1 to ${cap} moves`);
   const elements = (els: ManaType[]) => {
     if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
@@ -133,9 +146,11 @@ export function setChain<S extends ChainSkill>(
     if (!els.every((e) => inPair(profile, e))) throw new Error('Pick from your two elements');
   };
   for (const m of moves) if (!MOVE_KINDS.includes(m.kind)) throw new Error(`Bad kind ${m.kind}`);
+  const set = (next: Chains[ChainSkill]) =>
+    withMoveset(profile, { ...moveset, chains: { ...moveset.chains, [skill]: next } });
   if (blows) {
     for (const b of blows) elements([b.element]);
-    return { ...profile, chains: { ...profile.chains, basic: blows.map((b) => ({ ...b })) } };
+    return set(blows.map((b) => ({ ...b })));
   }
   const { payment } = chain as Chain;
   for (const m of (chain as Chain).moves) {
@@ -145,7 +160,7 @@ export function setChain<S extends ChainSkill>(
   }
   if (!ABILITY_PAYMENTS.includes(payment)) throw new Error(`Bad payment ${payment}`);
   const copy = (chain as Chain).moves.map((m) => ({ ...m, elements: [...m.elements] }));
-  return { ...profile, chains: { ...profile.chains, [skill]: { moves: copy, payment } } };
+  return set({ moves: copy, payment });
 }
 
 const STRENGTH: MoveKind[] = ['light', 'medium', 'heavy'];
@@ -175,10 +190,62 @@ function buildChains(registry: DataRegistry, builds: AbilityBuilds): Pick<Chains
   return { primary, defensive, ultimate };
 }
 
-/** A save read back: the profile, and the moves a migration changed (a fix each). */
+/** A save read back: the profile, and what a migration changed. */
 export interface ParsedDelveProfile {
   profile: DelveProfile;
+  /** The moves a migration fixed to the pair, a fix each. */
   fixed: ChainFix[];
+  /** The chains the migration to version 6 dropped: the equipped weapon's rarity doesn't carry them. */
+  dropped: ChainSkill[];
+  /** An unarmed save's built chains were reset to the unarmed defaults (no weapon holds them). */
+  movesetReset: boolean;
+}
+
+/** A version 5 save, as its frozen schema reads it. */
+type ProfileV5 = Omit<DelveProfile, 'version' | 'links'> & {
+  version: 5;
+  chains: Chains;
+  chainCaps: Record<ChainSkill, number>;
+};
+
+/** Every weapon's moveset: a weapon without one gets its base defaults in its own mana. */
+function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const fit = (item: GearItem): GearItem =>
+    item.slot === 'weapon' ? { ...item, moveset: movesetOf(registry, item) } : item;
+  const equipped: EquippedGear = {};
+  for (const slot of GEAR_SLOTS) {
+    const item = profile.equipped[slot];
+    if (item) equipped[slot] = fit(item);
+  }
+  return { ...profile, equipped, bag: profile.bag.map(fit) };
+}
+
+/** A chain's length: its blows or its moves. */
+function chainLength(chain: Chains[ChainSkill]): number {
+  return Array.isArray(chain) ? chain.length : chain.moves.length;
+}
+
+/**
+ * A version 5 save as version 6: the equipped weapon takes the profile's
+ * chains, each at slots of its length (at least its base); every other weapon
+ * gets its base defaults. An unarmed save keeps no chains: the unarmed
+ * defaults follow the pair.
+ */
+function fromV5(registry: DataRegistry, old: ProfileV5): ParsedDelveProfile {
+  const { chains, chainCaps: _caps, ...rest } = old;
+  const weapon = old.equipped.weapon;
+  let equipped = old.equipped;
+  if (weapon) {
+    const slots = (skill: ChainSkill) =>
+      Math.max(chainLength(chains[skill]), baseSlots(registry, weapon.baseId, skill));
+    const moveset: Moveset = {
+      chains,
+      slots: Object.fromEntries(CHAIN_SKILLS.map((s) => [s, slots(s)])),
+    };
+    equipped = { ...equipped, weapon: { ...weapon, moveset } };
+  }
+  const profile = fitMovesets(registry, { ...rest, version: 6, links: 0, equipped });
+  return { profile, fixed: [], dropped: [], movesetReset: false };
 }
 
 /** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
@@ -204,15 +271,25 @@ function migratedPrimary(registry: DataRegistry, equipped: EquippedGear): ManaTy
 }
 
 /**
- * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4 → 5).
- * To 4: a primary from the gear, no secondary, no Mana Dust. To 5: each
- * build its form's default chain shifted by its weight (`chainFromBuild`),
- * the weapon's default basic chain on the pair, the balance's caps, and every
- * move fixed to the pair. A dive in progress stays. Null when it doesn't fit.
+ * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4 →
+ * 5 → 6), and fit every weapon's moveset to the data (`fitMovesets`). To 4:
+ * a primary from the gear, no secondary, no Mana Dust. To 5: each build its
+ * form's default chain shifted by its weight (`chainFromBuild`) and the
+ * weapon's default basic chain on the pair. To 6: the chains move onto the
+ * weapon (`fromV5`), and from a version 4 or older save every move is then
+ * fixed to the pair. A dive in progress stays. Null when it doesn't fit.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   const parsed = DelveProfileSchema.safeParse(raw);
-  if (parsed.success) return { profile: parsed.data as DelveProfile, fixed: [] };
+  if (parsed.success)
+    return {
+      profile: fitMovesets(registry, parsed.data as DelveProfile),
+      fixed: [],
+      dropped: [],
+      movesetReset: false,
+    };
+  const v5 = DelveProfileV5Schema.safeParse(raw);
+  if (v5.success) return fromV5(registry, v5.data as ProfileV5);
   const v4 = DelveProfileV4Schema.safeParse(raw);
   const old = v4.success ? v4.data : fromV3(registry, raw);
   if (!old) return null;
@@ -227,12 +304,14 @@ export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedD
         ...buildChains(registry, abilities),
       }
     : defaultChains(registry, element, weapon?.baseId ?? null);
-  return fixChainsToPair({
+  const res = fromV5(registry, {
     ...rest,
     version: 5,
     chains,
     chainCaps: { ...registry.getDelveBalance().chains.cap },
-  } as DelveProfile);
+  } as ProfileV5);
+  const { profile, fixed } = fixChainsToPair(registry, res.profile);
+  return { ...res, profile, fixed };
 }
 
 /** A version 3 or 2 save as version 4 (see `parseDelveProfile`); version 2 has no builds. */
@@ -256,13 +335,7 @@ export function referenceDepth(profile: DelveProfile): number {
 }
 
 export function profilePower(registry: DataRegistry, profile: DelveProfile): number {
-  return heroPower(
-    profile.equipped,
-    registry,
-    referenceDepth(profile),
-    profile.chains,
-    profile.pair,
-  );
+  return heroPower(profile.equipped, registry, referenceDepth(profile), profile.pair);
 }
 
 export function findItem(
@@ -368,7 +441,7 @@ export function addLootToBag(
   };
 }
 
-/** Equip a bag item. */
+/** Equip a bag item; a weapon brings its own moveset. */
 export function equipItem(
   _registry: DataRegistry,
   profile: DelveProfile,
@@ -382,7 +455,7 @@ export function equipItem(
   return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
 }
 
-/** Unequip into the bag. */
+/** Unequip into the bag (a weapon keeps its moveset). */
 export function unequipSlot(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -452,13 +525,12 @@ export function salvageCandidates(
         !item.locked &&
         item.rarity !== 'legendary' &&
         rarityIndex(item.rarity) <= cap &&
-        compareItem(profile.equipped, item, registry, depth, profile.chains, profile.pair)
-          .powerPct <= 0,
+        compareItem(profile.equipped, item, registry, depth, profile.pair).powerPct <= 0,
     )
     .map((i) => i.uid);
 }
 
-/** Greedily equip any bag item that raises Power (with the chains equipping it gives). */
+/** Greedily equip any bag item that raises Power (a weapon with its own moveset). */
 export function equipBest(
   registry: DataRegistry,
   profile: DelveProfile,
