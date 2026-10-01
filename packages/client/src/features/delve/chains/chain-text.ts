@@ -1,4 +1,16 @@
-import type { ChainSkill, DataRegistry, ManaType, MoveKind } from '@alloy/engine';
+import {
+  runeFits,
+  type Blow,
+  type ChainSkill,
+  type DataRegistry,
+  type ManaType,
+  type Move,
+  type MoveKind,
+  type RunePouch,
+  type RuneRef,
+  type RuneTarget,
+  type RuneTier,
+} from '@alloy/engine';
 import { manaStyle } from '../format';
 
 /** A skill's name in the builder and the notices. */
@@ -46,4 +58,33 @@ export function listed(items: readonly string[]): string {
 /** A chain's names in order: "light Fire Bolt · medium Fire Bolt". */
 export function chainText(names: readonly string[]): string {
   return names.join(' · ');
+}
+
+/** What a move's runes are socketed on: an ability move's form, or a blow of `weaponBaseId`. */
+export function runeTarget(m: Move | Blow, weaponBaseId: string | null): RuneTarget {
+  return 'form' in m ? { form: m.form } : { weapon: weaponBaseId, kind: m.kind };
+}
+
+/**
+ * The runes a socket can take: each that fits `on` and isn't in the move's other sockets
+ * (`others`), by tier with its count from `pouch`; or, from 'any' (the Training Grounds, which
+ * pick the tier in the picker), once each.
+ */
+export function runeCandidates(
+  registry: DataRegistry,
+  on: RuneTarget,
+  others: readonly (RuneRef | null)[],
+  pouch: RunePouch | 'any',
+): { rune: RuneRef; count: number | null }[] {
+  const taken = new Set(others.map((r) => r?.id));
+  return registry
+    .getRunes()
+    .filter((def) => runeFits(def, on) && !taken.has(def.id))
+    .flatMap((def): { rune: RuneRef; count: number | null }[] =>
+      pouch === 'any'
+        ? [{ rune: { id: def.id, tier: 1 }, count: null }]
+        : (pouch[def.id] ?? []).flatMap((n, i) =>
+            n > 0 ? [{ rune: { id: def.id, tier: (i + 1) as RuneTier }, count: n }] : [],
+          ),
+    );
 }
