@@ -34,24 +34,76 @@ describe('DelveCamp', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
   });
 
-  it('a pending chain draft shows on the Abilities tab and above the Delve button; diving drops it', () => {
+  /** A Lance in place of the Primary's first move, unapplied. */
+  const draftLance = () => {
     const s = useDelveStore.getState();
     const primary = heroChains(getDelveRegistry(), s.profile.equipped, s.profile.pair).primary!;
     act(() =>
       s.editDraft('primary', { ...primary, moves: [{ ...primary.moves[0], form: 'lance' }] }),
     );
+  };
+  const renderCamp = () =>
     render(
       <MemoryRouter>
         <DelveCamp />
       </MemoryRouter>,
     );
+
+  it('a pending chain draft blocks the Delve button, saying why; Apply sets it and opens the way', () => {
+    draftLance();
+    renderCamp();
     expect(screen.getByTestId('draft-count')).toHaveTextContent('1 unapplied change');
-    expect(screen.getByTestId('draft-warning')).toHaveTextContent(
-      'Unapplied changes: apply or revert them first',
-    );
+    const warning = screen.getByTestId('draft-warning');
+    expect(warning).toHaveTextContent('Unapplied changes: apply or discard them to delve');
+    const delve = screen.getByTestId('delve-button');
+    expect(delve).toBeDisabled();
+    expect(delve).toHaveAttribute('aria-describedby', warning.id);
+    fireEvent.click(delve);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(useDelveStore.getState().chainDraft).not.toBeNull();
+    // Free before the first dive: Apply carries no price.
+    fireEvent.click(screen.getByTestId('draft-apply'));
+    expect(useDelveStore.getState().chainDraft).toBeNull();
+    expect(useDelveStore.getState().profile.equipped.weapon!.moveset!.chains.primary).toBeTruthy();
+    expect(screen.queryByTestId('draft-warning')).toBeNull();
+    expect(screen.getByTestId('delve-button')).toBeEnabled();
+  });
+
+  it("Apply shows the price, and the engine's refusal when it can't go through", () => {
+    const p = useDelveStore.getState().profile;
+    useDelveStore.getState().setProfile({ ...p, stats: { ...p.stats, dives: 1 }, manaDust: 0 });
+    draftLance();
+    renderCamp();
+    const apply = screen.getByTestId('draft-apply');
+    expect(apply).toHaveTextContent(/Apply · ✦ \d+/);
+    expect(apply).toBeDisabled();
+    const why = screen.getByTestId('draft-apply-why');
+    expect(why).toHaveTextContent('Not enough Mana Dust');
+    expect(apply).toHaveAttribute('aria-describedby', why.id);
+    // The way out still works.
+    expect(screen.getByTestId('draft-discard-delve')).toBeEnabled();
+  });
+
+  it('Discard changes & delve reverts the draft and starts the dive in one press', () => {
+    draftLance();
+    renderCamp();
+    fireEvent.click(screen.getByTestId('draft-discard-delve'));
+    expect(useDelveStore.getState().chainDraft).toBeNull();
+    expect(useDelveStore.getState().profile.dive).not.toBeNull();
+    expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
+  });
+
+  it('the store never starts a dive over a pending draft; a dive under way still resumes', () => {
+    draftLance();
+    expect(useDelveStore.getState().startDive(1)).toBe(false);
+    expect(useDelveStore.getState().profile.dive).toBeNull();
+    useDelveStore.getState().revertDraft();
+    expect(useDelveStore.getState().startDive(1)).toBe(true);
+    draftLance();
+    renderCamp();
+    expect(screen.queryByTestId('draft-warning')).toBeNull();
     fireEvent.click(screen.getByTestId('delve-button'));
     expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
-    expect(useDelveStore.getState().chainDraft).toBeNull();
   });
 
   it('shows waiting notices as toasts, once', () => {

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   MANA_TYPES,
+  editPrice,
   isDiveActive,
   profilePower,
   profileStats,
+  setChains,
   startDepthOptions,
 } from '@alloy/engine';
 import { draftChanges, useDelveStore } from '@/stores/delveStore';
@@ -37,6 +39,7 @@ export function DelveCamp() {
   const [selected, setSelected] = useState<string | null>(null);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const id = useId();
   useDelveNotices();
 
   // A finished dive's summary was shown on the run screen — clear it here.
@@ -58,17 +61,28 @@ export function DelveCamp() {
     () => profileStats(registry, { equipped, pair }).attunement,
     [equipped, pair, registry],
   );
-  // The chain builder's unapplied changes (a dive's start drops them).
-  const unapplied = useMemo(
-    () => Object.keys(draftChanges(registry, profile, draft)).length,
-    [registry, profile, draft],
-  );
+  // The chain builder's unapplied changes: a new dive waits until they're applied or discarded.
+  const changes = useMemo(() => draftChanges(registry, profile, draft), [registry, profile, draft]);
+  const unapplied = Object.keys(changes).length;
+  const blocked = unapplied > 0 && !active;
+  // The builder's Apply, here too: its price, and the engine's op as a dry run (why it can't go).
+  const price = blocked ? editPrice(registry, profile, changes) : 0;
+  const applying = blocked ? setChains(registry, profile, changes) : null;
+  const applyWhy = applying && !applying.ok ? applying.reason : null;
 
   const onDelve = () => {
+    if (!active && !useDelveStore.getState().startDive(starts.includes(start) ? start : 1)) return;
     playSound('phaseTransition');
     vibrate('medium');
-    if (!active) useDelveStore.getState().startDive(starts.includes(start) ? start : 1);
     navigate('/delve/run');
+  };
+  const onApply = () => {
+    const res = useDelveStore.getState().applyDraft();
+    playSound(res.ok ? 'upgradeTier' : 'combineFail');
+  };
+  const onDiscardAndDelve = () => {
+    useDelveStore.getState().revertDraft();
+    onDelve();
   };
 
   const openItem = (uid: string) => {
@@ -204,14 +218,51 @@ export function DelveCamp() {
                 ))}
               </div>
             )}
-            {unapplied > 0 && !active && (
-              <div className="text-center text-xs text-amber-200" data-testid="draft-warning">
-                Unapplied changes: apply or revert them first
+            {blocked && (
+              <div className="flex flex-col items-center gap-1.5" data-testid="draft-block">
+                <div
+                  id={`${id}-draft`}
+                  className="text-center text-xs text-amber-200"
+                  data-testid="draft-warning"
+                >
+                  Unapplied changes: apply or discard them to delve
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <button
+                    type="button"
+                    className="delve-btn delve-btn-gold px-3 py-1 text-xs"
+                    disabled={!applying?.ok}
+                    onClick={onApply}
+                    aria-describedby={applyWhy ? `${id}-apply` : undefined}
+                    data-testid="draft-apply"
+                  >
+                    Apply{price > 0 ? ` · ✦ ${price}` : ''}
+                  </button>
+                  <button
+                    type="button"
+                    className="delve-btn px-3 py-1 text-xs"
+                    onClick={onDiscardAndDelve}
+                    data-testid="draft-discard-delve"
+                  >
+                    Discard changes &amp; delve
+                  </button>
+                </div>
+                {applyWhy && (
+                  <span
+                    id={`${id}-apply`}
+                    className="text-xs text-amber-200/80"
+                    data-testid="draft-apply-why"
+                  >
+                    {applyWhy}
+                  </span>
+                )}
               </div>
             )}
             <button
               className="delve-btn delve-btn-gold py-4 text-2xl"
               onClick={onDelve}
+              disabled={blocked}
+              aria-describedby={blocked ? `${id}-draft` : undefined}
               data-testid="delve-button"
             >
               {active

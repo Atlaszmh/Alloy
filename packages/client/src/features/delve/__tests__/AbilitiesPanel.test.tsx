@@ -122,7 +122,7 @@ describe('AbilitiesPanel', () => {
     expect(store().profile.manaDust).toBe(0);
   });
 
-  it('keeps the draft when the tab closes, until a dive starts', () => {
+  it('keeps the draft when the tab closes; a dive starts only once it is discarded', () => {
     roomy();
     const { unmount } = render(<AbilitiesPanel />);
     fireEvent.click(screen.getByTestId('form-lance'));
@@ -130,7 +130,12 @@ describe('AbilitiesPanel', () => {
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
     expect(screen.getByTestId('chain-draft')).toBeInTheDocument();
-    act(() => store().startDive(1));
+    expect(store().startDive(1)).toBe(false);
+    expect(screen.getByTestId('chain-draft')).toBeInTheDocument();
+    act(() => {
+      store().revertDraft();
+      store().startDive(1);
+    });
     expect(screen.queryByTestId('chain-draft')).toBeNull();
     expect(chains().primary.moves[0].form).toBe('bolt');
   });

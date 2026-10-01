@@ -216,13 +216,14 @@ interface DelveStore {
   notices: string[];
   /** Elements whose bind prompt was answered "Not now" this session (never saved). */
   bindDeclined: ManaType[];
-  /** The chain builder's unapplied edits (never saved; a dive's start drops them). */
+  /** The chain builder's unapplied edits (never saved; a dive can't start over them). */
   chainDraft: ChainDraft | null;
 
   setProfile: (profile: DelveProfile) => void;
   /** A new save; with `primary` its mana is already chosen (tests, E2E). */
   resetProfile: (seed?: number, primary?: ManaType) => void;
-  startDive: (depth: number) => void;
+  /** Start a dive; refused (false) while the chain builder holds unapplied changes. */
+  startDive: (depth: number) => boolean;
   /** Close the finished (or abandoned) dive; a secondary that has overtaken swaps in, with a notice. */
   closeDive: () => void;
   /** The one-time "Choose your mana". */
@@ -313,8 +314,12 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     },
 
     startDive: (depth) => {
-      commit(engineStartDive(registry(), get().profile, depth));
+      const { profile, chainDraft } = get();
+      // A dive locks the chains: a pending draft is applied or discarded first, never dropped.
+      if (Object.keys(draftChanges(registry(), profile, chainDraft)).length > 0) return false;
+      commit(engineStartDive(registry(), profile, depth));
       set({ diveDrops: [], chainDraft: null });
+      return true;
     },
 
     closeDive: () => {

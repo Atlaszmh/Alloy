@@ -152,6 +152,7 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
     - today's other refusals.
   - **The autopilot's `bindBest`** pays for its edit, and skips it when it can't.
 - **The Anvil's chain builder** works on a draft. Edits pile up, the price shows (`movesetEditPrice`, summed over the chains changed), and **Apply** (paid) or **Revert** settles them. Apply is all or nothing through one engine op, `setChains(registry, profile, partial)`. It checks every changed chain's refusals and the total price, then commits them all; if any is refused or the total can't be paid, nothing applies. `setChain` stays as the one-chain case of it. The builder also holds Add slot, with its price. Off-pair moves show their element chip marked and can't be picked for new moves. The Training Grounds' builder stays instant and free.
+  - **A draft blocks a new dive** (not a dive's Resume): the Delve button is disabled, and beside its warning sit the builder's Apply (priced, and disabled with the engine's reason from the same `setChains` dry run) and **Discard changes & delve**, which reverts the draft and starts the dive in one press. The store's `startDive` refuses over a draft, so no path drops one silently.
 - **Transfer.** `transferMoveset(registry, profile, uid)` moves the equipped weapon's moveset onto a weapon in the bag and equips it.
   - **Each chain keeps its extra count on the new weapon:** its slots become the new base plus the source's extra, capped at 5.
     - Any overflow past 5 comes back as Links.
