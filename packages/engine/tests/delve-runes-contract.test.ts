@@ -492,6 +492,10 @@ describe('wave 1B: delve/runes.ts and arpg/rune-drops.ts', () => {
     'runeChange and draftPrice: sockets opened, runes socketed and pulled, net Links, refusals',
   );
   it.todo('openSocket, socketRune, fusePrice and fuseRunes');
+  it.todo('bankWorld banks pending.runes into the pouch and returns them (no longer runes: [])');
+  it.todo(
+    "stopKinds offers 'rune' when an empty socket and a fitting pouch rune exist (no longer false)",
+  );
   it.todo('dropRune: a rune Drop from rollRuneDrop on world.runeRng, none in the sandbox');
 });
 
@@ -551,6 +555,9 @@ describe('wave 1A: the sim', () => {
     'guardLand: a guardOnLand × max life barrier for guardSeconds, never shrinking a larger one',
   );
   it.todo('queueEcho and echoTick: the move or blow again after echoDelay, at its echo fraction');
+  it.todo(
+    "resolveAbility merges a move's active runes (ResolvedAbility.runes, runeKnobs), and blows merge theirs (HeroBlow.knobs, no longer NEUTRAL)",
+  );
 });
 
 describe('save v7', () => {

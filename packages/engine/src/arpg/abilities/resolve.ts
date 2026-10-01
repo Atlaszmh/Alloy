@@ -24,10 +24,10 @@ import type {
 } from '../../types/delve.js';
 
 /** Knobs that change nothing: every merge starts from them (never mutate it). */
-export const NEUTRAL: Knobs = {
+export const NEUTRAL: Knobs = Object.freeze({
   power: 1,
   area: 1,
-  applies: [],
+  applies: Object.freeze([]) as unknown as Knobs['applies'],
   chain: 0,
   pierce: 0,
   knockback: 0,
@@ -40,12 +40,12 @@ export const NEUTRAL: Knobs = {
   split: null,
   extraShots: null,
   echo: 0,
-  quick: { beat: 1, cooldown: 1, windup: 1 },
+  quick: Object.freeze({ beat: 1, cooldown: 1, windup: 1 }),
   stacksBonus: 0,
   catalyst: 0,
   manaOnHit: 0,
   guardOnLand: 0,
-};
+});
 
 /**
  * Combine knob sets (see the runes spec's knob table): multipliers multiply,
@@ -73,7 +73,13 @@ export function mergeKnobs(...parts: KnobsData[]): Knobs {
     k.execute = Math.max(k.execute, p.execute ?? 0);
     k.scatter = Math.max(k.scatter, p.scatter ?? 0);
     k.spread ||= p.spread ?? false;
-    if (p.split && (!k.split || p.split.count > k.split.count)) k.split = { ...p.split };
+    if (
+      p.split &&
+      (!k.split ||
+        p.split.count > k.split.count ||
+        (p.split.count === k.split.count && p.split.power > k.split.power))
+    )
+      k.split = { ...p.split };
     if (p.extraShots)
       k.extraShots = {
         count: (k.extraShots?.count ?? 0) + p.extraShots.count,
