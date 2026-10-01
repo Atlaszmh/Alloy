@@ -144,7 +144,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
   - **Decided in the spec (review): a Lance fan chains and lingers per beam.** Each beam that hits jumps from its farthest foe and leaves its zone at its first, as one Lance does today; the shared hit set means a later beam's jumps skip foes an earlier beam struck. *Each beam is a Lance; only the double hit at the hero is shared.*
   - Volley and Barrage: `extraShots.count` adds to `ResolvedAbility.count` in `resolveAbility` (Volley's darts by kind, Barrage's impacts); Volley's shots take half the power cut, Barrage's none (see the knob).
   - Bow and wand blows: `1 + extraShots.count` shots in the same fan.
-  - **Every shot, the first included, is at the cut power.** *That is what "each −35%" means.*
+  - **Every shot, the first included, is at the cut power** (half the cut on Volley, none on Barrage). *That is what "each −35%" means.*
   - **Decided in the spec (review): Twin Fang's extra shot stays one shot and carries no runes.** *It already applies no stacks and pairs nothing; it is the legendary's echo, not the blow's shot.*
 - **Pierce.** The count above: a Bolt or a dart passes that many foes, impacting on each (as Earth's piercing Bolt does today), then dies on the next.
 - **Chain.** Abilities: as today (`chainFrom`), the Storm mastery's +2 included. Blows: `chainFrom`'s body becomes `chainJumps(ctx, first, damage, element, jumps, opts, hit)`, which both call; it keeps today's per-jump knockback origin (`kbFrom` = the foe it jumps from). A melee blow jumps from the first foe struck; a shot from the foe it hit.
@@ -205,7 +205,7 @@ What every rune does on an ability move, a melee blow and a shot blow. A dash me
 
   - `tiers` holds five knob sets, the trade-off included (Pierce's is `"power": 0.9` at every tier). They are validated by the same `KnobsSchema` as elements and fusions, so a misspelled knob fails at load.
   - `fits.forms` lists form ids; `fits.weapons` lists weapon base ids whose basic blows it fits; `fits.kinds`, optional, limits the blows it acts on (Linger: `["heavy", "hold"]`).
-  - `effect` and `tradeoff` are templates. `{path}` prints a knob value of the tier, `{path:%}` it × 100 with a %, `{path:±%}` (it − 1) × 100 signed with a %, and `{runes.key}` a `delve.runes` balance value (Drain's "up to {runes.drainFoes} foe-hits a cast"). Quick reads "Beat {quick.beat:±%}, cooldown {quick.cooldown:±%}" → "Beat −20%, cooldown −20%". `runeText(registry, ref)` fills them; the client never formats rune numbers itself.
+  - `effect` and `tradeoff` are templates. `{path}` prints a knob value of the tier, `{path:%}` it × 100 with a %, `{path:±%}` (it − 1) × 100 signed with a %, and `{runes.key}` a `delve.runes` balance value (Drain's "up to {runes.drainFoes} foe-hits a cast"). Quick reads "Beat {quick.beat:±%}, cooldown {quick.cooldown:±%}" → "Beat −20%, cooldown −20%". `runeText(registry, ref, on?)` fills them, and with `on` applies the same rules as the resolver (Multi-shot's half cut on Volley and none on Barrage; the picker passes the move); the client never formats rune numbers itself.
 - **A new rune from existing knobs** is one row in `runes.json`, nothing else: it drops, sockets, prices, fuses, shows, and is valued by Power and swept by the DPS Lab.
 - **A rune that needs a new knob** adds:
   1. the field on `Knobs`, its neutral value in `NEUTRAL` and its rule in `mergeKnobs` (`resolve.ts`);
@@ -613,7 +613,7 @@ export function runeKnobs(
   runes: readonly (RuneRef | null)[] | undefined,
   on: RuneTarget,
 ): { knobs: KnobsData[]; active: RuneRef[] };                             // unknown ids and dormant runes skipped
-export function runeText(registry: DataRegistry, ref: RuneRef): { effect: string; tradeoff: string | null };
+export function runeText(registry: DataRegistry, ref: RuneRef, on?: RuneTarget): { effect: string; tradeoff: string | null };
 export function socketCap(registry: DataRegistry, rarity: Rarity | null): number; // unarmed: 0
 export function socketPrice(registry: DataRegistry, open: number): { links: number; scrap: number } | null; // null at MAX_SOCKETS
 export function pouchCount(pouch: RunePouch, ref: RuneRef): number;
