@@ -1,6 +1,7 @@
 import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
-import { HOLD_STAGE_KINDS, type MoveKind } from '../types/ability.js';
+import { HOLD_STAGE_KINDS, type MoveKind, type ZoneKnob } from '../types/ability.js';
 import type { ComboStepDef, DelveBalance, HeroBlow, HeroWeapon } from '../types/delve.js';
+import type { ManaType } from '../types/mana.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { endPushes, startPush } from './action.js';
@@ -326,10 +327,12 @@ export function landBlow(
           noReact: true,
         });
     }
-    // Chain: jumps from the first foe struck.
+    // Chain: jumps from the first foe struck. Linger: a zone ahead, at half the reach.
     if (first) {
       const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
       chainJumps(ctx, first, base, element, k.chain, jump, struck);
+      if (k.zone)
+        blowZone(ctx, h.x + dir.x * reach * 0.5, h.y + dir.y * reach * 0.5, base, element, k.zone);
     }
   } else {
     const size = s.size ?? 1;
@@ -402,10 +405,46 @@ function blowStep(ctx: SimCtx, s: ComboStepDef, dir: Vec, steer: Vec): void {
   if (len > 1e-9) startPush(ctx, 'step', { x: x / len, y: y / len }, len, bal.feel.stepSeconds);
 }
 
+/** A blow's Linger zone's radius. */
+const BLOW_ZONE_RADIUS = 1.2;
+
+/**
+ * Linger on a heavy or hold blow: a hero zone with no ability at (x, y), for
+ * `zone.seconds`, whose ticks (every 0.5 s, `zonesTick`) hit each foe inside as
+ * a basic hit for `hit × zone.tickPower`.
+ */
+function blowZone(
+  ctx: SimCtx,
+  x: number,
+  y: number,
+  hit: number,
+  element: ManaType,
+  zone: ZoneKnob,
+): void {
+  const { world } = ctx;
+  world.zones.push({
+    id: world.nextId++,
+    owner: 'hero',
+    source: 'linger',
+    ability: null,
+    x,
+    y,
+    radius: BLOW_ZONE_RADIUS,
+    born: world.t,
+    until: world.t + zone.seconds,
+    tick: 0.5,
+    nextTick: world.t + 0.5,
+    damage: hit * zone.tickPower,
+    element,
+    detonateAt: 0,
+    dead: false,
+  });
+}
+
 /**
  * A basic shot's knobs where it lands (see `burstShot` and the projectile tick):
  * `hit` are the foes it hit there, the one it struck first. Chain jumps from
- * that one; Split's shards skip them all.
+ * that one, Linger leaves its zone there, and Split's shards skip them all.
  */
 export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntity[]): void {
   const k = p.knobs!;
@@ -418,6 +457,8 @@ export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntit
     ...knobHitOpts(k),
   };
   chainJumps(ctx, hit[0], p.damage, p.element!, k.chain, jump, new Set(hit.map((m) => m.id)));
+  // Linger: a zone where it hit.
+  if (k.zone) blowZone(ctx, p.x, p.y, p.damage, p.element!, k.zone);
   if (k.split)
     shedShards(ctx, p.x, p.y, k.split, p.damage, hit, {
       ability: null,

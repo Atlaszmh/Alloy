@@ -610,3 +610,46 @@ describe('Chain on blows (chainJumps)', () => {
     expect(chained(w, events)).toEqual({ points: [3], hit: [true, true, true] });
   });
 });
+
+describe('Linger on blows (a hero zone with no ability)', () => {
+  const heavy = (runes: RuneRef[]): Blow => ({ kind: 'heavy', element: 'fire', runes });
+  const lingering = (w: ArpgWorld) => w.zones.filter((z) => z.owner === 'hero' && !z.ability);
+
+  it('a heavy melee blow that connects leaves a zone ahead, at half its reach, ticking as a basic hit', () => {
+    const w = blowWorld([heavy([R('linger')])]);
+    const hit = basicHits(firstBlow(w))[0];
+    w.hero.nextAttackAt = 1e9;
+    const [zone] = lingering(w);
+    const reach = w.hero.stats.weapon.range + (w.hero.stats.weapon.feel.heavy.reach ?? 0);
+    expect(zone).toMatchObject({ x: 13, radius: 1.2, element: 'fire', tick: 0.5 });
+    expect(zone.y).toBeCloseTo(w.hero.y - reach / 2);
+    expect(zone.until - zone.born).toBeCloseTo(2.5);
+    expect(zone.damage).toBeCloseTo(
+      w.hero.stats.weaponDamage *
+        w.hero.stats.damageMult *
+        w.hero.stats.weapon.feel.heavy.power *
+        0.2,
+    );
+    const ticks = basicHits(run(w, 1.05)).filter((e) => !e.crit && e.heft === 0);
+    expect(ticks).toHaveLength(2);
+    expect(ticks[0].amount).toBeLessThan(hit.amount);
+  });
+
+  it('a light blow leaves none: Linger acts on heavy and hold blows only', () => {
+    const w = blowWorld([light([R('linger')])]);
+    firstBlow(w);
+    expect(lingering(w)).toHaveLength(0);
+  });
+
+  it('a heavy shot leaves its zone where it hits', () => {
+    const w = blowWorld([heavy([R('linger')])], [dummy(13, 30)], {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    firstBlow(w);
+    w.hero.nextAttackAt = 1e9;
+    until(w, 'hit');
+    const [zone] = lingering(w);
+    expect(zone.x).toBeCloseTo(13);
+    expect(Math.abs(zone.y - 30)).toBeLessThan(1);
+  });
+});

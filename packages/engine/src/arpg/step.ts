@@ -10,6 +10,7 @@ import type {
 } from '../types/arpg.js';
 import { MANA_TYPES } from '../types/mana.js';
 import {
+  BASIC_STATUS,
   healHero,
   hitMonster,
   hurtHero,
@@ -461,6 +462,13 @@ function zonesTick(ctx: SimCtx): void {
     z.nextTick += z.tick;
     if (z.ability)
       impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
+    else {
+      // A blow's Linger: each foe inside takes a basic hit (no crit) of its element.
+      const applies = z.element ? [BASIC_STATUS[z.element]] : [];
+      for (const m of world.monsters)
+        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius)
+          hitMonster(ctx, m, z.damage, z.element, { source: 'basic', canCrit: false, applies });
+    }
   }
 }
 
