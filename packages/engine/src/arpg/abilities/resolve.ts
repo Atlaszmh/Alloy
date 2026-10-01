@@ -15,7 +15,8 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
-import { runeKnobs } from '../../loot/runes.js';
+import { runeFits, runeKnobs } from '../../loot/runes.js';
+import type { RuneRef } from '../../types/rune.js';
 import type {
   DelveBalance,
   DelveProfile,
@@ -389,7 +390,9 @@ export function roleHeir(
  * The basic chain after its weapon or pair changes from `before` to `after`:
  * one still on its default becomes the new default; otherwise, once an element
  * leaves the pair, each blow takes its element's heir (`roleHeir`); else it
- * stays as it is.
+ * stays as it is. A reset to the default keeps each old blow's sockets on the
+ * new blow at its position, a rune that doesn't fit the new weapon taken out
+ * (its socket stays open); a blow past the old chain's end has none.
  */
 export function followBasic(
   registry: DataRegistry,
@@ -397,8 +400,18 @@ export function followBasic(
   before: BasicLoadout,
   after: BasicLoadout,
 ): Blow[] {
-  if (isDefaultBasic(registry, basic, before))
-    return defaultBasic(registry, after.weaponBaseId, after.primary, after.secondary);
+  if (isDefaultBasic(registry, basic, before)) {
+    const weapon = after.weaponBaseId;
+    return defaultBasic(registry, weapon, after.primary, after.secondary).map((b, i) => {
+      const runes = basic[i]?.runes;
+      if (!runes) return b;
+      const fits = (r: RuneRef) => {
+        const def = registry.findRune(r.id);
+        return !!def && runeFits(def, { weapon, kind: b.kind });
+      };
+      return { ...b, runes: runes.map((r) => (r && fits(r) ? r : null)) };
+    });
+  }
   const heir = roleHeir(before, after);
   return heir ? basic.map((b) => ({ ...b, element: heir(b.element) })) : basic;
 }

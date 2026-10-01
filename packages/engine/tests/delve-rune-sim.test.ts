@@ -1,8 +1,22 @@
 import { describe, it, expect } from 'vitest';
+import { NEUTRAL, defaultBasic, followBasic } from '../src/arpg/abilities/resolve.js';
+import { refreshWorldHero } from '../src/arpg/world.js';
+import { computeHeroStats } from '../src/delve/hero-stats.js';
+import type { Blow } from '../src/types/ability.js';
 import type { ArpgEvent, ArpgWorld, MonsterEntity } from '../src/types/arpg.js';
 import type { RuneRef, RuneTier } from '../src/types/rune.js';
-import { STEP, arena, dummy, moveOf, press, run, type ArenaOpts } from './fixtures/arena.js';
-
+import {
+  STEP,
+  arena,
+  dummy,
+  gear,
+  moveOf,
+  press,
+  pressOnly,
+  registry,
+  run,
+  type ArenaOpts,
+} from './fixtures/arena.js';
 // See the runes spec, "Each rune in the sim". The fixture arena's hero stands at (13, 36) facing
 // up; `dummy(x, y)` is a sturdy Fire foe that doesn't fight back. A move's runes ride on it
 // (`Move.runes`, `Blow.runes`): `R('chain')` is Chain III.
@@ -121,5 +135,82 @@ describe('runes merge into the move they sit on (resolveAbility)', () => {
     events.push(...run(w, 1.5));
     expect(w.projectiles).toHaveLength(0);
     expect(events.filter((e) => e.kind === 'explode')).toHaveLength(1);
+  });
+});
+
+describe('basic blows carry their runes (computeHeroStats)', () => {
+  const blowsOf = (baseId: string, basic: Blow[]) =>
+    computeHeroStats({ weapon: gear('fire', 'weapon', baseId) }, registry, { basic }).weapon.blows;
+
+  it("takes the runes that fit the weapon and act on the blow's kind, merged into its knobs", () => {
+    const [light, heavy] = blowsOf('sword', [
+      { kind: 'light', element: 'fire', runes: [R('linger'), R('chain')] },
+      { kind: 'heavy', element: 'fire', runes: [R('linger'), R('split'), R('chain')] },
+    ]);
+    // Linger acts on heavy and hold blows only; Split doesn't fit a sword.
+    expect(light.runes).toEqual([R('chain')]);
+    expect(light.knobs.zone).toBeNull();
+    expect(heavy.runes).toEqual([R('linger'), R('chain')]);
+    expect(heavy.knobs.zone).toEqual({ seconds: 2.5, tickPower: 0.2 });
+    expect(heavy.knobs.chain).toBe(2);
+    expect(blowsOf('sword', [{ kind: 'light', element: 'fire' }])[0].knobs).toEqual(NEUTRAL);
+  });
+
+  it("leaves a Pierce dormant on a staff's rows that burst", () => {
+    const [light, medium] = blowsOf('staff', [
+      { kind: 'light', element: 'fire', runes: [R('pierce')] },
+      { kind: 'medium', element: 'fire', runes: [R('pierce')] },
+    ]);
+    expect(light.runes).toEqual([R('pierce')]);
+    expect(light.knobs.pierce).toBe(3);
+    expect(medium.runes).toEqual([]);
+    expect(medium.knobs.pierce).toBe(0);
+  });
+});
+
+describe('a chain whose sockets change is a changed chain (refreshWorldHero)', () => {
+  it('drops the slot’s wind-up when a socket opens or a rune changes; the same sockets keep it', () => {
+    const chains = (runes: (RuneRef | null)[]) => ({
+      primary: {
+        moves: [
+          { kind: 'heavy' as const, form: 'bolt' as const, elements: ['fire' as const], runes },
+        ],
+        payment: 'mana' as const,
+      },
+    });
+    const w = world([dummy(13, 30)], { chains: chains([null]) });
+    pressOnly(w, 0);
+    expect(w.hero.windup).not.toBeNull();
+    refreshWorldHero(registry, w, w.hero.stats, chains([null]));
+    expect(w.hero.windup).not.toBeNull();
+    refreshWorldHero(registry, w, w.hero.stats, chains([null, null]));
+    expect(w.hero.windup).toBeNull();
+    pressOnly(w, 0);
+    refreshWorldHero(registry, w, w.hero.stats, chains([R('chain'), null]));
+    expect(w.hero.windup).toBeNull();
+  });
+});
+
+describe("the Training Grounds' followBasic keeps blow runes", () => {
+  const fire = (weaponBaseId: string) => ({
+    weaponBaseId,
+    primary: 'fire' as const,
+    secondary: null,
+  });
+
+  it('a reset to the new default keeps each blow’s sockets by position, minus runes that don’t fit', () => {
+    const basic: Blow[] = defaultBasic(registry, 'sword', 'fire').map((b, i) =>
+      i === 0 ? { ...b, runes: [R('chain'), null] } : i === 2 ? { ...b, runes: [R('widen')] } : b,
+    );
+    expect(followBasic(registry, basic, fire('sword'), fire('bow'))).toEqual([
+      { kind: 'light', element: 'fire', runes: [R('chain'), null] },
+      { kind: 'light', element: 'fire' },
+      { kind: 'heavy', element: 'fire', runes: [null] },
+    ]);
+    // The dagger's chain is a blow longer: its fourth has none.
+    expect(followBasic(registry, basic, fire('sword'), fire('dagger'))[3]).toEqual({
+      kind: 'heavy',
+      element: 'fire',
+    });
   });
 });

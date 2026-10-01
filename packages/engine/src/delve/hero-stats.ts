@@ -13,11 +13,13 @@ import {
   defaultBasic,
   defaultChains,
   holdFull,
+  mergeKnobs,
   moveBeat,
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
 import { heroChains, movesetTransfer } from '../loot/moveset.js';
+import { runeKnobs } from '../loot/runes.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -175,14 +177,21 @@ export function computeHeroStats(
     extra.basic ??
     defaultBasic(registry, armed?.id ?? null, primary ?? weaponItem?.mana ?? 'fire', secondary);
   const perAttune = bal.pair.basicPowerPerAttune;
-  const blows = chain.map((b) => ({
-    ...feel[b.kind],
-    kind: b.kind,
-    element: b.element,
-    attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
-    knobs: NEUTRAL,
-    runes: [],
-  }));
+  const blows = chain.map((b) => {
+    const row = feel[b.kind];
+    // Its runes: those that fit the weapon and act on its kind (a Pierce does nothing on a row
+    // that bursts). Without any, it keeps the shared NEUTRAL.
+    const on = { weapon: armed?.id ?? null, kind: b.kind, explode: (row.explode ?? 0) > 0 };
+    const socketed = runeKnobs(registry, b.runes, on);
+    return {
+      ...row,
+      kind: b.kind,
+      element: b.element,
+      attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
+      knobs: socketed.knobs.length > 0 ? mergeKnobs(...socketed.knobs) : NEUTRAL,
+      runes: socketed.active,
+    };
+  });
   const weapon: HeroWeapon = armed?.attack
     ? {
         baseId: armed.id,

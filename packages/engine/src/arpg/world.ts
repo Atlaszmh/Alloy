@@ -10,6 +10,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
   type AbilitySlot,
@@ -177,6 +178,13 @@ export function createMonsterEntity(
   };
 }
 
+/**
+ * The chain each hero chain was resolved from: `sameChain` compares its raw sockets, which the
+ * resolved moves don't keep (their `runes` drop empty and dormant sockets).
+ */
+// ponytail: a side table, since the contract gives ResolvedChain no field for the raw chain.
+const SOURCES = new WeakMap<ResolvedChain, Chain>();
+
 /** Each slot's chain resolved, by slot; null for a skill left out. */
 function resolveAll(
   registry: DataRegistry,
@@ -185,7 +193,10 @@ function resolveAll(
 ): (ResolvedChain | null)[] {
   return ABILITY_SLOTS.map((slot) => {
     const chain = chains[slot];
-    return chain ? resolveChain(registry, stats, slot, chain) : null;
+    if (!chain) return null;
+    const resolved = resolveChain(registry, stats, slot, chain);
+    SOURCES.set(resolved, chain);
+    return resolved;
   });
 }
 
@@ -299,9 +310,10 @@ export function refreshWorldHero(
   });
 }
 
-/** Whether a resolved chain is `b` (both absent counts as the same). */
+/** Whether a resolved chain is `b` (both absent count as the same), raw sockets included. */
 function sameChain(a: ResolvedChain | null, b: Chain | undefined): boolean {
   if (!a || !b) return !a && !b;
+  const source = SOURCES.get(a);
   return (
     a.payment === b.payment &&
     a.moves.length === b.moves.length &&
@@ -309,9 +321,15 @@ function sameChain(a: ResolvedChain | null, b: Chain | undefined): boolean {
       (m, i) =>
         m.kind === b.moves[i].kind &&
         m.form.id === b.moves[i].form &&
-        m.elements.join() === b.moves[i].elements.join(),
+        m.elements.join() === b.moves[i].elements.join() &&
+        sameSockets(source?.moves[i]?.runes ?? [], b.moves[i].runes ?? []),
     )
   );
+}
+
+/** The same sockets: as many, each empty in both or holding the same rune at the same tier. */
+function sameSockets(a: readonly (RuneRef | null)[], b: readonly (RuneRef | null)[]): boolean {
+  return a.length === b.length && a.every((r, i) => r?.id === b[i]?.id && r?.tier === b[i]?.tier);
 }
 
 /** Build the arena for one depth: hero at the bottom, monster packs spread above. */
