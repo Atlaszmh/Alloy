@@ -394,6 +394,8 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           from,
           tick: p.form === 'ember',
           heft: p.heft,
+          // Past its first foe, a rune's Pierce only hits: an Earth shot's endless pierce, as before.
+          through: p.hitIds.length > 1 && Number.isFinite(p.pierceLeft ?? 0),
         });
       else if (p.explodeRadius > 0) {
         burstShot(ctx, p, m);

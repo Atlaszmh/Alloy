@@ -183,6 +183,11 @@ export interface ImpactOpts {
   silent?: boolean;
   /** How hard direct hits land (defaults to the ability's). */
   heft?: number;
+  /**
+   * A shot's later impact as it pierces on, by a rune's count (see the runes spec's balance
+   * pass): it hits, but its jumps, zone and shards come off its first foe only.
+   */
+  through?: boolean;
 }
 
 /** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
@@ -230,16 +235,16 @@ export function impact(
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
 
-  if (hits.length > 0) {
+  if (hits.length > 0 && !o.through) {
     const first = hits.reduce((a, b) => (dist(x, y, a.x, a.y) <= dist(x, y, b.x, b.y) ? a : b));
     chainFrom(ctx, ab, first, damage, new Set(hits.map((m) => m.id)), o.tick);
   }
   if (!o.tick) {
-    leaveZone(ctx, ab, x, y, radius, damage);
+    if (!o.through) leaveZone(ctx, ab, x, y, radius, damage);
     embers(ctx, ab, x, y, damage);
     // Split: an impact that hit sheds shards, each carrying the move without the knobs that
     // would multiply them (shards of shards, a zone or an echo per shard).
-    if (k.split && hits.length > 0) {
+    if (k.split && hits.length > 0 && !o.through) {
       const ability: ResolvedAbility = {
         ...ab,
         knobs: {

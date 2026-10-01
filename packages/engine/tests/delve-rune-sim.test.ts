@@ -984,3 +984,31 @@ describe('with no rune acting, nothing changes', () => {
     expect(fight((m) => (m === 'bolt' ? [R('pierce'), null] : [R('split')]))).toBe(none);
   });
 });
+
+describe('the balance pass: shape runes add, they do not multiply', () => {
+  /** A line of foes up the Bolt's way, each with a foe beside it to jump to. */
+  const line = () => [13, 16].flatMap((x) => [dummy(x, 33), dummy(x, 30), dummy(x, 27)]);
+  const heroZones = (w: ArpgWorld) =>
+    w.zones.filter((z) => z.owner === 'hero' && z.ability && !z.detonateAt);
+
+  it('a pierced foe takes the Bolt but no jump, zone or shards: they come off its first foe only', () => {
+    const cast = (runes: RuneRef[]) => {
+      const w = world(line(), { primary: { runes } });
+      const events = [...press(w, 0), ...run(w, 1)];
+      return { w, events };
+    };
+    const chain = cast([R('pierce'), R('chain')]);
+    expect(chain.w.monsters.slice(0, 3).every((m) => m.hp < m.maxHp)).toBe(true);
+    expect(chain.events.filter((e) => e.kind === 'chain')).toHaveLength(1);
+    expect(heroZones(cast([R('pierce'), R('linger')]).w)).toHaveLength(1);
+    const split = cast([R('pierce'), R('split')]);
+    expect(split.events.filter((e) => e.kind === 'runeFx' && e.effect === 'split')).toHaveLength(1);
+  });
+
+  it("an Earth Bolt's endless pierce still lingers at every foe it passes (Magma), as before runes", () => {
+    const w = world(line(), { primary: { elements: ['fire', 'earth'] } });
+    press(w, 0);
+    run(w, 1);
+    expect(heroZones(w)).toHaveLength(3);
+  });
+});
