@@ -17,7 +17,8 @@ interface PickupFeedProps {
 /**
  * The last few items picked up this dive, stacked on the right edge of the
  * arena. Tap one to inspect it mid-fight; ▲ marks an upgrade, to equip at the
- * Anvil (gear is locked while a dive runs).
+ * Anvil (gear is locked while a dive runs), ◇ a weapon better only once your
+ * moveset moves onto it (Transfer).
  */
 export function PickupFeed({ onSelect, top }: PickupFeedProps) {
   const registry = getDelveRegistry();
@@ -29,23 +30,32 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
   const depth = referenceDepth(profile);
 
   const rows = useMemo(() => {
-    const out: { item: GearItem; equipped: boolean; delta: number | null }[] = [];
+    const out: {
+      item: GearItem;
+      equipped: boolean;
+      /** The Power change as a home for your moveset (Transfer); `asIs`, as it comes. */
+      delta: number | null;
+      asIs: number | null;
+    }[] = [];
     for (const uid of diveDrops) {
       const found = findItem(profile, uid);
       if (!found) continue;
+      const { item } = found;
       const equipped = found.where === 'equipped';
-      out.push({
-        item: found.item,
-        equipped,
-        delta: equipped
-          ? null
-          : compareItem(profile.equipped, found.item, registry, depth, profile.pair).powerPct,
-      });
+      const value = (as: 'home' | 'asIs') =>
+        compareItem(profile.equipped, item, registry, depth, profile.pair, as).powerPct;
+      const delta = equipped ? null : value('home');
+      // Only a weapon carries a moveset: anything else is the same either way.
+      const asIs = equipped || item.slot !== 'weapon' ? delta : value('asIs');
+      out.push({ item, equipped, delta, asIs });
     }
     return out;
   }, [diveDrops, profile, registry, depth]);
 
-  const upgrades = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON).length;
+  // ▲ what's better as it comes; ◇ a weapon better only with your moveset moved onto it.
+  const up = (d: number | null) => d !== null && d > UPGRADE_EPSILON;
+  const upgrades = rows.filter((r) => up(r.asIs)).length;
+  const potential = rows.filter((r) => up(r.delta) && !up(r.asIs)).length;
   const visible = rows.slice(0, SHOWN);
 
   // Slide fresh pickups in from the arena edge (on the real tiles).
@@ -90,6 +100,14 @@ export function PickupFeed({ onSelect, top }: PickupFeedProps) {
           data-testid="upgrades-locked"
         >
           ▲ {upgrades} to equip at the Anvil
+        </span>
+      )}
+      {potential > 0 && (
+        <span
+          className="delve-display text-[10px] uppercase tracking-wider text-sky-300"
+          data-testid="upgrades-potential"
+        >
+          ◇ {potential} potential: Transfer at the Anvil
         </span>
       )}
       {visible.map(({ item, equipped, delta }) => (

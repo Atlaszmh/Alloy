@@ -61,6 +61,55 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     );
   });
 
+  /**
+   * Slots bought on the worn sword make an uncommon dagger better only with
+   * that moveset moved onto it: a potential upgrade, not one a stop can equip.
+   */
+  const diveWithPotential = () => {
+    store().setProfile({ ...store().profile, links: 99, scrap: 9999 });
+    for (const skill of ['basic', 'basic', 'primary', 'primary', 'primary'] as const)
+      expect(store().addSlot(skill).ok).toBe(true);
+    const dagger = generateItem(
+      registry,
+      { uid: 'w2', ilvl: 3, rarity: 'uncommon', slot: 'weapon', mana: 'fire' },
+      new SeededRNG(3),
+    );
+    store().setProfile({ ...store().profile, bag: [...store().profile.bag, dagger] });
+    store().startDive(1);
+    store().pushDiveDrops(['h1', 'w1', 'w2']);
+  };
+
+  it('a weapon better only as a home for your moveset counts apart, as a potential upgrade', () => {
+    diveWithPotential();
+    const d = store().profile.dive!;
+    store().setProfile({
+      ...store().profile,
+      dive: { ...d, phase: 'choosing', stop: { offers: ['equip'], taken: false } },
+    });
+    render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
+    expect(screen.getByTestId('upgrades-locked')).toHaveTextContent(
+      '▲ 2 to equip at this stop, or at the Anvil',
+    );
+    expect(screen.getByTestId('upgrades-potential')).toHaveTextContent(
+      '◇ 1 potential upgrade: better once your moveset moves onto it (Transfer, at the Anvil)',
+    );
+  });
+
+  it("the arena's feed counts the potential upgrade apart too", () => {
+    diveWithPotential();
+    render(<PickupFeed onSelect={() => {}} top={0} />);
+    expect(screen.getByTestId('upgrades-locked')).toHaveTextContent('▲ 2 to equip at the Anvil');
+    expect(screen.getByTestId('upgrades-potential')).toHaveTextContent(
+      '◇ 1 potential: Transfer at the Anvil',
+    );
+  });
+
+  it('no potential upgrade, no note', () => {
+    dive();
+    render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
+    expect(screen.queryByTestId('upgrades-potential')).toBeNull();
+  });
+
   it('once the dive has ended, the tray equips again, but never a weapon', () => {
     dive();
     store().setProfile({

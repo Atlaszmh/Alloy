@@ -48,25 +48,36 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   }, []);
 
   const rows = useMemo(() => {
-    const out: { item: GearItem; equipped: boolean; delta: number | null }[] = [];
+    const out: {
+      item: GearItem;
+      equipped: boolean;
+      /** The Power change as a home for your moveset (Transfer); `asIs`, as it comes. */
+      delta: number | null;
+      asIs: number | null;
+    }[] = [];
     for (const uid of diveDrops) {
       const found = findItem(profile, uid);
       if (!found) continue;
+      const { item } = found;
       const equipped = found.where === 'equipped';
-      out.push({
-        item: found.item,
-        equipped,
-        delta: equipped
-          ? null
-          : compareItem(profile.equipped, found.item, registry, depth, profile.pair).powerPct,
-      });
+      const value = (as: 'home' | 'asIs') =>
+        compareItem(profile.equipped, item, registry, depth, profile.pair, as).powerPct;
+      const delta = equipped ? null : value('home');
+      // Only a weapon carries a moveset: anything else is the same either way.
+      const asIs = equipped || item.slot !== 'weapon' ? delta : value('asIs');
+      out.push({ item, equipped, delta, asIs });
     }
     return out;
   }, [diveDrops, profile, registry, depth]);
 
-  // Mid-dive every upgrade waits for the Anvil; after it, Equip upgrades
-  // leaves weapons alone (a weapon changes through its sheet).
+  // Mid-dive every upgrade waits for the Anvil (or a stop's Equip, which takes
+  // an item as it comes); after it, Equip upgrades leaves weapons alone (a
+  // weapon changes through its sheet). A weapon better only with your moveset
+  // moved onto it is a potential upgrade: Transfer, at the Anvil.
   const better = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON);
+  const up = (d: number | null) => d !== null && d > UPGRADE_EPSILON;
+  const asIsBetter = rows.filter((r) => up(r.asIs)).length;
+  const potential = rows.filter((r) => up(r.delta) && !up(r.asIs)).length;
   const diving = isDiveActive(profile);
   // The door screen's stop may offer to equip one now.
   const stop = profile.dive?.stop;
@@ -124,9 +135,19 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         <span className="delve-display text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400">
           Loot {rows.length > 0 && <span className="text-stone-500">· {rows.length}</span>}
         </span>
-        {better.length > 0 && diving && (
-          <span className="text-[11px] text-amber-200" data-testid="upgrades-locked">
-            ▲ {better.length} to equip {atStop ? 'at this stop, or ' : ''}at the Anvil
+        {diving && (asIsBetter > 0 || potential > 0) && (
+          <span className="flex flex-col items-end text-right text-[11px]">
+            {asIsBetter > 0 && (
+              <span className="text-amber-200" data-testid="upgrades-locked">
+                ▲ {asIsBetter} to equip {atStop ? 'at this stop, or ' : ''}at the Anvil
+              </span>
+            )}
+            {potential > 0 && (
+              <span className="text-sky-200" data-testid="upgrades-potential">
+                ◇ {potential} potential upgrade{potential === 1 ? '' : 's'}: better once your
+                moveset moves onto {potential === 1 ? 'it' : 'one'} (Transfer, at the Anvil)
+              </span>
+            )}
           </span>
         )}
         {upgrades > 0 && !diving && (
