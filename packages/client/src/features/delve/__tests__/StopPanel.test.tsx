@@ -37,6 +37,7 @@ function atStop(offers: StopKind[], over: Partial<ReturnType<typeof store>['prof
     return (
       <>
         <StopPanel stop={stop} />
+        <button data-testid="door-first">The first door</button>
         <ToastContainer />
       </>
     );
@@ -83,6 +84,16 @@ describe('StopPanel (the door screen)', () => {
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByTestId('stop-picker')).toBeNull();
     expect(card).toHaveFocus();
+  });
+
+  it('after a take, the focus goes on to the first door, not the card that has gone', () => {
+    atStop(['equip', 'upgrade']);
+    const card = screen.getByTestId('stop-equip');
+    card.focus();
+    fireEvent.click(card);
+    fireEvent.click(screen.getByTestId('stop-equip-item'));
+    expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
+    expect(screen.getByTestId('door-first')).toHaveFocus();
   });
 
   it('a weapon to equip brings its own moves, which the picker says', () => {

@@ -57,6 +57,12 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
     setOpen(null);
     opener.current?.focus();
   };
+  const section = useRef<HTMLElement | null>(null);
+  // Taken, the cards go: the focus goes on to the next control after them (the first door).
+  const taken = () => {
+    setOpen(null);
+    nextControl(section.current)?.focus();
+  };
   if (stop.taken)
     return (
       <div className="text-center text-xs text-stone-400" data-testid="stop-taken">
@@ -64,7 +70,11 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
       </div>
     );
   return (
-    <section className="flex w-full max-w-[520px] flex-col gap-1.5" data-testid="stop">
+    <section
+      ref={section}
+      className="flex w-full max-w-[520px] flex-col gap-1.5"
+      data-testid="stop"
+    >
       <div className="delve-display text-center text-[11px] uppercase tracking-[0.3em] text-stone-500">
         A power-up: take one, or skip it
       </div>
@@ -89,8 +99,20 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
         ))}
       </div>
       {/* Over the whole screen, not the door list's scroll: the last pad scope, above the loot tray. */}
-      {open && createPortal(<StopPicker kind={open} onClose={close} />, document.body)}
+      {open &&
+        createPortal(<StopPicker kind={open} onClose={close} onTaken={taken} />, document.body)}
     </section>
+  );
+}
+
+/** The first enabled control after `el` in its pad scope (or the page), outside it. */
+function nextControl(el: HTMLElement | null): HTMLElement | null {
+  if (!el) return null;
+  const within = el.closest('[data-pad-scope]') ?? document;
+  return (
+    [...within.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')].find(
+      (c) => !el.contains(c) && el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ) ?? null
   );
 }
 
@@ -99,7 +121,15 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
  * to the doors. A modal dialog: Back has the focus, and Escape closes it. A
  * portal outside `.delve-page`, so its backdrop brings the page's look along.
  */
-function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) {
+function StopPicker({
+  kind,
+  onClose,
+  onTaken,
+}: {
+  kind: StopKind;
+  onClose: () => void;
+  onTaken: () => void;
+}) {
   const [message, setMessage] = useState<string | null>(null);
   const take = (action: StopAction) => {
     const res = useDelveStore.getState().takeStop(action);
@@ -107,7 +137,7 @@ function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) 
       playSound('upgradeTier');
       vibrate('success');
       showToast(`${STOP_TEXT[kind].name}: done`);
-      onClose();
+      onTaken();
     } else {
       playSound('combineFail');
       setMessage(res.reason ?? 'Cannot take it');
