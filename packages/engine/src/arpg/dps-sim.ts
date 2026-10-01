@@ -14,6 +14,8 @@ import { defaultBasic, defaultChains } from './abilities/resolve.js';
 import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
+import { runeFits } from '../loot/runes.js';
+import type { RuneDef, RuneTier } from '../types/rune.js';
 
 /**
  * The DPS Lab's sim (a dev tool; see the DPS Lab spec): one loadout on the
@@ -24,13 +26,17 @@ import { stepWorld } from './step.js';
 
 /** One run: a whole loadout, labelled by the dimensions the lab filters and colours by. */
 export interface DpsSetup {
-  view: 'basic' | 'ability';
+  view: 'basic' | 'ability' | 'rune';
   /**
-   * Filterable dimensions in display order, e.g. { weapon, primary, secondary } or
+   * Filterable dimensions in display order, e.g. { weapon, primary, secondary },
    * { form, first, second, kind, payment } (a kind, or 'default' for the form's default
-   * chain). Values are short ids; a missing element is 'none'.
+   * chain) or { rune, on, elements, tier } (a rune's id, 'a+b+c' for a set, 'none' for the
+   * baseline; an attack form or a weapon; 'fire' or 'fire+frost'; 'III', 'none' for the
+   * baseline). Values are short ids; a missing element is 'none'.
    */
   dims: Record<string, string>;
+  /** The `dpsKey` of the row it is measured against: a rune row's baseline (no rune). */
+  base?: string;
   weapon: { baseId: string; primary: ManaType; secondary: ManaType | null };
   /** The hero's chains: the basic chain (for the stats) and each ability slot's. */
   chains: Chains;
@@ -155,7 +161,8 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
  * one-move chain, plus the form's default chain (`kind: 'default'`, what a held
  * button plays) × element set × payment. Ability setups carry a plain sword,
  * the pair `{ first, second }` (as the game limits abilities to the pair) and
- * its default basics. The only function here that knows the chain model.
+ * its default basics. Then the rune view (`runeRows`). With `runeSetup`, the
+ * only code here that knows the chain model.
  */
 export function dpsCombos(registry: DataRegistry): DpsSetup[] {
   const out: DpsSetup[] = [];
@@ -204,10 +211,133 @@ export function dpsCombos(registry: DataRegistry): DpsSetup[] {
           });
         }
   }
+  out.push(...runeRows(registry));
   return out;
 }
 
 /** A stable key: the view, then the `dims` values in order, e.g. `basic|sword|fire|none`. */
 export function dpsKey(setup: DpsSetup): string {
   return [setup.view, ...Object.values(setup.dims)].join('|');
+}
+
+/** The rune view's tier (see the runes spec's gate). */
+const RUNE_TIER: RuneTier = 3;
+const FIRE: ManaType[] = ['fire'];
+const FIRE_FROST: ManaType[] = ['fire', 'frost'];
+
+/** The Primary's and the Ultimate's forms: what a held ability button attacks with. */
+function attackForms(registry: DataRegistry) {
+  return registry.getArpgData().forms.filter((f) => f.slot !== 'defensive');
+}
+
+/** Whether `def` fits `on`: an attack form, or a weapon's blows (the fit ignores a blow's kind). */
+function fitsOn(registry: DataRegistry, def: RuneDef, on: string): boolean {
+  const form = attackForms(registry).find((f) => f.id === on);
+  return runeFits(def, form ? { form: form.id } : { weapon: on, kind: 'medium' });
+}
+
+/**
+ * The elements a set of runes runs on: Fire + Frost when one of them feeds
+ * reactions (its knobs set `catalyst` or `stacksBonus`: Volatile, Saturate), so
+ * Melt fires and its gate can fail; else Fire.
+ */
+function runeElements(registry: DataRegistry, ids: readonly string[]): ManaType[] {
+  const reacts = ids.some((id) =>
+    registry.getRune(id).tiers.some((t) => t.catalyst !== undefined || t.stacksBonus !== undefined),
+  );
+  return reacts ? FIRE_FROST : FIRE;
+}
+
+/**
+ * A rune-view setup: runes `ids` at tier III in every move of form `on`'s
+ * default chain (paid with mana, on a sword), or in every blow of weapon
+ * `on`'s default basic chain, on `elements` (Frost the pair's secondary). No
+ * ids is the baseline that every such setup is measured against (`base`).
+ */
+function runeSetup(
+  registry: DataRegistry,
+  on: string,
+  ids: readonly string[],
+  elements: ManaType[],
+): DpsSetup {
+  const runes = ids.map((id) => ({ id, tier: RUNE_TIER }));
+  const [first, second = null] = elements;
+  const form = attackForms(registry).find((f) => f.id === on);
+  const baseId = form ? 'sword' : on;
+  const chains: Chains = {
+    ...defaultChains(registry, first, baseId),
+    basic: defaultBasic(registry, baseId, first, second),
+  };
+  if (form)
+    chains[form.slot] = {
+      moves: form.defaultChain.map((kind) => ({
+        kind,
+        form: form.id,
+        elements: [...elements],
+        runes: [...runes],
+      })),
+      payment: 'mana',
+    };
+  else chains.basic = chains.basic.map((b) => ({ ...b, runes: [...runes] }));
+  const socketed = ids.length > 0;
+  return {
+    view: 'rune',
+    dims: {
+      rune: socketed ? ids.join('+') : 'none',
+      on,
+      elements: elements.join('+'),
+      tier: socketed ? 'III' : 'none',
+    },
+    ...(socketed ? { base: dpsKey(runeSetup(registry, on, [], elements)) } : {}),
+    weapon: { baseId, primary: first, secondary: second },
+    chains,
+    hold: form ? { slot: ABILITY_SLOTS.indexOf(form.slot) } : 'attack',
+  };
+}
+
+/**
+ * The rune view: a baseline per attack form and weapon on Fire and on Fire +
+ * Frost, then each rune at tier III on every attack form and weapon it fits,
+ * on its elements (`runeElements`).
+ */
+function runeRows(registry: DataRegistry): DpsSetup[] {
+  const ons = [
+    ...attackForms(registry).map((f) => f.id),
+    ...registry.getGearBasesForSlot('weapon').map((b) => b.id),
+  ];
+  return [
+    ...[FIRE, FIRE_FROST].flatMap((elements) =>
+      ons.map((on) => runeSetup(registry, on, [], elements)),
+    ),
+    ...registry
+      .getRunes()
+      .flatMap((def) =>
+        ons
+          .filter((on) => fitsOn(registry, def, on))
+          .map((on) => runeSetup(registry, on, [def.id], runeElements(registry, [def.id]))),
+      ),
+  ];
+}
+
+/**
+ * The combo gate's setups (see the runes spec; wave 3 runs them): every set of
+ * three runes that fit attack form or weapon `on`, in `runes.json` order, at
+ * tier III on every move or blow, on Fire + Frost when the set feeds
+ * reactions, else Fire, each measured against its `base` in the rune view.
+ * Not in the grid: up to 286 a form.
+ */
+export function runeComboSetups(registry: DataRegistry, on: string): DpsSetup[] {
+  const fit = registry
+    .getRunes()
+    .filter((def) => fitsOn(registry, def, on))
+    .map((def) => def.id);
+  return fit.flatMap((a, i) =>
+    fit
+      .slice(i + 1)
+      .flatMap((b, j) =>
+        fit
+          .slice(i + j + 2)
+          .map((c) => runeSetup(registry, on, [a, b, c], runeElements(registry, [a, b, c]))),
+      ),
+  );
 }

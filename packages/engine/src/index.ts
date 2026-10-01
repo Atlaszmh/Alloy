@@ -279,7 +279,14 @@ export {
   sandboxWeapon,
 } from './arpg/sandbox.js';
 export type { SandboxWorldOptions } from './arpg/sandbox.js';
-export { simulateDps, dpsCombos, dpsKey, DPS_SECONDS, DPS_SAMPLE } from './arpg/dps-sim.js';
+export {
+  simulateDps,
+  dpsCombos,
+  dpsKey,
+  runeComboSetups,
+  DPS_SECONDS,
+  DPS_SAMPLE,
+} from './arpg/dps-sim.js';
 export type { DpsSetup, DpsOptions, DpsResult } from './arpg/dps-sim.js';
 
 // Runes (see the runes spec): every module whole, so the waves that build them never edit this file.
