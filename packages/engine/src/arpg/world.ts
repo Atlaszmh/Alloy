@@ -10,6 +10,7 @@ import type {
 } from '../types/arpg.js';
 import type { DoorDef, HeroStats, MonsterDef, MonsterTrait } from '../types/delve.js';
 import type { ManaType } from '../types/mana.js';
+import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
   type AbilitySlot,
@@ -177,6 +178,13 @@ export function createMonsterEntity(
   };
 }
 
+/**
+ * The chain each hero chain was resolved from: `sameChain` compares its raw sockets, which the
+ * resolved moves don't keep (their `runes` drop empty and dormant sockets).
+ */
+// ponytail: a side table, since the contract gives ResolvedChain no field for the raw chain.
+const SOURCES = new WeakMap<ResolvedChain, Chain>();
+
 /** Each slot's chain resolved, by slot; null for a skill left out. */
 function resolveAll(
   registry: DataRegistry,
@@ -185,7 +193,10 @@ function resolveAll(
 ): (ResolvedChain | null)[] {
   return ABILITY_SLOTS.map((slot) => {
     const chain = chains[slot];
-    return chain ? resolveChain(registry, stats, slot, chain) : null;
+    if (!chain) return null;
+    const resolved = resolveChain(registry, stats, slot, chain);
+    SOURCES.set(resolved, chain);
+    return resolved;
   });
 }
 
@@ -238,6 +249,9 @@ export function createHeroEntity(
     lastHitAt: -1,
     moving: false,
     swaySide: 1,
+    drained: [0, 0, 0, 0],
+    drainLeft: [0, 0, 0, 0],
+    zonesLeft: [0, 0, 0, 0],
   };
 }
 
@@ -246,8 +260,8 @@ export function createHeroEntity(
  * pool resizes, keeping the life fraction and current mana (clamped). Charge
  * (clamped to each chain's largest need), combos (clamped to a shortened
  * chain) and each move's cooldown carry over. A slot whose chain changed
- * drops its wind-up (as a dodge does), its hold, its beat and its waiting
- * press, and a new Defensive ends the old one's buff and Ward at once, without
+ * drops its wind-up (as a dodge does), its hold, its beat, its waiting press
+ * and its queued echo, and a new Defensive ends the old one's buff and Ward at once, without
  * bursting. A skill left out has no chain (and so no cooldowns or charge).
  */
 export function refreshWorldHero(
@@ -281,6 +295,7 @@ export function refreshWorldHero(
   changed.forEach((c, i) => {
     if (c) clearBeat(world, i);
   });
+  world.echoes = world.echoes.filter((e) => e.slot === null || !changed[e.slot]);
   if (changed[1]) {
     h.defend = null;
     h.ward = null;
@@ -298,9 +313,10 @@ export function refreshWorldHero(
   });
 }
 
-/** Whether a resolved chain is `b` (both absent counts as the same). */
+/** Whether a resolved chain is `b` (both absent count as the same), raw sockets included. */
 function sameChain(a: ResolvedChain | null, b: Chain | undefined): boolean {
   if (!a || !b) return !a && !b;
+  const source = SOURCES.get(a);
   return (
     a.payment === b.payment &&
     a.moves.length === b.moves.length &&
@@ -308,9 +324,15 @@ function sameChain(a: ResolvedChain | null, b: Chain | undefined): boolean {
       (m, i) =>
         m.kind === b.moves[i].kind &&
         m.form.id === b.moves[i].form &&
-        m.elements.join() === b.moves[i].elements.join(),
+        m.elements.join() === b.moves[i].elements.join() &&
+        sameSockets(source?.moves[i]?.runes ?? [], b.moves[i].runes ?? []),
     )
   );
+}
+
+/** The same sockets: as many, each empty in both or holding the same rune at the same tier. */
+function sameSockets(a: readonly (RuneRef | null)[], b: readonly (RuneRef | null)[]): boolean {
+  return a.length === b.length && a.every((r, i) => r?.id === b[i]?.id && r?.tier === b[i]?.tier);
 }
 
 /** Build the arena for one depth: hero at the bottom, monster packs spread above. */
@@ -330,6 +352,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     // Loot depends on how far the save has progressed, so re-entering a
     // floor re-fights the same monsters but rolls fresh drops.
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
+    runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,
@@ -349,10 +372,11 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     drops: [],
     nextId: 1,
     loot: { ...opts.loot },
-    pending: { items: [], scrap: 0, kills: 0, reactions: [] },
+    pending: { items: [], scrap: 0, kills: 0, reactions: [], runes: [] },
     totalMonsters: 0,
     bossId: null,
     queuedCasts: [],
+    echoes: [],
     queuedRelease: null,
     holdDropped: null,
     queuedAttack: null,

@@ -1,14 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import {
   computeHeroStats,
   defaultChains,
   defaultMoveset,
   heroChains,
+  pouchCount,
+  socketsOf,
   type Chains,
   type ChainSkill,
   type Move,
   type MoveKind,
+  type RuneRef,
+  type RunePouch,
 } from '@alloy/engine';
 import { AbilitiesPanel } from '../AbilitiesPanel';
 import { ChainEditor } from '../chains/ChainEditor';
@@ -483,6 +487,191 @@ describe('AbilitiesPanel', () => {
   });
 });
 
+const split = { id: 'split', tier: 1 } as const;
+
+describe('AbilitiesPanel: sockets and runes', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store().resetProfile(1234, 'fire');
+    useDelveStore.setState({ unsocket: null });
+  });
+
+  /**
+   * The starting sword (common: one socket a move): its Primary Bolt's sockets `bolt` (none
+   * open when null), its blows' sockets `blows`, and the pouch `pouch`.
+   */
+  function socketed(
+    bolt: (RuneRef | null)[] | null,
+    pouch: RunePouch = {},
+    blows: ((RuneRef | null)[] | null)[] = [],
+  ) {
+    const p = store().profile;
+    const sword = p.equipped.weapon!;
+    const moveset = defaultMoveset(registry, sword, 'fire');
+    const primary = moveset.chains.primary!;
+    const chains = {
+      ...moveset.chains,
+      basic: moveset.chains.basic!.map((b, i) => (blows[i] ? { ...b, runes: blows[i] } : b)),
+      primary: { ...primary, moves: primary.moves.map((m) => (bolt ? { ...m, runes: bolt } : m)) },
+    };
+    store().setProfile({
+      ...p,
+      runes: pouch,
+      equipped: { ...p.equipped, weapon: { ...sword, moveset: { ...moveset, chains } } },
+    });
+  }
+  /** Tap socket `n` (1-based, by its name) under card `i`. */
+  const tapSocket = (i: number, name: string) =>
+    fireEvent.click(within(screen.getByTestId(`sockets-${i}`)).getByRole('button', { name }));
+  const picker = () => within(screen.getByTestId('rune-picker'));
+
+  it('+ socket opens one on the chosen move at its price; Apply pays the Links and scrap', () => {
+    store().setProfile({ ...store().profile, links: 1, scrap: 20 });
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 0/1');
+    const open = screen.getByTestId('socket-open');
+    expect(within(screen.getByTestId('chain-cards')).getByTestId('socket-open')).toBe(open);
+    expect(open).toHaveTextContent('+ socket · 🔗 1 · ⚙ 20');
+    fireEvent.click(open);
+    expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/1');
+    expect(screen.queryByTestId('socket-open')).toBeNull(); // a common weapon's cap
+    expect(screen.getByTestId('chain-price')).toHaveTextContent(
+      'Changes cost 🔗 1 Link (you have 🔗 1) and ⚙ 20 scrap (you have ⚙ 20)',
+    );
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
+    apply();
+    expect(chains().primary.moves[0].runes).toEqual([null]);
+    expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
+  });
+
+  it("a draft the engine won't price says why in place of a price, once", () => {
+    socketed([null]);
+    render(<AbilitiesPanel />);
+    const primary = chains().primary;
+    const moves = primary.moves.map((m) => ({ ...m, runes: [{ id: 'split', tier: 1 as const }] }));
+    act(() => store().editDraft('primary', { ...primary, moves }));
+    const price = screen.getByTestId('chain-price');
+    expect(price).toHaveTextContent('Not enough runes in your pouch');
+    expect(price).not.toHaveTextContent(/free/);
+    expect(screen.getAllByText('Not enough runes in your pouch')).toHaveLength(1);
+    const button = screen.getByTestId('chain-apply');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-describedby', price.id);
+  });
+
+  it("+ socket is off without the Links, saying why in the engine's words", () => {
+    store().setProfile({ ...store().profile, links: 0, scrap: 20 });
+    render(<AbilitiesPanel />);
+    const open = screen.getByTestId('socket-open');
+    expect(open).toBeDisabled();
+    const why = document.getElementById(open.getAttribute('aria-describedby')!);
+    expect(why).toHaveTextContent(/Links/);
+  });
+
+  it('an empty socket offers the pouch runes that fit the move; picking one sockets it, free', () => {
+    socketed([null], { split: [1, 0, 0, 0, 0], quick: [0, 0, 2, 0, 0], widen: [1, 0, 0, 0, 0] });
+    render(<AbilitiesPanel />);
+    tapSocket(0, 'Socket 1: empty');
+    expect(picker().getByRole('button', { name: 'Quick III ×2' })).toBeInTheDocument();
+    // Widen fits a Burst, a Strike or a Ward, never a Bolt.
+    expect(picker().queryByRole('button', { name: /^Widen/ })).toBeNull();
+    fireEvent.click(picker().getByRole('button', { name: 'Split I ×1' }));
+    expect(screen.queryByTestId('rune-picker')).toBeNull();
+    expect(
+      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: Split I' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent(/^Apply$/); // socketing is free
+    apply();
+    expect(chains().primary.moves[0].runes).toEqual([split]);
+    expect(pouchCount(store().profile.runes, split)).toBe(0);
+  });
+
+  it('a filled socket offers Pull: destroyed by the rule, or for scrap and back to the pouch', () => {
+    socketed([split]);
+    render(<AbilitiesPanel />);
+    tapSocket(0, 'Socket 1: Split I');
+    expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · destroys it');
+    fireEvent.click(picker().getByTestId('rune-pull'));
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · destroys Split I');
+    expect(screen.getByTestId('chain-price')).toHaveTextContent('Changes cost Split I (destroyed)');
+    fireEvent.click(screen.getByTestId('chain-revert'));
+    act(() => {
+      store().setUnsocket('pay');
+      store().setProfile({ ...store().profile, scrap: 15 });
+    });
+    tapSocket(0, 'Socket 1: Split I');
+    expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · ⚙ 15, back to your pouch');
+    fireEvent.click(picker().getByTestId('rune-pull'));
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · ⚙ 15');
+    apply();
+    expect(chains().primary.moves[0].runes).toEqual([null]);
+    expect(store().profile.scrap).toBe(0);
+    expect(pouchCount(store().profile.runes, split)).toBe(1);
+  });
+
+  it('a rune that does nothing on its move is dimmed, with why: Linger on a light blow', () => {
+    const linger = { id: 'linger', tier: 1 } as const;
+    socketed(null, {}, [[linger]]);
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    tapSocket(0, 'Socket 1: Linger I, dormant: works on heavy and hold blows');
+    expect(picker().getByTestId('rune-dormant')).toHaveTextContent('Works on heavy and hold blows');
+    fireEvent.click(picker().getByRole('button', { name: 'Back' }));
+    // A kind change keeps the rune, and a heavy blow wakes it.
+    fireEvent.click(screen.getByTestId('kind-heavy'));
+    expect(
+      within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: Linger I' }),
+    ).toBeInTheDocument();
+    apply();
+    expect(chains().basic[0]).toMatchObject({ kind: 'heavy', runes: [linger] });
+  });
+
+  it("a form a socketed rune doesn't fit is off; the kind stays free", () => {
+    socketed([split]);
+    render(<AbilitiesPanel />);
+    expect(screen.getByTestId('form-volley')).toBeEnabled();
+    for (const f of ['lance', 'burst', 'strike'])
+      expect(screen.getByTestId(`form-${f}`), f).toBeDisabled();
+    expect(screen.getByTestId('form-burst')).toHaveAttribute('title', "Split doesn't fit a Burst");
+    expect(screen.getByTestId('form-rune-note')).toHaveTextContent(
+      "Split doesn't fit every form: pull it to pick another.",
+    );
+    fireEvent.click(screen.getByTestId('kind-heavy'));
+    apply();
+    expect(chains().primary.moves[0]).toMatchObject({ kind: 'heavy', runes: [split] });
+  });
+
+  it('a reorder carries the runes with their move', () => {
+    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    roomy(5, {
+      primary: {
+        moves: [
+          { ...bolt, runes: [split] },
+          { ...bolt, kind: 'heavy' },
+        ],
+        payment: 'mana',
+      },
+    });
+    render(<AbilitiesPanel />);
+    fireEvent.click(screen.getByTestId('move-right-0'));
+    apply();
+    expect(chains().primary.moves.map((m) => m.kind)).toEqual(['heavy', 'light']);
+    expect(chains().primary.moves[1].runes).toEqual([split]);
+    expect(socketsOf(chains().primary.moves[0])).toEqual([]);
+  });
+
+  it("the readout's beat counts a Quick rune", () => {
+    socketed([null], { quick: [0, 0, 0, 0, 1] });
+    render(<AbilitiesPanel />);
+    const beat = () =>
+      Number(/then a ([\d.]+)s beat/.exec(screen.getByTestId('ability-readout').textContent!)![1]);
+    const before = beat();
+    tapSocket(0, 'Socket 1: empty');
+    fireEvent.click(picker().getByRole('button', { name: 'Quick V ×1' }));
+    expect(beat()).toBeCloseTo(before * 0.7, 1);
+  });
+});
+
 describe('ChainEditor', () => {
   const stats = computeHeroStats({}, registry);
   const given = defaultChains(registry, 'storm', null);
@@ -503,10 +692,11 @@ describe('ChainEditor', () => {
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Storm Bolt');
     fireEvent.click(screen.getByTestId('form-lance'));
     const [first, ...rest] = given.primary.moves;
-    expect(onChange).toHaveBeenCalledWith('primary', {
-      ...given.primary,
-      moves: [{ ...first, form: 'lance' }, ...rest],
-    });
+    expect(onChange).toHaveBeenCalledWith(
+      'primary',
+      { ...given.primary, moves: [{ ...first, form: 'lance' }, ...rest] },
+      given.primary.moves.map((_, i) => i), // an edit keeps every move where it was
+    );
     expect(screen.getByTestId('reaction-melt')).toBeInTheDocument();
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(14);
     expect(screen.getAllByTestId('reaction-unknown')[0]).toHaveTextContent(
@@ -549,5 +739,42 @@ describe('ChainEditor', () => {
     expect(screen.queryByTestId('move-add')).toBeNull();
     expect(screen.getByTestId('move-left-1')).not.toBeVisible();
     expect(screen.queryByTestId('payment-mana')).toBeNull();
+  });
+
+  it('reports where each move came from: ◂ ▸ move it, × drops it, + is new, an edit keeps it', () => {
+    const onChange = vi.fn();
+    const [m] = given.primary.moves;
+    const three = {
+      ...given,
+      primary: {
+        ...given.primary,
+        moves: [
+          m,
+          { ...m, kind: 'medium' as const },
+          { ...m, kind: 'heavy' as const, runes: [split] },
+        ],
+      },
+    };
+    render(
+      <ChainEditor
+        chains={three}
+        caps={caps}
+        stats={stats}
+        reactionsSeen={[]}
+        locked={false}
+        onChange={onChange}
+      />,
+    );
+    const last = () => onChange.mock.lastCall!;
+    fireEvent.click(screen.getByTestId('move-right-0'));
+    expect(last()[2]).toEqual([1, 0, 2]);
+    fireEvent.click(screen.getByTestId('move-remove-1'));
+    expect(last()[2]).toEqual([0, 2]);
+    fireEvent.click(screen.getByTestId('move-2'));
+    fireEvent.click(screen.getByTestId('move-add')); // a copy of the heavy, with no sockets
+    expect(last()[2]).toEqual([0, 1, 2, null]);
+    expect(last()[1].moves[3]).toEqual({ kind: 'heavy', form: m.form, elements: m.elements });
+    fireEvent.click(screen.getByTestId('kind-light'));
+    expect(last()[2]).toEqual([0, 1, 2]);
   });
 });

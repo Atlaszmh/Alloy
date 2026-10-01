@@ -1,10 +1,9 @@
 import {
   MOVE_KINDS,
-  beatFor,
   blowNumbers,
   holdFull,
+  moveBeat,
   moveNumbers,
-  playedKind,
   takesElements,
   type AbilitySlot,
   type Blow,
@@ -14,11 +13,14 @@ import {
   type Move,
   type MoveKind,
   type ResolvedAbility,
+  runeFits,
+  socketsOf,
+  type FormId,
 } from '@alloy/engine';
 import { Chip } from '../AbilitiesPanel';
 import { formatNumber, manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
-import { KIND_ICON, KIND_LABEL } from './chain-text';
+import { KIND_ICON, KIND_LABEL, listed } from './chain-text';
 
 const KIND_HINT: Record<MoveKind, string> = {
   light: 'Quick and cheap.',
@@ -61,8 +63,7 @@ function Readout({
   const { hit, radius } = moveNumbers(stats, bal, ab);
   const maxHp = stats.maxHp;
   const lines: string[] = [];
-  const beat = (a: ResolvedAbility) =>
-    `then a ${secs(beatFor(bal, a.slot, playedKind(a), stats.tempo))} beat`;
+  const beat = (a: ResolvedAbility) => `then a ${secs(moveBeat(bal, a, stats.tempo))} beat`;
   const f = ab.form.id;
   if (f === 'ward')
     lines.push(
@@ -206,6 +207,15 @@ export function MoveEditor({
   const shown = [...elements, ...off];
   // A move may keep its off-pair set, but never take a new one (the engine refuses it).
   const takes = (els: readonly ManaType[]) => takesElements(elements, own, els);
+  // A form a socketed rune doesn't fit is off (the engine refuses it): pull the rune to pick it.
+  const misfits = (form: FormId): string[] =>
+    socketsOf(move).flatMap((r) => {
+      const def = r ? registry.findRune(r.id) : undefined;
+      return def && !runeFits(def, { form }) ? [def.name] : [];
+    });
+  const blocking = [
+    ...new Set(data.forms.filter((f) => f.slot === slot).flatMap((f) => misfits(f.id))),
+  ];
 
   return (
     <div className="flex flex-col gap-3" data-testid="move-editor">
@@ -255,17 +265,28 @@ export function MoveEditor({
             <div className="flex flex-wrap gap-1.5">
               {data.forms
                 .filter((f) => f.slot === slot)
-                .map((f) => (
-                  <Chip
-                    key={f.id}
-                    pressed={move.form === f.id}
-                    onClick={() => set({ form: f.id })}
-                    testId={`form-${f.id}`}
-                  >
-                    {f.icon} {f.name}
-                  </Chip>
-                ))}
+                .map((f) => {
+                  const out = f.id === move.form ? [] : misfits(f.id);
+                  return (
+                    <Chip
+                      key={f.id}
+                      pressed={move.form === f.id}
+                      onClick={() => set({ form: f.id })}
+                      testId={`form-${f.id}`}
+                      disabled={out.length > 0}
+                      title={out.length > 0 ? `${listed(out)} doesn't fit a ${f.name}` : undefined}
+                    >
+                      {f.icon} {f.name}
+                    </Chip>
+                  );
+                })}
             </div>
+            {blocking.length > 0 && (
+              <div className="text-[11px] text-amber-200/90" data-testid="form-rune-note">
+                {listed(blocking)} {blocking.length > 1 ? "don't" : "doesn't"} fit every form: pull{' '}
+                {blocking.length > 1 ? 'them' : 'it'} to pick another.
+              </div>
+            )}
             <div className="text-xs text-stone-400">{registry.getForm(move.form).text}</div>
           </section>
 

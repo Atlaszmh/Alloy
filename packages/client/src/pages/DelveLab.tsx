@@ -8,6 +8,7 @@ import { LabChart } from '@/features/delve/lab/LabChart';
 import { LabTable } from '@/features/delve/lab/LabTable';
 import {
   BY_LINE,
+  baseRatios,
   dimGroups,
   lineColor,
   passes,
@@ -25,13 +26,15 @@ type View = DpsSetup['view'];
 const VIEWS: [View, string][] = [
   ['basic', 'Basics'],
   ['ability', 'Abilities'],
+  ['rune', 'Runes'],
 ];
 const SELECT = 'rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-xs text-stone-200';
 
 /**
- * The DPS Lab (dev builds only): every basic-attack and ability combo's
+ * The DPS Lab (dev builds only): every basic-attack, ability and rune combo's
  * baseline DPS over 30 s, simulated by the engine in a worker, as a ranked
- * table and a chart of the ticked rows. See the DPS Lab spec.
+ * table and a chart of the ticked rows; the Runes view adds each row's ratio
+ * to its baseline ("× none"). See the DPS Lab and runes specs.
  */
 export function DelveLab() {
   const navigate = useNavigate();
@@ -83,6 +86,8 @@ export function DelveLab() {
     [rows, view, off],
   );
   const charted = ticks ?? topTicks(ranked);
+  // The Runes view's "× none": each row's DPS over its baseline's.
+  const ratios = useMemo(() => (view === 'rune' ? baseRatios(rows) : undefined), [rows, view]);
   const lines = ranked
     .filter((r) => charted.has(r.key))
     .map((r, i) => ({
@@ -225,7 +230,7 @@ export function DelveLab() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         <LabChart lines={lines} />
-        <LabTable rows={ranked} columns={columns} ticked={charted} onTick={tick} />
+        <LabTable rows={ranked} columns={columns} ticked={charted} onTick={tick} ratios={ratios} />
       </div>
     </div>
   );

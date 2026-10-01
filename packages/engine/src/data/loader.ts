@@ -5,6 +5,7 @@ import type { BaseItemDef } from '../types/item.js';
 import type { SynergyDef } from '../types/synergy.js';
 import type { DelveData } from '../types/delve.js';
 import type { ArpgData } from '../types/arpg.js';
+import type { RuneDef } from '../types/rune.js';
 import type { RecipeDefinition } from '../combine/recipe-registry.js';
 import {
   AffixesSchema,
@@ -14,6 +15,7 @@ import {
   CombinationsSchema,
   DelveDataSchema,
   RecipesSchema,
+  RunesSchema,
   SynergiesSchema,
 } from './schemas.js';
 
@@ -25,6 +27,7 @@ import rawBaseItems from './base-items.json';
 import rawBalance from './balance.json';
 import rawDelve from './delve.json';
 import rawArpg from './arpg.json';
+import rawRunes from './runes.json';
 
 interface RawBaseItemsJSON {
   weapons: unknown[];
@@ -52,7 +55,10 @@ export function loadAndValidateData(): LoadedData {
   const baseItems = BaseItemsSchema.parse(flatBaseItems) as unknown as BaseItemDef[];
   const balance = BalanceConfigSchema.parse(rawBalance) as unknown as BalanceConfig;
   const delve = DelveDataSchema.parse(rawDelve) as unknown as DelveData;
-  const arpg = ArpgDataSchema.parse(rawArpg) as unknown as ArpgData;
+  const arpg: ArpgData = {
+    ...(ArpgDataSchema.parse(rawArpg) as unknown as Omit<ArpgData, 'runes'>),
+    runes: RunesSchema.parse(rawRunes) as unknown as RuneDef[],
+  };
 
   return { affixes, combinations, recipes, synergies, baseItems, balance, delve, arpg };
 }

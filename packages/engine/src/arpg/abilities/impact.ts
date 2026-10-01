@@ -1,12 +1,22 @@
-import { ABILITY_SLOTS, type ResolvedAbility } from '../../types/ability.js';
-import type { MonsterEntity, Vec } from '../../types/arpg.js';
+import {
+  ABILITY_SLOTS,
+  type Knobs,
+  type ResolvedAbility,
+  type SplitKnob,
+  type ZoneKnob,
+} from '../../types/ability.js';
+import type { MonsterEntity, StatusId, Vec } from '../../types/arpg.js';
+import type { ManaType } from '../../types/mana.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
-import { dist } from '../geometry.js';
+import { dirTo, dist } from '../geometry.js';
 import { alive, nearestMonster, spawnProjectile } from './targeting.js';
 
 /** Pyroclasm's embers come off these forms' impacts. */
 const EMBER_FORMS = new Set(['bolt', 'burst', 'barrage']);
+
+/** A Split shard's size: it hits what it touches. */
+const SHARD_RADIUS = 0.2;
 
 export function slotIndex(ab: ResolvedAbility): number {
   return ABILITY_SLOTS.indexOf(ab.slot);
@@ -39,7 +49,7 @@ export function hitOpts(
     applies: stagger ? [...k.applies, 'stagger'] : k.applies,
     knockback: tick ? 0 : k.knockback + (direct ? ab.heavyKnockback : 0),
     kbFrom: from,
-    leech: k.lifesteal,
+    ...knobHitOpts(k),
     execute: k.execute,
     spread: k.spread,
     slot: slotIndex(ab),
@@ -50,7 +60,41 @@ export function hitOpts(
   };
 }
 
-/** Lightning-style jumps from `first` to foes not yet hit, each weaker than the last. */
+/**
+ * Lightning-style jumps from `first` to foes not yet hit (`hit`, which they
+ * join), each `chainPower` weaker than the last: `jumps` of them, 2 more with
+ * the Storm mastery when there are any. Each hits with `opts`, knocked back
+ * from the foe it jumps from. Abilities (`chainFrom`) and basic blows share it.
+ */
+export function chainJumps(
+  ctx: SimCtx,
+  first: MonsterEntity,
+  damage: number,
+  element: ManaType,
+  jumps: number,
+  opts: HitOpts,
+  hit: Set<number>,
+): void {
+  const storm = hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm');
+  const total = jumps + (jumps > 0 && storm ? 2 : 0);
+  if (total <= 0) return;
+  const { chainRange, chainPower } = ctx.bal.abilities;
+  const points: Vec[] = [{ x: first.x, y: first.y }];
+  let current = first;
+  let amount = damage;
+  for (let i = 0; i < total; i++) {
+    const next = nearestMonster(ctx, current.x, current.y, chainRange, hit);
+    if (!next) break;
+    hit.add(next.id);
+    amount *= chainPower;
+    points.push({ x: next.x, y: next.y });
+    hitMonster(ctx, next, amount, element, { ...opts, kbFrom: current });
+    current = next;
+  }
+  if (points.length > 1) ctx.events.push({ kind: 'chain', points, element });
+}
+
+/** An ability's jumps (its `chain` knob) from `first`: hits that aren't direct. */
 export function chainFrom(
   ctx: SimCtx,
   ab: ResolvedAbility,
@@ -59,26 +103,19 @@ export function chainFrom(
   hit: Set<number>,
   tick = false,
 ): void {
-  const jumps =
-    ab.knobs.chain +
-    (ab.knobs.chain > 0 && hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm')
-      ? 2
-      : 0);
-  if (jumps <= 0) return;
-  const { chainRange, chainPower } = ctx.bal.abilities;
-  const points: Vec[] = [{ x: first.x, y: first.y }];
-  let current = first;
-  let amount = damage;
-  for (let i = 0; i < jumps; i++) {
-    const next = nearestMonster(ctx, current.x, current.y, chainRange, hit);
-    if (!next) break;
-    hit.add(next.id);
-    amount *= chainPower;
-    points.push({ x: next.x, y: next.y });
-    hitMonster(ctx, next, amount, ab.element, hitOpts(ab, current, tick, false));
-    current = next;
-  }
-  if (points.length > 1) ctx.events.push({ kind: 'chain', points, element: ab.element });
+  const opts = hitOpts(ab, first, tick, false);
+  chainJumps(ctx, first, damage, ab.element, ab.knobs.chain, opts, hit);
+}
+/**
+ * Whether skill `slot` (3: the basic attack) may leave `zone` now: a capped zone (Linger's,
+ * `perCast`) spends one of the cast's (`HeroEntity.zonesLeft`); an uncapped one always may.
+ */
+export function spendZone(ctx: SimCtx, slot: number, zone: ZoneKnob): boolean {
+  if (zone.perCast === undefined) return true;
+  const left = ctx.world.hero.zonesLeft;
+  if (left[slot] <= 0) return false;
+  left[slot]--;
+  return true;
 }
 
 /** Lingering ground (Magma, Rimebloom, Wildfire…) where an ability lands. */
@@ -91,7 +128,7 @@ export function leaveZone(
   damage: number,
 ): void {
   const zone = ab.knobs.zone;
-  if (!zone) return;
+  if (!zone || !spendZone(ctx, slotIndex(ab), zone)) return;
   const { world } = ctx;
   world.zones.push({
     id: world.nextId++,
@@ -159,6 +196,16 @@ export interface ImpactOpts {
   silent?: boolean;
   /** How hard direct hits land (defaults to the ability's). */
   heft?: number;
+  /**
+   * A shot's later impact as it pierces on, by a rune's count (see the runes spec's balance
+   * pass): it hits, but its jumps, zone and shards come off its first foe only.
+   */
+  through?: boolean;
+}
+
+/** The hit-time knobs a hit carries: lifesteal, Volatile and Drain (see the runes spec). */
+export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'manaOnHit'> {
+  return { leech: k.lifesteal, catalyst: k.catalyst, manaOnHit: k.manaOnHit };
 }
 
 /**
@@ -201,13 +248,83 @@ export function impact(
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
 
-  if (hits.length > 0) {
+  if (hits.length > 0 && !o.through) {
     const first = hits.reduce((a, b) => (dist(x, y, a.x, a.y) <= dist(x, y, b.x, b.y) ? a : b));
     chainFrom(ctx, ab, first, damage, new Set(hits.map((m) => m.id)), o.tick);
   }
   if (!o.tick) {
-    leaveZone(ctx, ab, x, y, radius, damage);
+    if (!o.through) leaveZone(ctx, ab, x, y, radius, damage);
     embers(ctx, ab, x, y, damage);
+    // Split: an impact that hit sheds shards, each carrying the move without the knobs that
+    // would multiply them (shards of shards, a zone or an echo per shard).
+    if (k.split && hits.length > 0 && !o.through) {
+      const ability: ResolvedAbility = {
+        ...ab,
+        knobs: {
+          ...k,
+          split: null,
+          extraShots: null,
+          echo: 0,
+          zone: null,
+          chain: 0,
+          guardOnLand: 0,
+        },
+      };
+      shedShards(ctx, x, y, k.split, damage, hits, {
+        ability,
+        element: ab.element,
+        applies: k.applies,
+      });
+    }
   }
   return hits;
+}
+
+/**
+ * Split: `split.count` shards from (x, y), evenly spaced round a circle that
+ * starts along the way from the hero to (x, y) (no RNG), each at `damage` ×
+ * `split.power`, skipping the foes in `hit`, flying `shardSpeed` for
+ * `shardRange` and ending there. An ability's shard (`carry.ability`) hits only
+ * the foe it touches, as the move's direct hit; a basic shot's hits as a basic
+ * shot (a tick's stacks). A `runeFx` marks it.
+ */
+export function shedShards(
+  ctx: SimCtx,
+  x: number,
+  y: number,
+  split: SplitKnob,
+  damage: number,
+  hit: readonly MonsterEntity[],
+  carry: { ability: ResolvedAbility | null; element: ManaType | null; applies: StatusId[] },
+): void {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const way = dirTo(h.x, h.y, x, y);
+  const from = way.x === 0 && way.y === 0 ? h.facing : way;
+  const start = Math.atan2(from.y, from.x);
+  for (let i = 0; i < split.count; i++) {
+    const a = start + (Math.PI * 2 * i) / split.count;
+    spawnProjectile(ctx, {
+      owner: 'hero',
+      form: 'shard',
+      ability: carry.ability,
+      homingId: null,
+      x,
+      y,
+      vx: Math.cos(a) * bal.runes.shardSpeed,
+      vy: Math.sin(a) * bal.runes.shardSpeed,
+      radius: SHARD_RADIUS,
+      damage: damage * split.power,
+      element: carry.element,
+      pierce: false,
+      pierceLeft: 0,
+      maxDist: bal.runes.shardRange,
+      explodeRadius: 0,
+      applies: carry.applies,
+      knockback: 0,
+      heft: 0,
+      hitIds: hit.map((m) => m.id),
+    });
+  }
+  ctx.events.push({ kind: 'runeFx', effect: 'split', x, y, element: carry.element });
 }

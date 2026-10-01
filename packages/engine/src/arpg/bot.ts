@@ -91,7 +91,7 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   const threat = nearestMonster(ctx, h.x, h.y, 4);
   if (!threat) {
     const item = world.drops.find(
-      (d) => !d.dead && d.kind === 'item' && dist(h.x, h.y, d.x, d.y) < 6,
+      (d) => !d.dead && (d.kind === 'item' || d.kind === 'rune') && dist(h.x, h.y, d.x, d.y) < 6,
     );
     if (item) move = dirTo(h.x, h.y, item.x, item.y);
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { dpsCombos, dpsKey } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -102,6 +102,22 @@ describe('DelveLab', () => {
       'ability|nova|fire|none|heavy|mana',
     ]);
     expect(screen.getAllByTestId('lab-row')[1]).toHaveTextContent("can't afford");
+  });
+
+  it('the Runes view gives each row its ratio to its baseline (× none)', () => {
+    renderLab();
+    latest().reply([
+      result('rune|none|bolt|fire|none', 40),
+      result('rune|echo|bolt|fire|III', 58),
+      result('basic|sword|fire|none', 30),
+    ]);
+    expect(screen.queryByText('× none')).toBeNull();
+    fireEvent.click(screen.getByTestId('lab-tab-rune'));
+    expect(rowKeys()).toEqual(['rune|echo|bolt|fire|III', 'rune|none|bolt|fire|none']);
+    expect(screen.getByText('× none')).toBeInTheDocument();
+    const [echo, none] = screen.getAllByTestId('lab-row');
+    expect(within(echo).getByTestId('lab-ratio')).toHaveTextContent('×1.45');
+    expect(within(none).getByTestId('lab-ratio')).toHaveTextContent('—');
   });
 
   it('a new depth (on release) or Pack starts a fresh worker; a finished run is kept', () => {

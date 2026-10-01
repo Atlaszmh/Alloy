@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CHAIN_SKILLS,
@@ -13,10 +13,15 @@ import {
   pairElements,
   profileStats,
   referenceDepth,
+  resolveChain,
+  runeTargetOf,
   slotPrice,
+  socketCap,
+  socketsOf,
   takeStop,
   upgradeCost,
   withMove,
+  type AbilitySlot,
   type Blow,
   type ChainSkill,
   type DiveStop,
@@ -31,8 +36,10 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
-import { SKILL_NAME } from './chains/chain-text';
+import { SKILL_NAME, blowText, moveText, runeCandidates } from './chains/chain-text';
 import { ChainEditor } from './chains/ChainEditor';
+import { RunePicker } from './runes/RunePicker';
+import { SocketRow } from './runes/SocketRow';
 import { formatNumber } from './format';
 
 /** Each power-up kind as its card says it. */
@@ -41,6 +48,11 @@ export const STOP_TEXT: Record<StopKind, { icon: string; name: string; text: str
   slot: { icon: '🔗', name: 'Add a slot', text: 'One more slot on a chain, for Links and scrap.' },
   move: { icon: '✎', name: 'Adjust a move', text: 'Change one move of one chain, for Mana Dust.' },
   upgrade: { icon: '⚒️', name: 'Upgrade', text: 'One forge upgrade of an item, for scrap.' },
+  rune: {
+    icon: '💠',
+    name: 'Socket a rune',
+    text: 'One rune from your pouch into an open socket. Free.',
+  },
 };
 
 /**
@@ -180,6 +192,7 @@ function StopPicker({
         {kind === 'slot' && <SlotPick take={take} />}
         {kind === 'move' && <MovePick take={take} />}
         {kind === 'upgrade' && <UpgradePick take={take} />}
+        {kind === 'rune' && <RunePick take={take} />}
         {message && (
           <div className="text-xs font-semibold text-red-300" role="status">
             {message}
@@ -393,6 +406,81 @@ function UpgradePick({ take }: { take: Take }) {
         })}
       </div>
       <Wallet />
+    </div>
+  );
+}
+
+/**
+ * Each move of the equipped weapon with an empty socket, with its sockets: tapping an empty one
+ * opens the rune picker (the pouch's runes that fit the move and aren't on it), and a pick takes
+ * the stop. A filled socket stays as it is: the stop never pulls.
+ */
+function RunePick({ take }: { take: Take }) {
+  const registry = getDelveRegistry();
+  const profile = useDelveStore((s) => s.profile);
+  const { equipped, pair } = profile;
+  const [at, setAt] = useState<{ skill: ChainSkill; index: number; socket: number } | null>(null);
+  // The pick is taken once the picker has closed (and given the focus back to its socket), so
+  // the take's own move of the focus, on to the first door, comes last.
+  const [chosen, setChosen] = useState<StopAction | null>(null);
+  useEffect(() => {
+    if (!chosen) return;
+    setChosen(null);
+    take(chosen);
+  }, [chosen, take]);
+  const chains = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
+  const stats = useMemo(
+    () => profileStats(registry, { equipped, pair }),
+    [registry, equipped, pair],
+  );
+  const weapon = equipped.weapon;
+  if (!weapon) return null;
+  const rows = CHAIN_SKILLS.flatMap((skill) => {
+    const chain = chains[skill];
+    if (!chain) return [];
+    const names = Array.isArray(chain)
+      ? chain.map((b) => blowText(registry, b))
+      : resolveChain(registry, stats, skill as AbilitySlot, chain).moves.map(moveText);
+    return movesOf(chain).flatMap((move, index) =>
+      socketsOf(move).includes(null) ? [{ skill, index, move, name: names[index] }] : [],
+    );
+  });
+  const picked = at && rows.find((r) => r.skill === at.skill && r.index === at.index);
+  return (
+    <div className="flex flex-col gap-1.5">
+      {rows.map(({ skill, index, move, name }) => (
+        <div
+          key={`${skill}-${index}`}
+          role="group"
+          aria-label={`${SKILL_NAME[skill]} · ${name}`}
+          className="delve-panel flex items-center justify-between gap-2 p-2 text-sm"
+          data-testid={`stop-rune-move-${skill}-${index}`}
+        >
+          <span>
+            {SKILL_NAME[skill]} · {name}
+          </span>
+          <SocketRow
+            runes={socketsOf(move)}
+            cap={socketCap(registry, weapon.rarity)}
+            nextPrice={null}
+            emptyOnly
+            onSocketTap={(socket) => setAt({ skill, index, socket })}
+          />
+        </div>
+      ))}
+      {at && picked && (
+        <RunePicker
+          candidates={runeCandidates(
+            registry,
+            runeTargetOf(weapon.baseId, picked.move),
+            socketsOf(picked.move),
+            profile.runes,
+          )}
+          on={runeTargetOf(weapon.baseId, picked.move)}
+          onPick={(rune) => setChosen({ kind: 'rune', ...at, rune })}
+          onClose={() => setAt(null)}
+        />
+      )}
     </div>
   );
 }

@@ -2,11 +2,13 @@ import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
+import type { RuneDef, RuneRef } from './rune.js';
 import type {
   AbilityCast,
   AbilitySlot,
   FormId,
   Knobs,
+  KnobsData,
   MoveKind,
   ResolvedAbility,
   ResolvedChain,
@@ -75,7 +77,7 @@ export interface FormDef {
 
 /** What an element adds to any ability built with it. */
 export interface ElementTraitDef {
-  knobs: Partial<Knobs>;
+  knobs: KnobsData;
   /** Player-facing effect on offensive forms. */
   text: string;
   /** Player-facing effect on defensive forms. */
@@ -89,7 +91,7 @@ export interface FusionDef {
   name: string;
   icon: string;
   text: string;
-  knobs: Partial<Knobs>;
+  knobs: KnobsData;
 }
 
 /** A hit of either element pairs its stacks off with the other's on a foe to set it off (see the elemental stacks spec). */
@@ -124,6 +126,8 @@ export interface ArpgData {
   fusions: FusionDef[];
   reactions: ReactionDef[];
   masteries: MasteryDef[];
+  /** `runes.json`'s runes (see the runes spec). */
+  runes: RuneDef[];
 }
 
 // ── World runtime ──────────────────────────────────────────────────────────
@@ -210,8 +214,11 @@ export interface MonsterEntity {
 export interface Projectile {
   id: number;
   owner: 'hero' | 'monster';
-  /** The ability form that fired it, 'ember' (Pyroclasm), or null for a basic-attack bolt / monster shot. */
-  form: FormId | 'ember' | null;
+  /**
+   * The ability form that fired it, 'ember' (Pyroclasm), 'shard' (Split's), or
+   * null for a basic-attack bolt / monster shot.
+   */
+  form: FormId | 'ember' | 'shard' | null;
   /** The hero ability behind it (its knobs decide what an impact does). */
   ability: ResolvedAbility | null;
   /** Volley: the foe this dart homes in on. */
@@ -223,7 +230,10 @@ export interface Projectile {
   radius: number;
   damage: number;
   element: ManaType | null;
+  /** Spawned piercing: such a shot never bursts at the end of its flight. */
   pierce: boolean;
+  /** Foes it may still pass; a hit with none left ends it (Infinity: all). */
+  pierceLeft: number;
   hitIds: number[];
   maxDist: number;
   traveled: number;
@@ -238,6 +248,8 @@ export interface Projectile {
   stacks?: number;
   /** A Twin Fang echo: its hit pairs nothing (see `HitOpts.noReact`). */
   noReact?: boolean;
+  /** A basic shot's blow knobs (its runes'; see the runes spec). */
+  knobs?: Knobs;
   dead: boolean;
 }
 
@@ -268,7 +280,7 @@ export interface Zone {
   dead: boolean;
 }
 
-export type DropKind = 'item' | 'mote' | 'orb' | 'scrap';
+export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune';
 
 export interface Drop {
   id: number;
@@ -277,6 +289,8 @@ export interface Drop {
   y: number;
   item?: GearItem;
   mana?: ManaType;
+  /** A rune drop's rune (kind `'rune'`). */
+  rune?: RuneRef;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -450,6 +464,15 @@ export interface HeroEntity {
   moving: boolean;
   /** The side (1 or −1) the last side step took (see the weapon flow spec). */
   swaySide: number;
+  /**
+   * Drain's foe-hits counted per skill since it last fired: the Primary, the
+   * Defensive, the Ultimate, then the basic attack (see the runes spec).
+   */
+  drained: number[];
+  /** The mana Drain may still give back per skill this cast (`runes.drainShare`), as `drained`. */
+  drainLeft: number[];
+  /** The capped zones (`ZoneKnob.perCast`, Linger's) each skill may still leave this cast, as `drained`. */
+  zonesLeft: number[];
 }
 
 export interface ArpgInput {
@@ -597,6 +620,7 @@ export type ArpgEvent =
       item?: GearItem;
       amount: number;
       mana?: ManaType;
+      rune?: RuneRef;
     }
   | {
       kind: 'dash';
@@ -609,6 +633,14 @@ export type ArpgEvent =
   | { kind: 'noMana'; slot: number }
   | { kind: 'dodge'; fromX: number; fromY: number; dirX: number; dirY: number }
   | { kind: 'perfectDodge'; x: number; y: number }
+  /** A rune's effect fired: its glyph flashes at the point (see the runes spec). */
+  | {
+      kind: 'runeFx';
+      effect: 'split' | 'echo' | 'volatile';
+      x: number;
+      y: number;
+      element: ManaType | null;
+    }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -630,6 +662,8 @@ export interface WorldPending {
   scrap: number;
   kills: number;
   reactions: ReactionId[];
+  /** Runes picked up, banked into the pouch. */
+  runes: RuneRef[];
 }
 
 /** How `spawnDummies` places a group: one; five in a line going up (lances, chains); or five in a clump (areas). */
@@ -645,6 +679,19 @@ export interface SandboxToggles {
   invulnerable: boolean;
 }
 
+/** A move or a blow to repeat at `at` (Echo; see the runes spec). */
+export interface Echo {
+  at: number;
+  /** An ability's: its slot, the move as it landed, and its landing point. */
+  slot: number | null;
+  ability: ResolvedAbility | null;
+  aim: Vec | null;
+  /** A blow's: its step in the basic chain, the stage it struck at (null: not held), and its way. */
+  blow: number | null;
+  stage: number | null;
+  dir: Vec | null;
+}
+
 /** An ability press waiting to fire (see `ArpgWorld.queuedCasts`). */
 export interface QueuedCast {
   cast: AbilityCast;
@@ -656,6 +703,8 @@ export interface ArpgWorld {
   accumulator: number;
   rng: SeededRNG;
   lootRng: SeededRNG;
+  /** Rune drops' own stream, so item drops roll as they did before runes. */
+  runeRng: SeededRNG;
   depth: number;
   biomeId: string;
   element: ManaType;
@@ -679,6 +728,8 @@ export interface ArpgWorld {
    * it (a wind-up, a hold, a dash, its slot's beat), plus the buffer.
    */
   queuedCasts: QueuedCast[];
+  /** Moves and blows waiting to repeat (Echo), in the order they were queued. */
+  echoes: Echo[];
   /** A press of the slot whose hold runs: its release, for the next step. */
   queuedRelease: AbilityCast | null;
   /**

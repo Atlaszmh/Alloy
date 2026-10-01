@@ -7,6 +7,7 @@ import {
   type Chain,
   type Chains,
   type Knobs,
+  type KnobsData,
   type Move,
   type MoveKind,
   type ResolvedAbility,
@@ -14,6 +15,8 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
+import { extraShotPower, runeFits, runeKnobs } from '../../loot/runes.js';
+import type { RuneRef } from '../../types/rune.js';
 import type {
   DelveBalance,
   DelveProfile,
@@ -22,12 +25,13 @@ import type {
   ManaPair,
 } from '../../types/delve.js';
 
-const NEUTRAL: Knobs = {
+/** Knobs that change nothing: every merge starts from them (never mutate it). */
+export const NEUTRAL: Knobs = Object.freeze({
   power: 1,
   area: 1,
-  applies: [],
+  applies: Object.freeze([]) as unknown as Knobs['applies'],
   chain: 0,
-  pierce: false,
+  pierce: 0,
   knockback: 0,
   lifesteal: 0,
   zone: null,
@@ -35,24 +39,65 @@ const NEUTRAL: Knobs = {
   execute: 0,
   scatter: 0,
   spread: false,
-};
+  split: null,
+  extraShots: null,
+  echo: 0,
+  quick: Object.freeze({ beat: 1, cooldown: 1, windup: 1 }),
+  stacksBonus: 0,
+  catalyst: 0,
+  manaOnHit: 0,
+  guardOnLand: 0,
+});
 
-/** Combine knob sets: multipliers multiply, counts add, flags OR, statuses union, the longer zone wins. */
-export function mergeKnobs(...parts: Partial<Knobs>[]): Knobs {
-  const k: Knobs = { ...NEUTRAL, applies: [] };
+/**
+ * Combine knob sets (see the runes spec's knob table): multipliers multiply,
+ * counts add (`pierce` true adds Infinity), flags OR, statuses union, a zone
+ * takes the longer seconds and the larger tick power, `split` the larger count
+ * with its power, `extraShots` adds counts and multiplies powers, `echo` the
+ * largest, and each part of `quick` multiplies.
+ */
+export function mergeKnobs(...parts: KnobsData[]): Knobs {
+  const k: Knobs = { ...NEUTRAL, applies: [], quick: { ...NEUTRAL.quick } };
   for (const p of parts) {
     if (p.power !== undefined) k.power *= p.power;
     if (p.area !== undefined) k.area *= p.area;
     for (const s of p.applies ?? []) if (!k.applies.includes(s)) k.applies.push(s);
     k.chain += p.chain ?? 0;
-    k.pierce ||= p.pierce ?? false;
+    k.pierce += p.pierce === true ? Infinity : p.pierce || 0;
     k.knockback += p.knockback ?? 0;
     k.lifesteal += p.lifesteal ?? 0;
-    if (p.zone && (!k.zone || p.zone.seconds > k.zone.seconds)) k.zone = { ...p.zone };
+    if (p.zone) {
+      const caps = [k.zone?.perCast, p.zone.perCast].filter((c) => c !== undefined);
+      k.zone = {
+        seconds: Math.max(k.zone?.seconds ?? 0, p.zone.seconds),
+        tickPower: Math.max(k.zone?.tickPower ?? 0, p.zone.tickPower),
+        ...(caps.length > 0 ? { perCast: Math.min(...caps) } : {}),
+      };
+    }
     k.pull ||= p.pull ?? false;
     k.execute = Math.max(k.execute, p.execute ?? 0);
     k.scatter = Math.max(k.scatter, p.scatter ?? 0);
     k.spread ||= p.spread ?? false;
+    if (
+      p.split &&
+      (!k.split ||
+        p.split.count > k.split.count ||
+        (p.split.count === k.split.count && p.split.power > k.split.power))
+    )
+      k.split = { ...p.split };
+    if (p.extraShots)
+      k.extraShots = {
+        count: (k.extraShots?.count ?? 0) + p.extraShots.count,
+        power: (k.extraShots?.power ?? 1) * p.extraShots.power,
+      };
+    k.echo = Math.max(k.echo, p.echo ?? 0);
+    k.quick.beat *= p.quick?.beat ?? 1;
+    k.quick.cooldown *= p.quick?.cooldown ?? 1;
+    k.quick.windup *= p.quick?.windup ?? 1;
+    k.stacksBonus += p.stacksBonus ?? 0;
+    k.catalyst += p.catalyst ?? 0;
+    k.manaOnHit += p.manaOnHit ?? 0;
+    k.guardOnLand += p.guardOnLand ?? 0;
   }
   return k;
 }
@@ -86,7 +131,7 @@ export function resolveAbility(
     second && second !== element ? (registry.getFusion(element, second) ?? null) : null;
   const L = stats.legendaries;
 
-  const legendary: Partial<Knobs>[] = [];
+  const legendary: KnobsData[] = [];
   if (L.stormcaller && move.elements.includes('storm'))
     legendary.push({ chain: Math.round(L.stormcaller) });
   if (L.bedrock && move.elements.includes('earth'))
@@ -94,12 +139,17 @@ export function resolveAbility(
   if (L.rimeheart && move.form === 'nova' && move.elements.includes('frost')) {
     legendary.push({ zone: { seconds: 3, tickPower: 0.15 } });
   }
-  const knobs = mergeKnobs(
+  const own = [
     ...move.elements.map((e) => data.elementTraits[e].knobs),
     fusion?.knobs ?? {},
     ...legendary,
-  );
-
+  ];
+  // Its runes merge last. A Pierce on a move that already passes every foe (an Earth Bolt)
+  // would do nothing, so it's left out, trade-off and all: dormant, like a rune that doesn't fit.
+  const socketed = runeKnobs(registry, move.runes, { form: move.form });
+  const pierces = mergeKnobs(...own).pierce === Infinity;
+  const acts = socketed.knobs.map((k) => !(pierces && k.pierce !== undefined));
+  const knobs = mergeKnobs(...own, ...socketed.knobs.filter((_, i) => acts[i]));
   const w = moveWeight(bal, move.kind, stage);
   const W = ab.weight;
   const s = ab.slots[slot];
@@ -115,11 +165,19 @@ export function resolveAbility(
   const needWeight = move.kind === 'hold' ? moveWeight(bal, 'hold', 2) : w;
   // Volley's darts by kind; a hold's stages count as medium, heavy and hold.
   const countKind = move.kind === 'hold' ? HOLD_STAGE_KINDS[stage] : move.kind;
+  // Multi-shot: Volley's darts and Barrage's impacts add its extra shots to the count, and every
+  // shot takes the cut (`extraShotPower`: in full, half on a Volley, none on a Barrage); Bolt
+  // and Lance fan theirs in `executeForm`.
+  const shots = knobs.extraShots;
+  const extra = shots && (move.form === 'volley' || move.form === 'barrage') ? shots.count : 0;
+  const cut = shots ? extraShotPower(shots.power, move.form) : 1;
 
   const F = bal.feel;
   const wi = w + 2;
-  const conjure = F.conjure[wi] * F.conjureSlot[slot];
-  const channel = cast ? s.castTime * (1 + W.castTime * w) : 0;
+  // Quick and Heavy (`quick`): the wind-up and the cooldown scale here, the beat in `moveBeat`.
+  const q = knobs.quick;
+  const conjure = F.conjure[wi] * F.conjureSlot[slot] * q.windup;
+  const channel = cast ? s.castTime * (1 + W.castTime * w) * q.windup : 0;
 
   return {
     slot,
@@ -135,13 +193,13 @@ export function resolveAbility(
     element,
     elements: [...move.elements],
     fusion,
-    power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower,
+    power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower * cut,
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
     cost: payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
     cooldown:
-      payment === 'charge'
+      (payment === 'charge'
         ? ab.chargeLockout
-        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult,
+        : s.cooldown * (1 + W.cooldown * w) * stats.cooldownMult) * q.cooldown,
     castTime: conjure + channel,
     conjure,
     recovery: slot === 'defensive' ? 0 : F.recovery[wi],
@@ -149,17 +207,18 @@ export function resolveAbility(
     heft: Math.min(1, F.heft[wi] + (slot === 'ultimate' ? 0.2 : 0)),
     heavyKnockback: Math.max(0, w) * F.heavyKnockback,
     heavyStagger: w >= 2,
-    stacks: bal.stacks.byWeight[wi],
+    stacks: bal.stacks.byWeight[wi] + knobs.stacksBonus,
     motion: (form.motion ?? 0) * (1 + F.motionPerWeight * w),
     chargeNeed: payment === 'charge' ? s.cost * (1 + W.cost * needWeight) * ab.chargeRatio : 0,
     range: form.range ?? 0,
     radius: (form.radius ?? 0) * size * knobs.area,
     speed: (form.speed ?? 0) * (1 - W.speed * w),
-    count: form.countByKind?.[countKind] ?? form.count ?? 1,
+    count: (form.countByKind?.[countKind] ?? form.count ?? 1) + extra,
     duration: form.duration ?? 0,
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,
     knobs,
+    runes: socketed.active.filter((_, i) => acts[i]),
   };
 }
 
@@ -222,6 +281,14 @@ export function beatFor(
   return bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo;
 }
 
+/**
+ * The beat after `ab` lands (`beatFor` by the kind it played as) times its
+ * `quick.beat`: Quick shortens it, Heavy lengthens it (see the runes spec).
+ */
+export function moveBeat(bal: DelveBalance, ab: ResolvedAbility, tempo: number): number {
+  return beatFor(bal, ab.slot, playedKind(ab), tempo) * ab.knobs.quick.beat;
+}
+
 /** Seconds a hold (an ability's or a hold blow's) takes to reach full charge at `tempo`. */
 export function holdFull(bal: DelveBalance, tempo: number): number {
   return bal.chains.holdTime * tempo;
@@ -258,8 +325,8 @@ export function blowNumbers(
   blow: HeroBlow,
 ): { hit: number; stacks: number } {
   return {
-    hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power,
-    stacks: bal.stacks.basicByKind[blow.kind],
+    hit: stats.weaponDamage * stats.damageMult * blow.attunePower * blow.power * blow.knobs.power,
+    stacks: bal.stacks.basicByKind[blow.kind] + blow.knobs.stacksBonus,
   };
 }
 
@@ -334,7 +401,9 @@ export function roleHeir(
  * The basic chain after its weapon or pair changes from `before` to `after`:
  * one still on its default becomes the new default; otherwise, once an element
  * leaves the pair, each blow takes its element's heir (`roleHeir`); else it
- * stays as it is.
+ * stays as it is. A reset to the default keeps each old blow's sockets on the
+ * new blow at its position, a rune that doesn't fit the new weapon taken out
+ * (its socket stays open); a blow past the old chain's end has none.
  */
 export function followBasic(
   registry: DataRegistry,
@@ -342,8 +411,18 @@ export function followBasic(
   before: BasicLoadout,
   after: BasicLoadout,
 ): Blow[] {
-  if (isDefaultBasic(registry, basic, before))
-    return defaultBasic(registry, after.weaponBaseId, after.primary, after.secondary);
+  if (isDefaultBasic(registry, basic, before)) {
+    const weapon = after.weaponBaseId;
+    return defaultBasic(registry, weapon, after.primary, after.secondary).map((b, i) => {
+      const runes = basic[i]?.runes;
+      if (!runes) return b;
+      const fits = (r: RuneRef) => {
+        const def = registry.findRune(r.id);
+        return !!def && runeFits(def, { weapon, kind: b.kind });
+      };
+      return { ...b, runes: runes.map((r) => (r && fits(r) ? r : null)) };
+    });
+  }
   const heir = roleHeir(before, after);
   return heir ? basic.map((b) => ({ ...b, element: heir(b.element) })) : basic;
 }

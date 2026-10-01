@@ -264,8 +264,8 @@ export function fillCharge(world: ArpgWorld): void {
 
 /**
  * The hero fell with Invulnerable off: back at once where it fell, with full
- * life and potions and Phoenix ready, every action, beat, waiting press and
- * buff cleared, and a second of invulnerability so a crowd can't kill it again
+ * life and potions and Phoenix ready, every action, beat, waiting press, echo
+ * and buff cleared, and a second of invulnerability so a crowd can't kill it again
  * at once. Monsters stay.
  */
 export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
@@ -290,6 +290,7 @@ export function respawnHero(registry: DataRegistry, world: ArpgWorld): void {
   h.reactionReadyAt = {};
   h.invulnUntil = t + 1;
   h.chains.forEach((_, i) => clearBeat(world, i));
+  world.echoes = [];
 }
 
 /**

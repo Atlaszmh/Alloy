@@ -19,6 +19,7 @@ import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
 import {
   addSlot,
   movesetEditPrice,
+  movesOf,
   setChain,
   setChains,
   slotPrice,
@@ -41,7 +42,13 @@ import {
   upgradeGear,
 } from '../src/delve/profile.js';
 import V5 from './fixtures/delve-v5-saves.json';
-import { abilityReady, nextMove, pressMove, pressStep } from '../src/arpg/abilities/cast.js';
+import {
+  abilityReady,
+  nextMove,
+  pressIndex,
+  pressMove,
+  pressStep,
+} from '../src/arpg/abilities/cast.js';
 import { gainCharge } from '../src/arpg/abilities/defend.js';
 import { botInput } from '../src/arpg/bot.js';
 import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
@@ -49,7 +56,13 @@ import { fillCharge, setSandboxToggles } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
 import { compareItem, computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
-import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
+import {
+  CHAIN_SKILLS,
+  type Blow,
+  type Chain,
+  type Chains,
+  type Move,
+} from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
@@ -66,6 +79,7 @@ import {
   dummy,
   gear,
   press,
+  pressOnly,
   registry,
   run,
   withChains,
@@ -225,7 +239,7 @@ describe('drops: extra slots by rarity', () => {
         expect(Object.keys(m.slots).sort()).toEqual([...bal.movesets.carries[rarity]].sort());
         const extra = extraSlots(registry, w);
         seen.add(extra);
-        expect(m).toEqual(defaultMoveset(registry, w, 'storm', m.slots));
+        expect(unsocketed(m)).toEqual(defaultMoveset(registry, w, 'storm', m.slots));
         for (const skill of CHAIN_SKILLS) expect(m.slots[skill] ?? 0).toBeLessThanOrEqual(5);
       }
       expect(Math.min(...seen)).toBe(EXTRA[rarity][0]);
@@ -345,6 +359,17 @@ describe('an absent skill (a null chain)', () => {
     expect(casts(press(w, 0))).toEqual([0, 0]);
   });
 
+  it("names the move a press now casts: during the slot's wind-up, the one after it (pressIndex)", () => {
+    const heavy = { kind: 'heavy' as const, form: 'bolt' as const, elements: ['fire' as const] };
+    const chains = { primary: { moves: [heavy, heavy], payment: 'mana' as const } };
+    const w = arena([dummy(13, 30)], { chains, noBasic: true });
+    pressOnly(w, 0);
+    expect(w.hero.windup?.step).toBe(0);
+    expect(pressIndex(w.hero, 0, w.t, 1)).toBe(1);
+    expect(pressMove(w.hero, 0, w.t, 1)).toBe(w.hero.chains[0]!.moves[1]);
+    expect(pressIndex(w.hero, 2, w.t, 1)).toBe(0);
+  });
+
   it("fills no charge meter for it, nor do the Training Grounds' top-ups", () => {
     const primary = { ...DEFAULT_CHAINS.primary, payment: 'charge' as const };
     const w = arena([dummy(13, 30)], { chains: { primary }, noBasic: true });
@@ -424,7 +449,7 @@ describe('save v6: the migration from version 5', () => {
 
   it("gives the equipped weapon the profile's chains it can carry, at slots of their length", () => {
     const { profile, fixed, dropped, movesetReset } = migrate(V5.fresh);
-    expect(profile).toMatchObject({ version: 6, links: 0 });
+    expect(profile).toMatchObject({ version: 7, links: 0 });
     expect('chains' in profile || 'chainCaps' in profile).toBe(false);
     const sword = profile.equipped.weapon!;
     expect(sword.moveset).toEqual({
@@ -459,7 +484,7 @@ describe('save v6: the migration from version 5', () => {
     // Its basic slots rise to the dagger's string of 4; the sword's three blows stay.
     expect(dagger.slots).toEqual({ basic: 4, primary: 4, defensive: 1 });
     expect(dagger.chains.basic).toEqual(V5.magic.chains.basic);
-    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, stop: null });
+    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, runesEarned: 0, stop: null });
   });
 
   it("keeps all four on an epic weapon, and raises a short basic chain's slots to its base", () => {
@@ -501,7 +526,7 @@ describe('save v6: the migration from version 5', () => {
     ]);
   });
 
-  it('round-trips every migrated save as version 6', () => {
+  it('round-trips every migrated save as version 7', () => {
     for (const save of Object.values(V5)) {
       const { profile } = migrate(save);
       expect(parseDelveProfile(registry, json(profile))).toEqual({
@@ -509,6 +534,7 @@ describe('save v6: the migration from version 5', () => {
         fixed: [],
         dropped: [],
         movesetReset: false,
+        runesLost: [],
       });
     }
   });
@@ -552,7 +578,7 @@ describe('save v6: the migration from version 5', () => {
   });
 });
 
-describe('the edit price (movesetEditPrice)', () => {
+describe('the edit price (movesetEditPrice): by origin', () => {
   const E = bal.movesets.editDust;
   const X = bal.movesets.elementDust;
   const bolt = (kind: Move['kind'], ...elements: ManaType[]): Move => ({
@@ -561,25 +587,27 @@ describe('the edit price (movesetEditPrice)', () => {
     elements,
   });
   const chain = (...moves: Move[]): Chain => ({ moves, payment: 'mana' });
-  const price = (old: Chain, next: Chain) =>
-    movesetEditPrice(registry, { primary: old }, { primary: next });
+  const price = (old: Chain, next: Chain, origins?: (number | null)[]) =>
+    movesetEditPrice(
+      registry,
+      { primary: old },
+      { primary: next },
+      origins && { primary: origins },
+    );
   const A = bolt('light', 'fire');
   const B = bolt('medium', 'fire');
   const C = bolt('heavy', 'storm');
 
-  it('the run the chains share is free: removing or inserting a move costs only that move', () => {
+  it('prices what the builder did: removing or inserting a move costs only that move', () => {
     expect(price(chain(A, B, C), chain(A, B, C))).toBe(0);
-    expect(price(chain(A, B, C), chain(A, C))).toBe(E);
-    expect(price(chain(A, B, C), chain(B, C))).toBe(E);
-    expect(price(chain(A, C), chain(A, B, C))).toBe(E); // Fire is an old move's element
+    expect(price(chain(A, B, C), chain(A, C), [0, 2])).toBe(E);
+    expect(price(chain(A, B, C), chain(B, C), [1, 2])).toBe(E);
+    expect(price(chain(A, C), chain(A, B, C), [0, null, 1])).toBe(E); // Fire is an old move's element
   });
 
-  it('a move that only moved costs editDust; a ◂▸ swap moves one', () => {
-    expect(price(chain(A, B, C), chain(B, C, A))).toBe(E);
-    expect(price(chain(A, B), chain(B, A))).toBe(E);
-  });
-
-  it('the rest pair up in order: a changed kind or form, changed elements, or both', () => {
+  it('without origins, move j came from saved move j: an edit in place', () => {
+    // B edited into C (its kind and elements), and the saved C removed.
+    expect(price(chain(A, B, C), chain(A, C))).toBe(E + X + E);
     expect(price(chain(A, B), chain(A, bolt('heavy', 'fire')))).toBe(E);
     expect(price(chain(A, B), chain(A, { ...B, form: 'lance' }))).toBe(E);
     expect(price(chain(A, B), chain(A, bolt('medium', 'storm')))).toBe(X);
@@ -587,16 +615,16 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(price(chain(A, B), chain(A, bolt('heavy', 'storm', 'fire')))).toBe(E + X);
   });
 
-  it('the rest pair up at the least total price, not by position', () => {
-    // Remove the light Fire Bolt and make the heavy Storm Bolt light: E + E (in order, 15 + 5).
-    expect(price(chain(A, C), chain(bolt('light', 'storm')))).toBe(2 * E);
-    // Make the heavy Fire Bolt Storm and add a light Storm Bolt: X + E, Storm charged once (in order, 20 + 20).
-    expect(price(chain(bolt('heavy', 'fire')), chain(bolt('light', 'storm'), C))).toBe(E + X);
-    // Leaving a pair unmatched when that's cheaper: remove the heavy Storm Bolt, add a heavy Fire one (Fire is known).
-    expect(price(chain(A, C), chain(A, bolt('heavy', 'fire')))).toBe(2 * E);
+  it('a card that moved costs editDust, even one edited back: the longest rising run stays free', () => {
+    expect(price(chain(A, B, C), chain(B, C, A), [1, 2, 0])).toBe(E);
+    expect(price(chain(A, B), chain(B, A), [1, 0])).toBe(E);
+    // Two cards alike swapped: still a move.
+    expect(price(chain(A, A), chain(A, A), [1, 0])).toBe(E);
+    // A card removed and one alike added: a removal and a new move.
+    expect(price(chain(A, B), chain(A, B), [0, null])).toBe(2 * E);
   });
 
-  it('a new element set is charged once per Apply, so a batch never costs more than its edits one by one', () => {
+  it('a new element set is charged once per Apply, however many moves take it', () => {
     const fire: Blow = { kind: 'light', element: 'fire' };
     const storm: Blow = { kind: 'light', element: 'storm' };
     const blows = (old: Blow[], next: Blow[]) =>
@@ -604,13 +632,13 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(blows([fire], [fire, storm])).toBe(E + X);
     expect(blows([fire, storm], [fire, storm, storm])).toBe(E);
     expect(blows([fire], [fire, storm, storm])).toBe(2 * E + X);
-    // Two moves changed to one new element: Storm charged once, the second removed and re-added.
-    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm')))).toBe(
-      X + 2 * E,
+    // Two moves re-coloured to one new set, and a new move in it: Storm charged once.
+    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm'), C))).toBe(
+      X + E,
     );
   });
 
-  it('is 0 only for the same chain and never beats doing it in two Applies (random triples)', () => {
+  it('is 0 only for the same chain in place, and never beats doing it in two Applies (random triples, origins composed)', () => {
     const rng = new SeededRNG(7);
     const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
     const kinds: Move['kind'][] = ['light', 'heavy', 'hold'];
@@ -635,15 +663,30 @@ describe('the edit price (movesetEditPrice)', () => {
         kind: pick(kinds),
         element: pick(['fire', 'storm', 'frost'] as const),
       }));
+    /** Random origins from `from` moves to `to`: each new move a fresh saved index, or null. */
+    const randomOrigins = (from: number, to: number): (number | null)[] => {
+      const free = Array.from({ length: from }, (_, i) => i);
+      return Array.from({ length: to }, () =>
+        free.length === 0 || rng.next() < 0.3
+          ? null
+          : free.splice(rng.nextInt(0, free.length - 1), 1)[0],
+      );
+    };
+    const length = (x: Partial<Chains>) => movesOf(x.basic ?? x.primary).length;
     const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
     let bad = 0;
     for (let n = 0; n < 4000; n++) {
       const basic = n % 2 === 0;
+      const skill = basic ? 'basic' : 'primary';
       const [a, b, c] = basic
         ? [randomBlows(), randomBlows(), randomBlows()].map((x) => ({ basic: x }))
         : [randomChain(), randomChain(), randomChain()].map((x) => ({ primary: x }));
-      const p = (x: typeof a, y: typeof a) => movesetEditPrice(registry, x, y);
-      if (p(a, c) > p(a, b) + p(b, c)) bad++;
+      const ab = randomOrigins(length(a), length(b));
+      const bc = randomOrigins(length(b), length(c));
+      const ac = bc.map((o) => (o === null ? null : ab[o]));
+      const p = (x: Partial<Chains>, y: Partial<Chains>, o?: (number | null)[]) =>
+        movesetEditPrice(registry, x, y, o && { [skill]: o });
+      if (p(a, c, ac) > p(a, b, ab) + p(b, c, bc)) bad++;
       if ((p(a, b) === 0) !== same(a, b)) bad++;
     }
     expect(bad).toBe(0);
@@ -655,17 +698,23 @@ describe('the edit price (movesetEditPrice)', () => {
     expect(price(chain(A, B, C), chain(A))).toBe(2 * E);
   });
 
-  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing', () => {
+  it('a changed payment costs editDust; blows price the same way; chains left out cost nothing, nor do their origins', () => {
     expect(price(chain(A), { moves: [A], payment: 'cast' })).toBe(E);
     const fire: Blow = { kind: 'light', element: 'fire' };
     const heavy: Blow = { kind: 'heavy', element: 'fire' };
-    const blows = (old: Blow[], next: Blow[]) =>
-      movesetEditPrice(registry, { basic: old }, { basic: next });
-    expect(blows([fire, fire, heavy], [fire, heavy])).toBe(E);
+    const blows = (old: Blow[], next: Blow[], origins?: (number | null)[]) =>
+      movesetEditPrice(registry, { basic: old }, { basic: next }, origins && { basic: origins });
+    expect(blows([fire, fire, heavy], [fire, heavy], [0, 2])).toBe(E);
     expect(blows([fire, fire, heavy], [fire, fire, { ...heavy, element: 'frost' }])).toBe(X);
     const old = { basic: [fire], primary: chain(A) };
     expect(movesetEditPrice(registry, old, { primary: chain(B) })).toBe(E);
     expect(movesetEditPrice(registry, old, { basic: [heavy], primary: chain(B) })).toBe(2 * E);
+    expect(movesetEditPrice(registry, old, { primary: chain(B) }, { basic: [null] })).toBe(E);
+  });
+
+  it('a rune is no part of the Dust: a socket or a rune alone costs none', () => {
+    const socketed: Move = { ...A, runes: [{ id: 'quick', tier: 1 }, null] };
+    expect(price(chain(A), chain(socketed))).toBe(0);
   });
 });
 
@@ -757,13 +806,15 @@ describe('edits: setChain and setChains', () => {
       moves: [{ kind: 'heavy', form: 'bolt', elements: ['fire'] }],
       payment: 'mana',
     };
-    const both = setChains(registry, p, { basic, primary });
+    // The basic chain keeps its heavy blow (the builder's origins); the Primary edits in place.
+    const origins = { basic: [2] };
+    const both = setChains(registry, p, { basic, primary }, { origins });
     expect(both.ok).toBe(true);
     expect(chainsOf(both.profile)).toEqual({ basic, primary });
     // Two blows removed and a kind changed: 3 × editDust.
     expect(both.profile.manaDust).toBe(20 - 3 * bal.movesets.editDust);
     const poor = { ...p, manaDust: 3 * bal.movesets.editDust - 1 };
-    expect(setChains(registry, poor, { basic, primary })).toMatchObject({
+    expect(setChains(registry, poor, { basic, primary }, { origins })).toMatchObject({
       ok: false,
       profile: poor,
       reason: 'Not enough Mana Dust',
@@ -776,6 +827,49 @@ describe('edits: setChain and setChains', () => {
       ok: false,
       profile: p,
     });
+  });
+});
+
+describe('edits by origin', () => {
+  const E = bal.movesets.editDust;
+  /** A Fire hero past its first dive, with Mana Dust to spare. */
+  const veteran = (): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    return { ...p, manaDust: 99, stats: { ...p.stats, dives: 1 } };
+  };
+
+  it('setChains prices by the origins it is given, and refuses bad ones', () => {
+    const p = veteran();
+    const blows = chainsOf(p).basic!; // the sword's light, light, heavy
+    const swapped = [blows[2], blows[0], blows[1]];
+    // The heavy moved to the front: one move.
+    const moved = setChains(registry, p, { basic: swapped }, { origins: { basic: [2, 0, 1] } });
+    expect(moved.profile.manaDust).toBe(99 - E);
+    expect(chainsOf(moved.profile).basic).toEqual(swapped);
+    // Without origins, in place: the first light became heavy, and the heavy light.
+    expect(setChains(registry, p, { basic: swapped }).profile.manaDust).toBe(99 - 2 * E);
+    for (const basic of [
+      [0, 0, 1],
+      [0, 1],
+      [0, 1, 3],
+      [0, 1, -1],
+      [0.5, 1, 2],
+    ])
+      expect(setChains(registry, p, { basic: swapped }, { origins: { basic } })).toMatchObject({
+        ok: false,
+        profile: p,
+        reason: 'Bad origins',
+      });
+    // Origins for a skill the edit leaves out are ignored.
+    const origins = { basic: [2, 0, 1], primary: [7] };
+    expect(setChains(registry, p, { basic: swapped }, { origins }).ok).toBe(true);
+  });
+
+  it('the first dive is still free, whatever moved', () => {
+    const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
+    const blows = chainsOf(fresh).basic!;
+    const res = setChains(registry, fresh, { basic: [blows[2]] }, { origins: { basic: [2] } });
+    expect(res.profile.manaDust).toBe(0);
   });
 });
 
@@ -1158,7 +1252,7 @@ describe('the autopilot between dives', () => {
     expect(betweenDives(registry, { ...p, scrap: 0 }).equipped.weapon!.uid).toBe(sword.uid);
   });
 
-  it('spends Links in the order Primary, basic chain, Ultimate, Defensive, each as far as it can pay', () => {
+  it('spends Links in the order Primary, basic chain, Ultimate, Defensive: each to three slots, then (after sockets) the rest', () => {
     const epic = weapon('epic', 1, 'sword');
     const base = {
       ...veteran(slotted(epic, { basic: 3, primary: 1, defensive: 1, ultimate: 1 })),
@@ -1167,10 +1261,12 @@ describe('the autopilot between dives', () => {
     const slots = (links: number) =>
       betweenDives(registry, { ...base, links }).equipped.weapon!.moveset!.slots;
     expect(slots(1)).toEqual({ basic: 3, primary: 2, defensive: 1, ultimate: 1 });
-    // 1 + 2 + 3 + 4 for the Primary's four, then 3 for the sword's 4th basic slot.
-    expect(slots(13)).toEqual({ basic: 4, primary: 5, defensive: 1, ultimate: 1 });
-    // 10 for the Primary; the basic chain's 3 can't be paid, so the last 2 buy the Ultimate's and the Defensive's.
-    expect(slots(12)).toEqual({ basic: 3, primary: 5, defensive: 2, ultimate: 2 });
+    // 1 + 2 each for the Primary's, the Ultimate's and the Defensive's 2nd and 3rd slots (9), then
+    // 3 for the Primary's 4th; its 5th (4) can't be paid, nor the basic chain's 4th (3).
+    expect(slots(13)).toEqual({ basic: 3, primary: 4, defensive: 3, ultimate: 3 });
+    // 9 + 3 + 4 brings the Primary to five; 3 more, the basic chain's 4th.
+    expect(slots(16)).toEqual({ basic: 3, primary: 5, defensive: 3, ultimate: 3 });
+    expect(slots(19)).toEqual({ basic: 4, primary: 5, defensive: 3, ultimate: 3 });
   });
 
   it('changes nothing on a dive still open: every op refuses, and it never loops', () => {
@@ -1196,3 +1292,15 @@ describe('the autopilot between dives', () => {
     expect(paid.manaDust).toBe(0);
   });
 });
+
+/** A moveset without its sockets (see the runes spec: weapon drops roll some, empty). */
+function unsocketed(m: Moveset): Moveset {
+  const strip = <X extends Move | Blow>({ runes: _r, ...x }: X) => x;
+  const chains = Object.fromEntries(
+    Object.entries(m.chains).map(([skill, c]) => [
+      skill,
+      Array.isArray(c) ? c.map(strip) : { ...c, moves: c!.moves.map(strip) },
+    ]),
+  );
+  return { chains, slots: m.slots };
+}

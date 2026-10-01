@@ -176,7 +176,7 @@ describe('resolveAbility', () => {
 });
 
 describe('mergeKnobs', () => {
-  it('multiplies, adds, ORs, unions and keeps the longer zone', () => {
+  it('multiplies, adds, ORs, unions and merges zones field by field', () => {
     const k = mergeKnobs(
       {
         power: 1.2,
@@ -200,10 +200,10 @@ describe('mergeKnobs', () => {
     expect(k.area).toBeCloseTo(3);
     expect(k.chain).toBe(3);
     expect(k.lifesteal).toBeCloseTo(0.1);
-    expect(k.pierce).toBe(true);
+    expect(k.pierce).toBe(Infinity);
     expect(k.pull).toBe(false);
     expect(k.applies).toEqual(['burn', 'poison']);
-    expect(k.zone).toEqual({ seconds: 3, tickPower: 0.1 });
+    expect(k.zone).toEqual({ seconds: 3, tickPower: 0.3 });
   });
 
   it('defaults to neutral knobs', () => {
@@ -212,7 +212,7 @@ describe('mergeKnobs', () => {
       area: 1,
       applies: [],
       chain: 0,
-      pierce: false,
+      pierce: 0,
       knockback: 0,
       lifesteal: 0,
       zone: null,
@@ -220,6 +220,14 @@ describe('mergeKnobs', () => {
       execute: 0,
       scatter: 0,
       spread: false,
+      split: null,
+      extraShots: null,
+      echo: 0,
+      quick: { beat: 1, cooldown: 1, windup: 1 },
+      stacksBonus: 0,
+      catalyst: 0,
+      manaOnHit: 0,
+      guardOnLand: 0,
     });
   });
 });

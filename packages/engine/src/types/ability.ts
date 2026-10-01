@@ -1,5 +1,6 @@
 import type { ManaType } from './mana.js';
 import type { FormDef, FusionDef, StatusId, Vec } from './arpg.js';
+import type { RuneRef } from './rune.js';
 
 /**
  * Each ability slot holds a chain of moves (see the moves and chains spec): a
@@ -59,6 +60,8 @@ export interface Move {
   form: FormId;
   /** One element, or two distinct elements (a fusion). */
   elements: ManaType[];
+  /** Its open sockets, each a rune or null (empty); absent is none (see the runes spec). */
+  runes?: (RuneRef | null)[];
 }
 
 /** An ability slot's chain: each press casts its next move; one payment for every move. */
@@ -71,6 +74,8 @@ export interface Chain {
 export interface Blow {
   kind: MoveKind;
   element: ManaType;
+  /** Its open sockets, as a move's. */
+  runes?: (RuneRef | null)[];
 }
 
 /** A skill that holds a chain: the basic attack or an ability slot. */
@@ -98,9 +103,33 @@ export interface ZoneKnob {
   seconds: number;
   /** Damage per 0.5 s tick, as a multiple of the ability's hit. */
   tickPower: number;
+  /**
+   * Most zones a cast leaves, its echo's included, and one a shot (Linger's: see the runes
+   * spec's balance pass). Absent: no limit (an element's or a fusion's zone).
+   */
+  perCast?: number;
 }
 
-/** Behaviour contributed by elements and fusions; merged into every ability. */
+/** Quick's and Heavy's timing: multipliers on the beat, the cooldown and the wind-up. */
+export interface QuickKnob {
+  beat: number;
+  cooldown: number;
+  windup: number;
+}
+
+/** The shards a hit sheds, and each shard's power. */
+export interface SplitKnob {
+  count: number;
+  power: number;
+}
+
+/** Extra shots and each shot's power (the cut is halved on Volley and Barrage). */
+export interface ShotsKnob {
+  count: number;
+  power: number;
+}
+
+/** Behaviour contributed by elements, fusions, legendaries and runes; merged into every ability. */
 export interface Knobs {
   /** Damage multiplier. */
   power: number;
@@ -109,7 +138,8 @@ export interface Knobs {
   applies: StatusId[];
   /** Extra foes each hit jumps to. */
   chain: number;
-  pierce: boolean;
+  /** Foes a shot passes (Infinity: all). */
+  pierce: number;
   knockback: number;
   /** Fraction of ability damage healed. */
   lifesteal: number;
@@ -122,7 +152,23 @@ export interface Knobs {
   scatter: number;
   /** On a kill, the foe's poison and hex spread to its neighbours. */
   spread: boolean;
+  split: SplitKnob | null;
+  extraShots: ShotsKnob | null;
+  /** Fraction of power the move or blow repeats at, `delve.runes.echoDelay` later (0: none). */
+  echo: number;
+  quick: QuickKnob;
+  stacksBonus: number;
+  catalyst: number;
+  manaOnHit: number;
+  /** Fraction of max life shielded on landing, for `delve.runes.guardSeconds`. */
+  guardOnLand: number;
 }
+
+/** Knobs as data sets them (elements, fusions, runes): partial, `pierce` true for all. */
+export type KnobsData = Partial<Omit<Knobs, 'pierce' | 'quick'>> & {
+  pierce?: boolean | number;
+  quick?: Partial<QuickKnob>;
+};
 
 /** A queued cast: which slot, and where the player aimed (world units), if they did. */
 export interface AbilityCast {
@@ -192,6 +238,8 @@ export interface ResolvedAbility {
   /** Melee arc in degrees. */
   arc: number;
   knobs: Knobs;
+  /** The runes acting on it (fitting and not dormant), in socket order. */
+  runes: RuneRef[];
 }
 
 /** A slot's chain compiled: its moves (a hold's at stage 0) and each hold move's three stages. */

@@ -30,10 +30,11 @@ export function playArenaEvents(events: readonly ArpgEvent[]): void {
         break;
       case 'drop':
         if (ev.rarity === 'rare' || ev.rarity === 'epic') playSound('lootRare');
-        else if (ev.dropKind === 'item') playSound('lootDrop');
+        else if (ev.dropKind === 'item' || ev.dropKind === 'rune') playSound('lootDrop');
         break;
       case 'pickup':
         if (ev.dropKind === 'item') playSound('dropSuccess');
+        else if (ev.dropKind === 'rune') playSound('upgradeTier');
         else if (ev.dropKind === 'orb') playSound('potion');
         break;
       case 'heal':

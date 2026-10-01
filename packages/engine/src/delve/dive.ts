@@ -1,6 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
+import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
@@ -11,6 +12,8 @@ import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
+import { addToPouch } from '../loot/runes.js';
+import type { SetChainsOptions } from './runes.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -47,6 +50,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     scrapEarned: 0,
     dustEarned: 0,
     linksEarned: 0,
+    runesEarned: 0,
     stop: null,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
@@ -120,18 +124,32 @@ export interface BankResult {
   dust: number;
   /** Links from weapons melted by auto-salvage or a full bag. */
   links: number;
+  /** Runes picked up, banked into the pouch (see the runes spec). */
+  runes: RuneRef[];
 }
 
 /**
- * Move everything the world collected since the last bank (items picked up,
- * scrap, kills, reactions discovered) into the profile. Call it whenever
- * pickups happen so new gear can be equipped mid-floor, and at floor end.
+ * Move everything the world collected since the last bank (items and runes
+ * picked up, scrap, kills, reactions discovered) into the profile. Call it
+ * whenever pickups happen so new gear can be equipped mid-floor, and at floor end.
+ * Auto-salvaged weapons' runes follow the parts rule (`opts.unsocket`, else the balance's).
  */
-export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): BankResult {
+export function bankWorld(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
+): BankResult {
   const dive = requireDive(profile);
   const pending = world.pending;
   const items = pending.items;
-  const bagged = addLootToBag(registry, { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid }, items);
+  const runes = pending.runes;
+  const bagged = addLootToBag(
+    registry,
+    { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid },
+    items,
+    opts,
+  );
   let next = bagged.profile;
 
   const found = { ...dive.found };
@@ -146,6 +164,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
   next = {
     ...next,
     scrap: next.scrap + scrap,
+    runes: addToPouch(next.runes, runes),
     firstBossLegendaryGiven: next.firstBossLegendaryGiven || !world.loot.forceLegendary,
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
     stats: {
@@ -159,13 +178,14 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
       scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
       dustEarned: dive.dustEarned + bagged.dust,
       linksEarned: dive.linksEarned + bagged.links,
+      runesEarned: dive.runesEarned + runes.length,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       found,
       bestFind,
     },
   };
-  world.pending = { items: [], scrap: 0, kills: 0, reactions: [] };
+  world.pending = { items: [], scrap: 0, kills: 0, reactions: [], runes: [] };
 
   return {
     profile: next,
@@ -177,6 +197,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
     links: bagged.links,
+    runes,
   };
 }
 
@@ -198,10 +219,15 @@ export interface FloorResult extends BankResult {
   bossKilled: boolean;
 }
 
-/** The floor is cleared: bank loot, pay the depth bounty, heal, offer doors. */
-export function completeFloor(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): FloorResult {
+/** The floor is cleared: bank loot (`bankWorld`, with `opts`), pay the depth bounty, heal, offer doors. */
+export function completeFloor(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
+): FloorResult {
   const bal = registry.getDelveBalance();
-  const banked = bankWorld(registry, profile, world);
+  const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
@@ -243,9 +269,14 @@ export function completeFloor(registry: DataRegistry, profile: DelveProfile, wor
   };
 }
 
-/** The hero fell: keep whatever was picked up, lose the bounty. */
-export function failFloor(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): BankResult {
-  const banked = bankWorld(registry, profile, world);
+/** The hero fell: keep whatever was picked up (`bankWorld`, with `opts`), lose the bounty. */
+export function failFloor(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  world: ArpgWorld,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
+): BankResult {
+  const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
   return {
     ...banked,

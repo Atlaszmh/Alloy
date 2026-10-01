@@ -8,14 +8,17 @@ import {
 } from '../src/arpg/abilities/resolve.js';
 import {
   DPS_SECONDS,
+  RUNE_SEEDS,
   dpsCombos,
   dpsKey,
+  runeComboSetups,
   simulateDps,
   type DpsOptions,
   type DpsSetup,
 } from '../src/arpg/dps-sim.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { runeFits } from '../src/loot/runes.js';
 import type { ArpgEvent, ArpgInput, ArpgWorld } from '../src/types/arpg.js';
 import { arena, bal, dummy, gear, registry, run } from './fixtures/arena.js';
 
@@ -338,5 +341,145 @@ describe('simulateDps', () => {
     expect(simulateDps(registry, s, { depth: 20, pack: false }).dps).toBeGreaterThan(
       simulateDps(registry, s, ONE).dps,
     );
+  });
+});
+
+describe('the rune view (see the runes spec)', () => {
+  const runeRows = grid.filter((s) => s.view === 'rune');
+  const socketed = runeRows.filter((s) => s.dims.rune !== 'none');
+  const echo = [{ id: 'echo', tier: 3 }];
+
+  it('170 rune rows, each rune on every attack form and weapon it fits, and 30 baselines', () => {
+    expect(socketed).toHaveLength(170);
+    expect(runeRows.filter((s) => s.dims.rune === 'none')).toHaveLength(30);
+    expect(socketed.filter((s) => s.dims.rune === 'split').map((s) => s.dims.on)).toEqual([
+      'bolt',
+      'volley',
+      'barrage',
+      'wand',
+      'bow',
+    ]);
+    // Each row's baseline: the same form or weapon and elements, with no rune.
+    for (const s of socketed)
+      expect(byKey.get(s.base!)?.dims).toEqual({ ...s.dims, rune: 'none', tier: 'none' });
+    expect(grid.filter((s) => s.view !== 'rune').every((s) => s.base === undefined)).toBe(true);
+  });
+
+  it("a form's row: its default chain paid with mana, every move holding the rune at tier III", () => {
+    expect(setup('rune|echo|bolt|fire|III')).toEqual({
+      view: 'rune',
+      dims: { rune: 'echo', on: 'bolt', elements: 'fire', tier: 'III' },
+      base: 'rune|none|bolt|fire|none',
+      weapon: { baseId: 'sword', primary: 'fire', secondary: null },
+      chains: {
+        ...defaultChains(registry, 'fire', 'sword'),
+        basic: defaultBasic(registry, 'sword', 'fire'),
+        primary: {
+          moves: ['light', 'medium', 'medium', 'heavy'].map((kind) => ({
+            kind,
+            form: 'bolt',
+            elements: ['fire'],
+            runes: echo,
+          })),
+          payment: 'mana',
+        },
+      },
+      hold: { slot: 0 },
+    });
+    // An Ultimate form's row holds the Ultimate; Volatile runs on Fire + Frost.
+    expect(setup('rune|volatile|nova|fire+frost|III')).toMatchObject({
+      base: 'rune|none|nova|fire+frost|none',
+      weapon: { baseId: 'sword', primary: 'fire', secondary: 'frost' },
+      chains: {
+        ultimate: {
+          moves: [
+            {
+              kind: 'medium',
+              form: 'nova',
+              elements: ['fire', 'frost'],
+              runes: [{ id: 'volatile', tier: 3 }],
+            },
+          ],
+          payment: 'mana',
+        },
+      },
+      hold: { slot: 2 },
+    });
+  });
+
+  it("a weapon's row: its default basic chain, every blow holding the rune; only Volatile and Saturate run on Fire + Frost", () => {
+    const s = setup('rune|saturate|bow|fire+frost|III');
+    expect(s).toMatchObject({
+      base: 'rune|none|bow|fire+frost|none',
+      weapon: { baseId: 'bow', primary: 'fire', secondary: 'frost' },
+      hold: 'attack',
+    });
+    expect(s.chains.basic).toEqual(
+      defaultBasic(registry, 'bow', 'fire', 'frost').map((b) => ({
+        ...b,
+        runes: [{ id: 'saturate', tier: 3 }],
+      })),
+    );
+    expect(s.chains.primary).toEqual(defaultChains(registry, 'fire', 'bow').primary);
+    const frost = socketed.filter((x) => x.dims.elements === 'fire+frost');
+    expect([...new Set(frost.map((x) => x.dims.rune))]).toEqual(['saturate', 'volatile']);
+  });
+
+  it("a baseline plays as the ability view's default chain (its first seed)", () => {
+    expect(simulateDps(registry, setup('rune|none|bolt|fire|none'), { ...ONE, seed: 0 })).toEqual(
+      simulateDps(registry, setup('ability|bolt|fire|none|default|mana'), ONE),
+    );
+  });
+
+  it('averages RUNE_SEEDS combat seeds: a Barrage rains its impacts at random', () => {
+    const s = setup('rune|multishot|barrage|fire|III');
+    const seeds = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
+      simulateDps(registry, s, { ...ONE, seed }),
+    );
+    expect(new Set(seeds.map((r) => r.dps)).size).toBeGreaterThan(1);
+    const mean = seeds.reduce((a, r) => a + r.dps, 0) / RUNE_SEEDS;
+    expect(simulateDps(registry, s, ONE).dps).toBeCloseTo(mean, 6);
+  });
+
+  it("counts a burn's ticks only while the held button's own hits keep it up, not the basics'", () => {
+    // Heavy lifts a Barrage's burn above the sword's, so the burn the basics keep alive all
+    // fight would be the Barrage's; counted while its own hits keep it, Heavy is its power.
+    const ratio = (o: DpsOptions) =>
+      simulateDps(registry, setup('rune|heavy|barrage|fire|III'), o).dps /
+      simulateDps(registry, setup('rune|none|barrage|fire|none'), o).dps;
+    expect(ratio(ONE)).toBeLessThan(1.6);
+    expect(ratio(PACK)).toBeLessThan(1.6);
+  });
+
+  it('a rune changes what the held button deals: Echo III on a Bolt beats its baseline', () => {
+    const dps = (key: string) => simulateDps(registry, setup(key), ONE).dps;
+    expect(dps('rune|echo|bolt|fire|III')).toBeGreaterThan(dps('rune|none|bolt|fire|none') * 1.2);
+  });
+});
+
+describe('runeComboSetups', () => {
+  it("every set of three runes that fit a form or a weapon's blows, at tier III on every move, against its baseline", () => {
+    const bolt = runeComboSetups(registry, 'bolt');
+    expect(bolt).toHaveLength(286); // 13 runes fit a Bolt
+    expect(runeComboSetups(registry, 'sword')).toHaveLength(165); // 11 fit a sword's blows
+    expect(new Set(bolt.map(dpsKey)).size).toBe(286);
+    const [a, b, c] = registry
+      .getRunes()
+      .filter((def) => runeFits(def, { form: 'bolt' }))
+      .map((def) => def.id);
+    expect(bolt[0].dims).toEqual({
+      rune: `${a}+${b}+${c}`,
+      on: 'bolt',
+      elements: 'fire',
+      tier: 'III',
+    });
+    for (const m of bolt[0].chains.primary.moves)
+      expect(m.runes).toEqual([a, b, c].map((id) => ({ id, tier: 3 })));
+    // A set holding Volatile or Saturate runs on Fire + Frost, against that baseline.
+    for (const s of bolt) {
+      const reacts = /volatile|saturate/.test(s.dims.rune);
+      expect(s.dims.elements).toBe(reacts ? 'fire+frost' : 'fire');
+      expect(byKey.get(s.base!)?.dims).toEqual({ ...s.dims, rune: 'none', tier: 'none' });
+    }
   });
 });

@@ -8,16 +8,18 @@ import {
   type ResolvedChain,
 } from '../types/ability.js';
 import {
-  beatFor,
+  NEUTRAL,
   chainMove,
   defaultBasic,
   defaultChains,
   holdFull,
-  playedKind,
+  mergeKnobs,
+  moveBeat,
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
 import { heroChains, movesetTransfer } from '../loot/moveset.js';
+import { runeKnobs } from '../loot/runes.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -175,12 +177,21 @@ export function computeHeroStats(
     extra.basic ??
     defaultBasic(registry, armed?.id ?? null, primary ?? weaponItem?.mana ?? 'fire', secondary);
   const perAttune = bal.pair.basicPowerPerAttune;
-  const blows = chain.map((b) => ({
-    ...feel[b.kind],
-    kind: b.kind,
-    element: b.element,
-    attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
-  }));
+  const blows = chain.map((b) => {
+    const row = feel[b.kind];
+    // Its runes: those that fit the weapon and act on its kind (a Pierce does nothing on a row
+    // that bursts). Without any, it keeps the shared NEUTRAL.
+    const on = { weapon: armed?.id ?? null, kind: b.kind, explode: (row.explode ?? 0) > 0 };
+    const socketed = runeKnobs(registry, b.runes, on);
+    return {
+      ...row,
+      kind: b.kind,
+      element: b.element,
+      attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
+      knobs: socketed.knobs.length > 0 ? mergeKnobs(...socketed.knobs) : NEUTRAL,
+      runes: socketed.active,
+    };
+  });
   const weapon: HeroWeapon = armed?.attack
     ? {
         baseId: armed.id,
@@ -308,6 +319,113 @@ const TARGETS: Record<string, number> = {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
+/**
+ * Power's rune constants (see the runes spec): an extra shot or a shard finds
+ * a foe half the time, a finitely pierced foe counts a quarter, reactions are
+ * a fifth of a hit's worth (Volatile's share), and an extra stack is 5%.
+ */
+const EXTRA_SHOT = 0.5;
+const PIERCED_FOE = 0.25;
+const REACTION_SHARE = 0.2;
+const PER_STACK = 0.05;
+
+type KnobSet = ResolvedAbility['knobs'];
+
+/** Impacts one use lands: a Barrage's count, a Maelstrom's ticks, else one. */
+function repeatsOf(ab: ResolvedAbility): number {
+  return ab.form.id === 'barrage'
+    ? ab.count
+    : ab.form.id === 'maelstrom'
+      ? ab.duration / ab.tick
+      : 1;
+}
+
+/**
+ * What one impact is worth, in hits: its `targets` (sized by area), a finite
+ * pierce's foes (at most 3; an Earth move's endless pierce adds nothing), its
+ * chain's jumps, its lingering ground and Split's shards.
+ */
+function reach(k: KnobSet, targets: number, bal: DelveBalance): number {
+  const pierced = Number.isFinite(k.pierce) ? PIERCED_FOE * Math.min(k.pierce, 3) : 0;
+  let jumps = 0;
+  for (let i = 1; i <= k.chain; i++) jumps += Math.pow(bal.abilities.chainPower, i);
+  const zone = k.zone ? (k.zone.seconds / 0.5) * k.zone.tickPower * targets : 0;
+  const shards = k.split ? EXTRA_SHOT * k.split.count * k.split.power : 0;
+  return targets + pierced + jumps + zone + shards;
+}
+
+/** What scales a whole use: Echo's repeat, Volatile's reactions and Saturate's stacks (1 without). */
+function boost(k: KnobSet): number {
+  return (1 + k.echo) * (1 + REACTION_SHARE * k.catalyst) * (1 + PER_STACK * k.stacksBonus);
+}
+
+/**
+ * Multi-shot on a move (its per-shot cut is in its power already): a Bolt's or
+ * a Lance's fan, each extra shot finding a foe half the time; a Volley's added
+ * darts (in its `count`). A Barrage's are in its repeats.
+ */
+function shots(ab: ResolvedAbility): number {
+  const extra = ab.knobs.extraShots;
+  if (!extra) return 1;
+  if (ab.form.id === 'volley') return ab.count / (ab.count - extra.count);
+  return ab.form.id === 'bolt' || ab.form.id === 'lance' ? 1 + EXTRA_SHOT * extra.count : 1;
+}
+
+/**
+ * A basic blow's runes as a factor on its hit (1 without): its power knob,
+ * Multi-shot's fan at its per-shot power, its reach (Widen on a melee cleave)
+ * over the plain cleave, and its boost.
+ */
+function blowRunes(k: KnobSet, cleave: number, bal: DelveBalance): number {
+  const fan = k.extraShots ? (1 + EXTRA_SHOT * k.extraShots.count) * k.extraShots.power : 1;
+  return (k.power * fan * reach(k, cleave * (1 + (k.area - 1) * 0.5), bal) * boost(k)) / cleave;
+}
+
+/**
+ * Mana a use of a chain drains: each move's per foe-hit × its foe-hits (its
+ * foes × its impacts), at most `drainFoes`.
+ */
+function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
+  return mean(
+    chain.moves.map((_, i) => {
+      const ab = valuedMove(chain, i);
+      const hits = TARGETS[ab.form.id] * repeatsOf(ab);
+      return Math.min(
+        ab.knobs.manaOnHit * Math.min(hits, bal.runes.drainFoes),
+        ab.cost * bal.runes.drainShare,
+      );
+    }),
+  );
+}
+
+/** Each move's Guard: the share of life it shields on landing. */
+function guards(chain: ResolvedChain): number[] {
+  return chain.moves.map((_, i) => valuedMove(chain, i).knobs.guardOnLand);
+}
+
+/**
+ * Guard's barrier on a chain as a share of life: each move's value × the
+ * share of `guardSeconds` it covers between its landings (the per-use
+ * interval × the chain's length); the largest.
+ */
+function guardShare(values: number[], interval: number, bal: DelveBalance): number {
+  const between = interval * values.length;
+  return Math.max(...values.map((v) => v * Math.min(1, bal.runes.guardSeconds / between)));
+}
+
+/** A chain's lifesteal from its runes alone, averaged over its moves (a rune's lifesteal adds). */
+function runeLeech(registry: DataRegistry, chain: ResolvedChain | null): number {
+  if (!chain) return 0;
+  return mean(
+    chain.moves.map((_, i) =>
+      valuedMove(chain, i).runes.reduce(
+        (sum, r) => sum + (registry.getRune(r.id).tiers[r.tier - 1].lifesteal ?? 0),
+        0,
+      ),
+    ),
+  );
+}
+
 /** The move Power values at step `i` of a chain: a hold move at its full charge (stage 2). */
 export function valuedMove(chain: ResolvedChain, i: number): ResolvedAbility {
   return chain.moves[i].kind === 'hold' ? chainMove(chain, i, 2) : chain.moves[i];
@@ -315,7 +433,8 @@ export function valuedMove(chain: ResolvedChain, i: number): ResolvedAbility {
 
 /**
  * Damage of one use of a chain, averaged over its moves (each with its step
- * bonus, a hold at full charge), counting jumps, lingering ground and repeats.
+ * bonus, a hold at full charge), counting jumps, lingering ground and repeats,
+ * and its runes through their knobs (`reach`, `shots`, `boost`).
  */
 export function damagePerUse(
   chain: ResolvedChain,
@@ -326,21 +445,11 @@ export function damagePerUse(
   return mean(
     chain.moves.map((_, i) => {
       const ab = valuedMove(chain, i);
-      const targets = TARGETS[ab.form.id] * (1 + (ab.knobs.area - 1) * 0.5);
-      const repeats =
-        ab.form.id === 'barrage'
-          ? ab.count
-          : ab.form.id === 'maelstrom'
-            ? ab.duration / ab.tick
-            : 1;
-      let jumps = 0;
-      for (let i = 1; i <= ab.knobs.chain; i++) jumps += Math.pow(bal.abilities.chainPower, i);
-      const zone = ab.knobs.zone
-        ? (ab.knobs.zone.seconds / 0.5) * ab.knobs.zone.tickPower * targets
-        : 0;
+      const k = ab.knobs;
+      const targets = TARGETS[ab.form.id] * (1 + (k.area - 1) * 0.5);
       const step = stepBonus(bal, ab.index).power;
       const perHit = hit * ab.power * step * (1 + stats.elementPower[ab.element]);
-      return perHit * (targets + jumps + zone) * repeats;
+      return perHit * reach(k, targets, bal) * repeatsOf(ab) * shots(ab) * boost(k);
     }),
   );
 }
@@ -369,7 +478,7 @@ export function useInterval(
         chain.payment === 'charge'
           ? ab.chargeNeed / Math.max(0.1, chargeRate)
           : ab.cost / Math.max(0.1, manaIncome);
-      const cadence = windup + beatFor(bal, ab.slot, playedKind(ab), tempo);
+      const cadence = windup + moveBeat(bal, ab, tempo);
       return Math.max(cooldown, pay, cadence);
     }),
   );
@@ -379,7 +488,10 @@ export function useInterval(
  * Heuristic DPS / effective-HP estimate against the reference monster, used
  * for Power and item comparisons. The basic attack, the Primary and the
  * Ultimate count toward DPS (sharing mana and time); the Defensive counts
- * toward survival. A skill left out of `chains` counts nothing.
+ * toward survival. A skill left out of `chains` counts nothing. Runes count
+ * through their knobs: the moves' in `damagePerUse`, the blows' in
+ * `blowRunes` and their time, Drain as mana, Guard as a barrier and Leech as
+ * sustain (see the runes spec).
  */
 export function estimateCombat(
   stats: HeroStats,
@@ -399,41 +511,65 @@ export function estimateCombat(
   const hit = stats.weaponDamage * stats.damageMult * critFactor;
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
-  // Each blow's power × its element's power, over the chain's time.
+  // Each blow's power × its element's power × its runes (`blowRunes`), over the chain's time
+  // (a blow's Quick or Heavy scales its share of it).
   const blows = stats.weapon.blows;
-  const stringTime = blows.reduce((a, s) => a + s.time, 0);
+  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
   const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
   const value = (b: (typeof blows)[number]) => b.attunePower * (1 + stats.elementPower[b.element]);
-  // Twin Fang: one extra hit on the last blow, at its value (×1.5 melee, ×1 ranged).
+  // Twin Fang: one extra hit on the last blow, at its value (×1.5 melee, ×1 ranged; no runes).
   const twin = ((L.twin_fang ?? 0) / 100) * (melee ? 1.5 : 1);
   const stringValue =
-    blows.reduce((a, b) => a + b.power * value(b), 0) + twin * value(blows[blows.length - 1]);
-  let dps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
+    blows.reduce((a, b) => a + b.power * value(b) * blowRunes(b.knobs, cleave, bal), 0) +
+    twin * value(blows[blows.length - 1]);
+  const basicDps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
+  let dps = basicDps;
 
   const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) => {
     const chain = chains[slot];
     return chain ? resolveChain(registry, stats, slot, chain) : null;
   });
   const pool = manaPool(stats, registry);
-  const manaIncome = pool.regen + bal.mana.basicAttackGain / strikeInterval;
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
   const every = (chain: ResolvedChain, income: number, rate: number) =>
     useInterval(bal, chain, stats.tempo, income, rate);
-  const primaryDps = primary
-    ? damagePerUse(primary, hit, stats, bal) / every(primary, manaIncome * 0.7, dps / unit)
-    : 0;
+  // Drain: mana per foe-hit, the blows' on each strike and each skill's on each use, over its
+  // interval at the income before Drain (one pass).
+  const income = pool.regen + bal.mana.basicAttackGain / strikeInterval;
+  const drained = (chain: ResolvedChain | null, share: number) => {
+    const perUse = chain ? drainPerUse(chain, bal) : 0;
+    return perUse > 0 ? perUse / every(chain!, income * share, dps / unit) : 0;
+  };
+  const manaIncome =
+    income +
+    mean(
+      blows.map((b) =>
+        Math.min(
+          b.knobs.manaOnHit * Math.min(cleave, bal.runes.drainFoes),
+          bal.mana.basicAttackGain * bal.runes.drainShare,
+        ),
+      ),
+    ) /
+      strikeInterval +
+    drained(primary, 0.7) +
+    drained(ultimate, 0.3) +
+    drained(defensive, 0.3);
+  const primaryEvery = primary ? every(primary, manaIncome * 0.7, dps / unit) : 0;
+  const primaryDps = primary ? damagePerUse(primary, hit, stats, bal) / primaryEvery : 0;
   // Abilities share the hero's time and mana; count them at partial efficiency.
   dps += primaryDps * 0.75;
   const chargeRate = dps / unit;
-  if (ultimate)
-    dps +=
-      (damagePerUse(ultimate, hit, stats, bal) / every(ultimate, manaIncome * 0.3, chargeRate)) *
-      0.8;
+  const ultimateEvery = ultimate ? every(ultimate, manaIncome * 0.3, chargeRate) : 0;
+  const ultimateDps = ultimate
+    ? (damagePerUse(ultimate, hit, stats, bal) / ultimateEvery) * 0.8
+    : 0;
+  dps += ultimateDps;
 
   let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
   let bonusLife = 0;
+  const guardEvery = defensive ? every(defensive, manaIncome * 0.3, chargeRate) : 0;
+  let defensiveDps = 0;
   if (defensive) {
-    const guardEvery = every(defensive, manaIncome * 0.3, chargeRate);
     // The Defensive's effect: its first move's (a hold's at full charge).
     const guard = valuedMove(defensive, 0);
     const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
@@ -444,11 +580,32 @@ export function estimateCombat(
     if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
     if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
     if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
-    dps += (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+    defensiveDps = (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+    dps += defensiveDps;
   }
+  // Guard: a barrier of its share of life for `guardSeconds` each time its move lands, the
+  // largest counting (it never stacks), valued as a Ward's.
+  const shield = Math.max(
+    guardShare(
+      blows.map((b) => b.knobs.guardOnLand),
+      strikeInterval,
+      bal,
+    ),
+    primary ? guardShare(guards(primary), primaryEvery, bal) : 0,
+    ultimate ? guardShare(guards(ultimate), ultimateEvery, bal) : 0,
+    defensive ? guardShare(guards(defensive), guardEvery, bal) : 0,
+  );
+  bonusLife += stats.maxHp * shield * 2;
 
   dps += stats.thorns / ref.interval;
-  const sustain = dps * stats.lifesteal;
+  // Leech: each part of the DPS heals by its runes' lifesteal (an element's own lifesteal on an
+  // ability isn't counted, as before runes).
+  const leech =
+    basicDps * mean(blows.map((b) => b.knobs.lifesteal)) +
+    primaryDps * 0.75 * runeLeech(registry, primary) +
+    ultimateDps * runeLeech(registry, ultimate) +
+    defensiveDps * runeLeech(registry, defensive);
+  const sustain = dps * stats.lifesteal + leech;
   const phoenix = 1 + ((L.phoenix_plume ?? 0) / 100) * 0.5;
   const ehp =
     (stats.maxHp * phoenix + bonusLife) / Math.max(0.05, mitigation) +

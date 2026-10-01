@@ -300,19 +300,21 @@ describe('saves through version 6', () => {
     expect(c.defensive.moves.map((m) => m.form)).toEqual(['ward']);
   });
 
-  it('a new profile is version 6 with no pair yet, no Mana Dust and no Links, and round-trips', () => {
+  it('a new profile is version 7 with no pair yet, no Mana Dust, no Links and no runes, and round-trips', () => {
     const p = createDelveProfile(registry, 3);
     expect(p).toMatchObject({
-      version: 6,
+      version: 7,
       pair: { primary: null, secondary: null },
       manaDust: 0,
       links: 0,
+      runes: {},
     });
     expect(parseDelveProfile(registry, json(p))).toEqual({
       profile: p,
       fixed: [],
       dropped: [],
       movesetReset: false,
+      runesLost: [],
     });
   });
 
@@ -335,7 +337,7 @@ describe('saves through version 6', () => {
     };
     const res = parseDelveProfile(registry, json(old))!;
     expect(res.profile).toMatchObject({
-      version: 6,
+      version: 7,
       pair: { primary: 'storm', secondary: null },
       manaDust: 0,
     });
@@ -383,7 +385,7 @@ describe('saves through version 6', () => {
       registry,
       json({ ...v2, version: 2, skillSlots: [null, null, null] }),
     )!;
-    expect(res.profile).toMatchObject({ version: 6, pair: { primary: 'storm', secondary: null } });
+    expect(res.profile).toMatchObject({ version: 7, pair: { primary: 'storm', secondary: null } });
     expect(chainsOf(res.profile)).toEqual(defaultChains(registry, 'storm', 'sword'));
     expect(res.fixed).toEqual([]);
     expect(res.profile.dive).toEqual(p.dive);

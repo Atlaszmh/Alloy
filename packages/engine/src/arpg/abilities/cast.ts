@@ -4,8 +4,10 @@ import type { DelveBalance } from '../../types/delve.js';
 import type { SimCtx } from '../combat.js';
 import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
+import { guardLand } from './defend.js';
+import { queueEcho } from './echo.js';
 import { executeForm } from './forms.js';
-import { beatFor, chainMove, holdFull, playedKind, stepBonus, stepHeft } from './resolve.js';
+import { chainMove, holdFull, moveBeat, stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, DIRECTIONAL, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
@@ -54,21 +56,25 @@ export function nextMove(
 }
 
 /**
- * The move a press made now will cast: during the slot's own wind-up, the one
+ * The step a press made now will cast: during the slot's own wind-up, the one
  * after the winding move (the wind-up lands before the press fires); else
- * `nextMove` (null for a skill the weapon doesn't carry).
+ * `pressStep`.
  */
+export function pressIndex(h: HeroEntity, slot: number, t: number, window: number): number {
+  const moves = h.chains[slot]?.moves;
+  return moves && h.windup?.slot === slot
+    ? (h.windup.step + 1) % moves.length
+    : pressStep(h, slot, t, window);
+}
+
+/** The move a press made now will cast, at `pressIndex` (null for a skill the weapon doesn't carry). */
 export function pressMove(
   h: HeroEntity,
   slot: number,
   t: number,
   window: number,
 ): ResolvedAbility | null {
-  const moves = h.chains[slot]?.moves;
-  if (!moves) return null;
-  return h.windup?.slot === slot
-    ? moves[(h.windup.step + 1) % moves.length]
-    : nextMove(h, slot, t, window);
+  return h.chains[slot]?.moves[pressIndex(h, slot, t, window)] ?? null;
 }
 
 /** The slot's move winding up, holding or, for the Defensive, the one whose effect is up; else null. */
@@ -107,9 +113,13 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   const h = world.hero;
   // Only a slot with a chain winds up or holds.
   const ab = chainMove(h.chains[slot]!, step, stage);
+  // Drain's and Linger's budgets are the cast's: they count from before the move's hits land.
+  h.drained[slot] = 0;
+  h.drainLeft[slot] = ab.cost * bal.runes.drainShare;
+  h.zonesLeft[slot] = ab.knobs.zone?.perCast ?? 0;
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
-  const beat = beatFor(bal, ab.slot, playedKind(ab), h.stats.tempo);
+  const beat = moveBeat(bal, ab, h.stats.tempo);
   h.comboStep[slot] = step;
   h.comboAt[slot] = world.t + beat;
   h.beatFrom[slot] = world.t;
@@ -133,6 +143,18 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
       startPush(ctx, 'step', { x: -d.x, y: -d.y }, -ab.motion * size, bal.feel.recoilSeconds);
   }
   if (ab.recovery > 0) h.recoverUntil = world.t + ab.recovery;
+  guardLand(ctx, ab.knobs);
+  // Echo: the move again, as it landed, toward where it landed.
+  if (ab.knobs.echo > 0)
+    queueEcho(ctx, {
+      at: world.t + bal.runes.echoDelay,
+      slot,
+      ability: ab,
+      aim: { x: res.tx, y: res.ty },
+      blow: null,
+      stage: null,
+      dir: null,
+    });
   return true;
 }
 

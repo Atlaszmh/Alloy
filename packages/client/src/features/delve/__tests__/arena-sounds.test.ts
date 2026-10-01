@@ -59,3 +59,16 @@ describe('arena sounds', () => {
     now.mockRestore();
   });
 });
+
+describe('rune sounds', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('a rune drops with the loot sound and is picked up with its own', () => {
+    playArenaEvents([{ kind: 'drop', dropId: 1, x: 0, y: 0, dropKind: 'rune' }]);
+    expect(playSound).toHaveBeenLastCalledWith('lootDrop');
+    playArenaEvents([
+      { kind: 'pickup', dropId: 1, dropKind: 'rune', amount: 0, rune: { id: 'split', tier: 3 } },
+    ]);
+    expect(playSound).toHaveBeenLastCalledWith('upgradeTier');
+  });
+});

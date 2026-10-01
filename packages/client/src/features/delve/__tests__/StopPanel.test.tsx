@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import {
   generateItem,
   heroChains,
   movesetOf,
+  pouchCount,
   SeededRNG,
   upgradeCost,
   type Chains,
@@ -185,5 +186,51 @@ describe('StopPanel (the door screen)', () => {
     fireEvent.click(screen.getByRole('button', { name: `Upgrade ${helm.name} for ${cost} scrap` }));
     expect(store().profile.bag[0].upgrade).toBe(1);
     expect(store().profile.scrap).toBe(0);
+  });
+
+  /** At a stop offering a rune: the sword's Bolt has one open, empty socket. */
+  function atRuneStop() {
+    const p = store().profile;
+    const sword = p.equipped.weapon!;
+    const moveset = movesetOf(registry, sword);
+    const primary = moveset.chains.primary!;
+    const moves = [{ ...primary.moves[0], runes: [null] }];
+    const weapon = {
+      ...sword,
+      moveset: { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } },
+    };
+    atStop(['rune'], {
+      equipped: { ...p.equipped, weapon },
+      runes: { split: [1, 0, 0, 0, 0], widen: [1, 0, 0, 0, 0] },
+    });
+    fireEvent.click(screen.getByTestId('stop-rune'));
+    const move = screen.getByTestId('stop-rune-move-primary-0');
+    expect(move).toHaveTextContent('Primary · light Fire Bolt');
+    fireEvent.click(within(move).getByRole('button', { name: 'Socket 1: empty' }));
+    return within(screen.getByTestId('rune-picker'));
+  }
+
+  it('sockets a fitting pouch rune into an empty socket, free, and the focus goes on to the doors', () => {
+    const picker = atRuneStop();
+    expect(screen.getByTestId('stop-rune')).toHaveTextContent('Socket a rune');
+    // Widen doesn't fit a Bolt.
+    expect(picker.queryByRole('button', { name: /^Widen/ })).toBeNull();
+    fireEvent.click(picker.getByRole('button', { name: 'Split I ×1' }));
+    expect(chains().primary.moves[0].runes).toEqual([{ id: 'split', tier: 1 }]);
+    expect(pouchCount(store().profile.runes, { id: 'split', tier: 1 })).toBe(0);
+    expect(store().profile.dive!.stop!.taken).toBe(true);
+    expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
+    expect(screen.getByText('Socket a rune: done')).toBeInTheDocument();
+    expect(screen.getByTestId('door-first')).toHaveFocus();
+  });
+
+  it("Escape closes the rune picker, not the stop's", () => {
+    atRuneStop();
+    fireEvent.keyDown(within(screen.getByTestId('rune-picker')).getByRole('dialog'), {
+      key: 'Escape',
+    });
+    expect(screen.queryByTestId('rune-picker')).toBeNull();
+    expect(screen.getByTestId('stop-picker')).toBeInTheDocument();
+    expect(store().profile.dive!.stop!.taken).toBe(false);
   });
 });

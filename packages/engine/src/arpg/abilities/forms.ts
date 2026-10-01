@@ -41,29 +41,35 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
   };
 
   switch (ab.form.id) {
-    case 'bolt':
+    case 'bolt': {
       h.facing = dir;
-      spawnProjectile(ctx, {
-        owner: 'hero',
-        form: 'bolt',
-        ability: ab,
-        homingId: null,
-        x: h.x + dir.x * 0.6,
-        y: h.y + dir.y * 0.6,
-        vx: dir.x * ab.speed,
-        vy: dir.y * ab.speed,
-        radius: 0.3 + 0.15 * size,
-        damage: hit,
-        element: ab.element,
-        pierce: ab.knobs.pierce,
-        maxDist: ab.range,
-        explodeRadius: ab.radius * size,
-        applies: ab.knobs.applies,
-        knockback: ab.knobs.knockback,
-        heft,
-      });
+      // Multi-shot: 1 + its extra shots in a fan at Volley's spacing; each bolt hits on its own.
+      const n = 1 + (ab.knobs.extraShots?.count ?? 0);
+      for (let i = 0; i < n; i++) {
+        const d = n > 1 ? rotate(dir, (i - (n - 1) / 2) * 0.22) : dir;
+        spawnProjectile(ctx, {
+          owner: 'hero',
+          form: 'bolt',
+          ability: ab,
+          homingId: null,
+          x: h.x + d.x * 0.6,
+          y: h.y + d.y * 0.6,
+          vx: d.x * ab.speed,
+          vy: d.y * ab.speed,
+          radius: 0.3 + 0.15 * size,
+          damage: hit,
+          element: ab.element,
+          pierce: ab.knobs.pierce > 0,
+          pierceLeft: ab.knobs.pierce,
+          maxDist: ab.range,
+          explodeRadius: ab.radius * size,
+          applies: ab.knobs.applies,
+          knockback: ab.knobs.knockback,
+          heft,
+        });
+      }
       return done(h.x + dir.x * ab.range, h.y + dir.y * ab.range);
-
+    }
     case 'volley': {
       h.facing = dir;
       const n = ab.count;
@@ -84,7 +90,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
           radius: 0.25,
           damage: hit,
           element: ab.element,
-          pierce: ab.knobs.pierce,
+          pierce: ab.knobs.pierce > 0,
+          pierceLeft: ab.knobs.pierce,
           maxDist: ab.range + 3,
           explodeRadius: ab.radius,
           applies: ab.knobs.applies,
@@ -98,32 +105,44 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
     case 'lance': {
       h.facing = dir;
       const len = ab.range * size;
-      const ex = h.x + dir.x * len;
-      const ey = h.y + dir.y * len;
       const width = ab.radius;
-      const hits = alive(ctx)
-        .filter((m) => distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius)
-        .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
-      ctx.events.push({
-        kind: 'beam',
-        x: h.x,
-        y: h.y,
-        tx: ex,
-        ty: ey,
-        width,
-        element: ab.element,
-        infusion: ab.elements[1] ?? null,
-      });
       const opts = hitOpts(ab, { x: h.x, y: h.y }, false, true, heft);
-      for (const m of hits) hitMonster(ctx, m, hit, ab.element, opts);
-      if (hits.length > 0) {
-        const last = hits[hits.length - 1];
-        chainFrom(ctx, ab, last, hit, new Set(hits.map((m) => m.id)));
-        leaveZone(ctx, ab, hits[0].x, hits[0].y, Math.max(1.2, width * 2), hit);
+      // Multi-shot: 1 + its extra beams in a fan at Volley's spacing. They share one hit set, so
+      // a foe is struck once a cast; each beam that hits jumps from its farthest foe and leaves
+      // its zone at its first, as one Lance does.
+      const n = 1 + (ab.knobs.extraShots?.count ?? 0);
+      const struck = new Set<number>();
+      for (let i = 0; i < n; i++) {
+        const d = n > 1 ? rotate(dir, (i - (n - 1) / 2) * 0.22) : dir;
+        const ex = h.x + d.x * len;
+        const ey = h.y + d.y * len;
+        const hits = alive(ctx)
+          .filter(
+            (m) =>
+              !struck.has(m.id) && distToSegment(m.x, m.y, h.x, h.y, ex, ey) <= width + m.radius,
+          )
+          .sort((a, b) => dist(h.x, h.y, a.x, a.y) - dist(h.x, h.y, b.x, b.y));
+        ctx.events.push({
+          kind: 'beam',
+          x: h.x,
+          y: h.y,
+          tx: ex,
+          ty: ey,
+          width,
+          element: ab.element,
+          infusion: ab.elements[1] ?? null,
+        });
+        for (const m of hits) {
+          struck.add(m.id);
+          hitMonster(ctx, m, hit, ab.element, opts);
+        }
+        if (hits.length > 0) {
+          chainFrom(ctx, ab, hits[hits.length - 1], hit, struck);
+          leaveZone(ctx, ab, hits[0].x, hits[0].y, Math.max(1.2, width * 2), hit);
+        }
       }
-      return done(ex, ey);
+      return done(h.x + dir.x * len, h.y + dir.y * len);
     }
-
     case 'burst': {
       // Thrown: the mana arcs to the aim point and bursts where it lands.
       h.facing = dir;

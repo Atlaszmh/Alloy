@@ -141,6 +141,8 @@ The user wants a build to be an investment, not a free menu: "It shouldn't be co
   5. A changed payment costs `editDust`.
   - **It is a true minimum, never cheaper in steps:** the price is 0 only for the same chain, and turning a into c never costs more than a into b and then b into c (`tests/delve-movesets.test.ts` checks random triples).
   - **The caller applies the first-dive freebie:** `setChain` and the builder's preview charge 0 until the hero's first dive (`stats.dives === 0`).
+
+  > **Superseded** (2026-09-30) by `2026-09-30-delve-runes-design.md` (v0.51.0): moves are priced by **origin**, the builder's record of where each new move came from (`ChainOrigins`: the saved index each new move came from, null for a new move; missing origins are the identity map, so an in-place edit prices as before), instead of matched by what they are. The moves whose origins form the longest increasing run are in place and free; any other moved move costs `editDust`; each origin pair's changed kind or form costs `editDust` and its changed elements `elementDust`, charged once per new element set per Apply; a new move and a removed one cost `editDust` each, so removing a move and adding one alike (× then +) now costs 2 × `editDust` where steps 2–4 above called it unchanged; a changed payment costs `editDust`. An Apply is never dearer than its edits one by one, and equal when no move is removed. A move's sockets and runes go with its origin (a rune that ends up on another move is a pull plus a socket).
 - **`setChain`** edits the equipped weapon's chain.
   - **It returns a `ProfileActionResult`,** like the other refusing ops, instead of throwing.
   - **It refuses:**

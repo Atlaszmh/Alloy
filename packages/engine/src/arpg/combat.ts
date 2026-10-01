@@ -22,6 +22,7 @@ import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
+import { dropRune } from './rune-drops.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -47,6 +48,10 @@ export interface HitOpts {
   noReact?: boolean;
   /** Extra fraction of the damage healed (ability lifesteal). */
   leech?: number;
+  /** Added to the factor of the reactions this hit sets off (Volatile; see the runes spec). */
+  catalyst?: number;
+  /** Mana this hit gives per foe while its skill's Drain budget lasts. */
+  manaOnHit?: number;
   /** Frozen foes left below this life fraction shatter. */
   execute?: number;
   /** On a kill, the foe's poison and hex spread to its neighbours (Plague). */
@@ -373,7 +378,8 @@ function consumePairs(
 /**
  * A reaction's effect on `m` with `n` pairs, before they come off. Returns the
  * hit's amount after it: a damage reaction adds its bonus once per pair, scaled
- * by Catalyst. `slot`: the hit's ability slot, which its splash carries.
+ * by Catalyst (the legendary's %, plus the hit's Volatile, `volatile`). `slot`:
+ * the hit's ability slot, which its splash carries.
  */
 function react(
   ctx: SimCtx,
@@ -382,11 +388,12 @@ function react(
   amount: number,
   slot: number | undefined,
   n: number,
+  volatile: number,
 ): number {
   const r = ctx.bal.reactions;
   const h = ctx.world.hero;
   const t = ctx.world.t;
-  const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100;
+  const catalyst = 1 + (h.stats.legendaries.catalyst ?? 0) / 100 + volatile;
   const boost = (mult: number) => 1 + (mult - 1) * n * catalyst;
   switch (id) {
     case 'melt':
@@ -542,10 +549,13 @@ export function hitMonster(
   const pair = element && !opts.noReact ? findPair(ctx, m, element, k) : null;
   if (pair) {
     reaction = pair.def.id;
-    amount = react(ctx, m, reaction, amount, opts.slot, pair.n);
+    amount = react(ctx, m, reaction, amount, opts.slot, pair.n, opts.catalyst ?? 0);
     m.status.reactionLockUntil = world.t + bal.stacks.reactionLockout;
     if (pair.def.cooldown) h.reactionReadyAt[reaction] = world.t + bal.reactions.reactionCooldown;
     noteReaction(ctx, reaction, m, pair.n);
+    // Volatile marks a reaction it scaled: a damage reaction, or Soulfire.
+    if (opts.catalyst && (DAMAGE_REACTIONS.has(reaction) || reaction === 'soulfire'))
+      ctx.events.push({ kind: 'runeFx', effect: 'volatile', x: m.x, y: m.y, element });
     if (reaction === 'soulfire') healHero(ctx, amount * bal.reactions.soulfireHeal, 'soulfire');
   }
 
@@ -574,6 +584,15 @@ export function hitMonster(
     const leech = stats.lifesteal + (opts.leech ?? 0) + shadowGuard;
     if (leech > 0) healHero(ctx, amount * leech, 'lifesteal');
     addCharge(ctx, amount, opts.slot);
+    // Drain: mana per foe hit while the cast's budget lasts (`drainFoes` foe-hits since its
+    // skill last fired, and `drainLeft` mana; the basic attack's at index 3).
+    const drain = opts.slot ?? 3;
+    if (opts.manaOnHit && h.drained[drain] < bal.runes.drainFoes && h.drainLeft[drain] > 0) {
+      const gain = Math.min(opts.manaOnHit, h.drainLeft[drain]);
+      h.drained[drain]++;
+      h.drainLeft[drain] -= gain;
+      h.mana = Math.min(h.manaMax, h.mana + gain);
+    }
   }
 
   if (
@@ -714,7 +733,10 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5) spreadStacks(ctx, m, o, 'fire');
   }
 
-  if (!world.sandbox) dropLoot(ctx, m);
+  if (!world.sandbox) {
+    dropLoot(ctx, m);
+    dropRune(ctx, m);
+  }
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
   if (t < m.status.brandUntil) {

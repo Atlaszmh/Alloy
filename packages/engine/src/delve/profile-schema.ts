@@ -6,6 +6,7 @@ import {
   ReactionIdSchema,
 } from '../data/schemas.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
+import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
@@ -48,13 +49,33 @@ export const AbilityBuildSchema = z.object({
   payment: PaymentSchema,
 });
 
+/** A socketed rune: its id (checked against the data at load) and its tier, I to V. */
+export const RuneRefSchema = z.object({
+  id: z.string(),
+  tier: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+});
+
+/** A move's or a blow's open sockets, each a rune or null (see the runes spec). */
+const SocketsSchema = z.array(RuneRefSchema.nullable()).max(MAX_SOCKETS).optional();
+
 export const MoveSchema = z.object({
   kind: MoveKindSchema,
   form: FormIdSchema,
   elements: ElementsSchema,
+  runes: SocketsSchema,
 });
 
-export const BlowSchema = z.object({ kind: MoveKindSchema, element: ManaTypeSchema });
+export const BlowSchema = z.object({
+  kind: MoveKindSchema,
+  element: ManaTypeSchema,
+  runes: SocketsSchema,
+});
+
+/** Loose runes: rune id → counts by tier. */
+export const RunePouchSchema = z.record(
+  z.string(),
+  z.array(z.number().int().min(0)).length(RUNE_TIERS),
+);
 
 /** An ability chain: 1 to `MAX_CHAIN` moves and a payment (see `slotChain` for the forms). */
 export const ChainSchema = z.object({
@@ -165,10 +186,11 @@ const DiveSchema = z.object({
   scrapEarned: z.number().min(0),
   dustEarned: z.number().int().min(0).default(0),
   linksEarned: z.number().int().min(0).default(0),
+  runesEarned: z.number().int().min(0).default(0),
   // A stop between depths: its kinds are `STOP_KINDS` (delve/stops.ts).
   stop: z
     .object({
-      offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade'])),
+      offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade', 'rune'])),
       taken: z.boolean(),
     })
     .nullable()
@@ -262,13 +284,19 @@ export const DelveProfileV5Schema = DelveProfileV4Schema.omit({ abilities: true 
   }),
 });
 
-/** Version 6: the chains live on the weapon, and Links (see the weapon movesets spec). */
-export const DelveProfileSchema = DelveProfileV5Schema.omit({
+/** Version 6 (the chains on the weapon, and Links), kept frozen so older saves migrate through it. */
+export const DelveProfileV6Schema = DelveProfileV5Schema.omit({
   chains: true,
   chainCaps: true,
 }).extend({
   version: z.literal(6),
   links: z.number().int().min(0),
+});
+
+/** Version 7: the rune pouch (see the runes spec). */
+export const DelveProfileSchema = DelveProfileV6Schema.extend({
+  version: z.literal(7),
+  runes: RunePouchSchema,
 });
 
 /** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */

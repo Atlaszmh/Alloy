@@ -23,21 +23,27 @@ import {
   DelveProfileV3Schema,
   DelveProfileV4Schema,
   DelveProfileV5Schema,
+  DelveProfileV6Schema,
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
 import { isDiveActive } from './dive.js';
+import { settleParts, type SetChainsOptions } from './runes.js';
 import { sameChain } from './moveset.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
-import { baseSlots, carriedSkills, defaultChain, extraSlots, movesetOf } from '../loot/moveset.js';
+import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
+import { addToPouch, socketCap } from '../loot/runes.js';
+import type { RuneRef } from '../types/rune.js';
 import {
   ABILITY_SLOTS,
   CHAIN_SKILLS,
   type AbilityBuild,
   type AbilityBuilds,
   type AbilitySlot,
+  type Blow,
   type Chain,
   type Chains,
   type ChainSkill,
+  type Move,
   type MoveKind,
 } from '../types/ability.js';
 
@@ -50,6 +56,10 @@ export interface ProfileActionResult {
   fixed?: ChainFix[];
   /** Links the op gave back (a fuse's weapons' extra slots, a transfer's). */
   links?: number;
+  /** Runes the op put back in the pouch (see the runes spec). */
+  runes?: RuneRef[];
+  /** Runes the op destroyed. */
+  destroyed?: RuneRef[];
 }
 
 function perRarity<T>(value: T): Record<Rarity, T> {
@@ -77,7 +87,7 @@ export function createDelveProfile(
     rng,
   );
   const profile: DelveProfile = {
-    version: 6,
+    version: 7,
     seed: seed | 0,
     diveCount: 0,
     forgeCount: 0,
@@ -103,6 +113,7 @@ export function createDelveProfile(
     pair: { primary: null, secondary: null },
     manaDust: 0,
     links: 0,
+    runes: {},
     reactionsSeen: [],
     dive: null,
   };
@@ -151,10 +162,12 @@ export interface ParsedDelveProfile {
   dropped: ChainSkill[];
   /** An unarmed save's built chains were reset to the unarmed defaults (no weapon holds them). */
   movesetReset: boolean;
+  /** Runes a load-time trim destroyed (in 'destroy' mode), for a notice each. */
+  runesLost: RuneRef[];
 }
 
 /** A version 5 save, as its frozen schema reads it. */
-type ProfileV5 = Omit<DelveProfile, 'version' | 'links'> & {
+type ProfileV5 = Omit<DelveProfile, 'version' | 'links' | 'runes'> & {
   version: 5;
   chains: Chains;
   chainCaps: Record<ChainSkill, number>;
@@ -167,23 +180,63 @@ type ProfileV5 = Omit<DelveProfile, 'version' | 'links'> & {
  * carried one gets its base default; and a basic chain's slots are raised to
  * its weapon's string. (A base whose string grew absorbs extras it can't tell
  * from its new base: the old base isn't stored, so those give no Links.)
+ *
+ * And its sockets (see the runes spec): a rune the data doesn't know, or the
+ * second of one id on a move, is emptied; sockets past the rarity's cap are
+ * trimmed from the end, and a dropped chain's go with it. Each socket that
+ * goes comes back as a Link, and each known rune taken off leaves by the parts
+ * rule in the balance's mode: back to the pouch ('pay') or destroyed
+ * ('destroy', listed in `runesLost`). The pouch drops ids the data doesn't know.
  */
-function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+function fitMovesets(
+  registry: DataRegistry,
+  profile: DelveProfile,
+): { profile: DelveProfile; runesLost: RuneRef[] } {
   let links = 0;
+  const off: RuneRef[] = [];
+  const known = (r: RuneRef | null): r is RuneRef => !!r && !!registry.findRune(r.id);
+  const fitSockets = <M extends Move | Blow>(m: M, cap: number): M => {
+    if (!m.runes) return m;
+    const seen = new Set<string>();
+    const runes = m.runes.map((r) => {
+      if (!known(r)) return null;
+      if (seen.has(r.id)) {
+        off.push(r);
+        return null;
+      }
+      seen.add(r.id);
+      return r;
+    });
+    for (const r of runes.slice(cap)) {
+      links++;
+      if (r) off.push(r);
+    }
+    return { ...m, runes: runes.slice(0, cap) };
+  };
   const fit = (item: GearItem): GearItem => {
     if (item.slot !== 'weapon') return item;
     const old = movesetOf(registry, item);
     const carried = carriedSkills(registry, item.rarity);
+    const cap = socketCap(registry, item.rarity);
     const moveset: Moveset = { chains: {}, slots: {} };
     for (const skill of CHAIN_SKILLS) {
       const base = baseSlots(registry, item.baseId, skill);
       const chain = old.chains[skill];
       if (!carried.includes(skill)) {
         links += Math.max(0, (old.slots[skill] ?? base) - base);
+        for (const m of chain ? (Array.isArray(chain) ? chain : chain.moves) : [])
+          for (const r of m.runes ?? []) {
+            links++;
+            if (known(r)) off.push(r);
+          }
         continue;
       }
       const set = moveset.chains as Record<ChainSkill, unknown>;
-      set[skill] = chain ?? defaultChain(registry, skill, item.baseId, item.mana, base);
+      set[skill] = !chain
+        ? defaultChain(registry, skill, item.baseId, item.mana, base)
+        : Array.isArray(chain)
+          ? chain.map((b) => fitSockets(b, cap))
+          : { ...chain, moves: chain.moves.map((m) => fitSockets(m, cap)) };
       moveset.slots[skill] = chain ? Math.max(old.slots[skill]!, base) : base;
     }
     return { ...item, moveset };
@@ -194,7 +247,20 @@ function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfil
     if (item) equipped[slot] = fit(item);
   }
   const bag = profile.bag.map(fit);
-  return { ...profile, equipped, bag, links: profile.links + links };
+  const pouch = Object.fromEntries(
+    Object.entries(profile.runes).filter(([id]) => registry.findRune(id)),
+  );
+  const pay = registry.getDelveBalance().runes.unsocket === 'pay';
+  return {
+    profile: {
+      ...profile,
+      equipped,
+      bag,
+      links: profile.links + links,
+      runes: pay ? addToPouch(pouch, off) : pouch,
+    },
+    runesLost: pay ? [] : off,
+  };
 }
 
 /** A chain's length: its blows or its moves. */
@@ -240,8 +306,8 @@ function fromV5(
     basic: defaultBasic(registry, null, primary, old.pair.secondary),
   };
   const movesetReset = !weapon && CHAIN_SKILLS.some((s) => !sameChain(chains[s], unarmed[s]));
-  const profile = fitMovesets(registry, { ...rest, version: 6, links, equipped });
-  return { profile, fixed: [], dropped, movesetReset };
+  const fitted = fitMovesets(registry, { ...rest, version: 7, links, runes: {}, equipped });
+  return { ...fitted, fixed: [], dropped, movesetReset };
 }
 
 /** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
@@ -268,22 +334,24 @@ function migratedPrimary(registry: DataRegistry, equipped: EquippedGear): ManaTy
 
 /**
  * Validate an unknown JSON blob as a save, migrating older ones (2 → 3 → 4 →
- * 5 → 6), and fit every weapon's moveset to the data (`fitMovesets`). To 4:
+ * 5 → 6 → 7), and fit every weapon's moveset to the data (`fitMovesets`). To 4:
  * a primary from the gear, no secondary, no Mana Dust. To 5: each build its
  * form's default chain shifted by its weight (`chainFromBuild`) and the
  * weapon's default basic chain on the pair. To 6: the chains move onto the
  * weapon (`fromV5`), and from a version 4 or older save every move is then
- * fixed to the pair. A dive in progress stays. Null when it doesn't fit.
+ * fixed to the pair. To 7: an empty rune pouch. A dive in progress stays.
+ * Null when it doesn't fit.
  */
 export function parseDelveProfile(registry: DataRegistry, raw: unknown): ParsedDelveProfile | null {
   const parsed = DelveProfileSchema.safeParse(raw);
-  if (parsed.success)
-    return {
-      profile: fitMovesets(registry, parsed.data as DelveProfile),
-      fixed: [],
-      dropped: [],
-      movesetReset: false,
-    };
+  const v6 = parsed.success ? null : DelveProfileV6Schema.safeParse(raw);
+  const current = parsed.success
+    ? (parsed.data as DelveProfile)
+    : v6?.success
+      ? ({ ...v6.data, version: 7, runes: {} } as DelveProfile)
+      : null;
+  if (current)
+    return { ...fitMovesets(registry, current), fixed: [], dropped: [], movesetReset: false };
   const v5 = DelveProfileV5Schema.safeParse(raw);
   if (v5.success) return fromV5(registry, v5.data as ProfileV5);
   const v4 = DelveProfileV4Schema.safeParse(raw);
@@ -389,13 +457,22 @@ export interface BagInsertResult {
   links: number;
   bagFull: boolean;
   newCodex: string[];
+  /** Runes back to the pouch from melted weapons' sockets (see the runes spec). */
+  runes: RuneRef[];
+  /** Runes the melted weapons' sockets destroyed. */
+  destroyed: RuneRef[];
 }
 
-/** Put fresh loot in the bag, honouring auto-salvage and bag capacity. */
+/**
+ * Put fresh loot in the bag, honouring auto-salvage and bag capacity. A melted
+ * weapon gives its parts (`weaponParts`): a Link for each extra slot and open
+ * socket, and its runes by the parts rule (`opts.unsocket`, else the balance's).
+ */
 export function addLootToBag(
   registry: DataRegistry,
   profile: DelveProfile,
   items: GearItem[],
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): BagInsertResult {
   const bagSize = registry.getDelveBalance().loot.bagSize;
   const recorded = recordFinds(profile, items);
@@ -413,12 +490,14 @@ export function addLootToBag(
       salvaged.push(item);
       scrap += salvageValue(registry, item);
       dust += salvageDust(registry, item, profile.pair);
-      links += extraSlots(registry, item);
+      links += weaponParts(registry, item).links;
     } else {
       bag.push(item);
       kept.push(item);
     }
   }
+  const parts = salvaged.flatMap((item) => weaponParts(registry, item).runes);
+  const settled = settleParts(registry, recorded.profile.runes, parts, opts.unsocket);
   return {
     profile: {
       ...recorded.profile,
@@ -426,6 +505,7 @@ export function addLootToBag(
       scrap: recorded.profile.scrap + scrap,
       manaDust: recorded.profile.manaDust + dust,
       links: recorded.profile.links + links,
+      runes: settled.pouch,
       stats: { ...recorded.profile.stats, scrapEarned: recorded.profile.stats.scrapEarned + scrap },
     },
     kept,
@@ -433,6 +513,8 @@ export function addLootToBag(
     scrap,
     dust,
     links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
     bagFull,
     newCodex: recorded.newCodex,
   };
@@ -485,28 +567,44 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
 
 /**
  * Salvage bag items. Locked or missing uids are skipped. Gear outside the pair
- * also gives Mana Dust, and a weapon a Link for each extra slot. Mid-dive it
- * melts nothing (auto-salvage of new loot, `addLootToBag`, still runs).
+ * also gives Mana Dust, and a weapon its parts (`weaponParts`): a Link for each
+ * extra slot and open socket, and its runes by the parts rule (`opts.unsocket`,
+ * else the balance's). Mid-dive it melts nothing (auto-salvage of new loot,
+ * `addLootToBag`, still runs).
  */
 export function salvageItems(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
-): { profile: DelveProfile; scrap: number; dust: number; links: number; count: number } {
-  if (isDiveActive(profile)) return { profile, scrap: 0, dust: 0, links: 0, count: 0 };
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
+): {
+  profile: DelveProfile;
+  scrap: number;
+  dust: number;
+  links: number;
+  count: number;
+  /** Runes back to the pouch from the melted weapons' sockets (see the runes spec). */
+  runes: RuneRef[];
+  /** Runes their sockets destroyed. */
+  destroyed: RuneRef[];
+} {
+  if (isDiveActive(profile))
+    return { profile, scrap: 0, dust: 0, links: 0, count: 0, runes: [], destroyed: [] };
   const targets = new Set(uids);
   let scrap = 0;
   let dust = 0;
   let links = 0;
-  let count = 0;
+  const melted: GearItem[] = [];
   const bag = profile.bag.filter((item) => {
     if (!targets.has(item.uid) || item.locked) return true;
     scrap += salvageValue(registry, item);
     dust += salvageDust(registry, item, profile.pair);
-    links += extraSlots(registry, item);
-    count++;
+    links += weaponParts(registry, item).links;
+    melted.push(item);
     return false;
   });
+  const parts = melted.flatMap((item) => weaponParts(registry, item).runes);
+  const settled = settleParts(registry, profile.runes, parts, opts.unsocket);
   return {
     profile: {
       ...profile,
@@ -514,16 +612,19 @@ export function salvageItems(
       scrap: profile.scrap + scrap,
       manaDust: profile.manaDust + dust,
       links: profile.links + links,
+      runes: settled.pouch,
       stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + scrap },
     },
     scrap,
     dust,
     links,
-    count,
+    count: melted.length,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
   };
 }
 
-/** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`. */
+/** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`, and no weapon holding runes. */
 export function salvageCandidates(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -537,6 +638,7 @@ export function salvageCandidates(
         !item.locked &&
         item.rarity !== 'legendary' &&
         rarityIndex(item.rarity) <= cap &&
+        weaponParts(registry, item).runes.length === 0 &&
         compareItem(profile.equipped, item, registry, depth, profile.pair).powerPct <= 0,
     )
     .map((i) => i.uid);
@@ -621,13 +723,15 @@ export function reforgeGear(
 
 /**
  * Fuse three bag items of one rarity into one of the next (`fuseItems`), for
- * scrap. The inputs' weapon extra slots come back as Links, as salvaging them
- * would give (`links`); a fused weapon rolls its own moveset. Refuses mid-dive.
+ * scrap. The inputs' weapon parts come back as salvaging them would give
+ * (`weaponParts`: `links`, and the runes by the parts rule, `opts.unsocket`);
+ * a fused weapon rolls its own moveset. Refuses mid-dive.
  */
 export function fuseGear(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): ProfileActionResult {
   if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
   const items = uids.map((uid) => profile.bag.find((i) => i.uid === uid));
@@ -639,7 +743,14 @@ export function fuseGear(
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
 
   const result = fuseItems(registry, inputs, `g${profile.nextUid}`, forgeRng(profile));
-  const links = inputs.reduce((sum, i) => sum + extraSlots(registry, i), 0);
+  const parts = inputs.map((i) => weaponParts(registry, i));
+  const links = parts.reduce((sum, p) => sum + p.links, 0);
+  const settled = settleParts(
+    registry,
+    profile.runes,
+    parts.flatMap((p) => p.runes),
+    opts.unsocket,
+  );
   const consumed = new Set(uids);
   const recorded = recordFinds(
     {
@@ -647,10 +758,18 @@ export function fuseGear(
       bag: [...profile.bag.filter((i) => !consumed.has(i.uid)), result],
       scrap: profile.scrap - cost,
       links: profile.links + links,
+      runes: settled.pouch,
       nextUid: profile.nextUid + 1,
       forgeCount: profile.forgeCount + 1,
     },
     [result],
   );
-  return { ok: true, item: result, profile: recorded.profile, links };
+  return {
+    ok: true,
+    item: result,
+    profile: recorded.profile,
+    links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
+  };
 }

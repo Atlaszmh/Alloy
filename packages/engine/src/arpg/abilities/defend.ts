@@ -1,7 +1,7 @@
-import type { ResolvedAbility } from '../../types/ability.js';
+import type { Knobs, ResolvedAbility } from '../../types/ability.js';
 import type { MonsterEntity } from '../../types/arpg.js';
 import { applyStatus, hitMonster, type SimCtx } from '../combat.js';
-import { abilityHit, impact } from './impact.js';
+import { abilityHit, impact, knobHitOpts } from './impact.js';
 import { chainMove, chargeCap } from './resolve.js';
 
 const DEFENSIVE = 1;
@@ -12,6 +12,22 @@ export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
   if (!h.defend || ctx.world.t >= h.defend.until) return null;
   // A Defensive's effect runs only with a Defensive chain (a new one ends it).
   return chainMove(h.chains[DEFENSIVE]!, h.defend.move, h.defend.stage);
+}
+
+/**
+ * Guard (`guardOnLand`): a move or a blow that lands puts up a shield of that
+ * fraction of max life for `delve.runes.guardSeconds`, as Obsidian's barrier
+ * (it soaks after the Defensive's reductions and before the Ward). It never
+ * keeps a larger barrier alive: holding at least the barrier's life left (or
+ * with none up), it sets the barrier to its value for a fresh `guardSeconds`;
+ * against a larger one it does nothing.
+ */
+export function guardLand(ctx: SimCtx, knobs: Knobs): void {
+  if (knobs.guardOnLand <= 0) return;
+  const h = ctx.world.hero;
+  const hp = h.stats.maxHp * knobs.guardOnLand;
+  if (h.barrier && h.barrier.hp > hp) return;
+  h.barrier = { hp, max: hp, until: ctx.world.t + ctx.bal.runes.guardSeconds };
 }
 
 /** The Surge while it is up, else null. */
@@ -51,7 +67,7 @@ export function shieldHero(
         hitMonster(ctx, source, abilityHit(ctx, ab), ab.element, {
           source: 'skill',
           applies: ab.knobs.applies,
-          leech: ab.knobs.lifesteal,
+          ...knobHitOpts(ab.knobs),
           slot: DEFENSIVE,
           rattles,
         });

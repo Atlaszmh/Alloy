@@ -15,6 +15,7 @@ import type {
 import type { GearSlot, HeroStatKey } from '../types/gear.js';
 import type { ArpgData, FormDef, FusionDef, ReactionDef } from '../types/arpg.js';
 import type { FormId } from '../types/ability.js';
+import type { RuneDef, RuneId } from '../types/rune.js';
 import type { ManaType } from '../types/mana.js';
 import { RecipeRegistry, type RecipeDefinition } from '../combine/recipe-registry.js';
 
@@ -227,6 +228,23 @@ export class DataRegistry {
     const reaction = this.getArpgData().reactions.find((r) => r.id === id);
     if (!reaction) throw new Error(`Reaction not found: ${id}`);
     return reaction;
+  }
+
+  /** Every rune (`runes.json`), in the data's order. */
+  getRunes(): RuneDef[] {
+    return this.getArpgData().runes;
+  }
+
+  /** A rune by id; throws for an unknown one. */
+  getRune(id: RuneId): RuneDef {
+    const rune = this.findRune(id);
+    if (!rune) throw new Error(`Rune not found: ${id}`);
+    return rune;
+  }
+
+  /** A rune by id, or undefined (a save's id the data no longer has). */
+  findRune(id: RuneId): RuneDef | undefined {
+    return this.getArpgData().runes.find((r) => r.id === id);
   }
 
   getDelveData(): DelveData {

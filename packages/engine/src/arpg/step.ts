@@ -10,6 +10,7 @@ import type {
 } from '../types/arpg.js';
 import { MANA_TYPES } from '../types/mana.js';
 import {
+  BASIC_STATUS,
   healHero,
   hitMonster,
   hurtHero,
@@ -31,11 +32,12 @@ import {
   windupDir,
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
-import { impact } from './abilities/impact.js';
+import { echoTick } from './abilities/echo.js';
+import { hitOpts, impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
 import { createMonsterEntity } from './world.js';
-import { basicHoldTick, burstShot, startSwing, strike } from './basic.js';
+import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic.js';
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 
@@ -186,6 +188,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // A hold starts, charges, or fires.
   holdTick(ctx, input.holding, dt, dashing);
   castTick(ctx);
+  echoTick(ctx);
 
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
@@ -377,16 +380,27 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
       if (m.dead || p.hitIds.includes(m.id)) continue;
       if (dist(p.x, p.y, m.x, m.y) > p.radius + m.radius) continue;
       p.hitIds.push(m.id);
-      if (p.ability)
+      // A Split shard strikes only the foe it touches: no area, pull, zone or event of its own.
+      if (p.ability && p.form === 'shard')
+        hitMonster(
+          ctx,
+          m,
+          p.damage,
+          p.ability.element,
+          hitOpts(p.ability, from, false, true, p.heft),
+        );
+      else if (p.ability)
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',
           heft: p.heft,
+          // Past its first foe, a rune's Pierce only hits: an Earth shot's endless pierce, as before.
+          through: p.hitIds.length > 1 && Number.isFinite(p.pierceLeft ?? 0),
         });
       else if (p.explodeRadius > 0) {
         burstShot(ctx, p, m);
         break;
-      } else
+      } else {
         hitMonster(ctx, m, p.damage, p.element, {
           source: 'basic',
           canCrit: true,
@@ -395,13 +409,20 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           rattles: p.rattles,
           stacks: p.stacks,
           noReact: p.noReact,
+          ...(p.knobs ? knobHitOpts(p.knobs) : {}),
         });
-      if (!p.pierce) p.dead = true;
+        // A basic shot's knobs act where it first hits.
+        if (p.knobs && p.hitIds.length === 1) shotLands(ctx, p, [m]);
+      }
+      // A piercing shot passes `pierceLeft` foes; the hit after them ends it.
+      const left = p.pierceLeft ?? (p.pierce ? Infinity : 0);
+      if (left <= 0) p.dead = true;
+      else p.pierceLeft = left - 1;
     }
     if (!p.dead && expired) {
       p.dead = true;
-      // A bolt that reaches the end of its flight bursts on the ground.
-      if (p.ability && !p.pierce && p.form !== 'volley') {
+      // A bolt that reaches the end of its flight bursts on the ground (a Split shard just ends).
+      if (p.ability && !p.pierce && p.form !== 'volley' && p.form !== 'shard') {
         impact(ctx, p.ability, p.x, p.y, p.explodeRadius, p.damage, {
           from,
           tick: p.form === 'ember',
@@ -453,6 +474,13 @@ function zonesTick(ctx: SimCtx): void {
     z.nextTick += z.tick;
     if (z.ability)
       impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
+    else {
+      // A blow's Linger: each foe inside takes a basic hit (no crit) of its element.
+      const applies = z.element ? [BASIC_STATUS[z.element]] : [];
+      for (const m of world.monsters)
+        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius)
+          hitMonster(ctx, m, z.damage, z.element, { source: 'basic', canCrit: false, applies });
+    }
   }
 }
 
@@ -747,7 +775,8 @@ function dropsTick(ctx: SimCtx, dt: number): void {
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
-    const magnet = d.kind !== 'item' && gap < bal.hero.magnetRadius;
+    // Items and runes are walked over; motes, orbs and scrap fly to the hero.
+    const magnet = d.kind !== 'item' && d.kind !== 'rune' && gap < bal.hero.magnetRadius;
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
       const speed = d.vacuum ? 18 : 10;
@@ -771,12 +800,16 @@ function dropsTick(ctx: SimCtx, dt: number): void {
       case 'scrap':
         world.pending.scrap += d.amount;
         break;
+      case 'rune':
+        if (d.rune) world.pending.runes.push(d.rune);
+        break;
     }
     ctx.events.push({
       kind: 'pickup',
       dropId: d.id,
       dropKind: d.kind,
       item: d.item,
+      rune: d.rune,
       amount: d.amount,
       mana: d.mana,
     });

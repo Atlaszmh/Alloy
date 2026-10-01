@@ -1,5 +1,6 @@
 import {
   memo,
+  useMemo,
   useRef,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -9,6 +10,7 @@ import {
 import {
   MANA_TYPES,
   MAX_CHAIN,
+  MAX_SOCKETS,
   RARITY_ORDER,
   itemStatLines,
   type DummyLayout,
@@ -30,7 +32,7 @@ import {
 import { getDelveRegistry } from '../registry';
 import { RARITY_COLOR, RARITY_LABEL, formatStat, legendaryText, manaStyle } from '../format';
 import { AttunementBars, Chip } from '../AbilitiesPanel';
-import { ChainEditor } from '../chains/ChainEditor';
+import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
 import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
 import type { TrainingActions } from './useTrainingArena';
@@ -335,8 +337,8 @@ const LoadoutTab = memo(function LoadoutTab() {
         Load my build
       </button>
       <p className="text-[11px] text-stone-500">
-        Copies your equipped gear, your weapon's chains and your pair in. Nothing here ever changes
-        your save.
+        Copies your equipped gear, your weapon's chains with their runes, and your pair in. Nothing
+        here ever changes your save.
       </p>
     </div>
   );
@@ -346,13 +348,25 @@ const CAPS = { basic: MAX_CHAIN, primary: MAX_CHAIN, defensive: MAX_CHAIN, ultim
 
 /**
  * The Anvil's chain builder, bound to the sandbox: never locked, any element for
- * an ability, the pair for a blow, every reaction named (it's a testing tool).
+ * an ability, the pair for a blow, every reaction named, and every rune at any
+ * tier in up to MAX_SOCKETS sockets a move, free (it's a testing tool).
  */
 const TrainingAbilities = memo(function TrainingAbilities() {
   const chains = useSandboxStore((s) => s.chains);
   const primary = useSandboxStore((s) => s.primary);
   const secondary = useSandboxStore((s) => s.secondary);
+  const baseId = useSandboxStore((s) => s.weapon?.baseId ?? null);
   const stats = useSandboxStats();
+  const runes = useMemo<ChainRunes>(
+    () => ({
+      pouch: 'any',
+      socketCap: MAX_SOCKETS,
+      socketPrice: () => null,
+      weaponBaseId: baseId,
+      pullText: () => 'Pull · free',
+    }),
+    [baseId],
+  );
   const all = getDelveRegistry()
     .getArpgData()
     .reactions.map((r) => r.id);
@@ -365,6 +379,7 @@ const TrainingAbilities = memo(function TrainingAbilities() {
       locked={false}
       onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
       blowElements={secondary ? [primary, secondary] : [primary]}
+      runes={runes}
     />
   );
 });

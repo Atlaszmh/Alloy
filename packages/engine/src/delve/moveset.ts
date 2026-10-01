@@ -19,9 +19,12 @@ import {
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, Moveset } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
+import type { ChainOrigins } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
 import { inPair } from './pair.js';
 import { withMoveset, type ProfileActionResult } from './profile.js';
+import { runeChange, settleParts, type SetChainsOptions } from './runes.js';
+import { socketsOf, takeFromPouch } from '../loot/runes.js';
 
 /**
  * Editing a weapon's moveset (see the weapon movesets spec): its chains'
@@ -52,7 +55,16 @@ export function moveKey(m: Move | Blow): string {
   return 'element' in m ? `${m.kind}|${m.element}` : `${m.kind}|${m.form}|${m.elements.join('+')}`;
 }
 
-/** Whether two chains hold the same moves in order (by `moveKey`) and the same payment. */
+/** Whether two moves hold the same sockets: each empty in both, or the same rune at the same tier. */
+function sameSockets(a: Move | Blow, b: Move | Blow): boolean {
+  const [x, y] = [socketsOf(a), socketsOf(b)];
+  return x.length === y.length && x.every((r, i) => r?.id === y[i]?.id && r?.tier === y[i]?.tier);
+}
+
+/**
+ * Whether two chains hold the same moves in order (by `moveKey`), with the
+ * same sockets (see the runes spec), and the same payment.
+ */
 export function sameChain(
   a: Chains[ChainSkill] | undefined,
   b: Chains[ChainSkill] | undefined,
@@ -61,7 +73,9 @@ export function sameChain(
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const [x, y] = [movesOf(a), movesOf(b)];
   if (!Array.isArray(a) && (a as Chain).payment !== (b as Chain).payment) return false;
-  return x.length === y.length && x.every((m, i) => moveKey(m) === moveKey(y[i]));
+  return (
+    x.length === y.length && x.every((m, i) => moveKey(m) === moveKey(y[i]) && sameSockets(m, y[i]))
+  );
 }
 
 /** `chain` with move `index` replaced by `move` (its payment kept). */
@@ -103,21 +117,35 @@ export function legendaryNeeds(id: string): ChainSkill | null {
   return LEGENDARY_NEEDS.get(id) ?? null;
 }
 
-/** Index pairs of a longest common subsequence of `a` and `b` (by key). */
-function commonRun(a: string[], b: string[]): [number, number][] {
-  const n = a.length;
-  const m = b.length;
-  const len = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--)
-    for (let j = m - 1; j >= 0; j--)
-      len[i][j] = a[i] === b[j] ? len[i + 1][j + 1] + 1 : Math.max(len[i + 1][j], len[i][j + 1]);
-  const pairs: [number, number][] = [];
-  for (let i = 0, j = 0; i < n && j < m; ) {
-    if (a[i] === b[j]) pairs.push([i++, j++]);
-    else if (len[i + 1][j] >= len[i][j + 1]) i++;
-    else j++;
+/**
+ * A new chain's origins (see the runes spec): for each of its `moves` moves,
+ * the index in the saved chain (`saved` moves) it came from, or null for a new
+ * move. `given` is checked: one per move, each a saved index at most once;
+ * null when it isn't. Without it, the identity map: move j came from saved
+ * move j, if any.
+ */
+export function chainOrigins(
+  saved: number,
+  moves: number,
+  given?: readonly (number | null)[],
+): (number | null)[] | null {
+  if (!given) return Array.from({ length: moves }, (_, j) => (j < saved ? j : null));
+  if (given.length !== moves) return null;
+  const seen = new Set<number>();
+  for (const o of given) {
+    if (o === null) continue;
+    if (!Number.isInteger(o) || o < 0 || o >= saved || seen.has(o)) return null;
+    seen.add(o);
   }
-  return pairs;
+  return [...given];
+}
+
+/** The length of the longest strictly increasing run in `xs`, in order (at most 5 values). */
+function longestRise(xs: readonly number[]): number {
+  const best = xs.map(() => 1);
+  for (let j = 0; j < xs.length; j++)
+    for (let i = 0; i < j; i++) if (xs[i] < xs[j]) best[j] = Math.max(best[j], best[i] + 1);
+  return Math.max(0, ...best);
 }
 
 /** A move's elements as the price matches them ("fire+storm"). */
@@ -125,74 +153,41 @@ function els(m: Move | Blow): string {
   return elementsOf(m).join('+');
 }
 
-/**
- * The least total over every way to pair the old moves left with the new
- * ones, a move left unpaired included (a removal, or a new move): a pair costs
- * `pair(old, new)`, an unpaired move `editDust`, and a new element set (no old
- * move's, and no pair's changed elements) `elementDust` once, however many
- * new moves take it. A side holds at most 5 moves, so at most 1,546 ways.
- */
-function leastPairing(
-  old: (Move | Blow)[],
-  now: (Move | Blow)[],
-  pair: (o: Move | Blow, m: Move | Blow) => number,
-  known: Set<string>,
-  { editDust, elementDust }: { editDust: number; elementDust: number },
-): number {
-  const used = now.map(() => false);
-  const go = (i: number): number => {
-    if (i === old.length) {
-      const added = now.filter((_, j) => !used[j]);
-      const sets = new Set(added.map(els).filter((s) => !known.has(s)));
-      return added.length * editDust + sets.size * elementDust;
-    }
-    let best = editDust + go(i + 1); // removed
-    for (let j = 0; j < now.length; j++) {
-      if (used[j]) continue;
-      // Changed elements are charged here, so a new move in the same set isn't again.
-      const set = els(now[j]);
-      const charges = !known.has(set);
-      used[j] = true;
-      if (charges) known.add(set);
-      best = Math.min(best, pair(old[i], now[j]) + go(i + 1));
-      if (charges) known.delete(set);
-      used[j] = false;
-    }
-    return best;
-  };
-  return go(0);
-}
-
 /** The Mana Dust one chain's edit costs (see `movesetEditPrice`). */
 function chainEditPrice(
   registry: DataRegistry,
   old: Chains[ChainSkill] | undefined,
   next: Chains[ChainSkill],
+  given?: readonly (number | null)[],
 ): number {
-  const dust = registry.getDelveBalance().movesets;
-  const { editDust, elementDust } = dust;
+  const { editDust, elementDust } = registry.getDelveBalance().movesets;
   const was = movesOf(old);
   const now = movesOf(next);
-  // 1. The longest run the two share in order is unchanged, and free.
-  const run = commonRun(was.map(moveKey), now.map(moveKey));
-  const restOld = was.filter((_, i) => !run.some(([a]) => a === i));
-  let restNew = now.filter((_, j) => !run.some(([, b]) => b === j));
-  let price = 0;
-  // 2. A remaining new move equal to a remaining old one moved.
-  restNew = restNew.filter((m) => {
-    const i = restOld.findIndex((o) => moveKey(o) === moveKey(m));
-    if (i < 0) return true;
-    restOld.splice(i, 1);
-    price += editDust;
-    return false;
-  });
-  // 3. The rest pair up at the least total price: a changed kind or form, or elements, or both;
-  // 4. or stay unpaired: a removal, or a new move (a new element set charged once per Apply).
+  const origins =
+    chainOrigins(was.length, now.length, given) ?? chainOrigins(was.length, now.length)!;
+  const kept = origins.filter((o): o is number => o !== null);
+  // 1. The moves whose origins rise in order are in place, free; every other one moved.
+  let price = (kept.length - longestRise(kept)) * editDust;
+  // 2. Each origin pair's changes; 3. each new move, and each saved move none came from.
+  const known = new Set(was.map(els));
+  const charged = new Set<string>();
   const shape = (x: Move | Blow) => ('form' in x ? `${x.kind}|${x.form}` : x.kind);
-  const paired = (o: Move | Blow, m: Move | Blow) =>
-    (shape(o) !== shape(m) ? editDust : 0) + (els(o) !== els(m) ? elementDust : 0);
-  price += leastPairing(restOld, restNew, paired, new Set(was.map(els)), dust);
-  // 5. A changed payment.
+  now.forEach((m, j) => {
+    const o = origins[j];
+    const set = els(m);
+    if (o === null) {
+      price += editDust;
+      if (known.has(set) || charged.has(set)) return;
+    } else {
+      if (shape(was[o]) !== shape(m)) price += editDust;
+      if (set === els(was[o]) || charged.has(set)) return;
+    }
+    // A new element set: charged once per Apply, however many moves take it.
+    charged.add(set);
+    price += elementDust;
+  });
+  price += (was.length - kept.length) * editDust;
+  // 4. A changed payment.
   if (old && !Array.isArray(old) && !Array.isArray(next) && old.payment !== next.payment)
     price += editDust;
   return price;
@@ -200,35 +195,40 @@ function chainEditPrice(
 
 /**
  * The Mana Dust turning `old` into `next` costs, over every chain `next`
- * holds (see the weapon movesets spec): moves matched by what they are, not
- * where they stand. The longest run the two share in order is free; a move
- * that only moved costs `editDust`; the rest pair up at the least total price, a changed kind
- * or form costing `editDust` and changed elements `elementDust`, or stay
- * unpaired for `editDust` each (a removal, or a new move); a new element set
- * no old move has costs `elementDust` once per Apply, however many moves
- * take it; a changed payment costs `editDust`. The caller applies the
- * first-dive freebie.
+ * holds (see the runes spec, which retires 4a's matching by what moves are):
+ * each new move is priced against the saved move it came from (`origins`;
+ * missing, the identity map). The moves whose origins rise in order are in
+ * place, free; every other one moved, `editDust`. A pair whose kind or form
+ * changed costs `editDust`, whose elements changed `elementDust`; a new move
+ * `editDust`, and a saved move none came from `editDust`; an element set is
+ * charged `elementDust` once per Apply however many moves take it (a new
+ * move's only when no saved move has it); a changed payment costs `editDust`.
+ * Runes are no part of it (`moveKey` ignores them). Origins for a chain
+ * `next` doesn't hold are ignored, and bad origins price as the identity map
+ * (`setChains` refuses them first). The caller applies the first-dive freebie.
  */
 export function movesetEditPrice(
   registry: DataRegistry,
   old: Partial<Chains>,
   next: Partial<Chains>,
+  origins?: ChainOrigins,
 ): number {
   return CHAIN_SKILLS.reduce((sum, skill) => {
     const chain = next[skill];
-    return chain ? sum + chainEditPrice(registry, old[skill], chain) : sum;
+    return chain ? sum + chainEditPrice(registry, old[skill], chain, origins?.[skill]) : sum;
   }, 0);
 }
 
-/** What an edit costs `profile`: its price, but nothing before the hero's first dive. */
+/** What an edit costs `profile`: its price (by `origins`), but nothing before the hero's first dive. */
 export function editPrice(
   registry: DataRegistry,
   profile: DelveProfile,
   next: Partial<Chains>,
+  origins?: ChainOrigins,
 ): number {
   const weapon = profile.equipped.weapon;
   if (!weapon || profile.stats.dives === 0) return 0;
-  return movesetEditPrice(registry, movesetOf(registry, weapon).chains, next);
+  return movesetEditPrice(registry, movesetOf(registry, weapon).chains, next, origins);
 }
 
 /** How many moves of `chain` hold each element set outside the pair ("fire+nature"). */
@@ -278,25 +278,35 @@ function chainRefusal(
   return null;
 }
 
-/** A chain copied, so the save never shares arrays with the caller. */
+/** A chain copied, its sockets too, so the save never shares arrays with the caller. */
 function copyChain(chain: Chains[ChainSkill]): Chains[ChainSkill] {
-  if (Array.isArray(chain)) return chain.map((b) => ({ ...b }));
-  const moves = chain.moves.map((m) => ({ ...m, elements: [...m.elements] }));
+  const copy = <M extends Move | Blow>(m: M): M =>
+    m.runes ? { ...m, runes: m.runes.map((r) => r && { ...r }) } : { ...m };
+  if (Array.isArray(chain)) return chain.map(copy);
+  const moves = chain.moves.map((m) => ({ ...copy(m), elements: [...m.elements] }));
   return { moves, payment: chain.payment };
 }
 
 /**
- * Set several of the equipped weapon's chains at once, for Mana Dust
- * (`editPrice`): all or nothing. Refuses mid-dive, unarmed, and when any
- * chain is refused (a skill the weapon doesn't carry; fewer than one move or
- * more than its slots; an unknown kind, a form from another slot, anything
- * but one or two different known elements, an unknown payment; or an element
- * set outside the pair held more times than before) or the total can't be paid.
+ * Set several of the equipped weapon's chains at once: all or nothing (see
+ * the runes spec). Mana Dust by origin (`editPrice`, by `opts.origins`), and
+ * the sockets' Links and scrap and the runes in and out (`runeChange`; a pull
+ * by `opts.unsocket`): the hero's Links become `links − change.links +
+ * change.refundLinks`, the netted amount, whatever order the edits were made
+ * in (never dearer than the same edits one by one). Refuses mid-dive, unarmed,
+ * when any chain is refused (a skill the weapon doesn't carry; fewer than one
+ * move or more than its slots; an unknown kind, a form from another slot,
+ * anything but one or two different known elements, an unknown payment; an
+ * element set outside the pair held more times than before; or bad origins),
+ * when the runes are refused (`runeChange`), and when the Dust, the net Links
+ * or the scrap can't be paid. Its result lists the runes pulled back to the
+ * pouch (`runes`) and those destroyed (`destroyed`).
  */
 export function setChains(
   registry: DataRegistry,
   profile: DelveProfile,
   chains: Partial<Chains>,
+  opts: SetChainsOptions = {},
 ): ProfileActionResult {
   if (isDiveActive(profile)) return refuse(profile, BETWEEN_DIVES);
   const weapon = profile.equipped.weapon;
@@ -308,12 +318,33 @@ export function setChains(
     if (!chain) continue;
     const reason = chainRefusal(registry, profile, moveset, skill, chain);
     if (reason) return refuse(profile, reason);
+    const saved = movesOf(moveset.chains[skill]).length;
+    if (!chainOrigins(saved, movesOf(chain).length, opts.origins?.[skill]))
+      return refuse(profile, 'Bad origins');
     (next as Record<ChainSkill, unknown>)[skill] = copyChain(chain);
   }
-  const price = editPrice(registry, profile, chains);
+  const change = runeChange(registry, profile, chains, opts);
+  if ('refused' in change) return refuse(profile, change.refused);
+  const price = editPrice(registry, profile, chains, opts.origins);
   if (profile.manaDust < price) return refuse(profile, 'Not enough Mana Dust');
+  if (profile.links < change.links - change.refundLinks) return refuse(profile, 'Not enough Links');
+  if (profile.scrap < change.scrap) return refuse(profile, 'Not enough scrap');
+  const settled = settleParts(registry, profile.runes, change.pulled, opts.unsocket);
+  const runes = takeFromPouch(settled.pouch, change.socketed);
+  if (!runes) return refuse(profile, 'Not enough runes in your pouch');
   const edited = withMoveset(profile, { ...moveset, chains: next });
-  return { ok: true, profile: { ...edited, manaDust: profile.manaDust - price } };
+  return {
+    ok: true,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
+    profile: {
+      ...edited,
+      manaDust: profile.manaDust - price,
+      links: profile.links - change.links + change.refundLinks,
+      scrap: profile.scrap - change.scrap,
+      runes,
+    },
+  };
 }
 
 /** Set one of the equipped weapon's chains (`setChains` with one). */
@@ -391,15 +422,17 @@ export function addSlot(
 
 /**
  * Move the equipped weapon's moveset onto weapon `uid` in the bag and equip
- * it, for scrap (`movesetTransfer`); its Links come back. The old weapon goes
- * to the bag at its base slots, its moves the defaults in its own mana.
- * Refuses mid-dive, unarmed, for anything but a bag weapon, and when it can't
- * be paid for.
+ * it, for scrap (`movesetTransfer`: its extra slots and open sockets); its
+ * Links come back, and the runes that leave go by the parts rule
+ * (`opts.unsocket`, else the balance's). The old weapon goes to the bag at its
+ * base slots, its moves the defaults in its own mana. Refuses mid-dive,
+ * unarmed, for anything but a bag weapon, and when it can't be paid for.
  */
 export function transferMoveset(
   registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): ProfileActionResult {
   if (isDiveActive(profile)) return refuse(profile, 'Transfer your moveset between dives');
   const source = profile.equipped.weapon;
@@ -410,16 +443,20 @@ export function transferMoveset(
   if (profile.scrap < t.scrap) return refuse(profile, 'Not enough scrap');
   const item = { ...target, moveset: t.moveset };
   const old = { ...source, moveset: defaultMoveset(registry, source, source.mana) };
+  const settled = settleParts(registry, profile.runes, t.runes, opts.unsocket);
   return {
     ok: true,
     item,
     links: t.links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
     profile: {
       ...profile,
       equipped: { ...profile.equipped, weapon: item },
       bag: [...profile.bag.filter((i) => i.uid !== uid), old],
       scrap: profile.scrap - t.scrap,
       links: profile.links + t.links,
+      runes: settled.pouch,
     },
   };
 }

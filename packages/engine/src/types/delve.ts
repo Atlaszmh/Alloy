@@ -1,6 +1,8 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, MoveKind } from './ability.js';
+import type { AbilitySlot, ChainSkill, Knobs, MoveKind } from './ability.js';
+import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
+import type { MonsterKind } from './arpg.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -567,6 +569,45 @@ export interface DelveBalance {
     /** Scrap a transfer costs for each extra slot that moves. */
     transferScrap: number;
   };
+  /** Runes: sockets and their prices, the pull rule, fusing, drops and the knobs' numbers (see the runes spec). */
+  runes: {
+    /** Most sockets a move may open, by its weapon's rarity (at most `MAX_SOCKETS`). */
+    socketCap: Record<Rarity, number>;
+    /** Links the next socket costs, by the sockets the move already has. */
+    socketLinks: number[];
+    /** Scrap the next socket costs, by the sockets the move already has. */
+    socketScrap: number[];
+    /** Open sockets a weapon drop rolls, least and most, by rarity. */
+    socketDrops: Record<Rarity, [number, number]>;
+    /** What a pull does as shipped (a dev toggle overrides it). */
+    unsocket: UnsocketMode;
+    /** Scrap a pull costs in 'pay' mode, by the rune's tier. */
+    pullScrap: number[];
+    /** Runes of one id and tier that fuse into one of the next tier. */
+    fuseCount: number;
+    /** Scrap a fuse costs, by the tier it makes: II, III, IV, V. */
+    fuseScrap: number[];
+    /** A foe's chance to drop a rune, by its kind (normal and elite × the door's `dropMult`, at most 1). */
+    dropChance: Record<MonsterKind, number>;
+    /** The depth each tier starts at, I to V. */
+    tierDepths: number[];
+    /** Chance a drop comes one tier higher (at most V). */
+    tierUp: number;
+    /** Seconds before an echo repeats its move or blow. */
+    echoDelay: number;
+    /** Seconds Guard's shield lasts. */
+    guardSeconds: number;
+    /** Foe-hits a cast's Drain counts. */
+    drainFoes: number;
+    /**
+     * Most mana Drain gives back a cast, as a share of the move's own mana cost (a blow's: of
+     * the mana a blow brings, `mana.basicAttackGain`).
+     */
+    drainShare: number;
+    /** A shard's speed, and how far it flies. */
+    shardSpeed: number;
+    shardRange: number;
+  };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {
     charges: number;
@@ -600,6 +641,10 @@ export interface HeroBlow extends ComboStepDef {
   element: ManaType;
   /** Its damage multiplier: 1 + basicPowerPerAttune × its element's attunement (1 without a pair). */
   attunePower: number;
+  /** Its runes' knobs merged (`NEUTRAL` without runes; see the runes spec). */
+  knobs: Knobs;
+  /** The runes acting on it (fitting and not dormant), in socket order. */
+  runes: RuneRef[];
 }
 
 export interface HeroWeapon {
@@ -665,8 +710,8 @@ export interface HeroStats {
 
 export type DivePhase = 'fighting' | 'choosing' | 'dead' | 'extracted';
 
-/** A stop's power-up: equip a bag item, add a slot, adjust one move, or upgrade an item. */
-export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade';
+/** A stop's power-up: equip a bag item, add a slot, adjust one move, upgrade an item, or socket a rune. */
+export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade' | 'rune';
 
 /** A stop between depths (see the weapon movesets spec): the kinds offered, and whether one is taken. */
 export interface DiveStop {
@@ -693,6 +738,8 @@ export interface DiveState {
   dustEarned: number;
   /** Links from weapons salvaged while banking this dive (auto-salvage, full bag). */
   linksEarned: number;
+  /** Runes picked up this dive (see the runes spec). */
+  runesEarned: number;
   /** The door screen's stop: the power-up offered after the depth just cleared (null: none). */
   stop: DiveStop | null;
   found: Record<Rarity, number>;
@@ -724,7 +771,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 6;
+  version: 7;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -746,6 +793,8 @@ export interface DelveProfile {
   manaDust: number;
   /** From salvaging weapons with extra slots; spent on a weapon's new slots (see the weapon movesets spec). */
   links: number;
+  /** Loose runes: counts by id and tier (see the runes spec). */
+  runes: RunePouch;
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

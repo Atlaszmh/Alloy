@@ -1,12 +1,15 @@
 import type { HeroEntity, MonsterEntity, Projectile, StatusId, Vec } from '../types/arpg.js';
-import { HOLD_STAGE_KINDS } from '../types/ability.js';
-import type { ComboStepDef, DelveBalance, HeroWeapon } from '../types/delve.js';
+import { HOLD_STAGE_KINDS, type MoveKind, type ZoneKnob } from '../types/ability.js';
+import type { ComboStepDef, DelveBalance, HeroBlow, HeroWeapon } from '../types/delve.js';
+import type { ManaType } from '../types/mana.js';
 import { BASIC_STATUS, hitMonster, type SimCtx } from './combat.js';
 import { angleBetween, dirTo, dist } from './geometry.js';
 import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
-import { surging } from './abilities/defend.js';
+import { guardLand, surging } from './abilities/defend.js';
+import { queueEcho } from './abilities/echo.js';
+import { chainJumps, knobHitOpts, shedShards, spendZone } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
@@ -88,8 +91,12 @@ export function startSwing(
   const step = basicStep(h, t, bal);
   const blow = w.blows[step];
   const s = manual && blow.kind === 'hold' ? w.feel.medium : blow;
-  const cycle = (h.stats.attackInterval * s.time) / haste(ctx);
-  const startup = cycle * s.startup;
+  // Quick and Heavy (`quick`): the cycle × its beat; the startup, from the base cycle, × its
+  // wind-up, at most the cycle.
+  const q = blow.knobs.quick;
+  const base = (h.stats.attackInterval * s.time) / haste(ctx);
+  const cycle = base * q.beat;
+  const startup = Math.min(cycle, base * s.startup * q.windup);
   if (t + startup > deadline + 1e-9) return false;
   h.attackCount = step;
   const { lunge, reach, acquire } = swingReach(w, s, manual);
@@ -205,93 +212,18 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
   const last = sw.step === w.blows.length - 1;
   h.attackCount++;
   h.lastBasicAt = world.t;
-
-  const surge = surging(ctx);
   const element = blow.element;
-  const unit = h.stats.weaponDamage * h.stats.damageMult * blow.attunePower;
-  const base = unit * s.power;
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
-  const twin = twinPct > 0 && last;
-  // Every blow applies its element's stacks, by its kind (a Surge's statuses ride along).
-  const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
-  if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
-  if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
-  const stacks = bal.stacks.basicByKind[kind];
-  // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
-  const rattles = element === 'earth' || !!surge?.elements.includes('earth');
   const dir = sw.dir;
-
   // Mana only for an attack at something: a blow that connects, or a shot with a foe in range.
-  let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
-  if (w.kind === 'melee') {
-    const crit = world.rng.next() < h.stats.critChance;
-    const arc = s.arc ?? w.arc;
-    const reach = w.range + (s.reach ?? 0);
-    const halfArc = (arc * Math.PI) / 360;
-    const kb = s.knockback ? { knockback: s.knockback, kbFrom: { x: h.x, y: h.y } } : {};
-    for (const m of alive(ctx)) {
-      if (dist(h.x, h.y, m.x, m.y) - m.radius > reach) continue;
-      if (
-        arc < 360 &&
-        m.id !== sw.targetId &&
-        angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc
-      )
-        continue;
-      landed = true;
-      hitMonster(ctx, m, base, element, {
-        source: 'basic',
-        crit,
-        applies,
-        heft: s.heft,
-        rattles,
-        stacks,
-        ...kb,
-      });
-      // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks and pairs
-      // nothing (it would only react with the last blow's own fresh stacks).
-      if (twin)
-        hitMonster(ctx, m, unit * 1.5 * twinPct, element, {
-          source: 'basic',
-          crit,
-          heft: s.heft,
-          stacks: 0,
-          noReact: true,
-        });
-    }
-  } else {
-    const size = s.size ?? 1;
-    const speed = w.speed * (s.speed ?? 1);
-    for (let i = 0; i < (twin ? 2 : 1); i++) {
-      const spread = i === 0 ? 0 : 0.12;
-      const d = {
-        x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread),
-        y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread),
-      };
-      spawnProjectile(ctx, {
-        owner: 'hero',
-        form: null,
-        ability: null,
-        homingId: null,
-        x: h.x + d.x * 0.5,
-        y: h.y + d.y * 0.5,
-        vx: d.x * speed,
-        vy: d.y * speed,
-        radius: 0.3 * size,
-        // Twin Fang's extra shot: today's value (×1.0), never an explosion, no stacks and no pairing.
-        damage: i === 0 ? base : unit * twinPct,
-        element,
-        pierce: w.pierce,
-        maxDist: w.range + 1.5,
-        explodeRadius: i === 0 ? (s.explode ?? 0) : 0,
-        applies: i === 0 ? applies : [],
-        knockback: 0,
-        heft: s.heft,
-        rattles,
-        stacks: i === 0 ? stacks : 0,
-        noReact: i === 1,
-      });
-    }
-  }
+  // Drain's and Linger's budgets are the blow's: they count from before its hits land.
+  h.drained[3] = 0;
+  h.drainLeft[3] = bal.mana.basicAttackGain * bal.runes.drainShare;
+  h.zonesLeft[3] = blow.knobs.zone?.perCast ?? 0;
+  const landed = landBlow(ctx, blow, kind, dir, 1, {
+    twin: last ? twinPct : 0,
+    targetId: sw.targetId,
+  });
   blowStep(ctx, s, dir, steer);
 
   const tgt =
@@ -309,14 +241,162 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
     moveKind: kind,
     dir,
   });
-  if (landed) h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
-  // A held blow takes its time from its stage's row; its startup was spent holding. A tap
-  // (struck on the tick it reached its strike point) keeps a medium blow's timing.
-  const cycle = stage === null ? sw.cycle : (h.stats.attackInterval * s.time) / haste(ctx);
+  if (landed) {
+    h.mana = Math.min(h.manaMax, h.mana + bal.mana.basicAttackGain);
+    guardLand(ctx, blow.knobs);
+  }
+  // Echo: the blow again (a held blow at its stage), along its way, from where the hero stands then.
+  if (blow.knobs.echo > 0)
+    queueEcho(ctx, {
+      at: world.t + bal.runes.echoDelay,
+      slot: null,
+      ability: null,
+      aim: null,
+      blow: sw.step,
+      stage,
+      dir,
+    });
+  // A held blow takes its time from its stage's row (by the swing's `quick` rule); its startup
+  // was spent holding. A tap (struck on the tick it reached its strike point) keeps a medium
+  // blow's timing.
+  const q = blow.knobs.quick;
+  const cycle =
+    stage === null ? sw.cycle : ((h.stats.attackInterval * s.time) / haste(ctx)) * q.beat;
   if (stage !== null && world.t > sw.held! + 1e-9)
-    h.nextAttackAt = world.t + cycle * (1 - s.startup);
+    h.nextAttackAt = world.t + cycle * Math.max(0, 1 - (s.startup * q.windup) / q.beat);
   if (sw.committed)
     h.recoverUntil = Math.min(h.nextAttackAt, world.t + cycle * bal.feel.basicRecovery);
+}
+
+/**
+ * A blow's damage from where the hero stands now, along `dir`, struck as `kind`
+ * (a held blow's stage's: its row follows), at `powerMult` × its power. A melee
+ * blow hits every foe in its reach (× its `area`) and arc, the swing's
+ * `targetId` whatever its angle, with one crit roll; a shot blow fires its shot.
+ * Every hit carries the blow's knobs (`knobHitOpts`). `twin`: Twin Fang's share
+ * on the chain's last blow (its extra hit or shot carries no runes). Returns
+ * whether it landed: a melee blow that connected, or a shot with a foe in range.
+ */
+export function landBlow(
+  ctx: SimCtx,
+  blow: HeroBlow,
+  kind: MoveKind,
+  dir: Vec,
+  powerMult: number,
+  o: { twin?: number; targetId?: number | null } = {},
+): boolean {
+  const { world, bal } = ctx;
+  const h = world.hero;
+  const w = h.stats.weapon;
+  const s = kind === blow.kind ? blow : w.feel[kind];
+  const k = blow.knobs;
+  const twin = o.twin ?? 0;
+  const surge = surging(ctx);
+  const element = blow.element;
+  const unit = h.stats.weaponDamage * h.stats.damageMult * blow.attunePower;
+  const base = unit * s.power * k.power * powerMult;
+  // Every blow applies its element's stacks, by its kind (a Surge's statuses ride along).
+  const applies: StatusId[] = surge ? [...surge.knobs.applies] : [];
+  if (!applies.includes(BASIC_STATUS[element])) applies.push(BASIC_STATUS[element]);
+  if (s.stagger && !applies.includes('stagger')) applies.push('stagger');
+  for (const a of k.applies) if (!applies.includes(a)) applies.push(a);
+  const stacks = bal.stacks.basicByKind[kind] + k.stacksBonus;
+  // An Earth blow or an Earth Surge's statuses: its stagger adds Earth stacks.
+  const rattles = element === 'earth' || !!surge?.elements.includes('earth');
+  const knobbed = knobHitOpts(k);
+
+  let landed = w.kind !== 'melee' && !!nearestMonster(ctx, h.x, h.y, w.range);
+  if (w.kind === 'melee') {
+    const crit = world.rng.next() < h.stats.critChance;
+    const arc = s.arc ?? w.arc;
+    const reach = (w.range + (s.reach ?? 0)) * k.area;
+    const halfArc = (arc * Math.PI) / 360;
+    const kb = s.knockback ? { knockback: s.knockback, kbFrom: { x: h.x, y: h.y } } : {};
+    const struck = new Set<number>();
+    let first: MonsterEntity | null = null;
+    for (const m of alive(ctx)) {
+      if (dist(h.x, h.y, m.x, m.y) - m.radius > reach) continue;
+      if (
+        arc < 360 &&
+        m.id !== o.targetId &&
+        angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) > halfArc
+      )
+        continue;
+      landed = true;
+      first ??= m;
+      struck.add(m.id);
+      hitMonster(ctx, m, base, element, {
+        source: 'basic',
+        crit,
+        applies,
+        heft: s.heft,
+        rattles,
+        stacks,
+        ...kb,
+        ...knobbed,
+      });
+      // Twin Fang: today's finisher value (×1.5) on melee; it applies no stacks and pairs
+      // nothing (it would only react with the last blow's own fresh stacks).
+      if (twin > 0)
+        hitMonster(ctx, m, unit * 1.5 * twin, element, {
+          source: 'basic',
+          crit,
+          heft: s.heft,
+          stacks: 0,
+          noReact: true,
+        });
+    }
+    // Chain: jumps from the first foe struck. Linger: a zone ahead, at half the reach.
+    if (first) {
+      const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
+      chainJumps(ctx, first, base, element, k.chain, jump, struck);
+      if (k.zone)
+        blowZone(ctx, h.x + dir.x * reach * 0.5, h.y + dir.y * reach * 0.5, base, element, k.zone);
+    }
+  } else {
+    const size = s.size ?? 1;
+    const speed = w.speed * (s.speed ?? 1);
+    const weaponPierce = w.pierce ? Infinity : 0;
+    // Multi-shot: 1 + its extra shots in a fan at Volley's spacing, each at the cut power. Twin
+    // Fang's extra shot stays one, 0.12 off the blow's way, and carries no runes.
+    const n = 1 + (k.extraShots?.count ?? 0);
+    const shot = base * (k.extraShots?.power ?? 1);
+    for (let i = 0; i < n + (twin > 0 ? 1 : 0); i++) {
+      const main = i < n;
+      const spread = main ? (i - (n - 1) / 2) * 0.22 : 0.12;
+      const d = {
+        x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread),
+        y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread),
+      };
+      const pierceLeft = main ? weaponPierce + k.pierce : weaponPierce;
+      spawnProjectile(ctx, {
+        owner: 'hero',
+        form: null,
+        ability: null,
+        homingId: null,
+        x: h.x + d.x * 0.5,
+        y: h.y + d.y * 0.5,
+        vx: d.x * speed,
+        vy: d.y * speed,
+        radius: 0.3 * size,
+        // Twin Fang's extra shot: today's value (×1.0), never an explosion, no stacks and no pairing.
+        damage: main ? shot : unit * twin,
+        element,
+        pierce: pierceLeft > 0,
+        pierceLeft,
+        maxDist: w.range + 1.5,
+        explodeRadius: main ? (s.explode ?? 0) : 0,
+        applies: main ? applies : [],
+        knockback: 0,
+        heft: s.heft,
+        rattles,
+        stacks: main ? stacks : 0,
+        noReact: !main,
+        ...(main ? { knobs: k } : {}),
+      });
+    }
+  }
+  return landed;
 }
 
 /**
@@ -344,7 +424,73 @@ function blowStep(ctx: SimCtx, s: ComboStepDef, dir: Vec, steer: Vec): void {
   if (len > 1e-9) startPush(ctx, 'step', { x: x / len, y: y / len }, len, bal.feel.stepSeconds);
 }
 
-/** A basic shot with an explosion bursts over the foe it struck and every foe around it (each once). */
+/** A blow's Linger zone's radius. */
+const BLOW_ZONE_RADIUS = 1.2;
+
+/**
+ * Linger on a heavy or hold blow: a hero zone with no ability at (x, y), for
+ * `zone.seconds`, whose ticks (every 0.5 s, `zonesTick`) hit each foe inside as
+ * a basic hit for `hit × zone.tickPower`.
+ */
+function blowZone(
+  ctx: SimCtx,
+  x: number,
+  y: number,
+  hit: number,
+  element: ManaType,
+  zone: ZoneKnob,
+): void {
+  const { world } = ctx;
+  if (!spendZone(ctx, 3, zone)) return;
+  world.zones.push({
+    id: world.nextId++,
+    owner: 'hero',
+    source: 'linger',
+    ability: null,
+    x,
+    y,
+    radius: BLOW_ZONE_RADIUS,
+    born: world.t,
+    until: world.t + zone.seconds,
+    tick: 0.5,
+    nextTick: world.t + 0.5,
+    damage: hit * zone.tickPower,
+    element,
+    detonateAt: 0,
+    dead: false,
+  });
+}
+
+/**
+ * A basic shot's knobs where it lands (see `burstShot` and the projectile tick):
+ * `hit` are the foes it hit there, the one it struck first. Chain jumps from
+ * that one, Linger leaves its zone there, and Split's shards skip them all.
+ */
+export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntity[]): void {
+  const k = p.knobs!;
+  // Chain: jumps from the foe it struck.
+  const jump = {
+    source: 'basic' as const,
+    canCrit: true,
+    applies: p.applies,
+    rattles: p.rattles,
+    ...knobHitOpts(k),
+  };
+  chainJumps(ctx, hit[0], p.damage, p.element!, k.chain, jump, new Set(hit.map((m) => m.id)));
+  // Linger: a zone where it hit.
+  if (k.zone) blowZone(ctx, p.x, p.y, p.damage, p.element!, k.zone);
+  if (k.split)
+    shedShards(ctx, p.x, p.y, k.split, p.damage, hit, {
+      ability: null,
+      element: p.element,
+      applies: p.applies,
+    });
+}
+
+/**
+ * A basic shot with an explosion bursts over the foe it struck and every foe
+ * around it (each once); with knobs, they act after the burst (`shotLands`).
+ */
 export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | null = null): void {
   p.dead = true;
   ctx.events.push({
@@ -355,8 +501,10 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
     element: p.element,
     infusion: null,
   });
+  const hit: MonsterEntity[] = struck ? [struck] : [];
   for (const m of alive(ctx)) {
     if (m !== struck && dist(p.x, p.y, m.x, m.y) > p.explodeRadius + m.radius) continue;
+    if (m !== struck) hit.push(m);
     hitMonster(ctx, m, p.damage, p.element, {
       source: 'basic',
       canCrit: true,
@@ -365,6 +513,8 @@ export function burstShot(ctx: SimCtx, p: Projectile, struck: MonsterEntity | nu
       rattles: p.rattles,
       stacks: p.stacks,
       noReact: p.noReact,
+      ...(p.knobs ? knobHitOpts(p.knobs) : {}),
     });
   }
+  if (p.knobs && hit.length > 0) shotLands(ctx, p, hit);
 }

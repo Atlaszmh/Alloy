@@ -5,27 +5,36 @@ import {
   isDiveActive,
   nextRarity,
   upgradeCost,
+  fusePrice,
+  unsocketMode,
+  weaponParts,
   GEAR_SLOTS,
   type GearItem,
   type Rarity,
+  type RuneRef,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { partsText, pullText, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
+import { RunePouchPanel } from './runes/RunePouchPanel';
+import { runeName } from './runes/rune-style';
 
 const FUSABLE: Rarity[] = ['common', 'uncommon', 'magic', 'rare', 'epic'];
 
 export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const unsocket = useDelveStore((s) => s.unsocket);
   const [rarity, setRarity] = useState<Rarity>('common');
   const [picked, setPicked] = useState<string[]>([]);
   const [result, setResult] = useState<GearItem | null>(null);
   const [busy, setBusy] = useState(false);
+  // The picks a Fuse was pressed for once: inputs holding runes ask first.
+  const [armed, setArmed] = useState<string | null>(null);
   const slotRefs = useRef<(HTMLDivElement | null)[]>([]);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +51,12 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
   const check = checkFusion(pickedItems);
   const cost = pickedItems.length === 3 ? fuseCost(registry, pickedItems) : null;
   const target = nextRarity(rarity);
+  const melts = pullText(
+    registry,
+    pickedItems.flatMap((i) => weaponParts(registry, i).runes),
+    unsocketMode(registry, unsocket),
+  );
+  const asking = !!melts && armed === picked.join();
 
   const toggle = (uid: string) => {
     setResult(null);
@@ -64,6 +79,10 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
 
   const onFuse = async () => {
     if (!check.ok || busy) return;
+    if (melts && !asking) {
+      setArmed(picked.join());
+      return;
+    }
     setBusy(true);
     playSound('forgeCreak');
     // Converge the three input tiles on the centre before the result appears.
@@ -95,6 +114,7 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     const res = useDelveStore.getState().fuse(picked);
     setBusy(false);
     setPicked([]);
+    setArmed(null);
     if (!res.ok || !res.item) {
       playSound('combineFail');
       return;
@@ -102,6 +122,8 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     setResult(res.item);
     if (res.links)
       showToast(`+${res.links} Link${res.links > 1 ? 's' : ''} from the weapons' extra slots`);
+    const parts = partsText(registry, res.runes, res.destroyed);
+    if (parts) showToast(parts);
     playSound(res.item.rarity === 'legendary' ? 'lootLegendary' : 'combineMerge');
     vibrate(res.item.rarity === 'legendary' ? 'heavy' : 'success');
     requestAnimationFrame(() => {
@@ -137,6 +159,21 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     } else {
       playSound('combineFail');
     }
+  };
+
+  const fuseCount = registry.getDelveBalance().runes.fuseCount;
+  const onFuseRunes = (ref: RuneRef) => {
+    const res = useDelveStore.getState().fuseRunes(ref);
+    if (!res.ok) {
+      playSound('combineFail');
+      showToast(res.reason ?? 'Cannot fuse');
+      return;
+    }
+    playSound('combineMerge');
+    vibrate('success');
+    showToast(
+      `Fused ${fuseCount} ${runeName(registry, ref)} into ${runeName(registry, res.runes![0])}`,
+    );
   };
 
   // The forge waits for the dive to end, as all gear does (a stop's upgrade aside).
@@ -222,7 +259,11 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
             onClick={onFuse}
             data-testid="fuse-button"
           >
-            {cost === null ? 'Pick 3 items' : `Fuse · ⚙ ${formatNumber(cost)}`}
+            {cost === null
+              ? 'Pick 3 items'
+              : asking
+                ? `Tap again to fuse · ${melts}`
+                : `Fuse · ⚙ ${formatNumber(cost)}`}
           </button>
         </div>
 
@@ -277,6 +318,18 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
             );
           })}
         </div>
+      </section>
+
+      {/* Runes: the pouch, fused 3 → 1 (socketed in the chain builder) */}
+      <section data-testid="forge-runes">
+        <RunePouchPanel
+          pouch={profile.runes}
+          fuseCount={fuseCount}
+          fusePrice={(ref) => fusePrice(registry, ref)}
+          scrap={profile.scrap}
+          locked={false}
+          onFuse={onFuseRunes}
+        />
       </section>
     </div>
   );

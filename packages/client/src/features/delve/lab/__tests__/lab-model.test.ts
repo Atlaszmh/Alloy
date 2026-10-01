@@ -6,8 +6,10 @@ import {
   BY_LINE,
   NONE_COLOR,
   PALETTE,
+  baseRatios,
   dimGroups,
   formatDps,
+  formatRatio,
   lineColor,
   passes,
   rank,
@@ -91,5 +93,23 @@ describe('lab-model', () => {
   it('shows DPS to a tenth below 100, whole above', () => {
     expect(formatDps(12.345)).toBe('12.3');
     expect(formatDps(1046.4)).toBe('1046');
+  });
+
+  it("divides each row's DPS by its baseline's: none without a baseline, or one that dealt nothing", () => {
+    const run = (key: string, dps: number, base?: string): LabRow => ({
+      key,
+      setup: { view: 'rune', dims: {}, base } as unknown as DpsSetup,
+      result: { series: [dps], dps, casts: 1 },
+    });
+    const rows = [
+      run('none', 40),
+      run('echo', 58, 'none'),
+      run('idle', 0),
+      run('split', 30, 'idle'),
+      run('lost', 9, 'not-run'),
+    ];
+    expect([...baseRatios(rows)]).toEqual([['echo', 1.45]]);
+    expect(formatRatio(1.45)).toBe('×1.45');
+    expect(formatRatio(0.9)).toBe('×0.90');
   });
 });

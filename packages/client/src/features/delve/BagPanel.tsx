@@ -8,7 +8,7 @@ import {
   rarityIndex,
   type Rarity,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { partsText, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
@@ -56,14 +56,15 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
   };
 
   const onSalvageJunk = () => {
-    const { scrap, dust, links } = useDelveStore.getState().salvage(junk);
+    const { scrap, dust, links, runes, destroyed } = useDelveStore.getState().salvage(junk);
     if (scrap > 0) {
       playSound('gemScatter');
       vibrate('medium');
       const dustText = dust > 0 ? ` · +${formatNumber(dust)} Mana Dust` : '';
       const linkText = links > 0 ? ` · +${links} Link${links > 1 ? 's' : ''}` : '';
+      const parts = partsText(registry, runes, destroyed);
       showToast(
-        `Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}${linkText}`,
+        `Salvaged ${junk.length} items · +${formatNumber(scrap)} scrap${dustText}${linkText}${parts ? ` · ${parts}` : ''}`,
       );
     }
   };

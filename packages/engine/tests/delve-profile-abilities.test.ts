@@ -14,7 +14,7 @@ const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 describe('chains on the weapon (save v6)', () => {
   it("a new profile's sword carries its base moveset in the weapon's element", () => {
     const p = createDelveProfile(registry, 1);
-    expect(p.version).toBe(6);
+    expect(p.version).toBe(7);
     const sword = p.equipped.weapon!;
     expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
     expect(sword.moveset!.slots).toEqual({ basic: 3, primary: 1 });
@@ -39,6 +39,7 @@ describe('chains on the weapon (save v6)', () => {
       fixed: [],
       dropped: [],
       movesetReset: false,
+      runesLost: [],
     });
   });
 
@@ -100,7 +101,7 @@ describe('chains on the weapon (save v6)', () => {
     };
     const p = parseDelveProfile(registry, json(v2))?.profile;
     expect(p).toBeDefined();
-    expect(p!.version).toBe(6);
+    expect(p!.version).toBe(7);
     expect(p!.scrap).toBe(321);
     expect(p!.equipped.weapon!.uid).toBe(p0.equipped.weapon!.uid);
     expect(chainsOf(p!)).toEqual(defaultChains(registry, 'frost', 'sword'));

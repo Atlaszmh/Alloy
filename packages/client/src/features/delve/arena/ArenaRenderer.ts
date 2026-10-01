@@ -15,6 +15,8 @@ import { INFUSION_BUDGET, type InfusionBudget } from './fx/infusion';
 import { windingUp } from './fx/anticipation';
 import { Lifecycles } from './fx/lifecycles';
 import { barrierBreakFx, reactionFx, reactionLabel } from './fx/reactions';
+import { runeFx, runeHex } from './fx/runes';
+import { TIER_NUMERAL } from '../runes/rune-style';
 import {
   drawAim,
   drawAnticipation,
@@ -428,6 +430,9 @@ export class ArenaRenderer {
         case 'reaction':
           reactionFx(this.fx, e, w);
           break;
+        case 'runeFx':
+          runeFx(this.fx, e);
+          break;
         case 'chain':
           this.fx.bolt(e.points, MANA_HEX[e.element], 0.2, true);
           for (const p of e.points.slice(1)) this.fx.burst(p.x, p.y, MANA_HEX.storm, 3, 3);
@@ -819,8 +824,8 @@ export class ArenaRenderer {
       }
       const age = w.t - d.born;
       const pop = dropPop(d, age);
-      // Items lie still, and so does a Seedling's rooted sprout.
-      const still = d.kind === 'item' || isSprout(d);
+      // Items and runes lie still, and so does a Seedling's rooted sprout.
+      const still = d.kind === 'item' || d.kind === 'rune' || isSprout(d);
       const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
@@ -842,15 +847,15 @@ export class ArenaRenderer {
     root.addChild(gfx);
     this.dropLayer.addChild(root);
     let label: Text | null = null;
-    const rarity = d.item?.rarity;
-    if (d.item && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary')) {
+    const named = dropLabel(d);
+    if (named) {
       label = new Text({
-        text: d.item.name,
+        text: named.text,
         style: {
           fontFamily: FONT,
           fontWeight: '700',
           fontSize: 13,
-          fill: RARITY_HEX[rarity],
+          fill: named.color,
           stroke: { color: 0x000000, width: 3 },
         },
       });
@@ -904,9 +909,13 @@ export function holdPing(
   return { r: 0.8 + 0.4 * e.stage, color: elemColor(element) };
 }
 
-/** A pickup's sparkle: the item's rarity, else the drop's mana (a mote, a Seedling orb), else red. */
+/**
+ * A pickup's sparkle: the item's rarity, a rune's family, else the drop's
+ * mana (a mote, a Seedling orb), else red.
+ */
 export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
   if (e.item) return RARITY_HEX[e.item.rarity];
+  if (e.rune) return runeHex(e.rune);
   if (e.mana) return MANA_HEX[e.mana];
   return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
 }
@@ -918,6 +927,23 @@ const isSprout = (d: Drop) => d.kind === 'orb' && d.mana === 'nature';
 export function dropPop(d: Drop, age: number): number {
   if (age >= 0.35 || isSprout(d)) return 0;
   return Math.sin((age / 0.35) * Math.PI) * 1.1;
+}
+
+/**
+ * The name floating over a drop: a rare, epic or legendary item's in its
+ * rarity's colour, or a rune's glyph, name and tier ("✳️ Split III") in its
+ * family's; null for anything else.
+ */
+export function dropLabel(d: Drop): { text: string; color: number } | null {
+  const rarity = d.item?.rarity;
+  if (d.item && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary'))
+    return { text: d.item.name, color: RARITY_HEX[rarity] };
+  const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
+  if (!d.rune || !def) return null;
+  return {
+    text: `${def.icon} ${def.name} ${TIER_NUMERAL[d.rune.tier]}`,
+    color: runeHex(d.rune),
+  };
 }
 
 /**
@@ -958,6 +984,16 @@ export function drawDrop(g: Graphics, d: Drop, time: number, age: number): void 
     g.rect(-0.03, 0.1 - 0.4 * k, 0.06, 0.4 * k).fill({ color: 0x3f9a3a });
     g.ellipse(-0.12 * k, 0.1 - 0.36 * k, 0.12 * k, 0.06 * k).fill({ color: MANA_HEX.nature });
     g.ellipse(0.12 * k, 0.1 - 0.3 * k, 0.12 * k, 0.06 * k).fill({ color: MANA_HEX.nature });
+  } else if (d.kind === 'rune' && d.rune) {
+    // A rune stone in its family's colour, glowing, with a notch per tier (its name floats above).
+    const color = runeHex(d.rune);
+    const stone = [-0.2, -0.36, 0.2, -0.36, 0.26, -0.1, 0.2, 0.14, -0.2, 0.14, -0.26, -0.1];
+    g.ellipse(0, 0.14, 0.3, 0.11).fill({ color: 0x000000, alpha: 0.4 });
+    g.circle(0, -0.1, 0.46).fill({ color, alpha: 0.16 + Math.sin(time * 4 + d.id) * 0.06 });
+    g.poly(stone).fill({ color: 0x1c1917 });
+    g.poly(stone).stroke({ width: 0.05, color });
+    for (let i = 0; i < d.rune.tier; i++)
+      g.rect(-0.15 + i * 0.07, -0.16, 0.04, 0.1).fill({ color });
   } else if (d.kind === 'orb') {
     g.circle(0, 0, 0.32).fill({ color: 0xef4444, alpha: 0.25 });
     g.circle(0, 0, 0.2).fill({ color: 0xdc2626 });

@@ -5,7 +5,7 @@ import type { GearItem, GearSlot, HeroStatKey, Rarity, StatRoll } from '../types
 import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER } from '../types/gem.js';
-import { rollMoveset } from './moveset.js';
+import { rollMoveset, rollSockets } from './moveset.js';
 
 export interface ItemGenOptions {
   uid: string;
@@ -203,8 +203,11 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     locked: false,
   };
   if (legendary) item.legendary = legendary;
-  // Last, from its own stream: every other roll, and every later drop, stays as it was.
-  if (item.slot === 'weapon') item.moveset = rollMoveset(registry, item, rng.fork('moveset'));
+  // Last, from their own streams: every other roll, and every later drop, stays as it was.
+  if (item.slot === 'weapon') {
+    const moveset = rollMoveset(registry, item, rng.fork('moveset'));
+    item.moveset = rollSockets(registry, item, moveset, rng.fork('sockets'));
+  }
   return item;
 }
 

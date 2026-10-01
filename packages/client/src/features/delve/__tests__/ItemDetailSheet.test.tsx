@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import {
   compareItem,
   defaultMoveset,
@@ -9,6 +9,7 @@ import {
   SeededRNG,
   type GearItem,
   type ManaType,
+  type RuneRef,
 } from '@alloy/engine';
 import { ItemDetailSheet } from '../ItemDetailSheet';
 import { BagPanel } from '../BagPanel';
@@ -410,5 +411,102 @@ describe('ItemDetailSheet', () => {
     render(<ForgePanel onSelect={() => {}} />);
     expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
     expect(screen.queryByTestId('fuse-button')).toBeNull();
+  });
+});
+
+describe('ItemDetailSheet and the Forge: runes', () => {
+  const split = { id: 'split', tier: 3 } as const;
+  const quick = { id: 'quick', tier: 1 } as const;
+  beforeEach(() => {
+    localStorage.clear();
+    useDelveStore.getState().resetProfile(1234, 'fire');
+    useDelveStore.setState({ unsocket: null });
+  });
+
+  /** `w` with its Primary's first move holding `runes`. */
+  const withRunes = (w: GearItem, runes: (RuneRef | null)[]): GearItem => {
+    const moveset = w.moveset!;
+    const primary = moveset.chains.primary!;
+    const moves = [{ ...primary.moves[0], runes }, ...primary.moves.slice(1)];
+    return { ...w, moveset: { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } } };
+  };
+
+  it("a weapon's sheet lists each move's open sockets and their runes, read-only", () => {
+    const p = store().profile;
+    const sword = withRunes(p.equipped.weapon!, [split]);
+    store().setProfile({ ...p, equipped: { ...p.equipped, weapon: sword } });
+    render(<ItemDetailSheet uid={sword.uid} onClose={() => {}} />);
+    expect(screen.getByTestId('item-sockets')).toHaveTextContent('Sockets · up to 1 a move');
+    expect(screen.getByTestId('item-sockets-primary-0')).toHaveTextContent('Primary 1');
+    expect(screen.getByRole('img', { name: 'Socket 1: Split III' })).toBeInTheDocument();
+    expect(within(screen.getByTestId('item-sockets')).queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it("a transfer counts the sockets it moves and names the runes that leave, by the pull rule", () => {
+    const p = store().profile;
+    // A rare sword's two sockets onto a common one (one a move): Quick has no socket there.
+    const worn = withRunes(rareSword('w1'), [split, quick]);
+    const common = { ...p.equipped.weapon!, uid: 'w2' };
+    store().setProfile({ ...p, scrap: 999, equipped: { ...p.equipped, weapon: worn }, bag: [common] });
+    render(
+      <>
+        <ItemDetailSheet uid="w2" onClose={() => {}} />
+        <ToastContainer />
+      </>,
+    );
+    expect(screen.getByTestId('item-compare')).toHaveTextContent('to move it, its 1 socket included');
+    expect(screen.getByTestId('transfer-runes')).toHaveTextContent('Destroys Quick I: no socket for it there');
+    act(() => store().setUnsocket('pay'));
+    expect(screen.getByTestId('transfer-runes')).toHaveTextContent('Quick I back to your pouch');
+    act(() => store().setUnsocket('destroy'));
+    fireEvent.click(screen.getByTestId('transfer-button'));
+    expect(screen.getByText(/Your moveset moved onto .+ · \+1 Link · destroys Quick I$/)).toBeInTheDocument();
+    expect(store().profile.equipped.weapon!.uid).toBe('w2');
+  });
+
+  it('Salvage asks first for any weapon holding runes, naming what becomes of them by the pull rule', () => {
+    const p = store().profile;
+    const held = { ...withRunes(p.equipped.weapon!, [split]), uid: 'w2' };
+    expect(held.rarity).toBe('common');
+    store().setProfile({ ...p, bag: [held] });
+    render(<ItemDetailSheet uid="w2" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('salvage-button'));
+    expect(store().profile.bag).toHaveLength(1);
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Tap again to melt · destroys Split III');
+    act(() => store().setUnsocket('pay'));
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Tap again to melt · Split III back to your pouch');
+    fireEvent.click(screen.getByTestId('salvage-button'));
+    expect(store().profile.bag).toHaveLength(0);
+    expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
+  });
+
+  it("the Forge's Fuse asks first when an input holds runes, naming what becomes of them", async () => {
+    const animate = vi.fn(() => ({ finished: Promise.resolve() }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true });
+    const three = [withRunes(rareSword('a'), [split]), rareSword('b'), rareSword('c')];
+    store().setProfile({ ...store().profile, scrap: 9999, bag: three });
+    render(<ForgePanel onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
+    fireEvent.click(screen.getByText('Auto-pick'));
+    fireEvent.click(screen.getByTestId('fuse-button'));
+    expect(store().profile.bag).toHaveLength(3);
+    expect(screen.getByTestId('fuse-button')).toHaveTextContent('Tap again to fuse · destroys Split III');
+    await act(async () => fireEvent.click(screen.getByTestId('fuse-button')));
+    expect(store().profile.bag.map((i) => i.rarity)).toEqual(['epic']);
+    delete (HTMLElement.prototype as { animate?: unknown }).animate;
+  });
+
+  it('the Forge tab holds the pouch: three of a rune fuse into one of the next tier, for scrap', () => {
+    store().setProfile({ ...store().profile, scrap: 20, runes: { split: [3, 0, 0, 0, 0] } });
+    render(
+      <>
+        <ForgePanel onSelect={() => {}} />
+        <ToastContainer />
+      </>,
+    );
+    fireEvent.click(within(screen.getByTestId('forge-runes')).getByTestId('rune-fuse-split-1'));
+    expect(store().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
+    expect(screen.getByText('Fused 3 Split I into Split II')).toBeInTheDocument();
+    expect(screen.getByTestId('pouch-split-2')).toHaveTextContent('Split II ×1');
   });
 });

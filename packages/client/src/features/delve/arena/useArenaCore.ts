@@ -11,8 +11,8 @@ import {
   holdCharge,
   holdFull,
   moveNumbers,
+  pressIndex,
   pressMove,
-  pressStep,
   type ArpgEvent,
   type ArpgWorld,
   type Chains,
@@ -21,6 +21,7 @@ import {
   type ManaType,
   type MoveKind,
   type ResolvedAbility,
+  type RuneRef,
   type Vec,
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
@@ -84,6 +85,8 @@ export interface AbilityHud {
   windup: number | null;
   affordable: boolean;
   ready: boolean;
+  /** The runes acting on the move a press now casts (`pressMove`), in socket order. */
+  runes: RuneRef[];
 }
 
 export interface ArenaHud {
@@ -107,6 +110,8 @@ export interface ArenaHud {
   basicNextKind: MoveKind;
   /** A manual hold blow held at its strike point: its charge 0..1 and stage 0..2, or null. */
   basicHold: { charge: number; stage: number } | null;
+  /** The runes acting on the blow that lands next, in socket order. */
+  basicRunes: RuneRef[];
   potions: number;
   monstersLeft: number;
   monstersTotal: number;
@@ -205,7 +210,8 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     manaMax: h.manaMax,
     abilities: h.chains.map((chain, i) => {
       if (!chain) return null;
-      const step = pressStep(h, i, t, comboWindow);
+      // The move a press now casts (`pressMove`'s).
+      const step = pressIndex(h, i, t, comboWindow);
       const ab = chain.moves[step];
       // The longer wait shows: the next move's cooldown, or the slot's beat.
       const cooling = Math.max(0, h.cooldowns[i][step] - t);
@@ -243,6 +249,7 @@ export function snapshot(world: ArpgWorld): ArenaHud {
             : null,
         affordable,
         ready: cooldown <= 0 && charged && affordable && !busy,
+        runes: ab.runes,
       };
     }),
     busy,
@@ -255,6 +262,7 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     basicChainLength: h.stats.weapon.blows.length,
     basicNextKind: h.stats.weapon.blows[blow].kind,
     basicHold: held !== null ? holdCharge(bal, held, t, holdFull(bal, h.stats.tempo)) : null,
+    basicRunes: h.stats.weapon.blows[blow].runes,
     potions: h.potions,
     monstersLeft: world.monsters.length,
     monstersTotal: world.totalMonsters,

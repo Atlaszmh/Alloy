@@ -14,6 +14,9 @@ import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { UPGRADE_EPSILON } from './format';
+import { countRunes } from './chains/chain-text';
+import { RuneGlyph } from './runes/RuneGlyph';
+import { runeName } from './runes/rune-style';
 
 interface LootTrayProps {
   /** Element new loot flies out of (the monster). */
@@ -29,6 +32,7 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   const profile = useDelveStore((s) => s.profile);
   const diveDrops = useDelveStore((s) => s.diveDrops);
   const newUids = useDelveStore((s) => s.newUids);
+  const diveRunes = useDelveStore((s) => s.diveRunes);
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
   const animated = useRef<Set<string> | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -161,7 +165,7 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         )}
       </div>
       <div ref={rowRef} className="flex py-1" style={{ minHeight: TILE + 8, gap: GAP }}>
-        {rows.length === 0 && (
+        {rows.length === 0 && diveRunes.length === 0 && (
           <div className="flex h-[52px] items-center text-xs text-stone-500">
             Loot you find this dive lands here.
           </div>
@@ -193,6 +197,17 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
           </div>
         )}
       </div>
+      {diveRunes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-stone-300" data-testid="loot-runes">
+          {countRunes(diveRunes).map(({ rune, count }) => (
+            <span key={`${rune.id}-${rune.tier}`} className="inline-flex items-center gap-1" data-testid="loot-rune">
+              <RuneGlyph rune={rune} size="sm" />
+              {runeName(registry, rune)}
+              {count > 1 && ` ×${count}`}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
