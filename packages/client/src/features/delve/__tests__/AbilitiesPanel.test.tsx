@@ -78,6 +78,7 @@ describe('AbilitiesPanel', () => {
     render(<AbilitiesPanel />);
     expect(screen.getByTestId('attune-fire')).toHaveAttribute('data-value', '2');
     expect(screen.getByTestId('chain-skill-primary')).toHaveTextContent('1 of 1');
+    expect(screen.queryByTestId('move-add')).toBeNull(); // the Primary's one slot holds its move
     expect(screen.getByTestId('chain-skill-basic')).toHaveTextContent('3 of 3');
     expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('🔒');
     expect(screen.getByTestId('chain-skill-defensive')).toHaveTextContent('Locked');
@@ -134,17 +135,25 @@ describe('AbilitiesPanel', () => {
     expect(chains().primary.moves[0].form).toBe('bolt');
   });
 
-  it("shows Apply's refusal and keeps the draft; the next change clears the message", () => {
+  it('Apply is off while the engine would refuse the draft, and says why; the draft stays', () => {
     roomy();
     render(<AbilitiesPanel />);
     // A storm move the pair (Fire alone) doesn't hold: the engine refuses it.
     const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
     act(() => store().editDraft('primary', { moves: [storm], payment: 'mana' }));
+    const button = screen.getByTestId('chain-apply');
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Pick from your two elements');
+    expect(button).toHaveAttribute('aria-describedby', screen.getByTestId('chain-apply-why').id);
     apply();
-    expect(screen.getByTestId('chain-message')).toHaveTextContent('Pick from your two elements');
     expect(screen.getByTestId('chain-draft')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('kind-heavy'));
-    expect(screen.queryByTestId('chain-message')).toBeNull();
+    // Back in the pair, it goes through.
+    act(() =>
+      store().editDraft('primary', { moves: [{ ...storm, elements: ['fire'] }], payment: 'mana' }),
+    );
+    expect(screen.queryByTestId('chain-apply-why')).toBeNull();
+    apply();
+    expect(chains().primary.moves).toEqual([{ ...storm, elements: ['fire'] }]);
   });
 
   it('Add slot waits while its chain has a change pending; an edit undone by hand leaves none', () => {
@@ -207,6 +216,7 @@ describe('AbilitiesPanel', () => {
     fireEvent.click(screen.getByTestId('form-lance')); // a changed form: editDust
     expect(screen.getByTestId('chain-price')).toHaveTextContent('✦ 5 Mana Dust (you have ✦ 4)');
     expect(screen.getByTestId('chain-apply')).toBeDisabled();
+    expect(screen.getByTestId('chain-apply-why')).toHaveTextContent('Not enough Mana Dust');
     act(() => store().setProfile({ ...store().profile, manaDust: 20 }));
     fireEvent.click(screen.getByTestId('kind-heavy'));
     // Still one move changed: its kind and form together cost editDust once.
@@ -348,6 +358,12 @@ describe('AbilitiesPanel', () => {
     expect(screen.getByTestId('add-slot')).toHaveTextContent('+ Add slot · 🔗 1 · ⚙ 20');
     expect(screen.getByTestId('add-slot')).toBeDisabled(); // no Links yet
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent('Not enough Links');
+    expect(screen.getByTestId('add-slot')).toHaveAttribute(
+      'aria-describedby',
+      screen.getByTestId('add-slot-why').id,
+    );
+    act(() => store().setProfile({ ...store().profile, links: 1 }));
+    expect(screen.getByTestId('add-slot-why')).toHaveTextContent('Not enough scrap');
     act(() => store().setProfile({ ...store().profile, links: 1, scrap: 25 }));
     fireEvent.click(screen.getByTestId('add-slot'));
     expect(store().profile).toMatchObject({ links: 0, scrap: 5 });

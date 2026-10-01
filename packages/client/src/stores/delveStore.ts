@@ -24,6 +24,7 @@ import {
   pairElements,
   CHAIN_SKILLS,
   heroChains,
+  sameChain,
   type ChainFix,
   type Chains,
   type ChainSkill,
@@ -197,9 +198,9 @@ export function draftChanges(
   if (draft.pair.primary !== primary || draft.pair.secondary !== secondary) return {};
   const saved = heroChains(registry, profile.equipped, profile.pair);
   return Object.fromEntries(
-    CHAIN_SKILLS.filter(
-      (s) => draft.chains[s] && JSON.stringify(draft.chains[s]) !== JSON.stringify(saved[s]),
-    ).map((s) => [s, draft.chains[s]]),
+    CHAIN_SKILLS.filter((s) => draft.chains[s] && !sameChain(draft.chains[s], saved[s])).map(
+      (s) => [s, draft.chains[s]],
+    ),
   );
 }
 

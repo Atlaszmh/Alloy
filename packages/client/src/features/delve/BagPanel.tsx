@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import {
+  EQUIP_BEST_SLOTS,
   compareItem,
   isDiveActive,
   referenceDepth,
@@ -39,7 +40,9 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
   }, [profile.bag, profile.equipped, profile.pair, registry, depth]);
 
   // Equip best leaves weapons alone: a weapon changes through its sheet (Equip or Transfer).
-  const upgrades = rows.filter((r) => r.delta > UPGRADE_EPSILON && r.item.slot !== 'weapon').length;
+  const upgrades = rows.filter(
+    (r) => r.delta > UPGRADE_EPSILON && EQUIP_BEST_SLOTS.includes(r.item.slot),
+  ).length;
   const diving = isDiveActive(profile);
   const junk = useMemo(() => salvageCandidates(registry, profile, 'magic'), [registry, profile]);
 
@@ -82,7 +85,9 @@ export function BagPanel({ onSelect }: { onSelect: (uid: string) => void }) {
           onClick={onSalvageJunk}
           data-testid="salvage-junk"
         >
-          {diving ? 'Salvage between dives' : `Salvage junk${junk.length > 0 ? ` (${junk.length})` : ''}`}
+          {diving
+            ? 'Salvage between dives'
+            : `Salvage junk${junk.length > 0 ? ` (${junk.length})` : ''}`}
         </button>
       </div>
 

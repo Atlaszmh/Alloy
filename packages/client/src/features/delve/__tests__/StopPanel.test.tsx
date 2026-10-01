@@ -61,6 +61,7 @@ describe('StopPanel (the door screen)', () => {
     // Over the whole screen (not inside the door list), with the pad's back button.
     expect(screen.getByTestId('stop-picker').parentElement).toBe(document.body);
     expect(screen.getByText('Back')).toHaveAttribute('data-pad-back');
+    expect(screen.getByTestId('stop-picker')).toHaveClass('fixed', 'inset-0', 'text-white');
     fireEvent.click(screen.getByText('Back'));
     expect(screen.queryByTestId('stop-picker')).toBeNull();
     fireEvent.click(screen.getByTestId('stop-equip'));
@@ -69,6 +70,19 @@ describe('StopPanel (the door screen)', () => {
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.queryByTestId('stop-picker')).toBeNull();
     expect(screen.getByText('Equip: done')).toBeInTheDocument();
+  });
+
+  it('the picker is a modal dialog: Back has the focus, Escape closes it, and the focus returns to its card', () => {
+    atStop(['equip', 'upgrade']);
+    const card = screen.getByTestId('stop-upgrade');
+    card.focus();
+    fireEvent.click(card);
+    const dialog = screen.getByRole('dialog', { name: 'Upgrade' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByText('Back')).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByTestId('stop-picker')).toBeNull();
+    expect(card).toHaveFocus();
   });
 
   it('a weapon to equip brings its own moves, which the picker says', () => {
@@ -86,7 +100,12 @@ describe('StopPanel (the door screen)', () => {
     expect(screen.getByTestId('stop-slot-primary')).toHaveTextContent(
       'Primary 1/5 · + a slot · 🔗 1 · ⚙ 20',
     );
-    expect(screen.getByTestId('stop-slot-basic')).toBeDisabled(); // its 4th slot: 3 Links
+    const basic = screen.getByTestId('stop-slot-basic');
+    expect(basic).toBeDisabled(); // its 4th slot: 3 Links
+    // It says why, in the engine's words.
+    const why = document.getElementById(basic.getAttribute('aria-describedby')!);
+    expect(why).toHaveTextContent('Not enough Links');
+    expect(screen.getByTestId('stop-slot-primary')).not.toHaveAttribute('aria-describedby');
     expect(screen.queryByTestId('stop-slot-defensive')).toBeNull(); // not carried
     fireEvent.click(screen.getByTestId('stop-slot-primary'));
     expect(chains().primary.moves).toHaveLength(2);
@@ -120,6 +139,17 @@ describe('StopPanel (the door screen)', () => {
     expect(chains().basic[0].kind).toBe('light');
     expect(store().profile.manaDust).toBe(15);
     expect(store().profile.dive!.stop!.taken).toBe(true);
+  });
+
+  it("a move it can't pay for is off, and says why", () => {
+    const p = store().profile;
+    atStop(['move'], { manaDust: 4, stats: { ...p.stats, dives: 1 } });
+    fireEvent.click(screen.getByTestId('stop-move'));
+    fireEvent.click(screen.getByTestId('form-lance'));
+    const take = screen.getByTestId('stop-move-take');
+    expect(take).toBeDisabled();
+    const why = document.getElementById(take.getAttribute('aria-describedby')!);
+    expect(why).toHaveTextContent('Not enough Mana Dust');
   });
 
   it('an unaffordable upgrade is dimmed, and taking it says why, keeping the stop open', () => {

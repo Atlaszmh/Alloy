@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CHAIN_SKILLS,
@@ -7,14 +7,17 @@ import {
   compareItem,
   editPrice,
   heroChains,
+  moveKey,
+  movesOf,
   movesetOf,
   pairElements,
   profileStats,
   referenceDepth,
   slotPrice,
+  takeStop,
   upgradeCost,
+  withMove,
   type Blow,
-  type Chains,
   type ChainSkill,
   type DiveStop,
   type GearItem,
@@ -40,20 +43,6 @@ export const STOP_TEXT: Record<StopKind, { icon: string; name: string; text: str
   upgrade: { icon: '⚒️', name: 'Upgrade', text: 'One forge upgrade of an item, for scrap.' },
 };
 
-/** A chain's moves or blows. */
-function movesOf(chain: Chains[ChainSkill] | undefined): (Move | Blow)[] {
-  if (!chain) return [];
-  return Array.isArray(chain) ? chain : chain.moves;
-}
-
-/** `chain` with move `index` replaced by `move`. */
-function withMove(chain: Chains[ChainSkill], index: number, move: Move | Blow) {
-  if (Array.isArray(chain)) return chain.map((b, i) => (i === index ? (move as Blow) : b));
-  return { ...chain, moves: chain.moves.map((m, i) => (i === index ? (move as Move) : m)) };
-}
-
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-
 /**
  * The door screen's stop (see the weapon movesets spec): the power-up kinds
  * offered after the depth just cleared, as cards. A card opens its picker;
@@ -62,6 +51,12 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  */
 export function StopPanel({ stop }: { stop: DiveStop }) {
   const [open, setOpen] = useState<StopKind | null>(null);
+  // The card that opened the picker: closing it (the stop not taken) returns the focus there.
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const close = () => {
+    setOpen(null);
+    opener.current?.focus();
+  };
   if (stop.taken)
     return (
       <div className="text-center text-xs text-stone-400" data-testid="stop-taken">
@@ -79,8 +74,9 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
             key={kind}
             type="button"
             className="delve-panel flex flex-col items-start gap-0.5 p-2 text-left"
-            onClick={() => {
+            onClick={(e) => {
               playSound('buttonClick');
+              opener.current = e.currentTarget;
               setOpen(kind);
             }}
             data-testid={`stop-${kind}`}
@@ -93,13 +89,16 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
         ))}
       </div>
       {/* Over the whole screen, not the door list's scroll: the last pad scope, above the loot tray. */}
-      {open &&
-        createPortal(<StopPicker kind={open} onClose={() => setOpen(null)} />, document.body)}
+      {open && createPortal(<StopPicker kind={open} onClose={close} />, document.body)}
     </section>
   );
 }
 
-/** One kind's picker, over the doors: what to take, with its price, then back to the doors. */
+/**
+ * One kind's picker, over the doors: what to take, with its price, then back
+ * to the doors. A modal dialog: Back has the focus, and Escape closes it. A
+ * portal outside `.delve-page`, so its backdrop brings the page's look along.
+ */
 function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) {
   const [message, setMessage] = useState<string | null>(null);
   const take = (action: StopAction) => {
@@ -116,7 +115,7 @@ function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) 
   };
   return (
     <div
-      className="delve-sheet-backdrop"
+      className="delve-sheet-backdrop fixed inset-0 select-none text-white"
       onClick={onClose}
       data-testid="stop-picker"
       data-pad-scope
@@ -124,7 +123,13 @@ function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) 
       <div
         className="delve-sheet flex flex-col gap-3"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.stopPropagation();
+          onClose();
+        }}
         role="dialog"
+        aria-modal="true"
         aria-label={STOP_TEXT[kind].name}
       >
         <div className="flex items-center justify-between">
@@ -135,6 +140,7 @@ function StopPicker({ kind, onClose }: { kind: StopKind; onClose: () => void }) 
             type="button"
             className="delve-btn px-3 py-1 text-sm"
             onClick={onClose}
+            autoFocus
             data-pad-back
           >
             Back
@@ -173,6 +179,14 @@ function EquipPick({ take }: { take: Take }) {
   const profile = useDelveStore((s) => s.profile);
   const depth = referenceDepth(profile);
   const worn = profile.equipped.weapon;
+  const { bag, equipped, pair } = profile;
+  const deltas = useMemo(
+    () =>
+      new Map(
+        bag.map((i) => [i.uid, compareItem(equipped, i, registry, depth, pair, 'asIs').powerPct]),
+      ),
+    [registry, bag, equipped, pair, depth],
+  );
   if (profile.bag.length === 0)
     return <div className="text-xs text-stone-400">Your bag is empty.</div>;
   return (
@@ -183,9 +197,7 @@ function EquipPick({ take }: { take: Take }) {
             key={item.uid}
             item={item}
             size={56}
-            delta={
-              compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs').powerPct
-            }
+            delta={deltas.get(item.uid)}
             onClick={() => take({ kind: 'equip', uid: item.uid })}
             testId="stop-equip-item"
           />
@@ -200,10 +212,11 @@ function EquipPick({ take }: { take: Take }) {
   );
 }
 
-/** A chain of the equipped weapon to grow by a slot, at its price. */
+/** A chain of the equipped weapon to grow by a slot, at its price; one it can't take says why. */
 function SlotPick({ take }: { take: Take }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const id = useId();
   const weapon = profile.equipped.weapon;
   if (!weapon) return null;
   const { slots } = movesetOf(registry, weapon);
@@ -212,19 +225,30 @@ function SlotPick({ take }: { take: Take }) {
     <div className="flex flex-col gap-1.5">
       {CHAIN_SKILLS.filter((s) => slots[s] !== undefined).map((s) => {
         const price = slotPrice(registry, weapon, s);
-        const ok = !!price && price.links <= profile.links && price.scrap <= profile.scrap;
+        // The engine's own op as a dry run: whether it goes through, and why not.
+        const dry = takeStop(registry, profile, { kind: 'slot', skill: s });
+        const why = !price || dry.ok ? null : dry.reason;
         return (
-          <button
-            key={s}
-            type="button"
-            className="delve-btn text-sm"
-            disabled={!ok}
-            onClick={() => take({ kind: 'slot', skill: s })}
-            data-testid={`stop-slot-${s}`}
-          >
-            {SKILL_NAME[s]} {slots[s]}/{cap[s]}
-            {price ? ` · + a slot · 🔗 ${price.links} · ⚙ ${price.scrap}` : ' · every slot'}
-          </button>
+          <div key={s} className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              className="delve-btn text-sm"
+              disabled={!dry.ok}
+              onClick={() => take({ kind: 'slot', skill: s })}
+              aria-describedby={why ? `${id}-${s}` : undefined}
+              data-testid={`stop-slot-${s}`}
+            >
+              {SKILL_NAME[s]} {slots[s]}/{cap[s]}
+              {price
+                ? ` · + a slot · 🔗 ${price.links} · ⚙ ${formatNumber(price.scrap)}`
+                : ' · every slot'}
+            </button>
+            {why && (
+              <span id={`${id}-${s}`} className="text-[11px] text-amber-200/80">
+                {why}
+              </span>
+            )}
+          </div>
         );
       })}
       <Wallet />
@@ -236,6 +260,7 @@ function SlotPick({ take }: { take: Take }) {
 function MovePick({ take }: { take: Take }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
+  const whyId = useId();
   const { equipped, pair } = profile;
   const weapon = equipped.weapon;
   const [edit, setEdit] = useState<{ skill: ChainSkill; index: number; move: Move | Blow } | null>(
@@ -263,9 +288,12 @@ function MovePick({ take }: { take: Take }) {
     [registry, equipped, pair, weapon, chains],
   );
   if (!weapon) return null;
-  const changed = !!edit && !same(edit.move, movesOf(saved[edit.skill])[edit.index]);
+  const changed = !!edit && moveKey(edit.move) !== moveKey(movesOf(saved[edit.skill])[edit.index]);
   const price =
     edit && changed ? editPrice(registry, profile, { [edit.skill]: chains[edit.skill] }) : 0;
+  // The engine's own op as a dry run: whether the change goes through, and why not.
+  const dry = edit && changed ? takeStop(registry, profile, { kind: 'move', ...edit }) : null;
+  const why = dry && !dry.ok ? dry.reason : null;
   const elements = pairElements(pair);
   return (
     <div className="flex flex-col gap-2">
@@ -280,7 +308,7 @@ function MovePick({ take }: { take: Take }) {
         onChange={(skill, chain) => {
           const now = movesOf(chain);
           const shown = movesOf(chains[skill]);
-          const index = now.findIndex((m, i) => !same(m, shown[i]));
+          const index = now.findIndex((m, i) => !shown[i] || moveKey(m) !== moveKey(shown[i]));
           if (index >= 0) setEdit({ skill, index, move: now[index] });
         }}
         elements={elements.length > 0 ? elements : undefined}
@@ -288,14 +316,20 @@ function MovePick({ take }: { take: Take }) {
       <button
         type="button"
         className="delve-btn delve-btn-gold text-sm"
-        disabled={!changed || price > profile.manaDust}
+        disabled={!dry?.ok}
         onClick={() => edit && take({ kind: 'move', ...edit })}
+        aria-describedby={why ? whyId : undefined}
         data-testid="stop-move-take"
       >
         {changed
           ? `Change ${SKILL_NAME[edit!.skill]}'s move ${edit!.index + 1}${price > 0 ? ` · ✦ ${price}` : ''}`
           : 'Change one move'}
       </button>
+      {why && (
+        <span id={whyId} className="text-[11px] text-amber-200/80">
+          {why}
+        </span>
+      )}
       <Wallet />
     </div>
   );

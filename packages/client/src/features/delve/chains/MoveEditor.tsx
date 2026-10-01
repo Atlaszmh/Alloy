@@ -5,6 +5,7 @@ import {
   holdFull,
   moveNumbers,
   playedKind,
+  takesElements,
   type AbilitySlot,
   type Blow,
   type HeroBlow,
@@ -204,9 +205,7 @@ export function MoveEditor({
   const off = own.filter((m) => !elements.includes(m));
   const shown = [...elements, ...off];
   // A move may keep its off-pair set, but never take a new one (the engine refuses it).
-  const sorted = (els: readonly ManaType[]) => [...els].sort().join();
-  const takes = (els: readonly ManaType[]) =>
-    els.every((m) => elements.includes(m)) || sorted(els) === sorted(own);
+  const takes = (els: readonly ManaType[]) => takesElements(elements, own, els);
 
   return (
     <div className="flex flex-col gap-3" data-testid="move-editor">

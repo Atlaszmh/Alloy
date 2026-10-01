@@ -1,5 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { compareItem, findItem, isDiveActive, referenceDepth, type GearItem } from '@alloy/engine';
+import {
+  EQUIP_BEST_SLOTS,
+  compareItem,
+  findItem,
+  isDiveActive,
+  referenceDepth,
+  type GearItem,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -64,7 +71,7 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   // The door screen's stop may offer to equip one now.
   const stop = profile.dive?.stop;
   const atStop = !!stop && !stop.taken && stop.offers.includes('equip');
-  const upgrades = better.filter((r) => r.item.slot !== 'weapon').length;
+  const upgrades = better.filter((r) => EQUIP_BEST_SLOTS.includes(r.item.slot)).length;
   const overflow = rows.length > capacity ? rows.length - (capacity - 1) : 0;
   const visible = overflow > 0 ? rows.slice(0, capacity - 1) : rows;
 

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   CHAIN_SKILLS,
   MANA_TYPES,
+  addSlot,
   baseSlots,
   carriedByText,
   editPrice,
@@ -11,6 +12,7 @@ import {
   movesetOf,
   pairElements,
   profileStats,
+  setChains,
   slotPrice,
   type ChainSkill,
   type HeroStats,
@@ -148,6 +150,7 @@ export function AbilitiesPanel() {
   const { equipped, pair } = profile;
   const weapon = equipped.weapon;
   const [message, setMessage] = useState<string | null>(null);
+  const id = useId();
   const saved = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
   // The skills whose draft differs from the weapon's, and the chains shown.
   const changed = useMemo(() => draftChanges(registry, profile, draft), [registry, profile, draft]);
@@ -175,6 +178,9 @@ export function AbilitiesPanel() {
   const locked = isDiveActive(profile) || !weapon;
   const pending = Object.keys(changed).length > 0;
   const price = pending ? editPrice(registry, profile, changed) : 0;
+  // The engine's own op as a dry run: whether Apply goes through, and why not.
+  const applying = pending ? setChains(registry, profile, changed) : null;
+  const applyWhy = applying && !applying.ok ? applying.reason : null;
   const cap = registry.getDelveBalance().chains.cap;
 
   const onApply = () => {
@@ -190,16 +196,16 @@ export function AbilitiesPanel() {
 
   const slotRow = (skill: ChainSkill) => {
     const next = weapon ? slotPrice(registry, weapon, skill) : null;
-    // Why Add slot is off (none while a dive locks the whole builder).
+    // Why Add slot is off, in the engine's words (a dry run of its op); none
+    // while a dive locks the whole builder. It adds to the saved chain.
+    const dry = next && !changed[skill] ? addSlot(registry, profile, skill) : null;
     const why = !next
       ? null
       : changed[skill]
         ? 'Apply or revert this chain first'
-        : profile.links < next.links
-          ? 'Not enough Links'
-          : profile.scrap < next.scrap
-            ? 'Not enough scrap'
-            : null;
+        : dry && !dry.ok
+          ? dry.reason
+          : null;
     return (
       <div
         className="flex flex-wrap items-center gap-2 text-xs text-stone-400"
@@ -214,13 +220,14 @@ export function AbilitiesPanel() {
             className="delve-chip"
             disabled={locked || !!why}
             onClick={() => onAddSlot(skill)}
+            aria-describedby={why && !locked ? `${id}-slot` : undefined}
             data-testid="add-slot"
           >
             + Add slot · 🔗 {next.links} · ⚙ {formatNumber(next.scrap)}
           </button>
         )}
         {why && !locked && (
-          <span className="text-amber-200/80" data-testid="add-slot-why">
+          <span id={`${id}-slot`} className="text-amber-200/80" data-testid="add-slot-why">
             {why}
           </span>
         )}
@@ -258,12 +265,22 @@ export function AbilitiesPanel() {
           <button
             type="button"
             className="delve-btn delve-btn-gold px-3 py-1 text-xs"
-            disabled={price > profile.manaDust}
+            disabled={!applying?.ok}
             onClick={onApply}
+            aria-describedby={applyWhy ? `${id}-apply` : undefined}
             data-testid="chain-apply"
           >
             Apply{price > 0 ? ` · ✦ ${price}` : ''}
           </button>
+          {applyWhy && (
+            <span
+              id={`${id}-apply`}
+              className="w-full text-right text-xs text-amber-200/80"
+              data-testid="chain-apply-why"
+            >
+              {applyWhy}
+            </span>
+          )}
         </div>
       )}
       {message && (

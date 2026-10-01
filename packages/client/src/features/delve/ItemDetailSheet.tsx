@@ -11,6 +11,7 @@ import {
   isDiveActive,
   itemAffinityAttunement,
   itemStatLines,
+  legendaryNeeds,
   movesetOf,
   movesetTransfer,
   pairElements,
@@ -21,6 +22,7 @@ import {
   salvageValue,
   upgradeCost,
   type Blow,
+  type ChainSkill,
   type GearItem,
   type HeroStatKey,
   type ItemComparison,
@@ -54,12 +56,13 @@ interface ItemDetailSheetProps {
   onBuild?: () => void;
 }
 
-/** Legendaries whose power rides one skill: worn without it, that power does nothing. */
-const LEGENDARY_NEEDS: Record<string, 'defensive' | 'ultimate'> = {
-  nightstalker: 'defensive',
-  rimeheart: 'ultimate',
+/** A legendary power's skill, missing from the weapon (`legendaryNeeds`): "Needs a Defensive". */
+const NEEDS_TEXT: Record<ChainSkill, string> = {
+  basic: 'Needs a basic chain',
+  primary: 'Needs a Primary',
+  defensive: 'Needs a Defensive',
+  ultimate: 'Needs an Ultimate',
 };
-const NEEDS_TEXT = { defensive: 'Needs a Defensive', ultimate: 'Needs an Ultimate' };
 
 /** A move as the moveset lists it: "medium Fire Bolt", "heavy Fire+Nature Burst". */
 function moveName(registry: ReturnType<typeof getDelveRegistry>, m: Move | Blow): string {
@@ -209,7 +212,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const unbound =
     !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
   // A legendary power tied to a skill the equipped weapon doesn't carry.
-  const needs = item.legendary ? LEGENDARY_NEEDS[item.legendary.id] : undefined;
+  const needs = item.legendary ? legendaryNeeds(item.legendary.id) : null;
   const dead = !!needs && !carriedSkills(registry, worn?.rarity ?? null).includes(needs);
   // Your moveset would make the weapon an upgrade (Transfer's mark, as Equip's is as it is).
   const homeUpgrade = !!transfer && cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
