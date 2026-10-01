@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultRegistry, createDelveProfile, defaultMoveset } from '@alloy/engine';
+import {
+  createDefaultRegistry,
+  createDelveProfile,
+  defaultMoveset,
+  type Moveset,
+} from '@alloy/engine';
 
 /**
  * Controller support with a fake standard-mapping pad: Playwright has no real
@@ -10,17 +15,47 @@ import { createDefaultRegistry, createDelveProfile, defaultMoveset } from '@allo
 /** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
 const ARENA_READY = 30_000;
 
-const BUTTON = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, menu: 9, down: 13, left: 14, right: 15 } as const;
+const BUTTON = {
+  a: 0,
+  b: 1,
+  lb: 4,
+  rb: 5,
+  lt: 6,
+  menu: 9,
+  up: 12,
+  down: 13,
+  left: 14,
+  right: 15,
+} as const;
 
-/** A fire hero's save, its sword's Primary at `primarySlots` slots of default moves. */
-async function setup(page: Page, autopilot: boolean, primarySlots = 1): Promise<void> {
+/** `moveset` with one open, empty socket on its Primary's first move. */
+function withSocket(moveset: Moveset): Moveset {
+  const primary = moveset.chains.primary!;
+  const moves = primary.moves.map((m, i) => (i === 0 ? { ...m, runes: [null] } : m));
+  return { ...moveset, chains: { ...moveset.chains, primary: { ...primary, moves } } };
+}
+
+/**
+ * A fire hero's save, its sword's Primary at `primarySlots` slots of default moves; with
+ * `socket`, its first move has one open, empty socket and Quick III waits in the pouch.
+ */
+async function setup(
+  page: Page,
+  autopilot: boolean,
+  primarySlots = 1,
+  socket = false,
+): Promise<void> {
   const registry = createDefaultRegistry();
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
   const sword = profile.equipped.weapon!;
   const moveset = defaultMoveset(registry, sword, 'fire', { primary: primarySlots });
   const save = JSON.stringify({
     ...profile,
-    equipped: { ...profile.equipped, weapon: { ...sword, moveset } },
+    equipped: {
+      ...profile.equipped,
+      weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
+    },
+    runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
   });
   await page.addInitScript(
     ([value, bot]) => {
@@ -249,6 +284,52 @@ test.describe('Delve with a controller', () => {
     expect((await blow()).kind).toBe('light');
     await page.getByTestId('chain-apply').click();
     await expect.poll(async () => (await blow()).kind).toBe(chip.slice('kind-'.length));
+  });
+
+  test('G07: the D-pad and A socket a pouch rune through the picker, and B backs out of it', async ({
+    page,
+  }) => {
+    await setup(page, false, 1, true);
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.rb);
+    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.down);
+    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    const focused = () =>
+      page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
+    /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
+    const padTo = async (id: string) => {
+      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.down);
+      for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.up);
+      expect(await focused()).toBe(id);
+    };
+    // The Primary's move: past its card and reorder buttons to its one open socket.
+    await padTo('socket-0');
+    const picker = page.getByTestId('rune-picker');
+    // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
+    await tap(page, BUTTON.a);
+    await expect(picker).toBeVisible();
+    await expect.poll(focused).toMatch(/^rune-/);
+    await tap(page, BUTTON.b);
+    await expect(picker).toBeHidden();
+    await expect(page.getByTestId('socket-0')).toBeFocused();
+    // Again, and A on Quick sockets it: a draft until Apply.
+    await tap(page, BUTTON.a);
+    await expect(picker).toBeVisible();
+    await padTo('rune-pick-quick');
+    await tap(page, BUTTON.a);
+    await expect(picker).toBeHidden();
+    await expect(page.getByTestId('socket-0')).toHaveAttribute('data-rune', 'quick:3');
+    const sockets = () =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem('alloy:delve:v2')!).equipped.weapon.moveset.chains.primary
+            .moves[0].runes,
+      );
+    expect(await sockets()).toEqual([null]);
+    await page.getByTestId('chain-apply').click();
+    await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
   });
 
   test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {

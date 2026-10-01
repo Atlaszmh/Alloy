@@ -86,4 +86,34 @@ test.describe('Delve Training Grounds', () => {
       })
       .toBeGreaterThan(0);
   });
+
+  test('T02: socket any rune at any tier, free, and its pip shows on the button', async ({
+    page,
+  }) => {
+    await seed(page);
+    await page.goto('/delve');
+    await page.getByTestId('training-button').click();
+    const ability0 = page.getByTestId('ability-0');
+    await expect(ability0).toBeVisible({ timeout: ARENA_READY });
+    // The HUD's pips carry their rune's id as `data-rune`.
+    await expect(ability0.locator('[data-rune]')).toHaveCount(0);
+
+    await openPanel(page);
+    await page.getByTestId('training-tab-abilities').click();
+    const cards = page.getByTestId('chain-cards');
+    // No pouch and no price: every move takes up to 3 sockets, whatever the weapon.
+    await cards.getByTestId('socket-open').click();
+    await expect(cards.getByTestId('socket-open')).toBeVisible();
+    await cards.getByTestId('socket-0').click();
+    const picker = page.getByTestId('rune-picker');
+    await expect(picker).toBeVisible();
+    await picker.getByTestId('rune-tier-5').click();
+    await picker.getByTestId('rune-pick-echo').click();
+    await expect(picker).toBeHidden();
+    await expect(cards.getByTestId('socket-0')).toHaveAttribute('data-rune', 'echo:5');
+    await resume(page);
+    const pips = ability0.locator('[data-rune]');
+    await expect(pips).toHaveCount(1);
+    await expect(pips).toHaveAttribute('data-rune', 'echo');
+  });
 });
