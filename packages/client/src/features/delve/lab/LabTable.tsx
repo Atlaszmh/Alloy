@@ -1,16 +1,19 @@
 import { memo } from 'react';
-import { formatDps, type LabRow } from './lab-model';
+import { formatDps, formatRatio, type LabRow } from './lab-model';
 
 /**
  * The results that pass the filters, ranked: their dimensions, then DPS as a
  * number and a bar scaled to the top row. A row whose held button never acted
  * is greyed as "can't afford". Each row's tick decides whether it is charted.
+ * With `ratios` (the Runes view), a "× none" column gives each row's DPS over
+ * its baseline's.
  */
 export function LabTable({
   rows,
   columns,
   ticked,
   onTick,
+  ratios,
 }: {
   /** Already ranked (`rank`). */
   rows: readonly LabRow[];
@@ -19,6 +22,8 @@ export function LabTable({
   ticked: ReadonlySet<string>;
   /** Keep it the same function: the rows are memoised on it. */
   onTick: (key: string) => void;
+  /** Each row's ratio to its baseline, by key (`baseRatios`); without it, no column. */
+  ratios?: ReadonlyMap<string, number>;
 }) {
   const top = rows[0]?.result.dps || 1;
   return (
@@ -32,6 +37,7 @@ export function LabTable({
             </th>
           ))}
           <th className="w-2/5 px-1 py-1 font-normal">DPS</th>
+          {ratios && <th className="w-14 px-1 py-1 text-right font-normal">× none</th>}
         </tr>
       </thead>
       <tbody>
@@ -43,6 +49,7 @@ export function LabTable({
             top={top}
             ticked={ticked.has(r.key)}
             onTick={onTick}
+            ratio={ratios ? (ratios.get(r.key) ?? null) : undefined}
           />
         ))}
       </tbody>
@@ -57,12 +64,15 @@ const Row = memo(function Row({
   top,
   ticked,
   onTick,
+  ratio,
 }: {
   row: LabRow;
   columns: readonly string[];
   top: number;
   ticked: boolean;
   onTick: (key: string) => void;
+  /** Its ratio to its baseline; null without one; undefined: no column. */
+  ratio?: number | null;
 }) {
   const acted = row.result.casts > 0;
   return (
@@ -103,6 +113,11 @@ const Row = memo(function Row({
           "can't afford"
         )}
       </td>
+      {ratio !== undefined && (
+        <td className="px-1 text-right tabular-nums" data-testid="lab-ratio">
+          {ratio === null ? '—' : formatRatio(ratio)}
+        </td>
+      )}
     </tr>
   );
 });

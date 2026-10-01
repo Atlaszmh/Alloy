@@ -101,3 +101,23 @@ export function remember(depth: number, pack: boolean, rows: readonly LabRow[]):
 export function recall(depth: number, pack: boolean, keys: readonly string[]): LabRow[] {
   return keys.flatMap((key) => kept.get(`${depth}|${pack}|${key}`) ?? []);
 }
+
+/**
+ * Each row's DPS over its baseline's (`DpsSetup.base`: a rune row's `none`
+ * row), by key. A row has none without a baseline, or while its baseline
+ * hasn't run or dealt nothing.
+ */
+export function baseRatios(rows: readonly LabRow[]): Map<string, number> {
+  const dps = new Map(rows.map((r) => [r.key, r.result.dps]));
+  const ratios = new Map<string, number>();
+  for (const r of rows) {
+    const base = r.setup.base === undefined ? 0 : (dps.get(r.setup.base) ?? 0);
+    if (base > 0) ratios.set(r.key, r.result.dps / base);
+  }
+  return ratios;
+}
+
+/** A ratio to the baseline, to two places: ×1.45. */
+export function formatRatio(ratio: number): string {
+  return `×${ratio.toFixed(2)}`;
+}
