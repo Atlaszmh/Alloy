@@ -213,7 +213,7 @@ describe('ItemDetailSheet', () => {
     const sheet = (uid: string) => render(<ItemDetailSheet uid={uid} onClose={() => {}} />);
     let view = sheet('h1');
     expect(screen.queryByTestId('equip-button')).toBeNull();
-    expect(screen.getByTestId('equip-locked')).toHaveTextContent('Equip at the Anvil');
+    expect(screen.getByTestId('equip-locked')).toHaveTextContent('Equip at the Anvil, between dives');
     view.unmount();
     view = sheet(store().profile.equipped.weapon!.uid);
     expect(screen.queryByText('Unequip')).toBeNull();
@@ -250,6 +250,17 @@ describe('ItemDetailSheet', () => {
     expect(onBuild).toHaveBeenCalled();
   });
 
+  it('names a fused move as the chain builder does: "light Wildfire Burst"', () => {
+    const p = store().profile;
+    const sword = p.equipped.weapon!;
+    const moveset = defaultMoveset(registry, sword, 'fire');
+    const burst = { kind: 'light' as const, form: 'burst' as const, elements: ['fire', 'nature'] as ManaType[] };
+    const chains = { ...moveset.chains, primary: { moves: [burst], payment: 'mana' as const } };
+    store().setProfile({ ...p, equipped: { ...p.equipped, weapon: { ...sword, moveset: { ...moveset, chains } } } });
+    render(<ItemDetailSheet uid={sword.uid} onClose={() => {}} />);
+    expect(screen.getByTestId('moveset-primary')).toHaveTextContent('Primary 1/5 · light Wildfire Burst');
+  });
+
   it('a bag weapon is valued as it is and with your moveset; Transfer moves your moveset onto it for scrap', () => {
     const p = store().profile;
     const sword = p.equipped.weapon!;
@@ -274,6 +285,7 @@ describe('ItemDetailSheet', () => {
     expect(screen.getByTestId('transfer-button')).toHaveTextContent(
       /Transfer my moveset here · ⚙ 30 · \+1 Link$/,
     );
+    expect(screen.queryByTestId('transfer-leaves')).toBeNull(); // a rare sword carries all of yours
     fireEvent.click(screen.getByTestId('transfer-button'));
     expect(screen.getByRole('status')).toHaveTextContent('Not enough scrap');
     act(() => store().setProfile({ ...store().profile, scrap: 30 }));
@@ -316,6 +328,22 @@ describe('ItemDetailSheet', () => {
       /^▲ Transfer my moveset here · ⚙ 180$/,
     );
     expect(screen.getByTestId('transfer-button')).toHaveClass('delve-btn-green');
+  });
+
+  it('Transfer onto a weapon that carries less says which of your chains stay behind', () => {
+    const p = store().profile;
+    const epic = { ...p.equipped.weapon!, rarity: 'epic' as const };
+    const mine = { ...epic, moveset: defaultMoveset(registry, epic, 'fire') };
+    const plain = generateItem(
+      registry,
+      { uid: 'w2', ilvl: 2, rarity: 'common', slot: 'weapon', baseId: 'sword', mana: 'fire' },
+      new SeededRNG(4),
+    );
+    store().setProfile({ ...p, equipped: { ...p.equipped, weapon: mine }, bag: [plain] });
+    render(<ItemDetailSheet uid="w2" onClose={() => {}} />);
+    expect(screen.getByTestId('transfer-leaves')).toHaveTextContent(
+      'Leaves your Defensive and Ultimate behind',
+    );
   });
 
   it('a legendary whose power rides a skill the weapon lacks says it needs it', () => {

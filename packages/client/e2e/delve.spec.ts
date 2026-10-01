@@ -103,7 +103,7 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('item-compare')).toBeVisible();
     // Gear is locked mid-dive.
     await expect(page.getByTestId('equip-button')).toHaveCount(0);
-    await expect(sheet.getByTestId('equip-locked')).toHaveText('Equip at the Anvil');
+    await expect(sheet.getByTestId('equip-locked')).toHaveText('Equip at the Anvil, between dives');
     await page.getByRole('button', { name: 'Close' }).click();
     await expect(sheet).toBeHidden();
 

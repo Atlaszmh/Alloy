@@ -15,19 +15,21 @@ import {
   movesetOf,
   movesetTransfer,
   pairElements,
+  profileStats,
   reattuneCost,
   referenceDepth,
   reforgeCost,
+  resolveChain,
   salvageDust,
   salvageValue,
   upgradeCost,
+  type AbilitySlot,
   type Blow,
   type ChainSkill,
   type GearItem,
   type HeroStatKey,
   type ItemComparison,
   type ManaType,
-  type Move,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
@@ -36,7 +38,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
-import { KIND_LABEL, SKILL_NAME, blowText } from './chains/chain-text';
+import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
@@ -64,16 +66,15 @@ const NEEDS_TEXT: Record<ChainSkill, string> = {
   ultimate: 'Needs an Ultimate',
 };
 
-/** A move as the moveset lists it: "medium Fire Bolt", "heavy Fire+Nature Burst". */
-function moveName(registry: ReturnType<typeof getDelveRegistry>, m: Move | Blow): string {
-  if ('element' in m) return blowText(registry, m);
-  const els = m.elements.map((e) => manaStyle(registry, e).name).join('+');
-  return `${KIND_LABEL[m.kind]} ${els} ${registry.getForm(m.form).name}`;
-}
-
-/** A weapon's moveset: each chain it carries with its slots ("Primary 2/5") and moves. */
+/**
+ * A weapon's moveset: each chain it carries with its slots ("Primary 2/5") and
+ * moves, named as the chain builder names them ("medium Wildfire Burst").
+ */
 function MovesetView({ item }: { item: GearItem }) {
   const registry = getDelveRegistry();
+  const profile = useDelveStore((s) => s.profile);
+  // Only the moves' names are read: the hero's stats resolve them as well as any.
+  const stats = useMemo(() => profileStats(registry, profile), [registry, profile]);
   const { chains, slots } = movesetOf(registry, item);
   const cap = registry.getDelveBalance().chains.cap;
   const carried = carriedSkills(registry, item.rarity);
@@ -93,13 +94,15 @@ function MovesetView({ item }: { item: GearItem }) {
               {SKILL_NAME[s]}: {carriedByText(registry, s).toLowerCase()}
             </div>
           );
-        const moves: (Move | Blow)[] = Array.isArray(chain) ? chain : chain.moves;
+        const names = Array.isArray(chain)
+          ? chain.map((b: Blow) => blowText(registry, b))
+          : resolveChain(registry, stats, s as AbilitySlot, chain).moves.map(moveText);
         return (
           <div key={s} className="text-stone-300" data-testid={`moveset-${s}`}>
             <b className="text-stone-100">
               {SKILL_NAME[s]} {slots[s]}/{cap[s]}
             </b>{' '}
-            · {moves.map((m) => moveName(registry, m)).join(' · ')}
+            · {chainText(names)}
           </div>
         );
       })}
@@ -183,6 +186,13 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
     [item, twoWays, profile.equipped, profile.pair, registry, depth],
   );
   const transfer = item && twoWays ? movesetTransfer(registry, worn!, item) : null;
+  // Your chains the target can't carry stay behind (their extra slots come back as Links).
+  const leaves =
+    item && transfer
+      ? carriedSkills(registry, worn!.rarity).filter(
+          (s) => !carriedSkills(registry, item.rarity).includes(s),
+        )
+      : [];
 
   if (!item) return null;
   const color = RARITY_COLOR[item.rarity];
@@ -571,7 +581,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
               className="delve-panel flex items-center justify-center p-2 text-center text-xs text-amber-200"
               data-testid="equip-locked"
             >
-              Equip at the Anvil
+              Equip at the Anvil, between dives
             </div>
           ) : isEquipped ? (
             <button className="delve-btn" onClick={onUnequip}>
@@ -637,6 +647,14 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
               {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · ⚙ {formatNumber(transfer.scrap)}
               {transfer.links > 0 && ` · +${transfer.links} Link${transfer.links === 1 ? '' : 's'}`}
             </button>
+          )}
+          {transfer && !diving && leaves.length > 0 && (
+            <div
+              className="col-span-2 text-center text-[11px] text-amber-200/90"
+              data-testid="transfer-leaves"
+            >
+              Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+            </div>
           )}
         </div>
         {reattuneTo.length > 0 && (

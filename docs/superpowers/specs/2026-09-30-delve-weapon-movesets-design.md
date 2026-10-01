@@ -179,7 +179,7 @@ A weapon's sheet shows its moveset: each chain's slots (e.g. "Primary 2/5") and 
 Nothing about gear changes.
 - **Refused while `isDiveActive`:** `equipItem`, `unequipSlot`, `equipBest`, `setChain`, `addSlot`, `transferMoveset`, `reattuneItem`, and the forge and salvage (upgrade, reforge, fuse, manual salvage), since the Anvil can be visited with a dive still open. The one op a stop's `takeStop` runs is the exception. Auto-salvage of new loot still runs, so a full bag never blocks pickups. `chooseStartingMana` stays allowed, for a migrated save mid-dive.
 - **Loot** still goes to the bag mid-fight, with its ▲ mark.
-- **The arena's controls:** Equip and Equip best (`LootTray`, `PickupFeed`), and the item sheet's Equip, Unequip and Transfer, give way to "Equip at the Anvil" while a dive runs. The chain builder is already locked mid-dive, Add slot included.
+- **The arena's controls:** Equip and Equip best (`LootTray`, `PickupFeed`), and the item sheet's Equip, Unequip and Transfer, give way to "Equip at the Anvil" while a dive runs (the item sheet's reads "Equip at the Anvil, between dives", the engine's refusal, since the sheet also opens at the Anvil mid-dive). The chain builder is already locked mid-dive, Add slot included.
 - **The bind prompt** shows only at the Anvil.
 - **A dive that ends** by death or extraction unlocks, because `isDiveActive` covers only `fighting` and `choosing`.
 

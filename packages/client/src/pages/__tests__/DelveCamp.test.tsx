@@ -77,6 +77,9 @@ describe('DelveCamp', () => {
     );
     const choice = screen.getByTestId('mana-choice');
     expect(choice).toHaveAttribute('data-pad-scope');
+    // A second element is bound between dives; the chains keep their blows.
+    expect(choice).toHaveTextContent("Between dives you'll bind a second element");
+    expect(choice).not.toHaveTextContent('last blow');
     const storm = screen.getByTestId('mana-choice-storm');
     expect(storm).toHaveTextContent('Storm chains');
     expect(storm).toHaveTextContent('Every blow applies a stack of Storm: Shock');

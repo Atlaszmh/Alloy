@@ -44,7 +44,7 @@ export function ManaChoice() {
         </div>
         <p className="text-center text-sm text-stone-300">
           Your gear attunes to it, your blows strike with it, and your first abilities use it.
-          Between dives you'll bind a second element: your basic chain's last blow strikes with it.
+          Between dives you'll bind a second element, to build into your moves and blows.
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {MANA_TYPES.map((m) => {
