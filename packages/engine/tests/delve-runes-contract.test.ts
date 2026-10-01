@@ -14,6 +14,20 @@ import {
 import { makeCtx } from '../src/arpg/combat.js';
 import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
+import {
+  addToPouch,
+  extraShotPower,
+  pouchCount,
+  runeActive,
+  runeFits,
+  runeKnobs,
+  runeText,
+  socketCap,
+  socketPrice,
+  socketsOf,
+  takeFromPouch,
+} from '../src/loot/runes.js';
+import type { RunePouch, RuneRef, RuneTier } from '../src/types/rune.js';
 import { MOVE_KINDS } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import { arena, bal, damaged, dummy, moveOf, press, registry, run } from './fixtures/arena.js';
@@ -291,4 +305,160 @@ describe('balance: delve.runes', () => {
     expect(ok({ fuseScrap: [20, 40, 80, 160, 320] })).toBe(false);
     expect(ok({ unsocket: 'keep' })).toBe(false);
   });
+});
+
+describe('rune helpers: fit, act, knobs', () => {
+  const rune = (id: string) => registry.getRune(id);
+
+  it('fits the forms and the weapons it lists; unarmed fits none', () => {
+    expect(runeFits(rune('split'), { form: 'bolt' })).toBe(true);
+    expect(runeFits(rune('split'), { form: 'burst' })).toBe(false);
+    expect(runeFits(rune('split'), { weapon: 'bow', kind: 'light' })).toBe(true);
+    expect(runeFits(rune('split'), { weapon: 'sword', kind: 'light' })).toBe(false);
+    expect(runeFits(rune('chain'), { weapon: null, kind: 'light' })).toBe(false);
+  });
+
+  it("acts only on its kinds' blows, and Pierce not on a row that bursts", () => {
+    expect(runeActive(rune('linger'), { weapon: 'sword', kind: 'heavy' })).toBe(true);
+    expect(runeActive(rune('linger'), { weapon: 'sword', kind: 'light' })).toBe(false);
+    expect(runeFits(rune('linger'), { weapon: 'sword', kind: 'light' })).toBe(true);
+    expect(runeActive(rune('linger'), { form: 'bolt' })).toBe(true);
+    expect(runeActive(rune('pierce'), { weapon: 'staff', kind: 'light' })).toBe(true);
+    expect(runeActive(rune('pierce'), { weapon: 'staff', kind: 'medium', explode: true })).toBe(
+      false,
+    );
+    expect(runeActive(rune('chain'), { weapon: 'staff', kind: 'medium', explode: true })).toBe(
+      true,
+    );
+    expect(runeActive(rune('split'), { form: 'burst' })).toBe(false);
+  });
+
+  it('gives the knobs of the runes acting, in socket order, skipping empty, unknown and dormant ones', () => {
+    const runes: (RuneRef | null)[] = [
+      { id: 'chain', tier: 3 },
+      null,
+      { id: 'ghost', tier: 1 },
+      { id: 'linger', tier: 2 },
+      { id: 'quick', tier: 1 },
+    ];
+    const light = runeKnobs(registry, runes, { weapon: 'sword', kind: 'light' });
+    expect(light.active).toEqual([
+      { id: 'chain', tier: 3 },
+      { id: 'quick', tier: 1 },
+    ]);
+    expect(light.knobs).toEqual([rune('chain').tiers[2], rune('quick').tiers[0]]);
+    const heavy = runeKnobs(registry, runes, { weapon: 'sword', kind: 'heavy' });
+    expect(heavy.active.map((r) => r.id)).toEqual(['chain', 'linger', 'quick']);
+    expect(runeKnobs(registry, undefined, { form: 'bolt' })).toEqual({ knobs: [], active: [] });
+  });
+
+  it("cuts Multi-shot's shots in full, by half on a Volley, not at all on a Barrage", () => {
+    expect(extraShotPower(0.65, 'bolt')).toBe(0.65);
+    expect(extraShotPower(0.65, null)).toBe(0.65);
+    expect(extraShotPower(0.65, 'volley')).toBeCloseTo(0.825);
+    expect(extraShotPower(0.65, 'barrage')).toBe(1);
+  });
+});
+
+describe('rune helpers: text', () => {
+  const text = (id: string, tier: RuneTier, on?: Parameters<typeof runeText>[2]) =>
+    runeText(registry, { id, tier }, on);
+
+  it('fills the templates: plain values, percentages and signed changes', () => {
+    expect(text('split', 1)).toEqual({
+      effect: 'Splits into 2 shards on hit, each at 30% power',
+      tradeoff: null,
+    });
+    expect(text('split', 4).effect).toBe('Splits into 3 shards on hit, each at 45% power');
+    expect(text('quick', 3)).toEqual({
+      effect: 'Beat −20%, cooldown −20%',
+      tradeoff: 'Power −10%',
+    });
+    expect(text('heavy', 2)).toEqual({
+      effect: 'Power +22.5%, and it staggers',
+      tradeoff: 'Beat and wind-up +20%',
+    });
+    expect(text('guard', 2).effect).toBe('On landing, a 3 s shield of 4.25% max life');
+    expect(text('drain', 2).effect).toBe('+1.5 mana per foe hit, up to 5 foe-hits a cast');
+    expect(text('echo', 1).effect).toBe('Repeats 0.4 s later at 30% power');
+  });
+
+  it('words Multi-shot by the move: the cut in full, halved on a Volley, none on a Barrage', () => {
+    expect(text('multishot', 2)).toEqual({
+      effect: 'Extra shots: +1',
+      tradeoff: 'Each shot at 68.75% power',
+    });
+    expect(text('multishot', 2, { form: 'volley' }).tradeoff).toBe('Each shot at 84.375% power');
+    expect(text('multishot', 2, { form: 'barrage' }).tradeoff).toBeNull();
+    expect(text('multishot', 2, { weapon: 'bow', kind: 'light' }).tradeoff).toBe(
+      'Each shot at 68.75% power',
+    );
+  });
+
+  it("fills every rune's templates at every tier", () => {
+    for (const def of registry.getRunes())
+      for (const tier of [1, 2, 3, 4, 5] as RuneTier[]) {
+        const t = runeText(registry, { id: def.id, tier });
+        expect(t.effect).not.toMatch(/[{}]/);
+        expect(t.tradeoff === null).toBe(def.tradeoff === null);
+        if (t.tradeoff) expect(t.tradeoff).not.toMatch(/[{}]/);
+      }
+  });
+});
+
+describe('rune helpers: sockets and the pouch', () => {
+  it("caps a move's sockets by its weapon's rarity; unarmed has none", () => {
+    expect(socketCap(registry, 'common')).toBe(1);
+    expect(socketCap(registry, 'rare')).toBe(2);
+    expect(socketCap(registry, 'legendary')).toBe(3);
+    expect(socketCap(registry, null)).toBe(0);
+  });
+
+  it('prices the next socket by the sockets the move has, none past MAX_SOCKETS', () => {
+    expect(socketPrice(registry, 0)).toEqual({ links: 1, scrap: 20 });
+    expect(socketPrice(registry, 2)).toEqual({ links: 3, scrap: 60 });
+    expect(socketPrice(registry, 3)).toBeNull();
+  });
+
+  it('counts, adds and takes runes by id and tier without changing the pouch it is given', () => {
+    const pouch: RunePouch = { split: [1, 0, 0, 0, 0] };
+    const more = addToPouch(pouch, [
+      { id: 'split', tier: 1 },
+      { id: 'quick', tier: 3 },
+      { id: 'quick', tier: 3 },
+    ]);
+    expect(pouch).toEqual({ split: [1, 0, 0, 0, 0] });
+    expect(more).toEqual({ split: [2, 0, 0, 0, 0], quick: [0, 0, 2, 0, 0] });
+    expect(pouchCount(more, { id: 'quick', tier: 3 })).toBe(2);
+    expect(pouchCount(more, { id: 'echo', tier: 1 })).toBe(0);
+    expect(takeFromPouch(more, [{ id: 'quick', tier: 3 }])).toEqual({
+      split: [2, 0, 0, 0, 0],
+      quick: [0, 0, 1, 0, 0],
+    });
+    expect(takeFromPouch(more, [{ id: 'split', tier: 2 }])).toBeNull();
+    expect(
+      takeFromPouch(pouch, [
+        { id: 'split', tier: 1 },
+        { id: 'split', tier: 1 },
+      ]),
+    ).toBeNull();
+  });
+
+  it('reads a move without runes as no sockets', () => {
+    expect(socketsOf({ kind: 'light', element: 'fire' })).toEqual([]);
+    const runes = [{ id: 'chain', tier: 1 as const }, null];
+    expect(socketsOf({ kind: 'light', form: 'bolt', elements: ['fire'], runes })).toBe(runes);
+  });
+});
+
+// Stubs in wave 0 ("not built yet"); wave 1B builds them and may delete these lines.
+describe('wave 1B: loot/runes.ts', () => {
+  it.todo('runeTierAt: the highest tierDepths reached, then tierUp for one tier higher, at most V');
+  it.todo(
+    'rollRuneDrop: dropChance by kind (normal and elite × dropMult, at most 1), uniform over runes.json',
+  );
+  it.todo(
+    'rollSockets: socketDrops by rarity, spread uniformly over the moves, never past socketCap',
+  );
+  it.todo('weaponParts: a Link per extra slot and per open socket, and the socketed runes');
 });
