@@ -7,7 +7,7 @@ import { dirTo, dist } from '../geometry.js';
 import { guardLand } from './defend.js';
 import { queueEcho } from './echo.js';
 import { executeForm } from './forms.js';
-import { chainMove, holdFull, moveBeat, stepBonus, stepHeft } from './resolve.js';
+import { baseCost, chainMove, holdFull, moveBeat, stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, DIRECTIONAL, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
@@ -114,8 +114,9 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   // Only a slot with a chain winds up or holds.
   const ab = chainMove(h.chains[slot]!, step, stage);
   // Drain's and Linger's budgets are the cast's: they count from before the move's hits land.
+  // Drain's is a share of its cost before its runes' load, so Drain can't pay back their price.
   h.drained[slot] = 0;
-  h.drainLeft[slot] = ab.cost * bal.runes.drainShare;
+  h.drainLeft[slot] = baseCost(ab) * bal.runes.drainShare;
   h.zonesLeft[slot] = ab.knobs.zone?.perCast ?? 0;
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;

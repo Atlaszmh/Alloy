@@ -9,6 +9,7 @@ import {
 } from '../types/ability.js';
 import {
   NEUTRAL,
+  baseCost,
   chainMove,
   defaultBasic,
   defaultChains,
@@ -383,7 +384,8 @@ function blowRunes(k: KnobSet, cleave: number, bal: DelveBalance): number {
 
 /**
  * Mana a use of a chain drains: each move's per foe-hit × its foe-hits (its
- * foes × its impacts), at most `drainFoes`.
+ * foes × its impacts), at most `drainFoes`, and at most `drainShare` of its
+ * cost before its runes' load (`baseCost`), as the sim caps it.
  */
 function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
   return mean(
@@ -392,7 +394,7 @@ function drainPerUse(chain: ResolvedChain, bal: DelveBalance): number {
       const hits = TARGETS[ab.form.id] * repeatsOf(ab);
       return Math.min(
         ab.knobs.manaOnHit * Math.min(hits, bal.runes.drainFoes),
-        ab.cost * bal.runes.drainShare,
+        baseCost(ab) * bal.runes.drainShare,
       );
     }),
   );

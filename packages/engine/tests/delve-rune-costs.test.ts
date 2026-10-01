@@ -22,7 +22,7 @@ import type { AbilityPayment, AbilitySlot, Chain, Move, MoveKind } from '../src/
 import type { DelveBalance, HeroStats } from '../src/types/delve.js';
 import type { RuneRef } from '../src/types/rune.js';
 import GOLDEN from './fixtures/rune-costs-v051.json';
-import { gear, registry } from './fixtures/arena.js';
+import { arena, dummy, gear, moveOf, press, registry } from './fixtures/arena.js';
 
 /**
  * Rune costs (see the rune costs spec): each rune's load raises its move's
@@ -424,5 +424,39 @@ describe('basicIncome and manaSupport', () => {
     expect(starved.attunement.fire).toBe(1);
     expect(spend(starved, true) / spend(starved, false)).toBeCloseTo(1 + 2.35 * 0.97);
     expect(spend(supported, true) / spend(supported, false)).toBeCloseTo(1 + 2.35 * 0.55);
+  });
+});
+
+describe("Drain's cap: half the cost before the load", () => {
+  /** A light mana Bolt with Drain III: 5.6 mana before its load, so Drain gives back at most 2.8. */
+  const chain: Chain = { payment: 'mana', moves: [bolt({ kind: 'light', runes: [III('drain')] })] };
+
+  it("a cast's Drain budget is baseCost × drainShare, not the loaded cost's", () => {
+    const w = arena([dummy(13, 26)], { noBasic: true, chains: { primary: chain } });
+    w.hero.chains[0] = resolveChain(loaded, w.hero.stats, 'primary', chain);
+    const ab = moveOf(w, 0);
+    expect(ab.cost).toBeGreaterThan(baseCost(ab));
+    press(w, 0);
+    expect(w.hero.drainLeft[0]).toBeCloseTo(
+      baseCost(ab) * registry.getDelveBalance().runes.drainShare,
+    );
+  });
+
+  it("manaSupport's refill counts the chain's Drain capped the same way", () => {
+    const stats = computeHeroStats({ weapon: gear('fire') }, registry, {
+      pair: { primary: 'fire', secondary: null },
+    });
+    const resolved = resolveChain(loaded, stats, 'primary', chain);
+    const every = useInterval(
+      registry.getDelveBalance(),
+      resolved,
+      stats.tempo,
+      Infinity,
+      Infinity,
+    );
+    // 2 a foe-hit × a Bolt's 1.6 foes is 3.2, past the cap of 2.8.
+    expect(manaSupport(loaded, stats, resolved).refill - basicIncome(registry, stats)).toBeCloseTo(
+      2.8 / every,
+    );
   });
 });
