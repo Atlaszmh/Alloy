@@ -15,6 +15,7 @@ import { dist } from './geometry.js';
 import { createSandboxWorld, sandboxWeapon, spawnDummies } from './sandbox.js';
 import { stepWorld } from './step.js';
 import { runeFits } from '../loot/runes.js';
+import { SeededRNG } from '../rng/seeded-rng.js';
 import type { RuneDef, RuneTier } from '../types/rune.js';
 
 /**
@@ -48,6 +49,11 @@ export interface DpsOptions {
   depth: number;
   /** Five dummies in a clump instead of one. */
   pack: boolean;
+  /**
+   * One run on this combat seed (0: the sandbox's own). Without it a rune-view row averages
+   * `RUNE_SEEDS` of them; every other row is one run on seed 0.
+   */
+  seed?: number;
 }
 
 export interface DpsResult {
@@ -69,8 +75,27 @@ export const DPS_SAMPLE = 0.5;
 const GAP = 0.4;
 const NO_TOGGLES = { infiniteMana: false, noCooldowns: false, invulnerable: false };
 
-/** Average DPS over time for one setup: the held button's own damage (see `DpsSetup.hold`). */
+/**
+ * The rune view averages this many combat seeds (see the runes spec's gate): a Barrage rains
+ * its impacts at random and lands twice in a run, so one seed swings a rune's ratio.
+ */
+export const RUNE_SEEDS = 8;
+
+/**
+ * Average DPS over time for one setup: the held button's own damage (see `DpsSetup.hold`). A
+ * rune-view row averages `RUNE_SEEDS` combat seeds (`DpsResult.casts` their mean).
+ */
 export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult {
+  if (setup.view !== 'rune' || o.seed !== undefined) return runDps(registry, setup, o);
+  const runs = Array.from({ length: RUNE_SEEDS }, (_, seed) =>
+    runDps(registry, setup, { ...o, seed }),
+  );
+  const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
+  const series = runs[0].series.map((_, i) => mean(runs.map((r) => r.series[i])));
+  return { series, dps: series[series.length - 1], casts: mean(runs.map((r) => r.casts)) };
+}
+
+function runDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptions): DpsResult {
   const { baseId, primary, secondary } = setup.weapon;
   const weapon = sandboxWeapon(registry, {
     baseId,
@@ -87,6 +112,8 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
     chains: setup.chains,
     toggles: NO_TOGGLES,
   });
+  // The sandbox's own combat stream is `SeededRNG(1).fork('combat')`: seed k is the same from k + 1.
+  if (o.seed) world.rng = new SeededRNG(1 + o.seed).fork('combat');
   const h = world.hero;
   const start = { x: h.x, y: h.y };
   const dummies = spawnDummies(registry, world, {
@@ -126,6 +153,22 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   const acted = (e: ArpgEvent) =>
     slot === null ? e.kind === 'basic' : e.kind === 'cast' && e.slot === slot;
 
+  // A rune row counts an ability's burn and poison ticks only while its own hits keep them up:
+  // within the element's stack duration of its last hit on that foe. A burn belongs to the slot
+  // whose hit set its strength, and the basic attack, swinging on its own, keeps its stacks alive
+  // all fight; counted whole, a rune that lifts the ability's hit past the basic's takes over
+  // that burn (the runes balance pass: Heavy on a Barrage read 3×).
+  const ownDots = setup.view === 'rune' && slot !== null;
+  const lastOwn = new Map<number, number>();
+  const counts = (e: Extract<ArpgEvent, { kind: 'hit' }>) => {
+    if (slot === null) return true;
+    if (e.slot !== slot) return false;
+    if (e.source !== 'dot') lastOwn.set(e.id, world.t);
+    else if (ownDots && e.element)
+      return world.t - (lastOwn.get(e.id) ?? -Infinity) <= bal.stacks.duration[e.element];
+    return true;
+  };
+
   const step = bal.arena.step;
   const ticks = Math.round(DPS_SAMPLE / step);
   const series: number[] = [];
@@ -134,7 +177,7 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
   for (let i = 0; i < DPS_SECONDS / DPS_SAMPLE; i++) {
     for (let k = 0; k < ticks; k++) {
       for (const e of stepWorld(registry, world, input(), step)) {
-        if (e.kind === 'hit' && (slot === null || e.slot === slot)) damage += e.amount;
+        if (e.kind === 'hit' && counts(e)) damage += e.amount;
         if (acted(e)) casts++;
       }
       // Positions are held: knockback, pulls and pushes never drift anyone out of reach. The hero
