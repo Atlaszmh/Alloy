@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   CHAIN_SKILLS,
-  attuneElement,
   baseDisplayName,
   carriedByText,
   carriedSkills,
@@ -9,7 +8,6 @@ import {
   isDiveActive,
   itemAffinityAttunement,
   itemStatLines,
-  legendaryNeeds,
   movesetOf,
   movesetTransfer,
   pairElements,
@@ -25,9 +23,7 @@ import {
   weaponParts,
   type AbilitySlot,
   type Blow,
-  type ChainSkill,
   type GearItem,
-  type HeroStatKey,
   type ManaType,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
@@ -41,14 +37,14 @@ import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
 import { ItemSockets } from './runes/ItemSockets';
 import { useItemComparison } from './items/useItemComparison';
 import { PowerDelta } from './items/PowerDelta';
+import { AffixLine, ImplicitLine } from './items/ItemStatLines';
+import { LegendaryBox } from './items/LegendaryBox';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
   SLOT_LABEL,
   UPGRADE_EPSILON,
   formatNumber,
-  formatStat,
-  legendaryText,
   manaStyle,
 } from './format';
 
@@ -58,14 +54,6 @@ interface ItemDetailSheetProps {
   /** Open the chain builder (the Anvil): the equipped weapon's sheet links to it. */
   onBuild?: () => void;
 }
-
-/** A legendary power's skill, missing from the weapon (`legendaryNeeds`): "Needs a Defensive". */
-const NEEDS_TEXT: Record<ChainSkill, string> = {
-  basic: 'Needs a basic chain',
-  primary: 'Needs a Primary',
-  defensive: 'Needs a Defensive',
-  ultimate: 'Needs an Ultimate',
-};
 
 /**
  * A weapon's moveset: each chain it carries with its slots ("Primary 2/5") and
@@ -109,22 +97,6 @@ function MovesetView({ item }: { item: GearItem }) {
       })}
       <ItemSockets chains={chains} cap={socketCap(registry, item.rarity)} />
     </div>
-  );
-}
-
-function qualityColor(roll: number): string {
-  if (roll >= 0.9) return '#fbbf24';
-  if (roll >= 0.6) return '#4ade80';
-  if (roll >= 0.3) return '#60a5fa';
-  return '#78716c';
-}
-
-/** Marks an attunement line of an element outside the pair: it grants nothing. */
-function NotMine() {
-  return (
-    <span className="ml-1.5 text-[10px] text-stone-500" data-testid="not-your-element">
-      not your element
-    </span>
   );
 }
 
@@ -176,18 +148,10 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const melts = pullText(registry, weaponParts(registry, item).runes, pull);
   const dust = salvageDust(registry, item, profile.pair);
   const ownMana = inPair(profile, item.mana);
-  const notMine = (stat: HeroStatKey) => {
-    const el = attuneElement(stat);
-    return !!el && !inPair(profile, el);
-  };
   const reattuneTo = pairElements(profile.pair).filter((m) => m !== item.mana);
   // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
   const unbound =
     !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
-  // A legendary power tied to a skill the equipped weapon doesn't carry.
-  const needs = item.legendary ? legendaryNeeds(item.legendary.id) : null;
-  const dead =
-    !!needs && !carriedSkills(registry, profile.equipped.weapon?.rarity ?? null).includes(needs);
   // Your moveset would make the weapon an upgrade (Transfer's mark, as Equip's is as it is).
   const homeUpgrade = !!transfer && cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
 
@@ -442,14 +406,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
         {/* Stats */}
         <div ref={statsRef} className="mt-3 space-y-1.5">
           {implicits.map((l, i) => (
-            <div
-              key={`i${i}`}
-              className="text-sm"
-              style={{ color: notMine(l.stat) ? '#57534e' : '#d6d3d1' }}
-            >
-              {formatStat(registry, l.stat, l.value)}
-              {notMine(l.stat) && <NotMine />}
-            </div>
+            <ImplicitLine key={`i${i}`} line={l} />
           ))}
           {implicits.length > 0 && affixes.length > 0 && <div className="my-1 h-px bg-white/10" />}
           {affixes.map((l, i) => {
@@ -476,49 +433,11 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
                 }}
                 data-testid="item-affix"
               >
-                <div className="flex items-center justify-between text-sm">
-                  <span style={{ color: notMine(l.stat) ? '#57534e' : '#93c5fd' }}>
-                    {formatStat(registry, l.stat, l.value)}
-                    {notMine(l.stat) && <NotMine />}
-                  </span>
-                  {l.roll >= 0.9 && (
-                    <span className="text-[10px] font-bold text-amber-300">PERFECT</span>
-                  )}
-                </div>
-                <div className="delve-quality mt-1">
-                  <span
-                    style={{
-                      width: `${Math.round(l.roll * 100)}%`,
-                      background: qualityColor(l.roll),
-                    }}
-                  />
-                </div>
+                <AffixLine line={l} />
               </button>
             );
           })}
-          {item.legendary && (
-            <div
-              className="mt-2 rounded-lg px-3 py-2 text-sm"
-              style={{
-                background: 'rgba(251,146,60,0.1)',
-                border: '1px solid rgba(251,146,60,0.45)',
-                color: '#fed7aa',
-              }}
-            >
-              <div className="delve-display text-xs font-bold uppercase tracking-widest text-orange-400">
-                ★ {registry.getLegendary(item.legendary.id).name}
-              </div>
-              {legendaryText(registry, item.legendary.id, item.legendary.value)}
-              {dead && needs && (
-                <div
-                  className="mt-1 text-xs font-semibold text-amber-200"
-                  data-testid="legendary-dead"
-                >
-                  {NEEDS_TEXT[needs]}: your weapon doesn't carry one.
-                </div>
-              )}
-            </div>
-          )}
+          <LegendaryBox item={item} />
         </div>
 
         {item.slot === 'weapon' && <MovesetView item={item} />}
