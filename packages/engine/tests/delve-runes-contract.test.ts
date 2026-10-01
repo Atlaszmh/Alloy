@@ -474,18 +474,6 @@ describe('rune helpers: sockets and the pouch', () => {
 });
 
 // Stubs in wave 0 ("not built yet"); wave 1B builds them and may delete these lines.
-describe('wave 1B: loot/runes.ts', () => {
-  it.todo('runeTierAt: the highest tierDepths reached, then tierUp for one tier higher, at most V');
-  it.todo(
-    'rollRuneDrop: dropChance by kind (normal and elite × dropMult, at most 1), uniform over runes.json',
-  );
-  it.todo(
-    'rollSockets: socketDrops by rarity, spread uniformly over the moves, never past socketCap',
-  );
-  it.todo('weaponParts: a Link per extra slot and per open socket, and the socketed runes');
-});
-
-// Stubs in wave 0 ("not built yet"); wave 1B builds them and may delete these lines.
 describe('wave 1B: delve/runes.ts and arpg/rune-drops.ts', () => {
   it.todo('unsocketMode: the override, else balance.delve.runes.unsocket');
   it.todo(

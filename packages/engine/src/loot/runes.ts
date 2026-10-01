@@ -1,8 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
-import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { Blow, FormId, KnobsData, Move } from '../types/ability.js';
-import type { MonsterKind } from '../types/arpg.js';
-import type { GearItem, Moveset, Rarity } from '../types/gear.js';
+import type { Rarity } from '../types/gear.js';
 import {
   MAX_SOCKETS,
   RUNE_TIERS,
@@ -10,17 +8,16 @@ import {
   type RunePouch,
   type RuneRef,
   type RuneTarget,
-  type RuneTier,
 } from '../types/rune.js';
 
 /**
  * Runes' pure parts (see the runes spec): what a rune fits and acts on, its
  * knobs and its words, a move's sockets and their price, and the pouch. It
- * imports nothing from `delve/`. Wave 1 fills the rolls and the parts
- * (`runeTierAt`, `rollRuneDrop`, `rollSockets`, `weaponParts`).
+ * imports nothing from `delve/`. The rolls and a weapon's parts live beside
+ * what they act on and are re-exported at the end: `runeTierAt` and
+ * `rollRuneDrop` in `loot/drops.ts`, `rollSockets` and `weaponParts` in
+ * `loot/moveset.ts`.
  */
-
-const NOT_BUILT = 'not built yet';
 
 /** Whether `def` fits `on`: a form it lists, or a blow of a weapon it lists (unarmed fits none). */
 export function runeFits(def: RuneDef, on: RuneTarget): boolean {
@@ -179,34 +176,5 @@ export function socketsOf(m: Move | Blow): (RuneRef | null)[] {
   return m.runes ?? [];
 }
 
-/** A rune drop's tier at `depth`: the highest `tierDepths` reached, then `tierUp` for one higher. */
-export function runeTierAt(_registry: DataRegistry, _depth: number, _rng: SeededRNG): RuneTier {
-  throw new Error(NOT_BUILT);
-}
-
-/** The rune a foe of `kind` drops at `depth`, if any (uniform over `runes.json`). */
-export function rollRuneDrop(
-  _registry: DataRegistry,
-  _ctx: { depth: number; kind: MonsterKind; dropMult: number },
-  _rng: SeededRNG,
-): RuneRef | null {
-  throw new Error(NOT_BUILT);
-}
-
-/** A weapon drop's moveset with its rarity's `socketDrops` opened, empty, over its moves. */
-export function rollSockets(
-  _registry: DataRegistry,
-  _item: Pick<GearItem, 'rarity'>,
-  _moveset: Moveset,
-  _rng: SeededRNG,
-): Moveset {
-  throw new Error(NOT_BUILT);
-}
-
-/** What a weapon gives back when it goes: Links for its extra slots and open sockets, and its runes. */
-export function weaponParts(
-  _registry: DataRegistry,
-  _weapon: GearItem,
-): { links: number; runes: RuneRef[] } {
-  throw new Error(NOT_BUILT);
-}
+export { rollRuneDrop, runeTierAt } from './drops.js';
+export { rollSockets, weaponParts } from './moveset.js';

@@ -4,15 +4,19 @@ import {
   CHAIN_SKILLS,
   type AbilityPayment,
   type AbilitySlot,
+  type Blow,
   type Chains,
   type ChainSkill,
   type FormId,
+  type Move,
   type MoveKind,
 } from '../types/ability.js';
 import type { ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import type { ManaType } from '../types/mana.js';
+import type { RuneRef } from '../types/rune.js';
+import { socketCap, socketsOf } from './runes.js';
 
 /**
  * Weapon movesets (see the weapon movesets spec): which chains a weapon
@@ -174,6 +178,75 @@ export function rollMoveset(
     slots[open[rng.nextInt(0, open.length - 1)]]++;
   }
   return defaultMoveset(registry, item, item.mana, slots);
+}
+
+/** A chain's moves, or its blows (none for a chain left out). */
+function chainMoves(chain: Chains[ChainSkill] | undefined): (Move | Blow)[] {
+  if (!chain) return [];
+  return Array.isArray(chain) ? chain : chain.moves;
+}
+
+/** A move or blow copied, its elements and sockets too, so the copy never shares an array. */
+function copyMove<M extends Move | Blow>(m: M): M {
+  const copy = { ...m };
+  if ('elements' in copy) copy.elements = [...copy.elements];
+  if (copy.runes) copy.runes = copy.runes.map((r) => r && { ...r });
+  return copy;
+}
+
+/** A chain copied move by move (`copyMove`). */
+function copyChain<C extends Chains[ChainSkill]>(chain: C): C {
+  if (Array.isArray(chain)) return chain.map(copyMove) as C;
+  return { ...chain, moves: chain.moves.map(copyMove) };
+}
+
+/**
+ * A weapon drop's open sockets (see the runes spec): its rarity's count
+ * (`runes.socketDrops`), each on a move or blow of the chains it carries
+ * picked uniformly at random (never past the rarity's cap on a move), every
+ * one empty. With none to open, `moveset` comes back as it is.
+ */
+export function rollSockets(
+  registry: DataRegistry,
+  item: Pick<GearItem, 'rarity'>,
+  moveset: Moveset,
+  rng: SeededRNG,
+): Moveset {
+  const [least, most] = registry.getDelveBalance().runes.socketDrops[item.rarity];
+  const cap = socketCap(registry, item.rarity);
+  let open = rng.nextInt(least, most);
+  if (open === 0) return moveset;
+  const chains: Moveset['chains'] = {};
+  for (const skill of CHAIN_SKILLS) {
+    const chain = moveset.chains[skill];
+    if (chain) (chains as Record<ChainSkill, unknown>)[skill] = copyChain(chain);
+  }
+  const moves = CHAIN_SKILLS.flatMap((skill) => chainMoves(chains[skill]));
+  for (; open > 0; open--) {
+    const room = moves.filter((m) => socketsOf(m).length < cap);
+    if (room.length === 0) break;
+    const m = room[rng.nextInt(0, room.length - 1)];
+    m.runes = [...socketsOf(m), null];
+  }
+  return { chains, slots: { ...moveset.slots } };
+}
+
+/**
+ * What a weapon gives back when it goes (salvaged, fused, rebuilt): a Link
+ * for each extra slot and each open socket, and the runes in its sockets
+ * (which leave by the parts rule). Other gear gives nothing.
+ */
+export function weaponParts(
+  registry: DataRegistry,
+  weapon: GearItem,
+): { links: number; runes: RuneRef[] } {
+  if (weapon.slot !== 'weapon') return { links: 0, runes: [] };
+  const { chains } = movesetOf(registry, weapon);
+  const sockets = CHAIN_SKILLS.flatMap((skill) => chainMoves(chains[skill])).flatMap(socketsOf);
+  return {
+    links: extraSlots(registry, weapon) + sockets.length,
+    runes: sockets.filter((r): r is RuneRef => r !== null).map((r) => ({ ...r })),
+  };
 }
 
 /**
