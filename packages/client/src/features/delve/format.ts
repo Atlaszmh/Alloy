@@ -1,14 +1,18 @@
 import type { DataRegistry, HeroStatKey, ManaType, Rarity } from '@alloy/engine';
 import { MANA_TYPES } from '@alloy/engine';
 
+/** Each rarity's colour (ENDESGA 32): borders, fills and swatches. */
 export const RARITY_COLOR: Record<Rarity, string> = {
-  common: '#b9b9c4',
-  uncommon: '#4ade80',
-  magic: '#60a5fa',
-  rare: '#fcd34d',
-  epic: '#c084fc',
-  legendary: '#fb923c',
+  common: '#c0cbdc',
+  uncommon: '#63c74d',
+  magic: '#0099db',
+  rare: '#fee761',
+  epic: '#b55088',
+  legendary: '#f77622',
 };
+
+/** Each rarity as text: its colour, except epic, whose #b55088 is too dark on steel (2.96:1). */
+export const RARITY_TEXT: Record<Rarity, string> = { ...RARITY_COLOR, epic: '#d7a6e8' };
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   common: 'Common',

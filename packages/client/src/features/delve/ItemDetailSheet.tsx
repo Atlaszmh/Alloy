@@ -44,8 +44,8 @@ import { BindPrompt } from './BindPrompt';
 import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
 import { ItemSockets } from './runes/ItemSockets';
 import {
-  RARITY_COLOR,
   RARITY_LABEL,
+  RARITY_TEXT,
   SLOT_LABEL,
   UPGRADE_EPSILON,
   formatDelta,
@@ -201,7 +201,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
       : [];
 
   if (!item) return null;
-  const color = RARITY_COLOR[item.rarity];
+  const color = RARITY_TEXT[item.rarity];
   const lines = itemStatLines(item, registry);
   const implicits = lines.filter((l) => l.source === 'implicit');
   const affixes = lines.filter((l) => l.source === 'affix');
@@ -430,7 +430,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
               {cmp.replaced ? (
                 <>
                   vs{' '}
-                  <span style={{ color: RARITY_COLOR[cmp.replaced.rarity] }}>
+                  <span style={{ color: RARITY_TEXT[cmp.replaced.rarity] }}>
                     {cmp.replaced.name}
                   </span>
                 </>
