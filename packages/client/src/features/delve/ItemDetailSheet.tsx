@@ -5,8 +5,6 @@ import {
   baseDisplayName,
   carriedByText,
   carriedSkills,
-  compareItem,
-  findItem,
   inPair,
   isDiveActive,
   itemAffinityAttunement,
@@ -17,7 +15,6 @@ import {
   pairElements,
   profileStats,
   reattuneCost,
-  referenceDepth,
   reforgeCost,
   resolveChain,
   salvageDust,
@@ -31,7 +28,6 @@ import {
   type ChainSkill,
   type GearItem,
   type HeroStatKey,
-  type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
@@ -43,12 +39,13 @@ import { ItemTile } from './ItemTile';
 import { BindPrompt } from './BindPrompt';
 import { SKILL_NAME, blowText, chainText, moveText } from './chains/chain-text';
 import { ItemSockets } from './runes/ItemSockets';
+import { useItemComparison } from './items/useItemComparison';
+import { PowerDelta } from './items/PowerDelta';
 import {
   RARITY_COLOR,
   RARITY_LABEL,
   SLOT_LABEL,
   UPGRADE_EPSILON,
-  formatDelta,
   formatNumber,
   formatStat,
   legendaryText,
@@ -115,31 +112,6 @@ function MovesetView({ item }: { item: GearItem }) {
   );
 }
 
-/** Power, Damage and Toughness against what's worn. */
-function DeltaRow({ cmp }: { cmp: ItemComparison }) {
-  return (
-    <div className="flex">
-      <DeltaCell label="Power" value={cmp.powerPct} />
-      <DeltaCell label="Damage" value={cmp.dpsPct} />
-      <DeltaCell label="Toughness" value={cmp.ehpPct} />
-    </div>
-  );
-}
-
-function DeltaCell({ label, value }: { label: string; value: number }) {
-  const color =
-    value > UPGRADE_EPSILON ? '#4ade80' : value < -UPGRADE_EPSILON ? '#f87171' : '#a8a29e';
-  const arrow = value > UPGRADE_EPSILON ? '▲' : value < -UPGRADE_EPSILON ? '▼' : '';
-  return (
-    <div className="flex flex-1 flex-col items-center gap-0.5">
-      <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
-      <span className="delve-display text-base font-bold" style={{ color }}>
-        {arrow} {formatDelta(value)}
-      </span>
-    </div>
-  );
-}
-
 function qualityColor(roll: number): string {
   if (roll >= 0.9) return '#fbbf24';
   if (roll >= 0.6) return '#4ade80';
@@ -169,33 +141,14 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const [binding, setBinding] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
-  const found = findItem(profile, uid);
-  const item = found?.item;
-  const isEquipped = found?.where === 'equipped';
-  const depth = referenceDepth(profile);
-
-  const worn = profile.equipped.weapon;
-  // A bag weapon, while armed, is valued twice: as it is, and as a home for your moveset.
-  const twoWays = !!item && !isEquipped && item.slot === 'weapon' && !!worn;
-  const cmp = useMemo(
-    () =>
-      item && !isEquipped
-        ? compareItem(profile.equipped, item, registry, depth, profile.pair)
-        : null,
-    [item, isEquipped, profile.equipped, profile.pair, registry, depth],
-  );
-  const asIs = useMemo(
-    () =>
-      item && twoWays
-        ? compareItem(profile.equipped, item, registry, depth, profile.pair, 'asIs')
-        : null,
-    [item, twoWays, profile.equipped, profile.pair, registry, depth],
-  );
-  const transfer = item && twoWays ? movesetTransfer(registry, worn!, item) : null;
+  // A bag weapon, while armed, is valued twice: as it is (`asIs`), and as a home for your moveset.
+  const { item, worn, where, cmp, asIs } = useItemComparison(uid);
+  const isEquipped = where === 'equipped';
+  const transfer = item && worn && asIs ? movesetTransfer(registry, worn, item) : null;
   // Your chains the target can't carry stay behind (their extra slots come back as Links).
   const leaves =
-    item && transfer
-      ? carriedSkills(registry, worn!.rarity).filter(
+    item && worn && transfer
+      ? carriedSkills(registry, worn.rarity).filter(
           (s) => !carriedSkills(registry, item.rarity).includes(s),
         )
       : [];
@@ -233,7 +186,8 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
     !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
   // A legendary power tied to a skill the equipped weapon doesn't carry.
   const needs = item.legendary ? legendaryNeeds(item.legendary.id) : null;
-  const dead = !!needs && !carriedSkills(registry, worn?.rarity ?? null).includes(needs);
+  const dead =
+    !!needs && !carriedSkills(registry, profile.equipped.weapon?.rarity ?? null).includes(needs);
   // Your moveset would make the weapon an upgrade (Transfer's mark, as Equip's is as it is).
   const homeUpgrade = !!transfer && cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
 
@@ -444,7 +398,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
                   As it is
                 </div>
                 <div data-testid="compare-as-is">
-                  <DeltaRow cmp={asIs} />
+                  <PowerDelta cmp={asIs} />
                 </div>
                 <div className="mt-1 text-center text-[10px] uppercase tracking-wider text-stone-500">
                   With your moveset · ⚙ {formatNumber(transfer.scrap)} to move it
@@ -452,11 +406,11 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
                     `, its ${transfer.sockets} socket${transfer.sockets === 1 ? '' : 's'} included`}
                 </div>
                 <div data-testid="compare-home">
-                  <DeltaRow cmp={cmp} />
+                  <PowerDelta cmp={cmp} />
                 </div>
               </>
             ) : (
-              <DeltaRow cmp={cmp} />
+              <PowerDelta cmp={cmp} />
             )}
             {attuneDelta.length > 0 && (
               <div
