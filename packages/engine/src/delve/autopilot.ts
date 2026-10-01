@@ -34,7 +34,7 @@ import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
 import { takeStop, type StopAction } from './stops.js';
-import type { Blow, ChainSkill, Move } from '../types/ability.js';
+import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
 
 /**
@@ -151,6 +151,11 @@ export function betweenDives(registry: DataRegistry, profile: DelveProfile): Del
 
 /** The skills the bot adds slots to, in order: each as far as its Links and scrap go. */
 const SLOT_ORDER: ChainSkill[] = ['primary', 'basic', 'ultimate', 'defensive'];
+/**
+ * The slots a chain gets before the Links go to sockets for the pouch's runes; the 4th and 5th
+ * after (the runes balance pass: at 5, sockets got the leftovers and 20-43 runes sat in the pouch).
+ */
+const SOCKETS_AFTER = 3;
 
 /** The bag item `pick` allows that raises Power the most (a weapon valued `value`), or null. */
 function bestGain(
@@ -196,14 +201,24 @@ function transferBest(registry: DataRegistry, p: DelveProfile): DelveProfile {
 }
 
 /**
- * Spend Links on slots in `SLOT_ORDER`: each skill's next slot while it can
- * pay, then the next skill's (a slot it can't afford passes to the next).
+ * Spend Links on slots in `SLOT_ORDER`, up to `upTo` a chain: each skill's next
+ * slot while it can pay, then the next skill's (a slot it can't afford passes
+ * to the next).
  */
-function spendLinks(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+function spendLinks(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  upTo = MAX_CHAIN,
+): DelveProfile {
   let p = profile;
+  const slots = (skill: ChainSkill) =>
+    p.equipped.weapon ? (movesetOf(registry, p.equipped.weapon).slots[skill] ?? 0) : 0;
   for (const skill of SLOT_ORDER)
-    for (let res = addSlot(registry, p, skill); res.ok; res = addSlot(registry, p, skill))
+    while (slots(skill) < upTo) {
+      const res = addSlot(registry, p, skill);
+      if (!res.ok) break;
       p = res.profile;
+    }
   return p;
 }
 
@@ -272,23 +287,57 @@ function fusePouch(registry: DataRegistry, profile: DelveProfile): DelveProfile 
 }
 
 /**
- * Open sockets with the Links the slots left: each time on the move whose next
- * socket is cheapest (the fewest open; on a tie, the first in `SLOT_ORDER`),
- * below the weapon's cap, while it can pay.
+ * Socket `socket` of move `index` of `skill` with the pouch rune that raises Power most
+ * (`takes`), over `than` (by default `p`'s); a filled one is pulled by the pull rule. Null
+ * when no rune gains.
+ */
+function bestRune(
+  registry: DataRegistry,
+  p: DelveProfile,
+  skill: ChainSkill,
+  index: number,
+  socket: number,
+  than = profilePower(registry, p),
+): DelveProfile | null {
+  let best: { profile: DelveProfile; power: number } | null = null;
+  const chain = movesetOf(registry, p.equipped.weapon!).chains[skill]!;
+  const now = movesOf(chain)[index];
+  for (const rune of pouchBest(registry, p)) {
+    if (!takes(registry, p, now, socket, rune)) continue;
+    const runes = socketsOf(now).map((r, k) => (k === socket ? rune : r));
+    const res = setChain(registry, p, skill, withMove(chain, index, { ...now, runes }));
+    const power = res.ok ? profilePower(registry, res.profile) : 0;
+    if (res.ok && power > (best?.power ?? than)) best = { profile: res.profile, power };
+  }
+  return best?.profile ?? null;
+}
+
+/**
+ * Open sockets with the Links the slots left, each only for a pouch rune that
+ * goes in at once and raises Power (an empty socket is Links for nothing):
+ * each time on the move whose next socket is cheapest (the fewest open; on a
+ * tie, the first in `SLOT_ORDER`) that such a rune fits, below the weapon's
+ * cap, while it can pay.
  */
 function openSockets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const cap = socketCap(registry, profile.equipped.weapon?.rarity ?? null);
   let p = profile;
   for (;;) {
-    let next: { skill: ChainSkill; index: number; open: number } | null = null;
-    for (const { skill, index, move } of weaponMoves(registry, p)) {
-      const open = socketsOf(move).length;
-      if (open < cap && (!next || open < next.open)) next = { skill, index, open };
+    const power = profilePower(registry, p);
+    // A stable sort: on a tie, `SLOT_ORDER`, each chain from its first move.
+    const moves = weaponMoves(registry, p)
+      .map((m) => ({ ...m, open: socketsOf(m.move).length }))
+      .filter((m) => m.open < cap)
+      .sort((a, b) => a.open - b.open);
+    let next: DelveProfile | null = null;
+    for (const { skill, index, open } of moves) {
+      const res = openSocket(registry, p, skill, index);
+      if (!res.ok) break; // can't pay: every later socket costs as much or more
+      next = bestRune(registry, res.profile, skill, index, open, power);
+      if (next) break;
     }
     if (!next) return p;
-    const res = openSocket(registry, p, next.skill, next.index);
-    if (!res.ok) return p;
-    p = res.profile;
+    p = next;
   }
 }
 
@@ -300,19 +349,8 @@ function openSockets(registry: DataRegistry, profile: DelveProfile): DelveProfil
 function socketBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   let p = profile;
   for (const { skill, index, move } of weaponMoves(registry, profile))
-    for (let socket = 0; socket < socketsOf(move).length; socket++) {
-      let best = { profile: p, power: profilePower(registry, p) };
-      for (const rune of pouchBest(registry, p)) {
-        const chain = movesetOf(registry, p.equipped.weapon!).chains[skill]!;
-        const now = movesOf(chain)[index];
-        if (!takes(registry, p, now, socket, rune)) continue;
-        const runes = socketsOf(now).map((r, k) => (k === socket ? rune : r));
-        const res = setChain(registry, p, skill, withMove(chain, index, { ...now, runes }));
-        const power = res.ok ? profilePower(registry, res.profile) : 0;
-        if (res.ok && power > best.power) best = { profile: res.profile, power };
-      }
-      p = best.profile;
-    }
+    for (let socket = 0; socket < socketsOf(move).length; socket++)
+      p = bestRune(registry, p, skill, index, socket) ?? p;
   return p;
 }
 
@@ -375,8 +413,10 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
 
 /**
  * Between dives: move the moveset to a better weapon, equip upgrades, fuse
- * spare triples, melt junk, spend Links on slots, then the runes (fuse, open
- * sockets with the Links left, socket the best), and pour scrap into upgrades.
+ * spare triples, melt junk, spend Links on slots up to `SOCKETS_AFTER` a chain,
+ * then on sockets for the pouch's runes (each filled as it opens), then on the
+ * rest of the slots; socket the best, fuse the rune copies left over, and pour
+ * scrap into upgrades.
  */
 function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   let p = equipBest(registry, transferBest(registry, profile)).profile;
@@ -402,8 +442,14 @@ function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile
   }
 
   p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
+  // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
+  // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
+  // over and socket again (a fused tier can beat a socketed one).
+  p = spendLinks(registry, p, SOCKETS_AFTER);
+  p = openSockets(registry, p);
   p = spendLinks(registry, p);
-  p = socketBest(registry, openSockets(registry, fusePouch(registry, p)));
+  p = socketBest(registry, p);
+  p = socketBest(registry, fusePouch(registry, p));
 
   for (;;) {
     const cheapest = cheapestUpgrade(registry, p);
