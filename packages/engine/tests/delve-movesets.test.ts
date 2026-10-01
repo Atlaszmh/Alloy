@@ -590,8 +590,63 @@ describe('the edit price (movesetEditPrice)', () => {
   it('the rest pair up at the least total price, not by position', () => {
     // Remove the light Fire Bolt and make the heavy Storm Bolt light: E + E (in order, 15 + 5).
     expect(price(chain(A, C), chain(bolt('light', 'storm')))).toBe(2 * E);
-    // Make the heavy Fire Bolt Storm and add a light Storm Bolt: X + (E + X) (in order, 20 + 20).
-    expect(price(chain(bolt('heavy', 'fire')), chain(bolt('light', 'storm'), C))).toBe(E + 2 * X);
+    // Make the heavy Fire Bolt Storm and add a light Storm Bolt: X + E, Storm charged once (in order, 20 + 20).
+    expect(price(chain(bolt('heavy', 'fire')), chain(bolt('light', 'storm'), C))).toBe(E + X);
+    // Leaving a pair unmatched when that's cheaper: remove the heavy Storm Bolt, add a heavy Fire one (Fire is known).
+    expect(price(chain(A, C), chain(A, bolt('heavy', 'fire')))).toBe(2 * E);
+  });
+
+  it('a new element set is charged once per Apply, so a batch never costs more than its edits one by one', () => {
+    const fire: Blow = { kind: 'light', element: 'fire' };
+    const storm: Blow = { kind: 'light', element: 'storm' };
+    const blows = (old: Blow[], next: Blow[]) =>
+      movesetEditPrice(registry, { basic: old }, { basic: next });
+    expect(blows([fire], [fire, storm])).toBe(E + X);
+    expect(blows([fire, storm], [fire, storm, storm])).toBe(E);
+    expect(blows([fire], [fire, storm, storm])).toBe(2 * E + X);
+    // Two moves changed to one new element: Storm charged once, the second removed and re-added.
+    expect(price(chain(A, B), chain(bolt('light', 'storm'), bolt('medium', 'storm')))).toBe(
+      X + 2 * E,
+    );
+  });
+
+  it('is 0 only for the same chain and never beats doing it in two Applies (random triples)', () => {
+    const rng = new SeededRNG(7);
+    const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
+    const kinds: Move['kind'][] = ['light', 'heavy', 'hold'];
+    const sets: ManaType[][] = [
+      ['fire'],
+      ['storm'],
+      ['frost'],
+      ['fire', 'storm'],
+      ['storm', 'fire'],
+    ];
+    const forms = ['bolt', 'lance'] as const;
+    const randomChain = (): Chain => ({
+      moves: Array.from({ length: rng.nextInt(1, 5) }, () => ({
+        kind: pick(kinds),
+        form: pick(forms),
+        elements: pick(sets),
+      })),
+      payment: pick(['mana', 'cast'] as const),
+    });
+    const randomBlows = (): Blow[] =>
+      Array.from({ length: rng.nextInt(1, 5) }, () => ({
+        kind: pick(kinds),
+        element: pick(['fire', 'storm', 'frost'] as const),
+      }));
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    let bad = 0;
+    for (let n = 0; n < 4000; n++) {
+      const basic = n % 2 === 0;
+      const [a, b, c] = basic
+        ? [randomBlows(), randomBlows(), randomBlows()].map((x) => ({ basic: x }))
+        : [randomChain(), randomChain(), randomChain()].map((x) => ({ primary: x }));
+      const p = (x: typeof a, y: typeof a) => movesetEditPrice(registry, x, y);
+      if (p(a, c) > p(a, b) + p(b, c)) bad++;
+      if ((p(a, b) === 0) !== same(a, b)) bad++;
+    }
+    expect(bad).toBe(0);
   });
 
   it('a move left over: a new one costs editDust and, with elements no old move has, elementDust; a removal editDust', () => {

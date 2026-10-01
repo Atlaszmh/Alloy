@@ -120,29 +120,42 @@ function commonRun(a: string[], b: string[]): [number, number][] {
   return pairs;
 }
 
+/** A move's elements as the price matches them ("fire+storm"). */
+function els(m: Move | Blow): string {
+  return elementsOf(m).join('+');
+}
+
 /**
- * The least total of pairing each move of the shorter list with one of the
- * longer (`pair(old, new)`), the longer list's unpaired moves costing `left`
- * each: every assignment is tried (a side holds at most 5 moves, so at most 120).
+ * The least total over every way to pair the old moves left with the new
+ * ones, a move left unpaired included (a removal, or a new move): a pair costs
+ * `pair(old, new)`, an unpaired move `editDust`, and a new element set (no old
+ * move's, and no pair's changed elements) `elementDust` once, however many
+ * new moves take it. A side holds at most 5 moves, so at most 1,546 ways.
  */
 function leastPairing(
   old: (Move | Blow)[],
   now: (Move | Blow)[],
   pair: (o: Move | Blow, m: Move | Blow) => number,
-  left: (m: Move | Blow, isOld: boolean) => number,
+  known: Set<string>,
+  { editDust, elementDust }: { editDust: number; elementDust: number },
 ): number {
-  const swap = old.length > now.length;
-  const [short, long] = swap ? [now, old] : [old, now];
-  const used = long.map(() => false);
+  const used = now.map(() => false);
   const go = (i: number): number => {
-    if (i === short.length)
-      return long.reduce((sum, m, j) => sum + (used[j] ? 0 : left(m, swap)), 0);
-    let best = Infinity;
-    for (let j = 0; j < long.length; j++) {
+    if (i === old.length) {
+      const added = now.filter((_, j) => !used[j]);
+      const sets = new Set(added.map(els).filter((s) => !known.has(s)));
+      return added.length * editDust + sets.size * elementDust;
+    }
+    let best = editDust + go(i + 1); // removed
+    for (let j = 0; j < now.length; j++) {
       if (used[j]) continue;
+      // Changed elements are charged here, so a new move in the same set isn't again.
+      const set = els(now[j]);
+      const charges = !known.has(set);
       used[j] = true;
-      const cost = swap ? pair(long[j], short[i]) : pair(short[i], long[j]);
-      best = Math.min(best, cost + go(i + 1));
+      if (charges) known.add(set);
+      best = Math.min(best, pair(old[i], now[j]) + go(i + 1));
+      if (charges) known.delete(set);
       used[j] = false;
     }
     return best;
@@ -156,7 +169,8 @@ function chainEditPrice(
   old: Chains[ChainSkill] | undefined,
   next: Chains[ChainSkill],
 ): number {
-  const { editDust, elementDust } = registry.getDelveBalance().movesets;
+  const dust = registry.getDelveBalance().movesets;
+  const { editDust, elementDust } = dust;
   const was = movesOf(old);
   const now = movesOf(next);
   // 1. The longest run the two share in order is unchanged, and free.
@@ -172,16 +186,12 @@ function chainEditPrice(
     price += editDust;
     return false;
   });
-  // 3. The rest pair up at the least total price: a changed kind or form, or elements, or both.
+  // 3. The rest pair up at the least total price: a changed kind or form, or elements, or both;
+  // 4. or stay unpaired: a removal, or a new move (a new element set charged once per Apply).
   const shape = (x: Move | Blow) => ('form' in x ? `${x.kind}|${x.form}` : x.kind);
-  const els = (x: Move | Blow) => elementsOf(x).join('+');
   const paired = (o: Move | Blow, m: Move | Blow) =>
     (shape(o) !== shape(m) ? editDust : 0) + (els(o) !== els(m) ? elementDust : 0);
-  // 4. What's left: a new move (its elements free when some old move has them), or a removal.
-  const known = new Set(was.map(els));
-  const left = (m: Move | Blow, isOld: boolean) =>
-    editDust + (isOld || known.has(els(m)) ? 0 : elementDust);
-  price += leastPairing(restOld, restNew, paired, left);
+  price += leastPairing(restOld, restNew, paired, new Set(was.map(els)), dust);
   // 5. A changed payment.
   if (old && !Array.isArray(old) && !Array.isArray(next) && old.payment !== next.payment)
     price += editDust;
@@ -193,10 +203,11 @@ function chainEditPrice(
  * holds (see the weapon movesets spec): moves matched by what they are, not
  * where they stand. The longest run the two share in order is free; a move
  * that only moved costs `editDust`; the rest pair up at the least total price, a changed kind
- * or form costing `editDust` and changed elements `elementDust`; a move left
- * over costs `editDust` (a new one `elementDust` more, unless some old move
- * has its elements); a changed payment costs `editDust`. The caller applies
- * the first-dive freebie.
+ * or form costing `editDust` and changed elements `elementDust`, or stay
+ * unpaired for `editDust` each (a removal, or a new move); a new element set
+ * no old move has costs `elementDust` once per Apply, however many moves
+ * take it; a changed payment costs `editDust`. The caller applies the
+ * first-dive freebie.
  */
 export function movesetEditPrice(
   registry: DataRegistry,
