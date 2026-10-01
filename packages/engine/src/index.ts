@@ -168,6 +168,7 @@ export {
   editPrice,
   addSlot,
   slotPrice,
+  transferMoveset,
 } from './delve/moveset.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
@@ -192,7 +193,9 @@ export {
   baseSlots,
   carriedSkills,
   carriedByText,
+  movesetTransfer,
 } from './loot/moveset.js';
+export type { MovesetTransfer } from './loot/moveset.js';
 export {
   GearItemSchema,
   MoveSchema,

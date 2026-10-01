@@ -116,6 +116,8 @@ export interface BankResult {
   scrap: number;
   /** Mana Dust from items melted by auto-salvage or a full bag. */
   dust: number;
+  /** Links from weapons melted by auto-salvage or a full bag. */
+  links: number;
 }
 
 /**
@@ -154,6 +156,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
       kills: dive.kills + pending.kills,
       scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
       dustEarned: dive.dustEarned + bagged.dust,
+      linksEarned: dive.linksEarned + bagged.links,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       found,
@@ -171,6 +174,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
     newReactions,
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
+    links: bagged.links,
   };
 }
 

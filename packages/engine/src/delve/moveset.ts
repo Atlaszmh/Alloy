@@ -1,5 +1,11 @@
 import type { DataRegistry } from '../data/registry.js';
-import { carriedByText, defaultKind, movesetOf } from '../loot/moveset.js';
+import {
+  carriedByText,
+  defaultKind,
+  defaultMoveset,
+  movesetOf,
+  movesetTransfer,
+} from '../loot/moveset.js';
 import {
   ABILITY_PAYMENTS,
   CHAIN_SKILLS,
@@ -290,5 +296,40 @@ export function addSlot(
     ok: true,
     item: edited.equipped.weapon,
     profile: { ...edited, links: profile.links - price.links, scrap: profile.scrap - price.scrap },
+  };
+}
+
+/**
+ * Move the equipped weapon's moveset onto weapon `uid` in the bag and equip
+ * it, for scrap (`movesetTransfer`); its Links come back. The old weapon goes
+ * to the bag at its base slots, its moves the defaults in its own mana.
+ * Refuses mid-dive, unarmed, for anything but a bag weapon, and when it can't
+ * be paid for.
+ */
+export function transferMoveset(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+): ProfileActionResult {
+  if (isDiveActive(profile)) return refuse(profile, 'Transfer your moveset between dives');
+  const source = profile.equipped.weapon;
+  if (!source) return refuse(profile, UNARMED_TEXT);
+  const target = profile.bag.find((i) => i.uid === uid && i.slot === 'weapon');
+  if (!target) return refuse(profile, 'Transfer onto a weapon in your bag');
+  const t = movesetTransfer(registry, source, target);
+  if (profile.scrap < t.scrap) return refuse(profile, 'Not enough scrap');
+  const item = { ...target, moveset: t.moveset };
+  const old = { ...source, moveset: defaultMoveset(registry, source, source.mana) };
+  return {
+    ok: true,
+    item,
+    links: t.links,
+    profile: {
+      ...profile,
+      equipped: { ...profile.equipped, weapon: item },
+      bag: [...profile.bag.filter((i) => i.uid !== uid), old],
+      scrap: profile.scrap - t.scrap,
+      links: profile.links + t.links,
+    },
   };
 }

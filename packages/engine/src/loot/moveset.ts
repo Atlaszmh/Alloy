@@ -1,12 +1,13 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
-import type {
-  AbilityPayment,
-  AbilitySlot,
-  Chains,
-  ChainSkill,
-  FormId,
-  MoveKind,
+import {
+  CHAIN_SKILLS,
+  type AbilityPayment,
+  type AbilitySlot,
+  type Chains,
+  type ChainSkill,
+  type FormId,
+  type MoveKind,
 } from '../types/ability.js';
 import type { ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, Moveset, Rarity } from '../types/gear.js';
@@ -175,4 +176,64 @@ export function heroChains(
   const weapon = equipped.weapon;
   if (weapon) return movesetOf(registry, weapon).chains;
   return defaultMoveset(registry, UNARMED, pair.primary ?? 'fire').chains;
+}
+
+/** What moving one weapon's moveset onto another gives (see `movesetTransfer`). */
+export interface MovesetTransfer {
+  /** The target's moveset once the chains have moved onto it. */
+  moveset: Moveset;
+  /** Extra slots that move: the price counts these. */
+  moved: number;
+  /**
+   * Links back: the extras past the cap, the extras of chains the target
+   * can't carry, and the target's own extras on the chains replaced.
+   */
+  links: number;
+  /** Scrap: `transferScrap` for each extra slot that moves. */
+  scrap: number;
+}
+
+/**
+ * `source`'s moveset moved onto `target`: each chain the target carries keeps
+ * its extra slots over the target's base (at most the cap, the rest back as
+ * Links), its moves past the new slots dropped from the end; a chain the
+ * target can't carry stays behind, its extras back as Links; the target's own
+ * extras on the chains replaced come back as Links; and a skill only the
+ * target carries keeps the target's chain.
+ */
+export function movesetTransfer(
+  registry: DataRegistry,
+  source: GearItem,
+  target: GearItem,
+): MovesetTransfer {
+  const bal = registry.getDelveBalance();
+  const from = movesetOf(registry, source);
+  const onto = movesetOf(registry, target);
+  const carried = carriedSkills(registry, target.rarity);
+  const chains = { ...onto.chains };
+  const slots = { ...onto.slots };
+  let moved = 0;
+  let links = 0;
+  for (const skill of CHAIN_SKILLS) {
+    const chain = from.chains[skill];
+    if (!chain) continue;
+    const extra = from.slots[skill]! - baseSlots(registry, source.baseId, skill);
+    if (!carried.includes(skill)) {
+      links += extra;
+      continue;
+    }
+    const base = baseSlots(registry, target.baseId, skill);
+    const n = Math.min(base + extra, bal.chains.cap[skill]);
+    links += base + extra - n + (onto.slots[skill]! - base);
+    moved += n - base;
+    const kept = Array.isArray(chain)
+      ? chain.slice(0, n).map((b) => ({ ...b }))
+      : {
+          ...chain,
+          moves: chain.moves.slice(0, n).map((m) => ({ ...m, elements: [...m.elements] })),
+        };
+    (chains as Record<ChainSkill, unknown>)[skill] = kept;
+    slots[skill] = n;
+  }
+  return { moveset: { chains, slots }, moved, links, scrap: moved * bal.movesets.transferScrap };
 }

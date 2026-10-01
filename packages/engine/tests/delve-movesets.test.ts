@@ -14,10 +14,24 @@ import {
   heroChains,
 } from '../src/loot/moveset.js';
 import { GearItemSchema } from '../src/delve/profile-schema.js';
-import { startDive } from '../src/delve/dive.js';
-import { addSlot, movesetEditPrice, setChain, setChains, slotPrice } from '../src/delve/moveset.js';
+import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
+import {
+  addSlot,
+  movesetEditPrice,
+  setChain,
+  setChains,
+  slotPrice,
+  transferMoveset,
+} from '../src/delve/moveset.js';
 import { bindSecondary } from '../src/delve/pair.js';
-import { createDelveProfile, parseDelveProfile, unequipSlot } from '../src/delve/profile.js';
+import {
+  createDelveProfile,
+  fuseGear,
+  parseDelveProfile,
+  salvageItems,
+  setAutoSalvage,
+  unequipSlot,
+} from '../src/delve/profile.js';
 import V5 from './fixtures/delve-v5-saves.json';
 import { abilityReady, nextMove, pressMove, pressStep } from '../src/arpg/abilities/cast.js';
 import { gainCharge } from '../src/arpg/abilities/defend.js';
@@ -30,7 +44,7 @@ import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
-import type { GearItem, Rarity } from '../src/types/gear.js';
+import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import type { ManaType } from '../src/types/mana.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import {
@@ -774,5 +788,167 @@ describe('slots: addSlot', () => {
     expect(reason(full)).toBe('This chain has every slot');
     expect(reason({ ...p, links: 0 })).toBe('Not enough Links');
     expect(reason({ ...p, scrap: 19 })).toBe('Not enough scrap');
+  });
+});
+
+/** `w` with a moveset of these slots, every move its default in `w`'s mana. */
+function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
+  return { ...w, moveset: defaultMoveset(registry, w, w.mana, slots) };
+}
+
+describe('Links: salvage, fusing and banking', () => {
+  const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 3, defensive: 1 }); // 3 extra
+  const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
+
+  it('salvaging a weapon gives a Link for each extra slot; other gear none', () => {
+    const chest = generateItem(
+      registry,
+      { uid: 'c', ilvl: 2, rarity: 'rare', slot: 'chest' },
+      new SeededRNG(2),
+    );
+    const res = salvageItems(registry, { ...hero(), bag: [rare, chest] }, [rare.uid, chest.uid]);
+    expect(res.links).toBe(3);
+    expect(res.profile.links).toBe(3);
+  });
+
+  it('auto-salvage and a full bag give them too, and banking reports them for the dive', () => {
+    const p = startDive(registry, setAutoSalvage(hero(), 'rare', true), 1);
+    const w = beginFloor(registry, p);
+    w.pending.items = [rare];
+    const res = bankWorld(registry, p, w);
+    expect(res.links).toBe(3);
+    expect(res.profile.links).toBe(3);
+    expect(res.profile.dive!.linksEarned).toBe(3);
+
+    const full = { ...startDive(registry, hero(), 1), bag: Array(bal.loot.bagSize).fill(rare) };
+    const w2 = beginFloor(registry, full);
+    w2.pending.items = [rare];
+    expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, links: 3 });
+  });
+
+  it('fusing three weapons refunds their extra slots as Links; the fused weapon rolls its own', () => {
+    const magic = (uid: string, primary: number) => ({
+      ...slotted(weapon('magic', 4, 'axe'), { basic: 3, primary, defensive: 1 }),
+      uid,
+    });
+    const p = { ...hero(), scrap: 9999, bag: [magic('a', 2), magic('b', 1), magic('c', 2)] };
+    const res = fuseGear(registry, p, ['a', 'b', 'c']);
+    expect(res.ok).toBe(true);
+    expect(res.links).toBe(2);
+    expect(res.profile.links).toBe(2);
+    expect(res.item!.rarity).toBe('rare');
+    expect(extraSlots(registry, res.item!)).toBeGreaterThanOrEqual(1); // a rare's own 1–2
+  });
+});
+
+describe('transfer', () => {
+  const T = bal.movesets.transferScrap;
+  /** A Fire hero wielding `w`, with scrap to spare, and `bag` in the bag. */
+  const holding = (w: GearItem, ...bag: GearItem[]): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    return { ...p, equipped: { ...p.equipped, weapon: w }, bag, scrap: 1000 };
+  };
+  const built = (w: GearItem, chains: Moveset['chains'], slots: Moveset['slots']): GearItem => {
+    const m = slotted(w, slots).moveset!;
+    return { ...w, moveset: { chains: { ...m.chains, ...chains }, slots: m.slots } };
+  };
+  const lance: Chain = {
+    moves: [
+      { kind: 'heavy', form: 'lance', elements: ['fire'] },
+      { kind: 'light', form: 'lance', elements: ['fire'] },
+    ],
+    payment: 'cast',
+  };
+
+  it("moves each chain with its extra slots onto the target's base, for scrap; the target's replaced extras come back as Links", () => {
+    // A rare sword: a 4-slot string (1 extra), a 3-slot Primary (2), a 2-slot Defensive (1).
+    const sword = built(
+      weapon('rare', 1, 'sword'),
+      { primary: lance },
+      { basic: 4, primary: 3, defensive: 2 },
+    );
+    // A rare axe with its own extra Primary slot.
+    const axe = slotted(
+      { ...weapon('rare', 2, 'axe'), uid: 'axe' },
+      { basic: 3, primary: 2, defensive: 1 },
+    );
+    const res = transferMoveset(registry, holding(sword, axe), 'axe');
+    expect(res.ok).toBe(true);
+    const moved = res.profile.equipped.weapon!;
+    expect(moved.uid).toBe('axe');
+    expect(moved.moveset!.slots).toEqual({ basic: 4, primary: 3, defensive: 2 });
+    expect(moved.moveset!.chains).toEqual(sword.moveset!.chains);
+    expect(res.links).toBe(1);
+    expect(res.profile.links).toBe(1);
+    expect(res.profile.scrap).toBe(1000 - 4 * T);
+    // The sword goes back to the bag at its base slots, its moves the defaults in its own mana.
+    expect(res.profile.bag).toEqual([
+      { ...sword, moveset: defaultMoveset(registry, sword, sword.mana) },
+    ]);
+  });
+
+  it('a basic chain onto a shorter string drops moves from the end; past the cap its extras come back as Links', () => {
+    // A dagger's full string (4 + 1 extra) onto a maul (2): 3 slots, the last two blows gone.
+    const dagger = slotted(weapon('magic', 3, 'dagger'), { basic: 5, primary: 1, defensive: 1 });
+    const maul = { ...weapon('common', 4, 'maul'), uid: 'maul' };
+    const res = transferMoveset(registry, holding(dagger, maul), 'maul');
+    const basic = res.profile.equipped.weapon!.moveset!;
+    expect(basic.slots.basic).toBe(3);
+    expect(basic.chains.basic).toEqual(dagger.moveset!.chains.basic!.slice(0, 3));
+    expect(res.profile.scrap).toBe(1000 - T);
+    // A sword's 5-slot string (2 extra) onto a dagger (4): 5 slots, 1 Link back.
+    const sword = slotted(weapon('rare', 5, 'sword'), { basic: 5, primary: 1, defensive: 1 });
+    const onto = { ...weapon('common', 6, 'dagger'), uid: 'd' };
+    const over = transferMoveset(registry, holding(sword, onto), 'd');
+    expect(over.profile.equipped.weapon!.moveset!.slots.basic).toBe(5);
+    expect(over.links).toBe(1);
+    expect(over.profile.scrap).toBe(1000 - T);
+  });
+
+  it("leaves chains the target can't carry behind, their extras back as Links, and prices only what moves", () => {
+    const epic = slotted(weapon('epic', 7, 'sword'), {
+      basic: 3,
+      primary: 2,
+      defensive: 1,
+      ultimate: 3,
+    });
+    const common = { ...weapon('common', 8, 'axe'), uid: 'axe' };
+    const res = transferMoveset(registry, holding(epic, common), 'axe');
+    const m = res.profile.equipped.weapon!.moveset!;
+    expect(Object.keys(m.chains)).toEqual(['basic', 'primary']);
+    expect(m.slots).toEqual({ basic: 3, primary: 2 });
+    expect(res.links).toBe(2); // the Ultimate's two extras
+    expect(res.profile.scrap).toBe(1000 - T); // the Primary's one extra moved
+  });
+
+  it("keeps the target's own chain for a skill only it carries", () => {
+    const common = weapon('common', 9, 'sword');
+    const epic = slotted(
+      { ...weapon('epic', 10, 'axe'), uid: 'axe' },
+      { basic: 3, primary: 1, defensive: 1, ultimate: 2 },
+    );
+    const res = transferMoveset(registry, holding(common, epic), 'axe');
+    const m = res.profile.equipped.weapon!.moveset!;
+    expect(m.chains.ultimate).toEqual(epic.moveset!.chains.ultimate);
+    expect(m.slots).toEqual({ basic: 3, primary: 1, defensive: 1, ultimate: 2 });
+    expect([res.links, res.profile.scrap]).toEqual([0, 1000]);
+  });
+
+  it('refuses mid-dive, unarmed, anything but a bag weapon, and without the scrap', () => {
+    const sword = slotted(weapon('rare', 11, 'sword'), { basic: 3, primary: 3, defensive: 1 });
+    const axe = { ...weapon('rare', 12, 'axe'), uid: 'axe' };
+    const helm = generateItem(
+      registry,
+      { uid: 'helm', ilvl: 2, rarity: 'rare', slot: 'helm' },
+      new SeededRNG(4),
+    );
+    const p = holding(sword, axe, helm);
+    const reason = (q: DelveProfile, uid = 'axe') => transferMoveset(registry, q, uid).reason;
+    expect(reason(startDive(registry, p, 1))).toBe('Transfer your moveset between dives');
+    expect(reason(unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
+    expect(reason(p, p.equipped.chest!.uid)).toBe('Transfer onto a weapon in your bag');
+    expect(reason(p, 'helm')).toBe('Transfer onto a weapon in your bag');
+    expect(reason(p, 'nope')).toBe('Transfer onto a weapon in your bag');
+    expect(reason({ ...p, scrap: 2 * bal.movesets.transferScrap - 1 })).toBe('Not enough scrap');
   });
 });

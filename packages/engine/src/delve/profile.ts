@@ -26,7 +26,7 @@ import {
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
-import { baseSlots, carriedSkills, defaultChain, movesetOf } from '../loot/moveset.js';
+import { baseSlots, carriedSkills, defaultChain, extraSlots, movesetOf } from '../loot/moveset.js';
 import {
   ABILITY_SLOTS,
   CHAIN_SKILLS,
@@ -46,6 +46,8 @@ export interface ProfileActionResult {
   item?: GearItem;
   /** The chains' moves the op changed to fit the pair (Realign), a fix each. */
   fixed?: ChainFix[];
+  /** Links the op gave back (a fuse's weapons' extra slots, a transfer's). */
+  links?: number;
 }
 
 function perRarity<T>(value: T): Record<Rarity, T> {
@@ -374,6 +376,8 @@ export interface BagInsertResult {
   scrap: number;
   /** Mana Dust from the melted items outside the pair. */
   dust: number;
+  /** Links from the melted weapons' extra slots. */
+  links: number;
   bagFull: boolean;
   newCodex: string[];
 }
@@ -391,6 +395,7 @@ export function addLootToBag(
   const salvaged: GearItem[] = [];
   let scrap = 0;
   let dust = 0;
+  let links = 0;
   let bagFull = false;
   for (const item of items) {
     const auto = item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
@@ -399,6 +404,7 @@ export function addLootToBag(
       salvaged.push(item);
       scrap += salvageValue(registry, item);
       dust += salvageDust(registry, item, profile.pair);
+      links += extraSlots(registry, item);
     } else {
       bag.push(item);
       kept.push(item);
@@ -410,12 +416,14 @@ export function addLootToBag(
       bag,
       scrap: recorded.profile.scrap + scrap,
       manaDust: recorded.profile.manaDust + dust,
+      links: recorded.profile.links + links,
       stats: { ...recorded.profile.stats, scrapEarned: recorded.profile.stats.scrapEarned + scrap },
     },
     kept,
     salvaged,
     scrap,
     dust,
+    links,
     bagFull,
     newCodex: recorded.newCodex,
   };
@@ -460,20 +468,25 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
   return { ...profile, autoSalvage: { ...profile.autoSalvage, [rarity]: on } };
 }
 
-/** Salvage bag items. Locked or missing uids are skipped. Gear outside the pair also gives Mana Dust. */
+/**
+ * Salvage bag items. Locked or missing uids are skipped. Gear outside the pair
+ * also gives Mana Dust, and a weapon a Link for each extra slot.
+ */
 export function salvageItems(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
-): { profile: DelveProfile; scrap: number; dust: number; count: number } {
+): { profile: DelveProfile; scrap: number; dust: number; links: number; count: number } {
   const targets = new Set(uids);
   let scrap = 0;
   let dust = 0;
+  let links = 0;
   let count = 0;
   const bag = profile.bag.filter((item) => {
     if (!targets.has(item.uid) || item.locked) return true;
     scrap += salvageValue(registry, item);
     dust += salvageDust(registry, item, profile.pair);
+    links += extraSlots(registry, item);
     count++;
     return false;
   });
@@ -483,10 +496,12 @@ export function salvageItems(
       bag,
       scrap: profile.scrap + scrap,
       manaDust: profile.manaDust + dust,
+      links: profile.links + links,
       stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + scrap },
     },
     scrap,
     dust,
+    links,
     count,
   };
 }
@@ -580,6 +595,11 @@ export function reforgeGear(
   };
 }
 
+/**
+ * Fuse three bag items of one rarity into one of the next (`fuseItems`), for
+ * scrap. The inputs' weapon extra slots come back as Links, as salvaging them
+ * would give (`links`); a fused weapon rolls its own moveset.
+ */
 export function fuseGear(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -594,16 +614,18 @@ export function fuseGear(
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
 
   const result = fuseItems(registry, inputs, `g${profile.nextUid}`, forgeRng(profile));
+  const links = inputs.reduce((sum, i) => sum + extraSlots(registry, i), 0);
   const consumed = new Set(uids);
   const recorded = recordFinds(
     {
       ...profile,
       bag: [...profile.bag.filter((i) => !consumed.has(i.uid)), result],
       scrap: profile.scrap - cost,
+      links: profile.links + links,
       nextUid: profile.nextUid + 1,
       forgeCount: profile.forgeCount + 1,
     },
     [result],
   );
-  return { ok: true, item: result, profile: recorded.profile };
+  return { ok: true, item: result, profile: recorded.profile, links };
 }
