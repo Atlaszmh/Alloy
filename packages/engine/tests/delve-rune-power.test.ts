@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { resolveAbility } from '../src/arpg/abilities/resolve.js';
+import { botInput } from '../src/arpg/bot.js';
 import { dpsCombos, dpsKey, simulateDps, type DpsSetup } from '../src/arpg/dps-sim.js';
 import { sandboxWeapon } from '../src/arpg/sandbox.js';
 import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
@@ -12,7 +13,7 @@ import { ABILITY_SLOTS, type Chains } from '../src/types/ability.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { ManaType } from '../src/types/mana.js';
 import type { RuneRef } from '../src/types/rune.js';
-import { chainsOf, gear, registry, withChains } from './fixtures/arena.js';
+import { arena, chainsOf, dummy, gear, registry, withChains } from './fixtures/arena.js';
 
 /**
  * Power and runes (see the runes spec's "Power and the autopilot"): Power is
@@ -195,5 +196,24 @@ describe('Power values a rune as the DPS Lab measures it (tier III, depth 10)', 
       }
     }
     expect(drained).toBeGreaterThan(0);
+  });
+});
+
+describe('the bot and rune drops', () => {
+  it('detours for a rune on the floor, as for an item, while no foe is near', () => {
+    // The hero stands at (13, 36); its only foe is far up the arena.
+    const w = arena([dummy(13, 10)]);
+    w.drops.push({
+      id: 9000,
+      kind: 'rune',
+      x: 16,
+      y: 36,
+      rune: { id: 'echo', tier: 1 },
+      amount: 0,
+      born: 0,
+      vacuum: false,
+      dead: false,
+    });
+    expect(botInput(registry, w).move.x).toBeGreaterThan(0.9);
   });
 });
