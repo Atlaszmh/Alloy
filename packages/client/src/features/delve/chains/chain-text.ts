@@ -88,3 +88,14 @@ export function runeCandidates(
           ),
     );
 }
+
+/** Runes counted by id and tier, in the order first seen: [{ Quick I, 1 }, { Split III, 2 }]. */
+export function countRunes(refs: readonly RuneRef[]): { rune: RuneRef; count: number }[] {
+  const out: { rune: RuneRef; count: number }[] = [];
+  for (const r of refs) {
+    const seen = out.find((o) => o.rune.id === r.id && o.rune.tier === r.tier);
+    if (seen) seen.count++;
+    else out.push({ rune: r, count: 1 });
+  }
+  return out;
+}

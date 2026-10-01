@@ -1,8 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { DiveState } from '@alloy/engine';
 import { RARITY_ORDER } from '@alloy/engine';
+import { useDelveStore } from '@/stores/delveStore';
 import { ItemTile } from './ItemTile';
 import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
+import { countRunes } from './chains/chain-text';
+import { getDelveRegistry } from './registry';
+import { runeName } from './runes/rune-style';
 
 interface DiveSummaryProps {
   dive: DiveState;
@@ -15,6 +19,12 @@ interface DiveSummaryProps {
 export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: DiveSummaryProps) {
   const died = dive.phase === 'dead';
   const titleRef = useRef<HTMLDivElement>(null);
+  const registry = getDelveRegistry();
+  // The runes picked up this dive by name: this session's (after a reload, only their count).
+  const diveRunes = useDelveStore((s) => s.diveRunes);
+  const runeNames = countRunes(diveRunes)
+    .map(({ rune, count }) => `${runeName(registry, rune)}${count > 1 ? ` ×${count}` : ''}`)
+    .join(', ');
 
   useEffect(() => {
     titleRef.current?.animate(
@@ -114,6 +124,13 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
             <span data-testid="dive-links">
               {' '}
               · 🔗 {dive.linksEarned} Link{dive.linksEarned > 1 ? 's' : ''} from salvaged weapons
+            </span>
+          )}
+          {dive.runesEarned > 0 && (
+            <span data-testid="dive-runes">
+              {' '}
+              · ◈ {dive.runesEarned} rune{dive.runesEarned > 1 ? 's' : ''} found
+              {runeNames && `: ${runeNames}`}
             </span>
           )}
         </div>

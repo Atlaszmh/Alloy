@@ -119,4 +119,33 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
     expect(screen.getByTestId('equip-upgrades')).toHaveTextContent('▲ Equip upgrades (1)');
   });
+
+  const found = () =>
+    store().pushDiveRunes([
+      { id: 'split', tier: 3 },
+      { id: 'split', tier: 3 },
+      { id: 'quick', tier: 1 },
+    ]);
+
+  it('the tray names the runes found this dive, grouped', () => {
+    dive();
+    found();
+    render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
+    // Each after its glyph, newest first.
+    const [first, second, ...more] = screen.getAllByTestId('loot-rune');
+    expect(first).toHaveTextContent(/Quick I$/);
+    expect(second).toHaveTextContent(/Split III ×2$/);
+    expect(more).toEqual([]);
+  });
+
+  it('the feed shows them too, even with no item found', () => {
+    store().startDive(1);
+    found();
+    render(<PickupFeed onSelect={() => {}} top={0} />);
+    expect(screen.getByTestId('pickup-feed')).toBeInTheDocument();
+    const [first, second, ...more] = screen.getAllByTestId('feed-rune');
+    expect(first).toHaveTextContent(/Quick I$/);
+    expect(second).toHaveTextContent(/Split III ×2$/);
+    expect(more).toEqual([]);
+  });
 });

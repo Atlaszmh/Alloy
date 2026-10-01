@@ -62,6 +62,7 @@ export function useArena(
     const res = bankWorld(registry, store.profile, world);
     store.setProfile(res.profile);
     store.pushDiveDrops(res.kept.map((i) => i.uid));
+    store.pushDiveRunes(res.runes);
     store.markNew(res.kept.map((i) => i.uid));
     if (res.kept.length + res.salvaged.length > 0) {
       onUiRef.current({
@@ -101,6 +102,7 @@ export function useArena(
       const res = completeFloor(registry, store.profile, world);
       store.setProfile(res.profile);
       store.pushDiveDrops(res.kept.map((i) => i.uid));
+      store.pushDiveRunes(res.runes);
       onUiRef.current({
         kind: 'cleared',
         bountyAdded: res.bountyAdded,
@@ -120,7 +122,8 @@ export function useArena(
     loadout,
     frame: checkEnd,
     onEvents: (world) => {
-      if (world.pending.items.length > 0 || world.pending.reactions.length > 0) bank(world);
+      const { items, reactions, runes } = world.pending;
+      if (items.length + reactions.length + runes.length > 0) bank(world);
     },
     onHeroDead: () => {},
     speed: 1,
