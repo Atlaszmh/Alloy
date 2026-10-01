@@ -26,7 +26,13 @@ import {
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
-import { baseSlots, carriedByText, movesetOf } from '../loot/moveset.js';
+import {
+  baseSlots,
+  carriedByText,
+  carriedSkills,
+  defaultChain,
+  movesetOf,
+} from '../loot/moveset.js';
 import {
   ABILITY_PAYMENTS,
   ABILITY_SLOTS,
@@ -208,10 +214,26 @@ type ProfileV5 = Omit<DelveProfile, 'version' | 'links'> & {
   chainCaps: Record<ChainSkill, number>;
 };
 
-/** Every weapon's moveset: a weapon without one gets its base defaults in its own mana. */
+/**
+ * Every weapon's moveset fitted to the data: a weapon without one gets its
+ * base defaults in its own mana; a chain its rarity no longer carries is
+ * dropped, a newly carried one gets its base default; and a basic chain's
+ * slots are raised to its weapon's string.
+ */
 function fitMovesets(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const fit = (item: GearItem): GearItem =>
-    item.slot === 'weapon' ? { ...item, moveset: movesetOf(registry, item) } : item;
+  const fit = (item: GearItem): GearItem => {
+    if (item.slot !== 'weapon') return item;
+    const old = movesetOf(registry, item);
+    const moveset: Moveset = { chains: {}, slots: {} };
+    for (const skill of carriedSkills(registry, item.rarity)) {
+      const base = baseSlots(registry, item.baseId, skill);
+      const chain = old.chains[skill];
+      const set = moveset.chains as Record<ChainSkill, unknown>;
+      set[skill] = chain ?? defaultChain(registry, skill, item.baseId, item.mana, base);
+      moveset.slots[skill] = chain ? Math.max(old.slots[skill]!, base) : base;
+    }
+    return { ...item, moveset };
+  };
   const equipped: EquippedGear = {};
   for (const slot of GEAR_SLOTS) {
     const item = profile.equipped[slot];
@@ -227,25 +249,41 @@ function chainLength(chain: Chains[ChainSkill]): number {
 
 /**
  * A version 5 save as version 6: the equipped weapon takes the profile's
- * chains, each at slots of its length (at least its base); every other weapon
- * gets its base defaults. An unarmed save keeps no chains: the unarmed
- * defaults follow the pair.
+ * chains, each at slots of its length (at least its base), but for the chains
+ * its rarity doesn't carry, which are dropped (their moves past one slot come
+ * back as Links); every other weapon gets its base defaults. An unarmed save
+ * keeps no chains: the unarmed defaults follow the pair.
  */
 function fromV5(registry: DataRegistry, old: ProfileV5): ParsedDelveProfile {
   const { chains, chainCaps: _caps, ...rest } = old;
   const weapon = old.equipped.weapon;
+  const dropped: ChainSkill[] = [];
+  let links = 0;
   let equipped = old.equipped;
   if (weapon) {
-    const slots = (skill: ChainSkill) =>
-      Math.max(chainLength(chains[skill]), baseSlots(registry, weapon.baseId, skill));
-    const moveset: Moveset = {
-      chains,
-      slots: Object.fromEntries(CHAIN_SKILLS.map((s) => [s, slots(s)])),
-    };
+    const carried = carriedSkills(registry, weapon.rarity);
+    const moveset: Moveset = { chains: {}, slots: {} };
+    for (const skill of CHAIN_SKILLS) {
+      const length = chainLength(chains[skill]);
+      const base = baseSlots(registry, weapon.baseId, skill);
+      if (!carried.includes(skill)) {
+        dropped.push(skill);
+        links += Math.max(0, length - base);
+        continue;
+      }
+      (moveset.chains as Record<ChainSkill, unknown>)[skill] = chains[skill];
+      moveset.slots[skill] = Math.max(length, base);
+    }
     equipped = { ...equipped, weapon: { ...weapon, moveset } };
   }
-  const profile = fitMovesets(registry, { ...rest, version: 6, links: 0, equipped });
-  return { profile, fixed: [], dropped: [], movesetReset: false };
+  const primary = old.pair.primary ?? 'fire';
+  const unarmed = {
+    ...defaultChains(registry, primary, null),
+    basic: defaultBasic(registry, null, primary, old.pair.secondary),
+  };
+  const movesetReset = !weapon && JSON.stringify(chains) !== JSON.stringify(unarmed);
+  const profile = fitMovesets(registry, { ...rest, version: 6, links, equipped });
+  return { profile, fixed: [], dropped, movesetReset };
 }
 
 /** Version 2 (spell bar): everything kept but the spells. It had no ability builds. */
