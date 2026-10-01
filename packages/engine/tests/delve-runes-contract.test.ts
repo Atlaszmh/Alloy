@@ -26,6 +26,7 @@ import { stopKinds } from '../src/delve/stops.js';
 import {
   addToPouch,
   extraShotPower,
+  loadText,
   pouchCount,
   runeActive,
   runeFits,
@@ -407,16 +408,16 @@ describe('rune helpers: text', () => {
     runeText(registry, { id, tier }, on);
 
   it('fills the templates: plain values, percentages and signed changes', () => {
-    expect(text('split', 1)).toEqual({
+    expect(text('split', 1)).toMatchObject({
       effect: 'Splits into 2 shards on hit, each at 30% power',
       tradeoff: null,
     });
     expect(text('split', 4).effect).toBe('Splits into 3 shards on hit, each at 45% power');
-    expect(text('quick', 3)).toEqual({
+    expect(text('quick', 3)).toMatchObject({
       effect: 'Beat −20%, cooldown −20%',
       tradeoff: 'Power −10%',
     });
-    expect(text('heavy', 2)).toEqual({
+    expect(text('heavy', 2)).toMatchObject({
       effect: 'Power +22.5%, and it staggers',
       tradeoff: 'Beat and wind-up +20%',
     });
@@ -428,7 +429,7 @@ describe('rune helpers: text', () => {
   });
 
   it('words Multi-shot by the move: the cut in full, halved on a Volley, none on a Barrage', () => {
-    expect(text('multishot', 2)).toEqual({
+    expect(text('multishot', 2)).toMatchObject({
       effect: 'Extra shots: +1',
       tradeoff: 'Each shot at 68.75% power',
     });
@@ -447,6 +448,75 @@ describe('rune helpers: text', () => {
         expect(t.tradeoff === null).toBe(def.tradeoff === null);
         if (t.tradeoff) expect(t.tradeoff).not.toMatch(/[{}]/);
       }
+  });
+});
+
+describe('rune helpers: costs (the rune costs spec)', () => {
+  /**
+   * A fresh registry whose load factors are all 1, or `over`'s, and whose Echo row is the
+   * spec's, so no tuning of the data moves these texts.
+   */
+  const priced = (over: object = {}) => {
+    const r = engine.createDefaultRegistry();
+    Object.assign(
+      r.getDelveBalance().runes.load,
+      { bySlot: { primary: 1, defensive: 1, ultimate: 1 }, byForm: {}, charge: 1, cast: 1 },
+      over,
+    );
+    r.getRune('echo').load = [0.27, 0.36, 0.45, 0.54, 0.63];
+    return r;
+  };
+  const echo3: RuneRef = { id: 'echo', tier: 3 };
+  const bolt = { form: 'bolt' } as const;
+
+  it("prices a rune on a move in its chain's payment", () => {
+    const r = priced();
+    expect(runeText(r, echo3, bolt, { payment: 'mana' }).cost).toBe('+45% cost');
+    expect(runeText(r, echo3, bolt, { payment: 'charge' }).cost).toBe('+45% charge');
+    expect(runeText(r, echo3, bolt, { payment: 'cast' }).cost).toBe('+45% cast wind-up, +45% cost');
+    expect(runeText(r, echo3, bolt).cost).toBe('+45% cost');
+  });
+
+  it("shows the eased figure when the move's ease is known, else the raw one", () => {
+    const r = priced();
+    expect(runeText(r, echo3, bolt, { payment: 'mana', ease: 0.45 }).cost).toBe('+25% cost');
+    expect(runeText(r, echo3, bolt, { payment: 'mana', ease: 0 }).cost).toBe('+45% cost');
+  });
+
+  it("applies the slot's and the form's factors, and the payment's conversions", () => {
+    const r = priced({
+      bySlot: { primary: 0.5, defensive: 1, ultimate: 1 },
+      byForm: { bolt: 4 },
+      charge: 2,
+      cast: 2,
+    });
+    expect(runeText(r, echo3, bolt, { payment: 'mana' }).cost).toBe('+90% cost');
+    const nova = { form: 'nova' } as const;
+    expect(runeText(r, echo3, nova, { payment: 'mana' }).cost).toBe('+45% cost');
+    expect(runeText(r, echo3, nova, { payment: 'charge' }).cost).toBe('+90% charge');
+    expect(runeText(r, echo3, nova, { payment: 'cast' }).cost).toBe('+90% cast wind-up, +45% cost');
+  });
+
+  it("prices the pouch (no target) at its tier's raw load: no factor, no ease", () => {
+    const r = priced({ bySlot: { primary: 0, defensive: 0, ultimate: 0 }, byForm: { bolt: 4 } });
+    expect(runeText(r, echo3).cost).toBe('+45% cost');
+    expect(runeText(r, { id: 'echo', tier: 5 }, undefined, { ease: 0.6 }).cost).toBe('+63% cost');
+  });
+
+  it('names no cost on a blow, nor where the share comes to 0', () => {
+    const r = priced({ bySlot: { primary: 0, defensive: 1, ultimate: 1 } });
+    const blow = { weapon: 'sword', kind: 'heavy' } as const;
+    expect(runeText(r, echo3, blow, { payment: 'mana' }).cost).toBeNull();
+    expect(runeText(r, echo3, bolt, { payment: 'mana' }).cost).toBeNull();
+    expect(runeText(r, echo3, { form: 'nova' }, { payment: 'mana' }).cost).toBe('+45% cost');
+  });
+
+  it("words a move's total load by its payment, in whole percentages", () => {
+    const r = priced();
+    expect(loadText(r, 1.0725, 'mana')).toBe('+107% cost');
+    expect(loadText(r, 1.0725)).toBe('+107% cost');
+    expect(loadText(r, 1.0725, 'charge')).toBe('+107% charge');
+    expect(loadText(r, 1.0725, 'cast')).toBe('+107% cast wind-up, +107% cost');
   });
 });
 

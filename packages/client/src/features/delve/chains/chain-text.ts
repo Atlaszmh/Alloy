@@ -1,7 +1,12 @@
 import {
+  resolveAbility,
   runeFits,
+  socketsOf,
+  type AbilitySlot,
+  type Chain,
   type ChainSkill,
   type DataRegistry,
+  type HeroStats,
   type ManaType,
   type MoveKind,
   type RunePouch,
@@ -80,6 +85,28 @@ export function runeCandidates(
             n > 0 ? [{ rune: { id: def.id, tier: (i + 1) as RuneTier }, count: n }] : [],
           ),
     );
+}
+
+/**
+ * `candidates` for socket `at.socket` of move `at.index` of an ability's chain, each marked
+ * dormant when it would do nothing there: resolving the move with it in the socket leaves it out
+ * of `ResolvedAbility.runes` (a Pierce on an Earth Bolt), the rule the builder's dormant marks
+ * follow. The picker dims it and shows no price. A blow's (`at` null) stay unmarked: blows are free.
+ */
+export function markIdle(
+  registry: DataRegistry,
+  stats: HeroStats,
+  at: { slot: AbilitySlot; chain: Chain; index: number; socket: number } | null,
+  candidates: readonly { rune: RuneRef; count: number | null }[],
+): { rune: RuneRef; count: number | null; dormant: boolean }[] {
+  return candidates.map((c) => {
+    if (!at) return { ...c, dormant: false };
+    const move = at.chain.moves[at.index];
+    // Dormancy doesn't depend on tier, so the Training Grounds' tier-I candidates mark every tier.
+    const runes = socketsOf(move).map((r, k) => (k === at.socket ? c.rune : r));
+    const ab = resolveAbility(registry, at.slot, { ...move, runes }, at.chain.payment, stats);
+    return { ...c, dormant: !ab.runes.some((r) => r.id === c.rune.id) };
+  });
 }
 
 /** Runes counted by id and tier, in the order first seen: [{ Quick I, 1 }, { Split III, 2 }]. */

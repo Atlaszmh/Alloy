@@ -36,7 +36,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
-import { SKILL_NAME, blowText, moveText, runeCandidates } from './chains/chain-text';
+import { SKILL_NAME, blowText, markIdle, moveText, runeCandidates } from './chains/chain-text';
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
 import { SocketRow } from './runes/SocketRow';
@@ -438,14 +438,25 @@ function RunePick({ take }: { take: Take }) {
   const rows = CHAIN_SKILLS.flatMap((skill) => {
     const chain = chains[skill];
     if (!chain) return [];
+    const resolved = Array.isArray(chain)
+      ? null
+      : resolveChain(registry, stats, skill as AbilitySlot, chain);
     const names = Array.isArray(chain)
       ? chain.map((b) => blowText(registry, b))
-      : resolveChain(registry, stats, skill as AbilitySlot, chain).moves.map(moveText);
+      : resolved!.moves.map(moveText);
+    // An ability move's ease prices its runes (a blow has none).
     return movesOf(chain).flatMap((move, index) =>
-      socketsOf(move).includes(null) ? [{ skill, index, move, name: names[index] }] : [],
+      socketsOf(move).includes(null)
+        ? [{ skill, index, move, name: names[index], ease: resolved?.moves[index].ease }]
+        : [],
     );
   });
   const picked = at && rows.find((r) => r.skill === at.skill && r.index === at.index);
+  // An ability move's saved chain: its payment words the runes' prices (a blow has none).
+  const ability =
+    at && picked && picked.skill !== 'basic'
+      ? { slot: picked.skill, chain: chains[picked.skill]! }
+      : null;
   return (
     <div className="flex flex-col gap-1.5">
       {rows.map(({ skill, index, move, name }) => (
@@ -470,13 +481,20 @@ function RunePick({ take }: { take: Take }) {
       ))}
       {at && picked && (
         <RunePicker
-          candidates={runeCandidates(
+          candidates={markIdle(
             registry,
-            runeTargetOf(weapon.baseId, picked.move),
-            socketsOf(picked.move),
-            profile.runes,
+            stats,
+            ability && { ...ability, index: at.index, socket: at.socket },
+            runeCandidates(
+              registry,
+              runeTargetOf(weapon.baseId, picked.move),
+              socketsOf(picked.move),
+              profile.runes,
+            ),
           )}
           on={runeTargetOf(weapon.baseId, picked.move)}
+          payment={ability?.chain.payment}
+          ease={picked.ease}
           onPick={(rune) => setChosen({ kind: 'rune', ...at, rune })}
           onClose={() => setAt(null)}
         />

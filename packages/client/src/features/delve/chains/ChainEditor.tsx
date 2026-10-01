@@ -3,6 +3,7 @@ import {
   CHAIN_SKILLS,
   MANA_TYPES,
   manaPool,
+  manaSupport,
   resolveChain,
   runeTargetOf,
   socketsOf,
@@ -23,7 +24,15 @@ import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { RunePicker } from '../runes/RunePicker';
 import { SocketRow } from '../runes/SocketRow';
-import { KIND_ICON, SKILL_NAME, blowText, chainText, moveText, runeCandidates } from './chain-text';
+import {
+  KIND_ICON,
+  SKILL_NAME,
+  blowText,
+  chainText,
+  markIdle,
+  moveText,
+  runeCandidates,
+} from './chain-text';
 import { MoveEditor } from './MoveEditor';
 
 const SKILL_KEY: Record<ChainSkill, string | null> = {
@@ -161,6 +170,12 @@ export function ChainEditor({
     ? resolved.moves.map(moveText)
     : entries.map((b) => blowText(registry, b as Blow));
   const allowed = slot ? elements : blowElements;
+  // A mana or cast chain's spend a second at its cadence against what the build brings back
+  // (the engine's estimate, which Power shares), in whole numbers: amber when it spends more.
+  const support =
+    resolved && resolved.payment !== 'charge' ? manaSupport(registry, stats, resolved) : null;
+  const spends = Math.round(support?.spend ?? 0);
+  const refills = Math.round(support?.refill ?? 0);
   const weapon = stats.weapon.baseId ? registry.getGearBase(stats.weapon.baseId).name : 'Fist';
 
   // Each move's index in the chain handed in: the map a change reports (an edit keeps them all).
@@ -404,6 +419,14 @@ export function ChainEditor({
           </div>
         )}
       </div>
+      {support && (
+        <div
+          className={`text-xs ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
+          data-testid="mana-support"
+        >
+          Spends {spends}/s · your build refills {refills}/s
+        </div>
+      )}
       {!absent && footer?.(skill)}
 
       <fieldset
@@ -500,17 +523,24 @@ export function ChainEditor({
       </section>
       {runes && move && socket !== null && (
         <RunePicker
-          candidates={runeCandidates(
+          candidates={markIdle(
             registry,
-            runeTargetOf(runes.weaponBaseId, move),
-            sockets.filter((_, k) => k !== socket),
-            runes.pouch,
+            stats,
+            slot && chain ? { slot, chain, index, socket } : null,
+            runeCandidates(
+              registry,
+              runeTargetOf(runes.weaponBaseId, move),
+              sockets.filter((_, k) => k !== socket),
+              runes.pouch,
+            ),
           )}
           current={current}
           pullText={current ? runes.pullText(current) : undefined}
           tierChoice={runes.pouch === 'any'}
           on={runeTargetOf(runes.weaponBaseId, move)}
           dormant={dormant(index).includes(socket)}
+          payment={chain?.payment}
+          ease={resolved?.moves[index]?.ease}
           onPick={(rune) => setSockets(sockets.map((r, k) => (k === socket ? rune : r)))}
           onPull={
             current ? () => setSockets(sockets.map((r, k) => (k === socket ? null : r))) : undefined

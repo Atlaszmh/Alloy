@@ -2,6 +2,7 @@ import {
   MOVE_KINDS,
   blowNumbers,
   holdFull,
+  loadText,
   moveBeat,
   moveNumbers,
   takesElements,
@@ -43,7 +44,8 @@ const secs = (s: number) => `${+s.toFixed(2)}s`;
 /**
  * Plain-language numbers for a resolved move (at its place in the chain) and
  * the beat after it; a hold's full charge too, with its time and its beat (by
- * the weapon's tempo).
+ * the weapon's tempo). The price carries its runes' share (eased by the move's
+ * attunement, which a line says), and a mana cost the pool can't hold warns.
  */
 function Readout({
   ab,
@@ -90,10 +92,17 @@ function Readout({
       `Hits for ${formatNumber(hit)}${radius > 0 && f !== 'strike' ? ` · radius ${radius.toFixed(1)}` : ''}`,
     );
   const windup = ab.castTime > 0 ? ` · ${ab.castTime.toFixed(2)}s wind-up` : '';
+  // The runes' share of the price, eased, in the payment's words (see the rune costs spec).
+  const runed = ab.load > 0 ? ` (runes: ${loadText(registry, ab.load, ab.payment)})` : '';
   const pay =
     ab.payment === 'charge'
-      ? `Charge ${Math.round(ab.chargeNeed)}${windup}`
-      : `${Math.round(ab.cost)} mana${windup}`;
+      ? `Charge ${Math.round(ab.chargeNeed)}${windup}${runed}`
+      : `${Math.round(ab.cost)} mana${windup}${runed}`;
+  // How much the move's attunement takes off its runes' load, and whether that is the cap.
+  const ease =
+    ab.load > 0 && ab.ease > 0
+      ? `Attunement eases rune cost by ${Math.round(ab.ease * 100)}%${ab.ease >= bal.runes.load.easeCap ? ' (the most it can)' : ''}`
+      : null;
   lines.push(
     `${pay} · ${ab.payment === 'charge' ? 'no cooldown' : `${ab.cooldown.toFixed(ab.cooldown < 2 ? 2 : 0)}s cooldown`}, ${beat(ab)}`,
     `${ab.stacks} ${ab.stacks === 1 ? 'stack' : 'stacks'} a hit`,
@@ -124,6 +133,11 @@ function Readout({
           {l}
         </div>
       ))}
+      {ease && (
+        <div className="text-stone-300" data-testid="rune-ease">
+          {ease}
+        </div>
+      )}
       {warning && (
         <div className="text-xs font-semibold text-red-300" data-testid="cost-warning">
           {warning}
