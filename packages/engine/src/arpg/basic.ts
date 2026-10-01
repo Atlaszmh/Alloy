@@ -326,13 +326,18 @@ export function landBlow(
     const size = s.size ?? 1;
     const speed = w.speed * (s.speed ?? 1);
     const weaponPierce = w.pierce ? Infinity : 0;
-    for (let i = 0; i < (twin > 0 ? 2 : 1); i++) {
-      const spread = i === 0 ? 0 : 0.12;
+    // Multi-shot: 1 + its extra shots in a fan at Volley's spacing, each at the cut power. Twin
+    // Fang's extra shot stays one, 0.12 off the blow's way, and carries no runes.
+    const n = 1 + (k.extraShots?.count ?? 0);
+    const shot = base * (k.extraShots?.power ?? 1);
+    for (let i = 0; i < n + (twin > 0 ? 1 : 0); i++) {
+      const main = i < n;
+      const spread = main ? (i - (n - 1) / 2) * 0.22 : 0.12;
       const d = {
         x: dir.x * Math.cos(spread) - dir.y * Math.sin(spread),
         y: dir.x * Math.sin(spread) + dir.y * Math.cos(spread),
       };
-      const pierceLeft = i === 0 ? weaponPierce + k.pierce : weaponPierce;
+      const pierceLeft = main ? weaponPierce + k.pierce : weaponPierce;
       spawnProjectile(ctx, {
         owner: 'hero',
         form: null,
@@ -344,19 +349,19 @@ export function landBlow(
         vy: d.y * speed,
         radius: 0.3 * size,
         // Twin Fang's extra shot: today's value (×1.0), never an explosion, no stacks and no pairing.
-        damage: i === 0 ? base : unit * twin,
+        damage: main ? shot : unit * twin,
         element,
         pierce: pierceLeft > 0,
         pierceLeft,
         maxDist: w.range + 1.5,
-        explodeRadius: i === 0 ? (s.explode ?? 0) : 0,
-        applies: i === 0 ? applies : [],
+        explodeRadius: main ? (s.explode ?? 0) : 0,
+        applies: main ? applies : [],
         knockback: 0,
         heft: s.heft,
         rattles,
-        stacks: i === 0 ? stacks : 0,
-        noReact: i === 1,
-        ...(i === 0 ? { knobs: k } : {}),
+        stacks: main ? stacks : 0,
+        noReact: !main,
+        ...(main ? { knobs: k } : {}),
       });
     }
   }

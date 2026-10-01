@@ -15,7 +15,7 @@ import {
 } from '../../types/ability.js';
 import type { ManaType } from '../../types/mana.js';
 import { DEFAULT_FORMS, weaponString } from '../../loot/moveset.js';
-import { runeFits, runeKnobs } from '../../loot/runes.js';
+import { extraShotPower, runeFits, runeKnobs } from '../../loot/runes.js';
 import type { RuneRef } from '../../types/rune.js';
 import type {
   DelveBalance,
@@ -162,6 +162,12 @@ export function resolveAbility(
   const needWeight = move.kind === 'hold' ? moveWeight(bal, 'hold', 2) : w;
   // Volley's darts by kind; a hold's stages count as medium, heavy and hold.
   const countKind = move.kind === 'hold' ? HOLD_STAGE_KINDS[stage] : move.kind;
+  // Multi-shot: Volley's darts and Barrage's impacts add its extra shots to the count, and every
+  // shot takes the cut (`extraShotPower`: in full, half on a Volley, none on a Barrage); Bolt
+  // and Lance fan theirs in `executeForm`.
+  const shots = knobs.extraShots;
+  const extra = shots && (move.form === 'volley' || move.form === 'barrage') ? shots.count : 0;
+  const cut = shots ? extraShotPower(shots.power, move.form) : 1;
 
   const F = bal.feel;
   const wi = w + 2;
@@ -184,7 +190,7 @@ export function resolveAbility(
     element,
     elements: [...move.elements],
     fusion,
-    power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower,
+    power: form.power * (1 + W.power * w) * payPower * knobs.power * attunePower * cut,
     effect: (form.effect ?? 0) * (1 + W.power * w) * payPower,
     cost: payment === 'charge' ? 0 : cast ? manaCost * ab.castManaMult : manaCost,
     cooldown:
@@ -204,7 +210,7 @@ export function resolveAbility(
     range: form.range ?? 0,
     radius: (form.radius ?? 0) * size * knobs.area,
     speed: (form.speed ?? 0) * (1 - W.speed * w),
-    count: form.countByKind?.[countKind] ?? form.count ?? 1,
+    count: (form.countByKind?.[countKind] ?? form.count ?? 1) + extra,
     duration: form.duration ?? 0,
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,

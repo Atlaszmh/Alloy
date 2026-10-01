@@ -413,3 +413,76 @@ describe('Saturate (the stacksBonus knob)', () => {
     expect(w.monsters[0].status.stacks.fire).toBe(2);
   });
 });
+
+describe('Multi-shot (the extraShots knob)', () => {
+  const primary = (form: 'bolt' | 'volley' | 'lance', runes: RuneRef[] = []) =>
+    moveOf(world([], { primary: { form, runes } }), 0);
+  const barrage = (runes: RuneRef[] = []) =>
+    moveOf(world([], { ultimate: { form: 'barrage', runes } }), 2);
+
+  it('adds to Volley’s darts and Barrage’s impacts; the cut is full on a Bolt, half on Volley, none on Barrage', () => {
+    expect(primary('volley', [R('multishot')]).count).toBe(primary('volley').count + 2);
+    expect(primary('volley', [R('multishot')]).power / primary('volley').power).toBeCloseTo(0.8625);
+    expect(barrage([R('multishot')]).count).toBe(barrage().count + 2);
+    expect(barrage([R('multishot')]).power).toBeCloseTo(barrage().power);
+    expect(primary('bolt', [R('multishot')]).count).toBe(primary('bolt').count);
+    expect(primary('bolt', [R('multishot')]).power / primary('bolt').power).toBeCloseTo(0.725);
+  });
+
+  it('a Bolt fans its extra bolts; a Volley fires its extra darts', () => {
+    const fired = (form: 'bolt' | 'volley') => {
+      const w = world([dummy(13, 28)], { primary: { form, runes: [R('multishot')] } });
+      press(w, 0);
+      return w.projectiles.filter((p) => p.form === form);
+    };
+    const bolts = fired('bolt');
+    expect(bolts).toHaveLength(3);
+    const angles = bolts.map((p) => Math.atan2(p.vy, p.vx));
+    expect(angles[1] - angles[0]).toBeCloseTo(0.22);
+    expect(angles[2] - angles[1]).toBeCloseTo(0.22);
+    expect(fired('volley')).toHaveLength(5);
+  });
+
+  it('a Lance fans its beams, which share one hit set and each linger where it hits', () => {
+    const near = dummy(13, 34);
+    const aside = dummy(13 + 5 * Math.sin(0.22), 36 - 5 * Math.cos(0.22));
+    const cast = (runes: RuneRef[]) => {
+      const w = world([near, aside], { primary: { form: 'lance', runes } });
+      const events = press(w, 0);
+      const hitsOn = (i: number) =>
+        skillHits(events).filter((e) => e.id === w.monsters[i].id).length;
+      return { w, events, near: hitsOn(0), aside: hitsOn(1) };
+    };
+    expect(cast([])).toMatchObject({ near: 1, aside: 0 });
+    const fan = cast([R('multishot'), R('linger')]);
+    expect(fan.events.filter((e) => e.kind === 'beam')).toHaveLength(3);
+    expect(fan).toMatchObject({ near: 1, aside: 1 });
+    expect(fan.w.zones.filter((z) => z.owner === 'hero' && z.ability)).toHaveLength(2);
+  });
+
+  it('a bow or wand blow fires a fan of shots, every one at the cut power', () => {
+    const shots = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)], [dummy(13, 30)], {
+        weapon: gear('fire', 'weapon', 'wand'),
+      });
+      firstBlow(w);
+      return w.projectiles.filter((p) => p.owner === 'hero');
+    };
+    const plain = shots([]);
+    const fan = shots([R('multishot')]);
+    expect(plain).toHaveLength(1);
+    expect(fan).toHaveLength(3);
+    for (const p of fan) expect(p.damage / plain[0].damage).toBeCloseTo(0.725);
+  });
+
+  it("Twin Fang's extra shot stays one, without runes", () => {
+    const w = blowWorld([light([R('multishot')])], [dummy(13, 30)], {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    w.hero.stats.legendaries.twin_fang = 50;
+    firstBlow(w);
+    const shots = w.projectiles.filter((p) => p.owner === 'hero');
+    expect(shots).toHaveLength(4);
+    expect(shots.filter((p) => !p.knobs)).toHaveLength(1);
+  });
+});
