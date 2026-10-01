@@ -25,6 +25,7 @@ import {
   DelveProfileV5Schema,
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
+import { isDiveActive } from './dive.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
 import { baseSlots, carriedSkills, defaultChain, extraSlots, movesetOf } from '../loot/moveset.js';
 import {
@@ -429,12 +430,17 @@ export function addLootToBag(
   };
 }
 
-/** Equip a bag item; a weapon brings its own moveset. */
+/** Mid-dive, all gear is locked, the forge and salvage too (see the weapon movesets spec). */
+const AT_THE_ANVIL = 'Equip at the Anvil, between dives';
+const FORGE_LOCKED = 'Forge at the Anvil, between dives';
+
+/** Equip a bag item; a weapon brings its own moveset. Throws mid-dive. */
 export function equipItem(
   _registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): DelveProfile {
+  if (isDiveActive(profile)) throw new Error(AT_THE_ANVIL);
   const item = profile.bag.find((i) => i.uid === uid);
   if (!item) throw new Error(`Item not in bag: ${uid}`);
   const previous = profile.equipped[item.slot];
@@ -443,12 +449,13 @@ export function equipItem(
   return { ...profile, bag, equipped: { ...profile.equipped, [item.slot]: item } };
 }
 
-/** Unequip into the bag (a weapon keeps its moveset). */
+/** Unequip into the bag (a weapon keeps its moveset). Throws mid-dive. */
 export function unequipSlot(
   registry: DataRegistry,
   profile: DelveProfile,
   slot: GearSlot,
 ): DelveProfile {
+  if (isDiveActive(profile)) throw new Error(AT_THE_ANVIL);
   const item = profile.equipped[slot];
   if (!item) return profile;
   if (profile.bag.length >= registry.getDelveBalance().loot.bagSize) throw new Error('Bag is full');
@@ -470,13 +477,15 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
 
 /**
  * Salvage bag items. Locked or missing uids are skipped. Gear outside the pair
- * also gives Mana Dust, and a weapon a Link for each extra slot.
+ * also gives Mana Dust, and a weapon a Link for each extra slot. Mid-dive it
+ * melts nothing (auto-salvage of new loot, `addLootToBag`, still runs).
  */
 export function salvageItems(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
 ): { profile: DelveProfile; scrap: number; dust: number; links: number; count: number } {
+  if (isDiveActive(profile)) return { profile, scrap: 0, dust: 0, links: 0, count: 0 };
   const targets = new Set(uids);
   let scrap = 0;
   let dust = 0;
@@ -506,7 +515,7 @@ export function salvageItems(
   };
 }
 
-/** Bag items that are safe to melt: unlocked, not an upgrade, at or below `maxRarity`. */
+/** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`. */
 export function salvageCandidates(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -525,15 +534,20 @@ export function salvageCandidates(
     .map((i) => i.uid);
 }
 
-/** Greedily equip any bag item that raises Power (a weapon with its own moveset). */
+/**
+ * Greedily equip any bag item that raises Power, but for weapons: a weapon
+ * changes by hand (Equip, as it is, or Transfer). Nothing mid-dive.
+ */
 export function equipBest(
   registry: DataRegistry,
   profile: DelveProfile,
 ): { profile: DelveProfile; equipped: GearItem[] } {
+  if (isDiveActive(profile)) return { profile, equipped: [] };
   let current = profile;
   const changed = new Map<GearSlot, GearItem>();
   for (let pass = 0; pass < 2; pass++) {
     for (const slot of GEAR_SLOTS) {
+      if (slot === 'weapon') continue;
       let best: GearItem | null = null;
       let bestPower = profilePower(registry, current);
       for (const item of current.bag) {
@@ -553,11 +567,13 @@ export function equipBest(
   return { profile: current, equipped: [...changed.values()] };
 }
 
+/** One forge upgrade, for scrap. Refuses mid-dive (a stop's `takeStop` lifts the lock). */
 export function upgradeGear(
   registry: DataRegistry,
   profile: DelveProfile,
   uid: string,
 ): ProfileActionResult {
+  if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
   const found = findItem(profile, uid);
   if (!found) return { ok: false, profile, reason: 'Item not found' };
   const cost = upgradeCost(registry, found.item);
@@ -577,6 +593,7 @@ export function reforgeGear(
   uid: string,
   affixIndex: number,
 ): ProfileActionResult {
+  if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
   const found = findItem(profile, uid);
   if (!found) return { ok: false, profile, reason: 'Item not found' };
   if (affixIndex < 0 || affixIndex >= found.item.affixes.length)
@@ -598,13 +615,14 @@ export function reforgeGear(
 /**
  * Fuse three bag items of one rarity into one of the next (`fuseItems`), for
  * scrap. The inputs' weapon extra slots come back as Links, as salvaging them
- * would give (`links`); a fused weapon rolls its own moveset.
+ * would give (`links`); a fused weapon rolls its own moveset. Refuses mid-dive.
  */
 export function fuseGear(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
 ): ProfileActionResult {
+  if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
   const items = uids.map((uid) => profile.bag.find((i) => i.uid === uid));
   if (items.some((i) => !i)) return { ok: false, profile, reason: 'Fuse items from your bag' };
   const inputs = items as GearItem[];

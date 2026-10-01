@@ -17,7 +17,7 @@ import {
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
-import { heroChains } from '../loot/moveset.js';
+import { heroChains, movesetTransfer } from '../loot/moveset.js';
 import type { DelveBalance, HeroStats, HeroWeapon, ManaPair } from '../types/delve.js';
 import type { EquippedGear, GearItem, HeroStatKey, StatRoll } from '../types/gear.js';
 import { GEAR_SLOTS, HERO_STAT_KEYS } from '../types/gear.js';
@@ -496,8 +496,16 @@ function estimateLoadout(
 }
 
 /**
- * How equipping `item` (in its slot) would change the hero: a weapon fights
- * with its own moveset.
+ * How a weapon is valued: `home`, with the equipped weapon's moveset moved
+ * onto it (`movesetTransfer`); `asIs`, with its own, as it would fight if
+ * equipped now.
+ */
+export type WeaponValue = 'home' | 'asIs';
+
+/**
+ * How equipping `item` (in its slot) would change the hero. A weapon is valued
+ * as `value` says (a home by default); unarmed, there is no moveset to move,
+ * so as it is.
  */
 export function compareItem(
   equipped: EquippedGear,
@@ -506,9 +514,15 @@ export function compareItem(
   depth: number,
   /** The hero's pair (its basics and the two-element limit); none counts every element. */
   pair?: ManaPair,
+  value: WeaponValue = 'home',
 ): ItemComparison {
   const replaced = equipped[item.slot];
-  const next = { ...equipped, [item.slot]: item };
+  const worn = equipped.weapon;
+  const home = value === 'home' && item.slot === 'weapon' && worn && worn.uid !== item.uid;
+  const candidate = home
+    ? { ...item, moveset: movesetTransfer(registry, worn, item).moveset }
+    : item;
+  const next = { ...equipped, [item.slot]: candidate };
   const { stats: beforeStats, estimate: before } = estimateLoadout(equipped, registry, depth, pair);
   const { stats: afterStats, estimate: after } = estimateLoadout(next, registry, depth, pair);
 

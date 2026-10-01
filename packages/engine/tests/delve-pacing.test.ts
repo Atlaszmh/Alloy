@@ -36,7 +36,8 @@ const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
 describe('Delve ARPG pacing (autopilot)', () => {
   it('first dive gets past the opening floors but stalls around the first boss', () => {
     for (const r of runs) expect(r[0].endDepth).toBeGreaterThanOrEqual(3);
-    expect(endDepthAt(1)).toBeGreaterThanOrEqual(4);
+    // A short scouting run: gear is locked mid-dive (see the weapon movesets spec).
+    expect(endDepthAt(1)).toBeGreaterThanOrEqual(3);
     expect(endDepthAt(1)).toBeLessThanOrEqual(12);
   });
 

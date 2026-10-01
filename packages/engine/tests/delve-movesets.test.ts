@@ -23,14 +23,21 @@ import {
   slotPrice,
   transferMoveset,
 } from '../src/delve/moveset.js';
-import { bindSecondary } from '../src/delve/pair.js';
+import { bindSecondary, chooseStartingMana, reattuneItem } from '../src/delve/pair.js';
 import {
+  addLootToBag,
   createDelveProfile,
+  equipBest,
+  equipItem,
   fuseGear,
   parseDelveProfile,
+  profilePower,
+  reforgeGear,
+  salvageCandidates,
   salvageItems,
   setAutoSalvage,
   unequipSlot,
+  upgradeGear,
 } from '../src/delve/profile.js';
 import V5 from './fixtures/delve-v5-saves.json';
 import { abilityReady, nextMove, pressMove, pressStep } from '../src/arpg/abilities/cast.js';
@@ -40,7 +47,7 @@ import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/comba
 import { fillCharge, setSandboxToggles } from '../src/arpg/sandbox.js';
 import { stepWorld } from '../src/arpg/step.js';
 import { refreshWorldHero } from '../src/arpg/world.js';
-import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
+import { compareItem, computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
@@ -950,5 +957,98 @@ describe('transfer', () => {
     expect(reason(p, 'helm')).toBe('Transfer onto a weapon in your bag');
     expect(reason(p, 'nope')).toBe('Transfer onto a weapon in your bag');
     expect(reason({ ...p, scrap: 2 * bal.movesets.transferScrap - 1 })).toBe('Not enough scrap');
+  });
+});
+
+describe('valuing a weapon: as it is, and as a home', () => {
+  /** A Fire hero whose sword holds a 4-slot Primary, and `bag` in the bag. */
+  const hero = (...bag: GearItem[]): DelveProfile => {
+    const p = createDelveProfile(registry, 3, { primary: 'fire' });
+    const sword = slotted(p.equipped.weapon!, { basic: 3, primary: 4 });
+    return { ...p, equipped: { ...p.equipped, weapon: sword }, bag, scrap: 1000 };
+  };
+  /** The same sword as the hero's, one upgrade better, with its base moveset. */
+  const spare = (p: DelveProfile): GearItem => ({
+    ...p.equipped.weapon!,
+    uid: 'spare',
+    upgrade: 1,
+    moveset: defaultMoveset(registry, p.equipped.weapon!, 'fire'),
+  });
+
+  it('as it is: its own moveset; as a home: the equipped moveset moved onto it (the default)', () => {
+    const p0 = hero();
+    const p = { ...p0, bag: [spare(p0)] };
+    const cmp = (value?: 'home' | 'asIs') =>
+      compareItem(p.equipped, p.bag[0], registry, 1, p.pair, value);
+    expect(cmp('asIs').newPower).toBe(profilePower(registry, equipItem(registry, p, 'spare')));
+    const moved = transferMoveset(registry, p, 'spare').profile;
+    expect(cmp('home').newPower).toBe(profilePower(registry, moved));
+    expect(cmp()).toEqual(cmp('home'));
+    // A better base with fewer slots: junk as it is, an upgrade as a home.
+    expect(cmp('asIs').powerPct).toBeLessThanOrEqual(0);
+    expect(cmp('home').powerPct).toBeGreaterThan(0);
+    // The equipped weapon itself, and unarmed (no moveset to move), value as they are.
+    const worn = p.equipped.weapon!;
+    expect(compareItem(p.equipped, worn, registry, 1, p.pair)).toEqual(
+      compareItem(p.equipped, worn, registry, 1, p.pair, 'asIs'),
+    );
+    const bare = unequipSlot(registry, p, 'weapon');
+    const axe = weapon('rare', 1, 'axe');
+    expect(compareItem(bare.equipped, axe, registry, 1, bare.pair)).toEqual(
+      compareItem(bare.equipped, axe, registry, 1, bare.pair, 'asIs'),
+    );
+  });
+
+  it('salvage never marks a good base as junk; Equip best leaves the weapon alone', () => {
+    const p0 = hero();
+    const p = { ...p0, bag: [spare(p0)] };
+    expect(salvageCandidates(registry, p, 'legendary')).toEqual([]);
+    expect(equipBest(registry, p).equipped).toEqual([]);
+  });
+});
+
+describe('the dive lock', () => {
+  it('refuses every gear, moveset, forge and salvage op mid-dive, but the choice of mana; a dive that ended unlocks', () => {
+    const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
+    const axe = { ...weapon('rare', 2, 'axe'), uid: 'axe' };
+    const helm = generateItem(
+      registry,
+      { uid: 'h', ilvl: 6, rarity: 'magic', slot: 'helm', mana: 'fire' },
+      new SeededRNG(9),
+    );
+    const p = { ...p0, bag: [axe, helm], manaDust: 99, links: 99, scrap: 9999 };
+    const diving = startDive(registry, p, 1);
+    const anvil = 'Equip at the Anvil, between dives';
+    expect(() => equipItem(registry, diving, 'axe')).toThrow(anvil);
+    expect(() => unequipSlot(registry, diving, 'chest')).toThrow(anvil);
+    expect(equipBest(registry, diving)).toEqual({ profile: diving, equipped: [] });
+    const primary = chainsOf(diving).primary!;
+    expect(setChain(registry, diving, 'primary', primary).ok).toBe(false);
+    expect(addSlot(registry, diving, 'primary').ok).toBe(false);
+    expect(transferMoveset(registry, diving, 'axe').ok).toBe(false);
+    expect(reattuneItem(registry, diving, 'h', 'fire').reason).toBe('Re-attune between dives');
+    // The forge and salvage too: the Anvil can be visited with a dive still open.
+    const forge = 'Forge at the Anvil, between dives';
+    expect(upgradeGear(registry, diving, 'h')).toMatchObject({ ok: false, reason: forge });
+    expect(reforgeGear(registry, diving, 'h', 0)).toMatchObject({ ok: false, reason: forge });
+    const triple = { ...diving, bag: [0, 1, 2].map((i) => ({ ...helm, uid: `f${i}` })) };
+    expect(fuseGear(registry, triple, ['f0', 'f1', 'f2'])).toMatchObject({
+      ok: false,
+      reason: forge,
+    });
+    expect(salvageItems(registry, diving, ['h'])).toMatchObject({ profile: diving, count: 0 });
+    // But auto-salvage of new loot still runs, so a full bag never blocks pickups.
+    const auto = setAutoSalvage(diving, 'magic', true);
+    expect(addLootToBag(registry, auto, [{ ...helm, uid: 'h2' }]).salvaged).toHaveLength(1);
+    // The choice stays open mid-dive (a migrated save may be diving).
+    const unchosen = startDive(registry, createDelveProfile(registry, 3), 1);
+    expect(chooseStartingMana(registry, unchosen, 'frost').ok).toBe(true);
+    // Death or extraction ends the lock.
+    for (const phase of ['dead', 'extracted'] as const) {
+      const over = { ...diving, dive: { ...diving.dive!, phase } };
+      expect(equipItem(registry, over, 'axe').equipped.weapon!.uid).toBe('axe');
+      expect(equipBest(registry, over).equipped.map((i) => i.uid)).toEqual(['h']);
+      expect(upgradeGear(registry, over, 'h').ok).toBe(true);
+    }
   });
 });

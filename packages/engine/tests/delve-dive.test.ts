@@ -286,9 +286,16 @@ describe('gear management', () => {
     ]);
   });
 
-  it('equipBest picks upgrades', () => {
-    const r = equipBest(registry, withBag(4));
-    expect(r.equipped.length).toBeGreaterThan(0);
+  it('equipBest picks upgrades, but never a weapon', () => {
+    const p = withBag(4);
+    const helm = generateItem(
+      registry,
+      { uid: 'h', ilvl: 6, rarity: 'magic', slot: 'helm', mana: 'fire' },
+      new SeededRNG(9),
+    );
+    const r = equipBest(registry, { ...p, bag: [...p.bag, helm] });
+    expect(r.equipped.map((i) => i.uid)).toEqual(['h']);
+    expect(r.profile.equipped.weapon).toEqual(p.equipped.weapon);
   });
 
   it('salvage grants scrap and skips locked items', () => {

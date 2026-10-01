@@ -926,7 +926,7 @@ describe("Power values the hero's own chains", () => {
     expect(salvageCandidates(registry, withStorm, 'common')).toEqual(['fire']);
   });
 
-  it('compareItem values a weapon with its own moveset', () => {
+  it('compareItem values a weapon as it is with its own moveset', () => {
     const maul: GearItem = { ...gear('fire', 'weapon', 'maul'), uid: 'maul' };
     const built = setChain(registry, hero(), 'basic', [
       { kind: 'light', element: 'storm' },
@@ -935,13 +935,13 @@ describe("Power values the hero's own chains", () => {
     ]).profile;
     for (const q of [hero(), built]) {
       const bagged = { ...q, bag: [maul] };
-      const cmp = compareItem(q.equipped, maul, registry, 1, q.pair);
+      const cmp = compareItem(q.equipped, maul, registry, 1, q.pair, 'asIs');
       expect(cmp.power).toBe(profilePower(registry, bagged));
       expect(cmp.newPower).toBe(profilePower(registry, equipItem(registry, bagged, 'maul')));
     }
     // The maul fights with its own blows whatever the sword held.
-    expect(compareItem(built.equipped, maul, registry, 1, built.pair).newPower).toBe(
-      compareItem(hero().equipped, maul, registry, 1, built.pair).newPower,
+    expect(compareItem(built.equipped, maul, registry, 1, built.pair, 'asIs').newPower).toBe(
+      compareItem(hero().equipped, maul, registry, 1, built.pair, 'asIs').newPower,
     );
   });
 });

@@ -126,6 +126,7 @@ export type {
   ItemStatLine,
   CombatEstimate,
   HeroStatsExtra,
+  WeaponValue,
 } from './delve/hero-stats.js';
 export {
   isBossDepth,
