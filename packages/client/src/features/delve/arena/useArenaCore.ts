@@ -11,8 +11,8 @@ import {
   holdCharge,
   holdFull,
   moveNumbers,
+  pressIndex,
   pressMove,
-  pressStep,
   type ArpgEvent,
   type ArpgWorld,
   type Chains,
@@ -210,11 +210,8 @@ export function snapshot(world: ArpgWorld): ArenaHud {
     manaMax: h.manaMax,
     abilities: h.chains.map((chain, i) => {
       if (!chain) return null;
-      // The move a press now casts (`pressMove`'s): during the slot's wind-up, the one after it.
-      const step =
-        h.windup?.slot === i
-          ? (h.windup.step + 1) % chain.moves.length
-          : pressStep(h, i, t, comboWindow);
+      // The move a press now casts (`pressMove`'s).
+      const step = pressIndex(h, i, t, comboWindow);
       const ab = chain.moves[step];
       // The longer wait shows: the next move's cooldown, or the slot's beat.
       const cooling = Math.max(0, h.cooldowns[i][step] - t);

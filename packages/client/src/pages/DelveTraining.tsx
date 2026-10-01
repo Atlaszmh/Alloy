@@ -29,6 +29,7 @@ import {
   type PanelLayout,
   type TrainingTab,
 } from '@/features/delve/training/TrainingPanel';
+import { useRunePickerOpen } from '@/features/delve/runes/RunePicker';
 import '@/features/delve/delve.css';
 
 const fineMouse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
@@ -67,7 +68,9 @@ export function DelveTraining() {
     return () => ro.disconnect();
   }, []);
 
-  const paused = panel === 'sheet' || controlsOpen;
+  // A rune picker over the docked panel pauses too: Space and the pad belong to it.
+  const picking = useRunePickerOpen();
+  const paused = panel === 'sheet' || controlsOpen || picking;
   // A layout effect, so the controller changes owner in the same commit as the pause.
   useLayoutEffect(() => {
     setArenaLive(!paused);

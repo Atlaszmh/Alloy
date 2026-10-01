@@ -356,6 +356,15 @@ export function partsText(
   return out.length > 0 ? out.join(' · ') : null;
 }
 
+/** What melting these runes would do with them under `mode` (a confirm's `partsText`); null for none. */
+export function pullText(
+  registry: DataRegistry,
+  runes: readonly RuneRef[],
+  mode: UnsocketMode,
+): string | null {
+  return mode === 'destroy' ? partsText(registry, [], runes) : partsText(registry, runes);
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */

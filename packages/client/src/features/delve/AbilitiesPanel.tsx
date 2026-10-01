@@ -23,7 +23,7 @@ import {
   type HeroStats,
   type ManaType,
 } from '@alloy/engine';
-import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
+import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
@@ -200,6 +200,9 @@ export function AbilitiesPanel() {
     links > 0 ? `🔗 ${links} Link${links === 1 ? '' : 's'} (you have 🔗 ${profile.links})` : null,
     price && price.scrap > 0
       ? `⚙ ${formatNumber(price.scrap)} scrap (you have ⚙ ${formatNumber(profile.scrap)})`
+      : null,
+    price && price.destroys.length > 0
+      ? `${runeNames(registry, price.destroys)} (destroyed)`
       : null,
   ].filter((c) => c !== null);
   const mode = unsocketMode(registry, unsocket);

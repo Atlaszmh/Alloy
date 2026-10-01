@@ -464,6 +464,38 @@ describe('ItemDetailSheet and the Forge: runes', () => {
     expect(store().profile.equipped.weapon!.uid).toBe('w2');
   });
 
+  it('Salvage asks first for any weapon holding runes, naming what becomes of them by the pull rule', () => {
+    const p = store().profile;
+    const held = { ...withRunes(p.equipped.weapon!, [split]), uid: 'w2' };
+    expect(held.rarity).toBe('common');
+    store().setProfile({ ...p, bag: [held] });
+    render(<ItemDetailSheet uid="w2" onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId('salvage-button'));
+    expect(store().profile.bag).toHaveLength(1);
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Tap again to melt · destroys Split III');
+    act(() => store().setUnsocket('pay'));
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent('Tap again to melt · Split III back to your pouch');
+    fireEvent.click(screen.getByTestId('salvage-button'));
+    expect(store().profile.bag).toHaveLength(0);
+    expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
+  });
+
+  it("the Forge's Fuse asks first when an input holds runes, naming what becomes of them", async () => {
+    const animate = vi.fn(() => ({ finished: Promise.resolve() }));
+    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true });
+    const three = [withRunes(rareSword('a'), [split]), rareSword('b'), rareSword('c')];
+    store().setProfile({ ...store().profile, scrap: 9999, bag: three });
+    render(<ForgePanel onSelect={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
+    fireEvent.click(screen.getByText('Auto-pick'));
+    fireEvent.click(screen.getByTestId('fuse-button'));
+    expect(store().profile.bag).toHaveLength(3);
+    expect(screen.getByTestId('fuse-button')).toHaveTextContent('Tap again to fuse · destroys Split III');
+    await act(async () => fireEvent.click(screen.getByTestId('fuse-button')));
+    expect(store().profile.bag.map((i) => i.rarity)).toEqual(['epic']);
+    delete (HTMLElement.prototype as { animate?: unknown }).animate;
+  });
+
   it('the Forge tab holds the pouch: three of a rune fuse into one of the next tier, for scrap', () => {
     store().setProfile({ ...store().profile, scrap: 20, runes: { split: [3, 0, 0, 0, 0] } });
     render(

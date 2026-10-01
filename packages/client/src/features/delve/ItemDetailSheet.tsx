@@ -25,6 +25,7 @@ import {
   socketCap,
   unsocketMode,
   upgradeCost,
+  weaponParts,
   type AbilitySlot,
   type Blow,
   type ChainSkill,
@@ -33,7 +34,7 @@ import {
   type ItemComparison,
   type ManaType,
 } from '@alloy/engine';
-import { partsText, runeNames, useDelveStore } from '@/stores/delveStore';
+import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
@@ -218,6 +219,8 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const diving = isDiveActive(profile);
   // What a transfer's leaving runes become: destroyed, or back to the pouch.
   const pull = unsocketMode(registry, unsocket);
+  // What salvaging it does with its runes: asked first, whatever its rarity.
+  const melts = pullText(registry, weaponParts(registry, item).runes, pull);
   const dust = salvageDust(registry, item, profile.pair);
   const ownMana = inPair(profile, item.mana);
   const notMine = (stat: HeroStatKey) => {
@@ -328,7 +331,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
 
   const onSalvage = () => {
     const precious =
-      item.rarity === 'rare' || item.rarity === 'epic' || item.rarity === 'legendary';
+      !!melts || item.rarity === 'rare' || item.rarity === 'epic' || item.rarity === 'legendary';
     if (precious && !confirmSalvage) {
       setConfirmSalvage(true);
       return;
@@ -642,7 +645,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
                 data-testid="salvage-button"
               >
                 {confirmSalvage
-                  ? 'Tap again to melt'
+                  ? `Tap again to melt${melts ? ` · ${melts}` : ''}`
                   : `Salvage +${formatNumber(salvage)}${dust > 0 ? ` · ✦ ${dust}` : ''}`}
               </button>
             </>

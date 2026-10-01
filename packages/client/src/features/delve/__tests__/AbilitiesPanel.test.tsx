@@ -593,6 +593,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
     expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · destroys it');
     fireEvent.click(picker().getByTestId('rune-pull'));
     expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · destroys Split I');
+    expect(screen.getByTestId('chain-price')).toHaveTextContent('Changes cost Split I (destroyed)');
     fireEvent.click(screen.getByTestId('chain-revert'));
     act(() => {
       store().setUnsocket('pay');

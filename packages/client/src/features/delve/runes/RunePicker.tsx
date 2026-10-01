@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { runeText, type RuneRef, type RuneTarget, type RuneTier } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
@@ -23,6 +23,23 @@ export interface RunePickerProps {
   /** A pull, then `onClose`. */
   onPull?: () => void;
   onClose: () => void;
+}
+
+// How many pickers are open: an arena under one pauses (`useRunePickerOpen`).
+let openPickers = 0;
+const pickerListeners = new Set<() => void>();
+function countPicker(by: number) {
+  openPickers += by;
+  pickerListeners.forEach((l) => l());
+}
+function onPickers(l: () => void) {
+  pickerListeners.add(l);
+  return () => void pickerListeners.delete(l);
+}
+
+/** Whether any rune picker is open (the Training Grounds pause the arena under one). */
+export function useRunePickerOpen(): boolean {
+  return useSyncExternalStore(onPickers, () => openPickers > 0);
 }
 
 /** A rune's effect and its trade-off, as the engine words them at its tier (and on its move). */
@@ -61,6 +78,10 @@ export function RunePicker({
   // The control that had the focus as the picker first rendered: its opener.
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
   const [tier, setTier] = useState<RuneTier>(1);
+  useLayoutEffect(() => {
+    countPicker(1);
+    return () => countPicker(-1);
+  }, []);
   const close = () => {
     onClose();
     opener?.focus();
