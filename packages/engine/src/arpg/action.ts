@@ -154,7 +154,7 @@ export function cancelWindup(h: HeroEntity, t: number): void {
   const w = h.windup;
   if (!w) return;
   h.cooldowns[w.slot][w.step] = t;
-  h.charge[w.slot] = Math.min(chargeCap(h.chains[w.slot]), h.charge[w.slot] + w.chargePaid);
+  h.charge[w.slot] = Math.min(chargeCap(h.chains[w.slot]!), h.charge[w.slot] + w.chargePaid);
   h.windup = null;
 }
 

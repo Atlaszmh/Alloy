@@ -78,6 +78,8 @@ export interface ArenaOpts {
   primary?: ChainOpts;
   defensive?: ChainOpts;
   ultimate?: ChainOpts;
+  /** The chains exactly (a skill left out has none), in place of the fixture's and the options above. */
+  chains?: Partial<Pick<Chains, AbilitySlot>>;
   /** Stop the hero's automatic basic attack so only abilities deal damage. */
   noBasic?: boolean;
   depth?: number;
@@ -91,7 +93,7 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
     depth,
     door: null,
     stats: computeHeroStats(equipped, registry),
-    chains: chainsWith(opts),
+    chains: opts.chains ?? chainsWith(opts),
     heroHpFrac: 1,
     potions: 3,
     phoenixAvailable: true,

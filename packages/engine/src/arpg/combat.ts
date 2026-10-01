@@ -478,6 +478,7 @@ function react(
     case 'galvanize':
       // Per slot, as Nightstalker does for the Defensive: a unit of charge, or every move's cooldown.
       h.chains.forEach((chain, i) => {
+        if (!chain) return;
         if (chain.payment === 'charge') h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + 1);
         else
           h.cooldowns[i] = h.cooldowns[i].map((c) =>

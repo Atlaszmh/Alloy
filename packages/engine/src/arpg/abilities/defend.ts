@@ -10,7 +10,8 @@ const DEFENSIVE = 1;
 export function defendingAbility(ctx: SimCtx): ResolvedAbility | null {
   const h = ctx.world.hero;
   if (!h.defend || ctx.world.t >= h.defend.until) return null;
-  return chainMove(h.chains[DEFENSIVE], h.defend.move, h.defend.stage);
+  // A Defensive's effect runs only with a Defensive chain (a new one ends it).
+  return chainMove(h.chains[DEFENSIVE]!, h.defend.move, h.defend.stage);
 }
 
 /** The Surge while it is up, else null. */
@@ -88,7 +89,7 @@ export function defendTick(ctx: SimCtx, dt: number): void {
   const { world } = ctx;
   const h = world.hero;
   if (!h.defend) return;
-  const ab = chainMove(h.chains[DEFENSIVE], h.defend.move, h.defend.stage);
+  const ab = chainMove(h.chains[DEFENSIVE]!, h.defend.move, h.defend.stage);
   if (world.t >= h.defend.until) {
     const wasWard = h.defend.form === 'ward' && h.ward;
     h.defend = null;
@@ -118,7 +119,7 @@ export function gainCharge(ctx: SimCtx, units: number, fromSlot?: number): void 
   const h = ctx.world.hero;
   const t = ctx.world.t;
   h.chains.forEach((chain, i) => {
-    if (chain.payment !== 'charge' || i === fromSlot || h.cooldowns[i].some((c) => t < c)) return;
+    if (chain?.payment !== 'charge' || i === fromSlot || h.cooldowns[i].some((c) => t < c)) return;
     h.charge[i] = Math.min(chargeCap(chain), h.charge[i] + units);
   });
 }

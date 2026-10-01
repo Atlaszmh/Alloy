@@ -322,8 +322,11 @@ export interface HeroEntity {
   manaMax: number;
   /** Mana per second. */
   manaRegen: number;
-  /** The Primary's, Defensive's and Ultimate's chains. */
-  chains: ResolvedChain[];
+  /**
+   * The Primary's, Defensive's and Ultimate's chains, by slot: null for a
+   * skill the weapon doesn't carry (see the weapon movesets spec).
+   */
+  chains: (ResolvedChain | null)[];
   /** Per slot and move: the time the move is ready again. */
   cooldowns: number[][];
   /** Per slot: charge units banked (a charge-paid chain's meter). */

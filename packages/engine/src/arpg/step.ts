@@ -175,7 +175,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
       (p) =>
         !p.cast.repeat ||
         !ready(p.cast.slot) ||
-        nextMove(h, p.cast.slot, t, window).kind !== 'hold',
+        nextMove(h, p.cast.slot, t, window)?.kind !== 'hold',
     );
     const q = world.queuedCasts.find((p) => ready(p.cast.slot));
     if (q) {
@@ -259,7 +259,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // No cooldowns (Training Grounds) keeps every charge-paid chain charged.
   if (world.sandbox?.noCooldowns)
     h.chains.forEach((chain, i) => {
-      if (chain.payment === 'charge') h.charge[i] = chargeCap(chain);
+      if (chain?.payment === 'charge') h.charge[i] = chargeCap(chain);
     });
   if (!nearestMonster(ctx, h.x, h.y, bal.abilities.lullRadius))
     gainCharge(ctx, bal.abilities.lullCharge * dt);
@@ -303,7 +303,7 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
   const payable = (slot: number) => {
     const chain = h.chains[slot];
     if (!chain) return false;
-    const ab = nextMove(h, slot, t, bal.abilities.comboWindow);
+    const ab = nextMove(h, slot, t, bal.abilities.comboWindow)!;
     if (chain.payment === 'charge' && h.charge[slot] < ab.chargeNeed - 1e-9) return false;
     return canAfford(world, ab);
   };

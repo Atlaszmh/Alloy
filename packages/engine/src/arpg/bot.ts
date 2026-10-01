@@ -104,7 +104,7 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
     (near >= 3 || big) && abilityReady(ctx, 2) ? 2 : -1,
     (h.hp < h.stats.maxHp * 0.7 || crowded) && gap < 6 && abilityReady(ctx, 1) ? 1 : -1,
     // Let a swing land: pressing the Primary now would cancel it.
-    gap < nextMove(h, 0, world.t, ctx.bal.abilities.comboWindow).range &&
+    gap < (nextMove(h, 0, world.t, ctx.bal.abilities.comboWindow)?.range ?? 0) &&
     !h.swing &&
     abilityReady(ctx, 0)
       ? 0
@@ -112,7 +112,7 @@ export function botInput(registry: DataRegistry, world: ArpgWorld): ArpgInput {
   ];
   const slot = wants.find((s) => s >= 0);
   if (slot !== undefined) {
-    if (nextMove(h, slot, world.t, ctx.bal.abilities.comboWindow).kind === 'hold')
+    if (nextMove(h, slot, world.t, ctx.bal.abilities.comboWindow)?.kind === 'hold')
       input.holding = slot;
     else input.cast = { slot };
   }

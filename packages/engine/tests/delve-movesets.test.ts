@@ -13,10 +13,29 @@ import {
   extraSlots,
 } from '../src/loot/moveset.js';
 import { GearItemSchema } from '../src/delve/profile-schema.js';
+import { abilityReady, nextMove, pressMove, pressStep } from '../src/arpg/abilities/cast.js';
+import { gainCharge } from '../src/arpg/abilities/defend.js';
+import { botInput } from '../src/arpg/bot.js';
+import { applyStatus, hitMonster, killMonster, makeCtx } from '../src/arpg/combat.js';
+import { fillCharge, setSandboxToggles } from '../src/arpg/sandbox.js';
+import { stepWorld } from '../src/arpg/step.js';
+import { refreshWorldHero } from '../src/arpg/world.js';
+import { computeHeroStats, estimateCombat } from '../src/delve/hero-stats.js';
 import { CHAIN_SKILLS, type Blow, type Chain } from '../src/types/ability.js';
+import type { ArpgEvent } from '../src/types/arpg.js';
 import type { GearItem, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
-import { bal, registry } from './fixtures/arena.js';
+import {
+  DEFAULT_CHAINS,
+  STEP,
+  arena,
+  bal,
+  dummy,
+  gear,
+  press,
+  registry,
+  run,
+} from './fixtures/arena.js';
 
 // See the weapon movesets spec.
 
@@ -256,5 +275,99 @@ describe('save schema: a weapon moveset', () => {
     expect(bad({ ...m, slots: { basic: 3 } })).toBe(false);
     expect(bad({ ...m, slots: { ...m.slots, defensive: 1 } })).toBe(false);
     expect(bad({ ...m, slots: { ...m.slots, primary: 5 } })).toBe(true);
+  });
+});
+
+describe('an absent skill (a null chain)', () => {
+  const PRIMARY_ONLY = { primary: DEFAULT_CHAINS.primary };
+  const casts = (events: ArpgEvent[]) =>
+    events.filter((e) => e.kind === 'windup' || e.kind === 'cast').map((e) => e.slot);
+
+  it('sets the hero up with no chain for a skill left out, every slot keeping its place', () => {
+    const w = arena([dummy(13, 30)], { chains: PRIMARY_ONLY, noBasic: true });
+    expect(w.hero.chains.map((c) => c && c.moves[0].form.id)).toEqual(['bolt', null, null]);
+    expect(w.hero.cooldowns).toEqual([[0], [], []]);
+  });
+
+  it('refuses a press or a hold of it, and names no move for it', () => {
+    const w = arena([dummy(13, 30)], { chains: PRIMARY_ONLY, noBasic: true });
+    const ctx = makeCtx(registry, w, []);
+    expect([0, 1, 2].map((s) => abilityReady(ctx, s))).toEqual([true, false, false]);
+    expect(casts([...press(w, 1), ...press(w, 2)])).toEqual([]);
+    for (let i = 0; i < 10; i++) stepWorld(registry, w, { move: { x: 0, y: 0 }, holding: 2 }, STEP);
+    expect(w.hero.hold).toBeNull();
+    expect(pressStep(w.hero, 2, w.t, 1)).toBe(0);
+    expect(nextMove(w.hero, 1, w.t, 1)).toBeNull();
+    expect(pressMove(w.hero, 2, w.t, 1)).toBeNull();
+    expect(casts(press(w, 0))).toEqual([0, 0]);
+  });
+
+  it("fills no charge meter for it, nor do the Training Grounds' top-ups", () => {
+    const primary = { ...DEFAULT_CHAINS.primary, payment: 'charge' as const };
+    const w = arena([dummy(13, 30)], { chains: { primary }, noBasic: true });
+    gainCharge(makeCtx(registry, w, []), 1e9);
+    expect(w.hero.charge[0]).toBeGreaterThan(0);
+    expect(w.hero.charge.slice(1)).toEqual([0, 0]);
+    setSandboxToggles(w, { infiniteMana: false, noCooldowns: true, invulnerable: false });
+    fillCharge(w);
+    run(w, 0.2);
+    expect(w.hero.charge.slice(1)).toEqual([0, 0]);
+  });
+
+  it('Galvanize and Nightstalker pass over it', () => {
+    const w = arena([dummy(13, 30), dummy(15, 30)], { chains: PRIMARY_ONLY, noBasic: true });
+    const events: ArpgEvent[] = [];
+    const ctx = makeCtx(registry, w, events);
+    const h = w.hero;
+    h.cooldowns[0] = [w.t + 2];
+    applyStatus(ctx, w.monsters[0], 'shock', 0);
+    hitMonster(ctx, w.monsters[0], 10, 'nature', { source: 'skill' });
+    expect(events.some((e) => e.kind === 'reaction' && e.reaction === 'galvanize')).toBe(true);
+    expect(h.cooldowns).toEqual([[w.t + 2 - bal.reactions.galvanizeSeconds], [], []]);
+    h.stats.legendaries.nightstalker = 30;
+    killMonster(ctx, w.monsters[1]);
+    expect(h.cooldowns[1]).toEqual([]);
+    expect(h.charge).toEqual([0, 0, 0]);
+  });
+
+  it('the bot never reaches for it', () => {
+    const foes = [dummy(13, 34), dummy(14, 34), dummy(12, 34), dummy(13, 33)];
+    const w = arena(foes, { chains: PRIMARY_ONLY });
+    w.hero.hp = w.hero.stats.maxHp / 2; // it would guard, and the crowd calls for the Ultimate
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < 3 / STEP; i++)
+      events.push(...stepWorld(registry, w, botInput(registry, w), STEP));
+    expect(new Set(casts(events))).toEqual(new Set([0]));
+  });
+
+  it('a chain swapped out mid-floor ends its effect; swapped back in, it is ready', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    press(w, 1);
+    expect(w.hero.defend).not.toBeNull();
+    refreshWorldHero(registry, w, w.hero.stats, PRIMARY_ONLY);
+    expect(w.hero.chains.map((c) => c !== null)).toEqual([true, false, false]);
+    expect([w.hero.defend, w.hero.ward]).toEqual([null, null]);
+    expect(w.hero.cooldowns.slice(1)).toEqual([[], []]);
+    refreshWorldHero(registry, w, w.hero.stats, DEFAULT_CHAINS);
+    expect(w.hero.cooldowns[1]).toEqual([0]);
+    expect(casts(press(w, 1))).toEqual([1, 1]);
+  });
+
+  it('counts nothing toward Power: no Defensive means no guard and no mitigation', () => {
+    const stats = computeHeroStats({ weapon: gear('fire') }, registry);
+    const est = (chains: Parameters<typeof estimateCombat>[3]) =>
+      estimateCombat(stats, registry, 5, chains);
+    const none = est({});
+    const primary = est(PRIMARY_ONLY);
+    expect(primary.dps).toBeGreaterThan(none.dps);
+    expect(primary.ehp).toBe(none.ehp);
+    const armor = {
+      moves: [{ kind: 'medium' as const, form: 'armor' as const, elements: ['earth' as const] }],
+      payment: 'mana' as const,
+    };
+    expect(est({ ...PRIMARY_ONLY, defensive: armor }).ehp).toBeGreaterThan(primary.ehp);
+    expect(est({ ...PRIMARY_ONLY, ultimate: DEFAULT_CHAINS.ultimate }).dps).toBeGreaterThan(
+      primary.dps,
+    );
   });
 });

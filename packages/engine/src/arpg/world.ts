@@ -26,8 +26,11 @@ export interface FloorOptions {
   depth: number;
   door: DoorDef | null;
   stats: HeroStats;
-  /** The Primary's, Defensive's and Ultimate's chains (the basic chain is in `stats`). */
-  chains: Pick<Chains, AbilitySlot>;
+  /**
+   * The Primary's, Defensive's and Ultimate's chains (the basic chain is in
+   * `stats`); a skill left out has none.
+   */
+  chains: Partial<Pick<Chains, AbilitySlot>>;
   heroHpFrac: number;
   potions: number;
   phoenixAvailable: boolean;
@@ -174,18 +177,22 @@ export function createMonsterEntity(
   };
 }
 
+/** Each slot's chain resolved, by slot; null for a skill left out. */
 function resolveAll(
   registry: DataRegistry,
-  chains: Pick<Chains, AbilitySlot>,
+  chains: Partial<Pick<Chains, AbilitySlot>>,
   stats: HeroStats,
-): ResolvedChain[] {
-  return ABILITY_SLOTS.map((slot) => resolveChain(registry, stats, slot, chains[slot]));
+): (ResolvedChain | null)[] {
+  return ABILITY_SLOTS.map((slot) => {
+    const chain = chains[slot];
+    return chain ? resolveChain(registry, stats, slot, chain) : null;
+  });
 }
 
 export function createHeroEntity(
   registry: DataRegistry,
   stats: HeroStats,
-  chains: Pick<Chains, AbilitySlot>,
+  chains: Partial<Pick<Chains, AbilitySlot>>,
   opts: { hpFrac: number; potions: number; phoenixAvailable: boolean; x: number; y: number },
 ): HeroEntity {
   const pool = manaPool(stats, registry);
@@ -201,7 +208,7 @@ export function createHeroEntity(
     manaMax: pool.max,
     manaRegen: pool.regen,
     chains: resolved,
-    cooldowns: resolved.map((c) => c.moves.map(() => 0)),
+    cooldowns: resolved.map((c) => c?.moves.map(() => 0) ?? []),
     charge: [0, 0, 0],
     comboStep: [0, 0, 0],
     comboAt: [-Infinity, -Infinity, -Infinity],
@@ -241,13 +248,13 @@ export function createHeroEntity(
  * chain) and each move's cooldown carry over. A slot whose chain changed
  * drops its wind-up (as a dodge does), its hold, its beat and its waiting
  * press, and a new Defensive ends the old one's buff and Ward at once, without
- * bursting.
+ * bursting. A skill left out has no chain (and so no cooldowns or charge).
  */
 export function refreshWorldHero(
   registry: DataRegistry,
   world: ArpgWorld,
   stats: HeroStats,
-  chains: Pick<Chains, AbilitySlot>,
+  chains: Partial<Pick<Chains, AbilitySlot>>,
 ): void {
   const h = world.hero;
   const frac = h.hp / h.stats.maxHp;
@@ -285,15 +292,16 @@ export function refreshWorldHero(
   h.mana = Math.min(h.mana, pool.max);
   h.chains = resolveAll(registry, chains, stats);
   h.chains.forEach((chain, i) => {
-    h.cooldowns[i] = chain.moves.map((_, j) => h.cooldowns[i][j] ?? 0);
-    h.comboStep[i] = Math.min(h.comboStep[i], chain.moves.length - 1);
-    h.charge[i] = Math.min(h.charge[i], chargeCap(chain));
+    h.cooldowns[i] = chain?.moves.map((_, j) => h.cooldowns[i][j] ?? 0) ?? [];
+    h.comboStep[i] = chain ? Math.min(h.comboStep[i], chain.moves.length - 1) : 0;
+    h.charge[i] = chain ? Math.min(h.charge[i], chargeCap(chain)) : 0;
   });
 }
 
-function sameChain(a: ResolvedChain | undefined, b: Chain): boolean {
+/** Whether a resolved chain is `b` (both absent counts as the same). */
+function sameChain(a: ResolvedChain | null, b: Chain | undefined): boolean {
+  if (!a || !b) return !a && !b;
   return (
-    !!a &&
     a.payment === b.payment &&
     a.moves.length === b.moves.length &&
     a.moves.every(

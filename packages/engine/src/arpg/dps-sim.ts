@@ -113,7 +113,7 @@ export function simulateDps(registry: DataRegistry, setup: DpsSetup, o: DpsOptio
       return { move, holding: slot, cast: full ? { slot, aim } : null };
     }
     const waiting = world.queuedCasts.some((q) => q.cast.slot === slot);
-    if (waiting || pressMove(h, slot, world.t, bal.abilities.comboWindow).kind === 'hold')
+    if (waiting || pressMove(h, slot, world.t, bal.abilities.comboWindow)?.kind === 'hold')
       return { move, holding: slot };
     return { move, holding: slot, cast: { slot, aim, repeat: true } };
   };

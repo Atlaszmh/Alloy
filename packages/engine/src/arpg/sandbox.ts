@@ -258,7 +258,7 @@ export function setSandboxToggles(world: ArpgWorld, toggles: SandboxToggles): vo
 export function fillCharge(world: ArpgWorld): void {
   const h = world.hero;
   h.chains.forEach((chain, i) => {
-    if (chain.payment === 'charge') h.charge[i] = chargeCap(chain);
+    if (chain?.payment === 'charge') h.charge[i] = chargeCap(chain);
   });
 }
 

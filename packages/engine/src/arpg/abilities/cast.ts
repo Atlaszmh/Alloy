@@ -38,21 +38,34 @@ export function abilityReady(ctx: SimCtx, slot: number): boolean {
  * else the first.
  */
 export function pressStep(h: HeroEntity, slot: number, t: number, window: number): number {
-  return t - h.comboAt[slot] <= window ? (h.comboStep[slot] + 1) % h.chains[slot].moves.length : 0;
+  const chain = h.chains[slot];
+  if (!chain) return 0;
+  return t - h.comboAt[slot] <= window ? (h.comboStep[slot] + 1) % chain.moves.length : 0;
 }
 
-/** The move the slot's next press would cast. */
-export function nextMove(h: HeroEntity, slot: number, t: number, window: number): ResolvedAbility {
-  return h.chains[slot].moves[pressStep(h, slot, t, window)];
+/** The move the slot's next press would cast (null for a skill the weapon doesn't carry). */
+export function nextMove(
+  h: HeroEntity,
+  slot: number,
+  t: number,
+  window: number,
+): ResolvedAbility | null {
+  return h.chains[slot]?.moves[pressStep(h, slot, t, window)] ?? null;
 }
 
 /**
  * The move a press made now will cast: during the slot's own wind-up, the one
  * after the winding move (the wind-up lands before the press fires); else
- * `nextMove`.
+ * `nextMove` (null for a skill the weapon doesn't carry).
  */
-export function pressMove(h: HeroEntity, slot: number, t: number, window: number): ResolvedAbility {
-  const moves = h.chains[slot].moves;
+export function pressMove(
+  h: HeroEntity,
+  slot: number,
+  t: number,
+  window: number,
+): ResolvedAbility | null {
+  const moves = h.chains[slot]?.moves;
+  if (!moves) return null;
   return h.windup?.slot === slot
     ? moves[(h.windup.step + 1) % moves.length]
     : nextMove(h, slot, t, window);
@@ -92,7 +105,8 @@ export function holdCharge(
 function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 0): boolean {
   const { world, bal } = ctx;
   const h = world.hero;
-  const ab = chainMove(h.chains[slot], step, stage);
+  // Only a slot with a chain winds up or holds.
+  const ab = chainMove(h.chains[slot]!, step, stage);
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
   const beat = beatFor(bal, ab.slot, playedKind(ab), h.stats.tempo);
@@ -238,7 +252,7 @@ function releaseHold(ctx: SimCtx, aim: Vec | null, stage: number): void {
   const t = world.t;
   const hold = h.hold!;
   h.hold = null;
-  const chain = h.chains[hold.slot];
+  const chain = h.chains[hold.slot]!;
   let s = stage;
   while (s > 0 && !canAfford(world, chainMove(chain, hold.step, s))) s--;
   const ab = chainMove(chain, hold.step, s);
@@ -322,7 +336,7 @@ type Aimed = Pick<Windup, 'slot' | 'step' | 'stage' | 'from' | 'at'>;
  * the hero stands on it). Never for a placed or self-centred form.
  */
 function passedAim(h: HeroEntity, w: Aimed): boolean {
-  if (!DIRECTIONAL.has(chainMove(h.chains[w.slot], w.step, w.stage).form.id)) return false;
+  if (!DIRECTIONAL.has(chainMove(h.chains[w.slot]!, w.step, w.stage).form.id)) return false;
   const first = dirTo(w.from.x, w.from.y, w.at.x, w.at.y);
   const now = dirTo(h.x, h.y, w.at.x, w.at.y);
   return (first.x !== 0 || first.y !== 0) && now.x * first.x + now.y * first.y <= 0;

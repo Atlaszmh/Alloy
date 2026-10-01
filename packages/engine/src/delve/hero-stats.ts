@@ -380,13 +380,13 @@ export function useInterval(
  * Heuristic DPS / effective-HP estimate against the reference monster, used
  * for Power and item comparisons. The basic attack, the Primary and the
  * Ultimate count toward DPS (sharing mana and time); the Defensive counts
- * toward survival.
+ * toward survival. A skill left out of `chains` counts nothing.
  */
 export function estimateCombat(
   stats: HeroStats,
   registry: DataRegistry,
   depth: number,
-  chains: Pick<Chains, AbilitySlot> = defaultChains(
+  chains: Partial<Pick<Chains, AbilitySlot>> = defaultChains(
     registry,
     stats.weapon.blows[0].element,
     stats.weapon.baseId,
@@ -411,36 +411,42 @@ export function estimateCombat(
     blows.reduce((a, b) => a + b.power * value(b), 0) + twin * value(blows[blows.length - 1]);
   let dps = (hit * cleave * (stringValue / stringTime)) / stats.attackInterval;
 
-  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) =>
-    resolveChain(registry, stats, slot, chains[slot]),
-  );
+  const [primary, defensive, ultimate] = ABILITY_SLOTS.map((slot) => {
+    const chain = chains[slot];
+    return chain ? resolveChain(registry, stats, slot, chain) : null;
+  });
   const pool = manaPool(stats, registry);
   const manaIncome = pool.regen + bal.mana.basicAttackGain / strikeInterval;
   const unit = Math.max(1, stats.weaponDamage * stats.damageMult);
   const every = (chain: ResolvedChain, income: number, rate: number) =>
     useInterval(bal, chain, stats.tempo, income, rate);
-  const primaryDps =
-    damagePerUse(primary, hit, stats, bal) / every(primary, manaIncome * 0.7, dps / unit);
+  const primaryDps = primary
+    ? damagePerUse(primary, hit, stats, bal) / every(primary, manaIncome * 0.7, dps / unit)
+    : 0;
   // Abilities share the hero's time and mana; count them at partial efficiency.
   dps += primaryDps * 0.75;
   const chargeRate = dps / unit;
-  dps +=
-    (damagePerUse(ultimate, hit, stats, bal) / every(ultimate, manaIncome * 0.3, chargeRate)) * 0.8;
+  if (ultimate)
+    dps +=
+      (damagePerUse(ultimate, hit, stats, bal) / every(ultimate, manaIncome * 0.3, chargeRate)) *
+      0.8;
 
   let mitigation = (1 - armorReduction(bal, stats.armor, depth)) * (1 - stats.dodge);
   let bonusLife = 0;
-  const guardEvery = every(defensive, manaIncome * 0.3, chargeRate);
-  // The Defensive's effect: its first move's (a hold's at full charge).
-  const guard = valuedMove(defensive, 0);
-  const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
-  const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
-  if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
-  if (guard.elements.includes('earth'))
-    mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
-  if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
-  if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
-  if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
-  dps += (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+  if (defensive) {
+    const guardEvery = every(defensive, manaIncome * 0.3, chargeRate);
+    // The Defensive's effect: its first move's (a hold's at full charge).
+    const guard = valuedMove(defensive, 0);
+    const guardFor = guard.form.id === 'blink' ? bal.abilities.defend.blinkSeconds : guard.duration;
+    const uptime = Math.min(1, guardFor / Math.max(guardFor, guardEvery));
+    if (guard.form.id === 'armor') mitigation *= 1 - Math.min(0.75, guard.effect) * uptime;
+    if (guard.elements.includes('earth'))
+      mitigation *= 1 - bal.abilities.defend.earthReduction * uptime;
+    if (guard.form.id === 'ward') bonusLife += stats.maxHp * guard.effect * uptime * 2;
+    if (guard.form.id === 'surge') dps *= 1 + guard.effect * uptime;
+    if (guard.form.id === 'blink') mitigation *= 1 - 0.3 * uptime;
+    dps += (damagePerUse(defensive, hit, stats, bal) / Math.max(1, guardEvery)) * 0.5;
+  }
 
   dps += stats.thorns / ref.interval;
   const sustain = dps * stats.lifesteal;
