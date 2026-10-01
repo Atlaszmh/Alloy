@@ -249,4 +249,64 @@ describe('sandboxStore', () => {
     expect(store()).toMatchObject({ primary: 'frost', secondary: 'nature' });
     expect(store().loadedWeapon?.mana).toBe('frost'); // the real item, its real mana
   });
+
+  const split = { id: 'split', tier: 3 } as const;
+
+  it("keeps the moves' runes: saved, and copied by Load my build", () => {
+    const primary = store().chains.primary;
+    store().setChain('primary', {
+      ...primary,
+      moves: [{ ...primary.moves[0], runes: [split, null] }],
+    });
+    const saved = parseSandbox(JSON.parse(localStorage.getItem(SANDBOX_KEY)!));
+    expect(saved.chains.primary.moves[0].runes).toEqual([split, null]);
+    const profile = createDelveProfile(registry, 7, { primary: 'fire' });
+    const sword = profile.equipped.weapon!;
+    const ms = sword.moveset!;
+    const bolt = { ...ms.chains.primary!.moves[0], runes: [split] };
+    const weapon = {
+      ...sword,
+      moveset: {
+        ...ms,
+        chains: { ...ms.chains, primary: { ...ms.chains.primary!, moves: [bolt] } },
+      },
+    };
+    store().loadMyBuild({ ...profile, equipped: { ...profile.equipped, weapon } });
+    expect(store().chains.primary.moves[0].runes).toEqual([split]);
+  });
+
+  it('a rune the game no longer knows leaves its socket empty when the loadout loads', () => {
+    const primary = SANDBOX_DEFAULTS.chains.primary;
+    const moves = [{ ...primary.moves[0], runes: [{ id: 'gone', tier: 2 }, split] }];
+    const chains = { ...SANDBOX_DEFAULTS.chains, primary: { ...primary, moves } };
+    expect(parseSandbox({ ...SANDBOX_DEFAULTS, chains }).chains.primary.moves[0].runes).toEqual([
+      null,
+      split,
+    ]);
+  });
+
+  it('a default basic chain that follows a new weapon keeps each blow’s runes by position, if they fit', () => {
+    const chain = { id: 'chain', tier: 2 } as const;
+    const linger = { id: 'linger', tier: 1 } as const;
+    // The sword's default (light, light, heavy) with Chain on its first blow and Linger on its third.
+    const basic = store().chains.basic;
+    const runes: (typeof chain | typeof linger)[][] = [[chain], [], [linger]];
+    store().setChain(
+      'basic',
+      basic.map((b, i) => (runes[i].length > 0 ? { ...b, runes: runes[i] } : b)),
+    );
+    store().setWeapon({ baseId: 'dagger', mana: 'fire', rarity: 'rare' });
+    const blows = store().chains.basic;
+    expect(blows.map((b) => b.kind)).toEqual(['light', 'light', 'medium', 'heavy']); // the dagger's
+    expect(blows.map((b) => (b.runes ?? []).filter(Boolean))).toEqual([[chain], [], [linger], []]);
+    // Split fits a bow's blows, not a sword's: following a sword, it goes.
+    store().setWeapon({ baseId: 'bow', mana: 'fire', rarity: 'rare' });
+    const bow = store().chains.basic;
+    store().setChain(
+      'basic',
+      bow.map((b, i) => (i === 0 ? { ...b, runes: [split] } : b)),
+    );
+    store().setWeapon({ baseId: 'sword', mana: 'fire', rarity: 'rare' });
+    expect((store().chains.basic[0].runes ?? []).filter(Boolean)).toEqual([]);
+  });
 });

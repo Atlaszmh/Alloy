@@ -15,6 +15,7 @@ import {
   heroChains,
   sandboxWeapon,
   type AbilitySlot,
+  type Chain,
   type Chains,
   type ChainSkill,
   type DataRegistry,
@@ -27,6 +28,7 @@ import {
   type ManaType,
   type MonsterKind,
   type Rarity,
+  type RuneRef,
   type SandboxToggles,
 } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -182,6 +184,22 @@ function loadoutSchema(registry: DataRegistry): z.ZodType<SandboxLoadout, z.ZodT
 }
 
 /**
+ * The chains with every rune the game doesn't know (`findRune`) taken out of its
+ * socket, which stays open: `runeText` throws on an unknown id.
+ */
+function knownRunes(registry: DataRegistry, chains: Chains): Chains {
+  const known = <T extends { runes?: (RuneRef | null)[] }>(m: T): T =>
+    m.runes ? { ...m, runes: m.runes.map((r) => (r && registry.findRune(r.id) ? r : null)) } : m;
+  const moves = (c: Chain): Chain => ({ ...c, moves: c.moves.map(known) });
+  return {
+    basic: chains.basic.map(known),
+    primary: moves(chains.primary),
+    defensive: moves(chains.defensive),
+    ultimate: moves(chains.ultimate),
+  };
+}
+
+/**
  * A saved loadout; whatever is missing or bad takes its default. A save from
  * before chains keeps its pair: its basics-only `basicInfusion` becomes the
  * secondary, and its chains the defaults on its weapon and pair.
@@ -204,7 +222,7 @@ export function parseSandbox(raw: unknown): SandboxLoadout {
         ...defaultChains(registry, primary, weaponBaseId),
         basic: defaultBasic(registry, weaponBaseId, primary, secondary),
       };
-  const s = { ...parsed.data, secondary, chains };
+  const s = { ...parsed.data, secondary, chains: knownRunes(registry, chains) };
   // A loaded weapon only counts while the choice still names it: a bad save can't show one
   // weapon and fight with another.
   return s.loadedWeapon && !sameChoice(s.weapon, choiceOf(s.loadedWeapon))
