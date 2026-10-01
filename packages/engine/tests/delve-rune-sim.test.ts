@@ -784,3 +784,78 @@ describe('Volatile (the catalyst knob)', () => {
     }
   });
 });
+
+describe('Drain (the manaOnHit knob)', () => {
+  const pack = [
+    dummy(10, 33),
+    dummy(11.5, 33),
+    dummy(13, 33),
+    dummy(14.5, 33),
+    dummy(16, 33),
+    dummy(11, 31),
+    dummy(15, 31),
+  ];
+
+  it('an ability: mana per foe hit, up to drainFoes foe-hits a cast', () => {
+    const nova = (runes: RuneRef[]) => {
+      const w = world(pack, { ultimate: { payment: 'mana', runes } });
+      const events = press(w, 2);
+      return { mana: w.hero.mana, hits: skillHits(events, 2).length };
+    };
+    const plain = nova([]);
+    const drain = nova([R('drain')]);
+    expect(drain.hits).toBe(7);
+    expect(drain.mana - plain.mana).toBeCloseTo(bal.runes.drainFoes * 2);
+  });
+
+  it('counts from before the cast’s hits land: a new cast has its own budget', () => {
+    const lance = (runes: RuneRef[]) => {
+      const w = world([dummy(13, 33), dummy(13, 31), dummy(13, 29)], {
+        primary: { form: 'lance', runes },
+      });
+      w.hero.drained[0] = bal.runes.drainFoes;
+      press(w, 0);
+      return w.hero.mana;
+    };
+    expect(lance([R('drain')]) - lance([])).toBeCloseTo(3 * 2);
+  });
+
+  it('a blow: mana per foe struck, its budget reset as it lands', () => {
+    const blow = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)]);
+      w.hero.mana = 0;
+      w.hero.drained[3] = bal.runes.drainFoes;
+      firstBlow(w);
+      return { mana: w.hero.mana, drained: w.hero.drained[3] };
+    };
+    const plain = blow([]);
+    const drain = blow([R('drain')]);
+    expect(drain.mana - plain.mana).toBeCloseTo(2);
+    expect(drain.drained).toBe(1);
+  });
+
+  it('counts foe-hits, not foes: the same foe hit again counts again', () => {
+    const volley = (runes: RuneRef[]) => {
+      const w = world([dummy(13, 30)], { primary: { form: 'volley', runes } });
+      w.hero.mana = 20;
+      const events = [...press(w, 0), ...run(w, 1)];
+      return { mana: w.hero.mana, hits: skillHits(events).length };
+    };
+    const drain = volley([R('drain')]);
+    expect(drain.hits).toBe(3);
+    expect(drain.mana - volley([]).mana).toBeCloseTo(3 * 2);
+  });
+
+  it('a shot blow: mana for the foe its shot hits', () => {
+    const shot = (runes: RuneRef[]) => {
+      const w = blowWorld([light(runes)], [dummy(13, 30)], {
+        weapon: gear('fire', 'weapon', 'wand'),
+      });
+      w.hero.mana = 0;
+      firstBlow(w);
+      until(w, 'hit');
+      return w.hero.mana;
+    };
+    expect(shot([R('drain')]) - shot([])).toBeCloseTo(2);
+  });
+});

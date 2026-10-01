@@ -216,6 +216,8 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
   const twinPct = (h.stats.legendaries.twin_fang ?? 0) / 100;
   const dir = sw.dir;
   // Mana only for an attack at something: a blow that connects, or a shot with a foe in range.
+  // Drain's budget is the blow's: it counts from before its hits land.
+  h.drained[3] = 0;
   const landed = landBlow(ctx, blow, kind, dir, 1, {
     twin: last ? twinPct : 0,
     targetId: sw.targetId,
