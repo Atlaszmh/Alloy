@@ -27,9 +27,10 @@ import {
 } from './profile-schema.js';
 import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
 import { isDiveActive } from './dive.js';
+import { settleParts, type SetChainsOptions } from './runes.js';
 import { sameChain } from './moveset.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
-import { baseSlots, carriedSkills, defaultChain, extraSlots, movesetOf } from '../loot/moveset.js';
+import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { addToPouch, socketCap } from '../loot/runes.js';
 import type { RuneRef } from '../types/rune.js';
 import {
@@ -462,11 +463,16 @@ export interface BagInsertResult {
   destroyed: RuneRef[];
 }
 
-/** Put fresh loot in the bag, honouring auto-salvage and bag capacity. */
+/**
+ * Put fresh loot in the bag, honouring auto-salvage and bag capacity. A melted
+ * weapon gives its parts (`weaponParts`): a Link for each extra slot and open
+ * socket, and its runes by the parts rule (`opts.unsocket`, else the balance's).
+ */
 export function addLootToBag(
   registry: DataRegistry,
   profile: DelveProfile,
   items: GearItem[],
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): BagInsertResult {
   const bagSize = registry.getDelveBalance().loot.bagSize;
   const recorded = recordFinds(profile, items);
@@ -484,12 +490,14 @@ export function addLootToBag(
       salvaged.push(item);
       scrap += salvageValue(registry, item);
       dust += salvageDust(registry, item, profile.pair);
-      links += extraSlots(registry, item);
+      links += weaponParts(registry, item).links;
     } else {
       bag.push(item);
       kept.push(item);
     }
   }
+  const parts = salvaged.flatMap((item) => weaponParts(registry, item).runes);
+  const settled = settleParts(registry, recorded.profile.runes, parts, opts.unsocket);
   return {
     profile: {
       ...recorded.profile,
@@ -497,6 +505,7 @@ export function addLootToBag(
       scrap: recorded.profile.scrap + scrap,
       manaDust: recorded.profile.manaDust + dust,
       links: recorded.profile.links + links,
+      runes: settled.pouch,
       stats: { ...recorded.profile.stats, scrapEarned: recorded.profile.stats.scrapEarned + scrap },
     },
     kept,
@@ -504,10 +513,10 @@ export function addLootToBag(
     scrap,
     dust,
     links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
     bagFull,
     newCodex: recorded.newCodex,
-    runes: [],
-    destroyed: [],
   };
 }
 
@@ -558,13 +567,16 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
 
 /**
  * Salvage bag items. Locked or missing uids are skipped. Gear outside the pair
- * also gives Mana Dust, and a weapon a Link for each extra slot. Mid-dive it
- * melts nothing (auto-salvage of new loot, `addLootToBag`, still runs).
+ * also gives Mana Dust, and a weapon its parts (`weaponParts`): a Link for each
+ * extra slot and open socket, and its runes by the parts rule (`opts.unsocket`,
+ * else the balance's). Mid-dive it melts nothing (auto-salvage of new loot,
+ * `addLootToBag`, still runs).
  */
 export function salvageItems(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): {
   profile: DelveProfile;
   scrap: number;
@@ -582,15 +594,17 @@ export function salvageItems(
   let scrap = 0;
   let dust = 0;
   let links = 0;
-  let count = 0;
+  const melted: GearItem[] = [];
   const bag = profile.bag.filter((item) => {
     if (!targets.has(item.uid) || item.locked) return true;
     scrap += salvageValue(registry, item);
     dust += salvageDust(registry, item, profile.pair);
-    links += extraSlots(registry, item);
-    count++;
+    links += weaponParts(registry, item).links;
+    melted.push(item);
     return false;
   });
+  const parts = melted.flatMap((item) => weaponParts(registry, item).runes);
+  const settled = settleParts(registry, profile.runes, parts, opts.unsocket);
   return {
     profile: {
       ...profile,
@@ -598,14 +612,15 @@ export function salvageItems(
       scrap: profile.scrap + scrap,
       manaDust: profile.manaDust + dust,
       links: profile.links + links,
+      runes: settled.pouch,
       stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + scrap },
     },
     scrap,
     dust,
     links,
-    count,
-    runes: [],
-    destroyed: [],
+    count: melted.length,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
   };
 }
 
@@ -707,13 +722,15 @@ export function reforgeGear(
 
 /**
  * Fuse three bag items of one rarity into one of the next (`fuseItems`), for
- * scrap. The inputs' weapon extra slots come back as Links, as salvaging them
- * would give (`links`); a fused weapon rolls its own moveset. Refuses mid-dive.
+ * scrap. The inputs' weapon parts come back as salvaging them would give
+ * (`weaponParts`: `links`, and the runes by the parts rule, `opts.unsocket`);
+ * a fused weapon rolls its own moveset. Refuses mid-dive.
  */
 export function fuseGear(
   registry: DataRegistry,
   profile: DelveProfile,
   uids: string[],
+  opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): ProfileActionResult {
   if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
   const items = uids.map((uid) => profile.bag.find((i) => i.uid === uid));
@@ -725,7 +742,14 @@ export function fuseGear(
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
 
   const result = fuseItems(registry, inputs, `g${profile.nextUid}`, forgeRng(profile));
-  const links = inputs.reduce((sum, i) => sum + extraSlots(registry, i), 0);
+  const parts = inputs.map((i) => weaponParts(registry, i));
+  const links = parts.reduce((sum, p) => sum + p.links, 0);
+  const settled = settleParts(
+    registry,
+    profile.runes,
+    parts.flatMap((p) => p.runes),
+    opts.unsocket,
+  );
   const consumed = new Set(uids);
   const recorded = recordFinds(
     {
@@ -733,10 +757,18 @@ export function fuseGear(
       bag: [...profile.bag.filter((i) => !consumed.has(i.uid)), result],
       scrap: profile.scrap - cost,
       links: profile.links + links,
+      runes: settled.pouch,
       nextUid: profile.nextUid + 1,
       forgeCount: profile.forgeCount + 1,
     },
     [result],
   );
-  return { ok: true, item: result, profile: recorded.profile, links };
+  return {
+    ok: true,
+    item: result,
+    profile: recorded.profile,
+    links,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
+  };
 }

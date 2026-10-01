@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
+import { startDive } from '../src/delve/dive.js';
+import { chooseStartingMana } from '../src/delve/pair.js';
+import {
+  addLootToBag,
+  createDelveProfile,
+  fuseGear,
+  salvageItems,
+  setAutoSalvage,
+} from '../src/delve/profile.js';
+import { unsocketMode } from '../src/delve/runes.js';
 import {
   rollRuneDrop,
   rollSockets,
@@ -13,6 +23,7 @@ import { CHAIN_SKILLS, type Blow, type Move } from '../src/types/ability.js';
 import type { MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
+import type { RuneRef } from '../src/types/rune.js';
 import { bal, registry } from './fixtures/arena.js';
 
 // See the runes spec: sockets, the pouch, the draft's price, fusing, drops and the stop.
@@ -155,5 +166,102 @@ describe("a weapon's parts", () => {
       new SeededRNG(2),
     );
     expect(weaponParts(registry, chest)).toEqual({ links: 0, runes: [] });
+  });
+});
+
+const CHAIN_II: RuneRef = { id: 'chain', tier: 2 };
+const SPLIT_I: RuneRef = { id: 'split', tier: 1 };
+
+/**
+ * A rare sword (`uid`) with one extra basic slot and three open sockets: its
+ * first blow holds Chain II and an empty socket, its Bolt holds Split I.
+ * Its parts: 4 Links, and the two runes.
+ */
+function socketedSword(uid = 'w'): GearItem {
+  const w = { ...weapon('rare', 1, 'sword'), uid };
+  const moveset = defaultMoveset(registry, w, 'storm', { basic: 4, primary: 1, defensive: 1 });
+  moveset.chains.basic![0] = { ...moveset.chains.basic![0], runes: [CHAIN_II, null] };
+  const primary = moveset.chains.primary!;
+  primary.moves[0] = { ...primary.moves[0], runes: [SPLIT_I] };
+  return { ...w, moveset };
+}
+
+describe('the parts rule', () => {
+  const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
+
+  it('reads the pull mode from the balance unless overridden', () => {
+    expect(R.unsocket).toBe('destroy');
+    expect(unsocketMode(registry)).toBe('destroy');
+    expect(unsocketMode(registry, null)).toBe('destroy');
+    expect(unsocketMode(registry, 'pay')).toBe('pay');
+    expect(unsocketMode(registry, 'destroy')).toBe('destroy');
+  });
+
+  it('salvage: a Link for each extra slot and open socket; the runes destroyed, or back to the pouch in pay mode', () => {
+    const p = { ...hero(), bag: [socketedSword()] };
+    const gone = salvageItems(registry, p, ['w']);
+    expect(gone).toMatchObject({ links: 4, count: 1, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    expect(gone.profile.links).toBe(4);
+    expect(gone.profile.runes).toEqual({});
+    const paid = salvageItems(registry, p, ['w'], { unsocket: 'pay' });
+    expect(paid).toMatchObject({ links: 4, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    // Nothing melts mid-dive, so nothing comes back.
+    const diving = startDive(registry, p, 1);
+    expect(salvageItems(registry, diving, ['w'])).toMatchObject({
+      count: 0,
+      links: 0,
+      runes: [],
+      destroyed: [],
+    });
+  });
+
+  it('auto-salvage and a full bag melt a socketed weapon the same way', () => {
+    const auto = setAutoSalvage(hero(), 'rare', true);
+    const melted = addLootToBag(registry, auto, [socketedSword()]);
+    expect(melted).toMatchObject({ links: 4, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    const paid = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'pay' });
+    expect(paid).toMatchObject({ links: 4, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    const full = { ...hero(), bag: Array(bal.loot.bagSize).fill(socketedSword('x')) };
+    expect(addLootToBag(registry, full, [socketedSword()])).toMatchObject({
+      bagFull: true,
+      links: 4,
+      destroyed: [CHAIN_II, SPLIT_I],
+    });
+    // Kept loot gives nothing back.
+    expect(addLootToBag(registry, hero(), [socketedSword()])).toMatchObject({
+      links: 0,
+      runes: [],
+      destroyed: [],
+    });
+  });
+
+  it("fusing gives the inputs' parts back by the rule; the fused weapon rolls its own", () => {
+    const three = ['a', 'b', 'c'].map((uid) => socketedSword(uid));
+    const p = { ...hero(), scrap: 9999, bag: three };
+    const res = fuseGear(registry, p, ['a', 'b', 'c']);
+    expect(res).toMatchObject({ ok: true, links: 12, runes: [] });
+    expect(res.destroyed).toHaveLength(6);
+    expect(res.profile.links).toBe(12);
+    expect(res.item!.rarity).toBe('epic');
+    const paid = fuseGear(registry, p, ['a', 'b', 'c'], { unsocket: 'pay' });
+    expect(paid).toMatchObject({ ok: true, links: 12, destroyed: [] });
+    expect(paid.profile.runes).toEqual({ chain: [0, 3, 0, 0, 0], split: [3, 0, 0, 0, 0] });
+  });
+
+  it('the choice of mana rebuilds the weapon: its sockets back as Links, its runes by the rule', () => {
+    const unchosen = createDelveProfile(registry, 3);
+    const p = { ...unchosen, equipped: { ...unchosen.equipped, weapon: socketedSword() } };
+    const res = chooseStartingMana(registry, p, 'fire');
+    expect(res).toMatchObject({ ok: true, links: 3, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    expect(res.profile.links).toBe(3); // the open sockets; the extra slot, as before, is not refunded
+    const sword = res.profile.equipped.weapon!;
+    expect(sword.moveset).toEqual(defaultMoveset(registry, sword, 'fire'));
+    const paid = chooseStartingMana(registry, p, 'fire', { unsocket: 'pay' });
+    expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
+    // A fresh hero has no parts: a new save is unchanged.
+    const fresh = createDelveProfile(registry, 3, { primary: 'fire' });
+    expect([fresh.links, fresh.runes]).toEqual([0, {}]);
   });
 });

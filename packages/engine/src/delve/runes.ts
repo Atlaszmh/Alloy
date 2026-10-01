@@ -1,24 +1,22 @@
 import type { DataRegistry } from '../data/registry.js';
+import { addToPouch } from '../loot/runes.js';
 import type { Chains, ChainSkill } from '../types/ability.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { ChainOrigins, RuneRef, UnsocketMode } from '../types/rune.js';
+import type { ChainOrigins, RunePouch, RuneRef, UnsocketMode } from '../types/rune.js';
 import type { ProfileActionResult } from './profile.js';
 
 /**
- * The runes' profile ops (see the runes spec): the pull rule, a draft's rune
- * diff and price, opening a socket, socketing a rune, and fusing. Results,
- * not throws; each refuses mid-dive. Wave 1B builds them.
+ * Runes on the hero's moves (see the runes spec): the pull rule, the parts
+ * rule, the draft's rune price, opening sockets, socketing, and fusing.
+ * moveset.ts, profile.ts and pair.ts import this module back: keep to
+ * function declarations.
  */
 
-const NOT_BUILT = 'not built yet';
-
-/** `setChains`' options: where each new move came from, and the pull rule. */
 export interface SetChainsOptions {
   origins?: ChainOrigins;
   unsocket?: UnsocketMode;
 }
 
-/** What an Apply's runes cost and move (`runeChange`). */
 export interface RuneChange {
   /** Sockets opened. */
   links: number;
@@ -32,7 +30,6 @@ export interface RuneChange {
   pulled: RuneRef[];
 }
 
-/** The builder's one total for a draft: Dust, net Links, scrap, and the runes it destroys or returns. */
 export interface DraftPrice {
   dust: number;
   links: number;
@@ -42,45 +39,56 @@ export interface DraftPrice {
   returns: RuneRef[];
 }
 
-/** The pull rule: the override (the dev toggle), else the balance's. */
-export function unsocketMode(
-  _registry: DataRegistry,
-  _override?: UnsocketMode | null,
-): UnsocketMode {
-  throw new Error(NOT_BUILT);
+/** What a pull does: `override` (the client's dev toggle) or the balance's `runes.unsocket`. */
+export function unsocketMode(registry: DataRegistry, override?: UnsocketMode | null): UnsocketMode {
+  return override ?? registry.getDelveBalance().runes.unsocket;
 }
 
-/** The runes' part of an Apply of `chains`: sockets opened, runes socketed and pulled, and their price. */
+/**
+ * The parts rule for `runes` leaving a weapon other than through Apply (a
+ * salvage, a fuse, a transfer, the choice of mana): in 'pay' they go back to
+ * `pouch` free, in 'destroy' they are destroyed. The sockets' Links are the
+ * caller's (one each, in both modes).
+ */
+export function settleParts(
+  registry: DataRegistry,
+  pouch: RunePouch,
+  runes: readonly RuneRef[],
+  unsocket?: UnsocketMode | null,
+): { pouch: RunePouch; runes: RuneRef[]; destroyed: RuneRef[] } {
+  const list = runes.map((r) => ({ ...r }));
+  if (unsocketMode(registry, unsocket) === 'pay')
+    return { pouch: addToPouch(pouch, list), runes: list, destroyed: [] };
+  return { pouch, runes: [], destroyed: list };
+}
+
 export function runeChange(
   _registry: DataRegistry,
   _profile: DelveProfile,
   _chains: Partial<Chains>,
   _opts?: SetChainsOptions,
 ): RuneChange | { refused: string } {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
 
-/** A draft's whole price, from the functions `setChains` charges with. */
 export function draftPrice(
   _registry: DataRegistry,
   _profile: DelveProfile,
   _chains: Partial<Chains>,
   _opts?: SetChainsOptions,
 ): DraftPrice | { refused: string } {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
 
-/** Open the next socket of move `index` of the equipped weapon's `skill` chain, for Links and scrap. */
 export function openSocket(
   _registry: DataRegistry,
   _profile: DelveProfile,
   _skill: ChainSkill,
   _index: number,
 ): ProfileActionResult {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
 
-/** Socket a pouch rune into socket `socket` of move `index` of `skill` (one `setChains`). */
 export function socketRune(
   _registry: DataRegistry,
   _profile: DelveProfile,
@@ -90,19 +98,17 @@ export function socketRune(
   _rune: RuneRef,
   _opts?: SetChainsOptions,
 ): ProfileActionResult {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
 
-/** Scrap to fuse `fuseCount` of `ref` into one of the next tier; null at tier V. */
 export function fusePrice(_registry: DataRegistry, _ref: RuneRef): number | null {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
 
-/** Fuse `fuseCount` of `ref` into one of the next tier, for scrap. */
 export function fuseRunes(
   _registry: DataRegistry,
   _profile: DelveProfile,
   _ref: RuneRef,
 ): ProfileActionResult {
-  throw new Error(NOT_BUILT);
+  throw new Error('not built yet');
 }
