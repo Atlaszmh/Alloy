@@ -211,6 +211,8 @@ export {
   MoveSchema,
   BlowSchema,
   ChainSchema,
+  RuneRefSchema,
+  RunePouchSchema,
   SLOT_FORMS,
 } from './delve/profile-schema.js';
 export { runAutopilot, takeBestStop } from './delve/autopilot.js';

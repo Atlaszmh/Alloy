@@ -63,7 +63,7 @@ function clearDepth(p: DelveProfile): DelveProfile {
 describe('profile basics', () => {
   it('starts with a fire sword and an earth cuirass, and Fire chains', () => {
     const p = createDelveProfile(registry, 123);
-    expect(p.version).toBe(6);
+    expect(p.version).toBe(7);
     expect(p.links).toBe(0);
     expect(p.equipped.weapon?.mana).toBe('fire');
     expect(p.equipped.chest?.mana).toBe('earth');
@@ -80,6 +80,7 @@ describe('profile basics', () => {
       fixed: [],
       dropped: [],
       movesetReset: false,
+      runesLost: [],
     });
     expect(parseDelveProfile(registry, { ...p, version: 1 })).toBeNull();
     expect(parseDelveProfile(registry, null)).toBeNull();

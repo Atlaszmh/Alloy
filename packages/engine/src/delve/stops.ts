@@ -46,6 +46,7 @@ export function stopKinds(registry: DataRegistry, profile: DelveProfile): StopKi
       }),
     move: !!weapon && canEdit(registry, profile),
     upgrade: items.some((i) => (upgradeCost(registry, i) ?? Infinity) <= profile.scrap),
+    rune: false,
   };
   return STOP_KINDS.filter((k) => applies[k]);
 }

@@ -424,7 +424,7 @@ describe('save v6: the migration from version 5', () => {
 
   it("gives the equipped weapon the profile's chains it can carry, at slots of their length", () => {
     const { profile, fixed, dropped, movesetReset } = migrate(V5.fresh);
-    expect(profile).toMatchObject({ version: 6, links: 0 });
+    expect(profile).toMatchObject({ version: 7, links: 0 });
     expect('chains' in profile || 'chainCaps' in profile).toBe(false);
     const sword = profile.equipped.weapon!;
     expect(sword.moveset).toEqual({
@@ -459,7 +459,7 @@ describe('save v6: the migration from version 5', () => {
     // Its basic slots rise to the dagger's string of 4; the sword's three blows stay.
     expect(dagger.slots).toEqual({ basic: 4, primary: 4, defensive: 1 });
     expect(dagger.chains.basic).toEqual(V5.magic.chains.basic);
-    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, stop: null });
+    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, runesEarned: 0, stop: null });
   });
 
   it("keeps all four on an epic weapon, and raises a short basic chain's slots to its base", () => {
@@ -501,7 +501,7 @@ describe('save v6: the migration from version 5', () => {
     ]);
   });
 
-  it('round-trips every migrated save as version 6', () => {
+  it('round-trips every migrated save as version 7', () => {
     for (const save of Object.values(V5)) {
       const { profile } = migrate(save);
       expect(parseDelveProfile(registry, json(profile))).toEqual({
@@ -509,6 +509,7 @@ describe('save v6: the migration from version 5', () => {
         fixed: [],
         dropped: [],
         movesetReset: false,
+        runesLost: [],
       });
     }
   });

@@ -1309,7 +1309,7 @@ describe('saves before version 6', () => {
         ultimate: { form: 'barrage', elements: ['fire'], weight: -1, payment: 'charge' },
       }),
     );
-    expect(profile).toMatchObject({ version: 6, links: 0 });
+    expect(profile).toMatchObject({ version: 7, links: 0 });
     expect('abilities' in profile).toBe(false);
     expect('chainCaps' in profile).toBe(false);
     expect(chainsOf(profile).defensive).toEqual({

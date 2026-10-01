@@ -1,6 +1,7 @@
 import type { DataRegistry } from '../data/registry.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
+import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
@@ -47,6 +48,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     scrapEarned: 0,
     dustEarned: 0,
     linksEarned: 0,
+    runesEarned: 0,
     stop: null,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
@@ -120,6 +122,8 @@ export interface BankResult {
   dust: number;
   /** Links from weapons melted by auto-salvage or a full bag. */
   links: number;
+  /** Runes picked up, banked into the pouch (see the runes spec). */
+  runes: RuneRef[];
 }
 
 /**
@@ -177,6 +181,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
     links: bagged.links,
+    runes: [],
   };
 }
 

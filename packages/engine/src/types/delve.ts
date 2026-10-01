@@ -1,7 +1,7 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
 import type { AbilitySlot, ChainSkill, Knobs, MoveKind } from './ability.js';
-import type { RuneRef, UnsocketMode } from './rune.js';
+import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
@@ -705,8 +705,8 @@ export interface HeroStats {
 
 export type DivePhase = 'fighting' | 'choosing' | 'dead' | 'extracted';
 
-/** A stop's power-up: equip a bag item, add a slot, adjust one move, or upgrade an item. */
-export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade';
+/** A stop's power-up: equip a bag item, add a slot, adjust one move, upgrade an item, or socket a rune. */
+export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade' | 'rune';
 
 /** A stop between depths (see the weapon movesets spec): the kinds offered, and whether one is taken. */
 export interface DiveStop {
@@ -733,6 +733,8 @@ export interface DiveState {
   dustEarned: number;
   /** Links from weapons salvaged while banking this dive (auto-salvage, full bag). */
   linksEarned: number;
+  /** Runes picked up this dive (see the runes spec). */
+  runesEarned: number;
   /** The door screen's stop: the power-up offered after the depth just cleared (null: none). */
   stop: DiveStop | null;
   found: Record<Rarity, number>;
@@ -764,7 +766,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 6;
+  version: 7;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -786,6 +788,8 @@ export interface DelveProfile {
   manaDust: number;
   /** From salvaging weapons with extra slots; spent on a weapon's new slots (see the weapon movesets spec). */
   links: number;
+  /** Loose runes: counts by id and tier (see the runes spec). */
+  runes: RunePouch;
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

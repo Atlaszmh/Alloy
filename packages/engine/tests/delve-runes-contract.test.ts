@@ -15,6 +15,14 @@ import * as engine from '../src/index.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import { spawnProjectile } from '../src/arpg/abilities/targeting.js';
 import { computeHeroStats } from '../src/delve/hero-stats.js';
+import { startDive } from '../src/delve/dive.js';
+import {
+  addLootToBag,
+  createDelveProfile,
+  parseDelveProfile,
+  salvageItems,
+} from '../src/delve/profile.js';
+import { stopKinds } from '../src/delve/stops.js';
 import {
   addToPouch,
   extraShotPower,
@@ -30,9 +38,21 @@ import {
 } from '../src/loot/runes.js';
 import type { RunePouch, RuneRef, RuneTier } from '../src/types/rune.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { MOVE_KINDS } from '../src/types/ability.js';
+import { MOVE_KINDS, type Move } from '../src/types/ability.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
-import { arena, bal, damaged, dummy, moveOf, press, registry, run } from './fixtures/arena.js';
+import type { DelveProfile } from '../src/types/delve.js';
+import {
+  arena,
+  bal,
+  chainsOf,
+  damaged,
+  dummy,
+  moveOf,
+  press,
+  registry,
+  run,
+  withChains,
+} from './fixtures/arena.js';
 
 // The runes spec's wave-0 contract: every new knob neutral, so nothing plays differently yet.
 
@@ -531,4 +551,158 @@ describe('wave 1A: the sim', () => {
     'guardLand: a guardOnLand × max life barrier for guardSeconds, never shrinking a larger one',
   );
   it.todo('queueEcho and echoTick: the move or blow again after echoDelay, at its echo fraction');
+});
+
+describe('save v7', () => {
+  const json = (x: unknown) => JSON.parse(JSON.stringify(x));
+  const fresh = () => createDelveProfile(registry, 1, { primary: 'fire' });
+  const bolt = (runes: (RuneRef | null)[]): Move => ({
+    kind: 'medium',
+    form: 'bolt',
+    elements: ['fire'],
+    runes,
+  });
+  /** A rare weapon: two sockets a move. */
+  const rare = (p: DelveProfile): DelveProfile => ({
+    ...p,
+    equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, rarity: 'rare' } },
+  });
+
+  it('a new profile is version 7 with an empty pouch', () => {
+    expect(fresh()).toMatchObject({ version: 7, runes: {} });
+  });
+
+  it('loads a version 6 save as version 7 with an empty pouch, and nothing else changed', () => {
+    const p = fresh();
+    const { runes: _runes, ...v6 } = p;
+    expect(parseDelveProfile(registry, json({ ...v6, version: 6 }))).toEqual({
+      profile: p,
+      fixed: [],
+      dropped: [],
+      movesetReset: false,
+      runesLost: [],
+    });
+  });
+
+  it('round-trips sockets, empty ones included, and the pouch', () => {
+    const p = {
+      ...withChains(rare(fresh()), {
+        primary: { moves: [bolt([{ id: 'chain', tier: 2 }, null])], payment: 'mana' },
+      }),
+      runes: { quick: [0, 1, 0, 0, 0] },
+    };
+    const res = parseDelveProfile(registry, json(p))!;
+    expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'chain', tier: 2 }, null]);
+    expect(res.profile.runes).toEqual({ quick: [0, 1, 0, 0, 0] });
+    expect(parseDelveProfile(registry, json(res.profile))).toEqual({ ...res, runesLost: [] });
+  });
+
+  it('empties unknown and repeated runes and trims sockets past the cap: a Link each, the runes destroyed', () => {
+    const p = {
+      ...withChains(rare(fresh()), {
+        primary: {
+          moves: [
+            bolt([
+              { id: 'ghost', tier: 1 },
+              { id: 'chain', tier: 1 },
+            ]),
+            bolt([
+              { id: 'quick', tier: 2 },
+              { id: 'quick', tier: 3 },
+              { id: 'echo', tier: 1 },
+            ]),
+          ],
+          payment: 'mana',
+        },
+      }),
+      runes: { ghost: [1, 0, 0, 0, 0], echo: [0, 0, 1, 0, 0] },
+    };
+    const res = parseDelveProfile(registry, json(p))!;
+    expect(chainsOf(res.profile).primary!.moves.map((m) => m.runes)).toEqual([
+      [null, { id: 'chain', tier: 1 }],
+      [{ id: 'quick', tier: 2 }, null],
+    ]);
+    expect(res.profile.links).toBe(p.links + 1);
+    expect(res.runesLost).toEqual([
+      { id: 'quick', tier: 3 },
+      { id: 'echo', tier: 1 },
+    ]);
+    expect(res.profile.runes).toEqual({ echo: [0, 0, 1, 0, 0] });
+  });
+
+  it("in 'pay' mode the runes a trim takes off go back to the pouch", () => {
+    const p = {
+      ...withChains(fresh(), {
+        primary: {
+          moves: [
+            bolt([
+              { id: 'quick', tier: 2 },
+              { id: 'echo', tier: 1 },
+            ]),
+          ],
+          payment: 'mana',
+        },
+      }),
+      runes: { echo: [0, 0, 1, 0, 0] },
+    };
+    bal.runes.unsocket = 'pay';
+    try {
+      const res = parseDelveProfile(registry, json(p))!;
+      expect(chainsOf(res.profile).primary!.moves[0].runes).toEqual([{ id: 'quick', tier: 2 }]);
+      expect(res.profile.links).toBe(p.links + 1);
+      expect(res.runesLost).toEqual([]);
+      expect(res.profile.runes).toEqual({ echo: [1, 0, 1, 0, 0] });
+    } finally {
+      bal.runes.unsocket = 'destroy';
+    }
+  });
+
+  it("a chain the weapon can't carry takes its sockets with it: a Link each, its runes by the rule", () => {
+    // A common sword carries no Defensive.
+    const ward: Move = {
+      kind: 'medium',
+      form: 'ward',
+      elements: ['fire'],
+      runes: [{ id: 'guard', tier: 1 }, null],
+    };
+    const p = withChains(fresh(), { defensive: { moves: [ward], payment: 'mana' } });
+    const res = parseDelveProfile(registry, json(p))!;
+    expect(res.profile.equipped.weapon!.moveset!.chains.defensive).toBeUndefined();
+    expect(res.profile.links).toBe(p.links + 2);
+    expect(res.runesLost).toEqual([{ id: 'guard', tier: 1 }]);
+  });
+
+  it('refuses more than MAX_SOCKETS sockets, a tier past V, or a pouch row of other than five counts', () => {
+    const p = fresh();
+    const four = withChains(rare(p), {
+      primary: { moves: [bolt([null, null, null, null])], payment: 'mana' },
+    });
+    const tierSix = withChains(rare(p), {
+      primary: { moves: [bolt([{ id: 'chain', tier: 6 as RuneTier }])], payment: 'mana' },
+    });
+    expect(parseDelveProfile(registry, json(four))).toBeNull();
+    expect(parseDelveProfile(registry, json(tierSix))).toBeNull();
+    expect(parseDelveProfile(registry, json({ ...p, runes: { chain: [1, 0, 0] } }))).toBeNull();
+  });
+
+  it("starts a dive with no runes earned; a dive saved without the count loads with 0, and a stop may offer 'rune'", () => {
+    const p = startDive(registry, fresh(), 1);
+    expect(p.dive!.runesEarned).toBe(0);
+    const { runesEarned: _r, ...dive } = p.dive!;
+    const stop = { offers: ['rune'], taken: false };
+    const res = parseDelveProfile(registry, json({ ...p, dive: { ...dive, stop } }))!;
+    expect(res.profile.dive).toMatchObject({ runesEarned: 0, stop });
+  });
+
+  it("doesn't offer the 'rune' stop yet, and the ops that can return runes return none", () => {
+    const p = fresh();
+    expect(stopKinds(registry, p)).not.toContain('rune');
+    expect(salvageItems(registry, p, [])).toMatchObject({ runes: [], destroyed: [] });
+    expect(addLootToBag(registry, p, [])).toMatchObject({ runes: [], destroyed: [] });
+  });
+
+  it("exports the save's rune schemas", () => {
+    expect(engine.RuneRefSchema.safeParse({ id: 'split', tier: 3 }).success).toBe(true);
+    expect(engine.RunePouchSchema.safeParse({ split: [0, 1, 0, 0, 0] }).success).toBe(true);
+  });
 });
