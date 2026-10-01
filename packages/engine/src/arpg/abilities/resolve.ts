@@ -7,6 +7,7 @@ import {
   type Chain,
   type Chains,
   type Knobs,
+  type KnobsData,
   type Move,
   type MoveKind,
   type ResolvedAbility,
@@ -22,12 +23,13 @@ import type {
   ManaPair,
 } from '../../types/delve.js';
 
-const NEUTRAL: Knobs = {
+/** Knobs that change nothing: every merge starts from them (never mutate it). */
+export const NEUTRAL: Knobs = {
   power: 1,
   area: 1,
   applies: [],
   chain: 0,
-  pierce: false,
+  pierce: 0,
   knockback: 0,
   lifesteal: 0,
   zone: null,
@@ -35,24 +37,56 @@ const NEUTRAL: Knobs = {
   execute: 0,
   scatter: 0,
   spread: false,
+  split: null,
+  extraShots: null,
+  echo: 0,
+  quick: { beat: 1, cooldown: 1, windup: 1 },
+  stacksBonus: 0,
+  catalyst: 0,
+  manaOnHit: 0,
+  guardOnLand: 0,
 };
 
-/** Combine knob sets: multipliers multiply, counts add, flags OR, statuses union, the longer zone wins. */
-export function mergeKnobs(...parts: Partial<Knobs>[]): Knobs {
-  const k: Knobs = { ...NEUTRAL, applies: [] };
+/**
+ * Combine knob sets (see the runes spec's knob table): multipliers multiply,
+ * counts add (`pierce` true adds Infinity), flags OR, statuses union, a zone
+ * takes the longer seconds and the larger tick power, `split` the larger count
+ * with its power, `extraShots` adds counts and multiplies powers, `echo` the
+ * largest, and each part of `quick` multiplies.
+ */
+export function mergeKnobs(...parts: KnobsData[]): Knobs {
+  const k: Knobs = { ...NEUTRAL, applies: [], quick: { ...NEUTRAL.quick } };
   for (const p of parts) {
     if (p.power !== undefined) k.power *= p.power;
     if (p.area !== undefined) k.area *= p.area;
     for (const s of p.applies ?? []) if (!k.applies.includes(s)) k.applies.push(s);
     k.chain += p.chain ?? 0;
-    k.pierce ||= p.pierce ?? false;
+    k.pierce += p.pierce === true ? Infinity : p.pierce || 0;
     k.knockback += p.knockback ?? 0;
     k.lifesteal += p.lifesteal ?? 0;
-    if (p.zone && (!k.zone || p.zone.seconds > k.zone.seconds)) k.zone = { ...p.zone };
+    if (p.zone)
+      k.zone = {
+        seconds: Math.max(k.zone?.seconds ?? 0, p.zone.seconds),
+        tickPower: Math.max(k.zone?.tickPower ?? 0, p.zone.tickPower),
+      };
     k.pull ||= p.pull ?? false;
     k.execute = Math.max(k.execute, p.execute ?? 0);
     k.scatter = Math.max(k.scatter, p.scatter ?? 0);
     k.spread ||= p.spread ?? false;
+    if (p.split && (!k.split || p.split.count > k.split.count)) k.split = { ...p.split };
+    if (p.extraShots)
+      k.extraShots = {
+        count: (k.extraShots?.count ?? 0) + p.extraShots.count,
+        power: (k.extraShots?.power ?? 1) * p.extraShots.power,
+      };
+    k.echo = Math.max(k.echo, p.echo ?? 0);
+    k.quick.beat *= p.quick?.beat ?? 1;
+    k.quick.cooldown *= p.quick?.cooldown ?? 1;
+    k.quick.windup *= p.quick?.windup ?? 1;
+    k.stacksBonus += p.stacksBonus ?? 0;
+    k.catalyst += p.catalyst ?? 0;
+    k.manaOnHit += p.manaOnHit ?? 0;
+    k.guardOnLand += p.guardOnLand ?? 0;
   }
   return k;
 }
@@ -86,7 +120,7 @@ export function resolveAbility(
     second && second !== element ? (registry.getFusion(element, second) ?? null) : null;
   const L = stats.legendaries;
 
-  const legendary: Partial<Knobs>[] = [];
+  const legendary: KnobsData[] = [];
   if (L.stormcaller && move.elements.includes('storm'))
     legendary.push({ chain: Math.round(L.stormcaller) });
   if (L.bedrock && move.elements.includes('earth'))
@@ -160,6 +194,7 @@ export function resolveAbility(
     tick: form.tick ?? 0.5,
     arc: form.arc ?? 360,
     knobs,
+    runes: [],
   };
 }
 
@@ -220,6 +255,14 @@ export function beatFor(
   tempo: number,
 ): number {
   return bal.chains.beat[kind] * bal.chains.beatSlot[slot] * tempo;
+}
+
+/**
+ * The beat after `ab` lands (`beatFor` by the kind it played as) times its
+ * `quick.beat`: Quick shortens it, Heavy lengthens it (see the runes spec).
+ */
+export function moveBeat(bal: DelveBalance, ab: ResolvedAbility, tempo: number): number {
+  return beatFor(bal, ab.slot, playedKind(ab), tempo) * ab.knobs.quick.beat;
 }
 
 /** Seconds a hold (an ability's or a hold blow's) takes to reach full charge at `tempo`. */

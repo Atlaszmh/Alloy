@@ -396,7 +396,10 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
           stacks: p.stacks,
           noReact: p.noReact,
         });
-      if (!p.pierce) p.dead = true;
+      // A piercing shot passes `pierceLeft` foes; the hit after them ends it.
+      const left = p.pierceLeft ?? (p.pierce ? Infinity : 0);
+      if (left <= 0) p.dead = true;
+      else p.pierceLeft = left - 1;
     }
     if (!p.dead && expired) {
       p.dead = true;

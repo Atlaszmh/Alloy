@@ -1,6 +1,7 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, MoveKind } from './ability.js';
+import type { AbilitySlot, ChainSkill, Knobs, MoveKind } from './ability.js';
+import type { RuneRef } from './rune.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -600,6 +601,10 @@ export interface HeroBlow extends ComboStepDef {
   element: ManaType;
   /** Its damage multiplier: 1 + basicPowerPerAttune × its element's attunement (1 without a pair). */
   attunePower: number;
+  /** Its runes' knobs merged (`NEUTRAL` without runes; see the runes spec). */
+  knobs: Knobs;
+  /** The runes acting on it (fitting and not dormant), in socket order. */
+  runes: RuneRef[];
 }
 
 export interface HeroWeapon {

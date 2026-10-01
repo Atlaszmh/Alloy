@@ -49,9 +49,19 @@ export function bestCluster(ctx: SimCtx, range: number, radius: number): Monster
 
 export function spawnProjectile(
   ctx: SimCtx,
-  p: Omit<Projectile, 'id' | 'hitIds' | 'traveled' | 'dead'>,
+  p: Omit<Projectile, 'id' | 'hitIds' | 'traveled' | 'dead' | 'pierceLeft'> & {
+    /** Foes it may pass (default: all when `pierce`, else none). */
+    pierceLeft?: number;
+  },
 ): Projectile {
-  const proj: Projectile = { ...p, id: ctx.world.nextId++, hitIds: [], traveled: 0, dead: false };
+  const proj: Projectile = {
+    ...p,
+    pierceLeft: p.pierceLeft ?? (p.pierce ? Infinity : 0),
+    id: ctx.world.nextId++,
+    hitIds: [],
+    traveled: 0,
+    dead: false,
+  };
   ctx.world.projectiles.push(proj);
   return proj;
 }

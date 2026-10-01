@@ -6,7 +6,7 @@ import type {
   AbilityCast,
   AbilitySlot,
   FormId,
-  Knobs,
+  KnobsData,
   MoveKind,
   ResolvedAbility,
   ResolvedChain,
@@ -75,7 +75,7 @@ export interface FormDef {
 
 /** What an element adds to any ability built with it. */
 export interface ElementTraitDef {
-  knobs: Partial<Knobs>;
+  knobs: KnobsData;
   /** Player-facing effect on offensive forms. */
   text: string;
   /** Player-facing effect on defensive forms. */
@@ -89,7 +89,7 @@ export interface FusionDef {
   name: string;
   icon: string;
   text: string;
-  knobs: Partial<Knobs>;
+  knobs: KnobsData;
 }
 
 /** A hit of either element pairs its stacks off with the other's on a foe to set it off (see the elemental stacks spec). */
@@ -223,7 +223,10 @@ export interface Projectile {
   radius: number;
   damage: number;
   element: ManaType | null;
+  /** Spawned piercing: such a shot never bursts at the end of its flight. */
   pierce: boolean;
+  /** Foes it may still pass; a hit with none left ends it (Infinity: all). */
+  pierceLeft: number;
   hitIds: number[];
   maxDist: number;
   traveled: number;

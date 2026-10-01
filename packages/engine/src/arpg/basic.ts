@@ -281,6 +281,7 @@ export function strike(ctx: SimCtx, steer: Vec, stage: number | null = null): vo
         damage: i === 0 ? base : unit * twinPct,
         element,
         pierce: w.pierce,
+        pierceLeft: w.pierce ? Infinity : 0,
         maxDist: w.range + 1.5,
         explodeRadius: i === 0 ? (s.explode ?? 0) : 0,
         applies: i === 0 ? applies : [],

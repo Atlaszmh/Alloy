@@ -8,12 +8,12 @@ import {
   type ResolvedChain,
 } from '../types/ability.js';
 import {
-  beatFor,
+  NEUTRAL,
   chainMove,
   defaultBasic,
   defaultChains,
   holdFull,
-  playedKind,
+  moveBeat,
   resolveChain,
   stepBonus,
 } from '../arpg/abilities/resolve.js';
@@ -180,6 +180,8 @@ export function computeHeroStats(
     kind: b.kind,
     element: b.element,
     attunePower: primary ? 1 + perAttune * attunement[b.element] : 1,
+    knobs: NEUTRAL,
+    runes: [],
   }));
   const weapon: HeroWeapon = armed?.attack
     ? {
@@ -369,7 +371,7 @@ export function useInterval(
         chain.payment === 'charge'
           ? ab.chargeNeed / Math.max(0.1, chargeRate)
           : ab.cost / Math.max(0.1, manaIncome);
-      const cadence = windup + beatFor(bal, ab.slot, playedKind(ab), tempo);
+      const cadence = windup + moveBeat(bal, ab, tempo);
       return Math.max(cooldown, pay, cadence);
     }),
   );

@@ -5,7 +5,7 @@ import type { SimCtx } from '../combat.js';
 import { cancelSwing, finishPushes, startPush, swingStrikes } from '../action.js';
 import { dirTo, dist } from '../geometry.js';
 import { executeForm } from './forms.js';
-import { beatFor, chainMove, holdFull, playedKind, stepBonus, stepHeft } from './resolve.js';
+import { chainMove, holdFull, moveBeat, stepBonus, stepHeft } from './resolve.js';
 import { aimPoint, DIRECTIONAL, nearestMonster } from './targeting.js';
 
 const DEFENSIVE = 1;
@@ -109,7 +109,7 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   const ab = chainMove(h.chains[slot]!, step, stage);
   const res = executeForm(ctx, ab, aim);
   if (!res.ok) return false;
-  const beat = beatFor(bal, ab.slot, playedKind(ab), h.stats.tempo);
+  const beat = moveBeat(bal, ab, h.stats.tempo);
   h.comboStep[slot] = step;
   h.comboAt[slot] = world.t + beat;
   h.beatFrom[slot] = world.t;

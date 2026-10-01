@@ -578,14 +578,20 @@ export const DelveDataSchema = z.object({
   }),
 });
 
-/** Partial ability knobs; `.strict()` rejects misspelled knob names. */
+/** A count and a power (`split`, `extraShots`). */
+const CountPowerSchema = z
+  .object({ count: z.number().int().positive(), power: z.number().positive() })
+  .strict();
+
+/** Partial ability knobs (`KnobsData`); `.strict()` rejects misspelled knob names. */
 const KnobsSchema = z
   .object({
     power: z.number().positive(),
     area: z.number().positive(),
     applies: z.array(StatusIdSchema),
     chain: z.number().int().min(0),
-    pierce: z.boolean(),
+    // True: every foe; a count: that many.
+    pierce: z.union([z.boolean(), z.number().int().min(1)]),
     knockback: z.number().min(0),
     lifesteal: z.number().min(0),
     zone: z.object({ seconds: z.number().positive(), tickPower: z.number().positive() }),
@@ -593,6 +599,21 @@ const KnobsSchema = z
     execute: z.number().min(0).max(1),
     scatter: z.number().min(0).max(1),
     spread: z.boolean(),
+    split: CountPowerSchema,
+    extraShots: CountPowerSchema,
+    echo: z.number().min(0),
+    quick: z
+      .object({
+        beat: z.number().positive(),
+        cooldown: z.number().positive(),
+        windup: z.number().positive(),
+      })
+      .partial()
+      .strict(),
+    stacksBonus: z.number().int().min(0),
+    catalyst: z.number().min(0),
+    manaOnHit: z.number().min(0),
+    guardOnLand: z.number().min(0),
   })
   .partial()
   .strict();
