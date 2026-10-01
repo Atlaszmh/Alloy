@@ -23,7 +23,8 @@ import type { ChainOrigins } from '../types/rune.js';
 import { isDiveActive } from './dive.js';
 import { inPair } from './pair.js';
 import { withMoveset, type ProfileActionResult } from './profile.js';
-import { settleParts, type SetChainsOptions } from './runes.js';
+import { runeChange, settleParts, type SetChainsOptions } from './runes.js';
+import { socketsOf, takeFromPouch } from '../loot/runes.js';
 
 /**
  * Editing a weapon's moveset (see the weapon movesets spec): its chains'
@@ -54,7 +55,16 @@ export function moveKey(m: Move | Blow): string {
   return 'element' in m ? `${m.kind}|${m.element}` : `${m.kind}|${m.form}|${m.elements.join('+')}`;
 }
 
-/** Whether two chains hold the same moves in order (by `moveKey`) and the same payment. */
+/** Whether two moves hold the same sockets: each empty in both, or the same rune at the same tier. */
+function sameSockets(a: Move | Blow, b: Move | Blow): boolean {
+  const [x, y] = [socketsOf(a), socketsOf(b)];
+  return x.length === y.length && x.every((r, i) => r?.id === y[i]?.id && r?.tier === y[i]?.tier);
+}
+
+/**
+ * Whether two chains hold the same moves in order (by `moveKey`), with the
+ * same sockets (see the runes spec), and the same payment.
+ */
 export function sameChain(
   a: Chains[ChainSkill] | undefined,
   b: Chains[ChainSkill] | undefined,
@@ -63,7 +73,9 @@ export function sameChain(
   if (Array.isArray(a) !== Array.isArray(b)) return false;
   const [x, y] = [movesOf(a), movesOf(b)];
   if (!Array.isArray(a) && (a as Chain).payment !== (b as Chain).payment) return false;
-  return x.length === y.length && x.every((m, i) => moveKey(m) === moveKey(y[i]));
+  return (
+    x.length === y.length && x.every((m, i) => moveKey(m) === moveKey(y[i]) && sameSockets(m, y[i]))
+  );
 }
 
 /** `chain` with move `index` replaced by `move` (its payment kept). */
@@ -266,21 +278,29 @@ function chainRefusal(
   return null;
 }
 
-/** A chain copied, so the save never shares arrays with the caller. */
+/** A chain copied, its sockets too, so the save never shares arrays with the caller. */
 function copyChain(chain: Chains[ChainSkill]): Chains[ChainSkill] {
-  if (Array.isArray(chain)) return chain.map((b) => ({ ...b }));
-  const moves = chain.moves.map((m) => ({ ...m, elements: [...m.elements] }));
+  const copy = <M extends Move | Blow>(m: M): M =>
+    m.runes ? { ...m, runes: m.runes.map((r) => r && { ...r }) } : { ...m };
+  if (Array.isArray(chain)) return chain.map(copy);
+  const moves = chain.moves.map((m) => ({ ...copy(m), elements: [...m.elements] }));
   return { moves, payment: chain.payment };
 }
 
 /**
- * Set several of the equipped weapon's chains at once, for Mana Dust
- * (`editPrice`, by `opts.origins`): all or nothing. Refuses mid-dive, unarmed,
- * and when any chain is refused (a skill the weapon doesn't carry; fewer than
- * one move or more than its slots; an unknown kind, a form from another slot,
+ * Set several of the equipped weapon's chains at once: all or nothing (see
+ * the runes spec). Mana Dust by origin (`editPrice`, by `opts.origins`), and
+ * the sockets' Links and scrap and the runes in and out (`runeChange`; a pull
+ * by `opts.unsocket`): the hero's Links become `links − change.links +
+ * change.refundLinks`, the netted amount, whatever order the edits were made
+ * in (never dearer than the same edits one by one). Refuses mid-dive, unarmed,
+ * when any chain is refused (a skill the weapon doesn't carry; fewer than one
+ * move or more than its slots; an unknown kind, a form from another slot,
  * anything but one or two different known elements, an unknown payment; an
- * element set outside the pair held more times than before; or bad origins)
- * or the total can't be paid.
+ * element set outside the pair held more times than before; or bad origins),
+ * when the runes are refused (`runeChange`), and when the Dust, the net Links
+ * or the scrap can't be paid. Its result lists the runes pulled back to the
+ * pouch (`runes`) and those destroyed (`destroyed`).
  */
 export function setChains(
   registry: DataRegistry,
@@ -303,10 +323,28 @@ export function setChains(
       return refuse(profile, 'Bad origins');
     (next as Record<ChainSkill, unknown>)[skill] = copyChain(chain);
   }
+  const change = runeChange(registry, profile, chains, opts);
+  if ('refused' in change) return refuse(profile, change.refused);
   const price = editPrice(registry, profile, chains, opts.origins);
   if (profile.manaDust < price) return refuse(profile, 'Not enough Mana Dust');
+  if (profile.links < change.links - change.refundLinks) return refuse(profile, 'Not enough Links');
+  if (profile.scrap < change.scrap) return refuse(profile, 'Not enough scrap');
+  const settled = settleParts(registry, profile.runes, change.pulled, opts.unsocket);
+  const runes = takeFromPouch(settled.pouch, change.socketed);
+  if (!runes) return refuse(profile, 'Not enough runes in your pouch');
   const edited = withMoveset(profile, { ...moveset, chains: next });
-  return { ok: true, profile: { ...edited, manaDust: profile.manaDust - price } };
+  return {
+    ok: true,
+    runes: settled.runes,
+    destroyed: settled.destroyed,
+    profile: {
+      ...edited,
+      manaDust: profile.manaDust - price,
+      links: profile.links - change.links + change.refundLinks,
+      scrap: profile.scrap - change.scrap,
+      runes,
+    },
+  };
 }
 
 /** Set one of the equipped weapon's chains (`setChains` with one). */

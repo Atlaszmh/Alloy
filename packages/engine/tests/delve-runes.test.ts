@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { baseSlots, carriedSkills, defaultMoveset } from '../src/loot/moveset.js';
-import { transferMoveset } from '../src/delve/moveset.js';
+import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
 import { startDive } from '../src/delve/dive.js';
 import { chooseStartingMana } from '../src/delve/pair.js';
 import {
@@ -13,7 +13,7 @@ import {
   salvageItems,
   setAutoSalvage,
 } from '../src/delve/profile.js';
-import { unsocketMode } from '../src/delve/runes.js';
+import { draftPrice, unsocketMode } from '../src/delve/runes.js';
 import {
   rollRuneDrop,
   rollSockets,
@@ -22,13 +22,13 @@ import {
   socketsOf,
   weaponParts,
 } from '../src/loot/runes.js';
-import { CHAIN_SKILLS, type Blow, type Move } from '../src/types/ability.js';
+import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
 import type { MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { RunePouch, RuneRef } from '../src/types/rune.js';
-import { bal, registry } from './fixtures/arena.js';
+import { bal, chainsOf, registry } from './fixtures/arena.js';
 
 // See the runes spec: sockets, the pouch, the draft's price, fusing, drops and the stop.
 
@@ -403,6 +403,297 @@ describe('transfer: sockets move with their moves', () => {
       const s = salvageItems(registry, t.profile, [a.uid], { unsocket });
       expect(s.count).toBe(1);
       expect(totals(s.profile, [...t.destroyed!, ...s.destroyed])).toEqual(before);
+    }
+  });
+});
+
+const QUICK_II: RuneRef = { id: 'quick', tier: 2 };
+const CHAIN_I: RuneRef = { id: 'chain', tier: 1 };
+
+/** `c` with move `i`'s sockets set to `runes`. */
+function withRunes(c: Chain, i: number, runes: (RuneRef | null)[]): Chain {
+  return { ...c, moves: c.moves.map((m, j) => (j === i ? { ...m, runes } : m)) };
+}
+
+/**
+ * A Storm hero past its first dive with 10 Links, 500 scrap and 100 Mana Dust,
+ * wielding an epic bow (3 sockets a move) whose Primary is three Bolts: the
+ * first holds Split I and an empty socket, the second Quick II, the third
+ * none. Its pouch: two Split I, a Chain I and an Echo I.
+ */
+function ready(): DelveProfile {
+  const p = createDelveProfile(registry, 3, { primary: 'storm' });
+  const slots = { basic: 3, primary: 3, defensive: 1, ultimate: 1 };
+  const bow = slotted({ ...weapon('epic', 6, 'bow'), uid: 'bow' }, slots);
+  const primary = bow.moveset!.chains.primary!;
+  primary.moves[0] = { ...primary.moves[0], runes: [SPLIT_I, null] };
+  primary.moves[1] = { ...primary.moves[1], runes: [QUICK_II] };
+  return {
+    ...p,
+    equipped: { ...p.equipped, weapon: bow },
+    links: 10,
+    scrap: 500,
+    manaDust: 100,
+    stats: { ...p.stats, dives: 1 },
+    runes: { split: [2, 0, 0, 0, 0], chain: [1, 0, 0, 0, 0], echo: [1, 0, 0, 0, 0] },
+  };
+}
+
+/** The hero's Primary chain. */
+const primaryOf = (q: DelveProfile) => chainsOf(q).primary!;
+
+describe('the draft: sockets and runes through setChains', () => {
+  const E = bal.movesets.editDust;
+  const PAY = { unsocket: 'pay' as const };
+
+  it('opens sockets for Links and scrap by their index; socketing is free, out of the pouch', () => {
+    const p = ready();
+    // Move 2's first socket, Chain I in it; move 1's second socket, left empty.
+    const c = withRunes(withRunes(primaryOf(p), 2, [CHAIN_I]), 1, [QUICK_II, null]);
+    expect(draftPrice(registry, p, { primary: c })).toEqual({
+      dust: 0,
+      links: 1 + 2,
+      scrap: 20 + 40,
+      refundLinks: 0,
+      destroys: [],
+      returns: [],
+    });
+    const res = setChains(registry, p, { primary: c });
+    expect(res).toMatchObject({ ok: true, runes: [], destroyed: [] });
+    expect(res.profile).toMatchObject({ links: 7, scrap: 440, manaDust: 100 });
+    expect(res.profile.runes.chain).toEqual([0, 0, 0, 0, 0]);
+    expect(primaryOf(res.profile).moves.map((m) => m.runes)).toEqual([
+      [SPLIT_I, null],
+      [QUICK_II, null],
+      [CHAIN_I],
+    ]);
+    expect(R.socketLinks).toEqual([1, 2, 3]);
+    expect(R.socketScrap).toEqual([20, 40, 60]);
+  });
+
+  it('a pull follows the mode: destroy is free and the rune is gone; pay costs its tier and returns it', () => {
+    const p = ready();
+    const c = withRunes(primaryOf(p), 1, [null]);
+    expect(draftPrice(registry, p, { primary: c })).toMatchObject({
+      scrap: 0,
+      destroys: [QUICK_II],
+      returns: [],
+    });
+    const gone = setChains(registry, p, { primary: c });
+    expect(gone).toMatchObject({ ok: true, runes: [], destroyed: [QUICK_II] });
+    expect(gone.profile.scrap).toBe(500);
+    expect(gone.profile.runes).toEqual(p.runes);
+    expect(R.pullScrap).toEqual([15, 30, 50, 80, 120]);
+    expect(draftPrice(registry, p, { primary: c }, PAY)).toMatchObject({
+      scrap: 30,
+      destroys: [],
+      returns: [QUICK_II],
+    });
+    const paid = setChains(registry, p, { primary: c }, PAY);
+    expect(paid).toMatchObject({ ok: true, runes: [QUICK_II], destroyed: [] });
+    expect(paid.profile.scrap).toBe(470);
+    expect(paid.profile.runes.quick).toEqual([0, 1, 0, 0, 0]);
+    // Overwriting is a pull and a socket: Quick II out, Echo I in from the pouch.
+    const over = setChains(registry, p, { primary: withRunes(primaryOf(p), 1, [ECHO_I]) });
+    expect(over).toMatchObject({ ok: true, destroyed: [QUICK_II] });
+    expect(over.profile.runes.echo).toEqual([0, 0, 0, 0, 0]);
+  });
+
+  it('reordering carries the runes; a removed move gives its sockets back, netted against those opened', () => {
+    const p = ready();
+    const [m0, m1, m2] = primaryOf(p).moves;
+    const swapped = { ...primaryOf(p), moves: [m1, m0, m2] };
+    const moved = setChains(registry, p, { primary: swapped }, { origins: { primary: [1, 0, 2] } });
+    expect(moved).toMatchObject({ ok: true, destroyed: [] });
+    expect(moved.profile).toMatchObject({ links: 10, scrap: 500, manaDust: 100 - E });
+    expect(primaryOf(moved.profile).moves.map((m) => m.runes)).toEqual([
+      [QUICK_II],
+      [SPLIT_I, null],
+      undefined,
+    ]);
+    // Read in place, the same chain would close move 0's second socket.
+    expect(draftPrice(registry, p, { primary: swapped })).toEqual({
+      refused: "Sockets can't be closed",
+    });
+    // Move 0 removed (2 sockets back, Split I pulled), move 2's first socket opened.
+    const removed = { ...primaryOf(p), moves: [m1, { ...m2, runes: [null] }] };
+    const origins = { primary: [1, 2] };
+    expect(draftPrice(registry, p, { primary: removed }, { origins })).toEqual({
+      dust: E,
+      links: 1,
+      scrap: 20,
+      refundLinks: 2,
+      destroys: [SPLIT_I],
+      returns: [],
+    });
+    const res = setChains(registry, p, { primary: removed }, { origins });
+    expect(res.profile).toMatchObject({ links: 10 - 1 + 2, scrap: 480, manaDust: 100 - E });
+    // The refund pays for the socket: a hero with no Links can still do it.
+    expect(setChains(registry, { ...p, links: 0 }, { primary: removed }, { origins }).ok).toBe(
+      true,
+    );
+  });
+
+  it('a rune that changes moves is a pull plus a socket: destroy needs another in the pouch, pay can re-socket it', () => {
+    const p = ready();
+    const [m0, m1, m2] = primaryOf(p).moves;
+    const c = {
+      ...primaryOf(p),
+      moves: [{ ...m0, runes: [null, null] }, m1, { ...m2, runes: [SPLIT_I] }],
+    };
+    expect(draftPrice(registry, p, { primary: c })).toEqual({
+      dust: 0,
+      links: 1,
+      scrap: 20,
+      refundLinks: 0,
+      destroys: [SPLIT_I],
+      returns: [],
+    });
+    const res = setChains(registry, p, { primary: c });
+    expect(res.profile.runes.split).toEqual([1, 0, 0, 0, 0]);
+    const empty = { ...p, runes: {} };
+    expect(setChains(registry, empty, { primary: c })).toMatchObject({
+      ok: false,
+      profile: empty,
+      reason: 'Not enough runes in your pouch',
+    });
+    const paid = setChains(registry, empty, { primary: c }, PAY);
+    expect(paid).toMatchObject({ ok: true, runes: [SPLIT_I] });
+    expect(paid.profile).toMatchObject({ scrap: 500 - 20 - 15, runes: { split: [0, 0, 0, 0, 0] } });
+  });
+
+  it('refuses past the cap, a closed socket, a rune twice, one that does not fit or is unknown, and bad origins', () => {
+    const p = ready();
+    const c = primaryOf(p);
+    const reason = (next: Chain, opts = {}) => {
+      const res = setChains(registry, p, { primary: next }, opts);
+      expect(res.profile).toBe(p);
+      return res.reason;
+    };
+    expect(reason(withRunes(c, 2, [null, null, null, null]))).toBe(
+      "This weapon's moves hold at most 3 sockets",
+    );
+    expect(reason(withRunes(c, 0, [SPLIT_I]))).toBe("Sockets can't be closed");
+    expect(reason(withRunes(c, 0, [SPLIT_I, { id: 'split', tier: 2 }]))).toBe(
+      'A move takes one Split',
+    );
+    expect(reason(withRunes(c, 2, [{ id: 'widen', tier: 1 }]))).toBe("Widen doesn't fit a Bolt");
+    expect(reason(withRunes(c, 2, [{ id: 'nope', tier: 1 }]))).toBe('Unknown rune nope');
+    expect(reason(c, { origins: { primary: [0, 0, 1] } })).toBe('Bad origins');
+    // A form change is refused while a socketed rune wouldn't fit it.
+    const lance = {
+      ...c,
+      moves: c.moves.map((m, i) => (i === 0 ? { ...m, form: 'lance' as const } : m)),
+    };
+    expect(reason(lance)).toBe("Split doesn't fit a Lance");
+    // A kind or element change keeps the runes.
+    const heavy = {
+      ...c,
+      moves: c.moves.map((m, i) => (i === 0 ? { ...m, kind: 'heavy' as const } : m)),
+    };
+    expect(setChains(registry, p, { primary: heavy }).ok).toBe(true);
+    // Blows: a rune must fit the weapon's.
+    const blows = chainsOf(p).basic!;
+    const widened = blows.map((b, i) =>
+      i === 0 ? { ...b, runes: [{ id: 'widen', tier: 1 as const }] } : b,
+    );
+    expect(setChains(registry, p, { basic: widened }).reason).toBe("Widen doesn't fit Bow blows");
+    // All or nothing: a good Primary and a bad basic chain change nothing.
+    const good = withRunes(c, 2, [CHAIN_I]);
+    expect(setChains(registry, p, { primary: good, basic: widened })).toMatchObject({
+      ok: false,
+      profile: p,
+    });
+    // Short of Links or scrap.
+    expect(setChains(registry, { ...p, links: 0 }, { primary: good }).reason).toBe(
+      'Not enough Links',
+    );
+    expect(setChains(registry, { ...p, scrap: 19 }, { primary: good }).reason).toBe(
+      'Not enough scrap',
+    );
+  });
+
+  it('sameChain sees the sockets: a rune-only change is a change', () => {
+    const c = primaryOf(ready());
+    expect(sameChain(c, withRunes(c, 2, []))).toBe(true);
+    expect(sameChain(c, withRunes(c, 2, [null]))).toBe(false);
+    expect(sameChain(c, withRunes(c, 1, [{ id: 'quick', tier: 3 }]))).toBe(false);
+    expect(sameChain(c, withRunes(c, 1, [QUICK_II]))).toBe(true);
+  });
+
+  it('nets Links: a batch is never dearer than its edits one Apply at a time, and the same when it removes no move (random edits, origins composed)', () => {
+    const rng = new SeededRNG(21);
+    const fits = registry.getRunes().filter((d) => runeFits(d, { form: 'bolt' }));
+    const pouch = Object.fromEntries(registry.getRunes().map((d) => [d.id, [50, 50, 50, 50, 50]]));
+    /** One edit as the builder makes it: the new chain, and each new move's index in `c` (null: new). */
+    const randomEdit = (c: Chain, remove: boolean): { next: Chain; map: (number | null)[] } => {
+      const moves = c.moves.map((m) => ({ ...m }));
+      const map: (number | null)[] = moves.map((_, i) => i);
+      const i = rng.nextInt(0, moves.length - 1);
+      const sockets = [...socketsOf(moves[i])];
+      switch (rng.nextInt(0, 5)) {
+        case 0:
+          if (remove && moves.length > 1) [moves, map].forEach((xs) => xs.splice(i, 1));
+          break;
+        case 1:
+          if (i + 1 < moves.length) {
+            [moves[i], moves[i + 1]] = [moves[i + 1], moves[i]];
+            [map[i], map[i + 1]] = [map[i + 1], map[i]];
+          }
+          break;
+        case 2:
+          if (moves.length < 3) {
+            moves.push({ kind: 'light', form: 'bolt', elements: ['storm'] });
+            map.push(null);
+          }
+          break;
+        case 3:
+          if (sockets.length < 3) moves[i].runes = [...sockets, null];
+          break;
+        case 4: {
+          const def = fits[rng.nextInt(0, fits.length - 1)];
+          const at = sockets.indexOf(null);
+          if (at >= 0 && !sockets.some((r) => r?.id === def.id)) {
+            sockets[at] = { id: def.id, tier: rng.nextInt(1, 5) as RuneRef['tier'] };
+            moves[i].runes = sockets;
+          }
+          break;
+        }
+        case 5: {
+          const at = sockets.findIndex((r) => r !== null);
+          if (at >= 0) {
+            sockets[at] = null;
+            moves[i].runes = sockets;
+          }
+          break;
+        }
+      }
+      return { next: { ...c, moves }, map };
+    };
+    for (let n = 0; n < 300; n++) {
+      const unsocket = n % 2 === 0 ? 'destroy' : 'pay';
+      // A removed move refunds one Link a socket, so a socket opened past the first and removed
+      // in the same batch costs the batch nothing but the steps a Link or two: never dearer.
+      const remove = n % 4 < 2;
+      const start = { ...ready(), links: 999, scrap: 99999, manaDust: 9999, runes: pouch };
+      let step = start;
+      let chain = primaryOf(start);
+      let origins: (number | null)[] = chain.moves.map((_, i) => i);
+      for (let k = 0; k < 8; k++) {
+        const { next, map } = randomEdit(chain, remove);
+        const opts = { origins: { primary: map }, unsocket };
+        const res = setChains(registry, step, { primary: next }, opts);
+        expect(res.ok).toBe(true);
+        step = res.profile;
+        chain = next;
+        origins = map.map((o) => (o === null ? null : origins[o]));
+      }
+      const opts = { origins: { primary: origins }, unsocket };
+      const batch = setChains(registry, start, { primary: chain }, opts);
+      expect(batch.ok).toBe(true);
+      if (remove) expect(batch.profile.links).toBeGreaterThanOrEqual(step.links);
+      else expect(batch.profile.links).toBe(step.links);
+      expect(primaryOf(batch.profile)).toEqual(primaryOf(step));
     }
   });
 });
