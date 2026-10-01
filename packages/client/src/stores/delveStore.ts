@@ -11,6 +11,7 @@ import {
   upgradeGear,
   reforgeGear,
   fuseGear,
+  fuseRunes as engineFuseRunes,
   setAutoSalvage,
   setChains as engineSetChains,
   addSlot as engineAddSlot,
@@ -304,12 +305,39 @@ export function applyLabel(registry: DataRegistry, price: DraftPrice | null): st
     .join(' · ');
 }
 
+/** The runes a load-time trim destroyed: "Split III was lost: its socket no longer exists". */
+export function runeLostNotices(registry: DataRegistry, lost: readonly RuneRef[]): string[] {
+  return lost
+    .filter((r) => registry.findRune(r.id))
+    .map((r) => `${runeName(registry, r)} was lost: its socket no longer exists`);
+}
+
+/**
+ * What became of the runes an op's parts brought back (salvage, a fuse, a transfer):
+ * "Split I back to your pouch", "2 runes back to your pouch · destroys Quick III"; null for none.
+ */
+export function partsText(
+  registry: DataRegistry,
+  runes: readonly RuneRef[] = [],
+  destroyed: readonly RuneRef[] = [],
+): string | null {
+  const out: string[] = [];
+  if (runes.length > 0)
+    out.push(
+      `${runes.length === 1 ? runeName(registry, runes[0]) : `${runes.length} runes`} back to your pouch`,
+    );
+  if (destroyed.length > 0) out.push(`destroys ${runeNames(registry, destroyed)}`);
+  return out.length > 0 ? out.join(' · ') : null;
+}
+
 interface DelveStore {
   profile: DelveProfile;
   /** Items the player hasn't looked at yet (pulse dot). */
   newUids: Record<string, true>;
   /** Drops from the current dive, newest first (session only). */
   diveDrops: string[];
+  /** Runes picked up this dive, newest first (session only). */
+  diveRunes: RuneRef[];
   /** Basic attacks on a button instead of automatic (a device preference). */
   manualAttack: boolean;
   /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed moves. */
@@ -340,8 +368,14 @@ interface DelveStore {
   equip: (uid: string) => void;
   unequip: (slot: GearSlot) => void;
   toggleLock: (uid: string) => void;
-  /** Melt bag items; what they gave. */
-  salvage: (uids: string[]) => { scrap: number; dust: number; links: number };
+  /** Melt bag items; what they gave (their runes back to the pouch, or destroyed, by the rule). */
+  salvage: (uids: string[]) => {
+    scrap: number;
+    dust: number;
+    links: number;
+    runes: RuneRef[];
+    destroyed: RuneRef[];
+  };
   equipBest: () => GearItem[];
   upgrade: (uid: string) => ProfileActionResult;
   reforge: (uid: string, affixIndex: number) => ProfileActionResult;
@@ -350,6 +384,9 @@ interface DelveStore {
   markNew: (uids: string[]) => void;
   markSeen: (uids: string[]) => void;
   pushDiveDrops: (uids: string[]) => void;
+  pushDiveRunes: (runes: RuneRef[]) => void;
+  /** Fuse `fuseCount` of a rune and tier into one of the next tier, for scrap (the Forge tab). */
+  fuseRunes: (ref: RuneRef) => ProfileActionResult;
   /** Set the equipped weapon's changed chains, for Mana Dust: all or nothing. */
   setChains: (chains: Partial<Chains>) => ProfileActionResult;
   /**
@@ -392,6 +429,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     return res;
   };
   const notify = (text: string) => set({ notices: [...get().notices, text] });
+  // The pull rule for the ops whose parts can return or destroy a rune.
+  const pull = () => ({ unsocket: get().unsocket ?? undefined });
 
   const loaded = loadDelveProfile();
   // A migrated save is written back at once.
@@ -401,6 +440,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     profile: loaded?.profile ?? createDelveProfile(getDelveRegistry(), freshSeed()),
     newUids: {},
     diveDrops: [],
+    diveRunes: [],
     manualAttack: loadManualAttack(),
     notices: loaded
       ? [
@@ -409,6 +449,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
             : []),
           ...movesetNotices(loaded.dropped, loaded.movesetReset, loaded.profile.links),
           ...fixNotices(getDelveRegistry(), loaded.fixed, loaded.profile.pair),
+          ...runeLostNotices(getDelveRegistry(), loaded.runesLost),
         ]
       : [],
     bindDeclined: [],
@@ -419,7 +460,14 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     resetProfile: (seed, primary) => {
       commit(createDelveProfile(registry(), seed ?? freshSeed(), primary ? { primary } : {}));
-      set({ newUids: {}, diveDrops: [], notices: [], bindDeclined: [], chainDraft: null });
+      set({
+        newUids: {},
+        diveDrops: [],
+        diveRunes: [],
+        notices: [],
+        bindDeclined: [],
+        chainDraft: null,
+      });
     },
 
     startDive: (depth) => {
@@ -427,7 +475,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       // A dive locks the chains: a pending draft is applied or discarded first, never dropped.
       if (Object.keys(draftChanges(registry(), profile, chainDraft)).length > 0) return false;
       commit(engineStartDive(registry(), profile, depth));
-      set({ diveDrops: [], chainDraft: null });
+      set({ diveDrops: [], diveRunes: [], chainDraft: null });
       return true;
     },
 
@@ -470,10 +518,11 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     toggleLock: (uid) => commit(toggleLock(get().profile, uid)),
 
     salvage: (uids) => {
-      const res = salvageItems(registry(), get().profile, uids);
+      const res = salvageItems(registry(), get().profile, uids, pull());
       commit(res.profile);
       set({ newUids: withoutUids(get().newUids, uids) });
-      return { scrap: res.scrap, dust: res.dust, links: res.links };
+      const { scrap, dust, links, runes, destroyed } = res;
+      return { scrap, dust, links, runes, destroyed };
     },
 
     equipBest: () => {
@@ -496,7 +545,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       applyResult(reforgeGear(registry(), get().profile, uid, affixIndex)),
 
     fuse: (uids) => {
-      const res = applyResult(fuseGear(registry(), get().profile, uids));
+      const res = applyResult(fuseGear(registry(), get().profile, uids, pull()));
       if (res.ok && res.item)
         set({ newUids: { ...withoutUids(get().newUids, uids), [res.item.uid]: true } });
       return res;
@@ -519,6 +568,11 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     pushDiveDrops: (uids) => {
       if (uids.length === 0) return;
       set({ diveDrops: [...uids.slice().reverse(), ...get().diveDrops].slice(0, 60) });
+    },
+
+    pushDiveRunes: (runes) => {
+      if (runes.length === 0) return;
+      set({ diveRunes: [...runes.slice().reverse(), ...get().diveRunes].slice(0, 60) });
     },
 
     setManualAttack: (on) => {
@@ -580,6 +634,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     revertDraft: () => set({ chainDraft: null }),
 
+    fuseRunes: (ref) => applyResult(engineFuseRunes(registry(), get().profile, ref)),
+
     addSlot: (skill) => {
       const res = applyResult(engineAddSlot(registry(), get().profile, skill));
       // The draft's edit of that chain was made on fewer slots: it goes.
@@ -592,7 +648,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     },
 
     transfer: (uid) => {
-      const res = applyResult(transferMoveset(registry(), get().profile, uid));
+      const res = applyResult(transferMoveset(registry(), get().profile, uid, pull()));
       if (res.ok) set({ newUids: withoutUids(get().newUids, [uid]) });
       return res;
     },

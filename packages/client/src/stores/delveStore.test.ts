@@ -8,6 +8,7 @@ import {
   type ChainFix,
   type Chains,
   type DelveProfile,
+  type GearItem,
   type GearSlot,
   type ManaType,
   type RuneRef,
@@ -24,6 +25,8 @@ import {
   UNSOCKET_KEY,
   applyLabel,
   draftApply,
+  partsText,
+  runeLostNotices,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 
@@ -540,5 +543,79 @@ describe('delveStore: runes in the draft', () => {
     } finally {
       import.meta.env.DEV = dev;
     }
+  });
+});
+
+const quick = { id: 'quick', tier: 1 } as const;
+
+describe('delveStore: runes outside the draft', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    s().resetProfile(1234, 'fire');
+    useDelveStore.setState({ unsocket: null });
+  });
+
+  /** The starting sword, its one Bolt's sockets `runes` (under `uid` when given: a bag copy). */
+  function swordWith(runes: (RuneRef | null)[], uid?: string): GearItem {
+    const sword = s().profile.equipped.weapon!;
+    const moveset = defaultMoveset(registry, sword, 'fire');
+    const primary = moveset.chains.primary!;
+    const moves = [{ ...primary.moves[0], runes }];
+    const chains = { ...moveset.chains, primary: { ...primary, moves } };
+    return { ...sword, uid: uid ?? sword.uid, moveset: { ...moveset, chains } };
+  }
+
+  it('a rune a load-time trim destroys becomes a notice, its socket a Link', async () => {
+    const p = s().profile;
+    // Two sockets on a common sword (one a move): the second goes, and its Quick with it.
+    const weapon = swordWith([split, quick]);
+    localStorage.setItem(
+      DELVE_SAVE_KEY,
+      JSON.stringify({ ...p, equipped: { ...p.equipped, weapon } }),
+    );
+    (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
+      'delveStore',
+    );
+    vi.resetModules();
+    const fresh = (await import('./delveStore')).useDelveStore;
+    expect(fresh.getState().notices).toEqual(['Quick I was lost: its socket no longer exists']);
+    expect(fresh.getState().profile.links).toBe(p.links + 1);
+    expect(
+      runeLostNotices(registry, [
+        { id: 'split', tier: 3 },
+        { id: 'nope', tier: 1 },
+      ]),
+    ).toEqual(['Split III was lost: its socket no longer exists']);
+  });
+
+  it('salvage gives a socket back as a Link; its rune follows the pull rule', () => {
+    s().setProfile({ ...s().profile, bag: [swordWith([split], 'x5'), swordWith([split], 'x6')] });
+    expect(s().salvage(['x5'])).toMatchObject({ links: 1, runes: [], destroyed: [split] });
+    s().setUnsocket('pay');
+    expect(s().salvage(['x6'])).toMatchObject({ links: 1, runes: [split], destroyed: [] });
+    expect(pouchCount(s().profile.runes, split)).toBe(1);
+  });
+
+  it('says what became of the runes', () => {
+    expect(partsText(registry, [split], [])).toBe('Split I back to your pouch');
+    expect(partsText(registry, [split, split], [{ id: 'quick', tier: 3 }])).toBe(
+      '2 runes back to your pouch · destroys Quick III',
+    );
+    expect(partsText(registry, [], [])).toBeNull();
+    expect(partsText(registry)).toBeNull();
+  });
+
+  it('fuses three of a rune into one of the next tier, for scrap', () => {
+    s().setProfile({ ...s().profile, scrap: 20, runes: { split: [3, 0, 0, 0, 0] } });
+    expect(s().fuseRunes(split).ok).toBe(true);
+    expect(s().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
+    expect(s().fuseRunes(split).ok).toBe(false);
+  });
+
+  it('keeps the runes found this dive, newest first, until the next dive', () => {
+    s().pushDiveRunes([split, quick]);
+    expect(s().diveRunes).toEqual([quick, split]);
+    s().startDive(1);
+    expect(s().diveRunes).toEqual([]);
   });
 });
