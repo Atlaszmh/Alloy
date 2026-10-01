@@ -36,6 +36,12 @@ export interface RuneDef {
   fits: RuneFits;
   /** Knob values at tiers I..V (index tier − 1), the trade-off included. */
   tiers: KnobsData[];
+  /**
+   * Its load at tiers I..V (index tier − 1; see the rune costs spec): the share
+   * it raises its move's price by, before the slot's and the form's factors and
+   * the easing. Never falls with tier.
+   */
+  load: number[];
   /** Templates filled by `runeText`: {path}, {path:%}, {path:±%}, {runes.key}. */
   effect: string;
   tradeoff: string | null;

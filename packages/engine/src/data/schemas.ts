@@ -641,6 +641,11 @@ const RuneDefSchema = z
       })
       .strict(),
     tiers: z.array(KnobsSchema).length(RUNE_TIERS),
+    // Its load by tier (see the rune costs spec): required, so a new rune says what it costs.
+    load: z
+      .array(z.number().min(0))
+      .length(RUNE_TIERS)
+      .refine((l) => l.every((x, i) => i === 0 || l[i - 1] <= x), 'load must not fall with tier'),
     effect: z.string(),
     tradeoff: z.string().nullable(),
   })
@@ -1036,6 +1041,20 @@ const DelveBalanceSchema = z.object({
     drainShare: z.number().min(0),
     shardSpeed: z.number().positive(),
     shardRange: z.number().positive(),
+    // Rune costs (see the rune costs spec). A test holds `byForm`'s keys to arpg.json's forms.
+    load: z.object({
+      bySlot: z.object({
+        primary: z.number().min(0),
+        defensive: z.number().min(0),
+        ultimate: z.number().min(0),
+      }),
+      byForm: z.record(z.string(), z.number().min(0)),
+      charge: z.number().min(0),
+      cast: z.number().min(0),
+      easePerAttune: z.number().min(0),
+      // At 1 runes are free; above it a load would turn into a refund.
+      easeCap: z.number().min(0).max(1),
+    }),
   }),
   dodge: z
     .object({

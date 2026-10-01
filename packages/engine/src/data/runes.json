@@ -12,6 +12,7 @@
       { "split": { "count": 3, "power": 0.45 } },
       { "split": { "count": 4, "power": 0.5 } }
     ],
+    "load": [0.27, 0.36, 0.45, 0.54, 0.63],
     "effect": "Splits into {split.count} shards on hit, each at {split.power:%} power",
     "tradeoff": null
   },
@@ -28,6 +29,7 @@
       { "extraShots": { "count": 2, "power": 0.7625 } },
       { "extraShots": { "count": 2, "power": 0.8 } }
     ],
+    "load": [0.15, 0.2, 0.25, 0.3, 0.35],
     "effect": "Extra shots: +{extraShots.count}",
     "tradeoff": "Each shot at {extraShots.power:%} power"
   },
@@ -44,6 +46,7 @@
       { "pierce": 2, "power": 0.675 },
       { "pierce": 2, "power": 0.7 }
     ],
+    "load": [0.57, 0.76, 0.95, 1.14, 1.33],
     "effect": "Foes it passes: {pierce}",
     "tradeoff": "Power {power:±%}"
   },
@@ -67,6 +70,7 @@
       "weapons": ["dagger", "sword", "axe", "maul", "staff", "wand", "bow"]
     },
     "tiers": [{ "chain": 1 }, { "chain": 1 }, { "chain": 1 }, { "chain": 2 }, { "chain": 2 }],
+    "load": [0.45, 0.6, 0.75, 0.9, 1.05],
     "effect": "Jumps to more foes: +{chain}",
     "tradeoff": null
   },
@@ -86,6 +90,7 @@
       { "area": 1.2, "power": 0.9 },
       { "area": 1.25, "power": 0.9 }
     ],
+    "load": [0.12, 0.16, 0.2, 0.24, 0.28],
     "effect": "Area {area:±%}",
     "tradeoff": "Power {power:±%}"
   },
@@ -118,6 +123,7 @@
       { "quick": { "beat": 0.75, "cooldown": 0.75 }, "power": 0.9 },
       { "quick": { "beat": 0.7, "cooldown": 0.7 }, "power": 0.9 }
     ],
+    "load": [0.15, 0.2, 0.25, 0.3, 0.35],
     "effect": "Beat {quick.beat:±%}, cooldown {quick.cooldown:±%}",
     "tradeoff": "Power {power:±%}"
   },
@@ -137,6 +143,7 @@
       { "echo": 0.525 },
       { "echo": 0.6 }
     ],
+    "load": [0.27, 0.36, 0.45, 0.54, 0.63],
     "effect": "Repeats {runes.echoDelay} s later at {echo:%} power",
     "tradeoff": null
   },
@@ -156,6 +163,7 @@
       { "power": 1.375, "applies": ["stagger"], "quick": { "beat": 1.2, "windup": 1.2 } },
       { "power": 1.45, "applies": ["stagger"], "quick": { "beat": 1.2, "windup": 1.2 } }
     ],
+    "load": [0.33, 0.44, 0.55, 0.66, 0.77],
     "effect": "Power {power:±%}, and it staggers",
     "tradeoff": "Beat and wind-up {quick.beat:±%}"
   },
@@ -186,6 +194,7 @@
       { "stacksBonus": 2 },
       { "stacksBonus": 2 }
     ],
+    "load": [0.12, 0.16, 0.2, 0.24, 0.28],
     "effect": "Stacks per direct hit: +{stacksBonus}",
     "tradeoff": null
   },
@@ -206,6 +215,7 @@
       { "zone": { "seconds": 3, "tickPower": 0.2, "perCast": 3 } },
       { "zone": { "seconds": 3.5, "tickPower": 0.2, "perCast": 3 } }
     ],
+    "load": [0.57, 0.76, 0.95, 1.14, 1.33],
     "effect": "Leaves a zone for {zone.seconds} s, ticking at {zone.tickPower:%} of the hit (at most {zone.perCast} a cast)",
     "tradeoff": null
   },
@@ -237,6 +247,7 @@
       { "catalyst": 0.4125 },
       { "catalyst": 0.5 }
     ],
+    "load": [0.15, 0.2, 0.25, 0.3, 0.35],
     "effect": "Reactions it sets off: +{catalyst:%} damage",
     "tradeoff": null
   },
@@ -268,6 +279,7 @@
       { "lifesteal": 0.05 },
       { "lifesteal": 0.06 }
     ],
+    "load": [0.12, 0.16, 0.2, 0.24, 0.28],
     "effect": "Heals {lifesteal:%} of its damage",
     "tradeoff": null
   },
@@ -299,6 +311,7 @@
       { "manaOnHit": 2.5 },
       { "manaOnHit": 3 }
     ],
+    "load": [0.24, 0.32, 0.4, 0.48, 0.56],
     "effect": "+{manaOnHit} mana per foe hit, up to {runes.drainFoes} foe-hits and {runes.drainShare:%} of its mana cost a cast",
     "tradeoff": null
   },
@@ -331,6 +344,7 @@
       { "guardOnLand": 0.0675 },
       { "guardOnLand": 0.08 }
     ],
+    "load": [0.12, 0.16, 0.2, 0.24, 0.28],
     "effect": "On landing, a {runes.guardSeconds} s shield of {guardOnLand:%} max life",
     "tradeoff": null
   }

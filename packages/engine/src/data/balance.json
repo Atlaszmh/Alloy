@@ -195,7 +195,11 @@
       "fuseCount": 3, "fuseScrap": [20, 40, 80, 160],
       "dropChance": { "normal": 0.03, "elite": 0.15, "boss": 1 },
       "tierDepths": [1, 7, 13, 21, 31], "tierUp": 0.2,
-      "echoDelay": 0.4, "guardSeconds": 3, "drainFoes": 5, "drainShare": 0.5, "shardSpeed": 12, "shardRange": 4
+      "echoDelay": 0.4, "guardSeconds": 3, "drainFoes": 5, "drainShare": 0.5, "shardSpeed": 12, "shardRange": 4,
+      "load": {
+        "bySlot": { "primary": 0, "defensive": 0, "ultimate": 0 }, "byForm": {},
+        "charge": 1, "cast": 1, "easePerAttune": 0.03, "easeCap": 0.6
+      }
     },
     "dodge": {
       "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,

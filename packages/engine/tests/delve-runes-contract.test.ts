@@ -326,6 +326,8 @@ describe('balance: delve.runes', () => {
       drainShare: 0.5,
       shardSpeed: 12,
       shardRange: 4,
+      // Pinned in delve-rune-costs.test.ts, which the rune costs build owns.
+      load: expect.any(Object),
     });
   });
 

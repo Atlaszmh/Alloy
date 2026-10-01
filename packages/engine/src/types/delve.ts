@@ -1,6 +1,6 @@
 import type { EquippedGear, GearItem, GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaMap, ManaType } from './mana.js';
-import type { AbilitySlot, ChainSkill, Knobs, MoveKind } from './ability.js';
+import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 
@@ -607,6 +607,20 @@ export interface DelveBalance {
     /** A shard's speed, and how far it flies. */
     shardSpeed: number;
     shardRange: number;
+    /**
+     * Rune costs (see the rune costs spec): a move's load is Σ its runes'
+     * `load` × `bySlot` × `byForm` (a form missing from it counts as 1), eased by
+     * `easePerAttune` a point of its attunement, at most `easeCap`. `charge` and
+     * `cast` say how much of it a charge need and a cast's channel take.
+     */
+    load: {
+      bySlot: Record<AbilitySlot, number>;
+      byForm: Partial<Record<FormId, number>>;
+      charge: number;
+      cast: number;
+      easePerAttune: number;
+      easeCap: number;
+    };
   };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {
