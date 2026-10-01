@@ -22,6 +22,7 @@ import {
   dummy,
   firstBlow,
   gear,
+  holdFor,
   moveOf,
   press,
   pressOnly,
@@ -651,5 +652,86 @@ describe('Linger on blows (a hero zone with no ability)', () => {
     const [zone] = lingering(w);
     expect(zone.x).toBeCloseTo(13);
     expect(Math.abs(zone.y - 30)).toBeLessThan(1);
+  });
+});
+
+describe('Echo (the echo knob)', () => {
+  it('an ability: the move again after echoDelay at its fraction, free, with no beat, cast or echo of its own', () => {
+    const w = world([dummy(13, 30)], { primary: { runes: [R('echo')] } });
+    const cast = press(w, 0);
+    const first = w.projectiles.find((p) => p.form === 'bolt')!;
+    const at = w.t;
+    const { mana, beatUntil, cooldowns } = w.hero;
+    const [beat, cooldown] = [beatUntil[0], cooldowns[0][0]];
+    w.hero.facing = { x: 1, y: 0 };
+    const events = until(w, 'runeFx');
+    expect(w.t - at).toBeCloseTo(bal.runes.echoDelay, 1);
+    const echo = w.projectiles.find((p) => p.form === 'bolt' && p.id !== first.id)!;
+    expect(echo.damage).toBeCloseTo(first.damage * 0.45);
+    expect(echo.ability?.knobs.echo).toBe(0);
+    expect(events.find((e) => e.kind === 'runeFx')).toMatchObject({
+      effect: 'echo',
+      element: 'fire',
+    });
+    expect([...cast, ...events].filter((e) => e.kind === 'cast')).toHaveLength(1);
+    expect(w.hero.mana).toBeGreaterThanOrEqual(mana);
+    expect([w.hero.beatUntil[0], w.hero.cooldowns[0][0]]).toEqual([beat, cooldown]);
+    expect(w.hero.facing).toEqual({ x: 1, y: 0 });
+    expect(w.echoes).toHaveLength(0);
+    run(w, 1);
+    expect(w.echoes).toHaveLength(0);
+  });
+
+  it("a hold's echo repeats the stage that fired", () => {
+    const w = world([dummy(13, 30)], { primary: { kind: 'hold', runes: [R('echo')] } });
+    holdFor(w, 0, 1.2);
+    run(w, 0.3);
+    const [first] = w.projectiles.filter((p) => p.form === 'bolt');
+    until(w, 'runeFx');
+    const echo = w.projectiles.find((p) => p.form === 'bolt' && p.id !== first.id)!;
+    expect(first.ability?.stage).toBe(2);
+    expect(echo.ability?.stage).toBe(2);
+    expect(echo.damage).toBeCloseTo(first.damage * 0.45);
+  });
+
+  it('a blow: the blow again where the hero stands, no swing, step, mana or chain step', () => {
+    const w = blowWorld([light([R('echo')])]);
+    w.hero.stats.critChance = 0;
+    const [hit] = basicHits(firstBlow(w));
+    w.hero.nextAttackAt = 1e9;
+    const { attackCount, mana } = w.hero;
+    const events = until(w, 'runeFx');
+    expect(basicHits(events)).toHaveLength(1);
+    expect(basicHits(events)[0].amount).toBeCloseTo(hit.amount * 0.45);
+    expect(events.filter((e) => e.kind === 'basic')).toHaveLength(0);
+    expect([w.hero.attackCount, w.hero.mana]).toEqual([attackCount, mana]);
+  });
+
+  it("a hold blow's echo replays the stage it struck at", () => {
+    const w = blowWorld([{ kind: 'hold', element: 'fire', runes: [R('echo')] }]);
+    w.hero.stats.critChance = 0;
+    const events: ArpgEvent[] = [];
+    for (let i = 0; i < 300 && !events.some((e) => e.kind === 'basic'); i++)
+      events.push(...stepWorld(registry, w, { move: { x: 0, y: 0 }, attack: w.t < 1 }, STEP));
+    // Let go at stage 1: it struck as a heavy blow.
+    expect(events.find((e) => e.kind === 'basic')).toMatchObject({ moveKind: 'heavy' });
+    const [hit] = basicHits(events);
+    w.hero.nextAttackAt = 1e9;
+    const echo = basicHits(until(w, 'runeFx'));
+    expect(echo).toHaveLength(1);
+    expect(echo[0].amount).toBeCloseTo(hit.amount * 0.45);
+  });
+
+  it('a shot blow: the shot again', () => {
+    const w = blowWorld([light([R('echo')])], [dummy(13, 30)], {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    firstBlow(w);
+    w.hero.nextAttackAt = 1e9;
+    const [shot] = w.projectiles.filter((p) => p.owner === 'hero');
+    until(w, 'runeFx');
+    const echo = w.projectiles.filter((p) => p.owner === 'hero' && p.id !== shot.id);
+    expect(echo).toHaveLength(1);
+    expect(echo[0].damage).toBeCloseTo(shot.damage * 0.45);
   });
 });

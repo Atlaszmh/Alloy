@@ -32,6 +32,7 @@ import {
   windupDir,
 } from './abilities/cast.js';
 import { defendTick, gainCharge, surging } from './abilities/defend.js';
+import { echoTick } from './abilities/echo.js';
 import { impact, knobHitOpts } from './abilities/impact.js';
 import { chargeCap } from './abilities/resolve.js';
 import { nearestMonster, spawnProjectile } from './abilities/targeting.js';
@@ -187,6 +188,7 @@ function heroTick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   // A hold starts, charges, or fires.
   holdTick(ctx, input.holding, dt, dashing);
   castTick(ctx);
+  echoTick(ctx);
 
   const v = clampLen(move);
   const speed = Math.hypot(v.x, v.y);
