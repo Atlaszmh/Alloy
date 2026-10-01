@@ -1,6 +1,6 @@
 # Delve UI v1: PC hub, Hades-style HUD, forge pixel-art kit
 
-**Status:** approved direction, 2026-10-01 ("lock it in as v1 UI/UX to build now"); revised the same day after the spec review. Every change from the review is marked **(revision)**, here and in the "Decided in the spec" index.
+**Status:** approved direction, 2026-10-01 ("lock it in as v1 UI/UX to build now"); revised the same day after the spec review. Every change from the review is marked **(revision)**, here and in the "Decided in the spec" index. Changes from the second review are marked **(revision 2)**.
 - **Releases.** The build starts from v0.53.0 (`84a2c8a`) and ships in five releases over four phases: v0.54.0, v0.55.0, v0.56.0, v0.57.0 and v0.57.1.
 - **Engine.** The engine owns every rule and number. The build makes one small engine addition (`chainCycle`, with `expectedHit` extracted for it; Phase 2) and no other engine change.
 - **Saves.** `alloy:delve:v2`, `alloy:controls:v1` and `alloy:delve:sandbox:v1` keep their shape.
@@ -118,6 +118,7 @@ The index of every decision this spec makes. Each line names the decision and it
 6. **Training Grounds (revision).**
    - Phase 3a ports them to the HUD grid minimally: `SkillDock`, with today's panel in the right column.
    - Phase 3b finishes the dock: a 400 px right-column panel for every device, one "◂ Anvil", View focusing the dock through `[data-pad-journal]` and pausing, and a `data-pad-menu` Menu button for the system menu.
+   - **(revision 2)** The sandbox pauses only when the pad focuses the dock (View), not whenever the panel is open. With the mouse the fight stays live beside the open dock, as today, and T01 still holds.
    - The `sheet` layout and `openLayout` go.
    - Reason: every file has one owner per phase, and the pad never fights the menus.
 7. **DPS Lab.** It takes the kit's shell (wall, steel header with kit Tabs, kit Buttons and Chips) and keeps its native selects, chart and table. Reason: it is a dev tool; a coherent frame is enough.
@@ -188,9 +189,10 @@ The index of every decision this spec makes. Each line names the decision and it
 19. **The prompt runtime and Esc / Menu ownership (revision).**
     - **Prompts are data.** Footer prompts are `Prompt[]`. `Footer` and `PromptBar` only draw them, and the screen calls `usePrompts` with the same array.
     - **One owner per state.** While the arena is live (`isArenaLive()` from `gamepad-hub.ts`, the flag `setArenaLive` already keeps), the arena owns Esc, the menu key and the pad's Menu. Otherwise `usePrompts`' global handler owns them.
-    - **Scoped lookups.** Every marker lookup takes the last visible match inside the topmost visible `[data-pad-scope]`, falling back to the document only when no scope exists. That covers the arena's `attachKeyboard` and `padFrame`, and the nav's `press` and `stepTabs`.
+    - **Scoped lookups.** Every marker lookup takes the last visible match inside the topmost visible `[data-pad-scope]`, falling back to the document only when no scope exists. That covers the arena's `attachKeyboard` (`input.ts`) and `padFrame` (`useArenaCore.ts`), and the nav's `press` and `stepTabs`. **(revision 2)** In Phase 1, 1B changes only the menu lines of `attachKeyboard` and `padFrame`; from 3a, 3C owns both files.
     - **Esc** presses the topmost scope's `[data-pad-back]`, else its `[data-pad-menu]`. **Enter** presses `[data-pad-menu]` only when no control has focus.
-    - **Already handled.** The handler skips events already `defaultPrevented`.
+    - **One global listener (revision 2).** 1B installs a single window `keydown` listener in the bubble phase, from `useGamepadNav` in AppShell. It is active on every `/delve*` route whether or not any prompts are registered, so Esc still closes the dive's kebab menu and the Training sheet in Phase 1. `usePrompts` registers prompts with that one listener and never adds its own.
+    - **Already handled.** The listener skips events already `defaultPrevented`. **(revision 2)** The arena's menu-key handler (`attachKeyboard` in `input.ts`) calls `e.preventDefault()`, so one Esc can never open the menu and then close it.
     - **Mouse clicks.** Kit buttons blur after a mouse click (today's `blurOnPointerUp`, moved into the kit).
     - Reason: no Esc or Menu press can act twice, and Enter never fights a focused button.
 20. **Stop cards (revision: confirmed).**
@@ -274,6 +276,14 @@ The index of every decision this spec makes. Each line names the decision and it
     - With the mouse, drag. With the keyboard, Alt+← / Alt+→.
     - With the pad, X picks the card up and the prompt registry captures the D-pad while carrying (`captureNav`): left and right move it, X drops it, and B puts it back.
     - Reason: no hidden controls that the pad nav, which skips zero-size elements, couldn't reach.
+38. **Legacy content under a zoom (revision 2).**
+    - Phase 1's interim panel column (today's panels inside the new hub) gets `zoom: calc(1 / var(--ui-scale))`, so today's small text doesn't shrink before Phase 2 replaces it.
+    - In 3a, today's `TrainingPanel` in the HUD's right column gets `zoom: calc(1 / var(--hud-scale))` for the same reason, until 3F rebuilds it.
+    - Reason: 8–11 px legacy text at 0.75 would fall under the minimum size.
+39. **In-pane sub-modes are scopes (revision 2).**
+    - The Mana view in the Skills right pane, Reforge's affix pick on the Forge bench, the inline rune picker and every other mode that temporarily replaces a pane's content is its own `data-pad-scope` with a Back (`data-pad-back`).
+    - So Esc and B return to the pane, never past it to the hub's system menu.
+    - Reason: the scoped lookups of item 19 find the innermost Back first.
 
 ## Architecture
 
@@ -394,7 +404,7 @@ These are copied from the mockups (Appendix A):
 
 Several builders work on the kit at once against this contract. Everything is exported from `features/delve/kit/index.ts`, with sizes in design px.
 
-**(revision)** The types land first, in step 1·0. That step adds `kit/types.ts`, a stub `index.ts` whose components render `null` and whose hooks are no-ops, and the `uiStore` field names. 1A, 1B and 1C then build against real imports.
+**(revision)** The types land first, in step 1·0. That step adds `kit/types.ts`, a stub `index.ts` whose components render `null` and whose hooks are no-ops, and the `uiStore` field names. **(revision 2)** The stub `useUiScale` returns `{ ui: 1, hud: 1 }`. 1A, 1B and 1C then build against real imports.
 
 ```ts
 // ── kit/types.ts (step 1·0) ──────────────────────────────────────────────
@@ -538,8 +548,9 @@ export interface TabsProps<T extends string> {
   tabs: { id: T; label: ReactNode; badge?: ReactNode; disabled?: boolean; title?: string; testId?: string }[];
   value: T;
   onChange: (id: T) => void;
-  /** 'top': LB/RB (+ digits 1..n when `digits`). 'sub': LT/RT. Disabled tabs are skipped by all of them. */
+  /** 'top': LB/RB. 'sub': LT/RT. Disabled tabs are skipped. */
   level: 'top' | 'sub';
+  /** (revision 2) Draws the 1..n digit glyphs only. The screen binds the digit keys through its prompts (AnvilHub, 1D), skipping disabled tabs. */
   digits?: boolean;
   glyphs?: boolean;
   size?: 'lg' | 'md';
@@ -664,6 +675,7 @@ export function useUiScale(): { ui: number; hud: number };
   - `.delve-chip` and `.delve-hpbar` take the forge look
   - `.delve-sheet` becomes a steel plate with no radius
 - **(revision) `format.ts`:** `RARITY_COLOR` takes the ENDESGA values, and `RARITY_TEXT` is added.
+- **(revision 2) Legacy rarity text.** Grep the Delve for `RARITY_COLOR` used as a text `color` (item names, rarity labels, counts) and switch those uses to `RARITY_TEXT`, so epic text on the re-skinned legacy screens passes contrast. Borders, glows and swatches keep `RARITY_COLOR`.
 - **Icons:** the pixel `ItemIcon` maps.
 - **Tests:**
   - each component renders its role and aria state
@@ -678,8 +690,9 @@ export function useUiScale(): { ui: number; hud: number };
   - `hideTabBar` for `/delve*`
   - `--ui-scale` and `--hud-scale` (quarter steps) computed on resize and on a `uiStore.hudScale` change, then mirrored into `uiStore`
 - **`index.css`:** the letterbox release, and the ring scoped away from `.delve-ui`.
+- **(revision 2) The global key listener:** one window `keydown` listener (bubble phase), installed by `useGamepadNav` in AppShell. It is active on every `/delve*` route, with or without registered prompts, and it skips `defaultPrevented` events (decided item 19).
 - **`kit/prompts.ts`:**
-  - the registry keyed by scope
+  - the registry keyed by scope, feeding that one listener
   - the tap and hold timing
   - `captureNav`, `topScope` and `scopedLast`
   - the global Esc / Enter rules of decided item 19, inert while `isArenaLive()`
@@ -691,11 +704,12 @@ export function useUiScale(): { ui: number; hud: number };
   - skips disabled tabs
 - **`spatial-nav.ts`:** the `pickNext` cross-axis fix.
 - **`gamepad-hub.ts`:** exports `isArenaLive()`.
-- **`arena/input.ts`:** the menu key acts only while live, and through `scopedLast('[data-pad-menu]')`. This fixes today's double handling of Esc when the kebab is open.
+- **`arena/input.ts`:** the menu key acts only while live, and through `scopedLast('[data-pad-menu]')`. **(revision 2)** It calls `e.preventDefault()`, so the global listener skips that Esc. This fixes today's double handling of Esc when the kebab is open.
+- **`arena/useArenaCore.ts` (revision 2):** `padFrame`'s menu line only, to `scopedLast('[data-pad-menu]')`. 3C owns the file from 3a.
 - **Tests:**
   - `use-gamepad-nav.test.ts`: sub-tabs, first focus, the scoped back, disabled tabs
   - `gamepad.test.ts`: `pickNext` reaches a wide button below a small off-centre one
-  - `prompts.test.ts`: chords, the tap and hold split, the topmost scope only, an input focused, `defaultPrevented`, arena live
+  - `prompts.test.ts`: chords, the tap and hold split, the topmost scope only, an input focused, `defaultPrevented`, arena live, and **(revision 2)** Esc closing a scope's Back with no prompts registered
 
 **1C · Item views (parallel).** Split `ItemDetailSheet.tsx` into `features/delve/items/` with no visual change. The sheet composes these until Phase 3b:
 
@@ -712,16 +726,28 @@ export function LegendaryBox(props: { item: GearItem }): ReactElement;
 export function MovesetView(props: { item: GearItem }): ReactElement;
 ```
 
-**(revision)** `ItemTooltip` moves to 1D, because it needs the kit's `TooltipCard`. `ItemDetailSheet.test.tsx` keeps passing, and the new pieces get render tests.
+**(revision)** `ItemTooltip` moves to 1D, because it needs the kit's `TooltipCard`. **(revision 2)** It lives in `items/ItemTooltip.tsx`, written by 1D after 1C merges. `ItemDetailSheet.test.tsx` keeps passing, and the new pieces get render tests.
 
 **1D · Anvil shell and menus (after 1A, 1B and 1C merge).**
 - **`AnvilHub`** (`mode: 'anvil' | 'pause'`, the pause wired in 3b), as a `Screen` on the wall:
   - **Header:** the anvil glyph, "The Anvil", "Deepest N · n of 12 legendaries", the Tabs (top, digits, glyphs), then the currencies as `Price` glyphs, a divider and Power (`hero-power`, `scrap-count` and `links-count` kept).
   - **Footer:** the tab's prompts, including the "Menu" `asButton` prompt (`data-pad-back`). Then Training (T / View, `training-button`), the start-depth chips (`start-depths`) and the hot-metal Delve button (`delve-button`, `data-pad-menu`, `data-pad-first`). The draft block (`draft-block`, `draft-apply`, `draft-discard-delve`) is in a footer slot until Phase 2's Apply bar.
 - **Interim main area:** each tab shows today's panel in a centred 960 px column. Loadout holds `PaperDoll` and `BagPanel`. Skills holds `AbilitiesPanel`. Forge and Codex hold their panels. Quests holds the empty state.
+  - **(revision 2)** The column gets `zoom: calc(1 / var(--ui-scale))` (decided item 38).
+  - **(revision 2)** The `mana-strip` moves onto the interim Loadout tab, under the paper doll. It reads "Skills ›" and opens the Skills tab.
+- **(revision 2) Digit keys.** `AnvilHub` binds 1–5 through its own prompts, skipping disabled tabs; `Tabs` only draws the digit glyphs.
 - **How-to:** "How to delve" (`delve-howto`, first save) is rewritten per device with `InputGlyph`s. It sits at the top of the Loadout tab.
-- **`ItemTooltip`** **(revision)**.
-- **`SystemMenu`** (Esc / B): Resume, Controls, Settings, Main menu, and dev Restart and Pull mode (`restart-delve`, `unsocket-chip`). `open-controls` is kept on its Controls entry.
+- **`ItemTooltip`** **(revision)**, in `items/ItemTooltip.tsx` **(revision 2)**.
+- **`SystemMenu`** (Esc / B): Resume, Controls, Settings, Main menu, and dev Restart and Pull mode (`restart-delve`, `unsocket-chip`). `open-controls` is kept on its Controls entry. **(revision 2)** Its contract:
+
+  ```ts
+  // hub/SystemMenu.tsx (1D)
+  export interface SystemMenuProps {
+    onClose: () => void;
+    /** Screen-specific entries above Controls (the Training Grounds' "Anvil"). */
+    extra?: { id: string; label: string; onSelect: () => void }[];
+  }
+  ```
 - **`SettingsPanel`:** volumes, mute and colorblind mode, plus HUD scale and `v{version}`.
 - **Dialogs:** `ControlsPanel` and `ManaChoice` move into kit `Dialog`s.
 - **Emoji (revision):** the hub header and currencies swap emoji for glyphs.
@@ -731,7 +757,7 @@ export function MovesetView(props: { item: GearItem }): ReactElement;
 The kit contract above. Every file has one owner:
 - **1·0:** `kit/types.ts`, the stub `index.ts` and the `uiStore` field names.
 - **1A:** everything else under `kit/` except `prompts.ts`, plus `delve.css`, `format.ts` and `ItemIcon.tsx`.
-- **1B:** `prompts.ts`, AppShell, `index.css`, `use-gamepad-nav.ts`, `spatial-nav.ts`, `gamepad-hub.ts`, `arena/input.ts` (the menu key only) and `uiStore.ts` (values).
+- **1B:** `prompts.ts`, AppShell, `index.css`, `use-gamepad-nav.ts`, `spatial-nav.ts`, `gamepad-hub.ts`, `arena/input.ts` (the menu key only), `arena/useArenaCore.ts` (`padFrame`'s menu line only, **(revision 2)**) and `uiStore.ts` (values).
 - **1C:** `items/` and `ItemDetailSheet.tsx`.
 - **1D:** `hub/`, `DelveCamp.tsx`, `ControlsPanel.tsx` and `ManaChoice.tsx`, and fills `kit/index.ts`'s exports.
 
@@ -744,6 +770,9 @@ The kit contract above. Every file has one owner:
   - **D01:** its `scrap-count` "not" assertion becomes real: `toHaveText(/[1-9][\d,]* scrap/)` instead of `not.toHaveText('⚙ 0 scrap')`.
   - **R04:** `scrap-count` reads `'0 scrap'`.
   - **D04:** `mana-strip` contains 'Skills', not 'Abilities'. The strip is the Loadout's attunement line, linking to Skills.
+- **(revision 2) More Phase 1 updates.**
+  - **D04:** `links-count` becomes glyph text; assert `toHaveText(/\d+ Links?/)`.
+  - **G06 and G07:** verify their D-pad paths through the interim hub (the new footer and the `pickNext` fix change what each press reaches), and update the press sequences where they changed.
 
 **Bump:** `chore(client): bump version to 0.54.0`.
 
@@ -757,6 +786,7 @@ Each tab becomes its three panes, and the interim column goes.
 - Swap every old `Chip` (imported from `AbilitiesPanel` by `ChainEditor`, `MoveEditor`, `ManaPanel`, `TrainingPanel` and `DelveLab`) for the kit `Chip`, which takes the same `pressed` prop.
 - Move the reactions grid out of `ChainEditor.tsx` to `hub/codex/ReactionsGrid.tsx`, unchanged; `ChainEditor` stops rendering it.
 - Until 2C lands the Codex panes, `ReactionsGrid` renders on the Codex tab under `CodexPanel`, which keeps D04's `reaction-unknown` count working.
+- **(revision 2)** Add `hub/types.ts`, the shared hub contract below, so every area imports it.
 - It merges before 2A–2D start.
 
 ### Shared contract (the hub)
@@ -850,7 +880,7 @@ One owner per file:
   - its payment
   - five slot dots
   - its summary line (`abilities-summary`)
-- **Mana pair box:** "Fire · 6", "Storm · 8", the overtake line and the reaction. "Realign ›" swaps the right pane to the Mana view (today's `ManaPanel`, `mana-view` and its ids kept); Esc / B returns.
+- **Mana pair box:** "Fire · 6", "Storm · 8", the overtake line and the reaction. "Realign ›" swaps the right pane to the Mana view (today's `ManaPanel`, `mana-view` and its ids kept); Esc / B returns. **(revision 2)** The Mana view is its own `data-pad-scope` with a Back (decided item 39).
 
 *Chain lane* (`ChainLane`, `chain-cards`):
 - **Header:** "Primary", then "4 of 5 slots · pays mana · each press casts the next move".
@@ -889,6 +919,7 @@ One owner per file:
 - then a compact Delve button (`delve-button`, `data-pad-menu`), disabled while changes are unapplied, as the draft block is today
 - With nothing unapplied, the group shows "No changes", disabled.
 - Training and the start chips show on the other tabs only.
+- **(revision 2)** In `mode: 'pause'`, `SkillsTab` sets no footer action, so the pause's own footer stays.
 
 *`applyLabel`* (`delveStore.ts`) **(revision)**: the label text has no emoji, e.g. "Apply · 5 Mana Dust · 1 Link · 20 scrap"; the bar draws it with `Price`.
 
@@ -932,7 +963,7 @@ Rebuild the engine (`pnpm -F @alloy/engine build`). `estimateCombat`'s numbers a
 - **Forge:**
   - **`GearList`:** equipped items first, then the bag, with filter chips (`temper-row`).
   - **`Bench`**, with `level="sub"` Tabs of Temper and Fuse:
-    - **Temper** works the selected item: Upgrade +1 (`upgrade-button`, `upgradeCost`), Reforge (pick an affix line, then `reforgeAffix`, `reforgeCost`) and Re-attune (element chips, `reattune-<m>`, `reattuneCost`). Each shows its `Price` against the wallet.
+    - **Temper** works the selected item: Upgrade +1 (`upgrade-button`, `upgradeCost`), Reforge (pick an affix line, then `reforgeAffix`, `reforgeCost`) and Re-attune (element chips, `reattune-<m>`, `reattuneCost`). Each shows its `Price` against the wallet. **(revision 2)** Reforge's affix pick is its own `data-pad-scope` with a Back (decided item 39).
     - **Fuse** is today's Alloy Fusion (`fusion-result`, `fuse-button`).
   - **`RunePane`:** today's pouch (`rune-pouch`, `pouch-<key>`, `rune-fuse-<key>`), with a visible "Fuse 3 → 1" button per row.
   - **Ids:** `forge-panel` stays on the tab root.
@@ -1192,7 +1223,7 @@ At other device-pixel ratios the rule runs in render pixels, so the result stays
 
 | Area | Owns | Codes against |
 |---|---|---|
-| **3A · HUD dock and top bar** | `arena/hud/HudGrid`, `PurseBar`, `SkillDock`, `SkillSlot`, `SkillTooltip`, `BuffRow`, `Vitals`, `BossBar`; `ArenaHud.tsx`; **`DelveRun.tsx`**; **`DelveTraining.tsx`** (the minimal port: `HudGrid` + `SkillDock`, today's top-bar contents in a glass bar, today's `TrainingPanel` in the right column); `ArenaHud.test.tsx` | `ArenaHud` with `buffs` (3C) |
+| **3A · HUD dock and top bar** | `arena/hud/HudGrid`, `PurseBar`, `SkillDock`, `SkillSlot`, `SkillTooltip`, `BuffRow`, `Vitals`, `BossBar`; `ArenaHud.tsx`; **`DelveRun.tsx`**; **`DelveTraining.tsx`** (the minimal port: `HudGrid` + `SkillDock`, today's top-bar contents in a glass bar, today's `TrainingPanel` in the right column, under `zoom: calc(1 / var(--hud-scale))` **(revision 2)**); `ArenaHud.test.tsx` | `ArenaHud` with `buffs` (3C) |
 | **3B · Right column** | `FloorColumn`, `Minimap`, `FoundLog`, `PickupFeed.tsx` (deleted); `delveStore.ts` (`floorDropsFrom`, `floorRunesFrom`); the `QuestTracker` wiring | `HudMap` (3C), `QuestTracker` (2D) |
 | **3C · Arena core and renderer** | `camera.ts`, `aim.ts` (from `aim-gestures.ts`), `ArenaRenderer.ts`, `useArenaCore.ts`, **`useArena.ts`**, **`useTrainingArena.ts`**, `ArenaControls.tsx`, `input.ts`, `fx/draw-world.ts` (the import), `controls.ts`, `arena-pad.ts`, `uiStore` (`arenaViewUnits`), Settings → View distance; their tests (`arena-input.test.ts`, `aim.test.ts`, `arena-hud-snapshot.test.ts`, `arena-renderer.test.ts`, `controls.test.ts`) | `Insets`, `HudMap`, `HudBuff` above |
 
@@ -1222,6 +1253,10 @@ export interface FloorColumnProps {
 }
 ```
 
+**Sequencing in 3a (revision 2).**
+- 3C deletes `aim-gestures.ts` only after 3A has merged, because `ArenaHud.tsx` (3A's) imports `DRAG_PX`, `classifyPress` and `isOverButton` from it until 3A's rewrite lands.
+- The integrator then fixes the `floatPay` import, which moves from `ArenaHud.tsx` to `arena/hud/`, at its callers.
+
 **E2E in 3a** **(revision)**:
 - **`delve.spec.ts`:**
   - D01: `depth-label` and `monsters-left` kept; its `bounty` "not" assertion becomes real, `toHaveText(/[1-9]\d*/)`
@@ -1242,6 +1277,8 @@ export interface FloorColumnProps {
 - **3D:** `hub/PauseScreen.tsx`, the pause's header and footer, and `ControlsPanel.tsx` (the attack toggle). It deletes `ItemDetailSheet.tsx`.
 - **3E:** **`DelveRun.tsx`** (it wires `PauseScreen`), `stop/`, `StopPanel.tsx`, `RunePicker.tsx` (removing the sheet variant), `DiveSummary.tsx` and `LegendaryFanfare.tsx`. It deletes `DoorChoice.tsx`, `LootTray.tsx` and `.delve-sheet`.
 - **3F:** `DelveTraining.tsx`, `TrainingPanel.tsx`, `TrainingBar.tsx` and `MeterView.tsx`.
+
+**Sequencing in 3b (revision 2).** 3F merges before 3E removes `RunePicker`'s sheet variant, because `TrainingPanel` uses the sheet until 3F switches it to `variant="inline"`. If 3E is ready first, it removes the variant as its last commit, after 3F's merge.
 
 **3D · Pause (parallel).**
 
@@ -1302,8 +1339,9 @@ export interface PauseScreenProps {
   - **`dock`:** the `SkillDock`.
 - **Pad routes (revision).**
   - While the sandbox is live, the arena owns the pad. Its `journal` action (View) clicks `scopedLast('[data-pad-journal]')`, the Panel button, which opens the dock and focuses it.
-  - Opening the dock or the menu sets `paused`, and `setArenaLive(false)` then hands the pad to the menu layer, as the dive's pause does.
-  - B, or View again, closes the dock and resumes.
+  - **(revision 2)** Opening the dock with View, which gives it the pad's focus, sets `paused`. Opening the menu also sets `paused`. Then `setArenaLive(false)` hands the pad to the menu layer, as the dive's pause does.
+  - **(revision 2)** Opening the panel with the mouse doesn't pause: the fight stays live beside it, as today, so T01 still holds.
+  - B, or View again, takes the pad's focus out of the dock and resumes. The dock stays open.
 - **The panel:**
   - kit Panel and Tabs (`training-tab-<id>`, level `top`)
   - Abilities keeps the one-column `ChainEditor`, with `RunePicker variant="inline"`
@@ -1379,7 +1417,7 @@ export interface PauseScreenProps {
 | `#ead4aa` (wood text) | 9.59 | 12.44 | 6.59 | also 5.85 on `#733e39` and 7.26 on `#5c3434` |
 | `#e8b796` (Dust) | 7.70 | 9.99 | 5.30 | |
 | `#b55088` (epic border) | **2.96** | 3.83 | n/a | borders and swatches only (non-text needs 3:1, met on wells) |
-| `#e43b44` (loss glyph) | **3.31** | 4.58 | n/a | ▼ glyphs only |
+| `#e43b44` (loss glyph) | **3.31** | 4.30 **(revision 2)** | n/a | ▼ glyphs only (non-text, 3:1, met on both); never text on either ground |
 
 **Buttons and glyphs:**
 
