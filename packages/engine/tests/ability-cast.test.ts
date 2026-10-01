@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { stepWorld } from '../src/arpg/step.js';
 import { abilityReady } from '../src/arpg/abilities/cast.js';
+import { baseCost, chainMove } from '../src/arpg/abilities/resolve.js';
+import type { ArpgEvent } from '../src/types/arpg.js';
 import { makeCtx } from '../src/arpg/combat.js';
 import {
   arena,
@@ -8,6 +10,7 @@ import {
   damaged,
   dummy,
   gear,
+  holdFor,
   moveOf,
   press,
   pressOnly,
@@ -134,5 +137,54 @@ describe('basic attacks', () => {
       .filter((e) => e.kind === 'hit' && !e.crit)
       .map((e) => (e.kind === 'hit' ? e.amount : 0));
     expect(Math.max(...hits) / Math.min(...hits)).toBeCloseTo(third.power / first.power, 1);
+  });
+});
+
+describe('the pay event', () => {
+  const pays = (events: ArpgEvent[]) => events.filter((e) => e.kind === 'pay');
+
+  it('a mana cast emits pay with its loaded cost, once, its echo free', () => {
+    const w = arena([dummy(13, 30)], {
+      noBasic: true,
+      primary: { runes: [{ id: 'echo', tier: 3 }] },
+    });
+    const ab = moveOf(w, 0);
+    expect(ab.cost).toBeGreaterThan(baseCost(ab));
+    const events = [...press(w, 0), ...run(w, 1)];
+    expect(pays(events)).toEqual([{ kind: 'pay', slot: 0, mana: ab.cost, charge: 0 }]);
+  });
+
+  it('a charge cast emits pay with its chargeNeed', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    const ab = moveOf(w, 2);
+    w.hero.charge[2] = ab.chargeNeed;
+    expect(pays(press(w, 2))).toEqual([
+      { kind: 'pay', slot: 2, mana: ab.cost, charge: ab.chargeNeed },
+    ]);
+  });
+
+  it('a cast chain emits as its mana is taken, at the press, before its channel lands', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { payment: 'cast' } });
+    const ab = moveOf(w, 0);
+    expect(ab.channel).toBeGreaterThan(0);
+    const first = pressOnly(w, 0);
+    expect(pays(first)).toEqual([{ kind: 'pay', slot: 0, mana: ab.cost, charge: 0 }]);
+    expect(first.some((e) => e.kind === 'cast')).toBe(false);
+    expect(pays(run(w, ab.castTime + 0.1))).toEqual([]);
+  });
+
+  it('a hold emits as it is released, with its stage’s cost', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true, primary: { kind: 'hold' } });
+    const events = holdFor(w, 0, 0.1);
+    expect(pays(events)).toEqual([
+      { kind: 'pay', slot: 0, mana: chainMove(w.hero.chains[0], 0, 0).cost, charge: 0 },
+    ]);
+  });
+
+  it('infinite mana and no cooldowns emit nothing', () => {
+    const w = arena([dummy(13, 30)], { noBasic: true });
+    w.sandbox = { infiniteMana: true, noCooldowns: true, invulnerable: false };
+    w.hero.charge[2] = moveOf(w, 2).chargeNeed;
+    expect(pays([...press(w, 0), ...run(w, 1), ...press(w, 2)])).toEqual([]);
   });
 });

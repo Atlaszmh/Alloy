@@ -631,6 +631,8 @@ export type ArpgEvent =
       infusion: ManaType | null;
     }
   | { kind: 'noMana'; slot: number }
+  /** A skill paid: the mana and charge it really cost (none for the sandbox's free toggles). */
+  | { kind: 'pay'; slot: number; mana: number; charge: number }
   | { kind: 'dodge'; fromX: number; fromY: number; dirX: number; dirY: number }
   | { kind: 'perfectDodge'; x: number; y: number }
   /** A rune's effect fired: its glyph flashes at the point (see the runes spec). */

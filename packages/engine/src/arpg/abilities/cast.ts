@@ -159,13 +159,21 @@ function fire(ctx: SimCtx, slot: number, aim: Vec | null, step: number, stage = 
   return true;
 }
 
-/** Pay for move `step`: its mana, its own cooldown (from `from`), its charge from the slot's meter. */
+/**
+ * Pay for move `step`: its mana, its own cooldown (from `from`), its charge from
+ * the slot's meter. A `pay` event says what it really cost: infinite mana's
+ * mana and no cooldowns' charge come straight back, so they're free.
+ */
 function pay(ctx: SimCtx, slot: number, step: number, ab: ResolvedAbility, from: number): void {
   const h = ctx.world.hero;
+  const sandbox = ctx.world.sandbox;
   h.mana -= ab.cost;
   // No cooldowns (Training Grounds): no cooldown, and so no charge lockout.
-  if (!ctx.world.sandbox?.noCooldowns) h.cooldowns[slot][step] = from + ab.cooldown;
+  if (!sandbox?.noCooldowns) h.cooldowns[slot][step] = from + ab.cooldown;
   if (ab.payment === 'charge') h.charge[slot] = Math.max(0, h.charge[slot] - ab.chargeNeed);
+  const mana = sandbox?.infiniteMana ? 0 : ab.cost;
+  const charge = ab.payment === 'charge' && !sandbox?.noCooldowns ? ab.chargeNeed : 0;
+  if (mana > 0 || charge > 0) ctx.events.push({ kind: 'pay', slot, mana, charge });
 }
 
 /**
