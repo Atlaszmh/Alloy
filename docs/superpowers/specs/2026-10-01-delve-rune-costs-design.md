@@ -99,7 +99,7 @@ The sim reads every price from `ResolvedAbility`, so these readers follow the lo
   - **Decided in the spec.** *Drain's cap exists so Drain can't pay for its own move. A cap that grew with the load would refund half of every rune's price, Drain's own included, and undo the cost the user asked for.*
 - **A move the pool can't hold** **(revision).** A loaded mana move can cost more than the pool. A heavy mana Ultimate already does: 78 against a starting pool of 60.
   - The sim refuses it with `noMana`. A chain stuck on it waits out its restart window (`comboWindow`), then starts over from its first move.
-  - The builder flags it with the existing warning: "Needs 82 mana; your pool holds 66."
+  - The builder flags it with the existing warning. For a heavy mana Nova (78 before runes) with Leech I, at attunement 2 in its element (pool 66, eased 6%), the cost is 78 × (1 + 0.12 × 0.94) = 86.8, and the warning reads "Needs 87 mana; your pool holds 66."
   - Power counts it as the sim plays it (see "Power and the pool").
   - **Decided in the spec (revision): an uncastable runed mana Ultimate at a low pool is intended.** *It is the user's "build around it": the pool from attunement is the lever, and the warning names the gap.*
 - **Determinism:** the load is arithmetic on resolved numbers; nothing new is rolled.
@@ -153,7 +153,7 @@ The details:
 - **Decided in the spec (revision 2): the whole gain, eased.** *The user asked for roughly double the half-gain loads. The whole gain is exactly double the half-gain rule before rounding, needs no extra multiplier, and reads simply: a starved hero pays about the full gain, and attunement takes up to 60% of it off. The prototype puts it inside every target (Balance and gates).* The first spec's half-gain table, as revised once, is superseded.
 - **Decided in the spec: the gain is the rune's best on the ability forms** (the Primary's and the Ultimate's): the higher of one dummy and the pack, from the runes gate's last single-rune run (`gate-final`; tier III, depth 10, eight seeds). *Basics carry no load, so a rune's worth on a weapon's blows isn't what its load prices (Widen's 1.80 and Saturate's 1.34 are on an axe's blows). And a player sockets a rune where it shines, so its best showing sets its price.*
 - **Decided in the spec: rounded up, not to the nearest.** *Rounding up keeps every load at or above its gain's share, so the price never undercuts the rule.*
-- **Decided in the spec: the tier steps are × 0.6, 0.8, 1, 1.2, 1.4.** *It is the decisions' own Echo row ([0.15, 0.2, 0.25, 0.3, 0.35]) turned into a rule, and it roughly tracks the runes' tier tables (Echo 30 → 60%, Heavy +15 → +45%, Guard 3 → 8%).*
+- **Decided in the spec: the tier steps are × 0.6, 0.8, 1, 1.2, 1.4.** *It is the shape of the decisions' own Echo row (0.6 to 1.4 of its tier III) turned into a rule: at the whole-gain loads, Echo's row is [0.27, 0.36, 0.45, 0.54, 0.63]. It roughly tracks the runes' tier tables (Echo 30 → 60%, Heavy +15 → +45%, Guard 3 → 8%).*
 - **Decided in the spec: no rune is free; the floor is 0.20 at tier III** **(revision 2: doubled with the rest)**.
   - It covers Leech and Guard: their worth is life, which the Lab can't size.
   - It also covers any rune whose ability gain comes to less. Widen is a loss on the dummies, because its worth there is reach the clump doesn't show. Saturate comes to exactly 0.20.
@@ -255,11 +255,11 @@ export function loadText(registry: DataRegistry, load: number, payment?: Ability
 - When `ab.load > 0`, it appends ` (runes: ${loadText(registry, ab.load, ab.payment)})`, the eased figure. For the medium Bolt of the worked example at 15 attunement:
   - "17 mana · …s wind-up (runes: +107% cost) · 0.45s cooldown, then a …s beat";
   - "Charge 6 · …s wind-up (runes: +107% charge) · no cooldown, …";
-  - "9 mana · …s wind-up (runes: +107% cast wind-up, +107% cost) · …".
+  - "8 mana · …s wind-up (runes: +107% cast wind-up, +107% cost) · …" (4 × 2.0725 = 8.3).
 - **(revision 2)** When the move has runes acting and `ab.ease > 0`, a line follows: "Attunement eases rune cost by 45%" (`Math.round(ab.ease × 100)`). At the cap it adds " (the most it can)".
   - **Decided in the spec (revision 2): the easing gets its own line.** *It names the lever (attunement) beside the price it moves, which is the user's "build around it". Folding it into the price would hide why two heroes pay differently.*
 - A hold's "Fully charged" line already shows its loaded price and adds nothing.
-- The pool warning ("Needs 82 mana; your pool holds 66.") reads the loaded cost and needs no change.
+- The pool warning ("Needs 87 mana; your pool holds 66." for the heavy mana Nova above) reads the loaded cost and needs no change.
 
 **The mana support readout** **(revision)**. One engine helper, in step 1 (`delve/hero-stats.ts`):
 
@@ -277,7 +277,10 @@ export interface ManaSupport {
 export function manaSupport(registry: DataRegistry, stats: HeroStats, chain: ResolvedChain): ManaSupport;
 ```
 
-- `refill`'s first two terms are factored out of `estimateCombat` as `basicIncome(registry, stats): number` (`manaPool(…).regen + (basicAttackGain + the blows' Drain) / strikeInterval`). `estimateCombat` reads it with the same arithmetic, so Power doesn't move.
+- `refill`'s first two terms are factored out of `estimateCombat` as `basicIncome(registry, stats): number`: `income + blowDrain / strikeInterval`. Here `income` is `manaPool(…).regen + basicAttackGain / strikeInterval`, and `blowDrain` is the mean of the blows' capped Drain.
+  - It replaces exactly that sum inside `manaIncome`, and nothing else. `manaIncome` becomes `basicIncome(…) + drained(primary, 0.7) + drained(ultimate, 0.3) + drained(defensive, 0.3)`.
+  - `income` itself, which leaves out Drain and is what `drained()` measures each skill's interval against (`hero-stats.ts`, about line 538), stays as it is.
+  - The golden test compares Power exactly and DPS with `toBeCloseTo`, since moving the sum into a function may change the last float bit.
 - **The builder** (`ChainEditor.tsx`, B) shows one line under a mana or cast chain's moves: "Spends 14/s · your build refills 9/s". It resolves the draft chain with the hero's stats (`resolveChain`, then `manaSupport`) and shows whole numbers, amber when spend > refill. A charge chain and the basic chain show none. The Training Grounds show it from their own stats.
 - **Decided in the spec (revision): the refill counts the basics at their full rate, as Power does.** *A held ability squeezes some swings out, so the line is optimistic, but it is a planning number. One estimate shared with Power keeps the readout and the autopilot from disagreeing about whether a build can feed a chain.*
 - **(revision 2)** `spend` reads the eased costs, so the same chain spends less on a better-attuned hero. That is easing's effect, seen where the player plans; the line needs no change for it.
@@ -304,7 +307,8 @@ So a mana-bound Primary's Power falls by about its `(1 + load)`, and a rune is w
   export function valuedChain(chain: ResolvedChain, pool?: number): (ResolvedAbility | null)[];
   ```
 
-  - `damagePerUse`, `useInterval`, `drainPerUse` and `guards` read it in place of `valuedMove`. Each takes an optional `pool` (default Infinity), and `estimateCombat` passes the hero's pool.
+  - `damagePerUse`, `useInterval`, `drainPerUse`, `guards` and `runeLeech` (`hero-stats.ts`, about line 421) read it in place of `valuedMove`. Each takes an optional `pool` (default Infinity), and `estimateCombat` passes the hero's pool. A null move adds no lifesteal, Drain or Guard.
+  - The Defensive's effect (`valuedMove(defensive, 0)`, about line 574) becomes `valuedChain(defensive, pool)[0]`. When it is null, the Defensive gives no effect: no uptime, no Ward, Armor, Surge or Blink.
   - The moves before the cut count as today. The null move deals nothing and takes `comboWindow` seconds (the press waits out the restart window, then the chain starts over). The moves after it never fire.
   - A chain whose first move the pool can't pay deals nothing.
   - A hold whose stage 0 the pool can't pay is a null move (`startHold` never starts it). Otherwise it is valued at its highest affordable stage, matching `releaseHold`'s fallback.
@@ -391,7 +395,7 @@ So a mana-bound Primary's Power falls by about its `(1 + load)`, and a rune is w
     - **Volley is the exception:** 1.34 starved on the pack. Pierce's pack gain, 3.68× unloaded, is the most any set adds, and its starved casts stay at 12 in 30 s at any load from 1.89 to 1.99 (the pool's refill sets them). On one dummy it is 0.45: a trap there. **Accepted (revision 2):** *starved is reported, not gated. `byForm.volley` has little room: the band allows about 1.06 at most (3.0× at full price), and between loads 1.89 and 1.99 the ratio didn't move.*
     - **Every price bites:** each loaded ratio is below its unloaded one.
     - The tuning that got here: the earlier half-gain table at 1.8× and 1.9× gave starved 1.07–1.22 and 1.02–1.18 and supported 1.66–2.14 and 1.60–2.04 (pack, Volley aside). 1.9× would also put starved at 2.93× the mana, near the band's top. The whole-gain table lands between them (1.95 against 1.89 and 1.99), with every number a 0.05 step.
-  - The gate is a skipped-by-default vitest file, `tests/delve-rune-costs-gate.test.ts` (`describe.skipIf(!process.env.RUNE_COST_GATE)`). It prints a row per form (the set; its full-mana, starved and supported ratios, loaded and unloaded, on both layouts; its mana per press for both builds) and fails on a breach of the supported floor or the starved band. The unloaded runs use a registry cloned from the default data with `bySlot` zeroed. **Decided in the spec: in the repo, not a scratch script.** *The loads will be tuned again, and the gate should be one command away for whoever tunes them.*
+  - The gate is a skipped-by-default vitest file, `tests/delve-rune-costs-gate.test.ts` (`describe.skipIf(!process.env.RUNE_COST_GATE)`). It prints a row per form (the set; its full-mana, starved and supported ratios, loaded and unloaded, on both layouts; its mana per press for both builds) and fails on a breach of the supported floor (1.5×, pack) or of the mana-per-press band (2.0–3.0×, starved hero). The unloaded runs use a registry cloned from the default data with `bySlot` zeroed. **Decided in the spec: in the repo, not a scratch script.** *The loads will be tuned again, and the gate should be one command away for whoever tunes them.*
   - **Decided in the spec: the gate covers mana chains only.** *The Primary's default payment is mana, and the decisions' "costs 2–3× the mana" is a mana statement. `charge` and `cast` start at 1 and are tuned by play.*
 - **Tuning order** when the gate fails: tune the loads and the easing; never the ceilings, the floor or the band.
   1. `byForm` for the form that misses (a form whose best set gains less pays less).
@@ -510,7 +514,7 @@ The gates' numbers in the release notes, `CLAUDE.md`, and v0.52.0.
   - **The sum:** three runes add. An empty socket, an unknown id and the Pierce on an Earth Bolt add nothing (`runes` and `load` agree).
   - **Stacking:** Manaweaver gives `8 × 0.8 × (1 + load)`, and each of a hold's stages is loaded.
   - **Blows:** `HeroBlow` is unchanged with runes socketed.
-  - **`manaSupport`:** `spend` is the mean cost over the unbounded `useInterval`, and 0 for a charge chain. `refill` is `basicIncome` plus the chain's Drain. `estimateCombat` is unchanged by the `basicIncome` refactor (a golden).
+  - **`manaSupport`:** `spend` is the mean cost over the unbounded `useInterval`, and 0 for a charge chain. `refill` is `basicIncome` plus the chain's Drain. `estimateCombat` is unchanged by the `basicIncome` refactor: a golden comparing Power exactly and DPS with `toBeCloseTo`.
   - **The sim** (`delve-rune-sim.test.ts`, A):
     - a loaded move that the pool covers only before its load is refused with `noMana`;
     - a waiting press for it is skipped (`pressDue`);
@@ -564,7 +568,6 @@ These don't block the build; each is for the gate or for play.
 - **(revision 2) Attunement now pays three ways:** power (`powerPerAttune`), the pool and regen, and rune easing. If attuned heroes run away in the pacing rails, `easePerAttune` is the first lever.
 - **Charge and cast conversions.** Both start at 1 and the gate doesn't cover them. A charge Ultimate (a Nova) at a load near 1 needs about twice the charge. Whether that feels like the same price as twice the mana is play's call.
 - **Basic blows.** They are free by the user's call. If runed basics outpace runed abilities in play, a blow load is one more factor (`bySlot.basic`).
-- **The full-mana ceilings.** The loads should pull the five accepted Nova-with-Linger sets down on one dummy. If they come under 3.0×, the accepted exception can be dropped from the docs.
 
 ## Decided in the spec (index)
 Items marked **(revision)** were added or changed after the spec, from the user's change to the gate and from the review.
@@ -579,7 +582,7 @@ Items marked **(revision)** were added or changed after the spec, from the user'
 8. `load` is required on every rune row and never falls with tier.
 9. `byForm` ships as `{}`, and a missing form counts as 1. **(revision)** Its keys are checked in `tests/delve-rune-costs.test.ts`.
 10. Starting loads: the rune's best tier-III gain on the ability forms (the higher of one dummy and the pack), rounded up to the next 0.05. **(revision 2)** The whole gain, not half.
-11. Tier steps × 0.6, 0.8, 1, 1.2, 1.4 of tier III (the decisions' Echo row as a rule).
+11. Tier steps × 0.6, 0.8, 1, 1.2, 1.4 of tier III (the shape of the decisions' Echo row as a rule; Echo is now [0.27, 0.36, 0.45, 0.54, 0.63]).
 12. No rune is free: a floor at tier III, which Leech, Guard and Widen take. **(revision 2)** It is 0.20, doubled with the rest.
 13. `ResolvedAbility.load` is exposed, after easing and before the payment's conversion; `baseCost(ab)` is exported.
 14. `runeText` takes its price terms as a fourth argument and returns `cost`; `loadText` is the one formatter; whole percentages. **(revision 2)** The terms are an options object, `{ payment, ease }`.
@@ -598,13 +601,13 @@ Items marked **(revision)** were added or changed after the spec, from the user'
 27. **(revision)** The build: step 1 (types, data, `resolveAbility`, `runeLoad`, `baseCost`, Drain's cap, `basicIncome`, `manaSupport`) ships with `bySlot` at 0 and every number identical; then A (the pool rule, the loads, the Lab end to end, gates, pacing; it owns `delve-rune-sim.test.ts`) and B (texts and client) in parallel.
 28. **(revision)** In `resolve.ts` the load's variable is `load` (`L` is the legendaries).
 29. **(revision)** The sim readers that follow the load unchanged: `canAfford`, `pressDue`'s `payable`, `startHold`, `releaseHold`'s fallback, `pay`, `cancelWindup`, `gainCharge`, Galvanize, Nightstalker, the no-cooldowns fill and `world.ts`'s clamp.
-30. **(revision)** An uncastable runed mana Ultimate at a low pool is intended ("build around it"); the builder's warning names it ("Needs 82 mana; your pool holds 66.").
+30. **(revision)** An uncastable runed mana Ultimate at a low pool is intended ("build around it"); the builder's warning names it ("Needs 87 mana; your pool holds 66." for a heavy mana Nova with Leech I at attunement 2).
 31. **(revision)** Drain's tier-III load comes from the rule (1.36× in the Lab), not the floor. **(revision 2)** It is 0.40.
 32. **(revision)** Quick can be a net loss on a mana-bound move in a starved build (accepted).
 33. **(revision)** A dormant rune shows no price, by one rule: the caller hides the cost wherever it dims the rune, and dimming reads `ResolvedAbility.runes` (a candidate resolved in its socket); `runeText` stays dormancy-free.
 34. **(revision)** The pouch shows each rune's raw cost beside its effect (the no-target branch).
-35. **(revision)** `manaSupport(registry, stats, chain) → { spend, refill }`, with `basicIncome` factored out of `estimateCombat`. Refill counts the basics at their full rate, as Power does, and spend ignores the pool cap. The builder shows "Spends X/s · your build refills Y/s", amber when spend > refill, for mana and cast chains.
-36. **(revision)** Power and the pool: `valuedChain` cuts a chain after its first move the pool can't pay (no damage, `comboWindow` seconds); a hold is valued at its highest affordable stage. It can move Power without runes only for over-pool moves, recorded separately in pacing.
+35. **(revision)** `manaSupport(registry, stats, chain) → { spend, refill }`, with `basicIncome` factored out of `estimateCombat`; it replaces only `income + blowDrain / strikeInterval` inside `manaIncome`, and `income` stays for `drained()`. Refill counts the basics at their full rate, as Power does, and spend ignores the pool cap. The builder shows "Spends X/s · your build refills Y/s", amber when spend > refill, for mana and cast chains.
+36. **(revision)** Power and the pool: `valuedChain` cuts a chain after its first move the pool can't pay (no damage, `comboWindow` seconds); a hold is valued at its highest affordable stage. `runeLeech` and the Defensive's effect read it too. It can move Power without runes only for over-pool moves, recorded separately in pacing.
 37. **(revision)** Accepted: the mana split. Power's fixed income shares can value a mana Ward that a loaded Primary starves in the sim; the pacing rails are the guard.
 38. **(revision)** `DpsOptions.sustained: 'starved' | 'supported'`. Starved is the Lab's plain hero (pool 63, regen 4.2). Supported adds +14 primary and +5 secondary attunement (pool 120), +30% Mana Regen (regen 10.4) and Drain III in every basic blow; no Manaweaver. It comes from the autopilot's dive-12 heroes.
 39. **(revision)** The gate's set is ranked unloaded (`bySlot` zeroed) and measured loaded: Echo + Heavy + Linger for Bolt, Lance, Burst and Strike; Pierce + Echo + Heavy for Volley.
