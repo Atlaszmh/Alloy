@@ -27,8 +27,14 @@ interface UIStore {
   colorblindMode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
   hapticEnabled: boolean;
   duelSpeed: DuelSpeed;
+  /** Delve UI: the computed `--ui-scale` (quarter steps), mirrored here by AppShell. Not persisted. */
+  uiScale: number;
+  /** Delve UI: Settings → HUD scale, 0.8 to 1.25 (`alloy:delve:hudScale`). */
+  hudScale: number;
+  /** Delve UI: Settings → View distance, the arena's target view height in units, 20 to 30 (`alloy:delve:viewUnits`). */
+  arenaViewUnits: number;
 
-  openModal: (id: string) => void;
+  openModal:(id: string) => void;
   closeModal: () => void;
   toast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   clearToast: () => void;
@@ -39,6 +45,18 @@ interface UIStore {
   setColorblindMode: (mode: 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia') => void;
   setHapticEnabled: (enabled: boolean) => void;
   setDuelSpeed: (speed: DuelSpeed) => void;
+  setUiScale: (scale: number) => void;
+  setHudScale: (scale: number) => void;
+  setArenaViewUnits: (units: number) => void;
+}
+
+function loadNumber(key: string, fallback: number): number {
+  try {
+    const v = parseFloat(localStorage.getItem(key) ?? '');
+    return Number.isFinite(v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function loadDuelSpeed(): DuelSpeed {
@@ -64,6 +82,9 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
   colorblindMode: (() => { try { return (localStorage.getItem('alloy:colorblindMode') as UIStore['colorblindMode']) ?? 'none'; } catch { return 'none' as const; } })(),
   hapticEnabled: (() => { try { return localStorage.getItem('alloy:hapticEnabled') !== 'false'; } catch { return true; } })(),
   duelSpeed: loadDuelSpeed(),
+  uiScale: 1,
+  hudScale: loadNumber('alloy:delve:hudScale', 1),
+  arenaViewUnits: loadNumber('alloy:delve:viewUnits', 27),
 
   openModal: (id) => set({ modalOpen: id }),
   closeModal: () => set({ modalOpen: null }),
@@ -108,5 +129,14 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
     const clamped: DuelSpeed = speed === 1 || speed === 2 || speed === 3 ? speed : 1;
     try { localStorage.setItem('alloy:duelSpeed', String(clamped)); } catch { /* noop */ }
     set({ duelSpeed: clamped });
+  },
+  setUiScale: (scale) => set({ uiScale: scale }),
+  setHudScale: (scale) => {
+    try { localStorage.setItem('alloy:delve:hudScale', String(scale)); } catch { /* noop */ }
+    set({ hudScale: scale });
+  },
+  setArenaViewUnits: (units) => {
+    try { localStorage.setItem('alloy:delve:viewUnits', String(units)); } catch { /* noop */ }
+    set({ arenaViewUnits: units });
   },
 }));
