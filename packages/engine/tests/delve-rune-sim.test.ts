@@ -574,3 +574,39 @@ describe('Split (the split knob)', () => {
     for (const p of shards) expect(p.hitIds).toEqual(w.monsters.map((m) => m.id));
   });
 });
+
+describe('Chain on blows (chainJumps)', () => {
+  /** The `chain` events' points, and which foes took a basic hit. */
+  const chained = (w: ArpgWorld, events: ArpgEvent[]) => ({
+    points: events.flatMap((e) => (e.kind === 'chain' ? [e.points.length] : [])),
+    hit: w.monsters.map((m) => m.hp < m.maxHp),
+  });
+  const line = [dummy(13, 34.5), dummy(13, 31.5), dummy(13, 28.5), dummy(13, 25.5)];
+
+  it('a melee blow jumps from the first foe it strikes', () => {
+    const w = blowWorld([light([R('chain')])], line);
+    expect(chained(w, firstBlow(w))).toEqual({ points: [3], hit: [true, true, true, false] });
+    const plain = blowWorld([light()], line);
+    expect(chained(plain, firstBlow(plain))).toEqual({
+      points: [],
+      hit: [true, false, false, false],
+    });
+  });
+
+  it('with the Storm mastery, 2 jumps more, as an ability’s', () => {
+    const w = arena(line, { equipped: SWORD });
+    w.hero.stats = computeHeroStats(SWORD, registry, {
+      basic: [light([R('chain', 1)])],
+      attunement: { storm: bal.mana.masteryThreshold },
+    });
+    expect(chained(w, firstBlow(w)).points).toEqual([4]);
+  });
+
+  it('a shot blow jumps from the foe it hits', () => {
+    const w = blowWorld([light([R('chain')])], line.slice(1), {
+      weapon: gear('fire', 'weapon', 'wand'),
+    });
+    const events = [...firstBlow(w), ...until(w, 'chain')];
+    expect(chained(w, events)).toEqual({ points: [3], hit: [true, true, true] });
+  });
+});

@@ -59,7 +59,41 @@ export function hitOpts(
   };
 }
 
-/** Lightning-style jumps from `first` to foes not yet hit, each weaker than the last. */
+/**
+ * Lightning-style jumps from `first` to foes not yet hit (`hit`, which they
+ * join), each `chainPower` weaker than the last: `jumps` of them, 2 more with
+ * the Storm mastery when there are any. Each hits with `opts`, knocked back
+ * from the foe it jumps from. Abilities (`chainFrom`) and basic blows share it.
+ */
+export function chainJumps(
+  ctx: SimCtx,
+  first: MonsterEntity,
+  damage: number,
+  element: ManaType,
+  jumps: number,
+  opts: HitOpts,
+  hit: Set<number>,
+): void {
+  const storm = hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm');
+  const total = jumps + (jumps > 0 && storm ? 2 : 0);
+  if (total <= 0) return;
+  const { chainRange, chainPower } = ctx.bal.abilities;
+  const points: Vec[] = [{ x: first.x, y: first.y }];
+  let current = first;
+  let amount = damage;
+  for (let i = 0; i < total; i++) {
+    const next = nearestMonster(ctx, current.x, current.y, chainRange, hit);
+    if (!next) break;
+    hit.add(next.id);
+    amount *= chainPower;
+    points.push({ x: next.x, y: next.y });
+    hitMonster(ctx, next, amount, element, { ...opts, kbFrom: current });
+    current = next;
+  }
+  if (points.length > 1) ctx.events.push({ kind: 'chain', points, element });
+}
+
+/** An ability's jumps (its `chain` knob) from `first`: hits that aren't direct. */
 export function chainFrom(
   ctx: SimCtx,
   ab: ResolvedAbility,
@@ -68,28 +102,9 @@ export function chainFrom(
   hit: Set<number>,
   tick = false,
 ): void {
-  const jumps =
-    ab.knobs.chain +
-    (ab.knobs.chain > 0 && hasMastery(ctx.registry, ctx.world.hero.stats.attunement, 'storm')
-      ? 2
-      : 0);
-  if (jumps <= 0) return;
-  const { chainRange, chainPower } = ctx.bal.abilities;
-  const points: Vec[] = [{ x: first.x, y: first.y }];
-  let current = first;
-  let amount = damage;
-  for (let i = 0; i < jumps; i++) {
-    const next = nearestMonster(ctx, current.x, current.y, chainRange, hit);
-    if (!next) break;
-    hit.add(next.id);
-    amount *= chainPower;
-    points.push({ x: next.x, y: next.y });
-    hitMonster(ctx, next, amount, ab.element, hitOpts(ab, current, tick, false));
-    current = next;
-  }
-  if (points.length > 1) ctx.events.push({ kind: 'chain', points, element: ab.element });
+  const opts = hitOpts(ab, first, tick, false);
+  chainJumps(ctx, first, damage, ab.element, ab.knobs.chain, opts, hit);
 }
-
 /** Lingering ground (Magma, Rimebloom, Wildfire…) where an ability lands. */
 export function leaveZone(
   ctx: SimCtx,

@@ -7,7 +7,7 @@ import { endPushes, startPush } from './action.js';
 import { holdCharge } from './abilities/cast.js';
 import { holdFull } from './abilities/resolve.js';
 import { surging } from './abilities/defend.js';
-import { knobHitOpts, shedShards } from './abilities/impact.js';
+import { chainJumps, knobHitOpts, shedShards } from './abilities/impact.js';
 import { alive, nearestMonster, spawnProjectile } from './abilities/targeting.js';
 
 /**
@@ -292,6 +292,8 @@ export function landBlow(
     const reach = (w.range + (s.reach ?? 0)) * k.area;
     const halfArc = (arc * Math.PI) / 360;
     const kb = s.knockback ? { knockback: s.knockback, kbFrom: { x: h.x, y: h.y } } : {};
+    const struck = new Set<number>();
+    let first: MonsterEntity | null = null;
     for (const m of alive(ctx)) {
       if (dist(h.x, h.y, m.x, m.y) - m.radius > reach) continue;
       if (
@@ -301,6 +303,8 @@ export function landBlow(
       )
         continue;
       landed = true;
+      first ??= m;
+      struck.add(m.id);
       hitMonster(ctx, m, base, element, {
         source: 'basic',
         crit,
@@ -321,6 +325,11 @@ export function landBlow(
           stacks: 0,
           noReact: true,
         });
+    }
+    // Chain: jumps from the first foe struck.
+    if (first) {
+      const jump = { source: 'basic' as const, canCrit: true, applies, rattles, ...knobbed };
+      chainJumps(ctx, first, base, element, k.chain, jump, struck);
     }
   } else {
     const size = s.size ?? 1;
@@ -395,11 +404,20 @@ function blowStep(ctx: SimCtx, s: ComboStepDef, dir: Vec, steer: Vec): void {
 
 /**
  * A basic shot's knobs where it lands (see `burstShot` and the projectile tick):
- * `hit` are the foes it hit there, the one it struck first. Split's shards
- * skip them all.
+ * `hit` are the foes it hit there, the one it struck first. Chain jumps from
+ * that one; Split's shards skip them all.
  */
 export function shotLands(ctx: SimCtx, p: Projectile, hit: readonly MonsterEntity[]): void {
   const k = p.knobs!;
+  // Chain: jumps from the foe it struck.
+  const jump = {
+    source: 'basic' as const,
+    canCrit: true,
+    applies: p.applies,
+    rattles: p.rattles,
+    ...knobHitOpts(k),
+  };
+  chainJumps(ctx, hit[0], p.damage, p.element!, k.chain, jump, new Set(hit.map((m) => m.id)));
   if (k.split)
     shedShards(ctx, p.x, p.y, k.split, p.damage, hit, {
       ability: null,
