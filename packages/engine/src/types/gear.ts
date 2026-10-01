@@ -1,3 +1,4 @@
+import type { Chains, ChainSkill } from './ability.js';
 import type { GemRarity } from './gem.js';
 import type { ManaType } from './mana.js';
 
@@ -116,6 +117,17 @@ export interface GearItem {
   /** Number of reforges performed — drives escalating reforge cost. */
   reforges: number;
   locked: boolean;
+  /** Weapons: the chains the weapon carries and their slots (see the weapon movesets spec). */
+  moveset?: Moveset;
+}
+
+/**
+ * A weapon's moveset: a chain for each skill its rarity carries, each holding
+ * 1 to `slots[skill]` moves; a skill it doesn't carry has neither.
+ */
+export interface Moveset {
+  chains: Partial<Chains>;
+  slots: Partial<Record<ChainSkill, number>>;
 }
 
 export type EquippedGear = Partial<Record<GearSlot, GearItem>>;

@@ -528,7 +528,7 @@ export interface DelveBalance {
   abilities: DelveAbilityBalance;
   /** Moves and chains (see the moves and chains spec). */
   chains: {
-    /** Most moves each skill's chain holds, a profile's caps to start with (at most `MAX_CHAIN`). */
+    /** Most slots each skill's chain can grow to on a weapon (at most `MAX_CHAIN`). */
     cap: Record<ChainSkill, number>;
     /** The weight each kind resolves at: every per-weight table reads through it. */
     kindWeight: Record<Exclude<MoveKind, 'hold'>, number>;
@@ -549,6 +549,23 @@ export interface DelveBalance {
      */
     beat: Record<MoveKind, number>;
     beatSlot: Record<AbilitySlot, number>;
+  };
+  /** Weapon movesets: which chains a weapon carries, its slots and their prices (see the weapon movesets spec). */
+  movesets: {
+    /** The chains a weapon of each rarity carries (unarmed: basic and primary). */
+    carries: Record<Rarity, ChainSkill[]>;
+    /** Extra slots a weapon drop rolls, least and most, by rarity. */
+    extraSlots: Record<Rarity, [number, number]>;
+    /** Links a new slot costs, by its position: the 2nd slot's first. */
+    slotLinks: number[];
+    /** Scrap a new slot costs, by its position as `slotLinks`. */
+    slotScrap: number[];
+    /** Mana Dust a changed, moved, added or removed move costs, or a changed payment. */
+    editDust: number;
+    /** Mana Dust a move's changed elements cost, or a new move's elements that no old move has. */
+    elementDust: number;
+    /** Scrap a transfer costs for each extra slot that moves. */
+    transferScrap: number;
   };
   /** The dodge: charges, the dash, i-frames and the perfect-dodge windows (seconds / units). */
   dodge: {

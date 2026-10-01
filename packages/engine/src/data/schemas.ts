@@ -923,6 +923,33 @@ const DelveBalanceSchema = z.object({
     })
     .refine((c) => c.holdStages[0] < c.holdStages[1], 'holdStages must rise')
     .refine((c) => c.holdMax >= c.holdTime, 'holdMax must be at least holdTime'),
+  movesets: z.object({
+    // Every weapon swings a basic chain; each skill once.
+    carries: perRarity(
+      z
+        .array(z.enum(['basic', 'primary', 'defensive', 'ultimate']))
+        .refine((s) => s.includes('basic'), 'every weapon carries basic')
+        .refine((s) => new Set(s).size === s.length, 'each skill once'),
+    ).refine(
+      (c) =>
+        (['uncommon', 'magic', 'rare', 'epic', 'legendary'] as const).every((r, i) => {
+          const lower = c[(['common', 'uncommon', 'magic', 'rare', 'epic'] as const)[i]];
+          return lower.every((s) => c[r].includes(s));
+        }),
+      'a rarity carries every chain the rarity below it does',
+    ),
+    extraSlots: perRarity(
+      z
+        .tuple([z.number().int().min(0), z.number().int().min(0)])
+        .refine(([lo, hi]) => lo <= hi, 'least before most'),
+    ),
+    // By the new slot's position: the 2nd slot's price first, the last slot's last.
+    slotLinks: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
+    slotScrap: z.array(z.number().int().min(0)).length(MAX_CHAIN - 1),
+    editDust: z.number().int().min(0),
+    elementDust: z.number().int().min(0),
+    transferScrap: z.number().int().min(0),
+  }),
   dodge: z
     .object({
       charges: z.number().int().positive(),

@@ -5,7 +5,7 @@ import {
   MoveKindSchema,
   ReactionIdSchema,
 } from '../data/schemas.js';
-import { MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
+import { CHAIN_SKILLS, MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
 
 /** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
 
@@ -72,6 +72,32 @@ function slotChain(slot: AbilitySlot) {
 
 const CapSchema = z.number().int().min(1).max(MAX_CHAIN);
 
+/** A weapon's moveset: a chain for each skill it carries, each within its skill's slots. */
+export const MovesetSchema = z
+  .object({
+    chains: z.object({
+      basic: z.array(BlowSchema).min(1).max(MAX_CHAIN).optional(),
+      primary: slotChain('primary').optional(),
+      defensive: slotChain('defensive').optional(),
+      ultimate: slotChain('ultimate').optional(),
+    }),
+    slots: z.object({
+      basic: CapSchema.optional(),
+      primary: CapSchema.optional(),
+      defensive: CapSchema.optional(),
+      ultimate: CapSchema.optional(),
+    }),
+  })
+  .refine(
+    ({ chains, slots }) =>
+      CHAIN_SKILLS.every((skill) => {
+        const moves = skill === 'basic' ? chains.basic?.length : chains[skill]?.moves.length;
+        const n = slots[skill];
+        return moves === undefined ? n === undefined : n !== undefined && moves <= n;
+      }),
+    'each chain has its slots and fits them',
+  );
+
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 
@@ -91,6 +117,7 @@ export const GearItemSchema = z.object({
   upgrade: z.number().int().min(0),
   reforges: z.number().int().min(0),
   locked: z.boolean(),
+  moveset: MovesetSchema.optional(),
 });
 
 const PerRarityCount = z.object({

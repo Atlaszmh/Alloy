@@ -177,6 +177,16 @@
       "beat": { "light": 0.25, "medium": 0.4, "heavy": 0.6, "hold": 0.8 },
       "beatSlot": { "primary": 1, "defensive": 0.75, "ultimate": 1.5 }
     },
+    "movesets": {
+      "carries": {
+        "common": ["basic", "primary"], "uncommon": ["basic", "primary"],
+        "magic": ["basic", "primary", "defensive"], "rare": ["basic", "primary", "defensive"],
+        "epic": ["basic", "primary", "defensive", "ultimate"], "legendary": ["basic", "primary", "defensive", "ultimate"]
+      },
+      "extraSlots": { "common": [0, 0], "uncommon": [0, 0], "magic": [0, 1], "rare": [1, 2], "epic": [2, 3], "legendary": [3, 4] },
+      "slotLinks": [1, 2, 3, 4], "slotScrap": [20, 40, 60, 80],
+      "editDust": 5, "elementDust": 15, "transferScrap": 30
+    },
     "dodge": {
       "charges": 2, "recharge": 2.5, "distance": 3, "duration": 0.2, "iframes": 0.25,
       "perfectWindow": 0.15, "riposteWindow": 1.5
