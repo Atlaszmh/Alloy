@@ -8,6 +8,7 @@ import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
 import { createFloorWorld, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
+import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 
@@ -46,6 +47,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     scrapEarned: 0,
     dustEarned: 0,
     linksEarned: 0,
+    stop: null,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -219,7 +221,11 @@ export function completeFloor(registry: DataRegistry, profile: DelveProfile, wor
     potions: bossKilled ? Math.min(bal.dive.maxPotions, dive.potions + bal.dive.bossPotionReward) : dive.potions,
     phase: 'choosing',
   };
-  nextDive = { ...nextDive, doorChoices: rollDoorChoices(registry, nextDive) };
+  nextDive = {
+    ...nextDive,
+    doorChoices: rollDoorChoices(registry, nextDive),
+    stop: rollStop(registry, banked.profile, nextDive),
+  };
 
   let checkpoints = banked.profile.checkpoints;
   if (bossKilled && !checkpoints.includes(dive.depth)) checkpoints = [...checkpoints, dive.depth].sort((a, b) => a - b);
@@ -268,6 +274,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       potions: Math.min(bal.dive.maxPotions, dive.potions + (door.mods.potions ?? 0)),
       door,
       doorChoices: [],
+      stop: null,
       phase: 'fighting',
     },
   };

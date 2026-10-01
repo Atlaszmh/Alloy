@@ -450,7 +450,7 @@ describe('save v6: the migration from version 5', () => {
     // Its basic slots rise to the dagger's string of 4; the sword's three blows stay.
     expect(dagger.slots).toEqual({ basic: 4, primary: 4, defensive: 1 });
     expect(dagger.chains.basic).toEqual(V5.magic.chains.basic);
-    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0 });
+    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, stop: null });
   });
 
   it("keeps all four on an epic weapon, and raises a short basic chain's slots to its base", () => {

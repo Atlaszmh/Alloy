@@ -171,6 +171,8 @@ export {
   slotPrice,
   transferMoveset,
 } from './delve/moveset.js';
+export { STOP_KINDS, stopKinds, rollStop, takeStop } from './delve/stops.js';
+export type { StopAction } from './delve/stops.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,

@@ -665,6 +665,15 @@ export interface HeroStats {
 
 export type DivePhase = 'fighting' | 'choosing' | 'dead' | 'extracted';
 
+/** A stop's power-up: equip a bag item, add a slot, adjust one move, or upgrade an item. */
+export type StopKind = 'equip' | 'slot' | 'move' | 'upgrade';
+
+/** A stop between depths (see the weapon movesets spec): the kinds offered, and whether one is taken. */
+export interface DiveStop {
+  offers: StopKind[];
+  taken: boolean;
+}
+
 export interface DiveState {
   seed: number;
   startDepth: number;
@@ -684,6 +693,8 @@ export interface DiveState {
   dustEarned: number;
   /** Links from weapons salvaged while banking this dive (auto-salvage, full bag). */
   linksEarned: number;
+  /** The door screen's stop: the power-up offered after the depth just cleared (null: none). */
+  stop: DiveStop | null;
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;

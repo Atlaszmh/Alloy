@@ -165,6 +165,13 @@ const DiveSchema = z.object({
   scrapEarned: z.number().min(0),
   dustEarned: z.number().int().min(0).default(0),
   linksEarned: z.number().int().min(0).default(0),
+  stop: z
+    .object({
+      offers: z.array(z.enum(['equip', 'slot', 'move', 'upgrade'])),
+      taken: z.boolean(),
+    })
+    .nullable()
+    .default(null),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
 });
