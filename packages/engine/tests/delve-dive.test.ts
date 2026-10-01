@@ -119,7 +119,7 @@ describe('dive lifecycle', () => {
   it('banking moves pickups, scrap, kills and reactions into the profile', () => {
     const p = startDive(registry, createDelveProfile(registry, 5), 1);
     const world = beginFloor(registry, p);
-    world.pending = { items: items(2), scrap: 40, kills: 6, reactions: ['melt'] };
+    world.pending = { items: items(2), scrap: 40, kills: 6, reactions: ['melt'], runes: [] };
     const res = bankWorld(registry, p, world);
     expect(res.kept).toHaveLength(2);
     expect(res.newReactions).toEqual(['melt']);

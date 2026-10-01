@@ -22,6 +22,7 @@ import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
+import { dropRune } from './rune-drops.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -718,7 +719,10 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5) spreadStacks(ctx, m, o, 'fire');
   }
 
-  if (!world.sandbox) dropLoot(ctx, m);
+  if (!world.sandbox) {
+    dropLoot(ctx, m);
+    dropRune(ctx, m);
+  }
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
   if (t < m.status.brandUntil) {

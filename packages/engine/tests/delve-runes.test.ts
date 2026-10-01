@@ -3,7 +3,9 @@ import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { baseSlots, carriedSkills, defaultMoveset } from '../src/loot/moveset.js';
 import { sameChain, setChains, transferMoveset } from '../src/delve/moveset.js';
-import { startDive } from '../src/delve/dive.js';
+import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
+import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { setSandboxToggles } from '../src/arpg/sandbox.js';
 import { chooseStartingMana } from '../src/delve/pair.js';
 import {
   addLootToBag,
@@ -31,12 +33,12 @@ import {
   weaponParts,
 } from '../src/loot/runes.js';
 import { CHAIN_SKILLS, type Blow, type Chain, type Move } from '../src/types/ability.js';
-import type { MonsterKind } from '../src/types/arpg.js';
+import type { ArpgWorld, Drop, DropKind, MonsterKind } from '../src/types/arpg.js';
 import type { GearItem, Moveset, Rarity } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { RunePouch, RuneRef } from '../src/types/rune.js';
-import { bal, chainsOf, registry } from './fixtures/arena.js';
+import { arena, bal, chainsOf, dummy, registry, run } from './fixtures/arena.js';
 
 // See the runes spec: sockets, the pouch, the draft's price, fusing, drops and the stop.
 
@@ -815,5 +817,91 @@ describe('opening a socket, socketing a rune, fusing', () => {
     // The choice of mana stays open (a migrated save may be diving).
     const unchosen = startDive(registry, createDelveProfile(registry, 3), 1);
     expect(chooseStartingMana(registry, unchosen, 'frost').ok).toBe(true);
+  });
+});
+
+describe('rune drops in the world', () => {
+  /** A fresh dive's first floor, and a context to kill its foes in. */
+  const floor = () => {
+    const p = startDive(registry, createDelveProfile(registry, 3, { primary: 'fire' }), 1);
+    const w = beginFloor(registry, p);
+    return { p, w, ctx: makeCtx(registry, w, []) };
+  };
+  /** A world's drops but runes, without their ids (a rune drop renumbers later spawns). */
+  const others = (w: ArpgWorld) =>
+    w.drops.filter((d) => d.kind !== 'rune').map(({ id: _id, ...d }) => d);
+
+  it('a slain foe drops a rune from its own stream: every other drop comes out as without it', () => {
+    const a = floor();
+    const b = floor();
+    b.w.runeRng = { next: () => 1 } as unknown as SeededRNG; // never a rune
+    for (const { w, ctx } of [a, b])
+      for (const [i, m] of [...w.monsters].entries()) {
+        if (i === 0) m.kind = 'boss';
+        killMonster(ctx, m);
+      }
+    const runes = a.w.drops.filter((d) => d.kind === 'rune');
+    expect(runes.length).toBeGreaterThanOrEqual(1);
+    expect(b.w.drops.some((d) => d.kind === 'rune')).toBe(false);
+    expect(others(a.w)).toEqual(others(b.w));
+    const [first] = runes;
+    expect(registry.findRune(first.rune!.id)).toBeDefined();
+    expect(first.rune!.tier).toBeLessThanOrEqual(2); // depth 1: tier I, or II a fifth of the time
+    expect(a.ctx.events).toContainEqual({
+      kind: 'drop',
+      dropId: first.id,
+      x: first.x,
+      y: first.y,
+      dropKind: 'rune',
+    });
+  });
+
+  it('the Training Grounds drop none', () => {
+    const w = arena([{ kind: 'boss' }, {}, {}]);
+    setSandboxToggles(w, { infiniteMana: false, noCooldowns: false, invulnerable: false });
+    const ctx = makeCtx(registry, w, []);
+    for (const m of [...w.monsters]) killMonster(ctx, m);
+    expect(w.drops).toEqual([]);
+  });
+
+  it('a rune on the floor is walked over, never pulled by the magnet, and comes in when the floor clears', () => {
+    const w = arena([dummy(13, 5)], { noBasic: true });
+    const { x, y } = w.hero;
+    const drop = (id: number, kind: DropKind, dx: number, rune?: RuneRef): Drop => ({
+      id,
+      kind,
+      x: x + dx,
+      y,
+      rune,
+      amount: 1,
+      born: -1,
+      vacuum: false,
+      dead: false,
+    });
+    // Inside the magnet's reach, outside the pickup's: the mote flies in, the rune stays.
+    w.drops.push(drop(1, 'rune', 2.4, SPLIT_I), drop(2, 'mote', -2.4), drop(3, 'rune', 0, CHAIN_I));
+    const events = run(w, 0.5);
+    expect(w.drops.map((d) => [d.id, d.x])).toEqual([[1, x + 2.4]]);
+    expect(w.pending.runes).toEqual([CHAIN_I]);
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'pickup', dropId: 3, dropKind: 'rune', rune: CHAIN_I }),
+    );
+    // The floor clears, and everything left comes in.
+    w.monsters = [];
+    run(w, 1);
+    expect(w.pending.runes).toEqual([CHAIN_I, SPLIT_I]);
+  });
+
+  it('banking puts the runes picked up in the pouch, counts them for the dive, and reports them', () => {
+    const { p, w } = floor();
+    w.pending.runes = [SPLIT_I, SPLIT_I, CHAIN_II];
+    const res = bankWorld(registry, p, w);
+    expect(res.runes).toEqual([SPLIT_I, SPLIT_I, CHAIN_II]);
+    expect(res.profile.runes).toEqual({ split: [2, 0, 0, 0, 0], chain: [0, 1, 0, 0, 0] });
+    expect(res.profile.dive!.runesEarned).toBe(3);
+    expect(w.pending.runes).toEqual([]);
+    const again = bankWorld(registry, res.profile, w);
+    expect(again.runes).toEqual([]);
+    expect(again.profile.dive!.runesEarned).toBe(3);
   });
 });

@@ -1,11 +1,35 @@
+import { rollRuneDrop } from '../loot/runes.js';
 import type { MonsterEntity } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
 
 /**
- * A slain foe's rune drop (see the runes spec): rolled on `ArpgWorld.runeRng`
- * by `rollRuneDrop`, spawned as a `Drop` of kind `'rune'`. `killMonster` calls
- * it inside its `!world.sandbox` guard, so the Training Grounds drop none.
+ * A slain foe's rune (see the runes spec), rolled on the world's own stream
+ * (`world.runeRng`: the chance, the rune, its tier and where it lands), so
+ * item drops, motes and orbs come out as they would without it. It bursts
+ * onto the floor like loot, a `Drop` of kind 'rune', walked over to pick up.
+ * `killMonster` calls it beside `dropLoot`, inside its `!world.sandbox` guard.
  */
-export function dropRune(_ctx: SimCtx, _m: MonsterEntity): void {
-  throw new Error('not built yet');
+export function dropRune(ctx: SimCtx, m: MonsterEntity): void {
+  const { world, registry } = ctx;
+  const rng = world.runeRng;
+  const ctxDrop = { depth: world.depth, kind: m.kind, dropMult: world.loot.dropMult };
+  const rune = rollRuneDrop(registry, ctxDrop, rng);
+  if (!rune) return;
+  const angle = rng.next() * Math.PI * 2;
+  const r = 0.6 + rng.next() * 0.9;
+  const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
+  const y = Math.max(1, Math.min(world.height - 1, m.y + Math.sin(angle) * r));
+  const id = world.nextId++;
+  world.drops.push({
+    id,
+    kind: 'rune',
+    x,
+    y,
+    rune,
+    amount: 1,
+    born: world.t,
+    vacuum: world.cleared,
+    dead: false,
+  });
+  ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: 'rune' });
 }

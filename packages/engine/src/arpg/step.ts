@@ -750,7 +750,8 @@ function dropsTick(ctx: SimCtx, dt: number): void {
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
-    const magnet = d.kind !== 'item' && gap < bal.hero.magnetRadius;
+    // Items and runes are walked over; motes, orbs and scrap fly to the hero.
+    const magnet = d.kind !== 'item' && d.kind !== 'rune' && gap < bal.hero.magnetRadius;
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
       const speed = d.vacuum ? 18 : 10;
@@ -774,12 +775,16 @@ function dropsTick(ctx: SimCtx, dt: number): void {
       case 'scrap':
         world.pending.scrap += d.amount;
         break;
+      case 'rune':
+        if (d.rune) world.pending.runes.push(d.rune);
+        break;
     }
     ctx.events.push({
       kind: 'pickup',
       dropId: d.id,
       dropKind: d.kind,
       item: d.item,
+      rune: d.rune,
       amount: d.amount,
       mana: d.mana,
     });

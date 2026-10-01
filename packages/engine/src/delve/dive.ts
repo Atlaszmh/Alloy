@@ -12,6 +12,7 @@ import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
+import { addToPouch } from '../loot/runes.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -127,14 +128,15 @@ export interface BankResult {
 }
 
 /**
- * Move everything the world collected since the last bank (items picked up,
- * scrap, kills, reactions discovered) into the profile. Call it whenever
- * pickups happen so new gear can be equipped mid-floor, and at floor end.
+ * Move everything the world collected since the last bank (items and runes
+ * picked up, scrap, kills, reactions discovered) into the profile. Call it
+ * whenever pickups happen so new gear can be equipped mid-floor, and at floor end.
  */
 export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: ArpgWorld): BankResult {
   const dive = requireDive(profile);
   const pending = world.pending;
   const items = pending.items;
+  const runes = pending.runes;
   const bagged = addLootToBag(registry, { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid }, items);
   let next = bagged.profile;
 
@@ -150,6 +152,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
   next = {
     ...next,
     scrap: next.scrap + scrap,
+    runes: addToPouch(next.runes, runes),
     firstBossLegendaryGiven: next.firstBossLegendaryGiven || !world.loot.forceLegendary,
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
     stats: {
@@ -163,6 +166,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
       scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
       dustEarned: dive.dustEarned + bagged.dust,
       linksEarned: dive.linksEarned + bagged.links,
+      runesEarned: dive.runesEarned + runes.length,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
       found,
@@ -181,7 +185,7 @@ export function bankWorld(registry: DataRegistry, profile: DelveProfile, world: 
     scrap: scrap + bagged.scrap,
     dust: bagged.dust,
     links: bagged.links,
-    runes: [],
+    runes,
   };
 }
 
