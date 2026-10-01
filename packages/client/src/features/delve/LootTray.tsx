@@ -61,6 +61,9 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
   // leaves weapons alone (a weapon changes through its sheet).
   const better = rows.filter((r) => r.delta !== null && r.delta > UPGRADE_EPSILON);
   const diving = isDiveActive(profile);
+  // The door screen's stop may offer to equip one now.
+  const stop = profile.dive?.stop;
+  const atStop = !!stop && !stop.taken && stop.offers.includes('equip');
   const upgrades = better.filter((r) => r.item.slot !== 'weapon').length;
   const overflow = rows.length > capacity ? rows.length - (capacity - 1) : 0;
   const visible = overflow > 0 ? rows.slice(0, capacity - 1) : rows;
@@ -116,7 +119,7 @@ export function LootTray({ originRef, onSelect }: LootTrayProps) {
         </span>
         {better.length > 0 && diving && (
           <span className="text-[11px] text-amber-200" data-testid="upgrades-locked">
-            ▲ {better.length} to equip at the Anvil
+            ▲ {better.length} to equip {atStop ? 'at this stop, or ' : ''}at the Anvil
           </span>
         )}
         {upgrades > 0 && !diving && (

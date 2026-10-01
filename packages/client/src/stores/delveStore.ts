@@ -15,6 +15,7 @@ import {
   setChains as engineSetChains,
   addSlot as engineAddSlot,
   transferMoveset,
+  takeStop as engineTakeStop,
   bindSecondary as engineBindSecondary,
   chooseStartingMana,
   realign as engineRealign,
@@ -35,6 +36,7 @@ import {
   type ParsedDelveProfile,
   type ProfileActionResult,
   type Rarity,
+  type StopAction,
 } from '@alloy/engine';
 import { SKILL_NAME } from '@/features/delve/chains/chain-text';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -255,6 +257,8 @@ interface DelveStore {
   addSlot: (skill: ChainSkill) => ProfileActionResult;
   /** Move the equipped weapon's moveset onto bag weapon `uid` and equip it, for scrap. */
   transfer: (uid: string) => ProfileActionResult;
+  /** Take the door screen's power-up. */
+  takeStop: (action: StopAction) => ProfileActionResult;
   setManualAttack: (on: boolean) => void;
 }
 
@@ -448,6 +452,13 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     transfer: (uid) => {
       const res = applyResult(transferMoveset(registry(), get().profile, uid));
       if (res.ok) set({ newUids: withoutUids(get().newUids, [uid]) });
+      return res;
+    },
+
+    takeStop: (action) => {
+      const res = applyResult(engineTakeStop(registry(), get().profile, action));
+      if (res.ok && action.kind === 'equip')
+        set({ newUids: withoutUids(get().newUids, [action.uid]) });
       return res;
     },
   };

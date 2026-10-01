@@ -47,6 +47,8 @@ export interface ChainEditorProps {
   lockedText?: string;
   /** Why a skill has no chain (the text its locked tab shows). */
   absentText?: (skill: ChainSkill) => string;
+  /** Each chain keeps its moves and payment, only changing them (a stop's one move): no reordering, adding, removing, payment, attunement or reactions. */
+  fixedShape?: boolean;
   /** Shown under the chosen skill's cards (the Anvil's Add slot). */
   footer?: (skill: ChainSkill) => ReactNode;
   onChange: <S extends ChainSkill>(skill: S, chain: Chains[S]) => void;
@@ -96,6 +98,7 @@ export function ChainEditor({
   locked,
   lockedText = 'A dive is under way: your chains can change once you extract or fall.',
   absentText,
+  fixedShape = false,
   footer,
   onChange,
   elements = MANA_TYPES,
@@ -229,7 +232,7 @@ export function ChainEditor({
                   </span>
                 )}
               </button>
-              <span className="flex gap-0.5">
+              <span className="flex gap-0.5" hidden={fixedShape}>
                 <button
                   type="button"
                   className="delve-chip px-1.5"
@@ -279,7 +282,7 @@ export function ChainEditor({
             </div>
           );
         })}
-        {!absent && entries.length < (caps[skill] ?? 0) && (
+        {!fixedShape && !absent && entries.length < (caps[skill] ?? 0) && (
           <button
             type="button"
             className="delve-panel flex w-20 items-center justify-center p-1.5 text-2xl text-stone-400"
@@ -319,7 +322,7 @@ export function ChainEditor({
           />
         )}
 
-        {chain && (
+        {chain && !fixedShape && (
           <section className="flex flex-col gap-1.5">
             <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
               Pay with
@@ -343,16 +346,17 @@ export function ChainEditor({
         )}
       </fieldset>
 
-      {mana ?? (
-        <section className="flex flex-col gap-1.5">
-          <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-            Attunement
-          </div>
-          <AttunementBars stats={stats} />
-        </section>
-      )}
+      {!fixedShape &&
+        (mana ?? (
+          <section className="flex flex-col gap-1.5">
+            <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
+              Attunement
+            </div>
+            <AttunementBars stats={stats} />
+          </section>
+        ))}
 
-      <section className="flex flex-col gap-1.5">
+      <section className="flex flex-col gap-1.5" hidden={fixedShape}>
         <div className="flex items-baseline justify-between">
           <span className="delve-display text-xs font-bold uppercase tracking-widest text-fuchsia-300">
             Reactions

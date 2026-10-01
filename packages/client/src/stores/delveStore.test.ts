@@ -180,6 +180,29 @@ describe('delveStore', () => {
     });
   });
 
+  it("takes the door screen's power-up", () => {
+    const s = () => useDelveStore.getState();
+    const helm = generateItem(
+      registry,
+      { uid: 'x4', ilvl: 3, rarity: 'rare', slot: 'helm' },
+      new SeededRNG(4),
+    );
+    s().setProfile({ ...s().profile, bag: [helm] });
+    s().startDive(1);
+    s().markNew(['x4']);
+    // At the door screen after a depth, a stop offering an equip.
+    const dive = { ...s().profile.dive!, phase: 'choosing' as const };
+    s().setProfile({
+      ...s().profile,
+      dive: { ...dive, stop: { offers: ['equip'], taken: false } },
+    });
+    expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(true);
+    expect(s().profile.equipped.helm?.uid).toBe('x4');
+    expect(s().profile.dive!.stop!.taken).toBe(true);
+    expect(s().newUids.x4).toBeUndefined();
+    expect(s().takeStop({ kind: 'equip', uid: 'x4' }).ok).toBe(false);
+  });
+
   it('a reset takes a primary; without one the choice is still to make', () => {
     expect(useDelveStore.getState().profile.pair).toEqual({ primary: 'fire', secondary: null });
     useDelveStore.getState().resetProfile(99);

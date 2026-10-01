@@ -511,4 +511,22 @@ describe('ChainEditor', () => {
     fireEvent.click(screen.getByTestId('move-add'));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('with a fixed shape, moves change but never move, go or come, and the payment stays', () => {
+    render(
+      <ChainEditor
+        chains={given}
+        caps={caps}
+        stats={stats}
+        reactionsSeen={[]}
+        locked={false}
+        fixedShape
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('form-lance')).toBeEnabled();
+    expect(screen.queryByTestId('move-add')).toBeNull();
+    expect(screen.getByTestId('move-left-1')).not.toBeVisible();
+    expect(screen.queryByTestId('payment-mana')).toBeNull();
+  });
 });

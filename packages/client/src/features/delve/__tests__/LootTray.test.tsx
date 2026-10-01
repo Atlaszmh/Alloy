@@ -48,6 +48,19 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     expect(screen.getByTestId('upgrades-locked')).toHaveTextContent('▲ 2 to equip at the Anvil');
   });
 
+  it('at a stop that offers to equip, the tray says one can go on there', () => {
+    dive();
+    const d = store().profile.dive!;
+    store().setProfile({
+      ...store().profile,
+      dive: { ...d, phase: 'choosing', stop: { offers: ['equip'], taken: false } },
+    });
+    render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
+    expect(screen.getByTestId('upgrades-locked')).toHaveTextContent(
+      '▲ 2 to equip at this stop, or at the Anvil',
+    );
+  });
+
   it('once the dive has ended, the tray equips again, but never a weapon', () => {
     dive();
     store().setProfile({

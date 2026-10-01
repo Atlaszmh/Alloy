@@ -3,6 +3,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { formatNumber } from './format';
+import { StopPanel } from './StopPanel';
 
 interface DoorChoiceProps {
   dive: DiveState;
@@ -38,6 +39,8 @@ export function DoorChoice({ dive, onChoose, onExtract }: DoorChoiceProps) {
             {dive.potions} 🧪 · {Math.round(dive.heroHpFrac * 100)}% life
           </div>
         </div>
+
+        {dive.stop && <StopPanel stop={dive.stop} />}
 
         <div className="delve-display text-[11px] uppercase tracking-[0.3em] text-stone-500">
           Choose your path
