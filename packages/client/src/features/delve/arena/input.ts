@@ -1,4 +1,5 @@
 import {
+  dropHold,
   pressMove,
   type AbilityCast,
   type ArpgInput,
@@ -116,7 +117,6 @@ export function frameInput(
   mem: PadMemory,
   o: FrameOpts,
 ): ArpgInput {
-  const h = world.hero;
   const padLive = o.device === 'gamepad';
   const switched = padLive !== (input.device === 'gamepad');
   input.device = o.device;
@@ -129,8 +129,10 @@ export function frameInput(
       attackAim: null,
     });
   else if (switched) Object.assign(mem, padMemory());
+  // Unmarked: the new device's own press of that slot charges anew.
+  if (switched) dropHold(world, false);
   const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
-  out.cancelHold = (switched && !!h.hold) || (!padLive && input.cancelHold);
+  out.cancelHold = !padLive && input.cancelHold;
   input.cast = null;
   input.cancelHold = false;
   input.potion = false;

@@ -169,10 +169,14 @@ export function clearBeat(world: ArpgWorld, slot: number): void {
   world.queuedCasts = world.queuedCasts.filter((q) => q.cast.slot !== slot);
 }
 
-/** Drop a charging hold, unpaid, marking its slot so its release (the button let go) is swallowed. */
-export function dropHold(world: ArpgWorld): void {
+/**
+ * Drop a charging hold, unpaid, marking its slot so its release (the button
+ * let go) is swallowed; with `mark` false, no slot stays marked (the client's
+ * switch of input device: the old buttons go unheard), so a new press charges anew.
+ */
+export function dropHold(world: ArpgWorld, mark = true): void {
   const hold = world.hero.hold;
   if (!hold) return;
-  world.holdDropped = hold.slot;
+  world.holdDropped = mark ? hold.slot : null;
   world.hero.hold = null;
 }

@@ -300,7 +300,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(w.hero.hold?.slot).toBe(0);
     // ...the pad takes the lock: the hold drops unpaid, nothing casts, and Q's release later is quiet.
     const switched = frame({ move: { x: 1, y: 0 } }, opts);
-    expect(switched.out).toMatchObject({ cancelHold: true, cast: null, holding: null });
+    expect(switched.out).toMatchObject({ cast: null, holding: null });
     expect(switched.casts).toEqual([]);
     expect(w.hero.hold).toBeNull();
     expect(input.aiming).toBeNull();
@@ -310,13 +310,39 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(w.hero.hold?.slot).toBe(0);
     // ...the mouse takes the lock with RT still down: dropped, nothing casts.
     const back = frame({ held: [0] }, keys);
-    expect(back.out).toMatchObject({ cancelHold: true, cast: null, holding: null });
+    expect(back.out).toMatchObject({ cast: null, holding: null });
     expect(back.casts).toEqual([]);
     expect(w.hero.hold).toBeNull();
     // The pad takes it back with RT still down (a stick moved): RT counts as already seen,
     // so it holds nothing, and its release casts nothing.
     expect(frame({ held: [0], move: { x: 1, y: 0 } }, opts).out.holding).toBeNull();
     expect(frame({}, opts).casts).toEqual([]);
+  });
+
+  it("a switch's dropped hold never swallows the new device's own hold of that slot", () => {
+    const w = world({
+      moves: [{ kind: 'hold', form: 'bolt', elements: ['fire'] }],
+      payment: 'mana',
+    });
+    const STEP = registry.getDelveBalance().arena.step;
+    const input = createArenaInput();
+    const mem = padMemory();
+    const frame = (acts: Partial<ArenaPadActions>, o: typeof opts | typeof keys) =>
+      stepWorld(registry, w, frameInput(registry, w, input, pad(acts), mem, o), STEP);
+    // Q charges the Primary's hold; RT pressed takes the lock and charges a fresh one.
+    input.aiming = { slot: 0, since: 0, at: null };
+    for (let i = 0; i < 5; i++) frame({}, keys);
+    const first = w.hero.hold?.start;
+    frame({ cast: [0], held: [0] }, opts);
+    for (let i = 0; i < 3; i++) frame({ held: [0] }, opts);
+    expect(w.hero.hold?.slot).toBe(0);
+    expect(w.hero.hold?.start).toBeGreaterThan(first!);
+    // ...and back: Q pressed with RT still down charges a fresh one too.
+    const second = w.hero.hold!.start;
+    input.aiming = { slot: 0, since: 0, at: null };
+    for (let i = 0; i < 3; i++) frame({ held: [0] }, keys);
+    expect(w.hero.hold?.slot).toBe(0);
+    expect(w.hero.hold?.start).toBeGreaterThan(second);
   });
 
   it('sends each press once: cancelHold, a cast, a dodge, a potion and an attack tap', () => {
