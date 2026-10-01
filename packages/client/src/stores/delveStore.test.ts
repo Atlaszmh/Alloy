@@ -213,7 +213,7 @@ describe('delveStore', () => {
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(v3Save()));
     const loaded = loadDelveProfile()!;
     expect(loaded.profile).toMatchObject({
-      version: 6,
+      version: 7,
       pair: { primary: 'fire', secondary: null },
     });
     // The common sword carries no Defensive: the Frost Ward went with it, and nothing needed a fix.
@@ -235,7 +235,7 @@ describe('delveStore', () => {
       // One move each: nothing came back as Links.
       "Your chains live on your weapon now, and yours can't carry your Defensive and Ultimate: they went",
     ]);
-    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(6);
+    expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!).version).toBe(7);
   });
 
   it('a save that already has its pair (version 4 or 5) gets no bind hint', async () => {
@@ -247,7 +247,7 @@ describe('delveStore', () => {
       ultimate: { ...bolt, form: 'nova' },
     };
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify({ ...v4, version: 4, abilities }));
-    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 6 } });
+    expect(loadDelveProfile()).toMatchObject({ gainedPair: false, profile: { version: 7 } });
     localStorage.setItem(DELVE_SAVE_KEY, JSON.stringify(useDelveStore.getState().profile));
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(
       'delveStore',

@@ -41,6 +41,11 @@ export const STOP_TEXT: Record<StopKind, { icon: string; name: string; text: str
   slot: { icon: '🔗', name: 'Add a slot', text: 'One more slot on a chain, for Links and scrap.' },
   move: { icon: '✎', name: 'Adjust a move', text: 'Change one move of one chain, for Mana Dust.' },
   upgrade: { icon: '⚒️', name: 'Upgrade', text: 'One forge upgrade of an item, for scrap.' },
+  rune: {
+    icon: '💠',
+    name: 'Socket a rune',
+    text: 'One rune from your pouch into an open socket. Free.',
+  },
 };
 
 /**

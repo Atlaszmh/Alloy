@@ -1,10 +1,9 @@
 import {
   MOVE_KINDS,
-  beatFor,
   blowNumbers,
   holdFull,
+  moveBeat,
   moveNumbers,
-  playedKind,
   takesElements,
   type AbilitySlot,
   type Blow,
@@ -61,8 +60,7 @@ function Readout({
   const { hit, radius } = moveNumbers(stats, bal, ab);
   const maxHp = stats.maxHp;
   const lines: string[] = [];
-  const beat = (a: ResolvedAbility) =>
-    `then a ${secs(beatFor(bal, a.slot, playedKind(a), stats.tempo))} beat`;
+  const beat = (a: ResolvedAbility) => `then a ${secs(moveBeat(bal, a, stats.tempo))} beat`;
   const f = ab.form.id;
   if (f === 'ward')
     lines.push(
