@@ -35,6 +35,12 @@ const EFFECT_FAMILY: Record<RuneEffect, RuneFamily> = {
 /** How far above its point a glyph flashes (world units), clear of the hit's sparks. */
 export const GLYPH_LIFT = 0.9;
 
+/**
+ * How far below its point Volatile's glyph flashes: it fires with a reaction, whose label pops
+ * over the point's top and would hide it. A glyph rises 0.4 as it fades, so it ends clear of the foe.
+ */
+export const GLYPH_DROP = 1;
+
 /** A family's colour for Pixi (`FAMILY_STYLE` holds it as CSS). */
 export function familyHex(family: RuneFamily): number {
   return cssToHex(FAMILY_STYLE[family].color);
@@ -47,11 +53,13 @@ export function runeHex(ref: RuneRef): number {
 }
 
 /**
- * A rune's effect fires: its glyph flashes above the point in its family's
- * colour, over a small ring in the element's (the family's without one).
+ * A rune's effect fires: its glyph flashes above the point (Volatile's below)
+ * in its family's colour, over a small ring in the element's (the family's
+ * without one).
  */
 export function runeFx(fx: ManaFx, e: RuneFxEvent): void {
   const color = familyHex(EFFECT_FAMILY[e.effect]);
-  fx.glyph(e.x, e.y - GLYPH_LIFT, GLYPHS[e.effect], color);
+  const y = e.effect === 'volatile' ? e.y + GLYPH_DROP : e.y - GLYPH_LIFT;
+  fx.glyph(e.x, y, GLYPHS[e.effect], color);
   fx.ring(e.x, e.y, 0.6, e.element ? MANA_HEX[e.element] : color, false, 0.25);
 }

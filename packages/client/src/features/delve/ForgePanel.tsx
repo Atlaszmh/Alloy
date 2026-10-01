@@ -10,7 +10,6 @@ import {
   type GearItem,
   type Rarity,
   type RuneRef,
-  type RuneTier,
 } from '@alloy/engine';
 import { partsText, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -156,8 +155,9 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
     }
     playSound('combineMerge');
     vibrate('success');
-    const made = { ...ref, tier: (ref.tier + 1) as RuneTier };
-    showToast(`Fused ${fuseCount} ${runeName(registry, ref)} into ${runeName(registry, made)}`);
+    showToast(
+      `Fused ${fuseCount} ${runeName(registry, ref)} into ${runeName(registry, res.runes![0])}`,
+    );
   };
 
   // The forge waits for the dive to end, as all gear does (a stop's upgrade aside).

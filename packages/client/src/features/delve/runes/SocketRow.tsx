@@ -12,6 +12,8 @@ export interface SocketRowProps {
   /** Socket indexes whose rune does nothing on this move now. */
   dormant?: readonly number[];
   locked?: boolean;
+  /** Only the empty sockets take a tap (a stop's rune pick); filled ones are marks. */
+  emptyOnly?: boolean;
   onOpenSocket?: () => void;
   onSocketTap?: (socket: number) => void;
 }
@@ -21,7 +23,8 @@ export interface SocketRowProps {
  * glyph, dimmed with its reason when dormant, or an empty ring), then
  * "+ socket" with the next one's price while the move is below its cap.
  * Tapping a pip calls `onSocketTap`; locked (a dive, the item sheet), the pips
- * are marks, not buttons. A move with no socket and none to open shows nothing.
+ * are marks, not buttons (with `emptyOnly`, the filled ones). A move with no
+ * socket and none to open shows nothing.
  */
 export function SocketRow({
   runes,
@@ -29,6 +32,7 @@ export function SocketRow({
   nextPrice,
   dormant = [],
   locked = false,
+  emptyOnly = false,
   onOpenSocket,
   onSocketTap,
 }: SocketRowProps) {
@@ -48,7 +52,7 @@ export function SocketRow({
         ) : (
           <span className="px-1 text-[11px] leading-none text-stone-500">◇</span>
         );
-        return tap ? (
+        return tap && !(emptyOnly && r) ? (
           <button
             key={i}
             type="button"

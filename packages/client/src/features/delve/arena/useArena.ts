@@ -10,7 +10,7 @@ import {
   type GearItem,
   type ReactionId,
 } from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { pullOpts, useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from './useArenaCore';
 
@@ -59,7 +59,7 @@ export function useArena(
 
   function bank(world: ArpgWorld) {
     const store = useDelveStore.getState();
-    const res = bankWorld(registry, store.profile, world);
+    const res = bankWorld(registry, store.profile, world, pullOpts(store));
     store.setProfile(res.profile);
     store.pushDiveDrops(res.kept.map((i) => i.uid));
     store.pushDiveRunes(res.runes);
@@ -95,11 +95,11 @@ export function useArena(
     if (now - endAtRef.current < (world.heroDead ? END_DELAY : 0.4)) return false;
     const store = useDelveStore.getState();
     if (world.heroDead) {
-      const res = failFloor(registry, store.profile, world);
+      const res = failFloor(registry, store.profile, world, pullOpts(store));
       store.setProfile(res.profile);
       onUiRef.current({ kind: 'fell' });
     } else {
-      const res = completeFloor(registry, store.profile, world);
+      const res = completeFloor(registry, store.profile, world, pullOpts(store));
       store.setProfile(res.profile);
       store.pushDiveDrops(res.kept.map((i) => i.uid));
       store.pushDiveRunes(res.runes);

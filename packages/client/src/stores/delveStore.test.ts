@@ -26,6 +26,7 @@ import {
   applyLabel,
   draftApply,
   partsText,
+  selectDraftApply,
   runeLostNotices,
 } from './delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -515,6 +516,28 @@ describe('delveStore: runes in the draft', () => {
     expect(s().profile).toMatchObject({ links: 0, scrap: 0 });
   });
 
+  it("when the engine won't price the draft, says why, and the pouch stays as it is", () => {
+    bolts([[null]], { runes: {} });
+    const primary = chains().primary;
+    const [first, second] = primary.moves;
+    s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [split] }, second] });
+    expect(view()).toMatchObject({ price: null, refused: 'Not enough runes in your pouch' });
+    expect(view().pouch).toEqual({});
+  });
+
+  it('is one memoised result for the store until the profile, the draft or the pull rule changes', () => {
+    bolts([[null]]);
+    const primary = chains().primary;
+    s().editDraft('primary', { ...primary, moves: [primary.moves[1], primary.moves[0]] }, [1, 0]);
+    const first = selectDraftApply(s());
+    expect(first.price).not.toBeNull();
+    expect(selectDraftApply(s())).toBe(first);
+    s().setUnsocket('pay');
+    const paying = selectDraftApply(s());
+    expect(paying).not.toBe(first);
+    expect(selectDraftApply(s())).toBe(paying);
+  });
+
   it('the dev override sets the pull rule: paying, a pull costs scrap and the rune comes back', () => {
     bolts([[split]], { scrap: 100 });
     s().setUnsocket('pay');
@@ -593,6 +616,16 @@ describe('delveStore: runes outside the draft', () => {
     expect(s().salvage(['x5'])).toMatchObject({ links: 1, runes: [], destroyed: [split] });
     s().setUnsocket('pay');
     expect(s().salvage(['x6'])).toMatchObject({ links: 1, runes: [split], destroyed: [] });
+    expect(pouchCount(s().profile.runes, split)).toBe(1);
+  });
+
+  it("choosing the mana gives the weapon's runes back by the pull rule", () => {
+    s().resetProfile(5);
+    const p = s().profile;
+    const weapon = swordWith([split]);
+    s().setProfile({ ...p, equipped: { ...p.equipped, weapon } });
+    s().setUnsocket('pay');
+    expect(s().chooseMana('frost')).toMatchObject({ ok: true, runes: [split], destroyed: [] });
     expect(pouchCount(s().profile.runes, split)).toBe(1);
   });
 

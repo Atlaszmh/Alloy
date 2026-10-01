@@ -544,6 +544,21 @@ describe('AbilitiesPanel: sockets and runes', () => {
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
   });
 
+  it("a draft the engine won't price says why in place of a price, once", () => {
+    socketed([null]);
+    render(<AbilitiesPanel />);
+    const primary = chains().primary;
+    const moves = primary.moves.map((m) => ({ ...m, runes: [{ id: 'split', tier: 1 as const }] }));
+    act(() => store().editDraft('primary', { ...primary, moves }));
+    const price = screen.getByTestId('chain-price');
+    expect(price).toHaveTextContent('Not enough runes in your pouch');
+    expect(price).not.toHaveTextContent(/free/);
+    expect(screen.getAllByText('Not enough runes in your pouch')).toHaveLength(1);
+    const button = screen.getByTestId('chain-apply');
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-describedby', price.id);
+  });
+
   it("+ socket is off without the Links, saying why in the engine's words", () => {
     store().setProfile({ ...store().profile, links: 0, scrap: 20 });
     render(<AbilitiesPanel />);

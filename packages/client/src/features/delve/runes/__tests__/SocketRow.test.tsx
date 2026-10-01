@@ -70,6 +70,23 @@ describe('SocketRow', () => {
     expect(screen.getByRole('img', { name: 'Socket 2: empty' })).toBeInTheDocument();
   });
 
+  it('emptyOnly (a stop rune pick), only the empty sockets are buttons: filled ones are marks', () => {
+    const onSocketTap = vi.fn();
+    render(
+      <SocketRow
+        runes={[{ id: 'split', tier: 1 }, null]}
+        cap={2}
+        nextPrice={null}
+        emptyOnly
+        onSocketTap={onSocketTap}
+      />,
+    );
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'Socket 1: Split I' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Socket 2: empty' }));
+    expect(onSocketTap).toHaveBeenCalledWith(1);
+  });
+
   it('a move with no socket and none to open shows nothing', () => {
     const { container } = render(<SocketRow runes={[]} cap={0} nextPrice={null} />);
     expect(container).toBeEmptyDOMElement();

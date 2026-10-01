@@ -15,12 +15,8 @@ import {
   setAutoSalvage,
   setChains as engineSetChains,
   addSlot as engineAddSlot,
-  addToPouch,
   draftPrice,
   movesOf,
-  runeChange,
-  takeFromPouch,
-  unsocketMode,
   transferMoveset,
   takeStop as engineTakeStop,
   bindSecondary as engineBindSecondary,
@@ -248,6 +244,8 @@ export interface DraftApply {
   opts: SetChainsOptions;
   /** The total, from the engine's `draftPrice`; null with nothing pending, or when it refuses. */
   price: DraftPrice | null;
+  /** Why `draftPrice` refuses (and so Apply would); null when it prices the draft. */
+  refused: string | null;
   /** The engine's `setChains` as a dry run: whether Apply goes through, and why not. */
   dry: ProfileActionResult | null;
   /** The pouch once Apply has taken what it sockets (and, paying, given back what it pulls). */
@@ -263,22 +261,50 @@ export function draftApply(
   const changes = draftChanges(registry, profile, draft);
   const opts = applyOpts(draft, unsocket);
   if (Object.keys(changes).length === 0)
-    return { changes, opts, price: null, dry: null, pouch: profile.runes };
+    return { changes, opts, price: null, refused: null, dry: null, pouch: profile.runes };
   const price = draftPrice(registry, profile, changes, opts);
-  const change = runeChange(registry, profile, changes, opts);
-  let pouch = profile.runes;
-  if (!('refused' in change)) {
-    const back = unsocketMode(registry, unsocket) === 'pay' ? change.pulled : [];
-    // Short of a rune, Apply refuses; the picker shows the pouch as it is.
-    pouch = takeFromPouch(addToPouch(pouch, back), change.socketed) ?? pouch;
-  }
+  const refused = 'refused' in price ? price.refused : null;
   return {
     changes,
     opts,
     price: 'refused' in price ? null : price,
+    refused,
     dry: engineSetChains(registry, profile, changes, opts),
-    pouch,
+    // Refused (a rune short, say), the picker shows the pouch as it is.
+    pouch: 'refused' in price ? profile.runes : price.pouch,
   };
+}
+
+/** An engine op's pull rule: the dev override, else (undefined) the balance's. */
+export function pullOpts(s: Pick<DelveStore, 'unsocket'>): Pick<SetChainsOptions, 'unsocket'> {
+  return { unsocket: s.unsocket ?? undefined };
+}
+
+let lastApply: {
+  profile: DelveProfile;
+  draft: ChainDraft | null;
+  unsocket: UnsocketMode | null;
+  view: DraftApply;
+} | null = null;
+
+/**
+ * `draftApply` on the store's state, memoised across its readers (the Anvil page and its
+ * builder): the same result until the profile, the draft or the pull rule changes.
+ */
+export function selectDraftApply(s: DelveStore): DraftApply {
+  const { profile, chainDraft: draft, unsocket } = s;
+  if (
+    lastApply?.profile !== profile ||
+    lastApply.draft !== draft ||
+    lastApply.unsocket !== unsocket
+  )
+    lastApply = {
+      profile,
+      draft,
+      unsocket,
+      view: draftApply(getDelveRegistry(), profile, draft, unsocket),
+    };
+  return lastApply.view;
 }
 
 /** Runes by name: "Split III", "Split III and Quick I". */
@@ -430,7 +456,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
   };
   const notify = (text: string) => set({ notices: [...get().notices, text] });
   // The pull rule for the ops whose parts can return or destroy a rune.
-  const pull = () => ({ unsocket: get().unsocket ?? undefined });
+  const pull = () => pullOpts(get());
 
   const loaded = loadDelveProfile();
   // A migrated save is written back at once.
@@ -486,7 +512,7 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       if (res.swapped) notify(overtakeNotice(registry(), primary!, secondary!));
     },
 
-    chooseMana: (mana) => applyResult(chooseStartingMana(registry(), get().profile, mana)),
+    chooseMana: (mana) => applyResult(chooseStartingMana(registry(), get().profile, mana, pull())),
 
     bindSecondary: (mana) => applyResult(engineBindSecondary(registry(), get().profile, mana)),
 

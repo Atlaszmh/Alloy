@@ -14,6 +14,7 @@ import {
   profileStats,
   referenceDepth,
   resolveChain,
+  runeTargetOf,
   slotPrice,
   socketCap,
   socketsOf,
@@ -35,7 +36,7 @@ import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
-import { SKILL_NAME, blowText, moveText, runeCandidates, runeTarget } from './chains/chain-text';
+import { SKILL_NAME, blowText, moveText, runeCandidates } from './chains/chain-text';
 import { ChainEditor } from './chains/ChainEditor';
 import { RunePicker } from './runes/RunePicker';
 import { SocketRow } from './runes/SocketRow';
@@ -462,9 +463,8 @@ function RunePick({ take }: { take: Take }) {
             runes={socketsOf(move)}
             cap={socketCap(registry, weapon.rarity)}
             nextPrice={null}
-            onSocketTap={(socket) => {
-              if (socketsOf(move)[socket] === null) setAt({ skill, index, socket });
-            }}
+            emptyOnly
+            onSocketTap={(socket) => setAt({ skill, index, socket })}
           />
         </div>
       ))}
@@ -472,11 +472,11 @@ function RunePick({ take }: { take: Take }) {
         <RunePicker
           candidates={runeCandidates(
             registry,
-            runeTarget(picked.move, weapon.baseId),
+            runeTargetOf(weapon.baseId, picked.move),
             socketsOf(picked.move),
             profile.runes,
           )}
-          on={runeTarget(picked.move, weapon.baseId)}
+          on={runeTargetOf(weapon.baseId, picked.move)}
           onPick={(rune) => setChosen({ kind: 'rune', ...at, rune })}
           onClose={() => setAt(null)}
         />

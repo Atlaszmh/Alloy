@@ -23,7 +23,7 @@ import {
   type HeroStats,
   type ManaType,
 } from '@alloy/engine';
-import { applyLabel, draftApply, useDelveStore } from '@/stores/delveStore';
+import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
@@ -153,7 +153,6 @@ export function Chip({
 export function AbilitiesPanel() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const draft = useDelveStore((s) => s.chainDraft);
   const unsocket = useDelveStore((s) => s.unsocket);
   const { equipped, pair } = profile;
   const weapon = equipped.weapon;
@@ -162,10 +161,7 @@ export function AbilitiesPanel() {
   const saved = useMemo(() => heroChains(registry, equipped, pair), [registry, equipped, pair]);
   // The draft against the weapon: the skills it changes, Apply's options and total, the
   // engine's dry run and the pouch it leaves; and the chains shown.
-  const view = useMemo(
-    () => draftApply(registry, profile, draft, unsocket),
-    [registry, profile, draft, unsocket],
-  );
+  const view = useDelveStore(selectDraftApply);
   const changed = view.changes;
   const chains = useMemo(() => ({ ...saved, ...changed }), [saved, changed]);
   // Unarmed, the default chains sit at their base slots (the bare hands' string for the basic one).
@@ -190,8 +186,10 @@ export function AbilitiesPanel() {
   const elements = pairElements(pair);
   const locked = isDiveActive(profile) || !weapon;
   const pending = Object.keys(changed).length > 0;
-  const { price, dry: applying } = view;
+  const { price, refused, dry: applying } = view;
   const applyWhy = applying && !applying.ok ? applying.reason : null;
+  // Unpriced, the price line says why; Apply's own reason shows only when it says something else.
+  const applyNote = applyWhy && applyWhy !== refused ? applyWhy : null;
   // What Apply spends, each against what the hero holds (Links netted: the sockets of moves
   // removed pay for those opened).
   const links = price ? price.links - price.refundLinks : 0;
@@ -292,12 +290,18 @@ export function AbilitiesPanel() {
           className="delve-panel flex flex-wrap items-center gap-2 p-2"
           data-testid="chain-draft"
         >
-          <span className="flex-1 text-xs text-stone-300" data-testid="chain-price">
-            {costs.length > 0
-              ? `Changes cost ${listed(costs)}`
-              : profile.stats.dives === 0
-                ? 'Changes are free until your first dive'
-                : 'Changes are free'}
+          <span
+            id={`${id}-price`}
+            className="flex-1 text-xs text-stone-300"
+            data-testid="chain-price"
+          >
+            {refused
+              ? refused
+              : costs.length > 0
+                ? `Changes cost ${listed(costs)}`
+                : profile.stats.dives === 0
+                  ? 'Changes are free until your first dive'
+                  : 'Changes are free'}
           </span>
           <button
             type="button"
@@ -315,18 +319,18 @@ export function AbilitiesPanel() {
             className="delve-btn delve-btn-gold px-3 py-1 text-xs"
             disabled={!applying?.ok}
             onClick={onApply}
-            aria-describedby={applyWhy ? `${id}-apply` : undefined}
+            aria-describedby={applyNote ? `${id}-apply` : applyWhy ? `${id}-price` : undefined}
             data-testid="chain-apply"
           >
             {applyLabel(registry, price)}
           </button>
-          {applyWhy && (
+          {applyNote && (
             <span
               id={`${id}-apply`}
               className="w-full text-right text-xs text-amber-200/80"
               data-testid="chain-apply-why"
             >
-              {applyWhy}
+              {applyNote}
             </span>
           )}
         </div>

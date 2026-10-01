@@ -8,7 +8,7 @@ import {
   startDepthOptions,
   unsocketMode,
 } from '@alloy/engine';
-import { applyLabel, draftApply, useDelveStore } from '@/stores/delveStore';
+import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer } from '@/components/Toast';
@@ -33,7 +33,6 @@ export function DelveCamp() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
-  const draft = useDelveStore((s) => s.chainDraft);
   const unsocket = useDelveStore((s) => s.unsocket);
   const [tab, setTab] = useState<Tab>('bag');
   const [selected, setSelected] = useState<string | null>(null);
@@ -63,10 +62,7 @@ export function DelveCamp() {
   );
   // The chain builder's unapplied changes: a new dive waits until they're applied or discarded.
   // The builder's Apply, here too: its total, and the engine's op as a dry run (why it can't go).
-  const view = useMemo(
-    () => draftApply(registry, profile, draft, unsocket),
-    [registry, profile, draft, unsocket],
-  );
+  const view = useDelveStore(selectDraftApply);
   const unapplied = Object.keys(view.changes).length;
   const blocked = unapplied > 0 && !active;
   const applying = blocked ? view.dry : null;

@@ -214,4 +214,26 @@ describe('arena HUD snapshot: runes', () => {
     hud = snapshot(w);
     expect(hud.basicRunes).toEqual([chain]);
   });
+
+  it("during a slot's wind-up, its button names the move after it, runes and all", () => {
+    const split = { id: idOf('Split'), tier: 1 as const };
+    const w = sandbox({
+      primary: {
+        moves: [
+          { kind: 'light', form: 'bolt', elements: ['fire'] },
+          { kind: 'light', form: 'bolt', elements: ['frost'], runes: [split] },
+        ],
+        payment: 'cast',
+      },
+    });
+    // No foe to auto-aim at in an empty sandbox: aim by hand.
+    const aim = { x: w.hero.x + 3, y: w.hero.y };
+    stepWorld(registry, w, { move: still, cast: { slot: 0, aim } }, STEP);
+    expect(w.hero.windup).toMatchObject({ slot: 0, step: 0 });
+    expect(snapshot(w).abilities[0]).toMatchObject({
+      name: 'Frost Bolt',
+      chainStep: 1,
+      runes: [split],
+    });
+  });
 });

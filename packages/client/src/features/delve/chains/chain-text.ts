@@ -1,10 +1,8 @@
 import {
   runeFits,
-  type Blow,
   type ChainSkill,
   type DataRegistry,
   type ManaType,
-  type Move,
   type MoveKind,
   type RunePouch,
   type RuneRef,
@@ -58,11 +56,6 @@ export function listed(items: readonly string[]): string {
 /** A chain's names in order: "light Fire Bolt · medium Fire Bolt". */
 export function chainText(names: readonly string[]): string {
   return names.join(' · ');
-}
-
-/** What a move's runes are socketed on: an ability move's form, or a blow of `weaponBaseId`. */
-export function runeTarget(m: Move | Blow, weaponBaseId: string | null): RuneTarget {
-  return 'form' in m ? { form: m.form } : { weapon: weaponBaseId, kind: m.kind };
 }
 
 /**

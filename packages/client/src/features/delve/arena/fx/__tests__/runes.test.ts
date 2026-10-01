@@ -4,7 +4,15 @@ import type { ArpgWorld, RuneFamily } from '@alloy/engine';
 import { getDelveRegistry } from '../../../registry';
 import { FAMILY_STYLE } from '../../../runes/rune-style';
 import { MANA_HEX, cssToHex } from '../../palette';
-import { GLYPHS, GLYPH_LIFT, familyHex, runeFx, runeHex, type RuneEffect } from '../runes';
+import {
+  GLYPHS,
+  GLYPH_DROP,
+  GLYPH_LIFT,
+  familyHex,
+  runeFx,
+  runeHex,
+  type RuneEffect,
+} from '../runes';
 import { GLYPH_LIFE, ManaFx } from '../mana-fx';
 import { INFUSION_BUDGET } from '../infusion';
 import { drawInfusions, drawProjectiles, drawZones } from '../draw-world';
@@ -25,12 +33,13 @@ const FAMILY: Record<RuneEffect, RuneFamily> = {
 };
 
 describe("a rune's effect firing", () => {
-  it("flashes its glyph above the point in its rune's family colour, over a ring in the element's", () => {
+  it("flashes its glyph above the point (Volatile's below, clear of its reaction's label) in its rune's family colour, over a ring in the element's", () => {
     for (const effect of ['split', 'echo', 'volatile'] as const) {
       const fx = { glyph: vi.fn(), ring: vi.fn() };
       runeFx(fx as unknown as ManaFx, { kind: 'runeFx', effect, x: 4, y: 6, element: 'frost' });
       const color = cssToHex(FAMILY_STYLE[FAMILY[effect]].color);
-      expect(fx.glyph, effect).toHaveBeenCalledWith(4, 6 - GLYPH_LIFT, GLYPHS[effect], color);
+      const y = effect === 'volatile' ? 6 + GLYPH_DROP : 6 - GLYPH_LIFT;
+      expect(fx.glyph, effect).toHaveBeenCalledWith(4, y, GLYPHS[effect], color);
       expect(fx.ring.mock.calls[0].slice(0, 4), effect).toEqual([4, 6, 0.6, MANA_HEX.frost]);
       // Every glyph is 5×5 cells.
       expect(GLYPHS[effect].map((row) => row.length)).toEqual([5, 5, 5, 5, 5]);
