@@ -24,24 +24,15 @@ import {
   DelveProfileV4Schema,
   DelveProfileV5Schema,
 } from './profile-schema.js';
-import { chooseStartingMana, fixChainsToPair, inPair, salvageDust, type ChainFix } from './pair.js';
+import { chooseStartingMana, fixChainsToPair, salvageDust, type ChainFix } from './pair.js';
 import { defaultBasic, defaultChains } from '../arpg/abilities/resolve.js';
+import { baseSlots, carriedSkills, defaultChain, movesetOf } from '../loot/moveset.js';
 import {
-  baseSlots,
-  carriedByText,
-  carriedSkills,
-  defaultChain,
-  movesetOf,
-} from '../loot/moveset.js';
-import {
-  ABILITY_PAYMENTS,
   ABILITY_SLOTS,
   CHAIN_SKILLS,
-  MOVE_KINDS,
   type AbilityBuild,
   type AbilityBuilds,
   type AbilitySlot,
-  type Blow,
   type Chain,
   type Chains,
   type ChainSkill,
@@ -118,55 +109,6 @@ export function createDelveProfile(
 export function withMoveset(profile: DelveProfile, moveset: Moveset): DelveProfile {
   const weapon = profile.equipped.weapon!;
   return { ...profile, equipped: { ...profile.equipped, weapon: { ...weapon, moveset } } };
-}
-
-/**
- * Set one skill's chain on the equipped weapon. Throws mid-dive, unarmed, for
- * a skill the weapon doesn't carry, and on fewer than one move or more than
- * the chain's slots, an unknown kind, a form from another slot, anything but
- * one or two different elements (a blow: one), an element outside the pair
- * (once there is one), or an unknown payment.
- */
-export function setChain<S extends ChainSkill>(
-  registry: DataRegistry,
-  profile: DelveProfile,
-  skill: S,
-  chain: Chains[S],
-): DelveProfile {
-  const phase = profile.dive?.phase;
-  if (phase === 'fighting' || phase === 'choosing') {
-    throw new Error('Chains can only change between dives');
-  }
-  const weapon = profile.equipped.weapon;
-  if (!weapon) throw new Error('Equip a weapon to build your moves');
-  const moveset = movesetOf(registry, weapon);
-  const cap = moveset.slots[skill];
-  if (cap === undefined) throw new Error(carriedByText(registry, skill));
-  const blows = skill === 'basic' ? (chain as Blow[]) : null;
-  const moves = blows ?? (chain as Chain).moves;
-  if (moves.length < 1 || moves.length > cap) throw new Error(`A chain holds 1 to ${cap} moves`);
-  const elements = (els: ManaType[]) => {
-    if (els.length < 1 || els.length > 2 || new Set(els).size !== els.length)
-      throw new Error('Pick one or two different elements');
-    if (!els.every((e) => e in registry.getArpgData().mana)) throw new Error('Unknown element');
-    if (!els.every((e) => inPair(profile, e))) throw new Error('Pick from your two elements');
-  };
-  for (const m of moves) if (!MOVE_KINDS.includes(m.kind)) throw new Error(`Bad kind ${m.kind}`);
-  const set = (next: Chains[ChainSkill]) =>
-    withMoveset(profile, { ...moveset, chains: { ...moveset.chains, [skill]: next } });
-  if (blows) {
-    for (const b of blows) elements([b.element]);
-    return set(blows.map((b) => ({ ...b })));
-  }
-  const { payment } = chain as Chain;
-  for (const m of (chain as Chain).moves) {
-    const form = registry.getForm(m.form);
-    if (form.slot !== skill) throw new Error(`${form.name} is not a ${skill} form`);
-    elements(m.elements);
-  }
-  if (!ABILITY_PAYMENTS.includes(payment)) throw new Error(`Bad payment ${payment}`);
-  const copy = (chain as Chain).moves.map((m) => ({ ...m, elements: [...m.elements] }));
-  return set({ moves: copy, payment });
 }
 
 const STRENGTH: MoveKind[] = ['light', 'medium', 'heavy'];

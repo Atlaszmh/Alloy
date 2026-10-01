@@ -29,9 +29,9 @@ import {
   salvageCandidates,
   salvageItems,
   setAutoSalvage,
-  setChain,
   unequipSlot,
 } from '../src/delve/profile.js';
+import { setChain } from '../src/delve/moveset.js';
 import {
   ABILITY_SLOTS,
   type Blow,
@@ -932,7 +932,7 @@ describe("Power values the hero's own chains", () => {
       { kind: 'light', element: 'storm' },
       { kind: 'light', element: 'fire' },
       { kind: 'heavy', element: 'fire' },
-    ]);
+    ]).profile;
     for (const q of [hero(), built]) {
       const bagged = { ...q, bag: [maul] };
       const cmp = compareItem(q.equipped, maul, registry, 1, q.pair);
@@ -953,15 +953,14 @@ describe('real stats read the pair', () => {
       moves: [{ kind: 'medium', form: 'bolt', elements: ['fire', 'nature'] }],
       payment: 'mana',
     };
-    expect(() => setChain(registry, p, 'primary', plague)).toThrow(/two elements/);
-    expect(() => setChain(registry, p, 'basic', [{ kind: 'light', element: 'nature' }])).toThrow(
-      /two elements/,
+    expect(setChain(registry, p, 'primary', plague).reason).toBe('Pick from your two elements');
+    expect(setChain(registry, p, 'basic', [{ kind: 'light', element: 'nature' }]).reason).toBe(
+      'Pick from your two elements',
     );
     const withNature = bindSecondary(registry, p, 'nature').profile;
-    expect(chainsOf(setChain(registry, withNature, 'primary', plague)).primary).toEqual(plague);
-    expect(
-      chainsOf(setChain(registry, createDelveProfile(registry, 3), 'primary', plague)).primary,
-    ).toEqual(plague);
+    const set = (q: DelveProfile) => chainsOf(setChain(registry, q, 'primary', plague).profile);
+    expect(set(withNature).primary).toEqual(plague);
+    expect(set(createDelveProfile(registry, 3)).primary).toEqual(plague);
   });
 
   it('Power, Equip best, salvage, the floor and max life ignore attunement outside the pair', () => {

@@ -29,9 +29,9 @@ import {
   referenceDepth,
   salvageCandidates,
   salvageItems,
-  setChain,
   upgradeGear,
 } from './profile.js';
+import { setChain } from './moveset.js';
 
 /**
  * Plays whole dives with the arena bot, like a sensible player: fights every
@@ -130,16 +130,15 @@ function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
 
 /**
  * Build every move of the weapon's Primary chain from both elements of a
- * bound pair, so it keeps finding their reaction.
+ * bound pair, so it keeps finding their reaction, when it can pay for the edit.
  */
 function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   const { primary, secondary } = p.pair;
   const chain = heroChains(registry, p.equipped, p.pair).primary;
-  if (!primary || !secondary || !chain || !p.equipped.weapon) return p;
-  return setChain(registry, p, 'primary', {
-    ...chain,
-    moves: chain.moves.map((m) => ({ ...m, elements: [primary, secondary] })),
-  });
+  if (!primary || !secondary || !chain) return p;
+  const moves = chain.moves.map((m) => ({ ...m, elements: [primary, secondary] }));
+  const res = setChain(registry, p, 'primary', { ...chain, moves });
+  return res.ok ? res.profile : p;
 }
 
 /**

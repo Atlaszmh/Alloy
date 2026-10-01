@@ -1,12 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { defaultChains } from '../src/arpg/abilities/resolve.js';
-import {
-  createDelveProfile,
-  parseDelveProfile,
-  setChain,
-  unequipSlot,
-} from '../src/delve/profile.js';
+import { setChain } from '../src/delve/moveset.js';
+import { createDelveProfile, parseDelveProfile, unequipSlot } from '../src/delve/profile.js';
 import { startDive } from '../src/delve/dive.js';
 import { defaultMoveset } from '../src/loot/moveset.js';
 import type { Chain, Move } from '../src/types/ability.js';
@@ -33,8 +29,8 @@ describe('chains on the weapon (save v6)', () => {
       payment: 'cast',
     };
     const roomy = withChains(createDelveProfile(registry, 1), { primary: chain });
-    let p = setChain(registry, roomy, 'primary', chain);
-    p = setChain(registry, p, 'basic', [{ kind: 'heavy', element: 'nature' }]);
+    let p = setChain(registry, roomy, 'primary', chain).profile;
+    p = setChain(registry, p, 'basic', [{ kind: 'heavy', element: 'nature' }]).profile;
     expect(chainsOf(p).primary).toEqual(chain);
     expect(chainsOf(p).basic).toEqual([{ kind: 'heavy', element: 'nature' }]);
     expect(p.equipped.weapon!.moveset!.slots).toEqual({ basic: 3, primary: 2 });
@@ -54,41 +50,39 @@ describe('chains on the weapon (save v6)', () => {
       basic: Array(5).fill({ kind: 'light', element: 'fire' }),
       primary: { ...ok, moves: Array(5).fill(move) },
     });
-    const set =
-      (chain: Chain, profile = p) =>
-      () =>
-        setChain(registry, profile, 'primary', chain);
-    expect(set(ok)).not.toThrow();
-    expect(set({ ...ok, moves: [] })).toThrow('A chain holds 1 to 5 moves');
-    expect(set({ ...ok, moves: Array(6).fill(move) })).toThrow('A chain holds 1 to 5 moves');
-    expect(set({ ...ok, moves: [move, move] }, fresh)).toThrow('A chain holds 1 to 1 moves');
-    expect(set({ ...ok, moves: [{ ...move, kind: 'huge' as never }] })).toThrow('Bad kind huge');
-    expect(set({ ...ok, moves: [{ ...move, form: 'nova' }] })).toThrow(
-      'Nova is not a primary form',
-    );
+    const set = (chain: Chain, profile = p) => setChain(registry, profile, 'primary', chain).reason;
+    expect(set(ok)).toBeUndefined();
+    expect(set({ ...ok, moves: [] })).toBe('A chain holds 1 to 5 moves');
+    expect(set({ ...ok, moves: Array(6).fill(move) })).toBe('A chain holds 1 to 5 moves');
+    expect(set({ ...ok, moves: [move, move] }, fresh)).toBe('A chain holds 1 to 1 moves');
+    expect(set({ ...ok, moves: [{ ...move, kind: 'huge' as never }] })).toBe('Bad kind huge');
+    expect(set({ ...ok, moves: [{ ...move, form: 'nova' }] })).toBe('Nova is not a primary form');
     for (const elements of [[], ['fire', 'fire'], ['fire', 'frost', 'storm']] as const)
-      expect(set({ ...ok, moves: [{ ...move, elements: [...elements] }] })).toThrow(
+      expect(set({ ...ok, moves: [{ ...move, elements: [...elements] }] })).toBe(
         'Pick one or two different elements',
       );
-    expect(set({ ...ok, payment: 'gold' as never })).toThrow('Bad payment gold');
-    expect(() => setChain(registry, p, 'basic', [])).toThrow('A chain holds 1 to 5 moves');
-    expect(() =>
-      setChain(registry, p, 'basic', [{ kind: 'light', element: 'gold' as never }]),
-    ).toThrow('Unknown element');
+    expect(set({ ...ok, payment: 'gold' as never })).toBe('Bad payment gold');
+    expect(set({ ...ok, moves: [{ ...move, form: 'axe' as never }] })).toBe('Unknown form axe');
+    expect(set([{ kind: 'light', element: 'fire' }] as never)).toBe('Not a primary chain');
+    expect(setChain(registry, p, 'basic', []).reason).toBe('A chain holds 1 to 5 moves');
+    expect(
+      setChain(registry, p, 'basic', [{ kind: 'light', element: 'gold' as never }]).reason,
+    ).toBe('Unknown element');
     const ward: Chain = { moves: [{ ...move, form: 'ward' }], payment: 'mana' };
-    expect(() => setChain(registry, p, 'defensive', ward)).toThrow(
+    expect(setChain(registry, p, 'defensive', ward).reason).toBe(
       'Carried by magic weapons and better',
     );
-    expect(set(ok, unequipSlot(registry, p, 'weapon'))).toThrow(
-      'Equip a weapon to build your moves',
-    );
+    expect(set(ok, unequipSlot(registry, p, 'weapon'))).toBe('Equip a weapon to build your moves');
   });
 
   it('chains can only change between dives', () => {
     const diving = startDive(registry, createDelveProfile(registry, 1), 1);
-    expect(() => setChain(registry, diving, 'basic', [{ kind: 'light', element: 'fire' }])).toThrow(
-      /dive/,
-    );
+    const res = setChain(registry, diving, 'basic', [{ kind: 'light', element: 'fire' }]);
+    expect(res).toEqual({
+      ok: false,
+      profile: diving,
+      reason: 'Chains can only change between dives',
+    });
   });
 
   it("migrates a version 2 save, keeping gear and scrap: its new primary's default chains", () => {

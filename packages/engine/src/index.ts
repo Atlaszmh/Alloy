@@ -159,9 +159,16 @@ export {
   upgradeGear,
   reforgeGear,
   fuseGear,
-  setChain,
   chainFromBuild,
 } from './delve/profile.js';
+export {
+  setChain,
+  setChains,
+  movesetEditPrice,
+  editPrice,
+  addSlot,
+  slotPrice,
+} from './delve/moveset.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,
