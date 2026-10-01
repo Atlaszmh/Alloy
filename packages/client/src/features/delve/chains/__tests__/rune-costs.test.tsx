@@ -104,3 +104,76 @@ describe("the builder's rune picker: prices", () => {
     expect(picker().getByTestId('rune-pick-heavy')).not.toHaveTextContent('% cost');
   });
 });
+
+describe("the readout's rune price", () => {
+  /** A Fire Bolt of `kind` holding Echo, Heavy and Linger III: a raw load of 1.95. */
+  const runed = (kind: Move['kind'] = 'medium'): Move => ({
+    kind,
+    form: 'bolt',
+    elements: ['fire'],
+    runes: [
+      { id: 'echo', tier: 3 },
+      { id: 'heavy', tier: 3 },
+      { id: 'linger', tier: 3 },
+    ],
+  });
+  const readout = () => screen.getByTestId('ability-readout');
+  const payLine = () => within(readout()).getByText(/runes:/);
+
+  it("adds the runes' eased load to the pay line, in the payment's words", () => {
+    // 1.95 eased 45% by 15 Fire: 1.0725, so 8 mana → 17, charge 2.8 → 6, cast 4 → 8.
+    const { rerender } = render(editor({ primary: [runed()] }));
+    expect(payLine()).toHaveTextContent(/^17 mana · [\d.]+s wind-up \(runes: \+107% cost\) · /);
+    rerender(editor({ primary: [runed()], payment: 'charge' }));
+    expect(payLine()).toHaveTextContent(
+      /^Charge 6 · [\d.]+s wind-up \(runes: \+107% charge\) · no cooldown/,
+    );
+    rerender(editor({ primary: [runed()], payment: 'cast' }));
+    expect(payLine()).toHaveTextContent(
+      /^8 mana · [\d.]+s wind-up \(runes: \+107% cast wind-up, \+107% cost\) · /,
+    );
+  });
+
+  it('says how much attunement eases the runes, and when that is the most it can', () => {
+    const { rerender } = render(editor({ primary: [runed()] }));
+    expect(within(readout()).getByTestId('rune-ease')).toHaveTextContent(
+      /^Attunement eases rune cost by 45%$/,
+    );
+    rerender(editor({ primary: [runed()], stats: hero({ fire: 25 }) }));
+    expect(screen.getByTestId('rune-ease')).toHaveTextContent(
+      /^Attunement eases rune cost by 60% \(the most it can\)$/,
+    );
+    expect(payLine()).toHaveTextContent('(runes: +78% cost)');
+    rerender(editor({ primary: [runed()], stats: hero({}) }));
+    expect(payLine()).toHaveTextContent('(runes: +195% cost)');
+    expect(screen.queryByTestId('rune-ease')).toBeNull();
+  });
+
+  it('names no runes and no easing for a move without runes', () => {
+    render(editor({ primary: [{ kind: 'medium', form: 'bolt', elements: ['fire'] }] }));
+    expect(readout()).toHaveTextContent('8 mana');
+    expect(readout()).not.toHaveTextContent('runes:');
+    expect(screen.queryByTestId('rune-ease')).toBeNull();
+  });
+
+  it('warns when the loaded cost is more than the pool', () => {
+    // A heavy mana Nova (78) with Leech I at 2 Fire: 78 × (1 + 0.12 × 0.94) = 86.8; pool 66.
+    const nova: Move = {
+      kind: 'heavy',
+      form: 'nova',
+      elements: ['fire'],
+      runes: [{ id: 'leech', tier: 1 }],
+    };
+    render(
+      editor({
+        primary: [bolt('fire')],
+        stats: hero({ fire: 2 }),
+        over: { ultimate: { moves: [nova], payment: 'mana' } },
+      }),
+    );
+    fireEvent.click(screen.getByTestId('chain-skill-ultimate'));
+    expect(screen.getByTestId('cost-warning')).toHaveTextContent(
+      'Needs 87 mana; your pool holds 66.',
+    );
+  });
+});
