@@ -134,6 +134,11 @@ export function rollAffix(
   return line;
 }
 
+/** Every other element's Power and Attunement stats: a random line on an item of `mana` never rolls them. */
+export function foreignElementStats(mana: ManaType): HeroStatKey[] {
+  return MANA_TYPES.filter((m) => m !== mana).flatMap((m) => [`${m}Power`, `${m}Attune`] as HeroStatKey[]);
+}
+
 /** Affix definitions that may roll on a slot, excluding stats already present. */
 export function eligibleAffixes(registry: DataRegistry, slot: GearSlot, exclude: HeroStatKey[] = []): GearAffixDef[] {
   return registry.getDelveData().affixes.filter((a) => a.slots.includes(slot) && !exclude.includes(a.stat));

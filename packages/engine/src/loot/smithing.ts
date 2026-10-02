@@ -1,7 +1,13 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
 import type { GearItem } from '../types/gear.js';
-import { eligibleAffixes, rollAffix, scrapLevelFactor, weightedPick } from './item-generator.js';
+import {
+  eligibleAffixes,
+  foreignElementStats,
+  rollAffix,
+  scrapLevelFactor,
+  weightedPick,
+} from './item-generator.js';
 
 /** Scrap gained from salvaging an item (upgrades refund a little extra). */
 export function salvageValue(registry: DataRegistry, item: GearItem): number {
@@ -40,7 +46,8 @@ export function reforgeCost(registry: DataRegistry, item: GearItem): number {
 /**
  * Replace the affix at `index` with a freshly rolled, different stat: at the
  * rarity's band (a shard's `band` goes) and lifted by `floor`, the attunement
- * floor (see the crafting spec).
+ * floor (see the crafting spec). Like forging, it never rolls another
+ * element's Power or Attunement.
  */
 export function reforgeAffix(
   registry: DataRegistry,
@@ -50,11 +57,10 @@ export function reforgeAffix(
   floor = 0,
 ): GearItem {
   if (index < 0 || index >= item.affixes.length) throw new Error(`No affix at index ${index}`);
-  const pool = eligibleAffixes(
-    registry,
-    item.slot,
-    item.affixes.map((a) => a.stat),
-  );
+  const pool = eligibleAffixes(registry, item.slot, [
+    ...item.affixes.map((a) => a.stat),
+    ...foreignElementStats(item.mana),
+  ]);
   if (pool.length === 0) throw new Error('No alternative affixes for this slot');
   const def = weightedPick(pool, (a) => a.weight, rng);
   const affixes = item.affixes.slice();
