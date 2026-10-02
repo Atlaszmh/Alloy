@@ -38,7 +38,7 @@ function NotMine() {
 export function ImplicitLine({ line }: { line: ItemStatLine }) {
   const off = useOffPair(line.stat);
   return (
-    <div className="text-sm" style={{ color: off ? '#57534e' : '#d6d3d1' }}>
+    <div className="text-[16px]" style={{ color: off ? '#57534e' : '#d6d3d1' }}>
       {formatStat(getDelveRegistry(), line.stat, line.value)}
       {off && <NotMine />}
     </div>
@@ -50,7 +50,7 @@ export function AffixLine({ line }: { line: ItemStatLine }) {
   const off = useOffPair(line.stat);
   return (
     <>
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-[16px]">
         <span style={{ color: off ? '#57534e' : '#93c5fd' }}>
           {formatStat(getDelveRegistry(), line.stat, line.value)}
           {off && <NotMine />}

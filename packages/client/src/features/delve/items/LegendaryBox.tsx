@@ -24,7 +24,7 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
   const dead = !!needs && !carriedSkills(registry, weapon?.rarity ?? null).includes(needs);
   return (
     <div
-      className="mt-2 rounded-lg px-3 py-2 text-sm"
+      className="mt-2 rounded-lg px-3 py-2 text-[16px]"
       style={{
         background: 'rgba(251,146,60,0.1)',
         border: '1px solid rgba(251,146,60,0.45)',

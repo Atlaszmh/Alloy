@@ -191,7 +191,7 @@ function Readout(props: {
   const registry = getDelveRegistry();
   const { ab } = props;
   return (
-    <div className="delve-panel flex flex-col gap-1 p-3 text-sm" data-testid="ability-readout">
+    <div className="delve-panel flex flex-col gap-1 p-3 text-[16px]" data-testid="ability-readout">
       <div
         className="delve-display flex items-center gap-1.5 text-lg font-bold"
         style={{ color: manaStyle(registry, ab.element).color }}
@@ -207,7 +207,7 @@ function Readout(props: {
 function BlowReadout({ blow, stats }: { blow: HeroBlow; stats: HeroStats }) {
   const registry = getDelveRegistry();
   return (
-    <div className="delve-panel flex flex-col gap-1 p-3 text-sm" data-testid="ability-readout">
+    <div className="delve-panel flex flex-col gap-1 p-3 text-[16px]" data-testid="ability-readout">
       <div
         className="delve-display text-lg font-bold"
         style={{ color: manaStyle(registry, blow.element).color }}
