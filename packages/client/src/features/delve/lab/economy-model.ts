@@ -1,7 +1,7 @@
 import {
   FLUX_GRADES,
   RARITY_ORDER,
-  type EconomyDive,
+  type EconomyRow,
   type EconomyReport,
   type Haul,
 } from '@alloy/engine';
@@ -67,7 +67,7 @@ export function economyMaterials(): EconomyMaterial[] {
 /** Each dive's mean over the reports that reached it of `value` (its sum with `sum`). */
 export function perDive(
   reports: readonly EconomyReport[],
-  value: (d: EconomyDive) => number,
+  value: (d: EconomyRow) => number,
   sum = false,
 ): number[] {
   const n = Math.max(0, ...reports.map((r) => r.dives.length));
@@ -86,7 +86,7 @@ export interface EconomyLine {
 }
 
 /**
- * The chart's lines for a choice: a material's income, spending and death loss
+ * The chart's lines for a choice: a material's income, Anvil salvage, spending and death loss
  * (its id; `lost` null counts 0), the items forged by rarity (`'forged'`), the
  * deepest depth (`'depth'`) or the deaths (`'deaths'`, a count). One choice at a
  * time, so one axis holds one unit.
@@ -124,6 +124,12 @@ export function economyLines(reports: readonly EconomyReport[], show: string): E
       label: `${m.label} in`,
       color: PALETTE[0],
       values: perDive(reports, (d) => m.of(d.income)),
+    },
+    {
+      key: `salvaged:${m.id}`,
+      label: `${m.label} salvaged`,
+      color: PALETTE[3],
+      values: perDive(reports, (d) => m.of(d.salvaged)),
     },
     {
       key: `spent:${m.id}`,

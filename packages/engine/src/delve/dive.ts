@@ -28,8 +28,10 @@ export function startDepthOptions(_registry: DataRegistry, profile: DelveProfile
   return [...set].sort((a, b) => a - b);
 }
 
+/** A dive under way: fighting or choosing, and not settled (an abandon settles a dive where it stands). */
 export function isDiveActive(profile: DelveProfile): boolean {
-  return profile.dive !== null && (profile.dive.phase === 'fighting' || profile.dive.phase === 'choosing');
+  const dive = profile.dive;
+  return dive !== null && !dive.settled && (dive.phase === 'fighting' || dive.phase === 'choosing');
 }
 
 export function startDive(registry: DataRegistry, profile: DelveProfile, startDepth: number): DelveProfile {
@@ -59,6 +61,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     banked: emptyHaul(),
     lost: null,
     settled: false,
+    dropsGiven: [],
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -71,10 +74,12 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
   };
 }
 
+/** The dive; with `phase`, one in that phase and not settled (a settled dive goes nowhere). */
 function requireDive(profile: DelveProfile, phase?: DiveState['phase']): DiveState {
   const dive = profile.dive;
   if (!dive) throw new Error('No dive in progress');
   if (phase && dive.phase !== phase) throw new Error(`Dive is ${dive.phase}, expected ${phase}`);
+  if (phase && dive.settled) throw new Error('The dive has settled');
   return dive;
 }
 
@@ -103,6 +108,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
       firstEssence: !profile.firstEssenceGiven,
       patterns: [...profile.patterns],
+      dropsGiven: [...dive.dropsGiven],
       pair: pairElements(profile.pair),
     },
   });
@@ -198,6 +204,7 @@ export function bankWorld(
       runesEarned: dive.runesEarned + runes.length,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
+      dropsGiven: [...world.loot.dropsGiven],
       found,
       bestFind,
     },
@@ -240,7 +247,8 @@ export interface FloorResult extends BankResult {
 /**
  * The floor is cleared: bank loot (`bankWorld`, with `opts`) and the floor's haul
  * into `dive.banked`, pay the depth bounty, heal, offer doors. The first boss's
- * essence counts as given once a haul holding it banks here.
+ * guaranteed essence counts as given once the haul holding it banks here
+ * (`ArpgWorld.firstEssenceTaken`).
  */
 export function completeFloor(
   registry: DataRegistry,
@@ -249,11 +257,13 @@ export function completeFloor(
   opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): FloorResult {
   const bal = registry.getDelveBalance();
+  requireDive(profile, 'fighting');
   const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
-  const essenceBanked = !world.loot.firstEssence && Object.keys(dive.haul.essences).length > 0;
+  // The guaranteed essence itself, picked up this floor: another essence in the haul doesn't count.
+  const essenceBanked = world.firstEssenceTaken;
 
   const bountyAdded = Math.round(
     bal.dive.bountyBase *
@@ -333,6 +343,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       door,
       doorChoices: [],
       stop: null,
+      dropsGiven: [],
       phase: 'fighting',
     },
   };

@@ -44,6 +44,7 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
       find: 0,
       legendaryBoost: 1,
       forceLegendary: false,
+      dropsGiven: [],
       pair: [],
     },
     ...opts,
@@ -107,6 +108,7 @@ describe('floor generation', () => {
       find: 0,
       legendaryBoost: 1,
       forceLegendary: false,
+      dropsGiven: [],
       pair: [],
     };
     const first = world({ loot: { ...loot, nextUid: 100 } });

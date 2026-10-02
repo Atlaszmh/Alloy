@@ -733,9 +733,11 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   }
 
   if (!world.sandbox) {
-    dropLoot(ctx, m);
+    // A replayed floor's foe that already gave gear or a pattern this dive gives neither again.
+    const given = world.loot.dropsGiven.includes(m.id);
+    dropLoot(ctx, m, given);
     dropRune(ctx, m);
-    dropMaterials(ctx, m, scrap);
+    dropMaterials(ctx, m, scrap, given);
   }
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
@@ -755,24 +757,27 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
 }
 
 /** Items, a mana mote and health orbs burst from a dying foe. */
-function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
+function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   const { world, bal, registry } = ctx;
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
-  const drops = rollEncounterDrops(
-    registry,
-    {
-      depth: world.depth,
-      kind: m.kind,
-      gear: world.door?.mods.gear ?? 1,
-      nextUid: loot.nextUid,
-      biomeMana: world.element,
-      pair: loot.pair,
-    },
-    lootRng,
-  );
+  const drops = given
+    ? { items: [], nextUid: loot.nextUid }
+    : rollEncounterDrops(
+        registry,
+        {
+          depth: world.depth,
+          kind: m.kind,
+          gear: world.door?.mods.gear ?? 1,
+          nextUid: loot.nextUid,
+          biomeMana: world.element,
+          pair: loot.pair,
+        },
+        lootRng,
+      );
   loot.nextUid = drops.nextUid;
+  if (drops.items.length > 0 && !loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;

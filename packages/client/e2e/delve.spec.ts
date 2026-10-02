@@ -64,8 +64,8 @@ test.describe('Delve loot loop', () => {
   test('D02: loot drops mid-dive and can be inspected, then equipped at the Anvil', async ({
     page,
   }) => {
-    // Only elites and bosses drop gear: seed 8's first floor holds two elites, and the first
-    // one slain drops an item whatever order the bot kills in.
+    // Only elites and bosses drop gear: seed 8's first floor holds two elites, and the bot's
+    // clear of it drops gear at any frame rate (pinned in the engine's delve-banking test).
     await seedProfile(page, 8);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();

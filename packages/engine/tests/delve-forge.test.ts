@@ -409,6 +409,18 @@ describe('forgeItem', () => {
       }
   });
 
+  it("random lines never roll another element's Power or Attunement; the item's own element's stay", () => {
+    const p = smith(20);
+    const req = reqs[3]; // a Fire ring at epic: four random lines
+    const elemental = /^(fire|frost|storm|earth|shadow|nature)(Power|Attune)$/;
+    const stats = Array.from({ length: 300 }, (_, i) =>
+      forgeItem(registry, p, req, new SeededRNG(i + 1)).affixes.map((a) => a.stat),
+    ).flat();
+    const own = stats.filter((s) => elemental.test(s));
+    expect(own.length).toBeGreaterThan(0);
+    for (const s of own) expect(s.startsWith(req.element)).toBe(true);
+  });
+
   it('throws where the preview refuses', () => {
     expect(() => forgeItem(registry, { ...smith(), scrap: 0 }, reqs[0], new SeededRNG(1))).toThrow(
       'Not enough scrap',

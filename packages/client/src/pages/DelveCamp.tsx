@@ -9,13 +9,15 @@ import '@/features/delve/delve.css';
 /** The Anvil (`/delve`): the hub, and on a new save the mana choice over it. */
 export function DelveCamp() {
   const phase = useDelveStore((s) => s.profile.dive?.phase);
+  const settled = useDelveStore((s) => !!s.profile.dive?.settled);
   const choosing = useDelveStore((s) => s.profile.pair.primary === null);
   useDelveNotices();
 
-  // A finished dive's summary was shown on the run screen — clear it here.
+  // A finished dive's summary was shown on the run screen — clear it here (an abandoned one
+  // has settled where it stood, mid-floor or at a stop).
   useEffect(() => {
-    if (phase === 'dead' || phase === 'extracted') useDelveStore.getState().closeDive();
-  }, [phase]);
+    if (phase === 'dead' || phase === 'extracted' || settled) useDelveStore.getState().closeDive();
+  }, [phase, settled]);
 
   return (
     <div className="delve-page delve-ui" data-testid="delve-camp">

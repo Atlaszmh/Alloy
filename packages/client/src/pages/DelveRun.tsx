@@ -113,6 +113,9 @@ export function DelveRun() {
         case 'loot':
           if (e.bagFull) showToast('Bag full: extra loot was salvaged');
           break;
+        case 'patterns':
+          for (const id of e.ids) showToast(`Pattern learned: ${registry.getGearBase(id).name}`);
+          break;
         case 'legendary':
           playSound('lootLegendary');
           vibrate('heavy');
@@ -211,6 +214,7 @@ export function DelveRun() {
   /** Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its losses. */
   const abandon = useCallback(() => {
     setPause(null);
+    arenaRef.current?.flush();
     const s = useDelveStore.getState();
     s.setProfile(settleDive(registry, s.profile, 'abandon'));
   }, [registry]);

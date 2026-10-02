@@ -22,7 +22,7 @@ import {
 import { MANA_HEX, cssToHex } from '../arena/palette';
 import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
-import { DUST_COLOR, METAL_COLOR } from '../materials/material-style';
+import { DUST_COLOR, METAL_COLOR, PATTERN_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
@@ -285,6 +285,37 @@ describe('materials on the floor', () => {
     expect(
       pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'material', amount: 2, material: iron }),
     ).toBe(ironHex);
+  });
+});
+
+describe('patterns on the floor', () => {
+  const maul = drop({ kind: 'pattern', pattern: 'maul', amount: 1 });
+  const blue = cssToHex(PATTERN_COLOR);
+
+  it('draw as a blueprint scroll in their own colour, named always, and sparkle so when picked up', () => {
+    const scroll = recorder();
+    drawDrop(scroll.g, maul, 1, 1);
+    expect(scroll.fills).toContain(blue);
+    expect(scroll.fills).not.toContain(0xfcd34d); // not the scrap coin
+    expect(dropPlaque(maul, false)).toEqual({ text: 'Pattern: Maul', color: blue, always: true });
+    expect(
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'pattern', amount: 1, pattern: 'maul' }),
+    ).toBe(blue);
+  });
+});
+
+describe('a slain foe', () => {
+  it("floats no scrap: it bursts out as pickups, credited as they're picked up", () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    const death = { kind: 'death', id: 999, x: 13, y: 18, scrap: 30 } as const;
+    r.handleEvents([
+      { ...death, monsterKind: 'elite' },
+      { ...death, id: 998, monsterKind: 'boss' },
+    ]);
+    const floats = (r as unknown as { floats: { text: Text }[] }).floats;
+    expect(floats.map((f) => f.text.text).filter((t) => t.includes('⚙'))).toEqual([]);
   });
 });
 

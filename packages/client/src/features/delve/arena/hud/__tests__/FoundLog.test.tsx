@@ -64,6 +64,17 @@ describe('FoundLog: what this floor found', () => {
     expect(onInspect).toHaveBeenCalledWith('w1');
   });
 
+  it('lists the patterns learned this floor', () => {
+    store().startDive(1);
+    store().pushDivePatterns(['axe']);
+    at('choosing', 1);
+    at('fighting', 2);
+    store().pushDivePatterns(['maul']);
+    render(<FoundLog onInspect={() => {}} />);
+    const rows = screen.getAllByTestId('feed-pattern');
+    expect(rows.map((r) => r.textContent)).toEqual(['Pattern: Maulpattern']);
+  });
+
   it('shows the item card inline on hover', () => {
     dive();
     render(<FoundLog onInspect={() => {}} />);

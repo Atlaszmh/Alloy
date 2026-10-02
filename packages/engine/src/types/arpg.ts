@@ -296,6 +296,8 @@ export interface Drop {
   material?: MaterialRef;
   /** A pattern drop's base id (kind `'pattern'`): learned when it banks. */
   pattern?: string;
+  /** The first boss's guaranteed essence: picking it up sets `ArpgWorld.firstEssenceTaken`. */
+  firstEssence?: boolean;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -668,6 +670,12 @@ export interface LootContext {
   firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
   patterns: string[];
+  /**
+   * Foes of this depth (by id) that already dropped gear or a pattern this dive
+   * (`DiveState.dropsGiven`): a replayed floor's foe drops neither again.
+   * `dropLoot` and `dropMaterials` add to it; `bankWorld` keeps it on the dive.
+   */
+  dropsGiven: number[];
   /** The hero's pair, primary first (empty before the choice): drops lean toward it. */
   pair: ManaType[];
 }
@@ -771,6 +779,11 @@ export interface ArpgWorld {
   queuedDodge: boolean;
   kills: number;
   bossKilled: boolean;
+  /**
+   * The first boss's guaranteed essence was picked up on this floor (it rides the
+   * floor's haul): `completeFloor` counts it as given only then.
+   */
+  firstEssenceTaken: boolean;
   cleared: boolean;
   clearedAt: number;
   heroDead: boolean;

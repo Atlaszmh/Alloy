@@ -773,6 +773,12 @@ export interface DiveState {
   lost: Haul | null;
   /** The dive has settled: `settleDive` runs once a dive. */
   settled: boolean;
+  /**
+   * Foes of the current depth (by id, which a floor's seed fixes) that already
+   * dropped gear or a pattern: a replay of the floor (left for the Anvil, a
+   * reload) drops neither again from them. A new depth starts it afresh.
+   */
+  dropsGiven: number[];
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;

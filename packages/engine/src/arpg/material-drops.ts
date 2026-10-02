@@ -172,9 +172,11 @@ export function rollMaterialDrops(
  * kill scrap split into `drops.scrapPickups[kind]` pickups (each at least 1),
  * every material and the pattern their own. A boss that takes the first
  * essence's guarantee clears it for the floor; a dropped pattern won't drop
- * again this floor. `killMonster` calls it inside its `!world.sandbox` guard.
+ * again this floor, nor any from a foe that already gave gear or a pattern
+ * this dive (`given`: a replayed floor; see `LootContext.dropsGiven`).
+ * `killMonster` calls it inside its `!world.sandbox` guard.
  */
-export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): void {
+export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, given = false): void {
   const { world, registry } = ctx;
   const rng = world.materialRng;
   const loot = world.loot;
@@ -196,7 +198,9 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): voi
   );
   if (firstEssence) loot.firstEssence = false;
 
-  const spawn = (extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern'>) => {
+  const spawn = (
+    extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern' | 'firstEssence'>,
+  ) => {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
     const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
@@ -212,8 +216,14 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): voi
     spawn({ kind: 'scrap', amount });
   }
   for (const { material, amount } of rolled.materials)
-    spawn({ kind: 'material', amount, material });
-  if (rolled.pattern) {
+    spawn({
+      kind: 'material',
+      amount,
+      material,
+      ...(firstEssence && material.kind === 'essence' && { firstEssence: true }),
+    });
+  if (rolled.pattern && !given) {
+    if (!loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
     loot.patterns = [...loot.patterns, rolled.pattern];
     spawn({ kind: 'pattern', amount: 1, pattern: rolled.pattern });
   }

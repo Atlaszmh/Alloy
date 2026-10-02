@@ -9,10 +9,12 @@ import {
   completeFloor,
   extractDive,
   failFloor,
+  isDiveActive,
   settleDive,
   startDive,
 } from '../src/delve/dive.js';
-import { runAutopilot } from '../src/delve/autopilot.js';
+import { takeStop } from '../src/delve/stops.js';
+import { botInput } from '../src/arpg/bot.js';
 import { createDelveProfile, setAutoSalvage } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { addHaul, addMaterial, addMaterials, emptyHaul } from '../src/loot/materials.js';
@@ -97,7 +99,6 @@ describe('banking a floor', () => {
     expect(bankWorld(registry, once, again).profile.dive!.haul.metals.iron).toBe(1);
   });
 
-  // ponytail: B2's applySalvage sends mid-dive salvage into the haul; the integrator un-skips this once B1 and B2 merge.
   it("mid-dive auto-salvage yields (scrap, a shard) go to the floor's haul, not the stockpile", () => {
     const p = startDive(
       registry,
@@ -113,6 +114,42 @@ describe('banking a floor', () => {
     expect(res.profile.scrap).toBe(p.scrap);
     expect(res.profile.dive!.haul.scrap).toBeGreaterThan(0);
     expect(Object.keys(res.profile.dive!.haul.shards)).not.toEqual([]);
+  });
+});
+
+describe('a replayed floor', () => {
+  it("doesn't drop again the gear or patterns its foes gave this dive: clear, bank, restart × 4", () => {
+    const boss = registry.getDelveBalance().drops.boss;
+    const chance = boss.patternChance;
+    boss.patternChance = 1;
+    try {
+      const start = diving(3);
+      let p: DelveProfile = { ...start, dive: { ...start.dive!, depth: 5 } };
+      const gear: number[] = [];
+      const learned: number[] = [];
+      for (let run = 0; run < 4; run++) {
+        // Each run after the first: left for the Anvil mid-floor, the floor starts over.
+        const world = beginFloor(registry, p);
+        clearFloor(world);
+        const res = bankWorld(registry, p, world);
+        gear.push(res.kept.length + res.salvaged.length);
+        learned.push(res.patterns.length);
+        p = res.profile;
+      }
+      expect(gear[0]).toBeGreaterThan(0);
+      expect(learned[0]).toBeGreaterThan(0);
+      expect(gear.slice(1)).toEqual([0, 0, 0]);
+      expect(learned.slice(1)).toEqual([0, 0, 0]);
+      // The record is this depth's: the next depth's foes drop as ever.
+      const world = beginFloor(registry, p);
+      clearFloor(world);
+      const done = completeFloor(registry, p, world).profile;
+      const next = chooseDoor(registry, done, done.dive!.doorChoices[0]);
+      expect(next.dive!.dropsGiven).toEqual([]);
+      expect(beginFloor(registry, next).loot.dropsGiven).toEqual([]);
+    } finally {
+      boss.patternChance = chance;
+    }
   });
 });
 
@@ -205,7 +242,32 @@ describe('settling a dive', () => {
   });
 });
 
-describe('the first boss and a seeded dive', () => {
+describe('a settled dive', () => {
+  it('is over once an abandon settles it: not active, and no door, extract, stop or floor clear goes through', () => {
+    const p = diving();
+    const world = beginFloor(registry, p);
+    clearFloor(world);
+    const cleared = completeFloor(registry, p, world).profile;
+    const stop = { offers: ['slot' as const], taken: false };
+    const atStop = { ...cleared, dive: { ...cleared.dive!, stop } };
+    const left = settleDive(registry, atStop, 'abandon');
+    expect(isDiveActive(atStop)).toBe(true);
+    expect(isDiveActive(left)).toBe(false);
+    expect(() => extractDive(registry, left)).toThrow();
+    expect(() => chooseDoor(registry, left, left.dive!.doorChoices[0])).toThrow();
+    expect(takeStop(registry, left, { kind: 'slot', skill: 'primary' })).toMatchObject({
+      ok: false,
+    });
+
+    const abandoned = settleDive(registry, p, 'abandon');
+    expect(isDiveActive(abandoned)).toBe(false);
+    const again = beginFloor(registry, p);
+    clearFloor(again);
+    expect(() => completeFloor(registry, abandoned, again)).toThrow();
+  });
+});
+
+describe('the first boss, and when pickups bank', () => {
   it("the first boss's essence and epic flux bank with its floor, and count as given then", () => {
     const start = diving(3);
     const p = { ...start, dive: { ...start.dive!, depth: 5 } };
@@ -224,6 +286,23 @@ describe('the first boss and a seeded dive', () => {
     expect(beginFloor(registry, next).loot.firstEssence).toBe(false);
   });
 
+  it("only the guaranteed essence itself counts as given: another essence in the floor's haul doesn't", () => {
+    const start = diving(3);
+    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
+    const world = beginFloor(registry, p);
+    const ctx = makeCtx(registry, world, []);
+    for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
+    // The guaranteed essence is left lying; a salvaged legendary's essence rides the haul instead.
+    const before = world.drops.length;
+    world.drops = world.drops.filter((d) => d.material?.kind !== 'essence');
+    expect(world.drops.length).toBe(before - 1);
+    world.pending.haul = addMaterial(world.pending.haul, EMBER);
+    clearFloor(world);
+    const res = completeFloor(registry, p, world);
+    expect(res.profile.dive!.banked.essences).toEqual({ pyroclasm: 1 });
+    expect(res.profile.firstEssenceGiven).toBe(false);
+  });
+
   it("a death before the first boss's floor banks grants its essence again", () => {
     const start = diving(3);
     const p = { ...start, dive: { ...start.dive!, depth: 5 } };
@@ -237,12 +316,49 @@ describe('the first boss and a seeded dive', () => {
     expect(beginFloor(registry, again).loot.firstEssence).toBe(true);
   });
 
-  it('a seeded dive plays out the same: its drops, haul, banking and settle', () => {
-    const dives = () => runAutopilot(registry, { seed: 9, dives: 2 }).profile;
-    const a = dives();
-    expect(a).toEqual(dives());
-    const bars = (p: DelveProfile) => Object.values(p.materials.metals).reduce((x, y) => x + y, 0);
-    expect(bars(a)).toBeGreaterThan(bars(createDelveProfile(registry, 9)));
-    expect(a.stats.dives).toBe(2);
+  /** A floor the bot plays at `fps`, banked every frame or only as it ends: the profile after it. */
+  function play(seed: number, depth: number, fps: number, everyFrame: boolean): DelveProfile {
+    const start = diving(seed);
+    let p: DelveProfile = { ...start, dive: { ...start.dive!, depth } };
+    const world = beginFloor(registry, p);
+    for (let i = 0; i < fps * 120 && !world.heroDead; i++) {
+      stepWorld(registry, world, botInput(registry, world), 1 / fps);
+      if (everyFrame) p = bankWorld(registry, p, world).profile;
+      if (world.cleared && world.drops.length === 0) break;
+    }
+    return world.cleared
+      ? completeFloor(registry, p, world).profile
+      : failFloor(registry, p, world).profile;
+  }
+
+  it('when pickups bank never changes the outcome: every frame or only at the end, at 60 and 20 frames a second', () => {
+    for (const [seed, depth] of [
+      [8, 1], // cleared, with two elites' gear
+      [3, 5], // the first boss, which kills the starter hero: the floor's haul is lost
+    ])
+      for (const fps of [60, 20]) {
+        const once = play(seed, depth, fps, false);
+        expect(play(seed, depth, fps, true)).toEqual(once);
+        const { phase, kills, banked, lost } = once.dive!;
+        expect(kills).toBeGreaterThan(0);
+        if (phase === 'dead') expect(lost!.scrap).toBeGreaterThan(0);
+        else expect([banked.scrap, once.bag.length]).toEqual([expect.any(Number), 2]);
+      }
+  });
+});
+
+describe('the E2E dives', () => {
+  it("seed 8's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+    const p = startDive(registry, createDelveProfile(registry, 8, { primary: 'fire' }), 1);
+    for (const fps of [60, 45, 30, 20]) {
+      const world = beginFloor(registry, p);
+      const items: unknown[] = [];
+      for (let i = 0; i < fps * 120 && !world.heroDead && !world.cleared; i++) {
+        stepWorld(registry, world, botInput(registry, world), 1 / fps);
+        items.push(...world.drops.filter((d) => d.kind === 'item' && !items.includes(d)));
+      }
+      expect(world.cleared).toBe(true);
+      expect(items.length).toBeGreaterThan(0);
+    }
   });
 });

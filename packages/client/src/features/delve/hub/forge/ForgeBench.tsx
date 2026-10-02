@@ -80,12 +80,16 @@ export function ForgeBench({
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const { metals, flux: fluxHeld, essences } = profile.materials;
   const [baseId, setBaseId] = useState<string | null>(null);
-  // The picks follow the stock: a bar picked while held, else the first held;
-  // an essence while held, else none (forged away).
+  // The picks follow the stock: a bar or a flux grade picked while held, else the
+  // first held (a flux none); an essence while held, else none (forged away).
   const [metalPick, setMetal] = useState<MetalId>(METAL_IDS[0]);
   const metal =
     metals[metalPick] > 0 ? metalPick : (METAL_IDS.find((m) => metals[m] > 0) ?? metalPick);
-  const [flux, setFlux] = useState<FluxGrade | null>(null);
+  const [fluxPick, setFlux] = useState<FluxGrade | null>(null);
+  const flux =
+    fluxPick === null || fluxHeld[fluxPick] > 0
+      ? fluxPick
+      : (FLUX_GRADES.find((g) => fluxHeld[g] > 0) ?? null);
   const [essencePick, setEssence] = useState<string | null>(null);
   const essence = essencePick && essences[essencePick] ? essencePick : null;
   const [element, setElement] = useState(profile.pair.primary ?? MANA_TYPES[0]);
@@ -187,6 +191,16 @@ export function ForgeBench({
     );
   }, [pad, locked, setPrompts]);
 
+  // The bench's last word: beside the Forge button (where a forge leaves the eye), else on top.
+  const status = message && !locked && (
+    <p
+      role="status"
+      className="text-[16px]"
+      style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
+    >
+      {message.text}
+    </p>
+  );
   const offPairDust = registry.getDelveBalance().crafting.offPairDust;
   const legend = preview?.legendary ? registry.getLegendary(preview.legendary.id) : null;
   const uses: MaterialRef[] = req
@@ -219,15 +233,7 @@ export function ForgeBench({
         }}
       />
       <Panel aria-label="Forge" testId="forge-bench">
-        {message && !locked && (
-          <p
-            role="status"
-            className="text-[16px]"
-            style={{ color: message.good ? 'var(--k-ok)' : 'var(--k-bad-text)' }}
-          >
-            {message.text}
-          </p>
-        )}
+        {(!preview || picking !== null) && status}
         {locked ? (
           <ForgeLocked />
         ) : !preview ? (
@@ -438,6 +444,7 @@ export function ForgeBench({
             >
               Forge · <Price scrap={preview.price.scrap} dust={preview.price.dust || undefined} />
             </Button>
+            {status}
             {preview.refused && (
               <p
                 id={`${id}-why`}

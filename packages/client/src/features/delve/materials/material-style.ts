@@ -37,6 +37,8 @@ export const AFFIX_FAMILY_COLOR: Record<AffixFamily, string> = {
 export const DUST_COLOR = '#2ce8f5';
 export const LINKS_COLOR = '#1fb5a8';
 export const SCRAP_COLOR = '#fcd34d';
+/** A pattern's blueprint chalk: its pickup's lines, its loot label and its sparkle (its paper is dark blue). */
+export const PATTERN_COLOR = '#c0cbdc';
 
 const numeral = (tier: number) => TIER_NUMERAL[tier as RuneTier] ?? String(tier);
 

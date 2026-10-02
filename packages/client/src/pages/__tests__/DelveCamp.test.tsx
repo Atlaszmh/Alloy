@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { heroChains } from '@alloy/engine';
+import { heroChains, settleDive } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -33,6 +33,20 @@ describe('DelveCamp', () => {
     expect(button).toBeEnabled();
     fireEvent.click(button);
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
+  });
+
+  it('closes a settled dive on load: one abandoned mid-floor is over, not resumed', () => {
+    const s = useDelveStore.getState();
+    s.startDive(1);
+    const p = useDelveStore.getState().profile;
+    act(() => s.setProfile(settleDive(getDelveRegistry(), p, 'abandon')));
+    expect(useDelveStore.getState().profile.dive?.phase).toBe('fighting');
+    render(
+      <MemoryRouter>
+        <DelveCamp />
+      </MemoryRouter>,
+    );
+    expect(useDelveStore.getState().profile.dive).toBeNull();
   });
 
   /** A Lance in place of the Primary's first move, unapplied. */

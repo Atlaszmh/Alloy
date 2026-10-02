@@ -29,7 +29,8 @@ const OTHER_CHARTS = [
  * The DPS Lab's Economy view (dev builds only; see the crafting spec): the
  * engine's economy sim (the autopilot over N dives from a new save) for the
  * chosen seeds, run in a worker on Run, charted dive by dive (a material's
- * income, spending and death loss, the items forged by rarity, the deepest
+ * income, Anvil salvage, spending (the Anvil's and the stops') and death loss,
+ * the items forged by rarity, the deepest
  * depth or the deaths) over a table of every dive. Each value is the mean over the seeds;
  * deaths are a count. The page keeps it mounted, `hidden` under the other views.
  */
@@ -39,9 +40,11 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const [show, setShow] = useState('scrap');
   const [run, setRun] = useState<EconomyRequest | null>(null);
   const [reports, setReports] = useState<EconomyReport[]>([]);
+  /** The worker's error, if the sim threw: it ends the run. */
+  const [error, setError] = useState<string | null>(null);
   const seeds = parseSeeds(seedsText);
   const valid = seeds.length > 0 && Number.isInteger(dives) && dives >= 1 && dives <= MAX_DIVES;
-  const running = run !== null && reports.length < run.seeds.length;
+  const running = run !== null && reports.length < run.seeds.length && error === null;
 
   // Each Run gets a fresh worker; a new Run, or leaving the page, ends the last.
   useEffect(() => {
@@ -49,16 +52,21 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
     const worker = new Worker(new URL('./economy-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<EconomyReport>) => setReports((prev) => [...prev, e.data]);
     // A throw inside the sim would otherwise leave the progress bar stuck in silence.
-    worker.onerror = (e) => console.error('Economy worker', e.message);
+    worker.onerror = (e) => {
+      console.error('Economy worker', e.message);
+      setError(e.message || 'The economy sim failed');
+    };
     worker.postMessage(run);
     return () => {
       worker.onmessage = null;
+      worker.onerror = null;
       worker.terminate();
     };
   }, [run]);
 
   const onRun = () => {
     setReports([]);
+    setError(null);
     setRun({ seeds, dives });
   };
 
@@ -67,6 +75,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const forged = RARITY_ORDER.map((r) => perDive(reports, (d) => d.forged[r] ?? 0));
   const materials = MATERIAL_TOTALS.map((m) => [
     perDive(reports, (d) => m.of(d.income)),
+    perDive(reports, (d) => m.of(d.salvaged)),
     perDive(reports, (d) => m.of(d.spent)),
     perDive(reports, (d) => (d.lost ? m.of(d.lost) : 0)),
   ]);
@@ -131,6 +140,11 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
         )}
       </Panel>
       <Panel className="min-h-0 flex-1" testId="economy-results">
+        {error && (
+          <p className="k-body-2 text-[var(--k-bad)]" role="alert" data-testid="economy-error">
+            The economy sim failed: {error}
+          </p>
+        )}
         {reports.length === 0 ? (
           <p className="k-body-2">
             {running ? 'Running the autopilot…' : 'Pick seeds and dives, then Run.'}
@@ -147,7 +161,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                   <th className={HEAD}>Forged (common to legendary)</th>
                   {MATERIAL_TOTALS.map((m) => (
                     <th key={m.id} className={HEAD}>
-                      {m.label} in / spent / lost
+                      {m.label} in / salvaged / spent / lost
                     </th>
                   ))}
                 </tr>
@@ -159,9 +173,10 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                     <td className="px-1">{formatAmount(depth[i])}</td>
                     <td className="px-1">{deaths[i]}</td>
                     <td className="px-1">{forged.map((f) => formatAmount(f[i])).join(' · ')}</td>
-                    {materials.map(([inc, out, lost], j) => (
+                    {materials.map(([inc, salvaged, out, lost], j) => (
                       <td key={MATERIAL_TOTALS[j].id} className="px-1">
-                        {formatAmount(inc[i])} / {formatAmount(out[i])} / {formatAmount(lost[i])}
+                        {formatAmount(inc[i])} / {formatAmount(salvaged[i])} /{' '}
+                        {formatAmount(out[i])} / {formatAmount(lost[i])}
                       </td>
                     ))}
                   </tr>
