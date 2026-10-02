@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { generateItem, isBossDepth, SeededRNG, type DiveState, type StopKind } from '@alloy/engine';
-import { StopScreen } from '../StopScreen';
+import { ARM_MS, StopScreen } from '../StopScreen';
 import { padPrompts } from '../../kit/prompts';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import { getDelveRegistry } from '../../registry';
@@ -23,6 +23,9 @@ const press = (code: string) => {
     box.mockRestore();
   }
 };
+
+/** The stop's prompts and buttons wake ARM_MS after it mounts: a press carried from the fight does nothing. */
+const arm = () => act(() => vi.advanceTimersByTime(ARM_MS));
 
 /**
  * Depth 1 cleared, at a stop offering `offers`: the bag holds a helm, a weapon and a ring, and
@@ -75,9 +78,11 @@ function atStop(offers: StopKind[] | null, over: Partial<DiveState> = {}) {
 
 describe('StopScreen (between depths)', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     localStorage.clear();
     store().resetProfile(1234, 'fire');
   });
+  afterEach(() => vi.useRealTimers());
 
   it("is a kit screen over the arena: the depth cleared, its biome, the bounty and the floor's finds", () => {
     atStop(['equip']);
@@ -123,7 +128,6 @@ describe('StopScreen (between depths)', () => {
     const first = dive.doorChoices[0];
     const door = screen.getByTestId(`door-${first}`);
     expect(door).toHaveTextContent(registry.getDoor(first).name);
-    expect(door).toHaveAttribute('data-pad-first');
     expect(door.querySelector('[data-sprite], [data-glyph="chest"]')).not.toBeNull();
     fireEvent.click(door);
     expect(onChoose).toHaveBeenCalledWith(first);
@@ -139,6 +143,7 @@ describe('StopScreen (between depths)', () => {
 
   it('has no back at its top level: Esc presses its Menu, which opens the pause', () => {
     const { onMenu } = atStop(['equip']);
+    arm();
     const root = screen.getByTestId('door-choice');
     expect(root.querySelector('[data-pad-back]')).toBeNull();
     expect(screen.getByRole('button', { name: 'Menu' })).toHaveAttribute('data-pad-menu');
@@ -158,11 +163,52 @@ describe('StopScreen (between depths)', () => {
   it('S skips the power-up: the cards go and the focus moves to the first door', () => {
     atStop(['equip', 'upgrade']);
     expect(screen.getByTestId('door-choice')).toHaveTextContent('Skip power-up');
+    arm();
     press('KeyS');
     expect(screen.queryByTestId('stop')).toBeNull();
     expect(screen.getByTestId('stop-skipped')).toHaveTextContent('Power-up skipped');
     const first = store().profile.dive!.doorChoices[0];
     expect(screen.getByTestId(`door-${first}`)).toHaveFocus();
+  });
+
+  it('for ARM_MS after it mounts, its prompts and buttons are inert: a press carried from the fight skips nothing', () => {
+    const { onInspect } = atStop(['equip', 'upgrade']);
+    const main = screen.getByTestId('door-choice').querySelector('main > div')!;
+    expect(main).toHaveAttribute('inert');
+    press('KeyS');
+    within(screen.getByTestId('floor-finds')).getAllByTestId('loot-item')[0].focus();
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+    padPrompts(new Set<PadButton>(['y']), {} as Record<PadButton, boolean>, 0);
+    box.mockRestore();
+    expect(screen.getByTestId('stop')).toBeInTheDocument();
+    expect(onInspect).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(ARM_MS - 1));
+    press('KeyS');
+    expect(screen.getByTestId('stop')).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(main).not.toHaveAttribute('inert');
+    press('KeyS');
+    expect(screen.queryByTestId('stop')).toBeNull();
+  });
+
+  it("the pad's first focus is the first power-up card while one is on offer, the first door once it is skipped", () => {
+    atStop(['equip', 'upgrade']);
+    const first = store().profile.dive!.doorChoices[0];
+    const door = screen.getByTestId(`door-${first}`);
+    expect(screen.getByTestId('stop-equip')).toHaveAttribute('data-pad-first');
+    expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
+    arm();
+    press('KeyS');
+    expect(door).toHaveAttribute('data-pad-first');
+    expect(screen.getByTestId('door-choice').querySelectorAll('[data-pad-first]')).toHaveLength(1);
+  });
+
+  it('with the power-up taken, or none on offer, the first door is the first focus', () => {
+    atStop(['equip'], { stop: { offers: ['equip'], taken: true } });
+    const first = store().profile.dive!.doorChoices[0];
+    expect(screen.getByTestId(`door-${first}`)).toHaveAttribute('data-pad-first');
   });
 
   it('with no power-up to offer, says so', () => {
@@ -173,6 +219,7 @@ describe('StopScreen (between depths)', () => {
 
   it('Y (Inspect item) opens the focused find', () => {
     const { onInspect } = atStop(['equip']);
+    arm();
     expect(screen.getByTestId('door-choice')).toHaveTextContent('Inspect item');
     within(screen.getByTestId('floor-finds')).getAllByTestId('loot-item')[1].focus();
     const box = vi

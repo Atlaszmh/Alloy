@@ -63,15 +63,18 @@ function DoorButton({
 /**
  * "Choose your path": each door as a plate with its art in a doorway (the next depth's first
  * monster, or the chest for a door that raises Magic Find), its depth and a boss mark; Extract,
- * with the hero leaving; then the hero's life and potions, and a potion to drink.
+ * with the hero leaving; then the hero's life and potions, and a potion to drink. With
+ * `padFirst`, the first door is the pad's first focus (not while a power-up is on offer).
  */
 export function DoorPane({
   dive,
+  padFirst,
   onChoose,
   onExtract,
   onPotion,
 }: {
   dive: DiveState;
+  padFirst: boolean;
   onChoose: (doorId: string) => void;
   onExtract: () => void;
   onPotion: () => void;
@@ -90,7 +93,7 @@ export function DoorPane({
           return (
             <DoorButton
               key={id}
-              first={i === 0}
+              first={padFirst && i === 0}
               testId={`door-${id}`}
               art={
                 <Doorway fill={treasure ? 'var(--k-wood-0)' : 'var(--k-mana-2)'}>

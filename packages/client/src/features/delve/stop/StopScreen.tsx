@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { baseDisplayName, isBossDepth, type DiveState } from '@alloy/engine';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
@@ -10,6 +10,9 @@ import { FAMILY_STYLE, runeName } from '../runes/rune-style';
 import { MARK, useFloorFinds } from '../arena/hud/FoundLog';
 import { StopPanel } from '../StopPanel';
 import { DoorPane } from './DoorPane';
+
+/** How long after it mounts the stop ignores presses: one carried from the fight never skips or takes a door. */
+export const ARM_MS = 450;
 
 const ROW = 'flex w-full flex-none items-center gap-3 bg-[var(--k-well)] px-3 py-[10px] text-left';
 
@@ -42,6 +45,11 @@ export function StopScreen({
   const biome = registry.getBiomeForDepth(dive.depth);
   const { items, runes } = useFloorFinds();
   const [skipped, setSkipped] = useState(false);
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setArmed(true), ARM_MS);
+    return () => clearTimeout(t);
+  }, []);
   const mainRef = useRef<HTMLDivElement>(null);
   const stop = dive.stop;
   const offering = !!stop && !stop.taken && !skipped;
@@ -57,6 +65,7 @@ export function StopScreen({
         const uid = (document.activeElement as HTMLElement | null)?.dataset.uid;
         if (uid) onInspect(uid);
       },
+      disabled: !armed,
     },
     {
       id: 'skip',
@@ -66,7 +75,7 @@ export function StopScreen({
         setSkipped(true);
         mainRef.current?.querySelector<HTMLElement>('[data-door]')?.focus();
       },
-      disabled: !offering,
+      disabled: !offering || !armed,
     },
   ];
   usePrompts(prompts, mainRef);
@@ -93,7 +102,11 @@ export function StopScreen({
         </Footer>
       }
     >
-      <div ref={mainRef} className="box-border flex h-full flex-col gap-8 px-[72px]">
+      <div
+        ref={mainRef}
+        className="box-border flex h-full flex-col gap-8 px-[72px]"
+        inert={!armed}
+      >
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-[6px]">
             <span className="k-label" style={{ color: 'var(--k-mana)' }}>
@@ -203,7 +216,13 @@ export function StopScreen({
               <StopPanel stop={stop} />
             )}
           </div>
-          <DoorPane dive={dive} onChoose={onChoose} onExtract={onExtract} onPotion={onPotion} />
+          <DoorPane
+            dive={dive}
+            padFirst={!offering}
+            onChoose={onChoose}
+            onExtract={onExtract}
+            onPotion={onPotion}
+          />
         </div>
       </div>
     </Screen>

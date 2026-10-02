@@ -119,7 +119,7 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
         <StopPicker kind={open} onClose={close} onTaken={taken} />
       ) : (
         <div className="grid min-h-0 grid-cols-3 items-start gap-[18px]">
-          {stop.offers.map((kind) => (
+          {stop.offers.map((kind, i) => (
             <button
               key={kind}
               type="button"
@@ -128,6 +128,7 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
                 playSound('buttonClick');
                 setOpen(kind);
               }}
+              data-pad-first={i === 0 || undefined}
               data-testid={`stop-${kind}`}
             >
               <Glyph id={STOP_TEXT[kind].glyph} size={32} />
