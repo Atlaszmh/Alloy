@@ -233,7 +233,8 @@ export function ChainLane({
                   )}
                 </span>
                 {on && (
-                  <span className="flex gap-1.5" role="group" aria-label="Reorder">
+                  // The mouse's: the pad carries with X and removes with Y (SkillsTab's prompts).
+                  <span className="flex gap-1.5" role="group" aria-label="Reorder" data-pad-skip>
                     <button
                       type="button"
                       className="k-chip h-8 min-w-8 justify-center"
