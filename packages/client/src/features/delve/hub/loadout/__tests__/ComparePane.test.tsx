@@ -6,16 +6,35 @@ import {
   generateItem,
   heroChains,
   referenceDepth,
+  salvageYield,
   SeededRNG,
   type GearItem,
   type ManaType,
   type RuneRef,
+  type SalvageYield,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 import { ComparePane } from '../ComparePane';
 import { getDelveRegistry } from '../../../registry';
 import { UPGRADE_EPSILON, formatDelta } from '../../../format';
+
+// The engine's salvage preview (stage 4c's B2): each test says what it gives.
+vi.mock('@alloy/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@alloy/engine')>()),
+  salvageYield: vi.fn(),
+}));
+/** A salvage that gives scrap alone. */
+const SCRAP_ONLY: SalvageYield = {
+  scrap: 12,
+  dust: 0,
+  links: 0,
+  shards: [],
+  extraShard: 0,
+  pattern: null,
+  essence: null,
+  runes: [],
+};
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -80,6 +99,7 @@ describe('the compare pane', () => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
     useDelveStore.setState({ unsocket: null, bindDeclined: [] });
+    vi.mocked(salvageYield).mockReset().mockReturnValue(SCRAP_ONLY);
   });
 
   it('compares a bag item with the worn one: Power, the stat table, the attunement it moves', () => {
@@ -109,7 +129,7 @@ describe('the compare pane', () => {
     expect(store().profile.equipped.weapon).toBeUndefined();
   });
 
-  it('greys attunement outside the pair, and shows the scrap and Mana Dust salvage gives', () => {
+  it('greys attunement outside the pair, and shows the scrap and Mana Dust salvage gives (the engine says)', () => {
     put(
       helm('frost', 'h1', [
         { stat: 'fireAttune', value: 2, roll: 0.5 },
@@ -117,17 +137,50 @@ describe('the compare pane', () => {
       ]),
     );
     store().declineBind('frost');
+    vi.mocked(salvageYield).mockReturnValue({ ...SCRAP_ONLY, dust: pal.salvageDust.magic });
     show('h1');
     expect(pane()).toHaveTextContent('Selected · compared with your helm');
     expect(screen.getByTestId('item-mana')).toHaveTextContent('not your element');
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(
-      new RegExp(`^Salvage · \\+\\d+ scrap · \\+${pal.salvageDust.magic} Mana Dust`),
+      new RegExp(`^Salvage · \\+12 scrap · \\+${pal.salvageDust.magic} Mana Dust`),
+    );
+  });
+
+  it("Salvage shows the engine's yield: Links, a shard of one of its lines, its pattern and its essence", () => {
+    const essence = registry.getDelveData().legendaries[0];
+    vi.mocked(salvageYield).mockReturnValue({
+      scrap: 40,
+      dust: 5,
+      links: 2,
+      shards: [
+        { stat: 'damage', tier: 2 },
+        { stat: 'armor', tier: 4 },
+      ],
+      extraShard: 0.25,
+      pattern: 'axe',
+      essence: essence.id,
+      runes: [],
+    });
+    put(helm('fire'));
+    show('h1');
+    const p = store().profile;
+    expect(salvageYield).toHaveBeenLastCalledWith(registry, p, p.bag[0]);
+    expect(screen.getByTestId('salvage-button')).toHaveTextContent(
+      /^Salvage · \+2 Links · \+40 scrap · \+5 Mana Dust/,
+    );
+    const label = (stat: 'damage' | 'armor') => registry.getGearAffix(stat)!.label;
+    expect(screen.getByTestId('salvage-yield')).toHaveTextContent(
+      `Shard: ${label('damage')} II or ${label('armor')} IV · 25% for a second` +
+        'Teaches the Axe pattern' +
+        `Extracts the ${essence.name} essence`,
     );
   });
 
   it('Equip, Salvage and Lock act on the item, each with its binding; Forge it opens the Forge with it', () => {
     put(helm('fire'));
     const { props } = show('h1');
+    // Scrap alone: no yield line.
+    expect(screen.queryByTestId('salvage-yield')).toBeNull();
     fireEvent.click(screen.getByTestId('equip-button'));
     expect(props.actions.equip).toHaveBeenCalledWith('h1');
     fireEvent.click(screen.getByTestId('salvage-button'));
@@ -354,6 +407,8 @@ describe('the compare pane', () => {
   it('locked, Equip, Salvage, Lock, the bind choice, Transfer and Forge it give way to a note', () => {
     put(helm('storm'), rareSword('w1'));
     const view = show('h1', { locked: true });
+    // Nothing salvages mid-dive, so the engine isn't asked.
+    expect(salvageYield).not.toHaveBeenCalled();
     expect(screen.getByTestId('equip-locked')).toHaveTextContent(/^Locked during the dive$/);
     for (const id of ['equip-button', 'salvage-button', 'lock-button', 'bind-prompt', 'forge-it'])
       expect(screen.queryByTestId(id)).toBeNull();

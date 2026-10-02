@@ -9,6 +9,28 @@ import { LoadoutTab } from '../LoadoutTab';
 import type { HubTabProps } from '../../types';
 import { getDelveRegistry } from '../../../registry';
 
+// The compare pane asks the engine's salvage preview, a stub until stage 4c's B2: here it gives
+// what salvage gave before (scrap, Mana Dust off the pair, a weapon's Links and runes).
+vi.mock('@alloy/engine', async (importOriginal) => {
+  const engine = await importOriginal<typeof import('@alloy/engine')>();
+  return {
+    ...engine,
+    salvageYield: (...[registry, profile, item]: Parameters<typeof engine.salvageYield>) => {
+      const parts = engine.weaponParts(registry, item);
+      return {
+        scrap: engine.salvageValue(registry, item),
+        dust: engine.salvageDust(registry, item, profile.pair),
+        links: parts.links,
+        shards: [],
+        extraShard: 0,
+        pattern: null,
+        essence: null,
+        runes: parts.runes,
+      };
+    },
+  };
+});
+
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const put = (...bag: GearItem[]) => store().setProfile({ ...store().profile, bag });
