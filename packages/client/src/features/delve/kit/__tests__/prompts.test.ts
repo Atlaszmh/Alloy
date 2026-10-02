@@ -159,6 +159,19 @@ describe('usePrompts on the keyboard', () => {
     expect(lock).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves every key to a focused select or contentEditable element', () => {
+    const lock = vi.fn();
+    renderHook(() =>
+      usePrompts([{ id: 'lock', label: 'Lock', binding: { key: 'KeyL' }, onPress: lock }]),
+    );
+    const select = add('select');
+    const editor = add('div', { contenteditable: 'true' });
+    Object.defineProperty(editor, 'isContentEditable', { value: true }); // jsdom lacks it
+    keydown('KeyL', {}, select);
+    keydown('KeyL', {}, editor);
+    expect(lock).not.toHaveBeenCalled();
+  });
+
   it('is inert while the arena is live, Esc and Enter included', () => {
     const lock = vi.fn();
     const back = add('button', { 'data-pad-back': '' });

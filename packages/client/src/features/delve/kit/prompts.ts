@@ -85,7 +85,9 @@ function keyMatches(b: Binding, e: KeyboardEvent): boolean {
 function typing(t: EventTarget | null): boolean {
   return (
     t instanceof HTMLTextAreaElement ||
-    (t instanceof HTMLInputElement && t.type !== 'range' && t.type !== 'checkbox')
+    t instanceof HTMLSelectElement ||
+    (t instanceof HTMLInputElement && t.type !== 'range' && t.type !== 'checkbox') ||
+    (t instanceof HTMLElement && t.isContentEditable)
   );
 }
 
