@@ -15,9 +15,16 @@ export interface PauseScreenProps {
   /** Over the stop: back from the Anvil, the dive is still at the stop (nothing restarts). */
   atStop?: boolean;
   onResume: () => void;
-  onAnvil: () => void; // floor restarts, or back to the stop
-  onAbandon: () => void; // lose bounty
+  onAnvil: () => void; // floor restarts (its unbanked haul lost), or back to the stop
+  onAbandon: () => void; // counts as a death: the bounty, the floor's haul and a share of the banked
 }
+
+/** A caption inside a kit button: body text, as the hub writes it, not the button's display caps. */
+const CAPTION = {
+  fontFamily: 'var(--k-font-body)',
+  textTransform: 'none',
+  letterSpacing: 0,
+} as const;
 
 /** The footer's Tabs prompt, drawn only: the header's Tabs and the digit keys do the stepping. */
 const TABS_PROMPT: Prompt = { id: 'tabs', label: 'Tabs', binding: { key: '1 – 5', pad: 'rb' } };
@@ -79,10 +86,19 @@ export const PauseScreen = memo(function PauseScreen({
               <Glyph id="settings" size={20} /> Settings
             </Button>
             <Button onClick={onAnvil} testId="pause-anvil">
-              {atStop ? 'Anvil · back to this stop' : 'Anvil · floor restarts'}
+              {atStop ? (
+                'Anvil · back to this stop'
+              ) : (
+                <span className="flex flex-col items-start">
+                  Anvil · floor restarts
+                  <span className="k-caption" style={CAPTION}>
+                    This floor's unbanked haul is lost
+                  </span>
+                </span>
+              )}
             </Button>
             <Button variant="danger" onClick={onAbandon} testId="pause-abandon">
-              Abandon · lose bounty
+              Abandon · counts as a death
             </Button>
             <Button
               variant="primary"
