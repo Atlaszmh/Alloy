@@ -40,9 +40,11 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const [show, setShow] = useState('scrap');
   const [run, setRun] = useState<EconomyRequest | null>(null);
   const [reports, setReports] = useState<EconomyReport[]>([]);
+  /** The worker's error, if the sim threw: it ends the run. */
+  const [error, setError] = useState<string | null>(null);
   const seeds = parseSeeds(seedsText);
   const valid = seeds.length > 0 && Number.isInteger(dives) && dives >= 1 && dives <= MAX_DIVES;
-  const running = run !== null && reports.length < run.seeds.length;
+  const running = run !== null && reports.length < run.seeds.length && error === null;
 
   // Each Run gets a fresh worker; a new Run, or leaving the page, ends the last.
   useEffect(() => {
@@ -50,16 +52,21 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
     const worker = new Worker(new URL('./economy-worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<EconomyReport>) => setReports((prev) => [...prev, e.data]);
     // A throw inside the sim would otherwise leave the progress bar stuck in silence.
-    worker.onerror = (e) => console.error('Economy worker', e.message);
+    worker.onerror = (e) => {
+      console.error('Economy worker', e.message);
+      setError(e.message || 'The economy sim failed');
+    };
     worker.postMessage(run);
     return () => {
       worker.onmessage = null;
+      worker.onerror = null;
       worker.terminate();
     };
   }, [run]);
 
   const onRun = () => {
     setReports([]);
+    setError(null);
     setRun({ seeds, dives });
   };
 
@@ -133,6 +140,11 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
         )}
       </Panel>
       <Panel className="min-h-0 flex-1" testId="economy-results">
+        {error && (
+          <p className="k-body-2 text-[var(--k-bad)]" role="alert" data-testid="economy-error">
+            The economy sim failed: {error}
+          </p>
+        )}
         {reports.length === 0 ? (
           <p className="k-body-2">
             {running ? 'Running the autopilot…' : 'Pick seeds and dives, then Run.'}

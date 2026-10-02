@@ -8,6 +8,7 @@ import { EconomyView } from '../EconomyView';
 class FakeWorker {
   static all: FakeWorker[] = [];
   onmessage: ((e: MessageEvent<EconomyReport>) => void) | null = null;
+  onerror: ((e: ErrorEvent) => void) | null = null;
   requests: unknown[] = [];
   terminated = false;
   constructor() {
@@ -133,5 +134,18 @@ describe('EconomyView', () => {
     fireEvent.change(screen.getByTestId('economy-seeds'), { target: { value: '4' } });
     fireEvent.change(screen.getByTestId('economy-dives'), { target: { value: '0' } });
     expect(run).toBeDisabled();
+  });
+
+  it('a throw in the worker shows the error and stops the progress bar; a new Run clears it', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<EconomyView />);
+    fireEvent.click(screen.getByTestId('economy-run'));
+    latest().reply(report(1, [2]));
+    act(() => latest().onerror?.({ message: 'Uncaught Error: boom' } as ErrorEvent));
+    expect(screen.queryByTestId('economy-progress')).toBeNull();
+    expect(screen.getByTestId('economy-error')).toHaveTextContent('Uncaught Error: boom');
+    fireEvent.click(screen.getByTestId('economy-run'));
+    expect(screen.queryByTestId('economy-error')).toBeNull();
+    expect(screen.getByTestId('economy-progress')).toBeInTheDocument();
   });
 });
