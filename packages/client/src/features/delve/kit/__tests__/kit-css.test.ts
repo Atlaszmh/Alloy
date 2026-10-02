@@ -35,6 +35,11 @@ describe('kit.css', () => {
     expect(css).toMatch(/\.k-hot \.k-price rect,\s+\.k-go \.k-price rect \{\s+fill: currentColor;/);
   });
 
+  it('keeps a header title on one line, its subtitle cut with an ellipsis', () => {
+    expect(rule(css, '.k-header-title .k-disp')).toContain('white-space: nowrap;');
+    expect(rule(css, '.k-header-title .k-caption')).toContain('text-overflow: ellipsis;');
+  });
+
   it('keeps the zoom off .delve-ui, on its own two classes', () => {
     expect(rule(css, '.delve-zoom')).toContain('zoom: var(--ui-scale, 1);');
     expect(rule(css, '.delve-hud-zoom')).toContain('zoom: var(--hud-scale, 1);');
