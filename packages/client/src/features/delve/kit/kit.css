@@ -541,6 +541,13 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 20px 6px 16px;
 }
 
+/* In the band the tab keeps its look (the underline over the band's bottom border) but starts at
+   the band's top, not 4 px above it where the screen clipped it: a 4 px margin for the padding. */
+.k-band .k-tab-lg {
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
 .k-tab-md {
   font-size: 18px;
   padding: 8px 6px 6px;
