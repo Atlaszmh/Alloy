@@ -400,3 +400,202 @@ html[data-input='gamepad'] .delve-ui :focus {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ── Controls ── */
+
+.k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.k-btn:active:not(:disabled) {
+  transform: translateY(2px);
+}
+
+.k-btn-sm {
+  padding: 6px 12px;
+  min-height: 36px;
+  font-family: var(--k-font-body);
+  font-size: 16px;
+  font-size-adjust: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.k-btn-md {
+  padding: 12px 18px;
+  min-height: 48px;
+  font-size: 18px;
+}
+
+.k-btn-lg {
+  padding: 12px 26px;
+  min-height: 56px;
+  font-size: 22px;
+}
+
+.k-btn-quiet {
+  background: none;
+  border: 3px solid transparent;
+  color: var(--k-text-2);
+}
+
+.k-btn-quiet:hover:not(:disabled) {
+  color: var(--k-text);
+}
+
+.k-btn:disabled {
+  background: #262b44;
+  color: #5a6988;
+  border-color: #3a4466;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: var(--k-font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+  cursor: pointer;
+}
+
+.k-chip[aria-pressed='true'],
+.k-seg[aria-checked='true'] {
+  background: #feae34;
+  border-color: #fee761;
+  color: #3e2731;
+  box-shadow: 0 0 0 3px rgba(247, 118, 34, 0.45);
+}
+
+.k-chip:disabled,
+.k-seg:disabled {
+  color: #5a6988;
+  background: #262b44;
+  border-color: #3a4466;
+  cursor: not-allowed;
+}
+
+.k-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.k-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8b9bb4;
+  cursor: pointer;
+}
+
+.k-tab-lg {
+  font-size: 24px;
+  padding: 20px 6px 16px;
+}
+
+.k-tab-md {
+  font-size: 18px;
+  padding: 8px 6px 6px;
+}
+
+.k-tab[aria-selected='true'] {
+  color: #fee761;
+  border-bottom-color: #feae34;
+  text-shadow:
+    2px 2px 0 #181425,
+    0 3px 0 #f77622;
+}
+
+.k-tab:disabled {
+  color: #5a6988;
+  cursor: not-allowed;
+}
+
+.k-tab-badge {
+  font-family: var(--k-font-body);
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--k-text-2);
+  text-shadow: none;
+}
+
+.k-segs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.k-seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 36px;
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+  cursor: pointer;
+}
+
+.k-swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  box-shadow: 0 0 0 2px #181425;
+}
+
+.k-bar {
+  position: relative;
+  background: #181425;
+  overflow: hidden;
+}
+
+.k-bar-progress {
+  box-shadow: 0 0 0 2px #3a4466;
+}
+
+.k-bar-fill,
+.k-bar-extra {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.k-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
