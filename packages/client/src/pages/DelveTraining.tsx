@@ -164,11 +164,9 @@ export function DelveTraining() {
               data-pad-scope={padFocus || undefined}
             >
               <TrainingPanel
-                layout="dock"
                 tab={tab}
                 onTab={setTab}
                 onClose={closePanel}
-                onExit={exit}
                 actions={arena.actions}
                 meter={arena.meter}
                 onOpenControls={openControls}

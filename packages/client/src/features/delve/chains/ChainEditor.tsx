@@ -286,7 +286,7 @@ export function ChainEditor(props: ChainEditorProps) {
           </section>
         ))}
 
-      {ed.picker && <RunePicker {...ed.picker} />}
+      {ed.picker && <RunePicker {...ed.picker} variant="inline" />}
     </div>
   );
 }
