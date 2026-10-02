@@ -4,9 +4,10 @@ import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { heroChains } from '@alloy/engine';
 import { DelveCamp } from '../DelveCamp';
-import { UNSOCKET_KEY, useDelveStore } from '@/stores/delveStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { moveFocus } from '@/features/gamepad/use-gamepad-nav';
+import { uiLayer } from '@/features/delve/kit';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -52,7 +53,9 @@ describe('DelveCamp', () => {
   it('a pending chain draft blocks the Delve button, saying why; Apply sets it and opens the way', () => {
     draftLance();
     renderCamp();
-    expect(screen.getByTestId('draft-count')).toHaveTextContent('1 unapplied change');
+    const count = screen.getByTestId('draft-count');
+    expect(count).toHaveTextContent(/^1$/);
+    expect(count).toHaveAttribute('aria-label', '1 unapplied change');
     const warning = screen.getByTestId('draft-warning');
     expect(warning).toHaveTextContent('Unapplied changes: apply or discard them to delve');
     const delve = screen.getByTestId('delve-button');
@@ -96,30 +99,6 @@ describe('DelveCamp', () => {
     expect(apply).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
     expect(apply).toBeDisabled(); // the scrap is there, but a new hero has no Links
     expect(screen.getByTestId('draft-apply-why')).toHaveTextContent(/Links/);
-  });
-
-  it('the dev chip flips the pull rule and keeps it on this device', () => {
-    act(() => useDelveStore.setState({ unsocket: null }));
-    renderCamp();
-    const chip = screen.getByTestId('unsocket-chip');
-    expect(chip).toHaveTextContent('Pull: destroys'); // the balance's rule
-    fireEvent.click(chip);
-    expect(chip).toHaveTextContent('Pull: pays');
-    expect(useDelveStore.getState().unsocket).toBe('pay');
-    expect(localStorage.getItem(UNSOCKET_KEY)).toBe('pay');
-    fireEvent.click(chip);
-    expect(chip).toHaveTextContent('Pull: destroys');
-  });
-
-  it('a production build shows no pull chip', () => {
-    const dev = import.meta.env.DEV;
-    import.meta.env.DEV = false as unknown as boolean;
-    try {
-      renderCamp();
-      expect(screen.queryByTestId('unsocket-chip')).toBeNull();
-    } finally {
-      import.meta.env.DEV = dev;
-    }
   });
 
   it('Discard changes & delve reverts the draft and starts the dive in one press', () => {
@@ -195,14 +174,14 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('links-count')).toHaveTextContent('🔗 3 Links');
+    expect(screen.getByTestId('links-count')).toHaveTextContent(/^3 Links$/);
     act(() =>
       useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile, links: 1 }),
     );
-    expect(screen.getByTestId('links-count')).toHaveTextContent(/^🔗 1 Link$/);
+    expect(screen.getByTestId('links-count')).toHaveTextContent(/^1 Link$/);
   });
 
-  it('Restart Delve (dev) wipes the save on a second press, back to the mana choice', () => {
+  it('Restart Delve (dev), from the system menu, wipes the save back to the mana choice', () => {
     const s = useDelveStore.getState();
     s.startDive(1);
     s.setProfile({ ...useDelveStore.getState().profile, scrap: 500 });
@@ -211,6 +190,8 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
+    // The footer's Menu (Esc / B) opens the system menu.
+    fireEvent.click(document.querySelector<HTMLElement>('[data-pad-back]')!);
     fireEvent.click(screen.getByTestId('restart-delve'));
     // The first press only asks.
     expect(useDelveStore.getState().profile.scrap).toBe(500);
@@ -220,6 +201,7 @@ describe('DelveCamp', () => {
     expect(p).toMatchObject({ scrap: 0, dive: null, pair: { primary: null } });
     expect(p.stats.dives).toBe(0);
     expect(screen.getByTestId('mana-choice')).toBeInTheDocument();
+    expect(screen.queryByTestId('system-menu')).toBeNull();
   });
 
   it('asks nothing once the mana is chosen', () => {
@@ -244,7 +226,9 @@ describe('DelveCamp', () => {
     // A kit dialog: in the zoomed UI layer, over the hub.
     expect(dialog.closest('#delve-ui-layer')).not.toBeNull();
     expect(screen.getByTestId('delve-button').closest('[inert]')).not.toBeNull();
-    expect(screen.getByTestId('open-controls').closest('[inert]')).not.toBeNull();
+    expect(screen.getByTestId('training-button').closest('[inert]')).not.toBeNull();
+    // In the app the UI layer follows the page; here an earlier test's layer may precede it.
+    document.body.append(uiLayer());
     // jsdom lays nothing out: give every element a box so the pad sees them.
     const box = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
