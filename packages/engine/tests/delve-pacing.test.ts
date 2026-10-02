@@ -24,13 +24,22 @@ const frostResults = FROST_SEEDS.map((seed) => runAutopilot(registry, { seed, di
 const frostRuns: AutopilotDiveReport[][] = frostResults.map((r) => r.reports);
 
 /**
- * Every pair forced from the start (one seed each): a fused Primary sets off
- * its own reaction on every hit after the first, so none may run away or stall.
+ * Every pair forced from the start: a fused Primary sets off its own reaction
+ * on every hit after the first, so none may run away or stall. One seed's depth
+ * swings far more than one pair's from another's (one pair went from 12 to 51
+ * over ten seeds while the pairs' means ran 19 to 28), so each pair is its mean
+ * over `SWEEP_SEEDS`.
  */
 const SWEEP_DIVES = 6;
+const SWEEP_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const sweep = registry.getArpgData().reactions.map(({ elements: [primary, secondary] }) => ({
   pair: `${primary}+${secondary}`,
-  depth: runAutopilot(registry, { seed: 1, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
+  depth: avg(
+    SWEEP_SEEDS.map(
+      (seed) =>
+        runAutopilot(registry, { seed, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
+    ),
+  ),
 }));
 
 /** The same Fire runs' economy, dive by dive (the DPS Lab's Economy view reads the same). */
@@ -75,7 +84,7 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
-  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6', () => {
+  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6 (its mean over the seeds)', () => {
     const depths = sweep.map((s) => s.depth).sort((a, b) => a - b);
     const median = depths[Math.floor(depths.length / 2)];
     for (const s of sweep) {
