@@ -401,6 +401,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     queuedDodge: false,
     kills: 0,
     bossKilled: false,
+    firstEssenceTaken: false,
     cleared: false,
     clearedAt: 0,
     heroDead: false,

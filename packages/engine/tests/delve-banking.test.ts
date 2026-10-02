@@ -287,6 +287,23 @@ describe('the first boss and a seeded dive', () => {
     expect(beginFloor(registry, next).loot.firstEssence).toBe(false);
   });
 
+  it("only the guaranteed essence itself counts as given: another essence in the floor's haul doesn't", () => {
+    const start = diving(3);
+    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
+    const world = beginFloor(registry, p);
+    const ctx = makeCtx(registry, world, []);
+    for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
+    // The guaranteed essence is left lying; a salvaged legendary's essence rides the haul instead.
+    const before = world.drops.length;
+    world.drops = world.drops.filter((d) => d.material?.kind !== 'essence');
+    expect(world.drops.length).toBe(before - 1);
+    world.pending.haul = addMaterial(world.pending.haul, EMBER);
+    clearFloor(world);
+    const res = completeFloor(registry, p, world);
+    expect(res.profile.dive!.banked.essences).toEqual({ pyroclasm: 1 });
+    expect(res.profile.firstEssenceGiven).toBe(false);
+  });
+
   it("a death before the first boss's floor banks grants its essence again", () => {
     const start = diving(3);
     const p = { ...start, dive: { ...start.dive!, depth: 5 } };

@@ -813,6 +813,7 @@ function dropsTick(ctx: SimCtx, dt: number): void {
         break;
       case 'material':
         if (d.material) world.pending.haul = addMaterial(world.pending.haul, d.material, d.amount);
+        if (d.firstEssence) world.firstEssenceTaken = true;
         break;
       case 'pattern':
         if (d.pattern) world.pending.patterns.push(d.pattern);

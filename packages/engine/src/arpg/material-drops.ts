@@ -198,7 +198,9 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
   );
   if (firstEssence) loot.firstEssence = false;
 
-  const spawn = (extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern'>) => {
+  const spawn = (
+    extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern' | 'firstEssence'>,
+  ) => {
     const angle = rng.next() * Math.PI * 2;
     const r = 0.6 + rng.next() * 0.9;
     const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
@@ -214,7 +216,12 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, give
     spawn({ kind: 'scrap', amount });
   }
   for (const { material, amount } of rolled.materials)
-    spawn({ kind: 'material', amount, material });
+    spawn({
+      kind: 'material',
+      amount,
+      material,
+      ...(firstEssence && material.kind === 'essence' && { firstEssence: true }),
+    });
   if (rolled.pattern && !given) {
     if (!loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
     loot.patterns = [...loot.patterns, rolled.pattern];

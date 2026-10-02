@@ -247,7 +247,8 @@ export interface FloorResult extends BankResult {
 /**
  * The floor is cleared: bank loot (`bankWorld`, with `opts`) and the floor's haul
  * into `dive.banked`, pay the depth bounty, heal, offer doors. The first boss's
- * essence counts as given once a haul holding it banks here.
+ * guaranteed essence counts as given once the haul holding it banks here
+ * (`ArpgWorld.firstEssenceTaken`).
  */
 export function completeFloor(
   registry: DataRegistry,
@@ -261,7 +262,8 @@ export function completeFloor(
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
-  const essenceBanked = !world.loot.firstEssence && Object.keys(dive.haul.essences).length > 0;
+  // The guaranteed essence itself, picked up this floor: another essence in the haul doesn't count.
+  const essenceBanked = world.firstEssenceTaken;
 
   const bountyAdded = Math.round(
     bal.dive.bountyBase *
