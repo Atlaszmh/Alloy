@@ -765,10 +765,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     {
       depth: world.depth,
       kind: m.kind,
-      find: loot.find,
-      materials: world.door?.mods.materials ?? 1,
-      legendaryBoost: loot.legendaryBoost,
-      forceLegendary: false, // until Task 4's drop tables take the field out
+      gear: world.door?.mods.gear ?? 1,
       nextUid: loot.nextUid,
       biomeMana: world.element,
       pair: loot.pair,

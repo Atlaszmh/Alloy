@@ -274,7 +274,7 @@ describe('determinism', () => {
     expect(weapon('epic', 9).moveset).toEqual(weapon('epic', 9).moveset);
   });
 
-  it('leaves every other item stat, and every later drop, as v0.48.0 rolled them', () => {
+  it('leaves every other item stat as v0.48.0 rolled them, and the drop tables roll the same gear', () => {
     const items: GearItem[] = [];
     for (let seed = 1; seed <= 30; seed++)
       for (const rarity of RARITY_ORDER)
@@ -288,18 +288,14 @@ describe('determinism', () => {
     const rng = new SeededRNG(7);
     let ctx = {
       depth: 5,
-      kind: 'boss' as const,
-      find: 40,
-      materials: 1,
-      legendaryBoost: 1,
-      forceLegendary: true,
+      gear: 1,
       nextUid: 1,
       biomeMana: 'earth' as const,
       pair: ['fire' as const],
     };
     for (let i = 0; i < 40; i++) {
       const kind = i % 3 ? ('elite' as const) : ('boss' as const);
-      const r = rollEncounterDrops(registry, { ...ctx, kind, forceLegendary: i === 0 }, rng);
+      const r = rollEncounterDrops(registry, { ...ctx, kind }, rng);
       items.push(...r.items);
       ctx = { ...ctx, nextUid: r.nextUid };
     }
@@ -307,8 +303,8 @@ describe('determinism', () => {
     const strip = items.map(({ moveset: _m, hones: _h, ...rest }) => rest);
     let h = 0x811c9dc5;
     for (const c of JSON.stringify(strip)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
-    // v0.48.0's 291 items, hashed the same way (the plan's scratchpad `items-hash.mjs`).
-    expect([items.length, h.toString(16)]).toEqual([291, '49e20fb6']);
+    // v0.48.0's 180 generated items, then stage 4c's drop-table gear (B1), hashed the same way.
+    expect([items.length, h.toString(16)]).toEqual([204, 'f19d30c9']);
   });
 });
 

@@ -8,7 +8,7 @@ import {
   materialName,
   baseDisplayName,
 } from '../src/loot/item-generator.js';
-import { rollEncounterDrops } from '../src/loot/drops.js';
+import { dropLuck, rollEncounterDrops } from '../src/loot/drops.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import { GEAR_SLOTS } from '../src/types/gear.js';
 import type { Rarity } from '../src/types/gear.js';
@@ -229,38 +229,40 @@ describe('rollRarity', () => {
   });
 });
 
-describe('rollEncounterDrops', () => {
-  const base = {
-    depth: 5,
-    find: 0,
-    materials: 1,
-    legendaryBoost: 1,
-    forceLegendary: false,
-    nextUid: 1,
-    pair: [],
-  };
+describe('rollEncounterDrops: gear from the drop tables', () => {
+  const { drops, loot } = registry.getDelveBalance();
+  const base = { depth: 5, gear: 1, nextUid: 1, pair: [] };
 
-  it('bosses drop several items, the first at least rare, one item level higher', () => {
+  it('a boss drops drops.boss.gear items, each at least rare, one item level higher', () => {
     for (let s = 0; s < 20; s++) {
       const res = rollEncounterDrops(registry, { ...base, kind: 'boss' }, new SeededRNG(s));
-      // Phase A's stand-in counts (`loot/drops.ts`); the drop tables replace them.
-      const [min, max] = [3, 4];
-      expect(res.items.length).toBeGreaterThanOrEqual(min);
-      expect(res.items.length).toBeLessThanOrEqual(max);
-      expect(RARITY_ORDER.indexOf(res.items[0].rarity)).toBeGreaterThanOrEqual(
-        RARITY_ORDER.indexOf('rare'),
-      );
-      expect(res.items[0].ilvl).toBe(6);
+      expect(res.items).toHaveLength(drops.boss.gear);
+      for (const item of res.items) {
+        expect(RARITY_ORDER.indexOf(item.rarity)).toBeGreaterThanOrEqual(
+          RARITY_ORDER.indexOf(loot.bossMinRarity),
+        );
+        expect(item.ilvl).toBe(6);
+      }
     }
   });
 
-  it('forceLegendary makes the first drop legendary', () => {
-    const res = rollEncounterDrops(
-      registry,
-      { ...base, kind: 'boss', forceLegendary: true },
-      new SeededRNG(1),
-    );
-    expect(res.items[0].rarity).toBe('legendary');
+  it("an elite drops one item at gearChance × the door's gear, at most 1", () => {
+    const rate = (gear: number) => {
+      let n = 0;
+      for (let s = 0; s < 2000; s++)
+        n += rollEncounterDrops(registry, { ...base, kind: 'elite', gear }, new SeededRNG(s)).items
+          .length;
+      return n / 2000;
+    };
+    expect(rate(1)).toBeCloseTo(drops.elite.gearChance, 1);
+    expect(rate(1.5)).toBeCloseTo(Math.min(1, drops.elite.gearChance * 1.5), 1);
+    expect(rate(10)).toBe(1);
+  });
+
+  it("gear's luck comes from depth and the foe's kind alone (Find no longer feeds it)", () => {
+    const at = (depth: number) => Math.min(loot.maxDepthLuck, (depth - 1) * loot.luckPerDepth);
+    expect(dropLuck(registry, { depth: 5, kind: 'elite' })).toBeCloseTo(at(5) + loot.eliteLuck);
+    expect(dropLuck(registry, { depth: 5, kind: 'boss' })).toBeCloseTo(at(5) + loot.bossLuck);
   });
 
   it('assigns sequential unique uids', () => {
@@ -274,16 +276,10 @@ describe('rollEncounterDrops', () => {
     expect(res.nextUid).toBe(10 + uids.length);
   });
 
-  it('normal monsters drop 0-2 items', () => {
-    let total = 0;
-    for (let s = 0; s < 200; s++) {
-      const res = rollEncounterDrops(registry, { ...base, kind: 'normal' }, new SeededRNG(s));
-      expect(res.items.length).toBeLessThanOrEqual(2);
-      total += res.items.length;
-    }
-    const avg = total / 200;
-    // Phase A's stand-in chances (`loot/drops.ts`: 0.22 and 0.05); the drop tables replace them.
-    expect(avg).toBeGreaterThan(0.27 * 0.6);
-    expect(avg).toBeLessThan(0.27 * 1.4);
+  it('normal foes drop no gear', () => {
+    for (let s = 0; s < 200; s++)
+      expect(
+        rollEncounterDrops(registry, { ...base, kind: 'normal', gear: 10 }, new SeededRNG(s)).items,
+      ).toEqual([]);
   });
 });

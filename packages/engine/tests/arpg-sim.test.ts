@@ -297,7 +297,8 @@ describe('monsters', () => {
     expect(events.some((e) => e.kind === 'cleared')).toBe(true);
     expect(w.cleared).toBe(true);
     expect(w.drops).toHaveLength(0);
-    expect(w.pending.items.length).toBeGreaterThan(0);
+    expect(Object.values(w.pending.haul.metals).some((n) => n > 0)).toBe(true);
+    expect(w.pending.scrap).toBeGreaterThan(0);
   });
 
   it('boss slams hurt only inside the telegraph', () => {

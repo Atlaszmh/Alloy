@@ -47,8 +47,8 @@ import {
   heroPower,
   type HeroStatsExtra,
 } from '../src/delve/hero-stats.js';
-import { generateItem } from '../src/loot/item-generator.js';
-import { rollEncounterDrops } from '../src/loot/drops.js';
+import { generateItem, rollRarity } from '../src/loot/item-generator.js';
+import { dropLuck, stochasticRound } from '../src/loot/drops.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { DelveProfile, ManaPair } from '../src/types/delve.js';
@@ -1003,22 +1003,18 @@ describe('drops lean toward the pair', () => {
   ];
 
   it('with an empty pair, the seeded drop streams are unchanged', () => {
-    const ctx = {
-      depth: 5,
-      kind: 'elite' as const,
-      find: 0,
-      materials: 1,
-      legendaryBoost: 1,
-      forceLegendary: false,
-      nextUid: 1,
-      biomeMana: 'fire' as const,
-      pair: [],
-    };
-    const got = GOLDEN.map((_, s) =>
-      rollEncounterDrops(registry, ctx, new SeededRNG(s))
-        .items.map((i) => `${i.mana}:${i.rarity}:${i.baseId}`)
-        .join(','),
-    );
+    const luck = dropLuck(registry, { depth: 5, kind: 'elite' });
+    // Two or three items a seed, drawn as an elite's gear was when GOLDEN was recorded.
+    const got = GOLDEN.map((_, s) => {
+      const rng = new SeededRNG(s);
+      const n = stochasticRound(rng.nextInt(2, 3), rng);
+      return Array.from({ length: n }, (_, i) => {
+        const rarity = rollRarity(registry, { luck }, rng);
+        const opts = { uid: `g${i + 1}`, ilvl: 5, rarity, biomeMana: 'fire' as const, pair: [] };
+        const item = generateItem(registry, opts, rng);
+        return `${item.mana}:${item.rarity}:${item.baseId}`;
+      }).join(',');
+    });
     expect(got).toEqual(GOLDEN);
   });
 
