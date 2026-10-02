@@ -22,6 +22,7 @@ import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '
 import { emptyMaterials } from '../loot/materials.js';
 import { addToPouch, socketCap } from '../loot/runes.js';
 import type { RuneRef } from '../types/rune.js';
+import type { ShardRef } from '../types/crafting.js';
 import { CHAIN_SKILLS, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 
 export interface ProfileActionResult {
@@ -411,9 +412,14 @@ export function salvageItems(
   runes: RuneRef[];
   /** Runes their sockets destroyed. */
   destroyed: RuneRef[];
+  /** The shards, patterns and essences they gave (see the crafting spec's Salvage; stage 4c's B2). */
+  shards: ShardRef[];
+  patterns: string[];
+  essences: string[];
 } {
+  const none = { shards: [], patterns: [], essences: [] };
   if (isDiveActive(profile))
-    return { profile, scrap: 0, dust: 0, links: 0, count: 0, runes: [], destroyed: [] };
+    return { profile, scrap: 0, dust: 0, links: 0, count: 0, runes: [], destroyed: [], ...none };
   const targets = new Set(uids);
   let scrap = 0;
   let dust = 0;
@@ -445,6 +451,7 @@ export function salvageItems(
     count: melted.length,
     runes: settled.runes,
     destroyed: settled.destroyed,
+    ...none,
   };
 }
 

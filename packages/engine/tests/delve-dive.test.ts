@@ -170,7 +170,7 @@ describe('dive lifecycle', () => {
     expect(p.dive!.phase).toBe('extracted');
     expect(p.scrap).toBe(scrap + bounty);
     expect(p.stats.extracts).toBe(1);
-    expect(closeDive(p).dive).toBeNull();
+    expect(closeDive(registry, p).dive).toBeNull();
   });
 
   it('dying forfeits the bounty but keeps what was picked up', () => {

@@ -3,6 +3,7 @@ import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
+import type { SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
@@ -330,8 +331,24 @@ export function extractDive(_registry: DataRegistry, profile: DelveProfile): Del
   };
 }
 
-/** Clear the dive record (after the summary, or to abandon — the bounty is lost). */
-export function closeDive(profile: DelveProfile): DelveProfile {
+/**
+ * The one path from a dive's `banked` haul into the stockpile, once a dive
+ * (`dive.settled`; see the crafting spec's banking): an extract keeps it all; a
+ * death or an abandon loses the floor's haul and `crafting.deathLoss` of
+ * `banked` (each entry rounded stochastically on `death:${seed}`, banked
+ * essences exempt), recorded in `dive.lost`. Stage 4c's B1 fills it and calls
+ * it from `extractDive`, `failFloor` and `closeDive`; until then it throws.
+ */
+export function settleDive(_registry: DataRegistry, _profile: DelveProfile, _outcome: SettleOutcome): DelveProfile {
+  throw new Error('settleDive: not implemented');
+}
+
+/**
+ * Clear the dive record (after the summary, or to abandon — the bounty is lost).
+ * Stage 4c's B1 settles a dive still under way here first, as an abandon
+ * (`settleDive`); an extracted or dead dive has settled already.
+ */
+export function closeDive(_registry: DataRegistry, profile: DelveProfile): DelveProfile {
   return { ...profile, dive: null };
 }
 

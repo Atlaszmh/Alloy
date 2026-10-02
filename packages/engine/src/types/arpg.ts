@@ -3,6 +3,7 @@ import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
+import type { MaterialRef } from './crafting.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -280,7 +281,7 @@ export interface Zone {
   dead: boolean;
 }
 
-export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune';
+export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune' | 'material';
 
 export interface Drop {
   id: number;
@@ -291,6 +292,8 @@ export interface Drop {
   mana?: ManaType;
   /** A rune drop's rune (kind `'rune'`). */
   rune?: RuneRef;
+  /** A material drop's material (kind `'material'`; see the crafting spec). */
+  material?: MaterialRef;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -621,6 +624,8 @@ export type ArpgEvent =
       amount: number;
       mana?: ManaType;
       rune?: RuneRef;
+      /** A material pickup's material, `amount` of it. */
+      material?: MaterialRef;
     }
   | {
       kind: 'dash';

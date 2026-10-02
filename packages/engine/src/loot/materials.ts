@@ -127,3 +127,16 @@ export function stockHaul(profile: DelveProfile, haul: Haul): DelveProfile {
     stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + haul.scrap },
   };
 }
+
+/**
+ * What refining `what` costs: `count` of it and `scrap` make one of the next
+ * grade (see the crafting spec); null when it doesn't refine (the top grade, a
+ * shard at its affix's last tier, an essence, Mana Dust or Links). Stage 4c's
+ * B2 fills it; until then it throws.
+ */
+export function refineCost(
+  _registry: DataRegistry,
+  _what: MaterialRef,
+): { count: number; scrap: number } | null {
+  throw new Error('refineCost: not implemented');
+}

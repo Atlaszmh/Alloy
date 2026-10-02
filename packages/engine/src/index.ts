@@ -148,6 +148,7 @@ export {
   chooseDoor,
   extractDive,
   closeDive,
+  settleDive,
   drinkPotionBetweenFloors,
 } from './delve/dive.js';
 export type { BankResult, FloorResult } from './delve/dive.js';
@@ -303,3 +304,11 @@ export * from './arpg/abilities/echo.js';
 export * from './arpg/rune-drops.js';
 export { knobHitOpts } from './arpg/abilities/impact.js';
 export { guardLand } from './arpg/abilities/defend.js';
+
+// Crafting (see the crafting spec): every module whole, so the areas that build them never edit this file.
+export * from './loot/materials.js';
+export * from './loot/forge.js';
+export * from './loot/salvage-yield.js';
+export * from './delve/crafting.js';
+export * from './delve/economy.js';
+export * from './arpg/material-drops.js';

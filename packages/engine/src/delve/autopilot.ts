@@ -490,7 +490,7 @@ export function runAutopilot(
       reactionsSeen: p.reactionsSeen.length,
       scrap: p.scrap,
     });
-    p = betweenDives(registry, closeDive(p));
+    p = betweenDives(registry, closeDive(registry, p));
   }
   return { profile: p, reports };
 }
