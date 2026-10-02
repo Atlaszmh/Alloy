@@ -1,5 +1,4 @@
 import { useId, useLayoutEffect, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
 import {
   runeText,
   type AbilityPayment,
@@ -8,7 +7,6 @@ import {
   type RuneTarget,
   type RuneTier,
 } from '@alloy/engine';
-import { uiLayer } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { RuneGlyph } from './RuneGlyph';
 import { TIERS, TIER_NUMERAL, dormantText, runeName } from './rune-style';
@@ -38,12 +36,6 @@ export interface RunePickerProps {
   /** A pull, then `onClose`. */
   onPull?: () => void;
   onClose: () => void;
-  /**
-   * 'sheet' (the default: Training and the stop until 3b): a modal over the screen, in the kit's
-   * UI layer (taking the clicks the layer lets through, at its own unzoomed size until 3b).
-   * 'inline' (the Skills inspector): drawn in place, its own pad scope.
-   */
-  variant?: 'sheet' | 'inline';
 }
 
 // How many pickers are open: an arena under one pauses (`useRunePickerOpen`).
@@ -102,11 +94,11 @@ function RuneEffect({
  * A socket's picker: a filled socket's rune with Pull, then the runes that fit
  * the move and aren't on it, each with its effect, trade-off and price at its
  * tier and its count (a rune that would do nothing there dimmed, with no
- * price). The Training Grounds pick the tier here (I–V chips). Its own pad
- * scope either way: Back has the focus and is the pad's back, Escape closes
- * it, and closing it (a pick, a pull or Back) returns the focus to the control
- * that opened it. The sheet is a modal dialog in the kit's UI layer, which its
- * backdrop closes too; inline, it is drawn in place (the Skills inspector).
+ * price). The Training Grounds pick the tier here (I–V chips). Drawn in
+ * place (the Skills inspector, the stop's rune pick, the Training dock), its
+ * own pad scope: Back has the focus and is the pad's back, Escape closes it,
+ * and closing it (a pick, a pull or Back) returns the focus to the control
+ * that opened it.
  */
 export function RunePicker({
   candidates,
@@ -120,7 +112,6 @@ export function RunePicker({
   onPick,
   onPull,
   onClose,
-  variant = 'sheet',
 }: RunePickerProps) {
   const registry = getDelveRegistry();
   const id = useId();
@@ -148,8 +139,15 @@ export function RunePicker({
     e.stopPropagation();
     close();
   };
-  const body = (
-    <>
+  return (
+    <div
+      className="flex flex-col gap-3"
+      role="group"
+      aria-label={title}
+      onKeyDown={onKeyDown}
+      data-testid="rune-picker"
+      data-pad-scope
+    >
       <div className="flex items-center justify-between">
         <span className="delve-display text-lg font-bold text-amber-200">{title}</span>
         <button
@@ -249,42 +247,6 @@ export function RunePicker({
           );
         })}
       </div>
-    </>
-  );
-  if (variant === 'inline')
-    return (
-      <div
-        className="flex flex-col gap-3"
-        role="group"
-        aria-label={title}
-        onKeyDown={onKeyDown}
-        data-testid="rune-picker"
-        data-pad-scope
-      >
-        {body}
-      </div>
-    );
-  return createPortal(
-    <div
-      className="delve-sheet-backdrop pointer-events-auto fixed inset-0 select-none text-white [zoom:calc(1/var(--ui-scale,1))]"
-      onClick={(e) => {
-        e.stopPropagation();
-        close();
-      }}
-      data-testid="rune-picker"
-      data-pad-scope
-    >
-      <div
-        className="delve-sheet flex flex-col gap-3"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={onKeyDown}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        {body}
-      </div>
-    </div>,
-    uiLayer(),
+    </div>
   );
 }

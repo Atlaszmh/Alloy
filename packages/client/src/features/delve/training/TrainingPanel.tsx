@@ -14,11 +14,11 @@ import {
   RARITY_ORDER,
   itemStatLines,
   type DummyLayout,
+  type ManaType,
   type MonsterKind,
   type SandboxToggles,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import {
   MAX_DEPTH,
   MAX_DUMMY_GROUPS,
@@ -31,60 +31,29 @@ import {
 } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_LABEL, RARITY_TEXT, formatStat, legendaryText, manaStyle } from '../format';
-import { Chip } from '@/features/delve/kit';
+import { Button, Chip, Glyph, Panel, Tabs, type TabsProps } from '@/features/delve/kit';
 import { AttunementBars } from '../items/AttunementBars';
 import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
+import { ReactionsGrid } from '../hub/codex/ReactionsGrid';
 import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
 import type { TrainingActions } from './useTrainingArena';
 
-export type PanelLayout = 'dock' | 'sheet';
 export type TrainingTab = 'loadout' | 'abilities' | 'targets' | 'toggles' | 'meter';
 
-/** The docked panel's width in px (the arena narrows by this). */
-export const DOCK_WIDTH = 360;
-/** From this page width, with mouse and keyboard, the panel docks beside the fight. */
-const DOCK_MIN_WIDTH = 1024;
-
-/**
- * Decided when the panel opens and kept until it closes: docked (the fight runs
- * on) when the page itself is wide enough (the app frame letterboxes, so not
- * the window) and mouse and keyboard are in use; otherwise a sheet that pauses it.
- */
-export function openLayout(page: HTMLElement | null): PanelLayout {
-  return (page?.clientWidth ?? 0) >= DOCK_MIN_WIDTH &&
-    useInputDeviceStore.getState().device === 'keyboard'
-    ? 'dock'
-    : 'sheet';
-}
-
-/** The top bar's "Depth N", plus the slow-motion speed while it isn't 1×. */
-export function DepthLabel() {
-  const depth = useSandboxStore((s) => s.depth);
-  const slowmo = useSandboxStore((s) => s.slowmo);
-  return (
-    <span className="delve-display flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-widest text-stone-400">
-      <span data-testid="training-depth-label">Depth {depth}</span>
-      {slowmo !== 1 && (
-        <span className="text-sky-300" data-testid="training-slowmo">
-          {slowmo}×
-        </span>
-      )}
-    </span>
-  );
-}
-
-const TABS: [TrainingTab, string][] = [
-  ['loadout', 'Loadout'],
-  ['abilities', 'Abilities'],
-  ['targets', 'Targets'],
-  ['toggles', 'Toggles'],
-  ['meter', 'Meter'],
-];
+const TABS: TabsProps<TrainingTab>['tabs'] = (
+  [
+    ['loadout', 'Loadout'],
+    ['abilities', 'Abilities'],
+    ['targets', 'Targets'],
+    ['toggles', 'Toggles'],
+    ['meter', 'Meter'],
+  ] as const
+).map(([id, label]) => ({ id, label, testId: `training-tab-${id}` }));
 const LAYOUTS: [DummyLayout, string][] = [
-  ['single', '🎯 One'],
-  ['row', '▮ Row of 5'],
-  ['clump', '⁂ Clump of 5'],
+  ['single', 'One'],
+  ['row', 'Row of 5'],
+  ['clump', 'Clump of 5'],
 ];
 const KINDS: [MonsterKind, string][] = [
   ['normal', 'Normal'],
@@ -110,23 +79,31 @@ const SWITCHES: [keyof SandboxToggles, string, string][] = [
  * arena's keys keep working; focus reached with Tab stays. (Lists are handled
  * in the panel: blurring one on pointer-up would close it.)
  */
-export function blurOnPointerUp(e: ReactPointerEvent<HTMLElement>): void {
+function blurOnPointerUp(e: ReactPointerEvent<HTMLElement>): void {
   const el = (e.target as Element).closest('button, input');
   if (el instanceof HTMLElement) el.blur();
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-1.5">
-      <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-        {title}
-      </div>
+    <section className="flex flex-col gap-2">
+      <h3 className="k-label m-0">{title}</h3>
       {children}
     </section>
   );
 }
 
-const SELECT = 'rounded-lg border border-white/10 bg-black/60 px-2 py-1.5 text-sm text-stone-200';
+/** An element's glyph and name, in its colour. */
+function ManaName({ mana }: { mana: ManaType }) {
+  const style = manaStyle(getDelveRegistry(), mana);
+  return (
+    <>
+      <Glyph id={mana} size={16} color={style.color} /> {style.name}
+    </>
+  );
+}
+
+const SELECT = 'k-well px-2 py-1.5 text-[14px] text-[var(--k-text)]';
 
 const LoadoutTab = memo(function LoadoutTab() {
   const registry = getDelveRegistry();
@@ -140,7 +117,7 @@ const LoadoutTab = memo(function LoadoutTab() {
   return (
     <div className="flex flex-col gap-4" data-testid="loadout-tab">
       <Section title="Weapon">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {registry.getGearBasesForSlot('weapon').map((b) => (
             <Chip
               key={b.id}
@@ -157,10 +134,10 @@ const LoadoutTab = memo(function LoadoutTab() {
         </div>
         <fieldset
           disabled={!choice}
-          className="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0"
+          className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0"
           style={{ opacity: choice ? 1 : 0.5 }}
         >
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {MANA_TYPES.map((m) => (
               <Chip
                 key={m}
@@ -168,11 +145,11 @@ const LoadoutTab = memo(function LoadoutTab() {
                 onClick={() => pick({ mana: m })}
                 testId={`weapon-mana-${m}`}
               >
-                {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+                <ManaName mana={m} />
               </Chip>
             ))}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {RARITY_ORDER.map((r) => (
               <Chip
                 key={r}
@@ -185,32 +162,32 @@ const LoadoutTab = memo(function LoadoutTab() {
             ))}
           </div>
         </fieldset>
-        <div className="delve-panel flex flex-col gap-0.5 p-2.5 text-sm" data-testid="weapon-lines">
+        <div className="k-well flex flex-col gap-1 p-3 text-[14px]" data-testid="weapon-lines">
           <div
-            className="delve-display font-bold"
-            style={{ color: weapon ? RARITY_TEXT[weapon.rarity] : '#d6d3d1' }}
+            className="k-disp text-[20px]"
+            style={{ color: weapon ? RARITY_TEXT[weapon.rarity] : 'var(--k-text)' }}
             data-testid="weapon-name"
           >
             {weapon ? weapon.name : 'Unarmed'}
           </div>
           {weapon &&
             itemStatLines(weapon, registry).map((l, i) => (
-              <div key={i} className="text-stone-300">
+              <div key={i} className="text-[var(--k-text-2)]">
                 {formatStat(registry, l.stat, l.value)}
               </div>
             ))}
           {weapon?.legendary && (
-            <div className="text-orange-300">
+            <div className="text-[var(--k-hot)]">
               {legendaryText(registry, weapon.legendary.id, weapon.legendary.value)}
             </div>
           )}
           {s.loadedWeapon ? (
-            <div className="text-[11px] text-stone-500">
+            <div className="k-caption">
               Your own weapon, from Load my build. Change any option for a clean one.
             </div>
           ) : (
             weapon && (
-              <div className="text-[11px] text-stone-500">
+              <div className="k-caption">
                 A clean weapon: its base line, scaled by rarity and depth. Powers are below.
               </div>
             )
@@ -219,7 +196,7 @@ const LoadoutTab = memo(function LoadoutTab() {
       </Section>
 
       <Section title="Your primary">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {MANA_TYPES.map((m) => (
             <Chip
               key={m}
@@ -227,17 +204,17 @@ const LoadoutTab = memo(function LoadoutTab() {
               onClick={() => s.setPrimary(m)}
               testId={`sandbox-primary-${m}`}
             >
-              {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+              <ManaName mana={m} />
             </Chip>
           ))}
         </div>
-        <p className="text-[11px] text-stone-500">
+        <p className="k-caption m-0">
           Your primary: your basic blows strike with it, except where they pick your secondary.
         </p>
       </Section>
 
       <Section title="Your secondary">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           <Chip pressed={!s.secondary} onClick={() => s.setSecondary(null)} testId="secondary-none">
             None
           </Chip>
@@ -249,11 +226,11 @@ const LoadoutTab = memo(function LoadoutTab() {
               onClick={() => s.setSecondary(m)}
               testId={`secondary-${m}`}
             >
-              {manaStyle(registry, m).icon} {manaStyle(registry, m).name}
+              <ManaName mana={m} />
             </Chip>
           ))}
         </div>
-        <p className="text-[11px] text-stone-500">
+        <p className="k-caption m-0">
           The second element your basic blows can pick (in Abilities, Basic). The default basic
           chain follows your weapon and pair, so binding one gives it the last blow; a chain you
           built keeps its blows.
@@ -261,7 +238,7 @@ const LoadoutTab = memo(function LoadoutTab() {
       </Section>
 
       <Section title="Legendary powers">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {registry.getDelveData().legendaries.map((l) => {
             const on = l.id in s.legendaries;
             // Worn on the loaded gear: on, at the gear's roll, and switched by changing the gear.
@@ -271,25 +248,24 @@ const LoadoutTab = memo(function LoadoutTab() {
               <button
                 key={l.id}
                 type="button"
-                className="delve-panel flex flex-col items-start gap-0.5 p-2 text-left"
-                style={{ borderColor: lit ? '#fb923c' : undefined }}
+                className="k-socket flex flex-col items-start gap-1 p-3 text-left"
+                style={{ borderColor: lit ? 'var(--k-hot)' : undefined }}
                 aria-pressed={lit}
                 disabled={fromGear}
                 onClick={() => s.setLegendary(l.id, !on)}
                 data-testid={`legendary-${l.id}`}
               >
-                <span
-                  className="delve-display text-sm font-bold"
-                  style={{ color: lit ? '#fb923c' : '#d6d3d1' }}
-                >
-                  {lit ? '★' : '☆'} {l.name}
-                  {fromGear && (
-                    <span className="ml-1.5 text-[10px] font-normal normal-case text-stone-400">
-                      from your gear
-                    </span>
-                  )}
+                <span className="flex items-center gap-2">
+                  {lit && <Glyph id="check" size={14} />}
+                  <span
+                    className="k-disp text-[18px]"
+                    style={{ color: lit ? 'var(--k-hot)' : 'var(--k-text)' }}
+                  >
+                    {l.name}
+                  </span>
+                  {fromGear && <span className="k-caption">from your gear</span>}
                 </span>
-                <span className="text-[11px] leading-snug text-stone-400">
+                <span className="k-caption">
                   {legendaryText(registry, l.id, fromGear ? stats.legendaries[l.id] : l.max)}
                 </span>
               </button>
@@ -303,11 +279,10 @@ const LoadoutTab = memo(function LoadoutTab() {
         <div className="flex flex-col gap-1" data-testid="extra-attunement">
           {MANA_TYPES.map((m) => {
             const extra = s.attunement[m] ?? 0;
-            const style = manaStyle(registry, m);
             return (
-              <label key={m} className="flex items-center gap-2 text-xs">
-                <span className="w-20 shrink-0" style={{ color: style.color }}>
-                  {style.icon} {style.name}
+              <label key={m} className="flex items-center gap-2 text-[14px]">
+                <span className="flex w-24 shrink-0 items-center gap-1">
+                  <ManaName mana={m} />
                 </span>
                 <input
                   type="range"
@@ -316,12 +291,12 @@ const LoadoutTab = memo(function LoadoutTab() {
                   step={1}
                   value={extra}
                   onChange={(e) => s.setAttunement(m, Number(e.currentTarget.value))}
-                  className="min-w-0 flex-1"
+                  className="min-w-0 flex-1 accent-[#feae34]"
                   data-testid={`extra-attune-${m}`}
                 />
-                <span className="w-24 shrink-0 text-right text-stone-400">
+                <span className="w-24 shrink-0 text-right text-[var(--k-text-2)]">
                   {stats.attunement[m] - extra} + {extra} ={' '}
-                  <b className="text-stone-100">{stats.attunement[m]}</b>
+                  <b className="text-[var(--k-text)]">{stats.attunement[m]}</b>
                 </span>
               </label>
             );
@@ -329,15 +304,14 @@ const LoadoutTab = memo(function LoadoutTab() {
         </div>
       </Section>
 
-      <button
-        type="button"
-        className="delve-btn delve-btn-gold text-base"
+      <Button
+        variant="primary"
         onClick={() => s.loadMyBuild(useDelveStore.getState().profile)}
-        data-testid="load-my-build"
+        testId="load-my-build"
       >
         Load my build
-      </button>
-      <p className="text-[11px] text-stone-500">
+      </Button>
+      <p className="k-caption m-0">
         Copies your equipped gear, your weapon's chains with their runes, and your pair in. Nothing
         here ever changes your save.
       </p>
@@ -349,8 +323,9 @@ const CAPS = { basic: MAX_CHAIN, primary: MAX_CHAIN, defensive: MAX_CHAIN, ultim
 
 /**
  * The Anvil's chain builder, bound to the sandbox: never locked, any element for
- * an ability, the pair for a blow, every reaction named, and every rune at any
- * tier in up to MAX_SOCKETS sockets a move, free (it's a testing tool).
+ * an ability, the pair for a blow, and every rune at any tier in up to
+ * MAX_SOCKETS sockets a move, free (it's a testing tool), picked in place; then
+ * every reaction, named (the Codex's grid, all discovered).
  */
 const TrainingAbilities = memo(function TrainingAbilities() {
   const chains = useSandboxStore((s) => s.chains);
@@ -368,16 +343,23 @@ const TrainingAbilities = memo(function TrainingAbilities() {
     }),
     [baseId],
   );
+  const reactions = getDelveRegistry().getArpgData().reactions;
   return (
-    <ChainEditor
-      chains={chains}
-      caps={CAPS}
-      stats={stats}
-      locked={false}
-      onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
-      blowElements={secondary ? [primary, secondary] : [primary]}
-      runes={runes}
-    />
+    <div className="flex flex-col gap-6">
+      <ChainEditor
+        chains={chains}
+        caps={CAPS}
+        stats={stats}
+        locked={false}
+        onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
+        blowElements={secondary ? [primary, secondary] : [primary]}
+        runes={runes}
+      />
+      {/* The Codex's grid, one card a row in the dock. */}
+      <div className="[&_.grid-cols-2]:grid-cols-1">
+        <ReactionsGrid reactionsSeen={reactions.map((r) => r.id)} />
+      </div>
+    </div>
   );
 });
 
@@ -398,8 +380,8 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
   return (
     <div className="flex flex-col gap-4" data-testid="targets-tab">
       <Section title="Training dummies">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-stone-500">Resists</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="k-caption">Resists</span>
           <Chip
             pressed={dummyElement === null}
             onClick={() => store().setDummyElement(null)}
@@ -413,39 +395,34 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
               pressed={dummyElement === m}
               onClick={() => store().setDummyElement(m)}
               testId={`dummy-element-${m}`}
+              aria-label={manaStyle(registry, m).name}
               title={`Resists ${manaStyle(registry, m).name} · weak to ${manaStyle(registry, weakness[m]).name}`}
             >
-              {manaStyle(registry, m).icon}
+              <Glyph id={m} size={16} color={manaStyle(registry, m).color} />
             </Chip>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {LAYOUTS.map(([layout, label]) => (
-            <button
+            <Button
               key={layout}
-              type="button"
-              className="delve-btn px-2 py-2 text-xs"
+              size="sm"
               disabled={full}
               onClick={() => actions.addDummies(layout)}
-              data-testid={`add-dummy-${layout}`}
+              testId={`add-dummy-${layout}`}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
         {full && (
-          <div className="text-[11px] text-amber-200" data-testid="dummies-full">
+          <div className="k-caption text-[var(--k-hot)]" data-testid="dummies-full">
             {MAX_DUMMY_GROUPS} groups at most: clear the dummies to add more.
           </div>
         )}
-        <button
-          type="button"
-          className="delve-btn text-sm"
-          onClick={actions.resetDummies}
-          data-testid="reset-dummies"
-        >
-          ↺ Reset dummies
-        </button>
+        <Button size="sm" onClick={actions.resetDummies} testId="reset-dummies">
+          Reset dummies
+        </Button>
       </Section>
 
       <Section title="Monsters">
@@ -474,12 +451,12 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
         >
           {defs.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.icon} {d.name}
+              {d.name}
               {d.id === biome.boss.id ? ' (boss)' : ''}
             </option>
           ))}
         </select>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {KINDS.map(([k, label]) => (
             <Chip
               key={k}
@@ -491,7 +468,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             </Chip>
           ))}
         </div>
-        <label className="flex items-center gap-2 text-xs text-stone-300">
+        <label className="flex items-center gap-2 text-[14px] text-[var(--k-text-2)]">
           Count
           <input
             type="range"
@@ -500,52 +477,37 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
             step={1}
             value={count}
             onChange={(e) => store().setSpawn({ count: Number(e.currentTarget.value) })}
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-1 accent-[#feae34]"
             data-testid="spawn-count"
           />
-          <b className="w-4 text-right">{count}</b>
+          <b className="w-4 text-right text-[var(--k-text)]">{count}</b>
         </label>
-        <button
-          type="button"
-          className="delve-btn text-sm"
-          onClick={() => actions.spawn(def.id, kind, count)}
-          data-testid="spawn-button"
-        >
+        <Button size="sm" onClick={() => actions.spawn(def.id, kind, count)} testId="spawn-button">
           Spawn {count} × {def.name}
-        </button>
+        </Button>
       </Section>
 
       <Section title="Clear">
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            type="button"
-            className="delve-btn px-2 text-xs"
-            onClick={() => actions.clear('monsters')}
-            data-testid="clear-monsters"
-          >
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => actions.clear('monsters')} testId="clear-monsters">
             Monsters
-          </button>
-          <button
-            type="button"
-            className="delve-btn px-2 text-xs"
-            onClick={() => actions.clear('dummies')}
-            data-testid="clear-dummies"
-          >
+          </Button>
+          <Button size="sm" onClick={() => actions.clear('dummies')} testId="clear-dummies">
             Dummies
-          </button>
-          <button
-            type="button"
-            className="delve-btn delve-btn-danger px-2 text-xs"
+          </Button>
+          <Button
+            size="sm"
+            variant="danger"
             onClick={() => actions.clear('all')}
-            data-testid="clear-all"
+            testId="clear-all"
           >
             All
-          </button>
+          </Button>
         </div>
       </Section>
 
       <Section title="Depth">
-        <label className="flex items-center gap-2 text-sm text-stone-300">
+        <label className="flex items-center gap-2">
           <select
             className={SELECT}
             value={depth}
@@ -559,7 +521,7 @@ const TargetsTab = memo(function TargetsTab({ actions }: { actions: TrainingActi
               </option>
             ))}
           </select>
-          <span className="text-xs text-stone-400">
+          <span className="k-caption">
             {registry.getBiomeForDepth(depth).name}: monsters, dummies and your weapon&apos;s item
             level follow depth. A new depth restarts the arena (dummies come back, spawned monsters
             don&apos;t).
@@ -589,35 +551,30 @@ const TogglesTab = memo(function TogglesTab({
           <button
             key={key}
             type="button"
-            className="delve-panel flex items-center justify-between gap-3 p-2.5 text-left"
+            className="k-socket flex items-center justify-between gap-3 p-3 text-left"
             aria-pressed={toggles[key]}
             onClick={() => store().setToggles({ ...toggles, [key]: !toggles[key] })}
             data-testid={`toggle-${key}`}
           >
-            <span className="min-w-0">
-              <span className="delve-display block text-sm font-bold text-stone-100">{label}</span>
-              <span className="block text-[11px] text-stone-400">{text}</span>
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="k-disp text-[18px]">{label}</span>
+              <span className="k-caption">{text}</span>
             </span>
             <span
-              className="delve-display shrink-0 text-xs font-bold"
-              style={{ color: toggles[key] ? '#4ade80' : '#78716c' }}
+              className="k-disp shrink-0 text-[18px]"
+              style={{ color: toggles[key] ? 'var(--k-ok)' : 'var(--k-text-3)' }}
             >
               {toggles[key] ? 'ON' : 'OFF'}
             </span>
           </button>
         ))}
-        <button
-          type="button"
-          className="delve-btn text-sm"
-          onClick={actions.fillCharge}
-          data-testid="fill-charge"
-        >
-          ⚡ Fill charge
-        </button>
+        <Button size="sm" onClick={actions.fillCharge} testId="fill-charge">
+          Fill charge
+        </Button>
       </Section>
 
       <Section title="Slow motion">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {SLOWMO_SPEEDS.map((v) => (
             <Chip
               key={v}
@@ -632,51 +589,38 @@ const TogglesTab = memo(function TogglesTab({
       </Section>
 
       <Section title="Controls">
-        <button
-          type="button"
-          className="delve-btn text-sm"
+        <Button
+          size="sm"
           onClick={() => useDelveStore.getState().setManualAttack(!manual)}
-          data-testid="training-attack-mode"
+          testId="training-attack-mode"
         >
-          Basic attack: {manual ? 'Manual' : 'Auto'} ⇄
-        </button>
-        <button
-          type="button"
-          className="delve-btn text-sm"
-          onClick={onOpenControls}
-          data-testid="training-open-controls"
-        >
-          🎮 Controls
-        </button>
+          Basic attack: {manual ? 'Manual' : 'Auto'}
+        </Button>
+        <Button size="sm" onClick={onOpenControls} testId="training-open-controls">
+          <Glyph id="controls" size={18} /> Controls
+        </Button>
       </Section>
     </div>
   );
 });
 
 /**
- * The Training panel: docked beside the running fight (wide pages with mouse
- * and keyboard) or a sheet over the paused fight (phones, or a controller), as
- * the page decided when it opened. The sheet keeps the controller's focus
- * (`data-pad-scope`), its Close answers B (`data-pad-back`), LB/RB step the
- * tabs (`data-pad-tabs`), and Back to the Anvil (no marker) lets a controller
- * player leave from inside it. Memoised, with memoised tabs, so the HUD's and
- * the meter's refreshes don't re-render every tab.
+ * The Training dock (glass, the HUD's right column): a heading with Close, the
+ * kit's top-level tabs (LB/RB under the pad), and the open tab, which scrolls.
+ * The page decides who has the pad's focus. Memoised, with memoised tabs, so
+ * the HUD's and the meter's refreshes don't re-render every tab.
  */
 export const TrainingPanel = memo(function TrainingPanel({
-  layout,
   tab,
   onTab,
   onClose,
-  onExit,
   actions,
   meter,
   onOpenControls,
 }: {
-  layout: PanelLayout;
   tab: TrainingTab;
   onTab: (tab: TrainingTab) => void;
   onClose: () => void;
-  onExit: () => void;
   actions: TrainingActions;
   meter: MeterSummary;
   onOpenControls: () => void;
@@ -698,95 +642,46 @@ export const TrainingPanel = memo(function TrainingPanel({
     }
   };
 
-  const body = (
-    <div
-      className="flex flex-col gap-3"
+  return (
+    <Panel
+      as="aside"
+      material="glass"
+      aria-label="Training"
+      className="min-h-0 flex-1"
+      title={
+        <span className="flex items-center gap-2">
+          <Glyph id="training" size={20} /> Training
+        </span>
+      }
+      aside={
+        <Button size="sm" variant="quiet" onClick={onClose} testId="training-panel-close">
+          Close
+        </Button>
+      }
+      testId="training-panel"
       onPointerDown={onPointerDown}
       onPointerUp={blurOnPointerUp}
       onKeyDown={onKeyDown}
       onChange={onChange}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="delve-display text-lg font-bold uppercase tracking-widest text-amber-300">
-          🎯 Training
-        </span>
-        <span className="flex gap-1.5">
-          <button
-            type="button"
-            className="delve-btn px-3 py-1 text-sm"
-            onClick={onExit}
-            data-testid="training-panel-exit"
-          >
-            ◂ Anvil
-          </button>
-          {layout === 'sheet' && (
-            <button
-              type="button"
-              className="delve-btn px-3 py-1 text-sm"
-              onClick={onClose}
-              data-pad-back
-              data-testid="training-panel-close"
-            >
-              Close
-            </button>
-          )}
-        </span>
+      {/* Five tabs in the dock's 360 px: they wrap to a second row. */}
+      <div className="[&_.k-tabs]:flex-wrap [&_.k-tabs]:gap-x-4 [&_.k-tabs]:gap-y-0">
+        <Tabs
+          tabs={TABS}
+          value={tab}
+          onChange={onTab}
+          level="top"
+          size="md"
+          aria-label="Training"
+        />
       </div>
-      <div className="flex gap-1 rounded-xl bg-black/30 p-1" role="tablist" data-pad-tabs>
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => onTab(id)}
-            className="delve-display flex-1 rounded-lg py-1.5 text-[11px] font-bold uppercase tracking-wide"
-            style={{
-              background: tab === id ? 'linear-gradient(180deg,#2c2c3e,#1f1f2c)' : 'transparent',
-              color: tab === id ? '#fde68a' : '#8a8a9a',
-            }}
-            data-testid={`training-tab-${id}`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="k-scroll -mr-2 min-h-0 flex-1 pr-2">
+        {tab === 'loadout' && <LoadoutTab />}
+        {tab === 'abilities' && <TrainingAbilities />}
+        {tab === 'targets' && <TargetsTab actions={actions} />}
+        {tab === 'toggles' && <TogglesTab actions={actions} onOpenControls={onOpenControls} />}
+        {tab === 'meter' && <MeterTab meter={meter} onReset={actions.resetMeter} />}
       </div>
-      {tab === 'loadout' && <LoadoutTab />}
-      {tab === 'abilities' && <TrainingAbilities />}
-      {tab === 'targets' && <TargetsTab actions={actions} />}
-      {tab === 'toggles' && <TogglesTab actions={actions} onOpenControls={onOpenControls} />}
-      {tab === 'meter' && <MeterTab meter={meter} onReset={actions.resetMeter} />}
-    </div>
-  );
-
-  if (layout === 'dock')
-    return (
-      <aside
-        className="absolute inset-y-0 right-0 z-30 overflow-y-auto border-l border-white/10 p-3"
-        style={{ width: DOCK_WIDTH, background: 'linear-gradient(180deg,#16161f,#0e0e14)' }}
-        aria-label="Training"
-        data-testid="training-panel"
-        data-layout="dock"
-      >
-        {body}
-      </aside>
-    );
-  return (
-    <div
-      className="absolute inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center"
-      data-pad-scope
-    >
-      <div
-        className="delve-panel max-h-[88%] w-full max-w-[560px] overflow-y-auto p-3"
-        style={{ paddingBottom: 'calc(12px + var(--spacing-safe-bottom))' }}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Training"
-        data-testid="training-panel"
-        data-layout="sheet"
-      >
-        {body}
-      </div>
-    </div>
+    </Panel>
   );
 });

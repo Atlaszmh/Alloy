@@ -45,9 +45,8 @@ describe('RunePicker', () => {
         onClose={onClose}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Socket a rune' })).toHaveAttribute(
-      'aria-modal',
-      'true',
+    expect(screen.getByRole('group', { name: 'Socket a rune' })).toBe(
+      screen.getByTestId('rune-picker'),
     );
     expect(screen.getByTestId('rune-picker')).toHaveAttribute('data-pad-scope');
     expect(screen.getByRole('button', { name: 'Split I ×2' })).toHaveAccessibleDescription(
@@ -69,7 +68,7 @@ describe('RunePicker', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("is a modal: Back has the focus and is the pad's back; Escape, a pick or the backdrop close it, the focus back on its opener", () => {
+  it("Back has the focus and is the pad's back; Escape or a pick close it, the focus back on its opener", () => {
     render(<Harness />);
     const opener = screen.getByRole('button', { name: 'Socket 1' });
     opener.focus();
@@ -78,32 +77,19 @@ describe('RunePicker', () => {
     expect(back).toHaveFocus();
     expect(back).toHaveAttribute('data-pad-back');
     expect(back).toHaveAttribute('data-testid', 'rune-picker-close');
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    fireEvent.keyDown(screen.getByTestId('rune-picker'), { key: 'Escape' });
     expect(screen.queryByTestId('rune-picker')).toBeNull();
     expect(opener).toHaveFocus();
     fireEvent.click(opener);
     fireEvent.click(screen.getByRole('button', { name: 'Split I ×2' }));
     expect(screen.queryByTestId('rune-picker')).toBeNull();
     expect(opener).toHaveFocus();
-    fireEvent.click(opener);
-    fireEvent.click(screen.getByTestId('rune-picker'));
-    expect(screen.queryByTestId('rune-picker')).toBeNull();
-    expect(opener).toHaveFocus();
   });
 
-  it("the sheet sits in the kit's UI layer, over the screen", () => {
-    render(<Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Socket 1' }));
-    expect(screen.getByTestId('rune-picker').parentElement).toBe(
-      document.getElementById('delve-ui-layer'),
-    );
-  });
-
-  it('inline, it is drawn in place as its own pad scope: Back has the focus, Escape closes it', () => {
+  it('is drawn in place as its own pad scope, no sheet: Back has the focus, Escape closes it', () => {
     const onClose = vi.fn();
     const { container } = render(
       <RunePicker
-        variant="inline"
         candidates={[{ rune: { id: 'split', tier: 1 }, count: 2 }]}
         onPick={() => {}}
         onClose={onClose}
@@ -134,7 +120,7 @@ describe('RunePicker', () => {
         onClose={onClose}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Linger II' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Linger II' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Linger II, dormant' })).toBeInTheDocument();
     expect(screen.getByTestId('rune-dormant')).toHaveTextContent('Works on heavy and hold blows');
     expect(screen.getByText('Replace with')).toBeInTheDocument();
@@ -174,7 +160,7 @@ describe('RunePicker', () => {
     const { rerender } = render(
       <RunePicker candidates={[{ rune, count: 1 }]} onPick={() => {}} onClose={() => {}} />,
     );
-    expect(screen.getByRole('dialog')).toHaveTextContent('68.75%');
+    expect(screen.getByTestId('rune-picker')).toHaveTextContent('68.75%');
     rerender(
       <RunePicker
         candidates={[{ rune, count: 1 }]}
@@ -183,7 +169,7 @@ describe('RunePicker', () => {
         onClose={() => {}}
       />,
     );
-    expect(screen.getByRole('dialog')).toHaveTextContent('84.375%');
+    expect(screen.getByTestId('rune-picker')).toHaveTextContent('84.375%');
   });
 
   it('with nothing that fits, says so', () => {

@@ -552,12 +552,20 @@ html[data-input='gamepad'] .delve-ui :focus {
   cursor: not-allowed;
 }
 
+/* A count on a tab (Loadout's NEW finds, Skills' unapplied changes): a pip like the tiles' NEW tag. */
 .k-tab-badge {
-  font-family: var(--k-font-body);
-  font-size: 14px;
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 4px;
+  vertical-align: 3px;
+  font-family: var(--k-font-label);
+  font-size: 13px;
+  font-size-adjust: none;
+  line-height: 1.2;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--k-text-2);
+  color: #3e2731;
+  background: #fee761;
   text-shadow: none;
 }
 

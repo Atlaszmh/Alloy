@@ -228,7 +228,7 @@ export function MoveInspector({ ed, anvil }: { ed: ChainEditorModel; anvil: Anvi
         )}
       </fieldset>
       {ed.picker ? (
-        <RunePicker variant="inline" {...ed.picker} />
+        <RunePicker {...ed.picker} />
       ) : ab ? (
         <div className="k-well flex flex-col gap-2 px-3.5 py-3">
           <MoveNumbers

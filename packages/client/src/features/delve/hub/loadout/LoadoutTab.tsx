@@ -123,7 +123,11 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
       if (uid) a[act](uid);
     };
     const prompts: Prompt[] = [
-      { id: 'select', label: 'Select', binding: { mouse: 'click', pad: 'a' } },
+      {
+        id: 'select',
+        label: mode === 'pause' ? 'Inspect' : 'Select',
+        binding: { mouse: 'click', pad: 'a' },
+      },
       { id: 'equip', label: 'Equip', binding: { mouse: 'rmb', pad: 'a' } },
       {
         id: 'compare',

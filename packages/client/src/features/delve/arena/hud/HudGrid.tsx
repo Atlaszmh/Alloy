@@ -13,6 +13,10 @@ export interface HudGridProps {
   testId?: string;
   /** Laid on the grid itself, e.g. the BossBar (3A's addition to the contract). */
   children?: ReactNode;
+  /** The right column's width in design px: 340, or the Training Grounds' 400 px dock (3F). */
+  rightWidth?: number;
+  /** Under a screen (the stop, the pause): no focus or click reaches it. */
+  inert?: boolean;
 }
 
 /**
@@ -24,7 +28,16 @@ export interface HudGridProps {
  * window's width less the right column's left edge (0 while it is empty), and its height less the life bar's top edge
  * (the dock's while there is none).
  */
-export function HudGrid({ top, right, dock, onInsets, testId, children }: HudGridProps) {
+export function HudGrid({
+  top,
+  right,
+  dock,
+  onInsets,
+  testId,
+  children,
+  rightWidth = 340,
+  inert,
+}: HudGridProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -63,8 +76,10 @@ export function HudGrid({ top, right, dock, onInsets, testId, children }: HudGri
 
   return (
     <div
-      className="delve-ui delve-hud-zoom pointer-events-none absolute inset-6 z-20 grid grid-cols-[380px_minmax(0,1fr)_340px] grid-rows-[48px_minmax(0,1fr)] gap-4"
+      className="delve-ui delve-hud-zoom pointer-events-none absolute inset-6 z-20 grid grid-rows-[48px_minmax(0,1fr)] gap-4"
+      style={{ gridTemplateColumns: `380px minmax(0,1fr) ${rightWidth}px` }}
       data-testid={testId}
+      inert={inert}
     >
       <div
         ref={topRef}

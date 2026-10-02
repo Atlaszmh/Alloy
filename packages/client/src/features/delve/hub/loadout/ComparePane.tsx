@@ -220,9 +220,17 @@ export function ComparePane({
         )}
 
         {locked ? (
-          <p className="k-well p-3 text-[16px] text-[var(--k-hot)]" data-testid="equip-locked">
-            Equip at the Anvil, between dives
-          </p>
+          <div className="flex flex-col gap-2.5 border-[3px] border-[var(--k-wood-1)] bg-[var(--k-wood-0)] p-4">
+            <span className="flex items-center gap-3">
+              <Glyph id="lock" size={24} />
+              <span className="k-disp text-[24px] text-[var(--k-hot)]" data-testid="equip-locked">
+                Locked during the dive
+              </span>
+            </span>
+            <span className="text-[16px] text-[var(--k-wood-text)]">
+              Equip it at the Anvil between dives, or take Equip as is at the next stop.
+            </span>
+          </div>
         ) : (
           <div className="flex flex-col gap-2.5">
             {!inBag ? (

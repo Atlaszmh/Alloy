@@ -48,14 +48,14 @@ export function SkillList({
   const weapon = anvil.weapon ? registry.getGearBase(anvil.weapon.baseId).name : 'your fists';
 
   return (
-    <aside className="flex min-h-0 flex-col gap-3" aria-label="Skills">
+    <aside className="k-scroll flex min-h-0 flex-col gap-2" aria-label="Skills">
       <span className="k-label pl-1">Skills on {weapon}</span>
       <div
         role="tablist"
         aria-label="Skills"
         aria-orientation="vertical"
         data-pad-tabs="sub"
-        className="flex flex-col gap-3"
+        className="flex flex-col gap-2"
       >
         {CHAIN_SKILLS.map((s) => {
           const chain = chains[s];
@@ -76,7 +76,7 @@ export function SkillList({
               aria-selected={on}
               className="k-panel k-plate text-left"
               style={{
-                padding: '14px 16px',
+                padding: '12px 16px',
                 gap: 8,
                 borderColor: on ? 'var(--k-hot)' : undefined,
                 background: on ? 'var(--k-wood-0)' : undefined,
@@ -136,7 +136,7 @@ function ManaPair({ stats, onMana }: { stats: HeroStats; onMana: () => void }) {
   const overtake = overtakeProgress(registry, profile);
   return (
     <div
-      className="k-panel k-plate mt-auto"
+      className="k-panel k-plate mt-auto flex-none"
       style={{ padding: 16, gap: 10 }}
       data-testid="mana-pair"
     >

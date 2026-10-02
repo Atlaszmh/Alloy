@@ -134,7 +134,7 @@ export function EquippedPane({
         {rows.map(([label, value, mana]) => (
           <div
             key={label}
-            className="flex justify-between border-b-2 border-[var(--k-steel-1)] py-1"
+            className="flex justify-between border-b-2 border-[var(--k-steel-1)] py-0.5"
           >
             <dt className="text-[var(--k-text-3)]">{label}</dt>
             <dd className="font-bold" style={mana ? { color: 'var(--k-mana)' } : undefined}>
@@ -154,7 +154,7 @@ export function EquippedPane({
           <span className="k-label">Attunement</span>
           <span className="k-caption">Skills ›</span>
         </span>
-        <AttunementBars stats={stats} elements={elements} />
+        <AttunementBars stats={stats} elements={elements} compact />
       </button>
 
       {weapon && slots && (

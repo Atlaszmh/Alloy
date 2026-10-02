@@ -16,6 +16,7 @@ vi.mock('@/features/gamepad/gamepad-hub', () => ({
 import { ControlsPanel } from '../ControlsPanel';
 import { DEFAULT_CONTROLS, exportControls } from '../controls';
 import { useControlsStore } from '@/stores/controlsStore';
+import { MANUAL_ATTACK_KEY, useDelveStore } from '@/stores/delveStore';
 import { attachPromptKeys } from '@/features/delve/kit/prompts';
 
 const config = () => useControlsStore.getState().config;
@@ -63,6 +64,19 @@ describe('ControlsPanel', () => {
     expect(config().deadzone.right).toBeCloseTo(0.25);
     fireEvent.change(screen.getByTestId('aim-reach'), { target: { value: '0.6' } });
     expect(config().aimReach).toBeCloseTo(0.6);
+  });
+
+  it("switches the basic attack between Auto and Manual, this device's preference", () => {
+    useDelveStore.getState().setManualAttack(false);
+    render(<ControlsPanel onClose={() => {}} />);
+    const toggle = screen.getByTestId('attack-mode-toggle');
+    expect(toggle).toHaveTextContent('Basic attack: Auto');
+    fireEvent.click(toggle);
+    expect(useDelveStore.getState().manualAttack).toBe(true);
+    expect(localStorage.getItem(MANUAL_ATTACK_KEY)).toBe('1');
+    expect(toggle).toHaveTextContent('Basic attack: Manual');
+    fireEvent.click(toggle);
+    expect(useDelveStore.getState().manualAttack).toBe(false);
   });
 
   it('resets to the default, and copies the setup to send over', async () => {

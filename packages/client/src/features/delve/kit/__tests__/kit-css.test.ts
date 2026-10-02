@@ -56,7 +56,6 @@ describe('kit.css', () => {
       ['.delve-panel', 'border: 6px solid #733e39;'],
       ['.delve-tile', 'border: 3px solid;'],
       ['.delve-chip', 'background: #3a4466;'],
-      ['.delve-sheet', 'border: 4px solid #3a4466;'],
       ['.delve-hpbar', 'background: #181425;'],
     ];
     for (const [selector, look] of looks) {

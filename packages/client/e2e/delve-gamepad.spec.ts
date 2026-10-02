@@ -185,7 +185,7 @@ async function padWalk(page: Page, id: string): Promise<void> {
 }
 
 test.describe('Delve with a controller', () => {
-  test('G01: Menu opens the dive menu, its first control focused; A toggles it; B resumes', async ({
+  test('G01: Menu opens the pause with Resume focused; RB steps its tabs, skipping Forge; B resumes; Menu opens it again, and A on Resume resumes', async ({
     page,
   }) => {
     await setup(page, true);
@@ -194,15 +194,26 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
 
     await tap(page, BUTTON.menu);
-    const toggle = page.getByTestId('attack-mode-toggle');
-    await expect(toggle).toBeVisible();
-    await expect(toggle).toContainText('Auto');
-    // The pad has the input lock: the focus goes straight to the menu's first control.
-    await expect(toggle).toBeFocused();
-    await tap(page, BUTTON.a);
-    await expect(toggle).toContainText('Manual');
+    const pause = page.getByTestId('pause-screen');
+    const resume = pause.getByTestId('pause-resume');
+    await expect(pause).toBeVisible();
+    // The pad has the input lock: the focus goes straight to Resume, on the Loadout tab.
+    await expect(resume).toBeFocused();
+    await expect(pause.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.rb);
+    await expect(pause.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    // The Forge is locked mid-dive: RB steps over it.
+    await tap(page, BUTTON.rb);
+    await expect(pause.getByTestId('tab-codex')).toHaveAttribute('aria-selected', 'true');
+    await expect(pause.getByTestId('tab-forge')).toHaveAttribute('aria-selected', 'false');
     await tap(page, BUTTON.b);
-    await expect(toggle).toBeHidden();
+    await expect(pause).toBeHidden();
+
+    await tap(page, BUTTON.menu);
+    await expect(pause).toBeVisible();
+    await expect(resume).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect(pause).toBeHidden();
   });
 
   test('G02: LT dodges, and the hints switch to the controller', async ({ page }) => {
@@ -257,7 +268,7 @@ test.describe('Delve with a controller', () => {
     });
   });
 
-  test('G05: rebind the dodge to A from the Controls editor mid-dive, and A dodges', async ({
+  test("G05: rebind the dodge to A from the pause's Controls editor, and A dodges", async ({
     page,
   }) => {
     await setup(page, false);
@@ -275,7 +286,7 @@ test.describe('Delve with a controller', () => {
     await tap(page, BUTTON.b); // closes the editor
     await expect(page.getByTestId('controls-panel')).toBeHidden();
     await tap(page, BUTTON.b); // resumes the dive
-    await expect(page.getByTestId('attack-mode-toggle')).toBeHidden();
+    await expect(page.getByTestId('pause-screen')).toBeHidden();
 
     expect(await tapAndReadCharges(page, BUTTON.a)).toBe('1');
     await expect(dodge).toContainText('A');

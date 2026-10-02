@@ -78,6 +78,12 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('ability-2')).toHaveCount(0);
     await expect(page.getByTestId('mana-bar')).toBeVisible();
     await expect(page.getByTestId('dodge-button')).toBeVisible();
+    // Esc pauses the dive over the arena; Esc again (Resume) returns to the fight.
+    await page.keyboard.press('Escape');
+    const pause = page.getByTestId('dive-pause');
+    await expect(pause).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(pause).toBeHidden();
 
     const door = page.getByTestId('door-choice');
     const summary = page.getByTestId('dive-summary');
@@ -102,26 +108,24 @@ test.describe('Delve loot loop', () => {
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
-    // Inspected from the right column's "Found this floor" log.
+    // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
     await expect(loot).toBeVisible({ timeout: 60_000 });
+    const name = (await loot.locator('span.truncate').textContent())!;
     await loot.click();
-
-    const sheet = page.getByTestId('item-sheet');
-    await expect(sheet).toBeVisible();
-    await expect(page.getByTestId('item-name')).not.toBeEmpty();
-    await expect(page.getByTestId('item-compare')).toBeVisible();
+    const pause = page.getByTestId('dive-pause');
+    await expect(pause).toBeVisible();
+    // The compare pane shows the find it was opened on.
+    await expect(pause.getByTestId('item-sheet')).toContainText(name);
     // Gear is locked mid-dive.
-    await expect(page.getByTestId('equip-button')).toHaveCount(0);
-    await expect(sheet.getByTestId('equip-locked')).toHaveText('Equip at the Anvil, between dives');
-    await page.getByRole('button', { name: 'Close' }).click();
-    await expect(sheet).toBeHidden();
+    await expect(pause.getByTestId('equip-button')).toHaveCount(0);
+    await expect(pause.getByTestId('equip-locked')).toHaveText('Locked during the dive');
 
     // Abandon the dive (items are kept), and equip it at the Anvil (answering an off-pair
     // item's bind choice, which the compare pane shows in place of Equip; the pane stays).
-    await page.getByRole('button', { name: 'Dive menu' }).click();
-    await page.getByRole('button', { name: 'Abandon dive (lose bounty)' }).click();
+    await pause.getByRole('button', { name: 'Abandon · lose bounty' }).click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
+    const sheet = page.getByTestId('item-sheet');
     await page.getByTestId('bag-item').first().click();
     const notNow = page.getByTestId('bind-prompt-not-now');
     if (await notNow.isVisible()) await notNow.click();
@@ -129,7 +133,7 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toContainText('Equipped · your');
   });
 
-  test('D03: the door screen offers a power-up, and a door leads to the next depth', async ({
+  test('D03: the stop shows the floor, a power-up expanding in place, and a door to the next depth', async ({
     page,
   }) => {
     await seedProfile(page);
@@ -138,15 +142,20 @@ test.describe('Delve loot loop', () => {
 
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: 60_000 });
-    // The stop offers a power-up: the first card's picker opens and goes back, and skipping it is
-    // taking a door.
-    const stop = page.getByTestId('stop');
-    await expect(stop).toBeVisible();
-    await stop.locator('[data-testid^="stop-"]').first().click();
-    const picker = page.getByTestId('stop-picker');
+    await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
+    await expect(door.getByTestId('floor-finds')).toContainText(
+      'Already banked: yours even if you abandon.',
+    );
+    // The first card expands in place to its picker; Esc presses the picker's Back and the
+    // focus returns to the card. Skipping the power-up is taking a door.
+    const stop = door.getByTestId('stop');
+    const card = stop.locator('[data-testid^="stop-"]').first();
+    await card.click();
+    const picker = stop.getByTestId('stop-picker');
     await expect(picker).toBeVisible();
-    await picker.getByRole('button', { name: 'Back' }).click();
+    await page.keyboard.press('Escape');
     await expect(picker).toBeHidden();
+    await expect(card).toBeFocused();
     await door.locator('[data-testid^="door-"]').first().click();
     await expect(door).toBeHidden();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
@@ -183,12 +192,15 @@ test.describe('Delve loot loop', () => {
     expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
   });
 
-  test('D05: basic attacks switch between auto and manual from the dive menu', async ({ page }) => {
+  test("D05: basic attacks switch between auto and manual from the pause's Controls", async ({
+    page,
+  }) => {
     await seedProfile(page);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
     await page.getByRole('button', { name: 'Dive menu' }).click();
+    await page.getByTestId('open-controls').click();
     const toggle = page.getByTestId('attack-mode-toggle');
     await expect(toggle).toContainText('Auto');
     await toggle.click();
@@ -260,17 +272,17 @@ test.describe('Delve loot loop', () => {
     await expect(page.getByTestId('item-mana')).toContainText('Frost');
   });
 
-  test('D09: Esc opens and closes the dive menu, and in the Controls editor closes only the editor', async ({
+  test('D09: Esc opens and closes the pause, and in the Controls editor closes only the editor', async ({
     page,
   }) => {
     await seedProfile(page, 4242, false);
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
     await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
-    const menu = page.getByTestId('attack-mode-toggle');
+    const menu = page.getByTestId('pause-screen');
     await page.keyboard.press('Escape');
     await expect(menu).toBeVisible();
-    // Paused, Esc presses the menu's Resume: once, so the menu doesn't open again.
+    // Paused, Esc presses the pause's Resume: once, so the pause doesn't open again.
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
     await page.keyboard.press('Escape');

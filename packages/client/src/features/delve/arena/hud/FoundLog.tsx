@@ -16,7 +16,8 @@ const GAP = 6;
 const ROW_CLASS =
   'flex h-8 w-full flex-none items-center gap-[10px] bg-[var(--k-well)] px-2 text-left text-[14px]';
 
-const MARK = {
+/** A find's mark against what you wear (`deltaMark`), here and on the stop's found panel. */
+export const MARK = {
   up: { text: '▲', color: 'var(--k-ok)', label: 'upgrade' },
   down: { text: '▼', color: 'var(--k-bad)', label: 'downgrade' },
   potential: { text: '◇', color: 'var(--k-mana)', label: 'potential upgrade' },
@@ -37,27 +38,19 @@ function rowsThatFit(list: HTMLElement): number | null {
   return h > 0 ? Math.max(1, Math.floor((h + GAP) / (ROW + GAP))) : null;
 }
 
-function Swatch({ color }: { color: string }): ReactElement {
-  return <span aria-hidden className="size-[10px] flex-none" style={{ background: color }} />;
-}
-
 /**
- * "Found this floor": each pickup since the floor began, newest first (the items, then the
- * runes), as many as fit, then "+n more". An item shows its card on hover and opens on a click;
- * ▲ marks an upgrade (to equip at the Anvil), ◇ a weapon better only with your moveset moved
- * onto it (Transfer), ▼ a downgrade.
+ * This floor's finds (decided item 21), for the Found log and the stop: the items since
+ * `floorDropsFrom`, newest first, each with its Power change as a home for your moveset (`delta`)
+ * and as it is (`asIs`), and the runes since `floorRunesFrom`, grouped.
  */
-export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): ReactElement {
+export function useFloorFinds() {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const diveDrops = useDelveStore((s) => s.diveDrops);
   const diveRunes = useDelveStore((s) => s.diveRunes);
   const dropsFrom = useDelveStore((s) => s.floorDropsFrom);
   const runesFrom = useDelveStore((s) => s.floorRunesFrom);
-  const listRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(Infinity);
   const depth = referenceDepth(profile);
-
   const items = useMemo(() => {
     const out: { item: GearItem; delta: number | null; asIs: number | null }[] = [];
     for (const uid of diveDrops.slice(0, diveDrops.length - dropsFrom)) {
@@ -75,6 +68,24 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
     return out;
   }, [diveDrops, dropsFrom, profile, registry, depth]);
   const runes = countRunes(diveRunes.slice(0, diveRunes.length - runesFrom));
+  return { items, runes };
+}
+
+function Swatch({ color }: { color: string }): ReactElement {
+  return <span aria-hidden className="size-[10px] flex-none" style={{ background: color }} />;
+}
+
+/**
+ * "Found this floor": each pickup since the floor began, newest first (the items, then the
+ * runes), as many as fit, then "+n more". An item shows its card on hover and opens on a click;
+ * ▲ marks an upgrade (to equip at the Anvil), ◇ a weapon better only with your moveset moved
+ * onto it (Transfer), ▼ a downgrade.
+ */
+export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): ReactElement {
+  const registry = getDelveRegistry();
+  const listRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(Infinity);
+  const { items, runes } = useFloorFinds();
 
   // As many rows as fit: again after each render (a panel above may have come or gone) and on a
   // resize of the list or the column.

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import {
   generateItem,
@@ -15,6 +15,7 @@ import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 import { pricedRegistry } from '../runes/__tests__/priced-registry';
+import { attachPromptKeys } from '../kit/prompts';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -24,6 +25,7 @@ const helm = generateItem(
   { uid: 'h1', ilvl: 3, rarity: 'rare', slot: 'helm', mana: 'fire' },
   new SeededRNG(4),
 );
+const back = () => screen.getByRole('button', { name: 'Back' });
 
 /** At the door screen after depth 1, a stop offering `offers`; the panel reads the store's. */
 function atStop(offers: StopKind[], over: Partial<ReturnType<typeof store>['profile']> = {}) {
@@ -37,35 +39,38 @@ function atStop(offers: StopKind[], over: Partial<ReturnType<typeof store>['prof
   const Panel = () => {
     const stop = useDelveStore((s) => s.profile.dive!.stop!);
     return (
-      <>
+      <div data-pad-scope>
         <StopPanel stop={stop} />
         <button data-testid="door-first">The first door</button>
         <ToastContainer />
-      </>
+      </div>
     );
   };
   return render(<Panel />);
 }
 
-describe('StopPanel (the door screen)', () => {
+describe('StopPanel (the stop between depths)', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
   });
 
-  it('shows the offered kinds as cards, and once one is taken, says so', () => {
+  it('shows the offered kinds as cards that expand in place to their picker, and once one is taken, says so', () => {
     atStop(['equip', 'upgrade']);
-    expect(screen.getByTestId('stop')).toHaveTextContent('A power-up: take one, or skip it');
+    const stop = screen.getByTestId('stop');
+    expect(stop).toHaveTextContent('Take one power-up');
     expect(screen.getByTestId('stop-equip')).toHaveTextContent('Equip');
+    expect(screen.getByTestId('stop-equip')).toHaveTextContent('PriceFree');
     expect(screen.getByTestId('stop-upgrade')).toHaveTextContent('Upgrade');
     expect(screen.queryByTestId('stop-slot')).toBeNull();
     fireEvent.click(screen.getByTestId('stop-equip'));
-    expect(screen.getByTestId('stop-picker')).toHaveAttribute('data-pad-scope');
-    // Over the whole screen (not inside the door list), with the pad's back button.
-    expect(screen.getByTestId('stop-picker').parentElement).toBe(document.body);
-    expect(screen.getByText('Back')).toHaveAttribute('data-pad-back');
-    expect(screen.getByTestId('stop-picker')).toHaveClass('fixed', 'inset-0', 'text-white');
-    fireEvent.click(screen.getByText('Back'));
+    // In place of the cards, inside the stop: its own pad scope, with the pad's back button.
+    const picker = screen.getByTestId('stop-picker');
+    expect(stop).toContainElement(picker);
+    expect(screen.queryByTestId('stop-upgrade')).toBeNull();
+    expect(picker).toHaveAttribute('data-pad-scope');
+    expect(back()).toHaveAttribute('data-pad-back');
+    fireEvent.click(back());
     expect(screen.queryByTestId('stop-picker')).toBeNull();
     fireEvent.click(screen.getByTestId('stop-equip'));
     fireEvent.click(screen.getByTestId('stop-equip-item'));
@@ -75,24 +80,19 @@ describe('StopPanel (the door screen)', () => {
     expect(screen.getByText('Equip: done')).toBeInTheDocument();
   });
 
-  it('the picker is a modal dialog: Back has the focus, Escape closes it, and the focus returns to its card', () => {
+  it('Back has the focus; Escape closes the picker, and the focus returns to its card', () => {
     atStop(['equip', 'upgrade']);
-    const card = screen.getByTestId('stop-upgrade');
-    card.focus();
-    fireEvent.click(card);
-    const dialog = screen.getByRole('dialog', { name: 'Upgrade' });
-    expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByText('Back')).toHaveFocus();
-    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.click(screen.getByTestId('stop-upgrade'));
+    const picker = screen.getByRole('group', { name: 'Upgrade' });
+    expect(back()).toHaveFocus();
+    fireEvent.keyDown(picker, { key: 'Escape' });
     expect(screen.queryByTestId('stop-picker')).toBeNull();
-    expect(card).toHaveFocus();
+    expect(screen.getByTestId('stop-upgrade')).toHaveFocus();
   });
 
   it('after a take, the focus goes on to the first door, not the card that has gone', () => {
     atStop(['equip', 'upgrade']);
-    const card = screen.getByTestId('stop-equip');
-    card.focus();
-    fireEvent.click(card);
+    fireEvent.click(screen.getByTestId('stop-equip'));
     fireEvent.click(screen.getByTestId('stop-equip-item'));
     expect(screen.getByTestId('stop-taken')).toBeInTheDocument();
     expect(screen.getByTestId('door-first')).toHaveFocus();
@@ -111,7 +111,7 @@ describe('StopPanel (the door screen)', () => {
     atStop(['slot'], { links: 1, scrap: 20 });
     fireEvent.click(screen.getByTestId('stop-slot'));
     expect(screen.getByTestId('stop-slot-primary')).toHaveTextContent(
-      'Primary 1/5 · + a slot · 🔗 1 · ⚙ 20',
+      'Primary 1/5 · + a slot · 1 Link · 20 scrap',
     );
     const basic = screen.getByTestId('stop-slot-basic');
     expect(basic).toBeDisabled(); // its 4th slot: 3 Links
@@ -146,7 +146,9 @@ describe('StopPanel (the door screen)', () => {
     fireEvent.click(screen.getByTestId('chain-skill-primary'));
     fireEvent.click(screen.getByTestId('form-lance'));
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Fire Lance');
-    expect(screen.getByTestId('stop-move-take')).toHaveTextContent("Change Primary's move 1 · ✦ 5");
+    expect(screen.getByTestId('stop-move-take')).toHaveTextContent(
+      "Change Primary's move 1 · 5 Mana Dust",
+    );
     fireEvent.click(screen.getByTestId('stop-move-take'));
     expect(chains().primary.moves[0].form).toBe('lance');
     expect(chains().basic[0].kind).toBe('light');
@@ -213,7 +215,8 @@ describe('StopPanel (the door screen)', () => {
 
   it('sockets a fitting pouch rune into an empty socket, free, and the focus goes on to the doors', () => {
     const picker = atRuneStop();
-    expect(screen.getByTestId('stop-rune')).toHaveTextContent('Socket a rune');
+    // Inline, inside the stop's picker: no sheet over the screen.
+    expect(screen.getByTestId('stop-picker')).toContainElement(screen.getByTestId('rune-picker'));
     // Widen doesn't fit a Bolt.
     expect(picker.queryByRole('button', { name: /^Widen/ })).toBeNull();
     fireEvent.click(picker.getByRole('button', { name: 'Split I ×1' }));
@@ -234,11 +237,27 @@ describe('StopPanel (the door screen)', () => {
 
   it("Escape closes the rune picker, not the stop's", () => {
     atRuneStop();
-    fireEvent.keyDown(within(screen.getByTestId('rune-picker')).getByRole('dialog'), {
-      key: 'Escape',
-    });
+    fireEvent.keyDown(screen.getByTestId('rune-picker'), { key: 'Escape' });
     expect(screen.queryByTestId('rune-picker')).toBeNull();
     expect(screen.getByTestId('stop-picker')).toBeInTheDocument();
     expect(store().profile.dive!.stop!.taken).toBe(false);
+  });
+
+  it('Escape with the focus outside the open rune picker (on its socket) still closes only the rune picker', () => {
+    const release = attachPromptKeys();
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+    try {
+      atRuneStop();
+      const move = screen.getByTestId('stop-rune-move-primary-0');
+      within(move).getByRole('button', { name: 'Socket 1: empty' }).focus();
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+      expect(screen.queryByTestId('rune-picker')).toBeNull();
+      expect(screen.getByTestId('stop-picker')).toBeInTheDocument();
+    } finally {
+      box.mockRestore();
+      release();
+    }
   });
 });

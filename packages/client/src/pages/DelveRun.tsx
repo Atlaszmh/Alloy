@@ -8,18 +8,16 @@ import {
   type GearItem,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer, showToast } from '@/components/Toast';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveNotices } from '@/features/delve/useDelveNotices';
-import { DoorChoice } from '@/features/delve/DoorChoice';
 import { DiveSummary } from '@/features/delve/DiveSummary';
 import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
-import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
-import { LootTray } from '@/features/delve/LootTray';
+import { PauseScreen } from '@/features/delve/hub/PauseScreen';
+import type { HubLink } from '@/features/delve/hub/types';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
 import { HudGrid, type Insets } from '@/features/delve/arena/hud/HudGrid';
 import { PurseBar } from '@/features/delve/arena/hud/PurseBar';
@@ -27,6 +25,7 @@ import { SkillDock } from '@/features/delve/arena/hud/SkillDock';
 import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
 import { useQuests } from '@/features/delve/quests/useQuests';
+import { StopScreen } from '@/features/delve/stop/StopScreen';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
 import '@/features/delve/delve.css';
@@ -83,11 +82,9 @@ export function DelveRun() {
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [insets, setInsets] = useState<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
-  const [sheetUid, setSheetUid] = useState<string | null>(null);
+  const [pause, setPause] = useState<{ link?: HubLink } | null>(null);
   const [fanfares, setFanfares] = useState<{ item: GearItem; firstTime: boolean }[]>([]);
   const [banners, setBanners] = useState<BannerState[]>([]);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [controlsOpen, setControlsOpen] = useState(false);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
   useDelveNotices(!!dive);
@@ -147,8 +144,7 @@ export function DelveRun() {
 
   const choosing = dive?.phase === 'choosing';
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
-  const paused =
-    !!sheetUid || fanfares.length > 0 || menuOpen || controlsOpen || choosing || finished;
+  const paused = !!pause || fanfares.length > 0 || choosing || finished;
   // A layout effect, so the controller switches owner in the same commit as the
   // pause or resume: a press right after resuming reaches the fight, not the menus.
   useLayoutEffect(() => {
@@ -164,41 +160,63 @@ export function DelveRun() {
     if (!dive) navigate('/delve', { replace: true });
   }, [dive, navigate]);
 
-  if (!dive) return null;
-
-  const biome = registry.getBiomeForDepth(dive.depth);
-  const starts = startDepthOptions(registry, profile);
-
-  const onChooseDoor = (doorId: string) => {
-    const before = useDelveStore.getState().profile;
-    const next = chooseDoor(registry, before, doorId);
-    useDelveStore.getState().setProfile(next);
-    if (next.bestDepth > before.bestDepth && before.bestDepth > 0) {
-      showBanner('NEW RECORD', '#4ade80', `Deepest depth reached: ${next.bestDepth}`);
-    }
-  };
-  const onExtract = () =>
-    useDelveStore.getState().setProfile(extractDive(registry, useDelveStore.getState().profile));
-  const onDoorPotion = () => {
+  // Stable, so the memoised stop and pause skip the arena's 80 ms HUD refreshes.
+  const onChooseDoor = useCallback(
+    (doorId: string) => {
+      const before = useDelveStore.getState().profile;
+      const next = chooseDoor(registry, before, doorId);
+      useDelveStore.getState().setProfile(next);
+      if (next.bestDepth > before.bestDepth && before.bestDepth > 0) {
+        showBanner('NEW RECORD', '#4ade80', `Deepest depth reached: ${next.bestDepth}`);
+      }
+    },
+    [registry, showBanner],
+  );
+  const onExtract = useCallback(
+    () =>
+      useDelveStore.getState().setProfile(extractDive(registry, useDelveStore.getState().profile)),
+    [registry],
+  );
+  const onDoorPotion = useCallback(() => {
     const next = drinkPotionBetweenFloors(registry, useDelveStore.getState().profile);
     if (next) {
       useDelveStore.getState().setProfile(next);
       playSound('potion');
     } else playSound('combineFail');
-  };
-  const onCamp = () => {
+  }, [registry]);
+  const onCamp = useCallback(() => {
     useDelveStore.getState().closeDive();
     navigate('/delve');
-  };
+  }, [navigate]);
+  /** The pause over the dive or the stop, on `link`'s tab (Loadout without one). */
+  const openPause = useCallback((link?: HubLink) => setPause({ link }), []);
+  const openMenu = useCallback(() => setPause({}), []);
+  /** A find, from the Found log or the stop: the pause's Loadout, on that item. */
+  const openItem = useCallback(
+    (uid: string) => {
+      useDelveStore.getState().markSeen([uid]);
+      openPause({ tab: 'loadout', uid });
+    },
+    [openPause],
+  );
+  const openJournal = useCallback(() => openPause({ tab: 'quests' }), [openPause]);
+  const resume = useCallback(() => setPause(null), []);
+  const toAnvil = useCallback(() => navigate('/delve'), [navigate]);
+  const abandon = useCallback(() => {
+    setPause(null);
+    onCamp();
+  }, [onCamp]);
+
+  if (!dive) return null;
+
+  const biome = registry.getBiomeForDepth(dive.depth);
+  const starts = startDepthOptions(registry, profile);
+
   const onAgain = () => {
     const s = useDelveStore.getState();
     s.closeDive();
     s.startDive(starts[starts.length - 1]);
     playSound('phaseTransition');
-  };
-  const openItem = (uid: string) => {
-    useDelveStore.getState().markSeen([uid]);
-    setSheetUid(uid);
   };
   /** The Attack slot's click in Manual: one blow, as a tap of the attack input. */
   const tapAttack = () => {
@@ -219,7 +237,8 @@ export function DelveRun() {
 
       <HudGrid
         onInsets={setInsets}
-        top={<PurseBar dive={dive} onMenu={() => setMenuOpen(true)} />}
+        inert={!!pause || choosing}
+        top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
             dive={dive}
@@ -227,7 +246,7 @@ export function DelveRun() {
             hud={arena.hud}
             quests={quests}
             onInspect={openItem}
-            onJournal={() => {}}
+            onJournal={openJournal}
           />
         }
         dock={
@@ -250,69 +269,31 @@ export function DelveRun() {
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
-      {menuOpen && (
-        <div
-          className="delve-panel absolute right-3 top-14 z-40 flex w-60 flex-col gap-1.5 p-2 shadow-xl"
-          data-pad-scope
-        >
-          <button
-            className="delve-btn text-sm"
-            onClick={() => useDelveStore.getState().setManualAttack(!manualAttack)}
-            data-testid="attack-mode-toggle"
-          >
-            Basic attack: {manualAttack ? 'Manual' : 'Auto'} ⇄
-          </button>
-          <button
-            className="delve-btn text-sm"
-            onClick={() => setControlsOpen(true)}
-            data-testid="open-controls"
-          >
-            🎮 Controls
-          </button>
-          <button className="delve-btn text-sm" onClick={() => navigate('/delve')}>
-            Back to the Anvil (floor restarts)
-          </button>
-          <button
-            className="delve-btn delve-btn-danger text-sm"
-            onClick={() => {
-              setMenuOpen(false);
-              onCamp();
-            }}
-          >
-            Abandon dive (lose bounty)
-          </button>
-          <button className="delve-btn text-sm" onClick={() => setMenuOpen(false)} data-pad-back>
-            Resume
-          </button>
+      {choosing && (
+        <div className="absolute inset-0 z-40" inert={!!pause}>
+          <StopScreen
+            dive={dive}
+            onChoose={onChooseDoor}
+            onExtract={onExtract}
+            onPotion={onDoorPotion}
+            onMenu={openMenu}
+            onInspect={openItem}
+          />
         </div>
       )}
-      {/* After the dive menu: the controller's back button and focus go to the topmost panel. */}
-      {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
 
-      {choosing && (
-        <div className="absolute inset-0 z-40 flex flex-col bg-black/80" data-pad-scope>
-          <div className="relative min-h-0 flex-1">
-            <DoorChoice dive={dive} onChoose={onChooseDoor} onExtract={onExtract} />
-          </div>
-          <div
-            className="relative z-40 bg-black/70 pt-2"
-            style={{ paddingBottom: 'calc(8px + var(--spacing-safe-bottom))' }}
-          >
-            <div className="delve-column mb-3 flex items-center justify-between">
-              <span className="text-xs text-stone-400">
-                Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} 🧪
-              </span>
-              <button
-                className="delve-btn px-3 py-1.5 text-xs"
-                onClick={onDoorPotion}
-                disabled={dive.potions <= 0 || dive.heroHpFrac >= 1}
-                data-testid="door-potion"
-              >
-                🧪 Drink potion
-              </button>
-            </div>
-            <LootTray originRef={hostRef} onSelect={openItem} />
-          </div>
+      {pause && (
+        <div className="absolute inset-0 z-40" data-testid="dive-pause">
+          <PauseScreen
+            dive={dive}
+            biome={biome}
+            foesLeft={arena.hud?.monstersLeft ?? 0}
+            link={pause.link}
+            atStop={choosing}
+            onResume={resume}
+            onAnvil={toAnvil}
+            onAbandon={abandon}
+          />
         </div>
       )}
 
@@ -332,7 +313,6 @@ export function DelveRun() {
           onDone={popFanfare}
         />
       )}
-      {sheetUid && <ItemDetailSheet uid={sheetUid} onClose={() => setSheetUid(null)} />}
       <ToastContainer />
     </div>
   );
