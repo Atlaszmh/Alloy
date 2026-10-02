@@ -74,6 +74,7 @@ describe('AnvilHub', () => {
     expect(screen.getByTestId('forge-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('tab-codex'));
     expect(screen.getByTestId('codex-panel')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('codex-section-reactions'));
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
     fireEvent.click(screen.getByTestId('tab-quests'));
     expect(screen.getByTestId('quests-empty')).toHaveTextContent('Quests arrive in a later update');
@@ -90,6 +91,28 @@ describe('AnvilHub', () => {
     expect(strip).toHaveTextContent('Skills ›');
     fireEvent.click(strip);
     expect(selected()).toEqual(['tab-skills']);
+    expect(screen.getByTestId('mana-view')).toBeInTheDocument(); // the link opens the Mana view
+    fireEvent.click(screen.getByTestId('tab-loadout'));
+    fireEvent.click(screen.getByTestId('tab-skills'));
+    expect(screen.queryByTestId('mana-view')).toBeNull(); // a plain tab change carries no link
+  });
+
+  it("the footer draws the tab's prompts before the hub's Menu", () => {
+    renderHub();
+    const footer = screen.getByTestId('hub-anvil').querySelector('footer')!.textContent!;
+    expect(footer.indexOf('Salvage')).toBeGreaterThan(-1);
+    expect(footer.indexOf('Salvage')).toBeLessThan(footer.indexOf('Menu'));
+  });
+
+  it("on Skills the Apply bar replaces the footer's group, with one Delve button", () => {
+    renderHub();
+    fireEvent.click(screen.getByTestId('tab-skills'));
+    expect(screen.getByTestId('chain-draft')).toBeInTheDocument();
+    expect(screen.getAllByTestId('delve-button')).toHaveLength(1);
+    expect(screen.queryByTestId('training-button')).toBeNull();
+    fireEvent.click(screen.getByTestId('tab-forge'));
+    expect(screen.queryByTestId('chain-draft')).toBeNull();
+    expect(screen.getByTestId('training-button')).toBeInTheDocument();
   });
 
   it('the digits 1–5 pick a tab, and T opens the Training Grounds', () => {

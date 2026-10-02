@@ -1,23 +1,17 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { MANA_TYPES, profileStats } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { Glyph, Panel, Screen, Tabs, usePrompts, type Prompt } from '@/features/delve/kit';
-import { getDelveRegistry } from '../registry';
-import { PaperDoll } from '../PaperDoll';
-import { BagPanel } from '../BagPanel';
-import { ForgePanel } from '../ForgePanel';
-import { CodexPanel } from '../CodexPanel';
-import { AbilitiesPanel } from '../AbilitiesPanel';
-import { ItemDetailSheet } from '../ItemDetailSheet';
-import { RARITY_LABEL, RARITY_TEXT, formatNumber, manaStyle } from '../format';
+import { Screen, Tabs, usePrompts, type Prompt } from '@/features/delve/kit';
 import { HubHeader } from './HubHeader';
 import { HubFooter, TRAINING_BINDING } from './HubFooter';
-import { HowTo } from './HowTo';
-import { ReactionsGrid } from './codex/ReactionsGrid';
 import { SystemMenu } from './SystemMenu';
-import type { HubMode, HubTab } from './types';
+import { LoadoutTab } from './loadout/LoadoutTab';
+import { SkillsTab } from './skills/SkillsTab';
+import { ForgeTab } from './forge/ForgeTab';
+import { CodexTab } from './codex/CodexTab';
+import { QuestsTab } from './quests/QuestsTab';
+import type { HubLink, HubMode, HubTab, HubTabProps } from './types';
 
 const TABS: { id: HubTab; label: string }[] = [
   { id: 'loadout', label: 'Loadout' },
@@ -27,38 +21,47 @@ const TABS: { id: HubTab; label: string }[] = [
   { id: 'quests', label: 'Quests' },
 ];
 
+const TAB_VIEWS: Record<HubTab, (props: HubTabProps) => ReactNode> = {
+  loadout: LoadoutTab,
+  skills: SkillsTab,
+  forge: ForgeTab,
+  codex: CodexTab,
+  quests: QuestsTab,
+};
+
 /**
  * The Anvil hub: a kit Screen with the steel header (tabs 1–5 or LB/RB), the
- * wood footer (prompts, Training, the start depths, Delve) and the system
- * menu on Esc / B. Phase 1's main area is today's panels in a centred 960 px
- * column; Phase 2 makes each tab its panes, and wires `mode: 'pause'`.
+ * wood footer (the tab's prompts and Menu, then Training, the start depths and
+ * Delve, or the tab's own footer action) and the system menu on Esc / B. Each
+ * tab draws its own grid of panes in the main.
  */
 export function AnvilHub({ mode }: { mode: HubMode }) {
   const navigate = useNavigate();
-  const profile = useDelveStore((s) => s.profile);
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
   const unapplied = Object.keys(useDelveStore(selectDraftApply).changes).length;
   const [tab, setTab] = useState<HubTab>('loadout');
-  const [selected, setSelected] = useState<string | null>(null);
+  // The link the last go() carried, for the tab it names; a plain tab change carries none.
+  const [link, setLink] = useState<HubLink | undefined>();
+  const [tabPrompts, setTabPrompts] = useState<Prompt[]>([]);
+  const [footerAction, setFooterAction] = useState<ReactNode>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   // Paused mid-dive, the Forge is locked (spec: "Forge at the Anvil").
   const tabs = TABS.map((t) => ({ ...t, disabled: mode === 'pause' && t.id === 'forge' }));
 
-  const go = (to: HubTab) => {
+  const open = (to: HubTab, carried?: HubLink) => {
+    if (to !== tab) setTabPrompts([]);
     setTab(to);
+    setLink(carried);
     playSound('buttonClick');
   };
-  const openItem = (uid: string) => {
-    playSound('orbSelect');
-    useDelveStore.getState().markSeen([uid]);
-    setSelected(uid);
-  };
+  const go = (to: HubLink) => open(to.tab, to);
   const onTraining = () => navigate('/delve/training');
 
-  // The footer's prompts; the hub also binds Training (its button draws the glyph) and the digits.
+  // The footer's prompts: the tab's, then the hub's Menu. The hub also binds Training (its
+  // button draws the glyph) and the digits.
   const prompts: Prompt[] = [
-    { id: 'select', label: 'Select', binding: { mouse: 'click', pad: 'a' } },
+    ...tabPrompts,
     {
       id: 'menu',
       label: 'Menu',
@@ -76,18 +79,14 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
         id: `tab-${t.id}`,
         label: t.label,
         binding: { key: [`Digit${i + 1}`, `Numpad${i + 1}`] },
-        onPress: () => go(t.id),
+        onPress: () => open(t.id),
         disabled: t.disabled,
       })),
     ],
     mainRef,
   );
 
-  const { equipped, pair } = profile;
-  const attunement = useMemo(
-    () => profileStats(getDelveRegistry(), { equipped, pair }).attunement,
-    [equipped, pair],
-  );
+  const View = TAB_VIEWS[tab];
 
   return (
     <>
@@ -104,7 +103,7 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
                 digits
                 glyphs
                 value={tab}
-                onChange={go}
+                onChange={(t) => open(t)}
                 tabs={tabs.map((t) => ({
                   ...t,
                   testId: `tab-${t.id}`,
@@ -124,94 +123,20 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
             }
           />
         }
-        footer={<HubFooter prompts={prompts} onTraining={onTraining} />}
+        footer={<HubFooter prompts={prompts} onTraining={onTraining} action={footerAction} />}
       >
-        <div ref={mainRef} className="h-full overflow-y-auto px-8 py-6">
-          {/* Today's panels until Phase 2's panes, at their own size: the column undoes the UI zoom. */}
-          <div className="mx-auto flex w-[960px] max-w-full flex-col gap-4 [zoom:calc(1/var(--ui-scale,1))]">
-            {tab === 'loadout' && (
-              <>
-                {profile.stats.dives === 0 && <HowTo />}
-                <PaperDoll onSelect={openItem} />
-                <button
-                  type="button"
-                  className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[14px]"
-                  onClick={() => go('skills')}
-                  data-testid="mana-strip"
-                >
-                  {MANA_TYPES.filter((m) => attunement[m] > 0).map((m) => {
-                    const style = manaStyle(getDelveRegistry(), m);
-                    return (
-                      <span key={m} className="flex items-center gap-1" title={style.name}>
-                        <Glyph id={m} size={16} color={style.color} /> {attunement[m]}
-                      </span>
-                    );
-                  })}
-                  <span className="text-[var(--k-text-2)]">· Skills ›</span>
-                </button>
-                <BagPanel onSelect={openItem} />
-              </>
-            )}
-            {tab === 'skills' && <AbilitiesPanel />}
-            {tab === 'forge' && <ForgePanel onSelect={openItem} />}
-            {tab === 'codex' && (
-              <>
-                <CodexPanel />
-                {/* Out of the chain builder; 2C's Codex panes take it in. */}
-                <ReactionsGrid reactionsSeen={profile.reactionsSeen} />
-                {profile.stats.dives > 0 && <Records />}
-              </>
-            )}
-            {tab === 'quests' && (
-              <Panel title="Quests" testId="quests-empty" scroll={false}>
-                <p className="text-[16px] text-[var(--k-text-2)]">
-                  Quests arrive in a later update. The journal and the HUD tracker are ready for
-                  them.
-                </p>
-              </Panel>
-            )}
-          </div>
+        <div ref={mainRef} className="h-full min-h-0">
+          <View
+            key={tab}
+            mode={mode}
+            setPrompts={setTabPrompts}
+            setFooterAction={setFooterAction}
+            go={go}
+            link={link?.tab === tab ? link : undefined}
+          />
         </div>
       </Screen>
-      {selected && (
-        <ItemDetailSheet
-          uid={selected}
-          onClose={() => setSelected(null)}
-          onBuild={() => {
-            setSelected(null);
-            setTab('skills');
-          }}
-        />
-      )}
       {menuOpen && <SystemMenu onClose={() => setMenuOpen(false)} />}
     </>
-  );
-}
-
-/** The lifetime stats, on the Codex until Phase 2's Records. */
-function Records() {
-  const stats = useDelveStore((s) => s.profile.stats);
-  return (
-    <div className="delve-panel grid grid-cols-3 gap-2 p-3 text-center text-[14px] text-[var(--k-text-3)]">
-      {(
-        [
-          [stats.dives, 'dives'],
-          [formatNumber(stats.kills), 'kills'],
-          [stats.bossKills, 'bosses'],
-        ] as const
-      ).map(([n, label]) => (
-        <div key={label}>
-          <div className="text-[18px] text-[var(--k-text)]">{n}</div>
-          {label}
-        </div>
-      ))}
-      <div className="col-span-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
-        {(['uncommon', 'magic', 'rare', 'epic', 'legendary'] as const).map((r) => (
-          <span key={r} style={{ color: RARITY_TEXT[r] }}>
-            {stats.itemsFound[r]} {RARITY_LABEL[r]}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }

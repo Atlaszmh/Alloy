@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { isDiveActive, startDepthOptions } from '@alloy/engine';
 import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
@@ -14,9 +14,18 @@ export const TRAINING_BINDING: Binding = { key: 'KeyT', pad: 'view' };
  * The hub's planks: the prompts, then Training, the start depths and the hot
  * metal Delve button (Enter with nothing focused, or Start). An unapplied chain
  * draft blocks the dive, and its block (apply, or discard and delve) sits
- * before the button until Phase 2's Apply bar.
+ * before the button. While a tab sets `action` (Skills: its Apply bar, with a
+ * compact Delve), that node replaces the whole right-hand group.
  */
-export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraining: () => void }) {
+export function HubFooter({
+  prompts,
+  onTraining,
+  action,
+}: {
+  prompts: Prompt[];
+  onTraining: () => void;
+  action?: ReactNode;
+}) {
   const navigate = useNavigate();
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
@@ -46,6 +55,8 @@ export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraini
     useDelveStore.getState().revertDraft();
     onDelve();
   };
+
+  if (action) return <Footer prompts={prompts}>{action}</Footer>;
 
   return (
     <Footer prompts={prompts}>
