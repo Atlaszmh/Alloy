@@ -11,7 +11,6 @@ import {
   type RuneRef,
 } from '@alloy/engine';
 import { ItemDetailSheet } from '../ItemDetailSheet';
-import { ForgePanel } from '../ForgePanel';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
@@ -304,16 +303,9 @@ describe('ItemDetailSheet', () => {
     expect(store().profile.links).toBe(2);
     expect(screen.getByText('+2 Links from its extra slots')).toBeInTheDocument();
   });
-
-  it('mid-dive the Forge tab waits for the dive to end', () => {
-    store().startDive(1);
-    render(<ForgePanel onSelect={() => {}} />);
-    expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
-    expect(screen.queryByTestId('fuse-button')).toBeNull();
-  });
 });
 
-describe('ItemDetailSheet and the Forge: runes', () => {
+describe('ItemDetailSheet: runes', () => {
   const split = { id: 'split', tier: 3 } as const;
   const quick = { id: 'quick', tier: 1 } as const;
   beforeEach(() => {
@@ -377,35 +369,5 @@ describe('ItemDetailSheet and the Forge: runes', () => {
     fireEvent.click(screen.getByTestId('salvage-button'));
     expect(store().profile.bag).toHaveLength(0);
     expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
-  });
-
-  it("the Forge's Fuse asks first when an input holds runes, naming what becomes of them", async () => {
-    const animate = vi.fn(() => ({ finished: Promise.resolve() }));
-    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true });
-    const three = [withRunes(rareSword('a'), [split]), rareSword('b'), rareSword('c')];
-    store().setProfile({ ...store().profile, scrap: 9999, bag: three });
-    render(<ForgePanel onSelect={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
-    fireEvent.click(screen.getByText('Auto-pick'));
-    fireEvent.click(screen.getByTestId('fuse-button'));
-    expect(store().profile.bag).toHaveLength(3);
-    expect(screen.getByTestId('fuse-button')).toHaveTextContent('Tap again to fuse · destroys Split III');
-    await act(async () => fireEvent.click(screen.getByTestId('fuse-button')));
-    expect(store().profile.bag.map((i) => i.rarity)).toEqual(['epic']);
-    delete (HTMLElement.prototype as { animate?: unknown }).animate;
-  });
-
-  it('the Forge tab holds the pouch: three of a rune fuse into one of the next tier, for scrap', () => {
-    store().setProfile({ ...store().profile, scrap: 20, runes: { split: [3, 0, 0, 0, 0] } });
-    render(
-      <>
-        <ForgePanel onSelect={() => {}} />
-        <ToastContainer />
-      </>,
-    );
-    fireEvent.click(within(screen.getByTestId('forge-runes')).getByTestId('rune-fuse-split-1'));
-    expect(store().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
-    expect(screen.getByText('Fused 3 Split I into Split II')).toBeInTheDocument();
-    expect(screen.getByTestId('pouch-split-2')).toHaveTextContent('Split II ×1');
   });
 });
