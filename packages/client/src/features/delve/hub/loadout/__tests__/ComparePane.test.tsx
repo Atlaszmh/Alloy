@@ -224,6 +224,10 @@ describe('the compare pane', () => {
       bag: [rareSword('w1', { primary: 2 })],
     });
     show('w1');
+    // The actions sit below the scrolling details, always in view.
+    for (const id of ['transfer-button', 'equip-button', 'salvage-button', 'lock-button'])
+      expect(screen.getByTestId(id).closest('.k-scroll'), id).toBeNull();
+    expect(screen.getByTestId('compare-as-is').closest('.k-scroll')).not.toBeNull();
     expect(screen.getByTestId('compare-as-is')).toHaveTextContent('Power');
     expect(screen.getByTestId('compare-home')).toHaveTextContent('Power');
     expect(screen.getByTestId('item-compare')).toHaveTextContent(

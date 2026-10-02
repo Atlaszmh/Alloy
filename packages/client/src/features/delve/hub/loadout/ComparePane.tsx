@@ -132,151 +132,159 @@ export function ComparePane({
   };
 
   return (
-    <Panel testId="item-sheet" aria-label="Compare">
-      <span className="k-label">{heading}</span>
-      <div className="flex">
-        <ItemHeader item={item} size="lg" />
+    <Panel testId="item-sheet" aria-label="Compare" scroll={false}>
+      {/* The details scroll; the actions below them stay in view. */}
+      <div className="k-scroll flex min-h-0 flex-1 flex-col gap-4">
+        <span className="k-label">{heading}</span>
+        <div className="flex">
+          <ItemHeader item={item} size="lg" />
+        </div>
+
+        {cmp && (
+          <div className="flex flex-col gap-1" data-testid="item-compare">
+            {!cmp.replaced && <span className="k-caption">Empty slot: pure gain</span>}
+            {asIs && transfer ? (
+              <>
+                <span className="k-label">As it is</span>
+                <div data-testid="compare-as-is">
+                  <PowerDelta cmp={asIs} />
+                </div>
+                <span className="k-label">
+                  With your moveset · <Price scrap={transfer.scrap} /> to move it
+                  {transfer.sockets > 0 &&
+                    `, its ${transfer.sockets} socket${transfer.sockets === 1 ? '' : 's'} included`}
+                </span>
+                <div data-testid="compare-home">
+                  <PowerDelta cmp={cmp} />
+                </div>
+              </>
+            ) : (
+              <PowerDelta cmp={cmp} />
+            )}
+          </div>
+        )}
+        {cmp && <CompareTable item={item} worn={worn} />}
+        {(!cmp || full) && <ItemStatLines item={item} />}
+        <LegendaryBox item={item} />
+        {item.slot === 'weapon' && (!inBag || full) && <MovesetView item={item} />}
+
+        {attune.length > 0 && (
+          <p className="k-body-2 flex flex-wrap gap-x-4" data-testid="attune-delta">
+            {attune.map(([m, d]) => {
+              const st = manaStyle(registry, m);
+              const now = attunement[m];
+              return (
+                <span key={m} className="inline-flex items-center gap-1.5">
+                  <Glyph id={m} size={16} color={st.color} />
+                  {st.name} attunement {d > 0 ? '+' : '−'}
+                  {Math.abs(d)} ({now} → {now + d})
+                </span>
+              );
+            })}
+          </p>
+        )}
+
+        {binding && <BindChoice item={item} ask={asked === item.uid} />}
       </div>
 
-      {cmp && (
-        <div className="flex flex-col gap-1" data-testid="item-compare">
-          {!cmp.replaced && <span className="k-caption">Empty slot: pure gain</span>}
-          {asIs && transfer ? (
-            <>
-              <span className="k-label">As it is</span>
-              <div data-testid="compare-as-is">
-                <PowerDelta cmp={asIs} />
-              </div>
-              <span className="k-label">
-                With your moveset · <Price scrap={transfer.scrap} /> to move it
-                {transfer.sockets > 0 &&
-                  `, its ${transfer.sockets} socket${transfer.sockets === 1 ? '' : 's'} included`}
-              </span>
-              <div data-testid="compare-home">
-                <PowerDelta cmp={cmp} />
-              </div>
-            </>
-          ) : (
-            <PowerDelta cmp={cmp} />
-          )}
-        </div>
-      )}
-      {cmp && <CompareTable item={item} worn={worn} />}
-      {(!cmp || full) && <ItemStatLines item={item} />}
-      <LegendaryBox item={item} />
-      {item.slot === 'weapon' && (!inBag || full) && <MovesetView item={item} />}
-
-      {attune.length > 0 && (
-        <p className="k-body-2 flex flex-wrap gap-x-4" data-testid="attune-delta">
-          {attune.map(([m, d]) => {
-            const st = manaStyle(registry, m);
-            const now = attunement[m];
-            return (
-              <span key={m} className="inline-flex items-center gap-1.5">
-                <Glyph id={m} size={16} color={st.color} />
-                {st.name} attunement {d > 0 ? '+' : '−'}
-                {Math.abs(d)} ({now} → {now + d})
-              </span>
-            );
-          })}
-        </p>
-      )}
-
-      {binding && <BindChoice item={item} ask={asked === item.uid} />}
-
-      {transfer && !locked && (
-        <div className="flex flex-col gap-1.5">
-          <Button
-            variant={homeUpgrade ? 'go' : 'secondary'}
-            onClick={onTransfer}
-            className="flex-wrap whitespace-normal"
-            testId="transfer-button"
-          >
-            {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · <Price scrap={transfer.scrap} />
-            {transfer.links > 0 && (
-              <>
-                {' · '}
-                <Price links={transfer.links} signed />
-              </>
-            )}
-          </Button>
-          {leaves.length > 0 && (
-            <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
-              Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
-            </span>
-          )}
-          {transfer.runes.length > 0 && (
-            <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
-              {pull === 'destroy'
-                ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
-                : `${runeNames(registry, transfer.runes)} back to your pouch`}
-            </span>
-          )}
-        </div>
-      )}
-
-      {locked ? (
-        <p className="k-well p-3 text-[16px] text-[var(--k-hot)]" data-testid="equip-locked">
-          Equip at the Anvil, between dives
-        </p>
-      ) : (
-        <div className="mt-auto flex flex-col gap-2.5">
-          {!inBag ? (
-            <Button onClick={onUnequip} testId="unequip-button">
-              Unequip
-            </Button>
-          ) : (
-            !binding && (
-              <Button
-                variant={isUpgrade ? 'go' : 'secondary'}
-                binding={{ mouse: 'rmb', pad: 'a' }}
-                onClick={() => actions.equip(item.uid)}
-                testId="equip-button"
-              >
-                Equip{equipCmp && ` · ${formatDelta(equipCmp.powerPct)} Power`}
-              </Button>
-            )
-          )}
-          {inBag && (
+      <div className="flex flex-none flex-col gap-2.5" data-testid="compare-actions">
+        {transfer && !locked && (
+          <div className="flex flex-col gap-1.5">
             <Button
-              variant="danger"
-              binding={{ key: 'Delete', pad: 'x' }}
-              disabled={item.locked}
-              onClick={() => actions.salvage(item.uid)}
-              testId="salvage-button"
+              variant={homeUpgrade ? 'go' : 'secondary'}
+              onClick={onTransfer}
+              className="flex-wrap whitespace-normal"
+              testId="transfer-button"
             >
-              {armed === item.uid ? (
-                `Press again to melt${melts ? ` · ${melts}` : ''}`
-              ) : (
+              {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · <Price scrap={transfer.scrap} />
+              {transfer.links > 0 && (
                 <>
-                  Salvage ·{' '}
-                  <Price
-                    scrap={salvageValue(registry, item)}
-                    links={parts.links > 0 ? parts.links : undefined}
-                    dust={dust > 0 ? dust : undefined}
-                    signed
-                  />
+                  {' · '}
+                  <Price links={transfer.links} signed />
                 </>
               )}
             </Button>
-          )}
-          <Button
-            binding={{ key: 'KeyL', pad: 'y' }}
-            onClick={() => actions.lock(item.uid)}
-            testId="lock-button"
-          >
-            {item.locked ? 'Unlock' : 'Lock'}
-            {inBag && <span className="k-caption">kept from salvage</span>}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => go({ tab: 'forge', uid: item.uid })}
-            testId="forge-it"
-          >
-            Forge it ›
-          </Button>
-        </div>
-      )}
+            {leaves.length > 0 && (
+              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-leaves">
+                Leaves your {leaves.map((s) => SKILL_NAME[s]).join(' and ')} behind
+              </span>
+            )}
+            {transfer.runes.length > 0 && (
+              <span className="text-[14px] text-[var(--k-hot)]" data-testid="transfer-runes">
+                {pull === 'destroy'
+                  ? `Destroys ${runeNames(registry, transfer.runes)}: no socket for ${transfer.runes.length === 1 ? 'it' : 'them'} there`
+                  : `${runeNames(registry, transfer.runes)} back to your pouch`}
+              </span>
+            )}
+          </div>
+        )}
+
+        {locked ? (
+          <p className="k-well p-3 text-[16px] text-[var(--k-hot)]" data-testid="equip-locked">
+            Equip at the Anvil, between dives
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {!inBag ? (
+              <Button onClick={onUnequip} testId="unequip-button">
+                Unequip
+              </Button>
+            ) : (
+              !binding && (
+                <Button
+                  variant={isUpgrade ? 'go' : 'secondary'}
+                  binding={{ mouse: 'rmb', pad: 'a' }}
+                  onClick={() => actions.equip(item.uid)}
+                  testId="equip-button"
+                >
+                  Equip{equipCmp && ` · ${formatDelta(equipCmp.powerPct)} Power`}
+                </Button>
+              )
+            )}
+            {inBag && (
+              <Button
+                variant="danger"
+                binding={{ key: 'Delete', pad: 'x' }}
+                disabled={item.locked}
+                onClick={() => actions.salvage(item.uid)}
+                testId="salvage-button"
+              >
+                {armed === item.uid ? (
+                  `Press again to melt${melts ? ` · ${melts}` : ''}`
+                ) : (
+                  <>
+                    Salvage ·{' '}
+                    <Price
+                      scrap={salvageValue(registry, item)}
+                      links={parts.links > 0 ? parts.links : undefined}
+                      dust={dust > 0 ? dust : undefined}
+                      signed
+                    />
+                  </>
+                )}
+              </Button>
+            )}
+            <div className="flex gap-2.5">
+              <Button
+                className="flex-1"
+                binding={{ key: 'KeyL', pad: 'y' }}
+                onClick={() => actions.lock(item.uid)}
+                testId="lock-button"
+              >
+                {item.locked ? 'Unlock' : 'Lock'}
+                {inBag && <span className="k-caption">kept from salvage</span>}
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => go({ tab: 'forge', uid: item.uid })}
+                testId="forge-it"
+              >
+                Forge it ›
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
