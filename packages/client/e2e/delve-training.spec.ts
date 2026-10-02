@@ -23,19 +23,11 @@ async function seed(page: Page): Promise<void> {
   }, save);
 }
 
-/** Open the Training panel: docked (and open already) on desktop, a sheet on phones. */
+/** Open the Training dock (it opens on entry; with the mouse the fight runs on beside it). */
 async function openPanel(page: Page): Promise<void> {
   const panel = page.getByTestId('training-panel');
   if (!(await panel.isVisible())) await page.getByTestId('training-panel-toggle').click();
   await expect(panel).toBeVisible();
-}
-
-/** Close a sheet so the fight runs again (a docked panel stays open). */
-async function resume(page: Page): Promise<void> {
-  const panel = page.getByTestId('training-panel');
-  if ((await panel.getAttribute('data-layout')) === 'sheet')
-    await page.getByTestId('training-panel-close').click();
-  await expect(page.getByTestId('ability-0')).toBeVisible();
 }
 
 test.describe('Delve Training Grounds', () => {
@@ -54,16 +46,20 @@ test.describe('Delve Training Grounds', () => {
     // The sandbox starts on Fire's default chains.
     await expect(ability0).toHaveAttribute('aria-label', 'Primary: light Fire Bolt');
 
-    // The top bar fits on one line: the meter sits between the two buttons.
+    // The Training bar fits on one line: Anvil, the meter, then Panel and Menu.
+    const bar = (await page.getByTestId('training-bar').boundingBox())!;
     const back = (await page.getByTestId('training-back').boundingBox())!;
     const chip = (await page.getByTestId('meter-chip').boundingBox())!;
     const toggle = (await page.getByTestId('training-panel-toggle').boundingBox())!;
+    const menu = (await page.getByTestId('training-menu').boundingBox())!;
     expect(chip.x).toBeGreaterThanOrEqual(back.x + back.width);
     expect(chip.x + chip.width).toBeLessThanOrEqual(toggle.x);
-    // One row: the three share the glass bar's middle line.
+    expect(toggle.x + toggle.width).toBeLessThanOrEqual(menu.x);
+    expect(menu.x + menu.width).toBeLessThanOrEqual(bar.x + bar.width);
+    // One row: they share the glass bar's middle line.
     const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
-    expect(Math.abs(mid(chip) - mid(back))).toBeLessThanOrEqual(2);
-    expect(Math.abs(mid(toggle) - mid(back))).toBeLessThanOrEqual(2);
+    for (const b of [back, chip, toggle, menu])
+      expect(Math.abs(mid(b) - mid(bar))).toBeLessThanOrEqual(2);
 
     await openPanel(page);
     await page.getByTestId('training-tab-targets').click();
@@ -71,7 +67,6 @@ test.describe('Delve Training Grounds', () => {
     await page.getByTestId('training-tab-loadout').click();
     await page.getByTestId('weapon-base-staff').click();
     await expect(page.getByTestId('weapon-name')).toContainText('Staff');
-    await resume(page);
 
     const total = async () =>
       Number(await page.getByTestId('meter-total').getAttribute('data-total'));
@@ -115,27 +110,28 @@ test.describe('Delve Training Grounds', () => {
     await picker.getByTestId('rune-pick-echo').click();
     await expect(picker).toBeHidden();
     await expect(cards.getByTestId('socket-0')).toHaveAttribute('data-rune', 'echo:5');
-    await resume(page);
     const pips = ability0.locator('[data-rune]');
     await expect(pips).toHaveCount(1);
     await expect(pips).toHaveAttribute('data-rune', 'echo');
   });
 
-  test('T03: Esc closes the Training sheet, and opens the panel again from the fight', async ({
+  test('T03: Esc opens the menu over the paused fight, Esc resumes, and its Anvil entry leaves', async ({
     page,
   }) => {
     await seed(page);
-    // Narrower than the dock's 1024 px: the panel opens as a sheet that pauses the fight.
-    await page.setViewportSize({ width: 900, height: 700 });
     await page.goto('/delve/training');
     await expect(page.getByTestId('ability-0')).toBeVisible({ timeout: ARENA_READY });
-    const panel = page.getByTestId('training-panel');
-    await page.getByTestId('training-panel-toggle').click();
-    await expect(panel).toHaveAttribute('data-layout', 'sheet');
+    const menu = page.getByTestId('system-menu');
+    // The fight is live: the arena's menu key presses the bar's Menu.
     await page.keyboard.press('Escape');
-    await expect(panel).toBeHidden();
-    // The fight is live again: the arena's menu key opens the panel.
+    await expect(menu).toBeVisible();
+    await expect(page.getByTestId('menu-resume')).toBeFocused();
+    // Paused, the menu's Back takes Esc; the dock stays as it was.
     await page.keyboard.press('Escape');
-    await expect(panel).toBeVisible();
+    await expect(menu).toBeHidden();
+    await expect(page.getByTestId('training-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('menu-anvil').click();
+    await expect(page).toHaveURL(/\/delve$/);
   });
 });
