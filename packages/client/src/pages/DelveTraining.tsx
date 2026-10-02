@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
@@ -43,6 +43,14 @@ export function DelveTraining() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<TrainingTab>('loadout');
   const [controlsOpen, setControlsOpen] = useState(false);
+  // The pad's focus goes with the pad: a key or the mouse taking the input lock hands the fight back.
+  useEffect(
+    () =>
+      useInputDeviceStore.subscribe((s) => {
+        if (s.device !== 'gamepad') setPadFocus(false);
+      }),
+    [],
+  );
 
   // A rune picker in the dock pauses too: Space and the pad belong to it.
   const picking = useRunePickerOpen();

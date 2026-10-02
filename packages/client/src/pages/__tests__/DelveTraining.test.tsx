@@ -164,6 +164,17 @@ describe('DelveTraining', () => {
     expect(isPaused()).toBe(true);
   });
 
+  it('the pad leaving (a key, the mouse) hands the fight back: the dock lets go of the focus and unpauses', () => {
+    renderPage();
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    fireEvent.click(screen.getByTestId('training-panel-toggle'));
+    expect(isPaused()).toBe(true);
+    act(() => useInputDeviceStore.getState().setDevice('keyboard'));
+    expect(isPaused()).toBe(false);
+    expect(dock()).not.toHaveAttribute('data-pad-scope');
+    expect(live.calls.at(-1)).toBe(true);
+  });
+
   it('Menu opens the system menu over the paused fight; Resume resumes and Anvil leaves', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('training-menu'));
