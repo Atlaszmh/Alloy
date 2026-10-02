@@ -47,7 +47,10 @@ export interface ItemTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   label?: string;
 }
 
-/** An item as a kit `Tile`: its icon, rarity, ▲ ▼ ◇ mark, NEW, lock and equipped marks, and its mana pip. */
+/**
+ * An item as a kit `Tile`: its icon, rarity, ▲ ▼ ◇ mark, NEW, lock and equipped marks, its forge
+ * level (+N, also in its label) and its mana pip.
+ */
 export const ItemTile = forwardRef<HTMLButtonElement, ItemTileProps>(function ItemTile(
   { item, slot, size = 56, delta, asIs, dim, isNew, label, style, ...rest },
   ref,
@@ -62,15 +65,21 @@ export const ItemTile = forwardRef<HTMLButtonElement, ItemTileProps>(function It
       delta={deltaMark(delta, asIs)}
       fresh={!!isNew && !item?.locked}
       locked={!!item?.locked}
-      label={label ?? (item ? `${item.name}, ${item.rarity}` : `Empty ${slot ?? ''} slot`)}
+      label={
+        label ??
+        (item
+          ? `${item.name}${item.upgrade > 0 ? ` +${item.upgrade}` : ''}, ${item.rarity}`
+          : `Empty ${slot ?? ''} slot`)
+      }
       style={dim ? { ...style, opacity: 0.35 } : style}
       icon={
         item ? (
           <>
             <ItemIcon baseId={item.baseId} rarity={item.rarity} />
+            {item.upgrade > 0 && <span className="k-tile-mark k-tile-plus">+{item.upgrade}</span>}
             {mana && (
               <span
-                className="delve-tile-mana"
+                className="k-tile-mana"
                 data-mana={item.mana}
                 title={`${mana.name} affinity`}
                 style={{ background: mana.color }}

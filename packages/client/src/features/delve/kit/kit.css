@@ -805,6 +805,27 @@ html[data-input='gamepad'] .delve-ui :focus {
   text-shadow: 1px 1px 0 #181425;
 }
 
+/* The forge level, +N (ItemTile). */
+.k-tile-plus {
+  left: 6px;
+  bottom: 5px;
+  font-family: var(--k-font-display);
+  font-size: 16px;
+  color: #fee761;
+  text-shadow: 1px 1px 0 #181425;
+}
+
+/* The item's mana, a pip on the socket's bottom edge (ItemTile). */
+.k-tile-mana {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border: 2px solid #181425;
+}
+
 /* ── Tooltips ── */
 
 .k-tip {

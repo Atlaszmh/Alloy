@@ -56,9 +56,17 @@ describe('ItemTile', () => {
     expect(screen.getByRole('button', { name: /Empty helm slot/ })).toBeInTheDocument();
   });
 
+  it("marks the item's forge level +N, drawn and spoken, and none at +0", () => {
+    const { rerender } = render(<ItemTile item={{ ...item, upgrade: 3 }} />);
+    expect(screen.getByText('+3')).toHaveClass('k-tile-plus');
+    expect(screen.getByRole('button')).toHaveAccessibleName(`${item.name} +3, epic`);
+    rerender(<ItemTile item={{ ...item, upgrade: 0 }} />);
+    expect(screen.queryByText('+0')).toBeNull();
+  });
+
   it('marks the item mana affinity with a colored pip', () => {
     const { container } = render(<ItemTile item={{ ...item, mana: 'frost' }} />);
-    const pip = container.querySelector('.delve-tile-mana');
+    const pip = container.querySelector('.k-tile-mana');
     expect(pip).toHaveAttribute('data-mana', 'frost');
     expect(pip).toHaveAttribute('title', 'Frost affinity');
   });

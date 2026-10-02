@@ -27,7 +27,7 @@ describe('ItemHeader', () => {
     render(<ItemHeader item={item} />);
     expect(screen.getByTestId('item-name')).toHaveTextContent(item.name);
     expect(screen.getByTestId('item-name')).toHaveClass('text-lg');
-    expect(screen.getByRole('button', { name: `${item.name}, rare` })).toHaveStyle({
+    expect(screen.getByRole('button', { name: `${item.name} +2, rare` })).toHaveStyle({
       width: '56px',
     });
     expect(document.body).toHaveTextContent(/Rare .+ · Weapon/);

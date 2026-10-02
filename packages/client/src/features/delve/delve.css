@@ -101,16 +101,6 @@
   text-shadow: 1px 1px 0 #181425;
 }
 
-.delve-tile-mana {
-  position: absolute;
-  bottom: -4px;
-  left: 50%;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  border: 2px solid #181425;
-}
-
 .delve-tile-delta {
   position: absolute;
   bottom: -3px;
