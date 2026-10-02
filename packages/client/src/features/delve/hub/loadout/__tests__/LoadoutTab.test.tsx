@@ -9,28 +9,6 @@ import { LoadoutTab } from '../LoadoutTab';
 import type { HubTabProps } from '../../types';
 import { getDelveRegistry } from '../../../registry';
 
-// The compare pane asks the engine's salvage preview, a stub until stage 4c's B2: here it gives
-// what salvage gave before (scrap, Mana Dust off the pair, a weapon's Links and runes).
-vi.mock('@alloy/engine', async (importOriginal) => {
-  const engine = await importOriginal<typeof import('@alloy/engine')>();
-  return {
-    ...engine,
-    salvageYield: (...[registry, profile, item]: Parameters<typeof engine.salvageYield>) => {
-      const parts = engine.weaponParts(registry, item);
-      return {
-        scrap: engine.salvageValue(registry, item),
-        dust: engine.salvageDust(registry, item, profile.pair),
-        links: parts.links,
-        shards: [],
-        extraShard: 0,
-        pattern: null,
-        essence: null,
-        runes: parts.runes,
-      };
-    },
-  };
-});
-
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 const put = (...bag: GearItem[]) => store().setProfile({ ...store().profile, bag });
@@ -199,7 +177,8 @@ describe('LoadoutTab', () => {
 
   it('a precious item salvages on a second press within 2 s, and says the Links it gave', () => {
     vi.useFakeTimers();
-    put(rareSword('w1', { primary: 3 }));
+    // Three extra Primary slots: two Links past the one a rare forge grants free.
+    put(rareSword('w1', { primary: 4 }));
     open({ link: { tab: 'loadout', uid: 'w1' } });
     const salvage = () => fireEvent.click(screen.getByTestId('salvage-button'));
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(

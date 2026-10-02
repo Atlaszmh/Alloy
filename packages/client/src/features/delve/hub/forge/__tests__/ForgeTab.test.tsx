@@ -6,17 +6,6 @@ import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 import type { HubTabProps } from '../../types';
-import { fakeCrafting } from './crafting-fakes';
-
-// Stage 4c's B2 fills the crafting ops: until then the tab runs on fakes.
-vi.mock('@alloy/engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@alloy/engine')>()),
-  ...Object.fromEntries(
-    ['previewForge', 'forge', 'refineCost', 'refine', 'buyShard']
-      .concat(['honeCost', 'hone', 'imprintCost', 'imprint'])
-      .map((k) => [k, vi.fn()]),
-  ),
-}));
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -46,8 +35,6 @@ describe('ForgeTab', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    vi.clearAllMocks();
-    fakeCrafting();
   });
 
   it('opens on the Forge bench; Temper lists what you wear first, then the bag, filtered by kind', () => {

@@ -1,38 +1,40 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
-import { emptyMaterials, forge, previewForge, type MaterialsPouch } from '@alloy/engine';
+import {
+  emptyMaterials,
+  previewForge,
+  type ForgeRequest,
+  type MaterialsPouch,
+} from '@alloy/engine';
 import { ForgeBench } from '../ForgeBench';
+import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import type { Prompt } from '../../../kit';
-import { FAKE, fakeCrafting } from './crafting-fakes';
+import { pct, shardName, statRange, valueRange } from '../materials-text';
 
-// Stage 4c's B2 fills the crafting ops: until then the bench runs on fakes.
-vi.mock('@alloy/engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@alloy/engine')>()),
-  ...Object.fromEntries(
-    ['previewForge', 'forge', 'refineCost', 'refine', 'buyShard']
-      .concat(['honeCost', 'hone', 'imprintCost', 'imprint'])
-      .map((k) => [k, vi.fn()]),
-  ),
-}));
+// The bench runs on the real engine: what it shows is `previewForge`, what it makes is `forge`.
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
-const lastRequest = () => vi.mocked(previewForge).mock.lastCall?.[2];
-const withMaterials = (over: Partial<MaterialsPouch>) =>
+const withMaterials = (over: Partial<MaterialsPouch>, scrap = 1000) =>
   store().setProfile({
     ...store().profile,
-    scrap: 100,
+    scrap,
     materials: { ...emptyMaterials(), ...over },
   });
+/** The engine's preview of `req` for the profile as it stands. */
+const preview = (req: Partial<ForgeRequest> & { baseId: string; metal: ForgeRequest['metal'] }) =>
+  previewForge(registry, store().profile, { element: 'fire', shards: [], ...req });
+const uses = () => screen.getByTestId('forge-uses');
 
-function bench(locked = false) {
+function bench(locked = false, pane = false) {
   const setPrompts = vi.fn<(p: Prompt[]) => void>();
   render(
     <div style={{ display: 'grid' }}>
       <ForgeBench locked={locked} setPrompts={setPrompts} />
+      {pane && <MaterialsPane locked={locked} />}
     </div>,
   );
   return setPrompts;
@@ -51,8 +53,6 @@ describe('ForgeBench', () => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
     useInputDeviceStore.setState({ device: 'keyboard' });
-    vi.clearAllMocks();
-    fakeCrafting();
   });
 
   it('lists the learned patterns, then the unknown ones greyed with where they come from', () => {
@@ -66,7 +66,6 @@ describe('ForgeBench', () => {
     expect(within(screen.getByTestId('pattern-unknown-bow')).queryByRole('button')).toBeNull();
     // Nothing is forged from nothing: no preview until a pattern is picked.
     expect(screen.getByTestId('forge-empty')).toHaveTextContent('Pick a pattern to forge');
-    expect(previewForge).not.toHaveBeenCalled();
   });
 
   it("a pattern shows the engine's preview: the item, the floor, implicits, a weapon's skills, the price", () => {
@@ -75,22 +74,29 @@ describe('ForgeBench', () => {
     fireEvent.click(screen.getByTestId('pattern-sword'));
     expect(screen.getByTestId('pattern-sword')).toHaveAttribute('aria-pressed', 'true');
     // The first metal held, the primary, no flux and no shards.
-    expect(lastRequest()).toEqual({ baseId: 'sword', metal: 'iron', element: 'fire', shards: [] });
+    const prev = preview({ baseId: 'sword', metal: 'iron' });
+    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('element-fire')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Common Sword');
+    expect(screen.getByTestId('forge-bench')).toHaveTextContent(`item level ${prev.ilvl}`);
     expect(screen.getByTestId('metal-iron')).toHaveTextContent('Iron bar ×2');
     expect(screen.getByTestId('metal-rusty')).toBeDisabled();
     expect(
       screen.getByText('A common item rolls no lines: add flux for some.'),
     ).toBeInTheDocument();
+    expect(prev.floor).toBeGreaterThan(0);
     expect(screen.getByTestId('forge-floor')).toHaveTextContent(
-      'Your Fire attunement lifts every roll: each starts at least 12% up its band.',
+      `Your Fire attunement lifts every roll: each starts at least ${pct(prev.floor)} up its band.`,
     );
-    expect(screen.getByTestId('forge-implicits')).toHaveTextContent('+3 to +5 Armor');
-    expect(screen.getByTestId('forge-weapon')).toHaveTextContent(
-      'Carries Basic, Primary · extra slots: Primary +1 · 1 open socket',
+    for (const im of prev.implicits)
+      expect(screen.getByTestId('forge-implicits')).toHaveTextContent(
+        statRange(registry, im.stat, im.min, im.max),
+      );
+    expect(screen.getByTestId('forge-weapon')).toHaveTextContent('Carries Basic, Primary');
+    expect(uses()).toHaveTextContent('Uses Iron bar');
+    expect(screen.getByTestId('forge-button')).toHaveTextContent(
+      `Forge · ${prev.price.scrap} scrap`,
     );
-    expect(screen.getByTestId('forge-uses')).toHaveTextContent('Uses Iron bar');
-    expect(screen.getByTestId('forge-button')).toHaveTextContent(`Forge · ${FAKE.forge} scrap`);
     expect(screen.getByTestId('forge-button')).toBeEnabled();
   });
 
@@ -106,7 +112,8 @@ describe('ForgeBench', () => {
     fireEvent.click(screen.getByTestId('flux-rare'));
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Rare Sword');
     expect(screen.getByTestId('shard-slot-2')).toHaveTextContent('Random line');
-    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent('rolls 10%–100%');
+    const minRare = registry.getDelveBalance().loot.minRoll.rare;
+    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(`rolls ${pct(minRare)}–100%`);
     fireEvent.click(screen.getByTestId('shard-slot-0'));
     const pick = screen.getByTestId('shard-pick');
     expect(pick).toHaveAttribute('data-pad-scope');
@@ -117,23 +124,23 @@ describe('ForgeBench', () => {
     );
     expect(screen.queryByTestId('shard-pick-armor-1')).toBeNull();
     fireEvent.click(screen.getByTestId('shard-pick-critChance-2'));
-    expect(lastRequest()).toMatchObject({
-      flux: 'rare',
-      shards: [{ stat: 'critChance', tier: 2 }],
-    });
-    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent('Crit Chance II: +2% to +4%');
-    expect(screen.getByTestId('forge-uses')).toHaveTextContent(
-      'Uses Rusty bar, Rare flux, Crit Chance II',
+    const crit = { stat: 'critChance' as const, tier: 2 };
+    const [line] = preview({ baseId: 'sword', metal: 'rusty', flux: 'rare', shards: [crit] }).lines;
+    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(
+      `Crit Chance II: ${valueRange(registry, 'critChance', ...line.range!)}`,
     );
+    expect(uses()).toHaveTextContent('Uses Rusty bar, Rare flux, Crit Chance II');
     // The next line can't take the same affix again.
     fireEvent.click(screen.getByTestId('shard-slot-1'));
     expect(screen.queryByTestId('shard-pick-critChance-2')).toBeNull();
     fireEvent.click(screen.getByTestId('shard-pick-firePower-1'));
-    expect(lastRequest()!.shards).toHaveLength(2);
+    const fire = shardName(registry, { stat: 'firePower', tier: 1 });
+    expect(uses()).toHaveTextContent(`Uses Rusty bar, Rare flux, Crit Chance II, ${fire}`);
     // A line set back to random drops its shard; the others move up.
     fireEvent.click(screen.getByTestId('shard-slot-0'));
     fireEvent.click(screen.getByTestId('shard-random'));
-    expect(lastRequest()!.shards).toEqual([{ stat: 'firePower', tier: 1 }]);
+    expect(uses()).toHaveTextContent(`Uses Rusty bar, Rare flux, ${fire}`);
+    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(fire);
   });
 
   it('a lower flux keeps only the shards its lines can hold', () => {
@@ -150,12 +157,9 @@ describe('ForgeBench', () => {
     fireEvent.click(screen.getByTestId('shard-slot-1'));
     fireEvent.click(screen.getByTestId('shard-pick-firePower-1'));
     fireEvent.click(screen.getByTestId('flux-uncommon'));
-    expect(lastRequest()).toMatchObject({
-      flux: 'uncommon',
-      shards: [{ stat: 'critChance', tier: 1 }],
-    });
+    expect(uses()).toHaveTextContent(/^Uses Rusty bar, Uncommon flux, Crit Chance I$/);
     fireEvent.click(screen.getByTestId('flux-none'));
-    expect(lastRequest()).toEqual({ baseId: 'sword', metal: 'rusty', element: 'fire', shards: [] });
+    expect(uses()).toHaveTextContent(/^Uses Rusty bar$/);
   });
 
   it("an element outside the pair costs Mana Dust; the engine's refusal turns Forge off and says why", () => {
@@ -166,29 +170,26 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('element-fire')).toHaveTextContent(/^Fire$/);
     expect(screen.getByTestId('element-storm')).toHaveTextContent(`Storm · ${dust} Mana Dust`);
     fireEvent.click(screen.getByTestId('element-storm'));
-    expect(lastRequest()).toMatchObject({ element: 'storm' });
     expect(screen.queryByTestId('forge-floor')).toBeNull();
+    const prev = preview({ baseId: 'cuirass', metal: 'rusty', element: 'storm' });
     expect(screen.getByTestId('forge-button')).toHaveTextContent(
-      `Forge · ${FAKE.forge} scrap · ${dust} Mana Dust`,
+      `Forge · ${prev.price.scrap} scrap · ${dust} Mana Dust`,
     );
     act(() => withMaterials({}));
     expect(screen.getByTestId('forge-button')).toBeDisabled();
-    expect(screen.getByTestId('forge-refused')).toHaveTextContent('You have no such bar');
-    expect(screen.getByTestId('forge-button')).toHaveAccessibleDescription('You have no such bar');
+    expect(screen.getByTestId('forge-refused')).toHaveTextContent('Missing materials');
+    expect(screen.getByTestId('forge-button')).toHaveAccessibleDescription('Missing materials');
   });
 
   it('Forge (or Enter) forges: the item comes marked new, and the bench says so', () => {
     withMaterials({ metals: { ...emptyMaterials().metals, rusty: 2 } });
     const setPrompts = bench();
     fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    const bag = store().profile.bag.length;
     fireEvent.click(screen.getByTestId('forge-button'));
-    expect(forge).toHaveBeenCalledWith(registry, expect.anything(), {
-      baseId: 'cuirass',
-      metal: 'rusty',
-      element: 'fire',
-      shards: [],
-    });
     const made = store().profile.bag.at(-1)!;
+    expect(store().profile.bag).toHaveLength(bag + 1);
+    expect(made).toMatchObject({ baseId: 'cuirass', rarity: 'common', mana: 'fire' });
     expect(store().newUids[made.uid]).toBe(true);
     expect(screen.getByRole('status')).toHaveTextContent(
       `Forged ${made.name}: it waits in your bag`,
@@ -197,9 +198,58 @@ describe('ForgeBench', () => {
     const prompts = setPrompts.mock.lastCall![0];
     expect(prompts.map((p) => p.label)).toEqual(['Select', 'Forge']);
     act(() => prompts[1].onPress!());
-    expect(forge).toHaveBeenCalledTimes(2);
+    expect(store().profile.bag).toHaveLength(bag + 2);
     act(() => useInputDeviceStore.setState({ device: 'gamepad' }));
     expect(setPrompts.mock.lastCall![0].map((p) => p.label)).toEqual(['Select']);
+  });
+
+  it('forges a magic item through the engine: the bag gets what the bench showed, and the materials go', () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, iron: 2 },
+      flux: { ...emptyMaterials().flux, magic: 2 },
+      shards: { critChance: [0, 2] },
+    });
+    bench(false, true);
+    fireEvent.click(screen.getByTestId('pattern-sword'));
+    fireEvent.click(screen.getByTestId('flux-magic'));
+    fireEvent.click(screen.getByTestId('shard-slot-0'));
+    fireEvent.click(screen.getByTestId('shard-pick-critChance-2'));
+    const req: ForgeRequest = {
+      baseId: 'sword',
+      metal: 'iron',
+      flux: 'magic',
+      element: 'fire',
+      shards: [{ stat: 'critChance', tier: 2 }],
+    };
+    const shown = previewForge(registry, store().profile, req);
+    const [crit, random] = shown.lines;
+    expect(screen.getByTestId('forge-title')).toHaveTextContent('Magic Sword');
+    expect(screen.getByTestId('forge-bench')).toHaveTextContent(`item level ${shown.ilvl}`);
+    expect(screen.getByTestId('shard-slot-0')).toHaveTextContent(
+      `Crit Chance II: ${valueRange(registry, 'critChance', ...crit.range!)}rolls 20%–50%`,
+    );
+    expect(screen.getByTestId('shard-slot-1')).toHaveTextContent('Random linerolls 0%–100%');
+    const scrap = store().profile.scrap;
+    fireEvent.click(screen.getByTestId('forge-button'));
+
+    const item = store().profile.bag.at(-1)!;
+    expect(item).toMatchObject({ baseId: 'sword', rarity: 'magic', ilvl: shown.ilvl });
+    expect(item.affixes).toHaveLength(2);
+    expect(item.affixes[0]).toMatchObject({ stat: 'critChance', band: crit.band });
+    expect(item.affixes[0].value).toBeGreaterThanOrEqual(crit.range![0]);
+    expect(item.affixes[0].value).toBeLessThanOrEqual(crit.range![1]);
+    expect(item.affixes[0].roll).toBeGreaterThanOrEqual(
+      crit.band[0] + (crit.band[1] - crit.band[0]) * shown.floor,
+    );
+    expect(item.affixes[1].stat).not.toBe('critChance');
+    expect(item.affixes[1].band).toBeUndefined();
+    expect(item.affixes[1].roll).toBeGreaterThanOrEqual(random.band[0]);
+    expect(store().profile.scrap).toBe(scrap - shown.price.scrap);
+    expect(screen.getByTestId('material-metal-iron')).toHaveTextContent('Iron bar ×1');
+    expect(screen.getByTestId('material-flux-magic')).toHaveTextContent('Magic flux ×1');
+    expect(screen.getByTestId('material-shard-critChance-2')).toHaveTextContent(
+      'Crit Chance II ×1',
+    );
   });
 
   it('epic flux and an essence forge a legendary: the patterns say which it fits, and the fanfare plays', () => {
@@ -213,17 +263,28 @@ describe('ForgeBench', () => {
     expect(screen.queryByTestId('essence-pyroclasm')).toBeNull(); // epic flux first
     fireEvent.click(screen.getByTestId('flux-epic'));
     fireEvent.click(screen.getByTestId('essence-pyroclasm'));
-    expect(lastRequest()).toMatchObject({ flux: 'epic', essence: 'pyroclasm' });
+    expect(uses()).toHaveTextContent('Uses Rusty bar, Epic flux, Pyroclasm essence');
     // Pyroclasm fits a weapon, an amulet or a helm.
     expect(screen.getByTestId('pattern-sword')).toHaveTextContent('Fits the essence');
     expect(screen.getByTestId('pattern-cuirass')).toHaveTextContent('The essence does not fit');
     const def = registry.getLegendary('pyroclasm');
+    const { range } = preview({
+      baseId: 'sword',
+      metal: 'rusty',
+      flux: 'epic',
+      essence: 'pyroclasm',
+    }).legendary!;
     // The engine's range (the floor lifting its low end), not the data's.
+    expect(range[0]).toBeGreaterThan(def.min);
     expect(screen.getByTestId('forge-legendary')).toHaveTextContent(
-      `${def.name}: ${def.text.replace('{v}', '17–30')}`,
+      `${def.name}: ${def.text.replace('{v}', range.join('–'))}`,
     );
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Legendary Sword');
     fireEvent.click(screen.getByTestId('forge-button'));
+    const made = store().profile.bag.at(-1)!;
+    expect(made.legendary!.id).toBe('pyroclasm');
+    expect(made.legendary!.value).toBeGreaterThanOrEqual(range[0]);
+    expect(made.legendary!.value).toBeLessThanOrEqual(range[1]);
     expect(screen.getByTestId('legendary-fanfare')).toHaveTextContent('New codex entry!');
     fireEvent.click(screen.getByTestId('legendary-fanfare'));
     expect(screen.queryByTestId('legendary-fanfare')).toBeNull();
