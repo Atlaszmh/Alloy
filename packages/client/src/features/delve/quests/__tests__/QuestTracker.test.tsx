@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useControlsStore } from '@/stores/controlsStore';
+import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import { QuestTracker } from '../QuestTracker';
 import { SAMPLE_QUESTS } from '../sample';
 import type { QuestView } from '../types';
@@ -41,5 +43,16 @@ describe('QuestTracker', () => {
     render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} onJournal={onJournal} />);
     fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
     expect(onJournal).toHaveBeenCalledOnce();
+  });
+
+  it("its Journal hint shows the player's binding", () => {
+    render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} />);
+    expect(screen.getByTestId('quest-tracker')).toHaveTextContent('JJournal');
+    act(() => useControlsStore.getState().setKey('journal', 'KeyB'));
+    try {
+      expect(screen.getByTestId('quest-tracker')).toHaveTextContent('BJournal');
+    } finally {
+      useControlsStore.setState({ config: DEFAULT_CONTROLS });
+    }
   });
 });

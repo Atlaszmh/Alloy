@@ -1,9 +1,7 @@
 import type { ReactElement } from 'react';
-import { Bar, Glyph, InputGlyph, Panel, type Binding } from '@/features/delve/kit';
+import { Bar, Glyph, InputGlyph, Panel } from '@/features/delve/kit';
+import { useControlsStore } from '@/stores/controlsStore';
 import { MAX_TRACKED, QUEST_KIND, objectiveCount, type QuestView } from './types';
-
-/** The dive's Journal hint (the controls' `journal` action arrives in Phase 3a). */
-export const JOURNAL_BINDING: Binding = { key: 'KeyJ', pad: 'view' };
 
 /**
  * The HUD's quest tracker (Phase 3's right column): up to three tracked quests; nothing while none
@@ -16,11 +14,15 @@ export function QuestTracker({
   quests: QuestView[];
   onJournal?: () => void;
 }): ReactElement | null {
+  const config = useControlsStore((s) => s.config);
   const shown = quests.filter((q) => q.tracked).slice(0, MAX_TRACKED);
   if (shown.length === 0) return null;
   const hint = (
     <>
-      <InputGlyph binding={JOURNAL_BINDING} size="sm" />
+      <InputGlyph
+        binding={{ key: config.keys.journal ?? undefined, pad: config.pad.journal ?? undefined }}
+        size="sm"
+      />
       Journal
     </>
   );
