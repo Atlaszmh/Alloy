@@ -1024,11 +1024,13 @@ const PLAQUE_GAP = 2;
  */
 export function stackPlaques(boxes: { x: number; y: number; w: number; h: number }[]): number[] {
   const bottoms = boxes.map((b) => b.y);
+  /** The labels placed so far, lowest first (a placed label never moves again). */
   const placed: number[] = [];
   for (const i of boxes.map((_, i) => i).sort((a, b) => boxes[b].y - boxes[a].y)) {
     const b = boxes[i];
-    // Lowest first: moving above one can only meet those placed higher.
-    for (const j of placed.sort((m, n) => bottoms[n] - bottoms[m])) {
+    // Lowest first: moving above one can only meet those placed higher, and a label it passed
+    // while below it stays clear (it sits below every one after it too).
+    for (const j of placed) {
       const p = boxes[j];
       const apart =
         Math.abs(b.x - p.x) >= (b.w + p.w) / 2 ||
@@ -1036,7 +1038,8 @@ export function stackPlaques(boxes: { x: number; y: number; w: number; h: number
         bottoms[i] - b.h >= bottoms[j];
       if (!apart) bottoms[i] = bottoms[j] - p.h - PLAQUE_GAP;
     }
-    placed.push(i);
+    const at = placed.findIndex((j) => bottoms[j] < bottoms[i]);
+    placed.splice(at < 0 ? placed.length : at, 0, i);
   }
   return bottoms;
 }

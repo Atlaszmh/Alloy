@@ -296,4 +296,25 @@ describe('loot labels', () => {
       500, 478, 500, 456,
     ]);
   });
+
+  it('stacked labels of different sizes never overlap, one pushed past a raised one clearing it too', () => {
+    const boxes = [
+      { x: -30, y: 600, w: 20, h: 100 },
+      { x: 0, y: 590, w: 60, h: 60 }, // raised above the first
+      { x: 100, y: 530, w: 60, h: 20 },
+      // Starts below the raised one; the third pushes it up into its band, so it goes above it.
+      { x: 50, y: 525, w: 60, h: 20 },
+    ];
+    const bottoms = stackPlaques(boxes);
+    expect(bottoms).toEqual([600, 498, 530, 436]);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) {
+        const [a, b] = [boxes[i], boxes[j]];
+        const apart =
+          Math.abs(a.x - b.x) >= (a.w + b.w) / 2 ||
+          bottoms[i] <= bottoms[j] - b.h ||
+          bottoms[i] - a.h >= bottoms[j];
+        expect(apart).toBe(true);
+      }
+  });
 });
