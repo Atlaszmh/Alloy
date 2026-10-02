@@ -45,7 +45,7 @@ export function TrainingBar({
   const config = useControlsStore((s) => s.config);
   return (
     <div
-      className="k-glass pointer-events-auto flex h-full items-center gap-4 px-4"
+      className="k-glass pointer-events-auto flex h-full items-center gap-4 px-6"
       data-testid="training-bar"
     >
       <Button size="sm" onClick={onBack} aria-label="Back to the Anvil" testId="training-back">

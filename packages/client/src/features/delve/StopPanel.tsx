@@ -118,7 +118,7 @@ export function StopPanel({ stop }: { stop: DiveStop }) {
       {open ? (
         <StopPicker kind={open} onClose={close} onTaken={taken} />
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-3 gap-[18px]">
+        <div className="grid min-h-0 grid-cols-3 items-start gap-[18px]">
           {stop.offers.map((kind) => (
             <button
               key={kind}
