@@ -214,6 +214,7 @@ export function DelveRun() {
   /** Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its losses. */
   const abandon = useCallback(() => {
     setPause(null);
+    arenaRef.current?.flush();
     const s = useDelveStore.getState();
     s.setProfile(settleDive(registry, s.profile, 'abandon'));
   }, [registry]);

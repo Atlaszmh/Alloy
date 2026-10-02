@@ -18,6 +18,8 @@ const seen = vi.hoisted(() => ({
   live: [] as boolean[],
   tick: null as null | (() => void),
   onUi: null as null | ((e: ArenaUiEvent) => void),
+  /** The order the arena's flush and the engine's settle ran in. */
+  calls: [] as string[],
 }));
 
 // The engine's settle is stage 4c's B1: here an abandon settles the dive, two Iron bars lost.
@@ -25,14 +27,19 @@ vi.mock('@alloy/engine', async (orig) => {
   const real = await orig<typeof import('@alloy/engine')>();
   return {
     ...real,
-    settleDive: vi.fn((_registry: unknown, p: DelveProfile) => ({
-      ...p,
-      dive: {
-        ...p.dive!,
-        settled: true,
-        lost: real.addMaterial(real.emptyHaul(), { kind: 'metal', metal: 'iron' }, 2),
-      },
-    })),
+    settleDive: vi.fn(
+      (_registry: unknown, p: DelveProfile) => (
+        seen.calls.push('settle'),
+        {
+          ...p,
+          dive: {
+            ...p.dive!,
+            settled: true,
+            lost: real.addMaterial(real.emptyHaul(), { kind: 'metal', metal: 'iron' }, 2),
+          },
+        }
+      ),
+    ),
   };
 });
 
@@ -61,6 +68,7 @@ vi.mock('@/features/delve/arena/useArena', async () => {
         potion: () => {},
         dodge: () => {},
         attack: () => {},
+        flush: () => seen.calls.push('flush'),
       };
     },
   };
@@ -130,6 +138,7 @@ describe('DelveRun', () => {
     seen.stop.length = 0;
     seen.paused.length = 0;
     seen.live.length = 0;
+    seen.calls.length = 0;
     const registry = getDelveRegistry();
     useDelveStore.setState({
       profile: startDive(registry, createDelveProfile(registry, 7), 1),
@@ -186,6 +195,8 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
     expect(settleDive).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'abandon');
+    // What the floor picked up since the last bank banks first, so the summary counts it lost.
+    expect(seen.calls).toEqual(['flush', 'settle']);
     expect(screen.queryByTestId('pause-stub')).toBeNull();
     const summary = screen.getByTestId('dive-summary');
     expect(summary).toHaveTextContent('ABANDONED');
