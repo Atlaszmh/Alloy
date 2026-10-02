@@ -4,6 +4,7 @@ import {
   type AbilitySlot,
   type Blow,
   type Chains,
+  type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
 } from '../types/ability.js';
@@ -574,6 +575,64 @@ export function manaSupport(
   };
 }
 
+/** The expected hit before a move's power: weapon damage × damage multiplier × the crit factor. */
+export function expectedHit(stats: HeroStats): number {
+  const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
+  return stats.weaponDamage * stats.damageMult * critFactor;
+}
+
+/** One full cycle of an ability chain, as Power values it (the Skills tab's stats and rhythm). */
+export interface ChainCycle {
+  /** One full cycle's damage: `damagePerUse` at `expectedHit` × moves. */
+  damage: number;
+  /** One full cycle's seconds: the unbounded `useInterval` × moves. */
+  seconds: number;
+  /** Mana spent in one cycle: each move's valued cost (0 paid with charge). */
+  mana: number;
+  /** Each move as valued (a hold at full charge). */
+  steps: {
+    /** Its wind-up (conjure and channel); a hold's max(holdFull, castTime). */
+    cast: number;
+    /** `moveBeat` at the hero's tempo. */
+    beat: number;
+    kind: MoveKind;
+    elements: ManaType[];
+    hold: boolean;
+    /** Its runes repeat it (Echo). */
+    echo: boolean;
+  }[];
+  /** `comboWindow`: the pause after the last beat that starts the chain over. */
+  restart: number;
+}
+
+/** An ability chain's cycle (never the basic chain's): `chain` is the resolved draft. */
+export function chainCycle(
+  registry: DataRegistry,
+  stats: HeroStats,
+  chain: ResolvedChain,
+): ChainCycle {
+  const bal = registry.getDelveBalance();
+  const n = chain.moves.length;
+  const moves = chain.moves.map((_, i) => valuedMove(chain, i));
+  return {
+    damage: damagePerUse(chain, expectedHit(stats), stats, bal) * n,
+    seconds: useInterval(bal, chain, stats.tempo, Infinity, Infinity) * n,
+    mana: moves.reduce((sum, ab) => sum + ab.cost, 0),
+    steps: moves.map((ab) => {
+      const hold = ab.kind === 'hold';
+      return {
+        cast: hold ? Math.max(holdFull(bal, stats.tempo), ab.castTime) : ab.castTime,
+        beat: moveBeat(bal, ab, stats.tempo),
+        kind: ab.kind,
+        elements: ab.elements,
+        hold,
+        echo: ab.knobs.echo > 0,
+      };
+    }),
+    restart: bal.abilities.comboWindow,
+  };
+}
+
 /**
  * Heuristic DPS / effective-HP estimate against the reference monster, used
  * for Power and item comparisons. The basic attack, the Primary and the
@@ -597,8 +656,7 @@ export function estimateCombat(
   const ref = referenceMonster(registry, depth);
   const L = stats.legendaries;
 
-  const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
-  const hit = stats.weaponDamage * stats.damageMult * critFactor;
+  const hit = expectedHit(stats);
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
   // Each blow's power × its element's power × its runes (`blowRunes`), over the chain's time
