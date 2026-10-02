@@ -4,47 +4,40 @@ import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
-import { Panel, Tabs, type Prompt } from '../../kit';
+import { Panel, type Prompt } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { runeName } from '../../runes/rune-style';
 import type { HubLink, HubTabProps } from '../types';
 import { GearList } from './GearList';
 import { Temper } from './Temper';
-import { Fuse } from './Fuse';
 import { RunePane } from './RunePane';
-
-type BenchId = 'temper' | 'fuse';
 
 const PROMPTS: Prompt[] = [
   { id: 'select', label: 'Select', binding: { mouse: 'click', pad: 'a' } },
 ];
 
 /**
- * The Forge tab: the gear list, the bench (Temper the selected item, or Alloy
- * Fusion) and the rune pane. `{ tab: 'forge', uid, bench }` links pick the item
- * and the bench. Locked while a dive is under way, and in the pause.
+ * The Forge tab: the gear list, the Temper bench on the selected item and the
+ * rune pane (stage 4c's C2 adds the Forge bench). `{ tab: 'forge', uid }` links
+ * pick the item. Locked while a dive is under way, and in the pause.
  */
 export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const forgeLink = (l?: HubLink) => (l?.tab === 'forge' ? l : null);
   const [selected, setSelected] = useState<string | null>(forgeLink(link)?.uid ?? null);
-  const [bench, setBench] = useState<BenchId>(forgeLink(link)?.bench ?? 'temper');
-  // A new link (e.g. "Forge it ›" from the Loadout) picks its item and bench.
+  // A new link (e.g. "Forge it ›" from the Loadout) picks its item.
   const [seen, setSeen] = useState(link);
   if (link !== seen) {
     setSeen(link);
-    const to = forgeLink(link);
-    if (to) {
-      if (to.uid) setSelected(to.uid);
-      setBench(to.bench ?? 'temper');
-    }
+    const uid = forgeLink(link)?.uid;
+    if (uid) setSelected(uid);
   }
 
   useEffect(() => setPrompts(PROMPTS), [setPrompts]);
 
   const equipped = GEAR_SLOTS.flatMap((s) => profile.equipped[s] ?? []);
-  // The selected item, or (none yet, or fused away) the first one worn.
+  // The selected item, or (none yet, or salvaged away) the first one worn.
   const item = (selected && findItem(profile, selected)?.item) || equipped[0] || null;
   const locked = mode === 'pause' || isDiveActive(profile);
 
@@ -76,7 +69,6 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
         onSelect={(uid) => {
           playSound('orbSelect');
           setSelected(uid);
-          setBench('temper');
         }}
       />
       <Panel aria-label="Bench" testId="forge-bench">
@@ -85,28 +77,7 @@ export function ForgeTab({ mode, setPrompts, link }: HubTabProps) {
             A dive is under way: forge and salvage between dives.
           </p>
         ) : (
-          <>
-            <Tabs
-              aria-label="Bench"
-              level="sub"
-              size="md"
-              value={bench}
-              onChange={setBench}
-              tabs={[
-                { id: 'temper', label: 'Temper', testId: 'bench-temper' },
-                { id: 'fuse', label: 'Fuse', testId: 'bench-fuse' },
-              ]}
-            />
-            {bench === 'temper' && item && <Temper key={item.uid} item={item} />}
-            {bench === 'fuse' && (
-              <Fuse
-                onResult={(uid) => {
-                  setSelected(uid);
-                  setBench('temper');
-                }}
-              />
-            )}
-          </>
+          item && <Temper key={item.uid} item={item} />
         )}
       </Panel>
       <RunePane

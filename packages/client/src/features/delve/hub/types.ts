@@ -9,8 +9,11 @@ export type HubTab = 'loadout' | 'skills' | 'forge' | 'codex' | 'quests';
 export type HubLink =
   | { tab: 'loadout'; uid?: string }
   | { tab: 'skills'; skill?: ChainSkill; view?: 'mana' }
-  | { tab: 'forge'; uid?: string; bench?: 'temper' | 'fuse' }
-  | { tab: 'codex'; section?: 'legendaries' | 'reactions' | 'records' }
+  | { tab: 'forge'; uid?: string; bench?: 'forge' | 'temper' }
+  | {
+      tab: 'codex';
+      section?: 'legendaries' | 'reactions' | 'patterns' | 'essences' | 'records';
+    }
   | { tab: 'quests'; questId?: string };
 
 export interface HubTabProps {
