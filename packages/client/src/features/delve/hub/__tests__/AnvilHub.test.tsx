@@ -124,6 +124,18 @@ describe('AnvilHub', () => {
     expect(screen.queryByTestId('system-menu')).toBeNull();
   });
 
+  it('Esc opens the system menu, and Esc again closes it, once each', () => {
+    // The app makes the UI layer after the root; a layer left by an earlier test would sit before it.
+    document.getElementById('delve-ui-layer')?.remove();
+    renderHub();
+    press('Escape');
+    expect(screen.getAllByTestId('system-menu')).toHaveLength(1);
+    press('Escape'); // the menu's Back, never the hub's Menu prompt behind it
+    expect(screen.queryByTestId('system-menu')).toBeNull();
+    press('Escape');
+    expect(screen.getAllByTestId('system-menu')).toHaveLength(1);
+  });
+
   it('the footer holds Training, the start depths and the Delve button, the first focus', () => {
     act(() => {
       const p = useDelveStore.getState().profile;
