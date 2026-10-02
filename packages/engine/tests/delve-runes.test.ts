@@ -1004,6 +1004,22 @@ describe("the stop's fifth kind: socket a rune", () => {
     expect(takeStop(registry, elsewhere, action).reason).toBe('Not offered at this stop');
   });
 
+  it('sockets a rune found this dive, out of what the dive banked (S9)', () => {
+    const p = atStop({ ...ready(), runes: {} });
+    const found = {
+      ...p,
+      dive: { ...p.dive!, banked: { ...p.dive!.banked, runes: { chain: [1, 0, 0, 0, 0] } } },
+    };
+    expect(stopKinds(registry, p)).not.toContain('rune');
+    expect(stopKinds(registry, found)).toContain('rune');
+    const action = { kind: 'rune', skill: 'primary', index: 0, socket: 1, rune: CHAIN_I } as const;
+    const res = takeStop(registry, found, action);
+    expect(res.ok).toBe(true);
+    expect(primaryOf(res.profile).moves[0].runes).toEqual([SPLIT_I, CHAIN_I]);
+    expect(res.profile.dive!.banked.runes).toEqual({ chain: [0, 0, 0, 0, 0] });
+    expect(res.profile.runes).toEqual({ chain: [0, 0, 0, 0, 0] });
+  });
+
   it("the 'move' stop keeps the saved move's runes, whatever the client sends", () => {
     const p = atStop(ready());
     const bolt = primaryOf(p).moves[0];
