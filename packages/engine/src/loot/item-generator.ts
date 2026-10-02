@@ -27,9 +27,6 @@ export interface RarityRollContext {
   /** 0 = no luck; 1 = +100% magic find equivalent. */
   luck: number;
   minRarity?: Rarity;
-  // ponytail: ignored since stage 4c (the crafting spec's S5: Lucky Charm doubles only the essence
-  // odds); delete it once loot/drops.ts (B1) stops passing it.
-  legendaryBoost?: number;
 }
 
 /** Deterministic weighted pick. Returns the first item when all weights are 0. */

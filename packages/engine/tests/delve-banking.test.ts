@@ -98,7 +98,7 @@ describe('banking a floor', () => {
   });
 
   // ponytail: B2's applySalvage sends mid-dive salvage into the haul; the integrator un-skips this once B1 and B2 merge.
-  it.skip("mid-dive auto-salvage yields (scrap, a shard) go to the floor's haul, not the stockpile", () => {
+  it("mid-dive auto-salvage yields (scrap, a shard) go to the floor's haul, not the stockpile", () => {
     const p = startDive(
       registry,
       setAutoSalvage(createDelveProfile(registry, 5), 'magic', true),
