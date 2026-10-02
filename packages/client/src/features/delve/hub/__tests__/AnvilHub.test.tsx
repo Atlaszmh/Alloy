@@ -132,6 +132,7 @@ describe('AnvilHub', () => {
       </MemoryRouter>,
     );
     expect(screen.getByTestId('tab-forge')).toBeDisabled();
+    expect(screen.getByTestId('tab-forge')).toHaveAttribute('title', 'Forge at the Anvil');
     press('Digit3');
     expect(selected()).toEqual(['tab-loadout']);
     press('Digit4');

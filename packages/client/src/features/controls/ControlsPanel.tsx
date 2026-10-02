@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useControlsStore } from '@/stores/controlsStore';
+import { useDelveStore } from '@/stores/delveStore';
 import { capturePadButton } from '@/features/gamepad/gamepad-hub';
 import { Button, Chip, Dialog, Glyph } from '@/features/delve/kit';
 import {
@@ -24,6 +25,7 @@ type Capture = { kind: 'pad'; action: ControlAction } | { kind: 'key'; action: K
  */
 export function ControlsPanel({ onClose }: { onClose: () => void }) {
   const cfg = useControlsStore((s) => s.config);
+  const manual = useDelveStore((s) => s.manualAttack);
   const store = useControlsStore.getState;
   const [capturing, setCapturing] = useState<Capture | null>(null);
   const [text, setText] = useState<string | null>(null);
@@ -89,6 +91,14 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           Pick a cell, then press the button or key you want (Esc cancels). If another action
           already uses it, the two swap. Changes apply at once.
         </p>
+
+        <Button
+          className="self-start"
+          onClick={() => useDelveStore.getState().setManualAttack(!manual)}
+          testId="attack-mode-toggle"
+        >
+          Basic attack: {manual ? 'Manual' : 'Auto'}
+        </Button>
 
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
           <span className={caption}>Action</span>
