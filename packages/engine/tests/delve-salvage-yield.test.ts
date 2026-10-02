@@ -3,7 +3,7 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { forgedMoveset } from '../src/loot/forge.js';
-import { materialCount, withMaterial } from '../src/loot/materials.js';
+import { materialCount, shardTiersOf, withMaterial } from '../src/loot/materials.js';
 import { applySalvage, salvageRng, salvageYield } from '../src/loot/salvage-yield.js';
 import { salvageValue } from '../src/loot/smithing.js';
 import { forge } from '../src/delve/crafting.js';
@@ -88,6 +88,18 @@ describe('salvageYield', () => {
     expect(C.salvageShardTier.map(tierAt)).toEqual([2, 3, 4, 5]);
     const one = salvageYield(registry, hero(), gloves({ affixes: [line('armor', 0.5)] }));
     expect(one.extraShard).toBe(0);
+  });
+
+  it("gives at most the tier whose band holds the roll, in the affix's own bands", () => {
+    const tierOf = (stat: HeroStatKey, roll: number) =>
+      salvageYield(registry, hero(), gloves({ affixes: [line(stat, roll)] })).shards[0].tier;
+    // An Attune I shard rolls under 0.5: past the 0.3 threshold it is still I.
+    expect([0.3, 0.49, 0.5, 1].map((r) => tierOf('fireAttune', r))).toEqual([1, 1, 2, 2]);
+    // So an imprinted line never salvages above its shard's tier.
+    for (const a of registry.getDelveData().affixes)
+      for (const t of shardTiersOf(registry, a.stat))
+        for (const r of [t.min, (t.min + t.max) / 2, t.max - 1e-9])
+          expect(tierOf(a.stat, r), `${a.stat} ${t.tier} @${r}`).toBeLessThanOrEqual(t.tier);
   });
 
   it('gives no shard for a common, no pattern once known, and Mana Dust off the pair', () => {

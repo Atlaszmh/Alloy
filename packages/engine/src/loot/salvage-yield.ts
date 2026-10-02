@@ -15,12 +15,17 @@ import { salvageValue } from './smithing.js';
  * goes through `applySalvage`.
  */
 
-/** A salvaged line's shard tier: 1 + the `salvageShardTier` thresholds its roll reaches, at most its affix's last. */
+/**
+ * A salvaged line's shard tier: 1 + the `salvageShardTier` thresholds its roll
+ * reaches, but never past the highest of its affix's own tiers whose band holds
+ * the roll, so an imprinted line can't salvage above its shard.
+ */
 function salvageTier(registry: DataRegistry, stat: HeroStatKey, roll: number): number {
   const passed = registry
     .getDelveBalance()
     .crafting.salvageShardTier.filter((t) => roll >= t).length;
-  return Math.min(1 + passed, shardTiersOf(registry, stat).length);
+  const held = shardTiersOf(registry, stat).filter((t) => t.min <= roll).length;
+  return Math.max(1, Math.min(1 + passed, held));
 }
 
 /**
