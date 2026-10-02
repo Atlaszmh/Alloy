@@ -1,6 +1,6 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem, Rarity } from '../types/gear.js';
+import type { GearItem } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, emptyManaMap, type ManaType } from '../types/mana.js';
 import { upgradeCost } from '../loot/smithing.js';
@@ -23,7 +23,6 @@ import { bindSecondary, resolveOvertake } from './pair.js';
 import {
   createDelveProfile,
   equipBest,
-  fuseGear,
   profilePower,
   referenceDepth,
   salvageCandidates,
@@ -73,7 +72,6 @@ export interface AutopilotDiveReport {
 }
 
 const DOOR_PREFERENCE = ['winding', 'gilded', 'swarm', 'champions', 'cursed', 'plunge', 'shrine'];
-const FUSE_RARITIES: Rarity[] = ['magic', 'rare', 'epic'];
 const STEP = 1 / 30;
 
 function playFloor(
@@ -412,35 +410,14 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
 }
 
 /**
- * Between dives: move the moveset to a better weapon, equip upgrades, fuse
- * spare triples, melt junk, spend Links on slots up to `SOCKETS_AFTER` a chain,
+ * Between dives: move the moveset to a better weapon, equip upgrades, melt
+ * junk, spend Links on slots up to `SOCKETS_AFTER` a chain,
  * then on sockets for the pouch's runes (each filled as it opens), then on the
  * rest of the slots; socket the best, fuse the rune copies left over, and pour
  * scrap into upgrades.
  */
 function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   let p = equipBest(registry, transferBest(registry, profile)).profile;
-  const depth = referenceDepth(p);
-
-  for (const rarity of FUSE_RARITIES) {
-    for (;;) {
-      const spare = p.bag.filter(
-        (i) =>
-          i.rarity === rarity &&
-          !i.locked &&
-          compareItem(p.equipped, i, registry, depth, p.pair).powerPct <= 0,
-      );
-      if (spare.length < 3) break;
-      const res = fuseGear(
-        registry,
-        p,
-        spare.slice(0, 3).map((i) => i.uid),
-      );
-      if (!res.ok) break;
-      p = equipBest(registry, res.profile).profile;
-    }
-  }
-
   p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
   // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
   // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left

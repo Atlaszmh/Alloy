@@ -24,7 +24,6 @@ import {
   toggleLock,
   upgradeGear,
   reforgeGear,
-  fuseGear,
   setAutoSalvage,
   parseDelveProfile,
   findItem,
@@ -328,14 +327,5 @@ describe('gear management', () => {
     expect(a).toEqual(reforgeGear(registry, p, 'b0', 0));
     expect(a.ok).toBe(true);
     expect(a.profile.forgeCount).toBe(p.forgeCount + 1);
-  });
-
-  it('fusion consumes three items and yields one of the next rarity, keeping a mana type', () => {
-    const p = { ...withBag(9, 'magic'), scrap: 10_000 };
-    const r = fuseGear(registry, p, ['b0', 'b1', 'b2']);
-    expect(r.ok).toBe(true);
-    expect(r.profile.bag).toHaveLength(1);
-    expect(r.profile.bag[0].rarity).toBe('rare');
-    expect(r.profile.bag[0].mana).toBe('fire');
   });
 });

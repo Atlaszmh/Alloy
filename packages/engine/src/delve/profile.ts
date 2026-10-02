@@ -8,9 +8,6 @@ import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { generateItem } from '../loot/item-generator.js';
 import {
   applyUpgrade,
-  checkFusion,
-  fuseCost,
-  fuseItems,
   reforgeAffix,
   reforgeCost,
   salvageValue,
@@ -54,7 +51,7 @@ export interface ProfileActionResult {
   item?: GearItem;
   /** The chains' moves the op changed to fit the pair (Realign), a fix each. */
   fixed?: ChainFix[];
-  /** Links the op gave back (a fuse's weapons' extra slots, a transfer's). */
+  /** Links the op gave back (a transfer's). */
   links?: number;
   /** Runes the op put back in the pouch (see the runes spec). */
   runes?: RuneRef[];
@@ -718,58 +715,5 @@ export function reforgeGear(
       scrap: profile.scrap - cost,
       forgeCount: profile.forgeCount + 1,
     },
-  };
-}
-
-/**
- * Fuse three bag items of one rarity into one of the next (`fuseItems`), for
- * scrap. The inputs' weapon parts come back as salvaging them would give
- * (`weaponParts`: `links`, and the runes by the parts rule, `opts.unsocket`);
- * a fused weapon rolls its own moveset. Refuses mid-dive.
- */
-export function fuseGear(
-  registry: DataRegistry,
-  profile: DelveProfile,
-  uids: string[],
-  opts: Pick<SetChainsOptions, 'unsocket'> = {},
-): ProfileActionResult {
-  if (isDiveActive(profile)) return { ok: false, profile, reason: FORGE_LOCKED };
-  const items = uids.map((uid) => profile.bag.find((i) => i.uid === uid));
-  if (items.some((i) => !i)) return { ok: false, profile, reason: 'Fuse items from your bag' };
-  const inputs = items as GearItem[];
-  const check = checkFusion(inputs);
-  if (!check.ok) return { ok: false, profile, reason: check.reason };
-  const cost = fuseCost(registry, inputs);
-  if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
-
-  const result = fuseItems(registry, inputs, `g${profile.nextUid}`, forgeRng(profile));
-  const parts = inputs.map((i) => weaponParts(registry, i));
-  const links = parts.reduce((sum, p) => sum + p.links, 0);
-  const settled = settleParts(
-    registry,
-    profile.runes,
-    parts.flatMap((p) => p.runes),
-    opts.unsocket,
-  );
-  const consumed = new Set(uids);
-  const recorded = recordFinds(
-    {
-      ...profile,
-      bag: [...profile.bag.filter((i) => !consumed.has(i.uid)), result],
-      scrap: profile.scrap - cost,
-      links: profile.links + links,
-      runes: settled.pouch,
-      nextUid: profile.nextUid + 1,
-      forgeCount: profile.forgeCount + 1,
-    },
-    [result],
-  );
-  return {
-    ok: true,
-    item: result,
-    profile: recorded.profile,
-    links,
-    runes: settled.runes,
-    destroyed: settled.destroyed,
   };
 }

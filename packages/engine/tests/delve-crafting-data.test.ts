@@ -16,6 +16,7 @@ import { HERO_STAT_KEYS } from '../src/types/gear.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import { arena } from './fixtures/arena.js';
+import * as engine from '../src/index.js';
 
 // See the crafting spec: "Tuning: every number in data".
 
@@ -172,5 +173,13 @@ describe('balance: delve.crafting and delve.drops', () => {
       scrap('normal'),
       scrap('elite'),
     ]);
+  });
+});
+
+describe('Alloy Fusion is gone (refining flux replaces it)', () => {
+  it('has no fuse op, check or price, and no `forge.fuseCost`', () => {
+    for (const name of ['fuseGear', 'fuseItems', 'checkFusion', 'fuseCost'])
+      expect(name in engine, name).toBe(false);
+    expect('fuseCost' in balanceData.delve.forge).toBe(false);
   });
 });

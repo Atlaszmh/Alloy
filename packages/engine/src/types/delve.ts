@@ -394,7 +394,6 @@ export interface DelveBalance {
     rarityCostMult: Record<Rarity, number>;
     reforgeBaseCost: number;
     reforgeGrowth: number;
-    fuseCost: Record<Rarity, number>;
   };
   mana: {
     /** Attunement an item grants to its own mana type, by rarity. */

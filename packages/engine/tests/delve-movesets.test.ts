@@ -31,7 +31,6 @@ import {
   createDelveProfile,
   equipBest,
   equipItem,
-  fuseGear,
   parseDelveProfile,
   profilePower,
   reforgeGear,
@@ -973,7 +972,7 @@ function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
   return { ...w, moveset: defaultMoveset(registry, w, w.mana, slots) };
 }
 
-describe('Links: salvage, fusing and banking', () => {
+describe('Links: salvage and banking', () => {
   const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 3, defensive: 1 }); // 3 extra
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
 
@@ -1001,20 +1000,6 @@ describe('Links: salvage, fusing and banking', () => {
     const w2 = beginFloor(registry, full);
     w2.pending.items = [rare];
     expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, links: 3 });
-  });
-
-  it('fusing three weapons refunds their extra slots as Links; the fused weapon rolls its own', () => {
-    const magic = (uid: string, primary: number) => ({
-      ...slotted(weapon('magic', 4, 'axe'), { basic: 3, primary, defensive: 1 }),
-      uid,
-    });
-    const p = { ...hero(), scrap: 9999, bag: [magic('a', 2), magic('b', 1), magic('c', 2)] };
-    const res = fuseGear(registry, p, ['a', 'b', 'c']);
-    expect(res.ok).toBe(true);
-    expect(res.links).toBe(2);
-    expect(res.profile.links).toBe(2);
-    expect(res.item!.rarity).toBe('rare');
-    expect(extraSlots(registry, res.item!)).toBeGreaterThanOrEqual(1); // a rare's own 1–2
   });
 });
 
@@ -1201,11 +1186,6 @@ describe('the dive lock', () => {
     const forge = 'Forge at the Anvil, between dives';
     expect(upgradeGear(registry, diving, 'h')).toMatchObject({ ok: false, reason: forge });
     expect(reforgeGear(registry, diving, 'h', 0)).toMatchObject({ ok: false, reason: forge });
-    const triple = { ...diving, bag: [0, 1, 2].map((i) => ({ ...helm, uid: `f${i}` })) };
-    expect(fuseGear(registry, triple, ['f0', 'f1', 'f2'])).toMatchObject({
-      ok: false,
-      reason: forge,
-    });
     expect(salvageItems(registry, diving, ['h'])).toMatchObject({ profile: diving, count: 0 });
     // The door screen is still the dive: the same lock.
     const choosing = { ...diving, dive: { ...diving.dive!, phase: 'choosing' as const } };

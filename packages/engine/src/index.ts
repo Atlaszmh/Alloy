@@ -103,7 +103,7 @@ export {
 } from './loot/item-generator.js';
 export type { ItemGenOptions, RarityRollContext } from './loot/item-generator.js';
 export { rollEncounterDrops } from './loot/drops.js';
-export { salvageValue, upgradeCost, reforgeCost, fuseCost, checkFusion } from './loot/smithing.js';
+export { salvageValue, upgradeCost, reforgeCost } from './loot/smithing.js';
 export {
   computeHeroStats,
   computeAttunement,
@@ -167,7 +167,6 @@ export {
   EQUIP_BEST_SLOTS,
   upgradeGear,
   reforgeGear,
-  fuseGear,
   chainFromBuild,
 } from './delve/profile.js';
 export {

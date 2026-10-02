@@ -988,7 +988,6 @@ const DelveBalanceSchema = z.object({
     rarityCostMult: perRarity(z.number().positive()),
     reforgeBaseCost: z.number().positive(),
     reforgeGrowth: z.number().positive(),
-    fuseCost: perRarity(z.number().min(0)),
   }),
   mana: z.object({
     attuneByRarity: perRarity(z.number().int().min(0)),

@@ -120,8 +120,7 @@
     "forge": {
       "upgradeStep": 0.1, "maxUpgrade": 10, "upgradeBaseCost": 10, "upgradeCostExp": 1.5,
       "rarityCostMult": { "common": 1, "uncommon": 1.2, "magic": 1.5, "rare": 2, "epic": 3, "legendary": 4 },
-      "reforgeBaseCost": 25, "reforgeGrowth": 1.6,
-      "fuseCost": { "common": 5, "uncommon": 15, "magic": 40, "rare": 100, "epic": 300, "legendary": 0 }
+      "reforgeBaseCost": 25, "reforgeGrowth": 1.6
     },
     "mana": {
       "attuneByRarity": { "common": 1, "uncommon": 1, "magic": 1, "rare": 2, "epic": 2, "legendary": 3 },
