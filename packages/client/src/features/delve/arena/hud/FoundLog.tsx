@@ -8,6 +8,7 @@ import { getDelveRegistry } from '../../registry';
 import { RARITY_COLOR, RARITY_TEXT, UPGRADE_EPSILON } from '../../format';
 import { countRunes } from '../../chains/chain-text';
 import { FAMILY_STYLE, runeName } from '../../runes/rune-style';
+import { haulRows, type HaulRow } from '../../materials/material-style';
 import { noFocus } from './SkillSlot';
 
 /** A row's height and the gap between rows, in design px. */
@@ -75,17 +76,33 @@ function Swatch({ color }: { color: string }): ReactElement {
   return <span aria-hidden className="size-[10px] flex-none" style={{ background: color }} />;
 }
 
+/** A material's or an essence's row: "Iron bar ×3". */
+function HaulFeedRow({ row, testId, color }: { row: HaulRow; testId: string; color?: string }) {
+  return (
+    <div className={ROW_CLASS} data-testid={testId}>
+      <Swatch color={row.color} />
+      <span className="truncate" style={{ color }}>
+        {row.name}
+        {row.count > 1 && ` ×${row.count}`}
+      </span>
+    </div>
+  );
+}
+
 /**
- * "Found this floor": each pickup since the floor began, newest first (the items, then the
- * runes), as many as fit, then "+n more". An item shows its card on hover and opens on a click;
- * ▲ marks an upgrade (to equip at the Anvil), ◇ a weapon better only with your moveset moved
- * onto it (Transfer), ▼ a downgrade.
+ * "Found this floor": each pickup since the floor began, as many as fit, then "+n more": the
+ * materials in the floor's haul grouped ("Iron bar ×3"), the items newest first, the essences in
+ * legendary orange, then the runes (Mana Dust, Links and scrap are the purse's). An item shows
+ * its card on hover and opens on a click; ▲ marks an upgrade (to equip at the Anvil), ◇ a weapon
+ * better only with your moveset moved onto it (Transfer), ▼ a downgrade.
  */
 export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): ReactElement {
   const registry = getDelveRegistry();
   const listRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(Infinity);
   const { items, runes } = useFloorFinds();
+  const haul = useDelveStore((s) => s.profile.dive?.haul);
+  const found = haul ? haulRows(registry, haul) : [];
 
   // As many rows as fit: again after each render (a panel above may have come or gone) and on a
   // resize of the list or the column.
@@ -112,6 +129,9 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
   const potential = items.filter((r) => up(r.delta) && !up(r.asIs)).length;
 
   const rows = [
+    ...found
+      .filter((r) => r.group === 'material')
+      .map((r) => <HaulFeedRow key={r.key} row={r} testId="feed-material" />),
     ...items.map(({ item, delta, asIs }) => {
       const mark = deltaMark(delta, asIs);
       return (
@@ -137,6 +157,11 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
         </ItemTooltip>
       );
     }),
+    ...found
+      .filter((r) => r.group === 'essence')
+      .map((r) => (
+        <HaulFeedRow key={r.key} row={r} testId="feed-essence" color={RARITY_TEXT.legendary} />
+      )),
     ...runes.map(({ rune, count }) => (
       <div key={`${rune.id}-${rune.tier}`} className={ROW_CLASS} data-testid="feed-rune">
         <Swatch color={FAMILY_STYLE[registry.getRune(rune.id).family].color} />

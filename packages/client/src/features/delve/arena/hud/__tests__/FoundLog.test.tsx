@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { generateItem, SeededRNG } from '@alloy/engine';
+import { addMaterial, emptyHaul, generateItem, SeededRNG } from '@alloy/engine';
 import { FoundLog } from '../FoundLog';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
@@ -137,6 +137,34 @@ describe('FoundLog: what this floor found', () => {
       '◇ 1 potential: Transfer at the Anvil',
     );
     expect(screen.getAllByTestId('loot-item')[0]).toHaveTextContent(`${dagger.name}◇`);
+  });
+
+  it("groups the floor's materials above its items, and its essences below them; Mana Dust is the purse's", () => {
+    dive();
+    let haul = addMaterial(emptyHaul(), { kind: 'metal', metal: 'iron' }, 3);
+    haul = addMaterial(haul, { kind: 'shard', stat: 'critChance', tier: 2 });
+    haul = addMaterial(haul, { kind: 'essence', essence: 'twin_fang' });
+    haul = addMaterial(haul, { kind: 'dust' }, 5);
+    store().setProfile({ ...store().profile, dive: { ...store().profile.dive!, haul } });
+    render(<FoundLog onInspect={() => {}} />);
+    const feed = screen.getByTestId('pickup-feed');
+    const order = [
+      ...feed.querySelectorAll('[data-testid^="feed-"], [data-testid="loot-item"]'),
+    ].map((el) => el.getAttribute('data-testid'));
+    expect(order).toEqual([
+      'feed-material',
+      'feed-material',
+      'loot-item',
+      'loot-item',
+      'feed-essence',
+    ]);
+    const [bars, shard] = screen.getAllByTestId('feed-material');
+    expect(bars).toHaveTextContent(/^Iron bar ×3$/);
+    expect(shard).toHaveTextContent(/^Crit Chance II$/);
+    expect(within(screen.getByTestId('feed-essence')).getByText('Twin Fang essence')).toHaveStyle({
+      color: '#f77622',
+    });
+    expect(feed).not.toHaveTextContent('Mana Dust');
   });
 
   it('names the runes found, grouped, even with no item found', () => {
