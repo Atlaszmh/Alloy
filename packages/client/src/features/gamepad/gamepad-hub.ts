@@ -49,6 +49,11 @@ export function setArenaLive(live: boolean): void {
   arenaPresses.clear();
 }
 
+/** Whether the arena owns the controller, Esc and the menu key now (`setArenaLive`). */
+export function isArenaLive(): boolean {
+  return arenaLive;
+}
+
 /** The pad as of this frame (sticks and held buttons), or null with no pad. */
 export function padState(): PadState | null {
   return current;
