@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { useState } from 'react';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {
   emptyMaterials,
   previewForge,
@@ -11,7 +13,7 @@ import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
-import type { Prompt } from '../../../kit';
+import { usePrompts, type Prompt } from '../../../kit';
 import { pct, shardName, statRange, valueRange } from '../materials-text';
 
 // The bench runs on the real engine: what it shows is `previewForge`, what it makes is `forge`.
@@ -288,6 +290,35 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('legendary-fanfare')).toHaveTextContent('New codex entry!');
     fireEvent.click(screen.getByTestId('legendary-fanfare'));
     expect(screen.queryByTestId('legendary-fanfare')).toBeNull();
+  });
+
+  it('the fanfare takes the focus in its own pad scope: Enter dismisses it and never forges again', async () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, rusty: 2 },
+      flux: { ...emptyMaterials().flux, epic: 2 },
+      essences: { pyroclasm: 2 },
+    });
+    // The bench's prompts bound as the hub binds them: Enter forges.
+    function Hub() {
+      const [prompts, setPrompts] = useState<Prompt[]>([]);
+      usePrompts(prompts);
+      return <ForgeBench locked={false} setPrompts={setPrompts} />;
+    }
+    render(<Hub />);
+    fireEvent.click(screen.getByTestId('pattern-sword'));
+    fireEvent.click(screen.getByTestId('flux-epic'));
+    fireEvent.click(screen.getByTestId('essence-pyroclasm'));
+    const bag = store().profile.bag.length;
+    fireEvent.click(screen.getByTestId('forge-button'));
+    expect(store().profile.bag).toHaveLength(bag + 1);
+    const fanfare = screen.getByTestId('legendary-fanfare');
+    // Portalled to the body, it covers the viewport in its own pad scope.
+    expect(fanfare.closest('[data-pad-scope]')).toHaveClass('fixed', 'inset-0');
+    expect(screen.getByTestId('forge-bench').contains(fanfare)).toBe(false);
+    expect(fanfare.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard('{Enter}');
+    expect(screen.queryByTestId('legendary-fanfare')).toBeNull();
+    expect(store().profile.bag).toHaveLength(bag + 1);
   });
 
   it('mid-dive the forge waits, with Select alone left to the tab', () => {

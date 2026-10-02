@@ -12,12 +12,21 @@ interface LegendaryFanfareProps {
   onDone: () => void;
 }
 
-/** Full-screen celebration for a legendary drop, in the forge kit. Tap to continue. */
+/**
+ * Full-screen celebration for a legendary drop, in the forge kit. Tap to
+ * continue. It covers the viewport (it may be portalled to the body) in its
+ * own pad scope and takes the focus, so Enter, A, Esc or B dismiss it and
+ * never reach the controls behind it.
+ */
 export function LegendaryFanfare({ item, firstTime, onDone }: LegendaryFanfareProps) {
   const registry = getDelveRegistry();
   const rootRef = useRef<HTMLButtonElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
 
   useEffect(() => {
     const id = window.setTimeout(onDone, 3200);
@@ -44,53 +53,56 @@ export function LegendaryFanfare({ item, firstTime, onDone }: LegendaryFanfarePr
   }, [onDone]);
 
   return (
-    <button
-      ref={rootRef}
-      type="button"
-      onClick={onDone}
-      className="delve-ui delve-zoom absolute inset-0 z-[70] flex flex-col items-center justify-center gap-4 overflow-hidden border-0 px-8 text-center text-[var(--k-text)]"
-      style={{
-        background:
-          'radial-gradient(circle at 50% 42%, rgba(247,118,34,0.45) 0 22%, rgba(247,118,34,0.22) 22% 40%, transparent 40%), rgba(24,20,37,0.96)',
-      }}
-      data-testid="legendary-fanfare"
-    >
-      {/* Rotating rays */}
-      <div
-        className="pointer-events-none absolute left-1/2 top-[42%] h-[140vmax] w-[140vmax] -translate-x-1/2 -translate-y-1/2"
+    <div className="fixed inset-0 z-[70]" data-pad-scope>
+      <button
+        ref={rootRef}
+        type="button"
+        onClick={onDone}
+        data-pad-back
+        className="delve-ui delve-zoom absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-hidden border-0 px-8 text-center text-[var(--k-text)]"
         style={{
           background:
-            'repeating-conic-gradient(from 0deg, rgba(254,231,97,0.16) 0deg 8deg, transparent 8deg 22deg)',
-          animation: 'delve-rays 12s linear infinite',
-          maskImage: 'radial-gradient(circle, #000 0 30%, transparent 30%)',
-          WebkitMaskImage: 'radial-gradient(circle, #000 0 30%, transparent 30%)',
+            'radial-gradient(circle at 50% 42%, rgba(247,118,34,0.45) 0 22%, rgba(247,118,34,0.22) 22% 40%, transparent 40%), rgba(24,20,37,0.96)',
         }}
-      />
-      <div ref={titleRef} className="k-display relative" style={{ color: 'var(--k-hot-hi)' }}>
-        LEGENDARY!
-      </div>
-      <div ref={iconRef} className="relative h-36 w-36">
-        <ItemIcon baseId={item.baseId} rarity="legendary" />
-      </div>
-      <div className="relative flex flex-col gap-2">
-        <div className="k-disp text-[44px]" data-testid="fanfare-name">
-          {item.name}
+        data-testid="legendary-fanfare"
+      >
+        {/* Rotating rays */}
+        <div
+          className="pointer-events-none absolute left-1/2 top-[42%] h-[140vmax] w-[140vmax] -translate-x-1/2 -translate-y-1/2"
+          style={{
+            background:
+              'repeating-conic-gradient(from 0deg, rgba(254,231,97,0.16) 0deg 8deg, transparent 8deg 22deg)',
+            animation: 'delve-rays 12s linear infinite',
+            maskImage: 'radial-gradient(circle, #000 0 30%, transparent 30%)',
+            WebkitMaskImage: 'radial-gradient(circle, #000 0 30%, transparent 30%)',
+          }}
+        />
+        <div ref={titleRef} className="k-display relative" style={{ color: 'var(--k-hot-hi)' }}>
+          LEGENDARY!
         </div>
-        <div className="text-[16px] text-[var(--k-wood-text)]">
-          Legendary {baseDisplayName(registry, item)}
+        <div ref={iconRef} className="relative h-36 w-36">
+          <ItemIcon baseId={item.baseId} rarity="legendary" />
         </div>
-      </div>
-      {item.legendary && (
-        <div className="relative max-w-[520px] text-[18px]">
-          {legendaryText(registry, item.legendary.id, item.legendary.value)}
+        <div className="relative flex flex-col gap-2">
+          <div className="k-disp text-[44px]" data-testid="fanfare-name">
+            {item.name}
+          </div>
+          <div className="text-[16px] text-[var(--k-wood-text)]">
+            Legendary {baseDisplayName(registry, item)}
+          </div>
         </div>
-      )}
-      {firstTime && (
-        <div className="k-label relative" style={{ color: 'var(--k-hot)' }}>
-          New codex entry!
-        </div>
-      )}
-      <div className="k-label relative">Tap to continue</div>
-    </button>
+        {item.legendary && (
+          <div className="relative max-w-[520px] text-[18px]">
+            {legendaryText(registry, item.legendary.id, item.legendary.value)}
+          </div>
+        )}
+        {firstTime && (
+          <div className="k-label relative" style={{ color: 'var(--k-hot)' }}>
+            New codex entry!
+          </div>
+        )}
+        <div className="k-label relative">Tap to continue</div>
+      </button>
+    </div>
   );
 }
