@@ -204,6 +204,9 @@ function socketedSword(uid = 'w'): GearItem {
 
 describe('the parts rule', () => {
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
+  /** The socketed sword's Links on salvage: its parts past a rare forge's free extras. */
+  const free = bal.crafting.weaponExtras.rare;
+  const links = 4 - free.slots - free.sockets;
 
   it('reads the pull mode from the balance unless overridden', () => {
     expect(R.unsocket).toBe('destroy');
@@ -213,14 +216,14 @@ describe('the parts rule', () => {
     expect(unsocketMode(registry, 'destroy')).toBe('destroy');
   });
 
-  it('salvage: a Link for each extra slot and open socket; the runes destroyed, or back to the pouch in pay mode', () => {
+  it('salvage: a Link for each extra slot and open socket past the forged ones; the runes destroyed, or back to the pouch in pay mode', () => {
     const p = { ...hero(), bag: [socketedSword()] };
     const gone = salvageItems(registry, p, ['w']);
-    expect(gone).toMatchObject({ links: 4, count: 1, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
-    expect(gone.profile.links).toBe(4);
+    expect(gone).toMatchObject({ links, count: 1, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    expect(gone.profile.links).toBe(links);
     expect(gone.profile.runes).toEqual({});
     const paid = salvageItems(registry, p, ['w'], { unsocket: 'pay' });
-    expect(paid).toMatchObject({ links: 4, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(paid).toMatchObject({ links, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
     expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
     // Nothing melts mid-dive, so nothing comes back.
     const diving = startDive(registry, p, 1);
@@ -235,14 +238,14 @@ describe('the parts rule', () => {
   it('auto-salvage and a full bag melt a socketed weapon the same way', () => {
     const auto = setAutoSalvage(hero(), 'rare', true);
     const melted = addLootToBag(registry, auto, [socketedSword()]);
-    expect(melted).toMatchObject({ links: 4, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
+    expect(melted).toMatchObject({ links, runes: [], destroyed: [CHAIN_II, SPLIT_I] });
     const paid = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'pay' });
-    expect(paid).toMatchObject({ links: 4, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
+    expect(paid).toMatchObject({ links, runes: [CHAIN_II, SPLIT_I], destroyed: [] });
     expect(paid.profile.runes).toEqual({ chain: [0, 1, 0, 0, 0], split: [1, 0, 0, 0, 0] });
     const full = { ...hero(), bag: Array(bal.loot.bagSize).fill(socketedSword('x')) };
     expect(addLootToBag(registry, full, [socketedSword()])).toMatchObject({
       bagFull: true,
-      links: 4,
+      links,
       destroyed: [CHAIN_II, SPLIT_I],
     });
     // Kept loot gives nothing back.

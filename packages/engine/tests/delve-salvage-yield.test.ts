@@ -3,9 +3,10 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { forgedMoveset } from '../src/loot/forge.js';
-import { materialCount } from '../src/loot/materials.js';
+import { materialCount, withMaterial } from '../src/loot/materials.js';
 import { applySalvage, salvageRng, salvageYield } from '../src/loot/salvage-yield.js';
 import { salvageValue } from '../src/loot/smithing.js';
+import { forge } from '../src/delve/crafting.js';
 import { startDive } from '../src/delve/dive.js';
 import {
   addLootToBag,
@@ -13,7 +14,8 @@ import {
   salvageItems,
   setAutoSalvage,
 } from '../src/delve/profile.js';
-import type { GearItem, HeroStatKey, StatRoll } from '../src/types/gear.js';
+import type { ForgeRequest } from '../src/types/crafting.js';
+import type { GearItem, HeroStatKey, Rarity, StatRoll } from '../src/types/gear.js';
 
 // See the crafting spec: "Salvage (what gear gives back)".
 
@@ -109,13 +111,48 @@ describe('salvageYield', () => {
     });
   });
 
-  it("lists a weapon's Links (extra slots and sockets) and its runes", () => {
-    const extras = C.weaponExtras.epic;
+  it("lists a weapon's runes, and a Link for each slot and socket past its rarity's forged extras", () => {
     expect(salvageYield(registry, hero(), sword())).toMatchObject({
-      links: extras.slots + extras.sockets,
+      links: 0,
       runes: [{ id: 'split', tier: 1 }],
       pattern: null,
     });
+    const w = sword();
+    const m = w.moveset!;
+    m.slots.primary! += 1;
+    m.chains.primary!.moves.push({ ...m.chains.primary!.moves[0], runes: [null, null] });
+    expect(salvageYield(registry, hero(), w).links).toBe(3);
+  });
+
+  it('never pays back more Links or Mana Dust than forging it off the pair cost, at any rarity', () => {
+    const p0 = hero();
+    const refs = [
+      { kind: 'metal' as const, metal: 'iron' as const },
+      { kind: 'essence' as const, essence: 'pyroclasm' },
+      ...(['uncommon', 'magic', 'rare', 'epic'] as const).map((grade) => ({
+        kind: 'flux' as const,
+        grade,
+      })),
+    ];
+    const materials = refs.reduce((m, ref) => withMaterial(m, ref, 1), p0.materials);
+    // Pyroclasm fits a sword and a helm.
+    const p = { ...p0, materials, patterns: ['sword', 'helm'], scrap: 1e6, manaDust: 100 };
+    for (const rarity of Object.keys(C.weaponExtras) as Rarity[])
+      for (const baseId of ['sword', 'helm']) {
+        const req: ForgeRequest = {
+          baseId,
+          metal: 'iron',
+          element: 'frost',
+          shards: [],
+          ...(rarity !== 'common' && { flux: rarity === 'legendary' ? 'epic' : rarity }),
+          ...(rarity === 'legendary' && { essence: 'pyroclasm' }),
+        };
+        const made = forge(registry, p, req);
+        expect(made.item!.rarity).toBe(rarity);
+        const back = applySalvage(registry, made.profile, made.item!, new SeededRNG(1)).profile;
+        expect(back.links, `${rarity} ${baseId}`).toBeLessThanOrEqual(p.links);
+        expect(back.manaDust, `${rarity} ${baseId}`).toBeLessThanOrEqual(p.manaDust);
+      }
   });
 });
 

@@ -873,32 +873,34 @@ function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
 describe('Links: salvage and banking', () => {
   const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 3, defensive: 1 }); // 3 extra
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
+  /** Its Links: the extra slots past the ones a rare forge grants free. */
+  const links = 3 - bal.crafting.weaponExtras.rare.slots;
 
-  it('salvaging a weapon gives a Link for each extra slot; other gear none', () => {
+  it('salvaging a weapon gives a Link for each extra slot past the forged ones; other gear none', () => {
     const chest = generateItem(
       registry,
       { uid: 'c', ilvl: 2, rarity: 'rare', slot: 'chest' },
       new SeededRNG(2),
     );
     const res = salvageItems(registry, { ...hero(), bag: [rare, chest] }, [rare.uid, chest.uid]);
-    expect(res.links).toBe(3);
-    expect(res.profile.links).toBe(3);
+    expect(res.links).toBe(links);
+    expect(res.profile.links).toBe(links);
   });
 
   it("auto-salvage and a full bag give them too, into the floor's haul, and banking reports them for the dive", () => {
     const p = startDive(registry, setAutoSalvage(hero(), 'rare', true), 1);
-    expect(addLootToBag(registry, p, [rare]).profile.dive!.haul.links).toBe(3);
+    expect(addLootToBag(registry, p, [rare]).profile.dive!.haul.links).toBe(links);
     const w = beginFloor(registry, p);
     w.pending.items = [rare];
     const res = bankWorld(registry, p, w);
-    expect(res.links).toBe(3);
+    expect(res.links).toBe(links);
     expect(res.profile.links).toBe(0); // in the haul until the dive settles (see the crafting spec)
-    expect(res.profile.dive!.linksEarned).toBe(3);
+    expect(res.profile.dive!.linksEarned).toBe(links);
 
     const full = { ...startDive(registry, hero(), 1), bag: Array(bal.loot.bagSize).fill(rare) };
     const w2 = beginFloor(registry, full);
     w2.pending.items = [rare];
-    expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, links: 3 });
+    expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, links });
   });
 });
 

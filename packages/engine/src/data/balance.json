@@ -224,7 +224,7 @@
     },
     "crafting": {
       "forgeScrap": { "common": 10, "uncommon": 20, "magic": 40, "rare": 80, "epic": 160, "legendary": 320 },
-      "offPairDust": 10,
+      "offPairDust": 15,
       "weaponExtras": {
         "common": { "slots": 0, "sockets": 0 }, "uncommon": { "slots": 0, "sockets": 0 }, "magic": { "slots": 0, "sockets": 0 },
         "rare": { "slots": 1, "sockets": 0 }, "epic": { "slots": 2, "sockets": 1 }, "legendary": { "slots": 3, "sockets": 2 }

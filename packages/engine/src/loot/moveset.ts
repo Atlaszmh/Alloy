@@ -234,7 +234,8 @@ export function rollSockets(
 /**
  * What a weapon gives back when it goes (salvaged, fused, rebuilt): a Link
  * for each extra slot and each open socket, and the runes in its sockets
- * (which leave by the parts rule). Other gear gives nothing.
+ * (which leave by the parts rule). Other gear gives nothing. Salvage pays
+ * only the Links past a forge's free extras (`salvageYield`).
  */
 export function weaponParts(
   registry: DataRegistry,

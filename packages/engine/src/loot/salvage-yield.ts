@@ -7,7 +7,7 @@ import { isDiveActive } from '../delve/dive.js';
 import { salvageDust } from '../delve/pair.js';
 import { settleParts, type SetChainsOptions } from '../delve/runes.js';
 import { addHaul, addMaterial, emptyHaul, shardTiersOf, stockHaul } from './materials.js';
-import { weaponParts } from './moveset.js';
+import { extraSlots, weaponParts } from './moveset.js';
 import { salvageValue } from './smithing.js';
 
 /**
@@ -21,6 +21,18 @@ function salvageTier(registry: DataRegistry, stat: HeroStatKey, roll: number): n
     .getDelveBalance()
     .crafting.salvageShardTier.filter((t) => roll >= t).length;
   return Math.min(1 + passed, shardTiersOf(registry, stat).length);
+}
+
+/**
+ * A weapon's Links on salvage: one for each extra slot and open socket past the
+ * free ones a forge of its rarity grants (`crafting.weaponExtras`), dropped or
+ * forged alike, so forging then salvaging never makes Links.
+ */
+function salvageLinks(registry: DataRegistry, item: GearItem, partLinks: number): number {
+  if (item.slot !== 'weapon') return 0;
+  const free = registry.getDelveBalance().crafting.weaponExtras[item.rarity];
+  const slots = extraSlots(registry, item);
+  return Math.max(0, slots - free.slots) + Math.max(0, partLinks - slots - free.sockets);
 }
 
 /** What salvaging `item` could give (the Loadout's preview). */
@@ -39,7 +51,7 @@ export function salvageYield(
   return {
     scrap: salvageValue(registry, item),
     dust: salvageDust(registry, item, profile.pair),
-    links: parts.links,
+    links: salvageLinks(registry, item, parts.links),
     shards,
     extraShard: shards.length > 1 ? registry.getDelveBalance().crafting.salvageExtraShard : 0,
     pattern: profile.patterns.includes(item.baseId) ? null : item.baseId,
