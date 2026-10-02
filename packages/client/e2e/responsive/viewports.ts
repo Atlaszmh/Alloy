@@ -28,3 +28,13 @@ export const VIEWPORTS: readonly Viewport[] = [
   { name: 'qhd-1440p',         width: 2560, height: 1440, device: 'desktop' },
   { name: 'ultrawide',         width: 2560, height: 1080, device: 'ultrawide' },
 ] as const;
+
+/** The Delve's PC sizes (Delve UI v1, Phase 4A): the Delve specs run over these, the classic ones over VIEWPORTS. */
+export const PC_VIEWPORTS: readonly Viewport[] = [
+  { name: 'hd-720',    width: 1280, height: 720,  device: 'desktop' },
+  { name: 'deck',      width: 1280, height: 800,  device: 'desktop' },
+  { name: 'fhd',       width: 1920, height: 1080, device: 'desktop' },
+  { name: 'qhd-1440p', width: 2560, height: 1440, device: 'desktop' },
+  { name: 'sxga',      width: 1280, height: 1024, device: 'desktop' },
+  { name: 'ultrawide', width: 3440, height: 1440, device: 'ultrawide' },
+] as const;
