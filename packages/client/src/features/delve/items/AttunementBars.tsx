@@ -1,4 +1,5 @@
 import { MANA_TYPES, manaPool, type HeroStats, type ManaType } from '@alloy/engine';
+import { Glyph } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { manaStyle } from '../format';
 
@@ -45,7 +46,9 @@ export function AttunementBars({
             data-value={a}
           >
             <span className="flex items-center gap-2">
-              <span className="w-5 text-center text-[16px] leading-none">{style.icon}</span>
+              <span className="flex w-5 justify-center">
+                <Glyph id={m} size={16} color={style.color} />
+              </span>
               <span
                 className="k-disp w-16 text-[16px]"
                 style={{ color: a > 0 ? style.color : 'var(--k-steel-2)' }}

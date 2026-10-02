@@ -40,11 +40,11 @@ export const KIND_NAME: Record<MoveKind, string> = {
   hold: 'Hold',
 };
 
-/** A move's kind at a glance (the builder's cards, the HUD's buttons). */
+/** A move's kind at a glance (the one-column builder): plain geometric shapes, never emoji (▪ is one). */
 export const KIND_ICON: Record<MoveKind, string> = {
-  light: '▪',
-  medium: '▪▪',
-  heavy: '▪▪▪',
+  light: '■',
+  medium: '■■',
+  heavy: '■■■',
   hold: '◉',
 };
 

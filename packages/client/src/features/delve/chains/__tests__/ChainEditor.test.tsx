@@ -83,4 +83,31 @@ describe('ChainEditor', () => {
     fireEvent.click(screen.getByTestId('kind-light'));
     expect(last()[2]).toEqual([0, 1, 2]);
   });
+
+  it('wears kit glyphs, not emoji, and no text under 14 px, on every skill and a fusion', () => {
+    const [m] = given.primary.moves;
+    const fused = {
+      ...given,
+      primary: {
+        ...given.primary,
+        moves: [{ ...m, elements: ['storm' as const, 'fire' as const] }],
+      },
+    };
+    const { container } = render(
+      <ChainEditor chains={fused} caps={caps} stats={stats} locked={false} onChange={() => {}} />,
+    );
+    const check = () => {
+      expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(container.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
+    };
+    check();
+    expect(screen.getByTestId('move-0').querySelector('[data-glyph="bolt"]')).not.toBeNull();
+    expect(
+      screen.getByTestId('element-effect').querySelector('[data-glyph="fire"]'),
+    ).not.toBeNull();
+    for (const s of ['basic', 'defensive', 'ultimate'] as const) {
+      fireEvent.click(screen.getByTestId(`chain-skill-${s}`));
+      check();
+    }
+  });
 });

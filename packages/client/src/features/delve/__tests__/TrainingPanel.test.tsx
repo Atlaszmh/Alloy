@@ -141,7 +141,7 @@ describe('TrainingPanel', () => {
     expect(screen.queryByTestId('training-panel-exit')).toBeNull();
   });
 
-  it.each(['targets', 'toggles', 'meter'] as const)(
+  it.each(['abilities', 'targets', 'toggles', 'meter'] as const)(
     'the %s tab wears glyphs, not emoji, and no text under 14 px',
     (tab) => {
       renderPanel(tab);
