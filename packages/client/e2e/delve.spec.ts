@@ -242,4 +242,28 @@ test.describe('Delve loot loop', () => {
     await page.getByTestId('slot-weapon').click();
     await expect(page.getByTestId('item-mana')).toContainText('Frost');
   });
+
+  test('D09: Esc opens and closes the dive menu, and in the Controls editor closes only the editor', async ({
+    page,
+  }) => {
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
+    const menu = page.getByTestId('attack-mode-toggle');
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeVisible();
+    // Paused, Esc presses the menu's Resume: once, so the menu doesn't open again.
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeVisible();
+    await page.getByTestId('open-controls').click();
+    await expect(page.getByTestId('controls-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('controls-panel')).toBeHidden();
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+  });
 });

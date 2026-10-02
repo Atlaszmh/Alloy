@@ -116,4 +116,22 @@ test.describe('Delve Training Grounds', () => {
     await expect(pips).toHaveCount(1);
     await expect(pips).toHaveAttribute('data-rune', 'echo');
   });
+
+  test('T03: Esc closes the Training sheet, and opens the panel again from the fight', async ({
+    page,
+  }) => {
+    await seed(page);
+    // Narrower than the dock's 1024 px: the panel opens as a sheet that pauses the fight.
+    await page.setViewportSize({ width: 900, height: 700 });
+    await page.goto('/delve/training');
+    await expect(page.getByTestId('ability-0')).toBeVisible({ timeout: ARENA_READY });
+    const panel = page.getByTestId('training-panel');
+    await page.getByTestId('training-panel-toggle').click();
+    await expect(panel).toHaveAttribute('data-layout', 'sheet');
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    // The fight is live again: the arena's menu key opens the panel.
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeVisible();
+  });
 });
