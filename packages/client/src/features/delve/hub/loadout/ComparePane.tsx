@@ -189,6 +189,7 @@ export function ComparePane({
           <Button
             variant={homeUpgrade ? 'go' : 'secondary'}
             onClick={onTransfer}
+            className="flex-wrap whitespace-normal"
             testId="transfer-button"
           >
             {homeUpgrade ? '▲ ' : ''}Transfer my moveset here · <Price scrap={transfer.scrap} />
