@@ -153,6 +153,15 @@ describe('applySalvage', () => {
     expect(res.profile.materials.essences).toEqual({ nightstalker: 1 });
   });
 
+  it('marks a salvaged essence seen, at the Anvil and mid-dive, once', () => {
+    const anvil = applySalvage(registry, hero(), legendary, new SeededRNG(1)).profile;
+    expect(anvil.essencesSeen).toEqual(['nightstalker']);
+    const again = applySalvage(registry, anvil, legendary, new SeededRNG(1)).profile;
+    expect(again.essencesSeen).toEqual(['nightstalker']);
+    const mid = applySalvage(registry, startDive(registry, hero(), 1), legendary, new SeededRNG(1));
+    expect(mid.profile.essencesSeen).toEqual(['nightstalker']);
+  });
+
   it("mid-dive: the yield goes to the floor's haul; the pattern is learned at once", () => {
     const p = startDive(registry, hero(), 1);
     const res = applySalvage(registry, p, gloves({ mana: 'frost' }), new SeededRNG(1));

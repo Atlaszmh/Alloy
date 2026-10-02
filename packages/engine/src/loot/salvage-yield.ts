@@ -65,7 +65,7 @@ export function salvageRng(profile: DelveProfile, item: GearItem): SeededRNG {
  * instead), Mana Dust off the pair, a weapon's Links and its runes by the parts
  * rule (`opts.unsocket`, else the balance's). Mid-dive the yield goes to the
  * floor's haul (`dive.haul`), at the Anvil to the stockpile; its pattern is
- * learned at once. The item itself is the caller's to remove.
+ * learned and its essence seen at once. The item itself is the caller's to remove.
  */
 export function applySalvage(
   registry: DataRegistry,
@@ -88,7 +88,9 @@ export function applySalvage(
   let haul = { ...emptyHaul(), scrap: y.scrap, dust: y.dust, links: y.links, runes: settled.pouch };
   for (const s of shards) haul = addMaterial(haul, { kind: 'shard', ...s });
   if (y.essence) haul = addMaterial(haul, { kind: 'essence', essence: y.essence });
-  const learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
+  let learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
+  if (y.essence && !learned.essencesSeen.includes(y.essence))
+    learned = { ...learned, essencesSeen: [...learned.essencesSeen, y.essence] };
   const dive = profile.dive;
   return {
     profile:
