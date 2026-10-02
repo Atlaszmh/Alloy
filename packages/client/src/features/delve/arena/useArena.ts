@@ -2,6 +2,7 @@ import { useMemo, useRef, type RefObject } from 'react';
 import {
   bankWorld,
   beginFloor,
+  compareItem,
   completeFloor,
   failFloor,
   heroChains,
@@ -12,10 +13,18 @@ import {
 } from '@alloy/engine';
 import { pullOpts, useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
+import { UPGRADE_EPSILON } from '../format';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from './useArenaCore';
 import type { Insets } from './camera';
 
-export { snapshot, type AbilityHud, type ArenaHud } from './useArenaCore';
+export {
+  snapshot,
+  type AbilityHud,
+  type ArenaHud,
+  type HudBuff,
+  type HudMap,
+  type Insets,
+} from './useArenaCore';
 
 /**
  * The dive, on the shared arena core: it runs the save's current floor, banks
@@ -129,6 +138,12 @@ export function useArena(
     },
     onHeroDead: () => {},
     speed: 1,
+    // ▲ on a loot label: better as it comes, as the bag's tiles count it.
+    isUpgrade: (item) => {
+      const p = useDelveStore.getState().profile;
+      const value = compareItem(p.equipped, item, registry, p.dive?.depth ?? 0, p.pair, 'asIs');
+      return value.powerPct > UPGRADE_EPSILON;
+    },
   };
   return useArenaCore(hostRef, mode, { ...opts, insets: { left: 0, right: 0, ...opts.insets } });
 }

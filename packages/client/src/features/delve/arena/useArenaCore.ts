@@ -16,7 +16,9 @@ import {
   type ArpgEvent,
   type ArpgWorld,
   type Chains,
+  type Drop,
   type FormId,
+  type GearItem,
   type HeroStats,
   type ManaType,
   type MoveKind,
@@ -28,11 +30,16 @@ import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
 import { floatPay } from './ArenaHud';
 import type { AimView } from './fx/draw-world';
+import type { ViewRect } from './fx/pixel-layer';
+import { RARITY_COLOR } from '../format';
+import { FAMILY_STYLE } from '../runes/rune-style';
+import { hasZoomedAncestor } from '../kit/zoom';
 import { loadDelveSprites } from './sprites';
 import {
   attachKeyboard,
   createArenaInput,
   frameInput,
+  pressJournal,
   pressMenu,
   type Aiming,
   type ArenaInput,
@@ -51,6 +58,8 @@ import { rumble } from '@/features/gamepad/rumble';
 import { HitStop } from './fx/hitstop';
 import { arenaResolution, type Insets } from './camera';
 import { useUIStore } from '@/stores/uiStore';
+
+export type { Insets } from './camera';
 
 /**
  * The arena shared by the dive and the Training Grounds: the Pixi app and
@@ -93,6 +102,28 @@ export interface AbilityHud {
   runes: RuneRef[];
 }
 
+/** A timed buff on the hero, for the HUD's buff row. No Galvanize: its spark is on the slots. */
+export interface HudBuff {
+  id: 'riposte' | 'quick' | 'barrier';
+  /** Seconds left, from riposteUntil, quickUntil and barrier.until. */
+  left: number;
+  /** Its whole length when the balance fixes one; null for the barrier (its source sets it). */
+  total: number | null;
+}
+
+/** The minimap's floor, in world units. */
+export interface HudMap {
+  width: number;
+  height: number;
+  /** The camera's view; the whole arena when there is no renderer. */
+  view: ViewRect;
+  hero: { x: number; y: number };
+  foes: { x: number; y: number; rank: 'normal' | 'elite' | 'boss' }[];
+  drops: { x: number; y: number; color: string }[];
+  /** Blocked cells, if the engine ever adds terrain; [] today. */
+  terrain: { x: number; y: number; w: number; h: number }[];
+}
+
 export interface ArenaHud {
   hp: number;
   maxHp: number;
@@ -127,6 +158,9 @@ export interface ArenaHud {
   galvanizedAt: number | null;
   /** The world's time, for `galvanizedAt`. */
   t: number;
+  /** Riposte, Quick and the barrier while they last, in that order. */
+  buffs: HudBuff[];
+  map: HudMap;
 }
 
 /** What the core reports to the page, from any fight. */
@@ -161,6 +195,8 @@ export interface ArenaMode {
   onHeroDead: (world: ArpgWorld) => void;
   /** Display speed (1 = normal), times the perfect-dodge slow motion and the timescale hook. */
   speed: number;
+  /** Whether an item is an upgrade as it comes (▲ on its loot label); none when absent. */
+  isUpgrade?: (item: GearItem) => boolean;
 }
 
 export interface ArenaOpts {
@@ -193,7 +229,14 @@ function readArenaFlags(): { autopilot: boolean; timescale: number } {
   }
 }
 
-export function snapshot(world: ArpgWorld): ArenaHud {
+/** A loot drop's colour on the minimap: its rarity's, or its rune family's; null for anything else. */
+function mapColor(d: Drop): string | null {
+  if (d.item) return RARITY_COLOR[d.item.rarity];
+  const def = d.rune && getDelveRegistry().findRune(d.rune.id);
+  return def ? FAMILY_STYLE[def.family].color : null;
+}
+
+export function snapshot(world: ArpgWorld, renderer: { viewRect(): ViewRect } | null): ArenaHud {
   const h = world.hero;
   const t = world.t;
   const bal = getDelveRegistry().getDelveBalance();
@@ -279,6 +322,25 @@ export function snapshot(world: ArpgWorld): ArenaHud {
         ? null
         : h.reactionReadyAt.galvanize - bal.reactions.reactionCooldown,
     t,
+    buffs: (
+      [
+        ['riposte', h.riposteUntil, bal.dodge.riposteWindow],
+        ['quick', h.quickUntil, bal.reactions.lightningRodDuration],
+        ['barrier', h.barrier?.until ?? 0, null],
+      ] as const
+    ).flatMap(([id, until, total]) => (until > t ? [{ id, left: until - t, total }] : [])),
+    map: {
+      width: world.width,
+      height: world.height,
+      view: renderer?.viewRect() ?? { left: 0, top: 0, right: world.width, bottom: world.height },
+      hero: { x: h.x, y: h.y },
+      foes: world.monsters.map((m) => ({ x: m.x, y: m.y, rank: m.kind })),
+      drops: world.drops.flatMap((d) => {
+        const color = mapColor(d);
+        return color ? [{ x: d.x, y: d.y, color }] : [];
+      }),
+      terrain: [],
+    },
   };
 }
 
@@ -349,13 +411,16 @@ export function useArenaCore(
     hitstopRef.current.reset();
     finishedRef.current = false;
     renderer.loadFloor(world, registry.getBiomeForDepth(world.depth));
-    setHud(snapshot(world));
+    setHud(snapshot(world, renderer));
   }, [registry]);
 
   // Pixi application lifecycle.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    // A zoomed ancestor would desync Pixi's pointer mapping and its whole-pixel scale.
+    if (import.meta.env.DEV && hasZoomedAncestor(host))
+      console.error('The arena host sits under a CSS zoom (Delve UI, decided item 31)');
     let destroyed = false;
     const app = new Application();
     const detachKeys = attachKeyboard(inputRef.current, () => !pausedRef.current);
@@ -376,7 +441,8 @@ export function useArenaCore(
         resolution: arenaResolution(),
         autoDensity: true,
       })
-      .then(() => loadDelveSprites())
+      // The loot labels' font, before Pixi measures any.
+      .then(() => Promise.all([loadDelveSprites(), document.fonts?.load('14px "Jersey 10"')]))
       .then(() => {
         if (destroyed) {
           app.destroy(true);
@@ -387,6 +453,7 @@ export function useArenaCore(
         app.canvas.style.inset = '0';
         const renderer = new ArenaRenderer(app);
         renderer.setInsets(insetsRef.current);
+        renderer.setUpgradeTest((item) => modeRef.current.isUpgrade?.(item) ?? false);
         rendererRef.current = renderer;
         app.renderer.on('resize', () => renderer.resize());
         // Settings → View distance zooms at once.
@@ -435,6 +502,7 @@ export function useArenaCore(
             if (mode.frame(world)) finishedRef.current = true;
           }
           renderer.setInsets(insetsRef.current);
+          renderer.setLabelsHeld(inputRef.current.labels || !!pad?.labels);
           renderer.setAim(heldAim(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
           // The HUD refresh ignores the mode's speed, so the sandbox's slow motion doesn't slow
@@ -442,7 +510,7 @@ export function useArenaCore(
           hudClock += real * scale;
           if (hudClock > 0.08) {
             hudClock = 0;
-            setHud(snapshot(world));
+            setHud(snapshot(world, renderer));
           }
         });
         setReady(true);
@@ -450,14 +518,16 @@ export function useArenaCore(
 
     /**
      * The controller's part of this frame (see gamepad-hub), or null with none
-     * or while paused; Menu opens the dive menu. `frameInput` turns it into the
-     * step's input (a press, a hold's release, `holding`: see `padFrameCast`).
+     * or while paused; Menu opens the dive menu and View the journal.
+     * `frameInput` turns it into the step's input (a press, a hold's release,
+     * `holding`: see `padFrameCast`).
      */
     function padFrame(paused: boolean): ArenaPadActions | null {
       const state = padState();
       if (!state || paused) return null;
       const acts = padToArena(state, takeArenaPresses(), useControlsStore.getState().config);
       if (acts.menu) pressMenu();
+      if (acts.journal) pressJournal();
       return acts;
     }
 
@@ -530,7 +600,7 @@ export function useArenaCore(
     const world = worldRef.current;
     if (world && !world.heroDead && !finishedRef.current) {
       refreshWorldHero(registry, world, mode.loadout.stats, mode.loadout.chains);
-      setHud(snapshot(world));
+      setHud(snapshot(world, rendererRef.current));
     }
   }, [mode.loadout, registry]);
 
