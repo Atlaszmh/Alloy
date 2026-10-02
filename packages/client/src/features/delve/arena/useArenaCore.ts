@@ -49,6 +49,8 @@ import {
 } from '@/features/gamepad/arena-pad';
 import { rumble } from '@/features/gamepad/rumble';
 import { HitStop } from './fx/hitstop';
+import { arenaResolution, type Insets } from './camera';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * The arena shared by the dive and the Training Grounds: the Pixi app and
@@ -163,7 +165,8 @@ export interface ArenaMode {
 
 export interface ArenaOpts {
   paused: boolean;
-  insets: { top: number; bottom: number };
+  /** The screen the HUD covers (viewport px): the camera centres in the rest. */
+  insets: Insets;
   onUi: (e: CoreUiEvent) => void;
   /** Basic attacks on a button (held or tapped) instead of automatic. */
   manualAttack: boolean;
@@ -363,13 +366,14 @@ export function useArenaCore(
     // `resizeTo` only follows the window; the host can also change size on its own (the
     // Training panel docking beside it), so the canvas follows the host too.
     const hostResize = new ResizeObserver(() => app.queueResize());
+    let stopViewUnits = () => {};
 
     app
       .init({
         resizeTo: host,
         background: 0x050407,
         antialias: true,
-        resolution: Math.min(2, window.devicePixelRatio || 1),
+        resolution: arenaResolution(),
         autoDensity: true,
       })
       .then(() => loadDelveSprites())
@@ -382,9 +386,13 @@ export function useArenaCore(
         app.canvas.style.position = 'absolute';
         app.canvas.style.inset = '0';
         const renderer = new ArenaRenderer(app);
-        renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
+        renderer.setInsets(insetsRef.current);
         rendererRef.current = renderer;
         app.renderer.on('resize', () => renderer.resize());
+        // Settings → View distance zooms at once.
+        stopViewUnits = useUIStore.subscribe((s, prev) => {
+          if (s.arenaViewUnits !== prev.arenaViewUnits) renderer.resize();
+        });
         hostResize.observe(host); // only now: `queueResize` exists once the app is initialised
 
         app.ticker.add((ticker) => {
@@ -426,7 +434,7 @@ export function useArenaCore(
             if (!wasDead && world.heroDead) mode.onHeroDead(world);
             if (mode.frame(world)) finishedRef.current = true;
           }
-          renderer.setInsets(insetsRef.current.top, insetsRef.current.bottom);
+          renderer.setInsets(insetsRef.current);
           renderer.setAim(heldAim(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
           // The HUD refresh ignores the mode's speed, so the sandbox's slow motion doesn't slow
@@ -502,6 +510,7 @@ export function useArenaCore(
     return () => {
       destroyed = true;
       hostResize.disconnect();
+      stopViewUnits();
       detachKeys();
       rendererRef.current?.destroy();
       rendererRef.current = null;

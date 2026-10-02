@@ -36,7 +36,9 @@ export type { AimView } from './fx/draw-world';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
+import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * PixiJS view of an ArpgWorld. It never mutates the world: every frame it
@@ -106,7 +108,11 @@ export class ArenaRenderer {
   private world: ArpgWorld | null = null;
   private biome: BiomeDef | null = null;
   private unit = 30;
-  private insets = { top: 0, bottom: 0 };
+  private insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  /** The visible arena rectangle (world units), as of the last frame. */
+  private view: ViewRect = { left: 0, top: 0, right: 0, bottom: 0 };
+  /** Reduced motion: no shake and no strike kick (decided item 14). */
+  private readonly still = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   private cam = { x: 0, y: 0 };
   private shake = 0;
   /** This frame's shake offset in px; held while the display is frozen or paused. */
@@ -163,15 +169,21 @@ export class ArenaRenderer {
     this.resize();
   }
 
-  /** Screen space covered by HUD at the top/bottom, so the hero stays in the open. */
-  setInsets(top: number, bottom: number): void {
-    this.insets = { top, bottom };
+  /** The screen the HUD covers on each side (viewport px): the camera centres in what is left. */
+  setInsets(insets: Insets): void {
+    this.insets = insets;
   }
 
+  /** The visible arena rectangle in world units (the minimap's view box). */
+  viewRect(): ViewRect {
+    return this.view;
+  }
+
+  /** The zoom (camera.ts): whole render pixels per sprite pixel, from the screen height alone. */
   resize(): void {
-    const { width, height } = this.app.screen;
-    const playH = Math.max(200, height - this.insets.top - this.insets.bottom);
-    this.unit = Math.max(16, Math.min(width / 13.5, playH / 15));
+    const res = this.app.renderer.resolution;
+    const { scale } = arenaZoom(this.app.screen.height, res, useUIStore.getState().arenaViewUnits);
+    this.unit = Math.round(scale / SPRITE_PIXEL) / res;
   }
 
   /** Scene setup for a new floor. */
@@ -280,11 +292,13 @@ export class ArenaRenderer {
   // ── Effects ──────────────────────────────────────────────────────────────
 
   addShake(amount: number): void {
+    if (this.still) return;
     this.shake = Math.min(0.6, this.shake + amount);
   }
 
   /** Nudge the camera toward a strike, by its heft; heavy ones shake too. */
   private kickCamera(dir: Vec, heft: number): void {
+    if (this.still) return;
     const len = Math.hypot(dir.x, dir.y) || 1;
     this.kick.x += (dir.x / len) * 0.12 * heft;
     this.kick.y += (dir.y / len) * 0.12 * heft;
@@ -569,11 +583,13 @@ export class ArenaRenderer {
     const { width, height } = this.app.screen;
     const u = this.unit;
 
-    // Camera
-    const playTop = this.insets.top;
-    const playH = height - this.insets.top - this.insets.bottom;
-    const halfW = width / 2 / u;
-    const halfH = playH / 2 / u;
+    // Camera: centred in the clear rectangle the HUD's insets leave, clamped to that rectangle's
+    // half extents (a narrow one still follows sideways), on whole render pixels.
+    const ins = this.insets;
+    const clearW = Math.max(1, width - ins.left - ins.right);
+    const clearH = Math.max(1, height - ins.top - ins.bottom);
+    const halfW = clearW / 2 / u;
+    const halfH = clearH / 2 / u;
     const k = 1 - Math.exp(-8 * dt);
     this.cam.x += (w.hero.x - this.cam.x) * k;
     this.cam.y += (w.hero.y - this.cam.y) * k;
@@ -595,15 +611,18 @@ export class ArenaRenderer {
         y: (Math.random() - 0.5) * this.shake * u,
       };
     const { x: sx, y: sy } = this.jitter;
+    const res = this.app.renderer.resolution;
+    const whole = (px: number) => Math.round(px * res) / res;
     this.root.scale.set(u);
     this.root.position.set(
-      width / 2 - (cx + this.kick.x) * u + sx,
-      playTop + playH / 2 - (cy + this.kick.y) * u + sy,
+      whole(ins.left + clearW / 2 - (cx + this.kick.x) * u + sx),
+      whole(ins.top + clearH / 2 - (cy + this.kick.y) * u + sy),
     );
 
     const left = -this.root.position.x / u;
     const top = -this.root.position.y / u;
     const view: ViewRect = { left, top, right: left + width / u, bottom: top + height / u };
+    this.view = view;
     this.pixelFloor?.update(dt, w, view);
 
     const ground = this.groundFx.g;

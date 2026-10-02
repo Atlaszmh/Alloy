@@ -1,7 +1,16 @@
-import { describe, it, expect } from 'vitest';
-import type { Graphics } from 'pixi.js';
-import type { ArpgEvent, ArpgWorld, Drop, GearItem } from '@alloy/engine';
+import { describe, it, expect, afterEach } from 'vitest';
+import { Container, type Application, type Graphics } from 'pixi.js';
 import {
+  computeHeroStats,
+  createSandboxWorld,
+  defaultChains,
+  type ArpgEvent,
+  type ArpgWorld,
+  type Drop,
+  type GearItem,
+} from '@alloy/engine';
+import {
+  ArenaRenderer,
   drawDrop,
   dropLabel,
   dropPop,
@@ -12,6 +21,8 @@ import {
 import { MANA_HEX, RARITY_HEX } from '../arena/palette';
 import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
+import { spritePixelScale } from '../arena/camera';
+import { useUIStore } from '@/stores/uiStore';
 
 /** A Graphics stand-in that records the colours it fills. */
 function recorder() {
@@ -90,6 +101,102 @@ describe('the arena renderer', () => {
     const blow = holdPing(w, { slot: null, stage: 2 });
     expect(blow.color).toBe(MANA_HEX.storm);
     expect(blow.r).toBeCloseTo(1.6);
+  });
+});
+
+/** A renderer on a stand-in app (no GPU): a `width`×`height` screen at resolution `res`. */
+function stage(width = 1920, height = 1080, res = 1) {
+  const app = {
+    renderer: { render() {}, resolution: res },
+    stage: new Container(),
+    screen: { width, height },
+    canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+  };
+  return { app, r: new ArenaRenderer(app as unknown as Application) };
+}
+
+/** An empty sandbox floor (26 × 40 units) with the hero at `x`, `y`. */
+function floor(x = 13, y = 20): ArpgWorld {
+  const registry = getDelveRegistry();
+  const w = createSandboxWorld(registry, {
+    depth: 5,
+    stats: computeHeroStats({}, registry),
+    chains: defaultChains(registry, 'fire', null),
+    toggles: { infiniteMana: false, noCooldowns: false, invulnerable: false },
+  });
+  Object.assign(w.hero, { x, y });
+  return w;
+}
+
+/** Put `w` on screen with its camera on the hero, and draw a still frame. */
+function show(r: ArenaRenderer, w: ArpgWorld): void {
+  r.loadFloor(w, getDelveRegistry().getBiomeForDepth(w.depth));
+  r.update(0);
+}
+
+describe('the dive camera', () => {
+  afterEach(() => useUIStore.getState().setArenaViewUnits(27));
+
+  it('zooms to whole render pixels per sprite pixel from the height alone, and follows View distance', () => {
+    expect(stage(1920, 1080).r.pixelsPerUnit()).toBe(40); // 4 px per sprite px: 27 units tall
+    expect(stage(1280, 720).r.pixelsPerUnit()).toBe(30);
+    expect(stage(3440, 1440).r.pixelsPerUnit()).toBe(50);
+    expect(stage(1920, 1080, 2).r.pixelsPerUnit()).toBe(40); // 8 render px per sprite px
+    useUIStore.getState().setArenaViewUnits(20);
+    expect(stage(1920, 1080).r.pixelsPerUnit()).toBe(50); // 21.6 units
+  });
+
+  it('a point round-trips through the screen at each scale', () => {
+    const { app, r } = stage();
+    r.setInsets({ top: 72, right: 380, bottom: 230, left: 0 });
+    const w = floor();
+    show(r, w);
+    for (const height of [720, 800, 1024, 1080, 1200, 1440, 2160])
+      for (const res of [1, 2]) {
+        Object.assign(app.screen, { width: height * 1.6, height });
+        app.renderer.resolution = res;
+        r.resize();
+        // 10 sprite pixels a unit: the scale's px per sprite px, in CSS px.
+        expect(r.pixelsPerUnit()).toBeCloseTo((spritePixelScale(height * res) * 10) / res);
+        for (const [x, y] of [
+          [3, 5],
+          [13, 20],
+          [24.5, 37.25],
+        ]) {
+          Object.assign(w.hero, { x, y });
+          r.update(0);
+          const s = r.heroScreen()!;
+          const back = r.screenToWorld(s.x, s.y);
+          expect(back.x, `${height}p ×${res}`).toBeCloseTo(x, 6);
+          expect(back.y).toBeCloseTo(y, 6);
+        }
+      }
+  });
+
+  it('centres the hero in the clear rectangle the insets leave, on whole render pixels', () => {
+    const { r } = stage(1920, 1080, 2);
+    r.setInsets({ top: 71, right: 381, bottom: 230, left: 0 });
+    show(r, floor(13, 20));
+    // The arena's 26 units fit the clear width (38.5 units): it centres there; the height follows the hero.
+    expect(r.heroScreen()).toEqual({ x: (1920 - 381) / 2, y: 71 + (1080 - 71 - 230) / 2 });
+    const root = (r as unknown as { root: Container }).root.position;
+    expect(Number.isInteger(root.x * 2) && Number.isInteger(root.y * 2)).toBe(true);
+    // The view is the whole screen, in world units.
+    const v = r.viewRect();
+    expect(v.right - v.left).toBeCloseTo(48);
+    expect(v.bottom - v.top).toBeCloseTo(27);
+  });
+
+  it("clamps on the clear rectangle's half extents: a narrow one still follows sideways", () => {
+    // 1280×1024: 32 units wide, 4 px per sprite px; the right column leaves 24.9 units clear.
+    const left = (right: number, heroX: number) => {
+      const { r } = stage(1280, 1024);
+      r.setInsets({ top: 0, right, bottom: 0, left: 0 });
+      show(r, floor(heroX, 20));
+      return r.viewRect().left;
+    };
+    expect(left(0, 2)).toBe(left(0, 24)); // the whole arena fits: centred
+    expect(left(285, 2)).toBeLessThan(left(285, 24));
   });
 });
 

@@ -13,6 +13,7 @@ import {
 import { pullOpts, useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from './useArenaCore';
+import type { Insets } from './camera';
 
 export { snapshot, type AbilityHud, type ArenaHud } from './useArenaCore';
 
@@ -36,7 +37,8 @@ export function useArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
     paused: boolean;
-    insets: { top: number; bottom: number };
+    /** The HUD's insets; until the 3a page passes all four, the sides default to 0. */
+    insets: Pick<Insets, 'top' | 'bottom'> & Partial<Insets>;
     onUi: (e: ArenaUiEvent) => void;
     /** Basic attacks on a button (held or tapped) instead of automatic. */
     manualAttack: boolean;
@@ -128,5 +130,5 @@ export function useArena(
     onHeroDead: () => {},
     speed: 1,
   };
-  return useArenaCore(hostRef, mode, opts);
+  return useArenaCore(hostRef, mode, { ...opts, insets: { left: 0, right: 0, ...opts.insets } });
 }

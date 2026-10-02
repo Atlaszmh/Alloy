@@ -14,6 +14,7 @@ import {
 import { MAX_DUMMY_GROUPS, useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from '../arena/useArenaCore';
+import type { Insets } from '../arena/camera';
 import { DamageMeter, type MeterSummary } from './meter';
 
 /** How often the meter readout refreshes (real time), in ms. */
@@ -30,7 +31,8 @@ export function useTrainingArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
     paused: boolean;
-    insets: { top: number; bottom: number };
+    /** The HUD's insets; until the 3a page passes all four, the sides default to 0. */
+    insets: Pick<Insets, 'top' | 'bottom'> & Partial<Insets>;
     onUi: (e: CoreUiEvent) => void;
     manualAttack: boolean;
   },
@@ -66,7 +68,10 @@ export function useTrainingArena(
     onHeroDead: (world) => respawnHero(registry, world),
     speed: slowmo,
   };
-  const arena = useArenaCore(hostRef, mode, opts);
+  const arena = useArenaCore(hostRef, mode, {
+    ...opts,
+    insets: { left: 0, right: 0, ...opts.insets },
+  });
   const { worldRef } = arena;
 
   useEffect(() => {
