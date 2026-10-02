@@ -354,9 +354,7 @@ describe('the compare pane', () => {
   it('locked, Equip, Salvage, Lock, the bind choice, Transfer and Forge it give way to a note', () => {
     put(helm('storm'), rareSword('w1'));
     const view = show('h1', { locked: true });
-    expect(screen.getByTestId('equip-locked')).toHaveTextContent(
-      'Equip at the Anvil, between dives',
-    );
+    expect(screen.getByTestId('equip-locked')).toHaveTextContent(/^Locked during the dive$/);
     for (const id of ['equip-button', 'salvage-button', 'lock-button', 'bind-prompt', 'forge-it'])
       expect(screen.queryByTestId(id)).toBeNull();
     view.unmount();

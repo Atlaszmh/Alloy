@@ -230,11 +230,12 @@ describe('LoadoutTab', () => {
     put(gear('h1', 'helm'));
     store().markNew(['h1']);
     store().startDive(1);
-    open({ mode: 'pause', link: { tab: 'loadout', uid: 'h1' } });
+    const { props } = open({ mode: 'pause', link: { tab: 'loadout', uid: 'h1' } });
     expect(screen.getByTestId('item-sheet')).toHaveTextContent(
       'Selected · compared with your helm',
     );
-    expect(screen.getByTestId('equip-locked')).toBeInTheDocument();
+    expect(screen.getByTestId('equip-locked')).toHaveTextContent('Locked during the dive');
+    expect(prompts(props).map((p) => p.label)).toEqual(['Inspect', 'Full compare']);
     expect(screen.getByTestId('equip-best')).toBeDisabled();
     expect(tile('h1')).toHaveAccessibleName(expect.stringMatching(/, new$/));
   });
