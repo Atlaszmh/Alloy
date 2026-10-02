@@ -199,7 +199,7 @@ export const StopScreen = memo(function StopScreen({
                 })}
               </div>
             )}
-            <span className="k-caption mt-auto">Banked when you leave this stop.</span>
+            <span className="k-caption mt-auto">Already banked: yours even if you abandon.</span>
           </Panel>
           <div className="flex min-w-0 flex-col">
             {!stop ? (

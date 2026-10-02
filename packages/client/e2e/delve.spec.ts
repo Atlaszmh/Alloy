@@ -141,7 +141,9 @@ test.describe('Delve loot loop', () => {
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: 60_000 });
     await expect(door.getByRole('heading', { level: 1 })).toHaveText('Depth 1 cleared');
-    await expect(door.getByTestId('floor-finds')).toContainText('Banked when you leave this stop.');
+    await expect(door.getByTestId('floor-finds')).toContainText(
+      'Already banked: yours even if you abandon.',
+    );
     // The first card expands in place to its picker; Esc presses the picker's Back and the
     // focus returns to the card. Skipping the power-up is taking a door.
     const stop = door.getByTestId('stop');

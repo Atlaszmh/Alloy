@@ -12,8 +12,10 @@ export interface PauseScreenProps {
   biome: BiomeDef;
   foesLeft: number;
   link?: HubLink; // the Found log's item, or { tab: 'quests' } from the journal
+  /** Over the stop: back from the Anvil, the dive is still at the stop (nothing restarts). */
+  atStop?: boolean;
   onResume: () => void;
-  onAnvil: () => void; // floor restarts
+  onAnvil: () => void; // floor restarts, or back to the stop
   onAbandon: () => void; // lose bounty
 }
 
@@ -31,6 +33,7 @@ export const PauseScreen = memo(function PauseScreen({
   biome,
   foesLeft,
   link,
+  atStop = false,
   onResume,
   onAnvil,
   onAbandon,
@@ -72,7 +75,7 @@ export const PauseScreen = memo(function PauseScreen({
               <Glyph id="settings" size={20} /> Settings
             </Button>
             <Button onClick={onAnvil} testId="pause-anvil">
-              Anvil · floor restarts
+              {atStop ? 'Anvil · back to this stop' : 'Anvil · floor restarts'}
             </Button>
             <Button variant="danger" onClick={onAbandon} testId="pause-abandon">
               Abandon · lose bounty

@@ -9,7 +9,7 @@ import type { HubLink } from '../types';
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 
-const renderPause = (link?: HubLink) => {
+const renderPause = (link?: HubLink, atStop = false) => {
   const on = { onResume: vi.fn(), onAnvil: vi.fn(), onAbandon: vi.fn() };
   const dive = store().profile.dive!;
   render(
@@ -18,6 +18,7 @@ const renderPause = (link?: HubLink) => {
       biome={registry.getBiomeForDepth(dive.depth)}
       foesLeft={12}
       link={link}
+      atStop={atStop}
       {...on}
     />,
   );
@@ -87,6 +88,13 @@ describe('PauseScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abandon · lose bounty' }));
     expect(on.onAbandon).toHaveBeenCalledTimes(1);
     expect(on.onResume).not.toHaveBeenCalled();
+  });
+
+  it('over the stop, the Anvil says the stop waits: nothing restarts', () => {
+    const on = renderPause(undefined, true);
+    expect(screen.queryByRole('button', { name: 'Anvil · floor restarts' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Anvil · back to this stop' }));
+    expect(on.onAnvil).toHaveBeenCalledTimes(1);
   });
 
   it('Resume is hot metal on Esc / B / Menu and the first focus; Esc resumes', () => {

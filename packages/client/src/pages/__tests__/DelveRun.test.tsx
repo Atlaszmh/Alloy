@@ -150,6 +150,8 @@ describe('DelveRun', () => {
     fireEvent.click(within(stop).getByRole('button', { name: 'Menu' }));
     const pause = screen.getByTestId('pause-stub');
     expect(stop.compareDocumentPosition(pause) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Back from the Anvil, the dive is still at this stop: its Anvil says so.
+    expect(seen.pause.at(-1)).toMatchObject({ atStop: true });
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
     expect(screen.queryByTestId('pause-stub')).toBeNull();
     expect(screen.getByTestId('door-choice')).toBeInTheDocument();

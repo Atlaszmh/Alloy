@@ -104,7 +104,7 @@ describe('StopScreen (between depths)', () => {
     );
   });
 
-  it("lists this floor's items with their marks and its runes grouped, banked on leaving", () => {
+  it("lists this floor's items with their marks and its runes grouped, already banked", () => {
     const { onInspect } = atStop(['equip']);
     const found = screen.getByTestId('floor-finds');
     const items = within(found).getAllByTestId('loot-item');
@@ -117,7 +117,7 @@ describe('StopScreen (between depths)', () => {
       'Quick IRune, to your pouch',
       'Split III ×2Rune, to your pouch',
     ]);
-    expect(found).toHaveTextContent('Banked when you leave this stop.');
+    expect(found).toHaveTextContent('Already banked: yours even if you abandon.');
     fireEvent.click(items[1]);
     expect(onInspect).toHaveBeenCalledWith('h1');
   });

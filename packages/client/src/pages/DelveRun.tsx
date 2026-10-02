@@ -289,6 +289,7 @@ export function DelveRun() {
             biome={biome}
             foesLeft={arena.hud?.monstersLeft ?? 0}
             link={pause.link}
+            atStop={choosing}
             onResume={resume}
             onAnvil={toAnvil}
             onAbandon={abandon}
