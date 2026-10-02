@@ -9,7 +9,7 @@ import { generateItem } from '../src/loot/item-generator.js';
 import { emptyMaterials, withMaterial } from '../src/loot/materials.js';
 import { upgradeCost } from '../src/loot/smithing.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import type { MaterialRef } from '../src/types/crafting.js';
+import type { Haul, MaterialRef } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import { bal, registry } from './fixtures/arena.js';
@@ -33,7 +33,7 @@ describe('economySim', () => {
     for (const d of report.dives) {
       expect(Object.keys(d.forged)).toEqual(RARITY_ORDER);
       expect(d.lost === null).toBe(!d.died);
-      for (const h of [d.income, d.spent, ...(d.lost ? [d.lost] : [])]) {
+      for (const h of [d.income, d.salvaged, d.spent, ...(d.lost ? [d.lost] : [])]) {
         const counts = [
           h.scrap,
           h.dust,
@@ -45,6 +45,45 @@ describe('economySim', () => {
       }
     }
     expect(structuredClone(report)).toEqual(report);
+  });
+
+  it('reconciles each dive with the stockpile: what came in and what the Anvil salvaged, less what it and the stops spent', () => {
+    /** Every non-zero count in `h`, by a flat key. */
+    const flat = (h: Haul) => {
+      const out: Record<string, number> = { scrap: h.scrap, dust: h.dust, links: h.links };
+      for (const [k, n] of Object.entries(h.metals)) out[`metal:${k}`] = n;
+      for (const [k, n] of Object.entries(h.flux)) out[`flux:${k}`] = n;
+      for (const [k, n] of Object.entries(h.essences)) out[`essence:${k}`] = n;
+      for (const [k, ns] of Object.entries(h.shards))
+        ns!.forEach((n, t) => (out[`shard:${k}:${t}`] = n));
+      for (const [k, ns] of Object.entries(h.runes))
+        ns!.forEach((n, t) => (out[`rune:${k}:${t}`] = n));
+      return Object.fromEntries(Object.entries(out).filter(([, n]) => n !== 0));
+    };
+    const stock = (p: DelveProfile): Haul => ({
+      ...p.materials,
+      scrap: p.scrap,
+      dust: p.manaDust,
+      links: p.links,
+      runes: p.runes,
+    });
+    const minus = (a: Record<string, number>, b: Record<string, number>) => {
+      const out = { ...a };
+      for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) - n;
+      return Object.fromEntries(Object.entries(out).filter(([, n]) => n !== 0));
+    };
+    let p = runAutopilot(registry, { seed: 1, dives: 0 }).profile;
+    let salvagedAny = false;
+    for (const d of report.dives) {
+      const next = runAutopilot(registry, { seed: 1, dives: 1, profile: p }).profile;
+      const delta = minus(flat(stock(next)), flat(stock(p)));
+      const net = minus(minus(flat(d.income), flat(d.spent)), minus({}, flat(d.salvaged)));
+      expect(net).toEqual(delta);
+      salvagedAny ||= Object.keys(flat(d.salvaged)).length > 0;
+      p = next;
+    }
+    expect(p).toEqual(report.profile);
+    expect(salvagedAny).toBe(true);
   });
 
   it('plays a forced pair', () => {

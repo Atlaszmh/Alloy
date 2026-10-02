@@ -29,7 +29,8 @@ const OTHER_CHARTS = [
  * The DPS Lab's Economy view (dev builds only; see the crafting spec): the
  * engine's economy sim (the autopilot over N dives from a new save) for the
  * chosen seeds, run in a worker on Run, charted dive by dive (a material's
- * income, spending and death loss, the items forged by rarity, the deepest
+ * income, Anvil salvage, spending (the Anvil's and the stops') and death loss,
+ * the items forged by rarity, the deepest
  * depth or the deaths) over a table of every dive. Each value is the mean over the seeds;
  * deaths are a count. The page keeps it mounted, `hidden` under the other views.
  */
@@ -67,6 +68,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
   const forged = RARITY_ORDER.map((r) => perDive(reports, (d) => d.forged[r] ?? 0));
   const materials = MATERIAL_TOTALS.map((m) => [
     perDive(reports, (d) => m.of(d.income)),
+    perDive(reports, (d) => m.of(d.salvaged)),
     perDive(reports, (d) => m.of(d.spent)),
     perDive(reports, (d) => (d.lost ? m.of(d.lost) : 0)),
   ]);
@@ -147,7 +149,7 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                   <th className={HEAD}>Forged (common to legendary)</th>
                   {MATERIAL_TOTALS.map((m) => (
                     <th key={m.id} className={HEAD}>
-                      {m.label} in / spent / lost
+                      {m.label} in / salvaged / spent / lost
                     </th>
                   ))}
                 </tr>
@@ -159,9 +161,10 @@ export function EconomyView({ hidden = false }: { hidden?: boolean }) {
                     <td className="px-1">{formatAmount(depth[i])}</td>
                     <td className="px-1">{deaths[i]}</td>
                     <td className="px-1">{forged.map((f) => formatAmount(f[i])).join(' · ')}</td>
-                    {materials.map(([inc, out, lost], j) => (
+                    {materials.map(([inc, salvaged, out, lost], j) => (
                       <td key={MATERIAL_TOTALS[j].id} className="px-1">
-                        {formatAmount(inc[i])} / {formatAmount(out[i])} / {formatAmount(lost[i])}
+                        {formatAmount(inc[i])} / {formatAmount(salvaged[i])} /{' '}
+                        {formatAmount(out[i])} / {formatAmount(lost[i])}
                       </td>
                     ))}
                   </tr>

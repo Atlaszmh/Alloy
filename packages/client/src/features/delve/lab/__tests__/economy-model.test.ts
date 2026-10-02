@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createDelveProfile,
   emptyHaul,
-  type EconomyDive,
+  type EconomyRow,
   type EconomyReport,
   type Haul,
 } from '@alloy/engine';
@@ -21,10 +21,11 @@ const NONE = { common: 0, uncommon: 0, magic: 0, rare: 0, epic: 0, legendary: 0 
 /** A report's final save: the view never reads it. */
 const PROFILE = createDelveProfile(getDelveRegistry(), 1);
 const haul = (over: Partial<Haul> = {}): Haul => ({ ...emptyHaul(), ...over });
-function dive(n: number, over: Partial<EconomyDive> = {}): EconomyDive {
+function dive(n: number, over: Partial<EconomyRow> = {}): EconomyRow {
   return {
     dive: n,
     income: haul(),
+    salvaged: haul(),
     spent: haul(),
     forged: NONE,
     depth: n,
@@ -94,12 +95,13 @@ describe('the Economy view model', () => {
     expect(perDive([], (d) => d.depth)).toEqual([]);
   });
 
-  it("draws a material's income, spending and death loss, the items forged by rarity, the depth or the deaths", () => {
+  it("draws a material's income, Anvil salvage, spending and death loss, the items forged by rarity, the depth or the deaths", () => {
     const r: EconomyReport = {
       seed: 1,
       dives: [
         dive(1, {
           income: haul({ scrap: 50 }),
+          salvaged: haul({ scrap: 6 }),
           spent: haul({ scrap: 20 }),
           forged: { ...NONE, magic: 1 },
           died: true,
@@ -112,6 +114,7 @@ describe('the Economy view model', () => {
     // A dive that lost nothing (`lost: null`) counts 0.
     expect(economyLines([r], 'scrap').map((l) => [l.label, l.values])).toEqual([
       ['Scrap in', [50, 0]],
+      ['Scrap salvaged', [6, 0]],
       ['Scrap spent', [20, 0]],
       ['Scrap lost', [8, 0]],
     ]);
