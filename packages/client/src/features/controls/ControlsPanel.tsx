@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useControlsStore } from '@/stores/controlsStore';
 import { capturePadButton } from '@/features/gamepad/gamepad-hub';
+import { Button, Chip, Dialog, Glyph } from '@/features/delve/kit';
 import {
   ACTION_LABELS,
   AIM_REACH_LIMITS,
@@ -71,56 +72,43 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
   };
 
   const cell = (id: string, label: string, active: boolean, onClick: () => void) => (
-    <button
-      type="button"
-      className="delve-chip min-w-[76px] justify-center"
-      aria-pressed={active}
-      onClick={onClick}
-      data-testid={id}
-    >
+    <Chip pressed={active} onClick={onClick} className="min-w-[96px] justify-center" testId={id}>
       {active ? 'Press…' : label}
-    </button>
+    </Chip>
   );
   const isCapturing = (kind: Capture['kind'], action: KeyAction) =>
     capturing?.kind === kind && capturing.action === action;
+  const caption = 'text-[14px] uppercase tracking-[0.06em] text-[var(--k-text-3)]';
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 p-3"
-      data-pad-scope
-      data-testid="controls-panel"
+    <Dialog
+      title={
+        <span className="flex items-center gap-3">
+          <Glyph id="controls" size={28} /> Controls
+        </span>
+      }
+      onClose={onClose}
+      width={680}
+      testId="controls-panel"
+      footer={
+        <Button onClick={onClose} testId="controls-close">
+          Close
+        </Button>
+      }
     >
-      <div className="delve-panel flex w-full max-w-[520px] flex-col gap-3 p-3">
-        <div className="flex items-center justify-between">
-          <span className="delve-display text-lg font-bold uppercase tracking-widest text-amber-300">
-            🎮 Controls
-          </span>
-          <button
-            type="button"
-            className="delve-btn px-3 py-1 text-sm"
-            onClick={onClose}
-            data-pad-back
-            data-testid="controls-close"
-          >
-            Close
-          </button>
-        </div>
-        <p className="text-[11px] text-stone-400">
+      <div className="flex flex-col gap-4 text-[16px] text-[var(--k-text-2)]">
+        <p>
           Pick a cell, then press the button or key you want (Esc cancels). If another action
           already uses it, the two swap. Changes apply at once.
         </p>
 
-        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-2 gap-y-1.5 text-sm">
-          <span className="text-[10px] uppercase tracking-widest text-stone-500">Action</span>
-          <span className="text-center text-[10px] uppercase tracking-widest text-stone-500">
-            Controller
-          </span>
-          <span className="text-center text-[10px] uppercase tracking-widest text-stone-500">
-            Keyboard
-          </span>
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-2">
+          <span className={caption}>Action</span>
+          <span className={`${caption} text-center`}>Controller</span>
+          <span className={`${caption} text-center`}>Keyboard</span>
           {CONTROL_ACTIONS.map((a) => (
             <div key={a} className="contents">
-              <span className="text-stone-200">{ACTION_LABELS[a]}</span>
+              <span className="text-[var(--k-text)]">{ACTION_LABELS[a]}</span>
               {cell(`bind-pad-${a}`, padLabel(cfg.pad[a]), isCapturing('pad', a), () =>
                 setCapturing({ kind: 'pad', action: a }),
               )}
@@ -134,8 +122,8 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           ))}
           {MOVE_KEYS.map((a) => (
             <div key={a} className="contents">
-              <span className="text-stone-200">{ACTION_LABELS[a]}</span>
-              <span className="text-center text-[11px] text-stone-500">Left stick</span>
+              <span className="text-[var(--k-text)]">{ACTION_LABELS[a]}</span>
+              <span className="text-center text-[14px]">Left stick</span>
               {cell(`bind-key-${a}`, keyLabel(cfg.keys[a]), isCapturing('key', a), () =>
                 setCapturing({ kind: 'key', action: a }),
               )}
@@ -143,27 +131,23 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <section className="flex flex-col gap-1.5">
-          <div className="text-[10px] uppercase tracking-widest text-stone-500">
-            Controller: hold to keep casting
-          </div>
-          <div className="flex flex-wrap gap-1.5">
+        <section className="flex flex-col gap-2">
+          <div className={caption}>Controller: hold to keep casting</div>
+          <div className="flex flex-wrap gap-2">
             {REPEAT_ACTIONS.map((a) => (
-              <button
+              <Chip
                 key={a}
-                type="button"
-                className="delve-chip"
-                aria-pressed={cfg.repeat[a]}
+                pressed={cfg.repeat[a]}
                 onClick={() => store().setRepeat(a, !cfg.repeat[a])}
-                data-testid={`repeat-${a}`}
+                testId={`repeat-${a}`}
               >
                 {ACTION_LABELS[a]}
-              </button>
+              </Chip>
             ))}
           </div>
         </section>
 
-        <section className="flex flex-col gap-2 text-sm">
+        <section className="flex flex-col gap-2">
           <Slider
             id="deadzone-left"
             label="Move stick deadzone"
@@ -191,34 +175,24 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
         </section>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="delve-btn text-sm"
-            onClick={copy}
-            data-testid="controls-copy"
-          >
-            {copied ? 'Copied ✓' : 'Copy setup'}
-          </button>
-          <button
-            type="button"
-            className="delve-btn text-sm"
-            onClick={() => store().reset()}
-            data-testid="controls-reset"
-          >
+          <Button onClick={copy} testId="controls-copy">
+            {copied ? 'Copied' : 'Copy setup'}
+          </Button>
+          <Button onClick={() => store().reset()} testId="controls-reset">
             Reset to default
-          </button>
+          </Button>
         </div>
         {text && (
           <textarea
             readOnly
-            className="h-40 w-full rounded bg-black/60 p-2 font-mono text-[10px] text-stone-300"
+            className="h-40 w-full bg-[var(--k-well)] p-2 font-mono text-[14px] text-[var(--k-text-2)]"
             value={text}
             onFocus={(e) => e.currentTarget.select()}
             data-testid="controls-text"
           />
         )}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -238,8 +212,8 @@ function Slider({
   onChange: (v: number) => void;
 }) {
   return (
-    <label className="flex items-center gap-2">
-      <span className="w-44 shrink-0 text-stone-300">{label}</span>
+    <label className="flex items-center gap-3">
+      <span className="w-56 shrink-0 text-[var(--k-text)]">{label}</span>
       <input
         type="range"
         min={limits[0]}
@@ -247,10 +221,10 @@ function Slider({
         step={0.01}
         value={value}
         onChange={(e) => onChange(Number(e.currentTarget.value))}
-        className="min-w-0 flex-1"
+        className="min-w-0 flex-1 accent-[#feae34]"
         data-testid={id}
       />
-      <span className="w-28 shrink-0 text-right text-xs text-stone-400">{format(value)}</span>
+      <span className="w-36 shrink-0 text-right text-[14px]">{format(value)}</span>
     </label>
   );
 }

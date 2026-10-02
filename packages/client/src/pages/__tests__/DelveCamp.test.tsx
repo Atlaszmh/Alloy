@@ -166,7 +166,7 @@ describe('DelveCamp', () => {
       </MemoryRouter>,
     );
     const choice = screen.getByTestId('mana-choice');
-    expect(choice).toHaveAttribute('data-pad-scope');
+    expect(choice.closest('[data-pad-scope]')).not.toBeNull();
     // A second element is bound between dives; the chains keep their blows.
     expect(choice).toHaveTextContent("Between dives you'll bind a second element");
     expect(choice).not.toHaveTextContent('last blow');
@@ -239,10 +239,10 @@ describe('DelveCamp', () => {
         <DelveCamp />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('dialog', { name: 'Choose your mana' })).toHaveAttribute(
-      'aria-modal',
-      'true',
-    );
+    const dialog = screen.getByRole('dialog', { name: 'Choose your mana' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // A kit dialog: in the zoomed UI layer, over the hub.
+    expect(dialog.closest('#delve-ui-layer')).not.toBeNull();
     expect(screen.getByTestId('delve-button').closest('[inert]')).not.toBeNull();
     expect(screen.getByTestId('open-controls').closest('[inert]')).not.toBeNull();
     // jsdom lays nothing out: give every element a box so the pad sees them.

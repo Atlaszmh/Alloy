@@ -77,6 +77,14 @@ describe('ControlsPanel', () => {
     expect(config()).toEqual(DEFAULT_CONTROLS);
   });
 
+  it('opens as a kit dialog: a modal named Controls, in the UI layer, holding the pad', () => {
+    render(<ControlsPanel onClose={() => {}} />);
+    const dialog = screen.getByRole('dialog', { name: 'Controls' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.closest('[data-pad-scope]')).not.toBeNull();
+    expect(dialog.closest('#delve-ui-layer')).not.toBeNull();
+  });
+
   it('closes with its Close button or Esc', () => {
     const onClose = vi.fn();
     render(<ControlsPanel onClose={onClose} />);
