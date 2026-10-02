@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import {
   generateItem,
@@ -15,6 +15,7 @@ import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
 import { pricedRegistry } from '../runes/__tests__/priced-registry';
+import { attachPromptKeys } from '../kit/prompts';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -240,5 +241,23 @@ describe('StopPanel (the stop between depths)', () => {
     expect(screen.queryByTestId('rune-picker')).toBeNull();
     expect(screen.getByTestId('stop-picker')).toBeInTheDocument();
     expect(store().profile.dive!.stop!.taken).toBe(false);
+  });
+
+  it('Escape with the focus outside the open rune picker (on its socket) still closes only the rune picker', () => {
+    const release = attachPromptKeys();
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+    try {
+      atRuneStop();
+      const move = screen.getByTestId('stop-rune-move-primary-0');
+      within(move).getByRole('button', { name: 'Socket 1: empty' }).focus();
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape', code: 'Escape' });
+      expect(screen.queryByTestId('rune-picker')).toBeNull();
+      expect(screen.getByTestId('stop-picker')).toBeInTheDocument();
+    } finally {
+      box.mockRestore();
+      release();
+    }
   });
 });

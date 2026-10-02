@@ -191,7 +191,8 @@ function StopPicker({
       aria-label={STOP_TEXT[kind].name}
       className="k-plate k-scroll flex min-h-0 flex-1 flex-col gap-4 p-6"
       onKeyDown={(e) => {
-        if (e.key !== 'Escape') return;
+        // A scope open inside (the rune picker) is the top one: the prompt runtime presses its Back.
+        if (e.key !== 'Escape' || e.currentTarget.querySelector('[data-pad-scope]')) return;
         e.stopPropagation();
         onClose();
       }}
