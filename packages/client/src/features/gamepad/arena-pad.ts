@@ -6,7 +6,7 @@ import { DEFAULT_CONTROLS, type ControlsConfig } from '@/features/controls/contr
  * What the controller asks of the arena this frame, from the player's
  * bindings (`ControlsConfig.pad`; the default keeps both thumbs on the
  * sticks: RT Primary, LT dodge, LB Defensive, R3 Ultimate, RB manual attack,
- * D-pad down potion).
+ * D-pad down potion, L3 held every loot label, View the journal).
  */
 export interface ArenaPadActions {
   /** Left stick, 0..1 per axis after the deadzone. */
@@ -28,6 +28,10 @@ export interface ArenaPadActions {
   /** The attack button pressed this frame (a tap the engine keeps briefly). */
   attackTap: boolean;
   menu: boolean;
+  /** The labels button held (L3): every drop's loot label shows. */
+  labels: boolean;
+  /** The journal button pressed this frame (View). */
+  journal: boolean;
 }
 
 const ABILITY_ACTIONS = ['primary', 'defensive', 'ultimate'] as const;
@@ -56,6 +60,8 @@ export function padToArena(
     attackHeld: is(cfg.pad.attack, (b) => state.buttons[b]),
     attackTap: is(cfg.pad.attack, (b) => pressed.has(b)),
     menu: is(cfg.pad.menu, (b) => pressed.has(b)),
+    labels: is(cfg.pad.labels, (b) => state.buttons[b]),
+    journal: is(cfg.pad.journal, (b) => pressed.has(b)),
   };
 }
 

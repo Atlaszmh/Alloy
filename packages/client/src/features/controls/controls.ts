@@ -14,6 +14,8 @@ export const CONTROL_ACTIONS = [
   'attack',
   'potion',
   'menu',
+  'labels',
+  'journal',
 ] as const;
 export type ControlAction = (typeof CONTROL_ACTIONS)[number];
 
@@ -49,6 +51,8 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     attack: 'rb',
     potion: 'down',
     menu: 'menu',
+    labels: 'ls',
+    journal: 'view',
   },
   keys: {
     primary: 'KeyQ',
@@ -58,6 +62,8 @@ export const DEFAULT_CONTROLS: ControlsConfig = {
     attack: null,
     potion: 'KeyF',
     menu: 'Escape',
+    labels: 'AltLeft',
+    journal: 'KeyJ',
     up: 'KeyW',
     down: 'KeyS',
     left: 'KeyA',
@@ -76,6 +82,8 @@ export const ACTION_LABELS: Record<KeyAction, string> = {
   attack: 'Basic attack (manual)',
   potion: 'Potion',
   menu: 'Menu',
+  labels: 'Show all loot labels (hold)',
+  journal: 'Journal',
   up: 'Move up',
   down: 'Move down',
   left: 'Move left',
@@ -109,6 +117,23 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const inRange = (v: unknown, [lo, hi]: readonly [number, number]): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 
+/**
+ * The saved bindings, an action missing from them (or invalid) filled with its default, unless
+ * the saved setup already uses that default for another action: then it starts unbound, so a
+ * new action never lands on a button or key the player uses (decided item 23).
+ */
+function withDefaults<A extends string, V>(
+  actions: readonly A[],
+  saved: (a: A) => V | null | undefined,
+  defaults: Record<A, V | null>,
+): Record<A, V | null> {
+  const given = actions.map((a) => [a, saved(a)] as const);
+  const used = new Set(given.map(([, v]) => v));
+  return Object.fromEntries(
+    given.map(([a, v]) => [a, v !== undefined ? v : used.has(defaults[a]) ? null : defaults[a]]),
+  ) as Record<A, V | null>;
+}
+
 /** Read a saved or pasted setup: valid fields are kept, anything else falls back to the default. */
 export function parseControls(raw: unknown): ControlsConfig {
   const d = DEFAULT_CONTROLS;
@@ -117,22 +142,18 @@ export function parseControls(raw: unknown): ControlsConfig {
   const keys = isObject(r.keys) ? r.keys : {};
   const repeat = isObject(r.repeat) ? r.repeat : {};
   const dz = isObject(r.deadzone) ? r.deadzone : {};
-  const padButton = (v: unknown, fallback: PadButton | null) =>
+  const padButton = (v: unknown) =>
     v === null || (typeof v === 'string' && (PAD_BUTTONS as readonly string[]).includes(v))
       ? (v as PadButton | null)
-      : fallback;
-  const keyCode = (v: unknown, fallback: string | null) =>
+      : undefined;
+  const keyCode = (v: unknown) =>
     v === null || (typeof v === 'string' && v.length > 0 && v.length < 32)
       ? (v as string | null)
-      : fallback;
+      : undefined;
   return {
     version: 1,
-    pad: Object.fromEntries(
-      CONTROL_ACTIONS.map((a) => [a, padButton(pad[a], d.pad[a])]),
-    ) as ControlsConfig['pad'],
-    keys: Object.fromEntries(
-      [...CONTROL_ACTIONS, ...MOVE_KEYS].map((a) => [a, keyCode(keys[a], d.keys[a])]),
-    ) as ControlsConfig['keys'],
+    pad: withDefaults(CONTROL_ACTIONS, (a) => padButton(pad[a]), d.pad),
+    keys: withDefaults([...CONTROL_ACTIONS, ...MOVE_KEYS], (a) => keyCode(keys[a]), d.keys),
     repeat: Object.fromEntries(
       REPEAT_ACTIONS.map((a) => [a, typeof repeat[a] === 'boolean' ? repeat[a] : d.repeat[a]]),
     ) as ControlsConfig['repeat'],

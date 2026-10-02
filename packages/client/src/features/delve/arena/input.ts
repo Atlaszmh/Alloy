@@ -7,7 +7,7 @@ import {
   type DataRegistry,
   type Vec,
 } from '@alloy/engine';
-import { aimMarkerFor, classifyPress } from './aim-gestures';
+import { aimMarkerFor, classifyPress } from './aim';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
@@ -57,6 +57,10 @@ export interface ArenaInput {
   attackAim: Vec | null;
   /** The input lock as of the last frame (`frameInput`): a switch to or from the pad lets go of the other side. */
   device: InputDevice;
+  /** The labels key held (Alt): every drop's loot label shows. */
+  labels: boolean;
+  /** Any device has moved the hero (`frameInput`): the move hint goes. */
+  moved: boolean;
 }
 
 export function createArenaInput(): ArenaInput {
@@ -73,6 +77,8 @@ export function createArenaInput(): ArenaInput {
     attackTap: false,
     attackAim: null,
     device: 'keyboard',
+    labels: false,
+    moved: false,
   };
 }
 
@@ -134,6 +140,7 @@ export function frameInput(
   // Unmarked: the new device's own press of that slot charges anew.
   if (switched) dropHold(world, false);
   const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
+  if (out.move.x !== 0 || out.move.y !== 0) input.moved = true;
   out.cancelHold = !padLive && input.cancelHold;
   input.cast = null;
   input.cancelHold = false;
@@ -245,6 +252,11 @@ export function pressMenu(): void {
   scopedLast('[data-pad-menu]')?.click();
 }
 
+/** The Journal, from its key or the pad's button: the topmost scope's `[data-pad-journal]`. */
+export function pressJournal(): void {
+  scopedLast('[data-pad-journal]')?.click();
+}
+
 /** Text entry keeps every key, the menu key included. */
 function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
@@ -267,8 +279,9 @@ function isField(t: EventTarget | null): boolean {
 /**
  * Wire keyboard controls to `input`, following the player's key bindings.
  * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
- * mouse (and charges a hold move) and releasing casts there. Returns a
- * cleanup function.
+ * mouse (and charges a hold move) and releasing casts there. The labels key
+ * (Alt) is held: its default is prevented, and its keyup or a window blur
+ * lets go (an Alt+Tab never sends the keyup). Returns a cleanup function.
  */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();
@@ -303,6 +316,11 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       return;
     }
     const action = keyAction(e.code);
+    if (action === 'labels') {
+      input.labels = true;
+      e.preventDefault();
+      return;
+    }
     if (!action || e.repeat) return;
     const slot = ABILITY_SLOT[action];
     if (slot !== undefined) {
@@ -319,6 +337,9 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.attackHeld = true;
       input.attackTap = true;
       input.attackAim = input.mouse;
+    } else if (action === 'journal') {
+      e.preventDefault();
+      pressJournal();
     }
   };
   /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
@@ -326,13 +347,17 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     const a = input.aiming;
     if (!a) return;
     input.aiming = null;
-    const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
+    const tap = classifyPress(performance.now() - a.since) === 'tap' || !input.mouse;
     input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
   };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
     const action = keyAction(e.code);
     if (action === 'attack') input.attackHeld = false;
+    if (action === 'labels') {
+      input.labels = false;
+      e.preventDefault();
+    }
     const a = input.aiming;
     if (a && a.at === null && action && ABILITY_SLOT[action] === a.slot) release();
   };
@@ -344,6 +369,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     held.clear();
     recompute();
     input.aiming = null;
+    input.labels = false;
   };
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);

@@ -49,6 +49,16 @@ function hud(over: Partial<ArenaHud> & { buffs?: HudBuff[] } = {}): ArenaHud {
     barrier: null,
     galvanizedAt: null,
     t: 10,
+    buffs: [],
+    map: {
+      width: 26,
+      height: 40,
+      view: { left: 0, top: 0, right: 26, bottom: 40 },
+      hero: { x: 13, y: 20 },
+      foes: [],
+      drops: [],
+      terrain: [],
+    },
     ...over,
   } as ArenaHud;
 }

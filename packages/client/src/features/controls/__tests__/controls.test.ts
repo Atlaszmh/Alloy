@@ -42,6 +42,22 @@ describe('controls config', () => {
     expect(parseControls('garbage')).toEqual(DEFAULT_CONTROLS);
   });
 
+  it('shows every loot label on hold Alt / L3 and opens the journal on J / View', () => {
+    expect(DEFAULT_CONTROLS.keys).toMatchObject({ labels: 'AltLeft', journal: 'KeyJ' });
+    expect(DEFAULT_CONTROLS.pad).toMatchObject({ labels: 'ls', journal: 'view' });
+  });
+
+  it("a saved setup gains a new action's default, unless it already uses it: then unbound", () => {
+    const { labels: _l, journal: _j, ...pad } = { ...DEFAULT_CONTROLS.pad, primary: 'view' };
+    const { labels: _k, journal: _m, ...keys } = { ...DEFAULT_CONTROLS.keys, primary: 'AltLeft' };
+    const c = parseControls({ ...DEFAULT_CONTROLS, pad, keys });
+    expect(c.pad).toMatchObject({ primary: 'view', labels: 'ls', journal: null });
+    expect(c.keys).toMatchObject({ primary: 'AltLeft', labels: null, journal: 'KeyJ' });
+    // An action saved unbound stays so, and a setup without them gains both.
+    expect(parseControls({ pad: { journal: null } }).pad.journal).toBeNull();
+    expect(parseControls({}).keys).toMatchObject({ labels: 'AltLeft', journal: 'KeyJ' });
+  });
+
   it('exports text that parses back to the same setup', () => {
     const c = bindPad(bindKey(DEFAULT_CONTROLS, 'primary', 'KeyJ'), 'ultimate', 'y');
     expect(parseControls(JSON.parse(exportControls(c)))).toEqual(c);
