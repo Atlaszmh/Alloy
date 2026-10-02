@@ -22,6 +22,7 @@ import {
 import { MANA_HEX, cssToHex } from '../arena/palette';
 import { attachKeyboard, createArenaInput } from '../arena/input';
 import { RARITY_TEXT } from '../format';
+import { DUST_COLOR, METAL_COLOR } from '../materials/material-style';
 import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
@@ -251,6 +252,39 @@ describe('runes on the floor', () => {
     expect(dropPlaque(item('magic'), false)).toMatchObject({ text: 'Sunfang', always: false });
     expect(dropPlaque(item('magic'), true)).toMatchObject({ text: 'Sunfang ▲', always: true });
     expect(dropPlaque(drop({}), false)).toBeNull();
+  });
+});
+
+describe('materials on the floor', () => {
+  const iron = { kind: 'metal', metal: 'iron' } as const;
+  const bar = drop({ kind: 'material', material: iron, amount: 2 });
+  const ironHex = cssToHex(METAL_COLOR.iron);
+
+  it('draw as small pickups in their colour, trailing three pixels while the magnet pulls them', () => {
+    const still = recorder();
+    drawDrop(still.g, bar, 1, 1);
+    const fills = still.fills.filter((c) => c === ironHex).length;
+    expect(fills).toBeGreaterThan(0);
+    expect(still.fills).not.toContain(0xfcd34d); // not the scrap coin
+    const flying = recorder();
+    drawDrop(flying.g, bar, 1, 1, { dx: 0.3, dy: 0 });
+    expect(flying.fills.filter((c) => c === ironHex)).toHaveLength(fills + 3);
+    const dust = recorder();
+    drawDrop(dust.g, drop({ kind: 'material', material: { kind: 'dust' } }), 1, 1);
+    expect(dust.fills).toContain(cssToHex(DUST_COLOR));
+  });
+
+  it('only an essence is labelled, always, in legendary orange; a pickup sparkles its colour', () => {
+    expect(dropPlaque(bar, false)).toBeNull();
+    const essence = drop({ kind: 'material', material: { kind: 'essence', essence: 'twin_fang' } });
+    expect(dropPlaque(essence, false)).toEqual({
+      text: 'Twin Fang essence',
+      color: cssToHex(RARITY_TEXT.legendary),
+      always: true,
+    });
+    expect(
+      pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'material', amount: 2, material: iron }),
+    ).toBe(ironHex);
   });
 });
 
