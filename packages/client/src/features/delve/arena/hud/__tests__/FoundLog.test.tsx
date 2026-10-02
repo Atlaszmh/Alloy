@@ -58,6 +58,8 @@ describe('FoundLog: what this floor found', () => {
     expect(rows[0]).toHaveTextContent(`${blade.name}▲`);
     expect(rows[0]).toHaveAccessibleName(`${blade.name}, upgrade`);
     expect(within(rows[0]).getByText(blade.name)).toHaveStyle({ color: '#fee761' });
+    // A click leaves the focus where it was (the dock's buttons do the same).
+    expect(fireEvent.mouseDown(rows[0])).toBe(false);
     fireEvent.click(rows[0]);
     expect(onInspect).toHaveBeenCalledWith('w1');
   });

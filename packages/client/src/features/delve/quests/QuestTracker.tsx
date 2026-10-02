@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Bar, Glyph, InputGlyph, Panel } from '@/features/delve/kit';
 import { useControlsStore } from '@/stores/controlsStore';
+import { noFocus } from '../arena/hud/SkillSlot';
 import { MAX_TRACKED, QUEST_KIND, objectiveCount, type QuestView } from './types';
 
 /**
@@ -37,7 +38,7 @@ export function QuestTracker({
       title={<span style={{ color: 'var(--k-hot-hi)' }}>Quests</span>}
       aside={
         onJournal ? (
-          <button type="button" className={hintClass} onClick={onJournal}>
+          <button type="button" className={hintClass} onMouseDown={noFocus} onClick={onJournal}>
             {hint}
           </button>
         ) : (

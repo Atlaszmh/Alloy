@@ -8,6 +8,7 @@ import { getDelveRegistry } from '../../registry';
 import { RARITY_COLOR, RARITY_TEXT, UPGRADE_EPSILON } from '../../format';
 import { countRunes } from '../../chains/chain-text';
 import { FAMILY_STYLE, runeName } from '../../runes/rune-style';
+import { noFocus } from './SkillSlot';
 
 /** A row's height and the gap between rows, in design px. */
 const ROW = 32;
@@ -87,6 +88,7 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
             type="button"
             className={ROW_CLASS}
             aria-label={mark ? `${item.name}, ${MARK[mark].label}` : item.name}
+            onMouseDown={noFocus}
             onClick={() => onInspect(item.uid)}
             data-testid="loot-item"
           >

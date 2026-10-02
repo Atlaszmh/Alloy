@@ -41,7 +41,9 @@ describe('QuestTracker', () => {
   it('its Journal hint opens the journal when the HUD passes onJournal', () => {
     const onJournal = vi.fn();
     render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} onJournal={onJournal} />);
-    fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
+    const journal = screen.getByRole('button', { name: /Journal/ });
+    expect(fireEvent.mouseDown(journal)).toBe(false); // the focus stays where it was
+    fireEvent.click(journal);
     expect(onJournal).toHaveBeenCalledOnce();
   });
 
