@@ -440,8 +440,10 @@ export function useArenaCore(
         resolution: arenaResolution(),
         autoDensity: true,
       })
-      // The loot labels' font, before Pixi measures any.
-      .then(() => Promise.all([loadDelveSprites(), document.fonts?.load('14px "Jersey 10"')]))
+      // The loot labels' font, before Pixi measures any; its failure never blocks the arena.
+      .then(() =>
+        Promise.all([loadDelveSprites(), document.fonts?.load('14px "Jersey 10"').catch(() => {})]),
+      )
       .then(() => {
         if (destroyed) {
           app.destroy(true);
