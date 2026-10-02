@@ -37,6 +37,25 @@ test('min-size: 14 design px under the 0.75 zoom passes, 12 fails', async ({ pag
   expect(findings.some((f) => f.detail.includes('#small') && f.severity === 'fail')).toBe(true);
 });
 
+test('min-size: a form control and display:contents text take the floor too', async ({ page }) => {
+  await page.setContent(frame(`
+    <div style="zoom:0.75">
+      <select id="ok" style="font-size:14px;height:32px"><option>ok</option></select>
+      <span style="display:contents;font-size:14px">fine</span>
+    </div>`));
+  expect(await minSize(page, CTX)).toEqual([]);
+  await page.setContent(frame(`
+    <div style="zoom:0.75">
+      <select id="small" style="font-size:12px;height:32px"><option>small</option></select>
+      <input id="field" value="v" style="font-size:12px;height:32px">
+      <span id="contents" style="display:contents;font-size:12px">tiny</span>
+    </div>`));
+  const details = (await minSize(page, CTX)).map((f) => f.detail);
+  for (const id of ['#small', '#field', '#contents']) {
+    expect(details.some((d) => d.startsWith(`${id} text`))).toBe(true);
+  }
+});
+
 test('min-size: a click target under 24×24 fails, a hidden one is skipped', async ({ page }) => {
   await page.setContent(frame(`
     <button id="tiny" style="width:20px;height:30px;font-size:14px">x</button>
