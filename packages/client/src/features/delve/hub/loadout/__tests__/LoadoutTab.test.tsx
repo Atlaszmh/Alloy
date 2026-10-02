@@ -148,6 +148,22 @@ describe('LoadoutTab', () => {
     expect(screen.queryByText(/Hovered/)).toBeNull();
   });
 
+  it("under the pad RT jumps to the compare pane's first action, and B from there goes back to the tile", () => {
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    const { props } = open();
+    expect(prompts(props).some((x) => x.id === 'to-actions')).toBe(false); // the pad's only
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    act(() => tile('r1').focus());
+    expect(prompt(props, 'to-actions').binding).toEqual({ pad: 'rt' });
+    expect(prompts(props).some((x) => x.id === 'to-bag')).toBe(false);
+    act(() => prompt(props, 'to-actions').onPress!());
+    expect(screen.getByTestId('equip-button')).toHaveFocus();
+    expect(prompt(props, 'to-bag').binding).toEqual({ pad: 'b' });
+    act(() => prompt(props, 'to-bag').onPress!());
+    expect(tile('r1')).toHaveFocus();
+    expect(prompts(props).some((x) => x.id === 'to-bag')).toBe(false);
+  });
+
   it("holding Full compare shows every stat line and a weapon's moveset", () => {
     put(rareSword('w1'));
     const { props } = open({ link: { tab: 'loadout', uid: 'w1' } });

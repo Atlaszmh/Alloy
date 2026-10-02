@@ -3,6 +3,9 @@ import {
   createDefaultRegistry,
   createDelveProfile,
   defaultMoveset,
+  generateItem,
+  SeededRNG,
+  type GearItem,
   type Moveset,
 } from '@alloy/engine';
 
@@ -38,13 +41,15 @@ function withSocket(moveset: Moveset): Moveset {
 
 /**
  * A fire hero's save, its sword's Primary at `primarySlots` slots of default moves; with
- * `socket`, its first move has one open, empty socket and Quick III waits in the pouch.
+ * `socket`, its first move has one open, empty socket and Quick III waits in the pouch; with
+ * `bag`, the bag holds what `bag` makes.
  */
 async function setup(
   page: Page,
   autopilot: boolean,
   primarySlots = 1,
   socket = false,
+  bag: (registry: ReturnType<typeof createDefaultRegistry>) => GearItem[] = () => [],
 ): Promise<void> {
   const registry = createDefaultRegistry();
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
@@ -57,6 +62,7 @@ async function setup(
       weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
     },
     runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
+    bag: [...profile.bag, ...bag(registry)],
   });
   await page.addInitScript(
     ([value, bot]) => {
@@ -365,6 +371,47 @@ test.describe('Delve with a controller', () => {
     expect(await sockets()).toEqual([null]);
     await page.getByTestId('chain-apply').click();
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
+  });
+
+  test("G08: a bag weapon picked on the pad; RT reaches the compare pane's actions, A transfers and unequips, B goes back", async ({
+    page,
+  }) => {
+    await setup(page, false, 1, false, (registry) => {
+      const axe = generateItem(
+        registry,
+        { uid: 'bag-axe', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'axe', mana: 'fire' },
+        new SeededRNG(4),
+      );
+      return [{ ...axe, moveset: defaultMoveset(registry, axe, 'fire') }];
+    });
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    const save = () => page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!));
+    const sheet = page.getByTestId('item-sheet');
+    // The D-pad's focus selects the bag's axe for the compare pane.
+    await tap(page, BUTTON.down);
+    await padWalk(page, 'bag-item');
+    await expect(sheet).toContainText('Selected · compared with your weapon');
+    // RT jumps to the pane's first action, the footer says B goes back.
+    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toBeVisible();
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    await expect(page.locator('.k-prompt', { hasText: 'Back to bag' })).toBeVisible();
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('bag-item')).toBeFocused();
+    await expect(page.getByTestId('system-menu')).toBeHidden();
+    // Again, and A moves the moveset onto the axe, which is worn now.
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await save()).equipped.weapon?.uid).toBe('bag-axe');
+    await expect(sheet).toContainText('Equipped · your weapon');
+    // RT and A unequip it.
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('unequip-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await save()).equipped.weapon?.uid).toBeUndefined();
+    expect((await save()).bag.map((i: GearItem) => i.uid)).toContain('bag-axe');
   });
 
   test('G03: RB and LB step through the five Anvil tabs, wrapping round', async ({ page }) => {

@@ -23,7 +23,8 @@ const ARMED_MS = 2000;
  * selection), else the selected one
  * (a click, or the pad's focus), else the worn weapon (the how-to, on a first save). The tab's
  * prompts: Select, Equip, Full compare (hold Shift / LT), Salvage (Del / X) and Lock (L / Y),
- * which act on the hovered or selected item. In `mode: 'pause'` the item actions give way to notes.
+ * which act on the hovered or selected item; under the pad, RT jumps to the compare pane's first
+ * action and B from there goes back. In `mode: 'pause'` the item actions give way to notes.
  */
 export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactElement {
   const registry = getDelveRegistry();
@@ -33,6 +34,10 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
   const [full, setFull] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [asked, setAsked] = useState<string | null>(null);
+  // The pad's focus is in the compare pane (RT took it there; B brings it back to `from`).
+  const [inPane, setInPane] = useState(false);
+  const pane = useRef<HTMLDivElement>(null);
+  const from = useRef<HTMLElement | null>(null);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const locked = mode === 'pause' || isDiveActive(profile);
 
@@ -102,6 +107,13 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
     if (link?.tab === 'loadout' && link.uid) setSelected(link.uid);
   }, [link]);
 
+  // Where the focus is (a removed button's focus, put back by the pad's nav, never blurs).
+  useEffect(() => {
+    const on = (e: FocusEvent) => setInPane(!!pane.current?.contains(e.target as Node));
+    document.addEventListener('focusin', on);
+    return () => document.removeEventListener('focusin', on);
+  }, []);
+
   // A device switch forgets the hover.
   useEffect(() => useInputDeviceStore.subscribe(() => setHovered(null)), []);
 
@@ -127,11 +139,39 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
       },
       { id: 'lock', label: 'Lock', binding: { key: 'KeyL', pad: 'y' }, onPress: on('lock') },
     ];
+    // The pad reaches the compare pane's actions without stepping across the bag's tiles.
+    const toActions: Prompt = {
+      id: 'to-actions',
+      label: 'Actions',
+      binding: { pad: 'rt' },
+      onPress: () => {
+        // The first enabled kit button (the header's item tile isn't an action).
+        const first = pane.current?.querySelector<HTMLElement>('.k-btn:not(:disabled)');
+        if (!first) return;
+        from.current = document.activeElement as HTMLElement | null;
+        first.focus();
+      },
+    };
+    const toBag: Prompt = {
+      id: 'to-bag',
+      label: 'Back to bag',
+      binding: { pad: 'b' },
+      onPress: () => {
+        const back = from.current?.isConnected
+          ? from.current
+          : document.querySelector<HTMLElement>('[data-testid="bag-item"]');
+        back?.focus();
+      },
+    };
     setPrompts(
-      mode === 'pause' ? prompts.filter((p) => p.id === 'select' || p.id === 'compare') : prompts,
+      mode === 'pause'
+        ? prompts.filter((p) => p.id === 'select' || p.id === 'compare')
+        : pad
+          ? [...prompts, inPane ? toBag : toActions]
+          : prompts,
     );
-    return () => setPrompts([]);
-  }, [mode, setPrompts]);
+  }, [mode, setPrompts, pad, inPane]);
+  useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (
     <div
@@ -155,16 +195,18 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
           <HowTo />
         </div>
       ) : (
-        <ComparePane
-          uid={target ?? profile.equipped.weapon?.uid ?? null}
-          source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
-          full={full}
-          locked={locked}
-          armed={armed}
-          asked={asked}
-          actions={actions}
-          go={go}
-        />
+        <div ref={pane} className="contents">
+          <ComparePane
+            uid={target ?? profile.equipped.weapon?.uid ?? null}
+            source={!target ? 'worn' : target === hovered ? 'hovered' : 'selected'}
+            full={full}
+            locked={locked}
+            armed={armed}
+            asked={asked}
+            actions={actions}
+            go={go}
+          />
+        </div>
       )}
     </div>
   );
