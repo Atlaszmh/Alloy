@@ -1,8 +1,9 @@
-import { forwardRef } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import type { GearItem, GearSlot } from '@alloy/engine';
+import { Tile, type TileProps } from './kit';
 import { ItemIcon } from './ItemIcon';
 import { getDelveRegistry } from './registry';
-import { RARITY_COLOR, UPGRADE_EPSILON, manaStyle } from './format';
+import { UPGRADE_EPSILON, manaStyle } from './format';
 
 const EMPTY_BASE: Record<GearSlot, string> = {
   weapon: 'sword',
@@ -14,94 +15,72 @@ const EMPTY_BASE: Record<GearSlot, string> = {
   ring: 'ring',
 };
 
-export interface ItemTileProps {
+/**
+ * A tile's mark from its Power changes: ▲ better as it is (`asIs`, else `delta`), ◇ better only
+ * with your moveset moved onto it (`delta`, a weapon's value as a home: Transfer), ▼ worse as it is.
+ */
+export function deltaMark(
+  delta: number | null | undefined,
+  asIs: number | null | undefined = delta,
+): TileProps['delta'] {
+  if (delta === null || delta === undefined) return null;
+  const now = asIs ?? delta;
+  if (now > UPGRADE_EPSILON) return 'up';
+  if (delta > UPGRADE_EPSILON) return 'potential';
+  return now < -UPGRADE_EPSILON ? 'down' : null;
+}
+
+export interface ItemTileProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   item: GearItem | null;
   /** Needed to draw an empty slot silhouette. */
   slot?: GearSlot;
-  size?: number | string;
-  /** Power change if equipped (fraction). Shows ▲/▼. */
+  size?: number;
+  /** Power change if equipped (fraction); a weapon's as a home for your moveset. */
   delta?: number | null;
+  /** A weapon's Power change as it is; ▲ reads it, and ◇ marks one better only as a home. */
+  asIs?: number | null;
   selected?: boolean;
   dim?: boolean;
   isNew?: boolean;
   equipped?: boolean;
-  onClick?: () => void;
   testId?: string;
   label?: string;
 }
 
+/** An item as a kit `Tile`: its icon, rarity, ▲ ▼ ◇ mark, NEW, lock and equipped marks, and its mana pip. */
 export const ItemTile = forwardRef<HTMLButtonElement, ItemTileProps>(function ItemTile(
-  { item, slot, size = 56, delta, selected, dim, isNew, equipped, onClick, testId, label },
+  { item, slot, size = 56, delta, asIs, dim, isNew, label, style, ...rest },
   ref,
 ) {
-  const rarity = item?.rarity ?? 'common';
-  const color = RARITY_COLOR[rarity];
-  const high = item && (rarity === 'epic' || rarity === 'legendary');
-  const up = delta !== undefined && delta !== null && delta > UPGRADE_EPSILON;
-  const down = delta !== undefined && delta !== null && delta < -UPGRADE_EPSILON;
   const mana = item ? manaStyle(getDelveRegistry(), item.mana) : null;
-
   return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      data-rarity={item ? rarity : undefined}
-      aria-label={label ?? (item ? `${item.name}, ${rarity}` : `Empty ${slot ?? ''} slot`)}
-      className={`delve-tile ${item?.rarity === 'legendary' ? 'delve-tile-legendary' : ''}`}
-      style={{
-        width: size,
-        height: size,
-        opacity: dim ? 0.35 : 1,
-        borderColor: item
-          ? rarity === 'common'
-            ? 'rgba(185,185,196,0.35)'
-            : color
-          : 'rgba(255,255,255,0.08)',
-        background: item
-          ? `radial-gradient(circle at 50% 38%, ${color}40 0%, ${color}10 45%, transparent 72%), #15151e`
-          : 'rgba(255,255,255,0.025)',
-        boxShadow: selected
-          ? `0 0 0 2px #fff, 0 0 14px ${color}`
-          : high
-            ? `0 0 12px ${color}66, inset 0 0 10px ${color}33`
-            : 'inset 0 1px 0 rgba(255,255,255,0.05)',
-      }}
-    >
-      <span className="delve-tile-icon">
-        {item ? (
-          <ItemIcon baseId={item.baseId} rarity={item.rarity} />
+    <Tile
+      {...rest}
+      {...{ ref }}
+      rarity={item?.rarity ?? null}
+      size={size}
+      delta={deltaMark(delta, asIs)}
+      fresh={!!isNew && !item?.locked}
+      locked={!!item?.locked}
+      label={label ?? (item ? `${item.name}, ${item.rarity}` : `Empty ${slot ?? ''} slot`)}
+      style={dim ? { ...style, opacity: 0.35 } : style}
+      icon={
+        item ? (
+          <>
+            <ItemIcon baseId={item.baseId} rarity={item.rarity} />
+            {mana && (
+              <span
+                className="delve-tile-mana"
+                data-mana={item.mana}
+                title={`${mana.name} affinity`}
+                style={{ background: mana.color }}
+              />
+            )}
+          </>
         ) : slot ? (
           <ItemIcon baseId={EMPTY_BASE[slot]} rarity="common" ghost />
-        ) : null}
-      </span>
-      {item && item.upgrade > 0 && <span className="delve-tile-upgrade">+{item.upgrade}</span>}
-      {item?.locked && (
-        <span className="delve-tile-lock" aria-label="locked">
-          <svg viewBox="0 0 16 16" width="10" height="10">
-            <path d="M4 7V5a4 4 0 1 1 8 0v2h1v8H3V7zm2 0h4V5a2 2 0 1 0-4 0z" fill="currentColor" />
-          </svg>
-        </span>
-      )}
-      {isNew && !item?.locked && <span className="delve-tile-new" />}
-      {equipped && <span className="delve-tile-equipped">E</span>}
-      {mana && (
-        <span
-          className="delve-tile-mana"
-          data-mana={item?.mana}
-          title={`${mana.name} affinity`}
-          style={{ background: mana.color, boxShadow: `0 0 6px ${mana.color}` }}
-        />
-      )}
-      {(up || down) && (
-        <span
-          className={`delve-tile-delta ${up ? 'up' : 'down'}`}
-          data-testid={up ? 'upgrade-badge' : undefined}
-        >
-          {up ? '▲' : '▼'}
-        </span>
-      )}
-    </button>
+        ) : undefined
+      }
+    />
   );
 });
