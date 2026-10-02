@@ -187,6 +187,10 @@ export function SkillDock({
           aria-label="Attack"
           data-testid="attack-button"
           data-mode={manualAttack ? 'manual' : 'auto'}
+          // Auto is a readout: no tab stop, and the pad's focus passes it by.
+          aria-disabled={manualAttack ? undefined : true}
+          tabIndex={manualAttack ? undefined : -1}
+          data-pad-skip={manualAttack ? undefined : ''}
           onMouseDown={noFocus}
           onClick={manualAttack ? onAttack : undefined}
         >

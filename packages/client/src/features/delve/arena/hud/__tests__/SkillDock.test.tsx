@@ -398,10 +398,17 @@ describe('the dodge, potion and attack slots', () => {
     expect(button).toHaveAttribute('data-mode', 'auto');
     expect(button).toHaveTextContent('Auto');
     expect(button.style.opacity).toBe('0.5');
+    // Auto is a readout: no tab stop, and the pad's focus passes it by.
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAttribute('tabindex', '-1');
+    expect(button).toHaveAttribute('data-pad-skip');
     fireEvent.click(button);
     expect(onAttack).not.toHaveBeenCalled();
     rerender(dock({}, { onAttack, manualAttack: true }));
     expect(button).toHaveAttribute('data-mode', 'manual');
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).not.toHaveAttribute('tabindex');
+    expect(button).not.toHaveAttribute('data-pad-skip');
     fireEvent.click(button);
     expect(onAttack).toHaveBeenCalledTimes(1);
   });
