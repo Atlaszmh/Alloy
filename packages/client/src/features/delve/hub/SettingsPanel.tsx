@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useUIStore } from '@/stores/uiStore';
+import { HUD_SCALE_RANGE, useUIStore } from '@/stores/uiStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Chip, Dialog, Segmented } from '@/features/delve/kit';
 import { version } from '../../../../package.json';
@@ -14,7 +14,7 @@ const COLORBLIND: { id: Colorblind; label: string }[] = [
 ];
 
 /** Settings → HUD scale, in percent (the spec's 80 to 125%). */
-const HUD_PERCENT = [80, 125] as const;
+const HUD_PERCENT = HUD_SCALE_RANGE.map((v) => Math.round(v * 100));
 
 /**
  * The Delve's Settings (from the system menu): the same `uiStore` fields as

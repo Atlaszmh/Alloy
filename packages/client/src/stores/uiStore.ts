@@ -50,10 +50,17 @@ interface UIStore {
   setArenaViewUnits: (units: number) => void;
 }
 
-function loadNumber(key: string, fallback: number): number {
+/** Settings → HUD scale's range (the spec's 80 to 125%). */
+export const HUD_SCALE_RANGE = [0.8, 1.25] as const;
+/** Settings → View distance's range, in arena units of view height. */
+export const VIEW_UNITS_RANGE = [20, 30] as const;
+
+const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.min(hi, Math.max(lo, v));
+
+function loadNumber(key: string, fallback: number, range: readonly [number, number]): number {
   try {
     const v = parseFloat(localStorage.getItem(key) ?? '');
-    return Number.isFinite(v) ? v : fallback;
+    return Number.isFinite(v) ? clamp(v, range) : fallback;
   } catch {
     return fallback;
   }
@@ -83,8 +90,8 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
   hapticEnabled: (() => { try { return localStorage.getItem('alloy:hapticEnabled') !== 'false'; } catch { return true; } })(),
   duelSpeed: loadDuelSpeed(),
   uiScale: 1,
-  hudScale: loadNumber('alloy:delve:hudScale', 1),
-  arenaViewUnits: loadNumber('alloy:delve:viewUnits', 27),
+  hudScale: loadNumber('alloy:delve:hudScale', 1, HUD_SCALE_RANGE),
+  arenaViewUnits: loadNumber('alloy:delve:viewUnits', 27, VIEW_UNITS_RANGE),
 
   openModal: (id) => set({ modalOpen: id }),
   closeModal: () => set({ modalOpen: null }),
@@ -131,11 +138,13 @@ export const useUIStore = createHmrStore<UIStore>('uiStore', (set) => ({
     set({ duelSpeed: clamped });
   },
   setUiScale: (scale) => set({ uiScale: scale }),
-  setHudScale: (scale) => {
+  setHudScale: (value) => {
+    const scale = clamp(value, HUD_SCALE_RANGE);
     try { localStorage.setItem('alloy:delve:hudScale', String(scale)); } catch { /* noop */ }
     set({ hudScale: scale });
   },
-  setArenaViewUnits: (units) => {
+  setArenaViewUnits: (value) => {
+    const units = clamp(value, VIEW_UNITS_RANGE);
     try { localStorage.setItem('alloy:delve:viewUnits', String(units)); } catch { /* noop */ }
     set({ arenaViewUnits: units });
   },
