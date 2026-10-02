@@ -78,6 +78,13 @@ describe('ChainLane', () => {
     expect(screen.getByTestId('move-left-1')).toBeEnabled();
   });
 
+  it("the toolbar is the mouse's: the pad skips it (X carries, Y removes)", () => {
+    panes();
+    for (const id of ['move-left-0', 'move-right-0', 'move-remove-0'])
+      expect(screen.getByTestId(id).closest('[data-pad-skip]')).not.toBeNull();
+    expect(screen.getByTestId('move-0').closest('[data-pad-skip]')).toBeNull();
+  });
+
   it('a mouse drag moves a card by its travel over the spacing of the cards', () => {
     const onChange = vi.fn();
     const three: Chains = {

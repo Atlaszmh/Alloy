@@ -15,6 +15,27 @@ const MIN_GEM_SIZE = 80;
 const MIN_SOCKET_SIZE = 40;
 const MIN_TEXT_PX = 8;
 
+// The Delve's floors (Delve UI v1, Accessibility): nothing under 14 design px, which is 10.5
+// CSS px at the 0.75 zoom floor, so 10 with rounding slack; click targets at least 24×24
+// (WCAG 2.5.8). Both are CSS px as drawn: font-size × the element's effective zoom.
+const DELVE_MIN_TEXT_PX = 10;
+const DELVE_MIN_TARGET_PX = 24;
+
+/** What a player clicks: shared with the Delve's page-scroll probe. */
+export const CLICK_TARGETS = [
+  'button', 'a[href]', 'input:not([type="hidden"])', 'select', 'textarea', 'summary',
+  '[role="button"]', '[role="tab"]', '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
+  '[role="option"]', '[role="menuitem"]', '[role="slider"]', '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
+/** Controls that draw text from a value rather than a text node: measured by their own font-size. */
+const FORM_TEXT_SELECTOR = [
+  'select', 'textarea', 'button[value]',
+  ...['text', 'search', 'email', 'number', 'tel', 'url', 'password', 'button', 'submit', 'reset']
+    .map((t) => `input[type="${t}"]`),
+  'input:not([type])',
+].join(', ');
+
 export const minSize: Probe = async (page, ctx) => {
   // Wait for any in-flight CSS/Web animations (e.g., Framer Motion entrance
   // transitions, rarity shimmers are infinite so we filter them) so the probe
@@ -45,6 +66,7 @@ export const minSize: Probe = async (page, ctx) => {
     // subsequent probe evaluate will either succeed in the new context or
     // surface its own error.
   }
+  if (ctx.delve) return delveMinSize(page, ctx);
 
   const data = await page.evaluate(() => {
     const elementMin = (selector: string) => {
@@ -117,6 +139,77 @@ export const minSize: Probe = async (page, ctx) => {
         detail: `${t.id} font-size ${t.size.toFixed(1)}px below ${MIN_TEXT_PX}px floor`,
         measured: t.size,
         expected: MIN_TEXT_PX,
+      });
+    }
+  }
+  return findings;
+};
+
+/** The Delve's mode: every visible text and click target on the page, portals and HUD included. */
+const delveMinSize: Probe = async (page, ctx) => {
+  const data = await page.evaluate(({ targets, FORM_TEXT }) => {
+    const shown = (el: Element): boolean => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 &&
+        el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+    };
+    const zoom = (el: Element): number =>
+      (el as Element & { currentCSSZoom?: number }).currentCSSZoom ?? 1;
+    const name = (el: Element): string => {
+      const tid = el.getAttribute('data-testid');
+      if (tid) return `[data-testid="${tid}"]`;
+      if (el.id) return `#${el.id}`;
+      const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+      return `${el.tagName.toLowerCase()}${text ? ` "${text}"` : ''}`;
+    };
+    const texts: { id: string; size: number }[] = [];
+    const seen = new Set<Element>();
+    // `el` draws text at its own font-size × zoom; `box` is what is drawn (itself, or for a
+    // display:contents parent the nearest ancestor with a box).
+    const measure = (el: Element) => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      let box: Element | null = el;
+      while (box && getComputedStyle(box).display === 'contents') box = box.parentElement;
+      if (!box || !shown(box)) return;
+      // Screen-reader-only text (Tailwind's sr-only) is never drawn.
+      if (el.closest('.sr-only')) return;
+      // A box-less element's currentCSSZoom reads 1: take its box's.
+      texts.push({ id: name(el), size: parseFloat(getComputedStyle(el).fontSize) * zoom(box) });
+    };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.parentElement && node.textContent?.trim()) measure(node.parentElement);
+    }
+    // Controls whose text isn't a text node: a select's chosen option, an input's value, a textarea.
+    document.querySelectorAll(FORM_TEXT).forEach(measure);
+    const small = Array.from(document.querySelectorAll(targets))
+      .filter(shown)
+      .map((el) => ({ id: name(el), r: el.getBoundingClientRect() }))
+      .map(({ id, r }) => ({ id, width: r.width, height: r.height }));
+    return { texts, targets: small };
+  }, { targets: CLICK_TARGETS, FORM_TEXT: FORM_TEXT_SELECTOR });
+
+  const findings: Finding[] = [];
+  for (const t of data.texts) {
+    if (t.size < DELVE_MIN_TEXT_PX - 0.01) {
+      findings.push({
+        screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
+        severity: 'fail',
+        detail: `${t.id} text ${t.size.toFixed(2)}px below ${DELVE_MIN_TEXT_PX}px floor`,
+        measured: t.size,
+        expected: DELVE_MIN_TEXT_PX,
+      });
+    }
+  }
+  for (const t of data.targets) {
+    if (t.width < DELVE_MIN_TARGET_PX - 0.01 || t.height < DELVE_MIN_TARGET_PX - 0.01) {
+      findings.push({
+        screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
+        severity: 'fail',
+        detail: `target ${t.id} ${t.width.toFixed(1)}×${t.height.toFixed(1)} below ${DELVE_MIN_TARGET_PX}×${DELVE_MIN_TARGET_PX}`,
+        measured: Math.min(t.width, t.height),
+        expected: DELVE_MIN_TARGET_PX,
       });
     }
   }

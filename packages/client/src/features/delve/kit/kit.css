@@ -93,6 +93,11 @@
   shape-rendering: crispEdges;
 }
 
+/* A native slider is 16 px tall: 32 keeps it 24 CSS px at the 0.75 zoom floor (WCAG 2.5.8). */
+.delve-ui input[type='range'] {
+  height: 32px;
+}
+
 /* The zoom lives on these, never on .delve-ui (spec, decided item 31). */
 .delve-zoom {
   zoom: var(--ui-scale, 1);
@@ -401,7 +406,9 @@ html[data-input='gamepad'] .delve-ui :focus {
   white-space: nowrap;
 }
 
+/* At least 24 CSS px tall at the 0.75 zoom floor (WCAG 2.5.8 target size). */
 .k-prompt-btn {
+  min-height: 32px;
   background: none;
   border: 0;
   padding: 0;
@@ -481,6 +488,8 @@ html[data-input='gamepad'] .delve-ui :focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 24 CSS px at the 0.75 zoom floor (WCAG 2.5.8 target size). */
+  min-height: 32px;
   padding: 6px 12px;
   font-family: var(--k-font-body);
   font-weight: 600;
@@ -534,6 +543,13 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 20px 6px 16px;
 }
 
+/* In the band the tab keeps its look (the underline over the band's bottom border) but starts at
+   the band's top, not 4 px above it where the screen clipped it: a 4 px margin for the padding. */
+.k-band .k-tab-lg {
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
 .k-tab-md {
   font-size: 18px;
   padding: 8px 6px 6px;
@@ -559,7 +575,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 1px 4px;
   vertical-align: 3px;
   font-family: var(--k-font-label);
-  font-size: 13px;
+  font-size: 14px;
   font-size-adjust: none;
   line-height: 1.2;
   text-transform: none;

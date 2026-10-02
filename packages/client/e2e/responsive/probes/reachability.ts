@@ -2,6 +2,8 @@ import type { Probe, Finding } from './types';
 
 const PROBE = 'primary-action-reachable';
 const MIN_TOUCH = 36;
+/** The Delve is PC-only (mouse, keys, pad): its primary actions take its click-target floor. */
+const DELVE_MIN_TARGET = 24;
 
 export const primaryActionReachable: Probe = async (page, ctx) => {
   const findings: Finding[] = [];
@@ -90,6 +92,9 @@ export const primaryActionReachable: Probe = async (page, ctx) => {
   }, { vw: ctx.viewport.width, vh: ctx.viewport.height });
 
   if (items.length === 0) {
+    // Skipped, not covered: over the Delve's arena the play itself is the primary action (no
+    // button to measure), so a missing [data-primary-action] there is by design, not a gap.
+    if (ctx.delve?.arena) return findings;
     findings.push({
       screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
       severity: 'warn',
@@ -97,6 +102,7 @@ export const primaryActionReachable: Probe = async (page, ctx) => {
     });
     return findings;
   }
+  const min = ctx.delve ? DELVE_MIN_TARGET : MIN_TOUCH;
   for (const it of items) {
     if (!it.visible) {
       findings.push({
@@ -112,13 +118,13 @@ export const primaryActionReachable: Probe = async (page, ctx) => {
         detail: `primary action ${it.id} off-screen (rect outside viewport ${ctx.viewport.width}×${ctx.viewport.height})`,
       });
     }
-    if (it.rect.width < MIN_TOUCH || it.rect.height < MIN_TOUCH) {
+    if (it.rect.width < min || it.rect.height < min) {
       findings.push({
         screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
         severity: 'fail',
-        detail: `primary action ${it.id} below 36×36 touch target (measured ${it.rect.width.toFixed(1)}×${it.rect.height.toFixed(1)})`,
+        detail: `primary action ${it.id} below ${min}×${min} ${ctx.delve ? 'click' : 'touch'} target (measured ${it.rect.width.toFixed(1)}×${it.rect.height.toFixed(1)})`,
         measured: Math.min(it.rect.width, it.rect.height),
-        expected: MIN_TOUCH,
+        expected: min,
       });
     }
   }

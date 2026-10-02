@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { DiveState } from '@alloy/engine';
 import { RARITY_ORDER } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { Button, Glyph, Price } from './kit';
+import { Button, Glyph, Price, reducedMotion } from './kit';
 import { ItemTile } from './ItemTile';
 import { RARITY_LABEL, RARITY_TEXT, formatNumber } from './format';
 import { countRunes } from './chains/chain-text';
@@ -37,6 +37,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
     .join(', ');
 
   useEffect(() => {
+    if (reducedMotion()) return;
     titleRef.current?.animate(
       [
         { transform: 'scale(2.2)', opacity: 0, letterSpacing: '0.5em' },

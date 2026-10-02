@@ -1,9 +1,11 @@
 import type { Probe, Finding } from './types';
+import { CLICK_TARGETS } from './min-size';
 
 const PROBE_X = 'overflow-x';
 const PROBE_X_DOC = 'overflow-x-doc';
 const PROBE_X_INNER = 'overflow-x-inner';
 const PROBE_Y = 'overflow-y';
+const PROBE_PAGE = 'page-scroll';
 
 export const overflowX: Probe = async (page, ctx) => {
   const data = await page.evaluate((vw) => {
@@ -176,4 +178,93 @@ export const overflowY: Probe = async (page, ctx) => {
     measured: Math.max(...data.offenders.map(o => o.bottom)),
     expected: data.frameBottom,
   }];
+};
+
+/**
+ * The Delve's overflow rule: the page never scrolls, panes may. The document must fit the
+ * window, and no click target may be cut off (outside the window, or outside an ancestor that
+ * clips it) unless a scrolling pane between them can bring it into view, and that pane must
+ * itself fit the window and every ancestor that clips it.
+ */
+export const pageScroll: Probe = async (page, ctx) => {
+  const data = await page.evaluate((targets) => {
+    const doc = document.documentElement;
+    const clips = (s: CSSStyleDeclaration) => s.overflowX !== 'visible' || s.overflowY !== 'visible';
+    // A pane scrolls only on an axis whose overflow is auto/scroll and whose content overflows it:
+    // overflow-x:hidden alone computes overflow-y to auto, and a pane that grew to its content
+    // (the usual missing min-h-0) can't scroll; both only clip.
+    const scrolls = (p: HTMLElement, s: CSSStyleDeclaration) =>
+      (['auto', 'scroll'].includes(s.overflowY) && p.scrollHeight > p.clientHeight + 1) ||
+      (['auto', 'scroll'].includes(s.overflowX) && p.scrollWidth > p.clientWidth + 1);
+    // The box `el` must fit: each clipping ancestor up to the first that scrolls (returned too, as
+    // what can bring `el` into view), or else up to the window.
+    const clipBox = (el: HTMLElement) => {
+      let top = -Infinity, left = -Infinity, right = Infinity, bottom = Infinity;
+      let scroller: HTMLElement | null = null;
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (!clips(s)) continue;
+        if (scrolls(p, s)) { scroller = p; break; }
+        const pr = p.getBoundingClientRect();
+        top = Math.max(top, pr.top); left = Math.max(left, pr.left);
+        right = Math.min(right, pr.right); bottom = Math.min(bottom, pr.bottom);
+      }
+      if (!scroller) {
+        top = Math.max(top, 0); left = Math.max(left, 0);
+        right = Math.min(right, innerWidth); bottom = Math.min(bottom, innerHeight);
+      }
+      return { top, left, right, bottom, scroller };
+    };
+    const describe = (el: Element) => {
+      const tid = el.getAttribute('data-testid');
+      const section = el.getAttribute('data-screen-section');
+      const cls = typeof el.className === 'string' && el.className
+        ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : '';
+      const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+      if (tid) return `[data-testid="${tid}"]${text ? ` "${text}"` : ''}`;
+      if (section) return `[data-screen-section="${section}"]`;
+      return `${el.tagName.toLowerCase()}${cls}${text ? ` "${text}"` : ''}`;
+    };
+    const cut: string[] = [];
+    const checked = new Set<HTMLElement>();
+    document.querySelectorAll<HTMLElement>(targets).forEach((el) => {
+      if (cut.length >= 5) return;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
+      // The control against its box; then each pane that scrolls it against the pane's own box.
+      for (let node: HTMLElement = el; ;) {
+        const b = clipBox(node);
+        const nr = node.getBoundingClientRect();
+        if (nr.top < b.top - 1 || nr.left < b.left - 1 || nr.right > b.right + 1 || nr.bottom > b.bottom + 1) {
+          cut.push(node === el
+            ? describe(el)
+            : `scrolling pane ${describe(node).slice(0, 60)} (cut off by an ancestor, so is its content: ${describe(el)})`);
+          return;
+        }
+        if (!b.scroller || checked.has(b.scroller)) return;
+        checked.add(b.scroller);
+        node = b.scroller;
+      }
+    });
+    return { scrollW: doc.scrollWidth, scrollH: doc.scrollHeight, cut };
+  }, CLICK_TARGETS);
+
+  const findings: Finding[] = [];
+  const { width, height } = ctx.viewport;
+  if (data.scrollW > width + 0.5 || data.scrollH > height + 0.5) {
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE_PAGE,
+      severity: 'fail',
+      detail: `the page scrolls: document ${data.scrollW}×${data.scrollH} exceeds the window ${width}×${height}`,
+    });
+  }
+  if (data.cut.length > 0) {
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE_PAGE,
+      severity: 'fail',
+      detail: `controls cut off outside any scrolling pane: ${data.cut.join(', ')}`,
+    });
+  }
+  return findings;
 };

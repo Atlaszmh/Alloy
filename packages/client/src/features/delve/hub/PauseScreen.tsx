@@ -54,7 +54,11 @@ export const PauseScreen = memo(function PauseScreen({
         header={
           <Header
             title="Paused"
-            subtitle={`Depth ${dive.depth} · ${biome.name} · ${foesLeft} ${foesLeft === 1 ? 'foe' : 'foes'} left`}
+            subtitle={
+              atStop
+                ? `${biome.name} · Depth ${dive.depth} cleared`
+                : `Depth ${dive.depth} · ${biome.name} · ${foesLeft} ${foesLeft === 1 ? 'foe' : 'foes'} left`
+            }
             nav={hub.nav}
             aside={
               <span
@@ -88,6 +92,7 @@ export const PauseScreen = memo(function PauseScreen({
               data-pad-back
               data-pad-menu
               data-pad-first
+              data-primary-action="resume"
               testId="pause-resume"
             >
               Resume

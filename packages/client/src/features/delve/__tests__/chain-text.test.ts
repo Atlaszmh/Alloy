@@ -19,6 +19,7 @@ describe('chain text', () => {
       'light Fire Bolt · medium Wildfire Burst · held Frost Lance',
     );
     expect(blowText(registry, { kind: 'heavy', element: 'storm' })).toBe('heavy Storm blow');
-    expect(Object.values(KIND_ICON)).toEqual(['▪', '▪▪', '▪▪▪', '◉']);
+    expect(Object.values(KIND_ICON)).toEqual(['■', '■■', '■■■', '◉']);
+    expect(Object.values(KIND_ICON).join('')).not.toMatch(/\p{Extended_Pictographic}/u);
   });
 });

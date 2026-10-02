@@ -66,11 +66,18 @@ export function Screen({
       data-pad-scope
       data-testid={testId}
     >
-      <header className={`k-screen-head ${headerStyle === 'band' ? 'k-band' : ''}`}>
+      <header
+        className={`k-screen-head ${headerStyle === 'band' ? 'k-band' : ''}`}
+        data-screen-section="screen-head"
+      >
         {header}
       </header>
-      <main className="k-screen-main">{children}</main>
-      <footer className="k-screen-foot k-planks">{footer}</footer>
+      <main className="k-screen-main" data-screen-section="screen-main">
+        {children}
+      </main>
+      <footer className="k-screen-foot k-planks" data-screen-section="screen-foot">
+        {footer}
+      </footer>
     </div>
   );
 }

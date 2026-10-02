@@ -6,7 +6,13 @@ import { Button, Glyph, PixelSprite } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { formatNumber } from '../format';
 
-/** The 84×96 doorway each choice's art stands in. */
+/*
+ * Short screens: under 810 px tall the UI scale sits at its 0.75 floor, so the 1080-high design
+ * has less than 1080 px. There the plates tighten and the doorways shrink to 64×72 (art at 3/4),
+ * so three doors and Extract fit at 1280×720.
+ */
+
+/** The 84×96 doorway each choice's art stands in (64×72 on short screens). */
 function Doorway({ fill, children }: { fill: string; children: ReactNode }): ReactElement {
   const frame: CSSProperties = {
     background: fill,
@@ -16,10 +22,10 @@ function Doorway({ fill, children }: { fill: string; children: ReactNode }): Rea
   };
   return (
     <span
-      className="flex h-24 w-[84px] flex-none items-end justify-center overflow-hidden"
+      className="flex h-24 w-[84px] flex-none items-end justify-center overflow-hidden [@media(max-height:809px)]:h-[72px] [@media(max-height:809px)]:w-16"
       style={frame}
     >
-      {children}
+      <span className="flex origin-bottom [@media(max-height:809px)]:scale-75">{children}</span>
     </span>
   );
 }
@@ -30,6 +36,7 @@ function DoorButton({
   body,
   aside,
   first,
+  primary,
   onClick,
   testId,
 }: {
@@ -38,16 +45,19 @@ function DoorButton({
   body: ReactNode;
   aside?: ReactNode;
   first?: boolean;
+  /** The first door: the responsive harness's reachability probe checks it. */
+  primary?: boolean;
   onClick: () => void;
   testId: string;
 }): ReactElement {
   return (
     <button
       type="button"
-      className="k-plate flex flex-none items-center gap-4 p-5 text-left text-[var(--k-text)]"
+      className="k-plate flex flex-none items-center gap-4 p-5 text-left text-[var(--k-text)] [@media(max-height:809px)]:px-4 [@media(max-height:809px)]:py-2.5"
       onClick={onClick}
       data-door
       data-pad-first={first || undefined}
+      data-primary-action={primary ? 'door' : undefined}
       data-testid={testId}
     >
       {art}
@@ -82,9 +92,15 @@ export function DoorPane({
   const registry = getDelveRegistry();
   const finds = RARITY_ORDER.reduce((n, r) => n + dive.found[r], 0);
   return (
-    <section aria-label="Doors" className="flex min-h-0 flex-col gap-4">
+    <section
+      aria-label="Doors"
+      className="flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
+    >
       <h2 className="k-section m-0 text-[26px]">Choose your path</h2>
-      <div className="k-scroll flex min-h-0 flex-col gap-4">
+      <div
+        className="k-scroll flex min-h-0 flex-col gap-4 [@media(max-height:809px)]:gap-3"
+        data-testid="door-list"
+      >
         {dive.doorChoices.map((id, i) => {
           const door = registry.getDoor(id);
           const next = dive.depth + 1 + (door.mods.skip ?? 0);
@@ -94,6 +110,7 @@ export function DoorPane({
             <DoorButton
               key={id}
               first={padFirst && i === 0}
+              primary={i === 0}
               testId={`door-${id}`}
               art={
                 <Doorway fill={treasure ? 'var(--k-wood-0)' : 'var(--k-mana-2)'}>

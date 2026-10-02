@@ -18,7 +18,7 @@ import {
   socketsOf,
   type FormId,
 } from '@alloy/engine';
-import { Chip } from '@/features/delve/kit';
+import { Chip, Glyph } from '@/features/delve/kit';
 import { formatNumber, manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { KIND_ICON, KIND_LABEL, listed } from './chain-text';
@@ -32,11 +32,12 @@ export const KIND_HINT: Record<MoveKind, string> = {
 };
 
 function Heading({ children }: { children: string }) {
-  return (
-    <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-      {children}
-    </div>
-  );
+  return <h3 className="k-label m-0">{children}</h3>;
+}
+
+/** An element's glyph in its colour. */
+function ManaGlyph({ mana }: { mana: ManaType }) {
+  return <Glyph id={mana} size={16} color={manaStyle(getDelveRegistry(), mana).color} />;
 }
 
 /** Seconds as the readout says them: 0.4s, 1.04s. */
@@ -190,12 +191,12 @@ function Readout(props: {
   const registry = getDelveRegistry();
   const { ab } = props;
   return (
-    <div className="delve-panel flex flex-col gap-1 p-3 text-sm" data-testid="ability-readout">
+    <div className="delve-panel flex flex-col gap-1 p-3 text-[16px]" data-testid="ability-readout">
       <div
-        className="delve-display text-lg font-bold"
+        className="delve-display flex items-center gap-1.5 text-lg font-bold"
         style={{ color: manaStyle(registry, ab.element).color }}
       >
-        {ab.icon} {KIND_LABEL[ab.kind]} {ab.name}
+        <Glyph id={ab.form.id} size={18} /> {KIND_LABEL[ab.kind]} {ab.name}
       </div>
       <MoveNumbers {...props} />
     </div>
@@ -206,7 +207,7 @@ function Readout(props: {
 function BlowReadout({ blow, stats }: { blow: HeroBlow; stats: HeroStats }) {
   const registry = getDelveRegistry();
   return (
-    <div className="delve-panel flex flex-col gap-1 p-3 text-sm" data-testid="ability-readout">
+    <div className="delve-panel flex flex-col gap-1 p-3 text-[16px]" data-testid="ability-readout">
       <div
         className="delve-display text-lg font-bold"
         style={{ color: manaStyle(registry, blow.element).color }}
@@ -282,7 +283,7 @@ function ElementLabel({ mana, off }: { mana: ManaType; off: boolean }) {
   const st = manaStyle(getDelveRegistry(), mana);
   return (
     <>
-      {st.icon} {st.name}
+      <ManaGlyph mana={mana} /> {st.name}
       {off && <span className="text-amber-300/80"> · off-pair</span>}
     </>
   );
@@ -327,7 +328,7 @@ export function MoveEditor({
             </Chip>
           ))}
         </div>
-        <div className="text-[11px] text-stone-500">
+        <div className="k-caption">
           {'form' in move
             ? KIND_HINT[move.kind]
             : move.kind === 'hold' &&
@@ -370,18 +371,18 @@ export function MoveEditor({
                       disabled={out.length > 0}
                       title={out.length > 0 ? `${listed(out)} doesn't fit a ${f.name}` : undefined}
                     >
-                      {f.icon} {f.name}
+                      <Glyph id={f.id} size={16} /> {f.name}
                     </Chip>
                   );
                 })}
             </div>
             {blocking.length > 0 && (
-              <div className="text-[11px] text-amber-200/90" data-testid="form-rune-note">
+              <div className="text-[14px] text-amber-200/90" data-testid="form-rune-note">
                 {listed(blocking)} {blocking.length > 1 ? "don't" : "doesn't"} fit every form: pull{' '}
                 {blocking.length > 1 ? 'them' : 'it'} to pick another.
               </div>
             )}
-            <div className="text-xs text-stone-400">{registry.getForm(move.form).text}</div>
+            <div className="k-caption">{registry.getForm(move.form).text}</div>
           </section>
 
           <section className="flex flex-col gap-1.5">
@@ -405,7 +406,7 @@ export function MoveEditor({
               })}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-stone-500">Infuse with</span>
+              <span className="k-caption">Infuse with</span>
               <Chip
                 pressed={move.elements.length === 1}
                 onClick={() => set({ elements: [move.elements[0]] })}
@@ -423,8 +424,9 @@ export function MoveEditor({
                     onClick={() => set({ elements: [move.elements[0], m] })}
                     testId={`infusion-${m}`}
                     disabled={!takes([move.elements[0], m])}
+                    aria-label={`Infuse with ${manaStyle(registry, m).name}`}
                   >
-                    {manaStyle(registry, m).icon}
+                    <ManaGlyph mana={m} />
                   </Chip>
                 ))}
               {move.elements.length > 1 && (
@@ -439,11 +441,14 @@ export function MoveEditor({
                 </button>
               )}
             </div>
-            <div className="text-xs text-stone-400" data-testid="element-effect">
+            <div className="k-caption" data-testid="element-effect">
               {resolved?.fusion ? (
                 <>
                   <b className="text-stone-200">
-                    {resolved.fusion.icon} {resolved.fusion.name}:
+                    {move.elements.map((m) => (
+                      <ManaGlyph key={m} mana={m} />
+                    ))}{' '}
+                    {resolved.fusion.name}:
                   </b>{' '}
                   {resolved.fusion.text} {manaStyle(registry, move.elements[0]).name} sets the
                   damage type.
@@ -459,7 +464,7 @@ export function MoveEditor({
       )}
 
       {off.length > 0 && (
-        <div className="text-[11px] text-amber-200/90" data-testid="off-pair-note">
+        <div className="text-[14px] text-amber-200/90" data-testid="off-pair-note">
           {off.map((m) => manaStyle(registry, m).name).join(' and ')} off-pair: no attunement. Keep
           it, or pick from your two elements.
         </div>
