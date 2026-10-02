@@ -28,7 +28,7 @@ function qualityColor(roll: number): string {
 /** Marks an attunement line of an element outside the pair: it grants nothing. */
 function NotMine() {
   return (
-    <span className="ml-1.5 text-[10px] text-stone-500" data-testid="not-your-element">
+    <span className="ml-1.5 text-[14px] text-[var(--k-text-3)]" data-testid="not-your-element">
       not your element
     </span>
   );
@@ -55,7 +55,7 @@ export function AffixLine({ line }: { line: ItemStatLine }) {
           {formatStat(getDelveRegistry(), line.stat, line.value)}
           {off && <NotMine />}
         </span>
-        {line.roll >= 0.9 && <span className="text-[10px] font-bold text-amber-300">PERFECT</span>}
+        {line.roll >= 0.9 && <span className="k-label text-amber-300">PERFECT</span>}
       </div>
       <div className="delve-quality mt-1">
         <span

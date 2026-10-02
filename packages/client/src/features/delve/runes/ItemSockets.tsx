@@ -14,11 +14,9 @@ export function ItemSockets({ chains, cap }: { chains: Partial<Chains>; cap: num
   );
   return (
     <div className="flex flex-col gap-0.5" data-testid="item-sockets">
-      <div className="delve-display text-[11px] font-bold uppercase tracking-widest text-amber-300/80">
-        Sockets · up to {cap} a move
-      </div>
+      <div className="k-label">Sockets · up to {cap} a move</div>
       {rows.length === 0 && (
-        <div className="text-stone-500">None open yet: open them in the chain builder.</div>
+        <div className="text-[var(--k-text-3)]">None open yet: open them in the chain builder.</div>
       )}
       {rows.map(({ s, i, runes }) => (
         <div

@@ -30,12 +30,10 @@ export function MovesetView({ item }: { item: GearItem }): ReactElement {
   const carried = carriedSkills(registry, item.rarity);
   return (
     <div
-      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-xs"
+      className="delve-panel mt-3 flex flex-col gap-1 px-3 py-2 text-[14px]"
       data-testid="item-moveset"
     >
-      <div className="delve-display text-[11px] font-bold uppercase tracking-widest text-amber-300/80">
-        Moveset
-      </div>
+      <div className="k-label">Moveset</div>
       {CHAIN_SKILLS.map((s) => {
         const chain = chains[s];
         if (!carried.includes(s) || !chain)

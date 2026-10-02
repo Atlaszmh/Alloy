@@ -64,6 +64,18 @@ describe('ItemStatLines', () => {
     );
     expect(container.querySelectorAll('.h-px')).toHaveLength(0);
   });
+
+  it('draws no text under 14 px: the off-pair mark and PERFECT included', () => {
+    const { container } = render(
+      <ItemStatLines
+        item={helm(
+          [{ stat: 'frostAttune', value: 2, roll: 0.5 }],
+          [{ stat: 'critChance', value: 3, roll: 0.95 }],
+        )}
+      />,
+    );
+    expect(container.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
+  });
 });
 
 describe('LegendaryBox', () => {
@@ -88,6 +100,7 @@ describe('LegendaryBox', () => {
     expect(screen.getByTestId('legendary-dead')).toHaveTextContent(
       "Needs a Defensive: your weapon doesn't carry one.",
     );
+    expect(document.body.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
   });
 
   it('says nothing more once a weapon carries it, and renders nothing for other gear', () => {

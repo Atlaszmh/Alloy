@@ -113,11 +113,7 @@ export function DelveRun() {
         case 'reaction': {
           const def = registry.getReaction(e.reaction);
           playSound('synergyActivate');
-          showBanner(
-            `${def.icon} ${def.name.toUpperCase()}!`,
-            '#e9d5ff',
-            `Reaction discovered: ${def.text}`,
-          );
+          showBanner(`${def.name.toUpperCase()}!`, '#e9d5ff', `Reaction discovered: ${def.text}`);
           break;
         }
         case 'cleared': {

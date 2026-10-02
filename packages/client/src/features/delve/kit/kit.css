@@ -559,7 +559,7 @@ html[data-input='gamepad'] .delve-ui :focus {
   padding: 1px 4px;
   vertical-align: 3px;
   font-family: var(--k-font-label);
-  font-size: 13px;
+  font-size: 14px;
   font-size-adjust: none;
   line-height: 1.2;
   text-transform: none;

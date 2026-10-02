@@ -27,6 +27,9 @@ describe('MovesetView', () => {
       'Defensive: carried by magic weapons and better',
     );
     expect(screen.getByTestId('item-sockets')).toHaveTextContent('Sockets · up to 1 a move');
+    expect(screen.getByTestId('item-moveset').outerHTML).not.toMatch(
+      /text-(\[(\d|1[0-3])px\]|xs\b)/,
+    );
   });
 
   it("shows a rare weapon's Defensive and its extra Primary slot", () => {
