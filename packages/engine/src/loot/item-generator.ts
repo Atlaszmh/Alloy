@@ -27,7 +27,8 @@ export interface RarityRollContext {
   /** 0 = no luck; 1 = +100% magic find equivalent. */
   luck: number;
   minRarity?: Rarity;
-  /** Extra multiplier on legendary weight (Lucky Charm). */
+  // ponytail: ignored since stage 4c (the crafting spec's S5: Lucky Charm doubles only the essence
+  // odds); delete it once loot/drops.ts (B1) stops passing it.
   legendaryBoost?: number;
 }
 
@@ -74,37 +75,66 @@ function decimalsFor(registry: DataRegistry, stat: HeroStatKey): number {
   return registry.getGearAffix(stat)?.decimals ?? 0;
 }
 
-function rollImplicit(
+/** An implicit's value at `roll` (0–1), an item level and a rarity. */
+export function implicitValue(
+  registry: DataRegistry,
+  template: ImplicitTemplate,
+  ilvl: number,
+  rarity: Rarity,
+  roll: number,
+): number {
+  const loot = registry.getDelveBalance().loot;
+  const scale = template.scaling === 'flat' ? itemLevelScale(registry, ilvl) : 1;
+  const raw = template.base * scale * loot.rarityBaseMult[rarity] * (0.9 + 0.2 * roll);
+  return roundStat(raw, decimalsFor(registry, template.stat), template.scaling === 'flat');
+}
+
+export function rollImplicit(
   registry: DataRegistry,
   template: ImplicitTemplate,
   ilvl: number,
   rarity: Rarity,
   rng: SeededRNG,
 ): StatRoll {
-  const loot = registry.getDelveBalance().loot;
   const roll = rng.next();
-  const scale = template.scaling === 'flat' ? itemLevelScale(registry, ilvl) : 1;
-  const raw = template.base * scale * loot.rarityBaseMult[rarity] * (0.9 + 0.2 * roll);
-  return {
-    stat: template.stat,
-    value: roundStat(raw, decimalsFor(registry, template.stat), template.scaling === 'flat'),
-    roll,
-  };
+  return { stat: template.stat, value: implicitValue(registry, template, ilvl, rarity, roll), roll };
 }
 
-/** Roll one affix of the given definition at an item level and rarity. */
+/**
+ * A roll in `band` with the attunement floor (see the crafting spec's roll
+ * formula): `u = floor + (1 − floor) × r`, then `band[0] + (band[1] − band[0]) × u`,
+ * so the floor lifts the whole draw within the band.
+ */
+export function rollBand(band: readonly [number, number], floor: number, rng: SeededRNG): number {
+  const u = floor + (1 - floor) * rng.next();
+  return band[0] + (band[1] - band[0]) * u;
+}
+
+/** An affix's value at `roll` (0–1 in its full range) and an item level. */
+export function affixValue(registry: DataRegistry, def: GearAffixDef, ilvl: number, roll: number): number {
+  const scale = def.scaling === 'flat' ? itemLevelScale(registry, ilvl) : 1;
+  const raw = (def.min + (def.max - def.min) * roll) * scale;
+  return roundStat(raw, def.decimals, def.unit === 'flat');
+}
+
+/**
+ * Roll one affix of the given definition at an item level and rarity: in
+ * `opts.band` (a shard's, stored on the line), else the rarity's `[minRoll, 1]`
+ * (not stored), lifted by `opts.floor` (the attunement floor; drops take none).
+ */
 export function rollAffix(
   registry: DataRegistry,
   def: GearAffixDef,
   ilvl: number,
   rarity: Rarity,
   rng: SeededRNG,
+  opts: { band?: [number, number]; floor?: number } = {},
 ): StatRoll {
-  const minRoll = registry.getDelveBalance().loot.minRoll[rarity];
-  const roll = minRoll + (1 - minRoll) * rng.next();
-  const scale = def.scaling === 'flat' ? itemLevelScale(registry, ilvl) : 1;
-  const raw = (def.min + (def.max - def.min) * roll) * scale;
-  return { stat: def.stat, value: roundStat(raw, def.decimals, def.unit === 'flat'), roll };
+  const band = opts.band ?? [registry.getDelveBalance().loot.minRoll[rarity], 1];
+  const roll = rollBand(band, opts.floor ?? 0, rng);
+  const line: StatRoll = { stat: def.stat, value: affixValue(registry, def, ilvl, roll), roll };
+  if (opts.band) line.band = [opts.band[0], opts.band[1]];
+  return line;
 }
 
 /** Affix definitions that may roll on a slot, excluding stats already present. */
@@ -112,7 +142,7 @@ export function eligibleAffixes(registry: DataRegistry, slot: GearSlot, exclude:
   return registry.getDelveData().affixes.filter((a) => a.slots.includes(slot) && !exclude.includes(a.stat));
 }
 
-function generateRareName(registry: DataRegistry, slot: GearSlot, rng: SeededRNG): string {
+export function generateRareName(registry: DataRegistry, slot: GearSlot, rng: SeededRNG): string {
   const names = registry.getDelveData().names;
   const prefix = names.prefixes[rng.nextInt(0, names.prefixes.length - 1)];
   const suffixes = names.suffixes[slot];
@@ -214,8 +244,7 @@ export function rarityWeights(registry: DataRegistry, ctx: RarityRollContext): R
   const minIdx = ctx.minRarity ? RARITY_ORDER.indexOf(ctx.minRarity) : 0;
   const out = {} as Record<Rarity, number>;
   RARITY_ORDER.forEach((rarity, i) => {
-    let w = loot.rarityWeights[rarity] * Math.pow(1 + luck, i * loot.luckExponent);
-    if (rarity === 'legendary') w *= ctx.legendaryBoost ?? 1;
+    const w = loot.rarityWeights[rarity] * Math.pow(1 + luck, i * loot.luckExponent);
     out[rarity] = i < minIdx ? 0 : w;
   });
   return out;

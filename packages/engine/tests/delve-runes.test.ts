@@ -920,21 +920,20 @@ describe('rune drops in the world', () => {
     expect(again.profile.dive!.runesEarned).toBe(3);
   });
 
-  it("banking settles an auto-salvaged weapon's runes by the pull mode it is given, and so does a floor's end", () => {
+  it("mid-dive an auto-salvaged weapon's runes go to the floor's haul by the pull mode given, never the pouch", () => {
     const { p, w } = floor();
     const auto = setAutoSalvage(p, 'rare', true);
-    w.pending.items = [socketedSword()];
-    expect(bankWorld(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({
+    const paid = addLootToBag(registry, auto, [socketedSword()], { unsocket: 'pay' });
+    expect(paid.profile.dive!.haul.runes).toEqual({
       chain: [0, 1, 0, 0, 0],
       split: [1, 0, 0, 0, 0],
     });
+    expect(paid.profile.runes).toEqual({});
+    expect(addLootToBag(registry, auto, [socketedSword()]).profile.dive!.haul.runes).toEqual({});
     w.pending.items = [socketedSword()];
-    expect(failFloor(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({
-      chain: [0, 1, 0, 0, 0],
-      split: [1, 0, 0, 0, 0],
-    });
+    expect(bankWorld(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({});
     w.pending.items = [socketedSword()];
-    expect(bankWorld(registry, auto, w).profile.runes).toEqual({});
+    expect(failFloor(registry, auto, w, { unsocket: 'pay' }).profile.runes).toEqual({});
   });
 });
 

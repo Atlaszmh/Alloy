@@ -128,7 +128,7 @@ export interface ForgePreview {
   legendary: { id: string; band: [number, number] } | null;
   /** What it costs besides the bar, flux, essence and shards it consumes. */
   price: { scrap: number; dust: number };
-  /** A weapon's carried skills, slots and open sockets (see the crafting spec's S7). */
+  /** A weapon's carried skills, each one's extra slots past its base, and its open sockets (S7). */
   weapon: {
     carries: ChainSkill[];
     slots: Partial<Record<ChainSkill, number>>;

@@ -213,11 +213,9 @@ describe('rollRarity', () => {
     expect(lucky.common).toBeLessThan(base.common);
   });
 
-  it("Lucky Charm's boost multiplies only the legendary weight", () => {
+  it("ignores Lucky Charm's boost: it doubles only the essence odds (the crafting spec's S5)", () => {
     const w0 = rarityWeights(registry, { luck: 0 });
-    const w2 = rarityWeights(registry, { luck: 0, legendaryBoost: 2 });
-    expect(w2.legendary).toBe(w0.legendary * 2);
-    expect(w2.common).toBe(w0.common);
+    expect(rarityWeights(registry, { luck: 0, legendaryBoost: 2 })).toEqual(w0);
   });
 
   it('never rolls below minRarity', () => {

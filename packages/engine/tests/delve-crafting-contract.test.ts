@@ -54,7 +54,7 @@ describe('the crafting contract', () => {
     expect(closeDive(registry, ended)).toEqual({ ...ended, dive: null });
   });
 
-  it('names what a salvage gave besides scrap, Dust and Links (none until B2)', () => {
+  it('names what a salvage gave besides scrap, Dust and Links', () => {
     const p = createDelveProfile(registry, 4, { primary: 'fire' });
     expect(salvageItems(registry, p, [])).toMatchObject({ shards: [], patterns: [], essences: [] });
   });

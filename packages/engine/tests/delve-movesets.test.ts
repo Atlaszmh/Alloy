@@ -889,13 +889,14 @@ describe('Links: salvage and banking', () => {
     expect(res.profile.links).toBe(3);
   });
 
-  it('auto-salvage and a full bag give them too, and banking reports them for the dive', () => {
+  it("auto-salvage and a full bag give them too, into the floor's haul, and banking reports them for the dive", () => {
     const p = startDive(registry, setAutoSalvage(hero(), 'rare', true), 1);
+    expect(addLootToBag(registry, p, [rare]).profile.dive!.haul.links).toBe(3);
     const w = beginFloor(registry, p);
     w.pending.items = [rare];
     const res = bankWorld(registry, p, w);
     expect(res.links).toBe(3);
-    expect(res.profile.links).toBe(3);
+    expect(res.profile.links).toBe(0); // in the haul until the dive settles (see the crafting spec)
     expect(res.profile.dive!.linksEarned).toBe(3);
 
     const full = { ...startDive(registry, hero(), 1), bag: Array(bal.loot.bagSize).fill(rare) };

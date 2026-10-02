@@ -21,6 +21,7 @@ import {
   salvageDust,
 } from '../src/delve/pair.js';
 import {
+  addLootToBag,
   createDelveProfile,
   equipBest,
   equipItem,
@@ -1087,13 +1088,16 @@ describe('Mana Dust from salvage', () => {
     expect(res.profile.manaDust).toBe(dust.magic);
   });
 
-  it('auto-salvage and a full bag add it, and banking reports it', () => {
+  it("auto-salvage and a full bag add it to the floor's haul, and banking reports it", () => {
     const p = startDive(registry, setAutoSalvage(fire(), 'magic', true), 1);
+    expect(addLootToBag(registry, p, [magic('frost', 'a')]).profile.dive!.haul.dust).toBe(
+      dust.magic,
+    );
     const w = beginFloor(registry, p);
     w.pending.items = [magic('frost', 'a'), magic('fire', 'b')];
     const res = bankWorld(registry, p, w);
     expect(res.dust).toBe(dust.magic);
-    expect(res.profile.manaDust).toBe(dust.magic);
+    expect(res.profile.manaDust).toBe(0); // in the haul until the dive settles (see the crafting spec)
     expect(res.profile.dive!.dustEarned).toBe(dust.magic);
 
     const bag = Array.from({ length: bal.loot.bagSize }, (_, i) => magic('fire', `f${i}`));
