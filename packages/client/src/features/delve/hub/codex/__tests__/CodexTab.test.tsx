@@ -90,14 +90,70 @@ describe('CodexTab', () => {
     ).toHaveTextContent('Rare5');
   });
 
+  it('the patterns: every base, learned ones with their slot, the rest greyed with where they come from', () => {
+    store().setProfile({ ...store().profile, patterns: ['sword', 'cuirass', 'dagger', 'bow'] });
+    render(<CodexTab {...props({ link: { tab: 'codex', section: 'patterns' } })} />);
+    const tab = screen.getByTestId('codex-section-patterns');
+    expect(tab).toHaveTextContent('Patterns 4/13');
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByTestId('pattern-learned').map((c) => c.textContent)).toEqual([
+      'DaggerWeapon',
+      'SwordWeapon',
+      'BowWeapon',
+      'CuirassChest',
+    ]);
+    const unknown = screen.getAllByTestId('pattern-unknown');
+    expect(unknown).toHaveLength(9);
+    expect(unknown[0]).toHaveTextContent(
+      'AxeSalvage one, or find its pattern on an elite or a boss',
+    );
+    // The detail shows the first base until one is hovered or focused.
+    const detail = screen.getByTestId('codex-detail');
+    expect(detail).toHaveTextContent('DaggerWeapon · Learned');
+    fireEvent.focus(unknown[0]);
+    expect(unknown[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(detail).toHaveTextContent(
+      'AxeWeapon · Not learnedSalvage one, or find its pattern on an elite or a boss',
+    );
+  });
+
+  it('the essences: seen ones by name with how many are held, the rest as ???; a seen one details its power', () => {
+    const [first, second] = registry.getDelveData().legendaries;
+    const p = store().profile;
+    store().setProfile({
+      ...p,
+      essencesSeen: [second.id],
+      materials: { ...p.materials, essences: { [second.id]: 2 } },
+    });
+    render(<CodexTab {...props()} />);
+    fireEvent.click(screen.getByTestId('codex-section-essences'));
+    expect(screen.getByTestId('codex-section-essences')).toHaveTextContent('Essences 1/12');
+    expect(screen.getAllByTestId('essence-unknown')).toHaveLength(11);
+    expect(screen.getByTestId('essence-seen')).toHaveTextContent(`${second.name}Held ×2`);
+    const forgesOnto = (slots: readonly (keyof typeof SLOT_LABEL)[]) =>
+      `Forges onto: ${slots.map((s) => SLOT_LABEL[s]).join(', ')}`;
+    const detail = screen.getByTestId('codex-detail');
+    expect(detail).toHaveTextContent('???');
+    expect(detail).toHaveTextContent(forgesOnto(first.slots));
+    expect(detail).toHaveTextContent(
+      'Bosses drop essences; salvaging a legendary extracts its essence',
+    );
+    fireEvent.focus(screen.getByTestId('essence-seen'));
+    expect(detail).toHaveTextContent(`${second.name} essence`);
+    expect(detail).toHaveTextContent(second.text.replace('{v}', `${second.min}–${second.max}`));
+    expect(detail).toHaveTextContent(`Held ×2 · ${forgesOnto(second.slots)}`);
+  });
+
   it('a link opens its section', () => {
     const { rerender } = render(<CodexTab {...props()} />);
     expect(screen.getAllByTestId('codex-unknown')).toHaveLength(12);
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'reactions' } })} />);
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
     expect(screen.queryByTestId('codex-unknown')).toBeNull();
-    // Patterns and Essences arrive with stage 4c's C3: until then a link to one is ignored.
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'essences' } })} />);
-    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
+    expect(screen.getAllByTestId('essence-unknown')).toHaveLength(12);
+    // A new save knows three patterns: the sword's, the cuirass's and the dagger's.
+    rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'patterns' } })} />);
+    expect(screen.getAllByTestId('pattern-unknown')).toHaveLength(10);
   });
 });
