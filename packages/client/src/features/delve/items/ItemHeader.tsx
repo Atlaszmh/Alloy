@@ -9,7 +9,7 @@ import {
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { ItemTile } from '../ItemTile';
-import { RARITY_COLOR, RARITY_LABEL, SLOT_LABEL, manaStyle } from '../format';
+import { RARITY_LABEL, RARITY_TEXT, SLOT_LABEL, manaStyle } from '../format';
 
 const SIZES = {
   md: { tile: 56, name: 'text-lg' },
@@ -41,7 +41,7 @@ export function ItemHeader({
       <div className="min-w-0 flex-1">
         <div
           className={`delve-display truncate ${SIZES[size].name} font-bold`}
-          style={{ color: RARITY_COLOR[item.rarity] }}
+          style={{ color: RARITY_TEXT[item.rarity] }}
           data-testid="item-name"
         >
           {item.name}

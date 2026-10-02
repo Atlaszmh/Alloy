@@ -19,7 +19,7 @@ import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
 import { getDelveRegistry } from './registry';
 import { ItemTile } from './ItemTile';
-import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
+import { RARITY_COLOR, RARITY_LABEL, RARITY_TEXT, formatNumber } from './format';
 import { RunePouchPanel } from './runes/RunePouchPanel';
 import { runeName } from './runes/rune-style';
 
@@ -209,7 +209,7 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
               className="delve-chip"
               aria-pressed={rarity === r}
               onClick={() => chooseRarity(r)}
-              style={{ color: RARITY_COLOR[r] }}
+              style={{ color: RARITY_TEXT[r] }}
             >
               {RARITY_LABEL[r]} · {counts[r]}
             </button>
@@ -236,7 +236,7 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
                 className="delve-display flex h-[62px] w-[62px] items-center justify-center rounded-[14%] border border-dashed text-center text-[10px] leading-tight"
                 style={{
                   borderColor: target ? RARITY_COLOR[target] : '#555',
-                  color: target ? RARITY_COLOR[target] : '#777',
+                  color: target ? RARITY_TEXT[target] : '#777',
                 }}
               >
                 {target ? RARITY_LABEL[target] : '—'}
@@ -302,7 +302,7 @@ export function ForgePanel({ onSelect }: { onSelect: (uid: string) => void }) {
               <div key={item.uid} className="flex items-center gap-2" data-testid="temper-row">
                 <ItemTile item={item} size={40} onClick={() => onSelect(item.uid)} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm" style={{ color: RARITY_COLOR[item.rarity] }}>
+                  <div className="truncate text-sm" style={{ color: RARITY_TEXT[item.rarity] }}>
                     {item.name}
                   </div>
                   <div className="text-[11px] text-stone-500">Forge level +{item.upgrade}</div>

@@ -100,7 +100,7 @@ export interface TabsProps<T extends string> {
   tabs: { id: T; label: ReactNode; badge?: ReactNode; disabled?: boolean; title?: string; testId?: string }[];
   value: T;
   onChange: (id: T) => void;
-  /** 'top': LB/RB (+ digits 1..n when `digits`). 'sub': LT/RT. Disabled tabs are skipped by all of them. */
+  /** 'top': LB/RB (draws the digits 1..n when `digits` (the hub binds them)). 'sub': LT/RT. Disabled tabs are skipped by all of them. */
   level: 'top' | 'sub';
   digits?: boolean;
   glyphs?: boolean;

@@ -27,7 +27,7 @@ import { PowerDelta } from './items/PowerDelta';
 import { AffixLine, ImplicitLine } from './items/ItemStatLines';
 import { LegendaryBox } from './items/LegendaryBox';
 import { MovesetView } from './items/MovesetView';
-import { RARITY_COLOR, UPGRADE_EPSILON, formatNumber, manaStyle } from './format';
+import { RARITY_TEXT, UPGRADE_EPSILON, formatNumber, manaStyle } from './format';
 
 interface ItemDetailSheetProps {
   uid: string;
@@ -230,7 +230,7 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
               {cmp.replaced ? (
                 <>
                   vs{' '}
-                  <span style={{ color: RARITY_COLOR[cmp.replaced.rarity] }}>
+                  <span style={{ color: RARITY_TEXT[cmp.replaced.rarity] }}>
                     {cmp.replaced.name}
                   </span>
                 </>

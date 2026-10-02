@@ -23,7 +23,7 @@ import { AbilitiesPanel } from '@/features/delve/AbilitiesPanel';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { useCountUp } from '@/features/delve/useCountUp';
-import { RARITY_COLOR, RARITY_LABEL, formatNumber, manaStyle } from '@/features/delve/format';
+import { RARITY_LABEL, RARITY_TEXT, formatNumber, manaStyle } from '@/features/delve/format';
 import '@/features/delve/delve.css';
 
 type Tab = 'bag' | 'abilities' | 'forge' | 'codex';
@@ -346,7 +346,7 @@ export function DelveCamp() {
               </div>
               <div className="col-span-3 flex flex-wrap justify-center gap-x-3 gap-y-1">
                 {(['uncommon', 'magic', 'rare', 'epic', 'legendary'] as const).map((r) => (
-                  <span key={r} style={{ color: RARITY_COLOR[r] }}>
+                  <span key={r} style={{ color: RARITY_TEXT[r] }}>
                     {profile.stats.itemsFound[r]} {RARITY_LABEL[r]}
                   </span>
                 ))}

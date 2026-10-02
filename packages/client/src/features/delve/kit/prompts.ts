@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
+import { hudZoom } from './zoom';
 import { isArenaLive } from '@/features/gamepad/gamepad-hub';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import type { NavDir } from '@/features/gamepad/spatial-nav';
@@ -274,9 +275,8 @@ export function uiScaleFor(width: number, height: number): number {
 }
 
 /** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75. */
-export function hudScaleFor(ui: number, setting: number): number {
-  return Math.max(0.75, Math.round(ui * setting * 4) / 4);
-}
+/** One rule for the HUD zoom: the kit's `hudZoom`. */
+export const hudScaleFor = hudZoom;
 
 /** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` current). */
 export function useUiScale(): { ui: number; hud: number } {

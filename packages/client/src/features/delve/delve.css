@@ -2,6 +2,8 @@
    Delve — loot-crawler mode styles
    ══════════════════════════════════════════ */
 
+@import './kit/kit.css';
+
 .delve-page {
   position: relative;
   height: 100%;
@@ -21,8 +23,10 @@
 }
 
 .delve-display {
-  font-family: var(--font-family-display);
-  letter-spacing: 0.04em;
+  font-family: 'Jersey 10', sans-serif;
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.05em;
 }
 
 /* ── Item tiles ── */
@@ -30,78 +34,81 @@
 .delve-tile {
   position: relative;
   flex-shrink: 0;
-  border: 1.5px solid;
-  border-radius: 14%;
+  border: 3px solid;
+  border-radius: 0;
   padding: 0;
   cursor: pointer;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* A socket's steel insets, drawn over the tile's own (inline) background. */
+.delve-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 0 0 3px #262b44,
+    inset 0 0 0 5px #3a4466;
+  pointer-events: none;
+}
+
 .delve-tile:active {
-  transform: scale(0.94);
+  transform: translateY(2px);
 }
 
 .delve-tile-icon {
   position: absolute;
   inset: 16%;
   display: block;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(2px 2px 0 #181425);
 }
 
 .delve-tile-upgrade {
   position: absolute;
-  top: 2px;
-  left: 3px;
-  font-family: var(--font-family-display);
-  font-weight: 700;
-  font-size: 11px;
+  top: 3px;
+  left: 4px;
+  font-family: 'Jersey 10', sans-serif;
+  font-size: 14px;
   line-height: 1;
-  color: #fde68a;
-  text-shadow: 0 1px 2px #000;
+  color: #fee761;
+  text-shadow: 1px 1px 0 #181425;
 }
 
 .delve-tile-lock {
   position: absolute;
-  top: 3px;
-  right: 3px;
-  color: #d6d3d1;
-  opacity: 0.85;
+  top: 4px;
+  right: 4px;
+  color: #c0cbdc;
 }
 
 .delve-tile-new {
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #facc15;
-  box-shadow: 0 0 6px #facc15;
-  animation: delve-new-pulse 1.4s ease-in-out infinite;
+  width: 8px;
+  height: 8px;
+  background: #fee761;
+  box-shadow: 0 0 0 2px #181425;
 }
 
 .delve-tile-equipped {
   position: absolute;
   bottom: 2px;
-  left: 3px;
-  font-family: var(--font-family-display);
-  font-size: 10px;
-  font-weight: 700;
-  color: #d4a834;
+  left: 4px;
+  font-family: 'Jersey 10', sans-serif;
+  font-size: 14px;
+  color: #feae34;
+  text-shadow: 1px 1px 0 #181425;
 }
 
 .delve-tile-mana {
   position: absolute;
   bottom: -4px;
   left: 50%;
-  width: 9px;
-  height: 9px;
-  margin-left: -4.5px;
-  border-radius: 50%;
-  border: 1.5px solid #0c0c12;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border: 2px solid #181425;
 }
 
 .delve-tile-delta {
@@ -110,51 +117,32 @@
   right: -3px;
   min-width: 16px;
   height: 16px;
-  border-radius: 8px;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 16px;
   text-align: center;
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  box-shadow: 2px 2px 0 #181425;
 }
 
 .delve-tile-delta.up {
-  background: #16a34a;
-  color: #fff;
+  background: #63c74d;
+  color: #193c3e;
 }
 
 .delve-tile-delta.down {
-  background: #3f1d1d;
-  color: #f87171;
+  background: #3e2731;
+  color: #f6757a;
 }
 
+/* A legendary's stepped orange glow (it was a spinning ring). */
 .delve-tile-legendary::after {
   content: '';
   position: absolute;
-  inset: -2px;
-  border-radius: inherit;
-  padding: 2px;
-  background: conic-gradient(
-    from var(--delve-angle, 0deg),
-    #fb923c,
-    #fde68a,
-    #fb923c,
-    #9a3412,
-    #fb923c
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: delve-spin 3s linear infinite;
+  inset: -3px;
+  box-shadow:
+    0 0 0 3px rgba(247, 118, 34, 0.55),
+    0 0 0 8px rgba(247, 118, 34, 0.18);
   pointer-events: none;
-}
-
-@property --delve-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
 }
 
 /* An ability button waiting (a cooldown or its beat): a dark sweep over `--delve-sweep`, an
@@ -169,80 +157,68 @@
   background: conic-gradient(rgba(0, 0, 0, 0.72) var(--delve-sweep), transparent 0deg);
 }
 
-@keyframes delve-spin {
-  to {
-    --delve-angle: 360deg;
-  }
-}
-
-@keyframes delve-new-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.6;
-  }
-}
-
-/* ── Buttons ── */
+/* ── Buttons (the kit's materials: a plank, hot metal, go, danger) ── */
 
 .delve-btn {
-  font-family: var(--font-family-display);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(180deg, #262636, #1a1a26);
-  color: #fff;
+  font-family: 'Jersey 10', sans-serif;
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.06em;
+  border-radius: 0;
+  border: 3px solid #181425;
+  background: repeating-linear-gradient(0deg, #733e39 0 10px, #6a3934 10px 12px);
+  color: #ead4aa;
   padding: 10px 14px;
   cursor: pointer;
-  transition:
-    transform 0.1s ease,
-    filter 0.15s ease;
+  box-shadow:
+    inset 0 3px 0 #b86f50,
+    inset 0 -3px 0 #3e2731;
   -webkit-tap-highlight-color: transparent;
 }
 
 .delve-btn:active:not(:disabled) {
-  transform: translateY(1px) scale(0.98);
+  transform: translateY(2px);
 }
 
 .delve-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .delve-btn-gold {
-  background: linear-gradient(180deg, #ecd06a, #d4a834 55%, #b8891f);
-  color: #1a1206;
-  border-color: #fde68a88;
+  background: #feae34;
+  color: #3e2731;
   box-shadow:
-    0 4px 16px rgba(212, 168, 52, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    inset 0 3px 0 #fee761,
+    inset 0 -4px 0 #f77622,
+    0 0 0 3px rgba(247, 118, 34, 0.55),
+    0 0 0 8px rgba(247, 118, 34, 0.18);
 }
 
 .delve-btn-green {
-  background: linear-gradient(180deg, #22c55e, #15803d);
-  border-color: #86efac66;
+  background: #63c74d;
+  color: #193c3e;
+  box-shadow:
+    inset 0 3px 0 #a8e090,
+    inset 0 -4px 0 #3e8948;
 }
 
 .delve-btn-danger {
-  background: linear-gradient(180deg, #3b1515, #2a0e0e);
-  border-color: #f8717155;
-  color: #fca5a5;
+  background: #3e2731;
+  border-color: #a22633;
+  color: #f6757a;
+  box-shadow: none;
 }
 
 .delve-chip {
-  font-family: var(--font-family-display);
+  font-family: 'Pixelify Sans', sans-serif;
   font-weight: 600;
-  font-size: 13px;
-  border-radius: 999px;
+  font-size: 14px;
+  border-radius: 0;
   padding: 4px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: #d6d3d1;
+  border: 2px solid #5a6988;
+  background: #3a4466;
+  color: #ffffff;
   cursor: pointer;
 }
 
@@ -252,17 +228,30 @@
 }
 
 .delve-chip[aria-pressed='true'] {
-  background: rgba(212, 168, 52, 0.18);
-  border-color: #d4a834;
-  color: #fde68a;
+  background: #feae34;
+  border-color: #fee761;
+  color: #3e2731;
+  box-shadow: 0 0 0 3px rgba(247, 118, 34, 0.45);
 }
 
-/* ── Panels & sheets ── */
+/* â”€â”€ Panels & sheets â”€â”€ */
 
+/* A plate: a wood frame around riveted steel. */
 .delve-panel {
-  background: linear-gradient(180deg, rgba(30, 30, 44, 0.92), rgba(18, 18, 26, 0.92));
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
+  background:
+    linear-gradient(#8b9bb4, #8b9bb4) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) 10px calc(100% - 14px) / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) calc(100% - 14px) / 4px 4px no-repeat,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 6px),
+    #262b44;
+  border: 6px solid #733e39;
+  border-radius: 0;
+  box-shadow:
+    0 0 0 3px #181425,
+    inset 0 0 0 2px #3e2731,
+    inset 0 3px 0 2px #5a6988,
+    6px 6px 0 3px rgba(24, 20, 37, 0.6);
 }
 
 .delve-sheet-backdrop {
@@ -276,30 +265,35 @@
   animation: fade-in 0.15s ease-out;
 }
 
+/* A steel plate, square, rising from the bottom. */
 .delve-sheet {
   width: 100%;
   max-width: 560px;
   max-height: 88%;
   overflow-y: auto;
-  border-radius: 18px 18px 0 0;
-  background: linear-gradient(180deg, #1d1d2a, #121219);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.6);
+  border-radius: 0;
+  background:
+    linear-gradient(#5a6988, #5a6988) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    #262b44;
+  border: 4px solid #3a4466;
+  border-bottom: 0;
+  box-shadow:
+    0 0 0 3px #181425,
+    inset 0 3px 0 #5a6988;
   animation: drawer-up 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
   padding: 16px 16px calc(16px + var(--spacing-safe-bottom));
 }
 
 .delve-quality {
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 4px;
+  background: #181425;
   overflow: hidden;
 }
 
 .delve-quality > span {
   display: block;
   height: 100%;
-  border-radius: 2px;
 }
 
 /* ── Dive stage ── */
@@ -307,16 +301,17 @@
 .delve-hpbar {
   position: relative;
   height: 14px;
-  border-radius: 7px;
-  background: rgba(0, 0, 0, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #181425;
+  box-shadow:
+    0 0 0 2px #181425,
+    0 0 0 4px #5a6988;
   overflow: hidden;
 }
 
 .delve-hpbar > .lag {
   position: absolute;
   inset: 0 auto 0 0;
-  background: #fef3c7;
+  background: #ead4aa;
   opacity: 0.55;
   transition: width 0.5s ease 0.25s;
 }
@@ -333,10 +328,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-family-display);
-  font-weight: 700;
-  font-size: 11px;
-  text-shadow: 0 1px 2px #000;
+  font-family: 'Jersey 10', sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  font-size-adjust: 0.56;
+  text-shadow: 1px 1px 0 #181425;
 }
 
 .delve-monster {

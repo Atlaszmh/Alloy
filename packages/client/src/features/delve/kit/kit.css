@@ -1,0 +1,843 @@
+/* ══════════════════════════════════════════
+   The forge kit: tokens, fonts, materials and the focus ring (Delve UI v1).
+   Sizes are design px at 1920×1080; .delve-zoom / .delve-hud-zoom scale them.
+   Values from the spec's Appendix A (the mockups' theme CSS).
+   ══════════════════════════════════════════ */
+
+/* Self-hosted, unmodified, SIL OFL 1.1: each folder holds its OFL.txt. */
+@font-face {
+  font-family: 'Jersey 10';
+  src: url('/fonts/jersey-10/Jersey10-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('/fonts/pixelify-sans/PixelifySans-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('/fonts/silkscreen/Silkscreen-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+/* ── Tokens ── */
+
+.delve-ui {
+  --k-well: #181425;
+  --k-steel: #262b44;
+  --k-steel-1: #3a4466;
+  --k-steel-2: #5a6988;
+  --k-steel-3: #8b9bb4;
+  --k-text: #ffffff;
+  --k-text-2: #c0cbdc;
+  --k-text-3: #8b9bb4;
+  --k-wood-0: #3e2731;
+  --k-wood-1: #733e39;
+  --k-wood-hi: #b86f50;
+  --k-wood-text: #ead4aa;
+  --k-hot: #feae34;
+  --k-hot-hi: #fee761;
+  --k-hot-lo: #f77622;
+  --k-hot-ink: #3e2731;
+  --k-mana: #2ce8f5;
+  --k-mana-1: #0099db;
+  --k-mana-2: #124e89;
+  --k-ok: #63c74d;
+  --k-bad: #e43b44;
+  --k-bad-text: #f6757a;
+  --r-common: #c0cbdc;
+  --r-uncommon: #63c74d;
+  --r-magic: #0099db;
+  --r-rare: #fee761;
+  --r-epic: #b55088;
+  --r-legendary: #f77622;
+  --rt-common: #c0cbdc;
+  --rt-uncommon: #63c74d;
+  --rt-magic: #0099db;
+  --rt-rare: #fee761;
+  --rt-epic: #d7a6e8;
+  --rt-legendary: #f77622;
+  --k-font-display: 'Jersey 10', sans-serif;
+  --k-font-body: 'Pixelify Sans', sans-serif;
+  --k-font-label: 'Silkscreen', monospace;
+}
+
+/* ── Global rules ── */
+
+.delve-ui {
+  font-family: var(--k-font-body);
+  font-size: 18px;
+  color: var(--k-text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+
+.delve-ui,
+.delve-ui *,
+.delve-ui *::before,
+.delve-ui *::after {
+  border-radius: 0;
+}
+
+.delve-ui svg {
+  shape-rendering: crispEdges;
+}
+
+/* The zoom lives on these, never on .delve-ui (spec, decided item 31). */
+.delve-zoom {
+  zoom: var(--ui-scale, 1);
+}
+
+.delve-hud-zoom {
+  zoom: var(--hud-scale, 1);
+}
+
+/* ── Type ── */
+
+.k-disp,
+.k-display,
+.k-heading,
+.k-section {
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 var(--k-well);
+  line-height: 1;
+}
+
+.k-display {
+  font-size: 64px;
+}
+
+.k-heading {
+  font-size: 32px;
+}
+
+.k-section {
+  font-size: 22px;
+}
+
+.k-body-2 {
+  font-size: 16px;
+  color: var(--k-text-2);
+}
+
+.k-caption {
+  font-size: 14px;
+  color: var(--k-text-3);
+}
+
+.k-label {
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--k-text-3);
+}
+
+/* ── Materials ── */
+
+.k-wall {
+  background:
+    radial-gradient(
+      ellipse at 50% 115%,
+      rgba(247, 118, 34, 0.2) 0 28%,
+      rgba(247, 118, 34, 0.1) 28% 44%,
+      transparent 44%
+    ),
+    repeating-linear-gradient(90deg, rgba(24, 20, 37, 0.35) 0 3px, transparent 3px 190px),
+    repeating-linear-gradient(
+      0deg,
+      #2d1e24 0 52px,
+      #22161b 52px 56px,
+      #33222a 56px 108px,
+      #22161b 108px 112px
+    );
+}
+
+.k-plate {
+  background:
+    linear-gradient(#8b9bb4, #8b9bb4) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) 10px calc(100% - 14px) / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) calc(100% - 14px) / 4px 4px no-repeat,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 6px),
+    #262b44;
+  border: 6px solid #733e39;
+  box-shadow:
+    0 0 0 3px #181425,
+    inset 0 0 0 2px #3e2731,
+    inset 0 3px 0 2px #5a6988,
+    6px 6px 0 3px rgba(24, 20, 37, 0.6);
+}
+
+.k-glass {
+  background:
+    linear-gradient(#5a6988, #5a6988) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) 10px calc(100% - 14px) / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) calc(100% - 14px) calc(100% - 14px) / 4px 4px no-repeat,
+    rgba(38, 43, 68, 0.94);
+  border: 4px solid #3a4466;
+  box-shadow:
+    0 0 0 2px #181425,
+    inset 0 2px 0 #5a6988;
+}
+
+.k-well {
+  background: #181425;
+  border: 2px solid #262b44;
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.k-band {
+  position: relative;
+  z-index: 1;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 58px, #8b9bb4 58px 62px, transparent 62px 120px)
+      0 8px / 100% 4px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 58px, #181425 58px 62px, transparent 62px 120px)
+      0 calc(100% - 12px) / 100% 4px no-repeat,
+    #3a4466;
+  border-bottom: 4px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #5a6988,
+    0 4px 0 #0099db,
+    0 8px 0 rgba(44, 232, 245, 0.28);
+}
+
+.k-planks {
+  background: repeating-linear-gradient(0deg, #5c3434 0 22px, #4a2a2e 22px 24px), #733e39;
+  border-top: 4px solid #181425;
+  box-shadow: inset 0 3px 0 #b86f50;
+}
+
+.k-hot {
+  background: #feae34;
+  color: #3e2731;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #fee761,
+    inset 0 -4px 0 #f77622,
+    0 0 0 3px rgba(247, 118, 34, 0.55),
+    0 0 0 8px rgba(247, 118, 34, 0.18);
+}
+
+.k-plank {
+  background: repeating-linear-gradient(0deg, #733e39 0 10px, #6a3934 10px 12px);
+  color: #ead4aa;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #b86f50,
+    inset 0 -3px 0 #3e2731;
+}
+
+.k-go {
+  background: #63c74d;
+  color: #193c3e;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #a8e090,
+    inset 0 -4px 0 #3e8948;
+}
+
+.k-danger {
+  background: #3e2731;
+  color: #f6757a;
+  border: 3px solid #a22633;
+}
+
+.k-socket {
+  background: #181425;
+  border: 3px solid #5a6988;
+  box-shadow:
+    inset 0 0 0 3px #262b44,
+    inset 0 0 0 5px #3a4466,
+    3px 3px 0 #181425;
+}
+
+.k-mana {
+  box-shadow:
+    0 0 0 3px #181425,
+    0 0 0 6px #0099db,
+    0 0 0 10px rgba(44, 232, 245, 0.22),
+    0 0 0 14px rgba(44, 232, 245, 0.08);
+}
+
+.k-lifeframe {
+  box-shadow:
+    0 0 0 3px #181425,
+    0 0 0 6px #5a6988,
+    0 0 0 9px #181425;
+}
+
+/* ── Focus: one ring, for keys (focus-visible) and the pad (any focus), never a mouse click ── */
+
+.delve-ui :focus-visible,
+html[data-input='gamepad'] .delve-ui :focus {
+  outline: 3px solid #fee761;
+  outline-offset: 3px;
+  filter: drop-shadow(4px 4px 0 #181425);
+}
+
+/* ── The portal layer (uiLayer): over the screen, letting clicks through to it ── */
+
+#delve-ui-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+/* ── Glyphs ── */
+
+.k-glyph-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.k-key,
+.k-pad {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  font-family: var(--k-font-label);
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.k-key {
+  background: #3a4466;
+  border: 2px solid #8b9bb4;
+  border-bottom-width: 4px;
+  color: #ffffff;
+  box-shadow: inset 0 2px 0 #8b9bb4;
+}
+
+.k-pad {
+  color: #181425;
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+}
+
+.k-glyph-sm {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  font-size: 14px;
+}
+
+.k-glyph-md {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 16px;
+}
+
+.k-hold {
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: var(--k-text-2);
+  text-transform: uppercase;
+}
+
+.k-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.k-price-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.k-price-unit {
+  color: var(--k-text-3);
+}
+
+.k-promptbar {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.k-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: var(--k-text-2);
+  white-space: nowrap;
+}
+
+.k-prompt-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.k-prompt[aria-disabled='true'],
+.k-prompt-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── Controls ── */
+
+.k-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.k-btn:active:not(:disabled) {
+  transform: translateY(2px);
+}
+
+.k-btn-sm {
+  padding: 6px 12px;
+  min-height: 36px;
+  font-family: var(--k-font-body);
+  font-size: 16px;
+  font-size-adjust: none;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.k-btn-md {
+  padding: 12px 18px;
+  min-height: 48px;
+  font-size: 18px;
+}
+
+.k-btn-lg {
+  padding: 12px 26px;
+  min-height: 56px;
+  font-size: 22px;
+}
+
+.k-btn-quiet {
+  background: none;
+  border: 3px solid transparent;
+  color: var(--k-text-2);
+}
+
+.k-btn-quiet:hover:not(:disabled) {
+  color: var(--k-text);
+}
+
+.k-btn:disabled {
+  background: #262b44;
+  color: #5a6988;
+  border-color: #3a4466;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.k-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-family: var(--k-font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+  cursor: pointer;
+}
+
+.k-chip[aria-pressed='true'],
+.k-seg[aria-checked='true'] {
+  background: #feae34;
+  border-color: #fee761;
+  color: #3e2731;
+  box-shadow: 0 0 0 3px rgba(247, 118, 34, 0.45);
+}
+
+.k-chip:disabled,
+.k-seg:disabled {
+  color: #5a6988;
+  background: #262b44;
+  border-color: #3a4466;
+  cursor: not-allowed;
+}
+
+.k-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.k-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8b9bb4;
+  cursor: pointer;
+}
+
+.k-tab-lg {
+  font-size: 24px;
+  padding: 20px 6px 16px;
+}
+
+.k-tab-md {
+  font-size: 18px;
+  padding: 8px 6px 6px;
+}
+
+.k-tab[aria-selected='true'] {
+  color: #fee761;
+  border-bottom-color: #feae34;
+  text-shadow:
+    2px 2px 0 #181425,
+    0 3px 0 #f77622;
+}
+
+.k-tab:disabled {
+  color: #5a6988;
+  cursor: not-allowed;
+}
+
+.k-tab-badge {
+  font-family: var(--k-font-body);
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--k-text-2);
+  text-shadow: none;
+}
+
+.k-segs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.k-seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 36px;
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: #ffffff;
+  background: #3a4466;
+  border: 2px solid #5a6988;
+  cursor: pointer;
+}
+
+.k-swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  box-shadow: 0 0 0 2px #181425;
+}
+
+.k-bar {
+  position: relative;
+  background: #181425;
+  overflow: hidden;
+}
+
+.k-bar-progress {
+  box-shadow: 0 0 0 2px #3a4466;
+}
+
+.k-bar-fill,
+.k-bar-extra {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.k-bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Surfaces ── */
+
+.k-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.k-panel.k-glass {
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.k-panel.k-well {
+  padding: 14px;
+  gap: 8px;
+}
+
+.k-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.k-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.k-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #5a6988 #181425;
+}
+
+.k-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 72px minmax(0, 1fr) 76px;
+  overflow: hidden;
+}
+
+.k-screen-arena-pause {
+  background: rgba(24, 20, 37, 0.86);
+}
+
+.k-screen-arena-stop {
+  background: rgba(6, 6, 11, 0.82);
+}
+
+.k-screen-head {
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+
+.k-screen-main {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k-screen-foot {
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+
+.k-header {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+}
+
+.k-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  font-weight: 400;
+}
+
+.k-header-title .k-disp {
+  font-size: 30px;
+  color: var(--k-hot-hi);
+}
+
+.k-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.k-header-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 16px;
+}
+
+.k-footer {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+}
+
+.k-footer-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.k-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 20, 37, 0.72);
+  pointer-events: auto;
+}
+
+.k-dialog {
+  max-width: calc(100% - 64px);
+  max-height: calc(100% - 64px);
+}
+
+/* ── Items ── */
+
+.k-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* The mockups' 40 px icon in an 84 px socket. */
+.k-tile-icon {
+  display: flex;
+  width: 48%;
+  height: 48%;
+}
+
+.k-tile[aria-pressed='true'] {
+  outline: 2px solid #fee761;
+  outline-offset: 3px;
+}
+
+.k-tile-mark {
+  position: absolute;
+  line-height: 1;
+}
+
+.k-tile-delta {
+  right: 6px;
+  bottom: 5px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.k-tile-new {
+  left: 6px;
+  top: 6px;
+  padding: 1px 3px;
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: #3e2731;
+  background: #fee761;
+}
+
+.k-tile-lock {
+  right: 6px;
+  top: 6px;
+}
+
+.k-tile-eq {
+  left: 6px;
+  bottom: 5px;
+  font-family: var(--k-font-display);
+  font-size: 16px;
+  color: #feae34;
+  text-shadow: 1px 1px 0 #181425;
+}
+
+/* ── Tooltips ── */
+
+.k-tip {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.k-tipcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.k-tipcard.k-glass {
+  padding: 14px 16px;
+  gap: 8px;
+}
+
+.k-tipcard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.k-tipcard-head .k-disp {
+  font-size: 24px;
+}
+
+/* ── Art ── */
+
+.k-sprite {
+  display: inline-block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
