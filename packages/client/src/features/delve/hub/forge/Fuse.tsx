@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import {
   checkFusion,
   fuseCost,
@@ -51,6 +51,8 @@ export function Fuse({ onResult }: { onResult: (uid: string) => void }) {
     .filter(Boolean) as GearItem[];
   const check = checkFusion(pickedItems);
   const cost = pickedItems.length === 3 ? fuseCost(registry, pickedItems) : null;
+  const short = cost !== null && cost > profile.scrap;
+  const id = useId();
   const target = nextRarity(rarity);
   const melts = pullText(
     registry,
@@ -202,8 +204,9 @@ export function Fuse({ onResult }: { onResult: (uid: string) => void }) {
         <Button
           variant="primary"
           className="flex-[2]"
-          disabled={!check.ok || busy || (cost !== null && cost > profile.scrap)}
+          disabled={!check.ok || busy || short}
           onClick={onFuse}
+          aria-describedby={short ? `${id}-short` : undefined}
           testId="fuse-button"
         >
           {cost === null ? (
@@ -217,6 +220,11 @@ export function Fuse({ onResult }: { onResult: (uid: string) => void }) {
           )}
         </Button>
       </div>
+      {short && (
+        <span id={`${id}-short`} className="k-caption">
+          Needs <Price scrap={cost} />
+        </span>
+      )}
 
       {pool.length > 0 && (
         <div

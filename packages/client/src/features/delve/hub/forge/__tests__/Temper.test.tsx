@@ -48,6 +48,10 @@ describe('Temper', () => {
     const up = screen.getByTestId('upgrade-button');
     expect(up).toHaveTextContent(`Upgrade +1 · ${cost} scrap`);
     expect(up).toBeDisabled();
+    expect(up).toHaveAccessibleDescription(`Needs ${cost} scrap`);
+    expect(screen.getByTestId('temper').textContent).toContain(
+      `Each forge level adds +${Math.round(registry.getDelveBalance().forge.upgradeStep * 100)}% to every stat`,
+    );
     expect(screen.getByTestId('forge-purse')).toHaveTextContent(`In hand: ${cost - 1} scrap`);
     act(() => store().setProfile({ ...store().profile, scrap: cost }));
     fireEvent.click(up);
@@ -75,6 +79,10 @@ describe('Temper', () => {
     fireEvent.click(screen.getByTestId('reforge-line-0'));
     expect(screen.getByTestId('reforge-line-0')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('reforge-button')).toHaveTextContent(`Reforge · ${cost} scrap`);
+    act(() => store().setProfile({ ...store().profile, scrap: cost - 1 }));
+    expect(screen.getByTestId('reforge-button')).toBeDisabled();
+    expect(screen.getByTestId('reforge-button')).toHaveAccessibleDescription(`Needs ${cost} scrap`);
+    act(() => store().setProfile({ ...store().profile, scrap: cost }));
     fireEvent.click(screen.getByTestId('reforge-button'));
     expect(store().profile.scrap).toBe(0);
     expect(store().profile.bag[0].reforges).toBe(1);
@@ -100,6 +108,9 @@ describe('Temper', () => {
     expect(store().profile.manaDust).toBe(0);
     expect(screen.queryByTestId('reattune-storm')).toBeNull(); // its own element now
     expect(screen.getByTestId('reattune-fire')).toBeDisabled(); // no Dust left
+    expect(screen.getByTestId('reattune-fire')).toHaveAccessibleDescription(
+      `Needs ${pal.reattuneDust.magic} Mana Dust`,
+    );
     expect(screen.getByRole('status')).toHaveTextContent('Attuned to Storm');
   });
 });

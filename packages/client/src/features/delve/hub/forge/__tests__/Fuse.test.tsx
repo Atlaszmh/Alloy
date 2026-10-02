@@ -76,4 +76,18 @@ describe('Fuse (Alloy Fusion)', () => {
     fireEvent.click(within(screen.getByTestId('fusion-result')).getByRole('button'));
     expect(onResult).toHaveBeenCalledWith(made.uid);
   });
+
+  it('says what it needs when the purse is short', () => {
+    store().setProfile({
+      ...store().profile,
+      scrap: 0,
+      bag: [rareSword('a'), rareSword('b'), rareSword('c')],
+    });
+    render(<Fuse onResult={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
+    for (const t of screen.getAllByTestId('fuse-candidate')) fireEvent.click(t);
+    const fuse = screen.getByTestId('fuse-button');
+    expect(fuse).toBeDisabled();
+    expect(fuse).toHaveAccessibleDescription(/^Needs [\d,]+ scrap$/);
+  });
 });

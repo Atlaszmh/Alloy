@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import {
   itemStatLines,
   pairElements,
@@ -22,7 +22,7 @@ const BACK = { key: 'Escape', pad: 'b' } as const;
 /**
  * The Temper bench: the selected item's Upgrade +1, Reforge (pick a line, in
  * its own pad scope with a Back) and Re-attune to the pair's other element,
- * each priced against the purse.
+ * each priced against the purse: one the purse can't pay is off, and says what it needs.
  */
 export function Temper({ item }: { item: GearItem }) {
   const registry = getDelveRegistry();
@@ -40,7 +40,10 @@ export function Temper({ item }: { item: GearItem }) {
   const raCost = reattuneCost(registry, item);
   const affixes = itemStatLines(item, registry).filter((l) => l.source === 'affix');
   const reattuneTo = pairElements(pair).filter((m) => m !== item.mana);
-  const max = registry.getDelveBalance().forge.maxUpgrade;
+  const { maxUpgrade: max, upgradeStep } = registry.getDelveBalance().forge;
+  const id = useId();
+  const upShort = upCost !== null && upCost > scrap;
+  const rfShort = line !== null && rfCost > scrap;
 
   const say = (text: string, good: boolean) => {
     setMessage({ text, good });
@@ -136,8 +139,9 @@ export function Temper({ item }: { item: GearItem }) {
           ))}
           <Button
             variant="primary"
-            disabled={line === null || rfCost > scrap}
+            disabled={line === null || rfShort}
             onClick={onReforge}
+            aria-describedby={rfShort ? `${id}-rf` : undefined}
             testId="reforge-button"
           >
             {line === null ? (
@@ -148,18 +152,26 @@ export function Temper({ item }: { item: GearItem }) {
               </>
             )}
           </Button>
+          {rfShort && (
+            <span id={`${id}-rf`} className="k-caption">
+              Needs <Price scrap={rfCost} />
+            </span>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           <div ref={statsRef}>
             <ItemStatLines item={item} />
           </div>
-          <p className="k-caption">Each forge level adds +10% to every stat on the item.</p>
-          <div className="flex flex-wrap gap-3">
+          <p className="k-caption">
+            Each forge level adds +{Math.round(upgradeStep * 100)}% to every stat on the item.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="primary"
-              disabled={upCost === null || upCost > scrap}
+              disabled={upCost === null || upShort}
               onClick={onUpgrade}
+              aria-describedby={upShort ? `${id}-up` : undefined}
               testId="upgrade-button"
             >
               {upCost === null ? (
@@ -174,6 +186,11 @@ export function Temper({ item }: { item: GearItem }) {
               <Button onClick={() => setPicking(true)} testId="reforge-open">
                 Reforge…
               </Button>
+            )}
+            {upShort && (
+              <span id={`${id}-up`} className="k-caption">
+                Needs <Price scrap={upCost} />
+              </span>
             )}
           </div>
           {reattuneTo.length > 0 && (
@@ -190,6 +207,7 @@ export function Temper({ item }: { item: GearItem }) {
                       key={m}
                       disabled={raCost > dust}
                       onClick={() => onReattune(m)}
+                      aria-describedby={raCost > dust ? `${id}-ra` : undefined}
                       testId={`reattune-${m}`}
                     >
                       <Glyph id={m} size={16} color={st.color} /> {st.name} ·{' '}
@@ -197,6 +215,11 @@ export function Temper({ item }: { item: GearItem }) {
                     </Chip>
                   );
                 })}
+                {raCost > dust && (
+                  <span id={`${id}-ra`} className="k-caption self-center">
+                    Needs <Price dust={raCost} />
+                  </span>
+                )}
               </div>
             </div>
           )}
