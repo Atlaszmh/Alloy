@@ -833,3 +833,11 @@ html[data-input='gamepad'] .delve-ui :focus {
 .k-tipcard-head .k-disp {
   font-size: 24px;
 }
+
+/* ── Art ── */
+
+.k-sprite {
+  display: inline-block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
