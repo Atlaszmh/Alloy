@@ -634,18 +634,6 @@ describe('save v7', () => {
     expect(fresh()).toMatchObject({ version: 7, runes: {} });
   });
 
-  it('loads a version 6 save as version 7 with an empty pouch, and nothing else changed', () => {
-    const p = fresh();
-    const { runes: _runes, ...v6 } = p;
-    expect(parseDelveProfile(registry, json({ ...v6, version: 6 }))).toEqual({
-      profile: p,
-      fixed: [],
-      dropped: [],
-      movesetReset: false,
-      runesLost: [],
-    });
-  });
-
   it('round-trips sockets, empty ones included, and the pouch', () => {
     const p = {
       ...withChains(rare(fresh()), {

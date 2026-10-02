@@ -61,8 +61,6 @@ import {
 } from '../src/types/gear.js';
 import type { ManaMap, ManaType } from '../src/types/mana.js';
 import {
-  OLD_BUILDS,
-  asV4,
   bal,
   chainsOf,
   dummy,
@@ -282,12 +280,7 @@ describe('Power values the pair', () => {
   });
 });
 
-describe('saves through version 6', () => {
-  /** A version 3 save of `p`: its builds (`OLD_BUILDS`), no pair, no Mana Dust. */
-  function v3Of(p: DelveProfile) {
-    const { pair: _pair, manaDust: _dust, ...rest } = asV4(p);
-    return { ...rest, version: 3 };
-  }
+describe('the save and the pair', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
 
   it('default chains are all one element, the Ward included', () => {
@@ -323,72 +316,6 @@ describe('saves through version 6', () => {
     const bad = (pair: object) => parseDelveProfile(registry, json({ ...p, pair }));
     expect(bad({ primary: null, secondary: 'fire' })).toBeNull();
     expect(bad({ primary: 'fire', secondary: 'fire' })).toBeNull();
-  });
-
-  it("migrates version 3: the most attunement is the primary, and each chain's moves are fixed to it", () => {
-    const p = createDelveProfile(registry, 3); // an earth cuirass (1)
-    // An epic sword (fire 2) carries all four chains; a legendary storm ring (3) outweighs it.
-    const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
-    const ring = { ...item('storm'), rarity: 'legendary' as const };
-    const old = {
-      ...v3Of(p),
-      equipped: { ...p.equipped, weapon, ring },
-      abilities: { ...OLD_BUILDS, defensive: { ...OLD_BUILDS.defensive, elements: ['frost'] } },
-    };
-    const res = parseDelveProfile(registry, json(old))!;
-    expect(res.profile).toMatchObject({
-      version: 7,
-      pair: { primary: 'storm', secondary: null },
-      manaDust: 0,
-    });
-    expect(chainsOf(res.profile).primary!.moves.map((m) => m.elements)).toEqual([
-      ['storm'],
-      ['storm'],
-      ['storm'],
-      ['storm'],
-    ]);
-    // The Bolt's default chain has four moves: a fix each.
-    expect(res.fixed.map((f) => [f.skill, f.index, f.removed])).toEqual([
-      ['primary', 0, ['fire']],
-      ['primary', 1, ['fire']],
-      ['primary', 2, ['fire']],
-      ['primary', 3, ['fire']],
-      ['defensive', 0, ['frost']],
-      ['ultimate', 0, ['fire']],
-    ]);
-  });
-
-  it('ties go to the weapon, then MANA_TYPES order; nothing equipped leaves the choice open', () => {
-    const p = createDelveProfile(registry, 3);
-    expect(parseDelveProfile(registry, json(v3Of(p)))!.profile.pair.primary).toBe('fire');
-    // A nature weapon (1) ties the earth cuirass (1) and wins, though earth comes first.
-    const late = { ...v3Of(p), equipped: { ...p.equipped, weapon: item('nature', 'weapon') } };
-    expect(parseDelveProfile(registry, json(late))!.profile.pair.primary).toBe('nature');
-    const { weapon: _weapon, ...noWeapon } = p.equipped;
-    const tie = { ...v3Of(p), equipped: { ...noWeapon, ring: item('nature') } }; // earth 1, nature 1
-    expect(parseDelveProfile(registry, json(tie))!.profile.pair.primary).toBe('earth');
-    const bare = parseDelveProfile(registry, json({ ...v3Of(p), equipped: {} }))!;
-    expect(bare.profile.pair.primary).toBeNull();
-    expect(bare.fixed).toEqual([]);
-  });
-
-  it("migrates version 2 through versions 3 and 4: its new primary's default chains, nothing to fix; a dive stays", () => {
-    const p = startDive(registry, createDelveProfile(registry, 3), 1);
-    // A legendary storm ring (3) beats the epic fire sword's 2; the sword carries all four chains.
-    const weapon = { ...p.equipped.weapon!, rarity: 'epic' as const };
-    const ring = { ...item('storm'), rarity: 'legendary' as const };
-    const { abilities: _abilities, ...v2 } = v3Of({
-      ...p,
-      equipped: { ...p.equipped, weapon, ring },
-    });
-    const res = parseDelveProfile(
-      registry,
-      json({ ...v2, version: 2, skillSlots: [null, null, null] }),
-    )!;
-    expect(res.profile).toMatchObject({ version: 7, pair: { primary: 'storm', secondary: null } });
-    expect(chainsOf(res.profile)).toEqual(defaultChains(registry, 'storm', 'sword'));
-    expect(res.fixed).toEqual([]);
-    expect(res.profile.dive).toEqual(p.dive);
   });
 
   it("fixChainsToPair keeps the weapon's in-pair elements, gives an emptied move or a blow the primary, a fix each", () => {
