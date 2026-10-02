@@ -21,6 +21,7 @@ import {
   createArenaInput,
   frameInput,
   holdingSlot,
+  labelsHeld,
   pressJournal,
   pressMenu,
 } from '../arena/input';
@@ -257,6 +258,16 @@ describe('loot labels and the journal', () => {
     expect(opened).toBe(1);
     pressJournal(); // useArenaCore's padFrame, on the pad's View
     expect(opened).toBe(2);
+  });
+
+  it("the labels follow the input lock: the keys' Alt under the keys, the pad's L3 under the pad", () => {
+    const input = createArenaInput();
+    const l3 = { labels: true } as ArenaPadActions;
+    expect(labelsHeld('keyboard', input, l3)).toBe(false);
+    input.labels = true;
+    expect(labelsHeld('keyboard', input, null)).toBe(true);
+    expect(labelsHeld('gamepad', input, null)).toBe(false);
+    expect(labelsHeld('gamepad', input, l3)).toBe(true);
   });
 
   it('the pad reports L3 held as labels and a View press as the journal', () => {

@@ -98,6 +98,15 @@ export interface FrameOpts {
   device: InputDevice;
 }
 
+/** Whether the loot labels show: the keys' Alt under the keys or mouse, the pad's L3 under the pad. */
+export function labelsHeld(
+  device: InputDevice,
+  input: ArenaInput,
+  pad: ArenaPadActions | null,
+): boolean {
+  return device === 'gamepad' ? !!pad?.labels : input.labels;
+}
+
 /**
  * One step's input from the device with the input lock (`o.device`): the
  * controller (`pad`, null when there is none; `mem`, what it remembers from

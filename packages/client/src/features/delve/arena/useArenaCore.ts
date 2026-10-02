@@ -39,6 +39,7 @@ import {
   attachKeyboard,
   createArenaInput,
   frameInput,
+  labelsHeld,
   pressJournal,
   pressMenu,
   type Aiming,
@@ -500,7 +501,9 @@ export function useArenaCore(
             if (mode.frame(world)) finishedRef.current = true;
           }
           renderer.setInsets(insetsRef.current);
-          renderer.setLabelsHeld(inputRef.current.labels || !!pad?.labels);
+          renderer.setLabelsHeld(
+            labelsHeld(useInputDeviceStore.getState().device, inputRef.current, pad),
+          );
           renderer.setAim(heldAim(world) ?? padAimView(world));
           renderer.update(paused ? 0 : dt);
           // The HUD refresh ignores the mode's speed, so the sandbox's slow motion doesn't slow
