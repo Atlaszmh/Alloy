@@ -148,6 +148,52 @@ async function tapAndReadCharges(page: Page, button: number): Promise<string | n
   );
 }
 
+/**
+ * From the Skills tab in the hub's header, down by D-pad into the chain builder's skill row,
+ * then along it to the Primary (where the row meets the tab depends on the header's layout).
+ */
+async function padToPrimary(page: Page): Promise<void> {
+  const row = ['basic', 'primary', 'defensive', 'ultimate'].map((s) => `chain-skill-${s}`);
+  const at = async () =>
+    row.indexOf(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? ''),
+    );
+  for (let i = 0; i < 4 && (await at()) < 0; i++) await tap(page, BUTTON.down);
+  for (let i = 0; i < 3 && (await at()) >= 0 && (await at()) !== 1; i++) {
+    await tap(page, (await at()) < 1 ? BUTTON.right : BUTTON.left);
+  }
+  await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+}
+
+/**
+ * By D-pad to the control `id`: each press toward it, along the axis it lies further on, or
+ * the other axis when that press was already made from here. The pad's nearest-in-direction
+ * rule decides each step (in the 960 px interim column, left from the Primary meets the
+ * header's tabs first), so the walk takes what the rule gives.
+ */
+async function padWalk(page: Page, id: string): Promise<void> {
+  const tried = new Set<string>();
+  for (let i = 0; i < 12; i++) {
+    const step = await page.evaluate((target) => {
+      const from = document.activeElement;
+      const to = document.querySelector(`[data-testid="${target}"]`);
+      if (!from || !to || from === to) return null;
+      const [a, b] = [from, to].map((e) => e.getBoundingClientRect());
+      const dx = b.x + b.width / 2 - (a.x + a.width / 2);
+      const dy = b.y + b.height / 2 - (a.y + a.height / 2);
+      const h = dx < 0 ? 'left' : 'right';
+      const v = dy < 0 ? 'up' : 'down';
+      const at = from.getAttribute('data-testid') ?? '';
+      return { at, dirs: Math.abs(dx) > Math.abs(dy) ? [h, v] : [v, h] } as const;
+    }, id);
+    if (!step) break;
+    const dir = step.dirs.find((d) => !tried.has(`${step.at}:${d}`)) ?? step.dirs[0];
+    tried.add(`${step.at}:${dir}`);
+    await tap(page, BUTTON[dir]);
+  }
+  await expect(page.getByTestId(id)).toBeFocused();
+}
+
 test.describe('Delve with a controller', () => {
   test('G01: Menu opens the dive menu, its first control focused; A toggles it; B resumes', async ({
     page,
@@ -248,12 +294,11 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false);
     await page.goto('/delve');
-    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
-    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
-    await tap(page, BUTTON.down);
-    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
-    await tap(page, BUTTON.left);
+    await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    await padToPrimary(page);
+    await padWalk(page, 'chain-skill-basic');
     await tap(page, BUTTON.a);
     await expect(page.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.down);
@@ -291,11 +336,10 @@ test.describe('Delve with a controller', () => {
   }) => {
     await setup(page, false, 1, true);
     await page.goto('/delve');
-    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
-    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
-    await tap(page, BUTTON.down);
-    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
+    await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
+    await padToPrimary(page);
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
     /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
@@ -305,7 +349,7 @@ test.describe('Delve with a controller', () => {
       expect(await focused()).toBe(id);
     };
     // The Primary's move: past its card and reorder buttons to its one open socket.
-    await padTo('socket-0');
+    await padWalk(page, 'socket-0');
     const picker = page.getByTestId('rune-picker');
     // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
     await tap(page, BUTTON.a);
@@ -332,13 +376,15 @@ test.describe('Delve with a controller', () => {
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
   });
 
-  test('G03: RB and LB step through the Anvil tabs', async ({ page }) => {
+  test('G03: RB and LB step through the five Anvil tabs, wrapping round', async ({ page }) => {
     await setup(page, true);
     await page.goto('/delve');
-    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
-    await tap(page, BUTTON.rb);
-    await expect(page.getByTestId('tab-abilities')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    for (const tab of ['skills', 'forge', 'codex', 'quests', 'loadout']) {
+      await tap(page, BUTTON.rb);
+      await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
+    }
     await tap(page, BUTTON.lb);
-    await expect(page.getByTestId('tab-bag')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('tab-quests')).toHaveAttribute('aria-selected', 'true');
   });
 });

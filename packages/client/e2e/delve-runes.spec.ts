@@ -97,7 +97,7 @@ test.describe('Delve runes', () => {
       heroWith(registry, [], { links: 1, scrap: 20, runes: { quick: [0, 0, 1, 0, 0] } }),
     );
     await page.goto('/delve');
-    await page.getByTestId('tab-abilities').click();
+    await page.getByTestId('tab-skills').click();
     const cards = page.getByTestId('chain-cards');
     await expect(cards.getByTestId('socket-0')).toHaveCount(0);
     await cards.getByTestId('socket-open').click();
@@ -186,7 +186,7 @@ test.describe('Delve runes', () => {
     await pouch.getByTestId('rune-fuse-split-1').click();
     await expect(pouch.getByTestId('pouch-split-2')).toBeVisible();
     await expect(pouch.getByTestId('pouch-split-1')).toHaveCount(0);
-    await expect(page.getByTestId('scrap-count')).toHaveText('⚙ 0 scrap');
+    await expect(page.getByTestId('scrap-count')).toHaveText('0 scrap');
     await expect.poll(async () => (await saved(page)).runes.split).toEqual([0, 1, 0, 0, 0]);
   });
 
@@ -208,7 +208,7 @@ test.describe('Delve runes', () => {
     const support = manaSupport(registry, stats, resolved);
     await seed(page, profile);
     await page.goto('/delve');
-    await page.getByTestId('tab-abilities').click();
+    await page.getByTestId('tab-skills').click();
 
     // The move's readout: its loaded cost, the runes' share of it, and what attunement takes off.
     const readout = page.getByTestId('ability-readout');
@@ -261,7 +261,7 @@ test.describe('Delve runes', () => {
     expect(nova.cost).toBeGreaterThan(pool);
     await seed(page, profile);
     await page.goto('/delve');
-    await page.getByTestId('tab-abilities').click();
+    await page.getByTestId('tab-skills').click();
     await page.getByTestId('chain-skill-ultimate').click();
     await expect(page.getByTestId('cost-warning')).toHaveText(
       `Needs ${Math.round(nova.cost)} mana; your pool holds ${Math.round(pool)}.`,

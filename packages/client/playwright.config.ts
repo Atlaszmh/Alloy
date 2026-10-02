@@ -12,7 +12,8 @@ export default defineConfig({
   projects: [
     {
       name: 'iphone-se',
-      testIgnore: ['responsive/**'],
+      // The Delve is PC-only (Delve UI v1): the desktop project runs its specs.
+      testIgnore: ['responsive/**', 'delve*.spec.ts'],
       use: {
         browserName: 'chromium',
         viewport: { width: 375, height: 667 },
@@ -23,7 +24,7 @@ export default defineConfig({
     },
     {
       name: 'iphone-15-pro',
-      testIgnore: ['responsive/**'],
+      testIgnore: ['responsive/**', 'delve*.spec.ts'],
       use: {
         browserName: 'chromium',
         viewport: { width: 393, height: 852 },
@@ -34,7 +35,7 @@ export default defineConfig({
     },
     {
       name: 'pixel-7',
-      testIgnore: ['responsive/**'],
+      testIgnore: ['responsive/**', 'delve*.spec.ts'],
       use: {
         browserName: 'chromium',
         viewport: { width: 412, height: 915 },
