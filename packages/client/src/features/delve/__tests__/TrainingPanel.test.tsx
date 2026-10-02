@@ -21,6 +21,7 @@ function renderPanel(tab: TrainingTab) {
     resetMeter: vi.fn(),
   };
   const onClose = vi.fn();
+  const onOpenControls = vi.fn();
   const meter = new DamageMeter().summary(0);
   const panel = (t: TrainingTab) => (
     <TrainingPanel
@@ -29,11 +30,11 @@ function renderPanel(tab: TrainingTab) {
       onClose={onClose}
       actions={actions}
       meter={meter}
-      onOpenControls={vi.fn()}
+      onOpenControls={onOpenControls}
     />
   );
   const { rerender } = render(panel(tab));
-  return { actions, onClose, showTab: (t: TrainingTab) => rerender(panel(t)) };
+  return { actions, onClose, onOpenControls, showTab: (t: TrainingTab) => rerender(panel(t)) };
 }
 
 describe('TrainingPanel', () => {
@@ -119,6 +120,14 @@ describe('TrainingPanel', () => {
     });
     expect(screen.getByTestId('add-dummy-single')).toBeDisabled();
     expect(screen.getByTestId('dummies-full')).toBeInTheDocument();
+  });
+
+  it("the basic attack's Auto / Manual lives in the Controls editor alone, which the tab opens", () => {
+    const { onOpenControls } = renderPanel('toggles');
+    expect(screen.queryByTestId('training-attack-mode')).toBeNull();
+    expect(screen.queryByText(/Basic attack:/)).toBeNull();
+    fireEvent.click(screen.getByTestId('training-open-controls'));
+    expect(onOpenControls).toHaveBeenCalledOnce();
   });
 
   it('No cooldowns says the beats stay on', () => {
