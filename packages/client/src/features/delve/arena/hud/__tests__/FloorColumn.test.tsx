@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { generateItem, SeededRNG, type ManaType } from '@alloy/engine';
+import { generateItem, MANA_TYPES, SeededRNG, type ManaType } from '@alloy/engine';
 import { FloorColumn, type FloorColumnProps } from '../FloorColumn';
 import type { ArenaHud, HudMap } from '../../useArenaCore';
 import { getDelveRegistry } from '../../../registry';
 import { SAMPLE_QUESTS } from '../../../quests/sample';
 import { useDelveStore } from '@/stores/delveStore';
+import { contrast } from '../../../kit/controls';
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -62,6 +63,25 @@ describe('FloorColumn', () => {
     expect(screen.getByTestId('monsters-left')).toHaveTextContent('12 foes left');
     expect(screen.getByText('26').parentElement).toHaveTextContent('26 bounty');
     expect(screen.queryByTestId('bounty')).toBeNull();
+  });
+
+  it('tints the Resists and Weak to tiles by element: its colour on a dark tint of it, at 4.5:1 or more', () => {
+    /** `rgb(r, g, b)` as `#rrggbb`. */
+    const hex = (rgb: string) =>
+      '#' + (rgb.match(/\d+/g) ?? []).map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+    for (const mana of MANA_TYPES) {
+      const { unmount } = render(<FloorColumn {...props} biome={{ ...props.biome, mana }} />);
+      const weak = registry.getArpgData().weakness[mana];
+      const tiles = [...screen.getByTestId('biome-element').children] as HTMLElement[];
+      tiles.forEach((tile, i) => {
+        const color = registry.getArpgData().mana[i === 0 ? mana : weak].color;
+        expect(hex(tile.style.color)).toBe(color);
+        const ground = hex(tile.style.backgroundColor);
+        expect(ground).not.toBe('#181425');
+        expect(contrast(color, ground), `${mana} tile ${i}`).toBeGreaterThanOrEqual(4.5);
+      });
+      unmount();
+    }
   });
 
   it('shows no foe count until the arena reports', () => {

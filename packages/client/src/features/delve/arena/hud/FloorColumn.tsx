@@ -18,6 +18,18 @@ export interface FloorColumnProps {
   onJournal: () => void;
 }
 
+/** The well (`--k-well`) under `share` of `color`: an element's tile, its own colour reading at 4.5:1 or more at 18%. */
+function tint(color: string, share = 0.18): string {
+  const ch = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16);
+  return `#${[1, 3, 5]
+    .map((i) =>
+      Math.round(ch(color, i) * share + ch('#181425', i) * (1 - share))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
 /**
  * The HUD's right column: the floor panel (depth, biome, minimap, what the floor resists and is
  * weak to, foes left, the bounty), the tracked quests, and "Found this floor".
@@ -49,12 +61,19 @@ export function FloorColumn({
               ['Resists', biome.mana],
               ['Weak to', weak],
             ] as const
-          ).map(([label, mana]) => (
-            <span key={label} className="flex items-center gap-2 bg-[var(--k-well)] px-2 py-[6px]">
-              <Glyph id={mana} size={16} />
-              {label} {manaStyle(registry, mana).name}
-            </span>
-          ))}
+          ).map(([label, mana]) => {
+            const { color, name } = manaStyle(registry, mana);
+            return (
+              <span
+                key={label}
+                className="flex items-center gap-2 px-2 py-[6px]"
+                style={{ color, backgroundColor: tint(color) }}
+              >
+                <Glyph id={mana} size={16} color={color} />
+                {label} {name}
+              </span>
+            );
+          })}
         </div>
         <div className="flex items-baseline justify-between text-[15px] text-[var(--k-text-3)]">
           {hud && (
