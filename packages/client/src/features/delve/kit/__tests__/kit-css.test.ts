@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const css = readFileSync(resolve(__dirname, '../kit.css'), 'utf8');
+const legacy = readFileSync(resolve(__dirname, '../../delve.css'), 'utf8');
 const pub = resolve(__dirname, '../../../../../public');
 
 /** The body of a top-level rule, e.g. `.delve-btn { … }`. */
@@ -31,5 +32,24 @@ describe('kit.css', () => {
     for (const [, body] of css.matchAll(/\n\.delve-ui \{([^}]*)\}/g)) {
       expect(body).not.toMatch(/zoom/);
     }
+  });
+
+  it('re-skins the legacy classes square in the forge materials, and loads the kit with them', () => {
+    expect(legacy).toMatch(/^@import '\.\/kit\/kit\.css';\r?$/m);
+    const looks: [string, string][] = [
+      ['.delve-btn', 'repeating-linear-gradient(0deg, #733e39 0 10px, #6a3934 10px 12px)'],
+      ['.delve-btn-gold', 'background: #feae34;'],
+      ['.delve-panel', 'border: 6px solid #733e39;'],
+      ['.delve-tile', 'border: 3px solid;'],
+      ['.delve-chip', 'background: #3a4466;'],
+      ['.delve-sheet', 'border: 4px solid #3a4466;'],
+      ['.delve-hpbar', 'background: #181425;'],
+    ];
+    for (const [selector, look] of looks) {
+      const body = rule(legacy, selector);
+      expect(body, selector).toContain(look);
+      expect(body, selector).not.toMatch(/border-radius: (?!0;)/);
+    }
+    expect(legacy).not.toMatch(/linear-gradient\(180deg/);
   });
 });
