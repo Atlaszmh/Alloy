@@ -126,20 +126,18 @@ describe("the readout's rune price", () => {
     ],
   });
   const readout = () => screen.getByTestId('ability-readout');
-  const payLine = () => within(readout()).getByText(/runes:/);
+  const payLine = () => within(readout()).getByTestId('num-cost');
 
   it("adds the runes' eased load to the pay line, in the payment's words", () => {
     // 1.95 eased 45% by 15 Fire: 1.0725, so 8 mana → 17, charge 2.8 → 6, cast 4 → 8.
     const { rerender } = render(editor({ primary: [runed()] }));
-    expect(payLine()).toHaveTextContent(/^17 mana · [\d.]+s wind-up \(runes: \+107% cost\) · /);
+    expect(payLine()).toHaveTextContent(/^17 mana \(runes: \+107% cost\)$/);
+    expect(screen.getByTestId('num-windup')).toHaveTextContent(/^[\d.]+s$/);
     rerender(editor({ primary: [runed()], payment: 'charge' }));
-    expect(payLine()).toHaveTextContent(
-      /^Charge 6 · [\d.]+s wind-up \(runes: \+107% charge\) · no cooldown/,
-    );
+    expect(payLine()).toHaveTextContent(/^Charge 6 \(runes: \+107% charge\)$/);
+    expect(screen.getByTestId('num-cooldown')).toHaveTextContent('none');
     rerender(editor({ primary: [runed()], payment: 'cast' }));
-    expect(payLine()).toHaveTextContent(
-      /^8 mana · [\d.]+s wind-up \(runes: \+107% cast wind-up, \+107% cost\) · /,
-    );
+    expect(payLine()).toHaveTextContent(/^8 mana \(runes: \+107% cast wind-up, \+107% cost\)$/);
   });
 
   it('says how much attunement eases the runes, and when that is the most it can', () => {
