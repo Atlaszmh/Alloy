@@ -26,6 +26,7 @@ import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
 import { useQuests } from '@/features/delve/quests/useQuests';
 import { StopScreen } from '@/features/delve/stop/StopScreen';
+import { reducedMotion } from '@/features/delve/kit';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
 import '@/features/delve/delve.css';
@@ -40,13 +41,16 @@ interface BannerState {
 function Banner({ banner, onDone }: { banner: BannerState; onDone: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    // The animation is the banner's life; under reduced motion it only fades, never zooms.
     const anim = ref.current?.animate(
-      [
-        { transform: 'scale(2.2)', opacity: 0 },
-        { transform: 'scale(0.96)', opacity: 1, offset: 0.15 },
-        { transform: 'scale(1)', opacity: 1, offset: 0.8 },
-        { transform: 'scale(1.04)', opacity: 0 },
-      ],
+      reducedMotion()
+        ? [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }]
+        : [
+            { transform: 'scale(2.2)', opacity: 0 },
+            { transform: 'scale(0.96)', opacity: 1, offset: 0.15 },
+            { transform: 'scale(1)', opacity: 1, offset: 0.8 },
+            { transform: 'scale(1.04)', opacity: 0 },
+          ],
       { duration: 2000, easing: 'ease-out' },
     );
     const done = () => onDone();
@@ -113,11 +117,7 @@ export function DelveRun() {
         case 'reaction': {
           const def = registry.getReaction(e.reaction);
           playSound('synergyActivate');
-          showBanner(
-            `${def.icon} ${def.name.toUpperCase()}!`,
-            '#e9d5ff',
-            `Reaction discovered: ${def.text}`,
-          );
+          showBanner(`${def.name.toUpperCase()}!`, '#e9d5ff', `Reaction discovered: ${def.text}`);
           break;
         }
         case 'cleared': {

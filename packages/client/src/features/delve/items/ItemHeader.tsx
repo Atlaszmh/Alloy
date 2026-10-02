@@ -7,6 +7,7 @@ import {
   type GearItem,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { Glyph } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { ItemTile } from '../ItemTile';
 import { RARITY_LABEL, RARITY_TEXT, SLOT_LABEL, manaStyle } from '../format';
@@ -46,25 +47,29 @@ export function ItemHeader({
         >
           {item.name}
         </div>
-        <div className="text-xs text-stone-300">
+        <div className="text-[14px] text-stone-300">
           {RARITY_LABEL[item.rarity]} {baseDisplayName(registry, item)} · {SLOT_LABEL[item.slot]}
         </div>
-        <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-stone-400">
+        <div className="mt-1 flex flex-wrap gap-1.5 text-[14px] text-[var(--k-text-2)]">
           <span
-            className="rounded px-1.5 py-0.5 font-semibold"
+            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold"
             style={
               ownMana
                 ? { background: `${mana.color}22`, color: mana.color }
-                : { background: 'rgba(255,255,255,0.05)', color: '#78716c' }
+                : { background: 'rgba(255,255,255,0.05)', color: 'var(--k-text-3)' }
             }
             data-testid="item-mana"
           >
-            {mana.icon} {mana.name} +{itemAffinityAttunement(registry, item)}
+            <Glyph id={item.mana} size={14} /> {mana.name} +{itemAffinityAttunement(registry, item)}
             {!ownMana && ' · not your element'}
           </span>
           {attack && (
-            <span className="rounded bg-white/5 px-1.5 py-0.5">
-              {attack.kind === 'bolt' ? '🎯 Ranged' : '⚔️ Melee'}
+            <span
+              className="inline-flex items-center gap-1 rounded bg-white/5 px-1.5 py-0.5"
+              data-testid="item-attack"
+            >
+              <Glyph id={attack.kind === 'bolt' ? 'bolt' : 'attack'} size={14} />
+              {attack.kind === 'bolt' ? 'Ranged' : 'Melee'}
             </span>
           )}
           {base?.tempo !== undefined && (

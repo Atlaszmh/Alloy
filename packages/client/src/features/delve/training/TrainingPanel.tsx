@@ -541,7 +541,6 @@ const TogglesTab = memo(function TogglesTab({
 }) {
   const toggles = useSandboxStore((s) => s.toggles);
   const slowmo = useSandboxStore((s) => s.slowmo);
-  const manual = useDelveStore((s) => s.manualAttack);
   const store = useSandboxStore.getState;
 
   return (
@@ -588,14 +587,8 @@ const TogglesTab = memo(function TogglesTab({
         </div>
       </Section>
 
+      {/* The basic attack's Auto / Manual lives in the Controls editor (attack-mode-toggle). */}
       <Section title="Controls">
-        <Button
-          size="sm"
-          onClick={() => useDelveStore.getState().setManualAttack(!manual)}
-          testId="training-attack-mode"
-        >
-          Basic attack: {manual ? 'Manual' : 'Auto'}
-        </Button>
         <Button size="sm" onClick={onOpenControls} testId="training-open-controls">
           <Glyph id="controls" size={18} /> Controls
         </Button>

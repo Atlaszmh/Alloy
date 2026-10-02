@@ -31,12 +31,12 @@ export function LegendaryBox({ item }: { item: GearItem }): ReactElement | null 
         color: '#fed7aa',
       }}
     >
-      <div className="delve-display text-xs font-bold uppercase tracking-widest text-orange-400">
+      <div className="k-label text-orange-400">
         ★ {registry.getLegendary(item.legendary.id).name}
       </div>
       {legendaryText(registry, item.legendary.id, item.legendary.value)}
       {dead && needs && (
-        <div className="mt-1 text-xs font-semibold text-amber-200" data-testid="legendary-dead">
+        <div className="mt-1 text-[14px] font-semibold text-amber-200" data-testid="legendary-dead">
           {NEEDS_TEXT[needs]}: your weapon doesn't carry one.
         </div>
       )}

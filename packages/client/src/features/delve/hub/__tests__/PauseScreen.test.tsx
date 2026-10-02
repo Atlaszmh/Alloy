@@ -68,6 +68,13 @@ describe('PauseScreen', () => {
     );
   });
 
+  it('over the stop, the floor reads cleared, not its foes', () => {
+    renderPause(undefined, true);
+    const header = screen.getByTestId('pause-screen').querySelector('header')!;
+    expect(header).toHaveTextContent(`${registry.getBiomeForDepth(1).name} · Depth 1 cleared`);
+    expect(header).not.toHaveTextContent('foes left');
+  });
+
   it('the footer: Inspect, Full compare and Tabs, then Controls, Settings, Anvil, Abandon and Resume', () => {
     const on = renderPause();
     const footer = screen.getByTestId('pause-screen').querySelector('footer')!;

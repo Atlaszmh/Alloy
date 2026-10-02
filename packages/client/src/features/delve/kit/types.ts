@@ -1,6 +1,6 @@
 // The forge kit's shared types (Delve UI v1, step 1·0), verbatim from the spec's kit contract.
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactElement, ReactNode, RefObject } from 'react';
-import type { FormId, ManaType, Rarity } from '@alloy/engine';
+import type { FormId, ManaType, Rarity, RuneFamily } from '@alloy/engine';
 import type { PadButton } from '@/features/gamepad/gamepad';
 
 /** One action's inputs on both devices. */
@@ -44,6 +44,7 @@ export type GlyphId =
   | 'skull' | 'anvil' | 'chest' | 'up' | 'down' | 'new' | 'potential'
   | 'controls' | 'settings' | 'training' | 'menu' | 'journal' | 'lab' | 'door' | 'extract'
   | 'riposte' | 'quick' | 'barrier' | 'galvanize' // buffs
+  | `rune-${RuneFamily}` // the four rune families
   | ManaType | FormId; // 6 elements, 12 forms
 
 export type ScaleContext = 'ui' | 'hud';

@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { CHAIN_SKILLS, socketsOf, type ChainSkill } from '@alloy/engine';
-import { Chip, Price } from '@/features/delve/kit';
+import { Chip, Glyph, Price } from '@/features/delve/kit';
 import { AttunementBars } from '../items/AttunementBars';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
@@ -40,45 +40,61 @@ export function ChainEditor(props: ChainEditorProps) {
 
   return (
     <div className="flex flex-col gap-3" data-testid="abilities-panel">
-      <div className="flex gap-1.5" role="tablist">
-        {CHAIN_SKILLS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            role="tab"
-            aria-selected={skill === s}
-            className="delve-panel flex flex-1 flex-col items-center gap-0.5 p-2"
-            style={{ borderColor: skill === s ? '#fcd34d' : undefined }}
-            onClick={() => ed.pick(s)}
-            data-testid={`chain-skill-${s}`}
-          >
-            <span className="whitespace-nowrap text-[10px] uppercase tracking-wider text-stone-400">
-              {SKILL_NAME[s]}
-              {SKILL_KEY[s] && <span className="hidden sm:inline"> · {SKILL_KEY[s]}</span>}
-            </span>
-            <span className="text-lg leading-none">
-              {s === 'basic'
-                ? '⚔️'
-                : chains[s]
-                  ? registry.getForm(chains[s].moves[0].form).icon
-                  : '🔒'}
-            </span>
-            <span className="text-[11px] font-semibold text-stone-200">
-              {chains[s]
-                ? `${(s === 'basic' ? chains.basic! : chains[s].moves).length} of ${caps[s]}`
-                : 'Locked'}
-            </span>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-1.5" role="tablist">
+        {CHAIN_SKILLS.map((s) => {
+          const lead = s === 'basic' ? chains.basic?.[0] : chains[s]?.moves[0];
+          return (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={skill === s}
+              className="delve-panel flex items-center gap-2 p-2 pr-3 text-left"
+              style={{ borderColor: skill === s ? '#fcd34d' : undefined }}
+              onClick={() => ed.pick(s)}
+              data-testid={`chain-skill-${s}`}
+            >
+              {s !== 'basic' && !chains[s] ? (
+                <Glyph id="lock" size={20} />
+              ) : (
+                <Glyph
+                  id={s === 'basic' ? 'attack' : chains[s]!.moves[0].form}
+                  size={24}
+                  color={
+                    lead &&
+                    manaStyle(registry, 'element' in lead ? lead.element : lead.elements[0]).color
+                  }
+                />
+              )}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="k-label whitespace-nowrap">
+                  {SKILL_NAME[s]}
+                  {SKILL_KEY[s] && <span className="hidden sm:inline"> · {SKILL_KEY[s]}</span>}
+                </span>
+                <span className="text-[14px] font-semibold text-stone-200">
+                  {chains[s]
+                    ? `${(s === 'basic' ? chains.basic! : chains[s].moves).length} of ${caps[s]}`
+                    : 'Locked'}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="text-xs text-stone-400" data-testid="abilities-summary">
-        {absent ? `🔒 ${absentText?.(skill) ?? ''}` : chainText(names)}
+      <div className="k-caption flex items-center gap-1.5" data-testid="abilities-summary">
+        {absent ? (
+          <>
+            <Glyph id="lock" size={14} /> {absentText?.(skill) ?? ''}
+          </>
+        ) : (
+          chainText(names)
+        )}
       </div>
 
       {locked && !absent && (
         <div
-          className="delve-panel p-2 text-center text-xs text-amber-200"
+          className="delve-panel p-2 text-center text-[14px] text-amber-200"
           data-testid="abilities-locked"
         >
           {ed.lockedText}
@@ -98,28 +114,32 @@ export function ChainEditor(props: ChainEditorProps) {
               <button
                 type="button"
                 data-card={i}
-                className="delve-panel flex w-20 flex-col items-center gap-0.5 p-1.5"
+                className="delve-panel flex w-24 flex-col items-center gap-1 p-1.5"
                 style={{ borderColor: i === index ? '#fcd34d' : undefined }}
                 aria-pressed={i === index}
                 aria-label={off ? `${names[i]}, off-pair` : names[i]}
                 onClick={() => ed.select(i)}
                 data-testid={`move-${i}`}
               >
-                <span className="text-sm font-bold leading-none text-amber-200/90">
+                <span className="text-[14px] font-bold leading-none text-amber-200/90">
                   {KIND_ICON[e.kind]}
                 </span>
-                <span className="text-lg leading-none">
-                  {'form' in e ? registry.getForm(e.form).icon : '⚔️'}
-                </span>
-                <span className="text-center text-[10px] font-semibold leading-tight text-stone-200">
+                <Glyph
+                  id={'form' in e ? e.form : 'attack'}
+                  size={24}
+                  color={manaStyle(registry, els[0]).color}
+                />
+                <span className="text-center text-[14px] font-semibold leading-tight text-stone-200">
                   {'form' in e ? registry.getForm(e.form).name : ed.weapon}
                 </span>
-                <span className="text-xs leading-none">
-                  {els.map((m) => manaStyle(registry, m).icon).join('')}
+                <span className="flex gap-0.5">
+                  {els.map((m) => (
+                    <Glyph key={m} id={m} size={14} color={manaStyle(registry, m).color} />
+                  ))}
                 </span>
                 {off && (
                   <span
-                    className="text-[9px] leading-none text-amber-300/80"
+                    className="text-[14px] leading-none text-amber-300/80"
                     data-testid="card-off-pair"
                   >
                     off-pair
@@ -178,7 +198,7 @@ export function ChainEditor(props: ChainEditorProps) {
         {!fixedShape && !absent && entries.length < (caps[skill] ?? 0) && (
           <button
             type="button"
-            className="delve-panel flex w-20 items-center justify-center p-1.5 text-2xl text-stone-400"
+            className="delve-panel flex w-24 items-center justify-center p-1.5 text-2xl text-stone-400"
             style={{ opacity: locked ? 0.55 : 1 }}
             disabled={locked}
             aria-label="Add a move"
@@ -190,7 +210,7 @@ export function ChainEditor(props: ChainEditorProps) {
         )}
         {runes && runes.socketCap > 0 && move && (
           <div
-            className="flex w-full flex-wrap items-center gap-2 text-xs text-stone-400"
+            className="flex w-full flex-wrap items-center gap-2 text-[14px] text-stone-400"
             data-testid="socket-bar"
           >
             <span data-testid="socket-count">
@@ -224,7 +244,7 @@ export function ChainEditor(props: ChainEditorProps) {
       </div>
       {support && (
         <div
-          className={`text-xs ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
+          className={`text-[14px] ${spends > refills ? 'text-amber-200/90' : 'text-stone-400'}`}
           data-testid="mana-support"
         >
           Spends {spends}/s · your build refills {refills}/s
@@ -254,9 +274,7 @@ export function ChainEditor(props: ChainEditorProps) {
 
         {chain && !fixedShape && (
           <section className="flex flex-col gap-1.5">
-            <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-              Pay with
-            </div>
+            <h3 className="k-label m-0">Pay with</h3>
             <div className="flex flex-wrap gap-1.5">
               {PAYMENTS.map(([p, label]) => (
                 <Chip
@@ -269,7 +287,7 @@ export function ChainEditor(props: ChainEditorProps) {
                 </Chip>
               ))}
             </div>
-            <div className="text-[11px] text-stone-500">
+            <div className="k-caption">
               {PAYMENTS.find(([p]) => p === chain.payment)![2]} One payment for every move.
             </div>
           </section>
@@ -279,9 +297,7 @@ export function ChainEditor(props: ChainEditorProps) {
       {!fixedShape &&
         (mana ?? (
           <section className="flex flex-col gap-1.5">
-            <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-              Attunement
-            </div>
+            <h3 className="k-label m-0">Attunement</h3>
             <AttunementBars stats={stats} />
           </section>
         ))}

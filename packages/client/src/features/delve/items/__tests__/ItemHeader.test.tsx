@@ -32,7 +32,9 @@ describe('ItemHeader', () => {
     });
     expect(document.body).toHaveTextContent(/Rare .+ · Weapon/);
     expect(screen.getByTestId('item-mana')).toHaveTextContent(/Frost \+\d+ · not your element$/);
-    expect(document.body).toHaveTextContent('🎯 Ranged');
+    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Ranged$/);
+    expect(screen.getByTestId('item-attack').querySelector('[data-glyph="bolt"]')).not.toBeNull();
+    expect(screen.getByTestId('item-mana').querySelector('[data-glyph="frost"]')).not.toBeNull();
     expect(screen.getByTestId('item-tempo')).toHaveTextContent(/^Tempo [\d.]+×: /);
     expect(document.body).toHaveTextContent('iLvl 7');
     expect(document.body).toHaveTextContent('+2 forged');
@@ -46,8 +48,15 @@ describe('ItemHeader', () => {
     expect(screen.getByRole('button', { name: `${sword.name}, common` })).toHaveStyle({
       width: '72px',
     });
-    expect(screen.getByTestId('item-mana')).toHaveTextContent(/^🔥 Fire \+1$/);
-    expect(document.body).toHaveTextContent('⚔️ Melee');
+    expect(screen.getByTestId('item-mana')).toHaveTextContent(/^Fire \+1$/);
+    expect(screen.getByTestId('item-attack')).toHaveTextContent(/^Melee$/);
+    expect(screen.getByTestId('item-attack').querySelector('[data-glyph="attack"]')).not.toBeNull();
     expect(document.body).toHaveTextContent('Equipped');
+  });
+
+  it('wears kit glyphs, not emoji, and no text under 14 px', () => {
+    const { container } = render(<ItemHeader item={bow()} />);
+    expect(container.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(container.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
   });
 });

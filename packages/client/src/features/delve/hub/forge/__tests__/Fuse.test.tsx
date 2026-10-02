@@ -75,6 +75,30 @@ describe('Fuse (Alloy Fusion)', () => {
     expect(made.rarity).toBe('epic');
     fireEvent.click(within(screen.getByTestId('fusion-result')).getByRole('button'));
     expect(onResult).toHaveBeenCalledWith(made.uid);
+    expect(HTMLElement.prototype.animate).toHaveBeenCalled(); // the inputs converge
+  });
+
+  it('under reduced motion, fuses without the converging tiles or the pop', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({ matches: q === '(prefers-reduced-motion: reduce)' })),
+    );
+    try {
+      store().setProfile({
+        ...store().profile,
+        scrap: 9999,
+        bag: [rareSword('a'), rareSword('b'), rareSword('c')],
+      });
+      render(<Fuse onResult={() => {}} />);
+      fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
+      fireEvent.click(screen.getByText('Auto-pick'));
+      await act(async () => fireEvent.click(screen.getByTestId('fuse-button')));
+      await act(() => new Promise((r) => requestAnimationFrame(() => r(undefined))));
+      expect(store().profile.bag.map((i) => i.rarity)).toEqual(['epic']);
+      expect(HTMLElement.prototype.animate).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('says what it needs when the purse is short', () => {
