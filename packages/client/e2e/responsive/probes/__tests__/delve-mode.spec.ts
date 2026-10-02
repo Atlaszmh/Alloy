@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { minSize } from '../min-size';
 import { pageScroll } from '../overflow';
+import { primaryActionReachable } from '../reachability';
 import { tabBarVisibility } from '../tabbar';
 import { PC_VIEWPORTS } from '../../viewports';
 
@@ -57,4 +58,13 @@ test('page-scroll: a tall page fails; a control cut off fails unless a pane scro
   await page.setContent(frame(`
     <div style="height:100px;overflow:auto"><div style="height:200px"></div><button>x</button></div>`));
   expect(await pageScroll(page, CTX)).toEqual([]);
+});
+
+test('reachability: a Delve primary action takes the 24 px click floor, not the 36 px touch one', async ({
+  page,
+}) => {
+  await page.setContent(frame('<button data-primary-action style="width:100px;height:30px">Delve</button>'));
+  expect(await primaryActionReachable(page, CTX)).toEqual([]);
+  await page.setContent(frame('<button data-primary-action style="width:100px;height:20px">Delve</button>'));
+  expect((await primaryActionReachable(page, CTX))[0]?.severity).toBe('fail');
 });
