@@ -172,9 +172,11 @@ export function rollMaterialDrops(
  * kill scrap split into `drops.scrapPickups[kind]` pickups (each at least 1),
  * every material and the pattern their own. A boss that takes the first
  * essence's guarantee clears it for the floor; a dropped pattern won't drop
- * again this floor. `killMonster` calls it inside its `!world.sandbox` guard.
+ * again this floor, nor any from a foe that already gave gear or a pattern
+ * this dive (`given`: a replayed floor; see `LootContext.dropsGiven`).
+ * `killMonster` calls it inside its `!world.sandbox` guard.
  */
-export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): void {
+export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number, given = false): void {
   const { world, registry } = ctx;
   const rng = world.materialRng;
   const loot = world.loot;
@@ -213,7 +215,8 @@ export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): voi
   }
   for (const { material, amount } of rolled.materials)
     spawn({ kind: 'material', amount, material });
-  if (rolled.pattern) {
+  if (rolled.pattern && !given) {
+    if (!loot.dropsGiven.includes(m.id)) loot.dropsGiven.push(m.id);
     loot.patterns = [...loot.patterns, rolled.pattern];
     spawn({ kind: 'pattern', amount: 1, pattern: rolled.pattern });
   }

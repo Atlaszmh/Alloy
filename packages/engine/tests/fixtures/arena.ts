@@ -115,6 +115,7 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
       legendaryBoost: 1,
       firstEssence: false,
       patterns: [],
+      dropsGiven: [],
       pair: [],
     },
   });

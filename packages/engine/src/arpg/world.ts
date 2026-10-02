@@ -388,7 +388,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     zones: [],
     drops: [],
     nextId: 1,
-    loot: { ...opts.loot },
+    loot: { ...opts.loot, dropsGiven: [...opts.loot.dropsGiven] },
     pending: emptyPending(true),
     totalMonsters: 0,
     bossId: null,

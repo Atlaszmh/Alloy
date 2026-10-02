@@ -227,6 +227,7 @@ const DiveSchema = z.object({
   banked: HaulSchema,
   lost: HaulSchema.nullable(),
   settled: z.boolean(),
+  dropsGiven: z.array(z.number().int()).default([]),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
 });

@@ -668,6 +668,12 @@ export interface LootContext {
   firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
   patterns: string[];
+  /**
+   * Foes of this depth (by id) that already dropped gear or a pattern this dive
+   * (`DiveState.dropsGiven`): a replayed floor's foe drops neither again.
+   * `dropLoot` and `dropMaterials` add to it; `bankWorld` keeps it on the dive.
+   */
+  dropsGiven: number[];
   /** The hero's pair, primary first (empty before the choice): drops lean toward it. */
   pair: ManaType[];
 }

@@ -59,6 +59,7 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     banked: emptyHaul(),
     lost: null,
     settled: false,
+    dropsGiven: [],
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -103,6 +104,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
       firstEssence: !profile.firstEssenceGiven,
       patterns: [...profile.patterns],
+      dropsGiven: [...dive.dropsGiven],
       pair: pairElements(profile.pair),
     },
   });
@@ -198,6 +200,7 @@ export function bankWorld(
       runesEarned: dive.runesEarned + runes.length,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
+      dropsGiven: [...world.loot.dropsGiven],
       found,
       bestFind,
     },
@@ -333,6 +336,7 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
       door,
       doorChoices: [],
       stop: null,
+      dropsGiven: [],
       phase: 'fighting',
     },
   };

@@ -116,6 +116,42 @@ describe('banking a floor', () => {
   });
 });
 
+describe('a replayed floor', () => {
+  it("doesn't drop again the gear or patterns its foes gave this dive: clear, bank, restart × 4", () => {
+    const boss = registry.getDelveBalance().drops.boss;
+    const chance = boss.patternChance;
+    boss.patternChance = 1;
+    try {
+      const start = diving(3);
+      let p: DelveProfile = { ...start, dive: { ...start.dive!, depth: 5 } };
+      const gear: number[] = [];
+      const learned: number[] = [];
+      for (let run = 0; run < 4; run++) {
+        // Each run after the first: left for the Anvil mid-floor, the floor starts over.
+        const world = beginFloor(registry, p);
+        clearFloor(world);
+        const res = bankWorld(registry, p, world);
+        gear.push(res.kept.length + res.salvaged.length);
+        learned.push(res.patterns.length);
+        p = res.profile;
+      }
+      expect(gear[0]).toBeGreaterThan(0);
+      expect(learned[0]).toBeGreaterThan(0);
+      expect(gear.slice(1)).toEqual([0, 0, 0]);
+      expect(learned.slice(1)).toEqual([0, 0, 0]);
+      // The record is this depth's: the next depth's foes drop as ever.
+      const world = beginFloor(registry, p);
+      clearFloor(world);
+      const done = completeFloor(registry, p, world).profile;
+      const next = chooseDoor(registry, done, done.dive!.doorChoices[0]);
+      expect(next.dive!.dropsGiven).toEqual([]);
+      expect(beginFloor(registry, next).loot.dropsGiven).toEqual([]);
+    } finally {
+      boss.patternChance = chance;
+    }
+  });
+});
+
 describe('settling a dive', () => {
   const loss = registry.getDelveBalance().crafting.deathLoss;
   /** A haul with a bit of everything: bars, flux, shards, an essence, scrap, Mana Dust, Links and runes. */
