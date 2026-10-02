@@ -20,6 +20,7 @@ import { isDiveActive } from './dive.js';
 import { settleParts, type SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
+import { rollFloor } from '../loot/forge.js';
 import { addToPouch, socketCap } from '../loot/runes.js';
 import type { RuneRef } from '../types/rune.js';
 import type { ShardRef } from '../types/crafting.js';
@@ -540,7 +541,8 @@ export function reforgeGear(
     return { ok: false, profile, reason: 'No such affix' };
   const cost = reforgeCost(registry, found.item);
   if (profile.scrap < cost) return { ok: false, profile, reason: 'Not enough scrap' };
-  const item = reforgeAffix(registry, found.item, affixIndex, forgeRng(profile));
+  const floor = rollFloor(registry, profile, found.item.mana);
+  const item = reforgeAffix(registry, found.item, affixIndex, forgeRng(profile), floor);
   return {
     ok: true,
     item,
