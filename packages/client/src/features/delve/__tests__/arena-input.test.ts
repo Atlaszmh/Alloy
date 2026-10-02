@@ -231,6 +231,20 @@ describe('loot labels and the journal', () => {
     expect(input.labels).toBe(false);
   });
 
+  it('a game key pressed with Alt held has its default prevented (no browser menu)', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const send = (code: string, repeat = false) => {
+      const e = new KeyboardEvent('keydown', { code, altKey: true, repeat, cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(send('AltLeft')).toBe(true);
+    expect(send('KeyE')).toBe(true);
+    expect(send('KeyE', true)).toBe(true);
+    expect(send('KeyZ')).toBe(false); // unbound
+  });
+
   it("J and the pad's View press the topmost scope's Journal", () => {
     const input = createArenaInput();
     detach = attachKeyboard(input, () => true);

@@ -309,9 +309,11 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       return;
     }
     const action = keyAction(e.code);
+    // Every game key but the menu's keeps its default (Alt held for the labels and E would
+    // open the browser's menu), its repeats too.
+    if (action && action !== 'menu') e.preventDefault();
     if (action === 'labels') {
       input.labels = true;
-      e.preventDefault();
       return;
     }
     if (!action || e.repeat) return;
@@ -322,16 +324,13 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.aiming = { slot, since: performance.now(), at: null };
     } else if (action === 'dodge') {
       input.dodge = true;
-      e.preventDefault();
     } else if (action === 'potion') {
       input.potion = true;
-      e.preventDefault();
     } else if (action === 'attack') {
       input.attackHeld = true;
       input.attackTap = true;
       input.attackAim = input.mouse;
     } else if (action === 'journal') {
-      e.preventDefault();
       pressJournal();
     }
   };
