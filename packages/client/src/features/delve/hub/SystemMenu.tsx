@@ -38,7 +38,7 @@ export function SystemMenu({
   return (
     <Dialog title="Menu" onClose={onClose} width={440} testId="system-menu">
       <div className="flex flex-col gap-3">
-        <Button variant="primary" size="lg" onClick={onClose} testId="menu-resume">
+        <Button variant="primary" size="lg" onClick={onClose} testId="menu-resume" data-pad-first>
           Resume
         </Button>
         <Button onClick={() => setView('controls')} testId="open-controls">
