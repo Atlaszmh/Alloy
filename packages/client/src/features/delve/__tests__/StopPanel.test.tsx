@@ -167,6 +167,20 @@ describe('StopPanel (the stop between depths)', () => {
     expect(why).toHaveTextContent('Not enough Mana Dust');
   });
 
+  it("the Upgrade card's price is a number: the cheapest upgrade on offer", () => {
+    atStop(['upgrade']);
+    const { equipped, bag } = store().profile;
+    const costs = [...Object.values(equipped), ...bag].flatMap((i) => {
+      const c = i ? upgradeCost(registry, i) : null;
+      return c === null ? [] : [c];
+    });
+    const min = Math.min(...costs);
+    const price = within(screen.getByTestId('stop-upgrade')).getByTestId('stop-price');
+    expect(price).toHaveTextContent(
+      new RegExp(`^${new Set(costs).size > 1 ? 'from ' : ''}${min} scrap$`),
+    );
+  });
+
   it('an unaffordable upgrade is dimmed, and taking it says why, keeping the stop open', () => {
     const cost = upgradeCost(registry, helm)!;
     atStop(['upgrade'], { scrap: cost - 1 });
