@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TabBar } from './TabBar';
 import { SettingsDrawer } from './SettingsDrawer';
@@ -33,8 +33,9 @@ export function AppShell() {
   useEffect(() => (isDelve ? attachPromptKeys() : undefined), [isDelve]);
 
   // The Delve UI's zooms, on :root (quarter steps; see prompts.ts), mirrored into uiStore.
+  // A layout effect, so the first paint is already at the right zoom.
   const hudSetting = useUIStore((s) => s.hudScale);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     const apply = () => {
       const ui = uiScaleFor(window.innerWidth, window.innerHeight);

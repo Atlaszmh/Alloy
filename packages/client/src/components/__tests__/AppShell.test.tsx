@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { useEffect } from 'react';
 import { act, render } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { AppShell } from '../AppShell';
@@ -67,6 +68,28 @@ describe('AppShell', () => {
     expect(useUIStore.getState().uiScale).toBe(1.25);
     act(() => useUIStore.getState().setHudScale(1.25));
     expect(rootVar('--hud-scale')).toBe('1.5');
+  });
+
+  it('sets --ui-scale before the first paint, ahead of any page effect', () => {
+    resize(2560, 1440);
+    document.documentElement.style.removeProperty('--ui-scale');
+    let seen = '';
+    function Reader() {
+      useEffect(() => {
+        seen = rootVar('--ui-scale');
+      }, []);
+      return null;
+    }
+    render(
+      <MemoryRouter initialEntries={['/delve']}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="*" element={<Reader />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(seen).toBe('1.25');
   });
 
   it("binds Esc to the page's back on Delve routes only", () => {
