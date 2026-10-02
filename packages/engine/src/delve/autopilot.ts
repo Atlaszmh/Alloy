@@ -2,7 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
-import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
+import { RARITY_ORDER } from '../types/gem.js';
 import type { ManaType } from '../types/mana.js';
 import {
   FLUX_GRADES,
@@ -432,8 +432,8 @@ function upgradeAll(registry: DataRegistry, profile: DelveProfile): DelveProfile
 const FORGE_ORDER: readonly GearSlot[] = ['weapon', 'chest', 'helm', 'gloves', 'boots', 'amulet', 'ring'];
 /** The slots it forges in its primary (the weapon and two armour pieces); the rest in its secondary, so both grow. */
 const PRIMARY_SLOTS: readonly GearSlot[] = ['weapon', 'chest', 'helm'];
-/** Item levels a forge must gain on its slot's item at the same rarity. */
-const ILVL_STEP = 5;
+/** The least Power (a fraction) a forge must add for the bot to spend its materials on it. */
+const MIN_FORGE_GAIN = 0.01;
 
 /** The affixes it wants on an item of `element`, most wanted first: its shards go to these. */
 function wanted(p: DelveProfile, element: ManaType): HeroStatKey[] {
@@ -519,28 +519,33 @@ function planForge(
 
 /**
  * Forge `slot`'s planned item with the highest bar it can pay for, when that
- * beats what the slot wears: a rarer one, or as rare and `ILVL_STEP` item
- * levels higher (an empty slot takes anything). Null when it doesn't forge.
+ * raises Power by `MIN_FORGE_GAIN` (`compareItem`; a weapon valued as a home
+ * for its moveset), whatever the rarities: a better item replaces a low-level
+ * legendary. Null when it doesn't forge.
  */
 function forgeSlot(registry: DataRegistry, p: DelveProfile, slot: GearSlot): DelveProfile | null {
-  const now = p.equipped[slot];
   for (const metal of [...METAL_IDS].reverse()) {
     if (p.materials.metals[metal] === 0) continue;
     const req = planForge(registry, p, slot, metal);
     if (!req) return null;
-    const preview = previewForge(registry, p, req);
-    const up = now ? rarityIndex(preview.rarity) - rarityIndex(now.rarity) : 1;
-    if (up < 0 || (up === 0 && preview.ilvl < now!.ilvl + ILVL_STEP)) return null;
-    if (preview.refused) continue;
     const res = forge(registry, p, req);
-    return res.ok ? res.profile : null;
+    if (!res.ok) continue; // can't pay: a lower bar costs less
+    const gain = compareItem(p.equipped, res.item!, registry, referenceDepth(p), p.pair).powerPct;
+    return gain >= MIN_FORGE_GAIN ? res.profile : null; // a lower bar only forges lower
   }
   return null;
 }
 
-/** Whether it holds an essence and epic flux for a slot it knows a pattern for: a legendary to forge. */
+/**
+ * Whether it holds an essence and epic flux for a slot it knows a pattern for
+ * and can't yet pay to forge it: its scrap waits for the legendary (one it
+ * forgoes as no better than what it wears holds nothing back).
+ */
 function legendaryWaits(registry: DataRegistry, p: DelveProfile): boolean {
-  return FORGE_ORDER.some((slot) => planForge(registry, p, slot)?.essence !== undefined);
+  return FORGE_ORDER.some((slot) => {
+    const req = planForge(registry, p, slot);
+    return req?.essence !== undefined && previewForge(registry, p, req).refused !== null;
+  });
 }
 
 /**
@@ -551,16 +556,21 @@ function legendaryWaits(registry: DataRegistry, p: DelveProfile): boolean {
  */
 function forgeGear(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   let p = profile;
-  const done = FORGE_ORDER.find((slot) => planForge(registry, p, slot)?.essence !== undefined);
-  if (done) p = forgeSlot(registry, p, done) ?? p;
+  const done = FORGE_ORDER.find((slot) => {
+    if (planForge(registry, p, slot)?.essence === undefined) return false;
+    const next = forgeSlot(registry, p, slot);
+    if (next) p = next;
+    return next !== null;
+  });
   if (legendaryWaits(registry, p)) return p;
   for (const slot of FORGE_ORDER) if (slot !== done) p = forgeSlot(registry, p, slot) ?? p;
   return p;
 }
 
 /**
- * Refine flux up wherever it holds a triple, the lowest grade first so a
- * refined one can make a triple above it; and, while its best bar's band ends
+ * Refine flux up wherever it holds a triple and could still pay to forge its
+ * weapon after (else the forge takes the flux as it is), the lowest grade
+ * first so a refined one can make a triple above it; and, while its best bar's band ends
  * below its deepest depth (a forge's item level stops there), the highest bar
  * it holds a triple of.
  */
@@ -571,7 +581,19 @@ function refineSurplus(registry: DataRegistry, profile: DelveProfile): DelveProf
     if (res.ok) p = res.profile;
     return res.ok;
   };
-  for (const grade of FLUX_GRADES) while (step({ kind: 'flux', grade }));
+  // Flux only while it can also pay to forge the weapon with the refined grade, on its cheapest
+  // bar (else it forges with what it holds).
+  const forgeable = (q: DelveProfile) => {
+    const req = planForge(registry, q, 'weapon', METAL_IDS.find((m) => q.materials.metals[m] > 0));
+    const code = req && previewForge(registry, q, req).refused?.code;
+    return code !== 'scrap' && code !== 'dust';
+  };
+  for (const grade of FLUX_GRADES)
+    for (;;) {
+      const res = refine(registry, p, { kind: 'flux', grade });
+      if (!res.ok || !forgeable(res.profile)) break;
+      p = res.profile;
+    }
   const metals = [...registry.getCraftingData().metals].reverse();
   const count = registry.getDelveBalance().crafting.refine.metal.count;
   for (;;) {
@@ -742,6 +764,7 @@ export function runAutopilot(
     p = startDive(registry, p, startDepth);
     let seconds = 0;
     let result: AutopilotDiveReport['result'] = 'dead';
+    let stops = emptyHaul();
 
     while (p.dive && (p.dive.phase === 'fighting' || p.dive.phase === 'choosing')) {
       if (p.dive.phase === 'fighting') {
@@ -750,7 +773,9 @@ export function runAutopilot(
         seconds += played.seconds;
         continue;
       }
+      const before = p;
       p = takeBestStop(registry, p);
+      stops = addHaul(stops, outflow(before, p));
       if (p.dive!.depth >= maxDepth) {
         p = extractDive(registry, p);
         result = 'capped';
@@ -785,6 +810,7 @@ export function runAutopilot(
       dive: n + 1,
       income: diveIncome(p),
       spent: visit.spent,
+      stops,
       lost: dive.lost,
       forged,
       depth: dive.depth,

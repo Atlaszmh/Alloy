@@ -7,6 +7,7 @@ import { createDelveProfile } from '../src/delve/profile.js';
 import { honeCost } from '../src/loot/forge.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { emptyMaterials, withMaterial } from '../src/loot/materials.js';
+import { movesetOf } from '../src/loot/moveset.js';
 import { upgradeCost } from '../src/loot/smithing.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { Haul, MaterialRef } from '../src/types/crafting.js';
@@ -33,14 +34,18 @@ describe('economySim', () => {
     for (const d of report.dives) {
       expect(Object.keys(d.forged)).toEqual(RARITY_ORDER);
       expect(d.lost === null).toBe(!d.died);
-      for (const h of [d.income, d.salvaged, d.spent, ...(d.lost ? [d.lost] : [])]) {
+      // Each material exact: the stops' spend is its own, never netted against the Anvil's gains.
+      for (const h of [d.income, d.salvaged, d.spent, d.stops, ...(d.lost ? [d.lost] : [])]) {
         const counts = [
           h.scrap,
           h.dust,
           h.links,
           ...Object.values(h.metals),
           ...Object.values(h.flux),
-        ];
+          ...Object.values(h.essences),
+          ...Object.values(h.shards).flat(),
+          ...Object.values(h.runes).flat(),
+        ] as number[];
         expect(Math.min(...counts)).toBeGreaterThanOrEqual(0);
       }
     }
@@ -163,6 +168,58 @@ describe('the autopilot at the Anvil', () => {
     expect(after.materials.flux).toEqual({ uncommon: 1, magic: 2, rare: 0, epic: 0 });
     expect(after.materials.metals).toMatchObject({ rusty: 0, iron: 0, steel: 1 });
     expect(after.scrap).toBe(0);
+  });
+
+  it("keeps a flux triple when it couldn't then pay to forge the refined grade, and forges with what it holds", () => {
+    const materials = withMaterial(
+      pouch(3, { kind: 'flux', grade: 'uncommon' }),
+      { kind: 'metal', metal: 'rusty' },
+      1,
+    );
+    // Item level 4 (Rusty, depth 6): an uncommon forge fits in 50 scrap; refining and a magic one don't.
+    const p = hero({ materials, scrap: 50 });
+    const after = betweenDives(registry, p);
+    expect(after.equipped.weapon).toMatchObject({ rarity: 'uncommon', ilvl: 4 });
+    expect(after.materials.flux).toEqual({ uncommon: 2, magic: 0, rare: 0, epic: 0 });
+  });
+
+  it('forges by Power, not rarity: a better rare replaces a low-level legendary', () => {
+    const old = generateItem(
+      registry,
+      { uid: 'L', ilvl: 1, rarity: 'legendary', slot: 'chest', legendaryId: 'bedrock', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    const materials = withMaterial(
+      pouch(2, { kind: 'flux', grade: 'rare' }),
+      { kind: 'metal', metal: 'adamant' },
+      2,
+    );
+    const p = hero({ materials, bestDepth: 30, scrap: 1e5 });
+    const after = betweenDives(registry, { ...p, equipped: { ...p.equipped, chest: old } });
+    expect(after.equipped.chest).toMatchObject({ rarity: 'rare', ilvl: 30 });
+  });
+
+  it("keeps spending Links when the legendary it could forge is no better than what it wears", () => {
+    const worn = generateItem(
+      registry,
+      { uid: 'W', ilvl: 30, rarity: 'legendary', slot: 'weapon', baseId: 'sword', legendaryId: 'twin_fang', mana: 'fire' },
+      new SeededRNG(5),
+    );
+    // A Twin Fang essence (weapon or gloves; no gloves pattern) and only a Rusty bar: an item level 4 legendary.
+    const materials = pouch(
+      1,
+      { kind: 'flux', grade: 'epic' },
+      { kind: 'essence', essence: 'twin_fang' },
+      { kind: 'metal', metal: 'rusty' },
+    );
+    const p = hero({ materials, bestDepth: 30, scrap: 1e5, links: 20 });
+    const after = betweenDives(registry, { ...p, equipped: { ...p.equipped, weapon: worn } });
+    expect(after.equipped.weapon!.uid).toBe('W');
+    expect(after.materials.essences.twin_fang).toBe(1);
+    expect(after.links).toBeLessThan(20);
+    expect(movesetOf(registry, after.equipped.weapon!).slots.primary).toBeGreaterThan(
+      movesetOf(registry, worn).slots.primary!,
+    );
   });
 
   it('buys the tier I shard that makes a triple of an affix it wants, and refines it', () => {

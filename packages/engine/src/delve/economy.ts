@@ -12,6 +12,8 @@ export interface EconomyDive {
   income: Haul;
   /** What the Anvil spent between this dive and the next: forging, refining, buying, Links, runes, honing, upgrades. */
   spent: Haul;
+  /** What the stops spent from the stockpile during the dive (beyond what the dive had banked). */
+  stops: Haul;
   /** What a death or an abandon lost: the floor's haul and the death share (null: nothing). */
   lost: Haul | null;
   /** Items forged on the Anvil visit after it, by rarity (every rarity, 0 where none). */
@@ -65,8 +67,8 @@ function mapHaul(h: Haul, f: (n: number) => number): Haul {
  * economy dive by dive: the DPS Lab's Economy view and the pacing rails.
  * It plays one dive at a time from the profile before it (as one run does), so
  * each dive's change to the stockpile is known: what the autopilot reports
- * (`income`, the Anvil's spend) leaves the Anvil's gains less the stops'
- * spend. Plain data, so it crosses a worker's boundary.
+ * (`income`, the Anvil's and the stops' spend) leaves the Anvil's gains, each
+ * material exact. Plain data, so it crosses a worker's boundary.
  */
 export function economySim(
   registry: DataRegistry,
@@ -79,25 +81,13 @@ export function economySim(
   for (let n = 0; n < dives; n++) {
     const run = runAutopilot(registry, { seed, dives: 1, profile });
     const [row] = run.economy;
-    // The stockpile's change, less the income, plus the Anvil's spend: the Anvil's gains less the stops' spend.
-    const delta = addHaul(
-      stockOf(run.profile),
-      mapHaul(stockOf(profile), (x) => -x),
+    // The stockpile's change, less the income, plus what the Anvil and the stops spent: the Anvil's gains.
+    const delta = addHaul(stockOf(run.profile), mapHaul(stockOf(profile), (x) => -x));
+    const salvaged = addHaul(
+      addHaul(delta, mapHaul(row.income, (x) => -x)),
+      addHaul(row.spent, row.stops),
     );
-    const rest = addHaul(
-      addHaul(
-        delta,
-        mapHaul(row.income, (x) => -x),
-      ),
-      row.spent,
-    );
-    // Scrap splits exactly: the report's scrap is the stockpile's after the dive, before the Anvil.
-    const stopScrap = profile.scrap + row.income.scrap - run.reports[0].scrap;
-    // ponytail: Mana Dust, Links and runes net the stops' spend against the Anvil's gains (the
-    // autopilot reports neither): report the stops' spend from the autopilot to split them.
-    const salvaged = { ...mapHaul(rest, (x) => Math.max(0, x)), scrap: rest.scrap + stopScrap };
-    const stops = { ...mapHaul(rest, (x) => Math.max(0, -x)), scrap: stopScrap };
-    out.push({ ...row, dive: n + 1, salvaged, spent: addHaul(row.spent, stops) });
+    out.push({ ...row, dive: n + 1, salvaged, spent: addHaul(row.spent, row.stops) });
     profile = run.profile;
   }
   return { seed, dives: out, profile };
