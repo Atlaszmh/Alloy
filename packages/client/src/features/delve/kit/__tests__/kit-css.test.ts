@@ -26,6 +26,10 @@ describe('kit.css', () => {
     expect(css).not.toMatch(/fonts\.googleapis|fonts\.gstatic/);
   });
 
+  it("lets a click through a button's glyph, which swaps when the input device does", () => {
+    expect(rule(css, '.k-glyph-row')).toContain('pointer-events: none;');
+  });
+
   it('keeps the zoom off .delve-ui, on its own two classes', () => {
     expect(rule(css, '.delve-zoom')).toContain('zoom: var(--ui-scale, 1);');
     expect(rule(css, '.delve-hud-zoom')).toContain('zoom: var(--hud-scale, 1);');

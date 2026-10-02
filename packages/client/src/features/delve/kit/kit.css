@@ -303,10 +303,13 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 /* ── Glyphs ── */
 
+/* A click on a button's glyph lands on the button: the glyph swaps with the input device, and a
+   press whose target is swapped away mid-click never clicks. */
 .k-glyph-row {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  pointer-events: none;
 }
 
 .k-key,
