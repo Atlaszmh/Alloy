@@ -150,18 +150,30 @@ export interface BiomeDef {
 }
 
 export interface DoorMods {
-  magicFind?: number;
   monsterHp?: number;
   monsterDmg?: number;
   /** Chance each pack is an elite pack (overrides the base chance if higher). */
   eliteChance?: number;
   bountyMult?: number;
-  dropMult?: number;
   healFull?: boolean;
   potions?: number;
   skip?: number;
   /** Multiplier on the number of monster packs. */
   packs?: number;
+  /** Multiplies every material entry's drop chance, at most 1 (default 1; see the crafting spec). */
+  materials?: number;
+  /** Multiplies a normal or elite foe's rune chance. */
+  runes?: number;
+  /** Multiplies an elite's gear chance. */
+  gear?: number;
+  /** Multiplies the flux chance. */
+  flux?: number;
+  /** Multiplies the essence chance. */
+  essence?: number;
+  /** Chance a shard or flux drop comes a tier or grade up (default 0). */
+  shardTier?: number;
+  /** Added to Find, in percentage points. */
+  find?: number;
 }
 
 export interface DoorDef {
@@ -576,7 +588,7 @@ export interface DelveBalance {
     fuseCount: number;
     /** Scrap a fuse costs, by the tier it makes: II, III, IV, V. */
     fuseScrap: number[];
-    /** A foe's chance to drop a rune, by its kind (normal and elite × the door's `dropMult`, at most 1). */
+    /** A foe's chance to drop a rune, by its kind (normal and elite × the door's `runes`, at most 1). */
     dropChance: Record<MonsterKind, number>;
     /** The depth each tier starts at, I to V. */
     tierDepths: number[];
@@ -694,7 +706,7 @@ export interface HeroStats {
   /** 0–1 fraction of max HP */
   healOnKill: number;
   thorns: number;
-  /** Percentage points */
+  /** Find (the `magicFind` stat), in percentage points: shard and flux drops come a tier or grade up. */
   magicFind: number;
   /** Percentage points */
   scrapFind: number;

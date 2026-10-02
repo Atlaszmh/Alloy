@@ -108,12 +108,12 @@ describe('rune drops: tiers and chances', () => {
     expect(tiers(90)[5]).toBe(4000);
   });
 
-  it("drops at its kind's chance × the door's multiplier (at most 1); a boss always drops one", () => {
-    const rate = (kind: MonsterKind, dropMult: number) => {
+  it("drops at its kind's chance × the door's `runes` (at most 1); a boss always drops one", () => {
+    const rate = (kind: MonsterKind, runes: number) => {
       const rng = new SeededRNG(11);
       let got = 0;
       for (let i = 0; i < 20000; i++)
-        if (rollRuneDrop(registry, { depth: 5, kind, dropMult }, rng)) got++;
+        if (rollRuneDrop(registry, { depth: 5, kind, runes }, rng)) got++;
       return got / 20000;
     };
     expect(R.dropChance).toEqual({ normal: 0.03, elite: 0.15, boss: 1 });
@@ -130,7 +130,7 @@ describe('rune drops: tiers and chances', () => {
     const counts = new Map<string, number>();
     const tiers = new Set<number>();
     for (let i = 0; i < 14000; i++) {
-      const r = rollRuneDrop(registry, { depth: 13, kind: 'boss', dropMult: 1 }, rng)!;
+      const r = rollRuneDrop(registry, { depth: 13, kind: 'boss', runes: 1 }, rng)!;
       counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
       tiers.add(r.tier);
     }

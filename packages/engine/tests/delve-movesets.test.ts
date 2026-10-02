@@ -292,8 +292,8 @@ describe('determinism', () => {
     let ctx = {
       depth: 5,
       kind: 'boss' as const,
-      magicFind: 40,
-      dropMult: 1,
+      find: 40,
+      materials: 1,
       legendaryBoost: 1,
       forceLegendary: true,
       nextUid: 1,

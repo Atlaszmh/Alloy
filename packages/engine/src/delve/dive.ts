@@ -92,9 +92,8 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     seed: floorSeed(dive),
     loot: {
       nextUid: profile.nextUid,
-      magicFind: stats.magicFind + (mods.magicFind ?? 0),
+      find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
-      dropMult: mods.dropMult ?? 1,
       forceLegendary: !profile.firstBossLegendaryGiven,
       pair: pairElements(profile.pair),
     },

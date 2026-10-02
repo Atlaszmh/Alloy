@@ -9,10 +9,10 @@ import { generateItem, rollRarity } from './item-generator.js';
 export interface DropContext {
   depth: number;
   kind: MonsterKind;
-  /** Total magic find in percentage points (gear + door). */
-  magicFind: number;
-  /** Door drop multiplier (1 = normal). */
-  dropMult: number;
+  /** Total Find in percentage points (gear + door). */
+  find: number;
+  /** ponytail: the door's `materials` (1 = normal) stands in for its old `dropMult` on the gear counts until B1. */
+  materials: number;
   legendaryBoost: number;
   /** First boss kill ever: guarantee the hook legendary. */
   forceLegendary: boolean;
@@ -44,23 +44,23 @@ function dropCount(ctx: DropContext, rng: SeededRNG): number {
   const loot = GEAR_TODAY;
   switch (ctx.kind) {
     case 'normal': {
-      let n = rng.next() < Math.min(1, loot.normal * ctx.dropMult) ? 1 : 0;
-      if (rng.next() < Math.min(1, loot.extra * ctx.dropMult)) n++;
+      let n = rng.next() < Math.min(1, loot.normal * ctx.materials) ? 1 : 0;
+      if (rng.next() < Math.min(1, loot.extra * ctx.materials)) n++;
       return n;
     }
     case 'elite':
-      return stochasticRound(rng.nextInt(loot.elite[0], loot.elite[1]) * ctx.dropMult, rng);
+      return stochasticRound(rng.nextInt(loot.elite[0], loot.elite[1]) * ctx.materials, rng);
     case 'boss':
-      return Math.max(1, stochasticRound(rng.nextInt(loot.boss[0], loot.boss[1]) * ctx.dropMult, rng));
+      return Math.max(1, stochasticRound(rng.nextInt(loot.boss[0], loot.boss[1]) * ctx.materials, rng));
   }
 }
 
-/** Luck from magic find, depth, and monster kind. */
-export function dropLuck(registry: DataRegistry, ctx: Pick<DropContext, 'depth' | 'kind' | 'magicFind'>): number {
+/** Luck from Find, depth, and monster kind. */
+export function dropLuck(registry: DataRegistry, ctx: Pick<DropContext, 'depth' | 'kind' | 'find'>): number {
   const loot = registry.getDelveBalance().loot;
   const kindLuck = ctx.kind === 'boss' ? loot.bossLuck : ctx.kind === 'elite' ? loot.eliteLuck : 0;
   const depthLuck = Math.min(loot.maxDepthLuck, (ctx.depth - 1) * loot.luckPerDepth);
-  return ctx.magicFind / 100 + depthLuck + kindLuck;
+  return ctx.find / 100 + depthLuck + kindLuck;
 }
 
 export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): DropResult {
@@ -99,17 +99,17 @@ export function runeTierAt(registry: DataRegistry, depth: number, rng: SeededRNG
 /**
  * A slain foe's rune, or null (see the runes spec): a boss drops one at
  * `runes.dropChance.boss`, a normal or elite foe at its kind's chance × the
- * door's `dropMult`, at most 1 (magic find plays no part). The rune is uniform
+ * door's `runes`, at most 1 (Find plays no part). The rune is uniform
  * over the data, its tier by depth (`runeTierAt`).
  */
 export function rollRuneDrop(
   registry: DataRegistry,
-  ctx: { depth: number; kind: MonsterKind; dropMult: number },
+  ctx: { depth: number; kind: MonsterKind; runes: number },
   rng: SeededRNG,
 ): RuneRef | null {
   const { dropChance } = registry.getDelveBalance().runes;
   const chance =
-    ctx.kind === 'boss' ? dropChance.boss : Math.min(1, dropChance[ctx.kind] * ctx.dropMult);
+    ctx.kind === 'boss' ? dropChance.boss : Math.min(1, dropChance[ctx.kind] * ctx.runes);
   if (rng.next() >= chance) return null;
   const runes = registry.getRunes();
   const { id } = runes[rng.nextInt(0, runes.length - 1)];

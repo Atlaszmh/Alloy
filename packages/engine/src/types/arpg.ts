@@ -649,9 +649,9 @@ export type ArpgEvent =
 
 export interface LootContext {
   nextUid: number;
-  magicFind: number;
+  /** Total Find in percentage points (gear + the door's `find`). The door's drop multipliers are `world.door`'s. */
+  find: number;
   legendaryBoost: number;
-  dropMult: number;
   /** First boss kill ever drops a guaranteed legendary. */
   forceLegendary: boolean;
   /** The hero's pair, primary first (empty before the choice): drops lean toward it. */

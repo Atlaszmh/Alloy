@@ -9,6 +9,9 @@ import balanceData from '../src/data/balance.json';
 import craftingData from '../src/data/crafting.json';
 import delveData from '../src/data/delve.json';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
+import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
+import { profileStats } from '../src/delve/pair.js';
 import { materialName, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { metalAt, shardTiersOf } from '../src/loot/materials.js';
 import { METAL_IDS } from '../src/types/crafting.js';
@@ -181,5 +184,41 @@ describe('Alloy Fusion is gone (refining flux replaces it)', () => {
     for (const name of ['fuseGear', 'fuseItems', 'checkFusion', 'fuseCost'])
       expect(name in engine, name).toBe(false);
     expect('fuseCost' in balanceData.delve.forge).toBe(false);
+  });
+});
+
+describe('doors: the drop multipliers and Find', () => {
+  const mods = (id: string) => registry.getDoor(id).mods;
+
+  it('trade magic find and the one drop multiplier for Find and one multiplier a drop', () => {
+    for (const door of registry.getDelveData().doors) {
+      expect('magicFind' in door.mods, door.id).toBe(false);
+      expect('dropMult' in door.mods, door.id).toBe(false);
+    }
+    expect(mods('gilded')).toMatchObject({ find: 75, flux: 1.5, essence: 1.5 });
+    // The Quiet Shrine: half the loot.
+    expect(mods('shrine')).toMatchObject({ materials: 0.5, runes: 0.5 });
+    expect(mods('swarm')).toMatchObject({ packs: 1.5, materials: 1.3 });
+    expect(mods('cursed').shardTier).toBeGreaterThan(0);
+  });
+
+  it('call magic find "Find", and Lucky Charm doubles the essence odds', () => {
+    expect(registry.getGearAffix('magicFind')!.label).toBe('Find');
+    expect(registry.getLegendary('lucky_charm').text).toBe('+{v}% Find. Essence odds doubled.');
+  });
+
+  it("adds the door's Find to the hero's, and keeps the door the dive stored", () => {
+    let p = startDive(registry, createDelveProfile(registry, 5, { primary: 'fire' }), 1);
+    const world = beginFloor(registry, p);
+    for (const m of world.monsters) killMonster(makeCtx(registry, world, []), m);
+    p = completeFloor(registry, p, world).profile;
+    p = { ...p, dive: { ...p.dive!, doorChoices: ['gilded'] } };
+    p = chooseDoor(registry, p, 'gilded');
+    const find = profileStats(registry, p).magicFind;
+    expect(beginFloor(registry, p).loot.find).toBe(find + 75);
+    const json = JSON.parse(JSON.stringify(p));
+    expect(parseDelveProfile(registry, json)!.profile.dive!.door).toEqual(
+      registry.getDoor('gilded'),
+    );
   });
 });

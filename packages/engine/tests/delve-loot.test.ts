@@ -232,8 +232,8 @@ describe('rollRarity', () => {
 describe('rollEncounterDrops', () => {
   const base = {
     depth: 5,
-    magicFind: 0,
-    dropMult: 1,
+    find: 0,
+    materials: 1,
     legendaryBoost: 1,
     forceLegendary: false,
     nextUid: 1,

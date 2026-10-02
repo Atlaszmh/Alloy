@@ -1085,8 +1085,8 @@ describe('drops lean toward the pair', () => {
     const ctx = {
       depth: 5,
       kind: 'elite' as const,
-      magicFind: 0,
-      dropMult: 1,
+      find: 0,
+      materials: 1,
       legendaryBoost: 1,
       forceLegendary: false,
       nextUid: 1,

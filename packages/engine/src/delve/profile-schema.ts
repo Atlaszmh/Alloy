@@ -157,16 +157,21 @@ const DoorSchema = z.object({
   icon: z.string(),
   weight: z.number(),
   mods: z.object({
-    magicFind: z.number().optional(),
     monsterHp: z.number().optional(),
     monsterDmg: z.number().optional(),
     eliteChance: z.number().optional(),
     bountyMult: z.number().optional(),
-    dropMult: z.number().optional(),
     healFull: z.boolean().optional(),
     potions: z.number().optional(),
     skip: z.number().optional(),
     packs: z.number().optional(),
+    materials: z.number().optional(),
+    runes: z.number().optional(),
+    gear: z.number().optional(),
+    flux: z.number().optional(),
+    essence: z.number().optional(),
+    shardTier: z.number().optional(),
+    find: z.number().optional(),
   }),
 });
 

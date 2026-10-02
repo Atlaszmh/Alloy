@@ -764,8 +764,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     {
       depth: world.depth,
       kind: m.kind,
-      magicFind: loot.magicFind,
-      dropMult: loot.dropMult,
+      find: loot.find,
+      materials: world.door?.mods.materials ?? 1,
       legendaryBoost: loot.legendaryBoost,
       forceLegendary,
       nextUid: loot.nextUid,
