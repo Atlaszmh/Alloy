@@ -801,3 +801,35 @@ html[data-input='gamepad'] .delve-ui :focus {
   color: #feae34;
   text-shadow: 1px 1px 0 #181425;
 }
+
+/* ── Tooltips ── */
+
+.k-tip {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.k-tipcard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.k-tipcard.k-glass {
+  padding: 14px 16px;
+  gap: 8px;
+}
+
+.k-tipcard-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.k-tipcard-head .k-disp {
+  font-size: 24px;
+}
