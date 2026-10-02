@@ -93,6 +93,11 @@
   shape-rendering: crispEdges;
 }
 
+/* A native slider is 16 px tall: 32 keeps it 24 CSS px at the 0.75 zoom floor (WCAG 2.5.8). */
+.delve-ui input[type='range'] {
+  height: 32px;
+}
+
 /* The zoom lives on these, never on .delve-ui (spec, decided item 31). */
 .delve-zoom {
   zoom: var(--ui-scale, 1);
@@ -401,7 +406,9 @@ html[data-input='gamepad'] .delve-ui :focus {
   white-space: nowrap;
 }
 
+/* At least 24 CSS px tall at the 0.75 zoom floor (WCAG 2.5.8 target size). */
 .k-prompt-btn {
+  min-height: 32px;
   background: none;
   border: 0;
   padding: 0;
