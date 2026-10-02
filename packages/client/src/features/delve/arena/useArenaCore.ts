@@ -33,6 +33,7 @@ import {
   attachKeyboard,
   createArenaInput,
   frameInput,
+  pressMenu,
   type Aiming,
   type ArenaInput,
 } from './input';
@@ -448,7 +449,7 @@ export function useArenaCore(
       const state = padState();
       if (!state || paused) return null;
       const acts = padToArena(state, takeArenaPresses(), useControlsStore.getState().config);
-      if (acts.menu) (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
+      if (acts.menu) pressMenu();
       return acts;
     }
 

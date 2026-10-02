@@ -1,24 +1,32 @@
 import { useEffect } from 'react';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
-import type { PadState } from './gamepad';
+import { navCapture, padPrompts, scopedLast, topScope } from '@/features/delve/kit/prompts';
+import type { PadButton, PadState } from './gamepad';
 import { startGamepad } from './gamepad-hub';
 import { pickNext, type NavDir, type NavRect } from './spatial-nav';
 
 /**
  * Controller navigation for every screen outside live combat: D-pad (or a
  * left-stick flick) moves focus to the nearest control in that direction
- * (left/right adjust a focused slider or list), A presses it, B presses the
- * visible `[data-pad-back]`, LB/RB step through the `[data-pad-tabs]` tabs
- * and Menu presses `[data-pad-menu]`. The last visible
+ * (left/right adjust a focused slider or list), A presses it. Every other
+ * button goes to the screen's prompts first (`padPrompts`, which also times
+ * the holds); one no prompt takes does its default: B presses the topmost
+ * scope's `[data-pad-back]`, Menu its `[data-pad-menu]` (else its back),
+ * LB/RB step its top-level `[data-pad-tabs]` and LT/RT its
+ * `[data-pad-tabs="sub"]`, past disabled tabs. The last visible
  * `[data-pad-scope]` (a sheet or overlay) keeps focus inside it, and while the
- * pad has the input lock the focus never gets lost (`keepFocus`). It also lets
- * the keys, the mouse and touch claim the lock (`claimDevices`).
+ * pad has the input lock the focus never gets lost (`keepFocus`, which starts
+ * a scope on its `[data-pad-first]`). `[data-pad-skip]` controls are never
+ * D-pad targets. While a card is carried (`captureNav`) the D-pad and A/B/X go
+ * to it. It also lets the keys, the mouse and touch claim the lock
+ * (`claimDevices`).
  */
 
 const FOCUSABLE =
   'button:not(:disabled), a[href], [role="tab"], input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const REPEAT_DELAY_MS = 350;
 const REPEAT_EVERY_MS = 150;
+const DPAD = new Set<PadButton>(['up', 'down', 'left', 'right']);
 
 function visible(el: HTMLElement): boolean {
   const r = el.getBoundingClientRect();
@@ -59,13 +67,10 @@ export function claimDevices(): () => void {
   };
 }
 
-function scope(): HTMLElement | Document {
-  const scopes = [...document.querySelectorAll<HTMLElement>('[data-pad-scope]')].filter(visible);
-  return scopes.at(-1) ?? document;
-}
-
 function candidates(): HTMLElement[] {
-  return [...scope().querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+  return [...topScope().querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+    (el) => visible(el) && !el.closest('[data-pad-skip]'),
+  );
 }
 
 /** The focus last seen in each scope, and where it was (it may have gone since). */
@@ -75,11 +80,12 @@ const lastFocus = new WeakMap<HTMLElement | Document, { el: HTMLElement; at: DOM
  * Run each frame: while the pad has the input lock, a focus that isn't on a
  * visible control in the current scope (it unmounted, or a scope opened) goes
  * back to the scope's last focused control, else the one nearest where it
- * was, else the first. Under the keys or the mouse the focus is left alone.
+ * was, else its `[data-pad-first]`, else the first. Under the keys or the
+ * mouse the focus is left alone.
  * It never scrolls: a sheet still sliding in would drag the page under it.
  */
 export function keepFocus(): void {
-  const s = scope();
+  const s = topScope();
   const active = document.activeElement;
   if (
     active instanceof HTMLElement &&
@@ -95,7 +101,7 @@ export function keepFocus(): void {
   if (els.length === 0) return;
   const focus = (el: HTMLElement) => el.focus({ preventScroll: true });
   const last = lastFocus.get(s);
-  if (!last) return focus(els[0]);
+  if (!last) return focus(els.find((el) => el.hasAttribute('data-pad-first')) ?? els[0]);
   if (els.includes(last.el)) return focus(last.el);
   const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
   const was = centre(last.at);
@@ -158,20 +164,23 @@ export function moveFocus(dir: NavDir): void {
   if (next) focus(els[Number(next.id)]);
 }
 
-function press(selector: string): void {
-  const el = [...document.querySelectorAll<HTMLElement>(selector)].filter(visible).at(-1);
-  el?.click();
-}
+const TAB_LISTS = {
+  top: '[data-pad-tabs]:not([data-pad-tabs="sub"])',
+  sub: '[data-pad-tabs="sub"]',
+} as const;
 
-function stepTabs(delta: number): void {
-  const list = [...document.querySelectorAll<HTMLElement>('[data-pad-tabs]')].filter(visible)[0];
+/** Step the topmost scope's tab list (LB/RB its top level, LT/RT its sub list), past disabled tabs. */
+function stepTabs(level: keyof typeof TAB_LISTS, delta: number): void {
+  const list = scopedLast(TAB_LISTS[level]);
   if (!list) return;
   const tabs = [...list.querySelectorAll<HTMLElement>('[role="tab"]')];
-  if (tabs.length === 0) return;
-  const i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-  const next = tabs[(i + delta + tabs.length) % tabs.length];
-  next.click();
-  focus(next);
+  const enabled = (t: HTMLElement) => !t.matches(':disabled, [aria-disabled="true"]');
+  if (!tabs.some(enabled)) return;
+  let i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+  do i = (i + delta + tabs.length) % tabs.length;
+  while (!enabled(tabs[i]));
+  tabs[i].click();
+  focus(tabs[i]);
 }
 
 function stickDir(state: PadState): NavDir | null {
@@ -193,10 +202,13 @@ export function useGamepadNav(): void {
     let repeatAt = 0;
     let stickArmed = true;
     const stop = startGamepad((state, pressed, now) => {
+      // A carried card (Skills' reorder) hears the D-pad and A/B/X instead of the focus.
+      const carry = navCapture();
+      const move = (dir: NavDir) => (carry ? carry(dir) : moveFocus(dir));
       // A stick flick moves once; it re-arms when the stick comes back near the centre.
       const flick = stickDir(state);
       if (flick && stickArmed) {
-        moveFocus(flick);
+        move(flick);
         stickArmed = false;
       }
       if (Math.hypot(state.left.x, state.left.y) < 0.3) stickArmed = true;
@@ -205,21 +217,32 @@ export function useGamepadNav(): void {
       if (dir && dir !== heldDir) {
         heldDir = dir;
         repeatAt = now + REPEAT_DELAY_MS;
-        moveFocus(dir);
+        move(dir);
       } else if (dir && now >= repeatAt) {
         repeatAt = now + REPEAT_EVERY_MS;
-        moveFocus(dir);
+        move(dir);
       } else if (!dir) heldDir = null;
 
-      if (pressed.has('a')) {
+      const carried = carry ? (['a', 'b', 'x'] as const).filter((b) => pressed.has(b)) : [];
+      for (const b of carried) carry?.(b);
+      // The D-pad moves and A presses the focused control: never a prompt's.
+      const offered = [...pressed].filter(
+        (b) => !DPAD.has(b) && b !== 'a' && !(carried as readonly PadButton[]).includes(b),
+      );
+      const took = padPrompts(new Set(offered), state.buttons, now);
+      const left = (b: PadButton) => offered.includes(b) && !took.has(b);
+
+      if (!carry && pressed.has('a')) {
         const el = document.activeElement as HTMLElement | null;
         if (el && candidates().includes(el)) el.click();
         else moveFocus('down');
       }
-      if (pressed.has('b')) press('[data-pad-back]');
-      if (pressed.has('lb')) stepTabs(-1);
-      if (pressed.has('rb')) stepTabs(1);
-      if (pressed.has('menu')) press('[data-pad-menu]');
+      if (left('b')) scopedLast('[data-pad-back]')?.click();
+      if (left('lb')) stepTabs('top', -1);
+      if (left('rb')) stepTabs('top', 1);
+      if (left('lt')) stepTabs('sub', -1);
+      if (left('rt')) stepTabs('sub', 1);
+      if (left('menu')) (scopedLast('[data-pad-menu]') ?? scopedLast('[data-pad-back]'))?.click();
       keepFocus();
     });
     return () => {

@@ -5,6 +5,8 @@ import { SettingsDrawer } from './SettingsDrawer';
 import { DevDrawer } from './DevDrawer';
 import { ConfirmLeaveDialog } from './ConfirmLeaveDialog';
 import { useGamepadNav } from '@/features/gamepad/use-gamepad-nav';
+import { attachPromptKeys, hudScaleFor, uiScaleFor } from '@/features/delve/kit/prompts';
+import { useUIStore } from '@/stores/uiStore';
 
 export function AppShell() {
   const location = useLocation();
@@ -24,8 +26,26 @@ export function AppShell() {
   const isInMatch = location.pathname.startsWith('/match/');
   const isInQueue = location.pathname === '/queue';
   const isInActiveGame = isInMatch;
-  // Full screen: the Delve arena (its joystick and ability buttons need the space) and the DPS Lab.
-  const hideTabBar = ['/delve/run', '/delve/training', '/delve/lab'].includes(location.pathname);
+  // The Delve takes the whole window (no letterbox, no TabBar: its menus carry the version and
+  // the settings), and binds the prompt runtime's keys (Esc / Enter) on every Delve route.
+  const isDelve = location.pathname === '/delve' || location.pathname.startsWith('/delve/');
+  const hideTabBar = isDelve;
+  useEffect(() => (isDelve ? attachPromptKeys() : undefined), [isDelve]);
+
+  // The Delve UI's zooms, on :root (quarter steps; see prompts.ts), mirrored into uiStore.
+  const hudSetting = useUIStore((s) => s.hudScale);
+  useEffect(() => {
+    const root = document.documentElement;
+    const apply = () => {
+      const ui = uiScaleFor(window.innerWidth, window.innerHeight);
+      root.style.setProperty('--ui-scale', String(ui));
+      root.style.setProperty('--hud-scale', String(hudScaleFor(ui, hudSetting)));
+      useUIStore.getState().setUiScale(ui);
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, [hudSetting]);
 
   const confirmVariant = isInQueue ? 'queue' : 'match';
 
@@ -88,7 +108,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
-      <div className="app-frame" ref={frameRef}>
+      <div className="app-frame" ref={frameRef} data-frame={isDelve ? 'full' : undefined}>
         <main className="flex-1" style={{ minHeight: 0, overflow: 'hidden' }}>
           <Outlet />
         </main>

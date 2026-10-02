@@ -357,6 +357,17 @@
   }
 }
 
+/* The Delve fills the window at every aspect (AppShell sets data-frame="full" on /delve*). */
+.app-frame[data-frame='full'] {
+  aspect-ratio: auto;
+  width: 100%;
+  height: 100%;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* ── Atmospheric Background ── */
 
 body {
@@ -435,8 +446,9 @@ html, body, #root {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Controller focus ring: shown only while the gamepad is the active input. */
-html[data-input='gamepad'] :focus {
+/* Controller focus ring: shown only while the gamepad is the active input. The Delve UI
+   (.delve-ui) draws its own ring (kit.css), so it never shows two. */
+html[data-input='gamepad'] :focus:not(.delve-ui *) {
   outline: 3px solid #fcd34d !important;
   outline-offset: 2px !important;
 }
