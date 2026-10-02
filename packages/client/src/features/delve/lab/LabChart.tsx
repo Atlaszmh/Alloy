@@ -56,7 +56,7 @@ export function LabChart({ lines }: { lines: readonly ChartLine[] }) {
   const at = hover ?? last;
 
   return (
-    <div ref={box} className="delve-panel mb-2 p-2" data-testid="lab-chart">
+    <div ref={box} className="k-well mb-2 p-2" data-testid="lab-chart">
       <svg
         viewBox={`0 0 ${w} ${H}`}
         className="block w-full"
