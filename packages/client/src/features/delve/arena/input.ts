@@ -7,7 +7,7 @@ import {
   type DataRegistry,
   type Vec,
 } from '@alloy/engine';
-import { aimMarkerFor, classifyPress } from './aim-gestures';
+import { aimMarkerFor, classifyPress } from './aim';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
@@ -326,7 +326,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     const a = input.aiming;
     if (!a) return;
     input.aiming = null;
-    const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
+    const tap = classifyPress(performance.now() - a.since) === 'tap' || !input.mouse;
     input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
   };
   const up = (e: KeyboardEvent) => {

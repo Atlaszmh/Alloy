@@ -21,7 +21,7 @@ import {
   holdingSlot,
   pressMenu,
 } from '../arena/input';
-import { TAP_MS } from '../arena/aim-gestures';
+import { TAP_MS } from '../arena/aim';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { padMemory, type ArenaPadActions } from '@/features/gamepad/arena-pad';

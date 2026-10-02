@@ -37,7 +37,7 @@ import {
   type Aiming,
   type ArenaInput,
 } from './input';
-import { TAP_MS, aimMarkerFor } from './aim-gestures';
+import { TAP_MS, aimMarkerFor } from './aim';
 import { padState, takeArenaPresses } from '@/features/gamepad/gamepad-hub';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';

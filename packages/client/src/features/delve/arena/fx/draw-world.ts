@@ -11,7 +11,7 @@ import {
   type Zone,
 } from '@alloy/engine';
 import { drawInfusion, type InfusionBudget, type InfusionLayers } from './infusion';
-import type { AimMarker } from '../aim-gestures';
+import type { AimMarker } from '../aim';
 import { MANA_HEX, NEUTRAL_HEX } from '../palette';
 import { handPoint, spawnCount, type ManaFx } from './mana-fx';
 import { windingUp } from './anticipation';
