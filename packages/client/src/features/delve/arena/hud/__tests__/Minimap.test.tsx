@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Minimap, drawMinimap, type HudMap } from '../Minimap';
+import { Minimap, drawMinimap } from '../Minimap';
+import type { HudMap } from '../../useArenaCore';
 
 /** A 2D context that records what is filled, in what colour. */
 function fakeContext() {

@@ -1,18 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 import { useUiScale } from '../../kit';
-import type { ViewRect } from '../fx/pixel-layer';
-
-/** The floor as the minimap draws it: the snapshot's `map` (the spec's contract, filled by the arena core). */
-export interface HudMap {
-  width: number;
-  height: number;
-  view: ViewRect;
-  hero: { x: number; y: number };
-  foes: { x: number; y: number; rank: 'normal' | 'elite' | 'boss' }[];
-  drops: { x: number; y: number; color: string }[];
-  /** Blocked cells, if the engine ever adds terrain; [] today. */
-  terrain: { x: number; y: number; w: number; h: number }[];
-}
+import type { HudMap } from '../useArenaCore';
 
 const BORDER = '#5a6988';
 const TERRAIN = '#3a4466';

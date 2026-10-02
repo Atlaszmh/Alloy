@@ -7,7 +7,7 @@ import { QuestTracker } from '../../quests/QuestTracker';
 import type { QuestView } from '../../quests/types';
 import type { ArenaHud } from '../useArenaCore';
 import { FoundLog } from './FoundLog';
-import { Minimap, type HudMap } from './Minimap';
+import { Minimap } from './Minimap';
 
 export interface FloorColumnProps {
   dive: DiveState | null;
@@ -32,8 +32,6 @@ export function FloorColumn({
 }: FloorColumnProps): ReactElement {
   const registry = getDelveRegistry();
   const weak = registry.getArpgData().weakness[biome.mana];
-  // ponytail: the arena core's snapshot gains `map` in 3C; read `hud.map` once it has.
-  const map = (hud as (ArenaHud & { map?: HudMap }) | null)?.map ?? null;
   return (
     <aside className="flex h-full min-h-0 flex-col gap-4" aria-label="Floor, quests and finds">
       <Panel
@@ -44,7 +42,7 @@ export function FloorColumn({
         title={<span data-testid="depth-label">DEPTH {dive?.depth}</span>}
         aside={<span className="text-[14px] text-[var(--k-text-2)]">{biome.name}</span>}
       >
-        <Minimap map={map} />
+        <Minimap map={hud?.map ?? null} />
         <div className="grid grid-cols-2 gap-2 text-[14px]" data-testid="biome-element">
           {(
             [
