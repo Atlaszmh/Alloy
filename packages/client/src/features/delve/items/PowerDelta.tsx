@@ -31,8 +31,13 @@ export function PowerDelta({
 
 function DeltaCell({ label, value }: { label: string; value: number | null }) {
   const v = value ?? 0;
-  // Gain and loss text (the kit's `--k-ok` and `--k-bad-text`), else secondary.
-  const color = v > UPGRADE_EPSILON ? '#63c74d' : v < -UPGRADE_EPSILON ? '#f6757a' : '#c0cbdc';
+  // Gain and loss text, else secondary.
+  const color =
+    v > UPGRADE_EPSILON
+      ? 'var(--k-ok)'
+      : v < -UPGRADE_EPSILON
+        ? 'var(--k-bad-text)'
+        : 'var(--k-text-2)';
   const arrow = v > UPGRADE_EPSILON ? '▲' : v < -UPGRADE_EPSILON ? '▼' : '';
   return (
     <div className="flex flex-1 flex-col items-center gap-0.5">

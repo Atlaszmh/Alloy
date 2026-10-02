@@ -3,9 +3,9 @@ import { itemStatLines, type DataRegistry, type GearItem, type HeroStatKey } fro
 import { getDelveRegistry } from '../registry';
 import { formatStatValue } from '../format';
 
-/** Gain and loss text (the kit's `--k-ok` and `--k-bad-text`). */
-const GAIN = '#63c74d';
-const LOSS = '#f6757a';
+/** Gain and loss text. */
+const GAIN = 'var(--k-ok)';
+const LOSS = 'var(--k-bad-text)';
 
 /** An item's stat lines summed by stat, in the order they first appear. */
 function statTotals(registry: DataRegistry, item: GearItem): Map<HeroStatKey, number> {
@@ -51,14 +51,14 @@ export function CompareTable({
           return (
             <tr
               key={stat}
-              className="border-t-2 border-[#3a4466]"
+              className="border-t-2 border-[var(--k-steel-1)]"
               data-testid={`compare-row-${stat}`}
             >
-              <td className="py-[7px] text-[#c0cbdc]">{label(stat)}</td>
-              <td className="text-right text-[#8b9bb4]">{value(stat, was)}</td>
+              <td className="py-[7px] text-[var(--k-text-2)]">{label(stat)}</td>
+              <td className="text-right text-[var(--k-text-3)]">{value(stat, was)}</td>
               <td
                 className="text-right font-semibold"
-                style={{ color: d > 0 ? GAIN : d < 0 ? LOSS : '#c0cbdc' }}
+                style={{ color: d > 0 ? GAIN : d < 0 ? LOSS : 'var(--k-text-2)' }}
               >
                 {value(stat, now)}
               </td>

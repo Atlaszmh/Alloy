@@ -17,29 +17,35 @@ export function AttunementBars({
   const scale = Math.max(bal.masteryThreshold + 2, ...elements.map((m) => attunement[m] + 1));
   const pool = manaPool(stats, registry);
 
+  // Spans only: the Loadout draws it inside a button.
   return (
-    <div className="flex flex-col gap-2">
-      <div className="text-xs text-stone-400" data-testid="mana-pool">
-        Mana pool <b className="text-indigo-300">{Math.round(pool.max)}</b> · +
+    <span className="flex flex-col gap-2">
+      <span className="k-caption" data-testid="mana-pool">
+        Mana pool <b className="text-[var(--k-mana)]">{Math.round(pool.max)}</b> · +
         {pool.regen.toFixed(1)}/s · every point of attunement adds {bal.poolPerAttune}
-      </div>
+      </span>
       {elements.map((m) => {
         const style = manaStyle(registry, m);
         const a = attunement[m];
         const mastery = masteries.find((x) => x.mana === m);
         const mastered = a >= bal.masteryThreshold;
         return (
-          <div key={m} className="flex flex-col gap-0.5" data-testid={`attune-${m}`} data-value={a}>
-            <div className="flex items-center gap-2">
-              <span className="w-5 text-center text-sm leading-none">{style.icon}</span>
+          <span
+            key={m}
+            className="flex flex-col gap-0.5"
+            data-testid={`attune-${m}`}
+            data-value={a}
+          >
+            <span className="flex items-center gap-2">
+              <span className="w-5 text-center text-[16px] leading-none">{style.icon}</span>
               <span
-                className="delve-display w-14 text-xs font-bold"
-                style={{ color: a > 0 ? style.color : '#57534e' }}
+                className="k-disp w-16 text-[16px]"
+                style={{ color: a > 0 ? style.color : 'var(--k-steel-2)' }}
               >
                 {style.name}
               </span>
-              <div className="relative h-2.5 flex-1 overflow-visible rounded-full bg-white/5">
-                <div
+              <span className="relative h-2.5 flex-1 overflow-visible rounded-full bg-white/5">
+                <span
                   className="absolute inset-y-0 left-0 rounded-full"
                   style={{
                     width: `${Math.min(1, a / scale) * 100}%`,
@@ -51,17 +57,15 @@ export function AttunementBars({
                   className="absolute -top-0.5 h-3.5 w-0.5 rounded"
                   style={{
                     left: `${(bal.masteryThreshold / scale) * 100}%`,
-                    background: mastered ? '#fff' : 'rgba(255,255,255,0.25)',
+                    background: mastered ? 'var(--k-text)' : 'rgba(255,255,255,0.25)',
                   }}
                 />
-              </div>
-              <span className="delve-display w-6 text-right text-sm font-bold text-stone-100">
-                {a}
               </span>
-            </div>
-            <div className="pl-7 text-[10px] leading-snug text-stone-500">
+              <span className="k-disp w-6 text-right text-[18px] text-[var(--k-text)]">{a}</span>
+            </span>
+            <span className="k-caption pl-7 leading-snug">
               {a > 0 && (
-                <span className="text-stone-400">
+                <span className="text-[var(--k-text-2)]">
                   +{Math.round(a * bal.powerPerAttune * 100)}% to {style.name} abilities ·{' '}
                 </span>
               )}
@@ -75,10 +79,10 @@ export function AttunementBars({
                     At {bal.masteryThreshold}: {mastery.name}
                   </span>
                 ))}
-            </div>
-          </div>
+            </span>
+          </span>
         );
       })}
-    </div>
+    </span>
   );
 }

@@ -75,6 +75,11 @@ describe('the equipped pane', () => {
   it("the attunement block shows the pair's and opens the Mana view on Skills", () => {
     const props = open();
     const strip = screen.getByTestId('mana-strip');
+    // A button holds phrasing content only, and no text is drawn under the kit's 14 px.
+    expect(strip.querySelector('div')).toBeNull();
+    expect(
+      strip.querySelector('.text-xs, [class*="text-[10px]"], [class*="text-[12px]"]'),
+    ).toBeNull();
     expect(strip).toHaveTextContent('Skills ›');
     expect(within(strip).getByTestId('attune-frost')).toBeInTheDocument();
     expect(within(strip).queryByTestId('attune-fire')).toBeNull();
