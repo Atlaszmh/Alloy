@@ -31,10 +31,10 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
   const root = useRef<HTMLDivElement>(null);
   // The latest of what a handler reads (handlers are made once), and the hub's setters, which
   // need not be stable.
-  const live = useRef({ ed, carry });
+  const live = useRef({ ed, carry, mana });
   const hub = useRef({ setPrompts, setFooterAction });
   useLayoutEffect(() => {
-    live.current = { ed, carry };
+    live.current = { ed, carry, mana };
     hub.current = { setPrompts, setFooterAction };
   });
 
@@ -54,6 +54,11 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
 
   const { locked, absent, entries, fixedShape } = ed;
   const canEdit = !locked && !absent && !fixedShape;
+  /** Alt+← → move the chosen move; they're always taken, so the browser's Back never hears them. */
+  const shiftChosen = (by: number) => {
+    const { ed: now, mana: inMana } = live.current;
+    if (!inMana && !now.locked && !now.absent && !now.fixedShape) now.shift(now.index, by);
+  };
   const step = (by: number) => {
     const i = CHAIN_SKILLS.indexOf(live.current.ed.skill);
     live.current.ed.pick(CHAIN_SKILLS[(i + by + CHAIN_SKILLS.length) % CHAIN_SKILLS.length]);
@@ -160,15 +165,13 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
         id: 'earlier',
         label: 'Move earlier',
         binding: { key: 'ArrowLeft', alt: true },
-        onPress: () => live.current.ed.shift(live.current.ed.index, -1),
-        disabled: mana || !canEdit,
+        onPress: () => shiftChosen(-1),
       },
       {
         id: 'later',
         label: 'Move later',
         binding: { key: 'ArrowRight', alt: true },
-        onPress: () => live.current.ed.shift(live.current.ed.index, 1),
-        disabled: mana || !canEdit,
+        onPress: () => shiftChosen(1),
       },
     ],
     root,

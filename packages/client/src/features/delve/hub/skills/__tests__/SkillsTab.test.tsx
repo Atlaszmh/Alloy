@@ -94,6 +94,12 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     expect(chains().primary.moves.map((m) => m.kind)).toEqual(['light', 'medium', 'medium']);
   });
 
+  it('Alt+← → never fall through to the browser (Back / Forward), even where they move nothing', () => {
+    renderSkills({ link: { tab: 'skills', view: 'mana' } });
+    expect(press('ArrowLeft', { altKey: true })).toBe(false);
+    expect(press('ArrowRight', { altKey: true })).toBe(false);
+  });
+
   it('on the pad, X picks the chosen card up: the D-pad carries it, X drops it, B puts it back', () => {
     roomy();
     renderSkills();
