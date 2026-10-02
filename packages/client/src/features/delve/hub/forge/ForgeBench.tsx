@@ -359,9 +359,10 @@ export function ForgeBench({
                     label: inPair(profile, m) ? (
                       st.name
                     ) : (
-                      <>
+                      // One wrapping run, so a narrow cell breaks it between the name and the price.
+                      <span>
                         {st.name} · <Price dust={offPairDust} />
-                      </>
+                      </span>
                     ),
                     testId: `element-${m}`,
                   };
