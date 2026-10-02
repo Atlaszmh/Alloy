@@ -1,30 +1,15 @@
-import { useMemo, useRef, useState, type ReactElement } from 'react';
-import {
-  baseDisplayName,
-  compareItem,
-  findItem,
-  isBossDepth,
-  referenceDepth,
-  type DiveState,
-  type GearItem,
-} from '@alloy/engine';
-import { useDelveStore } from '@/stores/delveStore';
+import { useRef, useState, type ReactElement } from 'react';
+import { baseDisplayName, isBossDepth, type DiveState } from '@alloy/engine';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { ItemIcon } from '../ItemIcon';
 import { deltaMark } from '../ItemTile';
 import { ItemTooltip } from '../items/ItemTooltip';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_TEXT, formatNumber } from '../format';
-import { countRunes } from '../chains/chain-text';
 import { FAMILY_STYLE, runeName } from '../runes/rune-style';
+import { MARK, useFloorFinds } from '../arena/hud/FoundLog';
 import { StopPanel } from '../StopPanel';
 import { DoorPane } from './DoorPane';
-
-const MARK = {
-  up: { text: '▲', color: 'var(--k-ok)', label: 'upgrade' },
-  down: { text: '▼', color: 'var(--k-bad)', label: 'downgrade' },
-  potential: { text: '◇', color: 'var(--k-mana)', label: 'potential upgrade' },
-} as const;
 
 const ROW = 'flex w-full flex-none items-center gap-3 bg-[var(--k-well)] px-3 py-[10px] text-left';
 
@@ -223,37 +208,4 @@ export function StopScreen({
       </div>
     </Screen>
   );
-}
-
-/**
- * This floor's finds (decided item 21): the items since `floorDropsFrom`, newest first, each with
- * its Power change as a home for your moveset (`delta`) and as it is (`asIs`), and the runes since
- * `floorRunesFrom`, grouped.
- */
-function useFloorFinds() {
-  const registry = getDelveRegistry();
-  const profile = useDelveStore((s) => s.profile);
-  const diveDrops = useDelveStore((s) => s.diveDrops);
-  const diveRunes = useDelveStore((s) => s.diveRunes);
-  const dropsFrom = useDelveStore((s) => s.floorDropsFrom);
-  const runesFrom = useDelveStore((s) => s.floorRunesFrom);
-  const depth = referenceDepth(profile);
-  const items = useMemo(() => {
-    const out: { item: GearItem; delta: number | null; asIs: number | null }[] = [];
-    for (const uid of diveDrops.slice(0, diveDrops.length - dropsFrom)) {
-      const found = findItem(profile, uid);
-      if (!found) continue;
-      const { item } = found;
-      const equipped = found.where === 'equipped';
-      const value = (as: 'home' | 'asIs') =>
-        compareItem(profile.equipped, item, registry, depth, profile.pair, as).powerPct;
-      const delta = equipped ? null : value('home');
-      // Only a weapon carries a moveset: anything else is the same either way.
-      const asIs = equipped || item.slot !== 'weapon' ? delta : value('asIs');
-      out.push({ item, delta, asIs });
-    }
-    return out;
-  }, [diveDrops, dropsFrom, profile, registry, depth]);
-  const runes = countRunes(diveRunes.slice(0, diveRunes.length - runesFrom));
-  return { items, runes };
 }
