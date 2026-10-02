@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { QuestTracker } from '../QuestTracker';
 import { SAMPLE_QUESTS } from '../sample';
 import type { QuestView } from '../types';
@@ -34,5 +34,12 @@ describe('QuestTracker', () => {
     expect(within(first).getByRole('img', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByTestId('tracked-rat-catcher')).toHaveTextContent('Bounty');
     expect(screen.getByTestId('tracked-kindling')).toHaveTextContent('12 / 20');
+  });
+
+  it('its Journal hint opens the journal when the HUD passes onJournal', () => {
+    const onJournal = vi.fn();
+    render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} onJournal={onJournal} />);
+    fireEvent.click(screen.getByRole('button', { name: /Journal/ }));
+    expect(onJournal).toHaveBeenCalledOnce();
   });
 });

@@ -374,6 +374,12 @@ interface DelveStore {
   diveDrops: string[];
   /** Runes picked up this dive, newest first (session only). */
   diveRunes: RuneRef[];
+  /**
+   * The lengths of `diveDrops` and `diveRunes` when this floor began: the floor's finds are
+   * `diveDrops.slice(0, diveDrops.length - floorDropsFrom)` (the Found log, the stop).
+   */
+  floorDropsFrom: number;
+  floorRunesFrom: number;
   /** Basic attacks on a button instead of automatic (a device preference). */
   manualAttack: boolean;
   /** Toasts waiting for a Delve screen to show them (session only): overtakes, fixed moves. */
@@ -454,10 +460,18 @@ function withoutUids(map: Record<string, true>, uids: string[]): Record<string, 
 export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get) => {
   const commit = (profile: DelveProfile) => {
     saveProfile(profile);
+    const prev = get();
     // The chain draft belongs to one weapon: equipping another (or a transfer) drops it.
-    const draft = get()?.chainDraft;
+    const draft = prev?.chainDraft;
     const kept = !draft || profile.equipped.weapon?.uid === draft.uid;
-    set(kept ? { profile } : { profile, chainDraft: null });
+    // A floor begins (a door taken): its finds are what the dive picks up from here.
+    const was = prev?.profile.dive;
+    const now = profile.dive;
+    const floor =
+      prev && now?.phase === 'fighting' && (was?.phase !== 'fighting' || was.depth !== now.depth)
+        ? { floorDropsFrom: prev.diveDrops.length, floorRunesFrom: prev.diveRunes.length }
+        : {};
+    set(kept ? { profile, ...floor } : { profile, ...floor, chainDraft: null });
   };
   const registry = () => getDelveRegistry();
   const applyResult = (res: ProfileActionResult) => {
@@ -477,6 +491,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
     newUids: {},
     diveDrops: [],
     diveRunes: [],
+    floorDropsFrom: 0,
+    floorRunesFrom: 0,
     manualAttack: loadManualAttack(),
     notices: loaded
       ? [
@@ -500,6 +516,8 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
         newUids: {},
         diveDrops: [],
         diveRunes: [],
+        floorDropsFrom: 0,
+        floorRunesFrom: 0,
         notices: [],
         bindDeclined: [],
         chainDraft: null,
@@ -511,7 +529,13 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
       // A dive locks the chains: a pending draft is applied or discarded first, never dropped.
       if (Object.keys(draftChanges(registry(), profile, chainDraft)).length > 0) return false;
       commit(engineStartDive(registry(), profile, depth));
-      set({ diveDrops: [], diveRunes: [], chainDraft: null });
+      set({
+        diveDrops: [],
+        diveRunes: [],
+        floorDropsFrom: 0,
+        floorRunesFrom: 0,
+        chainDraft: null,
+      });
       return true;
     },
 
@@ -603,12 +627,23 @@ export const useDelveStore = createHmrStore<DelveStore>('delveStore', (set, get)
 
     pushDiveDrops: (uids) => {
       if (uids.length === 0) return;
-      set({ diveDrops: [...uids.slice().reverse(), ...get().diveDrops].slice(0, 60) });
+      const all = [...uids.slice().reverse(), ...get().diveDrops];
+      // The oldest fall off the end, and the floor's mark moves back with them.
+      const cut = Math.max(0, all.length - 60);
+      set({
+        diveDrops: all.slice(0, 60),
+        floorDropsFrom: Math.max(0, get().floorDropsFrom - cut),
+      });
     },
 
     pushDiveRunes: (runes) => {
       if (runes.length === 0) return;
-      set({ diveRunes: [...runes.slice().reverse(), ...get().diveRunes].slice(0, 60) });
+      const all = [...runes.slice().reverse(), ...get().diveRunes];
+      const cut = Math.max(0, all.length - 60);
+      set({
+        diveRunes: all.slice(0, 60),
+        floorRunesFrom: Math.max(0, get().floorRunesFrom - cut),
+      });
     },
 
     setManualAttack: (on) => {

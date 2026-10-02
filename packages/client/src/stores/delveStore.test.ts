@@ -666,3 +666,43 @@ describe('delveStore: runes outside the draft', () => {
     expect(s().diveRunes).toEqual([]);
   });
 });
+
+describe("delveStore: the floor's finds", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    s().resetProfile(1234, 'fire');
+  });
+
+  /** The dive's state as a bank, a clear or a door leaves it. */
+  const at = (phase: 'fighting' | 'choosing', depth: number) =>
+    s().setProfile({ ...s().profile, dive: { ...s().profile.dive!, phase, depth } });
+  const floorDrops = () => s().diveDrops.slice(0, s().diveDrops.length - s().floorDropsFrom);
+
+  it("marks where each floor begins in the dive's drops and runes", () => {
+    s().pushDiveDrops(['before']);
+    expect(s().startDive(1)).toBe(true);
+    expect(s()).toMatchObject({ floorDropsFrom: 0, floorRunesFrom: 0 });
+    s().pushDiveDrops(['a', 'b']);
+    s().pushDiveRunes([{ id: 'split', tier: 1 }]);
+    at('fighting', 1);
+    at('choosing', 1);
+    expect(s()).toMatchObject({ floorDropsFrom: 0, floorRunesFrom: 0 });
+    at('fighting', 2);
+    expect(s()).toMatchObject({ floorDropsFrom: 2, floorRunesFrom: 1 });
+    s().pushDiveDrops(['c']);
+    expect(floorDrops()).toEqual(['c']);
+    s().closeDive();
+    expect(s().startDive(1)).toBe(true);
+    expect(s()).toMatchObject({ floorDropsFrom: 0, floorRunesFrom: 0 });
+  });
+
+  it('keeps the mark on its floor as the oldest drops fall off', () => {
+    s().startDive(1);
+    s().pushDiveDrops(Array.from({ length: 50 }, (_, i) => `a${i}`));
+    at('choosing', 1);
+    at('fighting', 2);
+    s().pushDiveDrops(Array.from({ length: 15 }, (_, i) => `b${i}`));
+    expect(s().diveDrops).toHaveLength(60);
+    expect(floorDrops()).toEqual(Array.from({ length: 15 }, (_, i) => `b${14 - i}`));
+  });
+});
