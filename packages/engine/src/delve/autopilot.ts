@@ -1,9 +1,12 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem } from '../types/gear.js';
+import type { Haul } from '../types/crafting.js';
+import type { GearItem, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
+import { RARITY_ORDER } from '../types/gem.js';
 import { MANA_TYPES, emptyManaMap, type ManaType } from '../types/mana.js';
 import { upgradeCost } from '../loot/smithing.js';
+import { addHaul, emptyHaul } from '../loot/materials.js';
 import { botInput } from '../arpg/bot.js';
 import { stepWorld } from '../arpg/step.js';
 import {
@@ -35,6 +38,7 @@ import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
 import { takeStop, type StopAction } from './stops.js';
 import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
+import type { EconomyDive } from './economy.js';
 
 /**
  * Plays whole dives with the arena bot, like a sensible player: fights every
@@ -137,14 +141,9 @@ function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   return res.ok ? res.profile : p;
 }
 
-/**
- * Between dives, as a player would: an overtaking secondary swaps in, a second
- * element is bound (before anything is salvaged), the forge visit, and then
- * the Primary of whatever weapon it wields is built from both elements.
- */
+/** Between dives: a visit to the Anvil (`anvilVisit`). */
 export function betweenDives(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const bound = bindBest(registry, resolveOvertake(registry, profile).profile);
-  return fusePrimary(registry, visitForge(registry, bound));
+  return anvilVisit(registry, profile).profile;
 }
 
 /** The skills the bot adds slots to, in order: each as far as its Links and scrap go. */
@@ -410,43 +409,104 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
 }
 
 /**
- * Between dives: move the moveset to a better weapon, equip upgrades, melt
- * junk, spend Links on slots up to `SOCKETS_AFTER` a chain,
- * then on sockets for the pouch's runes (each filled as it opens), then on the
- * rest of the slots; socket the best, fuse the rune copies left over, and pour
- * scrap into upgrades.
+ * Upgrade its cheapest equipped item while the scrap lasts.
  */
-function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  let p = equipBest(registry, transferBest(registry, profile)).profile;
+function upgradeAll(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  for (;;) {
+    const cheapest = cheapestUpgrade(registry, p);
+    if (!cheapest || cheapest.cost > p.scrap) return p;
+    const res = upgradeGear(registry, p, cheapest.uid);
+    if (!res.ok) return p; // the forge refuses mid-dive (an open dive)
+    p = res.profile;
+  }
+}
+
+/** The stockpile as a haul: materials, scrap, Mana Dust, Links and runes. */
+function stockOf(p: DelveProfile): Haul {
+  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes };
+}
+
+/** `h` with every count passed through `f`. */
+function mapHaul(h: Haul, f: (n: number) => number): Haul {
+  const counts = <T extends Record<string, number>>(r: T) =>
+    Object.fromEntries(Object.entries(r).map(([k, n]) => [k, f(n)])) as T;
+  const tiers = (r: Partial<Record<string, number[]>>) =>
+    Object.fromEntries(Object.entries(r).map(([k, ns]) => [k, ns!.map(f)]));
+  return {
+    metals: counts(h.metals),
+    flux: counts(h.flux),
+    shards: tiers(h.shards),
+    essences: counts(h.essences),
+    scrap: f(h.scrap),
+    dust: f(h.dust),
+    links: f(h.links),
+    runes: tiers(h.runes),
+  };
+}
+
+/** What went out of the stockpile from `before` to `after`, each count at least 0. */
+function outflow(before: DelveProfile, after: DelveProfile): Haul {
+  const diff = addHaul(stockOf(before), mapHaul(stockOf(after), (n) => -n));
+  return mapHaul(diff, (n) => Math.max(0, n));
+}
+
+/** What a visit to the Anvil did: the profile after it, what it spent and the items it forged. */
+interface AnvilVisit {
+  profile: DelveProfile;
+  /** Each step's net outflow from the stockpile, summed (salvage gives; it spends nothing). */
+  spent: Haul;
+  forged: GearItem[];
+}
+
+/**
+ * The Anvil, between dives, as a player would: an overtaking secondary swaps
+ * in and a second element is bound (before anything is salvaged); it moves its
+ * moveset to a better weapon, equips upgrades and melts junk; spends Links on
+ * slots up to `SOCKETS_AFTER` a chain, then on sockets for the pouch's runes
+ * (each filled as it opens), then on the rest of the slots; sockets the best
+ * runes and fuses the copies left over; pours the scrap into upgrades; and
+ * builds the Primary of whatever weapon it wields from both elements.
+ */
+function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
+  let p = bindBest(registry, resolveOvertake(registry, profile).profile);
+  let spent = emptyHaul();
+  const pay = (next: DelveProfile) => {
+    spent = addHaul(spent, outflow(p, next));
+    p = next;
+  };
+  pay(equipBest(registry, transferBest(registry, p)).profile);
   p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
   // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
   // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
   // over and socket again (a fused tier can beat a socketed one).
-  p = spendLinks(registry, p, SOCKETS_AFTER);
-  p = openSockets(registry, p);
-  p = spendLinks(registry, p);
-  p = socketBest(registry, p);
-  p = socketBest(registry, fusePouch(registry, p));
+  pay(spendLinks(registry, p, SOCKETS_AFTER));
+  pay(openSockets(registry, p));
+  pay(spendLinks(registry, p));
+  pay(socketBest(registry, p));
+  pay(socketBest(registry, fusePouch(registry, p)));
+  pay(upgradeAll(registry, p));
+  pay(fusePrimary(registry, p));
+  return { profile: p, spent, forged: [] };
+}
 
-  for (;;) {
-    const cheapest = cheapestUpgrade(registry, p);
-    if (!cheapest || cheapest.cost > p.scrap) break;
-    const res = upgradeGear(registry, p, cheapest.uid);
-    if (!res.ok) break; // the forge refuses mid-dive (an open dive)
-    p = res.profile;
-  }
-  return p;
+/** What a dive brought into the stockpile: what it banked and kept, and an extract's bounty. */
+function diveIncome(p: DelveProfile): Haul {
+  const dive = p.dive!;
+  const bounty = dive.phase === 'extracted' ? dive.bounty : 0;
+  return { ...dive.banked, scrap: dive.banked.scrap + bounty };
 }
 
 export function runAutopilot(
   registry: DataRegistry,
   opts: AutopilotOptions,
-): { profile: DelveProfile; reports: AutopilotDiveReport[] } {
+): { profile: DelveProfile; reports: AutopilotDiveReport[]; economy: EconomyDive[] } {
   const maxDepth = opts.maxDepth ?? 100;
   const maxFloorSeconds = opts.maxFloorSeconds ?? 240;
   let p = opts.profile ?? createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
   if (opts.secondary) p = fusePrimary(registry, bindSecondary(registry, p, opts.secondary).profile);
   const reports: AutopilotDiveReport[] = [];
+  const economy: EconomyDive[] = [];
 
   for (let n = 0; n < opts.dives; n++) {
     const options = startDepthOptions(registry, p);
@@ -490,7 +550,19 @@ export function runAutopilot(
       reactionsSeen: p.reactionsSeen.length,
       scrap: p.scrap,
     });
-    p = betweenDives(registry, closeDive(registry, p));
+    const visit = anvilVisit(registry, closeDive(registry, p));
+    const forged = Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>;
+    for (const item of visit.forged) forged[item.rarity]++;
+    economy.push({
+      dive: n + 1,
+      income: diveIncome(p),
+      spent: visit.spent,
+      lost: dive.lost,
+      forged,
+      depth: dive.depth,
+      died: dive.phase === 'dead',
+    });
+    p = visit.profile;
   }
-  return { profile: p, reports };
+  return { profile: p, reports, economy };
 }
