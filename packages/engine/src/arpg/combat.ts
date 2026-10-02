@@ -758,7 +758,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
-  const forceLegendary = m.kind === 'boss' && loot.forceLegendary;
+  // ponytail: Phase A's stand-in for the first boss's essence (a legendary item); B1 drops the essence.
+  const forceLegendary = m.kind === 'boss' && loot.firstEssence;
   const drops = rollEncounterDrops(
     registry,
     {
@@ -775,7 +776,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     lootRng,
   );
   loot.nextUid = drops.nextUid;
-  if (forceLegendary) loot.forceLegendary = false;
+  if (forceLegendary) loot.firstEssence = false;
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;

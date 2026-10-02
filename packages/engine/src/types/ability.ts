@@ -35,17 +35,6 @@ export type AbilityPayment = 'mana' | 'charge' | 'cast';
 
 export const ABILITY_PAYMENTS: readonly AbilityPayment[] = ['mana', 'charge', 'cast'] as const;
 
-/** A version 4 save's ability (see `chainFromBuild`). */
-export interface AbilityBuild {
-  form: FormId;
-  /** One element, or two distinct elements (a fusion). */
-  elements: ManaType[];
-  weight: AbilityWeight;
-  payment: AbilityPayment;
-}
-
-export type AbilityBuilds = Record<AbilitySlot, AbilityBuild>;
-
 /** How a move lands: light, medium or heavy, or a hold that charges while the button is held. */
 export type MoveKind = 'light' | 'medium' | 'heavy' | 'hold';
 

@@ -3,7 +3,7 @@ import type { ManaMap, ManaType } from './mana.js';
 import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
-import type { CraftingBalance, DropsBalance } from './crafting.js';
+import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -761,6 +761,18 @@ export interface DiveState {
   runesEarned: number;
   /** The door screen's stop: the power-up offered after the depth just cleared (null: none). */
   stop: DiveStop | null;
+  /**
+   * This floor's pickups: materials, scrap pickups, Mana Dust, Links, runes and
+   * essences (see the crafting spec's banking). A cleared floor banks it; a floor
+   * left any other way loses it.
+   */
+  haul: Haul;
+  /** What this dive's cleared floors banked: it settles into the stockpile once (`settleDive`). */
+  banked: Haul;
+  /** What a death or an abandon took when the dive settled, for the summary (null: nothing). */
+  lost: Haul | null;
+  /** The dive has settled: `settleDive` runs once a dive. */
+  settled: boolean;
   found: Record<Rarity, number>;
   /** The best (highest rarity, then ilvl) item found this dive. */
   bestFind: GearItem | null;
@@ -790,7 +802,7 @@ export interface CodexEntry {
 }
 
 export interface DelveProfile {
-  version: 7;
+  version: 8;
   seed: number;
   diveCount: number;
   forgeCount: number;
@@ -802,9 +814,8 @@ export interface DelveProfile {
   checkpoints: number[];
   codex: Record<string, CodexEntry>;
   stats: DelveStats;
-  /** Drops since the last legendary — raises legendary odds. */
-  pity: number;
-  firstBossLegendaryGiven: boolean;
+  /** The first boss's essence has banked (until it does, the first boss guarantees one). */
+  firstEssenceGiven: boolean;
   autoSalvage: Record<Rarity, boolean>;
   /** The hero's two elements. */
   pair: ManaPair;
@@ -814,6 +825,12 @@ export interface DelveProfile {
   links: number;
   /** Loose runes: counts by id and tier (see the runes spec). */
   runes: RunePouch;
+  /** Bars, flux, shards and essences: the stockpile at the Anvil (see the crafting spec). */
+  materials: MaterialsPouch;
+  /** The bases the hero can forge: learned from the start, from salvage and from pattern drops. */
+  patterns: string[];
+  /** The legendaries whose essence the hero has picked up (the Codex's Essences). */
+  essencesSeen: string[];
   /** Elemental reactions the player has triggered at least once. */
   reactionsSeen: string[];
   dive: DiveState | null;

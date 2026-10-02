@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import type { DelveProfile } from '../types/delve.js';
 import {
   FLUX_GRADES,
   METAL_IDS,
@@ -112,4 +113,17 @@ export function addMaterial(haul: Haul, ref: MaterialRef, amount = 1): Haul {
       break;
   }
   return addHaul(haul, one);
+}
+
+/** `profile` with `haul` in its stockpile: materials, scrap (counted as earned), Mana Dust, Links and runes. */
+export function stockHaul(profile: DelveProfile, haul: Haul): DelveProfile {
+  return {
+    ...profile,
+    materials: addMaterials(profile.materials, haul),
+    scrap: profile.scrap + haul.scrap,
+    manaDust: profile.manaDust + haul.dust,
+    links: profile.links + haul.links,
+    runes: sumKeys(profile.runes, haul.runes, sumTiers),
+    stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + haul.scrap },
+  };
 }

@@ -5,7 +5,10 @@ import {
   addMaterials,
   emptyHaul,
   emptyMaterials,
+  stockHaul,
 } from '../src/loot/materials.js';
+import { createDefaultRegistry } from '../src/data/default-registry.js';
+import { createDelveProfile } from '../src/delve/profile.js';
 
 // See the crafting spec: the materials pouch and a dive's haul.
 
@@ -75,5 +78,28 @@ describe('the pouch and the haul', () => {
     );
     expect(pouch.metals.steel).toBe(1);
     expect('scrap' in pouch).toBe(false);
+  });
+});
+
+describe('stocking a haul (the settle at extract, a salvage at the Anvil)', () => {
+  it('adds its materials to the pouch and its currencies and runes to the profile', () => {
+    const p = {
+      ...createDelveProfile(createDefaultRegistry(), 3),
+      runes: { echo: [0, 1, 0, 0, 0] },
+    };
+    const haul = {
+      ...addMaterial(emptyHaul(), { kind: 'flux', grade: 'magic' }, 2),
+      scrap: 40,
+      dust: 3,
+      links: 1,
+      runes: { echo: [1, 0, 0, 0, 0] },
+    };
+    const next = stockHaul(p, haul);
+    expect(next.materials.flux).toMatchObject({ uncommon: 1, magic: 2 });
+    expect(next.materials.metals.rusty).toBe(5);
+    expect([next.scrap, next.manaDust, next.links]).toEqual([40, 3, 1]);
+    expect(next.runes).toEqual({ echo: [1, 1, 0, 0, 0] });
+    expect(next.stats.scrapEarned).toBe(p.stats.scrapEarned + 40);
+    expect(p.materials.flux.magic).toBe(0);
   });
 });

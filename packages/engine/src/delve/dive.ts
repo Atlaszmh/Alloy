@@ -13,6 +13,7 @@ import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
+import { emptyHaul } from '../loot/materials.js';
 import type { SetChainsOptions } from './runes.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
@@ -52,6 +53,10 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     linksEarned: 0,
     runesEarned: 0,
     stop: null,
+    haul: emptyHaul(),
+    banked: emptyHaul(),
+    lost: null,
+    settled: false,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -94,7 +99,8 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       nextUid: profile.nextUid,
       find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
-      forceLegendary: !profile.firstBossLegendaryGiven,
+      firstEssence: !profile.firstEssenceGiven,
+      patterns: profile.patterns,
       pair: pairElements(profile.pair),
     },
   });
@@ -163,7 +169,7 @@ export function bankWorld(
     ...next,
     scrap: next.scrap + scrap,
     runes: addToPouch(next.runes, runes),
-    firstBossLegendaryGiven: next.firstBossLegendaryGiven || !world.loot.forceLegendary,
+    firstEssenceGiven: next.firstEssenceGiven || !world.loot.firstEssence,
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
     stats: {
       ...next.stats,

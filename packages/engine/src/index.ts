@@ -167,7 +167,6 @@ export {
   EQUIP_BEST_SLOTS,
   upgradeGear,
   reforgeGear,
-  chainFromBuild,
 } from './delve/profile.js';
 export {
   setChain,

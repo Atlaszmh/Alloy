@@ -652,8 +652,13 @@ export interface LootContext {
   /** Total Find in percentage points (gear + the door's `find`). The door's drop multipliers are `world.door`'s. */
   find: number;
   legendaryBoost: number;
-  /** First boss kill ever drops a guaranteed legendary. */
-  forceLegendary: boolean;
+  /**
+   * The first boss's essence hasn't banked (`DelveProfile.firstEssenceGiven`):
+   * the first boss guarantees it. Until B1, the stand-in gives a legendary item.
+   */
+  firstEssence: boolean;
+  /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
+  patterns: string[];
   /** The hero's pair, primary first (empty before the choice): drops lean toward it. */
   pair: ManaType[];
 }
