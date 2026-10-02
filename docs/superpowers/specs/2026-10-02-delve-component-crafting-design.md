@@ -114,7 +114,7 @@ On any owned item, between dives (each refused mid-dive, each bumps `forgeCount`
 
 ## Salvage (what gear gives back)
 
-`salvageYield(registry, profile, item)` previews the possibilities; `applySalvage(registry, profile, item, rng)` applies one item's yield. Every salvage path goes through `applySalvage`: the Loadout's Salvage, Salvage junk, and **auto-salvage** of new gear (`addLootToBag`). Each salvage's RNG is **keyed on the item**: `new SeededRNG(item seed).fork('salvage:' + item.uid)` (the item seed: the dive's seed mid-dive, `forgeCount` at the Anvil), never a world stream, because `bankWorld` runs on frame timing that differs between the client and the autopilot. It returns:
+`salvageYield(registry, profile, item)` previews the possibilities; `applySalvage(registry, profile, item, rng)` applies one item's yield. Every salvage path goes through `applySalvage`: the Loadout's Salvage, Salvage junk, and **auto-salvage** of new gear (`addLootToBag`). Each salvage's RNG is **keyed on the item**: `new SeededRNG(dive.seed).fork('salvage:' + item.uid)` mid-dive, and `new SeededRNG(profile.seed).fork('salvage:' + forgeCount + ':' + item.uid)` at the Anvil (bumping `forgeCount`), never a world stream, because `bankWorld` runs on frame timing that differs between the client and the autopilot. It returns:
 - **Scrap**, as today (`forge.salvage`).
 - **Shards:** one shard of one of its affix lines (picked at random), at the tier `crafting.salvageShardTier` gives that line's `roll` (thresholds → tier), plus a `crafting.salvageExtraShard` chance of a second from another line. A common item (no lines) gives none.
 - **Its pattern**, if not yet learned.
@@ -264,7 +264,7 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 - `MetalId`, `FluxGrade`;
 - `ShardRef { stat: HeroStatKey; tier: number }`;
 - `MaterialsPouch { metals: Record<MetalId, number>; flux: Record<FluxGrade, number>; shards: Partial<Record<HeroStatKey, number[]>>; essences: Record<string, number> }`;
-- `Haul` (a `MaterialsPouch` plus `scrap`, `dust`, `links`, `runes`, `patterns`);
+- `Haul` (a `MaterialsPouch` plus `scrap`, `dust`, `links`, `runes`);
 - `ForgeRequest`, `ForgePreview`, `SalvageYield`, `SettleOutcome`.
 
 **Profile v8:**
@@ -298,7 +298,7 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 |---|---|---|---|
 | **A · Contract** (the integrator, first) | One area | Types; `crafting.json` and the two balance blocks with schemas and starting numbers; registry getters; profile v8 and the reset; **every new engine export as a typed stub that throws "not implemented"** in `index.ts` (no A-phase test calls a stub); **every new store action** in `delveStore.ts` as a thin wrapper over the engine op; `hub/types.ts` (`bench: 'forge' \| 'temper'`, Codex sections `patterns` and `essences`); deleting Fusion (engine, store, Fuse UI) and the migrations; door shape changes everywhere they're read; `materialName` switched to `crafting.metals` (since `delve.json → materials` goes); the Lucky Charm text and `magicFind` → Find relabel (`delve.json`, `delve/hero-stats.ts`) | Engine and client build; the suites pass with removed features' tests deleted; old saves reset with the toast |
 | **B · Engine** (B1 and B2 in parallel, then B3) | **B1** drops and banking | `arpg/material-drops.ts`, `arpg/step.ts` (magnet), `arpg/world.ts` (`materialRng`), `arpg/combat.ts` (kill hook), `loot/drops.ts`, `arpg/rune-drops.ts`, `delve/dive.ts` (haul, banking, `settleDive`), `delve/stops.ts` (spending from `banked`) | Engine suite green; determinism |
-| | **B2** forge and salvage | `loot/forge.ts`, `loot/materials.ts`, `loot/salvage-yield.ts`, `loot/smithing.ts` (hone, imprint, reforge clears `band`), `loot/item-generator.ts` (`materialName`, the band/floor roll), `delve/crafting.ts`, `delve/profile.ts` (`addLootToBag` calls `applySalvage`, `salvageItems`) | Engine suite green |
+| | **B2** forge and salvage | `loot/forge.ts`, `loot/materials.ts`, `loot/salvage-yield.ts`, `loot/smithing.ts` (hone, imprint, reforge clears `band`), `loot/item-generator.ts` (the band/floor roll only; A already switched `materialName`), `delve/crafting.ts`, `delve/profile.ts` (`addLootToBag` calls `applySalvage`, `salvageItems`) | Engine suite green |
 | | **B3** autopilot and economy (after B1 + B2) | `delve/autopilot.ts`, `economySim`, `tests/delve-pacing.test.ts` | Pacing rails and the four targets |
 | **C · Client** (all parallel, after A; wiring real data after B) | **C1** arena and dive | Pickup FX, `ArenaRenderer` material drops, `PurseBar`, `FoundLog`, `StopScreen` / `DoorPane`, `DiveSummary`, `arena/useArena.ts` (bank on material pickups), `pages/DelveRun.tsx` (abandon / close with the registry), `hub/PauseScreen.tsx` (the Abandon and floor-restart labels) | Client suite, typecheck |
 | | **C2** the Forge tab | `hub/forge/*` | |
