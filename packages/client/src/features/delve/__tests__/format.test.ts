@@ -6,6 +6,8 @@ import {
   legendaryText,
   manaStyle,
   manaStyles,
+  RARITY_COLOR,
+  RARITY_TEXT,
 } from '../format';
 import { getDelveRegistry } from '../registry';
 
@@ -44,5 +46,19 @@ describe('delve format helpers', () => {
     const all = manaStyles(registry);
     expect(Object.keys(all)).toEqual(['fire', 'frost', 'storm', 'earth', 'shadow', 'nature']);
     for (const style of Object.values(all)) expect(style.color).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+});
+
+describe('rarity colours', () => {
+  it('are ENDESGA 32, and as text the same but for epic', () => {
+    expect(RARITY_COLOR).toEqual({
+      common: '#c0cbdc',
+      uncommon: '#63c74d',
+      magic: '#0099db',
+      rare: '#fee761',
+      epic: '#b55088',
+      legendary: '#f77622',
+    });
+    expect(RARITY_TEXT).toEqual({ ...RARITY_COLOR, epic: '#d7a6e8' });
   });
 });

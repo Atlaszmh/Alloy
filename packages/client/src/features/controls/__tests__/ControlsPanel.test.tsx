@@ -10,11 +10,13 @@ vi.mock('@/features/gamepad/gamepad-hub', () => ({
       padCapture = null;
     };
   },
+  isArenaLive: () => false,
 }));
 
 import { ControlsPanel } from '../ControlsPanel';
 import { DEFAULT_CONTROLS, exportControls } from '../controls';
 import { useControlsStore } from '@/stores/controlsStore';
+import { attachPromptKeys } from '@/features/delve/kit/prompts';
 
 const config = () => useControlsStore.getState().config;
 const key = (code: string) => fireEvent.keyDown(window, { code });
@@ -77,11 +79,33 @@ describe('ControlsPanel', () => {
     expect(config()).toEqual(DEFAULT_CONTROLS);
   });
 
-  it('closes with its Close button or Esc', () => {
-    const onClose = vi.fn();
-    render(<ControlsPanel onClose={onClose} />);
-    key('Escape');
-    fireEvent.click(screen.getByTestId('controls-close'));
-    expect(onClose).toHaveBeenCalledTimes(2);
+  it('opens as a kit dialog: a modal named Controls, in the UI layer, holding the pad', () => {
+    render(<ControlsPanel onClose={() => {}} />);
+    const dialog = screen.getByRole('dialog', { name: 'Controls' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.closest('[data-pad-scope]')).not.toBeNull();
+    expect(dialog.closest('#delve-ui-layer')).not.toBeNull();
+  });
+
+  it('closes with its Close button, or once with Esc (the Delve routes press its Back)', () => {
+    const release = attachPromptKeys(); // as AppShell does on every Delve route
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ width: 10, height: 10 }));
+    try {
+      const onClose = vi.fn();
+      render(<ControlsPanel onClose={onClose} />);
+      key('Escape');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByTestId('bind-key-potion'));
+      key('Escape'); // cancels the capture, never closes
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('bind-key-potion')).toHaveTextContent('F');
+      fireEvent.click(screen.getByTestId('controls-close'));
+      expect(onClose).toHaveBeenCalledTimes(2);
+    } finally {
+      box.mockRestore();
+      release();
+    }
   });
 });

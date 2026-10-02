@@ -18,6 +18,8 @@ import {
   type PadMemory,
 } from '@/features/gamepad/arena-pad';
 import type { InputDevice } from '@/stores/inputDeviceStore';
+import { isArenaLive } from '@/features/gamepad/gamepad-hub';
+import { scopedLast } from '@/features/delve/kit/prompts';
 
 /** An ability press. `aim` is a screen point (client px), or null to auto-aim. */
 export interface CastPress {
@@ -235,6 +237,14 @@ function moveDir(code: string): Vec | null {
   return action && action in MOVE_DIRS ? MOVE_DIRS[action as MoveKey] : null;
 }
 
+/**
+ * The arena's Menu, from its key or the pad's button while the fight is live:
+ * the topmost scope's `[data-pad-menu]` (the dive's menu button, Training's panel).
+ */
+export function pressMenu(): void {
+  scopedLast('[data-pad-menu]')?.click();
+}
+
 /** Text entry keeps every key, the menu key included. */
 function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
@@ -277,9 +287,12 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
   };
   const down = (e: KeyboardEvent) => {
     if (isText(e.target)) return;
-    // The menu key works while paused too (so it can close the menu), and from a slider or a list.
+    // The menu key works from a slider or a list, but only while the fight is live: paused,
+    // the prompt runtime owns it (Esc presses the open menu's back), so no press acts twice.
     if (!e.repeat && keyAction(e.code) === 'menu') {
-      (document.querySelector('[data-pad-menu]') as HTMLElement | null)?.click();
+      if (e.defaultPrevented || !isArenaLive()) return;
+      e.preventDefault();
+      pressMenu();
       return;
     }
     if (isField(e.target) || !isEnabled()) return;

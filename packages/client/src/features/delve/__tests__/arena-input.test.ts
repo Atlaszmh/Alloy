@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import {
   beginFloor,
   chainMove,
@@ -14,12 +14,19 @@ import {
   type Move,
   type Vec,
 } from '@alloy/engine';
-import { attachKeyboard, createArenaInput, frameInput, holdingSlot } from '../arena/input';
+import {
+  attachKeyboard,
+  createArenaInput,
+  frameInput,
+  holdingSlot,
+  pressMenu,
+} from '../arena/input';
 import { TAP_MS } from '../arena/aim-gestures';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
 import { padMemory, type ArenaPadActions } from '@/features/gamepad/arena-pad';
 import { useControlsStore } from '@/stores/controlsStore';
+import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 
 const key = (type: 'keydown' | 'keyup', code: string) =>
   window.dispatchEvent(new KeyboardEvent(type, { code }));
@@ -101,10 +108,18 @@ describe('ability keys', () => {
 
 describe('panel controls keep their keys', () => {
   let detach = () => {};
+  // The menu key is the arena's only while the fight is live.
+  beforeEach(() => setArenaLive(true));
   afterEach(() => {
     detach();
+    setArenaLive(false);
     document.body.replaceChildren();
   });
+  /** Give `el` a box, so the scoped lookup sees it. */
+  const shown = <T extends HTMLElement>(el: T): T => {
+    el.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 });
+    return el;
+  };
 
   it('a slider or a list never moves, casts or dodges, but the menu key still works from them', () => {
     const input = createArenaInput();
@@ -112,7 +127,7 @@ describe('panel controls keep their keys', () => {
     const slider = document.body.appendChild(document.createElement('input'));
     slider.type = 'range';
     const list = document.body.appendChild(document.createElement('select'));
-    const menu = document.body.appendChild(document.createElement('button'));
+    const menu = document.body.appendChild(shown(document.createElement('button')));
     menu.setAttribute('data-pad-menu', '');
     let opened = 0;
     menu.addEventListener('click', () => opened++);
@@ -151,6 +166,40 @@ describe('panel controls keep their keys', () => {
     text.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
     expect(opened).toBe(0);
     expect(input.keys).toEqual({ x: 0, y: 0 });
+  });
+
+  it("the menu key acts only while the fight is live, on the topmost scope's menu, and never on a handled key", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const opened: string[] = [];
+    const menu = (name: string, parent: HTMLElement = document.body) => {
+      const b = parent.appendChild(shown(document.createElement('button')));
+      b.setAttribute('data-pad-menu', '');
+      b.addEventListener('click', () => opened.push(name));
+    };
+    const esc = () => {
+      const e = new KeyboardEvent('keydown', { code: 'Escape', bubbles: true, cancelable: true });
+      window.dispatchEvent(e);
+      return e;
+    };
+    menu('purse');
+    const dock = document.body.appendChild(shown(document.createElement('div')));
+    dock.setAttribute('data-pad-scope', '');
+    menu('dock', dock);
+    expect(esc().defaultPrevented).toBe(true);
+    expect(opened).toEqual(['dock']);
+    // Paused, the prompt runtime owns the key: the arena leaves it alone.
+    setArenaLive(false);
+    expect(esc().defaultPrevented).toBe(false);
+    setArenaLive(true);
+    const handled = (e: Event) => e.preventDefault();
+    window.addEventListener('keydown', handled, true);
+    esc();
+    window.removeEventListener('keydown', handled, true);
+    expect(opened).toEqual(['dock']);
+    // The pad's Menu while live (useArenaCore's padFrame) presses the same one.
+    pressMenu();
+    expect(opened).toEqual(['dock', 'dock']);
   });
 });
 

@@ -30,7 +30,7 @@ import {
   type WeaponChoice,
 } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
-import { RARITY_COLOR, RARITY_LABEL, formatStat, legendaryText, manaStyle } from '../format';
+import { RARITY_LABEL, RARITY_TEXT, formatStat, legendaryText, manaStyle } from '../format';
 import { AttunementBars, Chip } from '../AbilitiesPanel';
 import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
 import type { MeterSummary } from './meter';
@@ -179,7 +179,7 @@ const LoadoutTab = memo(function LoadoutTab() {
                 onClick={() => pick({ rarity: r })}
                 testId={`weapon-rarity-${r}`}
               >
-                <span style={{ color: RARITY_COLOR[r] }}>{RARITY_LABEL[r]}</span>
+                <span style={{ color: RARITY_TEXT[r] }}>{RARITY_LABEL[r]}</span>
               </Chip>
             ))}
           </div>
@@ -187,7 +187,7 @@ const LoadoutTab = memo(function LoadoutTab() {
         <div className="delve-panel flex flex-col gap-0.5 p-2.5 text-sm" data-testid="weapon-lines">
           <div
             className="delve-display font-bold"
-            style={{ color: weapon ? RARITY_COLOR[weapon.rarity] : '#d6d3d1' }}
+            style={{ color: weapon ? RARITY_TEXT[weapon.rarity] : '#d6d3d1' }}
             data-testid="weapon-name"
           >
             {weapon ? weapon.name : 'Unarmed'}

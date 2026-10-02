@@ -3,7 +3,7 @@ import type { DiveState } from '@alloy/engine';
 import { RARITY_ORDER } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { ItemTile } from './ItemTile';
-import { RARITY_COLOR, RARITY_LABEL, formatNumber } from './format';
+import { RARITY_LABEL, RARITY_TEXT, formatNumber } from './format';
 import { countRunes } from './chains/chain-text';
 import { getDelveRegistry } from './registry';
 import { runeName } from './runes/rune-style';
@@ -78,7 +78,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
         </div>
         <div className="col-span-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs">
           {RARITY_ORDER.filter((r) => dive.found[r] > 0).map((r) => (
-            <span key={r} style={{ color: RARITY_COLOR[r] }}>
+            <span key={r} style={{ color: RARITY_TEXT[r] }}>
               {dive.found[r]} {RARITY_LABEL[r]}
             </span>
           ))}
@@ -92,7 +92,7 @@ export function DiveSummary({ dive, biomeName, onCamp, onAgain, againLabel }: Di
             <div className="text-[11px] uppercase tracking-widest text-stone-500">Best find</div>
             <div
               className="delve-display text-lg font-bold"
-              style={{ color: RARITY_COLOR[dive.bestFind.rarity] }}
+              style={{ color: RARITY_TEXT[dive.bestFind.rarity] }}
             >
               {dive.bestFind.name}
             </div>

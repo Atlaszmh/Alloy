@@ -82,7 +82,7 @@ test.describe('Delve loot loop', () => {
 
     await page.getByTestId('return-camp').click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
-    await expect(page.getByTestId('scrap-count')).not.toHaveText('⚙ 0 scrap');
+    await expect(page.getByTestId('scrap-count')).toHaveText(/[1-9][\d,]* scrap/);
     await expect(page.getByTestId('delve-howto')).toHaveCount(0);
   });
 
@@ -192,8 +192,8 @@ test.describe('Delve loot loop', () => {
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {
     await seedProfile(page, 4242, true, 'nature', { links: 1, scrap: 20 });
     await page.goto('/delve');
-    await expect(page.getByTestId('links-count')).toHaveText('🔗 1 Link');
-    await expect(page.getByTestId('mana-strip')).toContainText('Abilities');
+    await expect(page.getByTestId('links-count')).toHaveText('1 Link');
+    await expect(page.getByTestId('mana-strip')).toContainText('Skills');
     await page.getByTestId('mana-strip').click();
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
     // The Primary's one move becomes a Wildfire Burst: a draft, free before the first dive.
@@ -233,13 +233,39 @@ test.describe('Delve loot loop', () => {
     await expect(choice).toBeVisible();
     await page.getByTestId('mana-choice-frost').click();
     await expect(choice).toBeHidden();
-    await page.getByTestId('tab-abilities').click();
+    await page.getByTestId('tab-skills').click();
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toContainText('Frost Bolt');
     // The common sword carries Basic and Primary: the others show locked.
     await page.getByTestId('chain-skill-defensive').click();
     await expect(summary).toContainText('Carried by magic weapons and better');
+    // The paper doll is on the Loadout tab.
+    await page.getByTestId('tab-loadout').click();
     await page.getByTestId('slot-weapon').click();
     await expect(page.getByTestId('item-mana')).toContainText('Frost');
+  });
+
+  test('D09: Esc opens and closes the dive menu, and in the Controls editor closes only the editor', async ({
+    page,
+  }) => {
+    await seedProfile(page, 4242, false);
+    await page.goto('/delve');
+    await page.getByTestId('delve-button').click();
+    await expect(page.getByTestId('delve-run')).toBeVisible({ timeout: ARENA_READY });
+    const menu = page.getByTestId('attack-mode-toggle');
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeVisible();
+    // Paused, Esc presses the menu's Resume: once, so the menu doesn't open again.
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeVisible();
+    await page.getByTestId('open-controls').click();
+    await expect(page.getByTestId('controls-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('controls-panel')).toBeHidden();
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
   });
 });

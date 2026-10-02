@@ -1,6 +1,9 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { claimDevices, keepFocus, moveFocus } from '../use-gamepad-nav';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { claimDevices, keepFocus, moveFocus, useGamepadNav } from '../use-gamepad-nav';
+import type { GamepadLike } from '../gamepad';
 import { useInputDeviceStore, type InputDevice } from '@/stores/inputDeviceStore';
+import { captureNav, usePrompts } from '@/features/delve/kit/prompts';
 
 describe('moveFocus on a list', () => {
   afterEach(() => document.body.replaceChildren());
@@ -76,6 +79,22 @@ describe('moveFocus between buttons', () => {
       at(document.createElement('select'), 40),
     );
     document.body.append(first, locked, last);
+    first.focus();
+    moveFocus('right');
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('never lands on a [data-pad-skip] control (a prompt bar button)', () => {
+    const at = (left: number, skip = false) => {
+      const b = document.body.appendChild(document.createElement('button'));
+      if (skip) b.setAttribute('data-pad-skip', '');
+      b.getBoundingClientRect = () =>
+        ({ left, top: 0, width: 10, height: 10, right: left + 10, bottom: 10 }) as DOMRect;
+      return b;
+    };
+    const first = at(0);
+    at(20, true);
+    const last = at(40);
     first.focus();
     moveFocus('right');
     expect(document.activeElement).toBe(last);
@@ -180,6 +199,19 @@ describe('keepFocus: the pad never loses the focus', () => {
     expect(document.activeElement).toBe(first);
   });
 
+  it("a scope with no remembered focus starts on its [data-pad-first] (the hub's Delve button)", () => {
+    setDevice('gamepad');
+    const hub = document.body.appendChild(document.createElement('div'));
+    hub.setAttribute('data-pad-scope', '');
+    hub.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 200, height: 200, right: 200, bottom: 200 }) as DOMRect;
+    button(0, 0, hub);
+    const delve = button(100, 150, hub);
+    delve.setAttribute('data-pad-first', '');
+    keepFocus();
+    expect(document.activeElement).toBe(delve);
+  });
+
   it('never scrolls to the control it focuses: a sheet still sliding in would drag the page under it', () => {
     setDevice('gamepad');
     const b = button(0, 2000);
@@ -195,5 +227,191 @@ describe('keepFocus: the pad never loses the focus', () => {
     expect(document.activeElement).toBe(b);
     expect(scrolled).toBe(false);
     expect(opts).toEqual({ preventScroll: true });
+  });
+});
+
+/** The standard mapping's button indices. */
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, right: 15 } as const;
+
+describe('the pad outside combat: scopes, tab lists and prompts', () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let lastFrame = 0;
+  const realGetGamepads = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
+  let down: number[] = [];
+  let now = 0;
+  let stop = () => {};
+  const pad = (): GamepadLike => ({
+    connected: true,
+    mapping: 'standard',
+    axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, (_, i) => ({
+      pressed: down.includes(i),
+      value: down.includes(i) ? 1 : 0,
+    })),
+  });
+  /** One animation frame, 16 ms on: the hub reads the pad once. */
+  const tick = () => {
+    const run = [...frames.values()];
+    frames.clear();
+    now += 16;
+    for (const cb of run) cb(now);
+  };
+  /** Press a button for one frame, then let it go. */
+  const tap = (button: number) => {
+    down = [button];
+    tick();
+    down = [];
+    tick();
+  };
+  /** A visible element with a box at `left`, `top`. */
+  const el = <K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    attrs: Record<string, string> = {},
+    parent: HTMLElement = document.body,
+    left = 0,
+    top = 0,
+  ): HTMLElementTagNameMap[K] => {
+    const e = parent.appendChild(document.createElement(tag));
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    e.getBoundingClientRect = () =>
+      ({ left, top, width: 10, height: 10, right: left + 10, bottom: top + 10 }) as DOMRect;
+    return e;
+  };
+  const clicks: string[] = [];
+  const named = (e: HTMLElement, name: string) => {
+    e.addEventListener('click', () => clicks.push(name));
+    return e;
+  };
+
+  beforeEach(() => {
+    clicks.length = 0;
+    down = [];
+    frames.clear();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      frames.set(++lastFrame, cb);
+      return lastFrame;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad()] });
+    stop = renderHook(() => useGamepadNav()).unmount;
+    tick();
+  });
+  afterEach(() => {
+    stop();
+    expect(frames.size).toBe(0); // the pad loop stopped with the hook
+    if (realGetGamepads) Object.defineProperty(navigator, 'getGamepads', realGetGamepads);
+    else delete (navigator as { getGamepads?: unknown }).getGamepads;
+    vi.unstubAllGlobals();
+    document.body.replaceChildren();
+    setDevice('keyboard');
+  });
+
+  it("B presses the topmost scope's back, never the page's; Menu its menu, else its back", () => {
+    named(el('button', { 'data-pad-back': '' }), 'page-back');
+    named(el('button', { 'data-pad-menu': '' }), 'page-menu');
+    const sheet = el('div', { 'data-pad-scope': '' });
+    named(el('button', { 'data-pad-back': '' }, sheet), 'sheet-back');
+    tap(PAD.b);
+    tap(PAD.menu);
+    expect(clicks).toEqual(['sheet-back', 'sheet-back']);
+    named(el('button', { 'data-pad-menu': '' }, sheet), 'sheet-menu');
+    tap(PAD.menu);
+    sheet.remove();
+    tap(PAD.menu);
+    tap(PAD.b);
+    expect(clicks).toEqual(['sheet-back', 'sheet-back', 'sheet-menu', 'page-menu', 'page-back']);
+  });
+
+  it('RB steps the top-level tabs and RT the sub list, both past disabled tabs', () => {
+    const list = (attrs: Record<string, string>, ids: string[], off: string[] = []) => {
+      const l = el('div', { role: 'tablist', ...attrs });
+      for (const [i, id] of ids.entries()) {
+        const t = el('button', { role: 'tab', 'aria-selected': String(i === 0) }, l);
+        t.id = id;
+        if (off.includes(id)) t.setAttribute('aria-disabled', 'true');
+        t.addEventListener('click', () => {
+          for (const o of l.querySelectorAll('[role="tab"]'))
+            o.setAttribute('aria-selected', 'false');
+          t.setAttribute('aria-selected', 'true');
+        });
+      }
+      return () => l.querySelector('[aria-selected="true"]')?.id;
+    };
+    const top = list({ 'data-pad-tabs': '' }, ['loadout', 'skills', 'forge'], ['skills']);
+    const sub = list({ 'data-pad-tabs': 'sub' }, ['basic', 'primary', 'defensive']);
+    tap(PAD.rb);
+    expect(top()).toBe('forge');
+    tap(PAD.rb);
+    expect(top()).toBe('loadout');
+    tap(PAD.lb);
+    expect(top()).toBe('forge');
+    expect(sub()).toBe('basic');
+    tap(PAD.rt);
+    expect(sub()).toBe('primary');
+    tap(PAD.lt);
+    tap(PAD.lt);
+    expect(sub()).toBe('defensive');
+    expect(top()).toBe('forge');
+  });
+
+  it("a screen's prompt takes its button first; A still presses the focused control", () => {
+    const salvage = vi.fn();
+    const back = vi.fn();
+    const select = vi.fn();
+    renderHook(() =>
+      usePrompts([
+        { id: 'salvage', label: 'Salvage', binding: { pad: 'x' }, onPress: salvage },
+        { id: 'back', label: 'Back', binding: { pad: 'b' }, onPress: back },
+        { id: 'select', label: 'Select', binding: { pad: 'a' }, onPress: select },
+      ]),
+    );
+    named(el('button', { 'data-pad-back': '' }), 'page-back');
+    const focused = named(el('button'), 'focused');
+    focused.focus();
+    tap(PAD.x);
+    tap(PAD.b);
+    tap(PAD.a);
+    expect([salvage.mock.calls.length, back.mock.calls.length, select.mock.calls.length]).toEqual([
+      1, 1, 0,
+    ]);
+    expect(clicks).toEqual(['focused']);
+  });
+
+  it('holding Y past its hold fires the hold prompt, and never the tap', () => {
+    const remove = vi.fn();
+    const apply = vi.fn();
+    renderHook(() =>
+      usePrompts([
+        { id: 'remove', label: 'Remove', binding: { pad: 'y' }, onPress: remove },
+        { id: 'apply', label: 'Apply', binding: { pad: 'y', padHold: 600 }, onHold: apply },
+      ]),
+    );
+    down = [PAD.y];
+    for (let i = 0; i < 40; i++) tick(); // 640 ms
+    down = [];
+    tick();
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(remove).not.toHaveBeenCalled();
+    tap(PAD.y);
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('while a card is carried, the D-pad and A, B and X go to it, not the focus or the back', () => {
+    named(el('button', { 'data-pad-back': '' }), 'page-back');
+    const first = el('button', {}, document.body, 0, 0);
+    el('button', {}, document.body, 40, 0);
+    first.focus();
+    const heard: string[] = [];
+    const release = captureNav((input) => heard.push(input));
+    tap(PAD.right);
+    tap(PAD.x);
+    tap(PAD.a);
+    tap(PAD.b);
+    expect(heard).toEqual(['right', 'x', 'a', 'b']);
+    expect(clicks).toEqual([]);
+    expect(document.activeElement).toBe(first);
+    release();
+    tap(PAD.right);
+    expect(document.activeElement).not.toBe(first);
   });
 });

@@ -1,4 +1,5 @@
 import type { ManaType, Rarity, ReactionId } from '@alloy/engine';
+import { RARITY_COLOR } from '../format';
 
 /** Pixi (numeric) colors for the arena. CSS colors live in ../format.ts. */
 export const MANA_HEX: Record<ManaType, number> = {
@@ -10,14 +11,10 @@ export const MANA_HEX: Record<ManaType, number> = {
   nature: 0x6fcf57,
 };
 
-export const RARITY_HEX: Record<Rarity, number> = {
-  common: 0xb9b9c4,
-  uncommon: 0x4ade80,
-  magic: 0x60a5fa,
-  rare: 0xfcd34d,
-  epic: 0xc084fc,
-  legendary: 0xfb923c,
-};
+/** The rarities' colours as numbers: format.ts's RARITY_COLOR, so the drops match the tiles. */
+export const RARITY_HEX = Object.fromEntries(
+  Object.entries(RARITY_COLOR).map(([r, c]) => [r, parseInt(c.slice(1), 16)]),
+) as Record<Rarity, number>;
 
 export const REACTION_HEX: Record<ReactionId, number> = {
   melt: 0xff8a3d,

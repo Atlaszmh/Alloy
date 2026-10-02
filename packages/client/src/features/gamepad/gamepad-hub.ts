@@ -1,5 +1,6 @@
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { useControlsStore } from '@/stores/controlsStore';
+import { releasePromptHolds } from '@/features/delve/kit/prompts';
 import {
   edges,
   firstPad,
@@ -43,10 +44,16 @@ export function capturePadButton(onButton: (button: PadButton) => void): () => v
   };
 }
 
-/** The arena owns the controller while a fight is live (not paused). */
+/** The arena owns the controller while a fight is live (not paused); the menus' held prompts let go as it starts. */
 export function setArenaLive(live: boolean): void {
   arenaLive = live;
   arenaPresses.clear();
+  if (live) releasePromptHolds();
+}
+
+/** Whether the arena owns the controller, Esc and the menu key now (`setArenaLive`). */
+export function isArenaLive(): boolean {
+  return arenaLive;
 }
 
 /** The pad as of this frame (sticks and held buttons), or null with no pad. */
