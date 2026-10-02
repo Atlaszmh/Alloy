@@ -144,4 +144,27 @@ describe('the kit surfaces', () => {
     expect(screen.getByRole('button', { name: 'Frost' })).toHaveFocus();
     expect(screen.getByRole('dialog')).toHaveTextContent('footer');
   });
+
+  it('keeps Tab and Shift+Tab inside it, wrapping at either end', () => {
+    render(
+      <>
+        <button type="button">Delve</button>
+        <Dialog title="Menu" onClose={() => {}}>
+          <button type="button">Resume</button>
+          <button type="button" tabIndex={-1}>
+            Skipped
+          </button>
+        </Dialog>
+      </>,
+    );
+    const back = screen.getByRole('button', { name: 'Back' });
+    const resume = screen.getByRole('button', { name: 'Resume' });
+    resume.focus();
+    expect(fireEvent.keyDown(resume, { key: 'Tab' })).toBe(false); // prevented
+    expect(back).toHaveFocus();
+    expect(fireEvent.keyDown(back, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(resume).toHaveFocus();
+    back.focus();
+    expect(fireEvent.keyDown(back, { key: 'Tab' })).toBe(true); // not at the end: the browser's own
+  });
 });

@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from './controls';
 import { PromptBar } from './glyphs';
@@ -107,6 +115,9 @@ export function Footer({
   );
 }
 
+const FOCUSABLE =
+  'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 /**
  * A centred plate in uiLayer() (zoomed), its own pad scope. Back carries `data-pad-back` (Esc and B
  * press it); with no `onClose` the dialog is forced and has no Back. The focus goes to
@@ -133,15 +144,27 @@ export function Dialog({
       initialFocus?.current ??
       ref.current?.querySelector<HTMLElement>('[data-pad-first]') ??
       ref.current?.querySelector<HTMLElement>('[data-pad-back]') ??
-      ref.current?.querySelector<HTMLElement>(
-        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      ) ??
+      ref.current?.querySelector<HTMLElement>(FOCUSABLE) ??
       ref.current;
     first?.focus();
     return () => {
       if (opener?.isConnected) opener.focus();
     };
   }, [initialFocus, opener]);
+
+  // Tab and Shift+Tab wrap inside the dialog: the screen behind never takes the focus.
+  const trapTab = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Tab' || !ref.current) return;
+    const all = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (el) => el.tabIndex >= 0,
+    );
+    if (all.length === 0) return;
+    const [first, last] = [all[0], all[all.length - 1]];
+    const at = document.activeElement;
+    if (e.shiftKey ? at !== first && at !== ref.current : at !== last) return;
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  };
 
   return createPortal(
     <div className="k-dialog-backdrop" data-pad-scope>
@@ -154,6 +177,7 @@ export function Dialog({
         className="k-panel k-plate k-dialog"
         style={{ width }}
         data-testid={testId}
+        onKeyDown={trapTab}
       >
         <div className="k-panel-head">
           <h2 id={titleId} className="k-heading" style={{ margin: 0 }}>
