@@ -1,9 +1,11 @@
 import type { Probe, Finding } from './types';
+import { CLICK_TARGETS } from './min-size';
 
 const PROBE_X = 'overflow-x';
 const PROBE_X_DOC = 'overflow-x-doc';
 const PROBE_X_INNER = 'overflow-x-inner';
 const PROBE_Y = 'overflow-y';
+const PROBE_PAGE = 'page-scroll';
 
 export const overflowX: Probe = async (page, ctx) => {
   const data = await page.evaluate((vw) => {
@@ -176,4 +178,60 @@ export const overflowY: Probe = async (page, ctx) => {
     measured: Math.max(...data.offenders.map(o => o.bottom)),
     expected: data.frameBottom,
   }];
+};
+
+/**
+ * The Delve's overflow rule: the page never scrolls, panes may. The document must fit the
+ * window, and no click target may be cut off (outside the window, or outside an ancestor that
+ * clips it) unless a scrolling pane between them can bring it into view.
+ */
+export const pageScroll: Probe = async (page, ctx) => {
+  const data = await page.evaluate((targets) => {
+    const doc = document.documentElement;
+    const scrolls = (s: CSSStyleDeclaration) =>
+      ['auto', 'scroll'].includes(s.overflowX) || ['auto', 'scroll'].includes(s.overflowY);
+    const clips = (s: CSSStyleDeclaration) => s.overflowX !== 'visible' || s.overflowY !== 'visible';
+    const cut: string[] = [];
+    document.querySelectorAll<HTMLElement>(targets).forEach((el) => {
+      if (cut.length >= 5) return;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
+      // The box it must fit: the window, narrowed by every clipping ancestor up to the
+      // first one that scrolls (a pane, which can bring it into view).
+      let top = 0, left = 0, right = innerWidth, bottom = innerHeight;
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (scrolls(s)) return;
+        if (!clips(s)) continue;
+        const pr = p.getBoundingClientRect();
+        top = Math.max(top, pr.top); left = Math.max(left, pr.left);
+        right = Math.min(right, pr.right); bottom = Math.min(bottom, pr.bottom);
+      }
+      if (r.top < top - 1 || r.left < left - 1 || r.right > right + 1 || r.bottom > bottom + 1) {
+        const tid = el.getAttribute('data-testid');
+        const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+        cut.push(`${tid ? `[data-testid="${tid}"]` : el.tagName.toLowerCase()}${text ? ` "${text}"` : ''}`);
+      }
+    });
+    return { scrollW: doc.scrollWidth, scrollH: doc.scrollHeight, cut };
+  }, CLICK_TARGETS);
+
+  const findings: Finding[] = [];
+  const { width, height } = ctx.viewport;
+  if (data.scrollW > width + 0.5 || data.scrollH > height + 0.5) {
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE_PAGE,
+      severity: 'fail',
+      detail: `the page scrolls: document ${data.scrollW}×${data.scrollH} exceeds the window ${width}×${height}`,
+    });
+  }
+  if (data.cut.length > 0) {
+    findings.push({
+      screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE_PAGE,
+      severity: 'fail',
+      detail: `controls cut off outside any scrolling pane: ${data.cut.join(', ')}`,
+    });
+  }
+  return findings;
 };

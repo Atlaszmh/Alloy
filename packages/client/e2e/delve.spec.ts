@@ -1,45 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-import {
-  bindSecondary,
-  createDefaultRegistry,
-  createDelveProfile,
-  type DelveProfile,
-  type ManaType,
-} from '@alloy/engine';
-
-const SAVE_KEY = 'alloy:delve:v2';
-/** Loading the arena (Pixi, sprites) can be slow when many test browsers run at once. */
-const ARENA_READY = 30_000;
-
-/**
- * Seed a deterministic Delve save (a fire hero, `secondary` bound if given, `over` on top) and
- * let the engine bot play the arena.
- */
-async function seedProfile(
-  page: Page,
-  seed = 4242,
-  autopilot = true,
-  secondary?: ManaType,
-  over: Partial<DelveProfile> = {},
-): Promise<void> {
-  const registry = createDefaultRegistry();
-  let profile = createDelveProfile(registry, seed, { primary: 'fire' });
-  if (secondary) profile = bindSecondary(registry, profile, secondary).profile;
-  profile = { ...profile, ...over };
-  const save = JSON.stringify(profile);
-  await page.addInitScript(
-    ([key, value, bot]) => {
-      if (sessionStorage.getItem('delve-e2e')) return;
-      localStorage.clear();
-      localStorage.setItem(key, value);
-      if (bot) localStorage.setItem('alloy:delve:autopilot', '1');
-      localStorage.setItem('alloy:delve:timescale', '2');
-      localStorage.setItem('alloy:muted', 'true');
-      sessionStorage.setItem('delve-e2e', '1');
-    },
-    [SAVE_KEY, save, autopilot] as const,
-  );
-}
+import { test, expect } from '@playwright/test';
+import { ARENA_READY, seedProfile } from './fixtures/delve';
 
 test.describe('Delve loot loop', () => {
   test('D01: menu → anvil → dive → clear depth → extract → back to the anvil', async ({ page }) => {

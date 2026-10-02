@@ -161,7 +161,11 @@ export function EquippedPane({
         <div className="k-well mt-auto flex flex-col gap-1 p-3" data-testid="loadout-moveset">
           <div className="flex items-baseline justify-between gap-3">
             <span className="k-disp truncate text-[18px]">Moveset · {weapon.name}</span>
-            <button type="button" className="k-caption" onClick={() => go({ tab: 'skills' })}>
+            <button
+              type="button"
+              className="k-caption -my-1.5 inline-flex min-h-8 items-center"
+              onClick={() => go({ tab: 'skills' })}
+            >
               Skills ›
             </button>
           </div>

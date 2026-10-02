@@ -109,6 +109,7 @@ export function HubFooter({
         binding={{ key: 'Enter', pad: 'menu' }}
         data-pad-menu
         data-pad-first
+        data-primary-action="delve"
         testId="delve-button"
       >
         {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${start}`}

@@ -59,7 +59,7 @@ export function TrainingBar({
       <span className="flex items-center gap-4 whitespace-nowrap text-[14px] text-[var(--k-text-2)]">
         <button
           type="button"
-          className="flex items-center gap-[6px]"
+          className="flex min-h-8 items-center gap-[6px]"
           aria-expanded={panelOpen}
           data-pad-journal
           onMouseDown={noFocus}
@@ -77,7 +77,7 @@ export function TrainingBar({
         </button>
         <button
           type="button"
-          className="flex items-center gap-[6px]"
+          className="flex min-h-8 items-center gap-[6px]"
           data-pad-menu
           onMouseDown={noFocus}
           onClick={onMenu}

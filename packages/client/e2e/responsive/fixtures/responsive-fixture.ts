@@ -6,6 +6,8 @@ import type { Viewport } from '../viewports';
 export interface RunProbesOptions {
   /** Per-probe threshold overrides (e.g., { deadSpace: { minRatio: 0.6 } }). */
   overrides?: ProbeOverrides;
+  /** Run the Delve's variants of the probes (see `ProbeCtx.delve`). */
+  delve?: { arena?: boolean };
 }
 
 export type RunProbes = (
@@ -19,7 +21,7 @@ export const test = base.extend<{ runProbes: RunProbes }>({
     await use(async (screen, vp, options) => {
       const findings = await runAllProbes(
         page,
-        { screen, viewport: vp },
+        { screen, viewport: vp, delve: options?.delve },
         options?.overrides,
       );
       findings.forEach(appendFinding);

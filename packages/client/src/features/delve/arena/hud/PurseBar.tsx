@@ -92,7 +92,7 @@ export function PurseBar({
         </span>
         <button
           type="button"
-          className="flex items-center gap-[6px] disabled:opacity-60"
+          className="flex min-h-8 items-center gap-[6px] disabled:opacity-60"
           data-pad-journal
           disabled={!onJournal}
           onMouseDown={noFocus}
@@ -109,7 +109,7 @@ export function PurseBar({
         </button>
         <button
           type="button"
-          className="flex items-center gap-[6px]"
+          className="flex min-h-8 items-center gap-[6px]"
           aria-label="Dive menu"
           data-pad-menu
           onMouseDown={noFocus}

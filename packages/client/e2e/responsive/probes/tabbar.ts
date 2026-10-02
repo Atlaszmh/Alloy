@@ -3,6 +3,16 @@ import type { Probe, Finding } from './types';
 const PROBE = 'tabbar-visibility';
 
 export const tabBarVisibility: Probe = async (page, ctx) => {
+  // The Delve hides the TabBar on every /delve* route.
+  if (ctx.delve) {
+    const present = await page.evaluate(() => document.querySelector('[data-tabbar]') !== null);
+    return present
+      ? [{
+          screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
+          severity: 'fail', detail: '[data-tabbar] present on a Delve screen (it must have none)',
+        }]
+      : [];
+  }
   const result = await page.evaluate(() => {
     const tabbar = document.querySelector<HTMLElement>('[data-tabbar]');
     if (!tabbar) return { missing: true } as const;
