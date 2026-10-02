@@ -74,5 +74,5 @@
     "natureAttune": "element"
   },
   "startingPatterns": ["sword", "cuirass", "dagger"],
-  "startingMaterials": { "metals": { "rusty": 5 }, "flux": { "uncommon": 3 }, "scrap": 60 }
+  "startingMaterials": { "metals": { "rusty": 5 }, "flux": { "uncommon": 5 }, "scrap": 50 }
 }

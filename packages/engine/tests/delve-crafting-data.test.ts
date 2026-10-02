@@ -71,13 +71,13 @@ describe('crafting.json', () => {
     ]);
   });
 
-  it("knows the starter kit: the sword's, the cuirass's and the dagger's patterns, 5 Rusty bars, 3 uncommon flux and 60 scrap", () => {
+  it("knows the starter kit: the sword's, the cuirass's and the dagger's patterns, 5 Rusty bars, 5 uncommon flux and 50 scrap", () => {
     expect(data.startingPatterns).toEqual(['sword', 'cuirass', 'dagger']);
     for (const id of data.startingPatterns) expect(registry.getGearBase(id).id).toBe(id);
     expect(data.startingMaterials).toEqual({
       metals: { rusty: 5 },
-      flux: { uncommon: 3 },
-      scrap: 60,
+      flux: { uncommon: 5 },
+      scrap: 50,
     });
   });
 });
