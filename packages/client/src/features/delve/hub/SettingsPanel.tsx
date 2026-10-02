@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { HUD_SCALE_RANGE, useUIStore } from '@/stores/uiStore';
+import { HUD_SCALE_RANGE, VIEW_UNITS_RANGE, useUIStore } from '@/stores/uiStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Chip, Dialog, Segmented } from '@/features/delve/kit';
+import { arenaResolution, arenaZoom } from '@/features/delve/arena/camera';
 import { version } from '../../../../package.json';
 
 type Colorblind = 'none' | 'deuteranopia' | 'protanopia' | 'tritanopia';
@@ -18,8 +19,8 @@ const HUD_PERCENT = HUD_SCALE_RANGE.map((v) => Math.round(v * 100));
 
 /**
  * The Delve's Settings (from the system menu): the same `uiStore` fields as
- * the classic drawer (volumes, mute, colorblind mode), the HUD scale, and the
- * version, which the Delve has no TabBar to show.
+ * the classic drawer (volumes, mute, colorblind mode), the HUD scale, View
+ * distance, and the version, which the Delve has no TabBar to show.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const ui = useUIStore();
@@ -39,6 +40,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     />
   );
   const hud = Math.round(ui.hudScale * 100);
+  // What View distance gives in this window: its whole scale and the units it shows.
+  const zoom = arenaZoom(window.innerHeight, arenaResolution(), ui.arenaViewUnits);
   return (
     <Dialog
       title="Settings"
@@ -80,6 +83,19 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             shown={<span data-testid="hud-scale-value">{hud}%</span>}
             onChange={(v) => ui.setHudScale(v / 100)}
           />
+          <Slider
+            id="view-distance"
+            label="View distance"
+            min={VIEW_UNITS_RANGE[0]}
+            max={VIEW_UNITS_RANGE[1]}
+            step={1}
+            value={ui.arenaViewUnits}
+            shown={ui.arenaViewUnits}
+            onChange={(v) => ui.setArenaViewUnits(v)}
+          />
+          <p className="text-[14px] text-[var(--k-text-3)]" data-testid="view-distance-value">
+            {zoom.scale} px per pixel · {Number(zoom.unitsTall.toFixed(1))} units tall
+          </p>
         </Section>
         <p className="text-[14px] text-[var(--k-text-3)]" data-testid="settings-version">
           Alloy v{version}
