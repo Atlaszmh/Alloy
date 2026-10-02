@@ -8,6 +8,7 @@ import {
   type ChainFix,
   type Chains,
   type DelveProfile,
+  type DraftPrice,
   type GearItem,
   type GearSlot,
   type ManaType,
@@ -463,6 +464,19 @@ describe('delveStore: runes in the draft', () => {
     expect(applyLabel(registry, null)).toBe('Apply');
   });
 
+  it("words Apply's total without emoji, as its Price draws it", () => {
+    const price: DraftPrice = {
+      dust: 5,
+      links: 2,
+      refundLinks: 0,
+      scrap: 1200,
+      destroys: [],
+      returns: [],
+      pouch: {},
+    };
+    expect(applyLabel(registry, price)).toBe('Apply · 5 Mana Dust · 2 Links · 1,200 scrap');
+  });
+
   it('socketing a pouch rune is free: Apply takes it from the pouch', () => {
     bolts([[null]], { runes: { split: [1, 0, 0, 0, 0] } });
     const primary = chains().primary;
@@ -497,7 +511,7 @@ describe('delveStore: runes in the draft', () => {
     const primary = chains().primary;
     s().editDraft('primary', { ...primary, moves: [primary.moves[1]] }, [1]); // × on the Split Bolt
     expect(view().price).toMatchObject({ links: 0, refundLinks: 1, destroys: [split] });
-    expect(applyLabel(registry, view().price)).toBe('Apply · 🔗 +1 · destroys Split I');
+    expect(applyLabel(registry, view().price)).toBe('Apply · +1 Link · destroys Split I');
     expect(s().applyDraft().ok).toBe(true);
     expect(chains().primary.moves).toEqual([primary.moves[1]]);
     expect(s().profile.links).toBe(1);
@@ -509,7 +523,7 @@ describe('delveStore: runes in the draft', () => {
     const [first, second] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [null] }, second] });
     expect(view().price).toMatchObject({ links: 1, scrap: 20 });
-    expect(applyLabel(registry, view().price)).toBe('Apply · 🔗 1 · ⚙ 20');
+    expect(applyLabel(registry, view().price)).toBe('Apply · 1 Link · 20 scrap');
     expect(view().dry).toMatchObject({ ok: false, reason: expect.stringMatching(/Links/) });
     s().setProfile({ ...s().profile, links: 1 });
     expect(s().applyDraft().ok).toBe(true);
@@ -546,7 +560,7 @@ describe('delveStore: runes in the draft', () => {
     const [first, second] = primary.moves;
     s().editDraft('primary', { ...primary, moves: [{ ...first, runes: [null] }, second] });
     expect(view().price).toMatchObject({ scrap: 15, destroys: [], returns: [split] });
-    expect(applyLabel(registry, view().price)).toBe('Apply · ⚙ 15');
+    expect(applyLabel(registry, view().price)).toBe('Apply · 15 scrap');
     expect(pouchCount(view().pouch, split)).toBe(1); // free to socket elsewhere in this Apply
     expect(s().applyDraft().ok).toBe(true);
     expect(s().profile.scrap).toBe(85);

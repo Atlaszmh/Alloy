@@ -49,7 +49,6 @@ import {
   type UnsocketMode,
 } from '@alloy/engine';
 import { SKILL_NAME, listed } from '@/features/delve/chains/chain-text';
-import { formatNumber } from '@/features/delve/format';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { runeName } from '@/features/delve/runes/rune-style';
 import { createHmrStore } from './hmr-store';
@@ -313,18 +312,20 @@ export function runeNames(registry: DataRegistry, refs: readonly RuneRef[]): str
 }
 
 /**
- * Apply's label with the draft's total: "Apply · ✦ 15 · 🔗 2 · ⚙ 40 · destroys Split III". Links
- * are netted (the sockets of moves removed pay for those opened): a refund beyond them reads
- * "🔗 +1".
+ * Apply's label with the draft's total, in the words its Price draws: "Apply · 15 Mana Dust ·
+ * 2 Links · 40 scrap · destroys Split III". Links are netted (the sockets of moves removed pay
+ * for those opened): a refund beyond them reads "+1 Link".
  */
 export function applyLabel(registry: DataRegistry, price: DraftPrice | null): string {
   if (!price) return 'Apply';
   const links = price.links - price.refundLinks;
+  const n = (x: number) => x.toLocaleString('en-US');
+  const linkText = (x: number) => `${n(x)} Link${x === 1 ? '' : 's'}`;
   return [
     'Apply',
-    price.dust > 0 ? `✦ ${price.dust}` : null,
-    links !== 0 ? `🔗 ${links > 0 ? links : `+${-links}`}` : null,
-    price.scrap > 0 ? `⚙ ${formatNumber(price.scrap)}` : null,
+    price.dust > 0 ? `${n(price.dust)} Mana Dust` : null,
+    links !== 0 ? (links > 0 ? linkText(links) : `+${linkText(-links)}`) : null,
+    price.scrap > 0 ? `${n(price.scrap)} scrap` : null,
     price.destroys.length > 0 ? `destroys ${runeNames(registry, price.destroys)}` : null,
   ]
     .filter((part) => part !== null)

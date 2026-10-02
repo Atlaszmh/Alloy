@@ -229,7 +229,7 @@ describe('AbilitiesPanel', () => {
     act(() => store().setProfile({ ...store().profile, manaDust: 20 }));
     fireEvent.click(screen.getByTestId('kind-heavy'));
     // Still one move changed: its kind and form together cost editDust once.
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · ✦ 5');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 5 Mana Dust');
     apply();
     expect(chains().primary.moves[0]).toEqual({ kind: 'heavy', form: 'lance', elements: ['fire'] });
     expect(store().profile.manaDust).toBe(15);
@@ -265,13 +265,13 @@ describe('AbilitiesPanel', () => {
     roomy();
     render(<AbilitiesPanel />);
     fireEvent.click(screen.getByTestId('kind-hold'));
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ \d+ mana/);
+    expect(screen.getByTestId('num-full')).toHaveTextContent(/\d+ mana/);
     fireEvent.click(screen.getByTestId('payment-charge'));
-    expect(screen.getByTestId('ability-readout')).toHaveTextContent(/Fully charged .+ Charge \d+/);
+    expect(screen.getByTestId('num-full')).toHaveTextContent(/Charge \d+/);
     fireEvent.click(screen.getByTestId('kind-heavy'));
     for (const payment of ['cast', 'mana', 'charge'] as const) {
       fireEvent.click(screen.getByTestId(`payment-${payment}`));
-      expect(screen.getByTestId('ability-readout')).toHaveTextContent(/\d\.\d\ds wind-up/);
+      expect(screen.getByTestId('num-windup')).toHaveTextContent(/^\d\.\d\ds$/);
     }
     apply();
     expect(chains().primary.payment).toBe('charge');
@@ -280,14 +280,14 @@ describe('AbilitiesPanel', () => {
 
   it("says each move's beat, and a hold's full-charge time and beat, by the weapon's tempo", () => {
     roomy();
-    const readout = () => screen.getByTestId('ability-readout');
+    const num = (id: string) => screen.getByTestId(`num-${id}`);
     const { unmount } = render(<AbilitiesPanel />);
     // The Primary's first move, a light Bolt, on the starting sword (tempo 1).
-    expect(readout()).toHaveTextContent(/cooldown, then a 0\.25s beat/);
+    expect(num('beat')).toHaveTextContent(/^0\.25s$/);
     fireEvent.click(screen.getByTestId('kind-hold'));
     // A tap plays as a medium; a full charge as a hold.
-    expect(readout()).toHaveTextContent(/cooldown, then a 0\.4s beat/);
-    expect(readout()).toHaveTextContent(/Fully charged \(1s\): .+ mana, then a 0\.8s beat/);
+    expect(num('beat')).toHaveTextContent(/^0\.4s$/);
+    expect(num('full')).toHaveTextContent(/^1s: .+ mana, then a 0\.8s beat$/);
     unmount();
     store().revertDraft(); // the draft outlives the panel
     // On a maul (tempo 1.3), the charge and every beat take longer.
@@ -297,10 +297,10 @@ describe('AbilitiesPanel', () => {
       equipped: { ...p.equipped, weapon: { ...p.equipped.weapon!, baseId: 'maul' } },
     });
     render(<AbilitiesPanel />);
-    expect(readout()).toHaveTextContent(/cooldown, then a 0\.33s beat/);
+    expect(num('beat')).toHaveTextContent(/^0\.33s$/);
     fireEvent.click(screen.getByTestId('kind-hold'));
-    expect(readout()).toHaveTextContent(/cooldown, then a 0\.52s beat/);
-    expect(readout()).toHaveTextContent(/Fully charged \(1\.3s\): .+ mana, then a 1\.04s beat/);
+    expect(num('beat')).toHaveTextContent(/^0\.52s$/);
+    expect(num('full')).toHaveTextContent(/^1\.3s: .+ mana, then a 1\.04s beat$/);
   });
 
   it('adds, reorders and removes moves within the slots, never below one', () => {
@@ -531,14 +531,14 @@ describe('AbilitiesPanel: sockets and runes', () => {
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 0/1');
     const open = screen.getByTestId('socket-open');
     expect(within(screen.getByTestId('chain-cards')).getByTestId('socket-open')).toBe(open);
-    expect(open).toHaveTextContent('+ socket · 🔗 1 · ⚙ 20');
+    expect(open).toHaveTextContent('+ socket · 1 Link · 20 scrap');
     fireEvent.click(open);
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/1');
     expect(screen.queryByTestId('socket-open')).toBeNull(); // a common weapon's cap
     expect(screen.getByTestId('chain-price')).toHaveTextContent(
       'Changes cost 🔗 1 Link (you have 🔗 1) and ⚙ 20 scrap (you have ⚙ 20)',
     );
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 1 Link · 20 scrap');
     apply();
     expect(chains().primary.moves[0].runes).toEqual([null]);
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
@@ -602,7 +602,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
     tapSocket(0, 'Socket 1: Split I');
     expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · ⚙ 15, back to your pouch');
     fireEvent.click(picker().getByTestId('rune-pull'));
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · ⚙ 15');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 15 scrap');
     apply();
     expect(chains().primary.moves[0].runes).toEqual([null]);
     expect(store().profile.scrap).toBe(0);
@@ -663,8 +663,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
   it("the readout's beat counts a Quick rune", () => {
     socketed([null], { quick: [0, 0, 0, 0, 1] });
     render(<AbilitiesPanel />);
-    const beat = () =>
-      Number(/then a ([\d.]+)s beat/.exec(screen.getByTestId('ability-readout').textContent!)![1]);
+    const beat = () => parseFloat(screen.getByTestId('num-beat').textContent!);
     const before = beat();
     tapSocket(0, 'Socket 1: empty');
     fireEvent.click(picker().getByRole('button', { name: 'Quick V ×1' }));

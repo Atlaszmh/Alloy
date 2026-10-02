@@ -23,7 +23,6 @@ import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from './registry';
 import { formatNumber } from './format';
-import { ManaPanel } from './ManaPanel';
 import { ChainEditor, type ChainRunes } from './chains/ChainEditor';
 import { listed } from './chains/chain-text';
 
@@ -245,7 +244,6 @@ export function AbilitiesPanel() {
           setMessage(null);
         }}
         elements={elements.length > 0 ? elements : undefined}
-        mana={<ManaPanel stats={stats} />}
         runes={runes}
       />
     </div>

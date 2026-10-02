@@ -122,6 +122,8 @@ export {
   isAttuneStat,
   basicIncome,
   manaSupport,
+  expectedHit,
+  chainCycle,
 } from './delve/hero-stats.js';
 export type {
   ItemComparison,
@@ -130,6 +132,7 @@ export type {
   HeroStatsExtra,
   WeaponValue,
   ManaSupport,
+  ChainCycle,
 } from './delve/hero-stats.js';
 export {
   isBossDepth,
