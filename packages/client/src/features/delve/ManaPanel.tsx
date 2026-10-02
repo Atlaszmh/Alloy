@@ -11,7 +11,8 @@ import {
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { AttunementBars, Chip } from './AbilitiesPanel';
+import { Chip } from './AbilitiesPanel';
+import { AttunementBars } from './items/AttunementBars';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
 

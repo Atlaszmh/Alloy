@@ -19,7 +19,8 @@ import {
   type RuneRef,
 } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
-import { AttunementBars, Chip } from '../AbilitiesPanel';
+import { Chip } from '../AbilitiesPanel';
+import { AttunementBars } from '../items/AttunementBars';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { RunePicker } from '../runes/RunePicker';
