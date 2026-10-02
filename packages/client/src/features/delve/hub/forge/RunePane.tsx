@@ -50,8 +50,9 @@ export function RunePane({ pouch, fuseCount, fusePrice, scrap, locked, onFuse }:
         const short = price !== null && price > scrap;
         const text = runeText(registry, rune);
         return (
-          <div key={key} className="flex items-center gap-3" data-testid={`pouch-${key}`}>
+          <div key={key} className="flex items-start gap-3" data-testid={`pouch-${key}`}>
             <RuneGlyph rune={rune} />
+            {/* The text keeps the row's width; Fuse sits under it. */}
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="text-[18px] text-[var(--k-text)]">
                 {runeName(registry, rune)} ×{n}
@@ -61,25 +62,25 @@ export function RunePane({ pouch, fuseCount, fusePrice, scrap, locked, onFuse }:
                 {text.cost && ' · '}
                 {text.cost && <span className="text-[var(--k-hot)]">{text.cost}</span>}
               </span>
+              {price !== null && (
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Button
+                    size="sm"
+                    disabled={locked || short}
+                    onClick={() => onFuse(rune)}
+                    aria-describedby={locked ? `${id}-locked` : short ? `${id}-${key}` : undefined}
+                    testId={`rune-fuse-${key}`}
+                  >
+                    Fuse {fuseCount} → 1 · <Price scrap={price} />
+                  </Button>
+                  {short && !locked && (
+                    <span id={`${id}-${key}`} className="k-caption">
+                      Needs <Price scrap={price} />
+                    </span>
+                  )}
+                </span>
+              )}
             </span>
-            {price !== null && (
-              <span className="flex flex-col items-end gap-1">
-                <Button
-                  size="sm"
-                  disabled={locked || short}
-                  onClick={() => onFuse(rune)}
-                  aria-describedby={locked ? `${id}-locked` : short ? `${id}-${key}` : undefined}
-                  testId={`rune-fuse-${key}`}
-                >
-                  Fuse {fuseCount} → 1 · <Price scrap={price} />
-                </Button>
-                {short && !locked && (
-                  <span id={`${id}-${key}`} className="k-caption">
-                    Needs <Price scrap={price} />
-                  </span>
-                )}
-              </span>
-            )}
           </div>
         );
       })}
