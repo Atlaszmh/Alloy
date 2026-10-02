@@ -175,4 +175,17 @@ describe('AnvilHub', () => {
     fireEvent.click(delve);
     expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
   });
+
+  it("the start depth picked in the footer holds for the Skills tab's Delve too", () => {
+    act(() => {
+      const p = useDelveStore.getState().profile;
+      useDelveStore.getState().setProfile({ ...p, bestDepth: 6, checkpoints: [5] });
+    });
+    renderHub();
+    fireEvent.click(within(screen.getByTestId('start-depths')).getByText('1'));
+    expect(screen.getByTestId('delve-button')).toHaveTextContent('depth 1');
+    fireEvent.click(screen.getByTestId('tab-skills'));
+    fireEvent.click(screen.getByTestId('delve-button'));
+    expect(useDelveStore.getState().profile.dive?.depth).toBe(1);
+  });
 });

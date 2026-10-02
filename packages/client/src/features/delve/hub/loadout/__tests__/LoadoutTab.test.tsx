@@ -28,6 +28,7 @@ const open = (over: Partial<HubTabProps> = {}) => {
     setPrompts: vi.fn(),
     setFooterAction: vi.fn(),
     go: vi.fn(),
+    onDelve: vi.fn(),
     ...over,
   };
   const view = render(

@@ -23,6 +23,7 @@ function Hub({ mode, link }: { mode: HubMode; link?: HubLink }) {
         setFooterAction={setFooter}
         go={() => {}}
         link={link}
+        onDelve={() => {}}
       />
       <footer data-testid="hub-footer">
         <PromptBar prompts={prompts} />

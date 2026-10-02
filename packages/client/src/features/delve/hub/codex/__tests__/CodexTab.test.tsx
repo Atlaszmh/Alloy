@@ -13,6 +13,7 @@ const props = (over: Partial<HubTabProps> = {}): HubTabProps => ({
   setPrompts: vi.fn(),
   setFooterAction: vi.fn(),
   go: vi.fn(),
+  onDelve: vi.fn(),
   ...over,
 });
 

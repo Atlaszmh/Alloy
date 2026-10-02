@@ -6,11 +6,7 @@ import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../../../registry';
 import { ApplyBar } from '../ApplyBar';
 
-const mockNavigate = vi.fn();
-vi.mock('react-router', async () => {
-  const actual = await vi.importActual('react-router');
-  return { ...actual, useNavigate: () => mockNavigate };
-});
+const onDelve = vi.fn();
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -19,7 +15,7 @@ const price = () => screen.getByTestId('chain-price');
 const renderBar = () =>
   render(
     <MemoryRouter>
-      <ApplyBar />
+      <ApplyBar onDelve={onDelve} />
     </MemoryRouter>,
   );
 /** The Primary's Bolt made a Lance: one unapplied change. */
@@ -34,7 +30,7 @@ describe('ApplyBar', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    mockNavigate.mockClear();
+    onDelve.mockClear();
   });
 
   it('with nothing unapplied: "No changes", Revert and Apply off, the Delve button on', () => {
@@ -59,7 +55,7 @@ describe('ApplyBar', () => {
     expect(price()).toHaveTextContent('No changes');
   });
 
-  it('the compact Delve waits while changes are unapplied, else starts the dive', () => {
+  it("the compact Delve waits while changes are unapplied, else is the hub's Delve", () => {
     renderBar();
     draftLance();
     const delve = screen.getByTestId('delve-button');
@@ -67,7 +63,6 @@ describe('ApplyBar', () => {
     expect(delve).toHaveAttribute('aria-describedby', price().id);
     fireEvent.click(screen.getByTestId('chain-revert'));
     fireEvent.click(screen.getByTestId('delve-button'));
-    expect(mockNavigate).toHaveBeenCalledWith('/delve/run');
-    expect(store().profile.dive?.depth).toBe(1);
+    expect(onDelve).toHaveBeenCalledOnce();
   });
 });

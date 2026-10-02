@@ -20,7 +20,7 @@ import { useAnvilChains } from './useAnvilChains';
  * up on the pad (the D-pad carries it, X drops it, B or Esc puts it back, and another skill or
  * device lets go), Ctrl+Enter or a held Y applies.
  */
-export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabProps) {
+export function SkillsTab({ mode, setPrompts, setFooterAction, link, onDelve }: HubTabProps) {
   const anvil = useAnvilChains();
   const ed = useChainEditor(anvil.editor);
   const [mana, setMana] = useState(false);
@@ -32,10 +32,10 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
   // The latest of what a handler reads (handlers are made once), and the hub's setters, which
   // need not be stable.
   const live = useRef({ ed, carry, mana });
-  const hub = useRef({ setPrompts, setFooterAction });
+  const hub = useRef({ setPrompts, setFooterAction, onDelve });
   useLayoutEffect(() => {
     live.current = { ed, carry, mana };
-    hub.current = { setPrompts, setFooterAction };
+    hub.current = { setPrompts, setFooterAction, onDelve };
   });
 
   // A link picks the skill, or opens the Mana view.
@@ -49,7 +49,7 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
   // paint so the hub's own Delve group never flashes in.
   useLayoutEffect(() => {
     if (mode === 'pause') return;
-    hub.current.setFooterAction(<ApplyBar />);
+    hub.current.setFooterAction(<ApplyBar onDelve={() => hub.current.onDelve()} />);
     return () => hub.current.setFooterAction(null);
   }, [mode]);
 

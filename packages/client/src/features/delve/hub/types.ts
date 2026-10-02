@@ -22,4 +22,6 @@ export interface HubTabProps {
   setFooterAction: (node: ReactNode | null) => void;
   go: (to: HubLink) => void;
   link?: HubLink;
+  /** Start (or resume) the dive at the footer's chosen start depth: the hub's one Delve. */
+  onDelve: () => void;
 }

@@ -1,9 +1,7 @@
 import { Fragment, useId } from 'react';
-import { useNavigate } from 'react-router';
-import { isDiveActive, startDepthOptions } from '@alloy/engine';
+import { isDiveActive } from '@alloy/engine';
 import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { vibrate } from '@/shared/utils/haptics';
 import { Button, Price, type Binding } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
 
@@ -20,11 +18,11 @@ export function applyChains() {
 /**
  * The Skills tab's footer group (`chain-draft`, always shown): "n unapplied changes · price"
  * (or "No changes"), Revert, Apply with its price (off with the engine's reason while it would
- * be refused), and a compact Delve button, which waits while changes are unapplied.
+ * be refused), and a compact Delve button (the hub's `onDelve`, at the footer's start depth),
+ * which waits while changes are unapplied.
  */
-export function ApplyBar() {
+export function ApplyBar({ onDelve }: { onDelve: () => void }) {
   const registry = getDelveRegistry();
-  const navigate = useNavigate();
   const profile = useDelveStore((s) => s.profile);
   const view = useDelveStore(selectDraftApply);
   const id = useId();
@@ -56,14 +54,6 @@ export function ApplyBar() {
       {p}
     </Fragment>
   ));
-  const starts = startDepthOptions(registry, profile);
-  const depth = starts[starts.length - 1] ?? 1;
-  const onDelve = () => {
-    if (!active && !useDelveStore.getState().startDive(depth)) return;
-    playSound('phaseTransition');
-    vibrate('medium');
-    navigate('/delve/run');
-  };
 
   return (
     <div className="flex items-center gap-4" data-testid="chain-draft">

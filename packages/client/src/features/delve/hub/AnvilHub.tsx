@@ -1,8 +1,11 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import { isDiveActive, startDepthOptions } from '@alloy/engine';
 import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
+import { vibrate } from '@/shared/utils/haptics';
 import { Screen, Tabs, usePrompts, type Prompt } from '@/features/delve/kit';
+import { getDelveRegistry } from '../registry';
 import { HubHeader } from './HubHeader';
 import { HubFooter, TRAINING_BINDING } from './HubFooter';
 import { SystemMenu } from './SystemMenu';
@@ -46,6 +49,11 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
   const [footerAction, setFooterAction] = useState<ReactNode>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
+  // The start depth the footer's chips pick (the deepest at first), for every Delve button.
+  const profile = useDelveStore((s) => s.profile);
+  const starts = startDepthOptions(getDelveRegistry(), profile);
+  const [start, setStart] = useState(starts[starts.length - 1]);
+  const depth = starts.includes(start) ? start : 1;
   // Paused mid-dive, the Forge is locked (spec: "Forge at the Anvil").
   const tabs = TABS.map((t) => ({ ...t, disabled: mode === 'pause' && t.id === 'forge' }));
 
@@ -57,6 +65,13 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
   };
   const go = (to: HubLink) => open(to.tab, to);
   const onTraining = () => navigate('/delve/training');
+  const onDelve = () => {
+    const s = useDelveStore.getState();
+    if (!isDiveActive(s.profile) && !s.startDive(depth)) return;
+    playSound('phaseTransition');
+    vibrate('medium');
+    navigate('/delve/run');
+  };
 
   // The footer's prompts: the tab's, then the hub's Menu. The hub also binds Training (its
   // button draws the glyph) and the digits.
@@ -123,7 +138,16 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
             }
           />
         }
-        footer={<HubFooter prompts={prompts} onTraining={onTraining} action={footerAction} />}
+        footer={
+          <HubFooter
+            prompts={prompts}
+            onTraining={onTraining}
+            start={depth}
+            onStart={setStart}
+            onDelve={onDelve}
+            action={footerAction}
+          />
+        }
       >
         <div ref={mainRef} className="h-full min-h-0">
           <View
@@ -133,6 +157,7 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
             setFooterAction={setFooterAction}
             go={go}
             link={link?.tab === tab ? link : undefined}
+            onDelve={onDelve}
           />
         </div>
       </Screen>

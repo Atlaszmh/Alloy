@@ -6,7 +6,7 @@ import type { Prompt } from '@/features/delve/kit';
 import type { HubLink } from '../../types';
 
 const renderTab = (link?: HubLink) => {
-  const props = { setPrompts: vi.fn(), setFooterAction: vi.fn(), go: vi.fn() };
+  const props = { setPrompts: vi.fn(), setFooterAction: vi.fn(), go: vi.fn(), onDelve: vi.fn() };
   render(<QuestsTab mode="anvil" link={link} {...props} />);
   return props;
 };
