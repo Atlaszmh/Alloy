@@ -19,12 +19,14 @@ import {
   createArenaInput,
   frameInput,
   holdingSlot,
+  pressJournal,
   pressMenu,
 } from '../arena/input';
 import { TAP_MS } from '../arena/aim';
 import { aimView } from '../arena/useArenaCore';
 import { getDelveRegistry } from '../registry';
-import { padMemory, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import { padMemory, padToArena, type ArenaPadActions } from '@/features/gamepad/arena-pad';
+import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { useControlsStore } from '@/stores/controlsStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 
@@ -203,6 +205,59 @@ describe('panel controls keep their keys', () => {
   });
 });
 
+describe('loot labels and the journal', () => {
+  let detach = () => {};
+  afterEach(() => {
+    detach();
+    document.body.replaceChildren();
+  });
+
+  it('Alt held shows every loot label, its default prevented; its keyup or a blur lets go', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const alt = new KeyboardEvent('keydown', { code: 'AltLeft', cancelable: true });
+    window.dispatchEvent(alt);
+    expect(alt.defaultPrevented).toBe(true);
+    expect(input.labels).toBe(true);
+    key('keyup', 'AltLeft');
+    expect(input.labels).toBe(false);
+    // Alt+Tab: the window loses focus and the keyup never comes.
+    key('keydown', 'AltLeft');
+    window.dispatchEvent(new Event('blur'));
+    expect(input.labels).toBe(false);
+  });
+
+  it("J and the pad's View press the topmost scope's Journal", () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    const journal = document.body.appendChild(document.createElement('button'));
+    journal.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 });
+    journal.setAttribute('data-pad-journal', '');
+    let opened = 0;
+    journal.addEventListener('click', () => opened++);
+    key('keydown', 'KeyJ');
+    expect(opened).toBe(1);
+    pressJournal(); // useArenaCore's padFrame, on the pad's View
+    expect(opened).toBe(2);
+  });
+
+  it('the pad reports L3 held as labels and a View press as the journal', () => {
+    const state = (...held: PadButton[]) => ({
+      left: { x: 0, y: 0 },
+      right: { x: 0, y: 0 },
+      buttons: Object.fromEntries(PAD_BUTTONS.map((b) => [b, held.includes(b)])) as Record<
+        PadButton,
+        boolean
+      >,
+    });
+    expect(padToArena(state('ls'), new Set())).toMatchObject({ labels: true, journal: false });
+    expect(padToArena(state('view'), new Set(['view']))).toMatchObject({
+      labels: false,
+      journal: true,
+    });
+  });
+});
+
 const registry = getDelveRegistry();
 /** A sandbox hero on Fire's default chains, the Primary `primary` if given. */
 const world = (primary?: Chain) =>
@@ -292,6 +347,8 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     attackHeld: false,
     attackTap: false,
     menu: false,
+    labels: false,
+    journal: false,
     ...over,
   });
   /** Screen px to world units: a tenth. */
@@ -421,6 +478,16 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
       potion: false,
       attackTap: false,
     });
+  });
+
+  it('marks the first move by any device, for the move hint', () => {
+    const w = world();
+    const input = createArenaInput();
+    const mem = padMemory();
+    frameInput(registry, w, input, pad(), mem, opts);
+    expect(input.moved).toBe(false);
+    frameInput(registry, w, input, pad({ move: { x: 0, y: 1 } }), mem, opts);
+    expect(input.moved).toBe(true);
   });
 
   it("the pad's button of a skill the weapon doesn't carry casts nothing", () => {
