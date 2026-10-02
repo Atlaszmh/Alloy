@@ -131,12 +131,12 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Honed!');
   });
 
-  it('imprints a held shard over a line: only shards that fit the slot, none of an affix the item has', () => {
+  it('imprints a held shard over a line: only shards that fit the slot', () => {
     const item = helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]);
     store().setProfile({
       ...store().profile,
-      // A helm takes Crit Chance and Armor, not Damage; it has Armor already.
-      materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [2], damage: [1] } },
+      // A helm takes Crit Chance and Armor, not Damage.
+      materials: { ...emptyMaterials(), shards: { critChance: [1], damage: [1] } },
     });
     bench(item, { scrap: FAKE.imprint });
     fireEvent.click(screen.getByTestId('imprint-open'));
@@ -144,7 +144,6 @@ describe('Temper', () => {
     fireEvent.click(screen.getByTestId('imprint-line-0'));
     expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
     expect(screen.getByTestId('shard-pick-critChance-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('shard-pick-armor-1')).toBeNull();
     expect(screen.queryByTestId('shard-pick-damage-1')).toBeNull();
     fireEvent.click(screen.getByTestId('shard-pick-critChance-1'));
     expect(screen.getByTestId('shard-pick-critChance-1')).toHaveAttribute('aria-pressed', 'true');
@@ -159,6 +158,25 @@ describe('Temper', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Imprinted!');
     // The shard is spent: the next imprint picks again.
     expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
+  });
+
+  it('a line may take a better shard of its own affix, never one on another line', () => {
+    const item = helm('fire', [
+      { stat: 'armor', value: 4, roll: 0.1 },
+      { stat: 'critChance', value: 1, roll: 0.1 },
+    ]);
+    store().setProfile({
+      ...store().profile,
+      materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [0, 1] } },
+    });
+    bench(item, { scrap: 100 });
+    fireEvent.click(screen.getByTestId('imprint-open'));
+    fireEvent.click(screen.getByTestId('imprint-line-0'));
+    expect(screen.getByTestId('shard-pick-armor-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('shard-pick-critChance-1')).toBeNull();
+    fireEvent.click(screen.getByTestId('imprint-line-1'));
+    expect(screen.getByTestId('shard-pick-critChance-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('shard-pick-armor-2')).toBeNull();
   });
 
   it("re-attunes to the pair's other element for Mana Dust", () => {
