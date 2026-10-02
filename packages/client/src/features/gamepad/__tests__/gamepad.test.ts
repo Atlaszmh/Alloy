@@ -489,6 +489,14 @@ describe('pickNext (spatial focus)', () => {
   it('stays put at the edge', () => {
     expect(pickNext(grid[0], grid, 'left')).toBeNull();
   });
+
+  it('reaches a wide button right below a small off-centre one, not a small one further down', () => {
+    const chip: NavRect = { id: 'chip', x: 900, y: 0, w: 40, h: 20 };
+    const delve: NavRect = { id: 'delve', x: 0, y: 100, w: 1000, h: 40 };
+    const far: NavRect = { id: 'far', x: 900, y: 200, w: 40, h: 20 };
+    expect(pickNext(chip, [chip, delve, far], 'down')?.id).toBe('delve');
+    expect(pickNext(far, [chip, delve, far], 'up')?.id).toBe('delve');
+  });
 });
 
 describe('the hub claims the input lock for the pad on a change, not a steady state', () => {

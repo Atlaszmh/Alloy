@@ -16,10 +16,17 @@ const AXIS: Record<NavDir, { x: number; y: number }> = {
   right: { x: 1, y: 0 },
 };
 
+/** The gap between two spans on one axis, 0 when they overlap. */
+function gap(a: number, aLen: number, b: number, bLen: number): number {
+  return Math.max(0, Math.max(a, b) - Math.min(a + aLen, b + bLen));
+}
+
 /**
  * The control to move focus to: the nearest one whose centre lies in the
  * pressed direction, favouring ones straight ahead over ones off to the side.
- * Null at the edge.
+ * "Off to the side" is the gap between the two boxes across the direction (0
+ * when they overlap), so a wide control right below is never skipped for a
+ * small one further on. Null at the edge.
  */
 export function pickNext(from: NavRect, candidates: NavRect[], dir: NavDir): NavRect | null {
   const a = AXIS[dir];
@@ -33,7 +40,7 @@ export function pickNext(from: NavRect, candidates: NavRect[], dir: NavDir): Nav
     const dy = c.y + c.h / 2 - cy;
     const along = dx * a.x + dy * a.y;
     if (along <= 1) continue;
-    const across = Math.abs(dx * a.y - dy * a.x);
+    const across = a.x === 0 ? gap(from.x, from.w, c.x, c.w) : gap(from.y, from.h, c.y, c.h);
     const score = along + across * 2;
     if (score < bestScore) {
       best = c;
