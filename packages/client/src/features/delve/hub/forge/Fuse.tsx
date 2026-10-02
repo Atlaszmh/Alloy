@@ -12,7 +12,7 @@ import { partsText, pullText, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
-import { Button, Chip, Price, Tile } from '../../kit';
+import { Button, Chip, Price, Tile, reducedMotion } from '../../kit';
 import { getDelveRegistry } from '../../registry';
 import { ItemIcon } from '../../ItemIcon';
 import { RARITY_COLOR, RARITY_LABEL, RARITY_TEXT } from '../../format';
@@ -88,10 +88,12 @@ export function Fuse({ onResult }: { onResult: (uid: string) => void }) {
     }
     setBusy(true);
     playSound('forgeCreak');
-    // Converge the three input tiles on the centre before the result appears.
+    // Converge the three input tiles on the centre before the result appears (not under
+    // reduced motion: the result just appears).
+    const still = reducedMotion();
     const centre = resultRef.current?.getBoundingClientRect();
     const anims = slotRefs.current.map((el) => {
-      if (!el?.animate || !centre) return null;
+      if (still || !el?.animate || !centre) return null;
       const r = el.getBoundingClientRect();
       const dx = centre.left + centre.width / 2 - (r.left + r.width / 2);
       const dy = centre.top + centre.height / 2 - (r.top + r.height / 2);
@@ -129,16 +131,17 @@ export function Fuse({ onResult }: { onResult: (uid: string) => void }) {
     if (parts) showToast(parts);
     playSound(res.item.rarity === 'legendary' ? 'lootLegendary' : 'combineMerge');
     vibrate(res.item.rarity === 'legendary' ? 'heavy' : 'success');
-    requestAnimationFrame(() => {
-      resultRef.current?.animate?.(
-        [
-          { transform: 'scale(0.2) rotate(-20deg)', filter: 'brightness(3)' },
-          { transform: 'scale(1.25) rotate(4deg)', filter: 'brightness(1.8)', offset: 0.6 },
-          { transform: 'scale(1) rotate(0)', filter: 'brightness(1)' },
-        ],
-        { duration: 600, easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)' },
-      );
-    });
+    if (!still)
+      requestAnimationFrame(() => {
+        resultRef.current?.animate?.(
+          [
+            { transform: 'scale(0.2) rotate(-20deg)', filter: 'brightness(3)' },
+            { transform: 'scale(1.25) rotate(4deg)', filter: 'brightness(1.8)', offset: 0.6 },
+            { transform: 'scale(1) rotate(0)', filter: 'brightness(1)' },
+          ],
+          { duration: 600, easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)' },
+        );
+      });
   };
 
   return (

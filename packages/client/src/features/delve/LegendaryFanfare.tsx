@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { GearItem } from '@alloy/engine';
 import { baseDisplayName } from '@alloy/engine';
+import { reducedMotion } from './kit';
 import { getDelveRegistry } from './registry';
 import { ItemIcon } from './ItemIcon';
 import { legendaryText } from './format';
@@ -19,7 +20,10 @@ export function LegendaryFanfare({ item, firstTime, onDone }: LegendaryFanfarePr
   const titleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const id = window.setTimeout(onDone, 3200);
     rootRef.current?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 });
+    // Under reduced motion only the fade: no zoom, no flying icon.
+    if (reducedMotion()) return () => window.clearTimeout(id);
     titleRef.current?.animate(
       [
         { transform: 'scale(3)', opacity: 0 },
@@ -36,7 +40,6 @@ export function LegendaryFanfare({ item, firstTime, onDone }: LegendaryFanfarePr
       ],
       { duration: 700, delay: 150, easing: 'cubic-bezier(0.2, 1.3, 0.4, 1)', fill: 'backwards' },
     );
-    const id = window.setTimeout(onDone, 3200);
     return () => window.clearTimeout(id);
   }, [onDone]);
 
