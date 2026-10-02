@@ -290,8 +290,7 @@ export function uiScaleFor(width: number, height: number): number {
   return Math.min(2, Math.max(0.75, fit));
 }
 
-/** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75. */
-/** One rule for the HUD zoom: the kit's `hudZoom`. */
+/** `--hud-scale`: the UI scale times Settings → HUD scale, to the nearest quarter, at least 0.75 (the kit's `hudZoom`). */
 export const hudScaleFor = hudZoom;
 
 /** The zooms `.delve-zoom` and `.delve-hud-zoom` apply (AppShell keeps `uiScale` current). */

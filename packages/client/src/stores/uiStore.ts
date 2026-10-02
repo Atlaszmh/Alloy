@@ -34,7 +34,7 @@ interface UIStore {
   /** Delve UI: Settings → View distance, the arena's target view height in units, 20 to 30 (`alloy:delve:viewUnits`). */
   arenaViewUnits: number;
 
-  openModal:(id: string) => void;
+  openModal: (id: string) => void;
   closeModal: () => void;
   toast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   clearToast: () => void;
