@@ -80,11 +80,14 @@ export function ForgeBench({
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const { metals, flux: fluxHeld, essences } = profile.materials;
   const [baseId, setBaseId] = useState<string | null>(null);
-  const [metal, setMetal] = useState<MetalId>(
-    () => METAL_IDS.find((m) => metals[m] > 0) ?? METAL_IDS[0],
-  );
+  // The picks follow the stock: a bar picked while held, else the first held;
+  // an essence while held, else none (forged away).
+  const [metalPick, setMetal] = useState<MetalId>(METAL_IDS[0]);
+  const metal =
+    metals[metalPick] > 0 ? metalPick : (METAL_IDS.find((m) => metals[m] > 0) ?? metalPick);
   const [flux, setFlux] = useState<FluxGrade | null>(null);
-  const [essence, setEssence] = useState<string | null>(null);
+  const [essencePick, setEssence] = useState<string | null>(null);
+  const essence = essencePick && essences[essencePick] ? essencePick : null;
   const [element, setElement] = useState(profile.pair.primary ?? MANA_TYPES[0]);
   const [shards, setShards] = useState<ShardRef[]>([]);
   const [picking, setPicking] = useState<number | null>(null);

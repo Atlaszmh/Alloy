@@ -321,6 +321,38 @@ describe('ForgeBench', () => {
     expect(store().profile.bag).toHaveLength(bag + 1);
   });
 
+  it('the metal follows the stock: forging away the last bar picked falls back to the first held', () => {
+    withMaterials({ metals: { ...emptyMaterials().metals, rusty: 1, iron: 2 } });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    fireEvent.click(screen.getByTestId('metal-iron'));
+    fireEvent.click(screen.getByTestId('metal-rusty'));
+    fireEvent.click(screen.getByTestId('forge-button'));
+    expect(store().profile.materials.metals.rusty).toBe(0);
+    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
+    expect(uses()).toHaveTextContent(/^Uses Iron bar$/);
+    expect(screen.getByTestId('forge-button')).toBeEnabled();
+  });
+
+  it('forging away the last of an essence clears it: the bench is back on epic', () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, rusty: 2 },
+      flux: { ...emptyMaterials().flux, epic: 2 },
+      essences: { pyroclasm: 1 },
+    });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-sword'));
+    fireEvent.click(screen.getByTestId('flux-epic'));
+    fireEvent.click(screen.getByTestId('essence-pyroclasm'));
+    fireEvent.click(screen.getByTestId('forge-button'));
+    fireEvent.click(screen.getByTestId('legendary-fanfare'));
+    expect(screen.queryByTestId('essence-pyroclasm')).toBeNull();
+    expect(screen.getByTestId('essence-none')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('forge-title')).toHaveTextContent('Epic Sword');
+    expect(uses()).toHaveTextContent(/^Uses Rusty bar, Epic flux$/);
+    expect(screen.getByTestId('forge-button')).toBeEnabled();
+  });
+
   it('mid-dive the forge waits, with Select alone left to the tab', () => {
     const setPrompts = bench(true);
     expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
