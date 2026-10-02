@@ -531,7 +531,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 0/1');
     const open = screen.getByTestId('socket-open');
     expect(within(screen.getByTestId('chain-cards')).getByTestId('socket-open')).toBe(open);
-    expect(open).toHaveTextContent('+ socket · 🔗 1 · ⚙ 20');
+    expect(open).toHaveTextContent('+ socket · 1 Link · 20 scrap');
     fireEvent.click(open);
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/1');
     expect(screen.queryByTestId('socket-open')).toBeNull(); // a common weapon's cap
