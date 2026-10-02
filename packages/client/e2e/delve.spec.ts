@@ -146,6 +146,17 @@ test.describe('Delve loot loop', () => {
     await expect(door.getByTestId('floor-finds')).toContainText(
       'Already banked: yours even if you abandon.',
     );
+    // At 1280×720 every door fits in its list, above Extract, without scrolling.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const list = door.getByTestId('door-list');
+    await expect
+      .poll(() => list.evaluate((el) => el.scrollHeight - el.clientHeight))
+      .toBeLessThanOrEqual(0);
+    const doors = list.locator('[data-door]');
+    const lastDoor = (await doors.nth((await doors.count()) - 1).boundingBox())!;
+    const extract = (await door.getByTestId('extract-button').boundingBox())!;
+    expect(lastDoor.y + lastDoor.height).toBeLessThanOrEqual(extract.y);
+    await page.setViewportSize({ width: 1280, height: 800 });
     // The first card expands in place to its picker; Esc presses the picker's Back and the
     // focus returns to the card. Skipping the power-up is taking a door.
     const stop = door.getByTestId('stop');
