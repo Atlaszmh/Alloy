@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react';
 import { baseDisplayName, isBossDepth, type DiveState } from '@alloy/engine';
+import { useControlsStore } from '@/stores/controlsStore';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
 import { ItemIcon } from '../ItemIcon';
@@ -31,7 +32,8 @@ export interface StopScreenProps {
  * The stop between depths, over the dimmed arena: "Depth N cleared" with the bounty and the
  * floor's finds; this floor's items and runes on the left; the power-up cards in the centre,
  * each expanding in place to its picker; the doors on the right. At its top level there is no
- * back: Esc and the pad's Menu press its Menu, which opens the pause over it.
+ * back: Esc (or the menu key) and the pad's Menu are its Menu prompt, which opens the pause over
+ * it. Its Menu is no `[data-pad-menu]`, so Enter with nothing focused never opens the pause.
  */
 export const StopScreen = memo(function StopScreen({
   dive,
@@ -54,6 +56,7 @@ export const StopScreen = memo(function StopScreen({
   const stop = dive.stop;
   const offering = !!stop && !stop.taken && !skipped;
   const runeCount = runes.reduce((n, r) => n + r.count, 0);
+  const menuKey = useControlsStore((s) => s.config.keys.menu);
 
   const prompts: Prompt[] = [
     { id: 'take', label: 'Take', binding: { mouse: 'click', pad: 'a' } },
@@ -78,7 +81,15 @@ export const StopScreen = memo(function StopScreen({
       disabled: !offering || !armed,
     },
   ];
-  usePrompts(prompts, mainRef);
+  // Drawn as the footer's Menu button, not in the prompt bar.
+  const menu: Prompt = {
+    id: 'menu',
+    label: 'Menu',
+    binding: { key: menuKey && menuKey !== 'Escape' ? ['Escape', menuKey] : 'Escape', pad: 'menu' },
+    onPress: onMenu,
+    disabled: !armed,
+  };
+  usePrompts([...prompts, menu], mainRef);
 
   return (
     <Screen
@@ -94,7 +105,6 @@ export const StopScreen = memo(function StopScreen({
             binding={{ key: 'Escape', pad: 'menu' }}
             onClick={onMenu}
             tabIndex={-1}
-            data-pad-menu
             data-pad-skip
           >
             Menu

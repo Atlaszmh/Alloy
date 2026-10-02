@@ -141,14 +141,26 @@ describe('StopScreen (between depths)', () => {
     expect(onPotion).toHaveBeenCalledOnce();
   });
 
-  it('has no back at its top level: Esc presses its Menu, which opens the pause', () => {
+  it("has no back at its top level: Esc and the pad's Menu open the pause; Enter with nothing focused doesn't", () => {
     const { onMenu } = atStop(['equip']);
+    press('Escape'); // carried from the fight
+    expect(onMenu).not.toHaveBeenCalled();
     arm();
     const root = screen.getByTestId('door-choice');
     expect(root.querySelector('[data-pad-back]')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Menu' })).toHaveAttribute('data-pad-menu');
+    expect(root.querySelector('[data-pad-menu]')).toBeNull();
+    press('Enter');
+    expect(onMenu).not.toHaveBeenCalled();
     press('Escape');
     expect(onMenu).toHaveBeenCalledOnce();
+    const box = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(DOMRect.fromRect({ x: 0, y: 0, width: 10, height: 10 }));
+    padPrompts(new Set<PadButton>(['menu']), {} as Record<PadButton, boolean>, 0);
+    box.mockRestore();
+    expect(onMenu).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(onMenu).toHaveBeenCalledTimes(3);
   });
 
   it("with a card's picker open, Esc presses the picker's Back, not the Menu", () => {
