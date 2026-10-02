@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { act, render, screen } from '@testing-library/react';
 import {
   beginFloor,
   chainMove,
@@ -29,6 +31,8 @@ import { padMemory, padToArena, type ArenaPadActions } from '@/features/gamepad/
 import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { useControlsStore } from '@/stores/controlsStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
+import { ArenaControls } from '../arena/ArenaControls';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
 const key = (type: 'keydown' | 'keyup', code: string) =>
   window.dispatchEvent(new KeyboardEvent(type, { code }));
@@ -255,6 +259,23 @@ describe('loot labels and the journal', () => {
       labels: false,
       journal: true,
     });
+  });
+});
+
+describe('the move hint', () => {
+  afterEach(() => useInputDeviceStore.getState().setDevice('keyboard'));
+
+  it("names the device's way to move until the hero first moves; no joystick", () => {
+    const input = createArenaInput();
+    const controls = () =>
+      createElement(ArenaControls, { input, heroScreen: () => null, pixelsPerUnit: () => 40 });
+    const { rerender } = render(controls());
+    expect(screen.getByTestId('move-hint')).toHaveTextContent('WASD or hold click to move');
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    expect(screen.getByTestId('move-hint')).toHaveTextContent('Left stick to move');
+    input.moved = true; // any device moved the hero (frameInput)
+    rerender(controls());
+    expect(screen.queryByTestId('move-hint')).toBeNull();
   });
 });
 
