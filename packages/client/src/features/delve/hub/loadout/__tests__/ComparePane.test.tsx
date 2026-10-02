@@ -153,7 +153,7 @@ describe('the compare pane', () => {
       dust: 5,
       links: 2,
       shards: [
-        { stat: 'damage', tier: 2 },
+        { stat: 'damagePct', tier: 2 },
         { stat: 'armor', tier: 4 },
       ],
       extraShard: 0.25,
@@ -168,9 +168,9 @@ describe('the compare pane', () => {
     expect(screen.getByTestId('salvage-button')).toHaveTextContent(
       /^Salvage · \+2 Links · \+40 scrap · \+5 Mana Dust/,
     );
-    const label = (stat: 'damage' | 'armor') => registry.getGearAffix(stat)!.label;
+    // Named as the Forge names them: the percent Damage says so.
     expect(screen.getByTestId('salvage-yield')).toHaveTextContent(
-      `Shard: ${label('damage')} II or ${label('armor')} IV · 25% for a second` +
+      'Shard: Damage % II or Armor IV · 25% for a second' +
         'Teaches the Axe pattern' +
         `Extracts the ${essence.name} essence`,
     );
