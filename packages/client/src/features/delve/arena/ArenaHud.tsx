@@ -6,7 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react';
-import type { ArpgEvent, BiomeDef, DiveState, RuneRef, Vec } from '@alloy/engine';
+import type { BiomeDef, DiveState, RuneRef, Vec } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { formatNumber, manaStyle } from '../format';
 import { KIND_ICON, moveText } from '../chains/chain-text';
@@ -187,49 +187,8 @@ export function Vitals({ hud }: { hud: ArenaHud | null }) {
 
 const SLOT_LABEL = ['Primary', 'Defensive', 'Ultimate'];
 
-/** A paid cost's colour: the mana bar's, or the charge meter's. */
-const PAY_COLOR = { mana: '#a5b4fc', charge: '#e7e5e4' };
-/** Floating costs live at once above one button (they're cosmetic). */
-const PAY_FLOATS = 3;
-
-/**
- * A skill's spend rising from its button and fading over a second: its mana
- * ("−16"), else its charge ("−78 ⚡"), rounded; nothing when that rounds to 0.
- * A real element animated in place (just a fade under reduced motion), removed
- * when it ends; the oldest goes first past `PAY_FLOATS`.
- */
-export function floatPay(e: Extract<ArpgEvent, { kind: 'pay' }>): void {
-  const button = document.querySelector(`[data-testid="ability-${e.slot}"]`);
-  const mana = Math.round(e.mana);
-  const amount = mana > 0 ? mana : Math.round(e.charge);
-  if (!button || amount <= 0) return;
-  const live = button.querySelectorAll('[data-pay]');
-  if (live.length >= PAY_FLOATS) live[0].remove();
-  const el = document.createElement('span');
-  el.dataset.pay = '';
-  el.setAttribute('aria-hidden', 'true');
-  // From the button's face to just over its edge, clear of the mana bar's numbers; a dark
-  // chip keeps it legible over the icon and a cooldown.
-  el.className =
-    'delve-display pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-black/70 px-1 text-xs font-bold leading-4';
-  el.style.color = mana > 0 ? PAY_COLOR.mana : PAY_COLOR.charge;
-  el.style.textShadow = '0 1px 2px #000';
-  el.textContent = mana > 0 ? `−${amount}` : `−${amount} ⚡`;
-  button.append(el);
-  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const anim = el.animate?.(
-    still
-      ? [{ opacity: 1 }, { opacity: 1, offset: 0.4 }, { opacity: 0 }]
-      : [
-          // `transform`, not `translate`: the class's `translate` centres it.
-          { opacity: 1, transform: 'translateY(0)' },
-          { opacity: 1, offset: 0.4 },
-          { opacity: 0, transform: 'translateY(-20px)' },
-        ],
-    { duration: 1000, easing: 'ease-out', fill: 'forwards' },
-  );
-  if (anim) anim.onfinish = () => el.remove();
-}
+// The spend's float lives in hud/floatPay.ts; useArenaCore imports it from here until the integrator.
+export { floatPay } from './hud/floatPay';
 
 /** Seconds the buttons still cooling down spark after Galvanize. */
 const GALVANIZE_SPARK = 0.4;
