@@ -30,6 +30,7 @@ function DoorButton({
   body,
   aside,
   first,
+  primary,
   onClick,
   testId,
 }: {
@@ -38,6 +39,8 @@ function DoorButton({
   body: ReactNode;
   aside?: ReactNode;
   first?: boolean;
+  /** The first door: the responsive harness's reachability probe checks it. */
+  primary?: boolean;
   onClick: () => void;
   testId: string;
 }): ReactElement {
@@ -48,6 +51,7 @@ function DoorButton({
       onClick={onClick}
       data-door
       data-pad-first={first || undefined}
+      data-primary-action={primary ? 'door' : undefined}
       data-testid={testId}
     >
       {art}
@@ -94,6 +98,7 @@ export function DoorPane({
             <DoorButton
               key={id}
               first={padFirst && i === 0}
+              primary={i === 0}
               testId={`door-${id}`}
               art={
                 <Doorway fill={treasure ? 'var(--k-wood-0)' : 'var(--k-mana-2)'}>

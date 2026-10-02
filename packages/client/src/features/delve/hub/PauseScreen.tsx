@@ -88,6 +88,7 @@ export const PauseScreen = memo(function PauseScreen({
               data-pad-back
               data-pad-menu
               data-pad-first
+              data-primary-action="resume"
               testId="pause-resume"
             >
               Resume

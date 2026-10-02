@@ -116,6 +116,7 @@ export function ApplyBar({ onDelve }: { onDelve: () => void }) {
         aria-describedby={n > 0 && !active ? `${id}-price` : undefined}
         binding={{ key: 'Enter', pad: 'menu' }}
         data-pad-menu
+        data-primary-action="delve"
         testId="delve-button"
       >
         {active ? 'Resume' : 'Delve'}
