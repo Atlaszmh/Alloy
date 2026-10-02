@@ -149,7 +149,7 @@ describe('the dive camera', () => {
     expect(stage(1920, 1080).r.pixelsPerUnit()).toBe(50); // 21.6 units
   });
 
-  it('a point round-trips through the screen at each scale', () => {
+  it('a point round-trips through the screen at each scale, the canvas anywhere on the page', () => {
     const { app, r } = stage();
     r.setInsets({ top: 72, right: 380, bottom: 230, left: 0 });
     const w = floor();
@@ -166,12 +166,19 @@ describe('the dive camera', () => {
           [13, 20],
           [24.5, 37.25],
         ]) {
-          Object.assign(w.hero, { x, y });
-          r.update(0);
-          const s = r.heroScreen()!;
-          const back = r.screenToWorld(s.x, s.y);
-          expect(back.x, `${height}p ×${res}`).toBeCloseTo(x, 6);
-          expect(back.y).toBeCloseTo(y, 6);
+          for (const at of [
+            { left: 0, top: 0 },
+            { left: 37, top: 11.5 },
+          ]) {
+            app.canvas.getBoundingClientRect = () => at;
+            Object.assign(w.hero, { x, y });
+            r.update(0);
+            // On the canvas; the page's point is that plus where the canvas sits.
+            const s = r.heroScreen()!;
+            const back = r.screenToWorld(s.x + at.left, s.y + at.top);
+            expect(back.x, `${height}p ×${res} at ${at.left}`).toBeCloseTo(x, 6);
+            expect(back.y).toBeCloseTo(y, 6);
+          }
         }
       }
   });
