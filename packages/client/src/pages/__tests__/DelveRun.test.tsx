@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { createDelveProfile, startDive } from '@alloy/engine';
+import { createDelveProfile, settleDive, startDive, type DelveProfile } from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveStore } from '@/stores/delveStore';
@@ -17,6 +17,22 @@ const seen = vi.hoisted(() => ({
   live: [] as boolean[],
   tick: null as null | (() => void),
 }));
+
+// The engine's settle is stage 4c's B1: here an abandon settles the dive, two Iron bars lost.
+vi.mock('@alloy/engine', async (orig) => {
+  const real = await orig<typeof import('@alloy/engine')>();
+  return {
+    ...real,
+    settleDive: vi.fn((_registry: unknown, p: DelveProfile) => ({
+      ...p,
+      dive: {
+        ...p.dive!,
+        settled: true,
+        lost: real.addMaterial(real.emptyHaul(), { kind: 'metal', metal: 'iron' }, 2),
+      },
+    })),
+  };
+});
 
 vi.mock('@/features/gamepad/gamepad-hub', async (orig) => ({
   ...(await orig<object>()),
@@ -98,6 +114,14 @@ const renderRun = () =>
 const pauseLink = () => JSON.parse(screen.getByTestId('pause-stub').dataset.link!);
 
 describe('DelveRun', () => {
+  beforeAll(() => {
+    // jsdom has no Web Animations; the summary's title entrance is cosmetic.
+    if (!Element.prototype.animate)
+      Element.prototype.animate = function () {
+        return { finished: Promise.resolve(), cancel() {} } as unknown as Animation;
+      };
+  });
+
   beforeEach(() => {
     seen.pause.length = 0;
     seen.stop.length = 0;
@@ -147,7 +171,7 @@ describe('DelveRun', () => {
     expect(seen.live.at(-1)).toBe(true);
   });
 
-  it("the pause's Anvil goes to the Anvil keeping the dive; Abandon closes the dive and goes there", () => {
+  it("the pause's Anvil goes to the Anvil keeping the dive; Abandon settles it as a death, shows the summary, then closes it", () => {
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Anvil' }));
@@ -158,8 +182,35 @@ describe('DelveRun', () => {
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
     fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
+    expect(settleDive).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'abandon');
+    expect(screen.queryByTestId('pause-stub')).toBeNull();
+    const summary = screen.getByTestId('dive-summary');
+    expect(summary).toHaveTextContent('ABANDONED');
+    expect(within(screen.getByTestId('dive-lost')).getByTestId('haul-row')).toHaveTextContent(
+      'Iron bar×2',
+    );
+    // The fight stays paused under the summary.
+    expect(seen.paused.at(-1)).toBe(true);
+    fireEvent.click(screen.getByTestId('return-camp'));
     expect(screen.getByTestId('anvil')).toBeInTheDocument();
     expect(useDelveStore.getState().profile.dive).toBeNull();
+  });
+
+  it('an abandon at the stop takes the stop away for the summary', () => {
+    const { profile } = useDelveStore.getState();
+    useDelveStore.setState({
+      profile: {
+        ...profile,
+        dive: { ...profile.dive!, phase: 'choosing', doorChoices: ['winding'], stop: null },
+      },
+    });
+    renderRun();
+    fireEvent.click(
+      within(screen.getByTestId('door-choice')).getByRole('button', { name: 'Menu' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
+    expect(screen.queryByTestId('door-choice')).toBeNull();
+    expect(screen.getByTestId('dive-summary')).toHaveTextContent('ABANDONED');
   });
 
   it('the Journal opens the pause on Quests', () => {

@@ -4,11 +4,15 @@ import {
   beginFloor,
   compareItem,
   completeFloor,
+  emptyHaul,
   failFloor,
   heroChains,
   profileStats,
+  type ArpgEvent,
   type ArpgWorld,
+  type DiveState,
   type GearItem,
+  type Haul,
   type ReactionId,
 } from '@alloy/engine';
 import { pullOpts, useDelveStore } from '@/stores/delveStore';
@@ -37,10 +41,32 @@ export type ArenaUiEvent =
   | { kind: 'loot'; kept: GearItem[]; salvaged: GearItem[]; bagFull: boolean }
   | { kind: 'legendary'; item: GearItem; firstTime: boolean }
   | { kind: 'reaction'; reaction: ReactionId }
-  | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean }
+  /** `haul`: the floor's haul as the clear banked it (the stop's "Found this floor"). */
+  | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean; haul: Haul }
   | { kind: 'fell' };
 
 const END_DELAY = 1.3;
+
+/**
+ * Whether a frame banks now: an item, a rune or a reaction is waiting, or a material or scrap was
+ * picked up (they ride the floor's haul, which the purse and the Found log show as it grows).
+ */
+export function banksNow(world: ArpgWorld, events: readonly ArpgEvent[]): boolean {
+  const { items, reactions, runes } = world.pending;
+  return (
+    items.length + reactions.length + runes.length > 0 ||
+    events.some((e) => e.kind === 'pickup' && (e.dropKind === 'material' || e.dropKind === 'scrap'))
+  );
+}
+
+/**
+ * The arena's world key: a floor under way. Only while fighting, so the finished floor stays on
+ * screen behind the doors or the summary; and not once the dive has settled, so after an abandon
+ * mid-floor a dive again at that depth starts a fresh floor.
+ */
+export function diveWorldKey(dive: DiveState | null): string | null {
+  return dive?.phase === 'fighting' && !dive.settled ? `fighting:${dive.depth}` : null;
+}
 
 export function useArena(
   hostRef: RefObject<HTMLDivElement | null>,
@@ -55,8 +81,6 @@ export function useArena(
 ) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
-  const phase = profile.dive?.phase ?? null;
-  const depth = profile.dive?.depth ?? 0;
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
@@ -110,6 +134,7 @@ export function useArena(
       store.setProfile(res.profile);
       onUiRef.current({ kind: 'fell' });
     } else {
+      const haul = store.profile.dive?.haul ?? emptyHaul();
       const res = completeFloor(registry, store.profile, world, pullOpts(store));
       store.setProfile(res.profile);
       store.pushDiveDrops(res.kept.map((i) => i.uid));
@@ -118,23 +143,22 @@ export function useArena(
         kind: 'cleared',
         bountyAdded: res.bountyAdded,
         bossKilled: res.bossKilled,
+        haul,
       });
     }
     return true;
   }
 
   const mode: ArenaMode = {
-    // Only while fighting: the finished floor stays on screen behind the doors or the summary.
-    worldKey: phase === 'fighting' ? `fighting:${depth}` : null,
+    worldKey: diveWorldKey(profile.dive),
     createWorld: () => {
       endAtRef.current = null;
       return beginFloor(registry, useDelveStore.getState().profile);
     },
     loadout,
     frame: checkEnd,
-    onEvents: (world) => {
-      const { items, reactions, runes } = world.pending;
-      if (items.length + reactions.length + runes.length > 0) bank(world);
+    onEvents: (world, events) => {
+      if (banksNow(world, events)) bank(world);
     },
     onHeroDead: () => {},
     speed: 1,

@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { createDelveProfile, startDive } from '@alloy/engine';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  addMaterial,
+  createDelveProfile,
+  emptyHaul,
+  startDive,
+  type DiveState,
+} from '@alloy/engine';
 import { DiveSummary } from '../DiveSummary';
 import { getDelveRegistry } from '../registry';
-import { useDelveStore } from '@/stores/delveStore';
 
 beforeAll(() => {
   // jsdom has no Web Animations; the title's entrance is cosmetic.
@@ -13,18 +18,13 @@ beforeAll(() => {
     };
 });
 
-function summary(
-  dustEarned: number,
-  linksEarned = 0,
-  runesEarned = 0,
-  phase: 'extracted' | 'dead' = 'extracted',
-) {
+function summary(over: Partial<DiveState> = {}) {
   const registry = getDelveRegistry();
   const dive = startDive(registry, createDelveProfile(registry, 1, { primary: 'fire' }), 1).dive!;
   const props = { onCamp: vi.fn(), onAgain: vi.fn() };
   render(
     <DiveSummary
-      dive={{ ...dive, phase, bounty: 40, dustEarned, linksEarned, runesEarned }}
+      dive={{ ...dive, phase: 'extracted', bounty: 40, settled: true, ...over }}
       biomeName="Test"
       againLabel="Again"
       {...props}
@@ -33,9 +33,14 @@ function summary(
   return props;
 }
 
+const rows = (id: string) =>
+  within(screen.getByTestId(id))
+    .getAllByTestId('haul-row')
+    .map((r) => r.textContent);
+
 describe('DiveSummary', () => {
   it('is a kit screen: the outcome, the bounty with its glyph, and the two ways on', () => {
-    const { onCamp, onAgain } = summary(3, 1);
+    const { onCamp, onAgain } = summary();
     const root = screen.getByTestId('dive-summary');
     expect(root).toHaveClass('delve-ui', 'delve-zoom');
     expect(root).toHaveAttribute('data-pad-scope');
@@ -51,34 +56,35 @@ describe('DiveSummary', () => {
   });
 
   it('a fall loses the bounty', () => {
-    summary(0, 0, 0, 'dead');
+    summary({ phase: 'dead' });
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('YOU FELL');
     expect(screen.getByTestId('dive-summary')).toHaveTextContent('Bounty lost: 40 scrap');
   });
 
-  it('shows the Mana Dust salvage gave this dive', () => {
-    summary(7);
-    expect(screen.getByTestId('dive-dust')).toHaveTextContent('7 Mana Dust from salvage');
+  it('an abandon (settled, still at its floor or stop) counts as a death', () => {
+    summary({ phase: 'choosing' });
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('ABANDONED');
+    expect(screen.getByTestId('dive-summary')).toHaveTextContent('Bounty lost: 40 scrap');
   });
 
-  it('says nothing about Mana Dust or Links when there were none', () => {
-    summary(0);
-    expect(screen.queryByTestId('dive-dust')).toBeNull();
-    expect(screen.queryByTestId('dive-links')).toBeNull();
+  it('lists what the dive brought home, and what a death took', () => {
+    const banked = {
+      ...addMaterial(emptyHaul(), { kind: 'metal', metal: 'iron' }, 3),
+      dust: 4,
+      runes: { split: [0, 0, 1, 0, 0] },
+    };
+    summary({
+      phase: 'dead',
+      banked,
+      lost: addMaterial(emptyHaul(), { kind: 'metal', metal: 'iron' }, 2),
+    });
+    expect(rows('dive-home')).toEqual(['Iron bar×3', 'Split III×1', 'Mana Dust×4']);
+    expect(rows('dive-lost')).toEqual(['Iron bar×2']);
   });
 
-  it('shows the Links salvaged weapons gave this dive', () => {
-    summary(0, 2);
-    expect(screen.getByTestId('dive-links')).toHaveTextContent('2 Links from salvaged weapons');
-    expect(screen.queryByTestId('dive-runes')).toBeNull();
-  });
-
-  it('counts the runes found this dive, and names them', () => {
-    useDelveStore.getState().pushDiveRunes([
-      { id: 'split', tier: 3 },
-      { id: 'quick', tier: 1 },
-    ]);
-    summary(0, 0, 2);
-    expect(screen.getByTestId('dive-runes')).toHaveTextContent('2 runes found: Quick I, Split III');
+  it('says when it brought nothing home, and shows no losses on an extract', () => {
+    summary();
+    expect(screen.getByTestId('dive-home')).toHaveTextContent('Brought homeNothing');
+    expect(screen.queryByTestId('dive-lost')).toBeNull();
   });
 });

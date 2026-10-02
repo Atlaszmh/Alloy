@@ -86,20 +86,24 @@ describe('PauseScreen', () => {
       'Controls',
       'Settings',
       'Anvil · floor restarts',
-      'Abandon · lose bounty',
+      'Abandon · counts as a death',
       'Resume',
     ].map((s) => text.indexOf(s));
     expect(order.every((at, i) => at > (order[i - 1] ?? -1))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Anvil · floor restarts' }));
+    const anvil = screen.getByRole('button', { name: /^Anvil · floor restarts/ });
+    // Its subtitle: the floor replays, so what it picked up and hasn't banked is lost.
+    expect(anvil).toHaveTextContent("This floor's unbanked haul is lost");
+    fireEvent.click(anvil);
     expect(on.onAnvil).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Abandon · lose bounty' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abandon · counts as a death' }));
     expect(on.onAbandon).toHaveBeenCalledTimes(1);
     expect(on.onResume).not.toHaveBeenCalled();
   });
 
   it('over the stop, the Anvil says the stop waits: nothing restarts', () => {
     const on = renderPause(undefined, true);
-    expect(screen.queryByRole('button', { name: 'Anvil · floor restarts' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Anvil · floor restarts/ })).toBeNull();
+    expect(screen.getByTestId('pause-anvil')).not.toHaveTextContent('haul');
     fireEvent.click(screen.getByRole('button', { name: 'Anvil · back to this stop' }));
     expect(on.onAnvil).toHaveBeenCalledTimes(1);
   });

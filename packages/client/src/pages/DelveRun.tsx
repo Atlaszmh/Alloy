@@ -4,8 +4,10 @@ import {
   chooseDoor,
   drinkPotionBetweenFloors,
   extractDive,
+  settleDive,
   startDepthOptions,
   type GearItem,
+  type Haul,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -88,6 +90,8 @@ export function DelveRun() {
   const [insets, setInsets] = useState<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [pause, setPause] = useState<{ link?: HubLink } | null>(null);
   const [fanfares, setFanfares] = useState<{ item: GearItem; firstTime: boolean }[]>([]);
+  /** The last cleared floor's haul, for the stop's "Found this floor" (none after a reload). */
+  const [floorHaul, setFloorHaul] = useState<Haul | null>(null);
   const [banners, setBanners] = useState<BannerState[]>([]);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
@@ -121,6 +125,7 @@ export function DelveRun() {
           break;
         }
         case 'cleared': {
+          setFloorHaul(e.haul);
           const d = useDelveStore.getState().profile.dive;
           playSound('victory');
           if (e.bossKilled)
@@ -143,7 +148,8 @@ export function DelveRun() {
   );
 
   const choosing = dive?.phase === 'choosing';
-  const finished = dive?.phase === 'dead' || dive?.phase === 'extracted';
+  // An abandon settles the dive where it stands (it counts as a death): the summary shows it too.
+  const finished = dive?.phase === 'dead' || dive?.phase === 'extracted' || !!dive?.settled;
   const paused = !!pause || fanfares.length > 0 || choosing || finished;
   // A layout effect, so the controller switches owner in the same commit as the
   // pause or resume: a press right after resuming reaches the fight, not the menus.
@@ -202,10 +208,12 @@ export function DelveRun() {
   const openJournal = useCallback(() => openPause({ tab: 'quests' }), [openPause]);
   const resume = useCallback(() => setPause(null), []);
   const toAnvil = useCallback(() => navigate('/delve'), [navigate]);
+  /** Abandon counts as a death (the crafting spec's S2): the dive settles, and the summary shows its losses. */
   const abandon = useCallback(() => {
     setPause(null);
-    onCamp();
-  }, [onCamp]);
+    const s = useDelveStore.getState();
+    s.setProfile(settleDive(registry, s.profile, 'abandon'));
+  }, [registry]);
 
   if (!dive) return null;
 
@@ -269,10 +277,11 @@ export function DelveRun() {
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
-      {choosing && (
+      {choosing && !finished && (
         <div className="absolute inset-0 z-40" inert={!!pause}>
           <StopScreen
             dive={dive}
+            haul={floorHaul}
             onChoose={onChooseDoor}
             onExtract={onExtract}
             onPotion={onDoorPotion}
