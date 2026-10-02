@@ -229,7 +229,7 @@ describe('AbilitiesPanel', () => {
     act(() => store().setProfile({ ...store().profile, manaDust: 20 }));
     fireEvent.click(screen.getByTestId('kind-heavy'));
     // Still one move changed: its kind and form together cost editDust once.
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · ✦ 5');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 5 Mana Dust');
     apply();
     expect(chains().primary.moves[0]).toEqual({ kind: 'heavy', form: 'lance', elements: ['fire'] });
     expect(store().profile.manaDust).toBe(15);
@@ -538,7 +538,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
     expect(screen.getByTestId('chain-price')).toHaveTextContent(
       'Changes cost 🔗 1 Link (you have 🔗 1) and ⚙ 20 scrap (you have ⚙ 20)',
     );
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 1 Link · 20 scrap');
     apply();
     expect(chains().primary.moves[0].runes).toEqual([null]);
     expect(store().profile).toMatchObject({ links: 0, scrap: 0 });
@@ -602,7 +602,7 @@ describe('AbilitiesPanel: sockets and runes', () => {
     tapSocket(0, 'Socket 1: Split I');
     expect(picker().getByTestId('rune-pull')).toHaveTextContent('Pull · ⚙ 15, back to your pouch');
     fireEvent.click(picker().getByTestId('rune-pull'));
-    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · ⚙ 15');
+    expect(screen.getByTestId('chain-apply')).toHaveTextContent('Apply · 15 scrap');
     apply();
     expect(chains().primary.moves[0].runes).toEqual([null]);
     expect(store().profile.scrap).toBe(0);
