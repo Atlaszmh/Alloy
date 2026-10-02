@@ -243,7 +243,7 @@ export function takeStop(
   action: StopAction,
 ): ProfileActionResult {
   const dive = profile.dive;
-  const stop = dive?.phase === 'choosing' ? dive.stop : null;
+  const stop = dive?.phase === 'choosing' && !dive.settled ? dive.stop : null;
   if (!dive || !stop) return { ok: false, profile, reason: 'No stop here' };
   if (stop.taken) return { ok: false, profile, reason: "This stop's power-up is taken" };
   if (!stop.offers.includes(action.kind))

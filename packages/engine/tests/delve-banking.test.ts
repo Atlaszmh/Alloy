@@ -9,9 +9,11 @@ import {
   completeFloor,
   extractDive,
   failFloor,
+  isDiveActive,
   settleDive,
   startDive,
 } from '../src/delve/dive.js';
+import { takeStop } from '../src/delve/stops.js';
 import { runAutopilot } from '../src/delve/autopilot.js';
 import { createDelveProfile, setAutoSalvage } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
@@ -238,6 +240,31 @@ describe('settling a dive', () => {
     const extracted = extractDive(registry, { ...p, dive: { ...p.dive!, phase: 'choosing' } });
     expect(extracted.scrap).toBe(p.scrap + p.dive!.bounty + 100);
     expect(closeDive(registry, extracted)).toEqual({ ...extracted, dive: null });
+  });
+});
+
+describe('a settled dive', () => {
+  it('is over once an abandon settles it: not active, and no door, extract, stop or floor clear goes through', () => {
+    const p = diving();
+    const world = beginFloor(registry, p);
+    clearFloor(world);
+    const cleared = completeFloor(registry, p, world).profile;
+    const stop = { offers: ['slot' as const], taken: false };
+    const atStop = { ...cleared, dive: { ...cleared.dive!, stop } };
+    const left = settleDive(registry, atStop, 'abandon');
+    expect(isDiveActive(atStop)).toBe(true);
+    expect(isDiveActive(left)).toBe(false);
+    expect(() => extractDive(registry, left)).toThrow();
+    expect(() => chooseDoor(registry, left, left.dive!.doorChoices[0])).toThrow();
+    expect(takeStop(registry, left, { kind: 'slot', skill: 'primary' })).toMatchObject({
+      ok: false,
+    });
+
+    const abandoned = settleDive(registry, p, 'abandon');
+    expect(isDiveActive(abandoned)).toBe(false);
+    const again = beginFloor(registry, p);
+    clearFloor(again);
+    expect(() => completeFloor(registry, abandoned, again)).toThrow();
   });
 });
 
