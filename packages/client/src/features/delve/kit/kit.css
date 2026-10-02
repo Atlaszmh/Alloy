@@ -599,3 +599,144 @@ html[data-input='gamepad'] .delve-ui :focus {
   align-items: center;
   justify-content: center;
 }
+
+/* ── Surfaces ── */
+
+.k-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.k-panel.k-glass {
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.k-panel.k-well {
+  padding: 14px;
+  gap: 8px;
+}
+
+.k-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.k-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.k-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #5a6988 #181425;
+}
+
+.k-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 72px minmax(0, 1fr) 76px;
+  overflow: hidden;
+}
+
+.k-screen-arena-pause {
+  background: rgba(24, 20, 37, 0.86);
+}
+
+.k-screen-arena-stop {
+  background: rgba(6, 6, 11, 0.82);
+}
+
+.k-screen-head {
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+
+.k-screen-main {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.k-screen-foot {
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+
+.k-header {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+}
+
+.k-header-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  font-weight: 400;
+}
+
+.k-header-title .k-disp {
+  font-size: 30px;
+  color: var(--k-hot-hi);
+}
+
+.k-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.k-header-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 16px;
+}
+
+.k-footer {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+}
+
+.k-footer-aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.k-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 20, 37, 0.72);
+  pointer-events: auto;
+}
+
+.k-dialog {
+  max-width: calc(100% - 64px);
+  max-height: calc(100% - 64px);
+}
