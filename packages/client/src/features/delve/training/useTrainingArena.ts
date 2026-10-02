@@ -31,8 +31,8 @@ export function useTrainingArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
     paused: boolean;
-    /** The HUD's insets; until the 3a page passes all four, the sides default to 0. */
-    insets: Pick<Insets, 'top' | 'bottom'> & Partial<Insets>;
+    /** The screen the HUD covers (viewport px), from `HudGrid`. */
+    insets: Insets;
     onUi: (e: CoreUiEvent) => void;
     manualAttack: boolean;
   },
@@ -68,10 +68,7 @@ export function useTrainingArena(
     onHeroDead: (world) => respawnHero(registry, world),
     speed: slowmo,
   };
-  const arena = useArenaCore(hostRef, mode, {
-    ...opts,
-    insets: { left: 0, right: 0, ...opts.insets },
-  });
+  const arena = useArenaCore(hostRef, mode, opts);
   const { worldRef } = arena;
 
   useEffect(() => {

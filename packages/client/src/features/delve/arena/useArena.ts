@@ -46,8 +46,8 @@ export function useArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
     paused: boolean;
-    /** The HUD's insets; until the 3a page passes all four, the sides default to 0. */
-    insets: Pick<Insets, 'top' | 'bottom'> & Partial<Insets>;
+    /** The screen the HUD covers (viewport px), from `HudGrid`. */
+    insets: Insets;
     onUi: (e: ArenaUiEvent) => void;
     /** Basic attacks on a button (held or tapped) instead of automatic. */
     manualAttack: boolean;
@@ -145,5 +145,5 @@ export function useArena(
       return value.powerPct > UPGRADE_EPSILON;
     },
   };
-  return useArenaCore(hostRef, mode, { ...opts, insets: { left: 0, right: 0, ...opts.insets } });
+  return useArenaCore(hostRef, mode, opts);
 }
