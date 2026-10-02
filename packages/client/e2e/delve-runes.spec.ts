@@ -165,10 +165,10 @@ test.describe('Delve runes', () => {
 
     await expect(page.getByTestId('door-choice')).toBeVisible({ timeout: ARENA_READY });
     await page.getByTestId('stop-rune').click();
-    const stopPicker = page.getByTestId('stop-picker');
+    const stopPicker = page.getByTestId('stop').getByTestId('stop-picker');
     await expect(stopPicker).toBeVisible();
     await stopPicker.getByTestId('stop-rune-move-primary-0').getByTestId('socket-0').click();
-    const picker = page.getByTestId('rune-picker');
+    const picker = stopPicker.getByTestId('rune-picker');
     await expect(picker).toBeVisible();
     await picker.getByTestId('rune-pick-quick').click();
     await expect(page.getByTestId('stop-taken')).toBeVisible();
