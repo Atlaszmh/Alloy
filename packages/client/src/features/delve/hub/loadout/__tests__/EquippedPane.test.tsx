@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { profileStats, strikeInterval, type Blow } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { getDelveRegistry } from '../../../registry';
 import { EquippedPane } from '../EquippedPane';
 
 const store = () => useDelveStore.getState();
@@ -40,6 +42,33 @@ describe('the equipped pane', () => {
     open();
     expect(screen.getByTestId('loadout-stats')).toHaveTextContent(
       /^Damage\d[\d.k]*Life\d+Attack speed\d+\.\d\d\/sArmor\d+Mana\d+Regen\d+\.\d\/s$/,
+    );
+  });
+
+  it("the attack speed is the engine's, a blow's Quick rune counted", () => {
+    const p = store().profile;
+    const weapon = p.equipped.weapon!;
+    const quick = weapon.moveset!.chains.basic!.map(
+      (b): Blow => ({
+        ...b,
+        runes: [{ id: 'quick', tier: 3 }],
+      }),
+    );
+    const equipped = {
+      ...p.equipped,
+      weapon: {
+        ...weapon,
+        moveset: {
+          ...weapon.moveset!,
+          chains: { ...weapon.moveset!.chains, basic: quick },
+        },
+      },
+    };
+    store().setProfile({ ...p, equipped });
+    open();
+    const stats = profileStats(getDelveRegistry(), { equipped, pair: p.pair });
+    expect(screen.getByTestId('loadout-stats')).toHaveTextContent(
+      `Attack speed${(1 / strikeInterval(stats)).toFixed(2)}/s`,
     );
   });
 

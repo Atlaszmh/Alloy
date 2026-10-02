@@ -518,6 +518,17 @@ export function useInterval(
 }
 
 /**
+ * The basics' mean seconds between strikes, as Power counts them: the attack
+ * interval × the blows' mean time, each blow's Quick or Heavy (`quick.beat`)
+ * scaling its share. Its inverse is the attack speed the Anvil shows.
+ */
+export function strikeInterval(stats: HeroStats): number {
+  const blows = stats.weapon.blows;
+  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
+  return (stats.attackInterval * stringTime) / blows.length;
+}
+
+/**
  * Mana a second the basics bring back at their full rate, as Power counts them
  * (see the rune costs spec): regen, `basicAttackGain` a strike, and the blows'
  * Drain (each blow's foe-hits at most `drainFoes`, capped at `drainShare` of a
@@ -530,9 +541,8 @@ export function basicIncome(registry: DataRegistry, stats: HeroStats): number {
   const blows = stats.weapon.blows;
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
-  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
-  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
-  const income = manaPool(stats, registry).regen + bal.mana.basicAttackGain / strikeInterval;
+  const interval = strikeInterval(stats);
+  const income = manaPool(stats, registry).regen + bal.mana.basicAttackGain / interval;
   const blowDrain = mean(
     blows.map((b) =>
       Math.min(
@@ -541,7 +551,7 @@ export function basicIncome(registry: DataRegistry, stats: HeroStats): number {
       ),
     ),
   );
-  return income + blowDrain / strikeInterval;
+  return income + blowDrain / interval;
 }
 
 /** A chain's mana spend a second against the build's refill (see the rune costs spec). */
@@ -663,7 +673,7 @@ export function estimateCombat(
   // (a blow's Quick or Heavy scales its share of it).
   const blows = stats.weapon.blows;
   const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
-  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
+  const interval = strikeInterval(stats);
   const value = (b: (typeof blows)[number]) => b.attunePower * (1 + stats.elementPower[b.element]);
   // Twin Fang: one extra hit on the last blow, at its value (×1.5 melee, ×1 ranged; no runes).
   const twin = ((L.twin_fang ?? 0) / 100) * (melee ? 1.5 : 1);
@@ -684,7 +694,7 @@ export function estimateCombat(
     useInterval(bal, chain, stats.tempo, income, rate, pool.max);
   // Drain: mana per foe-hit, the blows' on each strike and each skill's on each use, over its
   // interval at the income before Drain (one pass).
-  const income = pool.regen + bal.mana.basicAttackGain / strikeInterval;
+  const income = pool.regen + bal.mana.basicAttackGain / interval;
   const drained = (chain: ResolvedChain | null, share: number) => {
     const perUse = chain ? drainPerUse(chain, bal, pool.max) : 0;
     return perUse > 0 ? perUse / every(chain!, income * share, dps / unit) : 0;
@@ -733,7 +743,7 @@ export function estimateCombat(
   const shield = Math.max(
     guardShare(
       blows.map((b) => b.knobs.guardOnLand),
-      strikeInterval,
+      interval,
       bal,
     ),
     primary ? guardShare(guards(primary, pool.max), primaryEvery, bal) : 0,

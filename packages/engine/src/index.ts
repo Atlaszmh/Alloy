@@ -121,6 +121,7 @@ export {
   hasMastery,
   isAttuneStat,
   basicIncome,
+  strikeInterval,
   manaSupport,
   expectedHit,
   chainCycle,

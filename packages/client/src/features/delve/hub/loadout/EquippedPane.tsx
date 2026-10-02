@@ -9,6 +9,7 @@ import {
   pairElements,
   profileStats,
   referenceDepth,
+  strikeInterval,
   type GearSlot,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
@@ -64,8 +65,7 @@ export function EquippedPane({
     [stats, registry, profile, chains],
   );
   const pool = manaPool(stats, registry);
-  const blows = stats.weapon.blows;
-  const speed = blows.length / (stats.attackInterval * blows.reduce((a, b) => a + b.time, 0));
+  const speed = 1 / strikeInterval(stats);
   const elements = pairElements(pair);
   const weapon = equipped.weapon;
   const cap = registry.getDelveBalance().chains.cap;
