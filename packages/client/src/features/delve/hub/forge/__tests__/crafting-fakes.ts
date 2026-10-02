@@ -65,7 +65,7 @@ export function fakePreview(
       const t = shardTiersOf(registry, shard.stat)[shard.tier - 1];
       return { shard, band: [t.min, t.max], range: [2, 4] };
     }),
-    legendary: req.essence && rarity === 'legendary' ? { id: req.essence, band: [0.4, 1] } : null,
+    legendary: req.essence && rarity === 'legendary' ? { id: req.essence, band: [0.4, 1], range: [17, 30] } : null,
     price: {
       scrap: FAKE.forge,
       dust: inPair ? 0 : registry.getDelveBalance().crafting.offPairDust,

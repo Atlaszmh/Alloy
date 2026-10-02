@@ -386,7 +386,7 @@ export function ForgeBench({
             {legend && (
               <p className="text-[16px]" data-testid="forge-legendary">
                 <span style={{ color: RARITY_TEXT.legendary }}>{legend.name}:</span>{' '}
-                {legend.text.replace('{v}', `${legend.min}–${legend.max}`)}
+                {legend.text.replace('{v}', preview.legendary!.range.join('–'))}
               </p>
             )}
             {preview.weapon && (

@@ -218,7 +218,10 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('pattern-sword')).toHaveTextContent('Fits the essence');
     expect(screen.getByTestId('pattern-cuirass')).toHaveTextContent('The essence does not fit');
     const def = registry.getLegendary('pyroclasm');
-    expect(screen.getByTestId('forge-legendary')).toHaveTextContent(`${def.name}:`);
+    // The engine's range (the floor lifting its low end), not the data's.
+    expect(screen.getByTestId('forge-legendary')).toHaveTextContent(
+      `${def.name}: ${def.text.replace('{v}', '17–30')}`,
+    );
     expect(screen.getByTestId('forge-title')).toHaveTextContent('Legendary Sword');
     fireEvent.click(screen.getByTestId('forge-button'));
     expect(screen.getByTestId('legendary-fanfare')).toHaveTextContent('New codex entry!');

@@ -159,19 +159,34 @@ export function previewForge(
   const [lo, hi] = metal.band;
   const ilvl = Math.max(lo, Math.min(hi ?? Infinity, profile.bestDepth));
   const rarity: Rarity = req.essence && req.flux === 'epic' ? 'legendary' : (req.flux ?? 'common');
+  const floor = rollFloor(registry, profile, req.element);
+  /** A band's lowest roll once the floor lifts it. */
+  const low = ([b0, b1]: readonly [number, number]) => b0 + (b1 - b0) * floor;
   const lines: ForgeLinePreview[] = [];
   for (const shard of req.shards.slice(0, bal.loot.affixCount[rarity])) {
     const def = registry.getGearAffix(shard.stat);
     const band = shardBand(registry, shard);
     if (!def || !band) continue;
     const range: [number, number] = [
-      affixValue(registry, def, ilvl, band[0]),
+      affixValue(registry, def, ilvl, low(band)),
       affixValue(registry, def, ilvl, band[1]),
     ];
     lines.push({ shard: { ...shard }, band, range });
   }
   while (lines.length < bal.loot.affixCount[rarity])
     lines.push({ shard: null, band: [bal.loot.minRoll[rarity], 1], range: null });
+  // A legendary's power rolls as `forgeItem` rounds it (an unknown essence is refused).
+  const legend =
+    rarity === 'legendary'
+      ? (registry.getDelveData().legendaries.find((l) => l.id === req.essence) ?? {
+          id: req.essence!,
+          min: 0,
+          max: 0,
+        })
+      : null;
+  const legendBand: [number, number] = [bal.loot.minRoll.legendary, 1];
+  const legendValue = (roll: number) =>
+    Math.round(legend!.min + (legend!.max - legend!.min) * roll);
   const moveset =
     base.slot === 'weapon'
       ? forgedMoveset(registry, { baseId: base.id, rarity, mana: req.element })
@@ -182,15 +197,18 @@ export function previewForge(
     rarity,
     ilvl,
     element: req.element,
-    floor: rollFloor(registry, profile, req.element),
+    floor,
     implicits: base.implicits.map((t) => ({
       stat: t.stat,
       min: implicitValue(registry, t, ilvl, rarity, 0),
       max: implicitValue(registry, t, ilvl, rarity, 1),
     })),
     lines,
-    legendary:
-      rarity === 'legendary' ? { id: req.essence!, band: [bal.loot.minRoll.legendary, 1] } : null,
+    legendary: legend && {
+      id: legend.id,
+      band: legendBand,
+      range: [legendValue(low(legendBand)), legendValue(1)],
+    },
     price: {
       scrap: Math.round(bal.crafting.forgeScrap[rarity] * scrapLevelFactor(registry, ilvl)),
       dust: inPair(profile, req.element) ? 0 : bal.crafting.offPairDust,
