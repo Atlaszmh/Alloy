@@ -40,7 +40,8 @@ export interface RunePickerProps {
   onClose: () => void;
   /**
    * 'sheet' (the default: Training and the stop until 3b): a modal over the screen, in the kit's
-   * UI layer. 'inline' (the Skills inspector): drawn in place, its own pad scope.
+   * UI layer (taking the clicks the layer lets through, at its own unzoomed size until 3b).
+   * 'inline' (the Skills inspector): drawn in place, its own pad scope.
    */
   variant?: 'sheet' | 'inline';
 }
@@ -265,7 +266,7 @@ export function RunePicker({
     );
   return createPortal(
     <div
-      className="delve-sheet-backdrop fixed inset-0 select-none text-white"
+      className="delve-sheet-backdrop pointer-events-auto fixed inset-0 select-none text-white [zoom:calc(1/var(--ui-scale,1))]"
       onClick={(e) => {
         e.stopPropagation();
         close();
