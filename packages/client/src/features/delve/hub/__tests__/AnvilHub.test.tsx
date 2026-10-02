@@ -100,6 +100,19 @@ describe('AnvilHub', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/delve/training');
   });
 
+  it("a disabled tab's digit does nothing: the pause hub's Forge", () => {
+    render(
+      <MemoryRouter>
+        <AnvilHub mode="pause" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('tab-forge')).toBeDisabled();
+    press('Digit3');
+    expect(selected()).toEqual(['tab-loadout']);
+    press('Digit4');
+    expect(selected()).toEqual(['tab-codex']);
+  });
+
   it("the footer's Menu (Esc / B) opens the system menu, and Resume closes it", () => {
     renderHub();
     const menu = document.querySelector<HTMLElement>('[data-pad-back]')!;
