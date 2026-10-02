@@ -44,8 +44,8 @@ describe('CompareTable', () => {
     expect(rows[0]).toHaveTextContent('Armor+10+9');
     expect(rows[1]).toHaveTextContent('Crit Chance—+3%');
     expect(rows[2]).toHaveTextContent('Max Life+18—');
-    expect(rows[0].children[2]).toHaveStyle({ color: '#f87171' });
-    expect(rows[1].children[2]).toHaveStyle({ color: '#4ade80' });
+    expect(rows[0].children[2]).toHaveStyle({ color: '#f6757a' });
+    expect(rows[1].children[2]).toHaveStyle({ color: '#63c74d' });
   });
 
   it('with nothing worn, every stat is a gain', () => {
@@ -53,6 +53,6 @@ describe('CompareTable', () => {
     expect(screen.getByTestId('compare-table')).toHaveTextContent('StatWornThis');
     expect(screen.getAllByTestId(/^compare-row-/)).toHaveLength(2);
     expect(screen.getByTestId('compare-row-armor')).toHaveTextContent('Armor—+9');
-    expect(screen.getByTestId('compare-row-armor').children[2]).toHaveStyle({ color: '#4ade80' });
+    expect(screen.getByTestId('compare-row-armor').children[2]).toHaveStyle({ color: '#63c74d' });
   });
 });

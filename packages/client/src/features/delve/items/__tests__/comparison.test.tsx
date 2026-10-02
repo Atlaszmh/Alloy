@@ -74,8 +74,8 @@ describe('PowerDelta', () => {
   it('shows Power, Damage and Toughness, each with its arrow and colour', () => {
     render(<PowerDelta cmp={cmp} />);
     expect(document.body).toHaveTextContent('Power▲ +12%Damage▼ −4%Toughness ±0%');
-    expect(screen.getByText('+12%', { exact: false })).toHaveStyle({ color: '#4ade80' });
-    expect(screen.getByText('−4%', { exact: false })).toHaveStyle({ color: '#f87171' });
+    expect(screen.getByText('+12%', { exact: false })).toHaveStyle({ color: '#63c74d' });
+    expect(screen.getByText('−4%', { exact: false })).toHaveStyle({ color: '#f6757a' });
   });
 
   it('heads the row with its label, and shows dashes with nothing to compare', () => {
