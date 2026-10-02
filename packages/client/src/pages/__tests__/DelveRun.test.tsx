@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { createDelveProfile, startDive } from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
 import { getDelveRegistry } from '@/features/delve/registry';
@@ -9,11 +9,18 @@ import type { PauseScreenProps } from '@/features/delve/hub/PauseScreen';
 import type { StopScreenProps } from '@/features/delve/stop/StopScreen';
 import { DelveRun } from '../DelveRun';
 
-/** What the mocks saw: each render's props, and the arena's HUD tick. */
+/** What the mocks saw: each render's props, the arena's `paused` and HUD tick, and the pad's owner. */
 const seen = vi.hoisted(() => ({
   pause: [] as object[],
   stop: [] as object[],
+  paused: [] as boolean[],
+  live: [] as boolean[],
   tick: null as null | (() => void),
+}));
+
+vi.mock('@/features/gamepad/gamepad-hub', async (orig) => ({
+  ...(await orig<object>()),
+  setArenaLive: (on: boolean) => seen.live.push(on),
 }));
 
 // The arena itself (Pixi) stands still: the page's HUD is what's under test. `seen.tick` re-renders
@@ -21,7 +28,8 @@ const seen = vi.hoisted(() => ({
 vi.mock('@/features/delve/arena/useArena', async () => {
   const { useState } = await import('react');
   return {
-    useArena: () => {
+    useArena: (_host: unknown, opts: { paused: boolean }) => {
+      seen.paused.push(opts.paused);
       const [, setTick] = useState(0);
       seen.tick = () => setTick((n) => n + 1);
       return {
@@ -39,7 +47,7 @@ vi.mock('@/features/delve/arena/useArena', async () => {
   };
 });
 
-// The pause (3D's) as its contract: which tab it opens on, and Resume.
+// The pause (3D's) as its contract: which tab it opens on, Resume, the Anvil and Abandon.
 vi.mock('@/features/delve/hub/PauseScreen', () => ({
   PauseScreen: (props: PauseScreenProps) => {
     seen.pause.push(props);
@@ -47,6 +55,12 @@ vi.mock('@/features/delve/hub/PauseScreen', () => ({
       <div data-testid="pause-stub" data-link={JSON.stringify(props.link ?? null)}>
         <button type="button" onClick={props.onResume}>
           Resume
+        </button>
+        <button type="button" onClick={props.onAnvil}>
+          Anvil
+        </button>
+        <button type="button" onClick={props.onAbandon}>
+          Abandon
         </button>
       </div>
     );
@@ -74,8 +88,11 @@ const heldStill = (renders: object[]) => {
 
 const renderRun = () =>
   render(
-    <MemoryRouter>
-      <DelveRun />
+    <MemoryRouter initialEntries={['/delve/run']}>
+      <Routes>
+        <Route path="/delve/run" element={<DelveRun />} />
+        <Route path="/delve" element={<div data-testid="anvil" />} />
+      </Routes>
     </MemoryRouter>,
   );
 const pauseLink = () => JSON.parse(screen.getByTestId('pause-stub').dataset.link!);
@@ -84,6 +101,8 @@ describe('DelveRun', () => {
   beforeEach(() => {
     seen.pause.length = 0;
     seen.stop.length = 0;
+    seen.paused.length = 0;
+    seen.live.length = 0;
     const registry = getDelveRegistry();
     useDelveStore.setState({
       profile: startDive(registry, createDelveProfile(registry, 7), 1),
@@ -114,6 +133,33 @@ describe('DelveRun', () => {
     expect(screen.queryByTestId('pause-stub')).toBeNull();
     // The kebab menu is gone.
     expect(screen.queryByTestId('attack-mode-toggle')).toBeNull();
+  });
+
+  it('the pause stops the fight: the arena is paused and the pad goes to the menus', () => {
+    renderRun();
+    expect(seen.paused.at(-1)).toBe(false);
+    expect(seen.live.at(-1)).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    expect(seen.paused.at(-1)).toBe(true);
+    expect(seen.live.at(-1)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(seen.paused.at(-1)).toBe(false);
+    expect(seen.live.at(-1)).toBe(true);
+  });
+
+  it("the pause's Anvil goes to the Anvil keeping the dive; Abandon closes the dive and goes there", () => {
+    renderRun();
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Anvil' }));
+    expect(screen.getByTestId('anvil')).toBeInTheDocument();
+    expect(useDelveStore.getState().profile.dive).not.toBeNull();
+
+    cleanup();
+    renderRun();
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
+    expect(screen.getByTestId('anvil')).toBeInTheDocument();
+    expect(useDelveStore.getState().profile.dive).toBeNull();
   });
 
   it('the Journal opens the pause on Quests', () => {

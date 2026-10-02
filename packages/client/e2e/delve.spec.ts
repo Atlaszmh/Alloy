@@ -111,10 +111,12 @@ test.describe('Delve loot loop', () => {
     // Inspected from the right column's "Found this floor" log: the pause opens on Loadout.
     const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
     await expect(loot).toBeVisible({ timeout: 60_000 });
+    const name = (await loot.locator('span.truncate').textContent())!;
     await loot.click();
     const pause = page.getByTestId('dive-pause');
     await expect(pause).toBeVisible();
-    await expect(pause.getByTestId('item-name')).not.toBeEmpty();
+    // The compare pane shows the find it was opened on.
+    await expect(pause.getByTestId('item-sheet')).toContainText(name);
     // Gear is locked mid-dive.
     await expect(pause.getByTestId('equip-button')).toHaveCount(0);
     await expect(pause.getByTestId('equip-locked')).toHaveText('Locked during the dive');
