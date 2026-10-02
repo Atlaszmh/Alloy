@@ -31,7 +31,7 @@ import {
 } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_LABEL, RARITY_TEXT, formatStat, legendaryText, manaStyle } from '../format';
-import { Chip } from '../AbilitiesPanel';
+import { Chip } from '@/features/delve/kit';
 import { AttunementBars } from '../items/AttunementBars';
 import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
 import type { MeterSummary } from './meter';

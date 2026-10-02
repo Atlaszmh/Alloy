@@ -19,7 +19,7 @@ import {
   type RuneRef,
 } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
-import { Chip } from '../AbilitiesPanel';
+import { Chip } from '@/features/delve/kit';
 import { AttunementBars } from '../items/AttunementBars';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';

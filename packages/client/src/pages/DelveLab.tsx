@@ -2,7 +2,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { dpsCombos, dpsKey, type DpsOptions, type DpsSetup } from '@alloy/engine';
 import { MAX_DEPTH } from '@/stores/sandboxStore';
-import { Chip } from '@/features/delve/AbilitiesPanel';
+import { Chip } from '@/features/delve/kit';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { LabChart } from '@/features/delve/lab/LabChart';
 import { LabTable } from '@/features/delve/lab/LabTable';

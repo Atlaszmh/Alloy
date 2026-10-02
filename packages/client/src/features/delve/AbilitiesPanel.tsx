@@ -27,36 +27,6 @@ import { ManaPanel } from './ManaPanel';
 import { ChainEditor, type ChainRunes } from './chains/ChainEditor';
 import { listed } from './chains/chain-text';
 
-export function Chip({
-  pressed,
-  onClick,
-  children,
-  testId,
-  title,
-  disabled,
-}: {
-  pressed: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  testId?: string;
-  title?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className="delve-chip"
-      aria-pressed={pressed}
-      onClick={onClick}
-      data-testid={testId}
-      title={title}
-      disabled={disabled}
-    >
-      {children}
-    </button>
-  );
-}
-
 /**
  * The Anvil's workshop: the equipped weapon's chains, edited as a draft (kept
  * in the store, so it outlives the tab) whose price shows (free until the

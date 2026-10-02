@@ -18,7 +18,7 @@ import {
   socketsOf,
   type FormId,
 } from '@alloy/engine';
-import { Chip } from '../AbilitiesPanel';
+import { Chip } from '@/features/delve/kit';
 import { formatNumber, manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { KIND_ICON, KIND_LABEL, listed } from './chain-text';
