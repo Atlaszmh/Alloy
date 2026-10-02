@@ -47,19 +47,7 @@ export function ControlsPanel({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [capturing, store]);
-
-  // Esc closes the editor (and doesn't reach the game's menu key).
-  useEffect(() => {
-    if (capturing) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== 'Escape') return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [capturing, onClose]);
+  // Esc closes the editor through the Dialog's Back (`data-pad-back`), which the prompt runtime presses.
 
   const copy = () => {
     const setup = exportControls(store().config);
