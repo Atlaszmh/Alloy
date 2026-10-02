@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { defaultMoveset, generateItem, SeededRNG, type GearItem } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { ToastContainer } from '@/components/Toast';
 import type { Prompt } from '../../../kit';
 import { LoadoutTab } from '../LoadoutTab';
@@ -55,6 +56,7 @@ describe('LoadoutTab', () => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
     useDelveStore.setState({ bindDeclined: [] });
+    useInputDeviceStore.getState().setDevice('keyboard');
   });
   afterEach(() => vi.useRealTimers());
 
@@ -129,6 +131,18 @@ describe('LoadoutTab', () => {
     act(() => prompt(props, 'lock').onPress!());
     act(() => prompt(props, 'salvage').onPress!());
     expect(store().profile.bag.map((i) => i.uid)).toEqual(['r1']);
+  });
+
+  it('under the pad the actions take the selected item only, and a device switch forgets the hover', () => {
+    put(gear('h1', 'helm'), gear('r1', 'ring'));
+    const { props } = open();
+    fireEvent.mouseEnter(tile('h1'));
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    fireEvent.focus(tile('r1'));
+    act(() => prompt(props, 'salvage').onPress!());
+    expect(store().profile.bag.map((i) => i.uid)).toEqual(['h1']);
+    act(() => useInputDeviceStore.getState().setDevice('keyboard'));
+    expect(screen.queryByText(/Hovered/)).toBeNull();
   });
 
   it("holding Full compare shows every stat line and a weapon's moveset", () => {

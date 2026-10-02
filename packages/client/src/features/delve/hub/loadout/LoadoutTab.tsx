@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { findItem, isDiveActive, rarityIndex, weaponParts } from '@alloy/engine';
 import { partsText, useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { showToast } from '@/components/Toast';
@@ -31,10 +32,12 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
   const [full, setFull] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
   const [asked, setAsked] = useState<string | null>(null);
+  const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const locked = mode === 'pause' || isDiveActive(profile);
 
   const has = (uid: string | null): uid is string => !!uid && !!findItem(profile, uid);
-  const target = has(hovered) ? hovered : has(selected) ? selected : null;
+  // Under the pad only the focus (the selection) counts: a mouse hover left behind never does.
+  const target = !pad && has(hovered) ? hovered : has(selected) ? selected : null;
   const howTo = !target && profile.stats.dives === 0;
 
   const select = (uid: string) => {
@@ -96,6 +99,9 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
   useEffect(() => {
     if (link?.tab === 'loadout' && link.uid) setSelected(link.uid);
   }, [link]);
+
+  // A device switch forgets the hover.
+  useEffect(() => useInputDeviceStore.subscribe(() => setHovered(null)), []);
 
   useEffect(() => {
     const on = (act: keyof LoadoutActions) => () => {
