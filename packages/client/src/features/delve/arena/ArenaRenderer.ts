@@ -5,6 +5,7 @@ import {
   type ArpgWorld,
   type BiomeDef,
   type Drop,
+  type GearItem,
   type ManaType,
   type MonsterEntity,
   type Vec,
@@ -38,6 +39,8 @@ import { PixelFloor } from './pixel/pixel-floor';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
+import { RARITY_TEXT } from '../format';
+import { contextZoom } from '../kit/zoom';
 import { useUIStore } from '@/stores/uiStore';
 
 /**
@@ -62,7 +65,16 @@ interface MonsterView {
 interface DropView {
   root: Container;
   gfx: Graphics;
-  label: Text | null;
+  plaque: Plaque | null;
+}
+
+/** A loot label (decided item 22): screen space, `w`×`h` px. */
+interface Plaque {
+  box: Container;
+  w: number;
+  h: number;
+  /** Shown without Alt: rare and up, a rune, an upgrade. */
+  always: boolean;
 }
 
 interface FloatText {
@@ -151,6 +163,10 @@ export class ArenaRenderer {
   private heroFlashUntil = 0;
   private heroPerfectUntil = 0;
   private aim: AimView | null = null;
+  /** Alt or L3 held: every drop's loot label shows. */
+  private labelsHeld = false;
+  /** Whether an item is an upgrade as it comes (▲ on its label), asked once per drop. */
+  private isUpgrade: (item: GearItem) => boolean = () => false;
 
   constructor(app: Application) {
     this.app = app;
@@ -193,7 +209,7 @@ export class ArenaRenderer {
     for (const v of this.monsters.values()) v.root.destroy({ children: true });
     for (const v of this.drops.values()) {
       v.root.destroy({ children: true });
-      v.label?.destroy();
+      v.plaque?.box.destroy({ children: true });
     }
     for (const d of this.dying) d.root.destroy({ children: true });
     this.monsters.clear();
@@ -553,6 +569,16 @@ export class ArenaRenderer {
     return guard ? MANA_HEX[guard.element] : MANA_HEX.shadow;
   }
 
+  /** Alt or L3 held (or let go): every drop's loot label shows. */
+  setLabelsHeld(held: boolean): void {
+    this.labelsHeld = held;
+  }
+
+  /** How to tell an upgrade (▲ on its label); asked once, when a drop's view is made. */
+  setUpgradeTest(isUpgrade: (item: GearItem) => boolean): void {
+    this.isUpgrade = isUpgrade;
+  }
+
   /** Show (or hide, with null) the aim marker. */
   setAim(aim: AimView | null): void {
     this.aim = aim;
@@ -834,6 +860,7 @@ export class ArenaRenderer {
 
   private syncDrops(w: ArpgWorld): void {
     const alive = new Set<number>();
+    const shown: { p: Plaque; x: number; y: number }[] = [];
     for (const d of w.drops) {
       alive.add(d.id);
       let v = this.drops.get(d.id);
@@ -849,14 +876,19 @@ export class ArenaRenderer {
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
       drawDrop(v.gfx, d, this.time, age);
-      if (v.label) {
-        const p = this.toScreen(d.x, d.y - pop - 0.9);
-        v.label.position.set(p.x, p.y);
+      const plaque = v.plaque;
+      if (plaque) {
+        plaque.box.visible = plaque.always || this.labelsHeld;
+        if (plaque.box.visible) shown.push({ p: plaque, ...this.toScreen(d.x, d.y - pop - 0.9) });
       }
     }
+    const bottoms = stackPlaques(shown.map(({ p, x, y }) => ({ x, y, w: p.w, h: p.h })));
+    shown.forEach(({ p, x }, i) =>
+      p.box.position.set(Math.round(x - p.w / 2), Math.round(bottoms[i] - p.h)),
+    );
     pruneViews(this.drops, alive, (v) => {
       v.root.destroy({ children: true });
-      v.label?.destroy();
+      v.plaque?.box.destroy({ children: true });
     });
   }
 
@@ -865,23 +897,34 @@ export class ArenaRenderer {
     const gfx = new Graphics();
     root.addChild(gfx);
     this.dropLayer.addChild(root);
-    let label: Text | null = null;
-    const named = dropLabel(d);
-    if (named) {
-      label = new Text({
-        text: named.text,
-        style: {
-          fontFamily: FONT,
-          fontWeight: '700',
-          fontSize: 13,
-          fill: named.color,
-          stroke: { color: 0x000000, width: 3 },
-        },
-      });
-      label.anchor.set(0.5, 1);
-      this.textLayer.addChild(label);
-    }
-    return { root, gfx, label };
+    const named = dropPlaque(d, !!d.item && this.isUpgrade(d.item));
+    return { root, gfx, plaque: named && this.makePlaque(named) };
+  }
+
+  /** A loot label: its text in Jersey 10 at 14 × the HUD scale px on a dark plate, bordered in its colour. */
+  private makePlaque(named: { text: string; color: number; always: boolean }): Plaque {
+    const s = contextZoom('hud');
+    const text = new Text({
+      text: named.text,
+      style: {
+        fontFamily: '"Jersey 10", sans-serif',
+        fontSize: 14 * s,
+        letterSpacing: 0.7 * s,
+        fill: named.color,
+      },
+    });
+    text.position.set(Math.round(9 * s), Math.round(3 * s));
+    const w = Math.ceil(text.width + 18 * s);
+    const h = Math.ceil(text.height + 6 * s);
+    const plate = new Graphics()
+      .rect(0, 0, w, h)
+      .fill({ color: 0x0a0a10, alpha: 0.86 })
+      .stroke({ width: 1, color: named.color, alpha: 0.55, alignment: 1 });
+    const box = new Container();
+    box.addChild(plate, text);
+    box.visible = false;
+    this.textLayer.addChild(box);
+    return { box, w, h, always: named.always };
   }
 
   private updateTexts(dt: number): void {
@@ -949,20 +992,53 @@ export function dropPop(d: Drop, age: number): number {
 }
 
 /**
- * The name floating over a drop: a rare, epic or legendary item's in its
- * rarity's colour, or a rune's glyph, name and tier ("✳️ Split III") in its
- * family's; null for anything else.
+ * A drop's loot label (decided item 22): an item's name in its rarity's text
+ * colour, with ▲ when it is an upgrade as it comes, or a rune's name and tier
+ * ("Split III") in its family's. Rare and up, runes and upgrades always show;
+ * anything else only while every label does. Null for drops that aren't loot.
  */
-export function dropLabel(d: Drop): { text: string; color: number } | null {
-  const rarity = d.item?.rarity;
-  if (d.item && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary'))
-    return { text: d.item.name, color: RARITY_HEX[rarity] };
+export function dropPlaque(
+  d: Drop,
+  isUpgrade: boolean,
+): { text: string; color: number; always: boolean } | null {
+  if (d.item) {
+    const r = d.item.rarity;
+    return {
+      text: isUpgrade ? `${d.item.name} ▲` : d.item.name,
+      color: cssToHex(RARITY_TEXT[r]),
+      always: isUpgrade || r === 'rare' || r === 'epic' || r === 'legendary',
+    };
+  }
   const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
   if (!d.rune || !def) return null;
-  return {
-    text: `${def.icon} ${def.name} ${TIER_NUMERAL[d.rune.tier]}`,
-    color: runeHex(d.rune),
-  };
+  return { text: `${def.name} ${TIER_NUMERAL[d.rune.tier]}`, color: runeHex(d.rune), always: true };
+}
+
+/** Space between stacked loot labels, px. */
+const PLAQUE_GAP = 2;
+
+/**
+ * Loot labels that overlap stack upward: one greedy pass from the lowest on
+ * screen up, each moved above any label already placed that it overlaps.
+ * Boxes are centred on `x` with their bottom at `y` (px); returns each bottom.
+ */
+export function stackPlaques(boxes: { x: number; y: number; w: number; h: number }[]): number[] {
+  const bottoms = boxes.map((b) => b.y);
+  const placed: number[] = [];
+  for (const i of boxes.map((_, i) => i).sort((a, b) => boxes[b].y - boxes[a].y)) {
+    const b = boxes[i];
+    // Lowest first: moving above one can only meet those placed higher.
+    for (const j of placed.sort((m, n) => bottoms[n] - bottoms[m])) {
+      const p = boxes[j];
+      const apart =
+        Math.abs(b.x - p.x) >= (b.w + p.w) / 2 ||
+        bottoms[i] <= bottoms[j] - p.h ||
+        bottoms[i] - b.h >= bottoms[j];
+      if (!apart) bottoms[i] = bottoms[j] - p.h - PLAQUE_GAP;
+    }
+    placed.push(i);
+  }
+  return bottoms;
 }
 
 /**

@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { Container, type Application, type Graphics } from 'pixi.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { CanvasTextMetrics, Container, Text, type Application, type Graphics } from 'pixi.js';
 import {
   computeHeroStats,
   createSandboxWorld,
@@ -12,13 +12,16 @@ import {
 import {
   ArenaRenderer,
   drawDrop,
-  dropLabel,
+  dropPlaque,
   dropPop,
   holdPing,
   pickupColor,
   pruneViews,
+  stackPlaques,
 } from '../arena/ArenaRenderer';
-import { MANA_HEX, RARITY_HEX } from '../arena/palette';
+import { MANA_HEX, cssToHex } from '../arena/palette';
+import { attachKeyboard, createArenaInput } from '../arena/input';
+import { RARITY_TEXT } from '../format';
 import { runeHex } from '../arena/fx/runes';
 import { getDelveRegistry } from '../registry';
 import { spritePixelScale } from '../arena/camera';
@@ -208,21 +211,89 @@ describe('runes on the floor', () => {
     drawDrop(stone.g, drop({ kind: 'rune', rune: split }), 1, 1);
     expect(stone.fills).toContain(runeHex(split));
     expect(stone.fills).not.toContain(0xfcd34d); // not the scrap coin
-    const def = getDelveRegistry().getRune('split');
-    expect(dropLabel(drop({ kind: 'rune', rune: split }))).toEqual({
-      text: `${def.icon} Split III`,
+    expect(dropPlaque(drop({ kind: 'rune', rune: split }), false)).toEqual({
+      text: 'Split III',
       color: runeHex(split),
+      always: true,
     });
     expect(
       pickupColor({ kind: 'pickup', dropId: 1, dropKind: 'rune', amount: 0, rune: split }),
     ).toBe(runeHex(split));
   });
 
-  it('names rare, epic and legendary items and runes, nothing else', () => {
+  it('labels every item and rune: rare and up, runes and upgrades (▲) always, the rest on Alt', () => {
     const item = (rarity: GearItem['rarity']) =>
       drop({ kind: 'item', item: { name: 'Sunfang', rarity } as GearItem });
-    expect(dropLabel(item('legendary'))).toEqual({ text: 'Sunfang', color: RARITY_HEX.legendary });
-    expect(dropLabel(item('magic'))).toBeNull();
-    expect(dropLabel(drop({}))).toBeNull();
+    expect(dropPlaque(item('legendary'), false)).toEqual({
+      text: 'Sunfang',
+      color: cssToHex(RARITY_TEXT.legendary),
+      always: true,
+    });
+    expect(dropPlaque(item('epic'), false)?.color).toBe(0xd7a6e8); // epic's text colour
+    expect(dropPlaque(item('magic'), false)).toMatchObject({ text: 'Sunfang', always: false });
+    expect(dropPlaque(item('magic'), true)).toMatchObject({ text: 'Sunfang ▲', always: true });
+    expect(dropPlaque(drop({}), false)).toBeNull();
+  });
+});
+
+describe('loot labels', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** The loot labels on screen: each shown plate's text. */
+  const labels = (app: { stage: Container }) =>
+    app.stage.children[1].children
+      .filter((c) => c.visible)
+      .flatMap((c) => c.children.filter((t) => t instanceof Text).map((t) => (t as Text).text));
+
+  it('hold Alt shows every drop, and a blur (an Alt+Tab, no keyup) lets go', () => {
+    // jsdom has no canvas: measure text as 7 px a character, 14 tall.
+    vi.spyOn(CanvasTextMetrics, 'measureText').mockImplementation(
+      (text) =>
+        ({
+          width: String(text).length * 7,
+          height: 14,
+          lines: [String(text)],
+          lineWidths: [String(text).length * 7],
+          lineHeight: 14,
+          maxLineWidth: String(text).length * 7,
+          fontProperties: { ascent: 11, descent: 3, fontSize: 14 },
+        }) as unknown as CanvasTextMetrics,
+    );
+    const { app, r } = stage();
+    const w = floor(13, 20);
+    const item = (id: number, name: string, rarity: GearItem['rarity']) =>
+      drop({ id, kind: 'item', x: 10 + id * 3, y: 20, item: { name, rarity } as GearItem });
+    w.drops.push(
+      item(1, 'Rusty Ring', 'magic'),
+      item(2, 'Sunfang', 'legendary'),
+      item(3, 'Better Boots', 'common'),
+      drop({ id: 4, kind: 'rune', x: 22, y: 20, rune: { id: 'split', tier: 2 } }),
+      drop({ id: 5, x: 13, y: 22 }), // a health orb: no label
+    );
+    r.setUpgradeTest((i) => i.name === 'Better Boots');
+    show(r, w);
+    expect(labels(app).sort()).toEqual(['Better Boots ▲', 'Split II', 'Sunfang']);
+
+    const input = createArenaInput();
+    const detach = attachKeyboard(input, () => true);
+    /** One frame: what useArenaCore hands the renderer, then the draw. */
+    const frame = () => {
+      r.setLabelsHeld(input.labels);
+      r.update(0);
+    };
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'AltLeft' }));
+    frame();
+    expect(labels(app)).toContain('Rusty Ring');
+    window.dispatchEvent(new Event('blur'));
+    frame();
+    expect(labels(app)).not.toContain('Rusty Ring');
+    detach();
+  });
+
+  it('overlapping labels stack upward, lowest first; apart ones stay', () => {
+    const box = (x: number, y: number) => ({ x, y, w: 80, h: 20 });
+    expect(stackPlaques([box(100, 500), box(120, 495), box(400, 500), box(100, 490)])).toEqual([
+      500, 478, 500, 456,
+    ]);
   });
 });
