@@ -132,7 +132,7 @@ describe('balance: delve.crafting and delve.drops', () => {
         slots: bal.movesets.extraSlots[r][0],
         sockets: bal.runes.socketDrops[r][0],
       });
-    expect(bal.drops.scrapByKind).toEqual({ normal: 1, elite: 3, boss: 10 });
+    expect(bal.drops.scrapByKind).toEqual({ normal: 6, elite: 18, boss: 60 });
     expect([bal.drops.magnetSpeed, bal.drops.vacuumSpeed, bal.drops.pickupDelay]).toEqual([
       10, 18, 0.35,
     ]);

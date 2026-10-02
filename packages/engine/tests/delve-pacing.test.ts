@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { runAutopilot, type AutopilotDiveReport } from '../src/delve/autopilot.js';
+import { economySim, type EconomyDive } from '../src/delve/economy.js';
+import { GEAR_SLOTS, type Rarity } from '../src/types/gear.js';
+import { RARITY_ORDER, rarityIndex } from '../src/types/gem.js';
 
 /**
  * Guard rails for the Delve ARPG progression curve. The autopilot plays the
@@ -30,8 +33,14 @@ const sweep = registry.getArpgData().reactions.map(({ elements: [primary, second
   depth: runAutopilot(registry, { seed: 1, dives: SWEEP_DIVES, primary, secondary }).reports[SWEEP_DIVES - 1].endDepth,
 }));
 
+/** The same Fire runs' economy, dive by dive (the DPS Lab's Economy view reads the same). */
+const economies = SEEDS.map((seed) => economySim(registry, seed, DIVES));
+
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const endDepthAt = (dive: number) => avg(runs.map((r) => r[dive - 1].endDepth));
+/** Whether the Anvil visit after a dive forged an item of `rarity` or rarer. */
+const forgedAtLeast = (d: EconomyDive, rarity: Rarity) =>
+  RARITY_ORDER.some((r) => rarityIndex(r) >= rarityIndex(rarity) && d.forged[r] > 0);
 
 describe('Delve ARPG pacing (autopilot)', () => {
   it('first dive is a short scouting run: every seed clears the opening floors', () => {
@@ -51,8 +60,11 @@ describe('Delve ARPG pacing (autopilot)', () => {
     expect(end(DIVES)).toBeGreaterThanOrEqual(end(1) + 5);
   });
 
-  // ponytail: B1's drop tables give legendaries as essences; until B3's autopilot forges them, it owns none. B3 un-skips this.
-  it.skip('legendaries arrive without completing the codex early', () => {
+  it('legendaries arrive, forged from essences, without completing the codex early', () => {
+    for (const { profile } of fireResults) {
+      const gear = [...GEAR_SLOTS.map((s) => profile.equipped[s]), ...profile.bag];
+      expect(gear.some((i) => i?.rarity === 'legendary')).toBe(true);
+    }
     const owned = avg(runs.map((r) => r[DIVES - 1].legendariesOwned));
     expect(owned).toBeGreaterThanOrEqual(1);
     expect(owned).toBeLessThan(registry.getDelveData().legendaries.length);
@@ -66,8 +78,7 @@ describe('Delve ARPG pacing (autopilot)', () => {
     }
   });
 
-  // ponytail: with gear only from elites and bosses, the unforging autopilot's depths spread out until B3 forges. B3 un-skips this.
-  it.skip('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6', () => {
+  it('no pair runs away or stalls: each forced pair reaches 0.6–1.6 × the median depth by dive 6', () => {
     const depths = sweep.map((s) => s.depth).sort((a, b) => a - b);
     const median = depths[Math.floor(depths.length / 2)];
     for (const s of sweep) {
@@ -82,5 +93,32 @@ describe('Delve ARPG pacing (autopilot)', () => {
     );
     expect(avg(perFloor)).toBeGreaterThan(8);
     expect(avg(perFloor)).toBeLessThan(60);
+  });
+});
+
+/**
+ * The crafting spec's pacing targets, on the Fire runs' economy (`economySim`). The fourth,
+ * "over 12 dives, depth progression at least matches today's rails", is the rails above.
+ */
+describe('Delve crafting pacing targets (economySim)', () => {
+  it('after dive 1, enough to forge a magic item: the Anvil visit after it forges one (or better)', () => {
+    for (const e of economies) expect(forgedAtLeast(e.dives[0], 'magic'), `seed ${e.seed}`).toBe(true);
+  });
+
+  it('a first epic (or a legendary) is forged by about dive 5', () => {
+    const first = economies.map((e) => e.dives.findIndex((d) => forgedAtLeast(d, 'epic')) + 1);
+    for (const [i, dive] of first.entries()) {
+      expect(dive, `seed ${SEEDS[i]}`).toBeGreaterThan(0);
+      expect(dive, `seed ${SEEDS[i]}`).toBeLessThanOrEqual(6);
+    }
+    expect(avg(first)).toBeLessThanOrEqual(5);
+  });
+
+  it("the first boss's essence becomes a forged legendary on the Anvil visit after its dive", () => {
+    for (const e of economies) {
+      const first = e.dives.find((d) => Object.values(d.income.essences).some((n) => n > 0));
+      expect(first, `seed ${e.seed}`).toBeDefined();
+      expect(first!.forged.legendary, `seed ${e.seed}`).toBeGreaterThan(0);
+    }
   });
 });
