@@ -393,8 +393,11 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 .k-promptbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 28px;
+  gap: 6px 28px;
+  /* In a footer, the prompts wrap before the actions beside them run off the screen. */
+  min-width: 0;
 }
 
 .k-prompt {
