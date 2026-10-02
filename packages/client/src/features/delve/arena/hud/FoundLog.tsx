@@ -22,6 +22,21 @@ const MARK = {
   potential: { text: '◇', color: 'var(--k-mana)', label: 'potential upgrade' },
 } as const;
 
+/**
+ * How many rows the list holds: its own box plus the column's room below the panel (the panel is
+ * as tall as its rows, up to what the column has left), in design px; null before layout.
+ */
+function rowsThatFit(list: HTMLElement): number | null {
+  const panel = list.closest('.k-panel');
+  const column = panel?.parentElement;
+  const room =
+    panel && column
+      ? column.getBoundingClientRect().bottom - panel.getBoundingClientRect().bottom
+      : 0;
+  const h = (list.getBoundingClientRect().height + (room > 0 ? room : 0)) / layerZoom(list);
+  return h > 0 ? Math.max(1, Math.floor((h + GAP) / (ROW + GAP))) : null;
+}
+
 function Swatch({ color }: { color: string }): ReactElement {
   return <span aria-hidden className="size-[10px] flex-none" style={{ background: color }} />;
 }
@@ -61,17 +76,23 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
   }, [diveDrops, dropsFrom, profile, registry, depth]);
   const runes = countRunes(diveRunes.slice(0, diveRunes.length - runesFrom));
 
-  // As many rows as the list's height holds (its box ÷ the HUD's zoom, in design px).
+  // As many rows as fit: again after each render (a panel above may have come or gone) and on a
+  // resize of the list or the column.
+  const measure = () => {
+    const fits = listRef.current && rowsThatFit(listRef.current);
+    if (fits) setFit(fits);
+  };
+  useLayoutEffect(measure);
   useLayoutEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    const measure = () => {
-      const h = el.getBoundingClientRect().height / layerZoom(el);
-      if (h > 0) setFit(Math.max(1, Math.floor((h + GAP) / (ROW + GAP))));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(() => {
+      const fits = rowsThatFit(el);
+      if (fits) setFit(fits);
+    });
     ro.observe(el);
+    const column = el.closest('.k-panel')?.parentElement;
+    if (column) ro.observe(column);
     return () => ro.disconnect();
   }, []);
 
@@ -124,7 +145,7 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
       material="glass"
       scroll={false}
       title="Found this floor"
-      className="pointer-events-auto flex-1"
+      className="pointer-events-auto"
       testId="pickup-feed"
     >
       {upgrades > 0 && (

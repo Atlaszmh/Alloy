@@ -88,6 +88,33 @@ describe('FoundLog: what this floor found', () => {
     expect(screen.getByText('+2 more')).toBeInTheDocument();
   });
 
+  it("is as tall as its rows, counting the column's room below it as room for more", () => {
+    dive();
+    store().pushDiveRunes([
+      { id: 'split', tier: 3 },
+      { id: 'quick', tier: 1 },
+    ]);
+    // The list holds two rows (70 px); the column has 76 px more below the panel: four rows fit.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const id = this.dataset.testid;
+      return {
+        height: 70,
+        bottom: id === 'column' ? 376 : id === 'pickup-feed' ? 300 : 0,
+      } as DOMRect;
+    });
+    render(
+      <div data-testid="column">
+        <FoundLog onInspect={() => {}} />
+      </div>,
+    );
+    expect(screen.getByTestId('pickup-feed')).not.toHaveClass('flex-1');
+    expect(screen.getAllByTestId('loot-item')).toHaveLength(2);
+    expect(screen.getAllByTestId('feed-rune')).toHaveLength(2);
+    expect(screen.queryByText(/more$/)).toBeNull();
+  });
+
   /**
    * Slots bought on the worn sword make an uncommon dagger better only with
    * that moveset moved onto it: a potential upgrade.
