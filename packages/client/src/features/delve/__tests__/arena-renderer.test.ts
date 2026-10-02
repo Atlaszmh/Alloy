@@ -190,6 +190,17 @@ describe('the dive camera', () => {
     expect(v.bottom - v.top).toBeCloseTo(27);
   });
 
+  it("a new floor's view is set as it loads, before its first frame (the HUD's first snapshot reads it)", () => {
+    const { r } = stage();
+    show(r, floor(13, 4));
+    const before = r.viewRect();
+    r.loadFloor(floor(13, 36), getDelveRegistry().getBiomeForDepth(5));
+    const loaded = r.viewRect();
+    expect(loaded.top).toBeGreaterThan(before.top);
+    r.update(0);
+    expect(r.viewRect()).toEqual(loaded);
+  });
+
   it("clamps on the clear rectangle's half extents: a narrow one still follows sideways", () => {
     // 1280×1024: 32 units wide, 4 px per sprite px; the right column leaves 24.9 units clear.
     const left = (right: number, heroX: number) => {

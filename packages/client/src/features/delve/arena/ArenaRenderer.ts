@@ -232,6 +232,8 @@ export class ArenaRenderer {
     this.root.addChildAt(this.pixelFloor.sprite, 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
+    // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
+    this.update(0);
   }
 
   private emoji(glyph: string): Texture {
