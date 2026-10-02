@@ -113,6 +113,9 @@ export function DelveRun() {
         case 'loot':
           if (e.bagFull) showToast('Bag full: extra loot was salvaged');
           break;
+        case 'patterns':
+          for (const id of e.ids) showToast(`Pattern learned: ${registry.getGearBase(id).name}`);
+          break;
         case 'legendary':
           playSound('lootLegendary');
           vibrate('heavy');

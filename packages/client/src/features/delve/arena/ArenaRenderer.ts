@@ -41,7 +41,7 @@ import { SPRITE_PIXEL, spriteFrames } from './sprites';
 import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
 import { RARITY_TEXT } from '../format';
-import { materialColor, materialLabel } from '../materials/material-style';
+import { PATTERN_COLOR, materialColor, materialLabel } from '../materials/material-style';
 import { contextZoom } from '../kit/zoom';
 import { useUIStore } from '@/stores/uiStore';
 
@@ -877,9 +877,13 @@ export class ArenaRenderer {
       }
       const age = w.t - d.born;
       const pop = dropPop(d, age);
-      // Items, runes and essences lie still, and so does a Seedling's rooted sprout.
+      // Items, runes, patterns and essences lie still, and so does a Seedling's rooted sprout.
       const still =
-        d.kind === 'item' || d.kind === 'rune' || d.material?.kind === 'essence' || isSprout(d);
+        d.kind === 'item' ||
+        d.kind === 'rune' ||
+        d.kind === 'pattern' ||
+        d.material?.kind === 'essence' ||
+        isSprout(d);
       const bob = still ? 0 : Math.sin(this.time * 5 + d.id) * 0.06;
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
@@ -989,6 +993,7 @@ export function pickupColor(e: Extract<ArpgEvent, { kind: 'pickup' }>): number {
   if (e.item) return RARITY_HEX[e.item.rarity];
   if (e.rune) return runeHex(e.rune);
   if (e.material) return cssToHex(materialColor(getDelveRegistry(), e.material));
+  if (e.pattern) return cssToHex(PATTERN_COLOR);
   if (e.mana) return MANA_HEX[e.mana];
   return e.dropKind === 'orb' ? 0xf87171 : 0xffffff;
 }
@@ -1005,8 +1010,9 @@ export function dropPop(d: Drop, age: number): number {
 /**
  * A drop's loot label (decided item 22): an item's name in its rarity's text
  * colour, with ▲ when it is an upgrade as it comes, or a rune's name and tier
- * ("Split III") in its family's, or an essence's name in legendary orange.
- * Rare and up, runes, essences and upgrades always show; anything else only
+ * ("Split III") in its family's, an essence's name in legendary orange, or a
+ * pattern's base ("Pattern: Maul") in blueprint chalk.
+ * Rare and up, runes, essences, patterns and upgrades always show; anything else only
  * while every label does. Null for drops that aren't loot, and for every other
  * material (bars, flux, shards, Mana Dust and Links fly in unlabelled).
  */
@@ -1026,6 +1032,12 @@ export function dropPlaque(
     return {
       text: materialLabel(getDelveRegistry(), d.material),
       color: cssToHex(RARITY_TEXT.legendary),
+      always: true,
+    };
+  if (d.pattern)
+    return {
+      text: `Pattern: ${getDelveRegistry().getGearBase(d.pattern).name}`,
+      color: cssToHex(PATTERN_COLOR),
       always: true,
     };
   const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
@@ -1120,6 +1132,18 @@ export function drawDrop(
       g.rect(-0.15 + i * 0.07, -0.16, 0.04, 0.1).fill({ color });
   } else if (d.kind === 'material' && d.material) {
     drawMaterial(g, d.material, time + d.id, moved);
+  } else if (d.kind === 'pattern') {
+    // A rolled blueprint on whole sprite pixels: dark blue paper, chalk lines, curled ends.
+    const chalk = cssToHex(PATTERN_COLOR);
+    const px = (x: number, y: number, w: number, h: number, color: number, alpha = 1) =>
+      g.rect(x * 0.1, y * 0.1, w * 0.1, h * 0.1).fill({ color, alpha });
+    g.ellipse(0, 0.1, 0.3, 0.1).fill({ color: 0x000000, alpha: 0.4 });
+    g.circle(0, -0.2, 0.42).fill({ color: chalk, alpha: 0.1 + Math.sin(time * 4 + d.id) * 0.05 });
+    px(-3, -4, 6, 4, 0x124e89);
+    px(-2, -3, 4, 1, chalk);
+    px(-2, -1, 3, 1, chalk);
+    px(-4, -4, 1, 4, chalk);
+    px(3, -4, 1, 4, chalk);
   } else if (d.kind === 'orb') {
     g.circle(0, 0, 0.32).fill({ color: 0xef4444, alpha: 0.25 });
     g.circle(0, 0, 0.2).fill({ color: 0xdc2626 });

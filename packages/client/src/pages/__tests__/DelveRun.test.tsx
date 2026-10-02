@@ -7,6 +7,7 @@ import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveStore } from '@/stores/delveStore';
 import type { PauseScreenProps } from '@/features/delve/hub/PauseScreen';
 import type { StopScreenProps } from '@/features/delve/stop/StopScreen';
+import type { ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { DelveRun } from '../DelveRun';
 
 /** What the mocks saw: each render's props, the arena's `paused` and HUD tick, and the pad's owner. */
@@ -16,6 +17,7 @@ const seen = vi.hoisted(() => ({
   paused: [] as boolean[],
   live: [] as boolean[],
   tick: null as null | (() => void),
+  onUi: null as null | ((e: ArenaUiEvent) => void),
 }));
 
 // The engine's settle is stage 4c's B1: here an abandon settles the dive, two Iron bars lost.
@@ -44,8 +46,9 @@ vi.mock('@/features/gamepad/gamepad-hub', async (orig) => ({
 vi.mock('@/features/delve/arena/useArena', async () => {
   const { useState } = await import('react');
   return {
-    useArena: (_host: unknown, opts: { paused: boolean }) => {
+    useArena: (_host: unknown, opts: { paused: boolean; onUi: (e: ArenaUiEvent) => void }) => {
       seen.paused.push(opts.paused);
+      seen.onUi = opts.onUi;
       const [, setTick] = useState(0);
       seen.tick = () => setTick((n) => n + 1);
       return {
@@ -211,6 +214,12 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abandon' }));
     expect(screen.queryByTestId('door-choice')).toBeNull();
     expect(screen.getByTestId('dive-summary')).toHaveTextContent('ABANDONED');
+  });
+
+  it('a pattern picked up is learned at once, with a toast', () => {
+    renderRun();
+    act(() => seen.onUi!({ kind: 'patterns', ids: ['maul'] }));
+    expect(screen.getByText('Pattern learned: Maul')).toBeInTheDocument();
   });
 
   it('the Journal opens the pause on Quests', () => {

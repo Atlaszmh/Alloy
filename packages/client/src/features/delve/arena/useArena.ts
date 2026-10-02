@@ -41,6 +41,8 @@ export type ArenaUiEvent =
   | { kind: 'loot'; kept: GearItem[]; salvaged: GearItem[]; bagFull: boolean }
   | { kind: 'legendary'; item: GearItem; firstTime: boolean }
   | { kind: 'reaction'; reaction: ReactionId }
+  /** Patterns picked up: learned as they bank (base ids). */
+  | { kind: 'patterns'; ids: string[] }
   /** `haul`: the floor's haul as the clear banked it (the stop's "Found this floor"). */
   | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean; haul: Haul }
   | { kind: 'fell' };
@@ -48,13 +50,13 @@ export type ArenaUiEvent =
 const END_DELAY = 1.3;
 
 /**
- * Whether a frame banks now: an item, a rune or a reaction is waiting, or a material or scrap was
- * picked up (they ride the floor's haul, which the purse and the Found log show as it grows).
+ * Whether a frame banks now: an item, a rune, a pattern or a reaction is waiting, or a material or
+ * scrap was picked up (they ride the floor's haul, which the purse and the Found log show as it grows).
  */
 export function banksNow(world: ArpgWorld, events: readonly ArpgEvent[]): boolean {
-  const { items, reactions, runes } = world.pending;
+  const { items, reactions, runes, patterns } = world.pending;
   return (
-    items.length + reactions.length + runes.length > 0 ||
+    items.length + reactions.length + runes.length + patterns.length > 0 ||
     events.some((e) => e.kind === 'pickup' && (e.dropKind === 'material' || e.dropKind === 'scrap'))
   );
 }
@@ -98,7 +100,9 @@ export function useArena(
     store.setProfile(res.profile);
     store.pushDiveDrops(res.kept.map((i) => i.uid));
     store.pushDiveRunes(res.runes);
+    store.pushDivePatterns(res.patterns);
     store.markNew(res.kept.map((i) => i.uid));
+    if (res.patterns.length > 0) onUiRef.current({ kind: 'patterns', ids: res.patterns });
     if (res.kept.length + res.salvaged.length > 0) {
       onUiRef.current({
         kind: 'loot',

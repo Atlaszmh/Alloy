@@ -11,7 +11,7 @@ import { getDelveRegistry } from '../registry';
 
 const world = (over: object = {}) =>
   ({
-    pending: { items: [], scrap: 0, kills: 0, reactions: [], runes: [], ...over },
+    pending: { items: [], scrap: 0, kills: 0, reactions: [], runes: [], patterns: [], ...over },
   }) as unknown as ArpgWorld;
 const pickup = (dropKind: DropKind): ArpgEvent => ({
   kind: 'pickup',
@@ -21,11 +21,13 @@ const pickup = (dropKind: DropKind): ArpgEvent => ({
 });
 
 describe("banking the dive's pickups", () => {
-  it('banks a frame that picked up a material or scrap, or holds an item, a rune or a reaction', () => {
+  it('banks a frame that picked up a material or scrap, or holds an item, a rune, a pattern or a reaction', () => {
     expect(banksNow(world(), [pickup('material')])).toBe(true);
     expect(banksNow(world(), [pickup('scrap')])).toBe(true);
     expect(banksNow(world({ runes: [{ id: 'split', tier: 1 }] }), [])).toBe(true);
     expect(banksNow(world({ reactions: ['melt'] }), [])).toBe(true);
+    // A pattern is learned as it is picked up (the crafting spec's S1).
+    expect(banksNow(world({ patterns: ['maul'] }), [])).toBe(true);
   });
 
   it("waits on a frame of motes, health orbs or kills alone: they bank with the floor's next pickup", () => {

@@ -8,7 +8,7 @@ import { getDelveRegistry } from '../../registry';
 import { RARITY_COLOR, RARITY_TEXT, UPGRADE_EPSILON } from '../../format';
 import { countRunes } from '../../chains/chain-text';
 import { FAMILY_STYLE, runeName } from '../../runes/rune-style';
-import { haulRows, type HaulRow } from '../../materials/material-style';
+import { PATTERN_COLOR, haulRows, type HaulRow } from '../../materials/material-style';
 import { noFocus } from './SkillSlot';
 
 /** A row's height and the gap between rows, in design px. */
@@ -42,7 +42,7 @@ function rowsThatFit(list: HTMLElement): number | null {
 /**
  * This floor's finds (decided item 21), for the Found log and the stop: the items since
  * `floorDropsFrom`, newest first, each with its Power change as a home for your moveset (`delta`)
- * and as it is (`asIs`), and the runes since `floorRunesFrom`, grouped.
+ * and as it is (`asIs`), the runes since `floorRunesFrom`, grouped, and the patterns learned.
  */
 export function useFloorFinds() {
   const registry = getDelveRegistry();
@@ -51,6 +51,8 @@ export function useFloorFinds() {
   const diveRunes = useDelveStore((s) => s.diveRunes);
   const dropsFrom = useDelveStore((s) => s.floorDropsFrom);
   const runesFrom = useDelveStore((s) => s.floorRunesFrom);
+  const divePatterns = useDelveStore((s) => s.divePatterns);
+  const patternsFrom = useDelveStore((s) => s.floorPatternsFrom);
   const depth = referenceDepth(profile);
   const items = useMemo(() => {
     const out: { item: GearItem; delta: number | null; asIs: number | null }[] = [];
@@ -69,7 +71,8 @@ export function useFloorFinds() {
     return out;
   }, [diveDrops, dropsFrom, profile, registry, depth]);
   const runes = countRunes(diveRunes.slice(0, diveRunes.length - runesFrom));
-  return { items, runes };
+  const patterns = divePatterns.slice(0, divePatterns.length - patternsFrom);
+  return { items, runes, patterns };
 }
 
 function Swatch({ color }: { color: string }): ReactElement {
@@ -92,7 +95,8 @@ function HaulFeedRow({ row, testId, color }: { row: HaulRow; testId: string; col
 /**
  * "Found this floor": each pickup since the floor began, as many as fit, then "+n more": the
  * materials in the floor's haul grouped ("Iron bar ×3"), the items newest first, the essences in
- * legendary orange, then the runes (Mana Dust, Links and scrap are the purse's). An item shows
+ * legendary orange, then the runes and the patterns learned (Mana Dust, Links and scrap are the
+ * purse's). An item shows
  * its card on hover and opens on a click; ▲ marks an upgrade (to equip at the Anvil), ◇ a weapon
  * better only with your moveset moved onto it (Transfer), ▼ a downgrade.
  */
@@ -100,7 +104,7 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
   const registry = getDelveRegistry();
   const listRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(Infinity);
-  const { items, runes } = useFloorFinds();
+  const { items, runes, patterns } = useFloorFinds();
   const haul = useDelveStore((s) => s.profile.dive?.haul);
   const found = haul ? haulRows(registry, haul) : [];
 
@@ -170,6 +174,13 @@ export function FoundLog({ onInspect }: { onInspect: (uid: string) => void }): R
           {count > 1 && ` ×${count}`}
         </span>
         <span className="ml-auto text-[var(--k-text-3)]">rune</span>
+      </div>
+    )),
+    ...patterns.map((id) => (
+      <div key={`pattern-${id}`} className={ROW_CLASS} data-testid="feed-pattern">
+        <Swatch color={PATTERN_COLOR} />
+        <span className="truncate">Pattern: {registry.getGearBase(id).name}</span>
+        <span className="ml-auto text-[var(--k-text-3)]">pattern</span>
       </div>
     )),
   ];
