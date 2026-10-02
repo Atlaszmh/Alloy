@@ -3,7 +3,7 @@ import type { DoorDef, HeroStats, MonsterAi, MonsterTrait } from './delve.js';
 import type { GearItem, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
-import type { MaterialRef } from './crafting.js';
+import type { Haul, MaterialRef } from './crafting.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -673,8 +673,18 @@ export interface WorldPending {
   scrap: number;
   kills: number;
   reactions: ReactionId[];
-  /** Runes picked up, banked into the pouch. */
+  /** Runes picked up, banked into the floor's haul. */
   runes: RuneRef[];
+  /** Material pickups: bars, flux, shards, essences, Mana Dust and Links (scrap and runes ride `scrap` and `runes`). */
+  haul: Haul;
+  /** Patterns picked up, learned when they bank. */
+  patterns: string[];
+  /**
+   * The world hasn't banked yet: its first bank starts the dive's haul afresh, so
+   * a floor replayed from its seed (left for the Anvil mid-floor) loses its
+   * unbanked haul instead of collecting it twice.
+   */
+  newFloor: boolean;
 }
 
 /** How `spawnDummies` places a group: one; five in a line going up (lances, chains); or five in a clump (areas). */

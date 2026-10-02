@@ -907,12 +907,14 @@ describe('rune drops in the world', () => {
     expect(w.pending.runes).toEqual([CHAIN_I, SPLIT_I]);
   });
 
-  it('banking puts the runes picked up in the pouch, counts them for the dive, and reports them', () => {
+  it("banking puts the runes picked up in the floor's haul, counts them for the dive, and reports them", () => {
     const { p, w } = floor();
     w.pending.runes = [SPLIT_I, SPLIT_I, CHAIN_II];
     const res = bankWorld(registry, p, w);
     expect(res.runes).toEqual([SPLIT_I, SPLIT_I, CHAIN_II]);
-    expect(res.profile.runes).toEqual({ split: [2, 0, 0, 0, 0], chain: [0, 1, 0, 0, 0] });
+    expect(res.profile.runes).toEqual(p.runes);
+    const { runes } = res.profile.dive!.haul;
+    expect(runes).toEqual({ split: [2, 0, 0, 0, 0], chain: [0, 1, 0, 0, 0] });
     expect(res.profile.dive!.runesEarned).toBe(3);
     expect(w.pending.runes).toEqual([]);
     const again = bankWorld(registry, res.profile, w);
