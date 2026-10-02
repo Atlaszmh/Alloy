@@ -72,7 +72,7 @@ describe('SystemMenu', () => {
     expect(screen.getByTestId('restart-delve')).toHaveTextContent(/wipe/i);
     fireEvent.click(screen.getByTestId('restart-delve'));
     const p = useDelveStore.getState().profile;
-    expect(p).toMatchObject({ scrap: 0, dive: null, pair: { primary: null } });
+    expect(p).toMatchObject({ scrap: 60, dive: null, pair: { primary: null } }); // the starter kit's scrap
     expect(p.stats.dives).toBe(0);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
