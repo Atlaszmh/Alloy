@@ -45,8 +45,9 @@ export function SkillsTab({ mode, setPrompts, setFooterAction, link }: HubTabPro
     setMana(link.view === 'mana');
   }, [link]);
 
-  // The footer's group: the Apply bar (the pause keeps its own footer).
-  useEffect(() => {
+  // The footer's group: the Apply bar (the pause keeps its own footer), set before the first
+  // paint so the hub's own Delve group never flashes in.
+  useLayoutEffect(() => {
     if (mode === 'pause') return;
     hub.current.setFooterAction(<ApplyBar />);
     return () => hub.current.setFooterAction(null);
