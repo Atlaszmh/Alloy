@@ -42,6 +42,8 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
+  // Paused mid-dive, the Forge is locked (spec: "Forge at the Anvil").
+  const tabs = TABS.map((t) => ({ ...t, disabled: mode === 'pause' && t.id === 'forge' }));
 
   const go = (to: HubTab) => {
     setTab(to);
@@ -70,11 +72,12 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
     [
       ...prompts,
       { id: 'training', label: 'Training', binding: TRAINING_BINDING, onPress: onTraining },
-      ...TABS.map((t, i) => ({
+      ...tabs.map((t, i) => ({
         id: `tab-${t.id}`,
         label: t.label,
         binding: { key: [`Digit${i + 1}`, `Numpad${i + 1}`] },
         onPress: () => go(t.id),
+        disabled: t.disabled,
       })),
     ],
     mainRef,
@@ -102,7 +105,7 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
                 glyphs
                 value={tab}
                 onChange={go}
-                tabs={TABS.map((t) => ({
+                tabs={tabs.map((t) => ({
                   ...t,
                   testId: `tab-${t.id}`,
                   badge:

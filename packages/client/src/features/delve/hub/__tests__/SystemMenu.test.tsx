@@ -35,6 +35,11 @@ describe('SystemMenu', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
+  it('opens focused on Resume', () => {
+    renderMenu();
+    expect(screen.getByTestId('menu-resume')).toHaveFocus();
+  });
+
   it('opens Controls and Settings in its place, and their Close comes back to it', () => {
     renderMenu();
     fireEvent.click(screen.getByTestId('open-controls'));

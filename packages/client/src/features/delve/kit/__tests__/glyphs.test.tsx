@@ -113,4 +113,19 @@ describe('the kit glyphs', () => {
     fireEvent.click(menu);
     expect(onPress).toHaveBeenCalledOnce();
   });
+
+  it('a prompt button lets go of focus after a mouse click, so Enter reaches the screen', () => {
+    const menu: Prompt = {
+      id: 'menu',
+      label: 'Menu',
+      binding: { key: 'Escape' },
+      onPress: () => {},
+      asButton: true,
+    };
+    render(<PromptBar prompts={[menu]} />);
+    const button = screen.getByRole('button', { name: 'Menu' });
+    button.focus();
+    fireEvent.pointerUp(button, { pointerType: 'mouse' });
+    expect(button).not.toHaveFocus();
+  });
 });

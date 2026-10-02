@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { keyLabel, padHint } from '@/features/controls/controls';
 import type { PadButton } from '@/features/gamepad/gamepad';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { blurAfterMouse } from './controls';
 import { GLYPH_ART, pixelRuns } from './glyph-art';
 import type { Binding, GlyphId, Prompt } from './types';
 
@@ -199,6 +200,7 @@ export function PromptBar({
             data-pad-back={p.padBack ? '' : undefined}
             disabled={p.disabled}
             onClick={p.onPress}
+            onPointerUp={blurAfterMouse}
           >
             <InputGlyph binding={p.binding} size="sm" />
             {p.label}

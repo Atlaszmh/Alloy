@@ -159,6 +159,19 @@ describe('usePrompts on the keyboard', () => {
     expect(lock).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves every key to a focused select or contentEditable element', () => {
+    const lock = vi.fn();
+    renderHook(() =>
+      usePrompts([{ id: 'lock', label: 'Lock', binding: { key: 'KeyL' }, onPress: lock }]),
+    );
+    const select = add('select');
+    const editor = add('div', { contenteditable: 'true' });
+    Object.defineProperty(editor, 'isContentEditable', { value: true }); // jsdom lacks it
+    keydown('KeyL', {}, select);
+    keydown('KeyL', {}, editor);
+    expect(lock).not.toHaveBeenCalled();
+  });
+
   it('is inert while the arena is live, Esc and Enter included', () => {
     const lock = vi.fn();
     const back = add('button', { 'data-pad-back': '' });
@@ -331,6 +344,43 @@ describe('padPrompts: the tap and the hold', () => {
     add('div', { 'data-pad-scope': '' });
     expect(padPrompts(y, held('y'), 0).size).toBe(0);
     padPrompts(none, held(), 100);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('a press whose screen went away fires nothing: no tap on the release, no hold', () => {
+    const first = renderHook(() => usePrompts(prompts));
+    padPrompts(y, held('y'), 0);
+    first.unmount();
+    padPrompts(none, held(), 100);
+    const second = renderHook(() => usePrompts(prompts));
+    padPrompts(y, held('y'), 1000);
+    second.unmount();
+    padPrompts(none, held('y'), 1700);
+    padPrompts(none, held(), 1800);
+    expect([remove.mock.calls.length, apply.mock.calls.length]).toEqual([0, 0]);
+  });
+
+  it('the arena going live lets go of every held prompt: held ones hear the release, taps never fire', () => {
+    const compare = vi.fn();
+    renderHook(() =>
+      usePrompts([
+        ...prompts,
+        {
+          id: 'compare',
+          label: 'Full compare',
+          binding: { key: 'ShiftLeft', pad: 'lt', whileHeld: true },
+          onHold: compare,
+        },
+      ]),
+    );
+    keydown('ShiftLeft', { shiftKey: true });
+    padPrompts(new Set<PadButton>(['y', 'lt']), held('y', 'lt'), 0);
+    setArenaLive(true);
+    expect(compare.mock.calls).toEqual([[true], [true], [false], [false]]);
+    setArenaLive(false);
+    keyup('ShiftLeft');
+    padPrompts(none, held(), 100);
+    expect(compare).toHaveBeenCalledTimes(4);
     expect(remove).not.toHaveBeenCalled();
   });
 });

@@ -234,7 +234,9 @@ describe('keepFocus: the pad never loses the focus', () => {
 const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, menu: 9, right: 15 } as const;
 
 describe('the pad outside combat: scopes, tab lists and prompts', () => {
-  let frames: FrameRequestCallback[] = [];
+  const frames = new Map<number, FrameRequestCallback>();
+  let lastFrame = 0;
+  const realGetGamepads = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
   let down: number[] = [];
   let now = 0;
   let stop = () => {};
@@ -249,8 +251,8 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
   });
   /** One animation frame, 16 ms on: the hub reads the pad once. */
   const tick = () => {
-    const run = frames;
-    frames = [];
+    const run = [...frames.values()];
+    frames.clear();
     now += 16;
     for (const cb of run) cb(now);
   };
@@ -284,14 +286,21 @@ describe('the pad outside combat: scopes, tab lists and prompts', () => {
   beforeEach(() => {
     clicks.length = 0;
     down = [];
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
-    vi.stubGlobal('cancelAnimationFrame', () => {});
+    frames.clear();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      frames.set(++lastFrame, cb);
+      return lastFrame;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
     Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [pad()] });
     stop = renderHook(() => useGamepadNav()).unmount;
     tick();
   });
   afterEach(() => {
     stop();
+    expect(frames.size).toBe(0); // the pad loop stopped with the hook
+    if (realGetGamepads) Object.defineProperty(navigator, 'getGamepads', realGetGamepads);
+    else delete (navigator as { getGamepads?: unknown }).getGamepads;
     vi.unstubAllGlobals();
     document.body.replaceChildren();
     setDevice('keyboard');
