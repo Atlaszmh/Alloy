@@ -677,17 +677,10 @@ describe('ChainEditor', () => {
   const given = defaultChains(registry, 'storm', null);
   const caps = { basic: 5, primary: 5, defensive: 5, ultimate: 5 };
 
-  it('edits the chains it is given through onChange, and names the reactions it is told about', () => {
+  it('edits the chains it is given through onChange', () => {
     const onChange = vi.fn();
     render(
-      <ChainEditor
-        chains={given}
-        caps={caps}
-        stats={stats}
-        reactionsSeen={['melt']}
-        locked={false}
-        onChange={onChange}
-      />,
+      <ChainEditor chains={given} caps={caps} stats={stats} locked={false} onChange={onChange} />,
     );
     expect(screen.getByTestId('abilities-summary')).toHaveTextContent('light Storm Bolt');
     fireEvent.click(screen.getByTestId('form-lance'));
@@ -697,27 +690,13 @@ describe('ChainEditor', () => {
       { ...given.primary, moves: [{ ...first, form: 'lance' }, ...rest] },
       given.primary.moves.map((_, i) => i), // an edit keeps every move where it was
     );
-    expect(screen.getByTestId('reaction-melt')).toBeInTheDocument();
-    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(14);
-    expect(screen.getAllByTestId('reaction-unknown')[0]).toHaveTextContent(
-      'Stack one element on a foe, then hit it with another, to discover.',
-    );
-    expect(screen.getByText('1/15 discovered')).toBeInTheDocument();
+    expect(screen.queryByTestId('reaction-unknown')).toBeNull(); // the reactions live on the Codex
     expect(screen.getAllByTestId(/^attune-/)).toHaveLength(6);
   });
 
   it('changes nothing while locked', () => {
     const onChange = vi.fn();
-    render(
-      <ChainEditor
-        chains={given}
-        caps={caps}
-        stats={stats}
-        reactionsSeen={[]}
-        locked
-        onChange={onChange}
-      />,
-    );
+    render(<ChainEditor chains={given} caps={caps} stats={stats} locked onChange={onChange} />);
     fireEvent.click(screen.getByTestId('form-lance'));
     fireEvent.click(screen.getByTestId('move-add'));
     expect(onChange).not.toHaveBeenCalled();
@@ -729,7 +708,6 @@ describe('ChainEditor', () => {
         chains={given}
         caps={caps}
         stats={stats}
-        reactionsSeen={[]}
         locked={false}
         fixedShape
         onChange={() => {}}
@@ -756,14 +734,7 @@ describe('ChainEditor', () => {
       },
     };
     render(
-      <ChainEditor
-        chains={three}
-        caps={caps}
-        stats={stats}
-        reactionsSeen={[]}
-        locked={false}
-        onChange={onChange}
-      />,
+      <ChainEditor chains={three} caps={caps} stats={stats} locked={false} onChange={onChange} />,
     );
     const last = () => onChange.mock.lastCall!;
     fireEvent.click(screen.getByTestId('move-right-0'));

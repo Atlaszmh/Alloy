@@ -368,15 +368,11 @@ const TrainingAbilities = memo(function TrainingAbilities() {
     }),
     [baseId],
   );
-  const all = getDelveRegistry()
-    .getArpgData()
-    .reactions.map((r) => r.id);
   return (
     <ChainEditor
       chains={chains}
       caps={CAPS}
       stats={stats}
-      reactionsSeen={all}
       locked={false}
       onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
       blowElements={secondary ? [primary, secondary] : [primary]}

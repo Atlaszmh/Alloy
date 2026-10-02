@@ -52,7 +52,6 @@ function editor({
       chains={chains}
       caps={{ basic: 5, primary: 5, defensive: 5, ultimate: 5 }}
       stats={stats}
-      reactionsSeen={[]}
       locked={false}
       onChange={() => {}}
       runes={{

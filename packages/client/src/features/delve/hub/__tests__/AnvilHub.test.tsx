@@ -69,10 +69,12 @@ describe('AnvilHub', () => {
     expect(screen.getByTestId('bag-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('tab-skills'));
     expect(screen.getByTestId('abilities-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('reaction-unknown')).toBeNull(); // the reactions live on the Codex
     fireEvent.click(screen.getByTestId('tab-forge'));
     expect(screen.getByTestId('forge-panel')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('tab-codex'));
     expect(screen.getByTestId('codex-panel')).toBeInTheDocument();
+    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
     fireEvent.click(screen.getByTestId('tab-quests'));
     expect(screen.getByTestId('quests-empty')).toHaveTextContent('Quests arrive in a later update');
   });

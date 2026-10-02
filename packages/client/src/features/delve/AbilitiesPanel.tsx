@@ -236,7 +236,6 @@ export function AbilitiesPanel() {
         chains={chains}
         caps={slots}
         stats={stats}
-        reactionsSeen={profile.reactionsSeen}
         locked={locked}
         lockedText={weapon ? undefined : 'Equip a weapon to build your moves.'}
         absentText={(s) => carriedByText(registry, s)}

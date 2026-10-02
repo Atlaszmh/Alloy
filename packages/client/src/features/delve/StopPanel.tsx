@@ -344,7 +344,6 @@ function MovePick({ take }: { take: Take }) {
         chains={chains}
         caps={movesetOf(registry, weapon).slots}
         stats={stats}
-        reactionsSeen={profile.reactionsSeen}
         locked={false}
         fixedShape
         absentText={(s) => carriedByText(registry, s)}

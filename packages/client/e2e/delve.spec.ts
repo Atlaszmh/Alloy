@@ -211,12 +211,12 @@ test.describe('Delve loot loop', () => {
     await expect(summary).toHaveText('light Wildfire Burst · medium Wildfire Burst');
     await expect(page.getByTestId('chain-slots')).toHaveText('Slots 2/5');
     await expect(page.getByTestId('move-add')).toHaveCount(0);
-    await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
     await expect(page.getByTestId('temper-row')).toHaveCount(2);
     await page.getByTestId('tab-codex').click();
     await expect(page.getByTestId('codex-unknown')).toHaveCount(12);
+    await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
   });
 
   test('D08: a new save chooses its mana first; Frost starts with frost gear and abilities', async ({

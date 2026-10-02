@@ -55,15 +55,13 @@ export interface ChainEditorProps {
   caps: Partial<Record<ChainSkill, number>>;
   /** The hero the chains resolve against: legendaries, cooldowns, damage, life, attunement, pool. */
   stats: HeroStats;
-  /** Reactions shown by name; the rest show as ???. */
-  reactionsSeen: readonly string[];
   /** Read-only (a dive is under way). */
   locked: boolean;
   /** Why it is read-only; the dive's text when absent. */
   lockedText?: string;
   /** Why a skill has no chain (the text its locked tab shows). */
   absentText?: (skill: ChainSkill) => string;
-  /** Each chain keeps its moves and payment, only changing them (a stop's one move): no reordering, adding, removing, payment, attunement or reactions. */
+  /** Each chain keeps its moves and payment, only changing them (a stop's one move): no reordering, adding, removing, payment or attunement. */
   fixedShape?: boolean;
   /** Shown under the chosen skill's cards (the Anvil's Add slot). */
   footer?: (skill: ChainSkill) => ReactNode;
@@ -136,7 +134,6 @@ export function ChainEditor({
   chains,
   caps,
   stats,
-  reactionsSeen,
   locked,
   lockedText = 'A dive is under way: your chains can change once you extract or fall.',
   absentText,
@@ -149,7 +146,6 @@ export function ChainEditor({
   runes,
 }: ChainEditorProps) {
   const registry = getDelveRegistry();
-  const data = registry.getArpgData();
   const [skill, setSkill] = useState<ChainSkill>('primary');
   const [picked, setPicked] = useState(0);
   // After an add, a remove or a reorder, the focus stays with the move (a controller keeps its
@@ -484,44 +480,6 @@ export function ChainEditor({
           </section>
         ))}
 
-      <section className="flex flex-col gap-1.5" hidden={fixedShape}>
-        <div className="flex items-baseline justify-between">
-          <span className="delve-display text-xs font-bold uppercase tracking-widest text-fuchsia-300">
-            Reactions
-          </span>
-          <span className="text-[10px] text-stone-500">
-            {reactionsSeen.length}/{data.reactions.length} discovered
-          </span>
-        </div>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {data.reactions.map((r) => {
-            const seen = reactionsSeen.includes(r.id);
-            return (
-              <div
-                key={r.id}
-                className="delve-panel flex items-center gap-2.5 p-2"
-                data-testid={seen ? `reaction-${r.id}` : 'reaction-unknown'}
-                style={seen ? { borderColor: 'rgba(232,121,249,0.4)' } : undefined}
-              >
-                <span className="w-8 text-center text-2xl">{seen ? r.icon : '❔'}</span>
-                <span className="min-w-0">
-                  <span
-                    className="delve-display block text-sm font-bold"
-                    style={{ color: seen ? '#f0abfc' : '#57534e' }}
-                  >
-                    {seen ? r.name : '???'}
-                  </span>
-                  <span className="block text-[10.5px] leading-snug text-stone-400">
-                    {seen
-                      ? r.text
-                      : 'Stack one element on a foe, then hit it with another, to discover.'}
-                  </span>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
       {runes && move && socket !== null && (
         <RunePicker
           candidates={markIdle(

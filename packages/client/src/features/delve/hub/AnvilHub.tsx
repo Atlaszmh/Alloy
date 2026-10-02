@@ -15,6 +15,7 @@ import { RARITY_LABEL, RARITY_TEXT, formatNumber, manaStyle } from '../format';
 import { HubHeader } from './HubHeader';
 import { HubFooter, TRAINING_BINDING } from './HubFooter';
 import { HowTo } from './HowTo';
+import { ReactionsGrid } from './codex/ReactionsGrid';
 import { SystemMenu } from './SystemMenu';
 import type { HubMode, HubTab } from './types';
 
@@ -153,6 +154,8 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
             {tab === 'codex' && (
               <>
                 <CodexPanel />
+                {/* Out of the chain builder; 2C's Codex panes take it in. */}
+                <ReactionsGrid reactionsSeen={profile.reactionsSeen} />
                 {profile.stats.dives > 0 && <Records />}
               </>
             )}
