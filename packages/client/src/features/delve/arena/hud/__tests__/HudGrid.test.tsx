@@ -52,6 +52,27 @@ describe('HudGrid', () => {
     expect(screen.getByTestId('overlay').parentElement).toBe(root);
   });
 
+  it('sizes its right column: 340 px, or `rightWidth` (the Training dock)', () => {
+    const { rerender } = render(grid(() => {}));
+    const root = screen.getByTestId('hud');
+    expect(root.getAttribute('style')).toContain(
+      'grid-template-columns: 380px minmax(0,1fr) 340px',
+    );
+    rerender(
+      <HudGrid
+        onInsets={() => {}}
+        testId="hud"
+        top={null}
+        right={null}
+        dock={null}
+        rightWidth={400}
+      />,
+    );
+    expect(root.getAttribute('style')).toContain(
+      'grid-template-columns: 380px minmax(0,1fr) 400px',
+    );
+  });
+
   it("reports the camera's insets in viewport px, again on a resize or a HUD scale change, only when they change", () => {
     const onInsets = vi.fn();
     const { rerender } = render(grid(onInsets));

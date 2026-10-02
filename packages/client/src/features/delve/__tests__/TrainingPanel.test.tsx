@@ -1,24 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { sandboxWeapon } from '@alloy/engine';
 import { MAX_DUMMY_GROUPS, useSandboxStore } from '@/stores/sandboxStore';
-import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { attachKeyboard, createArenaInput } from '../arena/input';
 import { manaStyle } from '../format';
 import { getDelveRegistry } from '../registry';
 import { DamageMeter } from '../training/meter';
-import {
-  DepthLabel,
-  TrainingPanel,
-  openLayout,
-  type PanelLayout,
-  type TrainingTab,
-} from '../training/TrainingPanel';
+import { TrainingPanel, type TrainingTab } from '../training/TrainingPanel';
 import type { TrainingActions } from '../training/useTrainingArena';
 
 const registry = getDelveRegistry();
 
-function renderPanel(tab: TrainingTab, layout: PanelLayout = 'sheet') {
+function renderPanel(tab: TrainingTab) {
   const actions: TrainingActions = {
     addDummies: vi.fn(),
     spawn: vi.fn(),
@@ -28,22 +21,19 @@ function renderPanel(tab: TrainingTab, layout: PanelLayout = 'sheet') {
     resetMeter: vi.fn(),
   };
   const onClose = vi.fn();
-  const onExit = vi.fn();
   const meter = new DamageMeter().summary(0);
   const panel = (t: TrainingTab) => (
     <TrainingPanel
-      layout={layout}
       tab={t}
       onTab={vi.fn()}
       onClose={onClose}
-      onExit={onExit}
       actions={actions}
       meter={meter}
       onOpenControls={vi.fn()}
     />
   );
   const { rerender } = render(panel(tab));
-  return { actions, onClose, onExit, showTab: (t: TrainingTab) => rerender(panel(t)) };
+  return { actions, onClose, showTab: (t: TrainingTab) => rerender(panel(t)) };
 }
 
 describe('TrainingPanel', () => {
@@ -89,14 +79,19 @@ describe('TrainingPanel', () => {
     expect(useSandboxStore.getState().chains.basic[0].element).toBe('storm');
   });
 
-  it('the Abilities tab sockets any rune at any tier, free, up to three a move', () => {
-    renderPanel('abilities', 'dock');
+  it('the Abilities tab sockets any rune at any tier, free, up to three a move, picked in the dock', () => {
+    renderPanel('abilities');
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 0/3');
     expect(screen.getByTestId('socket-open')).toHaveTextContent(/^\+ socket$/);
     fireEvent.click(screen.getByTestId('socket-open'));
     fireEvent.click(
       within(screen.getByTestId('sockets-0')).getByRole('button', { name: 'Socket 1: empty' }),
     );
+    // In place in the dock, not a sheet over the fight.
+    expect(within(screen.getByTestId('training-panel')).getByTestId('rune-picker')).toHaveAttribute(
+      'data-pad-scope',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
     const picker = within(screen.getByTestId('rune-picker'));
     fireEvent.click(picker.getByRole('button', { name: 'Tier III' }));
     fireEvent.click(picker.getByRole('button', { name: 'Split III' }));
@@ -104,6 +99,14 @@ describe('TrainingPanel', () => {
       { id: 'split', tier: 3 },
     ]);
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/3');
+  });
+
+  it('the Abilities tab names every reaction under the builder', () => {
+    renderPanel('abilities');
+    const grid = within(screen.getByRole('region', { name: 'Reactions' }));
+    for (const r of registry.getArpgData().reactions)
+      expect(grid.getByTestId(`reaction-${r.id}`)).toHaveTextContent(r.name);
+    expect(grid.queryByTestId('reaction-unknown')).toBeNull();
   });
 
   it('adds dummies through the arena, and stops at the cap', () => {
@@ -125,19 +128,28 @@ describe('TrainingPanel', () => {
     ).toBeInTheDocument();
   });
 
-  it("the sheet's Close answers the controller's B; Back to the Anvil carries no marker", () => {
-    const { onClose, onExit } = renderPanel('toggles');
+  it("Close closes the dock (B doesn't: it hands the pad back); the tabs are the kit's top level", () => {
+    const { onClose } = renderPanel('toggles');
     const close = screen.getByTestId('training-panel-close');
-    expect(close).toHaveAttribute('data-pad-back');
-    expect(screen.getByRole('tablist')).toHaveAttribute('data-pad-tabs');
-    const exit = screen.getByTestId('training-panel-exit');
-    expect(exit).not.toHaveAttribute('data-pad-back');
-    expect(exit).not.toHaveAttribute('data-pad-menu');
+    expect(close).not.toHaveAttribute('data-pad-back');
     fireEvent.click(close);
     expect(onClose).toHaveBeenCalled();
-    fireEvent.click(exit);
-    expect(onExit).toHaveBeenCalled();
+    const tabs = screen.getByRole('tablist', { name: 'Training' });
+    expect(tabs).toHaveAttribute('data-pad-tabs', '');
+    expect(screen.getByTestId('training-tab-toggles')).toHaveAttribute('aria-selected', 'true');
+    // One way back to the Anvil: the Training bar's.
+    expect(screen.queryByTestId('training-panel-exit')).toBeNull();
   });
+
+  it.each(['targets', 'toggles', 'meter'] as const)(
+    'the %s tab wears glyphs, not emoji, and no text under 14 px',
+    (tab) => {
+      renderPanel(tab);
+      const panel = screen.getByTestId('training-panel');
+      expect(panel.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
+      expect(panel.innerHTML).not.toMatch(/text-(\[(\d|1[0-3])px\]|xs\b)/);
+    },
+  );
 
   it('a control lets go of focus when the pointer does; a list only when the pointer chose it', () => {
     renderPanel('targets');
@@ -221,44 +233,14 @@ describe('TrainingPanel', () => {
     );
   });
 
-  it('as a sheet it is a modal dialog, and its lists are named', () => {
+  it('its lists are named', () => {
     renderPanel('targets');
-    expect(screen.getByRole('dialog', { name: 'Training' })).toHaveAttribute('aria-modal', 'true');
     expect(screen.getByRole('combobox', { name: 'Biome' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Monster' })).toBeInTheDocument();
   });
 
-  it('docked, it is a labelled aside', () => {
-    renderPanel('loadout', 'dock');
+  it('is a labelled aside', () => {
+    renderPanel('loadout');
     expect(screen.getByRole('complementary', { name: 'Training' })).toBeInTheDocument();
-  });
-});
-
-describe('DepthLabel', () => {
-  beforeEach(() => useSandboxStore.getState().reset());
-
-  it('shows the depth, and the slow-motion speed when it is not 1×', () => {
-    render(<DepthLabel />);
-    expect(screen.getByTestId('training-depth-label')).toHaveTextContent('Depth 5');
-    expect(screen.queryByTestId('training-slowmo')).toBeNull();
-    act(() => useSandboxStore.getState().setSlowmo(0.5));
-    expect(screen.getByTestId('training-slowmo')).toHaveTextContent('0.5×');
-  });
-});
-
-describe('openLayout', () => {
-  const page = (width: number) => {
-    const el = document.createElement('div');
-    Object.defineProperty(el, 'clientWidth', { value: width });
-    return el;
-  };
-  afterEach(() => useInputDeviceStore.getState().setDevice('keyboard'));
-
-  it('docks on a wide page with mouse and keyboard; a narrow page or a controller gets a sheet', () => {
-    useInputDeviceStore.getState().setDevice('keyboard');
-    expect(openLayout(page(1280))).toBe('dock');
-    expect(openLayout(page(800))).toBe('sheet');
-    useInputDeviceStore.getState().setDevice('gamepad');
-    expect(openLayout(page(1280))).toBe('sheet');
   });
 });

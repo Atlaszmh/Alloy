@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 import { useNavigate } from 'react-router';
+import { Button, Glyph } from '@/features/delve/kit';
 
 /**
  * The DPS Lab page, in dev builds only; null otherwise. It is made here at
@@ -15,14 +16,13 @@ export function LabButton() {
   const navigate = useNavigate();
   if (!DEV_LAB) return null;
   return (
-    <button
-      type="button"
-      className="delve-btn pointer-events-auto px-2.5 py-1.5 text-sm"
+    <Button
+      size="sm"
       onClick={() => navigate('/delve/lab')}
       aria-label="DPS Lab"
-      data-testid="training-lab"
+      testId="training-lab"
     >
-      📈<span className="hidden sm:inline"> DPS Lab</span>
-    </button>
+      <Glyph id="lab" size={18} /> DPS Lab
+    </Button>
   );
 }
