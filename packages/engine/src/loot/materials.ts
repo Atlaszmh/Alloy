@@ -128,15 +128,61 @@ export function stockHaul(profile: DelveProfile, haul: Haul): DelveProfile {
   };
 }
 
+/** How many of `ref` the pouch holds (Mana Dust and Links live outside it: 0). */
+export function materialCount(pouch: MaterialsPouch, ref: MaterialRef): number {
+  switch (ref.kind) {
+    case 'metal':
+      return pouch.metals[ref.metal] ?? 0;
+    case 'flux':
+      return pouch.flux[ref.grade] ?? 0;
+    case 'shard':
+      return pouch.shards[ref.stat]?.[ref.tier - 1] ?? 0;
+    case 'essence':
+      return pouch.essences[ref.essence] ?? 0;
+    default:
+      return 0;
+  }
+}
+
+/** `pouch` with `amount` of `ref` added (negative: taken). */
+export function withMaterial<P extends MaterialsPouch>(
+  pouch: P,
+  ref: MaterialRef,
+  amount: number,
+): P {
+  return addMaterials(pouch, addMaterial(emptyHaul(), ref, amount));
+}
+
+/** The next grade up of `what` (a metal, a flux or a shard), or null at the top, for an essence, Mana Dust or Links. */
+export function refinedRef(registry: DataRegistry, what: MaterialRef): MaterialRef | null {
+  const data = registry.getCraftingData();
+  if (what.kind === 'metal') {
+    const ids = data.metals.map((m) => m.id);
+    const metal = ids[ids.indexOf(what.metal) + 1];
+    return metal ? { kind: 'metal', metal } : null;
+  }
+  if (what.kind === 'flux') {
+    const grades = data.flux.map((f) => f.grade);
+    const grade = grades[grades.indexOf(what.grade) + 1];
+    return grade ? { kind: 'flux', grade } : null;
+  }
+  if (what.kind === 'shard' && what.tier < shardTiersOf(registry, what.stat).length)
+    return { kind: 'shard', stat: what.stat, tier: what.tier + 1 };
+  return null;
+}
+
 /**
  * What refining `what` costs: `count` of it and `scrap` make one of the next
  * grade (see the crafting spec); null when it doesn't refine (the top grade, a
- * shard at its affix's last tier, an essence, Mana Dust or Links). Stage 4c's
- * B2 fills it; until then it throws.
+ * shard at its affix's last tier, an essence, Mana Dust or Links).
  */
 export function refineCost(
-  _registry: DataRegistry,
-  _what: MaterialRef,
+  registry: DataRegistry,
+  what: MaterialRef,
 ): { count: number; scrap: number } | null {
-  throw new Error('refineCost: not implemented');
+  if (!refinedRef(registry, what)) return null;
+  const { refine } = registry.getDelveBalance().crafting;
+  if (what.kind === 'shard')
+    return { count: refine.shard.count, scrap: refine.shard.scrap[what.tier - 1] };
+  return { ...(what.kind === 'metal' ? refine.metal : refine.flux) };
 }
