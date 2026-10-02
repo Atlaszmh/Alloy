@@ -6,6 +6,7 @@ import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import { rollMoveset, rollSockets } from './moveset.js';
+import { metalAt } from './materials.js';
 
 export interface ItemGenOptions {
   uid: string;
@@ -55,12 +56,9 @@ export function scrapLevelFactor(registry: DataRegistry, ilvl: number): number {
   return 1 + (Math.max(1, ilvl) - 1) * registry.getDelveBalance().loot.scrapLevelScale;
 }
 
+/** The name of the metal whose band holds `ilvl` (`crafting.json → metals`): a forged item's name matches its bar. */
 export function materialName(registry: DataRegistry, ilvl: number): string {
-  let name = registry.getDelveData().materials[0].name;
-  for (const m of registry.getDelveData().materials) {
-    if (ilvl >= m.minIlvl) name = m.name;
-  }
-  return name;
+  return metalAt(registry, ilvl).name;
 }
 
 /** "Steel Sword" — the base type line shown under a legendary or rare title. */

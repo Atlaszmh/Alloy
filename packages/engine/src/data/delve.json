@@ -1536,36 +1536,6 @@
       }
     }
   ],
-  "materials": [
-    {
-      "minIlvl": 1,
-      "name": "Rusty"
-    },
-    {
-      "minIlvl": 5,
-      "name": "Iron"
-    },
-    {
-      "minIlvl": 10,
-      "name": "Steel"
-    },
-    {
-      "minIlvl": 16,
-      "name": "Mithril"
-    },
-    {
-      "minIlvl": 24,
-      "name": "Adamant"
-    },
-    {
-      "minIlvl": 34,
-      "name": "Starforged"
-    },
-    {
-      "minIlvl": 48,
-      "name": "Voidforged"
-    }
-  ],
   "names": {
     "prefixes": [
       "Grim",

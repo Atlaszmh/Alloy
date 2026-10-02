@@ -172,11 +172,6 @@ export interface DoorDef {
   mods: DoorMods;
 }
 
-export interface MaterialDef {
-  minIlvl: number;
-  name: string;
-}
-
 export interface DelveData {
   bases: GearBaseDef[];
   affixes: GearAffixDef[];
@@ -184,7 +179,6 @@ export interface DelveData {
   traits: MonsterTraitDef[];
   biomes: BiomeDef[];
   doors: DoorDef[];
-  materials: MaterialDef[];
   names: { prefixes: string[]; suffixes: Record<GearSlot, string[]> };
   slotWeights: Record<GearSlot, number>;
 }

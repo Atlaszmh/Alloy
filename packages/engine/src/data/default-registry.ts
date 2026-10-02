@@ -13,5 +13,6 @@ export function createDefaultRegistry(): DataRegistry {
     data.recipes,
     data.delve,
     data.arpg,
+    data.crafting,
   );
 }

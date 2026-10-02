@@ -3,6 +3,7 @@ import type { ReactionId } from '../types/arpg.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import { MAX_SOCKETS, RUNE_FAMILIES, RUNE_TIERS } from '../types/rune.js';
+import { AFFIX_FAMILIES, FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 
 // --- Shared Schemas ---
 
@@ -572,10 +573,66 @@ export const DelveDataSchema = z.object({
       }),
     )
     .min(3),
-  materials: z.array(z.object({ minIlvl: z.number().int().positive(), name: z.string() })).min(1),
   names: z.object({
     prefixes: z.array(z.string()).min(1),
     suffixes: perSlot(z.array(z.string()).min(1)),
+  }),
+});
+
+// --- Crafting (crafting.json; see the crafting spec) ---
+
+export const MetalIdSchema = z.enum(METAL_IDS);
+export const FluxGradeSchema = z.enum(FLUX_GRADES);
+const AffixFamilySchema = z.enum(AFFIX_FAMILIES);
+
+/** Shard tiers, numbered from 1 in order, each band within 0–1. */
+const ShardTiersSchema = z
+  .array(
+    z
+      .object({ tier: z.number().int().min(1), min: z.number().min(0), max: z.number().max(1) })
+      .refine((t) => t.min <= t.max, 'a tier band runs low to high'),
+  )
+  .min(1)
+  .refine((ts) => ts.every((t, i) => t.tier === i + 1), 'tiers run 1, 2, 3… in order');
+
+export const CraftingDataSchema = z.object({
+  // Every metal once, lowest first, their bands partitioning the item levels from 1 up.
+  metals: z
+    .array(
+      z.object({
+        id: MetalIdSchema,
+        name: z.string(),
+        band: z.tuple([z.number().int().min(1), z.number().int().min(1).nullable()]),
+      }),
+    )
+    .refine(
+      (ms) => ms.map((m) => m.id).join() === METAL_IDS.join(),
+      'every metal once, lowest first',
+    )
+    .refine(
+      (ms) =>
+        ms.every(({ band: [lo, hi] }, i) => {
+          const last = i === ms.length - 1;
+          const from = i === 0 ? 1 : (ms[i - 1].band[1] ?? NaN) + 1;
+          return lo === from && (last ? hi === null : hi !== null && hi >= lo);
+        }),
+      'metal bands partition the item levels from 1 up: contiguous, no overlap, the last open-ended',
+    ),
+  flux: z
+    .array(z.object({ grade: FluxGradeSchema }))
+    .refine(
+      (fs) => fs.map((f) => f.grade).join() === FLUX_GRADES.join(),
+      'every grade once, lowest first',
+    ),
+  shardTiers: ShardTiersSchema,
+  affixShardTiers: z.record(HeroStatKeySchema, ShardTiersSchema),
+  families: z
+    .record(HeroStatKeySchema, AffixFamilySchema)
+    .refine((f) => HeroStatKeySchema.options.every((k) => k in f), 'every affix stat has a family'),
+  startingPatterns: z.array(z.string()).min(1),
+  startingMaterials: z.object({
+    metals: z.record(MetalIdSchema, z.number().int().min(0)),
+    flux: z.record(FluxGradeSchema, z.number().int().min(0)),
   }),
 });
 
