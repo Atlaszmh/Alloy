@@ -496,8 +496,6 @@ export class ArenaRenderer {
             this.fx.ring(e.x, e.y, 5, 0xfde68a, false, 0.8);
             this.addShake(0.5);
           }
-          if (e.scrap > 0 && e.monsterKind !== 'normal')
-            this.floatText(e.x, e.y + 0.4, `+${e.scrap} ⚙`, 0xfcd34d, 16);
           this.killMonsterView(e.id);
           break;
         case 'drop':

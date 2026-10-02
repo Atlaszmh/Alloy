@@ -304,6 +304,21 @@ describe('patterns on the floor', () => {
   });
 });
 
+describe('a slain foe', () => {
+  it("floats no scrap: it bursts out as pickups, credited as they're picked up", () => {
+    const { r } = stage();
+    const w = floor();
+    show(r, w);
+    const death = { kind: 'death', id: 999, x: 13, y: 18, scrap: 30 } as const;
+    r.handleEvents([
+      { ...death, monsterKind: 'elite' },
+      { ...death, id: 998, monsterKind: 'boss' },
+    ]);
+    const floats = (r as unknown as { floats: { text: Text }[] }).floats;
+    expect(floats.map((f) => f.text.text).filter((t) => t.includes('⚙'))).toEqual([]);
+  });
+});
+
 describe('loot labels', () => {
   afterEach(() => vi.restoreAllMocks());
 
