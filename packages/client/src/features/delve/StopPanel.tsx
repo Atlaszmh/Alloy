@@ -516,7 +516,6 @@ function RunePick({ take }: { take: Take }) {
       ))}
       {at && picked && (
         <RunePicker
-          variant="inline"
           candidates={markIdle(
             registry,
             stats,
