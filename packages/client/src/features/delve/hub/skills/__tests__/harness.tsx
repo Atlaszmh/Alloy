@@ -1,5 +1,6 @@
 import { useChainEditor, type ChainEditorProps } from '../../../chains/useChainEditor';
 import { ChainLane } from '../ChainLane';
+import { MoveInspector } from '../MoveInspector';
 import { SkillList } from '../SkillList';
 import type { AnvilChains } from '../useAnvilChains';
 
@@ -17,6 +18,7 @@ export function Panes(props: ChainEditorProps) {
     <>
       <SkillList ed={ed} anvil={anvil} onMana={() => {}} />
       <ChainLane ed={ed} anvil={anvil} carrying={false} />
+      <MoveInspector ed={ed} anvil={anvil} />
     </>
   );
 }
