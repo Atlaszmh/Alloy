@@ -10,7 +10,6 @@ import {
   Panel,
   Screen,
   Tabs,
-  type Prompt,
 } from '@/features/delve/kit';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { LabChart } from '@/features/delve/lab/LabChart';
@@ -46,8 +45,6 @@ const VIEWS: [View, string][] = [
 ];
 const SELECT = 'k-well px-2 py-1.5 text-[14px] text-[var(--k-text)]';
 const LABEL = 'flex items-center gap-2 text-[16px] text-[var(--k-text-2)]';
-/** Drawn only: Esc and B press ◂ Training (`data-pad-back`, AppShell's prompt keys); LB/RB step the tabs. */
-const PROMPTS: Prompt[] = [{ id: 'back', label: 'Training', binding: { key: 'Escape', pad: 'b' } }];
 
 /**
  * The DPS Lab (dev builds only): every basic-attack, ability and rune combo's
@@ -175,7 +172,8 @@ export function DelveLab() {
             }
           />
         }
-        footer={<Footer prompts={PROMPTS} />}
+        // No footer prompts: the header's ◂ Training already carries Esc and B (`data-pad-back`).
+        footer={<Footer prompts={[]} />}
       >
         <div className="flex h-full min-h-0 flex-col gap-4 px-8 py-5">
           <Panel material="well" scroll={false} className="shrink-0">

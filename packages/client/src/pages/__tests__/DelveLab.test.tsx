@@ -179,6 +179,8 @@ describe('DelveLab', () => {
     expect(within(header).getByRole('tablist')).toHaveAttribute('data-pad-tabs');
     const back = within(header).getByTestId('lab-back');
     expect(back).toHaveAttribute('data-pad-back');
+    // The footer doesn't repeat it.
+    expect(lab.querySelector('footer .k-prompt')).toBeNull();
     fireEvent.click(back);
     expect(screen.getByTestId('training-page')).toBeInTheDocument();
   });
