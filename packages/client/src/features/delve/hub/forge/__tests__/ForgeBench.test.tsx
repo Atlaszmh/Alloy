@@ -334,6 +334,39 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('forge-button')).toBeEnabled();
   });
 
+  it("the forge's result shows right after the Forge button, where the eye is, not scrolled out of view", () => {
+    withMaterials({ metals: { ...emptyMaterials().metals, rusty: 2 } });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    const button = screen.getByTestId('forge-button');
+    fireEvent.click(button);
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent(/^Forged /);
+    expect(button.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.nextElementSibling).toBe(status);
+  });
+
+  it('the flux follows the stock: forging away the last of a grade falls back to the first held', () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, rusty: 3 },
+      flux: { ...emptyMaterials().flux, uncommon: 2, rare: 1 },
+    });
+    bench();
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    fireEvent.click(screen.getByTestId('flux-rare'));
+    fireEvent.click(screen.getByTestId('forge-button'));
+    expect(store().profile.materials.flux.rare).toBe(0);
+    expect(screen.getByTestId('flux-uncommon')).toHaveAttribute('aria-checked', 'true');
+    expect(uses()).toHaveTextContent(/^Uses Rusty bar, Uncommon flux$/);
+    expect(screen.getByTestId('forge-title')).toHaveTextContent('Uncommon Cuirass');
+    expect(screen.getByTestId('forge-button')).toBeEnabled();
+    // The last of every grade forged away: no flux, a common item.
+    fireEvent.click(screen.getByTestId('forge-button'));
+    fireEvent.click(screen.getByTestId('forge-button'));
+    expect(screen.getByTestId('flux-none')).toHaveAttribute('aria-checked', 'true');
+    expect(uses()).toHaveTextContent(/^Uses Rusty bar$/);
+  });
+
   it('forging away the last of an essence clears it: the bench is back on epic', () => {
     withMaterials({
       metals: { ...emptyMaterials().metals, rusty: 2 },
