@@ -60,6 +60,29 @@ test('page-scroll: a tall page fails; a control cut off fails unless a pane scro
   expect(await pageScroll(page, CTX)).toEqual([]);
 });
 
+test('page-scroll: a scrolling pane cut off by its parent fails, and so does one that only clips', async ({
+  page,
+}) => {
+  // A 300 px pane in a 100 px overflow:hidden box (the missing min-h-0): its bottom is out of reach.
+  await page.setContent(frame(`
+    <div style="height:100px;overflow:hidden">
+      <div data-testid="pane" style="height:300px;overflow:auto"><div style="height:400px"></div><button>x</button></div>
+    </div>`));
+  expect((await pageScroll(page, CTX)).some((f) => f.detail.includes('scrolling pane [data-testid="pane"]'))).toBe(true);
+  // The same pane grown to its content: it can't scroll, so it only clips, and the button is cut.
+  await page.setContent(frame(`
+    <div style="height:100px;overflow:hidden">
+      <div style="overflow:auto"><div style="height:280px"></div><button data-testid="cut">x</button></div>
+    </div>`));
+  expect((await pageScroll(page, CTX)).some((f) => f.detail.includes('[data-testid="cut"]'))).toBe(true);
+  // overflow-x:hidden alone computes overflow-y to auto, but a box that doesn't overflow can't scroll.
+  await page.setContent(frame(`
+    <div style="height:100px;overflow:hidden">
+      <div style="overflow-x:hidden"><div style="height:200px"></div><button data-testid="cut">x</button></div>
+    </div>`));
+  expect((await pageScroll(page, CTX)).some((f) => f.detail.includes('[data-testid="cut"]'))).toBe(true);
+});
+
 test('reachability: a Delve primary action takes the 24 px click floor, not the 36 px touch one', async ({
   page,
 }) => {

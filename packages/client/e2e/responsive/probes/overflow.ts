@@ -183,35 +183,68 @@ export const overflowY: Probe = async (page, ctx) => {
 /**
  * The Delve's overflow rule: the page never scrolls, panes may. The document must fit the
  * window, and no click target may be cut off (outside the window, or outside an ancestor that
- * clips it) unless a scrolling pane between them can bring it into view.
+ * clips it) unless a scrolling pane between them can bring it into view, and that pane must
+ * itself fit the window and every ancestor that clips it.
  */
 export const pageScroll: Probe = async (page, ctx) => {
   const data = await page.evaluate((targets) => {
     const doc = document.documentElement;
-    const scrolls = (s: CSSStyleDeclaration) =>
-      ['auto', 'scroll'].includes(s.overflowX) || ['auto', 'scroll'].includes(s.overflowY);
     const clips = (s: CSSStyleDeclaration) => s.overflowX !== 'visible' || s.overflowY !== 'visible';
+    // A pane scrolls only on an axis whose overflow is auto/scroll and whose content overflows it:
+    // overflow-x:hidden alone computes overflow-y to auto, and a pane that grew to its content
+    // (the usual missing min-h-0) can't scroll; both only clip.
+    const scrolls = (p: HTMLElement, s: CSSStyleDeclaration) =>
+      (['auto', 'scroll'].includes(s.overflowY) && p.scrollHeight > p.clientHeight + 1) ||
+      (['auto', 'scroll'].includes(s.overflowX) && p.scrollWidth > p.clientWidth + 1);
+    // The box `el` must fit: each clipping ancestor up to the first that scrolls (returned too, as
+    // what can bring `el` into view), or else up to the window.
+    const clipBox = (el: HTMLElement) => {
+      let top = -Infinity, left = -Infinity, right = Infinity, bottom = Infinity;
+      let scroller: HTMLElement | null = null;
+      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (!clips(s)) continue;
+        if (scrolls(p, s)) { scroller = p; break; }
+        const pr = p.getBoundingClientRect();
+        top = Math.max(top, pr.top); left = Math.max(left, pr.left);
+        right = Math.min(right, pr.right); bottom = Math.min(bottom, pr.bottom);
+      }
+      if (!scroller) {
+        top = Math.max(top, 0); left = Math.max(left, 0);
+        right = Math.min(right, innerWidth); bottom = Math.min(bottom, innerHeight);
+      }
+      return { top, left, right, bottom, scroller };
+    };
+    const describe = (el: Element) => {
+      const tid = el.getAttribute('data-testid');
+      const section = el.getAttribute('data-screen-section');
+      const cls = typeof el.className === 'string' && el.className
+        ? `.${el.className.trim().split(/\s+/).slice(0, 2).join('.')}` : '';
+      const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+      if (tid) return `[data-testid="${tid}"]${text ? ` "${text}"` : ''}`;
+      if (section) return `[data-screen-section="${section}"]`;
+      return `${el.tagName.toLowerCase()}${cls}${text ? ` "${text}"` : ''}`;
+    };
     const cut: string[] = [];
+    const checked = new Set<HTMLElement>();
     document.querySelectorAll<HTMLElement>(targets).forEach((el) => {
       if (cut.length >= 5) return;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
       if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
-      // The box it must fit: the window, narrowed by every clipping ancestor up to the
-      // first one that scrolls (a pane, which can bring it into view).
-      let top = 0, left = 0, right = innerWidth, bottom = innerHeight;
-      for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-        const s = getComputedStyle(p);
-        if (scrolls(s)) return;
-        if (!clips(s)) continue;
-        const pr = p.getBoundingClientRect();
-        top = Math.max(top, pr.top); left = Math.max(left, pr.left);
-        right = Math.min(right, pr.right); bottom = Math.min(bottom, pr.bottom);
-      }
-      if (r.top < top - 1 || r.left < left - 1 || r.right > right + 1 || r.bottom > bottom + 1) {
-        const tid = el.getAttribute('data-testid');
-        const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
-        cut.push(`${tid ? `[data-testid="${tid}"]` : el.tagName.toLowerCase()}${text ? ` "${text}"` : ''}`);
+      // The control against its box; then each pane that scrolls it against the pane's own box.
+      for (let node: HTMLElement = el; ;) {
+        const b = clipBox(node);
+        const nr = node.getBoundingClientRect();
+        if (nr.top < b.top - 1 || nr.left < b.left - 1 || nr.right > b.right + 1 || nr.bottom > b.bottom + 1) {
+          cut.push(node === el
+            ? describe(el)
+            : `scrolling pane ${describe(node).slice(0, 60)} (cut off by an ancestor, so is its content: ${describe(el)})`);
+          return;
+        }
+        if (!b.scroller || checked.has(b.scroller)) return;
+        checked.add(b.scroller);
+        node = b.scroller;
       }
     });
     return { scrollW: doc.scrollWidth, scrollH: doc.scrollHeight, cut };
