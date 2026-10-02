@@ -20,7 +20,7 @@ describe('SocketRow', () => {
     expect(screen.getByTestId('socket-1')).not.toHaveAttribute('data-rune');
     fireEvent.click(screen.getByRole('button', { name: 'Socket 2: empty' }));
     expect(onSocketTap).toHaveBeenCalledWith(1);
-    expect(screen.getByTestId('socket-open')).toHaveTextContent('+ socket · 🔗 3 · ⚙ 60');
+    expect(screen.getByTestId('socket-open')).toHaveTextContent('+ socket · 3 Links · 60 scrap');
     fireEvent.click(screen.getByTestId('socket-open'));
     expect(onOpenSocket).toHaveBeenCalledOnce();
   });
@@ -34,6 +34,17 @@ describe('SocketRow', () => {
     expect(screen.queryByTestId('socket-open')).toBeNull();
     rerender(<SocketRow runes={[]} cap={3} nextPrice={{ links: 0, scrap: 0 }} />);
     expect(screen.getByTestId('socket-open').textContent).toBe('+ socket');
+  });
+
+  it('"+ socket" is off while `whyId` names the text that says why', () => {
+    render(
+      <>
+        <span id="why">Not enough Links</span>
+        <SocketRow runes={[]} cap={1} nextPrice={{ links: 1, scrap: 20 }} whyId="why" />
+      </>,
+    );
+    expect(screen.getByTestId('socket-open')).toBeDisabled();
+    expect(screen.getByTestId('socket-open')).toHaveAccessibleDescription('Not enough Links');
   });
 
   it('a dormant rune is dimmed and says why', () => {

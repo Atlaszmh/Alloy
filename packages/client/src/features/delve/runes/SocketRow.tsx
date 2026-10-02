@@ -1,5 +1,5 @@
 import type { RuneRef } from '@alloy/engine';
-import { formatNumber } from '../format';
+import { Price } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 import { RuneGlyph } from './RuneGlyph';
 import { dormantText, runeName } from './rune-style';
@@ -16,12 +16,15 @@ export interface SocketRowProps {
   emptyOnly?: boolean;
   onOpenSocket?: () => void;
   onSocketTap?: (socket: number) => void;
+  /** Why "+ socket" is off: the id of the text that says so (it is disabled while set). */
+  whyId?: string;
 }
 
 /**
  * A move's sockets, under its card: each open socket as a pip (its rune's
  * glyph, dimmed with its reason when dormant, or an empty ring), then
- * "+ socket" with the next one's price while the move is below its cap.
+ * "+ socket" with the next one's price while the move is below its cap (off,
+ * and described by it, while `whyId` names a reason).
  * Tapping a pip calls `onSocketTap`; locked (a dive, the item sheet), the pips
  * are marks, not buttons (with `emptyOnly`, the filled ones). A move with no
  * socket and none to open shows nothing.
@@ -35,6 +38,7 @@ export function SocketRow({
   emptyOnly = false,
   onOpenSocket,
   onSocketTap,
+  whyId,
 }: SocketRowProps) {
   const registry = getDelveRegistry();
   const tap = locked ? undefined : onSocketTap;
@@ -50,7 +54,7 @@ export function SocketRow({
         const pip = r ? (
           <RuneGlyph rune={r} dormant={off} size="sm" />
         ) : (
-          <span className="px-1 text-[11px] leading-none text-stone-500">◇</span>
+          <span className="px-1 text-[14px] leading-none text-stone-500">◇</span>
         );
         return tap && !(emptyOnly && r) ? (
           <button
@@ -81,13 +85,22 @@ export function SocketRow({
       {open && (
         <button
           type="button"
-          className="delve-chip px-1.5 py-0 text-[10px]"
+          className="delve-chip inline-flex flex-wrap items-center justify-center gap-x-1 px-1.5 py-0 text-[14px] [&_.k-price]:flex-wrap"
+          disabled={!!whyId}
+          aria-describedby={whyId}
           onClick={onOpenSocket}
           data-testid="socket-open"
         >
           + socket
-          {open.links > 0 && ` · 🔗 ${open.links}`}
-          {open.scrap > 0 && ` · ⚙ ${formatNumber(open.scrap)}`}
+          {(open.links > 0 || open.scrap > 0) && (
+            <>
+              {' · '}
+              <Price
+                links={open.links > 0 ? open.links : undefined}
+                scrap={open.scrap > 0 ? open.scrap : undefined}
+              />
+            </>
+          )}
         </button>
       )}
     </span>
