@@ -281,7 +281,7 @@ export interface Zone {
   dead: boolean;
 }
 
-export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune' | 'material';
+export type DropKind = 'item' | 'mote' | 'orb' | 'scrap' | 'rune' | 'material' | 'pattern';
 
 export interface Drop {
   id: number;
@@ -294,6 +294,8 @@ export interface Drop {
   rune?: RuneRef;
   /** A material drop's material (kind `'material'`; see the crafting spec). */
   material?: MaterialRef;
+  /** A pattern drop's base id (kind `'pattern'`): learned when it banks. */
+  pattern?: string;
   amount: number;
   born: number;
   /** Pulled to the hero regardless of distance (floor cleared). */
@@ -626,6 +628,8 @@ export type ArpgEvent =
       rune?: RuneRef;
       /** A material pickup's material, `amount` of it. */
       material?: MaterialRef;
+      /** A pattern pickup's base id. */
+      pattern?: string;
     }
   | {
       kind: 'dash';
@@ -659,7 +663,7 @@ export interface LootContext {
   legendaryBoost: number;
   /**
    * The first boss's essence hasn't banked (`DelveProfile.firstEssenceGiven`):
-   * the first boss guarantees it. Until B1, the stand-in gives a legendary item.
+   * the first boss guarantees it, with an epic flux (`dropMaterials` clears it).
    */
   firstEssence: boolean;
   /** The patterns the hero knows: a pattern drop teaches one it doesn't. */
@@ -726,6 +730,8 @@ export interface ArpgWorld {
   lootRng: SeededRNG;
   /** Rune drops' own stream, so item drops roll as they did before runes. */
   runeRng: SeededRNG;
+  /** Material drops' own stream (scrap pickups too), so gear, rune, orb and mote rolls stay as they were. */
+  materialRng: SeededRNG;
   depth: number;
   biomeId: string;
   element: ManaType;

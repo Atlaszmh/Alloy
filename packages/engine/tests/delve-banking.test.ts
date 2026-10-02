@@ -4,6 +4,7 @@ import { stepWorld } from '../src/arpg/step.js';
 import {
   bankWorld,
   beginFloor,
+  chooseDoor,
   closeDive,
   completeFloor,
   extractDive,
@@ -11,6 +12,7 @@ import {
   settleDive,
   startDive,
 } from '../src/delve/dive.js';
+import { runAutopilot } from '../src/delve/autopilot.js';
 import { createDelveProfile, setAutoSalvage } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { addHaul, addMaterial, addMaterials, emptyHaul } from '../src/loot/materials.js';
@@ -19,7 +21,6 @@ import type { ArpgWorld } from '../src/types/arpg.js';
 import type { MaterialRef } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import { registry } from './fixtures/arena.js';
-
 // See the crafting spec's "Banking and death".
 
 const IRON: MaterialRef = { kind: 'metal', metal: 'iron' };
@@ -201,5 +202,47 @@ describe('settling a dive', () => {
     const extracted = extractDive(registry, { ...p, dive: { ...p.dive!, phase: 'choosing' } });
     expect(extracted.scrap).toBe(p.scrap + p.dive!.bounty + 100);
     expect(closeDive(registry, extracted)).toEqual({ ...extracted, dive: null });
+  });
+});
+
+describe('the first boss and a seeded dive', () => {
+  it("the first boss's essence and epic flux bank with its floor, and count as given then", () => {
+    const start = diving(3);
+    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
+    const world = beginFloor(registry, p);
+    expect(world.loot.firstEssence).toBe(true);
+    clearFloor(world);
+    const res = completeFloor(registry, p, world);
+    const { banked } = res.profile.dive!;
+    const [essence] = Object.keys(banked.essences);
+    const slots = p.patterns.map((id) => registry.getGearBase(id).slot);
+    expect(registry.getLegendary(essence).slots.some((s) => slots.includes(s))).toBe(true);
+    expect(banked.flux.epic).toBe(1);
+    expect(res.profile.essencesSeen).toEqual([essence]);
+    expect(res.profile.firstEssenceGiven).toBe(true);
+    const next = chooseDoor(registry, res.profile, res.profile.dive!.doorChoices[0]);
+    expect(beginFloor(registry, next).loot.firstEssence).toBe(false);
+  });
+
+  it("a death before the first boss's floor banks grants its essence again", () => {
+    const start = diving(3);
+    const p = { ...start, dive: { ...start.dive!, depth: 5 } };
+    const world = beginFloor(registry, p);
+    clearFloor(world);
+    world.heroDead = true;
+    const dead = failFloor(registry, p, world).profile;
+    expect(dead.dive!.lost!.flux.epic).toBe(1);
+    expect(dead.firstEssenceGiven).toBe(false);
+    const again = startDive(registry, closeDive(registry, dead), 1);
+    expect(beginFloor(registry, again).loot.firstEssence).toBe(true);
+  });
+
+  it('a seeded dive plays out the same: its drops, haul, banking and settle', () => {
+    const dives = () => runAutopilot(registry, { seed: 9, dives: 2 }).profile;
+    const a = dives();
+    expect(a).toEqual(dives());
+    const bars = (p: DelveProfile) => Object.values(p.materials.metals).reduce((x, y) => x + y, 0);
+    expect(bars(a)).toBeGreaterThan(bars(createDelveProfile(registry, 9)));
+    expect(a.stats.dives).toBe(2);
   });
 });

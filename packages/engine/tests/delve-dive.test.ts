@@ -190,16 +190,15 @@ describe('dive lifecycle', () => {
     expect(res.profile.stats.deaths).toBe(1);
   });
 
-  it('the first boss ever drops a legendary (until B1, its essence), grants a checkpoint and a potion', () => {
+  it('the first boss ever drops an essence, grants a checkpoint and a potion', () => {
     let p = startDive(registry, createDelveProfile(registry, 3), 1);
     p = { ...p, dive: { ...p.dive!, depth: 5, potions: 0 } };
     const world = beginFloor(registry, p);
     expect(world.monsters.some((m) => m.kind === 'boss')).toBe(true);
     clearFloor(world);
+    expect(world.loot.firstEssence).toBe(false);
     const res = completeFloor(registry, p, world);
     expect(res.bossKilled).toBe(true);
-    expect([...res.kept, ...res.salvaged].some((i) => i.rarity === 'legendary')).toBe(true);
-    expect(res.newCodex).toHaveLength(1);
     expect(res.profile.checkpoints).toContain(5);
     expect(res.profile.firstEssenceGiven).toBe(true);
     expect(res.profile.dive!.potions).toBe(bal.dive.bossPotionReward);

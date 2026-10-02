@@ -369,6 +369,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     // floor re-fights the same monsters but rolls fresh drops.
     lootRng: rng.fork(`loot:${opts.loot.nextUid}`),
     runeRng: rng.fork(`runes:${opts.loot.nextUid}`),
+    materialRng: rng.fork(`materials:${opts.loot.nextUid}`),
     depth: opts.depth,
     biomeId: biome.id,
     element: biome.mana,

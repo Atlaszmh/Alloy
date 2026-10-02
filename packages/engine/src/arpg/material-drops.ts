@@ -2,7 +2,7 @@ import type { DataRegistry } from '../data/registry.js';
 import { weightedPick } from '../loot/item-generator.js';
 import { metalAt, shardTiersOf } from '../loot/materials.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
-import type { MonsterEntity, MonsterKind } from '../types/arpg.js';
+import type { Drop, MonsterEntity, MonsterKind } from '../types/arpg.js';
 import {
   FLUX_GRADES,
   type DropEntry,
@@ -167,11 +167,54 @@ export function rollMaterialDrops(
 }
 
 /**
- * A slain foe's materials (see the crafting spec's drop tables): pickups that
- * burst onto the floor and magnet in, rolled on the world's own stream. Stage
- * 4c's B1 fills it and calls it from `killMonster`'s `!world.sandbox` guard;
- * until then it throws.
+ * A slain foe's materials, scrap and pattern burst onto the floor on
+ * `world.materialRng` (so gear, rune, orb and mote rolls are untouched): its
+ * kill scrap split into `drops.scrapPickups[kind]` pickups (each at least 1),
+ * every material and the pattern their own. A boss that takes the first
+ * essence's guarantee clears it for the floor; a dropped pattern won't drop
+ * again this floor. `killMonster` calls it inside its `!world.sandbox` guard.
  */
-export function dropMaterials(_ctx: SimCtx, _m: MonsterEntity): void {
-  throw new Error('dropMaterials: not implemented');
+export function dropMaterials(ctx: SimCtx, m: MonsterEntity, scrap: number): void {
+  const { world, registry } = ctx;
+  const rng = world.materialRng;
+  const loot = world.loot;
+  const firstEssence = m.kind === 'boss' && loot.firstEssence;
+  const rolled = rollMaterialDrops(
+    registry,
+    {
+      depth: world.depth,
+      kind: m.kind,
+      biomeId: world.biomeId,
+      biomeMana: world.element,
+      door: world.door,
+      find: loot.find,
+      legendaryBoost: loot.legendaryBoost,
+      firstEssence,
+      patterns: loot.patterns,
+    },
+    rng,
+  );
+  if (firstEssence) loot.firstEssence = false;
+
+  const spawn = (extra: Pick<Drop, 'kind' | 'amount' | 'material' | 'pattern'>) => {
+    const angle = rng.next() * Math.PI * 2;
+    const r = 0.6 + rng.next() * 0.9;
+    const x = Math.max(1, Math.min(world.width - 1, m.x + Math.cos(angle) * r));
+    const y = Math.max(1, Math.min(world.height - 1, m.y + Math.sin(angle) * r));
+    const id = world.nextId++;
+    world.drops.push({ id, x, y, ...extra, born: world.t, vacuum: world.cleared, dead: false });
+    ctx.events.push({ kind: 'drop', dropId: id, x, y, dropKind: extra.kind });
+  };
+
+  const pieces = Math.min(registry.getDelveBalance().drops.scrapPickups[m.kind], scrap);
+  for (let i = 0; i < pieces; i++) {
+    const amount = Math.floor(scrap / pieces) + (i < scrap % pieces ? 1 : 0);
+    spawn({ kind: 'scrap', amount });
+  }
+  for (const { material, amount } of rolled.materials)
+    spawn({ kind: 'material', amount, material });
+  if (rolled.pattern) {
+    loot.patterns = [...loot.patterns, rolled.pattern];
+    spawn({ kind: 'pattern', amount: 1, pattern: rolled.pattern });
+  }
 }

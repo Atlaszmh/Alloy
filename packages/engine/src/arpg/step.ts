@@ -3,6 +3,7 @@ import type {
   ArpgEvent,
   ArpgInput,
   ArpgWorld,
+  Drop,
   HeroEntity,
   MonsterEntity,
   Projectile,
@@ -40,8 +41,8 @@ import { createMonsterEntity } from './world.js';
 import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic.js';
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
+import { addMaterial } from '../loot/materials.js';
 
-const ITEM_PICKUP_DELAY = 0.35;
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
 
@@ -769,22 +770,29 @@ function separate(ctx: SimCtx): void {
   h.y = clamp(h.y, h.radius, world.height - h.radius);
 }
 
+/** Gear, runes, patterns and essences are walked over; everything else flies to the hero in the magnet's reach. */
+function walkedOver(d: Drop): boolean {
+  return (
+    d.kind === 'item' || d.kind === 'rune' || d.kind === 'pattern' || d.material?.kind === 'essence'
+  );
+}
+
 function dropsTick(ctx: SimCtx, dt: number): void {
   const { world, bal } = ctx;
   const h = world.hero;
+  const { magnetSpeed, vacuumSpeed, pickupDelay } = bal.drops;
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
-    // Items and runes are walked over; motes, orbs and scrap fly to the hero.
-    const magnet = d.kind !== 'item' && d.kind !== 'rune' && gap < bal.hero.magnetRadius;
+    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius;
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
-      const speed = d.vacuum ? 18 : 10;
+      const speed = d.vacuum ? vacuumSpeed : magnetSpeed;
       const stepLen = Math.min(gap, speed * dt);
       d.x += dir.x * stepLen;
       d.y += dir.y * stepLen;
     }
-    if (world.t - d.born < ITEM_PICKUP_DELAY) continue;
+    if (world.t - d.born < pickupDelay) continue;
     if (dist(h.x, h.y, d.x, d.y) > bal.hero.pickupRadius) continue;
     d.dead = true;
     switch (d.kind) {
@@ -803,6 +811,12 @@ function dropsTick(ctx: SimCtx, dt: number): void {
       case 'rune':
         if (d.rune) world.pending.runes.push(d.rune);
         break;
+      case 'material':
+        if (d.material) world.pending.haul = addMaterial(world.pending.haul, d.material, d.amount);
+        break;
+      case 'pattern':
+        if (d.pattern) world.pending.patterns.push(d.pattern);
+        break;
     }
     ctx.events.push({
       kind: 'pickup',
@@ -812,6 +826,8 @@ function dropsTick(ctx: SimCtx, dt: number): void {
       rune: d.rune,
       amount: d.amount,
       mana: d.mana,
+      material: d.material,
+      pattern: d.pattern,
     });
   }
 }

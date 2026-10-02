@@ -23,6 +23,7 @@ import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
+import { dropMaterials } from './material-drops.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -701,7 +702,8 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (m.kind === 'boss') world.bossKilled = true;
   if (m.id === world.bossId) world.bossId = livingBossId(world);
 
-  // The Training Grounds drop nothing from kills: no scrap, items, motes or orbs.
+  // The Training Grounds drop nothing from kills: no scrap, items, motes, orbs or materials.
+  // The kill's scrap bursts out as pickups (`dropMaterials`).
   const scrap = world.sandbox
     ? 0
     : Math.round(
@@ -710,7 +712,6 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
           bal.drops.scrapByKind[m.kind] *
           (1 + h.stats.scrapFind / 100),
       );
-  world.pending.scrap += scrap;
   ctx.events.push({ kind: 'death', id: m.id, x: m.x, y: m.y, monsterKind: m.kind, scrap });
 
   if (h.stats.healOnKill > 0) healHero(ctx, h.stats.maxHp * h.stats.healOnKill, 'kill');
@@ -734,6 +735,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
   if (!world.sandbox) {
     dropLoot(ctx, m);
     dropRune(ctx, m);
+    dropMaterials(ctx, m, scrap);
   }
 
   // Hellfire Brand: branded corpses explode and brand their neighbours.
@@ -758,8 +760,6 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
-  // ponytail: Phase A's stand-in for the first boss's essence (a legendary item); B1 drops the essence.
-  const forceLegendary = m.kind === 'boss' && loot.firstEssence;
   const drops = rollEncounterDrops(
     registry,
     {
@@ -768,7 +768,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
       find: loot.find,
       materials: world.door?.mods.materials ?? 1,
       legendaryBoost: loot.legendaryBoost,
-      forceLegendary,
+      forceLegendary: false, // until Task 4's drop tables take the field out
       nextUid: loot.nextUid,
       biomeMana: world.element,
       pair: loot.pair,
@@ -776,7 +776,6 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     lootRng,
   );
   loot.nextUid = drops.nextUid;
-  if (forceLegendary) loot.firstEssence = false;
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;

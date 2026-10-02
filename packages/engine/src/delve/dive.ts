@@ -102,7 +102,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
       firstEssence: !profile.firstEssenceGiven,
-      patterns: profile.patterns,
+      patterns: [...profile.patterns],
       pair: pairElements(profile.pair),
     },
   });
@@ -186,7 +186,6 @@ export function bankWorld(
     ...next,
     patterns: [...next.patterns, ...patterns],
     essencesSeen: [...next.essencesSeen, ...essences],
-    firstEssenceGiven: next.firstEssenceGiven || !world.loot.firstEssence,
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
     stats: { ...next.stats, kills: next.stats.kills + pending.kills },
     dive: {
@@ -240,7 +239,8 @@ export interface FloorResult extends BankResult {
 
 /**
  * The floor is cleared: bank loot (`bankWorld`, with `opts`) and the floor's haul
- * into `dive.banked`, pay the depth bounty, heal, offer doors.
+ * into `dive.banked`, pay the depth bounty, heal, offer doors. The first boss's
+ * essence counts as given once a haul holding it banks here.
  */
 export function completeFloor(
   registry: DataRegistry,
@@ -253,6 +253,7 @@ export function completeFloor(
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
+  const essenceBanked = !world.loot.firstEssence && Object.keys(dive.haul.essences).length > 0;
 
   const bountyAdded = Math.round(
     bal.dive.bountyBase *
@@ -284,6 +285,7 @@ export function completeFloor(
     ...banked,
     profile: {
       ...banked.profile,
+      firstEssenceGiven: banked.profile.firstEssenceGiven || essenceBanked,
       checkpoints,
       dive: nextDive,
       stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },

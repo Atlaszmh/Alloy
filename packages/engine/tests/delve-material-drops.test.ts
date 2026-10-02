@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import {
   rollMaterialDrops,
   type MaterialDropContext,
   type MaterialDrops,
 } from '../src/arpg/material-drops.js';
+import { stepWorld } from '../src/arpg/step.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
+import type { ArpgWorld, Drop } from '../src/types/arpg.js';
 import { FLUX_GRADES, type MaterialRef } from '../src/types/crafting.js';
 import type { DoorMods } from '../src/types/delve.js';
-import { bal, registry } from './fixtures/arena.js';
-
+import { arena, bal, dummy, registry, run, STEP } from './fixtures/arena.js';
 const drops = bal.drops;
 const BASE: MaterialDropContext = {
   depth: 1,
@@ -184,5 +186,110 @@ describe('doors, depth and Find', () => {
     expect(share(roll({ kind: 'boss', door: shrine }), sustain)).toBeGreaterThan(
       1.2 * share(cinder, sustain),
     );
+  });
+});
+
+describe('material drops in the world', () => {
+  const kill = (w: ArpgWorld) => {
+    const ctx = makeCtx(registry, w, []);
+    for (const m of [...w.monsters]) killMonster(ctx, m);
+    return ctx.events;
+  };
+
+  it("a kill's scrap bursts out as its kind's scrap pickups, credited only when picked up", () => {
+    const w = arena([{ kind: 'boss' }], { noBasic: true });
+    const [death] = kill(w).flatMap((e) => (e.kind === 'death' ? [e] : []));
+    const scrap = w.drops.filter((d) => d.kind === 'scrap').map((d) => d.amount);
+    expect(death.scrap).toBeGreaterThan(drops.scrapPickups.boss);
+    expect(scrap).toHaveLength(drops.scrapPickups.boss);
+    expect(scrap.reduce((a, b) => a + b, 0)).toBe(death.scrap);
+    expect(Math.max(...scrap) - Math.min(...scrap)).toBeLessThanOrEqual(1);
+    expect(w.pending.scrap).toBe(0);
+  });
+
+  it('materials roll on their own stream: every other drop comes out as without them', () => {
+    const floor = () =>
+      arena(
+        Array.from({ length: 12 }, (_, i) => ({
+          kind: i % 4 ? ('elite' as const) : ('boss' as const),
+        })),
+        { noBasic: true },
+      );
+    const a = floor();
+    const b = floor();
+    b.materialRng = new SeededRNG(12345);
+    kill(a);
+    kill(b);
+    const mine = (d: Drop) => d.kind === 'material' || d.kind === 'scrap' || d.kind === 'pattern';
+    const others = (w: ArpgWorld) => w.drops.filter((d) => !mine(d)).map(({ id: _id, ...d }) => d);
+    expect(others(a)).toEqual(others(b));
+    expect(others(a).some((d) => d.kind === 'item')).toBe(true);
+    const materials = (w: ArpgWorld) =>
+      w.drops.filter((d) => d.kind === 'material').map((d) => d.material);
+    expect(materials(a)).not.toEqual(materials(b));
+  });
+
+  it('the magnet pulls materials in at magnetSpeed; essences and patterns are walked over', () => {
+    const w = arena([dummy(13, 5)], { noBasic: true });
+    const { x, y } = w.hero;
+    const drop = (id: number, dx: number, extra: Partial<Drop>): Drop => ({
+      id,
+      kind: 'material',
+      x: x + dx,
+      y,
+      amount: 1,
+      born: -1,
+      vacuum: false,
+      dead: false,
+      ...extra,
+    });
+    const iron = { kind: 'metal', metal: 'iron' } as const;
+    const ember = { kind: 'essence', essence: 'pyroclasm' } as const;
+    w.drops.push(
+      drop(1, 3, { material: iron }),
+      drop(2, -2.4, { material: ember }),
+      drop(3, 0, { material: ember }),
+      drop(4, 0.5, { kind: 'pattern', pattern: 'axe' }),
+      drop(5, 2.4, { kind: 'pattern', pattern: 'bow' }),
+    );
+    const events = stepWorld(registry, w, { move: { x: 0, y: 0 } }, STEP);
+    expect(w.drops[0].x).toBeCloseTo(x + 3 - drops.magnetSpeed * STEP);
+    events.push(...run(w, 0.5));
+    expect(w.drops.filter((d) => !d.dead).map((d) => [d.id, d.x])).toEqual([
+      [2, x - 2.4],
+      [5, x + 2.4],
+    ]);
+    expect(w.pending.haul.metals.iron).toBe(1);
+    expect(w.pending.haul.essences).toEqual({ pyroclasm: 1 });
+    expect(w.pending.patterns).toEqual(['axe']);
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'pickup', dropId: 4, dropKind: 'pattern', pattern: 'axe' }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'pickup', dropId: 1, dropKind: 'material', material: iron }),
+    );
+  });
+
+  it("a fresh drop waits pickupDelay before it's picked up", () => {
+    const w = arena([dummy(13, 5)], { noBasic: true });
+    const { x, y } = w.hero;
+    w.drops.push({ id: 1, kind: 'scrap', x, y, amount: 3, born: w.t, vacuum: false, dead: false });
+    run(w, drops.pickupDelay - 2 * STEP);
+    expect(w.pending.scrap).toBe(0);
+    run(w, 4 * STEP);
+    expect(w.pending.scrap).toBe(3);
+  });
+
+  it("the first boss's essence and epic flux drop once a floor", () => {
+    const w = arena([{ kind: 'boss' }, { kind: 'boss' }], { noBasic: true });
+    w.loot = { ...w.loot, firstEssence: true, patterns: ['sword'] };
+    kill(w);
+    const epic = w.drops.filter((d) => d.material?.kind === 'flux' && d.material.grade === 'epic');
+    expect(epic).toHaveLength(1);
+    const essences = w.drops.flatMap((d) =>
+      d.material?.kind === 'essence' ? [d.material.essence] : [],
+    );
+    expect(registry.getLegendary(essences[0]).slots).toContain('weapon');
+    expect(w.loot.firstEssence).toBe(false);
   });
 });

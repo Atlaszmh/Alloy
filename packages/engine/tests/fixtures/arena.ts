@@ -113,7 +113,8 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
       nextUid: 100,
       find: 0,
       legendaryBoost: 1,
-      forceLegendary: false,
+      firstEssence: false,
+      patterns: [],
       pair: [],
     },
   });
