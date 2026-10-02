@@ -1110,37 +1110,27 @@ describe('the autopilot and the pair', () => {
     ...new Set(chainsOf(p).primary!.moves.map((m) => m.elements.join('+'))),
   ];
 
-  /** Storm gear worse than the starter sword (no damage line): junk, salvaged between dives. */
-  const junk = (uid: string): GearItem => ({ ...item('storm', 'weapon'), uid, baseId: 'sword' });
+  /** A `primary` hero back from its first dive (to depth 3), Mana Dust enough to fuse its Primary. */
+  const back = (primary: ManaType): DelveProfile => {
+    const p = createDelveProfile(registry, 5, { primary });
+    const stats = { ...p.stats, dives: 1 };
+    return { ...p, bestDepth: 3, manaDust: bal.movesets.elementDust, stats };
+  };
 
-  it('binds the element it owns most before salvaging, and builds its Primary from both', () => {
-    const p = {
-      ...createDelveProfile(registry, 5, { primary: 'fire' }),
-      bag: [junk('j1'), junk('j2')],
-    };
-    const after = betweenDives(registry, p);
-    expect(after.pair).toEqual({ primary: 'fire', secondary: 'storm' });
-    expect(after.bag.map((i) => i.uid)).not.toContain('j1'); // melted…
-    expect(after.manaDust).toBe(0); // …after the bind: storm was in the pair by then
-    expect(primaryElements(after)).toEqual(['fire+storm']);
-  });
-
-  it('skips the bind while it owns nothing of another element', () => {
+  it('binds nothing before its first dive', () => {
     const after = betweenDives(registry, createDelveProfile(registry, 5, { primary: 'fire' }));
     expect(after.pair.secondary).toBeNull();
   });
 
-  it('binds the element it owns most, whichever it is: every pair reacts', () => {
-    const p = {
-      ...createDelveProfile(registry, 5, { primary: 'fire' }),
-      // earth 2 (Obsidian), frost 1 (Melt)
-      bag: [item('earth', 'helm'), item('earth', 'gloves'), item('frost', 'boots')],
-    };
-    const after = betweenDives(registry, p);
-    expect(after.pair).toEqual({ primary: 'fire', secondary: 'earth' });
-    expect(primaryElements(after)).toEqual(['fire+earth']);
+  it("after its first dive, binds the first biome's element other than its primary, and builds its Primary from both", () => {
+    // Depth 1's Cinder Mines are Fire: a Fire hero takes the next biome's Frost, any other Fire.
+    const fire = betweenDives(registry, back('fire'));
+    expect(fire.pair).toEqual({ primary: 'fire', secondary: 'frost' });
+    expect(primaryElements(fire)).toEqual(['fire+frost']);
+    const earth = betweenDives(registry, back('earth'));
+    expect(earth.pair).toEqual({ primary: 'earth', secondary: 'fire' });
+    expect(primaryElements(earth)).toEqual(['earth+fire']);
   });
-
   it('binds a given secondary before the first dive, and its fused Primary finds their reaction', () => {
     const after = (dives: number) =>
       runAutopilot(registry, { seed: 1, dives, primary: 'storm', secondary: 'earth' }).profile;

@@ -69,7 +69,7 @@ describe('the stop after a cleared depth', () => {
 
   it('offers only what the hero can take and pay for: a bag item, a slot, an edit, an upgrade', () => {
     const p0 = createDelveProfile(registry, 3, { primary: 'fire' });
-    const p = { ...p0, stats: { ...p0.stats, dives: 1 } }; // past the free edits
+    const p = { ...p0, scrap: 0, stats: { ...p0.stats, dives: 1 } }; // past the free edits
     expect(upgradeCost(registry, p.equipped.chest!)).toBe(10);
     expect(stopKinds(registry, p)).toEqual([]); // no bag, Links, scrap or Mana Dust
     const rich = { ...p, bag: [ring('r1')], links: 1, scrap: 20, manaDust: bal.movesets.editDust };

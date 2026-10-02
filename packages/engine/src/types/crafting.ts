@@ -197,10 +197,11 @@ export interface CraftingData {
   families: Record<HeroStatKey, AffixFamily>;
   /** The patterns a new save knows. */
   startingPatterns: string[];
-  /** The materials a new save holds. */
+  /** The materials and scrap a new save holds. */
   startingMaterials: {
     metals: Partial<Record<MetalId, number>>;
     flux: Partial<Record<FluxGrade, number>>;
+    scrap: number;
   };
 }
 

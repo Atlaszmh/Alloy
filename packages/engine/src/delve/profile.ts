@@ -73,7 +73,7 @@ export function createDelveProfile(
     nextUid: 2,
     equipped: { weapon, chest },
     bag: [],
-    scrap: 0,
+    scrap: kit.startingMaterials.scrap,
     bestDepth: 0,
     checkpoints: [],
     codex: {},

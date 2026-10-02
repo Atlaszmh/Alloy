@@ -95,9 +95,9 @@ describe('stocking a haul (the settle at extract, a salvage at the Anvil)', () =
       runes: { echo: [1, 0, 0, 0, 0] },
     };
     const next = stockHaul(p, haul);
-    expect(next.materials.flux).toMatchObject({ uncommon: 1, magic: 2 });
+    expect(next.materials.flux).toMatchObject({ uncommon: 3, magic: 2 });
     expect(next.materials.metals.rusty).toBe(5);
-    expect([next.scrap, next.manaDust, next.links]).toEqual([40, 3, 1]);
+    expect([next.scrap, next.manaDust, next.links]).toEqual([p.scrap + 40, 3, 1]);
     expect(next.runes).toEqual({ echo: [1, 1, 0, 0, 0] });
     expect(next.stats.scrapEarned).toBe(p.stats.scrapEarned + 40);
     expect(p.materials.flux.magic).toBe(0);

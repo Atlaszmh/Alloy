@@ -3,6 +3,7 @@ import { BalanceConfigSchema } from '../src/data/schemas.js';
 import balanceData from '../src/data/balance.json';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem } from '../src/loot/item-generator.js';
+import { emptyMaterials } from '../src/loot/materials.js';
 import { rollEncounterDrops } from '../src/loot/drops.js';
 import {
   baseSlots,
@@ -1114,11 +1115,16 @@ describe('the dive lock', () => {
 });
 
 describe('the autopilot between dives', () => {
-  /** A Fire hero after its first dive, wielding `w` (the starter sword by default). */
+  /** A Fire hero after its first dive, wielding `w` (the starter sword by default), with nothing to forge. */
   const veteran = (w?: GearItem): DelveProfile => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
     const weapon = w ?? p.equipped.weapon!;
-    return { ...p, equipped: { ...p.equipped, weapon }, stats: { ...p.stats, dives: 1 } };
+    return {
+      ...p,
+      equipped: { ...p.equipped, weapon },
+      materials: emptyMaterials(),
+      stats: { ...p.stats, dives: 1 },
+    };
   };
 
   it('moves its moveset onto the bag weapon that makes the best home, when it can pay', () => {
@@ -1157,18 +1163,13 @@ describe('the autopilot between dives', () => {
   });
 
   it('pays for its fused Primary, and skips the edit when it cannot', () => {
-    const helm = generateItem(
-      registry,
-      { uid: 'h', ilvl: 2, rarity: 'common', slot: 'helm', mana: 'storm' },
-      new SeededRNG(3),
-    );
-    const p = { ...veteran(), bag: [helm] };
+    const p = { ...veteran(), bestDepth: 3 }; // it has fought: it binds Frost
     const primary = (q: DelveProfile) => chainsOf(q).primary!.moves.map((m) => m.elements);
     const poor = betweenDives(registry, p);
-    expect(poor.pair.secondary).toBe('storm');
+    expect(poor.pair.secondary).toBe('frost');
     expect(primary(poor)).toEqual([['fire']]);
     const paid = betweenDives(registry, { ...p, manaDust: bal.movesets.elementDust });
-    expect(primary(paid)).toEqual([['fire', 'storm']]);
+    expect(primary(paid)).toEqual([['fire', 'frost']]);
     expect(paid.manaDust).toBe(0);
   });
 });

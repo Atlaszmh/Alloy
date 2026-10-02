@@ -638,6 +638,7 @@ export const CraftingDataSchema = z.object({
   startingMaterials: z.object({
     metals: z.record(MetalIdSchema, z.number().int().min(0)),
     flux: z.record(FluxGradeSchema, z.number().int().min(0)),
+    scrap: z.number().int().min(0),
   }),
 });
 
