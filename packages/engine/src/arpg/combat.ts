@@ -69,8 +69,6 @@ export interface HitOpts {
   stacks?: number;
 }
 
-const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
-
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
 export const BASIC_STATUS: Record<ManaType, StatusId> = {
   fire: 'burn',
@@ -709,7 +707,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     : Math.round(
         bal.loot.scrapPerKill *
           scrapLevelFactor(registry, world.depth) *
-          KILL_SCRAP_MULT[m.kind] *
+          bal.drops.scrapByKind[m.kind] *
           (1 + h.stats.scrapFind / 100),
       );
   world.pending.scrap += scrap;
@@ -760,15 +758,15 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
-  const forceLegendary = m.kind === 'boss' && loot.forceLegendary;
+  // ponytail: Phase A's stand-in for the first boss's essence (a legendary item); B1 drops the essence.
+  const forceLegendary = m.kind === 'boss' && loot.firstEssence;
   const drops = rollEncounterDrops(
     registry,
     {
       depth: world.depth,
       kind: m.kind,
-      magicFind: loot.magicFind,
-      pity: loot.pity,
-      dropMult: loot.dropMult,
+      find: loot.find,
+      materials: world.door?.mods.materials ?? 1,
       legendaryBoost: loot.legendaryBoost,
       forceLegendary,
       nextUid: loot.nextUid,
@@ -777,9 +775,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     },
     lootRng,
   );
-  loot.pity = drops.pity;
   loot.nextUid = drops.nextUid;
-  if (forceLegendary) loot.forceLegendary = false;
+  if (forceLegendary) loot.firstEssence = false;
   drops.items.forEach((item, i) => {
     const angle = (Math.PI * 2 * i) / Math.max(1, drops.items.length) + lootRng.next() * 0.8;
     const r = 0.6 + lootRng.next() * 0.9;

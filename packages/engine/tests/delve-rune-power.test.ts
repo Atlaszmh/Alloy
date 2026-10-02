@@ -60,6 +60,7 @@ function registryWith(change: (bal: DelveBalance) => void): DataRegistry {
     d.recipes,
     d.delve,
     d.arpg,
+    d.crafting,
   );
 }
 /** The runes without their price: every load zeroed (see the rune costs spec). */

@@ -6,6 +6,7 @@ import { GEAR_SLOTS } from '../types/gear.js';
 import { MANA_TYPES, type ManaType } from '../types/mana.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import { rollMoveset, rollSockets } from './moveset.js';
+import { metalAt } from './materials.js';
 
 export interface ItemGenOptions {
   uid: string;
@@ -25,8 +26,6 @@ export interface ItemGenOptions {
 export interface RarityRollContext {
   /** 0 = no luck; 1 = +100% magic find equivalent. */
   luck: number;
-  /** Drops since the last legendary. */
-  pity: number;
   minRarity?: Rarity;
   /** Extra multiplier on legendary weight (Lucky Charm). */
   legendaryBoost?: number;
@@ -55,12 +54,9 @@ export function scrapLevelFactor(registry: DataRegistry, ilvl: number): number {
   return 1 + (Math.max(1, ilvl) - 1) * registry.getDelveBalance().loot.scrapLevelScale;
 }
 
+/** The name of the metal whose band holds `ilvl` (`crafting.json → metals`): a forged item's name matches its bar. */
 export function materialName(registry: DataRegistry, ilvl: number): string {
-  let name = registry.getDelveData().materials[0].name;
-  for (const m of registry.getDelveData().materials) {
-    if (ilvl >= m.minIlvl) name = m.name;
-  }
-  return name;
+  return metalAt(registry, ilvl).name;
 }
 
 /** "Steel Sword" — the base type line shown under a legendary or rare title. */
@@ -200,6 +196,7 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     affixes,
     upgrade: 0,
     reforges: 0,
+    hones: 0,
     locked: false,
   };
   if (legendary) item.legendary = legendary;
@@ -218,10 +215,7 @@ export function rarityWeights(registry: DataRegistry, ctx: RarityRollContext): R
   const out = {} as Record<Rarity, number>;
   RARITY_ORDER.forEach((rarity, i) => {
     let w = loot.rarityWeights[rarity] * Math.pow(1 + luck, i * loot.luckExponent);
-    if (rarity === 'legendary') {
-      w *= 1 + Math.max(0, ctx.pity) * loot.pityPerDrop;
-      w *= ctx.legendaryBoost ?? 1;
-    }
+    if (rarity === 'legendary') w *= ctx.legendaryBoost ?? 1;
     out[rarity] = i < minIdx ? 0 : w;
   });
   return out;

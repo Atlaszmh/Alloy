@@ -12,7 +12,6 @@ import {
   addLootToBag,
   createDelveProfile,
   equipItem,
-  fuseGear,
   parseDelveProfile,
   salvageCandidates,
   salvageItems,
@@ -109,12 +108,12 @@ describe('rune drops: tiers and chances', () => {
     expect(tiers(90)[5]).toBe(4000);
   });
 
-  it("drops at its kind's chance × the door's multiplier (at most 1); a boss always drops one", () => {
-    const rate = (kind: MonsterKind, dropMult: number) => {
+  it("drops at its kind's chance × the door's `runes` (at most 1); a boss always drops one", () => {
+    const rate = (kind: MonsterKind, runes: number) => {
       const rng = new SeededRNG(11);
       let got = 0;
       for (let i = 0; i < 20000; i++)
-        if (rollRuneDrop(registry, { depth: 5, kind, dropMult }, rng)) got++;
+        if (rollRuneDrop(registry, { depth: 5, kind, runes }, rng)) got++;
       return got / 20000;
     };
     expect(R.dropChance).toEqual({ normal: 0.03, elite: 0.15, boss: 1 });
@@ -131,7 +130,7 @@ describe('rune drops: tiers and chances', () => {
     const counts = new Map<string, number>();
     const tiers = new Set<number>();
     for (let i = 0; i < 14000; i++) {
-      const r = rollRuneDrop(registry, { depth: 13, kind: 'boss', dropMult: 1 }, rng)!;
+      const r = rollRuneDrop(registry, { depth: 13, kind: 'boss', runes: 1 }, rng)!;
       counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
       tiers.add(r.tier);
     }
@@ -273,19 +272,6 @@ describe('the parts rule', () => {
     // The same weapon without runes is junk.
     const plain = { ...socketedSword(), moveset: undefined };
     expect(salvageCandidates(registry, wield(plain), 'epic')).toEqual(['w']);
-  });
-
-  it("fusing gives the inputs' parts back by the rule; the fused weapon rolls its own", () => {
-    const three = ['a', 'b', 'c'].map((uid) => socketedSword(uid));
-    const p = { ...hero(), scrap: 9999, bag: three };
-    const res = fuseGear(registry, p, ['a', 'b', 'c']);
-    expect(res).toMatchObject({ ok: true, links: 12, runes: [] });
-    expect(res.destroyed).toHaveLength(6);
-    expect(res.profile.links).toBe(12);
-    expect(res.item!.rarity).toBe('epic');
-    const paid = fuseGear(registry, p, ['a', 'b', 'c'], { unsocket: 'pay' });
-    expect(paid).toMatchObject({ ok: true, links: 12, destroyed: [] });
-    expect(paid.profile.runes).toEqual({ chain: [0, 3, 0, 0, 0], split: [3, 0, 0, 0, 0] });
   });
 
   it('the choice of mana rebuilds the weapon: its sockets back as Links, its runes by the rule', () => {
@@ -842,7 +828,6 @@ describe('opening a socket, socketing a rune, fusing', () => {
         'Transfer your moveset between dives',
       );
       expect(salvageItems(registry, bag, ['a'])).toMatchObject({ count: 0, destroyed: [] });
-      expect(fuseGear(registry, bag, ['a', 'b', 'c']).reason).toBe(forge);
     }
     // The choice of mana stays open (a migrated save may be diving).
     const unchosen = startDive(registry, createDelveProfile(registry, 3), 1);

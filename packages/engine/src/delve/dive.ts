@@ -3,6 +3,7 @@ import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
+import type { SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
@@ -13,6 +14,7 @@ import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
+import { emptyHaul } from '../loot/materials.js';
 import type { SetChainsOptions } from './runes.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
@@ -52,6 +54,10 @@ export function startDive(registry: DataRegistry, profile: DelveProfile, startDe
     linksEarned: 0,
     runesEarned: 0,
     stop: null,
+    haul: emptyHaul(),
+    banked: emptyHaul(),
+    lost: null,
+    settled: false,
     found: Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>,
     bestFind: null,
   };
@@ -91,12 +97,11 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     phoenixAvailable: !dive.phoenixUsed,
     seed: floorSeed(dive),
     loot: {
-      pity: profile.pity,
       nextUid: profile.nextUid,
-      magicFind: stats.magicFind + (mods.magicFind ?? 0),
+      find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
-      dropMult: mods.dropMult ?? 1,
-      forceLegendary: !profile.firstBossLegendaryGiven,
+      firstEssence: !profile.firstEssenceGiven,
+      patterns: profile.patterns,
       pair: pairElements(profile.pair),
     },
   });
@@ -146,7 +151,7 @@ export function bankWorld(
   const runes = pending.runes;
   const bagged = addLootToBag(
     registry,
-    { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid },
+    { ...profile, nextUid: world.loot.nextUid },
     items,
     opts,
   );
@@ -165,7 +170,7 @@ export function bankWorld(
     ...next,
     scrap: next.scrap + scrap,
     runes: addToPouch(next.runes, runes),
-    firstBossLegendaryGiven: next.firstBossLegendaryGiven || !world.loot.forceLegendary,
+    firstEssenceGiven: next.firstEssenceGiven || !world.loot.firstEssence,
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
     stats: {
       ...next.stats,
@@ -326,8 +331,24 @@ export function extractDive(_registry: DataRegistry, profile: DelveProfile): Del
   };
 }
 
-/** Clear the dive record (after the summary, or to abandon — the bounty is lost). */
-export function closeDive(profile: DelveProfile): DelveProfile {
+/**
+ * The one path from a dive's `banked` haul into the stockpile, once a dive
+ * (`dive.settled`; see the crafting spec's banking): an extract keeps it all; a
+ * death or an abandon loses the floor's haul and `crafting.deathLoss` of
+ * `banked` (each entry rounded stochastically on `death:${seed}`, banked
+ * essences exempt), recorded in `dive.lost`. Stage 4c's B1 fills it and calls
+ * it from `extractDive`, `failFloor` and `closeDive`; until then it throws.
+ */
+export function settleDive(_registry: DataRegistry, _profile: DelveProfile, _outcome: SettleOutcome): DelveProfile {
+  throw new Error('settleDive: not implemented');
+}
+
+/**
+ * Clear the dive record (after the summary, or to abandon — the bounty is lost).
+ * Stage 4c's B1 settles a dive still under way here first, as an abandon
+ * (`settleDive`); an extracted or dead dive has settled already.
+ */
+export function closeDive(_registry: DataRegistry, profile: DelveProfile): DelveProfile {
   return { ...profile, dive: null };
 }
 

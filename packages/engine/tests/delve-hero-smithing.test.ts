@@ -15,9 +15,6 @@ import {
   applyUpgrade,
   reforgeCost,
   reforgeAffix,
-  fuseCost,
-  checkFusion,
-  fuseItems,
 } from '../src/loot/smithing.js';
 import type { GearItem, StatRoll } from '../src/types/gear.js';
 
@@ -336,33 +333,5 @@ describe('smithing', () => {
     expect(reforgeAffix(registry, rare, 0, new SeededRNG(5))).toEqual(
       reforgeAffix(registry, rare, 0, new SeededRNG(5)),
     );
-  });
-
-  it('fusion needs three unlocked items of one non-legendary rarity', () => {
-    const a = generateItem(registry, { uid: 'a', ilvl: 5, rarity: 'magic' }, new SeededRNG(1));
-    const b = generateItem(registry, { uid: 'b', ilvl: 8, rarity: 'magic' }, new SeededRNG(2));
-    const c = generateItem(registry, { uid: 'c', ilvl: 6, rarity: 'magic' }, new SeededRNG(3));
-    expect(checkFusion([a, b]).ok).toBe(false);
-    expect(checkFusion([a, b, { ...c, rarity: 'rare' }]).ok).toBe(false);
-    expect(checkFusion([a, b, { ...c, locked: true }]).ok).toBe(false);
-    const leg = { ...a, rarity: 'legendary' as const };
-    expect(checkFusion([leg, { ...leg, uid: 'x' }, { ...leg, uid: 'y' }]).ok).toBe(false);
-    expect(checkFusion([a, b, c]).ok).toBe(true);
-  });
-
-  it('fusion produces the next rarity at the highest item level, keeping the best upgrade', () => {
-    const a = generateItem(registry, { uid: 'a', ilvl: 5, rarity: 'epic' }, new SeededRNG(1));
-    const b = {
-      ...generateItem(registry, { uid: 'b', ilvl: 9, rarity: 'epic' }, new SeededRNG(2)),
-      upgrade: 3,
-    };
-    const c = generateItem(registry, { uid: 'c', ilvl: 7, rarity: 'epic' }, new SeededRNG(3));
-    const out = fuseItems(registry, [a, b, c], 'new', new SeededRNG(4));
-    expect(out.rarity).toBe('legendary');
-    expect(out.ilvl).toBe(9);
-    expect(out.upgrade).toBe(3);
-    expect([a.slot, b.slot, c.slot]).toContain(out.slot);
-    expect(out.legendary).toBeDefined();
-    expect(fuseCost(registry, [a, b, c])).toBeGreaterThan(0);
   });
 });

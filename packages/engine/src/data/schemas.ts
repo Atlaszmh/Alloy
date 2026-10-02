@@ -3,6 +3,7 @@ import type { ReactionId } from '../types/arpg.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import { MAX_SOCKETS, RUNE_FAMILIES, RUNE_TIERS } from '../types/rune.js';
+import { AFFIX_FAMILIES, FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 
 // --- Shared Schemas ---
 
@@ -558,24 +559,85 @@ export const DelveDataSchema = z.object({
         icon: z.string(),
         weight: z.number().positive(),
         mods: z.object({
-          magicFind: z.number().optional(),
           monsterHp: z.number().optional(),
           monsterDmg: z.number().optional(),
           eliteChance: z.number().min(0).max(1).optional(),
           bountyMult: z.number().positive().optional(),
-          dropMult: z.number().positive().optional(),
           healFull: z.boolean().optional(),
           potions: z.number().int().optional(),
           skip: z.number().int().min(0).optional(),
           packs: z.number().positive().optional(),
+          materials: z.number().positive().optional(),
+          runes: z.number().positive().optional(),
+          gear: z.number().positive().optional(),
+          flux: z.number().positive().optional(),
+          essence: z.number().positive().optional(),
+          shardTier: z.number().min(0).max(1).optional(),
+          find: z.number().optional(),
         }),
       }),
     )
     .min(3),
-  materials: z.array(z.object({ minIlvl: z.number().int().positive(), name: z.string() })).min(1),
   names: z.object({
     prefixes: z.array(z.string()).min(1),
     suffixes: perSlot(z.array(z.string()).min(1)),
+  }),
+});
+
+// --- Crafting (crafting.json; see the crafting spec) ---
+
+export const MetalIdSchema = z.enum(METAL_IDS);
+export const FluxGradeSchema = z.enum(FLUX_GRADES);
+const AffixFamilySchema = z.enum(AFFIX_FAMILIES);
+
+/** Shard tiers, numbered from 1 in order, each band within 0–1. */
+const ShardTiersSchema = z
+  .array(
+    z
+      .object({ tier: z.number().int().min(1), min: z.number().min(0), max: z.number().max(1) })
+      .refine((t) => t.min <= t.max, 'a tier band runs low to high'),
+  )
+  .min(1)
+  .refine((ts) => ts.every((t, i) => t.tier === i + 1), 'tiers run 1, 2, 3… in order');
+
+export const CraftingDataSchema = z.object({
+  // Every metal once, lowest first, their bands partitioning the item levels from 1 up.
+  metals: z
+    .array(
+      z.object({
+        id: MetalIdSchema,
+        name: z.string(),
+        band: z.tuple([z.number().int().min(1), z.number().int().min(1).nullable()]),
+      }),
+    )
+    .refine(
+      (ms) => ms.map((m) => m.id).join() === METAL_IDS.join(),
+      'every metal once, lowest first',
+    )
+    .refine(
+      (ms) =>
+        ms.every(({ band: [lo, hi] }, i) => {
+          const last = i === ms.length - 1;
+          const from = i === 0 ? 1 : (ms[i - 1].band[1] ?? NaN) + 1;
+          return lo === from && (last ? hi === null : hi !== null && hi >= lo);
+        }),
+      'metal bands partition the item levels from 1 up: contiguous, no overlap, the last open-ended',
+    ),
+  flux: z
+    .array(z.object({ grade: FluxGradeSchema }))
+    .refine(
+      (fs) => fs.map((f) => f.grade).join() === FLUX_GRADES.join(),
+      'every grade once, lowest first',
+    ),
+  shardTiers: ShardTiersSchema,
+  affixShardTiers: z.record(HeroStatKeySchema, ShardTiersSchema),
+  families: z
+    .record(HeroStatKeySchema, AffixFamilySchema)
+    .refine((f) => HeroStatKeySchema.options.every((k) => k in f), 'every affix stat has a family'),
+  startingPatterns: z.array(z.string()).min(1),
+  startingMaterials: z.object({
+    metals: z.record(MetalIdSchema, z.number().int().min(0)),
+    flux: z.record(FluxGradeSchema, z.number().int().min(0)),
   }),
 });
 
@@ -732,6 +794,98 @@ export const ArpgDataSchema = z.object({
     .length(15),
 });
 
+/** A drop-table entry: a chance, then a count from lo to hi. */
+const DropEntrySchema = z.object({
+  chance: z.number().min(0).max(1),
+  count: z
+    .tuple([z.number().int().min(0), z.number().int().min(0)])
+    .refine(([lo, hi]) => lo <= hi, 'a count runs low to high'),
+});
+
+function perFoe<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({ normal: schema, elite: schema, boss: schema });
+}
+
+/** Weights by affix family (a family left out weighs 1). */
+const FamilyWeightsSchema = z.record(z.enum(AFFIX_FAMILIES), z.number().min(0));
+
+/** Depths a tier or grade starts at: the first at 1, rising. */
+const StartDepthsSchema = z
+  .array(z.number().int().min(1))
+  .min(1)
+  .refine((ds) => ds[0] === 1 && ds.every((d, i) => i === 0 || d > ds[i - 1]), 'from 1, rising');
+
+/** `balance.json → delve.crafting` (see the crafting spec). */
+export const CraftingBalanceSchema = z.object({
+  forgeScrap: perRarity(z.number().min(0)),
+  offPairDust: z.number().int().min(0),
+  weaponExtras: perRarity(
+    z.object({ slots: z.number().int().min(0), sockets: z.number().int().min(0) }),
+  ),
+  honeScrap: z.number().min(0),
+  honeGrowth: z.number().min(1),
+  imprintScrap: perRarity(z.number().min(0)),
+  refine: z.object({
+    metal: z.object({ count: z.number().int().min(2), scrap: z.number().min(0) }),
+    flux: z.object({ count: z.number().int().min(2), scrap: z.number().min(0) }),
+    shard: z.object({
+      count: z.number().int().min(2),
+      // By the tier refined: I→II, II→III, III→IV, IV→V.
+      scrap: z.array(z.number().min(0)).length(4),
+    }),
+  }),
+  attuneRoll: z.object({ perPoint: z.number().min(0), cap: z.number().min(0).max(1) }),
+  salvageShardTier: z
+    .array(z.number().min(0).max(1))
+    .length(4)
+    .refine((ts) => ts.every((t, i) => i === 0 || t > ts[i - 1]), 'thresholds rise'),
+  salvageExtraShard: z.number().min(0).max(1),
+  shardBench: z.object({ scrap: z.number().min(0), dust: z.number().min(0) }),
+  deathLoss: z.number().min(0).max(1),
+});
+
+/** `balance.json → delve.drops` (see the crafting spec). */
+export const DropsBalanceSchema = z.object({
+  normal: z.object({
+    bars: DropEntrySchema,
+    dust: DropEntrySchema,
+    shards: DropEntrySchema,
+    links: DropEntrySchema,
+  }),
+  elite: z.object({
+    bars: DropEntrySchema,
+    dust: DropEntrySchema,
+    shards: DropEntrySchema,
+    links: DropEntrySchema,
+    flux: DropEntrySchema,
+    gearChance: z.number().min(0).max(1),
+    patternChance: z.number().min(0).max(1),
+  }),
+  boss: z.object({
+    gear: z.number().int().min(0),
+    flux: DropEntrySchema,
+    shards: DropEntrySchema,
+    essenceChance: z.number().min(0).max(1),
+    patternChance: z.number().min(0).max(1),
+  }),
+  scrapByKind: perFoe(z.number().min(0)),
+  scrapPickups: perFoe(z.number().int().min(1)),
+  metalUpChance: z.number().min(0).max(1),
+  find: z.object({ perPoint: z.number().min(0), cap: z.number().min(0).max(1) }),
+  shardTierDepths: StartDepthsSchema.refine((ds) => ds.length === 5, 'one per tier, I to V'),
+  fluxGradeDepths: StartDepthsSchema.refine(
+    (ds) => ds.length === FLUX_GRADES.length,
+    'one per grade, uncommon to epic',
+  ),
+  tierWeights: z.array(z.number().positive()).length(5),
+  biomeShardWeights: z.record(z.string(), FamilyWeightsSchema),
+  biomeElementWeight: z.number().min(0),
+  doors: z.record(z.string(), FamilyWeightsSchema),
+  magnetSpeed: z.number().positive(),
+  vacuumSpeed: z.number().positive(),
+  pickupDelay: z.number().min(0),
+});
+
 const AbilitySlotBalanceSchema = z.object({
   cost: z.number().min(0),
   cooldown: z.number().min(0),
@@ -821,11 +975,6 @@ const DelveBalanceSchema = z.object({
     maxDepthLuck: z.number().min(0),
     eliteLuck: z.number().min(0),
     bossLuck: z.number().min(0),
-    pityPerDrop: z.number().min(0),
-    normalDropChance: z.number().min(0).max(1),
-    extraDropChance: z.number().min(0).max(1),
-    eliteDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
-    bossDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
     bossMinRarity: RaritySchema,
     rarityBaseMult: perRarity(z.number().positive()),
     affixCount: perRarity(z.number().int().min(0)),
@@ -844,7 +993,6 @@ const DelveBalanceSchema = z.object({
     rarityCostMult: perRarity(z.number().positive()),
     reforgeBaseCost: z.number().positive(),
     reforgeGrowth: z.number().positive(),
-    fuseCost: perRarity(z.number().min(0)),
   }),
   mana: z.object({
     attuneByRarity: perRarity(z.number().int().min(0)),
@@ -1100,6 +1248,8 @@ const DelveBalanceSchema = z.object({
     spawnRing: z.number().positive(),
     edgeMargin: z.number().min(0),
   }),
+  crafting: CraftingBalanceSchema,
+  drops: DropsBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),

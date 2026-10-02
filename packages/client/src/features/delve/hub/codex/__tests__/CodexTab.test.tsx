@@ -96,5 +96,8 @@ describe('CodexTab', () => {
     rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'reactions' } })} />);
     expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
     expect(screen.queryByTestId('codex-unknown')).toBeNull();
+    // Patterns and Essences arrive with stage 4c's C3: until then a link to one is ignored.
+    rerender(<CodexTab {...props({ link: { tab: 'codex', section: 'essences' } })} />);
+    expect(screen.getAllByTestId('reaction-unknown')).toHaveLength(15);
   });
 });

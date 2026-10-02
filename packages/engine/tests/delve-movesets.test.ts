@@ -31,7 +31,6 @@ import {
   createDelveProfile,
   equipBest,
   equipItem,
-  fuseGear,
   parseDelveProfile,
   profilePower,
   reforgeGear,
@@ -41,7 +40,6 @@ import {
   unequipSlot,
   upgradeGear,
 } from '../src/delve/profile.js';
-import V5 from './fixtures/delve-v5-saves.json';
 import {
   abilityReady,
   nextMove,
@@ -70,10 +68,8 @@ import type { ManaType } from '../src/types/mana.js';
 import { RARITY_ORDER } from '../src/types/gem.js';
 import {
   DEFAULT_CHAINS,
-  OLD_BUILDS,
   STEP,
   arena,
-  asV4,
   bal,
   chainsOf,
   dummy,
@@ -293,9 +289,8 @@ describe('determinism', () => {
     let ctx = {
       depth: 5,
       kind: 'boss' as const,
-      magicFind: 40,
-      pity: 0,
-      dropMult: 1,
+      find: 40,
+      materials: 1,
       legendaryBoost: 1,
       forceLegendary: true,
       nextUid: 1,
@@ -306,9 +301,10 @@ describe('determinism', () => {
       const kind = i % 3 ? ('elite' as const) : ('boss' as const);
       const r = rollEncounterDrops(registry, { ...ctx, kind, forceLegendary: i === 0 }, rng);
       items.push(...r.items);
-      ctx = { ...ctx, pity: r.pity, nextUid: r.nextUid };
+      ctx = { ...ctx, nextUid: r.nextUid };
     }
-    const strip = items.map(({ moveset: _m, ...rest }) => rest);
+    // `hones` (0 on every item) is new since: the rolls are as they were.
+    const strip = items.map(({ moveset: _m, hones: _h, ...rest }) => rest);
     let h = 0x811c9dc5;
     for (const c of JSON.stringify(strip)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
     // v0.48.0's 291 items, hashed the same way (the plan's scratchpad `items-hash.mjs`).
@@ -440,106 +436,10 @@ describe('an absent skill (a null chain)', () => {
   });
 });
 
-describe('save v6: the migration from version 5', () => {
-  // Real version 5 saves from the v0.48.0 engine (see the fixture): a new hero, a bound
-  // Fire+Storm hero with a rare axe in the bag, an unarmed hero with a built Primary, a magic
-  // dagger mid-dive with a two-move Ultimate, and an epic maul with a one-blow basic chain.
+describe('a save: fitting its weapons to the data at load', () => {
   const json = (x: unknown) => JSON.parse(JSON.stringify(x));
-  const migrate = (save: object) => parseDelveProfile(registry, json(save))!;
 
-  it("gives the equipped weapon the profile's chains it can carry, at slots of their length", () => {
-    const { profile, fixed, dropped, movesetReset } = migrate(V5.fresh);
-    expect(profile).toMatchObject({ version: 7, links: 0 });
-    expect('chains' in profile || 'chainCaps' in profile).toBe(false);
-    const sword = profile.equipped.weapon!;
-    expect(sword.moveset).toEqual({
-      chains: { basic: V5.fresh.chains.basic, primary: V5.fresh.chains.primary },
-      slots: { basic: 3, primary: 4 },
-    });
-    // A common sword carries no Defensive or Ultimate: both go (one move each, so no Links).
-    expect([fixed, dropped, movesetReset]).toEqual([[], ['defensive', 'ultimate'], false]);
-    expect(profile.equipped.chest).toEqual(V5.fresh.equipped.chest);
-    const { chains: _c, chainCaps: _k, version: _v, equipped: _e, ...rest } = V5.fresh;
-    expect(profile).toMatchObject(rest);
-  });
-
-  it('keeps built chains and gives every other weapon its base defaults in its own mana', () => {
-    const { profile } = migrate(V5.bound);
-    expect(heroChains(registry, profile.equipped, profile.pair)).toEqual({
-      basic: V5.bound.chains.basic,
-      primary: V5.bound.chains.primary,
-    });
-    expect(profile.equipped.weapon!.moveset!.slots).toEqual({ basic: 3, primary: 2 });
-    const axe = profile.bag[0];
-    expect(axe.moveset).toEqual(defaultMoveset(registry, axe, 'frost'));
-    expect(axe.moveset!.slots).toEqual({ basic: 3, primary: 1, defensive: 1 });
-  });
-
-  it("drops the chains a weapon can't carry, their moves past one slot back as Links; a dive stays", () => {
-    const { profile, dropped } = migrate(V5.magic);
-    expect(dropped).toEqual(['ultimate']);
-    expect(profile.links).toBe(1);
-    const dagger = profile.equipped.weapon!.moveset!;
-    expect(Object.keys(dagger.chains)).toEqual(['basic', 'primary', 'defensive']);
-    // Its basic slots rise to the dagger's string of 4; the sword's three blows stay.
-    expect(dagger.slots).toEqual({ basic: 4, primary: 4, defensive: 1 });
-    expect(dagger.chains.basic).toEqual(V5.magic.chains.basic);
-    expect(profile.dive).toEqual({ ...V5.magic.dive, linksEarned: 0, runesEarned: 0, stop: null });
-  });
-
-  it("keeps all four on an epic weapon, and raises a short basic chain's slots to its base", () => {
-    const { profile, dropped } = migrate(V5.epic);
-    expect(dropped).toEqual([]);
-    const maul = profile.equipped.weapon!.moveset!;
-    expect(maul.chains).toEqual(V5.epic.chains);
-    expect(maul.slots).toEqual({ basic: 2, primary: 4, defensive: 1, ultimate: 1 });
-  });
-
-  it("resets an unarmed save's built chains to the unarmed defaults, and says so", () => {
-    const res = migrate(V5.unarmed);
-    expect(res.movesetReset).toBe(true);
-    expect(res.dropped).toEqual([]);
-    expect(heroChains(registry, res.profile.equipped, res.profile.pair)).toEqual(
-      defaultMoveset(registry, { baseId: null, rarity: null }, 'fire').chains,
-    );
-    // An unarmed save on the unarmed defaults loses nothing.
-    const plain = { ...V5.unarmed, chains: V5.fresh.chains };
-    expect(migrate(plain).movesetReset).toBe(false);
-  });
-
-  it("drops a version 4 save's uncarried chains before fixing the rest to the pair", () => {
-    const p = createDelveProfile(registry, 3, { primary: 'fire' }); // a common sword
-    const frost = (b: (typeof OLD_BUILDS)['primary']) => ({ ...b, elements: ['frost' as const] });
-    const builds = {
-      ...OLD_BUILDS,
-      primary: frost(OLD_BUILDS.primary),
-      defensive: frost(OLD_BUILDS.defensive),
-    };
-    const res = migrate(asV4(p, builds));
-    expect(res.dropped).toEqual(['defensive', 'ultimate']);
-    // The Bolt's four moves are fixed to Fire; the Frost Ward went with the Defensive.
-    expect(res.fixed.map((f) => [f.skill, f.index])).toEqual([
-      ['primary', 0],
-      ['primary', 1],
-      ['primary', 2],
-      ['primary', 3],
-    ]);
-  });
-
-  it('round-trips every migrated save as version 7', () => {
-    for (const save of Object.values(V5)) {
-      const { profile } = migrate(save);
-      expect(parseDelveProfile(registry, json(profile))).toEqual({
-        profile,
-        fixed: [],
-        dropped: [],
-        movesetReset: false,
-        runesLost: [],
-      });
-    }
-  });
-
-  it("fits a version 6 save's weapons to the data at load", () => {
+  it("fits a save's weapons to the data at load", () => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
     const common = weapon('common', 4, 'sword');
     const rare = weapon('rare', 5, 'axe');
@@ -974,7 +874,7 @@ function slotted(w: GearItem, slots: Moveset['slots']): GearItem {
   return { ...w, moveset: defaultMoveset(registry, w, w.mana, slots) };
 }
 
-describe('Links: salvage, fusing and banking', () => {
+describe('Links: salvage and banking', () => {
   const rare = slotted(weapon('rare', 1, 'sword'), { basic: 4, primary: 3, defensive: 1 }); // 3 extra
   const hero = () => createDelveProfile(registry, 3, { primary: 'storm' });
 
@@ -1002,20 +902,6 @@ describe('Links: salvage, fusing and banking', () => {
     const w2 = beginFloor(registry, full);
     w2.pending.items = [rare];
     expect(bankWorld(registry, full, w2)).toMatchObject({ bagFull: true, links: 3 });
-  });
-
-  it('fusing three weapons refunds their extra slots as Links; the fused weapon rolls its own', () => {
-    const magic = (uid: string, primary: number) => ({
-      ...slotted(weapon('magic', 4, 'axe'), { basic: 3, primary, defensive: 1 }),
-      uid,
-    });
-    const p = { ...hero(), scrap: 9999, bag: [magic('a', 2), magic('b', 1), magic('c', 2)] };
-    const res = fuseGear(registry, p, ['a', 'b', 'c']);
-    expect(res.ok).toBe(true);
-    expect(res.links).toBe(2);
-    expect(res.profile.links).toBe(2);
-    expect(res.item!.rarity).toBe('rare');
-    expect(extraSlots(registry, res.item!)).toBeGreaterThanOrEqual(1); // a rare's own 1–2
   });
 });
 
@@ -1202,11 +1088,6 @@ describe('the dive lock', () => {
     const forge = 'Forge at the Anvil, between dives';
     expect(upgradeGear(registry, diving, 'h')).toMatchObject({ ok: false, reason: forge });
     expect(reforgeGear(registry, diving, 'h', 0)).toMatchObject({ ok: false, reason: forge });
-    const triple = { ...diving, bag: [0, 1, 2].map((i) => ({ ...helm, uid: `f${i}` })) };
-    expect(fuseGear(registry, triple, ['f0', 'f1', 'f2'])).toMatchObject({
-      ok: false,
-      reason: forge,
-    });
     expect(salvageItems(registry, diving, ['h'])).toMatchObject({ profile: diving, count: 0 });
     // The door screen is still the dive: the same lock.
     const choosing = { ...diving, dive: { ...diving.dive!, phase: 'choosing' as const } };

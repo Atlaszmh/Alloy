@@ -16,6 +16,8 @@ import type { HubLink, HubTabProps } from '../types';
 import { ReactionsGrid } from './ReactionsGrid';
 
 type Section = 'legendaries' | 'reactions' | 'records';
+// ponytail: Patterns and Essences come with stage 4c's C3; until then a link to one is ignored.
+const SECTIONS: readonly Section[] = ['legendaries', 'reactions', 'records'];
 
 const PROMPTS: Prompt[] = [
   { id: 'select', label: 'Select', binding: { mouse: 'click', pad: 'a' } },
@@ -45,7 +47,8 @@ export function CodexTab({ setPrompts, link }: HubTabProps) {
   const seenReactions = useDelveStore((s) => s.profile.reactionsSeen);
   const stats = useDelveStore((s) => s.profile.stats);
   const bestDepth = useDelveStore((s) => s.profile.bestDepth);
-  const linked = (l?: HubLink) => (l?.tab === 'codex' ? l.section : undefined);
+  const linked = (l?: HubLink) =>
+    l?.tab === 'codex' ? SECTIONS.find((s) => s === l.section) : undefined;
   const [section, setSection] = useState<Section>(linked(link) ?? 'legendaries');
   const [active, setActive] = useState<string | null>(null);
   const [seen, setSeen] = useState(link);

@@ -72,7 +72,7 @@ function DoorButton({
 
 /**
  * "Choose your path": each door as a plate with its art in a doorway (the next depth's first
- * monster, or the chest for a door that raises Magic Find), its depth and a boss mark; Extract,
+ * monster, or the chest for a door that raises gear or essences), its depth and a boss mark; Extract,
  * with the hero leaving; then the hero's life and potions, and a potion to drink. With
  * `padFirst`, the first door is the pad's first focus (not while a power-up is on offer).
  */
@@ -105,7 +105,7 @@ export function DoorPane({
           const door = registry.getDoor(id);
           const next = dive.depth + 1 + (door.mods.skip ?? 0);
           const monster = registry.getBiomeForDepth(next).monsters[0];
-          const treasure = (door.mods.magicFind ?? 0) > 0;
+          const treasure = (door.mods.gear ?? 1) > 1 || (door.mods.essence ?? 1) > 1;
           return (
             <DoorButton
               key={id}

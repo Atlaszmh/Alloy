@@ -529,7 +529,7 @@
     },
     {
       "stat": "magicFind",
-      "label": "Magic Find",
+      "label": "Find",
       "unit": "pct",
       "min": 5,
       "max": 25,
@@ -945,7 +945,7 @@
     {
       "id": "lucky_charm",
       "name": "Lucky Charm",
-      "text": "+{v}% Magic Find. Legendary odds doubled.",
+      "text": "+{v}% Find. Essence odds doubled.",
       "min": 40,
       "max": 80,
       "slots": [
@@ -1470,11 +1470,13 @@
     {
       "id": "gilded",
       "name": "Gilded Halls",
-      "text": "+75% Magic Find. Monsters have +25% life.",
+      "text": "+75% Find, more flux and essences. Monsters have +25% life.",
       "icon": "💰",
       "weight": 3,
       "mods": {
-        "magicFind": 75,
+        "find": 75,
+        "flux": 1.5,
+        "essence": 1.5,
         "monsterHp": 0.25
       }
     },
@@ -1498,7 +1500,8 @@
       "mods": {
         "healFull": true,
         "potions": 1,
-        "dropMult": 0.5
+        "materials": 0.5,
+        "runes": 0.5
       }
     },
     {
@@ -1515,55 +1518,25 @@
     {
       "id": "swarm",
       "name": "Swarming Tunnels",
-      "text": "50% more monsters, but weaker. 30% more loot.",
+      "text": "50% more monsters, but weaker. 30% more materials.",
       "icon": "🐜",
       "weight": 2,
       "mods": {
         "packs": 1.5,
         "monsterHp": -0.3,
-        "dropMult": 1.3
+        "materials": 1.3
       }
     },
     {
       "id": "cursed",
       "name": "Cursed Crypt",
-      "text": "Monsters hit 40% harder. +150% Magic Find.",
+      "text": "Monsters hit 40% harder. Shards and flux often come a tier higher.",
       "icon": "🩸",
       "weight": 2,
       "mods": {
         "monsterDmg": 0.4,
-        "magicFind": 150
+        "shardTier": 0.35
       }
-    }
-  ],
-  "materials": [
-    {
-      "minIlvl": 1,
-      "name": "Rusty"
-    },
-    {
-      "minIlvl": 5,
-      "name": "Iron"
-    },
-    {
-      "minIlvl": 10,
-      "name": "Steel"
-    },
-    {
-      "minIlvl": 16,
-      "name": "Mithril"
-    },
-    {
-      "minIlvl": 24,
-      "name": "Adamant"
-    },
-    {
-      "minIlvl": 34,
-      "name": "Starforged"
-    },
-    {
-      "minIlvl": 48,
-      "name": "Voidforged"
     }
   ],
   "names": {

@@ -192,10 +192,10 @@ describe('mana affinity', () => {
 });
 
 describe('rollRarity', () => {
-  function distribution(luck: number, pity = 0, seed = 1, n = 20000): Record<Rarity, number> {
+  function distribution(luck: number, seed = 1, n = 20000): Record<Rarity, number> {
     const rng = new SeededRNG(seed);
     const out = Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>;
-    for (let i = 0; i < n; i++) out[rollRarity(registry, { luck, pity }, rng)]++;
+    for (let i = 0; i < n; i++) out[rollRarity(registry, { luck }, rng)]++;
     return out;
   }
 
@@ -213,17 +213,17 @@ describe('rollRarity', () => {
     expect(lucky.common).toBeLessThan(base.common);
   });
 
-  it('pity raises legendary weight', () => {
-    const w0 = rarityWeights(registry, { luck: 0, pity: 0 });
-    const w1 = rarityWeights(registry, { luck: 0, pity: 200 });
-    expect(w1.legendary).toBeGreaterThan(w0.legendary * 2);
-    expect(w1.common).toBe(w0.common);
+  it("Lucky Charm's boost multiplies only the legendary weight", () => {
+    const w0 = rarityWeights(registry, { luck: 0 });
+    const w2 = rarityWeights(registry, { luck: 0, legendaryBoost: 2 });
+    expect(w2.legendary).toBe(w0.legendary * 2);
+    expect(w2.common).toBe(w0.common);
   });
 
   it('never rolls below minRarity', () => {
     const rng = new SeededRNG(3);
     for (let i = 0; i < 500; i++) {
-      const r = rollRarity(registry, { luck: 0, pity: 0, minRarity: 'rare' }, rng);
+      const r = rollRarity(registry, { luck: 0, minRarity: 'rare' }, rng);
       expect(RARITY_ORDER.indexOf(r)).toBeGreaterThanOrEqual(RARITY_ORDER.indexOf('rare'));
     }
   });
@@ -232,9 +232,8 @@ describe('rollRarity', () => {
 describe('rollEncounterDrops', () => {
   const base = {
     depth: 5,
-    magicFind: 0,
-    pity: 0,
-    dropMult: 1,
+    find: 0,
+    materials: 1,
     legendaryBoost: 1,
     forceLegendary: false,
     nextUid: 1,
@@ -244,7 +243,8 @@ describe('rollEncounterDrops', () => {
   it('bosses drop several items, the first at least rare, one item level higher', () => {
     for (let s = 0; s < 20; s++) {
       const res = rollEncounterDrops(registry, { ...base, kind: 'boss' }, new SeededRNG(s));
-      const [min, max] = registry.getDelveBalance().loot.bossDrops;
+      // Phase A's stand-in counts (`loot/drops.ts`); the drop tables replace them.
+      const [min, max] = [3, 4];
       expect(res.items.length).toBeGreaterThanOrEqual(min);
       expect(res.items.length).toBeLessThanOrEqual(max);
       expect(RARITY_ORDER.indexOf(res.items[0].rarity)).toBeGreaterThanOrEqual(
@@ -254,14 +254,13 @@ describe('rollEncounterDrops', () => {
     }
   });
 
-  it('forceLegendary makes the first drop legendary and resets pity', () => {
+  it('forceLegendary makes the first drop legendary', () => {
     const res = rollEncounterDrops(
       registry,
-      { ...base, kind: 'boss', forceLegendary: true, pity: 50 },
+      { ...base, kind: 'boss', forceLegendary: true },
       new SeededRNG(1),
     );
     expect(res.items[0].rarity).toBe('legendary');
-    expect(res.pity).toBeLessThan(50);
   });
 
   it('assigns sequential unique uids', () => {
@@ -283,8 +282,8 @@ describe('rollEncounterDrops', () => {
       total += res.items.length;
     }
     const avg = total / 200;
-    const loot = registry.getDelveBalance().loot;
-    expect(avg).toBeGreaterThan((loot.normalDropChance + loot.extraDropChance) * 0.6);
-    expect(avg).toBeLessThan((loot.normalDropChance + loot.extraDropChance) * 1.4);
+    // Phase A's stand-in chances (`loot/drops.ts`: 0.22 and 0.05); the drop tables replace them.
+    expect(avg).toBeGreaterThan(0.27 * 0.6);
+    expect(avg).toBeLessThan(0.27 * 1.4);
   });
 });

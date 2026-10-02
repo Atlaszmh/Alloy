@@ -6,9 +6,10 @@ import {
   ReactionIdSchema,
 } from '../data/schemas.js';
 import { CHAIN_SKILLS, MAX_CHAIN, type AbilitySlot, type FormId } from '../types/ability.js';
+import { FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
 import { MAX_SOCKETS, RUNE_TIERS } from '../types/rune.js';
 
-/** Zod schema for persisted Delve saves — rejects corrupt or foreign data. */
+/** Zod schema for persisted Delve saves (version 8 only) — rejects corrupt or foreign data. */
 
 /** Each ability slot's forms (`arpg.json`'s, which a test holds this to). */
 export const SLOT_FORMS: Record<AbilitySlot, readonly FormId[]> = {
@@ -41,14 +42,6 @@ const ElementsSchema = z
 
 const PaymentSchema = z.enum(['mana', 'charge', 'cast']);
 
-/** A version 3 or 4 save's ability (see `chainFromBuild`). */
-export const AbilityBuildSchema = z.object({
-  form: FormIdSchema,
-  elements: ElementsSchema,
-  weight: z.union([z.literal(-2), z.literal(-1), z.literal(0), z.literal(1), z.literal(2)]),
-  payment: PaymentSchema,
-});
-
 /** A socketed rune: its id (checked against the data at load) and its tier, I to V. */
 export const RuneRefSchema = z.object({
   id: z.string(),
@@ -76,6 +69,29 @@ export const RunePouchSchema = z.record(
   z.string(),
   z.array(z.number().int().min(0)).length(RUNE_TIERS),
 );
+
+const count = z.number().int().min(0);
+
+/** A count for each id. */
+function counts<K extends string>(ids: readonly K[]) {
+  return z.object(Object.fromEntries(ids.map((id) => [id, count])) as Record<K, typeof count>);
+}
+
+/** The materials pouch: bars, flux, shards by tier and essences (see the crafting spec). */
+export const MaterialsPouchSchema = z.object({
+  metals: counts(METAL_IDS),
+  flux: counts(FLUX_GRADES),
+  shards: z.record(StatKeySchema, z.array(count).max(5)),
+  essences: z.record(z.string(), count),
+});
+
+/** A floor's or a dive's haul: materials and the currencies. */
+export const HaulSchema = MaterialsPouchSchema.extend({
+  scrap: z.number().min(0),
+  dust: count,
+  links: count,
+  runes: RunePouchSchema,
+});
 
 /** An ability chain: 1 to `MAX_CHAIN` moves and a payment (see `slotChain` for the forms). */
 export const ChainSchema = z.object({
@@ -122,7 +138,12 @@ export const MovesetSchema = z
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 
-const StatRollSchema = z.object({ stat: StatKeySchema, value: z.number(), roll: z.number() });
+const StatRollSchema = z.object({
+  stat: StatKeySchema,
+  value: z.number(),
+  roll: z.number(),
+  band: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
+});
 
 export const GearItemSchema = z.object({
   uid: z.string(),
@@ -137,6 +158,8 @@ export const GearItemSchema = z.object({
   legendary: z.object({ id: z.string(), value: z.number(), roll: z.number() }).optional(),
   upgrade: z.number().int().min(0),
   reforges: z.number().int().min(0),
+  // The Training Grounds' saved loadout predates hones: it reads as none.
+  hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
 });
@@ -157,16 +180,21 @@ const DoorSchema = z.object({
   icon: z.string(),
   weight: z.number(),
   mods: z.object({
-    magicFind: z.number().optional(),
     monsterHp: z.number().optional(),
     monsterDmg: z.number().optional(),
     eliteChance: z.number().optional(),
     bountyMult: z.number().optional(),
-    dropMult: z.number().optional(),
     healFull: z.boolean().optional(),
     potions: z.number().optional(),
     skip: z.number().optional(),
     packs: z.number().optional(),
+    materials: z.number().optional(),
+    runes: z.number().optional(),
+    gear: z.number().optional(),
+    flux: z.number().optional(),
+    essence: z.number().optional(),
+    shardTier: z.number().optional(),
+    find: z.number().optional(),
   }),
 });
 
@@ -195,13 +223,25 @@ const DiveSchema = z.object({
     })
     .nullable()
     .default(null),
+  haul: HaulSchema,
+  banked: HaulSchema,
+  lost: HaulSchema.nullable(),
+  settled: z.boolean(),
   found: PerRarityCount,
   bestFind: GearItemSchema.nullable(),
 });
 
-/** Version 3 (before the pair), kept frozen so older saves migrate through it. */
-export const DelveProfileV3Schema = z.object({
-  version: z.literal(3),
+/** The hero's pair: a secondary only once there is a primary, and never the same element. */
+const PairSchema = z
+  .object({ primary: ManaTypeSchema.nullable(), secondary: ManaTypeSchema.nullable() })
+  .refine(
+    (p) => p.secondary === null || (p.primary !== null && p.secondary !== p.primary),
+    'a secondary needs a different primary',
+  );
+
+/** Version 8: materials, patterns and essences (see the crafting spec); older saves reset. */
+export const DelveProfileSchema = z.object({
+  version: z.literal(8),
   seed: z.number().int(),
   diveCount: z.number().int().min(0),
   forgeCount: z.number().int().min(0),
@@ -229,8 +269,7 @@ export const DelveProfileV3Schema = z.object({
     scrapEarned: z.number().min(0),
     itemsFound: PerRarityCount,
   }),
-  pity: z.number().int().min(0),
-  firstBossLegendaryGiven: z.boolean(),
+  firstEssenceGiven: z.boolean(),
   autoSalvage: z.object({
     common: z.boolean(),
     uncommon: z.boolean(),
@@ -239,71 +278,13 @@ export const DelveProfileV3Schema = z.object({
     epic: z.boolean(),
     legendary: z.boolean(),
   }),
-  abilities: z.object({
-    primary: AbilityBuildSchema,
-    defensive: AbilityBuildSchema,
-    ultimate: AbilityBuildSchema,
-  }),
-  reactionsSeen: z.array(
-    z.enum(['melt', 'shatter', 'overload', 'superconduct', 'soulfire', 'combust', 'blight']),
-  ),
-  dive: DiveSchema.nullable(),
-});
-
-/** The hero's pair: a secondary only once there is a primary, and never the same element. */
-const PairSchema = z
-  .object({ primary: ManaTypeSchema.nullable(), secondary: ManaTypeSchema.nullable() })
-  .refine(
-    (p) => p.secondary === null || (p.primary !== null && p.secondary !== p.primary),
-    'a secondary needs a different primary',
-  );
-
-/** Version 4 (the pair, before chains), kept frozen so older saves migrate through it. */
-export const DelveProfileV4Schema = DelveProfileV3Schema.extend({
-  version: z.literal(4),
   pair: PairSchema,
   manaDust: z.number().int().min(0),
-  // Every reaction (the frozen version 3 keeps its seven).
-  reactionsSeen: z.array(ReactionIdSchema),
-});
-
-/** Version 5 (each skill a chain of moves on the profile), kept frozen so older saves migrate through it. */
-export const DelveProfileV5Schema = DelveProfileV4Schema.omit({ abilities: true }).extend({
-  version: z.literal(5),
-  chains: z.object({
-    basic: z.array(BlowSchema).min(1).max(MAX_CHAIN),
-    primary: slotChain('primary'),
-    defensive: slotChain('defensive'),
-    ultimate: slotChain('ultimate'),
-  }),
-  chainCaps: z.object({
-    basic: CapSchema,
-    primary: CapSchema,
-    defensive: CapSchema,
-    ultimate: CapSchema,
-  }),
-});
-
-/** Version 6 (the chains on the weapon, and Links), kept frozen so older saves migrate through it. */
-export const DelveProfileV6Schema = DelveProfileV5Schema.omit({
-  chains: true,
-  chainCaps: true,
-}).extend({
-  version: z.literal(6),
   links: z.number().int().min(0),
-});
-
-/** Version 7: the rune pouch (see the runes spec). */
-export const DelveProfileSchema = DelveProfileV6Schema.extend({
-  version: z.literal(7),
   runes: RunePouchSchema,
-});
-
-/** Version 2 saves had a spell bar instead of ability builds; they migrate through version 3. */
-export const DelveProfileV2Schema = DelveProfileV3Schema.omit({
-  version: true,
-  abilities: true,
-}).extend({
-  version: z.literal(2),
-  skillSlots: z.array(z.string().nullable()).length(3),
+  materials: MaterialsPouchSchema,
+  patterns: z.array(z.string()),
+  essencesSeen: z.array(z.string()),
+  reactionsSeen: z.array(ReactionIdSchema),
+  dive: DiveSchema.nullable(),
 });
