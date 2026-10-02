@@ -197,8 +197,9 @@
   font-weight: 600;
   font-size: 14px;
   border-radius: 0;
-  /* 24 CSS px at the 0.75 zoom floor (WCAG 2.5.8 target size). */
+  /* 24 CSS px each way at the 0.75 zoom floor (WCAG 2.5.8 target size). */
   min-height: 32px;
+  min-width: 32px;
   padding: 4px 10px;
   border: 2px solid #5a6988;
   background: #3a4466;

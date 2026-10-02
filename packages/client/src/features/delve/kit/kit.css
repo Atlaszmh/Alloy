@@ -488,6 +488,8 @@ html[data-input='gamepad'] .delve-ui :focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 24 CSS px at the 0.75 zoom floor (WCAG 2.5.8 target size). */
+  min-height: 32px;
   padding: 6px 12px;
   font-family: var(--k-font-body);
   font-weight: 600;
