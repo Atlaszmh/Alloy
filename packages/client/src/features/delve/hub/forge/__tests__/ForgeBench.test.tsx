@@ -353,6 +353,46 @@ describe('ForgeBench', () => {
     expect(screen.getByTestId('forge-button')).toBeEnabled();
   });
 
+  it('a pick moves the focus to Forge, so Enter forges next; a refused forge leaves it where it was', async () => {
+    withMaterials({
+      metals: { ...emptyMaterials().metals, rusty: 2, iron: 1 },
+      flux: { ...emptyMaterials().flux, rare: 1 },
+      shards: { armor: [1] },
+    });
+    store().setProfile({ ...store().profile, manaDust: 0 });
+    function Hub() {
+      const [prompts, setPrompts] = useState<Prompt[]>([]);
+      usePrompts(prompts);
+      return <ForgeBench locked={false} setPrompts={setPrompts} />;
+    }
+    render(<Hub />);
+    const forgeButton = () => screen.getByTestId('forge-button');
+    fireEvent.click(screen.getByTestId('pattern-cuirass'));
+    expect(forgeButton()).toHaveFocus();
+    // Off the pair with no Mana Dust: refused, so the focus stays on the pick.
+    screen.getByTestId('element-storm').focus();
+    fireEvent.click(screen.getByTestId('element-storm'));
+    expect(screen.getByTestId('forge-refused')).toHaveTextContent('Not enough Mana Dust');
+    expect(screen.getByTestId('element-storm')).toHaveFocus();
+    fireEvent.click(screen.getByTestId('element-fire'));
+    expect(forgeButton()).toHaveFocus();
+    screen.getByTestId('flux-rare').focus();
+    fireEvent.click(screen.getByTestId('flux-rare'));
+    expect(forgeButton()).toHaveFocus();
+    fireEvent.click(screen.getByTestId('shard-slot-0'));
+    fireEvent.click(screen.getByTestId('shard-pick-armor-1'));
+    expect(forgeButton()).toHaveFocus();
+    // A metal picked with the keys: Enter picks it, the next Enter forges.
+    screen.getByTestId('metal-iron').focus();
+    const bag = store().profile.bag.length;
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByTestId('metal-iron')).toHaveAttribute('aria-checked', 'true');
+    expect(forgeButton()).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(store().profile.bag).toHaveLength(bag + 1);
+    expect(store().profile.bag.at(-1)).toMatchObject({ baseId: 'cuirass', rarity: 'rare' });
+  });
+
   it('mid-dive the forge waits, with Select alone left to the tab', () => {
     const setPrompts = bench(true);
     expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
