@@ -25,6 +25,10 @@ describe('LegendaryFanfare', () => {
     expect(root).toHaveClass('delve-ui', 'delve-zoom');
     expect(screen.getByTestId('fanfare-name')).toHaveTextContent(item.name);
     expect(root).toHaveTextContent('New codex entry!');
+    // It takes the focus in its own pad scope, B / Esc its back.
+    expect(root).toHaveFocus();
+    expect(root).toHaveAttribute('data-pad-back');
+    expect(root.closest('[data-pad-scope]')).toHaveClass('fixed', 'inset-0');
     fireEvent.click(root);
     expect(onDone).toHaveBeenCalledOnce();
   });

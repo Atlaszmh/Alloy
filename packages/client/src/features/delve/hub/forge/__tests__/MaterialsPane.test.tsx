@@ -1,23 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
-import { buyShard, emptyMaterials, refine, type MaterialsPouch } from '@alloy/engine';
+import { emptyMaterials, refineCost, type MaterialsPouch } from '@alloy/engine';
 import { MaterialsPane } from '../MaterialsPane';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
-import { FAKE, fakeCrafting } from './crafting-fakes';
-
-// Stage 4c's B2 fills the crafting ops: until then the pane runs on fakes.
-vi.mock('@alloy/engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@alloy/engine')>()),
-  ...Object.fromEntries(
-    ['previewForge', 'forge', 'refineCost', 'refine', 'buyShard']
-      .concat(['honeCost', 'hone', 'imprintCost', 'imprint'])
-      .map((k) => [k, vi.fn()]),
-  ),
-}));
-
 const registry = getDelveRegistry();
+/** The engine's price to refine Rusty bars. */
+const RUSTY = refineCost(registry, { kind: 'metal', metal: 'rusty' })!;
 const store = () => useDelveStore.getState();
 const held = (over: Partial<MaterialsPouch>, scrap = 100, manaDust = 0) =>
   store().setProfile({
@@ -38,8 +28,6 @@ describe('MaterialsPane', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    vi.clearAllMocks();
-    fakeCrafting();
   });
 
   it("lists what's held by kind, shards by family and tier, and refines 3 → 1 at the engine's price", () => {
@@ -52,7 +40,7 @@ describe('MaterialsPane', () => {
     pane();
     expect(screen.getByTestId('material-metal-rusty')).toHaveTextContent('Rusty bar ×5');
     expect(screen.getByTestId('refine-metal-rusty')).toHaveTextContent(
-      `Refine 3 → 1 · ${FAKE.refine} scrap`,
+      `Refine ${RUSTY.count} → 1 · ${RUSTY.scrap} scrap`,
     );
     // Too few to refine, or the top grade: no Refine.
     expect(screen.queryByTestId('refine-metal-iron')).toBeNull();
@@ -75,21 +63,22 @@ describe('MaterialsPane', () => {
       `${registry.getLegendary('prism').name} essence ×1`,
     );
     expect(screen.queryByTestId('refine-essence-prism')).toBeNull();
+    // The engine refines: the counts move and the purse pays its price.
     fireEvent.click(screen.getByTestId('refine-metal-rusty'));
-    expect(refine).toHaveBeenCalledWith(registry, expect.anything(), {
-      kind: 'metal',
-      metal: 'rusty',
-    });
-    expect(store().profile.scrap).toBe(100 - FAKE.refine);
-    expect(screen.getByText('Refined 3 × Rusty bar')).toBeInTheDocument();
+    expect(store().profile.scrap).toBe(100 - RUSTY.scrap);
+    expect(screen.getByTestId('material-metal-rusty')).toHaveTextContent(
+      `Rusty bar ×${5 - RUSTY.count}`,
+    );
+    expect(screen.getByTestId('material-metal-iron')).toHaveTextContent('Iron bar ×2');
+    expect(screen.getByText(`Refined ${RUSTY.count} × Rusty bar`)).toBeInTheDocument();
   });
 
   it("a refine the purse can't pay is off and says what it needs; mid-dive refining and buying wait", () => {
-    held({ metals: { ...emptyMaterials().metals, rusty: 3 } }, FAKE.refine - 1);
+    held({ metals: { ...emptyMaterials().metals, rusty: 3 } }, RUSTY.scrap - 1);
     const { unmount } = pane();
     expect(screen.getByTestId('refine-metal-rusty')).toBeDisabled();
     expect(screen.getByTestId('refine-metal-rusty')).toHaveAccessibleDescription(
-      `Needs ${FAKE.refine} scrap`,
+      `Needs ${RUSTY.scrap} scrap`,
     );
     unmount();
     held({ metals: { ...emptyMaterials().metals, rusty: 3 } });
@@ -116,7 +105,7 @@ describe('MaterialsPane', () => {
     const buy = screen.getByTestId('bench-buy');
     expect(buy).toHaveTextContent(`Buy Armor I · ${price.scrap} scrap · ${price.dust} Mana Dust`);
     fireEvent.click(buy);
-    expect(buyShard).toHaveBeenCalledWith(registry, expect.anything(), 'armor');
+    expect(store().profile).toMatchObject({ scrap: 0, manaDust: 0 });
     expect(screen.getByText('Bought Armor I')).toBeInTheDocument();
     expect(screen.getByTestId('material-shard-armor-1')).toHaveTextContent('Armor I ×1');
   });

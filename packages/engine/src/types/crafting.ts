@@ -107,7 +107,7 @@ export interface ForgeLinePreview {
   shard: ShardRef | null;
   /** Its roll band, 0–1 in the affix's full range: the shard tier's, or the rarity's `[minRoll, 1]`. */
   band: [number, number];
-  /** A shard line's value range at the item level (null for a random line). */
+  /** A shard line's value range at the item level, the floor lifting its low end (null for a random line). */
   range: [number, number] | null;
 }
 
@@ -124,8 +124,8 @@ export interface ForgePreview {
   implicits: { stat: HeroStatKey; min: number; max: number }[];
   /** One per line the rarity rolls (`loot.affixCount`), the shards' first. */
   lines: ForgeLinePreview[];
-  /** A legendary's power and its roll band. */
-  legendary: { id: string; band: [number, number] } | null;
+  /** A legendary's power, its roll band and its value range (the floor lifting its low end). */
+  legendary: { id: string; band: [number, number]; range: [number, number] } | null;
   /** What it costs besides the bar, flux, essence and shards it consumes. */
   price: { scrap: number; dust: number };
   /** A weapon's carried skills, each one's extra slots past its base, and its open sockets (S7). */

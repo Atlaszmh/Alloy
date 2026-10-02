@@ -197,7 +197,10 @@ describe('previewForge', () => {
       expect(previewForge(registry, p, req({ flux })).rarity).toBe(flux);
     const legendary = previewForge(registry, p, req({ flux: 'epic', essence: 'pyroclasm' }));
     expect(legendary.rarity).toBe('legendary');
-    expect(legendary.legendary).toEqual({ id: 'pyroclasm', band: [bal.loot.minRoll.legendary, 1] });
+    expect(legendary.legendary).toMatchObject({
+      id: 'pyroclasm',
+      band: [bal.loot.minRoll.legendary, 1],
+    });
     expect(previewForge(registry, p, req({ flux: 'epic' })).legendary).toBeNull();
   });
 
@@ -388,6 +391,22 @@ describe('forgeItem', () => {
     expect(helm.name).toBe(`Rusty ${registry.getGearBase('helm').name}`);
     const primary = forgeItem(registry, p, reqs[4], new SeededRNG(1)).moveset!.chains.primary!;
     expect(primary.moves.map((m) => socketsOf(m).length)).toEqual([1, 1, 0, 0]);
+  });
+
+  it("previews each shard line's and the legendary's range as the floored draw's ends", () => {
+    /** A stream whose every draw is `x` (nextInt its low end). */
+    const fixed = (x: number) =>
+      ({ next: () => x, nextInt: (lo: number) => lo }) as unknown as SeededRNG;
+    for (const p of [smith(), smith(6)])
+      for (const element of ['fire', 'frost'] as const) {
+        const r = { ...reqs[4], element, shards: [{ stat: 'damagePct' as const, tier: 3 }] };
+        const prev = previewForge(registry, p, r);
+        expect(prev.floor > 0).toBe(element === 'fire');
+        const lo = forgeItem(registry, p, r, fixed(0));
+        const hi = forgeItem(registry, p, r, fixed(1)); // the limit r → 1
+        expect([lo.affixes[0].value, hi.affixes[0].value]).toEqual(prev.lines[0].range);
+        expect([lo.legendary!.value, hi.legendary!.value]).toEqual(prev.legendary!.range);
+      }
   });
 
   it('throws where the preview refuses', () => {

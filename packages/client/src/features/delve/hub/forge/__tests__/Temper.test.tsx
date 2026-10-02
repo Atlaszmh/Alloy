@@ -1,12 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import {
   emptyMaterials,
   findItem,
   generateItem,
-  hone,
-  imprint,
+  honeCost,
+  imprintCost,
   reforgeCost,
+  shardTiersOf,
   upgradeCost,
   SeededRNG,
   type GearItem,
@@ -15,17 +16,6 @@ import {
 import { Temper } from '../Temper';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
-import { FAKE, fakeCrafting } from './crafting-fakes';
-
-// Stage 4c's B2 fills Hone and Imprint: until then the bench runs on fakes.
-vi.mock('@alloy/engine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@alloy/engine')>()),
-  ...Object.fromEntries(
-    ['previewForge', 'forge', 'refineCost', 'refine', 'buyShard']
-      .concat(['honeCost', 'hone', 'imprintCost', 'imprint'])
-      .map((k) => [k, vi.fn()]),
-  ),
-}));
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -53,8 +43,6 @@ describe('Temper', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
-    vi.clearAllMocks();
-    fakeCrafting();
   });
 
   it('upgrades the item for scrap, priced against the purse', () => {
@@ -114,9 +102,10 @@ describe('Temper', () => {
       expect(screen.queryByTestId(`${op}-open`)).toBeNull();
   });
 
-  it("hones a line at the engine's price, which grows with each hone", () => {
+  it('hones a line through the engine, at its price, which grows with each hone', () => {
     const item = { ...helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), hones: 2 };
-    bench(item, { scrap: 100 });
+    const cost = honeCost(registry, item);
+    bench(item, { scrap: cost + 1 });
     fireEvent.click(screen.getByTestId('hone-open'));
     expect(screen.getByTestId('hone-pick')).toHaveAttribute('data-pad-scope');
     expect(screen.getByTestId('hone-back')).toHaveAttribute('data-pad-back');
@@ -125,40 +114,72 @@ describe('Temper', () => {
     );
     expect(screen.getByTestId('hone-button')).toHaveTextContent('Pick a line');
     fireEvent.click(screen.getByTestId('hone-line-0'));
-    expect(screen.getByTestId('hone-button')).toHaveTextContent(`Hone · ${FAKE.hone * 3} scrap`);
+    expect(screen.getByTestId('hone-button')).toHaveTextContent(`Hone · ${cost} scrap`);
     fireEvent.click(screen.getByTestId('hone-button'));
-    expect(hone).toHaveBeenCalledWith(registry, expect.anything(), 'h1', 0);
+    const honed = store().profile.bag[0];
+    expect(store().profile.scrap).toBe(1);
+    expect(honed.hones).toBe(3);
+    // Rerolled at the rarity's band, the floor applied: a new roll.
+    expect(honed.affixes[0].stat).toBe('armor');
+    expect(honed.affixes[0].roll).not.toBe(0.3);
     expect(screen.getByRole('status')).toHaveTextContent('Honed!');
+    expect(screen.getByTestId('hone-count')).toHaveTextContent('Honed 3 times');
+    expect(screen.getByTestId('hone-button')).toHaveTextContent(
+      `Hone · ${honeCost(registry, honed)} scrap`,
+    );
   });
 
-  it('imprints a held shard over a line: only shards that fit the slot, none of an affix the item has', () => {
+  it('imprints a held shard over a line: only shards that fit the slot', () => {
     const item = helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]);
     store().setProfile({
       ...store().profile,
-      // A helm takes Crit Chance and Armor, not Damage; it has Armor already.
-      materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [2], damage: [1] } },
+      // A helm takes Crit Chance and Armor, not Damage.
+      materials: { ...emptyMaterials(), shards: { critChance: [1], damage: [1] } },
     });
-    bench(item, { scrap: FAKE.imprint });
+    const cost = imprintCost(registry, item);
+    bench(item, { scrap: cost });
     fireEvent.click(screen.getByTestId('imprint-open'));
     expect(screen.queryByTestId('shard-picker')).toBeNull(); // a line first
     fireEvent.click(screen.getByTestId('imprint-line-0'));
     expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
     expect(screen.getByTestId('shard-pick-critChance-1')).toBeInTheDocument();
-    expect(screen.queryByTestId('shard-pick-armor-1')).toBeNull();
     expect(screen.queryByTestId('shard-pick-damage-1')).toBeNull();
     fireEvent.click(screen.getByTestId('shard-pick-critChance-1'));
     expect(screen.getByTestId('shard-pick-critChance-1')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('imprint-button')).toHaveTextContent(
-      `Imprint Crit Chance I · ${FAKE.imprint} scrap`,
+      `Imprint Crit Chance I · ${cost} scrap`,
     );
     fireEvent.click(screen.getByTestId('imprint-button'));
-    expect(imprint).toHaveBeenCalledWith(registry, expect.anything(), 'h1', 0, {
-      stat: 'critChance',
-      tier: 1,
-    });
+    // The engine wrote the shard's affix over the line, in its band, and took the shard and scrap.
+    const [band] = shardTiersOf(registry, 'critChance');
+    const imprinted = store().profile.bag[0].affixes[0];
+    expect(imprinted).toMatchObject({ stat: 'critChance', band: [band.min, band.max] });
+    expect(imprinted.roll).toBeGreaterThanOrEqual(band.min);
+    expect(imprinted.roll).toBeLessThan(band.max);
+    expect(store().profile.materials.shards.critChance).toEqual([0]);
+    expect(store().profile.scrap).toBe(0);
     expect(screen.getByRole('status')).toHaveTextContent('Imprinted!');
     // The shard is spent: the next imprint picks again.
     expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
+  });
+
+  it('a line may take a better shard of its own affix, never one on another line', () => {
+    const item = helm('fire', [
+      { stat: 'armor', value: 4, roll: 0.1 },
+      { stat: 'critChance', value: 1, roll: 0.1 },
+    ]);
+    store().setProfile({
+      ...store().profile,
+      materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [0, 1] } },
+    });
+    bench(item, { scrap: 100 });
+    fireEvent.click(screen.getByTestId('imprint-open'));
+    fireEvent.click(screen.getByTestId('imprint-line-0'));
+    expect(screen.getByTestId('shard-pick-armor-2')).toBeInTheDocument();
+    expect(screen.queryByTestId('shard-pick-critChance-1')).toBeNull();
+    fireEvent.click(screen.getByTestId('imprint-line-1'));
+    expect(screen.getByTestId('shard-pick-critChance-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('shard-pick-armor-2')).toBeNull();
   });
 
   it("re-attunes to the pair's other element for Mana Dust", () => {

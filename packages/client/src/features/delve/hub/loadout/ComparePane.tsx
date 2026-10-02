@@ -6,8 +6,6 @@ import {
   salvageYield,
   unsocketMode,
   type ManaType,
-  type RuneTier,
-  type ShardRef,
 } from '@alloy/engine';
 import { partsText, pullText, runeNames, useDelveStore } from '@/stores/delveStore';
 import { showToast } from '@/components/Toast';
@@ -23,9 +21,9 @@ import { ItemStatLines } from '../../items/ItemStatLines';
 import { LegendaryBox } from '../../items/LegendaryBox';
 import { MovesetView } from '../../items/MovesetView';
 import { SKILL_NAME } from '../../chains/chain-text';
-import { TIER_NUMERAL } from '../../runes/rune-style';
 import { SLOT_LABEL, UPGRADE_EPSILON, formatDelta, manaStyle } from '../../format';
 import type { HubLink } from '../types';
+import { shardName } from '../forge/materials-text';
 import { BindChoice, needsBind } from './BindChoice';
 
 /** The item actions the Loadout binds to keys too (LoadoutTab owns them). */
@@ -100,8 +98,6 @@ export function ComparePane({
   // What salvage gives, as the engine reckons it: only a bag item salvages, and only between dives.
   const yields = inBag && !locked ? salvageYield(registry, profile, item) : null;
   const melts = yields ? pullText(registry, yields.runes, pull) : '';
-  const shard = (s: ShardRef) =>
-    `${registry.getGearAffix(s.stat)?.label ?? s.stat} ${TIER_NUMERAL[s.tier as RuneTier]}`;
   const binding = inBag && !locked && needsBind(profile, declined, item);
   const attune = cmp ? (Object.entries(cmp.attunementDelta) as [ManaType, number][]) : [];
   const slot = SLOT_LABEL[item.slot].toLowerCase();
@@ -283,7 +279,7 @@ export function ComparePane({
               >
                 {yields.shards.length > 0 && (
                   <span>
-                    Shard: {yields.shards.map(shard).join(' or ')}
+                    Shard: {yields.shards.map((s) => shardName(registry, s)).join(' or ')}
                     {yields.shards.length > 1 &&
                       yields.extraShard > 0 &&
                       ` · ${Math.round(yields.extraShard * 100)}% for a second`}

@@ -171,7 +171,10 @@ export function Temper({ item }: { item: GearItem }) {
               style={{ borderColor: line === i ? 'var(--k-hot)' : undefined }}
               aria-pressed={line === i}
               data-pad-first={i === 0 ? '' : undefined}
-              onClick={() => setLine(i)}
+              onClick={() => {
+                setLine(i);
+                setShard(null); // a shard for one line may sit on another
+              }}
               data-testid={`${op}-line-${i}`}
             >
               <AffixLine line={l} />
@@ -182,7 +185,7 @@ export function Temper({ item }: { item: GearItem }) {
               <span className="k-label">Pick a shard</span>
               <ShardPicker
                 slot={item.slot}
-                exclude={item.affixes.map((a) => a.stat)}
+                exclude={item.affixes.filter((_, j) => j !== line).map((a) => a.stat)}
                 selected={shard}
                 onPick={setShard}
               />

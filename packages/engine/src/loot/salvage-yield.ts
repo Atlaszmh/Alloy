@@ -7,7 +7,7 @@ import { isDiveActive } from '../delve/dive.js';
 import { salvageDust } from '../delve/pair.js';
 import { settleParts, type SetChainsOptions } from '../delve/runes.js';
 import { addHaul, addMaterial, emptyHaul, shardTiersOf, stockHaul } from './materials.js';
-import { weaponParts } from './moveset.js';
+import { extraSlots, weaponParts } from './moveset.js';
 import { salvageValue } from './smithing.js';
 
 /**
@@ -15,12 +15,29 @@ import { salvageValue } from './smithing.js';
  * goes through `applySalvage`.
  */
 
-/** A salvaged line's shard tier: 1 + the `salvageShardTier` thresholds its roll reaches, at most its affix's last. */
+/**
+ * A salvaged line's shard tier: 1 + the `salvageShardTier` thresholds its roll
+ * reaches, but never past the highest of its affix's own tiers whose band holds
+ * the roll, so an imprinted line can't salvage above its shard.
+ */
 function salvageTier(registry: DataRegistry, stat: HeroStatKey, roll: number): number {
   const passed = registry
     .getDelveBalance()
     .crafting.salvageShardTier.filter((t) => roll >= t).length;
-  return Math.min(1 + passed, shardTiersOf(registry, stat).length);
+  const held = shardTiersOf(registry, stat).filter((t) => t.min <= roll).length;
+  return Math.max(1, Math.min(1 + passed, held));
+}
+
+/**
+ * A weapon's Links on salvage: one for each extra slot and open socket past the
+ * free ones a forge of its rarity grants (`crafting.weaponExtras`), dropped or
+ * forged alike, so forging then salvaging never makes Links.
+ */
+function salvageLinks(registry: DataRegistry, item: GearItem, partLinks: number): number {
+  if (item.slot !== 'weapon') return 0;
+  const free = registry.getDelveBalance().crafting.weaponExtras[item.rarity];
+  const slots = extraSlots(registry, item);
+  return Math.max(0, slots - free.slots) + Math.max(0, partLinks - slots - free.sockets);
 }
 
 /** What salvaging `item` could give (the Loadout's preview). */
@@ -39,7 +56,7 @@ export function salvageYield(
   return {
     scrap: salvageValue(registry, item),
     dust: salvageDust(registry, item, profile.pair),
-    links: parts.links,
+    links: salvageLinks(registry, item, parts.links),
     shards,
     extraShard: shards.length > 1 ? registry.getDelveBalance().crafting.salvageExtraShard : 0,
     pattern: profile.patterns.includes(item.baseId) ? null : item.baseId,
@@ -65,7 +82,7 @@ export function salvageRng(profile: DelveProfile, item: GearItem): SeededRNG {
  * instead), Mana Dust off the pair, a weapon's Links and its runes by the parts
  * rule (`opts.unsocket`, else the balance's). Mid-dive the yield goes to the
  * floor's haul (`dive.haul`), at the Anvil to the stockpile; its pattern is
- * learned at once. The item itself is the caller's to remove.
+ * learned and its essence seen at once. The item itself is the caller's to remove.
  */
 export function applySalvage(
   registry: DataRegistry,
@@ -88,7 +105,9 @@ export function applySalvage(
   let haul = { ...emptyHaul(), scrap: y.scrap, dust: y.dust, links: y.links, runes: settled.pouch };
   for (const s of shards) haul = addMaterial(haul, { kind: 'shard', ...s });
   if (y.essence) haul = addMaterial(haul, { kind: 'essence', essence: y.essence });
-  const learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
+  let learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
+  if (y.essence && !learned.essencesSeen.includes(y.essence))
+    learned = { ...learned, essencesSeen: [...learned.essencesSeen, y.essence] };
   const dive = profile.dive;
   return {
     profile:

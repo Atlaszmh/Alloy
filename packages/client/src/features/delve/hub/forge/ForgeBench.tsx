@@ -80,11 +80,14 @@ export function ForgeBench({
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const { metals, flux: fluxHeld, essences } = profile.materials;
   const [baseId, setBaseId] = useState<string | null>(null);
-  const [metal, setMetal] = useState<MetalId>(
-    () => METAL_IDS.find((m) => metals[m] > 0) ?? METAL_IDS[0],
-  );
+  // The picks follow the stock: a bar picked while held, else the first held;
+  // an essence while held, else none (forged away).
+  const [metalPick, setMetal] = useState<MetalId>(METAL_IDS[0]);
+  const metal =
+    metals[metalPick] > 0 ? metalPick : (METAL_IDS.find((m) => metals[m] > 0) ?? metalPick);
   const [flux, setFlux] = useState<FluxGrade | null>(null);
-  const [essence, setEssence] = useState<string | null>(null);
+  const [essencePick, setEssence] = useState<string | null>(null);
+  const essence = essencePick && essences[essencePick] ? essencePick : null;
   const [element, setElement] = useState(profile.pair.primary ?? MANA_TYPES[0]);
   const [shards, setShards] = useState<ShardRef[]>([]);
   const [picking, setPicking] = useState<number | null>(null);
@@ -104,9 +107,23 @@ export function ForgeBench({
   const req = baseId ? request(flux, essence, shards) : null;
   const preview = req && previewForge(registry, profile, req);
 
+  // After a pick the focus goes to Forge, so Enter or A forges next; a refused
+  // forge leaves it where it was, by the reason.
+  const picked = useRef(false);
+  const pick = () => {
+    picked.current = true;
+  };
+  useEffect(() => {
+    if (!picked.current) return;
+    picked.current = false;
+    if (preview && !preview.refused)
+      document.getElementById(`${id}-forge`)?.focus({ preventScroll: true });
+  });
+
   const say = (text: string, good: boolean) => setMessage({ text, good });
   // A rarity's line count doesn't depend on the shards: a lower one keeps the first that fit.
   const pickIngot = (f: FluxGrade | null, e: string | null) => {
+    pick();
     const lines = previewForge(registry, profile, request(f, e, [])).lines.length;
     setFlux(f);
     setEssence(e);
@@ -114,6 +131,7 @@ export function ForgeBench({
   };
   // Line i takes `shard`, or (null) rolls at random: the shards come first, in order.
   const setLine = (i: number, shard: ShardRef | null) => {
+    pick();
     setShards((s) =>
       shard
         ? i < s.length
@@ -193,6 +211,7 @@ export function ForgeBench({
         essence={flux === 'epic' ? essence : null}
         onSelect={(b) => {
           playSound('orbSelect');
+          pick();
           setBaseId(b);
           setShards([]);
           setPicking(null);
@@ -275,7 +294,10 @@ export function ForgeBench({
                 aria-label="Metal"
                 columns={4}
                 value={metal}
-                onChange={setMetal}
+                onChange={(m) => {
+                  pick();
+                  setMetal(m);
+                }}
                 options={METAL_IDS.map((m) => ({
                   id: m,
                   label: `${materialLabel(registry, { kind: 'metal', metal: m })} ×${metals[m]}`,
@@ -325,7 +347,10 @@ export function ForgeBench({
                 aria-label="Element"
                 columns={3}
                 value={element}
-                onChange={setElement}
+                onChange={(m) => {
+                  pick();
+                  setElement(m);
+                }}
                 options={MANA_TYPES.map((m) => {
                   const st = manaStyle(registry, m);
                   return {
@@ -386,7 +411,7 @@ export function ForgeBench({
             {legend && (
               <p className="text-[16px]" data-testid="forge-legendary">
                 <span style={{ color: RARITY_TEXT.legendary }}>{legend.name}:</span>{' '}
-                {legend.text.replace('{v}', `${legend.min}–${legend.max}`)}
+                {legend.text.replace('{v}', preview.legendary!.range.join('–'))}
               </p>
             )}
             {preview.weapon && (
@@ -401,6 +426,7 @@ export function ForgeBench({
               Uses {uses.map((u) => materialLabel(registry, u)).join(', ')}
             </p>
             <Button
+              id={`${id}-forge`}
               variant="primary"
               size="lg"
               binding={{ key: 'Enter', pad: 'a' }}
