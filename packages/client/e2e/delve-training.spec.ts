@@ -60,6 +60,10 @@ test.describe('Delve Training Grounds', () => {
     const toggle = (await page.getByTestId('training-panel-toggle').boundingBox())!;
     expect(chip.x).toBeGreaterThanOrEqual(back.x + back.width);
     expect(chip.x + chip.width).toBeLessThanOrEqual(toggle.x);
+    // One row: the three share the glass bar's middle line.
+    const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
+    expect(Math.abs(mid(chip) - mid(back))).toBeLessThanOrEqual(2);
+    expect(Math.abs(mid(toggle) - mid(back))).toBeLessThanOrEqual(2);
 
     await openPanel(page);
     await page.getByTestId('training-tab-targets').click();
