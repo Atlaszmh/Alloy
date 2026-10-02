@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { dpsCombos, dpsKey } from '@alloy/engine';
 import { getDelveRegistry } from '@/features/delve/registry';
 import type { LabRow } from '@/features/delve/lab/lab-model';
@@ -160,6 +160,27 @@ describe('DelveLab', () => {
     fireEvent.change(mana, { target: { value: 'starved' } });
     expect(FakeWorker.all).toHaveLength(workers);
     expect(screen.queryByTestId('lab-progress')).toBeNull();
+  });
+
+  it('is a kit screen: the band header holds the view tabs and ◂ Training, which goes back', () => {
+    render(
+      <MemoryRouter initialEntries={['/delve/lab']}>
+        <Routes>
+          <Route path="/delve/lab" element={<DelveLab />} />
+          <Route path="/delve/training" element={<div data-testid="training-page" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const lab = screen.getByTestId('delve-lab');
+    expect(lab).toHaveClass('delve-zoom');
+    expect(lab).toHaveAttribute('data-pad-scope');
+    const header = lab.querySelector('header')!;
+    expect(within(header).getByTestId('lab-tab-basic')).toHaveAttribute('aria-selected', 'true');
+    expect(within(header).getByRole('tablist')).toHaveAttribute('data-pad-tabs');
+    const back = within(header).getByTestId('lab-back');
+    expect(back).toHaveAttribute('data-pad-back');
+    fireEvent.click(back);
+    expect(screen.getByTestId('training-page')).toBeInTheDocument();
   });
 
   it('moving focus off the slider commits the depth too (a controller only nudges it)', () => {

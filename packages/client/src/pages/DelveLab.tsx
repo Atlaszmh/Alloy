@@ -2,7 +2,16 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { dpsCombos, dpsKey, type DpsOptions, type DpsSetup } from '@alloy/engine';
 import { MAX_DEPTH } from '@/stores/sandboxStore';
-import { Chip } from '@/features/delve/kit';
+import {
+  Button,
+  Chip,
+  Footer,
+  Header,
+  Panel,
+  Screen,
+  Tabs,
+  type Prompt,
+} from '@/features/delve/kit';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { LabChart } from '@/features/delve/lab/LabChart';
 import { LabTable } from '@/features/delve/lab/LabTable';
@@ -35,7 +44,10 @@ const VIEWS: [View, string][] = [
   ['ability', 'Abilities'],
   ['rune', 'Runes'],
 ];
-const SELECT = 'rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-xs text-stone-200';
+const SELECT = 'k-well px-2 py-1.5 text-[14px] text-[var(--k-text)]';
+const LABEL = 'flex items-center gap-2 text-[16px] text-[var(--k-text-2)]';
+/** Drawn only: Esc and B press ◂ Training (`data-pad-back`, AppShell's prompt keys); LB/RB step the tabs. */
+const PROMPTS: Prompt[] = [{ id: 'back', label: 'Training', binding: { key: 'Escape', pad: 'b' } }];
 
 /**
  * The DPS Lab (dev builds only): every basic-attack, ability and rune combo's
@@ -132,130 +144,135 @@ export function DelveLab() {
   }, []);
 
   return (
-    <div className="delve-page bg-black" data-testid="delve-lab">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/10 px-3 py-2">
-        <button
-          type="button"
-          className="delve-btn px-2.5 py-1.5 text-sm"
-          onClick={() => navigate('/delve/training')}
-          data-pad-back
-          data-testid="lab-back"
-        >
-          ◂ Training
-        </button>
-        <div className="flex gap-1 rounded-xl bg-black/30 p-1" role="tablist" data-pad-tabs>
-          {VIEWS.map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v}
-              onClick={() => pickView(v)}
-              className="delve-display rounded-lg px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
-              style={{
-                background: view === v ? 'linear-gradient(180deg,#2c2c3e,#1f1f2c)' : 'transparent',
-                color: view === v ? '#fde68a' : '#8a8a9a',
-              }}
-              data-testid={`lab-tab-${v}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center gap-2 text-xs text-stone-300">
-          Depth
-          {/* Commits on release, a key up, or losing focus: a controller only nudges the value. */}
-          <input
-            type="range"
-            min={1}
-            max={MAX_DEPTH}
-            value={slider}
-            onChange={(e) => setSlider(Number(e.target.value))}
-            onPointerUp={(e) => setDepth(Number(e.currentTarget.value))}
-            onKeyUp={(e) => setDepth(Number(e.currentTarget.value))}
-            onBlur={(e) => setDepth(Number(e.currentTarget.value))}
-            data-testid="lab-depth"
-          />
-          <b className="w-5 text-right text-stone-100">{slider}</b>
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-stone-300">
-          <input
-            type="checkbox"
-            checked={pack}
-            onChange={(e) => setPack(e.target.checked)}
-            data-testid="lab-pack"
-          />
-          Pack of 5
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-stone-300">
-          Mana
-          <select
-            className={SELECT}
-            value={mana}
-            onChange={(e) => setMana(e.target.value as Mana)}
-            data-testid="lab-mana"
-          >
-            {MANAS.map(([m, label]) => (
-              <option key={m} value={m}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-stone-300">
-          Colour by
-          <select
-            className={SELECT}
-            value={colorBy}
-            onChange={(e) => setColorBy(e.target.value)}
-            data-testid="lab-color"
-          >
-            <option value={BY_LINE}>Line</option>
-            {groups.map((g) => (
-              <option key={g.key} value={g.key}>
-                {g.key}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="flex flex-col gap-1 px-3 py-2">
-        {groups.map((g) => (
-          <div key={g.key} className="flex flex-wrap items-center gap-1">
-            <span className="w-16 shrink-0 text-[10px] uppercase tracking-widest text-stone-500">
-              {g.key}
-            </span>
-            {g.values.map((v) => (
-              <Chip
-                key={v}
-                pressed={!off[g.key]?.includes(v)}
-                onClick={() => toggleChip(g.key, v)}
-                testId={`lab-chip-${g.key}-${v}`}
+    <div className="delve-page">
+      <Screen
+        backdrop="wall"
+        headerStyle="band"
+        testId="delve-lab"
+        header={
+          <Header
+            title="DPS Lab"
+            subtitle="30 s on the dummies"
+            nav={
+              <Tabs
+                level="top"
+                glyphs
+                aria-label="Lab views"
+                value={view}
+                onChange={pickView}
+                tabs={VIEWS.map(([v, label]) => ({ id: v, label, testId: `lab-tab-${v}` }))}
+              />
+            }
+            aside={
+              <Button
+                onClick={() => navigate('/delve/training')}
+                binding={{ key: 'Escape', pad: 'b' }}
+                data-pad-back
+                testId="lab-back"
               >
-                {v}
-              </Chip>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {rows.length < keys.length && (
-        <div
-          className="mx-3 h-1 overflow-hidden rounded-full bg-white/10"
-          data-testid="lab-progress"
-        >
-          <div
-            className="h-full bg-amber-400"
-            style={{ width: `${(rows.length / keys.length) * 100}%` }}
+                ◂ Training
+              </Button>
+            }
           />
+        }
+        footer={<Footer prompts={PROMPTS} />}
+      >
+        <div className="flex h-full min-h-0 flex-col gap-4 px-8 py-5">
+          <Panel material="well" scroll={false} className="shrink-0">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <label className={LABEL}>
+                Depth
+                {/* Commits on release, a key up, or losing focus: a controller only nudges the value. */}
+                <input
+                  type="range"
+                  min={1}
+                  max={MAX_DEPTH}
+                  value={slider}
+                  onChange={(e) => setSlider(Number(e.target.value))}
+                  onPointerUp={(e) => setDepth(Number(e.currentTarget.value))}
+                  onKeyUp={(e) => setDepth(Number(e.currentTarget.value))}
+                  onBlur={(e) => setDepth(Number(e.currentTarget.value))}
+                  data-testid="lab-depth"
+                />
+                <b className="w-6 text-right text-[var(--k-text)]">{slider}</b>
+              </label>
+              <label className={LABEL}>
+                <input
+                  type="checkbox"
+                  checked={pack}
+                  onChange={(e) => setPack(e.target.checked)}
+                  data-testid="lab-pack"
+                />
+                Pack of 5
+              </label>
+              <label className={LABEL}>
+                Mana
+                <select
+                  className={SELECT}
+                  value={mana}
+                  onChange={(e) => setMana(e.target.value as Mana)}
+                  data-testid="lab-mana"
+                >
+                  {MANAS.map(([m, label]) => (
+                    <option key={m} value={m}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={LABEL}>
+                Colour by
+                <select
+                  className={SELECT}
+                  value={colorBy}
+                  onChange={(e) => setColorBy(e.target.value)}
+                  data-testid="lab-color"
+                >
+                  <option value={BY_LINE}>Line</option>
+                  {groups.map((g) => (
+                    <option key={g.key} value={g.key}>
+                      {g.key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {groups.map((g) => (
+              <div key={g.key} className="flex flex-wrap items-center gap-1.5">
+                <span className="k-label w-28 shrink-0">{g.key}</span>
+                {g.values.map((v) => (
+                  <Chip
+                    key={v}
+                    pressed={!off[g.key]?.includes(v)}
+                    onClick={() => toggleChip(g.key, v)}
+                    testId={`lab-chip-${g.key}-${v}`}
+                  >
+                    {v}
+                  </Chip>
+                ))}
+              </div>
+            ))}
+            {rows.length < keys.length && (
+              <div className="h-1.5 overflow-hidden bg-white/10" data-testid="lab-progress">
+                <div
+                  className="h-full bg-[var(--k-hot)]"
+                  style={{ width: `${(rows.length / keys.length) * 100}%` }}
+                />
+              </div>
+            )}
+          </Panel>
+          <Panel className="min-h-0 flex-1" testId="lab-results">
+            <LabChart lines={lines} />
+            <LabTable
+              rows={ranked}
+              columns={columns}
+              ticked={charted}
+              onTick={tick}
+              ratios={ratios}
+            />
+          </Panel>
         </div>
-      )}
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        <LabChart lines={lines} />
-        <LabTable rows={ranked} columns={columns} ticked={charted} onTick={tick} ratios={ratios} />
-      </div>
+      </Screen>
     </div>
   );
 }
