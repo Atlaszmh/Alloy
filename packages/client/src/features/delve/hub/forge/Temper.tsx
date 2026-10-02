@@ -1,5 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import {
+  honeCost,
+  imprintCost,
   itemStatLines,
   pairElements,
   reattuneCost,
@@ -7,6 +9,7 @@ import {
   upgradeCost,
   type GearItem,
   type ManaType,
+  type ShardRef,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -16,13 +19,24 @@ import { getDelveRegistry } from '../../registry';
 import { ItemHeader } from '../../items/ItemHeader';
 import { ItemStatLines, AffixLine } from '../../items/ItemStatLines';
 import { manaStyle } from '../../format';
+import { ShardPicker } from './ShardPicker';
+import { shardName } from './materials-text';
 
 const BACK = { key: 'Escape', pad: 'b' } as const;
 
+/** The line ops: each picks a line in its own pad scope with a Back. */
+type LineOp = 'reforge' | 'hone' | 'imprint';
+const LINE_OP: Record<LineOp, { label: string; pick: string; done: string }> = {
+  reforge: { label: 'Reforge', pick: 'Pick a line to reforge', done: 'Reforged!' },
+  hone: { label: 'Hone', pick: 'Pick a line to hone', done: 'Honed!' },
+  imprint: { label: 'Imprint', pick: 'Pick a line to imprint over', done: 'Imprinted!' },
+};
+
 /**
- * The Temper bench: the selected item's Upgrade +1, Reforge (pick a line, in
- * its own pad scope with a Back) and Re-attune to the pair's other element,
- * each priced against the purse: one the purse can't pay is off, and says what it needs.
+ * The Temper bench: the selected item's Upgrade +1, the line ops (Reforge a
+ * line to a random affix, Hone its value within its band, Imprint a shard over
+ * it) and Re-attune to the pair's other element, each at the engine's price
+ * against the purse: one the purse can't pay is off, and says what it needs.
  */
 export function Temper({ item }: { item: GearItem }) {
   const registry = getDelveRegistry();
@@ -30,20 +44,30 @@ export function Temper({ item }: { item: GearItem }) {
   const dust = useDelveStore((s) => s.profile.manaDust);
   const pair = useDelveStore((s) => s.profile.pair);
   const store = useDelveStore.getState;
-  const [picking, setPicking] = useState(false);
+  const [op, setOp] = useState<LineOp | null>(null);
   const [line, setLine] = useState<number | null>(null);
+  const [shard, setShard] = useState<ShardRef | null>(null);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
   const statsRef = useRef<HTMLDivElement>(null);
 
   const upCost = upgradeCost(registry, item);
-  const rfCost = reforgeCost(registry, item);
   const raCost = reattuneCost(registry, item);
+  // The open line op's scrap (an Imprint's besides its shard; a Hone's grows with each).
+  const opCost =
+    op === 'reforge'
+      ? reforgeCost(registry, item)
+      : op === 'hone'
+        ? honeCost(registry, item)
+        : op === 'imprint'
+          ? imprintCost(registry, item)
+          : 0;
   const affixes = itemStatLines(item, registry).filter((l) => l.source === 'affix');
   const reattuneTo = pairElements(pair).filter((m) => m !== item.mana);
   const { maxUpgrade: max, upgradeStep } = registry.getDelveBalance().forge;
   const id = useId();
   const upShort = upCost !== null && upCost > scrap;
-  const rfShort = line !== null && rfCost > scrap;
+  const ready = line !== null && (op !== 'imprint' || shard !== null);
+  const opShort = ready && opCost > scrap;
 
   const say = (text: string, good: boolean) => {
     setMessage({ text, good });
@@ -67,17 +91,31 @@ export function Temper({ item }: { item: GearItem }) {
       say(reason ?? fallback, false);
     }
   };
+  const open = (next: LineOp | null) => {
+    setOp(next);
+    setLine(null);
+    setShard(null);
+  };
 
   const onUpgrade = () => {
     const res = store().upgrade(item.uid);
     if (res.ok) playSound('upgradeTier');
     done(res.ok, `Upgraded to +${res.item?.upgrade}`, res.reason, 'Cannot upgrade');
   };
-  const onReforge = () => {
-    if (line === null) return;
-    const res = store().reforge(item.uid, line);
+  const onLineOp = () => {
+    if (!op || line === null) return;
+    const s = store();
+    const res =
+      op === 'reforge'
+        ? s.reforge(item.uid, line)
+        : op === 'hone'
+          ? s.hone(item.uid, line)
+          : shard && s.imprint(item.uid, line, shard);
+    if (!res) return;
     if (res.ok) playSound('combineMerge');
-    done(res.ok, 'Reforged!', res.reason, 'Cannot reforge');
+    // An imprint spends its shard: pick again for the next.
+    if (res.ok && op === 'imprint') setShard(null);
+    done(res.ok, LINE_OP[op].done, res.reason, `Cannot ${op}`);
   };
   const onReattune = (to: ManaType) => {
     const res = store().reattune(item.uid, to);
@@ -100,29 +138,31 @@ export function Temper({ item }: { item: GearItem }) {
           {message.text}
         </p>
       )}
-      {picking ? (
+      {op ? (
         <div
           ref={statsRef}
           className="flex flex-col gap-3"
           data-pad-scope
-          data-testid="reforge-pick"
+          data-testid={`${op}-pick`}
         >
           <div className="flex items-center justify-between">
-            <span className="k-label">Pick a line to reforge</span>
+            <span className="k-label">{LINE_OP[op].pick}</span>
             <Button
               variant="quiet"
               size="sm"
               binding={BACK}
               data-pad-back
-              onClick={() => {
-                setPicking(false);
-                setLine(null);
-              }}
-              testId="reforge-back"
+              onClick={() => open(null)}
+              testId={`${op}-back`}
             >
               Back
             </Button>
           </div>
+          {op === 'hone' && (
+            <p className="k-caption" data-testid="hone-count">
+              Honed {item.hones} {item.hones === 1 ? 'time' : 'times'}: each hone costs more.
+            </p>
+          )}
           {affixes.map((l, i) => (
             <button
               key={`${i}-${l.stat}`}
@@ -132,29 +172,43 @@ export function Temper({ item }: { item: GearItem }) {
               aria-pressed={line === i}
               data-pad-first={i === 0 ? '' : undefined}
               onClick={() => setLine(i)}
-              data-testid={`reforge-line-${i}`}
+              data-testid={`${op}-line-${i}`}
             >
               <AffixLine line={l} />
             </button>
           ))}
+          {op === 'imprint' && line !== null && (
+            <>
+              <span className="k-label">Pick a shard</span>
+              <ShardPicker
+                slot={item.slot}
+                exclude={item.affixes.map((a) => a.stat)}
+                selected={shard}
+                onPick={setShard}
+              />
+            </>
+          )}
           <Button
             variant="primary"
-            disabled={line === null || rfShort}
-            onClick={onReforge}
-            aria-describedby={rfShort ? `${id}-rf` : undefined}
-            testId="reforge-button"
+            disabled={!ready || opShort}
+            onClick={onLineOp}
+            aria-describedby={opShort ? `${id}-op` : undefined}
+            testId={`${op}-button`}
           >
             {line === null ? (
               'Pick a line'
+            ) : !ready ? (
+              'Pick a shard'
             ) : (
               <>
-                Reforge · <Price scrap={rfCost} />
+                {LINE_OP[op].label}
+                {shard && ` ${shardName(registry, shard)}`} · <Price scrap={opCost} />
               </>
             )}
           </Button>
-          {rfShort && (
-            <span id={`${id}-rf`} className="k-caption">
-              Needs <Price scrap={rfCost} />
+          {opShort && (
+            <span id={`${id}-op`} className="k-caption">
+              Needs <Price scrap={opCost} />
             </span>
           )}
         </div>
@@ -182,11 +236,12 @@ export function Temper({ item }: { item: GearItem }) {
                 </>
               )}
             </Button>
-            {affixes.length > 0 && (
-              <Button onClick={() => setPicking(true)} testId="reforge-open">
-                Reforge…
-              </Button>
-            )}
+            {affixes.length > 0 &&
+              (Object.keys(LINE_OP) as LineOp[]).map((o) => (
+                <Button key={o} onClick={() => open(o)} testId={`${o}-open`}>
+                  {LINE_OP[o].label}…
+                </Button>
+              ))}
             {upShort && (
               <span id={`${id}-up`} className="k-caption">
                 Needs <Price scrap={upCost} />
