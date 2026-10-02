@@ -6,6 +6,7 @@ import {
   extractDive,
   startDepthOptions,
   type GearItem,
+  type Haul,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -88,6 +89,8 @@ export function DelveRun() {
   const [insets, setInsets] = useState<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [pause, setPause] = useState<{ link?: HubLink } | null>(null);
   const [fanfares, setFanfares] = useState<{ item: GearItem; firstTime: boolean }[]>([]);
+  /** The last cleared floor's haul, for the stop's "Found this floor" (none after a reload). */
+  const [floorHaul, setFloorHaul] = useState<Haul | null>(null);
   const [banners, setBanners] = useState<BannerState[]>([]);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
@@ -121,6 +124,7 @@ export function DelveRun() {
           break;
         }
         case 'cleared': {
+          setFloorHaul(e.haul);
           const d = useDelveStore.getState().profile.dive;
           playSound('victory');
           if (e.bossKilled)
@@ -273,6 +277,7 @@ export function DelveRun() {
         <div className="absolute inset-0 z-40" inert={!!pause}>
           <StopScreen
             dive={dive}
+            haul={floorHaul}
             onChoose={onChooseDoor}
             onExtract={onExtract}
             onPotion={onDoorPotion}

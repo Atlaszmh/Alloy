@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import { RARITY_ORDER, isBossDepth, type DiveState } from '@alloy/engine';
+import { RARITY_ORDER, isBossDepth, type DiveState, type DoorMods } from '@alloy/engine';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { Button, Glyph, PixelSprite } from '../kit';
@@ -70,9 +70,26 @@ function DoorButton({
   );
 }
 
+/** A door's loot multipliers as the data gives them: "Materials ×1.3", "Find +75%", "Tier up 35%". */
+export function doorLoot(mods: DoorMods): string[] {
+  const out: string[] = [];
+  const times: [number | undefined, string][] = [
+    [mods.materials, 'Materials'],
+    [mods.runes, 'Runes'],
+    [mods.gear, 'Gear'],
+    [mods.flux, 'Flux'],
+    [mods.essence, 'Essences'],
+  ];
+  for (const [v, label] of times) if (v !== undefined && v !== 1) out.push(`${label} ×${v}`);
+  if (mods.find) out.push(`Find +${mods.find}%`);
+  if (mods.shardTier) out.push(`Tier up ${Math.round(mods.shardTier * 100)}%`);
+  return out;
+}
+
 /**
  * "Choose your path": each door as a plate with its art in a doorway (the next depth's first
- * monster, or the chest for a door that raises gear or essences), its depth and a boss mark; Extract,
+ * monster, or the chest for a door that raises gear or essences), its depth, a boss mark and its
+ * loot multipliers (`doorLoot`); Extract,
  * with the hero leaving; then the hero's life and potions, and a potion to drink. With
  * `padFirst`, the first door is the pad's first focus (not while a power-up is on offer).
  */
@@ -133,6 +150,11 @@ export function DoorPane({
                       <Glyph id="skull" size={14} /> Boss
                     </span>
                   )}
+                  {doorLoot(door.mods).map((text) => (
+                    <span key={text} className="leading-tight text-[var(--k-mana)]" data-door-loot>
+                      {text}
+                    </span>
+                  ))}
                 </span>
               }
               onClick={() => {
