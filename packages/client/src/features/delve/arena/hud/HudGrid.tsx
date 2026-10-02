@@ -21,7 +21,7 @@ export interface HudGridProps {
  * the bottom of columns 1–2, with the middle clear. Only its panels and slots take the pointer.
  * It reports the camera's insets (`onInsets`, stable; only when they change) on mount, on a
  * resize of any part or of the window, and on a HUD scale change: the top bar's bottom edge, the
- * window's width less the right column's left edge, and its height less the life bar's top edge
+ * window's width less the right column's left edge (0 while it is empty), and its height less the life bar's top edge
  * (the dock's while there is none).
  */
 export function HudGrid({ top, right, dock, onInsets, testId, children }: HudGridProps) {
@@ -38,7 +38,8 @@ export function HudGrid({ top, right, dock, onInsets, testId, children }: HudGri
       const life = d.querySelector('[data-testid="hero-hp"]') ?? d;
       const insets: Insets = {
         top: t.getBoundingClientRect().bottom,
-        right: window.innerWidth - r.getBoundingClientRect().left,
+        // An empty right column (Training's panel closed or a sheet) takes nothing from the view.
+        right: r.childElementCount ? window.innerWidth - r.getBoundingClientRect().left : 0,
         bottom: window.innerHeight - life.getBoundingClientRect().top,
         left: 0,
       };
@@ -50,9 +51,12 @@ export function HudGrid({ top, right, dock, onInsets, testId, children }: HudGri
     measure();
     const ro = new ResizeObserver(measure);
     for (const el of [topRef.current, rightRef.current, dockRef.current]) if (el) ro.observe(el);
+    const mo = new MutationObserver(measure);
+    if (rightRef.current) mo.observe(rightRef.current, { childList: true });
     window.addEventListener('resize', measure);
     return () => {
       ro.disconnect();
+      mo.disconnect();
       window.removeEventListener('resize', measure);
     };
   }, [hud, onInsets]);

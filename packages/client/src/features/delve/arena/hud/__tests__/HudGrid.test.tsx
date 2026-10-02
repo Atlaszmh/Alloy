@@ -68,6 +68,26 @@ describe('HudGrid', () => {
     expect(onInsets).toHaveBeenLastCalledWith({ top: 90, right: 445, bottom: 380, left: 0 });
     act(() => useUIStore.setState({ hudScale: 1 }));
   });
+
+  it('reports no right inset while the right column is empty, and again once it fills', async () => {
+    const onInsets = vi.fn();
+    const at = (right: boolean) => (
+      <HudGrid
+        onInsets={onInsets}
+        top={<div />}
+        right={right && <div />}
+        dock={<div data-testid="hero-hp" />}
+      />
+    );
+    const { rerender } = render(at(false));
+    expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 0, bottom: 90, left: 0 });
+    rerender(at(true));
+    await act(async () => {});
+    expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 364, bottom: 90, left: 0 });
+    rerender(at(false));
+    await act(async () => {});
+    expect(onInsets).toHaveBeenLastCalledWith({ top: 72, right: 0, bottom: 90, left: 0 });
+  });
 });
 
 describe('PurseBar', () => {
