@@ -130,13 +130,6 @@ function onKeyUp(e: KeyboardEvent): void {
   prompt.onHold?.(false);
 }
 
-/** An Alt+Tab never delivers the keyup: let go of every held key. */
-function onBlur(): void {
-  const held = [...keysHeld.values()];
-  keysHeld.clear();
-  for (const p of held) p.onHold?.(false);
-}
-
 let listeners = 0;
 
 /**
@@ -148,7 +141,7 @@ export function attachPromptKeys(): () => void {
   if (listeners++ === 0) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
+    window.addEventListener('blur', releasePromptHolds);
   }
   let released = false;
   return () => {
@@ -157,7 +150,7 @@ export function attachPromptKeys(): () => void {
     if (--listeners > 0) return;
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
-    window.removeEventListener('blur', onBlur);
+    window.removeEventListener('blur', releasePromptHolds);
   };
 }
 
@@ -218,10 +211,13 @@ export function padPrompts(
     if (!held[button]) {
       padHeld.delete(button);
       if (p.whileHeld) p.whileHeld.onHold?.(false);
-      else if (p.tap && !p.fired && now - p.at < TAP_MAX_MS) fire(p.tap);
+      else if (!p.fired && now - p.at < TAP_MAX_MS) {
+        const tap = stillActive(p.tap);
+        if (tap) fire(tap);
+      }
     } else if (p.hold && !p.fired && now - p.at >= (p.hold.binding.padHold || HOLD_MS)) {
       p.fired = true;
-      p.hold.onHold?.(true);
+      stillActive(p.hold)?.onHold?.(true);
     }
   }
   const took = new Set<PadButton>();
@@ -246,6 +242,24 @@ export function padPrompts(
 function fire(p: Prompt): void {
   if (p.onPress) p.onPress();
   else p.onHold?.(true);
+}
+
+/** `p` as its screen has it now (by id), or undefined once its screen is gone or covered. */
+function stillActive(p: Prompt | undefined): Prompt | undefined {
+  return p && activePrompts().find((q) => q.id === p.id);
+}
+
+/**
+ * Let go of every held key and pad button (a window blur, which never delivers
+ * the keyup; the arena going live): a `whileHeld` prompt hears `onHold(false)`,
+ * and a pending tap or hold never fires.
+ */
+export function releasePromptHolds(): void {
+  const letGo = [...keysHeld.values()];
+  for (const p of padHeld.values()) if (p.whileHeld) letGo.push(p.whileHeld);
+  keysHeld.clear();
+  padHeld.clear();
+  for (const p of letGo) p.onHold?.(false);
 }
 
 /** What a carried card hears from the pad (Skills' reorder). */
