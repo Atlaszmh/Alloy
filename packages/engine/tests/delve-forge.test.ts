@@ -1,11 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
-import { generateItem, rollAffix, rollBand } from '../src/loot/item-generator.js';
+import { generateItem, rollAffix, rollBand, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { reforgeAffix } from '../src/loot/smithing.js';
-import { rollFloor } from '../src/loot/forge.js';
+import { forgeInputs, forgeItem, previewForge, rollFloor } from '../src/loot/forge.js';
+import {
+  emptyMaterials,
+  materialCount,
+  shardTiersOf,
+  withMaterial,
+} from '../src/loot/materials.js';
+import { baseSlots } from '../src/loot/moveset.js';
+import { socketsOf } from '../src/loot/runes.js';
+import { forge } from '../src/delve/crafting.js';
+import { startDive } from '../src/delve/dive.js';
+import { movesOf } from '../src/delve/moveset.js';
 import { profileStats } from '../src/delve/pair.js';
 import { createDelveProfile, reforgeGear } from '../src/delve/profile.js';
+import { CHAIN_SKILLS } from '../src/types/ability.js';
+import {
+  FLUX_GRADES,
+  METAL_IDS,
+  type FluxGrade,
+  type ForgeRequest,
+  type MaterialRef,
+  type MetalId,
+} from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { GearItem } from '../src/types/gear.js';
 
@@ -109,5 +129,300 @@ describe('Reforge', () => {
       expect(res.item!.affixes[1].roll).toBeGreaterThanOrEqual(min + (1 - min) * C.attuneRoll.cap);
       p = res.profile;
     }
+  });
+});
+
+/** `hero(attune)` knowing every pattern, with five more of everything, at best depth `depth`. */
+function smith(attune = 0, depth = 12): DelveProfile {
+  const p = hero(attune);
+  const data = registry.getDelveData();
+  const refs: MaterialRef[] = [
+    ...METAL_IDS.map((metal) => ({ kind: 'metal' as const, metal })),
+    ...FLUX_GRADES.map((grade) => ({ kind: 'flux' as const, grade })),
+    ...data.legendaries.map((l) => ({ kind: 'essence' as const, essence: l.id })),
+    ...data.affixes.flatMap((a) =>
+      shardTiersOf(registry, a.stat).map((t) => ({
+        kind: 'shard' as const,
+        stat: a.stat,
+        tier: t.tier,
+      })),
+    ),
+  ];
+  const materials = refs.reduce((m, ref) => withMaterial(m, ref, 5), p.materials);
+  const patterns = data.bases.map((b) => b.id);
+  return { ...p, materials, patterns, scrap: 1e6, manaDust: 1e3, bestDepth: depth };
+}
+
+const FORGE_LOCKED = 'Forge at the Anvil, between dives';
+const forgeStream = (p: DelveProfile) => new SeededRNG(p.seed).fork(`forge:${p.forgeCount}`);
+const tier = (n: number): [number, number] => {
+  const t = registry.getCraftingData().shardTiers[n - 1];
+  return [t.min, t.max];
+};
+
+describe('previewForge', () => {
+  const req = (over: Partial<ForgeRequest> = {}): ForgeRequest => ({
+    baseId: 'helm',
+    metal: 'steel',
+    element: 'fire',
+    shards: [],
+    ...over,
+  });
+
+  it("sets the item level from the bar: the best depth, clamped to the metal's band", () => {
+    const at = (metal: MetalId, depth: number) =>
+      previewForge(registry, smith(0, depth), req({ metal })).ilvl;
+    expect(at('rusty', 0)).toBe(1);
+    expect(at('rusty', 12)).toBe(4);
+    expect(at('steel', 3)).toBe(10);
+    expect(at('steel', 12)).toBe(12);
+    expect(at('voidforged', 12)).toBe(48);
+    expect(at('voidforged', 60)).toBe(60);
+  });
+
+  it('takes its rarity from the flux; an essence with epic flux makes a legendary', () => {
+    const p = smith();
+    expect(previewForge(registry, p, req()).rarity).toBe('common');
+    for (const flux of FLUX_GRADES)
+      expect(previewForge(registry, p, req({ flux })).rarity).toBe(flux);
+    const legendary = previewForge(registry, p, req({ flux: 'epic', essence: 'pyroclasm' }));
+    expect(legendary.rarity).toBe('legendary');
+    expect(legendary.legendary).toEqual({ id: 'pyroclasm', band: [bal.loot.minRoll.legendary, 1] });
+    expect(previewForge(registry, p, req({ flux: 'epic' })).legendary).toBeNull();
+  });
+
+  it("puts the shards' lines first, in their tier's band, and fills the rarity's lines at random", () => {
+    const p = smith();
+    const shards = [
+      { stat: 'armor' as const, tier: 3 },
+      { stat: 'fireAttune' as const, tier: 2 },
+    ];
+    const lines = previewForge(registry, p, req({ flux: 'rare', shards })).lines;
+    expect(lines).toHaveLength(bal.loot.affixCount.rare);
+    expect(lines[0]).toMatchObject({ shard: shards[0], band: tier(3) });
+    expect(lines[0].range![0]).toBeLessThan(lines[0].range![1]);
+    // The Attune shards have their own two tiers: II is the top half.
+    expect(lines[1]).toEqual({ shard: shards[1], band: [0.5, 1], range: [2, 2] });
+    expect(lines[2]).toEqual({ shard: null, band: [bal.loot.minRoll.rare, 1], range: null });
+    expect(previewForge(registry, p, req()).lines).toEqual([]);
+  });
+
+  it('prices it at forgeScrap × the level factor, with Mana Dust outside the pair, and gives the floor', () => {
+    const p = smith();
+    const magic = previewForge(registry, p, req({ flux: 'magic' }));
+    const scrap = Math.round(C.forgeScrap.magic * scrapLevelFactor(registry, 12));
+    expect(magic.price).toEqual({ scrap, dust: 0 });
+    expect(magic.floor).toBe(rollFloor(registry, p, 'fire'));
+    const frost = previewForge(registry, p, req({ element: 'frost' }));
+    expect(frost.price.dust).toBe(C.offPairDust);
+    expect(frost.floor).toBe(0);
+  });
+
+  it("gives the implicits' ranges at the item level and rarity", () => {
+    const prev = previewForge(registry, smith(), req({ flux: 'rare' }));
+    const base = registry.getGearBase('helm');
+    expect(prev.implicits.map((i) => i.stat)).toEqual(base.implicits.map((t) => t.stat));
+    for (const i of prev.implicits) expect(i.min).toBeLessThan(i.max);
+    expect(prev.weapon).toBeNull();
+  });
+
+  it("places a weapon's extras by S7: the Primary's slots first, sockets on its first moves", () => {
+    const p = smith();
+    const weapon = (flux?: FluxGrade) =>
+      previewForge(registry, p, req({ baseId: 'sword', flux })).weapon;
+    expect(weapon()).toEqual({
+      carries: ['basic', 'primary'],
+      slots: { basic: 0, primary: 0 },
+      sockets: 0,
+    });
+    expect(weapon('rare')).toEqual({
+      carries: ['basic', 'primary', 'defensive'],
+      slots: { basic: 0, primary: C.weaponExtras.rare.slots, defensive: 0 },
+      sockets: C.weaponExtras.rare.sockets,
+    });
+    expect(weapon('epic')).toEqual({
+      carries: ['basic', 'primary', 'defensive', 'ultimate'],
+      slots: { basic: 0, primary: C.weaponExtras.epic.slots, defensive: 0, ultimate: 0 },
+      sockets: C.weaponExtras.epic.sockets,
+    });
+  });
+
+  it('refuses with a code and a reason, never throwing', () => {
+    const p = smith();
+    const code = (q: DelveProfile, r: ForgeRequest) =>
+      previewForge(registry, q, r).refused?.code ?? null;
+    const armor = { stat: 'armor' as const, tier: 1 };
+    expect(code(p, req())).toBeNull();
+    expect(code(startDive(registry, p, 1), req())).toBe('locked');
+    expect(code({ ...p, patterns: ['sword'] }, req())).toBe('pattern');
+    expect(code(p, req({ flux: 'rare', essence: 'pyroclasm' }))).toBe('essence');
+    expect(code(p, req({ flux: 'epic', essence: 'nope' }))).toBe('essence');
+    expect(code(p, req({ flux: 'epic', essence: 'twin_fang' }))).toBe('essenceSlot'); // weapons and gloves
+    expect(code(p, req({ flux: 'rare', shards: [{ stat: 'moveSpeed', tier: 1 }] }))).toBe(
+      'shardSlot',
+    );
+    expect(code(p, req({ flux: 'rare', shards: [armor, { ...armor, tier: 2 }] }))).toBe(
+      'shardDuplicate',
+    );
+    expect(code(p, req({ flux: 'uncommon', shards: [armor, { stat: 'maxHp', tier: 1 }] }))).toBe(
+      'shardCount',
+    );
+    expect(code({ ...p, materials: emptyMaterials() }, req())).toBe('materials');
+    expect(code(p, req({ flux: 'rare', shards: [{ stat: 'fireAttune', tier: 3 }] }))).toBe(
+      'materials',
+    );
+    expect(code({ ...p, scrap: 0 }, req())).toBe('scrap');
+    expect(code({ ...p, manaDust: 0 }, req({ element: 'frost' }))).toBe('dust');
+    expect(code({ ...p, bag: Array(bal.loot.bagSize).fill(gloves()) }, req())).toBe('bagFull');
+    const reason = (q: DelveProfile, r: ForgeRequest) =>
+      previewForge(registry, q, r).refused!.reason;
+    expect(reason({ ...p, scrap: 0 }, req())).toBe('Not enough scrap');
+    expect(reason(p, req({ flux: 'epic', essence: 'twin_fang' }))).toBe(
+      "Twin Fang doesn't fit this pattern",
+    );
+  });
+});
+
+/** A common helm, magic off-pair gauntlets, a rare sword, an epic ring and a legendary sword. */
+const reqs: ForgeRequest[] = [
+  { baseId: 'helm', metal: 'rusty', element: 'fire', shards: [] },
+  {
+    baseId: 'gauntlets',
+    metal: 'steel',
+    flux: 'magic',
+    element: 'frost',
+    shards: [{ stat: 'critChance', tier: 4 }],
+  },
+  {
+    baseId: 'sword',
+    metal: 'iron',
+    flux: 'rare',
+    element: 'fire',
+    shards: [
+      { stat: 'damage', tier: 5 },
+      { stat: 'fireAttune', tier: 2 },
+    ],
+  },
+  { baseId: 'ring', metal: 'mithril', flux: 'epic', element: 'fire', shards: [] },
+  {
+    baseId: 'sword',
+    metal: 'steel',
+    flux: 'epic',
+    essence: 'pyroclasm',
+    element: 'fire',
+    shards: [{ stat: 'damagePct', tier: 1 }],
+  },
+];
+
+describe('forgeItem', () => {
+  it('makes exactly what the preview shows, but the draws', () => {
+    const p = smith(20);
+    for (const [i, r] of reqs.entries()) {
+      const prev = previewForge(registry, p, r);
+      expect(prev.refused).toBeNull();
+      const item = forgeItem(registry, p, r, new SeededRNG(i + 1));
+      expect(item).toMatchObject({
+        uid: `g${p.nextUid}`,
+        slot: prev.slot,
+        baseId: r.baseId,
+        rarity: prev.rarity,
+        ilvl: prev.ilvl,
+        mana: r.element,
+        upgrade: 0,
+        reforges: 0,
+        hones: 0,
+        locked: false,
+      });
+      expect(item.implicits.map((x) => x.stat)).toEqual(prev.implicits.map((x) => x.stat));
+      item.implicits.forEach((x, j) => {
+        expect(x.value).toBeGreaterThanOrEqual(prev.implicits[j].min);
+        expect(x.value).toBeLessThanOrEqual(prev.implicits[j].max);
+      });
+      expect(item.affixes).toHaveLength(prev.lines.length);
+      expect(new Set(item.affixes.map((a) => a.stat)).size).toBe(item.affixes.length);
+      prev.lines.forEach((line, j) => {
+        const a = item.affixes[j];
+        const [lo, hi] = line.band;
+        expect(a.roll).toBeGreaterThanOrEqual(lo + (hi - lo) * prev.floor);
+        expect(a.roll).toBeLessThanOrEqual(hi);
+        if (!line.shard) return expect(a.band).toBeUndefined();
+        expect(a).toMatchObject({ stat: line.shard.stat, band: line.band });
+        expect(a.value).toBeGreaterThanOrEqual(line.range![0]);
+        expect(a.value).toBeLessThanOrEqual(line.range![1]);
+      });
+      if (prev.legendary) {
+        const [lo] = prev.legendary.band;
+        expect(item.legendary!.id).toBe(prev.legendary.id);
+        expect(item.legendary!.roll).toBeGreaterThanOrEqual(lo + (1 - lo) * prev.floor);
+        expect(item.name).toBe(registry.getLegendary(prev.legendary.id).name);
+      } else expect(item.legendary).toBeUndefined();
+      if (!prev.weapon) {
+        expect(item.moveset).toBeUndefined();
+        continue;
+      }
+      const m = item.moveset!;
+      expect(Object.keys(m.chains).sort()).toEqual([...prev.weapon.carries].sort());
+      for (const s of prev.weapon.carries)
+        expect(m.slots[s]! - baseSlots(registry, r.baseId, s)).toBe(prev.weapon.slots[s]);
+      const sockets = CHAIN_SKILLS.flatMap((s) => movesOf(m.chains[s])).flatMap(socketsOf);
+      expect(sockets).toHaveLength(prev.weapon.sockets);
+    }
+  });
+
+  it('rolls the same item from the same stream, named by its rarity, sockets on the Primary first', () => {
+    const p = smith();
+    expect(forgeItem(registry, p, reqs[2], new SeededRNG(9))).toEqual(
+      forgeItem(registry, p, reqs[2], new SeededRNG(9)),
+    );
+    const helm = forgeItem(registry, p, reqs[0], new SeededRNG(1));
+    expect(helm.name).toBe(`Rusty ${registry.getGearBase('helm').name}`);
+    const primary = forgeItem(registry, p, reqs[4], new SeededRNG(1)).moveset!.chains.primary!;
+    expect(primary.moves.map((m) => socketsOf(m).length)).toEqual([1, 1, 0, 0]);
+  });
+
+  it('throws where the preview refuses', () => {
+    expect(() => forgeItem(registry, { ...smith(), scrap: 0 }, reqs[0], new SeededRNG(1))).toThrow(
+      'Not enough scrap',
+    );
+  });
+});
+
+describe('forge: the profile op', () => {
+  it('pays and consumes what it uses, bags the item and counts the find', () => {
+    const p = smith();
+    const r = reqs[4]; // the legendary sword
+    const prev = previewForge(registry, p, r);
+    const res = forge(registry, p, r);
+    expect(res.ok).toBe(true);
+    expect(res.item).toEqual(forgeItem(registry, p, r, forgeStream(p)));
+    const q = res.profile;
+    expect(q.bag).toEqual([...p.bag, res.item]);
+    expect(q.scrap).toBe(p.scrap - prev.price.scrap);
+    expect(q.manaDust).toBe(p.manaDust);
+    expect([q.nextUid, q.forgeCount]).toEqual([p.nextUid + 1, p.forgeCount + 1]);
+    for (const ref of forgeInputs(r))
+      expect(materialCount(q.materials, ref)).toBe(materialCount(p.materials, ref) - 1);
+    expect(q.stats.itemsFound.legendary).toBe(p.stats.itemsFound.legendary + 1);
+    expect(q.codex.pyroclasm?.count).toBe(1);
+  });
+
+  it('charges Mana Dust outside the pair', () => {
+    const p = smith();
+    expect(forge(registry, p, reqs[1]).profile.manaDust).toBe(p.manaDust - C.offPairDust);
+  });
+
+  it('refuses with the reason, changing nothing', () => {
+    const p = { ...smith(), scrap: 0 };
+    expect(forge(registry, p, reqs[0])).toEqual({
+      ok: false,
+      profile: p,
+      reason: 'Not enough scrap',
+    });
+    const diving = startDive(registry, smith(), 1);
+    expect(forge(registry, diving, reqs[0])).toEqual({
+      ok: false,
+      profile: diving,
+      reason: FORGE_LOCKED,
+    });
   });
 });

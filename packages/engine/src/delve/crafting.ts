@@ -1,10 +1,11 @@
 import type { DataRegistry } from '../data/registry.js';
+import { forgeInputs, forgeItem, previewForge } from '../loot/forge.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
 import type { ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
-import type { ProfileActionResult } from './profile.js';
+import { forgeRng, recordFinds, type ProfileActionResult } from './profile.js';
 
 /**
  * The Anvil's crafting ops on the profile (see the crafting spec), each refused
@@ -20,11 +21,27 @@ function refuse(profile: DelveProfile, reason: string): ProfileActionResult {
 
 /** Forge `req` into the bag, paying its price and consuming its materials (`ProfileActionResult.item`). */
 export function forge(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _req: ForgeRequest,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  req: ForgeRequest,
 ): ProfileActionResult {
-  throw new Error('forge: not implemented');
+  const preview = previewForge(registry, profile, req);
+  if (preview.refused) return refuse(profile, preview.refused.reason);
+  const item = forgeItem(registry, profile, req, forgeRng(profile));
+  const materials = forgeInputs(req).reduce(
+    (m, ref) => withMaterial(m, ref, -1),
+    profile.materials,
+  );
+  const paid: DelveProfile = {
+    ...profile,
+    materials,
+    scrap: profile.scrap - preview.price.scrap,
+    manaDust: profile.manaDust - preview.price.dust,
+    bag: [...profile.bag, item],
+    nextUid: profile.nextUid + 1,
+    forgeCount: profile.forgeCount + 1,
+  };
+  return { ok: true, item, profile: recordFinds(paid, [item]).profile };
 }
 
 /** Hone affix line `line` of item `uid`, for scrap. */

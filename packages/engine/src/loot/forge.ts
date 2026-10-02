@@ -1,10 +1,35 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { SeededRNG } from '../rng/seeded-rng.js';
-import type { ForgePreview, ForgeRequest, ShardRef } from '../types/crafting.js';
+import { CHAIN_SKILLS, type ChainSkill } from '../types/ability.js';
+import type {
+  ForgeLinePreview,
+  ForgePreview,
+  ForgeRefusal,
+  ForgeRequest,
+  MaterialRef,
+  ShardRef,
+} from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem } from '../types/gear.js';
+import type { GearItem, Moveset, Rarity, StatRoll } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
+import { isDiveActive } from '../delve/dive.js';
+import { movesOf } from '../delve/moveset.js';
 import { inPair, profileStats } from '../delve/pair.js';
+import {
+  affixValue,
+  baseDisplayName,
+  eligibleAffixes,
+  generateRareName,
+  implicitValue,
+  rollAffix,
+  rollBand,
+  rollImplicit,
+  scrapLevelFactor,
+  weightedPick,
+} from './item-generator.js';
+import { materialCount, shardTiersOf } from './materials.js';
+import { baseSlots, carriedSkills, defaultMoveset } from './moveset.js';
+import { socketCap, socketsOf } from './runes.js';
 
 /**
  * Forging and the Temper sinks on an item (see the crafting spec): the forge's
@@ -27,23 +52,219 @@ export function rollFloor(
   return Math.min(cap, perPoint * profileStats(registry, profile).attunement[element]);
 }
 
+/** A shard's roll band (its affix's tier), or null for a tier the affix doesn't have. */
+function shardBand(registry: DataRegistry, shard: ShardRef): [number, number] | null {
+  const tier = shardTiersOf(registry, shard.stat).find((t) => t.tier === shard.tier);
+  return tier ? [tier.min, tier.max] : null;
+}
+
+/** The skills a forged weapon's extras go to, in order (the crafting spec's S7). */
+const EXTRAS_ORDER: readonly ChainSkill[] = ['primary', 'basic', 'ultimate', 'defensive'];
+
+/**
+ * A forged weapon's moveset (the crafting spec's S7): the skills its rarity
+ * carries, every move its default in the item's mana; `crafting.weaponExtras`
+ * extra slots fill the Primary to its cap first, then Basic, Ultimate and
+ * Defensive; the open sockets go one a move in that order (the Primary's first
+ * moves first), round after round up to the rarity's cap.
+ */
+export function forgedMoveset(
+  registry: DataRegistry,
+  item: Pick<GearItem, 'baseId' | 'rarity' | 'mana'>,
+): Moveset {
+  const bal = registry.getDelveBalance();
+  const extras = bal.crafting.weaponExtras[item.rarity];
+  const carried = carriedSkills(registry, item.rarity);
+  const order = EXTRAS_ORDER.filter((s) => carried.includes(s));
+  const slots: Partial<Record<ChainSkill, number>> = {};
+  let left = extras.slots;
+  for (const s of order) {
+    const base = baseSlots(registry, item.baseId, s);
+    const add = Math.min(left, Math.max(0, bal.chains.cap[s] - base));
+    slots[s] = base + add;
+    left -= add;
+  }
+  const moveset = defaultMoveset(registry, item, item.mana, slots);
+  const moves = order.flatMap((s) => movesOf(moveset.chains[s]));
+  let open = extras.sockets;
+  for (let round = 0; round < socketCap(registry, item.rarity); round++)
+    for (const m of moves)
+      if (open > 0) {
+        m.runes = [...socketsOf(m), null];
+        open--;
+      }
+  return moveset;
+}
+
+/** What a forge consumes besides scrap and Mana Dust: the bar, the flux, the essence and the shards. */
+export function forgeInputs(req: ForgeRequest): MaterialRef[] {
+  return [
+    { kind: 'metal', metal: req.metal },
+    ...(req.flux ? [{ kind: 'flux' as const, grade: req.flux }] : []),
+    ...(req.essence ? [{ kind: 'essence' as const, essence: req.essence }] : []),
+    ...req.shards.map((s) => ({ kind: 'shard' as const, ...s })),
+  ];
+}
+
+/** Why `req` can't be forged now, or null (the crafting spec's refusals, in this order). */
+function forgeRefusal(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  req: ForgeRequest,
+  preview: Omit<ForgePreview, 'refused'>,
+): ForgeRefusal | null {
+  const no = (code: ForgeRefusal['code'], reason: string): ForgeRefusal => ({ code, reason });
+  const { slot, rarity } = preview;
+  if (isDiveActive(profile)) return no('locked', 'Forge at the Anvil, between dives');
+  if (!profile.patterns.includes(req.baseId)) return no('pattern', 'Learn this pattern first');
+  if (req.essence !== undefined) {
+    const def = registry.getDelveData().legendaries.find((l) => l.id === req.essence);
+    if (!def) return no('essence', 'No such essence');
+    if (req.flux !== 'epic') return no('essence', 'An essence needs epic flux');
+    if (!def.slots.includes(slot)) return no('essenceSlot', `${def.name} doesn't fit this pattern`);
+  }
+  const seen = new Set<string>();
+  for (const shard of req.shards) {
+    const def = registry.getGearAffix(shard.stat);
+    if (!def?.slots.includes(slot))
+      return no('shardSlot', `${def?.label ?? shard.stat} doesn't roll on this pattern`);
+    if (seen.has(shard.stat)) return no('shardDuplicate', `Only one ${def.label} shard`);
+    seen.add(shard.stat);
+  }
+  const lines = registry.getDelveBalance().loot.affixCount[rarity];
+  if (req.shards.length > lines)
+    return no('shardCount', `Too many shards: ${lines} lines at ${rarity}`);
+  const missing = forgeInputs(req).some(
+    (ref) =>
+      materialCount(profile.materials, ref) < 1 ||
+      (ref.kind === 'shard' && !shardBand(registry, ref)),
+  );
+  if (missing) return no('materials', 'Missing materials');
+  if (profile.scrap < preview.price.scrap) return no('scrap', 'Not enough scrap');
+  if (profile.manaDust < preview.price.dust) return no('dust', 'Not enough Mana Dust');
+  if (profile.bag.length >= registry.getDelveBalance().loot.bagSize)
+    return no('bagFull', 'Bag is full');
+  return null;
+}
+
 /** Everything `forgeItem` would make but the random draws, and why it refuses (if it does). */
 export function previewForge(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _req: ForgeRequest,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  req: ForgeRequest,
 ): ForgePreview {
-  throw new Error('previewForge: not implemented');
+  const bal = registry.getDelveBalance();
+  const base = registry.getGearBase(req.baseId);
+  const metal = registry.getCraftingData().metals.find((m) => m.id === req.metal)!;
+  const [lo, hi] = metal.band;
+  const ilvl = Math.max(lo, Math.min(hi ?? Infinity, profile.bestDepth));
+  const rarity: Rarity = req.essence && req.flux === 'epic' ? 'legendary' : (req.flux ?? 'common');
+  const lines: ForgeLinePreview[] = [];
+  for (const shard of req.shards.slice(0, bal.loot.affixCount[rarity])) {
+    const def = registry.getGearAffix(shard.stat);
+    const band = shardBand(registry, shard);
+    if (!def || !band) continue;
+    const range: [number, number] = [
+      affixValue(registry, def, ilvl, band[0]),
+      affixValue(registry, def, ilvl, band[1]),
+    ];
+    lines.push({ shard: { ...shard }, band, range });
+  }
+  while (lines.length < bal.loot.affixCount[rarity])
+    lines.push({ shard: null, band: [bal.loot.minRoll[rarity], 1], range: null });
+  const moveset =
+    base.slot === 'weapon'
+      ? forgedMoveset(registry, { baseId: base.id, rarity, mana: req.element })
+      : null;
+  const preview: Omit<ForgePreview, 'refused'> = {
+    baseId: base.id,
+    slot: base.slot,
+    rarity,
+    ilvl,
+    element: req.element,
+    floor: rollFloor(registry, profile, req.element),
+    implicits: base.implicits.map((t) => ({
+      stat: t.stat,
+      min: implicitValue(registry, t, ilvl, rarity, 0),
+      max: implicitValue(registry, t, ilvl, rarity, 1),
+    })),
+    lines,
+    legendary:
+      rarity === 'legendary' ? { id: req.essence!, band: [bal.loot.minRoll.legendary, 1] } : null,
+    price: {
+      scrap: Math.round(bal.crafting.forgeScrap[rarity] * scrapLevelFactor(registry, ilvl)),
+      dust: inPair(profile, req.element) ? 0 : bal.crafting.offPairDust,
+    },
+    weapon: moveset && {
+      carries: [...carriedSkills(registry, rarity)],
+      // Each carried skill's extra slots, past its base.
+      slots: Object.fromEntries(
+        carriedSkills(registry, rarity).map((s) => [
+          s,
+          moveset.slots[s]! - baseSlots(registry, base.id, s),
+        ]),
+      ),
+      sockets: CHAIN_SKILLS.flatMap((s) => movesOf(moveset.chains[s])).flatMap(socketsOf).length,
+    },
+  };
+  return { ...preview, refused: forgeRefusal(registry, profile, req, preview) };
 }
 
 /** The forged item, rolled on `rng` (`forge:${forgeCount}`); throws where the preview refuses. */
 export function forgeItem(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _req: ForgeRequest,
-  _rng: SeededRNG,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  req: ForgeRequest,
+  rng: SeededRNG,
 ): GearItem {
-  throw new Error('forgeItem: not implemented');
+  const p = previewForge(registry, profile, req);
+  if (p.refused) throw new Error(p.refused.reason);
+  const base = registry.getGearBase(p.baseId);
+  const implicits = base.implicits.map((t) => rollImplicit(registry, t, p.ilvl, p.rarity, rng));
+  const affixes: StatRoll[] = [];
+  for (const line of p.lines) {
+    const opts = { band: line.shard ? line.band : undefined, floor: p.floor };
+    const def = line.shard
+      ? registry.getGearAffix(line.shard.stat)!
+      : weightedPick(
+          eligibleAffixes(
+            registry,
+            p.slot,
+            affixes.map((a) => a.stat),
+          ),
+          (a) => a.weight,
+          rng,
+        );
+    if (!def) break;
+    affixes.push(rollAffix(registry, def, p.ilvl, p.rarity, rng, opts));
+  }
+  const item: GearItem = {
+    uid: `g${profile.nextUid}`,
+    slot: p.slot,
+    baseId: p.baseId,
+    rarity: p.rarity,
+    mana: p.element,
+    ilvl: p.ilvl,
+    name: '',
+    implicits,
+    affixes,
+    upgrade: 0,
+    reforges: 0,
+    hones: 0,
+    locked: false,
+  };
+  if (p.legendary) {
+    const def = registry.getLegendary(p.legendary.id);
+    const roll = rollBand(p.legendary.band, p.floor, rng);
+    item.legendary = { id: def.id, value: Math.round(def.min + (def.max - def.min) * roll), roll };
+    item.name = def.name;
+  } else if (p.rarity === 'rare' || p.rarity === 'epic') {
+    item.name = generateRareName(registry, p.slot, rng);
+  } else {
+    item.name = baseDisplayName(registry, item);
+  }
+  if (p.slot === 'weapon') item.moveset = forgedMoveset(registry, item);
+  return item;
 }
 
 /** `item` with affix line `line` rerolled within its band, the attunement floor applied; `hones` + 1. */

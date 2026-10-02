@@ -246,7 +246,8 @@ export function replaceItem(profile: DelveProfile, item: GearItem): DelveProfile
   return { ...profile, equipped: { ...profile.equipped, [item.slot]: item } };
 }
 
-function forgeRng(profile: DelveProfile): SeededRNG {
+/** The stream the next forge op draws on: `forge:${forgeCount}` (the op moves the count on). */
+export function forgeRng(profile: DelveProfile): SeededRNG {
   return new SeededRNG(profile.seed).fork(`forge:${profile.forgeCount}`);
 }
 
