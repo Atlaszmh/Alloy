@@ -237,6 +237,7 @@ export function DelveRun() {
 
       <HudGrid
         onInsets={setInsets}
+        inert={!!pause || choosing}
         top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
@@ -269,7 +270,7 @@ export function DelveRun() {
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
       {choosing && (
-        <div className="absolute inset-0 z-40">
+        <div className="absolute inset-0 z-40" inert={!!pause}>
           <StopScreen
             dive={dive}
             onChoose={onChooseDoor}

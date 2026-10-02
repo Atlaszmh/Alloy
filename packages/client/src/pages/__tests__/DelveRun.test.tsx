@@ -155,6 +155,39 @@ describe('DelveRun', () => {
     expect(screen.getByTestId('door-choice')).toBeInTheDocument();
   });
 
+  it('the pause makes the stop and the HUD behind it inert, and the stop the HUD: Tab stays in the top screen', () => {
+    renderRun();
+    const hud = () => screen.getByTestId('purse-bar').closest('.delve-hud-zoom')!;
+    expect(hud()).not.toHaveAttribute('inert');
+    fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
+    expect(hud()).toHaveAttribute('inert');
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(hud()).not.toHaveAttribute('inert');
+
+    const { profile } = useDelveStore.getState();
+    act(() =>
+      useDelveStore.setState({
+        profile: {
+          ...profile,
+          dive: {
+            ...profile.dive!,
+            phase: 'choosing',
+            doorChoices: ['winding'],
+            stop: { offers: ['equip'], taken: false },
+          },
+        },
+      }),
+    );
+    const stop = screen.getByTestId('door-choice').parentElement!;
+    expect(hud()).toHaveAttribute('inert');
+    expect(stop).not.toHaveAttribute('inert');
+    fireEvent.click(within(stop).getByRole('button', { name: 'Menu' }));
+    expect(stop).toHaveAttribute('inert');
+    expect(hud()).toHaveAttribute('inert');
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(stop).not.toHaveAttribute('inert');
+  });
+
   it('a HUD tick hands the stop and the pause over it the same props, so their memos skip it', () => {
     const { profile } = useDelveStore.getState();
     useDelveStore.setState({

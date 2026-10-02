@@ -15,6 +15,8 @@ export interface HudGridProps {
   children?: ReactNode;
   /** The right column's width in design px: 340, or the Training Grounds' 400 px dock (3F). */
   rightWidth?: number;
+  /** Under a screen (the stop, the pause): no focus or click reaches it. */
+  inert?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export function HudGrid({
   testId,
   children,
   rightWidth = 340,
+  inert,
 }: HudGridProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -76,6 +79,7 @@ export function HudGrid({
       className="delve-ui delve-hud-zoom pointer-events-none absolute inset-6 z-20 grid grid-rows-[48px_minmax(0,1fr)] gap-4"
       style={{ gridTemplateColumns: `380px minmax(0,1fr) ${rightWidth}px` }}
       data-testid={testId}
+      inert={inert}
     >
       <div
         ref={topRef}
