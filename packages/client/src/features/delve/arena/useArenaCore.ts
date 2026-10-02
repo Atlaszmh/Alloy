@@ -28,7 +28,7 @@ import {
 } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
 import { ArenaRenderer } from './ArenaRenderer';
-import { floatPay } from './ArenaHud';
+import { floatPay } from './hud/floatPay';
 import type { AimView } from './fx/draw-world';
 import type { ViewRect } from './fx/pixel-layer';
 import { RARITY_COLOR } from '../format';
@@ -359,14 +359,12 @@ function aimedMove(world: ArpgWorld, slot: number): ResolvedAbility | null {
 }
 
 /**
- * The aim marker for a key or HUD button held long enough to aim, at `point`
- * (world units: the pointer, or the mouse for a key); none while a HUD
- * button's press is still over its button, where letting go casts
- * auto-aimed. A charging hold's marker has its stage's size, and a later
+ * The aim marker for a key held long enough to aim, at `point` (world units:
+ * the mouse). A charging hold's marker has its stage's size, and a later
  * move's its step's (`moveNumbers`).
  */
 export function aimView(world: ArpgWorld, a: Aiming, point: Vec, now: number): AimView | null {
-  if (a.onButton || now - a.since < TAP_MS) return null;
+  if (now - a.since < TAP_MS) return null;
   const ab = aimedMove(world, a.slot);
   if (!ab) return null;
   return {
@@ -608,20 +606,6 @@ export function useArenaCore(
   const cast = useCallback((slot: number, aim?: { x: number; y: number } | null) => {
     inputRef.current.cast = { slot, aim: aim ?? null };
   }, []);
-  /**
-   * A held button aims at a screen point (its marker waits while the pointer is
-   * still `onButton`, but the button still holds its slot), or lets go (null).
-   */
-  const aim = useCallback((slot: number | null, at?: Vec, onButton = false) => {
-    inputRef.current.aiming =
-      slot === null || !at
-        ? null
-        : { slot, since: inputRef.current.aiming?.since ?? performance.now(), at, onButton };
-  }, []);
-  /** Drop a charging hold unpaid (an aim released back on its button). */
-  const cancelHold = useCallback(() => {
-    inputRef.current.cancelHold = true;
-  }, []);
   /** The HUD attack button: held or released (it auto-aims). */
   const attack = useCallback((held: boolean) => {
     const input = inputRef.current;
@@ -645,8 +629,6 @@ export function useArenaCore(
     ready,
     input: inputRef.current,
     cast,
-    aim,
-    cancelHold,
     attack,
     dodge,
     potion,

@@ -300,10 +300,9 @@ describe('the aim marker of a key or button held to aim', () => {
     expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line' });
   });
 
-  it("none before a tap's time, nor while a HUD press is still on its button; then at the pointer", () => {
+  it("none before a tap's time; then at the pointer", () => {
     const w = world();
     expect(aimView(w, aiming, point, TAP_MS - 1)).toBeNull();
-    expect(aimView(w, { ...aiming, onButton: true }, point, 1000)).toBeNull();
     expect(aimView(w, aiming, point, 1000)).toMatchObject({ marker: 'line', point });
   });
 
@@ -472,12 +471,11 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(w.hero.hold?.start).toBeGreaterThan(second);
   });
 
-  it('sends each press once: cancelHold, a cast, a dodge, a potion and an attack tap', () => {
+  it('sends each press once: a cast, a dodge, a potion and an attack tap', () => {
     const w = world();
     const input = createArenaInput();
     const mem = padMemory();
     Object.assign(input, {
-      cancelHold: true,
       cast: { slot: 2, aim: { x: 30, y: 40 } },
       dodge: true,
       potion: true,
@@ -485,7 +483,6 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     });
     const first = frameInput(registry, w, input, null, mem, keys);
     expect(first).toMatchObject({
-      cancelHold: true,
       cast: { slot: 2, aim: { x: 3, y: 4 } },
       dodge: true,
       potion: true,
@@ -493,7 +490,6 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     });
     const next = frameInput(registry, w, input, null, mem, keys);
     expect(next).toMatchObject({
-      cancelHold: false,
       cast: null,
       dodge: false,
       potion: false,

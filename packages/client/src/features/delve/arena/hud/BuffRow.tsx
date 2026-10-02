@@ -1,15 +1,8 @@
 import { Glyph } from '@/features/delve/kit';
 
-/**
- * A timed buff on the hero (the spec's contract; 3C's snapshot fills `ArenaHud.buffs`). No
- * Galvanize: its spark is on the slots.
- */
-export interface HudBuff {
-  id: 'riposte' | 'quick' | 'barrier';
-  /** Seconds left, from riposteUntil, quickUntil and barrier.until. */
-  left: number;
-  total: number | null;
-}
+import type { HudBuff } from '../useArenaCore';
+
+export type { HudBuff };
 
 const BUFF: Record<HudBuff['id'], { name: string; color: string }> = {
   riposte: { name: 'Riposte', color: '#fee761' },

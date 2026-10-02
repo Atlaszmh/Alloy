@@ -6,7 +6,7 @@ import { Glyph, Tooltip, type Binding } from '@/features/delve/kit';
 import { manaStyle } from '../../format';
 import { getDelveRegistry } from '../../registry';
 import type { AbilityHud, ArenaHud } from '../useArena';
-import { BuffRow, type HudBuff } from './BuffRow';
+import { BuffRow } from './BuffRow';
 import { Vitals } from './Vitals';
 import { SkillTooltip } from './SkillTooltip';
 import {
@@ -64,8 +64,7 @@ export function SkillDock({
   const registry = getDelveRegistry();
   const galvanized =
     !!hud && hud.galvanizedAt !== null && hud.t - hud.galvanizedAt < GALVANIZE_SPARK;
-  // 3C's snapshot adds `buffs`; until it does, there are none.
-  const buffs = (hud as (ArenaHud & { buffs?: HudBuff[] }) | null)?.buffs ?? [];
+  const buffs = hud?.buffs ?? [];
   const charges = hud?.dodgeCharges ?? 0;
   const max = hud?.dodgeMax ?? 2;
   const refill = hud?.dodgeRefill ?? 0;

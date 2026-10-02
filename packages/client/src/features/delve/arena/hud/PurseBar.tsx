@@ -1,13 +1,9 @@
 import type { DiveState } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useControlsStore } from '@/stores/controlsStore';
-import { Glyph, InputGlyph, type Binding, type GlyphId } from '@/features/delve/kit';
-import { JOURNAL_BINDING } from '../../quests/QuestTracker';
+import { Glyph, InputGlyph, type GlyphId } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
 import { noFocus } from './SkillSlot';
-
-/** Hold to show every drop's label (3C's `labels` action; its default). */
-export const LABELS_BINDING: Binding = { key: 'AltLeft', pad: 'ls', whileHeld: true };
 
 const n = (x: number) => x.toLocaleString('en-US');
 
@@ -84,7 +80,14 @@ export function PurseBar({
       </span>
       <span className="ml-auto flex items-center gap-4 whitespace-nowrap text-[14px] text-[var(--k-text-2)]">
         <span className="flex items-center gap-[6px]">
-          <InputGlyph binding={LABELS_BINDING} size="sm" />
+          <InputGlyph
+            binding={{
+              key: config.keys.labels ?? undefined,
+              pad: config.pad.labels ?? undefined,
+              whileHeld: true,
+            }}
+            size="sm"
+          />
           Labels
         </span>
         <button
@@ -95,7 +98,13 @@ export function PurseBar({
           onMouseDown={noFocus}
           onClick={onJournal}
         >
-          <InputGlyph binding={JOURNAL_BINDING} size="sm" />
+          <InputGlyph
+            binding={{
+              key: config.keys.journal ?? undefined,
+              pad: config.pad.journal ?? undefined,
+            }}
+            size="sm"
+          />
           Journal
         </button>
         <button

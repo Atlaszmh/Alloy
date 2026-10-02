@@ -7,15 +7,15 @@ import {
   moveBeat,
   moveNumbers,
 } from '@alloy/engine';
-import { floatPay } from '../arena/hud/floatPay';
-import { Vitals } from '../arena/hud/Vitals';
-import { BossBar } from '../arena/hud/BossBar';
-import { BuffRow, type HudBuff } from '../arena/hud/BuffRow';
-import { SkillDock, type SkillDockProps } from '../arena/hud/SkillDock';
-import type { AbilityHud, ArenaHud } from '../arena/useArena';
-import { getDelveRegistry } from '../registry';
-import { FAMILY_STYLE } from '../runes/rune-style';
-import { formatNumber } from '../format';
+import { floatPay } from '../floatPay';
+import { Vitals } from '../Vitals';
+import { BossBar } from '../BossBar';
+import { BuffRow } from '../BuffRow';
+import { SkillDock, type SkillDockProps } from '../SkillDock';
+import type { AbilityHud, ArenaHud } from '../../useArena';
+import { getDelveRegistry } from '../../../registry';
+import { FAMILY_STYLE } from '../../../runes/rune-style';
+import { formatNumber } from '../../../format';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 
 const registry = getDelveRegistry();
@@ -23,8 +23,8 @@ const registry = getDelveRegistry();
 /** The first rune of a family in the data. */
 const runeOf = (family: string) => registry.getRunes().find((r) => r.family === family)!;
 
-/** A HUD snapshot (cast: 3C's snapshot adds `buffs` and `map`). */
-function hud(over: Partial<ArenaHud> & { buffs?: HudBuff[] } = {}): ArenaHud {
+/** A HUD snapshot. */
+function hud(over: Partial<ArenaHud> = {}): ArenaHud {
   return {
     hp: 100,
     maxHp: 100,
@@ -60,7 +60,7 @@ function hud(over: Partial<ArenaHud> & { buffs?: HudBuff[] } = {}): ArenaHud {
       terrain: [],
     },
     ...over,
-  } as ArenaHud;
+  };
 }
 
 describe('the life and mana bars', () => {
@@ -176,10 +176,7 @@ const BOLT: AbilityHud = {
   runes: [],
 };
 
-function dock(
-  over: Partial<ArenaHud> & { buffs?: HudBuff[] } = {},
-  props: Partial<SkillDockProps> = {},
-) {
+function dock(over: Partial<ArenaHud> = {}, props: Partial<SkillDockProps> = {}) {
   return (
     <SkillDock
       hud={hud(over)}

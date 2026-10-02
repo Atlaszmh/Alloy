@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createDelveProfile, startDive } from '@alloy/engine';
-import { HudGrid } from '../arena/hud/HudGrid';
-import { PurseBar } from '../arena/hud/PurseBar';
-import { getDelveRegistry } from '../registry';
+import { HudGrid } from '../HudGrid';
+import { PurseBar } from '../PurseBar';
+import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
+import { useControlsStore } from '@/stores/controlsStore';
+import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 
 /** Where each part sits on a 1920×1080 window, by its `data-hud` (the life bar by its id). */
 let boxes: Record<string, DOMRect>;
@@ -129,5 +131,19 @@ describe('PurseBar', () => {
     fireEvent.click(journal);
     expect(onJournal).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('purse-bar')).toHaveTextContent('AltLabels');
+  });
+
+  it("the Labels and Journal hints show the player's bindings", () => {
+    render(purse());
+    act(() => {
+      useControlsStore.getState().setKey('labels', 'KeyV');
+      useControlsStore.getState().setKey('journal', 'KeyB');
+    });
+    try {
+      expect(screen.getByTestId('purse-bar')).toHaveTextContent('VLabels');
+      expect(screen.getByRole('button', { name: /Journal/ })).toHaveTextContent('BJournal');
+    } finally {
+      useControlsStore.setState({ config: DEFAULT_CONTROLS });
+    }
   });
 });

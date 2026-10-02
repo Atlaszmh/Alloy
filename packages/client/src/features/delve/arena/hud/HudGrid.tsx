@@ -1,13 +1,9 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useUiScale } from '@/features/delve/kit';
 
-/** The camera's insets, in viewport px (the spec's contract; 3C's renderer takes them). */
-export interface Insets {
-  top: number;
-  right: number;
-  bottom: number;
-  left: number;
-}
+import type { Insets } from '../camera';
+
+export type { Insets };
 
 export interface HudGridProps {
   top: ReactNode;

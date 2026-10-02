@@ -32,8 +32,6 @@ export interface Aiming {
   slot: number;
   since: number;
   at: Vec | null;
-  /** A HUD button's press still over its button: no marker (let go there, it casts auto-aimed). */
-  onButton?: boolean;
 }
 
 /** Live controller state shared between the controls and the game loop. */
@@ -45,8 +43,6 @@ export interface ArenaInput {
   cast: CastPress | null;
   /** The key or button held (it aims; a hold move charges while it is). */
   aiming: Aiming | null;
-  /** Drop a charging hold unpaid on the next step (an aim released back on its button). */
-  cancelHold: boolean;
   /** Last mouse position (client px), for hold-to-aim on the keyboard. */
   mouse: Vec | null;
   potion: boolean;
@@ -69,7 +65,6 @@ export function createArenaInput(): ArenaInput {
     pointer: { x: 0, y: 0 },
     cast: null,
     aiming: null,
-    cancelHold: false,
     mouse: null,
     potion: false,
     dodge: false,
@@ -114,7 +109,7 @@ export interface FrameOpts {
  * (`padFrameCast`) is aimed by the right stick, which aims the attack only
  * while the pad drives it: the attack button held, or let go this frame or
  * with its held blow not yet struck (the tick that strikes it re-aims it, and
- * a frame may run none). Each press (a cast, `cancelHold`, a dodge, a potion,
+ * a frame may run none). Each press (a cast, a dodge, a potion,
  * an attack tap) goes once, then resets.
  */
 export function frameInput(
@@ -141,9 +136,7 @@ export function frameInput(
   if (switched) dropHold(world, false);
   const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
   if (out.move.x !== 0 || out.move.y !== 0) input.moved = true;
-  out.cancelHold = !padLive && input.cancelHold;
   input.cast = null;
-  input.cancelHold = false;
   input.potion = false;
   input.dodge = false;
   input.attackTap = false;
