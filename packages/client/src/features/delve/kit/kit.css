@@ -375,6 +375,17 @@ html[data-input='gamepad'] .delve-ui :focus {
   color: var(--k-text-3);
 }
 
+/* On a gold or green button a price takes the button's dark text, its glyph too. */
+.k-hot .k-price-unit,
+.k-go .k-price-unit {
+  color: inherit;
+}
+
+.k-hot .k-price rect,
+.k-go .k-price rect {
+  fill: currentColor;
+}
+
 .k-promptbar {
   display: flex;
   align-items: center;
