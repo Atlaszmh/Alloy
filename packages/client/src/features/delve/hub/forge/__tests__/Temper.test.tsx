@@ -1,8 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import {
+  emptyMaterials,
   findItem,
   generateItem,
+  hone,
+  imprint,
   reforgeCost,
   upgradeCost,
   SeededRNG,
@@ -12,6 +15,17 @@ import {
 import { Temper } from '../Temper';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { FAKE, fakeCrafting } from './crafting-fakes';
+
+// Stage 4c's B2 fills Hone and Imprint: until then the bench runs on fakes.
+vi.mock('@alloy/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@alloy/engine')>()),
+  ...Object.fromEntries(
+    ['previewForge', 'forge', 'refineCost', 'refine', 'buyShard']
+      .concat(['honeCost', 'hone', 'imprintCost', 'imprint'])
+      .map((k) => [k, vi.fn()]),
+  ),
+}));
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -39,6 +53,8 @@ describe('Temper', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    vi.clearAllMocks();
+    fakeCrafting();
   });
 
   it('upgrades the item for scrap, priced against the purse', () => {
@@ -92,9 +108,57 @@ describe('Temper', () => {
     expect(screen.getByTestId('upgrade-button')).toBeInTheDocument();
   });
 
-  it('an item with no affixes has no Reforge', () => {
+  it('an item with no affixes has no Reforge, Hone or Imprint', () => {
     bench(helm('fire'));
-    expect(screen.queryByTestId('reforge-open')).toBeNull();
+    for (const op of ['reforge', 'hone', 'imprint'])
+      expect(screen.queryByTestId(`${op}-open`)).toBeNull();
+  });
+
+  it("hones a line at the engine's price, which grows with each hone", () => {
+    const item = { ...helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]), hones: 2 };
+    bench(item, { scrap: 100 });
+    fireEvent.click(screen.getByTestId('hone-open'));
+    expect(screen.getByTestId('hone-pick')).toHaveAttribute('data-pad-scope');
+    expect(screen.getByTestId('hone-back')).toHaveAttribute('data-pad-back');
+    expect(screen.getByTestId('hone-count')).toHaveTextContent(
+      'Honed 2 times: each hone costs more.',
+    );
+    expect(screen.getByTestId('hone-button')).toHaveTextContent('Pick a line');
+    fireEvent.click(screen.getByTestId('hone-line-0'));
+    expect(screen.getByTestId('hone-button')).toHaveTextContent(`Hone · ${FAKE.hone * 3} scrap`);
+    fireEvent.click(screen.getByTestId('hone-button'));
+    expect(hone).toHaveBeenCalledWith(registry, expect.anything(), 'h1', 0);
+    expect(screen.getByRole('status')).toHaveTextContent('Honed!');
+  });
+
+  it('imprints a held shard over a line: only shards that fit the slot, none of an affix the item has', () => {
+    const item = helm('fire', [{ stat: 'armor', value: 4, roll: 0.3 }]);
+    store().setProfile({
+      ...store().profile,
+      // A helm takes Crit Chance and Armor, not Damage; it has Armor already.
+      materials: { ...emptyMaterials(), shards: { critChance: [1], armor: [2], damage: [1] } },
+    });
+    bench(item, { scrap: FAKE.imprint });
+    fireEvent.click(screen.getByTestId('imprint-open'));
+    expect(screen.queryByTestId('shard-picker')).toBeNull(); // a line first
+    fireEvent.click(screen.getByTestId('imprint-line-0'));
+    expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
+    expect(screen.getByTestId('shard-pick-critChance-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('shard-pick-armor-1')).toBeNull();
+    expect(screen.queryByTestId('shard-pick-damage-1')).toBeNull();
+    fireEvent.click(screen.getByTestId('shard-pick-critChance-1'));
+    expect(screen.getByTestId('shard-pick-critChance-1')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('imprint-button')).toHaveTextContent(
+      `Imprint Crit Chance I · ${FAKE.imprint} scrap`,
+    );
+    fireEvent.click(screen.getByTestId('imprint-button'));
+    expect(imprint).toHaveBeenCalledWith(registry, expect.anything(), 'h1', 0, {
+      stat: 'critChance',
+      tier: 1,
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Imprinted!');
+    // The shard is spent: the next imprint picks again.
+    expect(screen.getByTestId('imprint-button')).toHaveTextContent('Pick a shard');
   });
 
   it("re-attunes to the pair's other element for Mana Dust", () => {
