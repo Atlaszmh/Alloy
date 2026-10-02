@@ -110,15 +110,16 @@ describe('dive lifecycle', () => {
     expect(isBossDepth(registry, 5)).toBe(true);
   });
 
-  it('banking moves pickups, scrap, kills and reactions into the profile', () => {
+  it("banking moves gear, kills and reactions into the profile, and scrap into the floor's haul", () => {
     const p = startDive(registry, createDelveProfile(registry, 5), 1);
     const world = beginFloor(registry, p);
-    world.pending = { items: items(2), scrap: 40, kills: 6, reactions: ['melt'], runes: [] };
+    world.pending = { ...world.pending, items: items(2), scrap: 40, kills: 6, reactions: ['melt'] };
     const res = bankWorld(registry, p, world);
     expect(res.kept).toHaveLength(2);
     expect(res.newReactions).toEqual(['melt']);
     expect(res.profile.bag).toHaveLength(2);
-    expect(res.profile.scrap).toBe(40);
+    expect(res.profile.scrap).toBe(p.scrap);
+    expect(res.profile.dive!.haul.scrap).toBe(40);
     expect(res.profile.stats.kills).toBe(6);
     expect(res.profile.reactionsSeen).toEqual(['melt']);
     expect(res.profile.dive!.kills).toBe(6);
@@ -166,14 +167,15 @@ describe('dive lifecycle', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     const bounty = p.dive!.bounty;
     const scrap = p.scrap;
+    const banked = p.dive!.banked.scrap;
     p = extractDive(registry, p);
     expect(p.dive!.phase).toBe('extracted');
-    expect(p.scrap).toBe(scrap + bounty);
+    expect(p.scrap).toBe(scrap + bounty + banked);
     expect(p.stats.extracts).toBe(1);
     expect(closeDive(registry, p).dive).toBeNull();
   });
 
-  it('dying forfeits the bounty but keeps what was picked up', () => {
+  it('dying forfeits the bounty and part of what was banked, but keeps the gear picked up', () => {
     let p = clearDepth(startDive(registry, createDelveProfile(registry, 5), 1));
     p = chooseDoor(registry, p, p.dive!.doorChoices[0]);
     const scrap = p.scrap;
@@ -182,21 +184,21 @@ describe('dive lifecycle', () => {
     world.heroDead = true;
     const res = failFloor(registry, p, world);
     expect(res.profile.dive!.phase).toBe('dead');
-    expect(res.profile.scrap).toBe(scrap);
+    expect(res.profile.dive!.banked.scrap).toBeLessThan(p.dive!.banked.scrap);
+    expect(res.profile.scrap).toBe(scrap + res.profile.dive!.banked.scrap);
     expect(res.profile.bag).toHaveLength(p.bag.length + 1);
     expect(res.profile.stats.deaths).toBe(1);
   });
 
-  it('the first boss ever drops a legendary (until B1, its essence), grants a checkpoint and a potion', () => {
+  it('the first boss ever drops an essence, grants a checkpoint and a potion', () => {
     let p = startDive(registry, createDelveProfile(registry, 3), 1);
     p = { ...p, dive: { ...p.dive!, depth: 5, potions: 0 } };
     const world = beginFloor(registry, p);
     expect(world.monsters.some((m) => m.kind === 'boss')).toBe(true);
     clearFloor(world);
+    expect(world.loot.firstEssence).toBe(false);
     const res = completeFloor(registry, p, world);
     expect(res.bossKilled).toBe(true);
-    expect([...res.kept, ...res.salvaged].some((i) => i.rarity === 'legendary')).toBe(true);
-    expect(res.newCodex).toHaveLength(1);
     expect(res.profile.checkpoints).toContain(5);
     expect(res.profile.firstEssenceGiven).toBe(true);
     expect(res.profile.dive!.potions).toBe(bal.dive.bossPotionReward);

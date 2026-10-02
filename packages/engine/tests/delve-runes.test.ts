@@ -907,12 +907,14 @@ describe('rune drops in the world', () => {
     expect(w.pending.runes).toEqual([CHAIN_I, SPLIT_I]);
   });
 
-  it('banking puts the runes picked up in the pouch, counts them for the dive, and reports them', () => {
+  it("banking puts the runes picked up in the floor's haul, counts them for the dive, and reports them", () => {
     const { p, w } = floor();
     w.pending.runes = [SPLIT_I, SPLIT_I, CHAIN_II];
     const res = bankWorld(registry, p, w);
     expect(res.runes).toEqual([SPLIT_I, SPLIT_I, CHAIN_II]);
-    expect(res.profile.runes).toEqual({ split: [2, 0, 0, 0, 0], chain: [0, 1, 0, 0, 0] });
+    expect(res.profile.runes).toEqual(p.runes);
+    const { runes } = res.profile.dive!.haul;
+    expect(runes).toEqual({ split: [2, 0, 0, 0, 0], chain: [0, 1, 0, 0, 0] });
     expect(res.profile.dive!.runesEarned).toBe(3);
     expect(w.pending.runes).toEqual([]);
     const again = bankWorld(registry, res.profile, w);
@@ -999,6 +1001,22 @@ describe("the stop's fifth kind: socket a rune", () => {
     const elsewhere = atStop(ready(), ['equip', 'move']);
     const action = { kind: 'rune', skill: 'primary', index: 0, socket: 1, rune: CHAIN_I } as const;
     expect(takeStop(registry, elsewhere, action).reason).toBe('Not offered at this stop');
+  });
+
+  it('sockets a rune found this dive, out of what the dive banked (S9)', () => {
+    const p = atStop({ ...ready(), runes: {} });
+    const found = {
+      ...p,
+      dive: { ...p.dive!, banked: { ...p.dive!.banked, runes: { chain: [1, 0, 0, 0, 0] } } },
+    };
+    expect(stopKinds(registry, p)).not.toContain('rune');
+    expect(stopKinds(registry, found)).toContain('rune');
+    const action = { kind: 'rune', skill: 'primary', index: 0, socket: 1, rune: CHAIN_I } as const;
+    const res = takeStop(registry, found, action);
+    expect(res.ok).toBe(true);
+    expect(primaryOf(res.profile).moves[0].runes).toEqual([SPLIT_I, CHAIN_I]);
+    expect(res.profile.dive!.banked.runes).toEqual({ chain: [0, 0, 0, 0, 0] });
+    expect(res.profile.runes).toEqual({ chain: [0, 0, 0, 0, 0] });
   });
 
   it("the 'move' stop keeps the saved move's runes, whatever the client sends", () => {

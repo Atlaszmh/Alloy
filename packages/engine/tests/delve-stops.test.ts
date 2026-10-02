@@ -90,6 +90,26 @@ describe('the stop after a cleared depth', () => {
     expect(rollStop(registry, spent, startDive(registry, spent, 1).dive!)).toBeNull();
   });
 
+  it('counts and spends what the dive banked first, then the stockpile (S9)', () => {
+    const p = atStop(hero(), { offers: ['slot'], taken: false });
+    const banking = (links: number, scrap: number, on: DelveProfile = p) => ({
+      ...on,
+      dive: { ...on.dive!, banked: { ...on.dive!.banked, links, scrap } },
+    });
+    const broke = { ...p, links: 0, scrap: 0 };
+    expect(stopKinds(registry, broke)).not.toContain('slot');
+    expect(stopKinds(registry, banking(1, 20, broke))).toContain('slot');
+    // The slot's Link and 20 scrap: the banked Link and 15 scrap, then 5 of the stockpile's.
+    const res = takeStop(registry, banking(1, 15, { ...p, links: 2, scrap: 100 }), {
+      kind: 'slot',
+      skill: 'primary',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.profile).toMatchObject({ links: 2, scrap: 95 });
+    expect(res.profile.dive!.banked).toMatchObject({ links: 0, scrap: 0 });
+    expect(res.profile.dive!.stop!.taken).toBe(true);
+  });
+
   it('offers 2 or 3 at random in the kinds order, all of them when only two apply', () => {
     const p = { ...hero(), links: 5, scrap: 1000 };
     const counts = new Set<number>();

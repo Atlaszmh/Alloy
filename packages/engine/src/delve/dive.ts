@@ -3,18 +3,19 @@ import { SeededRNG } from '../rng/seeded-rng.js';
 import type { ArpgWorld, ReactionId } from '../types/arpg.js';
 import type { RuneRef } from '../types/rune.js';
 import type { DelveProfile, DiveState } from '../types/delve.js';
-import type { SettleOutcome } from '../types/crafting.js';
+import type { Haul, SettleOutcome } from '../types/crafting.js';
 import type { GearItem, Rarity } from '../types/gear.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { scrapLevelFactor, weightedPick } from '../loot/item-generator.js';
-import { createFloorWorld, isBossFloor } from '../arpg/world.js';
+import { createFloorWorld, emptyPending, isBossFloor } from '../arpg/world.js';
 import { profileStats } from './pair.js';
 import { heroChains } from '../loot/moveset.js';
 import { rollStop } from './stops.js';
 import { pairElements } from './hero-stats.js';
 import { addLootToBag } from './profile.js';
 import { addToPouch } from '../loot/runes.js';
-import { emptyHaul } from '../loot/materials.js';
+import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
+import { stochasticRound } from '../loot/drops.js';
 import type { SetChainsOptions } from './runes.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
@@ -101,7 +102,7 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
       find: stats.magicFind + (mods.find ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
       firstEssence: !profile.firstEssenceGiven,
-      patterns: profile.patterns,
+      patterns: [...profile.patterns],
       pair: pairElements(profile.pair),
     },
   });
@@ -129,15 +130,21 @@ export interface BankResult {
   dust: number;
   /** Links from weapons melted by auto-salvage or a full bag. */
   links: number;
-  /** Runes picked up, banked into the pouch (see the runes spec). */
+  /** Runes picked up, into the floor's haul (see the runes spec). */
   runes: RuneRef[];
+  /** Patterns picked up and learned (see the crafting spec). */
+  patterns: string[];
 }
 
 /**
- * Move everything the world collected since the last bank (items and runes
- * picked up, scrap, kills, reactions discovered) into the profile. Call it
- * whenever pickups happen so new gear can be equipped mid-floor, and at floor end.
- * Auto-salvaged weapons' runes follow the parts rule (`opts.unsocket`, else the balance's).
+ * Move everything the world collected since the last bank into the profile
+ * (see the crafting spec's banking): gear into the bag, patterns learned and
+ * essences seen at once, kills and reactions discovered; materials, scrap,
+ * Mana Dust, Links and runes into the floor's haul (`dive.haul`), which a
+ * cleared floor banks. Call it whenever pickups happen so new gear can be
+ * equipped mid-floor, and at floor end. Auto-salvaged weapons' runes follow the
+ * parts rule (`opts.unsocket`, else the balance's). A world's first bank starts
+ * the haul afresh (`WorldPending.newFloor`).
  */
 export function bankWorld(
   registry: DataRegistry,
@@ -145,17 +152,23 @@ export function bankWorld(
   world: ArpgWorld,
   opts: Pick<SetChainsOptions, 'unsocket'> = {},
 ): BankResult {
-  const dive = requireDive(profile);
   const pending = world.pending;
+  const start = requireDive(profile);
   const items = pending.items;
   const runes = pending.runes;
   const bagged = addLootToBag(
     registry,
-    { ...profile, nextUid: world.loot.nextUid },
+    {
+      ...profile,
+      nextUid: world.loot.nextUid,
+      dive: pending.newFloor ? { ...start, haul: emptyHaul() } : start,
+    },
     items,
     opts,
   );
   let next = bagged.profile;
+  // Auto-salvage mid-dive may have put yields in the haul: take the dive after it.
+  const dive = next.dive!;
 
   const found = { ...dive.found };
   let bestFind = dive.bestFind;
@@ -165,24 +178,23 @@ export function bankWorld(
   }
   const newReactions = pending.reactions.filter((r) => !next.reactionsSeen.includes(r));
   const scrap = pending.scrap;
+  const picked: Haul = { ...pending.haul, scrap, runes: addToPouch({}, runes) };
+  const patterns = [...new Set(pending.patterns)].filter((id) => !next.patterns.includes(id));
+  const essences = Object.keys(picked.essences).filter((id) => !next.essencesSeen.includes(id));
 
   next = {
     ...next,
-    scrap: next.scrap + scrap,
-    runes: addToPouch(next.runes, runes),
-    firstEssenceGiven: next.firstEssenceGiven || !world.loot.firstEssence,
+    patterns: [...next.patterns, ...patterns],
+    essencesSeen: [...next.essencesSeen, ...essences],
     reactionsSeen: [...next.reactionsSeen, ...newReactions],
-    stats: {
-      ...next.stats,
-      kills: next.stats.kills + pending.kills,
-      scrapEarned: next.stats.scrapEarned + scrap,
-    },
+    stats: { ...next.stats, kills: next.stats.kills + pending.kills },
     dive: {
       ...dive,
+      haul: addHaul(dive.haul, picked),
       kills: dive.kills + pending.kills,
       scrapEarned: dive.scrapEarned + scrap + bagged.scrap,
-      dustEarned: dive.dustEarned + bagged.dust,
-      linksEarned: dive.linksEarned + bagged.links,
+      dustEarned: dive.dustEarned + bagged.dust + picked.dust,
+      linksEarned: dive.linksEarned + bagged.links + picked.links,
       runesEarned: dive.runesEarned + runes.length,
       potions: world.hero.potions,
       phoenixUsed: dive.phoenixUsed || world.hero.phoenixUsed,
@@ -190,7 +202,7 @@ export function bankWorld(
       bestFind,
     },
   };
-  world.pending = { items: [], scrap: 0, kills: 0, reactions: [], runes: [] };
+  world.pending = emptyPending();
 
   return {
     profile: next,
@@ -203,6 +215,7 @@ export function bankWorld(
     dust: bagged.dust,
     links: bagged.links,
     runes,
+    patterns,
   };
 }
 
@@ -224,7 +237,11 @@ export interface FloorResult extends BankResult {
   bossKilled: boolean;
 }
 
-/** The floor is cleared: bank loot (`bankWorld`, with `opts`), pay the depth bounty, heal, offer doors. */
+/**
+ * The floor is cleared: bank loot (`bankWorld`, with `opts`) and the floor's haul
+ * into `dive.banked`, pay the depth bounty, heal, offer doors. The first boss's
+ * essence counts as given once a haul holding it banks here.
+ */
 export function completeFloor(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -236,6 +253,7 @@ export function completeFloor(
   const dive = banked.profile.dive!;
   const mods = dive.door?.mods ?? {};
   const bossKilled = world.bossKilled;
+  const essenceBanked = !world.loot.firstEssence && Object.keys(dive.haul.essences).length > 0;
 
   const bountyAdded = Math.round(
     bal.dive.bountyBase *
@@ -246,6 +264,8 @@ export function completeFloor(
   const hpFrac = Math.max(0, Math.min(1, world.hero.hp / world.hero.stats.maxHp));
   let nextDive: DiveState = {
     ...dive,
+    haul: emptyHaul(),
+    banked: addHaul(dive.banked, dive.haul),
     bounty: dive.bounty + bountyAdded,
     depthsCleared: dive.depthsCleared + 1,
     heroHpFrac: Math.min(1, hpFrac + bal.dive.healOnDepthClear),
@@ -265,6 +285,7 @@ export function completeFloor(
     ...banked,
     profile: {
       ...banked.profile,
+      firstEssenceGiven: banked.profile.firstEssenceGiven || essenceBanked,
       checkpoints,
       dive: nextDive,
       stats: { ...banked.profile.stats, bossKills: banked.profile.stats.bossKills + (bossKilled ? 1 : 0) },
@@ -274,7 +295,10 @@ export function completeFloor(
   };
 }
 
-/** The hero fell: keep whatever was picked up (`bankWorld`, with `opts`), lose the bounty. */
+/**
+ * The hero fell: bank the floor (`bankWorld`, with `opts`: its gear is kept), lose
+ * the bounty, and settle the dive as a death (`settleDive`).
+ */
 export function failFloor(
   registry: DataRegistry,
   profile: DelveProfile,
@@ -283,14 +307,12 @@ export function failFloor(
 ): BankResult {
   const banked = bankWorld(registry, profile, world, opts);
   const dive = banked.profile.dive!;
-  return {
-    ...banked,
-    profile: {
-      ...banked.profile,
-      dive: { ...dive, phase: 'dead', heroHpFrac: 0 },
-      stats: { ...banked.profile.stats, deaths: banked.profile.stats.deaths + 1 },
-    },
+  const dead: DelveProfile = {
+    ...banked.profile,
+    dive: { ...dive, phase: 'dead', heroHpFrac: 0 },
+    stats: { ...banked.profile.stats, deaths: banked.profile.stats.deaths + 1 },
   };
+  return { ...banked, profile: settleDive(registry, dead, 'death') };
 }
 
 /** Take one of the offered doors into the next depth. */
@@ -316,10 +338,10 @@ export function chooseDoor(registry: DataRegistry, profile: DelveProfile, doorId
   };
 }
 
-/** Leave the depths alive and cash in the bounty. */
-export function extractDive(_registry: DataRegistry, profile: DelveProfile): DelveProfile {
+/** Leave the depths alive, cash in the bounty and settle what the dive banked (`settleDive`). */
+export function extractDive(registry: DataRegistry, profile: DelveProfile): DelveProfile {
   const dive = requireDive(profile, 'choosing');
-  return {
+  const extracted: DelveProfile = {
     ...profile,
     scrap: profile.scrap + dive.bounty,
     dive: { ...dive, phase: 'extracted', scrapEarned: dive.scrapEarned + dive.bounty },
@@ -329,6 +351,25 @@ export function extractDive(_registry: DataRegistry, profile: DelveProfile): Del
       scrapEarned: profile.stats.scrapEarned + dive.bounty,
     },
   };
+  return settleDive(registry, extracted, 'extract');
+}
+
+/** `haul` with each count passed through `f`, in a fixed order (its essences left out). */
+function mapCounts(haul: Haul, f: (n: number) => number): Haul {
+  const counts = (rec: Record<string, number>) =>
+    Object.fromEntries(Object.keys(rec).sort().map((k) => [k, f(rec[k])]));
+  const tiers = (rec: Partial<Record<string, number[]>>) =>
+    Object.fromEntries(Object.keys(rec).sort().map((k) => [k, rec[k]!.map(f)]));
+  return {
+    metals: counts(haul.metals) as Haul['metals'],
+    flux: counts(haul.flux) as Haul['flux'],
+    shards: tiers(haul.shards),
+    essences: {},
+    scrap: f(haul.scrap),
+    dust: f(haul.dust),
+    links: f(haul.links),
+    runes: tiers(haul.runes),
+  };
 }
 
 /**
@@ -336,20 +377,36 @@ export function extractDive(_registry: DataRegistry, profile: DelveProfile): Del
  * (`dive.settled`; see the crafting spec's banking): an extract keeps it all; a
  * death or an abandon loses the floor's haul and `crafting.deathLoss` of
  * `banked` (each entry rounded stochastically on `death:${seed}`, banked
- * essences exempt), recorded in `dive.lost`. Stage 4c's B1 fills it and calls
- * it from `extractDive`, `failFloor` and `closeDive`; until then it throws.
+ * essences exempt), recorded in `dive.lost`; `banked` keeps what reached the
+ * stockpile. `extractDive`, `failFloor` and `closeDive` call it; it leaves the
+ * dive's phase alone.
  */
-export function settleDive(_registry: DataRegistry, _profile: DelveProfile, _outcome: SettleOutcome): DelveProfile {
-  throw new Error('settleDive: not implemented');
+export function settleDive(registry: DataRegistry, profile: DelveProfile, outcome: SettleOutcome): DelveProfile {
+  const dive = requireDive(profile);
+  if (dive.settled) return profile;
+  let kept = dive.banked;
+  let lost: Haul | null = null;
+  if (outcome !== 'extract') {
+    const loss = registry.getDelveBalance().crafting.deathLoss;
+    const rng = new SeededRNG(profile.seed).fork(`death:${dive.seed}`);
+    const share = mapCounts(dive.banked, (n) => stochasticRound(n * loss, rng));
+    kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
+    lost = addHaul(dive.haul, share);
+  }
+  return {
+    ...stockHaul(profile, kept),
+    dive: { ...dive, haul: emptyHaul(), banked: kept, lost, settled: true },
+  };
 }
 
 /**
  * Clear the dive record (after the summary, or to abandon — the bounty is lost).
- * Stage 4c's B1 settles a dive still under way here first, as an abandon
- * (`settleDive`); an extracted or dead dive has settled already.
+ * A dive still under way settles first, as an abandon (`settleDive`); an
+ * extracted or dead dive has settled already.
  */
-export function closeDive(_registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  return { ...profile, dive: null };
+export function closeDive(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const settled = isDiveActive(profile) ? settleDive(registry, profile, 'abandon') : profile;
+  return { ...settled, dive: null };
 }
 
 /** Drink a potion at the door screen (between floors). Null when nothing to heal. */
