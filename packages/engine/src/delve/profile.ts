@@ -6,21 +6,16 @@ import { GEAR_SLOTS } from '../types/gear.js';
 import type { ManaType } from '../types/mana.js';
 import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
 import { generateItem } from '../loot/item-generator.js';
-import {
-  applyUpgrade,
-  reforgeAffix,
-  reforgeCost,
-  salvageValue,
-  upgradeCost,
-} from '../loot/smithing.js';
+import { applyUpgrade, reforgeAffix, reforgeCost, upgradeCost } from '../loot/smithing.js';
 import { compareItem, heroPower } from './hero-stats.js';
 import { DelveProfileSchema } from './profile-schema.js';
-import { chooseStartingMana, salvageDust, type ChainFix } from './pair.js';
+import { chooseStartingMana, type ChainFix } from './pair.js';
 import { isDiveActive } from './dive.js';
-import { settleParts, type SetChainsOptions } from './runes.js';
+import type { SetChainsOptions } from './runes.js';
 import { baseSlots, carriedSkills, defaultChain, movesetOf, weaponParts } from '../loot/moveset.js';
 import { emptyMaterials } from '../loot/materials.js';
 import { rollFloor } from '../loot/forge.js';
+import { applySalvage, salvageRng } from '../loot/salvage-yield.js';
 import { addToPouch, socketCap } from '../loot/runes.js';
 import type { RuneRef } from '../types/rune.js';
 import type { ShardRef } from '../types/crafting.js';
@@ -273,27 +268,75 @@ export function recordFinds(
   return { profile: { ...profile, codex, stats: { ...profile.stats, itemsFound } }, newCodex };
 }
 
-export interface BagInsertResult {
-  profile: DelveProfile;
-  kept: GearItem[];
-  salvaged: GearItem[];
+/** What melting gear gave (`applySalvage`, item by item). */
+export interface Melted {
   scrap: number;
   /** Mana Dust from the melted items outside the pair. */
   dust: number;
-  /** Links from the melted weapons' extra slots. */
+  /** Links from the melted weapons' extra slots and open sockets. */
   links: number;
-  bagFull: boolean;
-  newCodex: string[];
-  /** Runes back to the pouch from melted weapons' sockets (see the runes spec). */
+  /** Runes back to the pouch (or mid-dive the haul) from melted weapons' sockets (see the runes spec). */
   runes: RuneRef[];
   /** Runes the melted weapons' sockets destroyed. */
   destroyed: RuneRef[];
+  /** The shards, the patterns learned and the essences they gave (see the crafting spec's Salvage). */
+  shards: ShardRef[];
+  patterns: string[];
+  essences: string[];
 }
 
 /**
- * Put fresh loot in the bag, honouring auto-salvage and bag capacity. A melted
- * weapon gives its parts (`weaponParts`): a Link for each extra slot and open
- * socket, and its runes by the parts rule (`opts.unsocket`, else the balance's).
+ * Melt `items` one by one (`applySalvage`, each on its own `salvageRng`):
+ * mid-dive into the floor's haul, at the Anvil into the stockpile, moving
+ * `forgeCount` on once. Their runes leave by the parts rule (`opts.unsocket`).
+ */
+function melt(
+  registry: DataRegistry,
+  profile: DelveProfile,
+  items: GearItem[],
+  opts: Pick<SetChainsOptions, 'unsocket'>,
+): Melted & { profile: DelveProfile } {
+  const out: Melted = {
+    scrap: 0,
+    dust: 0,
+    links: 0,
+    runes: [],
+    destroyed: [],
+    shards: [],
+    patterns: [],
+    essences: [],
+  };
+  let next = profile;
+  for (const item of items) {
+    const r = applySalvage(registry, next, item, salvageRng(profile, item), opts);
+    next = r.profile;
+    out.scrap += r.scrap;
+    out.dust += r.dust;
+    out.links += r.links;
+    out.runes.push(...r.runes);
+    out.destroyed.push(...r.destroyed);
+    out.shards.push(...r.shards);
+    if (r.pattern) out.patterns.push(r.pattern);
+    if (r.essence) out.essences.push(r.essence);
+  }
+  if (items.length > 0 && !isDiveActive(profile))
+    next = { ...next, forgeCount: next.forgeCount + 1 };
+  return { ...out, profile: next };
+}
+
+export interface BagInsertResult extends Melted {
+  profile: DelveProfile;
+  kept: GearItem[];
+  salvaged: GearItem[];
+  bagFull: boolean;
+  newCodex: string[];
+}
+
+/**
+ * Put fresh loot in the bag, honouring auto-salvage and bag capacity. What
+ * doesn't fit or is set to auto-salvage melts (`melt`): mid-dive its yield
+ * goes to the floor's haul (see the crafting spec), and a melted weapon's
+ * runes leave by the parts rule (`opts.unsocket`, else the balance's).
  */
 export function addLootToBag(
   registry: DataRegistry,
@@ -306,45 +349,19 @@ export function addLootToBag(
   const bag = recorded.profile.bag.slice();
   const kept: GearItem[] = [];
   const salvaged: GearItem[] = [];
-  let scrap = 0;
-  let dust = 0;
-  let links = 0;
   let bagFull = false;
   for (const item of items) {
     const auto = item.rarity !== 'legendary' && profile.autoSalvage[item.rarity];
     if (auto || bag.length >= bagSize) {
       if (!auto) bagFull = true;
       salvaged.push(item);
-      scrap += salvageValue(registry, item);
-      dust += salvageDust(registry, item, profile.pair);
-      links += weaponParts(registry, item).links;
     } else {
       bag.push(item);
       kept.push(item);
     }
   }
-  const parts = salvaged.flatMap((item) => weaponParts(registry, item).runes);
-  const settled = settleParts(registry, recorded.profile.runes, parts, opts.unsocket);
-  return {
-    profile: {
-      ...recorded.profile,
-      bag,
-      scrap: recorded.profile.scrap + scrap,
-      manaDust: recorded.profile.manaDust + dust,
-      links: recorded.profile.links + links,
-      runes: settled.pouch,
-      stats: { ...recorded.profile.stats, scrapEarned: recorded.profile.stats.scrapEarned + scrap },
-    },
-    kept,
-    salvaged,
-    scrap,
-    dust,
-    links,
-    runes: settled.runes,
-    destroyed: settled.destroyed,
-    bagFull,
-    newCodex: recorded.newCodex,
-  };
+  const melted = melt(registry, { ...recorded.profile, bag }, salvaged, opts);
+  return { ...melted, kept, salvaged, bagFull, newCodex: recorded.newCodex };
 }
 
 /** Mid-dive, all gear is locked, the forge and salvage too (see the weapon movesets spec). */
@@ -393,10 +410,10 @@ export function setAutoSalvage(profile: DelveProfile, rarity: Rarity, on: boolea
 }
 
 /**
- * Salvage bag items. Locked or missing uids are skipped. Gear outside the pair
- * also gives Mana Dust, and a weapon its parts (`weaponParts`): a Link for each
- * extra slot and open socket, and its runes by the parts rule (`opts.unsocket`,
- * else the balance's). Mid-dive it melts nothing (auto-salvage of new loot,
+ * Salvage bag items (`melt`: each gives scrap, shards or an essence, its
+ * pattern, Mana Dust off the pair, and a weapon's Links and runes by the
+ * parts rule, `opts.unsocket` else the balance's). Locked or missing uids are
+ * skipped. Mid-dive it melts nothing (auto-salvage of new loot,
  * `addLootToBag`, still runs).
  */
 export function salvageItems(
@@ -404,57 +421,14 @@ export function salvageItems(
   profile: DelveProfile,
   uids: string[],
   opts: Pick<SetChainsOptions, 'unsocket'> = {},
-): {
-  profile: DelveProfile;
-  scrap: number;
-  dust: number;
-  links: number;
-  count: number;
-  /** Runes back to the pouch from the melted weapons' sockets (see the runes spec). */
-  runes: RuneRef[];
-  /** Runes their sockets destroyed. */
-  destroyed: RuneRef[];
-  /** The shards, patterns and essences they gave (see the crafting spec's Salvage; stage 4c's B2). */
-  shards: ShardRef[];
-  patterns: string[];
-  essences: string[];
-} {
-  const none = { shards: [], patterns: [], essences: [] };
-  if (isDiveActive(profile))
-    return { profile, scrap: 0, dust: 0, links: 0, count: 0, runes: [], destroyed: [], ...none };
+): Melted & { profile: DelveProfile; count: number } {
   const targets = new Set(uids);
-  let scrap = 0;
-  let dust = 0;
-  let links = 0;
-  const melted: GearItem[] = [];
-  const bag = profile.bag.filter((item) => {
-    if (!targets.has(item.uid) || item.locked) return true;
-    scrap += salvageValue(registry, item);
-    dust += salvageDust(registry, item, profile.pair);
-    links += weaponParts(registry, item).links;
-    melted.push(item);
-    return false;
-  });
-  const parts = melted.flatMap((item) => weaponParts(registry, item).runes);
-  const settled = settleParts(registry, profile.runes, parts, opts.unsocket);
-  return {
-    profile: {
-      ...profile,
-      bag,
-      scrap: profile.scrap + scrap,
-      manaDust: profile.manaDust + dust,
-      links: profile.links + links,
-      runes: settled.pouch,
-      stats: { ...profile.stats, scrapEarned: profile.stats.scrapEarned + scrap },
-    },
-    scrap,
-    dust,
-    links,
-    count: melted.length,
-    runes: settled.runes,
-    destroyed: settled.destroyed,
-    ...none,
-  };
+  const melted = isDiveActive(profile)
+    ? []
+    : profile.bag.filter((item) => targets.has(item.uid) && !item.locked);
+  const bag = profile.bag.filter((item) => !melted.includes(item));
+  const res = melt(registry, melted.length > 0 ? { ...profile, bag } : profile, melted, opts);
+  return { ...res, count: melted.length };
 }
 
 /** Bag items that are safe to melt: unlocked, not an upgrade (a weapon as a home), at or below `maxRarity`, and no weapon holding runes. */

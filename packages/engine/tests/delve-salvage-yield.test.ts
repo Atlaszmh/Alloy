@@ -7,7 +7,12 @@ import { materialCount } from '../src/loot/materials.js';
 import { applySalvage, salvageRng, salvageYield } from '../src/loot/salvage-yield.js';
 import { salvageValue } from '../src/loot/smithing.js';
 import { startDive } from '../src/delve/dive.js';
-import { createDelveProfile } from '../src/delve/profile.js';
+import {
+  addLootToBag,
+  createDelveProfile,
+  salvageItems,
+  setAutoSalvage,
+} from '../src/delve/profile.js';
 import type { GearItem, HeroStatKey, StatRoll } from '../src/types/gear.js';
 
 // See the crafting spec: "Salvage (what gear gives back)".
@@ -180,5 +185,42 @@ describe('salvageRng', () => {
     expect(salvageRng(diving, gloves()).next()).toBe(
       new SeededRNG(diving.dive!.seed).fork('salvage:x').next(),
     );
+  });
+});
+
+describe('every salvage goes through applySalvage', () => {
+  it('salvageItems: each item on its own stream, then forgeCount moves on once', () => {
+    const p = { ...hero(), bag: [gloves(), legendary] };
+    const res = salvageItems(registry, p, ['x', 'l']);
+    expect(res).toMatchObject({ count: 2, patterns: ['gauntlets'], essences: ['nightstalker'] });
+    const one = applySalvage(registry, { ...p, bag: [] }, gloves(), salvageRng(p, gloves()));
+    const two = applySalvage(registry, one.profile, legendary, salvageRng(p, legendary));
+    expect(res.shards).toEqual(one.shards);
+    expect(res.profile).toEqual({ ...two.profile, forgeCount: p.forgeCount + 1 });
+  });
+
+  it("addLootToBag: auto-salvage stocks it at the Anvil and fills the floor's haul mid-dive", () => {
+    const p = setAutoSalvage(hero(), 'rare', true);
+    const anvil = addLootToBag(registry, p, [gloves()]);
+    expect(anvil).toMatchObject({ kept: [], patterns: ['gauntlets'] });
+    expect(anvil.profile.scrap).toBe(p.scrap + anvil.scrap);
+    expect(anvil.profile.forgeCount).toBe(p.forgeCount + 1);
+
+    const diving = startDive(registry, p, 1);
+    const mid = addLootToBag(registry, diving, [gloves()]);
+    expect(mid.profile.scrap).toBe(diving.scrap);
+    expect(mid.profile.dive!.haul.scrap).toBe(mid.scrap);
+    expect(mid.profile.forgeCount).toBe(diving.forgeCount);
+    expect(mid.shards).toEqual(
+      applySalvage(registry, diving, gloves(), salvageRng(diving, gloves())).shards,
+    );
+  });
+
+  it("a full bag mid-dive melts even a legendary: its essence goes to the floor's haul", () => {
+    const diving = startDive(registry, hero(), 1);
+    const full = { ...diving, bag: Array(bal.loot.bagSize).fill(gloves()) };
+    const res = addLootToBag(registry, full, [legendary]);
+    expect(res).toMatchObject({ bagFull: true, essences: ['nightstalker'] });
+    expect(res.profile.dive!.haul.essences).toEqual({ nightstalker: 1 });
   });
 });
