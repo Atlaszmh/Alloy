@@ -91,7 +91,6 @@ export function beginFloor(registry: DataRegistry, profile: DelveProfile): ArpgW
     phoenixAvailable: !dive.phoenixUsed,
     seed: floorSeed(dive),
     loot: {
-      pity: profile.pity,
       nextUid: profile.nextUid,
       magicFind: stats.magicFind + (mods.magicFind ?? 0),
       legendaryBoost: stats.legendaries.lucky_charm ? 2 : 1,
@@ -146,7 +145,7 @@ export function bankWorld(
   const runes = pending.runes;
   const bagged = addLootToBag(
     registry,
-    { ...profile, pity: world.loot.pity, nextUid: world.loot.nextUid },
+    { ...profile, nextUid: world.loot.nextUid },
     items,
     opts,
   );

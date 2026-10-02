@@ -1,12 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
-import { CraftingDataSchema } from '../src/data/schemas.js';
+import {
+  CraftingBalanceSchema,
+  CraftingDataSchema,
+  DropsBalanceSchema,
+} from '../src/data/schemas.js';
+import balanceData from '../src/data/balance.json';
 import craftingData from '../src/data/crafting.json';
 import delveData from '../src/data/delve.json';
-import { materialName } from '../src/loot/item-generator.js';
+import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { materialName, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { metalAt, shardTiersOf } from '../src/loot/materials.js';
 import { METAL_IDS } from '../src/types/crafting.js';
 import { HERO_STAT_KEYS } from '../src/types/gear.js';
+import { RARITY_ORDER } from '../src/types/gem.js';
+import type { ArpgEvent } from '../src/types/arpg.js';
+import { arena } from './fixtures/arena.js';
 
 // See the crafting spec: "Tuning: every number in data".
 
@@ -98,5 +107,70 @@ describe('CraftingDataSchema', () => {
     const [one, two, ...rest] = craftingData.shardTiers;
     expect(ok({ shardTiers: [two, one, ...rest] })).toBe(false);
     expect(ok({ shardTiers: [{ tier: 1, min: 0.5, max: 0.2 }] })).toBe(false);
+  });
+});
+
+describe('balance: delve.crafting and delve.drops', () => {
+  const bal = registry.getDelveBalance();
+
+  it("loads both blocks; a forged weapon's extras start at the low end of a drop's", () => {
+    expect(bal.crafting.deathLoss).toBe(0.4);
+    expect(bal.crafting.shardBench).toEqual({ scrap: 30, dust: 5 });
+    for (const r of RARITY_ORDER)
+      expect(bal.crafting.weaponExtras[r]).toEqual({
+        slots: bal.movesets.extraSlots[r][0],
+        sockets: bal.runes.socketDrops[r][0],
+      });
+    expect(bal.drops.scrapByKind).toEqual({ normal: 1, elite: 3, boss: 10 });
+    expect([bal.drops.magnetSpeed, bal.drops.vacuumSpeed, bal.drops.pickupDelay]).toEqual([
+      10, 18, 0.35,
+    ]);
+    for (const biome of registry.getDelveData().biomes)
+      expect(bal.drops.biomeShardWeights[biome.id], biome.id).toBeDefined();
+    for (const door of Object.keys(bal.drops.doors)) expect(registry.getDoor(door).id).toBe(door);
+  });
+
+  it('drops the old gear counts and pity from the data', () => {
+    const loot = balanceData.delve.loot;
+    for (const gone of [
+      'pityPerDrop',
+      'normalDropChance',
+      'extraDropChance',
+      'eliteDrops',
+      'bossDrops',
+    ])
+      expect(gone in loot, gone).toBe(false);
+  });
+
+  it('refuses a count that runs backwards, thresholds that fall, a loss past 1 and tiers not from depth 1', () => {
+    const crafting = balanceData.delve.crafting;
+    const drops = balanceData.delve.drops;
+    expect(CraftingBalanceSchema.safeParse(crafting).success).toBe(true);
+    expect(DropsBalanceSchema.safeParse(drops).success).toBe(true);
+    const craft = (over: object) =>
+      CraftingBalanceSchema.safeParse({ ...crafting, ...over }).success;
+    expect(craft({ deathLoss: 1.2 })).toBe(false);
+    expect(craft({ salvageShardTier: [0.3, 0.2, 0.75, 0.9] })).toBe(false);
+    const drop = (over: object) => DropsBalanceSchema.safeParse({ ...drops, ...over }).success;
+    expect(drop({ normal: { ...drops.normal, bars: { chance: 0.5, count: [2, 1] } } })).toBe(false);
+    expect(drop({ shardTierDepths: [2, 6, 12, 20, 30] })).toBe(false);
+    expect(drop({ fluxGradeDepths: [1, 5, 11] })).toBe(false);
+  });
+
+  it("pays a kill's scrap by its kind from the data", () => {
+    const w = arena([
+      { x: 13, y: 20 },
+      { x: 15, y: 20, kind: 'elite' },
+    ]);
+    const events: ArpgEvent[] = [];
+    const ctx = makeCtx(registry, w, events);
+    for (const m of w.monsters) killMonster(ctx, m);
+    const each = bal.loot.scrapPerKill * scrapLevelFactor(registry, w.depth);
+    const scrap = (kind: 'normal' | 'elite') =>
+      Math.round(each * bal.drops.scrapByKind[kind] * (1 + w.hero.stats.scrapFind / 100));
+    expect(events.flatMap((e) => (e.kind === 'death' ? [e.scrap] : []))).toEqual([
+      scrap('normal'),
+      scrap('elite'),
+    ]);
   });
 });

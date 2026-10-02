@@ -51,7 +51,6 @@ export function createSandboxWorld(registry: DataRegistry, o: SandboxWorldOption
     phoenixAvailable: true,
     seed: 1,
     loot: {
-      pity: 0,
       nextUid: 1,
       magicFind: 0,
       legendaryBoost: 1,

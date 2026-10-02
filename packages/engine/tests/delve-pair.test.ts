@@ -1086,7 +1086,6 @@ describe('drops lean toward the pair', () => {
       depth: 5,
       kind: 'elite' as const,
       magicFind: 0,
-      pity: 0,
       dropMult: 1,
       legendaryBoost: 1,
       forceLegendary: false,

@@ -294,7 +294,6 @@ describe('determinism', () => {
       depth: 5,
       kind: 'boss' as const,
       magicFind: 40,
-      pity: 0,
       dropMult: 1,
       legendaryBoost: 1,
       forceLegendary: true,
@@ -306,7 +305,7 @@ describe('determinism', () => {
       const kind = i % 3 ? ('elite' as const) : ('boss' as const);
       const r = rollEncounterDrops(registry, { ...ctx, kind, forceLegendary: i === 0 }, rng);
       items.push(...r.items);
-      ctx = { ...ctx, pity: r.pity, nextUid: r.nextUid };
+      ctx = { ...ctx, nextUid: r.nextUid };
     }
     const strip = items.map(({ moveset: _m, ...rest }) => rest);
     let h = 0x811c9dc5;

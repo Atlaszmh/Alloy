@@ -789,6 +789,98 @@ export const ArpgDataSchema = z.object({
     .length(15),
 });
 
+/** A drop-table entry: a chance, then a count from lo to hi. */
+const DropEntrySchema = z.object({
+  chance: z.number().min(0).max(1),
+  count: z
+    .tuple([z.number().int().min(0), z.number().int().min(0)])
+    .refine(([lo, hi]) => lo <= hi, 'a count runs low to high'),
+});
+
+function perFoe<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({ normal: schema, elite: schema, boss: schema });
+}
+
+/** Weights by affix family (a family left out weighs 1). */
+const FamilyWeightsSchema = z.record(z.enum(AFFIX_FAMILIES), z.number().min(0));
+
+/** Depths a tier or grade starts at: the first at 1, rising. */
+const StartDepthsSchema = z
+  .array(z.number().int().min(1))
+  .min(1)
+  .refine((ds) => ds[0] === 1 && ds.every((d, i) => i === 0 || d > ds[i - 1]), 'from 1, rising');
+
+/** `balance.json → delve.crafting` (see the crafting spec). */
+export const CraftingBalanceSchema = z.object({
+  forgeScrap: perRarity(z.number().min(0)),
+  offPairDust: z.number().int().min(0),
+  weaponExtras: perRarity(
+    z.object({ slots: z.number().int().min(0), sockets: z.number().int().min(0) }),
+  ),
+  honeScrap: z.number().min(0),
+  honeGrowth: z.number().min(1),
+  imprintScrap: perRarity(z.number().min(0)),
+  refine: z.object({
+    metal: z.object({ count: z.number().int().min(2), scrap: z.number().min(0) }),
+    flux: z.object({ count: z.number().int().min(2), scrap: z.number().min(0) }),
+    shard: z.object({
+      count: z.number().int().min(2),
+      // By the tier refined: I→II, II→III, III→IV, IV→V.
+      scrap: z.array(z.number().min(0)).length(4),
+    }),
+  }),
+  attuneRoll: z.object({ perPoint: z.number().min(0), cap: z.number().min(0).max(1) }),
+  salvageShardTier: z
+    .array(z.number().min(0).max(1))
+    .length(4)
+    .refine((ts) => ts.every((t, i) => i === 0 || t > ts[i - 1]), 'thresholds rise'),
+  salvageExtraShard: z.number().min(0).max(1),
+  shardBench: z.object({ scrap: z.number().min(0), dust: z.number().min(0) }),
+  deathLoss: z.number().min(0).max(1),
+});
+
+/** `balance.json → delve.drops` (see the crafting spec). */
+export const DropsBalanceSchema = z.object({
+  normal: z.object({
+    bars: DropEntrySchema,
+    dust: DropEntrySchema,
+    shards: DropEntrySchema,
+    links: DropEntrySchema,
+  }),
+  elite: z.object({
+    bars: DropEntrySchema,
+    dust: DropEntrySchema,
+    shards: DropEntrySchema,
+    links: DropEntrySchema,
+    flux: DropEntrySchema,
+    gearChance: z.number().min(0).max(1),
+    patternChance: z.number().min(0).max(1),
+  }),
+  boss: z.object({
+    gear: z.number().int().min(0),
+    flux: DropEntrySchema,
+    shards: DropEntrySchema,
+    essenceChance: z.number().min(0).max(1),
+    patternChance: z.number().min(0).max(1),
+  }),
+  scrapByKind: perFoe(z.number().min(0)),
+  scrapPickups: perFoe(z.number().int().min(1)),
+  metalUpChance: z.number().min(0).max(1),
+  find: z.object({ perPoint: z.number().min(0), cap: z.number().min(0).max(1) }),
+  shardTierDepths: StartDepthsSchema.refine((ds) => ds.length === 5, 'one per tier, I to V'),
+  fluxGradeDepths: StartDepthsSchema.refine(
+    (ds) => ds.length === FLUX_GRADES.length,
+    'one per grade, uncommon to epic',
+  ),
+  tierWeights: z.array(z.number().positive()).length(5),
+  biomeShardWeights: z.record(z.string(), FamilyWeightsSchema),
+  biomeElementWeight: z.number().min(0),
+  doors: z.record(z.string(), FamilyWeightsSchema),
+  magnetSpeed: z.number().positive(),
+  vacuumSpeed: z.number().positive(),
+  pickupDelay: z.number().min(0),
+});
+
 const AbilitySlotBalanceSchema = z.object({
   cost: z.number().min(0),
   cooldown: z.number().min(0),
@@ -878,11 +970,6 @@ const DelveBalanceSchema = z.object({
     maxDepthLuck: z.number().min(0),
     eliteLuck: z.number().min(0),
     bossLuck: z.number().min(0),
-    pityPerDrop: z.number().min(0),
-    normalDropChance: z.number().min(0).max(1),
-    extraDropChance: z.number().min(0).max(1),
-    eliteDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
-    bossDrops: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
     bossMinRarity: RaritySchema,
     rarityBaseMult: perRarity(z.number().positive()),
     affixCount: perRarity(z.number().int().min(0)),
@@ -1157,6 +1244,8 @@ const DelveBalanceSchema = z.object({
     spawnRing: z.number().positive(),
     edgeMargin: z.number().min(0),
   }),
+  crafting: CraftingBalanceSchema,
+  drops: DropsBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),

@@ -69,8 +69,6 @@ export interface HitOpts {
   stacks?: number;
 }
 
-const KILL_SCRAP_MULT = { normal: 1, elite: 3, boss: 10 } as const;
-
 /** The status each element's hits apply: its stacks (Earth's `stagger` only from an Earth source). */
 export const BASIC_STATUS: Record<ManaType, StatusId> = {
   fire: 'burn',
@@ -709,7 +707,7 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     : Math.round(
         bal.loot.scrapPerKill *
           scrapLevelFactor(registry, world.depth) *
-          KILL_SCRAP_MULT[m.kind] *
+          bal.drops.scrapByKind[m.kind] *
           (1 + h.stats.scrapFind / 100),
       );
   world.pending.scrap += scrap;
@@ -767,7 +765,6 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
       depth: world.depth,
       kind: m.kind,
       magicFind: loot.magicFind,
-      pity: loot.pity,
       dropMult: loot.dropMult,
       legendaryBoost: loot.legendaryBoost,
       forceLegendary,
@@ -777,7 +774,6 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity): void {
     },
     lootRng,
   );
-  loot.pity = drops.pity;
   loot.nextUid = drops.nextUid;
   if (forceLegendary) loot.forceLegendary = false;
   drops.items.forEach((item, i) => {

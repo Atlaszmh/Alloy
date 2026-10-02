@@ -11,7 +11,6 @@ export interface DropContext {
   kind: MonsterKind;
   /** Total magic find in percentage points (gear + door). */
   magicFind: number;
-  pity: number;
   /** Door drop multiplier (1 = normal). */
   dropMult: number;
   legendaryBoost: number;
@@ -26,28 +25,33 @@ export interface DropContext {
 
 export interface DropResult {
   items: GearItem[];
-  pity: number;
   nextUid: number;
 }
 
+/**
+ * ponytail: Phase A's stand-in for today's gear counts (`loot.normalDropChance`, `extraDropChance`,
+ * `eliteDrops` and `bossDrops`, gone from the data); B1 replaces them with `delve.drops`' tables.
+ */
+const GEAR_TODAY = { normal: 0.22, extra: 0.05, elite: [2, 3], boss: [3, 4] } as const;
+
 /** Round a fractional count up with probability equal to its fraction. */
-function stochasticRound(value: number, rng: SeededRNG): number {
+export function stochasticRound(value: number, rng: SeededRNG): number {
   const whole = Math.floor(value);
   return whole + (rng.next() < value - whole ? 1 : 0);
 }
 
-function dropCount(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): number {
-  const loot = registry.getDelveBalance().loot;
+function dropCount(ctx: DropContext, rng: SeededRNG): number {
+  const loot = GEAR_TODAY;
   switch (ctx.kind) {
     case 'normal': {
-      let n = rng.next() < Math.min(1, loot.normalDropChance * ctx.dropMult) ? 1 : 0;
-      if (rng.next() < Math.min(1, loot.extraDropChance * ctx.dropMult)) n++;
+      let n = rng.next() < Math.min(1, loot.normal * ctx.dropMult) ? 1 : 0;
+      if (rng.next() < Math.min(1, loot.extra * ctx.dropMult)) n++;
       return n;
     }
     case 'elite':
-      return stochasticRound(rng.nextInt(loot.eliteDrops[0], loot.eliteDrops[1]) * ctx.dropMult, rng);
+      return stochasticRound(rng.nextInt(loot.elite[0], loot.elite[1]) * ctx.dropMult, rng);
     case 'boss':
-      return Math.max(1, stochasticRound(rng.nextInt(loot.bossDrops[0], loot.bossDrops[1]) * ctx.dropMult, rng));
+      return Math.max(1, stochasticRound(rng.nextInt(loot.boss[0], loot.boss[1]) * ctx.dropMult, rng));
   }
 }
 
@@ -61,11 +65,10 @@ export function dropLuck(registry: DataRegistry, ctx: Pick<DropContext, 'depth' 
 
 export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng: SeededRNG): DropResult {
   const loot = registry.getDelveBalance().loot;
-  const count = dropCount(registry, ctx, rng);
+  const count = dropCount(ctx, rng);
   const luck = dropLuck(registry, ctx);
   const ilvl = ctx.kind === 'boss' ? ctx.depth + 1 : ctx.depth;
 
-  let pity = ctx.pity;
   let nextUid = ctx.nextUid;
   const items: GearItem[] = [];
   for (let i = 0; i < count; i++) {
@@ -74,12 +77,11 @@ export function rollEncounterDrops(registry: DataRegistry, ctx: DropContext, rng
       rarity = 'legendary';
     } else {
       const minRarity = ctx.kind === 'boss' && i === 0 ? loot.bossMinRarity : undefined;
-      rarity = rollRarity(registry, { luck, pity, minRarity, legendaryBoost: ctx.legendaryBoost }, rng);
+      rarity = rollRarity(registry, { luck, minRarity, legendaryBoost: ctx.legendaryBoost }, rng);
     }
-    pity = rarity === 'legendary' ? 0 : pity + 1;
     items.push(generateItem(registry, { uid: `g${nextUid++}`, ilvl, rarity, biomeMana: ctx.biomeMana, pair: ctx.pair }, rng));
   }
-  return { items, pity, nextUid };
+  return { items, nextUid };
 }
 
 /**

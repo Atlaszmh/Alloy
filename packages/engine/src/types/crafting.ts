@@ -1,4 +1,5 @@
 import type { ChainSkill } from './ability.js';
+import type { MonsterKind } from './arpg.js';
 import type { DelveProfile } from './delve.js';
 import type { GearSlot, HeroStatKey, Rarity } from './gear.js';
 import type { ManaType } from './mana.js';
@@ -201,4 +202,91 @@ export interface CraftingData {
     metals: Partial<Record<MetalId, number>>;
     flux: Partial<Record<FluxGrade, number>>;
   };
+}
+
+// ── Balance (balance.json → delve.crafting, delve.drops) ──────────────────
+
+/** A drop-table entry: the chance it drops at all (× the door's `materials`, at most 1), then a uniform count. */
+export interface DropEntry {
+  chance: number;
+  count: [number, number];
+}
+
+export interface CraftingBalance {
+  /** A forge's scrap by rarity, × `scrapLevelFactor(ilvl)`. */
+  forgeScrap: Record<Rarity, number>;
+  /** Mana Dust to forge in an element outside the pair. */
+  offPairDust: number;
+  /** A forged weapon's extra slots and open sockets, by rarity (placed as the spec's S7 says). */
+  weaponExtras: Record<Rarity, { slots: number; sockets: number }>;
+  /** A hone's scrap: this × `forge.rarityCostMult` × `honeGrowth` ^ hones × `scrapLevelFactor(ilvl)`. */
+  honeScrap: number;
+  honeGrowth: number;
+  /** An imprint's scrap by rarity, × `scrapLevelFactor(ilvl)`, besides the shard. */
+  imprintScrap: Record<Rarity, number>;
+  /** Refining `count` of a grade into one of the next, for scrap (a shard's by the tier refined, I→II first). */
+  refine: {
+    metal: { count: number; scrap: number };
+    flux: { count: number; scrap: number };
+    shard: { count: number; scrap: number[] };
+  };
+  /** The attunement floor on an in-pair item's affix and legendary rolls: min(cap, perPoint × attunement). */
+  attuneRoll: { perPoint: number; cap: number };
+  /** A salvaged line's shard tier: the roll thresholds it passes, one per tier past I (clamped to the affix's last). */
+  salvageShardTier: number[];
+  /** Chance a salvage gives a second shard, from another line. */
+  salvageExtraShard: number;
+  /** The shard bench's price for a tier I shard. */
+  shardBench: { scrap: number; dust: number };
+  /** The share of a dive's banked materials a death or an abandon loses. */
+  deathLoss: number;
+}
+
+export interface DropsBalance {
+  normal: { bars: DropEntry; dust: DropEntry; shards: DropEntry; links: DropEntry };
+  elite: {
+    bars: DropEntry;
+    dust: DropEntry;
+    shards: DropEntry;
+    links: DropEntry;
+    flux: DropEntry;
+    /** Chance an elite drops a gear item (× the door's `gear`). */
+    gearChance: number;
+    /** Chance of a pattern the hero doesn't know (none once every pattern is known). */
+    patternChance: number;
+  };
+  boss: {
+    /** Gear items a boss drops, rolled as today's boss item (at least `loot.bossMinRarity`). */
+    gear: number;
+    flux: DropEntry;
+    shards: DropEntry;
+    /** Chance of an essence (× the door's `essence` and Lucky Charm's `legendaryBoost`). */
+    essenceChance: number;
+    patternChance: number;
+  };
+  /** A kill's scrap by foe kind: `scrapLevelFactor(ilvl)` × this × (1 + scrapFind / 100). */
+  scrapByKind: Record<MonsterKind, number>;
+  /** The scrap pickups a kill's scrap is split into. */
+  scrapPickups: Record<MonsterKind, number>;
+  /** Chance a bar comes as the next metal up. */
+  metalUpChance: number;
+  /** Find: each flux or shard drop comes a grade or tier up with chance min(cap, Find / 100 × perPoint). */
+  find: { perPoint: number; cap: number };
+  /** The depth each shard tier, I to V, starts dropping at. */
+  shardTierDepths: number[];
+  /** The depth each flux grade, uncommon to epic, starts dropping at. */
+  fluxGradeDepths: number[];
+  /** The weights of the tiers (or grades) a floor can drop, lowest first. */
+  tierWeights: number[];
+  /** A biome's shard leanings: an affix's weight × this by its family (missing: 1). */
+  biomeShardWeights: Record<string, Partial<Record<AffixFamily, number>>>;
+  /** The biome element's `*Power` and `*Attune` shards' weight × this. */
+  biomeElementWeight: number;
+  /** A door's shard leanings, as `biomeShardWeights`. */
+  doors: Record<string, Partial<Record<AffixFamily, number>>>;
+  /** The magnet's pull speed and the floor-clear vacuum's, in units a second. */
+  magnetSpeed: number;
+  vacuumSpeed: number;
+  /** Seconds before a fresh drop can be picked up. */
+  pickupDelay: number;
 }

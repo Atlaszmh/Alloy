@@ -26,8 +26,6 @@ export interface ItemGenOptions {
 export interface RarityRollContext {
   /** 0 = no luck; 1 = +100% magic find equivalent. */
   luck: number;
-  /** Drops since the last legendary. */
-  pity: number;
   minRarity?: Rarity;
   /** Extra multiplier on legendary weight (Lucky Charm). */
   legendaryBoost?: number;
@@ -216,10 +214,7 @@ export function rarityWeights(registry: DataRegistry, ctx: RarityRollContext): R
   const out = {} as Record<Rarity, number>;
   RARITY_ORDER.forEach((rarity, i) => {
     let w = loot.rarityWeights[rarity] * Math.pow(1 + luck, i * loot.luckExponent);
-    if (rarity === 'legendary') {
-      w *= 1 + Math.max(0, ctx.pity) * loot.pityPerDrop;
-      w *= ctx.legendaryBoost ?? 1;
-    }
+    if (rarity === 'legendary') w *= ctx.legendaryBoost ?? 1;
     out[rarity] = i < minIdx ? 0 : w;
   });
   return out;

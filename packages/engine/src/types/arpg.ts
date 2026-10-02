@@ -648,7 +648,6 @@ export type ArpgEvent =
   | { kind: 'heroDeath' };
 
 export interface LootContext {
-  pity: number;
   nextUid: number;
   magicFind: number;
   legendaryBoost: number;

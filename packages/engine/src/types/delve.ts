@@ -3,6 +3,7 @@ import type { ManaMap, ManaType } from './mana.js';
 import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability.js';
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
+import type { CraftingBalance, DropsBalance } from './crafting.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -374,11 +375,6 @@ export interface DelveBalance {
     maxDepthLuck: number;
     eliteLuck: number;
     bossLuck: number;
-    pityPerDrop: number;
-    normalDropChance: number;
-    extraDropChance: number;
-    eliteDrops: [number, number];
-    bossDrops: [number, number];
     bossMinRarity: Rarity;
     rarityBaseMult: Record<Rarity, number>;
     affixCount: Record<Rarity, number>;
@@ -631,6 +627,10 @@ export interface DelveBalance {
   };
   feel: FeelBalance;
   sandbox: SandboxBalance;
+  /** Forging, Temper, refining, salvage and the death loss (see the crafting spec). */
+  crafting: CraftingBalance;
+  /** The drop tables, Find, the leanings and the pickups' feel (see the crafting spec). */
+  drops: DropsBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;

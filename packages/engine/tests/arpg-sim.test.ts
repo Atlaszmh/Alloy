@@ -40,7 +40,6 @@ function world(opts: Partial<FloorOptions> & { equipped?: EquippedGear } = {}): 
     phoenixAvailable: true,
     seed: 77,
     loot: {
-      pity: 0,
       nextUid: 100,
       magicFind: 0,
       legendaryBoost: 1,
@@ -106,7 +105,6 @@ describe('floor generation', () => {
 
   it('re-entering a floor meets the same monsters but rolls fresh loot', () => {
     const loot = {
-      pity: 0,
       magicFind: 0,
       legendaryBoost: 1,
       dropMult: 1,

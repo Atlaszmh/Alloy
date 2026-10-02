@@ -155,7 +155,6 @@ export function arena(monsters: Partial<MonsterEntity>[] = [], opts: ArenaOpts =
     phoenixAvailable: true,
     seed: 77,
     loot: {
-      pity: 0,
       nextUid: 100,
       magicFind: 0,
       legendaryBoost: 1,
