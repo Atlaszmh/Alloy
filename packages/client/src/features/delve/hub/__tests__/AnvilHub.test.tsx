@@ -42,6 +42,14 @@ describe('AnvilHub', () => {
     useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
+  it("Loadout's tab counts the new finds as a NEW pip", () => {
+    useDelveStore.setState({ newUids: { a: true, b: true } });
+    renderHub();
+    const pip = screen.getByTestId('tab-loadout').querySelector('.k-tab-badge')!;
+    expect(pip).toHaveTextContent(/^NEW 2$/);
+    expect(pip.querySelector('[aria-label="2 new"]')).not.toBeNull();
+  });
+
   it('is a kit screen whose header holds the five tabs, the purse and Power', () => {
     renderHub();
     const hub = screen.getByTestId('hub-anvil');

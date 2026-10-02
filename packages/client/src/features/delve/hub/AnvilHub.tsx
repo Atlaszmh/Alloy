@@ -80,7 +80,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
         testId: `tab-${t.id}`,
         badge:
           t.id === 'loadout' && newCount > 0 ? (
-            <span aria-label={`${newCount} new`}>{newCount}</span>
+            <span aria-label={`${newCount} new`}>NEW {newCount}</span>
           ) : t.id === 'skills' && unapplied > 0 ? (
             <span
               aria-label={`${unapplied} unapplied change${unapplied === 1 ? '' : 's'}`}
