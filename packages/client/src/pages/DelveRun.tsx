@@ -15,11 +15,9 @@ import { vibrate } from '@/shared/utils/haptics';
 import { ToastContainer, showToast } from '@/components/Toast';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveNotices } from '@/features/delve/useDelveNotices';
-import { DoorChoice } from '@/features/delve/DoorChoice';
 import { DiveSummary } from '@/features/delve/DiveSummary';
 import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
-import { LootTray } from '@/features/delve/LootTray';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
 import { HudGrid, type Insets } from '@/features/delve/arena/hud/HudGrid';
 import { PurseBar } from '@/features/delve/arena/hud/PurseBar';
@@ -27,6 +25,7 @@ import { SkillDock } from '@/features/delve/arena/hud/SkillDock';
 import { BossBar } from '@/features/delve/arena/hud/BossBar';
 import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
 import { useQuests } from '@/features/delve/quests/useQuests';
+import { StopScreen } from '@/features/delve/stop/StopScreen';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
 import '@/features/delve/delve.css';
@@ -250,6 +249,19 @@ export function DelveRun() {
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 
+      {choosing && (
+        <div className="absolute inset-0 z-40">
+          <StopScreen
+            dive={dive}
+            onChoose={onChooseDoor}
+            onExtract={onExtract}
+            onPotion={onDoorPotion}
+            onMenu={() => setMenuOpen(true)}
+            onInspect={openItem}
+          />
+        </div>
+      )}
+
       {menuOpen && (
         <div
           className="delve-panel absolute right-3 top-14 z-40 flex w-60 flex-col gap-1.5 p-2 shadow-xl"
@@ -288,33 +300,6 @@ export function DelveRun() {
       )}
       {/* After the dive menu: the controller's back button and focus go to the topmost panel. */}
       {controlsOpen && <ControlsPanel onClose={() => setControlsOpen(false)} />}
-
-      {choosing && (
-        <div className="absolute inset-0 z-40 flex flex-col bg-black/80" data-pad-scope>
-          <div className="relative min-h-0 flex-1">
-            <DoorChoice dive={dive} onChoose={onChooseDoor} onExtract={onExtract} />
-          </div>
-          <div
-            className="relative z-40 bg-black/70 pt-2"
-            style={{ paddingBottom: 'calc(8px + var(--spacing-safe-bottom))' }}
-          >
-            <div className="delve-column mb-3 flex items-center justify-between">
-              <span className="text-xs text-stone-400">
-                Life {Math.round(dive.heroHpFrac * 100)}% · {dive.potions} 🧪
-              </span>
-              <button
-                className="delve-btn px-3 py-1.5 text-xs"
-                onClick={onDoorPotion}
-                disabled={dive.potions <= 0 || dive.heroHpFrac >= 1}
-                data-testid="door-potion"
-              >
-                🧪 Drink potion
-              </button>
-            </div>
-            <LootTray originRef={hostRef} onSelect={openItem} />
-          </div>
-        </div>
-      )}
 
       {finished && (
         <DiveSummary

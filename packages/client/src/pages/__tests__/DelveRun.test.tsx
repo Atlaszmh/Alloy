@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { createDelveProfile, startDive } from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
@@ -53,5 +53,31 @@ describe('DelveRun', () => {
     expect(screen.getByTestId('attack-mode-toggle')).toBeInTheDocument();
     fireEvent.click(menu);
     expect(screen.getByTestId('attack-mode-toggle')).toBeInTheDocument();
+  });
+
+  it('at the stop, the stop screen covers the arena and its Menu opens the dive menu over it', () => {
+    const { profile } = useDelveStore.getState();
+    useDelveStore.setState({
+      profile: {
+        ...profile,
+        dive: {
+          ...profile.dive!,
+          phase: 'choosing',
+          doorChoices: ['winding'],
+          stop: { offers: ['equip'], taken: false },
+        },
+      },
+    });
+    render(
+      <MemoryRouter>
+        <DelveRun />
+      </MemoryRouter>,
+    );
+    const stop = screen.getByTestId('door-choice');
+    expect(screen.getByTestId('door-winding')).toBeInTheDocument();
+    expect(screen.queryByTestId('skill-bar')).toBeNull();
+    fireEvent.click(within(stop).getByRole('button', { name: 'Menu' }));
+    const menu = screen.getByTestId('attack-mode-toggle');
+    expect(stop.compareDocumentPosition(menu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
