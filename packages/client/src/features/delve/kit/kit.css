@@ -1,0 +1,302 @@
+/* ══════════════════════════════════════════
+   The forge kit: tokens, fonts, materials and the focus ring (Delve UI v1).
+   Sizes are design px at 1920×1080; .delve-zoom / .delve-hud-zoom scale them.
+   Values from the spec's Appendix A (the mockups' theme CSS).
+   ══════════════════════════════════════════ */
+
+/* Self-hosted, unmodified, SIL OFL 1.1: each folder holds its OFL.txt. */
+@font-face {
+  font-family: 'Jersey 10';
+  src: url('/fonts/jersey-10/Jersey10-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Pixelify Sans';
+  src: url('/fonts/pixelify-sans/PixelifySans-Variable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Silkscreen';
+  src: url('/fonts/silkscreen/Silkscreen-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+/* ── Tokens ── */
+
+.delve-ui {
+  --k-well: #181425;
+  --k-steel: #262b44;
+  --k-steel-1: #3a4466;
+  --k-steel-2: #5a6988;
+  --k-steel-3: #8b9bb4;
+  --k-text: #ffffff;
+  --k-text-2: #c0cbdc;
+  --k-text-3: #8b9bb4;
+  --k-wood-0: #3e2731;
+  --k-wood-1: #733e39;
+  --k-wood-hi: #b86f50;
+  --k-wood-text: #ead4aa;
+  --k-hot: #feae34;
+  --k-hot-hi: #fee761;
+  --k-hot-lo: #f77622;
+  --k-hot-ink: #3e2731;
+  --k-mana: #2ce8f5;
+  --k-mana-1: #0099db;
+  --k-mana-2: #124e89;
+  --k-ok: #63c74d;
+  --k-bad: #e43b44;
+  --k-bad-text: #f6757a;
+  --r-common: #c0cbdc;
+  --r-uncommon: #63c74d;
+  --r-magic: #0099db;
+  --r-rare: #fee761;
+  --r-epic: #b55088;
+  --r-legendary: #f77622;
+  --rt-common: #c0cbdc;
+  --rt-uncommon: #63c74d;
+  --rt-magic: #0099db;
+  --rt-rare: #fee761;
+  --rt-epic: #d7a6e8;
+  --rt-legendary: #f77622;
+  --k-font-display: 'Jersey 10', sans-serif;
+  --k-font-body: 'Pixelify Sans', sans-serif;
+  --k-font-label: 'Silkscreen', monospace;
+}
+
+/* ── Global rules ── */
+
+.delve-ui {
+  font-family: var(--k-font-body);
+  font-size: 18px;
+  color: var(--k-text);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+
+.delve-ui,
+.delve-ui *,
+.delve-ui *::before,
+.delve-ui *::after {
+  border-radius: 0;
+}
+
+.delve-ui svg {
+  shape-rendering: crispEdges;
+}
+
+/* The zoom lives on these, never on .delve-ui (spec, decided item 31). */
+.delve-zoom {
+  zoom: var(--ui-scale, 1);
+}
+
+.delve-hud-zoom {
+  zoom: var(--hud-scale, 1);
+}
+
+/* ── Type ── */
+
+.k-disp,
+.k-display,
+.k-heading,
+.k-section {
+  font-family: var(--k-font-display);
+  font-weight: 400;
+  font-size-adjust: 0.56;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 var(--k-well);
+  line-height: 1;
+}
+
+.k-display {
+  font-size: 64px;
+}
+
+.k-heading {
+  font-size: 32px;
+}
+
+.k-section {
+  font-size: 22px;
+}
+
+.k-body-2 {
+  font-size: 16px;
+  color: var(--k-text-2);
+}
+
+.k-caption {
+  font-size: 14px;
+  color: var(--k-text-3);
+}
+
+.k-label {
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--k-text-3);
+}
+
+/* ── Materials ── */
+
+.k-wall {
+  background:
+    radial-gradient(
+      ellipse at 50% 115%,
+      rgba(247, 118, 34, 0.2) 0 28%,
+      rgba(247, 118, 34, 0.1) 28% 44%,
+      transparent 44%
+    ),
+    repeating-linear-gradient(90deg, rgba(24, 20, 37, 0.35) 0 3px, transparent 3px 190px),
+    repeating-linear-gradient(
+      0deg,
+      #2d1e24 0 52px,
+      #22161b 52px 56px,
+      #33222a 56px 108px,
+      #22161b 108px 112px
+    );
+}
+
+.k-plate {
+  background:
+    linear-gradient(#8b9bb4, #8b9bb4) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) 10px calc(100% - 14px) / 4px 4px no-repeat,
+    linear-gradient(#8b9bb4, #8b9bb4) calc(100% - 14px) calc(100% - 14px) / 4px 4px no-repeat,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 6px),
+    #262b44;
+  border: 6px solid #733e39;
+  box-shadow:
+    0 0 0 3px #181425,
+    inset 0 0 0 2px #3e2731,
+    inset 0 3px 0 2px #5a6988,
+    6px 6px 0 3px rgba(24, 20, 37, 0.6);
+}
+
+.k-glass {
+  background:
+    linear-gradient(#5a6988, #5a6988) 10px 10px / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) calc(100% - 14px) 10px / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) 10px calc(100% - 14px) / 4px 4px no-repeat,
+    linear-gradient(#5a6988, #5a6988) calc(100% - 14px) calc(100% - 14px) / 4px 4px no-repeat,
+    rgba(38, 43, 68, 0.94);
+  border: 4px solid #3a4466;
+  box-shadow:
+    0 0 0 2px #181425,
+    inset 0 2px 0 #5a6988;
+}
+
+.k-well {
+  background: #181425;
+  border: 2px solid #262b44;
+  box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+.k-band {
+  position: relative;
+  z-index: 1;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 58px, #8b9bb4 58px 62px, transparent 62px 120px)
+      0 8px / 100% 4px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 58px, #181425 58px 62px, transparent 62px 120px)
+      0 calc(100% - 12px) / 100% 4px no-repeat,
+    #3a4466;
+  border-bottom: 4px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #5a6988,
+    0 4px 0 #0099db,
+    0 8px 0 rgba(44, 232, 245, 0.28);
+}
+
+.k-planks {
+  background: repeating-linear-gradient(0deg, #5c3434 0 22px, #4a2a2e 22px 24px), #733e39;
+  border-top: 4px solid #181425;
+  box-shadow: inset 0 3px 0 #b86f50;
+}
+
+.k-hot {
+  background: #feae34;
+  color: #3e2731;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #fee761,
+    inset 0 -4px 0 #f77622,
+    0 0 0 3px rgba(247, 118, 34, 0.55),
+    0 0 0 8px rgba(247, 118, 34, 0.18);
+}
+
+.k-plank {
+  background: repeating-linear-gradient(0deg, #733e39 0 10px, #6a3934 10px 12px);
+  color: #ead4aa;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #b86f50,
+    inset 0 -3px 0 #3e2731;
+}
+
+.k-go {
+  background: #63c74d;
+  color: #193c3e;
+  border: 3px solid #181425;
+  box-shadow:
+    inset 0 3px 0 #a8e090,
+    inset 0 -4px 0 #3e8948;
+}
+
+.k-danger {
+  background: #3e2731;
+  color: #f6757a;
+  border: 3px solid #a22633;
+}
+
+.k-socket {
+  background: #181425;
+  border: 3px solid #5a6988;
+  box-shadow:
+    inset 0 0 0 3px #262b44,
+    inset 0 0 0 5px #3a4466,
+    3px 3px 0 #181425;
+}
+
+.k-mana {
+  box-shadow:
+    0 0 0 3px #181425,
+    0 0 0 6px #0099db,
+    0 0 0 10px rgba(44, 232, 245, 0.22),
+    0 0 0 14px rgba(44, 232, 245, 0.08);
+}
+
+.k-lifeframe {
+  box-shadow:
+    0 0 0 3px #181425,
+    0 0 0 6px #5a6988,
+    0 0 0 9px #181425;
+}
+
+/* ── Focus: one ring, for keys (focus-visible) and the pad (any focus), never a mouse click ── */
+
+.delve-ui :focus-visible,
+html[data-input='gamepad'] .delve-ui :focus {
+  outline: 3px solid #fee761;
+  outline-offset: 3px;
+  filter: drop-shadow(4px 4px 0 #181425);
+}
+
+/* ── The portal layer (uiLayer): over the screen, letting clicks through to it ── */
+
+#delve-ui-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
