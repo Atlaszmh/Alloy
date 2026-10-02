@@ -16,8 +16,6 @@ vi.mock('@/features/delve/arena/useArena', () => ({
     hud: null,
     worldRef: { current: null },
     cast: () => {},
-    aim: () => {},
-    cancelHold: () => {},
     potion: () => {},
     dodge: () => {},
     attack: () => {},
