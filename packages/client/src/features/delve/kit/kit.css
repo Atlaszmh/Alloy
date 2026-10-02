@@ -740,3 +740,64 @@ html[data-input='gamepad'] .delve-ui :focus {
   max-width: calc(100% - 64px);
   max-height: calc(100% - 64px);
 }
+
+/* ── Items ── */
+
+.k-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* The mockups' 40 px icon in an 84 px socket. */
+.k-tile-icon {
+  display: flex;
+  width: 48%;
+  height: 48%;
+}
+
+.k-tile[aria-pressed='true'] {
+  outline: 2px solid #fee761;
+  outline-offset: 3px;
+}
+
+.k-tile-mark {
+  position: absolute;
+  line-height: 1;
+}
+
+.k-tile-delta {
+  right: 6px;
+  bottom: 5px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.k-tile-new {
+  left: 6px;
+  top: 6px;
+  padding: 1px 3px;
+  font-family: var(--k-font-label);
+  font-size: 14px;
+  color: #3e2731;
+  background: #fee761;
+}
+
+.k-tile-lock {
+  right: 6px;
+  top: 6px;
+}
+
+.k-tile-eq {
+  left: 6px;
+  bottom: 5px;
+  font-family: var(--k-font-display);
+  font-size: 16px;
+  color: #feae34;
+  text-shadow: 1px 1px 0 #181425;
+}
