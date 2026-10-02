@@ -4,6 +4,7 @@ import { applyLabel, runeNames, selectDraftApply, useDelveStore } from '@/stores
 import { playSound } from '@/shared/utils/sound-manager';
 import { Button, Price, type Binding } from '@/features/delve/kit';
 import { getDelveRegistry } from '../../registry';
+import { sayRefusal } from './useAnvilChains';
 
 /** Apply's inputs: Ctrl+Enter, or Y held on the pad. */
 export const APPLY_BINDING: Binding = { key: 'Enter', ctrl: true, pad: 'y', padHold: 600 };
@@ -12,6 +13,7 @@ export const APPLY_BINDING: Binding = { key: 'Enter', ctrl: true, pad: 'y', padH
 export function applyChains() {
   const res = useDelveStore.getState().applyDraft();
   playSound(res.ok ? 'upgradeTier' : 'combineFail');
+  sayRefusal(res, 'Cannot apply');
   return res;
 }
 

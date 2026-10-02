@@ -394,6 +394,32 @@ describe('SkillsTab', () => {
     expect(screen.getByTestId('add-slot')).toHaveTextContent('3 Links · 60 scrap');
   });
 
+  it('offers + Slot beside + Move while the chain is under five slots, and none at five', () => {
+    const bolt: Move = { kind: 'light', form: 'bolt', elements: ['fire'] };
+    roomy(3, { primary: { moves: [bolt], payment: 'mana' } });
+    renderSkills();
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(screen.getByTestId('add-slot')).toHaveTextContent('+ Slot');
+    act(() => roomy(5, { primary: { moves: [bolt], payment: 'mana' } }));
+    expect(screen.getByTestId('move-add')).toBeInTheDocument();
+    expect(screen.queryByTestId('add-slot')).toBeNull();
+  });
+
+  it("a refused Add slot or Apply says the engine's reason on the lane's message line", () => {
+    store().setProfile({ ...store().profile, links: 1, scrap: 25 });
+    renderSkills();
+    const refuse = (reason: string) => ({ ok: false, profile: store().profile, reason });
+    vi.spyOn(store(), 'addSlot').mockReturnValueOnce(refuse('Not now'));
+    fireEvent.click(screen.getByTestId('add-slot'));
+    expect(screen.getByTestId('chain-message')).toHaveTextContent('Not now');
+    fireEvent.click(screen.getByTestId('form-lance'));
+    vi.spyOn(store(), 'applyDraft').mockReturnValueOnce(refuse('The forge is cold'));
+    apply();
+    expect(screen.getByTestId('chain-message')).toHaveTextContent('The forge is cold');
+    apply();
+    expect(screen.queryByTestId('chain-message')).toBeNull();
+  });
+
   it('marks a move outside the pair off-pair, and never offers its element to another', () => {
     const storm: Move = { kind: 'medium', form: 'bolt', elements: ['storm'] };
     const fire: Move = { kind: 'medium', form: 'bolt', elements: ['fire'] };

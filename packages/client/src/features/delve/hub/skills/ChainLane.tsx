@@ -1,4 +1,12 @@
-import { Fragment, useId, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import {
   chainCycle,
   socketsOf,
@@ -12,7 +20,7 @@ import { getDelveRegistry } from '../../registry';
 import { SocketRow } from '../../runes/SocketRow';
 import { KIND_NAME, SKILL_NAME } from '../../chains/chain-text';
 import { PAYMENTS, offPair, type ChainEditorModel } from '../../chains/useChainEditor';
-import type { AnvilChains } from './useAnvilChains';
+import { useChainMessage, type AnvilChains } from './useAnvilChains';
 
 /** Where a card dragged `dx` px (design px) from place `from` lands, `step` px a place apart. */
 export function dropIndex(from: number, dx: number, step: number, count: number): number {
@@ -30,8 +38,9 @@ interface Drag {
 /**
  * The Skills tab's centre pane: the chosen chain's header (its slots, payment and rule), its
  * move cards in order (each its kind, element tile and form glyph, element or fusion, socket
- * pips and price; the chosen card's ◂ ▸ × toolbar), "+ Slot" with its price, and for an ability
- * chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37).
+ * pips and price; the chosen card's ◂ ▸ × toolbar), "+ Move" while a slot is free and "+ Slot"
+ * with its price while the chain is under its cap, a refused Apply's or Add slot's reason, and for
+ * an ability chain its stats and rhythm. A card drags to a new place with the mouse (decided item 37).
  */
 export function ChainLane({
   ed,
@@ -53,6 +62,9 @@ export function ChainLane({
   // A drag that moved swallows the click that ends it.
   const dragged = useRef(false);
   const cycle = resolved ? chainCycle(registry, stats, resolved) : null;
+  const message = useChainMessage((s) => s.text);
+  // The message is this lane's: it goes with it.
+  useEffect(() => () => useChainMessage.setState({ text: null }), []);
 
   const onPointerDown = (i: number) => (e: PointerEvent<HTMLButtonElement>) => {
     if (e.pointerType !== 'mouse' || e.button !== 0 || locked || entries.length < 2) return;
@@ -273,7 +285,7 @@ export function ChainLane({
             free slot
           </button>
         )}
-        {!absent && entries.length >= slots && offer.price && (
+        {!absent && offer.price && (
           <button
             type="button"
             className="flex flex-[0_0_150px] flex-col items-center justify-center gap-1.5 border-2 border-dashed border-[var(--k-steel-2)] bg-transparent text-[14px] text-[var(--k-text-3)]"
@@ -287,13 +299,22 @@ export function ChainLane({
           </button>
         )}
       </div>
-      {offer.why && !locked && entries.length >= slots && (
+      {offer.why && !locked && (
         <span
           id={`${id}-slot`}
           className="text-[14px] text-[var(--k-hot)]"
           data-testid="add-slot-why"
         >
           {offer.why}
+        </span>
+      )}
+      {message && (
+        <span
+          role="status"
+          className="text-[14px] text-[var(--k-bad-text)]"
+          data-testid="chain-message"
+        >
+          {message}
         </span>
       )}
       {ed.openWhy && (

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { create } from 'zustand';
 import {
   CHAIN_SKILLS,
   addSlot,
@@ -25,6 +26,14 @@ import { selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
 import { getDelveRegistry } from '../../registry';
 import type { ChainEditorProps, ChainRunes } from '../../chains/ChainEditor';
+
+/** The last refused Apply or Add slot, in the engine's words (the lane's message line); null once one goes through. */
+export const useChainMessage = create<{ text: string | null }>(() => ({ text: null }));
+
+/** Say a builder op's refusal on the lane, or clear it when the op went through. */
+export function sayRefusal(res: { ok: boolean; reason?: string }, fallback: string): void {
+  useChainMessage.setState({ text: res.ok ? null : (res.reason ?? fallback) });
+}
 
 /** The Anvil's chain builder: its props, and the slots the equipped weapon sells. */
 export interface AnvilChains {
@@ -138,6 +147,7 @@ export function useAnvilChains(): AnvilChains {
     buySlot: (skill) => {
       const res = useDelveStore.getState().addSlot(skill);
       playSound(res.ok ? 'upgradeTier' : 'combineFail');
+      sayRefusal(res, 'Cannot add a slot');
     },
   };
 }
