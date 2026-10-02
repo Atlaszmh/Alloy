@@ -11,6 +11,7 @@ import { PAD_BUTTONS, type PadButton } from '@/features/gamepad/gamepad';
 import { navCapture, padPrompts } from '@/features/delve/kit/prompts';
 import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { renderSkills } from './harness';
 
 vi.mock('react-router', async () => {
@@ -48,6 +49,7 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
+    useInputDeviceStore.getState().setDevice('keyboard');
   });
 
   it('sets the Apply bar as its footer, "No changes" when nothing is unapplied; the pause sets none', () => {
@@ -107,6 +109,34 @@ describe('SkillsTab: the footer, the keys and the pad', () => {
     act(() => navCapture()!('x'));
     expect(navCapture()).toBeNull();
     expect(summary()).toHaveTextContent(kinds('medium', 'light', 'medium', 'heavy'));
+  });
+
+  it('the carry lets go when the skill changes, the device switches or Esc puts it back, and never edits another chain', () => {
+    roomy();
+    renderSkills();
+    const pickUp = (at: number) => act(() => void padPrompts(new Set(['x']), held('x'), at));
+    // LT / RT (here a click on the list) step to another skill mid-carry.
+    pickUp(0);
+    const carry = navCapture()!;
+    fireEvent.click(screen.getByTestId('chain-skill-basic'));
+    expect(navCapture()).toBeNull();
+    act(() => carry('right')); // a stale handler edits nothing
+    fireEvent.click(screen.getByTestId('chain-skill-primary'));
+    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
+    // The keyboard takes over mid-carry: the card goes back.
+    act(() => useInputDeviceStore.getState().setDevice('gamepad'));
+    pickUp(1000);
+    act(() => navCapture()!('right'));
+    act(() => useInputDeviceStore.getState().setDevice('keyboard'));
+    expect(navCapture()).toBeNull();
+    expect(screen.getByTestId('hub-footer')).not.toHaveTextContent('Put back');
+    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
+    // Esc puts it back too, and is spent (no menu opens over it).
+    pickUp(2000);
+    act(() => navCapture()!('right'));
+    expect(press('Escape')).toBe(false);
+    expect(navCapture()).toBeNull();
+    expect(summary()).toHaveTextContent(kinds('light', 'medium', 'medium', 'heavy'));
   });
 
   it('on the pad, a tap of Y removes the chosen move and a held Y applies', () => {
