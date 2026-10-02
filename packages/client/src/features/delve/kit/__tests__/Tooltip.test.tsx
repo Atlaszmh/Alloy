@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { createRef } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useUIStore } from '@/stores/uiStore';
 import { Tooltip, TooltipCard } from '../Tooltip';
 
@@ -63,10 +63,41 @@ describe('the kit tooltip', () => {
       </Tooltip>,
     );
     expect(screen.getByRole('tooltip')).toHaveStyle({
-      left: '220px', // (300 + 30) / 1.5
-      top: '88px', // 150 / 1.5 − 12
-      transform: 'translate(-50%, -100%)',
+      left: '220px', // (300 + 30) / 1.5, less half the card (0 wide here)
+      top: '88px', // 150 / 1.5 − 12, less the card's height
     });
+  });
+
+  it('measures its card, flips or clamps it at the viewport edge, and follows a scroll or resize', () => {
+    // jsdom's viewport is 1024 × 768; the card is 300 × 200.
+    const card = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.getAttribute('role') === 'tooltip'
+          ? DOMRect.fromRect({ width: 300, height: 200 })
+          : new DOMRect();
+      });
+    render(
+      <Tooltip content={() => 'tip'}>
+        <button type="button">Slot</button>
+      </Tooltip>,
+    );
+    const trigger = screen.getByRole('button');
+    at(trigger, 900, 700, 60, 30);
+    fireEvent.mouseEnter(trigger);
+    // No room on the right: on the left (900 − 12 − 300), and clamped to the bottom (768 − 200).
+    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '588px', top: '568px' });
+    at(trigger, 100, 40, 60, 30);
+    act(() => {
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '172px', top: '40px' });
+    at(trigger, 200, 50, 60, 30);
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '272px', top: '50px' });
+    card.mockRestore();
   });
 
   it('renders inline under the HUD zoom with portal off, and stays open while asked', () => {
