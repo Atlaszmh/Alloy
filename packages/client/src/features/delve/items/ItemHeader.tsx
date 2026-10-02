@@ -46,10 +46,10 @@ export function ItemHeader({
         >
           {item.name}
         </div>
-        <div className="text-xs text-stone-300">
+        <div className="text-[14px] text-stone-300">
           {RARITY_LABEL[item.rarity]} {baseDisplayName(registry, item)} · {SLOT_LABEL[item.slot]}
         </div>
-        <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-stone-400">
+        <div className="mt-1 flex flex-wrap gap-1.5 text-[14px] text-stone-400">
           <span
             className="rounded px-1.5 py-0.5 font-semibold"
             style={
