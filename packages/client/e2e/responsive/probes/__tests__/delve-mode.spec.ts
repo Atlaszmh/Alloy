@@ -68,3 +68,9 @@ test('reachability: a Delve primary action takes the 24 px click floor, not the 
   await page.setContent(frame('<button data-primary-action style="width:100px;height:20px">Delve</button>'));
   expect((await primaryActionReachable(page, CTX))[0]?.severity).toBe('fail');
 });
+
+test('reachability: no primary action is a skip over the arena, a warning elsewhere', async ({ page }) => {
+  await page.setContent(frame(''));
+  expect(await primaryActionReachable(page, { ...CTX, delve: { arena: true } })).toEqual([]);
+  expect((await primaryActionReachable(page, CTX))[0]?.severity).toBe('warn');
+});

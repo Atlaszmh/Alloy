@@ -92,6 +92,9 @@ export const primaryActionReachable: Probe = async (page, ctx) => {
   }, { vw: ctx.viewport.width, vh: ctx.viewport.height });
 
   if (items.length === 0) {
+    // Skipped, not covered: over the Delve's arena the play itself is the primary action (no
+    // button to measure), so a missing [data-primary-action] there is by design, not a gap.
+    if (ctx.delve?.arena) return findings;
     findings.push({
       screen: ctx.screen, viewport: ctx.viewport.name, probe: PROBE,
       severity: 'warn',
