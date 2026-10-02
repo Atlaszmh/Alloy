@@ -35,11 +35,12 @@ Gear is currently the input to every sink: salvage is the only source of Mana Du
 
 | # | Question | Decision |
 |---|---|---|
-| S1 | What rides in the floor's haul? | Every material and currency pickup (bars, flux, shards, essences, scrap, Mana Dust, Links, runes, patterns). **Gear banks into the bag at once**, as today, and is never lost. |
-| S2 | Abandon | **Counts as a death** for materials (floor haul + the death share). Its button reads "Abandon · counts as a death". "Anvil · back to this stop" still settles nothing. |
-| S3 | Death-loss rounding | **Stochastic rounding** per entry (each metal, flux grade, affix × tier, essence, rune id × tier, scrap, Dust, Links) on a forked stream, so small stacks are still at risk. |
-| S4 | Which rolls get the attunement floor | **Affix lines** (shard and random) and the **legendary power's roll**. Implicits don't. |
-| S5 | Legendary odds on gear drops | Elite and boss gear still roll rarity (legendary possible). **`pity` is removed.** Lucky Charm's `legendaryBoost` now multiplies the **essence** chance. |
+| S1 | What rides in the floor's haul? | Every material and currency pickup (bars, flux, shards, essences, scrap, Mana Dust, Links, runes). **Gear banks into the bag at once**, as today, and is never lost. **Patterns are learned at once** (knowledge isn't lost). |
+| S2 | Abandon | **Counts as a death** for materials (floor haul + the death share). Its button reads "Abandon · counts as a death". "Anvil · back to this stop" settles nothing; "Anvil · floor restarts" settles nothing but the floor's unbanked haul is lost (the floor replays). |
+| S3 | Death-loss rounding | **Stochastic rounding** per entry (each metal, flux grade, affix × tier, rune id × tier, scrap, Dust, Links) on a forked stream, so small stacks are still at risk. **Banked essences are exempt** from the share (only an unbanked floor's essence can be lost). |
+| S4 | Which rolls get the attunement floor | **Affix lines** (shard and random, on forge, hone, reforge and imprint) and the **legendary power's roll**. Implicits don't. |
+| S5 | Legendary odds on gear drops | Elite and boss gear still roll rarity (legendary possible) without `legendaryBoost`. **`pity` is removed.** Lucky Charm's `legendaryBoost` now multiplies only the **essence** chance; its text becomes "Find. Essence odds doubled." |
+| S9 | Stops | A stop's power-ups spend from the dive's **`banked`** materials first, then the stockpile (what a stop spends is no longer at risk). A rune found this dive can be socketed at the stop. |
 | S6 | Essence ids | **The legendary's id** (no separate mapping). |
 | S7 | Weapon extras on a forged weapon | Fixed per rarity, placed deterministically: extra slots to the Primary first, then Basic, Ultimate, Defensive (carried skills only); sockets on the Primary's first moves first. |
 | S8 | A new save | Starts with patterns for the starter sword and chest plus one more weapon (dagger), **5 Rusty bars and 1 uncommon flux**, so the first forge is possible before any dive. |
@@ -87,9 +88,9 @@ u = floor + (1 − floor) × r
 roll = bmin + (bmax − bmin) × u
 ```
 
-so the floor lifts the whole distribution within the band rather than piling onto its bottom. The same formula applies to the **legendary power's roll** (its band `[0, 1]`). Implicits are unchanged. `StatRoll` gains `band?: [number, number]` (absent = the rarity default); `GearItem` gains `hones: number`.
+so the floor lifts the whole distribution within the band rather than piling onto its bottom. The same formula applies to the **legendary power's roll** (its band `[minRoll.legendary, 1]`, matching today's distribution with no floor). Implicits are unchanged. `StatRoll` gains `band?: [number, number]` (absent = the rarity default); `GearItem` gains `hones: number`.
 
-**Attune affixes.** `*Attune` lines are small integers (1–2), so five tiers would collapse. `crafting.json → affixShardTiers` may give an affix its own tier bands (e.g. Attune shards: tiers I–II only, `[0,0.5]` and `[0.5,1]`); the shard pouch and the bench honour each affix's tier count.
+**Attune affixes.** `*Attune` lines are small integers (1–2), so five tiers would collapse. `crafting.json → affixShardTiers` may give an affix its own tier bands (e.g. Attune shards: tiers I–II only, `[0,0.5]` and `[0.5,1]`); the shard pouch, the bench, refining (refused past the affix's last tier) and `salvageShardTier` (clamped to the affix's last tier) honour each affix's tier count.
 
 **Weapons (S7)** come out with their rarity's carried skills (`movesets.carries`) and `crafting.weaponExtras[rarity] = { slots, sockets }` (starting values: the low end of today's `movesets.extraSlots` and `runes.socketDrops`), placed deterministically by S7. Links still buy more; Transfer still moves a moveset onto the new weapon.
 
@@ -104,7 +105,7 @@ On any owned item, between dives (each refused mid-dive, each bumps `forgeCount`
 | Operation | Effect | Price |
 |---|---|---|
 | **Hone** *(new)* | Reroll one affix line's value within its band (shard band or rarity default), attunement floor applied. | `crafting.honeScrap × rarityCostMult[rarity] × honeGrowth^hones × scrapLevelFactor(ilvl)`; `hones` +1 |
-| **Reforge** *(exists)* | Replace one line with a random different affix; **clears its `band`** (back to the rarity default). | As today |
+| **Reforge** *(exists)* | Replace one line with a random different affix; **clears its `band`** (back to the rarity default); its roll takes the attunement floor. | As today |
 | **Imprint** *(new)* | Replace any line with a chosen shard: its affix, rolled in the shard's band. Refused for an affix already on the item or not allowed on its slot. | The shard + `crafting.imprintScrap[rarity] × scrapLevelFactor(ilvl)` |
 | **Upgrade** *(exists)* | +1…+10, each +10% to all stats. | As today |
 | **Re-attune** *(exists)* | Change element within the pair. | As today |
@@ -113,7 +114,7 @@ On any owned item, between dives (each refused mid-dive, each bumps `forgeCount`
 
 ## Salvage (what gear gives back)
 
-`salvageYield(registry, profile, item)` previews the possibilities; `applySalvage(registry, profile, item, rng)` applies one item's yield. Every salvage path goes through `applySalvage`: the Loadout's Salvage, Salvage junk, and **auto-salvage** of new gear (`addLootToBag`). Salvage draws from `salvage:${forgeCount}` and bumps `forgeCount` (mid-dive auto-salvage draws from the dive's `materialRng`). It returns:
+`salvageYield(registry, profile, item)` previews the possibilities; `applySalvage(registry, profile, item, rng)` applies one item's yield. Every salvage path goes through `applySalvage`: the Loadout's Salvage, Salvage junk, and **auto-salvage** of new gear (`addLootToBag`). Each salvage's RNG is **keyed on the item**: `new SeededRNG(item seed).fork('salvage:' + item.uid)` (the item seed: the dive's seed mid-dive, `forgeCount` at the Anvil), never a world stream, because `bankWorld` runs on frame timing that differs between the client and the autopilot. It returns:
 - **Scrap**, as today (`forge.salvage`).
 - **Shards:** one shard of one of its affix lines (picked at random), at the tier `crafting.salvageShardTier` gives that line's `roll` (thresholds → tier), plus a `crafting.salvageExtraShard` chance of a second from another line. A common item (no lines) gives none.
 - **Its pattern**, if not yet learned.
@@ -127,13 +128,15 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 
 **Streams.** Material drops roll on a new `world.materialRng = rng.fork('materials:…')` (`arpg/world.ts`, beside `lootRng` and `runeRng`), so gear, rune, orb and mote rolls are untouched by material drops. Material drops never happen in the sandbox (inside `killMonster`'s `!world.sandbox` guard).
 
-**Drop tables** (`balance.json → delve.drops`). Per foe kind (`normal`, `elite`, `boss`), each material entry is `{ chance, count: [lo, hi] }` (the chance to drop at all, then a uniform count), scaled by the door's multipliers:
-- **Normal:** `scrap`, `bars`, `dust`, `shards` (with `tiers` weights), `links` (rare). **No gear.**
-- **Elite:** the same entries with higher chances, plus `flux` (with `grades` weights), `gearChance` and `patternChance` (an unknown pattern).
+**Drop tables** (`balance.json → delve.drops`). Per foe kind (`normal`, `elite`, `boss`), each material entry is `{ chance, count: [lo, hi] }`: the chance to drop at all (× the door's `materials`, capped at 1, as `dropMult` did), then a uniform count:
+- **Normal:** `bars`, `dust`, `shards`, `links` (rare). **No gear.**
+- **Elite:** the same entries with higher chances, plus `flux`, `gearChance` and `patternChance` (an unknown pattern; nothing when every pattern is known).
 - **Boss:** `gear` (one item, rolled as today's boss item: `bossMinRarity` applies to every boss), `flux`, `shards`, `essenceChance` (× Lucky Charm's `legendaryBoost`), `patternChance`.
-- **First boss:** guarantees one essence (a legendary the hero can use) plus one epic flux. `firstBossLegendaryGiven` becomes `firstEssenceGiven`, set when that floor's haul banks (so a death before banking grants it again).
-- **Scrap pickups** carry today's kill scrap: `scrapLevelFactor(ilvl) × drops.scrapByKind[kind] × (1 + scrapFind%)` (`KILL_SCRAP_MULT` moves into data). Scrap is no longer credited to the purse on kill.
-- **Runes:** unchanged rates; a rune drop now rides the haul like other pickups.
+- **First boss:** guarantees one essence of a legendary whose `slots` include a learned pattern's slot, plus one epic flux. `firstBossLegendaryGiven` becomes `firstEssenceGiven`, set when that floor's haul banks (so a death before banking grants it again).
+- **Shard tiers and flux grades by depth:** `drops.shardTierDepths` and `drops.fluxGradeDepths` (like `runes.tierDepths`): the highest tier or grade a floor can drop at its depth, with weights favouring the lower ones (`drops.tierWeights`). Find and the door's `shardTier` bump them by one.
+- **Scrap:** each kill drops `drops.scrapPickups[kind]` scrap pickups that together carry today's kill scrap, `scrapLevelFactor(ilvl) × drops.scrapByKind[kind] × (1 + scrapFind%)` (`KILL_SCRAP_MULT` moves into data). Scrap is no longer credited to the purse on kill.
+- **Runes:** unchanged rates (`runes.dropChance` stays, × the door's `runes`); a rune drop now rides the haul.
+- **`essencesSeen`** updates when an essence is picked up.
 
 **Metal by depth:** a dropped bar is the metal whose band contains the floor's ilvl, with `drops.metalUpChance` of the next metal.
 
@@ -141,7 +144,7 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 
 **Biome leanings.** `crafting.json → families` maps every affix to a family (offense, defense, sustain, utility, element). Shard affix weights = the affix's base weight × `drops.biomeShardWeights[biome][family]`, and the biome element's `*Power` / `*Attune` shards × `drops.biomeElementWeight`.
 
-**Doors.** `DoorMods` loses `magicFind` and `dropMult` and gains `{ materials, runes, gear, flux, essence, shardTier, find }` (multipliers, plus `find` added to Find): gilded `flux` and `essence` up, `find` +; cursed `shardTier` up; swarm `materials` 1.3 and packs ×1.5 (as today); champions elites up (so gear); **Quiet Shrine** `materials` 0.5 and `runes` 0.5 ("half the loot"). Every place that reads the old fields changes: `types/delve.ts` `DoorMods`, `data/schemas.ts`, `delve/profile-schema.ts` (the dive's stored door), `loot/drops.ts`, `arpg/rune-drops.ts`, `arpg/sandbox.ts`'s `LootContext`, the door `text` strings in `delve.json`, and `client/.../stop/DoorPane.tsx`'s treasure icon (from `gear` or `essence` > 1).
+**Doors.** `DoorMods` loses `magicFind` and `dropMult` and gains `{ materials, runes, gear, flux, essence, shardTier, find }`. `materials` multiplies every material entry's chance (capped at 1); `runes` the rune drop chance; `gear` the elite gear chance; `flux` the flux chance; `essence` the essence chance; `shardTier` the tier/grade bump chance; `find` is added to Find: gilded `flux` and `essence` up, `find` +; cursed `shardTier` up; swarm `materials` 1.3 and packs ×1.5 (as today); champions elites up (so gear); **Quiet Shrine** `materials` 0.5 and `runes` 0.5 ("half the loot"). Every place that reads the old fields changes: `types/delve.ts` `DoorMods`, `data/schemas.ts`, `delve/profile-schema.ts` (the dive's stored door), `loot/drops.ts`, `arpg/rune-drops.ts`, `arpg/sandbox.ts`'s `LootContext`, the door `text` strings in `delve.json`, and `client/.../stop/DoorPane.tsx`'s treasure icon (from `gear` or `essence` > 1).
 
 **The shard bench** (Anvil, Materials pane): `buyShard(registry, profile, affix)` sells a **tier I** shard for `crafting.shardBench { scrap, dust }`; higher tiers come from refining.
 
@@ -158,17 +161,20 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 | Pickup | During a floor | At floor clear | On death or abandon | On extract |
 |---|---|---|---|---|
 | Gear | **Bag at once** (`bankWorld`, as today) | — | Kept | Kept |
-| Materials, scrap pickups, Dust, Links, runes, essences, patterns | **`DiveState.haul`** | Haul → `DiveState.banked` | Haul lost; `banked` loses `deathLoss` (stochastic per entry) | `banked` → profile |
+| Patterns | **Learned at once** (`profile.patterns`) | — | Kept | Kept |
+| Materials, scrap pickups, Dust, Links, runes, essences | **`DiveState.haul`** | Haul → `DiveState.banked` | Haul lost; `banked` loses `deathLoss` (stochastic per entry; banked essences exempt) | `banked` → profile |
 | Scrap bounty | `dive.bounty` | Grows as today | Lost | Banked |
 
 - `bankWorld` keeps banking gear mid-floor and moves every other pickup into `haul`.
 - `completeFloor` moves `haul` into `banked`.
 - `beginFloor` clears `haul`, so replaying a floor's seed can't double-collect.
-- **One settle.** `settleDive(registry, profile, outcome: 'extract' | 'death' | 'abandon')` is the only path from `banked` to the profile, called exactly once:
-  - `extractDive` calls it with `'extract'`.
-  - `failFloor` and `closeDive` call it on a death or abandon. `closeDive` gains the registry.
-  - It applies `deathLoss` with stochastic rounding (`stochasticRound`, `loot/drops.ts`) on `death:${diveSeed}`.
-- **Anvil · back to this stop** doesn't settle.
+- **One settle.** `settleDive(registry, profile, outcome: 'extract' | 'death' | 'abandon')` is the only path from `banked` to the profile, and runs **exactly once per dive** (guarded by `dive.settled`):
+  - `extractDive` calls it with `'extract'` (the dive becomes `'extracted'`).
+  - `failFloor` calls it with `'death'` (the dive becomes `'dead'`).
+  - `closeDive(registry, profile)` (it gains the registry) calls it with `'abandon'` **only while the dive is `'fighting'` or `'choosing'`**; closing an `'extracted'` or `'dead'` dive (`DelveCamp`, `DelveRun`'s `onCamp` / `onAgain`, the autopilot after every dive) settles nothing more.
+  - It applies `deathLoss` with stochastic rounding (`stochasticRound`, `loot/drops.ts`) on `death:${diveSeed}`, and records what was lost in `dive.lost` (a `Haul`) for the dive summary.
+- **Anvil · back to this stop** doesn't settle. **Anvil · floor restarts** doesn't settle; the floor's unbanked haul is lost because the floor replays (the button's subtitle says so).
+- **Stops (S9)** spend from `banked` first, then the stockpile (`delve/stops.ts`: `stopKinds` and each stop op read both).
 - The stop's line reads "Banked this dive · dying loses 40% of it" (from `deathLoss`), replacing "Already banked: yours even if you abandon".
 
 ## Arena and pickups
@@ -235,13 +241,14 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
   - `deathLoss`.
 - **`balance.json → delve.drops`** (`DropsBalanceSchema`):
   - per kind: `normal`, `elite`, `boss` (as above);
-  - `scrapByKind`, `metalUpChance`, `find { perPoint, cap }`;
+  - `scrapByKind`, `scrapPickups`, `metalUpChance`, `find { perPoint, cap }`;
+  - `shardTierDepths`, `fluxGradeDepths`, `tierWeights`;
   - leanings: `biomeShardWeights`, `biomeElementWeight`, `doors`;
   - pickup feel: `magnetSpeed`, `vacuumSpeed`, `pickupDelay`.
 - **Removed:**
   - `forge.fuseCost`;
   - `loot.pityPerDrop` and `profile.pity`;
-  - `loot.dropChance`, `extraDropChance`, `eliteDrops`, `bossDrops` (replaced by `delve.drops`);
+  - `loot.normalDropChance`, `extraDropChance`, `eliteDrops`, `bossDrops` (replaced by `delve.drops`; `loot.bossMinRarity`, the rarity weights and the luck fields stay for elite and boss gear);
   - `KILL_SCRAP_MULT`.
 - **Economy view** (dev only, a view in the DPS Lab): runs `economySim(registry, seed, dives)` (the autopilot over N dives) for chosen seeds and charts, per dive:
   - income and spending per material;
@@ -289,11 +296,11 @@ Mid-dive, salvage yields go to the floor's haul; at the Anvil, straight to the p
 
 | Phase | Areas | Owns | Gate |
 |---|---|---|---|
-| **A · Contract** (the integrator, first) | One area | Types; `crafting.json` and the two balance blocks with schemas and starting numbers; registry getters; profile v8 and the reset; **every new engine export as a typed stub** in `index.ts`; **every new store action** in `delveStore.ts` as a thin wrapper over the engine op; `hub/types.ts` (`bench: 'forge' \| 'temper'`, Codex sections `patterns` and `essences`); deleting Fusion (engine, store, Fuse UI) and the migrations; door shape changes everywhere they're read | Engine and client build; the suites pass with removed features' tests deleted; old saves reset with the toast |
-| **B · Engine** (B1 and B2 in parallel, then B3) | **B1** drops and banking | `arpg/material-drops.ts`, `arpg/step.ts` (magnet), `arpg/world.ts` (`materialRng`), `arpg/combat.ts` (kill hook), `loot/drops.ts`, `arpg/rune-drops.ts`, `delve/dive.ts` (haul, banking, `settleDive`) | Engine suite green; determinism |
+| **A · Contract** (the integrator, first) | One area | Types; `crafting.json` and the two balance blocks with schemas and starting numbers; registry getters; profile v8 and the reset; **every new engine export as a typed stub that throws "not implemented"** in `index.ts` (no A-phase test calls a stub); **every new store action** in `delveStore.ts` as a thin wrapper over the engine op; `hub/types.ts` (`bench: 'forge' \| 'temper'`, Codex sections `patterns` and `essences`); deleting Fusion (engine, store, Fuse UI) and the migrations; door shape changes everywhere they're read; `materialName` switched to `crafting.metals` (since `delve.json → materials` goes); the Lucky Charm text and `magicFind` → Find relabel (`delve.json`, `delve/hero-stats.ts`) | Engine and client build; the suites pass with removed features' tests deleted; old saves reset with the toast |
+| **B · Engine** (B1 and B2 in parallel, then B3) | **B1** drops and banking | `arpg/material-drops.ts`, `arpg/step.ts` (magnet), `arpg/world.ts` (`materialRng`), `arpg/combat.ts` (kill hook), `loot/drops.ts`, `arpg/rune-drops.ts`, `delve/dive.ts` (haul, banking, `settleDive`), `delve/stops.ts` (spending from `banked`) | Engine suite green; determinism |
 | | **B2** forge and salvage | `loot/forge.ts`, `loot/materials.ts`, `loot/salvage-yield.ts`, `loot/smithing.ts` (hone, imprint, reforge clears `band`), `loot/item-generator.ts` (`materialName`, the band/floor roll), `delve/crafting.ts`, `delve/profile.ts` (`addLootToBag` calls `applySalvage`, `salvageItems`) | Engine suite green |
 | | **B3** autopilot and economy (after B1 + B2) | `delve/autopilot.ts`, `economySim`, `tests/delve-pacing.test.ts` | Pacing rails and the four targets |
-| **C · Client** (all parallel, after A; wiring real data after B) | **C1** arena and dive | Pickup FX, `ArenaRenderer` material drops, `PurseBar`, `FoundLog`, `StopScreen` / `DoorPane`, `DiveSummary` | Client suite, typecheck |
+| **C · Client** (all parallel, after A; wiring real data after B) | **C1** arena and dive | Pickup FX, `ArenaRenderer` material drops, `PurseBar`, `FoundLog`, `StopScreen` / `DoorPane`, `DiveSummary`, `arena/useArena.ts` (bank on material pickups), `pages/DelveRun.tsx` (abandon / close with the registry), `hub/PauseScreen.tsx` (the Abandon and floor-restart labels) | Client suite, typecheck |
 | | **C2** the Forge tab | `hub/forge/*` | |
 | | **C3** Codex, Loadout and the Economy view | `hub/codex/*`, `hub/loadout/ComparePane.tsx`, `features/delve/lab/*` (the Economy view) | |
 | **D · Balance and docs** | One area | Tuning to the pacing targets with the Economy view; CLAUDE.md's Delve section | Pacing rails; Delve E2E on `desktop` and `desktop-1080`; responsive probes; a report of the targets met; bump **v0.58.0** |
