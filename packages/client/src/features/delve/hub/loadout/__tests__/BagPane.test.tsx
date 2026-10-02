@@ -106,8 +106,8 @@ describe('the bag pane', () => {
     const helm = tiles()[0];
     fireEvent.mouseEnter(helm);
     expect(props.onHover).toHaveBeenLastCalledWith('h1');
-    fireEvent.mouseLeave(helm);
-    expect(props.onHover).toHaveBeenLastCalledWith(null);
+    fireEvent.mouseLeave(helm); // kept until another tile is hovered
+    expect(props.onHover).toHaveBeenCalledTimes(1);
     fireEvent.focus(helm);
     expect(props.onSelect).not.toHaveBeenCalled(); // keyboard focus only moves the ring
     fireEvent.click(helm);

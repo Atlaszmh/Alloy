@@ -19,7 +19,8 @@ const ARMED_MS = 2000;
 
 /**
  * The Anvil's Loadout tab: the equipped pane, the bag and the compare pane, in the spec's
- * 430 / flexible / 470 px columns. The compare pane shows the hovered item, else the selected one
+ * 430 / flexible / 470 px columns. The compare pane shows the last hovered bag item (until a
+ * selection), else the selected one
  * (a click, or the pad's focus), else the worn weapon (the how-to, on a first save). The tab's
  * prompts: Select, Equip, Full compare (hold Shift / LT), Salvage (Del / X) and Lock (L / Y),
  * which act on the hovered or selected item. In `mode: 'pause'` the item actions give way to notes.
@@ -42,6 +43,7 @@ export function LoadoutTab({ mode, setPrompts, go, link }: HubTabProps): ReactEl
 
   const select = (uid: string) => {
     setSelected(uid);
+    setHovered(null);
     useDelveStore.getState().markSeen([uid]);
   };
 

@@ -79,7 +79,10 @@ describe('LoadoutTab', () => {
     );
     fireEvent.mouseEnter(tile('r1'));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent('Hovered · compared with your ring');
+    // Leaving the tile (on the way to the compare pane) keeps it; a click selects anew.
     fireEvent.mouseLeave(tile('r1'));
+    expect(screen.getByTestId('item-sheet')).toHaveTextContent('Hovered · compared with your ring');
+    fireEvent.click(tile('h1'));
     expect(screen.getByTestId('item-sheet')).toHaveTextContent(
       'Selected · compared with your helm',
     );

@@ -238,8 +238,8 @@ export function BagPane({
                 onFocus={() => {
                   if (useInputDeviceStore.getState().device === 'gamepad') onSelect(item.uid);
                 }}
+                // Kept until another tile is hovered: the way to the compare pane leaves it.
                 onMouseEnter={() => onHover(item.uid)}
-                onMouseLeave={() => onHover(null)}
               />
             ))}
           </div>
