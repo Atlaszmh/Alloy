@@ -267,35 +267,76 @@ export function forgeItem(
   return item;
 }
 
+/** Why `shard` can't go on affix line `line` of `item`, or null (the affix on another line, or not on the slot). */
+export function imprintRefusal(
+  registry: DataRegistry,
+  item: GearItem,
+  line: number,
+  shard: ShardRef,
+): string | null {
+  if (!item.affixes[line]) return 'No such affix';
+  const def = registry.getGearAffix(shard.stat);
+  if (!def?.slots.includes(item.slot))
+    return `${def?.label ?? shard.stat} doesn't roll on this item`;
+  if (!shardBand(registry, shard)) return 'No such shard';
+  if (item.affixes.some((a, i) => i !== line && a.stat === shard.stat))
+    return 'Already on this item';
+  return null;
+}
+
 /** `item` with affix line `line` rerolled within its band, the attunement floor applied; `hones` + 1. */
 export function honeLine(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _item: GearItem,
-  _line: number,
-  _rng: SeededRNG,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  item: GearItem,
+  line: number,
+  rng: SeededRNG,
 ): GearItem {
-  throw new Error('honeLine: not implemented');
+  const old = item.affixes[line];
+  const def = old && registry.getGearAffix(old.stat);
+  if (!def) throw new Error(`No affix at index ${line}`);
+  const affixes = item.affixes.slice();
+  affixes[line] = rollAffix(registry, def, item.ilvl, item.rarity, rng, {
+    band: old.band,
+    floor: rollFloor(registry, profile, item.mana),
+  });
+  return { ...item, affixes, hones: item.hones + 1 };
 }
 
 /** `item` with affix line `line` replaced by `shard`'s affix, rolled in the shard's band. */
 export function imprintLine(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _item: GearItem,
-  _line: number,
-  _shard: ShardRef,
-  _rng: SeededRNG,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  item: GearItem,
+  line: number,
+  shard: ShardRef,
+  rng: SeededRNG,
 ): GearItem {
-  throw new Error('imprintLine: not implemented');
+  const why = imprintRefusal(registry, item, line, shard);
+  if (why) throw new Error(why);
+  const def = registry.getGearAffix(shard.stat)!;
+  const band = shardBand(registry, shard)!;
+  const affixes = item.affixes.slice();
+  affixes[line] = rollAffix(registry, def, item.ilvl, item.rarity, rng, {
+    band,
+    floor: rollFloor(registry, profile, item.mana),
+  });
+  return { ...item, affixes };
 }
 
 /** Scrap the next hone of `item` costs. */
-export function honeCost(_registry: DataRegistry, _item: GearItem): number {
-  throw new Error('honeCost: not implemented');
+export function honeCost(registry: DataRegistry, item: GearItem): number {
+  const bal = registry.getDelveBalance();
+  return Math.round(
+    bal.crafting.honeScrap *
+      bal.forge.rarityCostMult[item.rarity] *
+      Math.pow(bal.crafting.honeGrowth, item.hones) *
+      scrapLevelFactor(registry, item.ilvl),
+  );
 }
 
 /** Scrap an imprint on `item` costs, besides the shard. */
-export function imprintCost(_registry: DataRegistry, _item: GearItem): number {
-  throw new Error('imprintCost: not implemented');
+export function imprintCost(registry: DataRegistry, item: GearItem): number {
+  const crafting = registry.getDelveBalance().crafting;
+  return Math.round(crafting.imprintScrap[item.rarity] * scrapLevelFactor(registry, item.ilvl));
 }

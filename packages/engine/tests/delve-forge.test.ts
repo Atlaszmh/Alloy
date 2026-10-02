@@ -3,7 +3,17 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { generateItem, rollAffix, rollBand, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { reforgeAffix } from '../src/loot/smithing.js';
-import { forgeInputs, forgeItem, previewForge, rollFloor } from '../src/loot/forge.js';
+import {
+  forgeInputs,
+  forgeItem,
+  honeCost,
+  honeLine,
+  imprintCost,
+  imprintLine,
+  imprintRefusal,
+  previewForge,
+  rollFloor,
+} from '../src/loot/forge.js';
 import {
   emptyMaterials,
   materialCount,
@@ -12,7 +22,7 @@ import {
 } from '../src/loot/materials.js';
 import { baseSlots } from '../src/loot/moveset.js';
 import { socketsOf } from '../src/loot/runes.js';
-import { forge } from '../src/delve/crafting.js';
+import { forge, hone, imprint } from '../src/delve/crafting.js';
 import { startDive } from '../src/delve/dive.js';
 import { movesOf } from '../src/delve/moveset.js';
 import { profileStats } from '../src/delve/pair.js';
@@ -424,5 +434,123 @@ describe('forge: the profile op', () => {
       profile: diving,
       reason: FORGE_LOCKED,
     });
+  });
+});
+
+describe('Hone', () => {
+  /** A rare Fire sword: Damage V and Fire Attunement II from shards, and one random line. */
+  const sword = () =>
+    forgeItem(
+      registry,
+      smith(),
+      {
+        baseId: 'sword',
+        metal: 'iron',
+        flux: 'rare',
+        element: 'fire',
+        shards: [
+          { stat: 'damage', tier: 5 },
+          { stat: 'fireAttune', tier: 2 },
+        ],
+      },
+      new SeededRNG(3),
+    );
+
+  it('rerolls one line within its band, the floor applied, and counts the hone', () => {
+    const item = sword();
+    const [lo, hi] = item.affixes[0].band!;
+    for (let seed = 1; seed <= 30; seed++) {
+      const out = honeLine(registry, smith(100), item, 0, new SeededRNG(seed));
+      expect(out.affixes[0]).toMatchObject({ stat: 'damage', band: [lo, hi] });
+      expect(out.affixes[0].roll).toBeGreaterThanOrEqual(lo + (hi - lo) * C.attuneRoll.cap);
+      expect(out.affixes.slice(1)).toEqual(item.affixes.slice(1));
+      expect(out.hones).toBe(1);
+    }
+    expect(honeLine(registry, smith(), item, 2, new SeededRNG(1)).affixes[2].band).toBeUndefined();
+    expect(() => honeLine(registry, smith(), item, 3, new SeededRNG(1))).toThrow();
+  });
+
+  it('costs honeScrap × the rarity × honeGrowth ^ hones × the level factor', () => {
+    const item = gloves();
+    const base = C.honeScrap * bal.forge.rarityCostMult.rare * scrapLevelFactor(registry, 10);
+    expect(honeCost(registry, item)).toBe(Math.round(base));
+    expect(honeCost(registry, { ...item, hones: 2 })).toBe(Math.round(base * C.honeGrowth ** 2));
+  });
+
+  it('at the Anvil: pays, draws on the forge stream, and refuses with a reason', () => {
+    const p = { ...smith(), bag: [gloves()] };
+    const res = hone(registry, p, 'r1', 1);
+    expect(res.ok).toBe(true);
+    expect(res.item).toEqual(honeLine(registry, p, gloves(), 1, forgeStream(p)));
+    expect(res.profile.bag).toEqual([res.item]);
+    expect(res.profile.scrap).toBe(p.scrap - honeCost(registry, gloves()));
+    expect(res.profile.forgeCount).toBe(p.forgeCount + 1);
+    expect(hone(registry, p, 'nope', 0).reason).toBe('Item not found');
+    expect(hone(registry, p, 'r1', 9).reason).toBe('No such affix');
+    expect(hone(registry, { ...p, scrap: 0 }, 'r1', 0).reason).toBe('Not enough scrap');
+    expect(hone(registry, startDive(registry, p, 1), 'r1', 0).reason).toBe(FORGE_LOCKED);
+  });
+});
+
+describe('Imprint', () => {
+  const item = gloves();
+  /** An affix gloves can roll that these gloves don't have. */
+  const free = registry
+    .getDelveData()
+    .affixes.find(
+      (a) => a.slots.includes('gloves') && !item.affixes.some((x) => x.stat === a.stat),
+    )!.stat;
+  const moveSpeed = registry.getGearAffix('moveSpeed')!.label;
+
+  it("replaces a line with the shard's affix, rolled in its band with the floor", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const out = imprintLine(
+        registry,
+        smith(100),
+        item,
+        0,
+        { stat: free, tier: 5 },
+        new SeededRNG(seed),
+      );
+      const [lo, hi] = tier(5);
+      expect(out.affixes[0]).toMatchObject({ stat: free, band: [lo, hi] });
+      expect(out.affixes[0].roll).toBeGreaterThanOrEqual(lo + (hi - lo) * C.attuneRoll.cap);
+      expect(out.affixes.slice(1)).toEqual(item.affixes.slice(1));
+      expect([out.hones, out.reforges]).toEqual([item.hones, item.reforges]);
+    }
+  });
+
+  it('refuses an affix on another line or not on the slot; its own line may take a better shard', () => {
+    const taken = { stat: item.affixes[1].stat, tier: 1 };
+    expect(imprintRefusal(registry, item, 0, taken)).toBe('Already on this item');
+    expect(imprintRefusal(registry, item, 0, { stat: 'moveSpeed', tier: 1 })).toBe(
+      `${moveSpeed} doesn't roll on this item`,
+    );
+    expect(imprintRefusal(registry, item, 1, taken)).toBeNull();
+    expect(imprintRefusal(registry, item, 9, taken)).toBe('No such affix');
+    expect(() => imprintLine(registry, smith(), item, 0, taken, new SeededRNG(1))).toThrow(
+      'Already on this item',
+    );
+  });
+
+  it('at the Anvil: takes the shard and scrap, and refuses with a reason', () => {
+    const p = { ...smith(), bag: [item] };
+    const shard = { stat: free, tier: 2 };
+    const res = imprint(registry, p, 'r1', 0, shard);
+    expect(res.ok).toBe(true);
+    expect(res.item).toEqual(imprintLine(registry, p, item, 0, shard, forgeStream(p)));
+    const ref = { kind: 'shard' as const, ...shard };
+    expect(materialCount(res.profile.materials, ref)).toBe(materialCount(p.materials, ref) - 1);
+    const cost = Math.round(C.imprintScrap.rare * scrapLevelFactor(registry, 10));
+    expect(imprintCost(registry, item)).toBe(cost);
+    expect(res.profile.scrap).toBe(p.scrap - cost);
+    expect(res.profile.forgeCount).toBe(p.forgeCount + 1);
+    const bare = { ...p, materials: emptyMaterials() };
+    expect(imprint(registry, bare, 'r1', 0, shard).reason).toBe('Missing the shard');
+    expect(imprint(registry, p, 'r1', 0, { stat: 'moveSpeed', tier: 1 }).reason).toBe(
+      `${moveSpeed} doesn't roll on this item`,
+    );
+    expect(imprint(registry, { ...p, scrap: 0 }, 'r1', 0, shard).reason).toBe('Not enough scrap');
+    expect(imprint(registry, startDive(registry, p, 1), 'r1', 0, shard).reason).toBe(FORGE_LOCKED);
   });
 });

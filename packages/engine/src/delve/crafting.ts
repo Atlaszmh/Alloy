@@ -1,11 +1,26 @@
 import type { DataRegistry } from '../data/registry.js';
-import { forgeInputs, forgeItem, previewForge } from '../loot/forge.js';
+import {
+  forgeInputs,
+  forgeItem,
+  honeCost,
+  honeLine,
+  imprintCost,
+  imprintLine,
+  imprintRefusal,
+  previewForge,
+} from '../loot/forge.js';
 import { materialCount, refineCost, refinedRef, withMaterial } from '../loot/materials.js';
 import type { ForgeRequest, MaterialRef, ShardRef } from '../types/crafting.js';
 import type { DelveProfile } from '../types/delve.js';
 import type { HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from './dive.js';
-import { forgeRng, recordFinds, type ProfileActionResult } from './profile.js';
+import {
+  findItem,
+  forgeRng,
+  recordFinds,
+  replaceItem,
+  type ProfileActionResult,
+} from './profile.js';
 
 /**
  * The Anvil's crafting ops on the profile (see the crafting spec), each refused
@@ -46,23 +61,57 @@ export function forge(
 
 /** Hone affix line `line` of item `uid`, for scrap. */
 export function hone(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _uid: string,
-  _line: number,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+  line: number,
 ): ProfileActionResult {
-  throw new Error('hone: not implemented');
+  if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
+  const found = findItem(profile, uid);
+  if (!found) return refuse(profile, 'Item not found');
+  if (!found.item.affixes[line]) return refuse(profile, 'No such affix');
+  const cost = honeCost(registry, found.item);
+  if (profile.scrap < cost) return refuse(profile, 'Not enough scrap');
+  const item = honeLine(registry, profile, found.item, line, forgeRng(profile));
+  return {
+    ok: true,
+    item,
+    profile: {
+      ...replaceItem(profile, item),
+      scrap: profile.scrap - cost,
+      forgeCount: profile.forgeCount + 1,
+    },
+  };
 }
 
 /** Imprint `shard` on affix line `line` of item `uid`, for the shard and scrap. */
 export function imprint(
-  _registry: DataRegistry,
-  _profile: DelveProfile,
-  _uid: string,
-  _line: number,
-  _shard: ShardRef,
+  registry: DataRegistry,
+  profile: DelveProfile,
+  uid: string,
+  line: number,
+  shard: ShardRef,
 ): ProfileActionResult {
-  throw new Error('imprint: not implemented');
+  if (isDiveActive(profile)) return refuse(profile, FORGE_LOCKED);
+  const found = findItem(profile, uid);
+  if (!found) return refuse(profile, 'Item not found');
+  const why = imprintRefusal(registry, found.item, line, shard);
+  if (why) return refuse(profile, why);
+  const ref: MaterialRef = { kind: 'shard', ...shard };
+  if (materialCount(profile.materials, ref) < 1) return refuse(profile, 'Missing the shard');
+  const cost = imprintCost(registry, found.item);
+  if (profile.scrap < cost) return refuse(profile, 'Not enough scrap');
+  const item = imprintLine(registry, profile, found.item, line, shard, forgeRng(profile));
+  return {
+    ok: true,
+    item,
+    profile: {
+      ...replaceItem(profile, item),
+      materials: withMaterial(profile.materials, ref, -1),
+      scrap: profile.scrap - cost,
+      forgeCount: profile.forgeCount + 1,
+    },
+  };
 }
 
 /** Refine `refine.<kind>.count` of a bar, a flux or a shard into one of the next grade, for scrap. */
