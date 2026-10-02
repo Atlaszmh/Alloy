@@ -23,7 +23,7 @@ export function PowerDelta({
   if (!label) return row;
   return (
     <>
-      <div className="text-center text-[10px] uppercase tracking-wider text-stone-500">{label}</div>
+      <div className="k-label text-center">{label}</div>
       {row}
     </>
   );
@@ -31,12 +31,18 @@ export function PowerDelta({
 
 function DeltaCell({ label, value }: { label: string; value: number | null }) {
   const v = value ?? 0;
-  const color = v > UPGRADE_EPSILON ? '#4ade80' : v < -UPGRADE_EPSILON ? '#f87171' : '#a8a29e';
+  // Gain and loss text, else secondary.
+  const color =
+    v > UPGRADE_EPSILON
+      ? 'var(--k-ok)'
+      : v < -UPGRADE_EPSILON
+        ? 'var(--k-bad-text)'
+        : 'var(--k-text-2)';
   const arrow = v > UPGRADE_EPSILON ? '▲' : v < -UPGRADE_EPSILON ? '▼' : '';
   return (
     <div className="flex flex-1 flex-col items-center gap-0.5">
-      <span className="text-[10px] uppercase tracking-wider text-stone-400">{label}</span>
-      <span className="delve-display text-base font-bold" style={{ color }}>
+      <span className="k-label">{label}</span>
+      <span className="k-disp text-[22px]" style={{ color }}>
         {value === null ? (
           '—'
         ) : (

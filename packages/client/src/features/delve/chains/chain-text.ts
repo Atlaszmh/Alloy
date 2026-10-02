@@ -32,6 +32,14 @@ export const KIND_LABEL: Record<MoveKind, string> = {
   hold: 'held',
 };
 
+/** A move's kind as its choice says it: "Light", "Hold". */
+export const KIND_NAME: Record<MoveKind, string> = {
+  light: 'Light',
+  medium: 'Medium',
+  heavy: 'Heavy',
+  hold: 'Hold',
+};
+
 /** A move's kind at a glance (the builder's cards, the HUD's buttons). */
 export const KIND_ICON: Record<MoveKind, string> = {
   light: '▪',

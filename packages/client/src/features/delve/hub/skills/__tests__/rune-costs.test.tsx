@@ -14,9 +14,9 @@ import {
   type Move,
   type RunePouch,
 } from '@alloy/engine';
-import { ChainEditor } from '../ChainEditor';
-import { pricedRegistry } from '../../runes/__tests__/priced-registry';
-import { dormantText } from '../../runes/rune-style';
+import { pricedRegistry } from '../../../runes/__tests__/priced-registry';
+import { dormantText } from '../../../runes/rune-style';
+import { Panes } from './harness';
 
 const registry = pricedRegistry();
 
@@ -25,7 +25,7 @@ const hero = (attunement: Partial<Record<ManaType, number>>) =>
   computeHeroStats({}, registry, { attunement });
 
 /**
- * The builder over a Primary of `primary` paid with `payment` (the other chains the defaults,
+ * The Skills panes over a Primary of `primary` paid with `payment` (the other chains the defaults,
  * or `over`'s), for a hero with 15 Fire unless `stats` says, with sockets on every move and a
  * pouch of `pouch`. It is controlled: rerender it with new props.
  */
@@ -48,11 +48,10 @@ function editor({
     ...over,
   };
   return (
-    <ChainEditor
+    <Panes
       chains={chains}
       caps={{ basic: 5, primary: 5, defensive: 5, ultimate: 5 }}
       stats={stats}
-      reactionsSeen={[]}
       locked={false}
       onChange={() => {}}
       runes={{
@@ -78,7 +77,7 @@ const tapSocket = () =>
   );
 const picker = () => within(screen.getByTestId('rune-picker'));
 
-describe("the builder's rune picker: prices", () => {
+describe("the inspector's rune picker: prices", () => {
   const pouch: RunePouch = { heavy: [0, 0, 1, 0, 0], pierce: [0, 0, 1, 0, 0] };
 
   it("prices each candidate in the chain's payment, eased by the move's attunement", () => {
@@ -114,7 +113,7 @@ describe("the builder's rune picker: prices", () => {
   });
 });
 
-describe("the readout's rune price", () => {
+describe("the inspector's rune price", () => {
   /** A Fire Bolt of `kind` holding Echo, Heavy and Linger III: a raw load of 1.95. */
   const runed = (kind: Move['kind'] = 'medium'): Move => ({
     kind,
@@ -127,20 +126,18 @@ describe("the readout's rune price", () => {
     ],
   });
   const readout = () => screen.getByTestId('ability-readout');
-  const payLine = () => within(readout()).getByText(/runes:/);
+  const payLine = () => within(readout()).getByTestId('num-cost');
 
   it("adds the runes' eased load to the pay line, in the payment's words", () => {
     // 1.95 eased 45% by 15 Fire: 1.0725, so 8 mana → 17, charge 2.8 → 6, cast 4 → 8.
     const { rerender } = render(editor({ primary: [runed()] }));
-    expect(payLine()).toHaveTextContent(/^17 mana · [\d.]+s wind-up \(runes: \+107% cost\) · /);
+    expect(payLine()).toHaveTextContent(/^17 mana \(runes: \+107% cost\)$/);
+    expect(screen.getByTestId('num-windup')).toHaveTextContent(/^[\d.]+s$/);
     rerender(editor({ primary: [runed()], payment: 'charge' }));
-    expect(payLine()).toHaveTextContent(
-      /^Charge 6 · [\d.]+s wind-up \(runes: \+107% charge\) · no cooldown/,
-    );
+    expect(payLine()).toHaveTextContent(/^Charge 6 \(runes: \+107% charge\)$/);
+    expect(screen.getByTestId('num-cooldown')).toHaveTextContent('none');
     rerender(editor({ primary: [runed()], payment: 'cast' }));
-    expect(payLine()).toHaveTextContent(
-      /^8 mana · [\d.]+s wind-up \(runes: \+107% cast wind-up, \+107% cost\) · /,
-    );
+    expect(payLine()).toHaveTextContent(/^8 mana \(runes: \+107% cast wind-up, \+107% cost\)$/);
   });
 
   it('says how much attunement eases the runes, and when that is the most it can', () => {
@@ -200,7 +197,7 @@ describe("the readout's rune price", () => {
   });
 });
 
-describe('the mana support line', () => {
+describe('the mana support tile', () => {
   const heavyRuned: Move = {
     kind: 'heavy',
     form: 'bolt',
@@ -236,7 +233,7 @@ describe('the mana support line', () => {
     const fed = words(stats, 'primary', { moves: primary, payment: 'mana' });
     expect(fed.short).toBe(true); // three runed heavies on a bare hero: more than comes back
     expect(line().textContent).toBe(fed.text);
-    expect(line()).toHaveClass('text-amber-200/90');
+    expect(line()).toHaveAttribute('data-short');
     rerender(editor({ primary, payment: 'cast', stats, over: { defensive: ward } }));
     expect(line().textContent).toBe(
       words(stats, 'primary', { moves: primary, payment: 'cast' }).text,
@@ -245,7 +242,7 @@ describe('the mana support line', () => {
     const calm = words(stats, 'defensive', ward);
     expect(calm.short).toBe(false); // a Ward's 25 mana every 10 s
     expect(line().textContent).toBe(calm.text);
-    expect(line()).not.toHaveClass('text-amber-200/90');
+    expect(line()).not.toHaveAttribute('data-short');
   });
 
   it('shows none for a charge chain or the basic chain', () => {

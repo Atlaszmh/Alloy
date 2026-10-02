@@ -31,7 +31,8 @@ import {
 } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { RARITY_LABEL, RARITY_TEXT, formatStat, legendaryText, manaStyle } from '../format';
-import { AttunementBars, Chip } from '../AbilitiesPanel';
+import { Chip } from '@/features/delve/kit';
+import { AttunementBars } from '../items/AttunementBars';
 import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
 import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
@@ -367,15 +368,11 @@ const TrainingAbilities = memo(function TrainingAbilities() {
     }),
     [baseId],
   );
-  const all = getDelveRegistry()
-    .getArpgData()
-    .reactions.map((r) => r.id);
   return (
     <ChainEditor
       chains={chains}
       caps={CAPS}
       stats={stats}
-      reactionsSeen={all}
       locked={false}
       onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
       blowElements={secondary ? [primary, secondary] : [primary]}

@@ -108,15 +108,15 @@ test.describe('Delve loot loop', () => {
     await expect(sheet).toBeHidden();
 
     // Abandon the dive (items are kept), and equip it at the Anvil (answering an off-pair
-    // item's bind prompt).
+    // item's bind choice, which the compare pane shows in place of Equip; the pane stays).
     await page.getByRole('button', { name: 'Dive menu' }).click();
     await page.getByRole('button', { name: 'Abandon dive (lose bounty)' }).click();
     await expect(page.getByTestId('delve-camp')).toBeVisible();
     await page.getByTestId('bag-item').first().click();
-    await page.getByTestId('equip-button').click();
     const notNow = page.getByTestId('bind-prompt-not-now');
     if (await notNow.isVisible()) await notNow.click();
-    await expect(sheet).toBeHidden();
+    else await page.getByTestId('equip-button').click();
+    await expect(sheet).toContainText('Equipped · your');
   });
 
   test('D03: the door screen offers a power-up, and a door leads to the next depth', async ({
@@ -194,29 +194,33 @@ test.describe('Delve loot loop', () => {
     await page.goto('/delve');
     await expect(page.getByTestId('links-count')).toHaveText('1 Link');
     await expect(page.getByTestId('mana-strip')).toContainText('Skills');
+    // The attunement strip opens Skills on its Mana view; Back shows the move inspector.
     await page.getByTestId('mana-strip').click();
     await expect(page.getByTestId('abilities-panel')).toBeVisible();
+    await expect(page.getByTestId('mana-view')).toBeVisible();
+    await page.getByTestId('mana-back').click();
     // The Primary's one move becomes a Wildfire Burst: a draft, free before the first dive.
     await page.getByTestId('form-burst').click();
     await page.getByTestId('infusion-nature').click();
     await expect(page.getByTestId('ability-readout')).toContainText('light Wildfire Burst');
     await expect(page.getByTestId('chain-price')).toContainText('free until your first dive');
     await page.getByTestId('chain-apply').click();
-    await expect(page.getByTestId('chain-draft')).toHaveCount(0);
+    await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     const summary = page.getByTestId('abilities-summary');
     await expect(summary).toHaveText('light Wildfire Burst');
     // A Link and 20 scrap buy a second slot, holding the chain's next default move.
-    await expect(page.getByTestId('chain-slots')).toHaveText('Slots 1/5');
+    await expect(page.getByTestId('chain-slots')).toHaveText('1 of 1 slots');
     await page.getByTestId('add-slot').click();
     await expect(summary).toHaveText('light Wildfire Burst · medium Wildfire Burst');
-    await expect(page.getByTestId('chain-slots')).toHaveText('Slots 2/5');
+    await expect(page.getByTestId('chain-slots')).toHaveText('2 of 2 slots');
     await expect(page.getByTestId('move-add')).toHaveCount(0);
-    await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
     await page.getByTestId('tab-forge').click();
     await expect(page.getByTestId('forge-panel')).toBeVisible();
     await expect(page.getByTestId('temper-row')).toHaveCount(2);
     await page.getByTestId('tab-codex').click();
     await expect(page.getByTestId('codex-unknown')).toHaveCount(12);
+    await page.getByTestId('codex-section-reactions').click();
+    await expect(page.getByTestId('reaction-unknown')).toHaveCount(15);
   });
 
   test('D08: a new save chooses its mana first; Frost starts with frost gear and abilities', async ({

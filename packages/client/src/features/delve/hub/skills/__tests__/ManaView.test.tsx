@@ -1,10 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { screen, fireEvent } from '@testing-library/react';
 import { bindSecondary, generateItem, profilePower, SeededRNG, type ManaType } from '@alloy/engine';
-import { AbilitiesPanel } from '../AbilitiesPanel';
-import { formatNumber } from '../format';
-import { getDelveRegistry } from '../registry';
+import { formatNumber } from '../../../format';
+import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
+import { renderSkills } from './harness';
+
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
+  return { ...actual, useNavigate: () => vi.fn() };
+});
 
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
@@ -15,15 +20,32 @@ const helm = (mana: ManaType) =>
     new SeededRNG(1),
   );
 
-describe('the Mana view (the Anvil, Abilities tab)', () => {
+/** The Skills tab, its right pane on the Mana view (the Loadout's mana strip links there). */
+const renderMana = () => renderSkills({ link: { tab: 'skills', view: 'mana' } });
+
+describe('the Mana view (the Anvil, Skills tab)', () => {
   beforeEach(() => {
     localStorage.clear();
     store().resetProfile(1234, 'fire');
   });
 
+  it("opens from the mana pair's Realign as its own pad scope; Back returns to the move", () => {
+    store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
+    renderSkills();
+    expect(screen.getByTestId('mana-pair')).toHaveTextContent('Fire · 2');
+    expect(screen.getByTestId('mana-pair')).toHaveTextContent('Reaction: Overload');
+    fireEvent.click(screen.getByTestId('mana-realign'));
+    expect(screen.getByTestId('mana-view')).toHaveAttribute('data-pad-scope');
+    expect(screen.queryByTestId('ability-readout')).toBeNull();
+    expect(screen.getByTestId('mana-back')).toHaveAttribute('data-pad-back');
+    fireEvent.click(screen.getByTestId('mana-back'));
+    expect(screen.queryByTestId('mana-view')).toBeNull();
+    expect(screen.getByTestId('ability-readout')).toBeInTheDocument();
+  });
+
   it('binds a second element you own gear in, after a confirmation that shows the Power', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
-    render(<AbilitiesPanel />);
+    renderMana();
     expect(screen.getByTestId('pair-primary')).toHaveTextContent('Fire');
     expect(screen.getByTestId('pair-secondary')).toHaveTextContent('No second element yet');
     expect(screen.queryByTestId('mana-bind-nature')).toBeNull(); // no nature gear
@@ -37,7 +59,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
 
   it('says a bind leaves the chains their moves', () => {
     store().setProfile({ ...store().profile, bag: [helm('storm')] });
-    render(<AbilitiesPanel />);
+    renderMana();
     expect(screen.getByTestId('bind-section')).toHaveTextContent(
       'your moves and blows can use it, and your chains keep the ones they have',
     );
@@ -52,8 +74,8 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
       manaDust: realignDust,
       scrap: realignScrap,
     });
-    render(<AbilitiesPanel />);
-    expect(screen.getByTestId('mana-dust')).toHaveTextContent(`✦ ${realignDust} Mana Dust`);
+    renderMana();
+    expect(screen.getByTestId('mana-dust')).toHaveTextContent(`${realignDust} Mana Dust`);
     expect(screen.getByTestId('realign-section')).toHaveTextContent(
       "your equipped weapon's moves and blows follow the new pair",
     );
@@ -75,7 +97,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
       manaDust: realignDust,
       scrap: realignScrap,
     });
-    render(<AbilitiesPanel />);
+    renderMana();
     fireEvent.click(screen.getByTestId('realign-primary-storm'));
     expect(screen.getByTestId('realign-button')).toBeDisabled(); // storm twice
     fireEvent.click(screen.getByTestId('realign-secondary-fire'));
@@ -89,7 +111,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
 
   it('the overtake bar stays empty while the secondary has no attunement', () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
-    render(<AbilitiesPanel />);
+    renderMana();
     expect(screen.getByTestId('overtake')).toHaveTextContent('Storm 0 /');
     expect(screen.getByTestId('overtake-bar').style.width).toBe('0%');
   });
@@ -100,7 +122,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
     // Binding Storm between dives gives this Power; mid-dive the preview still shows it.
     const bound = profilePower(registry, bindSecondary(registry, store().profile, 'storm').profile);
     store().startDive(1);
-    render(<AbilitiesPanel />);
+    renderMana();
     expect(screen.getByTestId('pair-locked')).toHaveTextContent('between dives');
     expect(screen.getByTestId('mana-bind-storm')).toBeDisabled();
     expect(screen.getByTestId('mana-bind-storm')).toHaveTextContent(
@@ -117,7 +139,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
       scrap: realignScrap,
     });
     store().startDive(1);
-    render(<AbilitiesPanel />);
+    renderMana();
     expect(screen.getByTestId('pair-locked')).toBeInTheDocument();
     expect(screen.getByTestId('realign-secondary-nature')).toBeDisabled();
     expect(screen.getByTestId('realign-button')).toBeDisabled();
@@ -125,7 +147,7 @@ describe('the Mana view (the Anvil, Abilities tab)', () => {
 
   it('the element picker offers only the pair', () => {
     store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'storm' } });
-    render(<AbilitiesPanel />);
+    renderSkills();
     expect(screen.getByTestId('element-fire')).toBeInTheDocument();
     expect(screen.getByTestId('element-storm')).toBeInTheDocument();
     expect(screen.queryByTestId('element-frost')).toBeNull();

@@ -78,7 +78,7 @@ describe('DelveCamp', () => {
     draftLance();
     renderCamp();
     const apply = screen.getByTestId('draft-apply');
-    expect(apply).toHaveTextContent(/Apply · ✦ \d+/);
+    expect(apply).toHaveTextContent(/Apply · \d+ Mana Dust/);
     expect(apply).toBeDisabled();
     const why = screen.getByTestId('draft-apply-why');
     expect(why).toHaveTextContent('Not enough Mana Dust');
@@ -96,7 +96,7 @@ describe('DelveCamp', () => {
     });
     renderCamp();
     const apply = screen.getByTestId('draft-apply');
-    expect(apply).toHaveTextContent('Apply · 🔗 1 · ⚙ 20');
+    expect(apply).toHaveTextContent('Apply · 1 Link · 20 scrap');
     expect(apply).toBeDisabled(); // the scrap is there, but a new hero has no Links
     expect(screen.getByTestId('draft-apply-why')).toHaveTextContent(/Links/);
   });

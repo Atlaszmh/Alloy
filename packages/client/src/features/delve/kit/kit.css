@@ -303,10 +303,13 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 /* ── Glyphs ── */
 
+/* A click on a button's glyph lands on the button: the glyph swaps with the input device, and a
+   press whose target is swapped away mid-click never clicks. */
 .k-glyph-row {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  pointer-events: none;
 }
 
 .k-key,
@@ -370,6 +373,17 @@ html[data-input='gamepad'] .delve-ui :focus {
 
 .k-price-unit {
   color: var(--k-text-3);
+}
+
+/* On a gold or green button a price takes the button's dark text, its glyph too. */
+.k-hot .k-price-unit,
+.k-go .k-price-unit {
+  color: inherit;
+}
+
+.k-hot .k-price rect,
+.k-go .k-price rect {
+  fill: currentColor;
 }
 
 .k-promptbar {
@@ -689,22 +703,35 @@ html[data-input='gamepad'] .delve-ui :focus {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  min-width: 0;
   margin: 0;
   font-weight: 400;
 }
 
+/* The title stays on one line; the subtitle gives way, cut with an ellipsis. */
 .k-header-title .k-disp {
+  flex: none;
   font-size: 30px;
+  white-space: nowrap;
   color: var(--k-hot-hi);
 }
 
+.k-header-title .k-caption {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .k-header-nav {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 22px;
 }
 
 .k-header-aside {
+  flex: none;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -800,6 +827,27 @@ html[data-input='gamepad'] .delve-ui :focus {
   font-size: 16px;
   color: #feae34;
   text-shadow: 1px 1px 0 #181425;
+}
+
+/* The forge level, +N (ItemTile). */
+.k-tile-plus {
+  left: 6px;
+  bottom: 5px;
+  font-family: var(--k-font-display);
+  font-size: 16px;
+  color: #fee761;
+  text-shadow: 1px 1px 0 #181425;
+}
+
+/* The item's mana, a pip on the socket's bottom edge (ItemTile). */
+.k-tile-mana {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border: 2px solid #181425;
 }
 
 /* ── Tooltips ── */

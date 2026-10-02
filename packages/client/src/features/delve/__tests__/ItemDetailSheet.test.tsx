@@ -4,7 +4,6 @@ import {
   compareItem,
   defaultMoveset,
   generateItem,
-  heroChains,
   referenceDepth,
   SeededRNG,
   type GearItem,
@@ -12,8 +11,6 @@ import {
   type RuneRef,
 } from '@alloy/engine';
 import { ItemDetailSheet } from '../ItemDetailSheet';
-import { BagPanel } from '../BagPanel';
-import { ForgePanel } from '../ForgePanel';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { ToastContainer } from '@/components/Toast';
@@ -127,85 +124,12 @@ describe('ItemDetailSheet', () => {
     expect(screen.getByTestId('reattune-locked')).toHaveTextContent('between dives');
   });
 
-  it('equipping gear outside the pair asks to bind it, with the Power either way; Bind binds, then equips', () => {
+  it('Equip takes gear outside the pair as it is: the bind choice lives in the Loadout', () => {
     put(helm('storm'));
-    const onClose = vi.fn();
-    render(<ItemDetailSheet uid="h1" onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
-    const prompt = screen.getByTestId('bind-prompt');
-    expect(prompt).toHaveAttribute('data-pad-scope');
-    expect(prompt).toHaveTextContent('Bind Storm as your second element?');
-    expect(screen.getByTestId('bind-prompt-bound')).toHaveTextContent('Power');
-    expect(screen.getByTestId('bind-prompt-unbound')).toHaveTextContent('Power');
-    expect(screen.getByTestId('bind-prompt-not-now')).toHaveAttribute('data-pad-back');
-    expect(screen.getByTestId('bind-prompt-confirm')).toHaveFocus();
-    // It holds the keyboard: the sheet behind it takes no focus or clicks.
-    expect(screen.getByRole('dialog', { name: 'Bind Storm' })).toHaveAttribute('aria-modal', 'true');
-    expect(screen.getByTestId('equip-button').closest('[inert]')).not.toBeNull();
-    fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
-    expect(store().profile.pair).toEqual({ primary: 'fire', secondary: 'storm' });
-    expect(store().profile.equipped.helm?.uid).toBe('h1');
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('the bind prompt says the chains keep their moves, and binding leaves them alone', () => {
-    put(helm('storm'));
-    const before = heroChains(registry, store().profile.equipped, store().profile.pair);
     render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
     fireEvent.click(screen.getByTestId('equip-button'));
-    expect(screen.getByTestId('bind-prompt')).toHaveTextContent(
-      'Your moves and blows can use Storm and its gear will attune you; your chains keep the ones they have',
-    );
-    expect(screen.getByTestId('bind-prompt')).not.toHaveTextContent('last blow');
-    fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
-    expect(heroChains(registry, store().profile.equipped, store().profile.pair)).toEqual(before);
-  });
-
-  it('Not now equips for its stats only, and the prompt stays away this session', () => {
-    put(helm('storm'), helm('storm', 'h2'));
-    const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
-    fireEvent.click(screen.getByTestId('bind-prompt-not-now'));
-    expect(store().profile.pair.secondary).toBeNull();
-    expect(store().profile.equipped.helm?.uid).toBe('h1');
-    unmount();
-    render(<ItemDetailSheet uid="h2" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
     expect(screen.queryByTestId('bind-prompt')).toBeNull();
-    expect(store().profile.equipped.helm?.uid).toBe('h2');
-  });
-
-  it('Not now is remembered per element: Nature still asks after Storm', () => {
-    put(helm('storm'), helm('nature', 'h2'));
-    const { unmount } = render(<ItemDetailSheet uid="h1" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
-    fireEvent.click(screen.getByTestId('bind-prompt-not-now'));
-    unmount();
-    render(<ItemDetailSheet uid="h2" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId('equip-button'));
-    expect(screen.getByTestId('bind-prompt')).toHaveTextContent('Bind Nature as your second element?');
     expect(store().profile.equipped.helm?.uid).toBe('h1');
-  });
-
-  it('a refused bind says why and equips nothing', () => {
-    put(helm('storm'));
-    const onClose = vi.fn();
-    render(
-      <>
-        <ItemDetailSheet uid="h1" onClose={onClose} />
-        <ToastContainer />
-      </>,
-    );
-    fireEvent.click(screen.getByTestId('equip-button'));
-    // Bound elsewhere while the prompt was open: the engine refuses a second bind.
-    act(() =>
-      store().setProfile({ ...store().profile, pair: { primary: 'fire', secondary: 'nature' } }),
-    );
-    fireEvent.click(screen.getByTestId('bind-prompt-confirm'));
-    expect(screen.getByText('Your second element is already bound')).toBeInTheDocument();
-    expect(store().profile.equipped.helm).toBeUndefined();
-    expect(store().profile.pair.secondary).toBe('nature');
-    expect(onClose).toHaveBeenCalled();
   });
 
   it('mid-dive Equip, Unequip and Transfer give way to "Equip at the Anvil"', () => {
@@ -379,42 +303,9 @@ describe('ItemDetailSheet', () => {
     expect(store().profile.links).toBe(2);
     expect(screen.getByText('+2 Links from its extra slots')).toBeInTheDocument();
   });
-
-  it('Equip best never asks, and leaves weapons alone', () => {
-    put(helm('storm'), rareSword('w1', { primary: 5 })); // an empty helm slot: an upgrade
-    // The sword is an upgrade too, which Equip best still leaves to its sheet.
-    const { equipped, pair } = store().profile;
-    expect(
-      compareItem(equipped, store().profile.bag[1], registry, 1, pair).powerPct,
-    ).toBeGreaterThan(UPGRADE_EPSILON);
-    render(<BagPanel onSelect={() => {}} />);
-    expect(screen.getByTestId('equip-best')).toHaveTextContent('▲ Equip best (1)');
-    fireEvent.click(screen.getByTestId('equip-best'));
-    expect(screen.queryByTestId('bind-prompt')).toBeNull();
-    expect(store().profile.equipped.helm?.uid).toBe('h1');
-    expect(store().profile.equipped.weapon?.uid).not.toBe('w1');
-    expect(store().profile.pair.secondary).toBeNull();
-  });
-
-  it("mid-dive the bag's Equip best and Salvage junk wait for the dive to end", () => {
-    put(helm('storm'));
-    store().startDive(1);
-    render(<BagPanel onSelect={() => {}} />);
-    expect(screen.getByTestId('equip-best')).toBeDisabled();
-    expect(screen.getByTestId('equip-best')).toHaveTextContent('Equip between dives');
-    expect(screen.getByTestId('salvage-junk')).toBeDisabled();
-    expect(screen.getByTestId('salvage-junk')).toHaveTextContent('Salvage between dives');
-  });
-
-  it('mid-dive the Forge tab waits for the dive to end', () => {
-    store().startDive(1);
-    render(<ForgePanel onSelect={() => {}} />);
-    expect(screen.getByTestId('forge-locked')).toHaveTextContent('forge and salvage between dives');
-    expect(screen.queryByTestId('fuse-button')).toBeNull();
-  });
 });
 
-describe('ItemDetailSheet and the Forge: runes', () => {
+describe('ItemDetailSheet: runes', () => {
   const split = { id: 'split', tier: 3 } as const;
   const quick = { id: 'quick', tier: 1 } as const;
   beforeEach(() => {
@@ -478,35 +369,5 @@ describe('ItemDetailSheet and the Forge: runes', () => {
     fireEvent.click(screen.getByTestId('salvage-button'));
     expect(store().profile.bag).toHaveLength(0);
     expect(store().profile.runes).toEqual({ split: [0, 0, 1, 0, 0] });
-  });
-
-  it("the Forge's Fuse asks first when an input holds runes, naming what becomes of them", async () => {
-    const animate = vi.fn(() => ({ finished: Promise.resolve() }));
-    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true });
-    const three = [withRunes(rareSword('a'), [split]), rareSword('b'), rareSword('c')];
-    store().setProfile({ ...store().profile, scrap: 9999, bag: three });
-    render(<ForgePanel onSelect={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /^Rare/ }));
-    fireEvent.click(screen.getByText('Auto-pick'));
-    fireEvent.click(screen.getByTestId('fuse-button'));
-    expect(store().profile.bag).toHaveLength(3);
-    expect(screen.getByTestId('fuse-button')).toHaveTextContent('Tap again to fuse · destroys Split III');
-    await act(async () => fireEvent.click(screen.getByTestId('fuse-button')));
-    expect(store().profile.bag.map((i) => i.rarity)).toEqual(['epic']);
-    delete (HTMLElement.prototype as { animate?: unknown }).animate;
-  });
-
-  it('the Forge tab holds the pouch: three of a rune fuse into one of the next tier, for scrap', () => {
-    store().setProfile({ ...store().profile, scrap: 20, runes: { split: [3, 0, 0, 0, 0] } });
-    render(
-      <>
-        <ForgePanel onSelect={() => {}} />
-        <ToastContainer />
-      </>,
-    );
-    fireEvent.click(within(screen.getByTestId('forge-runes')).getByTestId('rune-fuse-split-1'));
-    expect(store().profile).toMatchObject({ scrap: 0, runes: { split: [0, 1, 0, 0, 0] } });
-    expect(screen.getByText('Fused 3 Split I into Split II')).toBeInTheDocument();
-    expect(screen.getByTestId('pouch-split-2')).toHaveTextContent('Split II ×1');
   });
 });

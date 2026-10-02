@@ -3,6 +3,9 @@ import {
   createDefaultRegistry,
   createDelveProfile,
   defaultMoveset,
+  generateItem,
+  SeededRNG,
+  type GearItem,
   type Moveset,
 } from '@alloy/engine';
 
@@ -21,6 +24,7 @@ const BUTTON = {
   lb: 4,
   rb: 5,
   lt: 6,
+  rt: 7,
   menu: 9,
   up: 12,
   down: 13,
@@ -37,13 +41,15 @@ function withSocket(moveset: Moveset): Moveset {
 
 /**
  * A fire hero's save, its sword's Primary at `primarySlots` slots of default moves; with
- * `socket`, its first move has one open, empty socket and Quick III waits in the pouch.
+ * `socket`, its first move has one open, empty socket and Quick III waits in the pouch; with
+ * `bag`, the bag holds what `bag` makes.
  */
 async function setup(
   page: Page,
   autopilot: boolean,
   primarySlots = 1,
   socket = false,
+  bag: (registry: ReturnType<typeof createDefaultRegistry>) => GearItem[] = () => [],
 ): Promise<void> {
   const registry = createDefaultRegistry();
   const profile = createDelveProfile(registry, 4242, { primary: 'fire' });
@@ -56,6 +62,7 @@ async function setup(
       weapon: { ...sword, moveset: socket ? withSocket(moveset) : moveset },
     },
     runes: socket ? { quick: [0, 0, 1, 0, 0] } : profile.runes,
+    bag: [...profile.bag, ...bag(registry)],
   });
   await page.addInitScript(
     ([value, bot]) => {
@@ -149,27 +156,10 @@ async function tapAndReadCharges(page: Page, button: number): Promise<string | n
 }
 
 /**
- * From the Skills tab in the hub's header, down by D-pad into the chain builder's skill row,
- * then along it to the Primary (where the row meets the tab depends on the header's layout).
- */
-async function padToPrimary(page: Page): Promise<void> {
-  const row = ['basic', 'primary', 'defensive', 'ultimate'].map((s) => `chain-skill-${s}`);
-  const at = async () =>
-    row.indexOf(
-      await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? ''),
-    );
-  for (let i = 0; i < 4 && (await at()) < 0; i++) await tap(page, BUTTON.down);
-  for (let i = 0; i < 3 && (await at()) >= 0 && (await at()) !== 1; i++) {
-    await tap(page, (await at()) < 1 ? BUTTON.right : BUTTON.left);
-  }
-  await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
-}
-
-/**
  * By D-pad to the control `id`: each press toward it, along the axis it lies further on, or
  * the other axis when that press was already made from here. The pad's nearest-in-direction
- * rule decides each step (in the 960 px interim column, left from the Primary meets the
- * header's tabs first), so the walk takes what the rule gives.
+ * rule decides each step (right from the lane's last card meets the header's tabs before the
+ * inspector), so the walk takes what the rule gives.
  */
 async function padWalk(page: Page, id: string): Promise<void> {
   const tried = new Set<string>();
@@ -289,21 +279,29 @@ test.describe('Delve with a controller', () => {
     await expect(dodge).toContainText('A');
   });
 
-  test('G06: the D-pad and A pick a skill, a move and its kind in the chain builder', async ({
-    page,
-  }) => {
+  test('G06: LT/RT pick a skill, then the D-pad and A a move and its kind', async ({ page }) => {
     await setup(page, false);
     await page.goto('/delve');
     await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
-    await padToPrimary(page);
-    await padWalk(page, 'chain-skill-basic');
-    await tap(page, BUTTON.a);
-    await expect(page.getByTestId('chain-skill-basic')).toHaveAttribute('aria-selected', 'true');
-    await tap(page, BUTTON.down);
+    const focused = () =>
+      page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
+    // The skill list steps with LT / RT; the Primary is the one first chosen.
+    await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.lt);
+    const basic = page.getByTestId('chain-skill-basic');
+    await expect(basic).toHaveAttribute('aria-selected', 'true');
+    await expect(basic).toBeFocused();
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('chain-skill-primary')).toHaveAttribute('aria-selected', 'true');
+    await tap(page, BUTTON.lt);
+    await expect(basic).toHaveAttribute('aria-selected', 'true');
+    // From the row, the chain's cards lie to the right.
+    await tap(page, BUTTON.right);
     await expect(page.getByTestId('move-0')).toBeFocused();
     await tap(page, BUTTON.right);
+    await expect(page.getByTestId('move-1')).toBeFocused();
     await tap(page, BUTTON.a);
     await expect(page.getByTestId('move-1')).toHaveAttribute('aria-pressed', 'true');
     // The weapon carries the chains.
@@ -314,21 +312,16 @@ test.describe('Delve with a controller', () => {
             .basic[1],
       );
     expect((await blow()).kind).toBe('light');
-    // Down past the card's reorder buttons to its kind chips (twice; on a phone the
-    // fixed tab bar sits in between, one press more).
-    const focused = () =>
-      page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
-    for (let i = 0; i < 4 && !(await focused()).startsWith('kind-'); i++) {
-      await tap(page, BUTTON.down);
-    }
-    const chip = await focused();
-    expect(chip).toMatch(/^kind-(medium|heavy|hold)$/);
+    // On to the inspector's kind radios, and along them past the light one.
+    await padWalk(page, 'kind-medium');
     await tap(page, BUTTON.a);
+    await expect(page.getByTestId('kind-medium')).toHaveAttribute('aria-checked', 'true');
     // A draft until Apply.
-    await expect(page.getByTestId('chain-apply')).toBeVisible();
+    await expect(page.getByTestId('chain-apply')).toBeEnabled();
     expect((await blow()).kind).toBe('light');
+    expect(await focused()).toBe('kind-medium');
     await page.getByTestId('chain-apply').click();
-    await expect.poll(async () => (await blow()).kind).toBe(chip.slice('kind-'.length));
+    await expect.poll(async () => (await blow()).kind).toBe('medium');
   });
 
   test('G07: the D-pad and A socket a pouch rune through the picker, and B backs out of it', async ({
@@ -339,7 +332,10 @@ test.describe('Delve with a controller', () => {
     await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
     await tap(page, BUTTON.rb);
     await expect(page.getByTestId('tab-skills')).toHaveAttribute('aria-selected', 'true');
-    await padToPrimary(page);
+    // LT / RT step the skill list (the Primary is the one first chosen), focusing its row.
+    await tap(page, BUTTON.lt);
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('chain-skill-primary')).toBeFocused();
     const focused = () =>
       page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? '');
     /** Press down, then up, until `id` has the focus (on a phone the tab bar sits in between). */
@@ -348,8 +344,9 @@ test.describe('Delve with a controller', () => {
       for (let i = 0; i < 6 && (await focused()) !== id; i++) await tap(page, BUTTON.up);
       expect(await focused()).toBe(id);
     };
-    // The Primary's move: past its card and reorder buttons to its one open socket.
-    await padWalk(page, 'socket-0');
+    // From the row, right to the Primary's card's one open socket.
+    await tap(page, BUTTON.right);
+    await expect(page.getByTestId('socket-0')).toBeFocused();
     const picker = page.getByTestId('rune-picker');
     // A opens the picker, which takes the focus; B backs out, the focus back on the socket.
     await tap(page, BUTTON.a);
@@ -374,6 +371,47 @@ test.describe('Delve with a controller', () => {
     expect(await sockets()).toEqual([null]);
     await page.getByTestId('chain-apply').click();
     await expect.poll(sockets).toEqual([{ id: 'quick', tier: 3 }]);
+  });
+
+  test("G08: a bag weapon picked on the pad; RT reaches the compare pane's actions, A transfers and unequips, B goes back", async ({
+    page,
+  }) => {
+    await setup(page, false, 1, false, (registry) => {
+      const axe = generateItem(
+        registry,
+        { uid: 'bag-axe', ilvl: 3, rarity: 'rare', slot: 'weapon', baseId: 'axe', mana: 'fire' },
+        new SeededRNG(4),
+      );
+      return [{ ...axe, moveset: defaultMoveset(registry, axe, 'fire') }];
+    });
+    await page.goto('/delve');
+    await expect(page.getByTestId('tab-loadout')).toHaveAttribute('aria-selected', 'true');
+    const save = () => page.evaluate(() => JSON.parse(localStorage.getItem('alloy:delve:v2')!));
+    const sheet = page.getByTestId('item-sheet');
+    // The D-pad's focus selects the bag's axe for the compare pane.
+    await tap(page, BUTTON.down);
+    await padWalk(page, 'bag-item');
+    await expect(sheet).toContainText('Selected · compared with your weapon');
+    // RT jumps to the pane's first action, the footer says B goes back.
+    await expect(page.locator('.k-prompt', { hasText: 'Actions' })).toBeVisible();
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    await expect(page.locator('.k-prompt', { hasText: 'Back to bag' })).toBeVisible();
+    await tap(page, BUTTON.b);
+    await expect(page.getByTestId('bag-item')).toBeFocused();
+    await expect(page.getByTestId('system-menu')).toBeHidden();
+    // Again, and A moves the moveset onto the axe, which is worn now.
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('transfer-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await save()).equipped.weapon?.uid).toBe('bag-axe');
+    await expect(sheet).toContainText('Equipped · your weapon');
+    // RT and A unequip it.
+    await tap(page, BUTTON.rt);
+    await expect(page.getByTestId('unequip-button')).toBeFocused();
+    await tap(page, BUTTON.a);
+    await expect.poll(async () => (await save()).equipped.weapon?.uid).toBeUndefined();
+    expect((await save()).bag.map((i: GearItem) => i.uid)).toContain('bag-axe');
   });
 
   test('G03: RB and LB step through the five Anvil tabs, wrapping round', async ({ page }) => {

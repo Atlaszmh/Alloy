@@ -15,6 +15,7 @@ import {
   estimateCombat,
   manaPool,
   manaSupport,
+  strikeInterval,
   useInterval,
 } from '../src/delve/hero-stats.js';
 import * as engine from '../src/index.js';
@@ -317,10 +318,26 @@ describe('basicIncome and manaSupport', () => {
       })),
     });
   }
-  /** Seconds between strikes, as Power counts them. */
-  const strikeInterval = (s: HeroStats) =>
-    (s.attackInterval * s.weapon.blows.reduce((a, b) => a + b.time * b.knobs.quick.beat, 0)) /
-    s.weapon.blows.length;
+
+  it("strikeInterval is the attack interval × the blows' mean time, a blow's Quick shortening its share", () => {
+    expect(engine.strikeInterval).toBe(strikeInterval);
+    const plain = swordHero(false);
+    const times = plain.weapon.blows.map((b) => b.time);
+    expect(strikeInterval(plain)).toBeCloseTo(
+      (plain.attackInterval * times.reduce((a, t) => a + t, 0)) / times.length,
+    );
+    const quick = computeHeroStats({ weapon: gear('fire') }, registry, {
+      pair: { primary: 'fire', secondary: null },
+      basic: (['light', 'light', 'heavy'] as const).map((kind) => ({
+        kind,
+        element: 'fire' as const,
+        runes: [III('quick')],
+      })),
+    });
+    const beat = quick.weapon.blows[0].knobs.quick.beat;
+    expect(beat).toBeLessThan(1);
+    expect(strikeInterval(quick)).toBeCloseTo(strikeInterval(plain) * beat);
+  });
 
   it("basicIncome is regen and a strike's gain, plus the blows' Drain, over the strike interval", () => {
     const plain = swordHero(false);

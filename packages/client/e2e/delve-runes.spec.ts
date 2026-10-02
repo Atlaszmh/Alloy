@@ -115,10 +115,10 @@ test.describe('Delve runes', () => {
     // Still a draft: the save is untouched until Apply, whose label holds the socket's price.
     expect((await primarySockets(page)) ?? []).toEqual([]);
     const apply = page.getByTestId('chain-apply');
-    await expect(apply).toContainText('🔗 1');
-    await expect(apply).toContainText('⚙ 20');
+    await expect(apply).toContainText('1 Link');
+    await expect(apply).toContainText('20 scrap');
     await apply.click();
-    await expect(page.getByTestId('chain-draft')).toHaveCount(0);
+    await expect(page.getByTestId('chain-price')).toHaveText('No changes');
     await expect.poll(() => primarySockets(page)).toEqual([QUICK_III]);
     const after = await saved(page);
     expect(after.links).toBe(0);

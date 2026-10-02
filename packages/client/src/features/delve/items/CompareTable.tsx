@@ -1,7 +1,11 @@
 import type { ReactElement } from 'react';
 import { itemStatLines, type DataRegistry, type GearItem, type HeroStatKey } from '@alloy/engine';
 import { getDelveRegistry } from '../registry';
-import { formatStat } from '../format';
+import { formatStatValue } from '../format';
+
+/** Gain and loss text. */
+const GAIN = 'var(--k-ok)';
+const LOSS = 'var(--k-bad-text)';
 
 /** An item's stat lines summed by stat, in the order they first appear. */
 function statTotals(registry: DataRegistry, item: GearItem): Map<HeroStatKey, number> {
@@ -28,16 +32,15 @@ export function CompareTable({
   const theirs = worn ? statTotals(registry, worn) : new Map<HeroStatKey, number>();
   const stats = [...new Set([...mine.keys(), ...theirs.keys()])];
   const label = (stat: HeroStatKey) => registry.getGearAffix(stat)?.label ?? stat;
-  // formatStat's "+12% Crit Chance" without its label.
   const value = (stat: HeroStatKey, v: number | undefined) =>
-    v === undefined ? '—' : formatStat(registry, stat, v).slice(0, -label(stat).length - 1);
+    v === undefined ? '—' : formatStatValue(registry, stat, v);
   return (
-    <table className="w-full text-xs" data-testid="compare-table">
+    <table className="w-full text-[16px]" data-testid="compare-table">
       <thead>
-        <tr className="text-[10px] uppercase tracking-wider text-stone-500">
-          <th className="text-left font-normal">Stat</th>
-          <th className="text-right font-normal">Worn</th>
-          <th className="text-right font-normal">This</th>
+        <tr className="k-label">
+          <th className="pb-1.5 text-left font-normal">Stat</th>
+          <th className="w-[90px] text-right font-normal">Worn</th>
+          <th className="w-[90px] text-right font-normal">This</th>
         </tr>
       </thead>
       <tbody>
@@ -46,12 +49,16 @@ export function CompareTable({
           const now = mine.get(stat);
           const d = (now ?? 0) - (was ?? 0);
           return (
-            <tr key={stat} data-testid={`compare-row-${stat}`}>
-              <td className="text-stone-300">{label(stat)}</td>
-              <td className="text-right text-stone-400">{value(stat, was)}</td>
+            <tr
+              key={stat}
+              className="border-t-2 border-[var(--k-steel-1)]"
+              data-testid={`compare-row-${stat}`}
+            >
+              <td className="py-[7px] text-[var(--k-text-2)]">{label(stat)}</td>
+              <td className="text-right text-[var(--k-text-3)]">{value(stat, was)}</td>
               <td
                 className="text-right font-semibold"
-                style={{ color: d > 0 ? '#4ade80' : d < 0 ? '#f87171' : '#d6d3d1' }}
+                style={{ color: d > 0 ? GAIN : d < 0 ? LOSS : 'var(--k-text-2)' }}
               >
                 {value(stat, now)}
               </td>

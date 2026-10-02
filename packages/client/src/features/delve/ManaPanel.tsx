@@ -11,28 +11,41 @@ import {
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { AttunementBars, Chip } from './AbilitiesPanel';
+import { Button, Chip, Glyph, Panel, Price } from '@/features/delve/kit';
+import { AttunementBars } from './items/AttunementBars';
 import { getDelveRegistry } from './registry';
 import { formatNumber, manaStyle } from './format';
 
 /**
- * The Anvil's Mana view: your primary and secondary with their attunement, how
- * near the secondary is to overtaking, your Mana Dust, and binding a second
- * element or realigning the pair (between dives only). The rules are the
- * engine's (`bindSecondary`, `realign`, `overtakeProgress`).
+ * The Mana view, in the Skills tab's right pane (its own pad scope: Back, Esc
+ * or B return to the move): your primary and secondary with their attunement,
+ * how near the secondary is to overtaking, your Mana Dust, and binding a
+ * second element or realigning the pair (between dives only). The rules are
+ * the engine's (`bindSecondary`, `realign`, `overtakeProgress`).
  */
-export function ManaPanel({ stats }: { stats: HeroStats }) {
+export function ManaPanel({ stats, onBack }: { stats: HeroStats; onBack: () => void }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const [binding, setBinding] = useState<ManaType | null>(null);
   const [target, setTarget] = useState<{ primary?: ManaType; secondary?: ManaType }>({});
   const [message, setMessage] = useState<string | null>(null);
   const { primary, secondary } = profile.pair;
-  if (!primary) return <AttunementBars stats={stats} />;
+  const back = (
+    <Button size="sm" onClick={onBack} data-pad-back testId="mana-back">
+      Back
+    </Button>
+  );
+  if (!primary)
+    return (
+      <Panel as="aside" title="Your mana" aside={back} data-pad-scope testId="mana-view">
+        <AttunementBars stats={stats} />
+      </Panel>
+    );
 
   const cost = registry.getDelveBalance().pair;
   const locked = isDiveActive(profile);
   const style = (m: ManaType) => manaStyle(registry, m);
+  const glyph = (m: ManaType) => <Glyph id={m} size={16} color={style(m).color} />;
   // The Power once `m` is bound: mid-dive too (binding refuses then), at the dive's depth.
   const boundPower = (m: ManaType) =>
     profilePower(registry, {
@@ -69,34 +82,44 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
   };
 
   return (
-    <section className="flex flex-col gap-2" data-testid="mana-view">
-      <div className="delve-display text-xs font-bold uppercase tracking-widest text-amber-300/80">
-        Your mana
-      </div>
-      <div className="flex flex-col gap-0.5 text-sm">
-        <span data-testid="pair-primary" style={{ color: style(primary).color }}>
-          {style(primary).icon} {style(primary).name} · primary: your blows and abilities use it,
-          except where you pick your secondary
+    <Panel as="aside" title="Your mana" aside={back} data-pad-scope testId="mana-view">
+      <div className="flex flex-col gap-1 text-[16px]">
+        <span
+          className="flex items-center gap-2"
+          data-testid="pair-primary"
+          style={{ color: style(primary).color }}
+        >
+          {glyph(primary)} {style(primary).name} · primary: your blows and abilities use it, except
+          where you pick your secondary
         </span>
         <span
+          className="flex items-center gap-2"
           data-testid="pair-secondary"
-          style={{ color: secondary ? style(secondary).color : '#78716c' }}
+          style={{ color: secondary ? style(secondary).color : 'var(--k-text-3)' }}
         >
-          {secondary
-            ? `${style(secondary).icon} ${style(secondary).name} · secondary: your blows and abilities can use it`
-            : 'No second element yet'}
+          {secondary ? (
+            <>
+              {glyph(secondary)} {style(secondary).name} · secondary: your blows and abilities can
+              use it
+            </>
+          ) : (
+            'No second element yet'
+          )}
         </span>
       </div>
       <AttunementBars stats={stats} elements={secondary ? [primary, secondary] : [primary]} />
       {secondary && (
-        <div className="flex flex-col gap-1 text-xs text-stone-400" data-testid="overtake">
+        <div
+          className="flex flex-col gap-1 text-[14px] text-[var(--k-text-3)]"
+          data-testid="overtake"
+        >
           <span>
             {style(secondary).name} {overtake.have} / {overtake.need.toFixed(1)} to overtake{' '}
             {style(primary).name} (checked when a dive ends)
           </span>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+          <div className="k-well h-2 overflow-hidden">
             <div
-              className="h-full rounded-full"
+              className="h-full"
               style={{
                 width: `${overtake.ready ? 100 : overtake.need > 0 ? Math.min(0.99, overtake.have / overtake.need) * 100 : 0}%`,
                 background: style(secondary).color,
@@ -106,26 +129,28 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
           </div>
         </div>
       )}
-      <div className="text-xs text-stone-300" data-testid="mana-dust">
-        ✦ {formatNumber(profile.manaDust)} Mana Dust · from salvaging gear outside your pair
+      <div className="text-[14px] text-[var(--k-text-2)]" data-testid="mana-dust">
+        <Price dust={profile.manaDust} /> · from salvaging gear outside your pair
       </div>
       {locked && (
         <div
-          className="delve-panel p-2 text-center text-xs text-amber-200"
+          className="k-well p-2 text-center text-[14px] text-[var(--k-hot)]"
           data-testid="pair-locked"
         >
           A dive is under way: bind and realign between dives.
         </div>
       )}
       {!secondary && (
-        <div className="flex flex-col gap-1.5" data-testid="bind-section">
-          <div className="text-xs text-stone-400">
+        <div className="flex flex-col gap-2" data-testid="bind-section">
+          <div className="text-[14px] text-[var(--k-text-3)]">
             Bind a second element: your moves and blows can use it, and your chains keep the ones
             they have (add the element in the chain builder). Power now{' '}
             {formatNumber(profilePower(registry, profile))}.
           </div>
           {candidates.length === 0 ? (
-            <div className="text-xs text-stone-500">Find gear of another element to bind it.</div>
+            <div className="text-[14px] text-[var(--k-text-3)]">
+              Find gear of another element to bind it.
+            </div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {candidates.map((m) => (
@@ -136,45 +161,42 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
                   onClick={() => setBinding(m)}
                   testId={`mana-bind-${m}`}
                 >
-                  {style(m).icon} {style(m).name} · Power {formatNumber(boundPower(m))}
+                  {glyph(m)} {style(m).name} · Power {formatNumber(boundPower(m))}
                 </Chip>
               ))}
             </div>
           )}
           {binding && !locked && (
-            <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="mana-bind-ask">
-              <span className="text-stone-300">
-                Bind {style(binding).name}? After that, only a Realign changes it.
-              </span>
-              <button
-                type="button"
-                className="delve-btn delve-btn-gold px-2.5 py-1 text-xs"
+            <div
+              className="flex flex-wrap items-center gap-2 text-[14px]"
+              data-testid="mana-bind-ask"
+            >
+              <span>Bind {style(binding).name}? After that, only a Realign changes it.</span>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => onBind(binding)}
-                data-testid="mana-bind-confirm"
+                testId="mana-bind-confirm"
               >
                 Bind
-              </button>
-              <button
-                type="button"
-                className="delve-btn px-2.5 py-1 text-xs"
-                onClick={() => setBinding(null)}
-                data-testid="mana-bind-cancel"
-              >
+              </Button>
+              <Button size="sm" onClick={() => setBinding(null)} testId="mana-bind-cancel">
                 Cancel
-              </button>
+              </Button>
             </div>
           )}
         </div>
       )}
       {next && (
-        <div className="flex flex-col gap-1.5" data-testid="realign-section">
-          <div className="text-xs text-stone-400">
-            Realign: change your pair for ✦ {cost.realignDust} Mana Dust and ⚙ {cost.realignScrap}{' '}
-            scrap. Gear stays as it is; your equipped weapon's moves and blows follow the new pair.
+        <div className="flex flex-col gap-2" data-testid="realign-section">
+          <div className="text-[14px] text-[var(--k-text-3)]">
+            Realign: change your pair for{' '}
+            <Price dust={cost.realignDust} scrap={cost.realignScrap} />. Gear stays as it is; your
+            equipped weapon's moves and blows follow the new pair.
           </div>
           {(['primary', 'secondary'] as const).map((role) => (
             <div key={role} className="flex flex-wrap items-center gap-1.5">
-              <span className="w-16 text-[11px] text-stone-500">
+              <span className="w-24 text-[14px] text-[var(--k-text-3)]">
                 {role === 'primary' ? 'Primary' : 'Secondary'}
               </span>
               {MANA_TYPES.map((m) => (
@@ -187,30 +209,30 @@ export function ManaPanel({ stats }: { stats: HeroStats }) {
                       role === 'primary' ? { ...next, primary: m } : { ...next, secondary: m },
                     )
                   }
-                  testId={`realign-${role}-${m}`}
+                  aria-label={style(m).name}
                   title={style(m).name}
+                  testId={`realign-${role}-${m}`}
                 >
-                  {style(m).icon}
+                  {glyph(m)}
                 </Chip>
               ))}
             </div>
           ))}
-          <button
-            type="button"
-            className="delve-btn delve-btn-gold text-sm"
+          <Button
+            variant="primary"
             disabled={locked || !changed}
             onClick={onRealign}
-            data-testid="realign-button"
+            testId="realign-button"
           >
-            Realign · ✦ {cost.realignDust} · ⚙ {cost.realignScrap}
-          </button>
+            Realign · <Price dust={cost.realignDust} scrap={cost.realignScrap} />
+          </Button>
         </div>
       )}
       {message && (
-        <div className="text-xs font-semibold text-red-300" role="status">
+        <div className="text-[14px] font-semibold text-[var(--k-bad-text)]" role="status">
           {message}
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

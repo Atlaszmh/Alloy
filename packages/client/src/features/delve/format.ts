@@ -58,12 +58,15 @@ function formatPct(value: number, decimals: number): string {
   return decimals > 0 ? v.toFixed(decimals).replace(/\.0+$/, '') : String(Math.round(v));
 }
 
+/** "+12%" / "+340": a stat's value without its label. */
+export function formatStatValue(registry: DataRegistry, stat: HeroStatKey, value: number): string {
+  const def = registry.getGearAffix(stat);
+  return def?.unit === 'pct' ? `+${formatPct(value, def.decimals)}%` : `+${formatNumber(value)}`;
+}
+
 /** "+12% Crit Chance" / "+340 Armor" */
 export function formatStat(registry: DataRegistry, stat: HeroStatKey, value: number): string {
-  const def = registry.getGearAffix(stat);
-  const label = def?.label ?? stat;
-  if (def?.unit === 'pct') return `+${formatPct(value, def.decimals)}% ${label}`;
-  return `+${formatNumber(value)} ${label}`;
+  return `${formatStatValue(registry, stat, value)} ${registry.getGearAffix(stat)?.label ?? stat}`;
 }
 
 export function legendaryText(registry: DataRegistry, id: string, value: number): string {

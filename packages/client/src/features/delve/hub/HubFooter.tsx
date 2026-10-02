@@ -1,9 +1,7 @@
-import { useId, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useId, type ReactNode } from 'react';
 import { isDiveActive, startDepthOptions } from '@alloy/engine';
 import { applyLabel, selectDraftApply, useDelveStore } from '@/stores/delveStore';
 import { playSound } from '@/shared/utils/sound-manager';
-import { vibrate } from '@/shared/utils/haptics';
 import { Button, Chip, Footer, Glyph, type Binding, type Prompt } from '@/features/delve/kit';
 import { getDelveRegistry } from '../registry';
 
@@ -14,15 +12,29 @@ export const TRAINING_BINDING: Binding = { key: 'KeyT', pad: 'view' };
  * The hub's planks: the prompts, then Training, the start depths and the hot
  * metal Delve button (Enter with nothing focused, or Start). An unapplied chain
  * draft blocks the dive, and its block (apply, or discard and delve) sits
- * before the button until Phase 2's Apply bar.
+ * before the button. While a tab sets `action` (Skills: its Apply bar, with a
+ * compact Delve), that node replaces the whole right-hand group.
  */
-export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraining: () => void }) {
-  const navigate = useNavigate();
+export function HubFooter({
+  prompts,
+  onTraining,
+  start,
+  onStart,
+  onDelve,
+  action,
+}: {
+  prompts: Prompt[];
+  onTraining: () => void;
+  /** The chosen start depth (the hub keeps it, for the Skills tab's Delve too). */
+  start: number;
+  onStart: (depth: number) => void;
+  onDelve: () => void;
+  action?: ReactNode;
+}) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
   const id = useId();
   const starts = startDepthOptions(registry, profile);
-  const [start, setStart] = useState(starts[starts.length - 1]);
   const active = isDiveActive(profile);
   // The chain builder's unapplied changes: a new dive waits until they're applied or discarded.
   // The builder's Apply, here too: its total, and the engine's op as a dry run (why it can't go).
@@ -30,14 +42,7 @@ export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraini
   const blocked = Object.keys(view.changes).length > 0 && !active;
   const applying = blocked ? view.dry : null;
   const applyWhy = applying && !applying.ok ? applying.reason : null;
-  const depth = starts.includes(start) ? start : 1;
 
-  const onDelve = () => {
-    if (!active && !useDelveStore.getState().startDive(depth)) return;
-    playSound('phaseTransition');
-    vibrate('medium');
-    navigate('/delve/run');
-  };
   const onApply = () => {
     const res = useDelveStore.getState().applyDraft();
     playSound(res.ok ? 'upgradeTier' : 'combineFail');
@@ -46,6 +51,8 @@ export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraini
     useDelveStore.getState().revertDraft();
     onDelve();
   };
+
+  if (action) return <Footer prompts={prompts}>{action}</Footer>;
 
   return (
     <Footer prompts={prompts}>
@@ -87,7 +94,7 @@ export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraini
         <div className="flex items-center gap-2" data-testid="start-depths">
           <span className="text-[14px] text-[var(--k-wood-text)]">Start at</span>
           {starts.map((d) => (
-            <Chip key={d} pressed={start === d} onClick={() => setStart(d)}>
+            <Chip key={d} pressed={start === d} onClick={() => onStart(d)}>
               {d}
             </Chip>
           ))}
@@ -104,7 +111,7 @@ export function HubFooter({ prompts, onTraining }: { prompts: Prompt[]; onTraini
         data-pad-first
         testId="delve-button"
       >
-        {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${depth}`}
+        {active ? `Resume dive · depth ${profile.dive!.depth}` : `Delve ▸ depth ${start}`}
       </Button>
     </Footer>
   );

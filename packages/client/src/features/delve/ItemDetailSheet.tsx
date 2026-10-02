@@ -19,7 +19,6 @@ import { showToast } from '@/components/Toast';
 import { playSound } from '@/shared/utils/sound-manager';
 import { vibrate } from '@/shared/utils/haptics';
 import { getDelveRegistry } from './registry';
-import { BindPrompt } from './BindPrompt';
 import { SKILL_NAME } from './chains/chain-text';
 import { useItemComparison } from './items/useItemComparison';
 import { ItemHeader } from './items/ItemHeader';
@@ -46,7 +45,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
   const [flashIdx, setFlashIdx] = useState<number | null>(null);
   const [confirmSalvage, setConfirmSalvage] = useState(false);
-  const [binding, setBinding] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
   // A bag weapon, while armed, is valued twice: as it is (`asIs`), and as a home for your moveset.
@@ -81,9 +79,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   const melts = pullText(registry, weaponParts(registry, item).runes, pull);
   const dust = salvageDust(registry, item, profile.pair);
   const reattuneTo = pairElements(profile.pair).filter((m) => m !== item.mana);
-  // Gear outside the pair while no second element is bound: equipping it asks to bind (between dives).
-  const unbound =
-    !!profile.pair.primary && !profile.pair.secondary && item.mana !== profile.pair.primary;
   // Your moveset would make the weapon an upgrade (Transfer's mark, as Equip's is as it is).
   const homeUpgrade = !!transfer && cmp !== null && cmp.powerPct > UPGRADE_EPSILON;
 
@@ -103,10 +98,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
   };
 
   const onEquip = () => {
-    if (unbound && !store().bindDeclined.includes(item.mana)) {
-      setBinding(true);
-      return;
-    }
     store().equip(item.uid);
     playSound('orbPlace');
     vibrate('medium');
@@ -207,8 +198,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={item.name}
-        // The bind prompt holds the keyboard: nothing behind it takes focus or clicks.
-        inert={binding}
       >
         {/* Header */}
         <div className="flex items-start gap-3">
@@ -472,15 +461,6 @@ export function ItemDetailSheet({ uid, onClose, onBuild }: ItemDetailSheetProps)
           {profile.links} Link{profile.links === 1 ? '' : 's'}
         </div>
       </div>
-      {binding && !isEquipped && (
-        <BindPrompt
-          item={item}
-          onDone={() => {
-            setBinding(false);
-            onClose();
-          }}
-        />
-      )}
     </div>
   );
 }

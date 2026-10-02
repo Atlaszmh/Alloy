@@ -91,6 +91,35 @@ describe('RunePicker', () => {
     expect(opener).toHaveFocus();
   });
 
+  it("the sheet sits in the kit's UI layer, over the screen", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Socket 1' }));
+    expect(screen.getByTestId('rune-picker').parentElement).toBe(
+      document.getElementById('delve-ui-layer'),
+    );
+  });
+
+  it('inline, it is drawn in place as its own pad scope: Back has the focus, Escape closes it', () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <RunePicker
+        variant="inline"
+        candidates={[{ rune: { id: 'split', tier: 1 }, count: 2 }]}
+        onPick={() => {}}
+        onClose={onClose}
+      />,
+    );
+    const picker = screen.getByTestId('rune-picker');
+    expect(container).toContainElement(picker);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Socket a rune' })).toBe(picker);
+    expect(picker).toHaveAttribute('data-pad-scope');
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Split I ×2' })).toBeInTheDocument();
+    fireEvent.keyDown(picker, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('a filled socket shows its rune with Pull, dormant with its reason, then the runes to replace it', () => {
     const onPull = vi.fn();
     const onClose = vi.fn();

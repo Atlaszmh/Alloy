@@ -4,6 +4,7 @@ import {
   type AbilitySlot,
   type Blow,
   type Chains,
+  type MoveKind,
   type ResolvedAbility,
   type ResolvedChain,
 } from '../types/ability.js';
@@ -517,6 +518,17 @@ export function useInterval(
 }
 
 /**
+ * The basics' mean seconds between strikes, as Power counts them: the attack
+ * interval × the blows' mean time, each blow's Quick or Heavy (`quick.beat`)
+ * scaling its share. Its inverse is the attack speed the Anvil shows.
+ */
+export function strikeInterval(stats: HeroStats): number {
+  const blows = stats.weapon.blows;
+  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
+  return (stats.attackInterval * stringTime) / blows.length;
+}
+
+/**
  * Mana a second the basics bring back at their full rate, as Power counts them
  * (see the rune costs spec): regen, `basicAttackGain` a strike, and the blows'
  * Drain (each blow's foe-hits at most `drainFoes`, capped at `drainShare` of a
@@ -529,9 +541,8 @@ export function basicIncome(registry: DataRegistry, stats: HeroStats): number {
   const blows = stats.weapon.blows;
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
-  const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
-  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
-  const income = manaPool(stats, registry).regen + bal.mana.basicAttackGain / strikeInterval;
+  const interval = strikeInterval(stats);
+  const income = manaPool(stats, registry).regen + bal.mana.basicAttackGain / interval;
   const blowDrain = mean(
     blows.map((b) =>
       Math.min(
@@ -540,7 +551,7 @@ export function basicIncome(registry: DataRegistry, stats: HeroStats): number {
       ),
     ),
   );
-  return income + blowDrain / strikeInterval;
+  return income + blowDrain / interval;
 }
 
 /** A chain's mana spend a second against the build's refill (see the rune costs spec). */
@@ -574,6 +585,64 @@ export function manaSupport(
   };
 }
 
+/** The expected hit before a move's power: weapon damage × damage multiplier × the crit factor. */
+export function expectedHit(stats: HeroStats): number {
+  const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
+  return stats.weaponDamage * stats.damageMult * critFactor;
+}
+
+/** One full cycle of an ability chain, as Power values it (the Skills tab's stats and rhythm). */
+export interface ChainCycle {
+  /** One full cycle's damage: `damagePerUse` at `expectedHit` × moves. */
+  damage: number;
+  /** One full cycle's seconds: the unbounded `useInterval` × moves. */
+  seconds: number;
+  /** Mana spent in one cycle: each move's valued cost (0 paid with charge). */
+  mana: number;
+  /** Each move as valued (a hold at full charge). */
+  steps: {
+    /** Its wind-up (conjure and channel); a hold's max(holdFull, castTime). */
+    cast: number;
+    /** `moveBeat` at the hero's tempo. */
+    beat: number;
+    kind: MoveKind;
+    elements: ManaType[];
+    hold: boolean;
+    /** Its runes repeat it (Echo). */
+    echo: boolean;
+  }[];
+  /** `comboWindow`: the pause after the last beat that starts the chain over. */
+  restart: number;
+}
+
+/** An ability chain's cycle (never the basic chain's): `chain` is the resolved draft. */
+export function chainCycle(
+  registry: DataRegistry,
+  stats: HeroStats,
+  chain: ResolvedChain,
+): ChainCycle {
+  const bal = registry.getDelveBalance();
+  const n = chain.moves.length;
+  const moves = chain.moves.map((_, i) => valuedMove(chain, i));
+  return {
+    damage: damagePerUse(chain, expectedHit(stats), stats, bal) * n,
+    seconds: useInterval(bal, chain, stats.tempo, Infinity, Infinity) * n,
+    mana: moves.reduce((sum, ab) => sum + ab.cost, 0),
+    steps: moves.map((ab) => {
+      const hold = ab.kind === 'hold';
+      return {
+        cast: hold ? Math.max(holdFull(bal, stats.tempo), ab.castTime) : ab.castTime,
+        beat: moveBeat(bal, ab, stats.tempo),
+        kind: ab.kind,
+        elements: ab.elements,
+        hold,
+        echo: ab.knobs.echo > 0,
+      };
+    }),
+    restart: bal.abilities.comboWindow,
+  };
+}
+
 /**
  * Heuristic DPS / effective-HP estimate against the reference monster, used
  * for Power and item comparisons. The basic attack, the Primary and the
@@ -597,15 +666,14 @@ export function estimateCombat(
   const ref = referenceMonster(registry, depth);
   const L = stats.legendaries;
 
-  const critFactor = 1 + stats.critChance * (stats.critMultiplier - 1);
-  const hit = stats.weaponDamage * stats.damageMult * critFactor;
+  const hit = expectedHit(stats);
   const melee = stats.weapon.kind === 'melee';
   const cleave = melee ? 1 + (stats.weapon.arc / 360) * 1.5 : stats.weapon.pierce ? 1.4 : 1;
   // Each blow's power × its element's power × its runes (`blowRunes`), over the chain's time
   // (a blow's Quick or Heavy scales its share of it).
   const blows = stats.weapon.blows;
   const stringTime = blows.reduce((a, s) => a + s.time * s.knobs.quick.beat, 0);
-  const strikeInterval = (stats.attackInterval * stringTime) / blows.length;
+  const interval = strikeInterval(stats);
   const value = (b: (typeof blows)[number]) => b.attunePower * (1 + stats.elementPower[b.element]);
   // Twin Fang: one extra hit on the last blow, at its value (×1.5 melee, ×1 ranged; no runes).
   const twin = ((L.twin_fang ?? 0) / 100) * (melee ? 1.5 : 1);
@@ -626,7 +694,7 @@ export function estimateCombat(
     useInterval(bal, chain, stats.tempo, income, rate, pool.max);
   // Drain: mana per foe-hit, the blows' on each strike and each skill's on each use, over its
   // interval at the income before Drain (one pass).
-  const income = pool.regen + bal.mana.basicAttackGain / strikeInterval;
+  const income = pool.regen + bal.mana.basicAttackGain / interval;
   const drained = (chain: ResolvedChain | null, share: number) => {
     const perUse = chain ? drainPerUse(chain, bal, pool.max) : 0;
     return perUse > 0 ? perUse / every(chain!, income * share, dps / unit) : 0;
@@ -675,7 +743,7 @@ export function estimateCombat(
   const shield = Math.max(
     guardShare(
       blows.map((b) => b.knobs.guardOnLand),
-      strikeInterval,
+      interval,
       bal,
     ),
     primary ? guardShare(guards(primary, pool.max), primaryEvery, bal) : 0,
