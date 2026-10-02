@@ -185,6 +185,26 @@ describe('DelveLab', () => {
     expect(screen.getByTestId('training-page')).toBeInTheDocument();
   });
 
+  it('the Economy tab shows the Economy view in place of the grid; its Run starts its own worker', () => {
+    renderLab();
+    const grid = latest();
+    expect(screen.getByTestId('economy-view')).not.toBeVisible();
+    fireEvent.click(screen.getByTestId('lab-tab-economy'));
+    expect(screen.getByTestId('economy-view')).toBeVisible();
+    expect(screen.getByTestId('lab-results')).not.toBeVisible();
+    expect(screen.getByTestId('delve-lab').querySelector('header')).toHaveTextContent(
+      'The autopilot, dive by dive',
+    );
+    fireEvent.click(screen.getByTestId('economy-run'));
+    expect(FakeWorker.all).toHaveLength(2);
+    expect(latest().requests).toEqual([{ seeds: [1, 2, 3], dives: 12 }]);
+    expect(grid.terminated).toBe(false);
+    // Back to a DPS view: the economy run is kept, hidden.
+    fireEvent.click(screen.getByTestId('lab-tab-basic'));
+    expect(screen.getByTestId('lab-results')).toBeVisible();
+    expect(screen.getByTestId('economy-progress')).not.toBeVisible();
+  });
+
   it('moving focus off the slider commits the depth too (a controller only nudges it)', () => {
     renderLab();
     fireEvent.change(screen.getByTestId('lab-depth'), { target: { value: '15' } });

@@ -14,6 +14,7 @@ import {
 import { getDelveRegistry } from '@/features/delve/registry';
 import { LabChart } from '@/features/delve/lab/LabChart';
 import { LabTable } from '@/features/delve/lab/LabTable';
+import { EconomyView } from '@/features/delve/lab/EconomyView';
 import {
   BY_LINE,
   baseRatios,
@@ -29,7 +30,8 @@ import {
 } from '@/features/delve/lab/lab-model';
 import '@/features/delve/delve.css';
 
-type View = DpsSetup['view'];
+/** The DPS views, and the Economy view (see the crafting spec). */
+type View = DpsSetup['view'] | 'economy';
 /** The Mana select's options: full mana, or sustained (`DpsOptions.sustained`; the rune costs spec). */
 type Mana = 'full' | NonNullable<DpsOptions['sustained']>;
 const MANAS: [Mana, string][] = [
@@ -42,6 +44,7 @@ const VIEWS: [View, string][] = [
   ['basic', 'Basics'],
   ['ability', 'Abilities'],
   ['rune', 'Runes'],
+  ['economy', 'Economy'],
 ];
 const SELECT = 'k-well px-2 py-1.5 text-[14px] text-[var(--k-text)]';
 const LABEL = 'flex items-center gap-2 text-[16px] text-[var(--k-text-2)]';
@@ -50,7 +53,9 @@ const LABEL = 'flex items-center gap-2 text-[16px] text-[var(--k-text-2)]';
  * The DPS Lab (dev builds only): every basic-attack, ability and rune combo's
  * baseline DPS over 30 s, simulated by the engine in a worker, as a ranked
  * table and a chart of the ticked rows; the Runes view adds each row's ratio
- * to its baseline ("× none"). See the DPS Lab and runes specs.
+ * to its baseline ("× none"). See the DPS Lab and runes specs. The Economy view
+ * runs the economy sim instead (see the crafting spec); both stay mounted, the
+ * one not shown `hidden`, so neither loses its run.
  */
 export function DelveLab() {
   const navigate = useNavigate();
@@ -149,7 +154,7 @@ export function DelveLab() {
         header={
           <Header
             title="DPS Lab"
-            subtitle="30 s on the dummies"
+            subtitle={view === 'economy' ? 'The autopilot, dive by dive' : '30 s on the dummies'}
             nav={
               <Tabs
                 level="top"
@@ -175,7 +180,8 @@ export function DelveLab() {
         // No footer prompts: the header's ◂ Training already carries Esc and B (`data-pad-back`).
         footer={<Footer prompts={[]} />}
       >
-        <div className="flex h-full min-h-0 flex-col gap-4 px-8 py-5">
+        <EconomyView hidden={view !== 'economy'} />
+        <div className="flex h-full min-h-0 flex-col gap-4 px-8 py-5" hidden={view === 'economy'}>
           <Panel material="well" scroll={false} className="shrink-0">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               <label className={LABEL}>
