@@ -12,6 +12,9 @@ import { killMonster, makeCtx } from '../src/arpg/combat.js';
 import { beginFloor, chooseDoor, completeFloor, startDive } from '../src/delve/dive.js';
 import { createDelveProfile, parseDelveProfile } from '../src/delve/profile.js';
 import { profileStats } from '../src/delve/pair.js';
+import { GearItemSchema } from '../src/delve/profile-schema.js';
+import { generateItem } from '../src/loot/item-generator.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import { materialName, scrapLevelFactor } from '../src/loot/item-generator.js';
 import { metalAt, shardTiersOf } from '../src/loot/materials.js';
 import { METAL_IDS } from '../src/types/crafting.js';
@@ -220,5 +223,27 @@ describe('doors: the drop multipliers and Find', () => {
     expect(parseDelveProfile(registry, json)!.profile.dive!.door).toEqual(
       registry.getDoor('gilded'),
     );
+  });
+});
+
+describe('items: hones and roll bands', () => {
+  const item = generateItem(
+    registry,
+    { uid: 'r', ilvl: 6, rarity: 'rare', slot: 'ring' },
+    new SeededRNG(3),
+  );
+
+  it('rolls with no hones and no bands (the rarity default)', () => {
+    expect(item.hones).toBe(0);
+    expect(item.affixes.every((a) => a.band === undefined)).toBe(true);
+  });
+
+  it("saves a line's band and the hones; an item saved before hones reads as none", () => {
+    const banded = { ...item, hones: 2, affixes: [{ ...item.affixes[0], band: [0.4, 0.7] }] };
+    expect(GearItemSchema.parse(banded)).toEqual(banded);
+    const { hones: _h, ...old } = item;
+    expect(GearItemSchema.parse(old).hones).toBe(0);
+    const bad = { ...item, affixes: [{ ...item.affixes[0], band: [0.4, 1.2] }] };
+    expect(GearItemSchema.safeParse(bad).success).toBe(false);
   });
 });

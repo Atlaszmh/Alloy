@@ -196,6 +196,7 @@ export function generateItem(registry: DataRegistry, opts: ItemGenOptions, rng: 
     affixes,
     upgrade: 0,
     reforges: 0,
+    hones: 0,
     locked: false,
   };
   if (legendary) item.legendary = legendary;

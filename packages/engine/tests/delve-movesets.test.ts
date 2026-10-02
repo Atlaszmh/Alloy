@@ -303,7 +303,8 @@ describe('determinism', () => {
       items.push(...r.items);
       ctx = { ...ctx, nextUid: r.nextUid };
     }
-    const strip = items.map(({ moveset: _m, ...rest }) => rest);
+    // `hones` (0 on every item) is new since: the rolls are as they were.
+    const strip = items.map(({ moveset: _m, hones: _h, ...rest }) => rest);
     let h = 0x811c9dc5;
     for (const c of JSON.stringify(strip)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
     // v0.48.0's 291 items, hashed the same way (the plan's scratchpad `items-hash.mjs`).

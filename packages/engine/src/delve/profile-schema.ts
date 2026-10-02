@@ -138,7 +138,12 @@ export const MovesetSchema = z
 const RaritySchema = z.enum(['common', 'uncommon', 'magic', 'rare', 'epic', 'legendary']);
 const SlotSchema = z.enum(['weapon', 'helm', 'chest', 'gloves', 'boots', 'amulet', 'ring']);
 
-const StatRollSchema = z.object({ stat: StatKeySchema, value: z.number(), roll: z.number() });
+const StatRollSchema = z.object({
+  stat: StatKeySchema,
+  value: z.number(),
+  roll: z.number(),
+  band: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
+});
 
 export const GearItemSchema = z.object({
   uid: z.string(),
@@ -153,6 +158,8 @@ export const GearItemSchema = z.object({
   legendary: z.object({ id: z.string(), value: z.number(), roll: z.number() }).optional(),
   upgrade: z.number().int().min(0),
   reforges: z.number().int().min(0),
+  // The Training Grounds' saved loadout predates hones: it reads as none.
+  hones: z.number().int().min(0).default(0),
   locked: z.boolean(),
   moveset: MovesetSchema.optional(),
 });
