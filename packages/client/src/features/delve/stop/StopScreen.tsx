@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { memo, useEffect, useRef, useState, type ReactElement } from 'react';
 import { baseDisplayName, isBossDepth, type DiveState } from '@alloy/engine';
 import { Button, Footer, Glyph, Panel, Screen, usePrompts, type Prompt } from '../kit';
 import { getDelveRegistry } from '../registry';
@@ -33,7 +33,7 @@ export interface StopScreenProps {
  * each expanding in place to its picker; the doors on the right. At its top level there is no
  * back: Esc and the pad's Menu press its Menu, which opens the pause over it.
  */
-export function StopScreen({
+export const StopScreen = memo(function StopScreen({
   dive,
   onChoose,
   onExtract,
@@ -102,11 +102,7 @@ export function StopScreen({
         </Footer>
       }
     >
-      <div
-        ref={mainRef}
-        className="box-border flex h-full flex-col gap-8 px-[72px]"
-        inert={!armed}
-      >
+      <div ref={mainRef} className="box-border flex h-full flex-col gap-8 px-[72px]" inert={!armed}>
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-[6px]">
             <span className="k-label" style={{ color: 'var(--k-mana)' }}>
@@ -227,4 +223,4 @@ export function StopScreen({
       </div>
     </Screen>
   );
-}
+});

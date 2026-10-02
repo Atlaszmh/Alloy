@@ -1,38 +1,76 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { createDelveProfile, startDive } from '@alloy/engine';
 import { createArenaInput } from '@/features/delve/arena/input';
 import { getDelveRegistry } from '@/features/delve/registry';
 import { useDelveStore } from '@/stores/delveStore';
 import type { PauseScreenProps } from '@/features/delve/hub/PauseScreen';
+import type { StopScreenProps } from '@/features/delve/stop/StopScreen';
 import { DelveRun } from '../DelveRun';
 
-// The arena itself (Pixi) stands still: the page's HUD is what's under test.
-vi.mock('@/features/delve/arena/useArena', () => ({
-  useArena: () => ({
-    input: createArenaInput(),
-    heroScreen: () => null,
-    pixelsPerUnit: () => 30,
-    hud: null,
-    worldRef: { current: null },
-    cast: () => {},
-    potion: () => {},
-    dodge: () => {},
-    attack: () => {},
-  }),
+/** What the mocks saw: each render's props, and the arena's HUD tick. */
+const seen = vi.hoisted(() => ({
+  pause: [] as object[],
+  stop: [] as object[],
+  tick: null as null | (() => void),
 }));
+
+// The arena itself (Pixi) stands still: the page's HUD is what's under test. `seen.tick` re-renders
+// the page as the arena's 80 ms HUD refresh does.
+vi.mock('@/features/delve/arena/useArena', async () => {
+  const { useState } = await import('react');
+  return {
+    useArena: () => {
+      const [, setTick] = useState(0);
+      seen.tick = () => setTick((n) => n + 1);
+      return {
+        input: createArenaInput(),
+        heroScreen: () => null,
+        pixelsPerUnit: () => 30,
+        hud: null,
+        worldRef: { current: null },
+        cast: () => {},
+        potion: () => {},
+        dodge: () => {},
+        attack: () => {},
+      };
+    },
+  };
+});
 
 // The pause (3D's) as its contract: which tab it opens on, and Resume.
 vi.mock('@/features/delve/hub/PauseScreen', () => ({
-  PauseScreen: ({ link, onResume }: PauseScreenProps) => (
-    <div data-testid="pause-stub" data-link={JSON.stringify(link ?? null)}>
-      <button type="button" onClick={onResume}>
-        Resume
-      </button>
-    </div>
-  ),
+  PauseScreen: (props: PauseScreenProps) => {
+    seen.pause.push(props);
+    return (
+      <div data-testid="pause-stub" data-link={JSON.stringify(props.link ?? null)}>
+        <button type="button" onClick={props.onResume}>
+          Resume
+        </button>
+      </div>
+    );
+  },
 }));
+
+// The stop as it is, its props recorded.
+vi.mock('@/features/delve/stop/StopScreen', async (orig) => {
+  const real = await orig<typeof import('@/features/delve/stop/StopScreen')>();
+  return {
+    ...real,
+    StopScreen: (props: StopScreenProps) => {
+      seen.stop.push(props);
+      return <real.StopScreen {...props} />;
+    },
+  };
+});
+
+/** The last two renders' props are the same values, key by key (so a memo skips the second). */
+const heldStill = (renders: object[]) => {
+  const [a, b] = renders.slice(-2) as Record<string, unknown>[];
+  expect(Object.keys(b)).toEqual(Object.keys(a));
+  for (const k of Object.keys(a)) expect(b[k], k).toBe(a[k]);
+};
 
 const renderRun = () =>
   render(
@@ -44,6 +82,8 @@ const pauseLink = () => JSON.parse(screen.getByTestId('pause-stub').dataset.link
 
 describe('DelveRun', () => {
   beforeEach(() => {
+    seen.pause.length = 0;
+    seen.stop.length = 0;
     const registry = getDelveRegistry();
     useDelveStore.setState({
       profile: startDive(registry, createDelveProfile(registry, 7), 1),
@@ -113,5 +153,30 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
     expect(screen.queryByTestId('pause-stub')).toBeNull();
     expect(screen.getByTestId('door-choice')).toBeInTheDocument();
+  });
+
+  it('a HUD tick hands the stop and the pause over it the same props, so their memos skip it', () => {
+    const { profile } = useDelveStore.getState();
+    useDelveStore.setState({
+      profile: {
+        ...profile,
+        dive: {
+          ...profile.dive!,
+          phase: 'choosing',
+          doorChoices: ['winding'],
+          stop: { offers: ['equip'], taken: false },
+        },
+      },
+    });
+    renderRun();
+    fireEvent.click(
+      within(screen.getByTestId('door-choice')).getByRole('button', { name: 'Menu' }),
+    );
+    const [pauses, stops] = [seen.pause.length, seen.stop.length];
+    act(() => seen.tick!());
+    expect(seen.pause.length).toBe(pauses + 1);
+    expect(seen.stop.length).toBe(stops + 1);
+    heldStill(seen.pause);
+    heldStill(seen.stop);
   });
 });

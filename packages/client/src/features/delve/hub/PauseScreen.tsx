@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import type { BiomeDef, DiveState } from '@alloy/engine';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { Button, Footer, Glyph, Header, Screen, usePrompts, type Prompt } from '../kit';
@@ -26,7 +26,7 @@ const TABS_PROMPT: Prompt = { id: 'tabs', label: 'Tabs', binding: { key: '1 – 
  * prompts and Tabs, then Controls, Settings, Anvil, Abandon and Resume, which Esc, B and Menu
  * press and the pad focuses first.
  */
-export function PauseScreen({
+export const PauseScreen = memo(function PauseScreen({
   dive,
   biome,
   foesLeft,
@@ -100,4 +100,4 @@ export function PauseScreen({
       {dialog === 'settings' && <SettingsPanel onClose={() => setDialog(null)} />}
     </div>
   );
-}
+});

@@ -160,46 +160,64 @@ export function DelveRun() {
     if (!dive) navigate('/delve', { replace: true });
   }, [dive, navigate]);
 
-  if (!dive) return null;
-
-  const biome = registry.getBiomeForDepth(dive.depth);
-  const starts = startDepthOptions(registry, profile);
-
-  const onChooseDoor = (doorId: string) => {
-    const before = useDelveStore.getState().profile;
-    const next = chooseDoor(registry, before, doorId);
-    useDelveStore.getState().setProfile(next);
-    if (next.bestDepth > before.bestDepth && before.bestDepth > 0) {
-      showBanner('NEW RECORD', '#4ade80', `Deepest depth reached: ${next.bestDepth}`);
-    }
-  };
-  const onExtract = () =>
-    useDelveStore.getState().setProfile(extractDive(registry, useDelveStore.getState().profile));
-  const onDoorPotion = () => {
+  // Stable, so the memoised stop and pause skip the arena's 80 ms HUD refreshes.
+  const onChooseDoor = useCallback(
+    (doorId: string) => {
+      const before = useDelveStore.getState().profile;
+      const next = chooseDoor(registry, before, doorId);
+      useDelveStore.getState().setProfile(next);
+      if (next.bestDepth > before.bestDepth && before.bestDepth > 0) {
+        showBanner('NEW RECORD', '#4ade80', `Deepest depth reached: ${next.bestDepth}`);
+      }
+    },
+    [registry, showBanner],
+  );
+  const onExtract = useCallback(
+    () =>
+      useDelveStore.getState().setProfile(extractDive(registry, useDelveStore.getState().profile)),
+    [registry],
+  );
+  const onDoorPotion = useCallback(() => {
     const next = drinkPotionBetweenFloors(registry, useDelveStore.getState().profile);
     if (next) {
       useDelveStore.getState().setProfile(next);
       playSound('potion');
     } else playSound('combineFail');
-  };
-  const onCamp = () => {
+  }, [registry]);
+  const onCamp = useCallback(() => {
     useDelveStore.getState().closeDive();
     navigate('/delve');
-  };
+  }, [navigate]);
+  /** The pause over the dive or the stop, on `link`'s tab (Loadout without one). */
+  const openPause = useCallback((link?: HubLink) => setPause({ link }), []);
+  const openMenu = useCallback(() => setPause({}), []);
+  /** A find, from the Found log or the stop: the pause's Loadout, on that item. */
+  const openItem = useCallback(
+    (uid: string) => {
+      useDelveStore.getState().markSeen([uid]);
+      openPause({ tab: 'loadout', uid });
+    },
+    [openPause],
+  );
+  const openJournal = useCallback(() => openPause({ tab: 'quests' }), [openPause]);
+  const resume = useCallback(() => setPause(null), []);
+  const toAnvil = useCallback(() => navigate('/delve'), [navigate]);
+  const abandon = useCallback(() => {
+    setPause(null);
+    onCamp();
+  }, [onCamp]);
+
+  if (!dive) return null;
+
+  const biome = registry.getBiomeForDepth(dive.depth);
+  const starts = startDepthOptions(registry, profile);
+
   const onAgain = () => {
     const s = useDelveStore.getState();
     s.closeDive();
     s.startDive(starts[starts.length - 1]);
     playSound('phaseTransition');
   };
-  /** The pause over the dive or the stop, on `link`'s tab (Loadout without one). */
-  const openPause = (link?: HubLink) => setPause({ link });
-  /** A find, from the Found log or the stop: the pause's Loadout, on that item. */
-  const openItem = (uid: string) => {
-    useDelveStore.getState().markSeen([uid]);
-    openPause({ tab: 'loadout', uid });
-  };
-  const openJournal = () => openPause({ tab: 'quests' });
   /** The Attack slot's click in Manual: one blow, as a tap of the attack input. */
   const tapAttack = () => {
     arena.attack(true);
@@ -219,7 +237,7 @@ export function DelveRun() {
 
       <HudGrid
         onInsets={setInsets}
-        top={<PurseBar dive={dive} onMenu={() => openPause()} onJournal={openJournal} />}
+        top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
             dive={dive}
@@ -257,7 +275,7 @@ export function DelveRun() {
             onChoose={onChooseDoor}
             onExtract={onExtract}
             onPotion={onDoorPotion}
-            onMenu={() => openPause()}
+            onMenu={openMenu}
             onInspect={openItem}
           />
         </div>
@@ -270,12 +288,9 @@ export function DelveRun() {
             biome={biome}
             foesLeft={arena.hud?.monstersLeft ?? 0}
             link={pause.link}
-            onResume={() => setPause(null)}
-            onAnvil={() => navigate('/delve')}
-            onAbandon={() => {
-              setPause(null);
-              onCamp();
-            }}
+            onResume={resume}
+            onAnvil={toAnvil}
+            onAbandon={abandon}
           />
         </div>
       )}
