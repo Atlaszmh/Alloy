@@ -53,6 +53,16 @@ export default defineConfig({
       },
     },
     {
+      // The Delve e2e again at 1080p (Delve UI v1, Phase 4A): its design size, --ui-scale 1.
+      name: 'desktop-1080',
+      testMatch: 'delve*.spec.ts',
+      testIgnore: ['responsive/**'],
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1920, height: 1080 },
+      },
+    },
+    {
       name: 'responsive',
       testMatch: /responsive\/.*\.spec\.ts$/,
       use: {
