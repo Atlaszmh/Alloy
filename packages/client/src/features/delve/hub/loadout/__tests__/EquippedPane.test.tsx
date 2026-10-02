@@ -83,6 +83,10 @@ describe('the equipped pane', () => {
     expect(strip).toHaveTextContent('Skills ›');
     expect(within(strip).getByTestId('attune-frost')).toBeInTheDocument();
     expect(within(strip).queryByTestId('attune-fire')).toBeNull();
+    // Compact, so the moveset box fits at 1080p with two elements: no pool line (the stats show
+    // Mana and Regen) and no line under each element (the Mana view has them).
+    expect(within(strip).queryByTestId('mana-pool')).toBeNull();
+    expect(strip).not.toHaveTextContent('At 10');
     fireEvent.click(strip);
     expect(props.go).toHaveBeenCalledWith({ tab: 'skills', view: 'mana' });
   });
