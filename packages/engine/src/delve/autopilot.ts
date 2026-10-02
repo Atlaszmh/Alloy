@@ -1,9 +1,19 @@
 import type { DataRegistry } from '../data/registry.js';
 import type { DelveProfile } from '../types/delve.js';
-import type { GearItem } from '../types/gear.js';
+import type { GearItem, GearSlot, HeroStatKey, Rarity } from '../types/gear.js';
 import { GEAR_SLOTS } from '../types/gear.js';
-import { MANA_TYPES, emptyManaMap, type ManaType } from '../types/mana.js';
+import { RARITY_ORDER, rarityIndex } from '../types/gem.js';
+import type { ManaType } from '../types/mana.js';
+import {
+  FLUX_GRADES,
+  METAL_IDS,
+  type ForgeRequest,
+  type Haul,
+  type ShardRef,
+} from '../types/crafting.js';
 import { upgradeCost } from '../loot/smithing.js';
+import { honeCost, previewForge } from '../loot/forge.js';
+import { addHaul, emptyHaul } from '../loot/materials.js';
 import { botInput } from '../arpg/bot.js';
 import { stepWorld } from '../arpg/step.js';
 import {
@@ -17,7 +27,7 @@ import {
   startDepthOptions,
   startDive,
 } from './dive.js';
-import { compareItem, itemAttunement, type WeaponValue } from './hero-stats.js';
+import { compareItem, type WeaponValue } from './hero-stats.js';
 import { heroChains, movesetOf } from '../loot/moveset.js';
 import { bindSecondary, resolveOvertake } from './pair.js';
 import {
@@ -29,18 +39,22 @@ import {
   salvageItems,
   upgradeGear,
 } from './profile.js';
+import { buyShard, forge, hone, refine } from './crafting.js';
 import { addSlot, movesOf, setChain, transferMoveset, withMove } from './moveset.js';
 import { fuseRunes, openSocket } from './runes.js';
 import { pouchCount, runeFits, socketCap, socketsOf } from '../loot/runes.js';
 import { takeStop, type StopAction } from './stops.js';
 import { MAX_CHAIN, type Blow, type ChainSkill, type Move } from '../types/ability.js';
 import { RUNE_TIERS, type RuneRef, type RuneTarget, type RuneTier } from '../types/rune.js';
+import type { EconomyDive } from './economy.js';
 
 /**
  * Plays whole dives with the arena bot, like a sensible player: fights every
- * floor (its gear locked, loot to the bag), picks doors, extracts when spent,
- * and between dives moves its moveset to a better weapon, equips upgrades,
- * forges, adds slots and sockets runes. Used by the pacing test and for balance sweeps.
+ * floor (its gear locked, loot to the bag, materials to the haul), picks
+ * doors, extracts when spent, and between dives (and once before the first)
+ * visits the Anvil: forges its gear from materials, moves its moveset to a
+ * better weapon, salvages what it doesn't wear, adds slots and sockets runes,
+ * hones and upgrades. Used by the pacing test, `economySim` and for balance sweeps.
  */
 
 export interface AutopilotOptions {
@@ -50,7 +64,7 @@ export interface AutopilotOptions {
   maxDepth?: number;
   /** A floor that runs longer than this counts as a death. */
   maxFloorSeconds?: number;
-  /** Continue from an existing profile instead of a fresh one. */
+  /** Continue from an existing profile instead of a fresh one (no opening Anvil visit). */
   profile?: DelveProfile;
   /** A fresh profile's starting mana (default fire). */
   primary?: ManaType;
@@ -92,8 +106,13 @@ function playFloor(
   return { profile: completeFloor(registry, p, world).profile, seconds: world.t, died: false };
 }
 
+/**
+ * The next door, or null to extract: when spent (low on life, no potions, no
+ * shrine), or to bring home an essence or epic flux it has banked.
+ */
 function pickDoor(profile: DelveProfile): string | null {
   const dive = profile.dive!;
+  if (dive.banked.flux.epic > 0 || Object.values(dive.banked.essences).some((n) => n > 0)) return null;
   if (dive.heroHpFrac < 0.35 && dive.potions === 0 && !dive.doorChoices.includes('shrine')) return null;
   if (dive.heroHpFrac < 0.5 && dive.doorChoices.includes('shrine')) return 'shrine';
   for (const id of DOOR_PREFERENCE) if (dive.doorChoices.includes(id)) return id;
@@ -101,27 +120,19 @@ function pickDoor(profile: DelveProfile): string | null {
 }
 
 /**
- * Bind the non-primary element the bot owns the most attunement in (equipped
- * and bagged: each item's base plus its `*Attune` lines; ties in MANA_TYPES
- * order), none while that's all 0: every pair reacts.
+ * Once it has fought (its deepest depth past 0: after its first dive), bind a
+ * second element: the first of the biomes' elements, in depth order, other
+ * than its primary (depth 1's biome is always fought; a hero whose primary
+ * that is takes the next biome's).
  */
-function bindBest(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const primary = profile.pair.primary;
-  if (!primary) return profile;
-  let p = profile;
-  if (!p.pair.secondary) {
-    const owned = emptyManaMap();
-    for (const item of [...GEAR_SLOTS.map((s) => p.equipped[s]), ...p.bag]) {
-      if (!item) continue;
-      const a = itemAttunement(registry, item);
-      for (const m of MANA_TYPES) owned[m] += a[m];
-    }
-    let best: ManaType | null = null;
-    for (const m of MANA_TYPES) if (m !== primary && owned[m] > (best ? owned[best] : 0)) best = m;
-    if (!best) return p;
-    p = bindSecondary(registry, p, best).profile;
-  }
-  return p;
+function bindPair(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  const { primary, secondary } = profile.pair;
+  if (!primary || secondary || profile.bestDepth === 0) return profile;
+  const mana = registry
+    .getDelveData()
+    .biomes.map((b) => b.mana)
+    .find((m) => m !== primary);
+  return mana ? bindSecondary(registry, profile, mana).profile : profile;
 }
 
 /**
@@ -137,14 +148,9 @@ function fusePrimary(registry: DataRegistry, p: DelveProfile): DelveProfile {
   return res.ok ? res.profile : p;
 }
 
-/**
- * Between dives, as a player would: an overtaking secondary swaps in, a second
- * element is bound (before anything is salvaged), the forge visit, and then
- * the Primary of whatever weapon it wields is built from both elements.
- */
+/** Between dives: a visit to the Anvil (`anvilVisit`). */
 export function betweenDives(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  const bound = bindBest(registry, resolveOvertake(registry, profile).profile);
-  return fusePrimary(registry, visitForge(registry, bound));
+  return anvilVisit(registry, profile).profile;
 }
 
 /** The skills the bot adds slots to, in order: each as far as its Links and scrap go. */
@@ -397,8 +403,7 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
   }
   if (stop.offers.includes('upgrade')) {
     const cheapest = cheapestUpgrade(registry, profile);
-    const upgraded =
-      cheapest && cheapest.cost <= profile.scrap && take({ kind: 'upgrade', uid: cheapest.uid });
+    const upgraded = cheapest && take({ kind: 'upgrade', uid: cheapest.uid });
     if (upgraded) return upgraded;
   }
   if (stop.offers.includes('slot'))
@@ -410,43 +415,326 @@ export function takeBestStop(registry: DataRegistry, profile: DelveProfile): Del
 }
 
 /**
- * Between dives: move the moveset to a better weapon, equip upgrades, melt
- * junk, spend Links on slots up to `SOCKETS_AFTER` a chain,
- * then on sockets for the pouch's runes (each filled as it opens), then on the
- * rest of the slots; socket the best, fuse the rune copies left over, and pour
- * scrap into upgrades.
+ * Upgrade its cheapest equipped item while the scrap lasts.
  */
-function visitForge(registry: DataRegistry, profile: DelveProfile): DelveProfile {
-  let p = equipBest(registry, transferBest(registry, profile)).profile;
-  p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
-  // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
-  // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
-  // over and socket again (a fused tier can beat a socketed one).
-  p = spendLinks(registry, p, SOCKETS_AFTER);
-  p = openSockets(registry, p);
-  p = spendLinks(registry, p);
-  p = socketBest(registry, p);
-  p = socketBest(registry, fusePouch(registry, p));
-
+function upgradeAll(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
   for (;;) {
     const cheapest = cheapestUpgrade(registry, p);
-    if (!cheapest || cheapest.cost > p.scrap) break;
+    if (!cheapest || cheapest.cost > p.scrap) return p;
     const res = upgradeGear(registry, p, cheapest.uid);
-    if (!res.ok) break; // the forge refuses mid-dive (an open dive)
+    if (!res.ok) return p; // the forge refuses mid-dive (an open dive)
     p = res.profile;
   }
+}
+
+/** The order it forges in, so what matters most gets the best flux first. */
+const FORGE_ORDER: readonly GearSlot[] = ['weapon', 'chest', 'helm', 'gloves', 'boots', 'amulet', 'ring'];
+/** The slots it forges in its primary (the weapon and two armour pieces); the rest in its secondary, so both grow. */
+const PRIMARY_SLOTS: readonly GearSlot[] = ['weapon', 'chest', 'helm'];
+/** Item levels a forge must gain on its slot's item at the same rarity. */
+const ILVL_STEP = 5;
+
+/** The affixes it wants on an item of `element`, most wanted first: its shards go to these. */
+function wanted(p: DelveProfile, element: ManaType): HeroStatKey[] {
+  const power = `${p.pair.primary ?? element}Power` as HeroStatKey;
+  const attune = `${element}Attune` as HeroStatKey;
+  return [
+    'damage',
+    'damagePct',
+    'critChance',
+    'critDamage',
+    'attackSpeedPct',
+    power,
+    'maxHp',
+    'hpPct',
+    'armor',
+    'lifesteal',
+    'manaRegen',
+    'cooldownReduction',
+    attune,
+  ];
+}
+
+/** Its best shard of each affix it wants on `slot`, highest tier first, up to `lines`. */
+function shardsFor(
+  registry: DataRegistry,
+  p: DelveProfile,
+  slot: GearSlot,
+  element: ManaType,
+  lines: number,
+): ShardRef[] {
+  const out: ShardRef[] = [];
+  for (const stat of wanted(p, element)) {
+    if (out.length >= lines) break;
+    if (!registry.getGearAffix(stat)?.slots.includes(slot)) continue;
+    const tiers = p.materials.shards[stat] ?? [];
+    for (let tier = tiers.length; tier >= 1; tier--)
+      if ((tiers[tier - 1] ?? 0) > 0) {
+        out.push({ stat, tier });
+        break;
+      }
+  }
+  return out;
+}
+
+/**
+ * The forge it would make for `slot` with `metal` (by default its highest
+ * bar): the slot's own pattern (else the first learned), its best flux (epic
+ * with an essence that fits: a legendary), the slot's element by the split and
+ * its shards; null without a pattern or a bar.
+ */
+function planForge(
+  registry: DataRegistry,
+  p: DelveProfile,
+  slot: GearSlot,
+  metal = [...METAL_IDS].reverse().find((m) => p.materials.metals[m] > 0),
+): ForgeRequest | null {
+  const own = p.equipped[slot]?.baseId;
+  const baseId =
+    own && p.patterns.includes(own)
+      ? own
+      : registry.getGearBasesForSlot(slot).find((b) => p.patterns.includes(b.id))?.id;
+  if (!baseId || !metal) return null;
+  const flux = [...FLUX_GRADES].reverse().find((g) => p.materials.flux[g] > 0);
+  const essence =
+    flux === 'epic'
+      ? Object.keys(p.materials.essences).find(
+          (id) => p.materials.essences[id] > 0 && registry.getLegendary(id).slots.includes(slot),
+        )
+      : undefined;
+  const { primary, secondary } = p.pair;
+  const element = (PRIMARY_SLOTS.includes(slot) ? primary : (secondary ?? primary)) ?? 'fire';
+  const rarity: Rarity = essence ? 'legendary' : (flux ?? 'common');
+  const lines = registry.getDelveBalance().loot.affixCount[rarity];
+  return {
+    baseId,
+    metal,
+    ...(flux ? { flux } : {}),
+    ...(essence ? { essence } : {}),
+    element,
+    shards: shardsFor(registry, p, slot, element, lines),
+  };
+}
+
+/**
+ * Forge `slot`'s planned item with the highest bar it can pay for, when that
+ * beats what the slot wears: a rarer one, or as rare and `ILVL_STEP` item
+ * levels higher (an empty slot takes anything). Null when it doesn't forge.
+ */
+function forgeSlot(registry: DataRegistry, p: DelveProfile, slot: GearSlot): DelveProfile | null {
+  const now = p.equipped[slot];
+  for (const metal of [...METAL_IDS].reverse()) {
+    if (p.materials.metals[metal] === 0) continue;
+    const req = planForge(registry, p, slot, metal);
+    if (!req) return null;
+    const preview = previewForge(registry, p, req);
+    const up = now ? rarityIndex(preview.rarity) - rarityIndex(now.rarity) : 1;
+    if (up < 0 || (up === 0 && preview.ilvl < now!.ilvl + ILVL_STEP)) return null;
+    if (preview.refused) continue;
+    const res = forge(registry, p, req);
+    return res.ok ? res.profile : null;
+  }
+  return null;
+}
+
+/** Whether it holds an essence and epic flux for a slot it knows a pattern for: a legendary to forge. */
+function legendaryWaits(registry: DataRegistry, p: DelveProfile): boolean {
+  return FORGE_ORDER.some((slot) => planForge(registry, p, slot)?.essence !== undefined);
+}
+
+/**
+ * Forge its legendary first (the essence goes into the first slot in
+ * `FORGE_ORDER` it fits), then, unless one still waits for its scrap, every
+ * other slot it can improve in `FORGE_ORDER`. The new items wait in the bag for
+ * the transfer and `equipBest`.
+ */
+function forgeGear(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  const done = FORGE_ORDER.find((slot) => planForge(registry, p, slot)?.essence !== undefined);
+  if (done) p = forgeSlot(registry, p, done) ?? p;
+  if (legendaryWaits(registry, p)) return p;
+  for (const slot of FORGE_ORDER) if (slot !== done) p = forgeSlot(registry, p, slot) ?? p;
   return p;
+}
+
+/**
+ * Refine flux up wherever it holds a triple, the lowest grade first so a
+ * refined one can make a triple above it; and, while its best bar's band ends
+ * below its deepest depth (a forge's item level stops there), the highest bar
+ * it holds a triple of.
+ */
+function refineSurplus(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  const step = (ref: Parameters<typeof refine>[2]) => {
+    const res = refine(registry, p, ref);
+    if (res.ok) p = res.profile;
+    return res.ok;
+  };
+  for (const grade of FLUX_GRADES) while (step({ kind: 'flux', grade }));
+  const metals = [...registry.getCraftingData().metals].reverse();
+  const count = registry.getDelveBalance().crafting.refine.metal.count;
+  for (;;) {
+    const top = metals.find((m) => p.materials.metals[m.id] > 0);
+    if (top && (top.band[1] ?? Infinity) >= p.bestDepth) return p;
+    const from = metals.find((m) => p.materials.metals[m.id] >= count);
+    if (!from || !step({ kind: 'metal', metal: from.id })) return p;
+  }
+}
+
+/**
+ * The shard bench: for each affix it wants on its primary's gear, holding one
+ * short of a triple of tier I, it buys the last; then it refines every wanted
+ * affix's triples, the lowest tier first.
+ */
+function refineShards(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  const need = registry.getDelveBalance().crafting.refine.shard.count;
+  for (const stat of wanted(p, p.pair.primary ?? 'fire')) {
+    if ((p.materials.shards[stat]?.[0] ?? 0) === need - 1) {
+      const res = buyShard(registry, p, stat);
+      if (res.ok) p = res.profile;
+    }
+    for (let tier = 1; tier < 5; tier++)
+      for (;;) {
+        const res = refine(registry, p, { kind: 'shard', stat, tier });
+        if (!res.ok) break;
+        p = res.profile;
+      }
+  }
+  return p;
+}
+
+/**
+ * Hone the equipped lines that rolled below their band's middle, the
+ * cheapest hone first, while scrap allows (each hone costs more than the last).
+ */
+function honeGear(registry: DataRegistry, profile: DelveProfile): DelveProfile {
+  let p = profile;
+  const minRoll = registry.getDelveBalance().loot.minRoll;
+  for (;;) {
+    let best: { uid: string; line: number; cost: number } | null = null;
+    for (const slot of GEAR_SLOTS) {
+      const item = p.equipped[slot];
+      if (!item) continue;
+      const cost = honeCost(registry, item);
+      if (cost > p.scrap || (best && cost >= best.cost)) continue;
+      const line = item.affixes.findIndex((a) => {
+        const [lo, hi] = a.band ?? [minRoll[item.rarity], 1];
+        return a.roll < (lo + hi) / 2;
+      });
+      if (line >= 0) best = { uid: item.uid, line, cost };
+    }
+    if (!best) return p;
+    const res = hone(registry, p, best.uid, best.line);
+    if (!res.ok) return p;
+    p = res.profile;
+  }
+}
+
+/** The stockpile as a haul: materials, scrap, Mana Dust, Links and runes. */
+function stockOf(p: DelveProfile): Haul {
+  return { ...p.materials, scrap: p.scrap, dust: p.manaDust, links: p.links, runes: p.runes };
+}
+
+/** `h` with every count passed through `f`. */
+function mapHaul(h: Haul, f: (n: number) => number): Haul {
+  const counts = <T extends Record<string, number>>(r: T) =>
+    Object.fromEntries(Object.entries(r).map(([k, n]) => [k, f(n)])) as T;
+  const tiers = (r: Partial<Record<string, number[]>>) =>
+    Object.fromEntries(Object.entries(r).map(([k, ns]) => [k, ns!.map(f)]));
+  return {
+    metals: counts(h.metals),
+    flux: counts(h.flux),
+    shards: tiers(h.shards),
+    essences: counts(h.essences),
+    scrap: f(h.scrap),
+    dust: f(h.dust),
+    links: f(h.links),
+    runes: tiers(h.runes),
+  };
+}
+
+/** What went out of the stockpile from `before` to `after`, each count at least 0. */
+function outflow(before: DelveProfile, after: DelveProfile): Haul {
+  const diff = addHaul(stockOf(before), mapHaul(stockOf(after), (n) => -n));
+  return mapHaul(diff, (n) => Math.max(0, n));
+}
+
+/** What a visit to the Anvil did: the profile after it, what it spent and the items it forged. */
+interface AnvilVisit {
+  profile: DelveProfile;
+  /** Each step's net outflow from the stockpile, summed (salvage gives; it spends nothing). */
+  spent: Haul;
+  forged: GearItem[];
+}
+
+/**
+ * The Anvil, between dives, as a player would: an overtaking secondary swaps
+ * in and a second element is bound (before anything is salvaged); it melts
+ * the gear it doesn't wear, refines flux and bars up, forges (a legendary
+ * first), moves its moveset to a better weapon and equips upgrades, melts
+ * what they replaced; spends Links on slots up to `SOCKETS_AFTER` a chain,
+ * then on sockets for the pouch's runes (each filled as it opens), then on the
+ * rest of the slots; sockets the best runes and fuses the copies left over;
+ * buys and refines shards; hones and pours the rest of the scrap into
+ * upgrades (all of that waits while it holds an essence it can't yet pay to
+ * forge); and builds the Primary of whatever weapon it wields from both elements.
+ */
+function anvilVisit(registry: DataRegistry, profile: DelveProfile): AnvilVisit {
+  let p = bindPair(registry, resolveOvertake(registry, profile).profile);
+  let spent = emptyHaul();
+  const pay = (next: DelveProfile) => {
+    spent = addHaul(spent, outflow(p, next));
+    p = next;
+  };
+  const melt = () => {
+    p = salvageItems(registry, p, salvageCandidates(registry, p, 'epic')).profile;
+  };
+  melt();
+  pay(refineSurplus(registry, p));
+  const before = new Set(p.bag.map((i) => i.uid));
+  pay(forgeGear(registry, p));
+  const forged = p.bag.filter((i) => !before.has(i.uid));
+  pay(equipBest(registry, transferBest(registry, p)).profile);
+  melt();
+  if (!legendaryWaits(registry, p)) {
+    // Links: slots up to SOCKETS_AFTER a chain, then sockets for the runes in the pouch, then
+    // the rest of the slots. Runes: upgrade the filled sockets, then fuse only the copies left
+    // over and socket again (a fused tier can beat a socketed one).
+    pay(spendLinks(registry, p, SOCKETS_AFTER));
+    pay(openSockets(registry, p));
+    pay(spendLinks(registry, p));
+    pay(socketBest(registry, p));
+    pay(socketBest(registry, fusePouch(registry, p)));
+    pay(refineShards(registry, p));
+    pay(honeGear(registry, p));
+    pay(upgradeAll(registry, p));
+  }
+  pay(fusePrimary(registry, p));
+  return { profile: p, spent, forged };
+}
+/** What a dive brought into the stockpile: what it banked and kept, and an extract's bounty. */
+function diveIncome(p: DelveProfile): Haul {
+  const dive = p.dive!;
+  const bounty = dive.phase === 'extracted' ? dive.bounty : 0;
+  return { ...dive.banked, scrap: dive.banked.scrap + bounty };
 }
 
 export function runAutopilot(
   registry: DataRegistry,
   opts: AutopilotOptions,
-): { profile: DelveProfile; reports: AutopilotDiveReport[] } {
+): { profile: DelveProfile; reports: AutopilotDiveReport[]; economy: EconomyDive[] } {
   const maxDepth = opts.maxDepth ?? 100;
   const maxFloorSeconds = opts.maxFloorSeconds ?? 240;
-  let p = opts.profile ?? createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
-  if (opts.secondary) p = fusePrimary(registry, bindSecondary(registry, p, opts.secondary).profile);
+  let p = opts.profile;
+  if (!p) {
+    p = createDelveProfile(registry, opts.seed, { primary: opts.primary ?? 'fire' });
+    if (opts.secondary) p = fusePrimary(registry, bindSecondary(registry, p, opts.secondary).profile);
+    p = betweenDives(registry, p); // the starter kit's forge (the crafting spec's S8)
+  }
   const reports: AutopilotDiveReport[] = [];
+  const economy: EconomyDive[] = [];
 
   for (let n = 0; n < opts.dives; n++) {
     const options = startDepthOptions(registry, p);
@@ -490,7 +778,19 @@ export function runAutopilot(
       reactionsSeen: p.reactionsSeen.length,
       scrap: p.scrap,
     });
-    p = betweenDives(registry, closeDive(registry, p));
+    const visit = anvilVisit(registry, closeDive(registry, p));
+    const forged = Object.fromEntries(RARITY_ORDER.map((r) => [r, 0])) as Record<Rarity, number>;
+    for (const item of visit.forged) forged[item.rarity]++;
+    economy.push({
+      dive: n + 1,
+      income: diveIncome(p),
+      spent: visit.spent,
+      lost: dive.lost,
+      forged,
+      depth: dive.depth,
+      died: dive.phase === 'dead',
+    });
+    p = visit.profile;
   }
-  return { profile: p, reports };
+  return { profile: p, reports, economy };
 }

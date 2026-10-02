@@ -22,6 +22,7 @@ import { movesOf } from '../src/delve/moveset.js';
 import { bindSecondary, profileStats } from '../src/delve/pair.js';
 import { createDelveProfile, referenceDepth } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
+import { emptyMaterials } from '../src/loot/materials.js';
 import { pouchCount, socketsOf } from '../src/loot/runes.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import {
@@ -273,12 +274,13 @@ describe('the bot and rune drops', () => {
 });
 
 describe('the autopilot and runes', () => {
-  /** A Fire hero after its first dive (past the free edits), wielding `weapon` (its starter sword by default). */
+  /** A Fire hero after its first dive (past the free edits), wielding `weapon` (its starter sword by default), with nothing to forge. */
   const veteran = (weapon?: GearItem): DelveProfile => {
     const p = createDelveProfile(registry, 3, { primary: 'fire' });
     return {
       ...p,
       equipped: { ...p.equipped, weapon: weapon ?? p.equipped.weapon! },
+      materials: emptyMaterials(),
       stats: { ...p.stats, dives: 1 },
     };
   };
@@ -317,8 +319,11 @@ describe('the autopilot and runes', () => {
       new SeededRNG(1),
     );
     const five = <T>(make: () => T): T[] => Array.from({ length: 5 }, make);
-    // Every chain it carries at its cap of 5, so no Link goes to a slot; two sockets a move.
-    const full = withChains(veteran(magic), {
+    // Every chain it carries at its cap of 5, so no Link goes to a slot; two sockets a move; Fire
+    // and Nature bound.
+    const pair = { primary: 'fire', secondary: 'nature' } as const;
+    const bound: DelveProfile = { ...veteran(magic), pair };
+    const full = withChains(bound, {
       basic: five(() => ({ kind: 'medium' as const, element: 'fire' as const })),
       primary: {
         moves: five(() => ({

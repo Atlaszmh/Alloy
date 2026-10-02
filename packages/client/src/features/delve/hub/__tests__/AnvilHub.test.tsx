@@ -63,7 +63,7 @@ describe('AnvilHub', () => {
     ]);
     expect(selected()).toEqual(['tab-loadout']);
     expect(screen.getByRole('tablist', { name: 'The Anvil' })).toHaveAttribute('data-pad-tabs');
-    expect(screen.getByTestId('scrap-count')).toHaveTextContent(/^0 scrap$/);
+    expect(screen.getByTestId('scrap-count')).toHaveTextContent(/^60 scrap$/); // the starter kit's
     expect(screen.getByTestId('links-count')).toHaveTextContent(/^0 Links$/);
     expect(screen.getByTestId('dust-count')).toHaveTextContent(/Mana Dust$/);
     expect(screen.getByTestId('hero-power')).toBeInTheDocument();

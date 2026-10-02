@@ -102,7 +102,7 @@ describe('delveStore', () => {
     );
     const s = useDelveStore.getState();
     // Frost is outside the fire hero's pair, so it melts into Mana Dust too.
-    s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }] });
+    s.setProfile({ ...s.profile, bag: [{ ...item, mana: 'frost' }], scrap: 0 });
     const { scrap, dust, links } = useDelveStore.getState().salvage(['x2']);
     expect(scrap).toBeGreaterThan(0);
     expect(dust).toBe(registry.getDelveBalance().pair.salvageDust.magic);
@@ -127,6 +127,7 @@ describe('delveStore', () => {
   });
 
   it('upgrade reports failure reasons', () => {
+    useDelveStore.getState().setProfile({ ...useDelveStore.getState().profile, scrap: 0 });
     const uid = useDelveStore.getState().profile.equipped.weapon!.uid;
     const res = useDelveStore.getState().upgrade(uid);
     expect(res.ok).toBe(false);
@@ -217,10 +218,10 @@ describe('delveStore', () => {
     vi.resetModules();
     const fresh = (await import('./delveStore')).useDelveStore;
     expect(fresh.getState().notices).toEqual([RESET_NOTICE]);
-    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 0 });
+    expect(fresh.getState().profile).toMatchObject({ version: 8, scrap: 60 }); // the kit's
     expect(JSON.parse(localStorage.getItem(DELVE_SAVE_KEY)!)).toMatchObject({
       version: 8,
-      scrap: 0,
+      scrap: 60,
     });
     // The written-back save loads as it is: no second notice.
     (globalThis as { __alloyStoreCache?: Map<string, unknown> }).__alloyStoreCache?.delete(

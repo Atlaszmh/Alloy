@@ -223,7 +223,7 @@
       "lobBase": 0.12
     },
     "crafting": {
-      "forgeScrap": { "common": 10, "uncommon": 20, "magic": 40, "rare": 80, "epic": 160, "legendary": 320 },
+      "forgeScrap": { "common": 10, "uncommon": 20, "magic": 40, "rare": 80, "epic": 160, "legendary": 240 },
       "offPairDust": 15,
       "weaponExtras": {
         "common": { "slots": 0, "sockets": 0 }, "uncommon": { "slots": 0, "sockets": 0 }, "magic": { "slots": 0, "sockets": 0 },
@@ -245,13 +245,13 @@
       "elite": {
         "bars": { "chance": 0.9, "count": [1, 2] }, "dust": { "chance": 0.5, "count": [2, 4] },
         "shards": { "chance": 0.6, "count": [1, 2] }, "links": { "chance": 0.08, "count": [1, 1] },
-        "flux": { "chance": 0.3, "count": [1, 1] }, "gearChance": 0.5, "patternChance": 0.1
+        "flux": { "chance": 0.3, "count": [1, 1] }, "gearChance": 0.5, "patternChance": 0.5
       },
       "boss": {
         "gear": 1, "flux": { "chance": 1, "count": [1, 2] }, "shards": { "chance": 1, "count": [2, 3] },
         "essenceChance": 0.15, "patternChance": 0.35
       },
-      "scrapByKind": { "normal": 1, "elite": 3, "boss": 10 }, "scrapPickups": { "normal": 1, "elite": 3, "boss": 8 },
+      "scrapByKind": { "normal": 6, "elite": 18, "boss": 60 }, "scrapPickups": { "normal": 1, "elite": 3, "boss": 8 },
       "metalUpChance": 0.1, "find": { "perPoint": 0.5, "cap": 0.5 },
       "shardTierDepths": [1, 6, 12, 20, 30], "fluxGradeDepths": [1, 5, 11, 20], "tierWeights": [8, 4, 2, 1, 0.5],
       "biomeShardWeights": {

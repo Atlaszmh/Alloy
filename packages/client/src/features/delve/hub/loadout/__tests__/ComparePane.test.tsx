@@ -275,6 +275,7 @@ describe('the compare pane', () => {
       ...p,
       equipped: { ...p.equipped, weapon: mine },
       bag: [rareSword('w1', { primary: 2 })],
+      scrap: 0,
     });
     show('w1');
     // The actions sit below the scrolling details, always in view.

@@ -309,7 +309,7 @@ describe('gear management', () => {
   });
 
   it('upgrading costs scrap and fails when broke', () => {
-    let p = createDelveProfile(registry, 3);
+    let p = { ...createDelveProfile(registry, 3), scrap: 0 };
     const uid = p.equipped.weapon!.uid;
     expect(upgradeGear(registry, p, uid).ok).toBe(false);
     p = { ...p, scrap: 10_000 };

@@ -380,7 +380,7 @@ describe('SkillsTab', () => {
       'aria-describedby',
       screen.getByTestId('add-slot-why').id,
     );
-    act(() => store().setProfile({ ...store().profile, links: 1 }));
+    act(() => store().setProfile({ ...store().profile, links: 1, scrap: 0 }));
     expect(screen.getByTestId('add-slot-why')).toHaveTextContent('Not enough scrap');
     act(() => store().setProfile({ ...store().profile, links: 1, scrap: 25 }));
     fireEvent.click(screen.getByTestId('add-slot'));
