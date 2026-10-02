@@ -213,6 +213,8 @@ test.describe('Delve with a controller', () => {
     await expect(dodge).toHaveAttribute('data-charges', '2', { timeout: ARENA_READY });
     expect(await tapAndReadCharges(page, BUTTON.lt)).toBe('1');
     await expect(dodge).toContainText('LT');
+    // The Primary's slot names its pad button too.
+    await expect(page.getByTestId('ability-0')).toContainText('RT');
   });
 
   test('G04: holding RT with the right stick aimed keeps casting the Primary, through its chain', async ({

@@ -1,26 +1,49 @@
 import type { ReactElement } from 'react';
-import { Bar, Glyph, InputGlyph, Panel, type Binding } from '@/features/delve/kit';
+import { Bar, Glyph, InputGlyph, Panel } from '@/features/delve/kit';
+import { useControlsStore } from '@/stores/controlsStore';
+import { noFocus } from '../arena/hud/SkillSlot';
 import { MAX_TRACKED, QUEST_KIND, objectiveCount, type QuestView } from './types';
 
-/** The dive's Journal hint (the controls' `journal` action arrives in Phase 3a). */
-export const JOURNAL_BINDING: Binding = { key: 'KeyJ', pad: 'view' };
-
-/** The HUD's quest tracker (Phase 3's right column): up to three tracked quests; nothing while none is. */
-export function QuestTracker({ quests }: { quests: QuestView[] }): ReactElement | null {
+/**
+ * The HUD's quest tracker (Phase 3's right column): up to three tracked quests; nothing while none
+ * is. With `onJournal`, its Journal hint is a button that opens the journal.
+ */
+export function QuestTracker({
+  quests,
+  onJournal,
+}: {
+  quests: QuestView[];
+  onJournal?: () => void;
+}): ReactElement | null {
+  const config = useControlsStore((s) => s.config);
   const shown = quests.filter((q) => q.tracked).slice(0, MAX_TRACKED);
   if (shown.length === 0) return null;
+  const hint = (
+    <>
+      <InputGlyph
+        binding={{ key: config.keys.journal ?? undefined, pad: config.pad.journal ?? undefined }}
+        size="sm"
+      />
+      Journal
+    </>
+  );
+  const hintClass = 'flex items-center gap-2 text-[14px] text-[var(--k-text-3)]';
   return (
     <Panel
       as="div"
       material="glass"
       scroll={false}
       testId="quest-tracker"
+      className="pointer-events-auto"
       title={<span style={{ color: 'var(--k-hot-hi)' }}>Quests</span>}
       aside={
-        <span className="flex items-center gap-2 text-[14px] text-[var(--k-text-3)]">
-          <InputGlyph binding={JOURNAL_BINDING} size="sm" />
-          Journal
-        </span>
+        onJournal ? (
+          <button type="button" className={hintClass} onMouseDown={noFocus} onClick={onJournal}>
+            {hint}
+          </button>
+        ) : (
+          <span className={hintClass}>{hint}</span>
+        )
       }
     >
       {shown.map((q) => (

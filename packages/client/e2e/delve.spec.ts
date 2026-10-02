@@ -57,6 +57,15 @@ test.describe('Delve loot loop', () => {
     await expect(page.locator('[data-testid="arena"] canvas')).toBeVisible({
       timeout: ARENA_READY,
     });
+    // The canvas is sized in viewport px: no ancestor of its host may carry the HUD's zoom.
+    const zoomed = await page.getByTestId('arena').evaluate((host) => {
+      for (let p = host.parentElement; p; p = p.parentElement) {
+        const z = getComputedStyle(p).zoom;
+        if (z && z !== 'normal' && parseFloat(z) !== 1) return true;
+      }
+      return false;
+    });
+    expect(zoomed).toBe(false);
     await expect(page.getByTestId('hero-hp')).toBeVisible();
     // Each button names its chain's next move: the bot is already stepping through the
     // Primary's (G04 and T01 see its first move before any press).
@@ -75,7 +84,7 @@ test.describe('Delve loot loop', () => {
     await expect(door.or(summary)).toBeVisible({ timeout: 60_000 });
 
     if (await door.isVisible()) {
-      await expect(page.getByTestId('bounty')).not.toHaveText('⚙ 0');
+      await expect(page.getByTestId('bounty')).toHaveText(/[1-9]\d*/);
       await page.getByTestId('extract-button').click();
       await expect(summary).toContainText('EXTRACTED');
     }
@@ -93,7 +102,8 @@ test.describe('Delve loot loop', () => {
     await page.goto('/delve');
     await page.getByTestId('delve-button').click();
 
-    const loot = page.getByTestId('loot-item').first();
+    // Inspected from the right column's "Found this floor" log.
+    const loot = page.getByTestId('pickup-feed').getByTestId('loot-item').first();
     await expect(loot).toBeVisible({ timeout: 60_000 });
     await loot.click();
 
@@ -168,7 +178,9 @@ test.describe('Delve loot loop', () => {
     const box = (await bar.boundingBox())!;
     const viewport = page.viewportSize()!;
     expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
   });
 
   test('D05: basic attacks switch between auto and manual from the dive menu', async ({ page }) => {
@@ -181,12 +193,11 @@ test.describe('Delve loot loop', () => {
     await expect(toggle).toContainText('Auto');
     await toggle.click();
     await expect(toggle).toContainText('Manual');
-    if (test.info().project.name !== 'desktop') {
-      await expect(page.getByTestId('attack-button')).toBeVisible();
-    }
+    // The dock's Attack slot shows in both modes.
+    await expect(page.getByTestId('attack-button')).toHaveAttribute('data-mode', 'manual');
     await toggle.click();
     await expect(toggle).toContainText('Auto');
-    await expect(page.getByTestId('attack-button')).toHaveCount(0);
+    await expect(page.getByTestId('attack-button')).toHaveAttribute('data-mode', 'auto');
   });
 
   test('D04: the anvil abilities, forge and codex tabs render', async ({ page }) => {

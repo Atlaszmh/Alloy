@@ -7,7 +7,7 @@ import {
   type DataRegistry,
   type Vec,
 } from '@alloy/engine';
-import { aimMarkerFor, classifyPress } from './aim-gestures';
+import { aimMarkerFor, classifyPress } from './aim';
 import { useControlsStore } from '@/stores/controlsStore';
 import type { KeyAction, MoveKey } from '@/features/controls/controls';
 import {
@@ -32,8 +32,6 @@ export interface Aiming {
   slot: number;
   since: number;
   at: Vec | null;
-  /** A HUD button's press still over its button: no marker (let go there, it casts auto-aimed). */
-  onButton?: boolean;
 }
 
 /** Live controller state shared between the controls and the game loop. */
@@ -45,8 +43,6 @@ export interface ArenaInput {
   cast: CastPress | null;
   /** The key or button held (it aims; a hold move charges while it is). */
   aiming: Aiming | null;
-  /** Drop a charging hold unpaid on the next step (an aim released back on its button). */
-  cancelHold: boolean;
   /** Last mouse position (client px), for hold-to-aim on the keyboard. */
   mouse: Vec | null;
   potion: boolean;
@@ -57,6 +53,10 @@ export interface ArenaInput {
   attackAim: Vec | null;
   /** The input lock as of the last frame (`frameInput`): a switch to or from the pad lets go of the other side. */
   device: InputDevice;
+  /** The labels key held (Alt): every drop's loot label shows. */
+  labels: boolean;
+  /** Any device has moved the hero (`frameInput`): the move hint goes. */
+  moved: boolean;
 }
 
 export function createArenaInput(): ArenaInput {
@@ -65,7 +65,6 @@ export function createArenaInput(): ArenaInput {
     pointer: { x: 0, y: 0 },
     cast: null,
     aiming: null,
-    cancelHold: false,
     mouse: null,
     potion: false,
     dodge: false,
@@ -73,6 +72,8 @@ export function createArenaInput(): ArenaInput {
     attackTap: false,
     attackAim: null,
     device: 'keyboard',
+    labels: false,
+    moved: false,
   };
 }
 
@@ -97,6 +98,15 @@ export interface FrameOpts {
   device: InputDevice;
 }
 
+/** Whether the loot labels show: the keys' Alt under the keys or mouse, the pad's L3 under the pad. */
+export function labelsHeld(
+  device: InputDevice,
+  input: ArenaInput,
+  pad: ArenaPadActions | null,
+): boolean {
+  return device === 'gamepad' ? !!pad?.labels : input.labels;
+}
+
 /**
  * One step's input from the device with the input lock (`o.device`): the
  * controller (`pad`, null when there is none; `mem`, what it remembers from
@@ -108,7 +118,7 @@ export interface FrameOpts {
  * (`padFrameCast`) is aimed by the right stick, which aims the attack only
  * while the pad drives it: the attack button held, or let go this frame or
  * with its held blow not yet struck (the tick that strikes it re-aims it, and
- * a frame may run none). Each press (a cast, `cancelHold`, a dodge, a potion,
+ * a frame may run none). Each press (a cast, a dodge, a potion,
  * an attack tap) goes once, then resets.
  */
 export function frameInput(
@@ -134,9 +144,8 @@ export function frameInput(
   // Unmarked: the new device's own press of that slot charges anew.
   if (switched) dropHold(world, false);
   const out = padLive ? padInput(registry, world, pad, mem, o) : keysInput(input, o);
-  out.cancelHold = !padLive && input.cancelHold;
+  if (out.move.x !== 0 || out.move.y !== 0) input.moved = true;
   input.cast = null;
-  input.cancelHold = false;
   input.potion = false;
   input.dodge = false;
   input.attackTap = false;
@@ -245,6 +254,11 @@ export function pressMenu(): void {
   scopedLast('[data-pad-menu]')?.click();
 }
 
+/** The Journal, from its key or the pad's button: the topmost scope's `[data-pad-journal]`. */
+export function pressJournal(): void {
+  scopedLast('[data-pad-journal]')?.click();
+}
+
 /** Text entry keeps every key, the menu key included. */
 function isText(t: EventTarget | null): boolean {
   return t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && t.type !== 'range');
@@ -267,8 +281,9 @@ function isField(t: EventTarget | null): boolean {
 /**
  * Wire keyboard controls to `input`, following the player's key bindings.
  * Ability keys: a quick tap auto-aims; holding shows the aim marker at the
- * mouse (and charges a hold move) and releasing casts there. Returns a
- * cleanup function.
+ * mouse (and charges a hold move) and releasing casts there. The labels key
+ * (Alt) is held: its default is prevented, and its keyup or a window blur
+ * lets go (an Alt+Tab never sends the keyup). Returns a cleanup function.
  */
 export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () => void {
   const held = new Set<string>();
@@ -303,6 +318,13 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       return;
     }
     const action = keyAction(e.code);
+    // Every game key but the menu's keeps its default (Alt held for the labels and E would
+    // open the browser's menu), its repeats too.
+    if (action && action !== 'menu') e.preventDefault();
+    if (action === 'labels') {
+      input.labels = true;
+      return;
+    }
     if (!action || e.repeat) return;
     const slot = ABILITY_SLOT[action];
     if (slot !== undefined) {
@@ -311,14 +333,14 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
       input.aiming = { slot, since: performance.now(), at: null };
     } else if (action === 'dodge') {
       input.dodge = true;
-      e.preventDefault();
     } else if (action === 'potion') {
       input.potion = true;
-      e.preventDefault();
     } else if (action === 'attack') {
       input.attackHeld = true;
       input.attackTap = true;
       input.attackAim = input.mouse;
+    } else if (action === 'journal') {
+      pressJournal();
     }
   };
   /** Cast the key-held ability: a tap auto-aims, a hold aims at the mouse. */
@@ -326,13 +348,17 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     const a = input.aiming;
     if (!a) return;
     input.aiming = null;
-    const tap = classifyPress(performance.now() - a.since, 0) === 'tap' || !input.mouse;
+    const tap = classifyPress(performance.now() - a.since) === 'tap' || !input.mouse;
     input.cast = { slot: a.slot, aim: tap ? null : input.mouse };
   };
   const up = (e: KeyboardEvent) => {
     if (held.delete(e.code)) recompute();
     const action = keyAction(e.code);
     if (action === 'attack') input.attackHeld = false;
+    if (action === 'labels') {
+      input.labels = false;
+      e.preventDefault();
+    }
     const a = input.aiming;
     if (a && a.at === null && action && ABILITY_SLOT[action] === a.slot) release();
   };
@@ -344,6 +370,7 @@ export function attachKeyboard(input: ArenaInput, isEnabled: () => boolean): () 
     held.clear();
     recompute();
     input.aiming = null;
+    input.labels = false;
   };
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);

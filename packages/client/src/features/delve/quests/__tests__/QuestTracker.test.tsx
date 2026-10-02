@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useControlsStore } from '@/stores/controlsStore';
+import { DEFAULT_CONTROLS } from '@/features/controls/controls';
 import { QuestTracker } from '../QuestTracker';
 import { SAMPLE_QUESTS } from '../sample';
 import type { QuestView } from '../types';
@@ -34,5 +36,25 @@ describe('QuestTracker', () => {
     expect(within(first).getByRole('img', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByTestId('tracked-rat-catcher')).toHaveTextContent('Bounty');
     expect(screen.getByTestId('tracked-kindling')).toHaveTextContent('12 / 20');
+  });
+
+  it('its Journal hint opens the journal when the HUD passes onJournal', () => {
+    const onJournal = vi.fn();
+    render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} onJournal={onJournal} />);
+    const journal = screen.getByRole('button', { name: /Journal/ });
+    expect(fireEvent.mouseDown(journal)).toBe(false); // the focus stays where it was
+    fireEvent.click(journal);
+    expect(onJournal).toHaveBeenCalledOnce();
+  });
+
+  it("its Journal hint shows the player's binding", () => {
+    render(<QuestTracker quests={[tracked(SAMPLE_QUESTS[0])]} />);
+    expect(screen.getByTestId('quest-tracker')).toHaveTextContent('JJournal');
+    act(() => useControlsStore.getState().setKey('journal', 'KeyB'));
+    try {
+      expect(screen.getByTestId('quest-tracker')).toHaveTextContent('BJournal');
+    } finally {
+      useControlsStore.setState({ config: DEFAULT_CONTROLS });
+    }
   });
 });

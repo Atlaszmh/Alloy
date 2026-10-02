@@ -5,6 +5,7 @@ import {
   type ArpgWorld,
   type BiomeDef,
   type Drop,
+  type GearItem,
   type ManaType,
   type MonsterEntity,
   type Vec,
@@ -36,7 +37,11 @@ export type { AimView } from './fx/draw-world';
 import { MANA_HEX, NEUTRAL_HEX, RARITY_HEX, REACTION_HEX, cssToHex } from './palette';
 import { PixelFloor } from './pixel/pixel-floor';
 import { SPRITE_PIXEL, spriteFrames } from './sprites';
+import { arenaZoom, type Insets } from './camera';
 import { getDelveRegistry } from '../registry';
+import { RARITY_TEXT } from '../format';
+import { contextZoom } from '../kit/zoom';
+import { useUIStore } from '@/stores/uiStore';
 
 /**
  * PixiJS view of an ArpgWorld. It never mutates the world: every frame it
@@ -60,7 +65,16 @@ interface MonsterView {
 interface DropView {
   root: Container;
   gfx: Graphics;
-  label: Text | null;
+  plaque: Plaque | null;
+}
+
+/** A loot label (decided item 22): screen space, `w`×`h` px. */
+interface Plaque {
+  box: Container;
+  w: number;
+  h: number;
+  /** Shown without Alt: rare and up, a rune, an upgrade. */
+  always: boolean;
 }
 
 interface FloatText {
@@ -106,7 +120,11 @@ export class ArenaRenderer {
   private world: ArpgWorld | null = null;
   private biome: BiomeDef | null = null;
   private unit = 30;
-  private insets = { top: 0, bottom: 0 };
+  private insets: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  /** The visible arena rectangle (world units), as of the last frame. */
+  private view: ViewRect = { left: 0, top: 0, right: 0, bottom: 0 };
+  /** Reduced motion: no shake and no strike kick (decided item 14). */
+  private readonly still = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   private cam = { x: 0, y: 0 };
   private shake = 0;
   /** This frame's shake offset in px; held while the display is frozen or paused. */
@@ -145,6 +163,10 @@ export class ArenaRenderer {
   private heroFlashUntil = 0;
   private heroPerfectUntil = 0;
   private aim: AimView | null = null;
+  /** Alt or L3 held: every drop's loot label shows. */
+  private labelsHeld = false;
+  /** Whether an item is an upgrade as it comes (▲ on its label), asked once per drop. */
+  private isUpgrade: (item: GearItem) => boolean = () => false;
 
   constructor(app: Application) {
     this.app = app;
@@ -163,15 +185,21 @@ export class ArenaRenderer {
     this.resize();
   }
 
-  /** Screen space covered by HUD at the top/bottom, so the hero stays in the open. */
-  setInsets(top: number, bottom: number): void {
-    this.insets = { top, bottom };
+  /** The screen the HUD covers on each side (viewport px): the camera centres in what is left. */
+  setInsets(insets: Insets): void {
+    this.insets = insets;
   }
 
+  /** The visible arena rectangle in world units (the minimap's view box). */
+  viewRect(): ViewRect {
+    return this.view;
+  }
+
+  /** The zoom (camera.ts): whole render pixels per sprite pixel, from the screen height alone. */
   resize(): void {
-    const { width, height } = this.app.screen;
-    const playH = Math.max(200, height - this.insets.top - this.insets.bottom);
-    this.unit = Math.max(16, Math.min(width / 13.5, playH / 15));
+    const res = this.app.renderer.resolution;
+    const { scale } = arenaZoom(this.app.screen.height, res, useUIStore.getState().arenaViewUnits);
+    this.unit = Math.round(scale / SPRITE_PIXEL) / res;
   }
 
   /** Scene setup for a new floor. */
@@ -181,7 +209,7 @@ export class ArenaRenderer {
     for (const v of this.monsters.values()) v.root.destroy({ children: true });
     for (const v of this.drops.values()) {
       v.root.destroy({ children: true });
-      v.label?.destroy();
+      v.plaque?.box.destroy({ children: true });
     }
     for (const d of this.dying) d.root.destroy({ children: true });
     this.monsters.clear();
@@ -204,6 +232,8 @@ export class ArenaRenderer {
     this.root.addChildAt(this.pixelFloor.sprite, 1);
     if (!this.hero.parent) this.entities.addChild(this.hero);
     this.cam = { x: world.hero.x, y: world.hero.y };
+    // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
+    this.update(0);
   }
 
   private emoji(glyph: string): Texture {
@@ -280,11 +310,13 @@ export class ArenaRenderer {
   // ── Effects ──────────────────────────────────────────────────────────────
 
   addShake(amount: number): void {
+    if (this.still) return;
     this.shake = Math.min(0.6, this.shake + amount);
   }
 
   /** Nudge the camera toward a strike, by its heft; heavy ones shake too. */
   private kickCamera(dir: Vec, heft: number): void {
+    if (this.still) return;
     const len = Math.hypot(dir.x, dir.y) || 1;
     this.kick.x += (dir.x / len) * 0.12 * heft;
     this.kick.y += (dir.y / len) * 0.12 * heft;
@@ -539,6 +571,16 @@ export class ArenaRenderer {
     return guard ? MANA_HEX[guard.element] : MANA_HEX.shadow;
   }
 
+  /** Alt or L3 held (or let go): every drop's loot label shows. */
+  setLabelsHeld(held: boolean): void {
+    this.labelsHeld = held;
+  }
+
+  /** How to tell an upgrade (▲ on its label); asked once, when a drop's view is made. */
+  setUpgradeTest(isUpgrade: (item: GearItem) => boolean): void {
+    this.isUpgrade = isUpgrade;
+  }
+
   /** Show (or hide, with null) the aim marker. */
   setAim(aim: AimView | null): void {
     this.aim = aim;
@@ -569,11 +611,13 @@ export class ArenaRenderer {
     const { width, height } = this.app.screen;
     const u = this.unit;
 
-    // Camera
-    const playTop = this.insets.top;
-    const playH = height - this.insets.top - this.insets.bottom;
-    const halfW = width / 2 / u;
-    const halfH = playH / 2 / u;
+    // Camera: centred in the clear rectangle the HUD's insets leave, clamped to that rectangle's
+    // half extents (a narrow one still follows sideways), on whole render pixels.
+    const ins = this.insets;
+    const clearW = Math.max(1, width - ins.left - ins.right);
+    const clearH = Math.max(1, height - ins.top - ins.bottom);
+    const halfW = clearW / 2 / u;
+    const halfH = clearH / 2 / u;
     const k = 1 - Math.exp(-8 * dt);
     this.cam.x += (w.hero.x - this.cam.x) * k;
     this.cam.y += (w.hero.y - this.cam.y) * k;
@@ -595,15 +639,18 @@ export class ArenaRenderer {
         y: (Math.random() - 0.5) * this.shake * u,
       };
     const { x: sx, y: sy } = this.jitter;
+    const res = this.app.renderer.resolution;
+    const whole = (px: number) => Math.round(px * res) / res;
     this.root.scale.set(u);
     this.root.position.set(
-      width / 2 - (cx + this.kick.x) * u + sx,
-      playTop + playH / 2 - (cy + this.kick.y) * u + sy,
+      whole(ins.left + clearW / 2 - (cx + this.kick.x) * u + sx),
+      whole(ins.top + clearH / 2 - (cy + this.kick.y) * u + sy),
     );
 
     const left = -this.root.position.x / u;
     const top = -this.root.position.y / u;
     const view: ViewRect = { left, top, right: left + width / u, bottom: top + height / u };
+    this.view = view;
     this.pixelFloor?.update(dt, w, view);
 
     const ground = this.groundFx.g;
@@ -815,6 +862,7 @@ export class ArenaRenderer {
 
   private syncDrops(w: ArpgWorld): void {
     const alive = new Set<number>();
+    const shown: { p: Plaque; x: number; y: number }[] = [];
     for (const d of w.drops) {
       alive.add(d.id);
       let v = this.drops.get(d.id);
@@ -830,14 +878,19 @@ export class ArenaRenderer {
       v.root.position.set(d.x, d.y - pop + bob);
       v.root.zIndex = d.y - 0.5;
       drawDrop(v.gfx, d, this.time, age);
-      if (v.label) {
-        const p = this.toScreen(d.x, d.y - pop - 0.9);
-        v.label.position.set(p.x, p.y);
+      const plaque = v.plaque;
+      if (plaque) {
+        plaque.box.visible = plaque.always || this.labelsHeld;
+        if (plaque.box.visible) shown.push({ p: plaque, ...this.toScreen(d.x, d.y - pop - 0.9) });
       }
     }
+    const bottoms = stackPlaques(shown.map(({ p, x, y }) => ({ x, y, w: p.w, h: p.h })));
+    shown.forEach(({ p, x }, i) =>
+      p.box.position.set(Math.round(x - p.w / 2), Math.round(bottoms[i] - p.h)),
+    );
     pruneViews(this.drops, alive, (v) => {
       v.root.destroy({ children: true });
-      v.label?.destroy();
+      v.plaque?.box.destroy({ children: true });
     });
   }
 
@@ -846,23 +899,34 @@ export class ArenaRenderer {
     const gfx = new Graphics();
     root.addChild(gfx);
     this.dropLayer.addChild(root);
-    let label: Text | null = null;
-    const named = dropLabel(d);
-    if (named) {
-      label = new Text({
-        text: named.text,
-        style: {
-          fontFamily: FONT,
-          fontWeight: '700',
-          fontSize: 13,
-          fill: named.color,
-          stroke: { color: 0x000000, width: 3 },
-        },
-      });
-      label.anchor.set(0.5, 1);
-      this.textLayer.addChild(label);
-    }
-    return { root, gfx, label };
+    const named = dropPlaque(d, !!d.item && this.isUpgrade(d.item));
+    return { root, gfx, plaque: named && this.makePlaque(named) };
+  }
+
+  /** A loot label: its text in Jersey 10 at 14 × the HUD scale px on a dark plate, bordered in its colour. */
+  private makePlaque(named: { text: string; color: number; always: boolean }): Plaque {
+    const s = contextZoom('hud');
+    const text = new Text({
+      text: named.text,
+      style: {
+        fontFamily: '"Jersey 10", sans-serif',
+        fontSize: 14 * s,
+        letterSpacing: 0.7 * s,
+        fill: named.color,
+      },
+    });
+    text.position.set(Math.round(9 * s), Math.round(3 * s));
+    const w = Math.ceil(text.width + 18 * s);
+    const h = Math.ceil(text.height + 6 * s);
+    const plate = new Graphics()
+      .rect(0, 0, w, h)
+      .fill({ color: 0x0a0a10, alpha: 0.86 })
+      .stroke({ width: 1, color: named.color, alpha: 0.55, alignment: 1 });
+    const box = new Container();
+    box.addChild(plate, text);
+    box.visible = false;
+    this.textLayer.addChild(box);
+    return { box, w, h, always: named.always };
   }
 
   private updateTexts(dt: number): void {
@@ -930,20 +994,56 @@ export function dropPop(d: Drop, age: number): number {
 }
 
 /**
- * The name floating over a drop: a rare, epic or legendary item's in its
- * rarity's colour, or a rune's glyph, name and tier ("✳️ Split III") in its
- * family's; null for anything else.
+ * A drop's loot label (decided item 22): an item's name in its rarity's text
+ * colour, with ▲ when it is an upgrade as it comes, or a rune's name and tier
+ * ("Split III") in its family's. Rare and up, runes and upgrades always show;
+ * anything else only while every label does. Null for drops that aren't loot.
  */
-export function dropLabel(d: Drop): { text: string; color: number } | null {
-  const rarity = d.item?.rarity;
-  if (d.item && (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary'))
-    return { text: d.item.name, color: RARITY_HEX[rarity] };
+export function dropPlaque(
+  d: Drop,
+  isUpgrade: boolean,
+): { text: string; color: number; always: boolean } | null {
+  if (d.item) {
+    const r = d.item.rarity;
+    return {
+      text: isUpgrade ? `${d.item.name} ▲` : d.item.name,
+      color: cssToHex(RARITY_TEXT[r]),
+      always: isUpgrade || r === 'rare' || r === 'epic' || r === 'legendary',
+    };
+  }
   const def = d.rune ? getDelveRegistry().findRune(d.rune.id) : undefined;
   if (!d.rune || !def) return null;
-  return {
-    text: `${def.icon} ${def.name} ${TIER_NUMERAL[d.rune.tier]}`,
-    color: runeHex(d.rune),
-  };
+  return { text: `${def.name} ${TIER_NUMERAL[d.rune.tier]}`, color: runeHex(d.rune), always: true };
+}
+
+/** Space between stacked loot labels, px. */
+const PLAQUE_GAP = 2;
+
+/**
+ * Loot labels that overlap stack upward: one greedy pass from the lowest on
+ * screen up, each moved above any label already placed that it overlaps.
+ * Boxes are centred on `x` with their bottom at `y` (px); returns each bottom.
+ */
+export function stackPlaques(boxes: { x: number; y: number; w: number; h: number }[]): number[] {
+  const bottoms = boxes.map((b) => b.y);
+  /** The labels placed so far, lowest first (a placed label never moves again). */
+  const placed: number[] = [];
+  for (const i of boxes.map((_, i) => i).sort((a, b) => boxes[b].y - boxes[a].y)) {
+    const b = boxes[i];
+    // Lowest first: moving above one can only meet those placed higher, and a label it passed
+    // while below it stays clear (it sits below every one after it too).
+    for (const j of placed) {
+      const p = boxes[j];
+      const apart =
+        Math.abs(b.x - p.x) >= (b.w + p.w) / 2 ||
+        bottoms[i] <= bottoms[j] - p.h ||
+        bottoms[i] - b.h >= bottoms[j];
+      if (!apart) bottoms[i] = bottoms[j] - p.h - PLAQUE_GAP;
+    }
+    const at = placed.findIndex((j) => bottoms[j] < bottoms[i]);
+    placed.splice(at < 0 ? placed.length : at, 0, i);
+  }
+  return bottoms;
 }
 
 /**

@@ -8,8 +8,6 @@ import {
   type GearItem,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
-import { useInputDeviceStore } from '@/stores/inputDeviceStore';
-import { useControlsStore } from '@/stores/controlsStore';
 import { ControlsPanel } from '@/features/controls/ControlsPanel';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -22,17 +20,13 @@ import { DiveSummary } from '@/features/delve/DiveSummary';
 import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
 import { ItemDetailSheet } from '@/features/delve/ItemDetailSheet';
 import { LootTray } from '@/features/delve/LootTray';
-import { PickupFeed } from '@/features/delve/arena/PickupFeed';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
-import {
-  AttackButton,
-  BossBar,
-  keyHints,
-  padHints,
-  SkillBar,
-  TopHud,
-  Vitals,
-} from '@/features/delve/arena/ArenaHud';
+import { HudGrid, type Insets } from '@/features/delve/arena/hud/HudGrid';
+import { PurseBar } from '@/features/delve/arena/hud/PurseBar';
+import { SkillDock } from '@/features/delve/arena/hud/SkillDock';
+import { BossBar } from '@/features/delve/arena/hud/BossBar';
+import { FloorColumn } from '@/features/delve/arena/hud/FloorColumn';
+import { useQuests } from '@/features/delve/quests/useQuests';
 import { useArena, type ArenaUiEvent } from '@/features/delve/arena/useArena';
 import { noManaToaster, playArenaEvents } from '@/features/delve/arena/arena-sounds';
 import '@/features/delve/delve.css';
@@ -68,20 +62,18 @@ function Banner({ banner, onDone }: { banner: BannerState; onDone: () => void })
     >
       <div
         className="delve-display text-3xl font-bold tracking-[0.12em]"
-        style={{ color: banner.color, textShadow: `0 0 24px ${banner.color}, 0 3px 0 #000` }}
+        style={{ color: banner.color, textShadow: '2px 2px 0 #181425' }}
       >
         {banner.title}
       </div>
       {banner.sub && (
-        <div className="delve-display mt-1 text-sm font-semibold text-stone-100 drop-shadow">
+        <div className="delve-display mt-1 text-sm font-semibold text-stone-100 [text-shadow:2px_2px_0_#181425]">
           {banner.sub}
         </div>
       )}
     </div>
   );
 }
-
-const fineMouse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches;
 
 export function DelveRun() {
   const navigate = useNavigate();
@@ -90,9 +82,7 @@ export function DelveRun() {
   const dive = profile.dive;
 
   const hostRef = useRef<HTMLDivElement>(null);
-  const topRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const [insets, setInsets] = useState({ top: 70, bottom: 190 });
+  const [insets, setInsets] = useState<Insets>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [sheetUid, setSheetUid] = useState<string | null>(null);
   const [fanfares, setFanfares] = useState<{ item: GearItem; firstTime: boolean }[]>([]);
   const [banners, setBanners] = useState<BannerState[]>([]);
@@ -107,19 +97,6 @@ export function DelveRun() {
   }, []);
   const popBanner = useCallback(() => setBanners((b) => b.slice(1)), []);
   const popFanfare = useCallback(() => setFanfares((f) => f.slice(1)), []);
-
-  // Keep the camera clear of the HUD.
-  useEffect(() => {
-    const ro = new ResizeObserver(() => {
-      setInsets({
-        top: topRef.current?.offsetHeight ?? 70,
-        bottom: bottomRef.current?.offsetHeight ?? 190,
-      });
-    });
-    if (topRef.current) ro.observe(topRef.current);
-    if (bottomRef.current) ro.observe(bottomRef.current);
-    return () => ro.disconnect();
-  }, []);
 
   const arenaRef = useRef<ReturnType<typeof useArena> | null>(null);
   const onUi = useCallback(
@@ -179,12 +156,9 @@ export function DelveRun() {
     return () => setArenaLive(false);
   }, [paused]);
   const manualAttack = useDelveStore((s) => s.manualAttack);
-  // The controller drives the fight while it's live; menus take it back when paused.
-  const device = useInputDeviceStore((s) => s.device);
-  const controls = useControlsStore((s) => s.config);
-  const hints = device === 'gamepad' ? padHints(controls) : fineMouse ? keyHints(controls) : null;
   const arena = useArena(hostRef, { paused, insets, onUi, manualAttack });
   arenaRef.current = arena;
+  const { quests } = useQuests();
 
   useEffect(() => {
     if (!dive) navigate('/delve', { replace: true });
@@ -226,6 +200,11 @@ export function DelveRun() {
     useDelveStore.getState().markSeen([uid]);
     setSheetUid(uid);
   };
+  /** The Attack slot's click in Manual: one blow, as a tap of the attack input. */
+  const tapAttack = () => {
+    arena.attack(true);
+    arena.attack(false);
+  };
 
   return (
     <div className="delve-page select-none bg-black" data-testid="delve-run">
@@ -238,46 +217,36 @@ export function DelveRun() {
         manualAttack={manualAttack}
       />
 
-      <TopHud
-        ref={topRef}
-        dive={dive}
-        biome={biome}
-        hud={arena.hud}
-        onMenu={() => setMenuOpen((v) => !v)}
-      />
-      <BossBar hud={arena.hud} />
-      {!choosing && !finished && (
-        <PickupFeed onSelect={openItem} top={insets.top + (arena.hud?.boss ? 44 : 6)} />
-      )}
-
-      <div
-        ref={bottomRef}
-        className="absolute inset-x-0 bottom-0 z-20 px-3 pt-6"
-        hidden={choosing || finished}
-        style={{
-          background: 'linear-gradient(0deg, rgba(0,0,0,0.8) 55%, rgba(0,0,0,0))',
-          paddingBottom: 'calc(10px + var(--spacing-safe-bottom))',
-          pointerEvents: 'none',
-        }}
-      >
-        <div className="pointer-events-auto mx-auto flex max-w-[520px] flex-col gap-2">
-          <Vitals hud={arena.hud} />
-          {manualAttack && (!fineMouse || device === 'gamepad') && (
-            <div className="flex justify-end pr-1">
-              <AttackButton hud={arena.hud} onAttack={arena.attack} hint={hints?.attack} />
-            </div>
-          )}
-          <SkillBar
+      <HudGrid
+        onInsets={setInsets}
+        top={<PurseBar dive={dive} onMenu={() => setMenuOpen(true)} />}
+        right={
+          <FloorColumn
+            dive={dive}
+            biome={biome}
             hud={arena.hud}
-            onCast={arena.cast}
-            onAim={arena.aim}
-            onCancel={arena.cancelHold}
-            onPotion={arena.potion}
-            onDodge={arena.dodge}
-            hints={hints}
+            quests={quests}
+            onInspect={openItem}
+            onJournal={() => {}}
           />
-        </div>
-      </div>
+        }
+        dock={
+          !choosing &&
+          !finished && (
+            <SkillDock
+              hud={arena.hud}
+              world={arena.worldRef}
+              onCast={arena.cast}
+              onDodge={arena.dodge}
+              onPotion={arena.potion}
+              onAttack={tapAttack}
+              manualAttack={manualAttack}
+            />
+          )
+        }
+      >
+        <BossBar hud={arena.hud} />
+      </HudGrid>
 
       {banners[0] && <Banner key={banners[0].id} banner={banners[0]} onDone={popBanner} />}
 

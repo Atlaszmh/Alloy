@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { generateItem, SeededRNG } from '@alloy/engine';
 import { LootTray } from '../LootTray';
-import { PickupFeed } from '../arena/PickupFeed';
 import { getDelveRegistry } from '../registry';
 import { useDelveStore } from '@/stores/delveStore';
 
@@ -37,13 +36,6 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     dive();
     const origin = { current: null };
     render(<LootTray originRef={origin} onSelect={() => {}} />);
-    expect(screen.queryByTestId('equip-upgrades')).toBeNull();
-    expect(screen.getByTestId('upgrades-locked')).toHaveTextContent('▲ 2 to equip at the Anvil');
-  });
-
-  it("the arena's feed says the same", () => {
-    dive();
-    render(<PickupFeed onSelect={() => {}} top={0} />);
     expect(screen.queryByTestId('equip-upgrades')).toBeNull();
     expect(screen.getByTestId('upgrades-locked')).toHaveTextContent('▲ 2 to equip at the Anvil');
   });
@@ -95,15 +87,6 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     );
   });
 
-  it("the arena's feed counts the potential upgrade apart too", () => {
-    diveWithPotential();
-    render(<PickupFeed onSelect={() => {}} top={0} />);
-    expect(screen.getByTestId('upgrades-locked')).toHaveTextContent('▲ 2 to equip at the Anvil');
-    expect(screen.getByTestId('upgrades-potential')).toHaveTextContent(
-      '◇ 1 potential: Transfer at the Anvil',
-    );
-  });
-
   it('no potential upgrade, no note', () => {
     dive();
     render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
@@ -133,17 +116,6 @@ describe("the dive's loot: upgrades wait for the Anvil", () => {
     render(<LootTray originRef={{ current: null }} onSelect={() => {}} />);
     // Each after its glyph, newest first.
     const [first, second, ...more] = screen.getAllByTestId('loot-rune');
-    expect(first).toHaveTextContent(/Quick I$/);
-    expect(second).toHaveTextContent(/Split III ×2$/);
-    expect(more).toEqual([]);
-  });
-
-  it('the feed shows them too, even with no item found', () => {
-    store().startDive(1);
-    found();
-    render(<PickupFeed onSelect={() => {}} top={0} />);
-    expect(screen.getByTestId('pickup-feed')).toBeInTheDocument();
-    const [first, second, ...more] = screen.getAllByTestId('feed-rune');
     expect(first).toHaveTextContent(/Quick I$/);
     expect(second).toHaveTextContent(/Split III ×2$/);
     expect(more).toEqual([]);

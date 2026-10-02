@@ -14,6 +14,7 @@ import {
 import { MAX_DUMMY_GROUPS, useSandboxStats, useSandboxStore } from '@/stores/sandboxStore';
 import { getDelveRegistry } from '../registry';
 import { useArenaCore, type ArenaMode, type CoreUiEvent } from '../arena/useArenaCore';
+import type { Insets } from '../arena/camera';
 import { DamageMeter, type MeterSummary } from './meter';
 
 /** How often the meter readout refreshes (real time), in ms. */
@@ -30,7 +31,8 @@ export function useTrainingArena(
   hostRef: RefObject<HTMLDivElement | null>,
   opts: {
     paused: boolean;
-    insets: { top: number; bottom: number };
+    /** The screen the HUD covers (viewport px), from `HudGrid`. */
+    insets: Insets;
     onUi: (e: CoreUiEvent) => void;
     manualAttack: boolean;
   },

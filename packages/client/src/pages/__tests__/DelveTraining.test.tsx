@@ -73,4 +73,18 @@ describe('DelveTraining', () => {
     expect(live.calls.at(-1)).toBe(true);
     expect(live.paused.at(-1)).toBe(false);
   });
+
+  it("docks today's panel in the HUD's right column at its own size, the skill dock and the top bar on the grid", () => {
+    render(
+      <MemoryRouter>
+        <DelveTraining />
+      </MemoryRouter>,
+    );
+    const docked = screen.getByText('Socket 1').parentElement!;
+    expect(docked.closest('[data-hud="right"]')).not.toBeNull();
+    expect(docked.getAttribute('style')).toContain('zoom: calc(1 / var(--hud-scale))');
+    expect(screen.getByTestId('skill-bar').closest('[data-hud="dock"]')).not.toBeNull();
+    expect(screen.getByTestId('training-back').closest('[data-hud="top"]')).not.toBeNull();
+    expect(screen.getByTestId('training-panel-toggle')).toHaveAttribute('data-pad-menu');
+  });
 });
