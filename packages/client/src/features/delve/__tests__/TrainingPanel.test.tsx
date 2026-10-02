@@ -101,6 +101,14 @@ describe('TrainingPanel', () => {
     expect(screen.getByTestId('socket-count')).toHaveTextContent('Sockets 1/3');
   });
 
+  it('the Abilities tab names every reaction under the builder', () => {
+    renderPanel('abilities');
+    const grid = within(screen.getByRole('region', { name: 'Reactions' }));
+    for (const r of registry.getArpgData().reactions)
+      expect(grid.getByTestId(`reaction-${r.id}`)).toHaveTextContent(r.name);
+    expect(grid.queryByTestId('reaction-unknown')).toBeNull();
+  });
+
   it('adds dummies through the arena, and stops at the cap', () => {
     const { actions } = renderPanel('targets');
     fireEvent.click(screen.getByTestId('add-dummy-row'));

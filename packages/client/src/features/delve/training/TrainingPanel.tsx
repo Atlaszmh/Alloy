@@ -34,6 +34,7 @@ import { RARITY_LABEL, RARITY_TEXT, formatStat, legendaryText, manaStyle } from 
 import { Button, Chip, Glyph, Panel, Tabs, type TabsProps } from '@/features/delve/kit';
 import { AttunementBars } from '../items/AttunementBars';
 import { ChainEditor, type ChainRunes } from '../chains/ChainEditor';
+import { ReactionsGrid } from '../hub/codex/ReactionsGrid';
 import type { MeterSummary } from './meter';
 import { MeterTab } from './MeterView';
 import type { TrainingActions } from './useTrainingArena';
@@ -323,7 +324,8 @@ const CAPS = { basic: MAX_CHAIN, primary: MAX_CHAIN, defensive: MAX_CHAIN, ultim
 /**
  * The Anvil's chain builder, bound to the sandbox: never locked, any element for
  * an ability, the pair for a blow, and every rune at any tier in up to
- * MAX_SOCKETS sockets a move, free (it's a testing tool), picked in place.
+ * MAX_SOCKETS sockets a move, free (it's a testing tool), picked in place; then
+ * every reaction, named (the Codex's grid, all discovered).
  */
 const TrainingAbilities = memo(function TrainingAbilities() {
   const chains = useSandboxStore((s) => s.chains);
@@ -341,16 +343,23 @@ const TrainingAbilities = memo(function TrainingAbilities() {
     }),
     [baseId],
   );
+  const reactions = getDelveRegistry().getArpgData().reactions;
   return (
-    <ChainEditor
-      chains={chains}
-      caps={CAPS}
-      stats={stats}
-      locked={false}
-      onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
-      blowElements={secondary ? [primary, secondary] : [primary]}
-      runes={runes}
-    />
+    <div className="flex flex-col gap-6">
+      <ChainEditor
+        chains={chains}
+        caps={CAPS}
+        stats={stats}
+        locked={false}
+        onChange={(skill, chain) => useSandboxStore.getState().setChain(skill, chain)}
+        blowElements={secondary ? [primary, secondary] : [primary]}
+        runes={runes}
+      />
+      {/* The Codex's grid, one card a row in the dock. */}
+      <div className="[&_.grid-cols-2]:grid-cols-1">
+        <ReactionsGrid reactionsSeen={reactions.map((r) => r.id)} />
+      </div>
+    </div>
   );
 });
 
