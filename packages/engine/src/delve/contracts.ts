@@ -29,6 +29,8 @@ import type { ProfileActionResult } from './profile.js';
 interface Possible {
   /** The biomes of depths 1 to max(1, bestDepth), in order (they cycle). */
   biomes: string[];
+  /** The biomes whose boss depth lies within the depth window's reach (bestDepth + its hi). */
+  bosses: string[];
   /** Their mana: a foe's element is its biome's. */
   elements: ManaType[];
   /** The pair's reaction, when bound, and every reaction seen. */
@@ -55,8 +57,14 @@ function possible(registry: DataRegistry, profile: DelveProfile): Possible {
   const owned = FLUX_GRADES.filter((g) => profile.materials.flux[g] > 0);
   const top = owned.length > 0 ? FLUX_GRADES.indexOf(owned[owned.length - 1]) + 1 : 0;
   const lo = Math.max(2, best + depthWindow[0]);
+  const every = registry.getDelveBalance().dive.bossEvery;
+  const bossDepths = Array.from(
+    { length: Math.floor(Math.max(0, best + depthWindow[1]) / every) },
+    (_, i) => (i + 1) * every,
+  );
   return {
     biomes: [...new Set(reached.map((b) => b.id))],
+    bosses: [...new Set(bossDepths.map((d) => registry.getBiomeForDepth(d).id))],
     elements: [...new Set(reached.map((b) => b.mana))],
     reactions: [...new Set(reactions)],
     window: [lo, Math.max(lo, best + depthWindow[1])],
@@ -65,9 +73,15 @@ function possible(registry: DataRegistry, profile: DelveProfile): Possible {
   };
 }
 
-/** A template is offered only when every filter rule it names has a value (a reaction rule needs one known). */
+/**
+ * A template is offered only when every filter rule it names has a value (a reaction rule needs
+ * one known; a boss goal a boss within reach).
+ */
 function offered(t: ContractTemplate, can: Possible): boolean {
-  return t.filter?.reaction === undefined || can.reactions.length > 0;
+  return (
+    (t.filter?.reaction === undefined || can.reactions.length > 0) &&
+    (t.type !== 'boss' || can.bosses.length > 0)
+  );
 }
 
 /**
@@ -96,7 +110,7 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   const rule = t.filter ?? {};
   const filter: ObjectiveFilter = {};
   if (rule.kind) filter.kind = rule.kind;
-  if (rule.biome) filter.biome = pick(can.biomes);
+  if (rule.biome) filter.biome = pick(t.type === 'boss' ? can.bosses : can.biomes);
   if (rule.element) filter.element = pick(can.elements);
   if (rule.reaction) filter.reaction = pick(can.reactions);
   if (rule.minDepth === 'window') filter.minDepth = rng.nextInt(...can.window);

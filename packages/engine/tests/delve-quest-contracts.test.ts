@@ -44,9 +44,11 @@ describe('generateContract', () => {
     const p = { ...fresh(), reactionsSeen: [] };
     const cs = offers(p);
     const all = goals(cs);
-    // Every template but the reaction one (no pair bound, no reaction seen).
-    expect(new Set(cs.map((c) => c.template)).size).toBe(8);
+    // Every template but the reaction one (no pair bound, no reaction seen) and the boss one (no
+    // boss within reach: depth 5 lies past the depth window's 0 + 3).
+    expect(new Set(cs.map((c) => c.template)).size).toBe(7);
     expect(all.some((o) => o.type === 'reaction')).toBe(false);
+    expect(all.some((o) => o.type === 'boss')).toBe(false);
     for (const o of all) {
       if (o.filter?.biome) expect(o.filter.biome).toBe('cinder_mines');
       if (o.filter?.element) expect(o.filter.element).toBe('fire');
@@ -82,6 +84,23 @@ describe('generateContract', () => {
     expect(all.find((o) => o.type === 'reaction')!.text).toMatch(
       /^Trigger (Melt|Overload) \d+ times$/,
     );
+  });
+
+  it("offers a biome's boss only once its boss depth is within the depth window's reach", () => {
+    const bosses = (bestDepth: number) => [
+      ...new Set(
+        goals(offers({ ...fresh(), bestDepth }))
+          .filter((o) => o.type === 'boss')
+          .map((o) => o.filter!.biome),
+      ),
+    ];
+    const reach = contracts.depthWindow[1];
+    expect(bosses(4 - reach)).toEqual([]);
+    expect(bosses(5 - reach)).toEqual(['cinder_mines']);
+    // Depth 11 reaches the Storm Foundry's floors (elites there) but not its boss at 15.
+    expect(bosses(11).sort()).toEqual(['cinder_mines', 'frostvault']);
+    const elites = goals(offers({ ...fresh(), bestDepth: 11 })).filter((o) => o.type === 'kill');
+    expect(elites.some((o) => o.filter?.biome === 'storm_foundry')).toBe(true);
   });
 
   it("draws counts from the tier's range and scales rewards with the best depth", () => {
