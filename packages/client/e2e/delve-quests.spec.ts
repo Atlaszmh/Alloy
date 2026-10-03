@@ -22,9 +22,13 @@ test.describe('Delve quests', () => {
     // abandon: progress counts, death or not.
     const door = page.getByTestId('door-choice');
     await expect(door).toBeVisible({ timeout: 60_000 });
+    // The toast lasts 2 s: watch for it from before the click, so a slow run can't miss it.
+    const toast = page
+      .getByText('Quest complete: First Steps · claim at the Anvil')
+      .waitFor({ timeout: 15_000 });
     await door.getByTestId('door-list').locator('[data-door]').first().click();
+    await toast;
     await expect(door).toBeHidden();
-    await expect(page.getByText('Quest complete: First Steps · claim at the Anvil')).toBeVisible();
     await expect(page.getByTestId('depth-label')).not.toHaveText('DEPTH 1');
     await expect(tracked.getByRole('img', { name: 'Done' })).toBeVisible();
     await page.keyboard.press('Escape');
