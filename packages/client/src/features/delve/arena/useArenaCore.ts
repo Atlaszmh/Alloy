@@ -248,7 +248,7 @@ const SLOWMO_SCALE = 0.3;
  * `alloy:delve:autopilot` = "1" lets the engine bot play, and
  * `alloy:delve:timescale` speeds the simulation up (max 4×).
  */
-function readArenaFlags(): { autopilot: boolean; timescale: number } {
+export function readArenaFlags(): { autopilot: boolean; timescale: number } {
   try {
     const scale = Number(localStorage.getItem('alloy:delve:timescale'));
     return {
