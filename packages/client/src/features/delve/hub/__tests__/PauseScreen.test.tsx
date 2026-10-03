@@ -6,10 +6,11 @@ import { getDelveRegistry } from '../../registry';
 import { PauseScreen } from '../PauseScreen';
 import type { HubLink } from '../types';
 
-// No quests (the engine's own come with B1): the journal link opens the Quests tab's empty state.
-vi.mock('../../quests/useQuests', () => {
-  const none = { quests: [], setTracked: () => {} };
-  return { useQuests: () => none };
+// The fixture's quests: the journal link opens the Quests tab on them.
+vi.mock('../../quests/useQuests', async () => {
+  const { SAMPLE_QUESTS } = await import('../../quests/__tests__/quest-fixture');
+  const some = { quests: SAMPLE_QUESTS, setTracked: () => {} };
+  return { useQuests: () => some };
 });
 
 const registry = getDelveRegistry();
@@ -165,6 +166,6 @@ describe('PauseScreen', () => {
   it('opens on Quests from the journal', () => {
     renderPause({ tab: 'quests' });
     expect(selected()).toEqual(['tab-quests']);
-    expect(screen.getByTestId('quests-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('quest-journal')).toBeInTheDocument();
   });
 });

@@ -2,11 +2,12 @@ import type { ReactElement } from 'react';
 import { Bar, Glyph, InputGlyph, Panel } from '@/features/delve/kit';
 import { useControlsStore } from '@/stores/controlsStore';
 import { noFocus } from '../arena/hud/SkillSlot';
-import { MAX_TRACKED, QUEST_KIND, objectiveCount, type QuestView } from './types';
+import { getDelveRegistry } from '../registry';
+import { QUEST_KIND, objectiveCount, type QuestView } from './types';
 
 /**
- * The HUD's quest tracker (Phase 3's right column): up to three tracked quests; nothing while none
- * is. With `onJournal`, its Journal hint is a button that opens the journal.
+ * The HUD's quest tracker (Phase 3's right column): up to `delve.quests.maxTracked` tracked quests;
+ * nothing while none is. With `onJournal`, its Journal hint is a button that opens the journal.
  */
 export function QuestTracker({
   quests,
@@ -16,7 +17,8 @@ export function QuestTracker({
   onJournal?: () => void;
 }): ReactElement | null {
   const config = useControlsStore((s) => s.config);
-  const shown = quests.filter((q) => q.tracked).slice(0, MAX_TRACKED);
+  const { maxTracked } = getDelveRegistry().getDelveBalance().quests;
+  const shown = quests.filter((q) => q.tracked).slice(0, maxTracked);
   if (shown.length === 0) return null;
   const hint = (
     <>

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
-import { rerollContract, type Contract, type ProfileActionResult } from '@alloy/engine';
+import { rerollContract, startDive, type Contract, type ProfileActionResult } from '@alloy/engine';
+import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { QuestsTab } from '../QuestsTab';
@@ -54,7 +55,7 @@ describe('QuestsTab', () => {
     shown.quests = [];
     const p = useDelveStore.getState().profile;
     useDelveStore.setState({
-      profile: { ...p, quests: { ...p.quests, board: [ratCatcher, null, null] } },
+      profile: { ...p, dive: null, quests: { ...p.quests, board: [ratCatcher, null, null] } },
       claimQuest: vi.fn(() => ok()),
       rerollContract: vi.fn(() => ok()),
       markQuestSeen: vi.fn(),
@@ -63,21 +64,9 @@ describe('QuestsTab', () => {
   });
   afterEach(() => useDelveStore.setState({ claimQuest, rerollContract: reroll, markQuestSeen }));
 
-  it('shows the empty state in its three panes while there are no quests', () => {
-    const { setPrompts } = renderTab();
-    expect(screen.getByTestId('quests-empty')).toHaveTextContent(
-      'Quests arrive in a later update. The journal and the HUD tracker are ready for them.',
-    );
-    expect(screen.getByRole('region', { name: 'Journal' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Rewards' })).toBeInTheDocument();
-    expect(screen.queryByTestId('quest-journal')).toBeNull();
-    expect(lastPrompts(setPrompts)).toEqual([]);
-  });
-
   it('shows the journal by kind, the first quest open, its objectives and rewards', () => {
     shown.quests = SAMPLE_QUESTS;
     renderTab();
-    expect(screen.queryByTestId('quests-empty')).toBeNull();
     const journal = screen.getByTestId('quest-journal');
     const headings = within(journal).getAllByRole('heading');
     expect(headings.map((h) => h.textContent)).toEqual(['Journal', 'Main', 'Side', 'Contracts']);
@@ -202,11 +191,23 @@ describe('QuestsTab', () => {
     );
   });
 
-  it('in the pause, Claim reads "Claim at the Anvil" and is disabled', () => {
+  it('in the pause, Claim reads "Claim after the dive" and is disabled', () => {
     shown.quests = [{ ...MAIN, status: 'complete' }];
     const { setPrompts } = renderTab(undefined, 'pause');
     const claim = screen.getByTestId('quest-claim');
-    expect(claim).toHaveTextContent('Claim at the Anvil');
+    expect(claim).toHaveTextContent('Claim after the dive');
+    expect(claim).toBeDisabled();
+    expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')?.disabled).toBe(true);
+  });
+
+  it('at the Anvil mid-dive (a floor restart), Claim reads "Claim after the dive" and is disabled', () => {
+    const p = useDelveStore.getState().profile;
+    const { dive } = startDive(getDelveRegistry(), { ...p, quests: { ...p.quests, board: [] } }, 1);
+    useDelveStore.setState({ profile: { ...p, dive } });
+    shown.quests = [{ ...MAIN, status: 'complete' }];
+    const { setPrompts } = renderTab();
+    const claim = screen.getByTestId('quest-claim');
+    expect(claim).toHaveTextContent('Claim after the dive');
     expect(claim).toBeDisabled();
     expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')?.disabled).toBe(true);
   });

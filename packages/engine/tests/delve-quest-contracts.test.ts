@@ -44,9 +44,11 @@ describe('generateContract', () => {
     const p = { ...fresh(), reactionsSeen: [] };
     const cs = offers(p);
     const all = goals(cs);
-    // Every template but the reaction one (no pair bound, no reaction seen).
-    expect(new Set(cs.map((c) => c.template)).size).toBe(8);
+    // Every template but the reaction one (no pair bound, no reaction seen) and the boss one (no
+    // boss within reach: depth 5 lies past the depth window's 0 + 3).
+    expect(new Set(cs.map((c) => c.template)).size).toBe(7);
     expect(all.some((o) => o.type === 'reaction')).toBe(false);
+    expect(all.some((o) => o.type === 'boss')).toBe(false);
     for (const o of all) {
       if (o.filter?.biome) expect(o.filter.biome).toBe('cinder_mines');
       if (o.filter?.element) expect(o.filter.element).toBe('fire');
@@ -84,23 +86,54 @@ describe('generateContract', () => {
     );
   });
 
-  it("draws counts from the tier's range and scales rewards with the best depth", () => {
+  it("offers a biome's boss only once its boss depth is within the depth window's reach", () => {
+    const bosses = (bestDepth: number) => [
+      ...new Set(
+        goals(offers({ ...fresh(), bestDepth }))
+          .filter((o) => o.type === 'boss')
+          .map((o) => o.filter!.biome),
+      ),
+    ];
+    const reach = contracts.depthWindow[1];
+    expect(bosses(4 - reach)).toEqual([]);
+    expect(bosses(5 - reach)).toEqual(['cinder_mines']);
+    // Depth 11 reaches the Storm Foundry's floors (elites there) but not its boss at 15.
+    expect(bosses(11).sort()).toEqual(['cinder_mines', 'frostvault']);
+    const elites = goals(offers({ ...fresh(), bestDepth: 11 })).filter((o) => o.type === 'kill');
+    expect(elites.some((o) => o.filter?.biome === 'storm_foundry')).toBe(true);
+  });
+
+  it("draws counts from the tier's range (kills and reactions grown with the best depth) and scales rewards with it", () => {
     const templates = registry.getQuestsData().contractTemplates;
-    const scale = 1 + contracts.depthScale * 20;
-    for (const c of offers({ ...fresh(), bestDepth: 20 })) {
-      const t = templates.find((x) => x.id === c.template)!;
-      const [lo, hi] = t.count[c.tier];
-      expect(c.objectives[0].count).toBeGreaterThanOrEqual(lo);
-      expect(c.objectives[0].count).toBeLessThanOrEqual(hi);
-      const base = t.rewards[c.tier];
-      expect(c.rewards.slice(0, base.length).map((r) => r.count)).toEqual(
-        base.map((r) => Math.round(r.count * scale)),
-      );
-      // Only a hard contract may add an essence.
-      const extra = c.rewards.slice(base.length);
-      expect(extra).toEqual(
-        c.tier === 'hard' && extra.length ? [{ kind: 'essence', id: 'fit', count: 1 }] : [],
-      );
+    const grown = new Set<string>();
+    for (const bestDepth of [0, 20]) {
+      const scale = 1 + contracts.depthScale * bestDepth;
+      for (const c of offers({ ...fresh(), bestDepth, reactionsSeen: ['melt'] })) {
+        const t = templates.find((x) => x.id === c.template)!;
+        const by = 1 + (contracts.countScale[t.type] ?? 0) * bestDepth;
+        if (by > 1) grown.add(t.type);
+        const [lo, hi] = t.count[c.tier];
+        expect(c.objectives[0].count).toBeGreaterThanOrEqual(Math.round(lo * by));
+        expect(c.objectives[0].count).toBeLessThanOrEqual(Math.round(hi * by));
+        const base = t.rewards[c.tier];
+        expect(c.rewards.slice(0, base.length).map((r) => r.count)).toEqual(
+          base.map((r) => Math.max(1, Math.round(r.count * scale))),
+        );
+        // Only a hard contract may add an essence.
+        const extra = c.rewards.slice(base.length);
+        expect(extra).toEqual(
+          c.tier === 'hard' && extra.length ? [{ kind: 'essence', id: 'fit', count: 1 }] : [],
+        );
+      }
+    }
+    expect([...grown].sort()).toEqual(['kill', 'reaction']);
+  });
+
+  it("a new save's kill goals take one or two dives (about 20 foes and 1 elite a floor)", () => {
+    for (const c of offers(fresh())) {
+      const o = c.objectives[0];
+      if (o.type !== 'kill') continue;
+      expect(o.count).toBeLessThanOrEqual(o.filter?.kind === 'elite' ? 6 : 40);
     }
   });
 
@@ -111,6 +144,36 @@ describe('generateContract', () => {
     expect(hard.length).toBeGreaterThan(20);
     expect(share).toBeGreaterThan(0);
     expect(share).toBeLessThan(0.4);
+  });
+});
+
+describe("a contract's text", () => {
+  it('shows the count of every counted goal, singular or plural, and a rarity by its name', () => {
+    const p: DelveProfile = {
+      ...fresh(),
+      bestDepth: 8,
+      materials: { ...fresh().materials, flux: { uncommon: 1, magic: 1, rare: 0, epic: 0 } },
+    };
+    const cs = offers(p);
+    const names = registry.getQuestsData().rarityNames;
+    expect(names.common).toBe('Common');
+    const of = (template: string) => cs.filter((c) => c.template === template);
+    expect(of('fine_work').length).toBeGreaterThan(0);
+    for (const c of of('fine_work')) {
+      const o = c.objectives[0];
+      const item = o.count === 1 ? 'item' : 'items';
+      expect(o.text).toBe(
+        `Forge ${o.count} ${item} of ${names[o.filter!.minRarity!]} rarity or better`,
+      );
+    }
+    expect(of('dry_run').length).toBeGreaterThan(0);
+    for (const c of of('dry_run')) {
+      const o = c.objectives[0];
+      const floors = o.count === 1 ? 'floor' : 'floors';
+      expect(o.text).toBe(
+        `Clear ${o.count} ${floors} of depth ${o.filter!.minDepth} or deeper without a potion`,
+      );
+    }
   });
 });
 
@@ -166,7 +229,7 @@ describe('rerollContract', () => {
     expect(rerollContract(registry, r.profile, 1)).toMatchObject({ ok: false, profile: r.profile });
   });
 
-  it('refuses mid-dive, an empty slot, a spent reroll and too little scrap', () => {
+  it('refuses mid-dive, an empty slot, a completed contract, a spent reroll and too little scrap', () => {
     const p = { ...fresh(), scrap: 100 };
     const refused = (q: DelveProfile, slot = 0) => {
       const r = rerollContract(registry, q, slot);
@@ -174,10 +237,14 @@ describe('rerollContract', () => {
       expect(r.profile).toBe(q);
       return r.reason;
     };
-    expect(refused(startDive(registry, p, 1))).toBe('Reroll at the Anvil, between dives');
+    expect(refused(startDive(registry, p, 1))).toBe('Finish or leave the dive first');
     const board = p.quests.board.slice();
     board[2] = null;
     expect(refused({ ...p, quests: { ...p.quests, board } }, 2)).toBe('No contract to reroll');
+    const complete = board.map(
+      (c) => c && { ...c, progress: [{ value: c.objectives[0].count, done: true }] },
+    );
+    expect(refused({ ...p, quests: { ...p.quests, board: complete } })).toBe('Claim it first');
     expect(refused({ ...p, quests: { ...p.quests, rerollUsed: true } })).toBe(
       'One reroll a visit: clear a depth to reroll again',
     );

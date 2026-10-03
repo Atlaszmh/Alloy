@@ -248,7 +248,7 @@ describe('delveStore', () => {
     expect(useDelveStore.getState().claimQuest('first_steps')).toEqual({
       ok: false,
       profile: diving,
-      reason: 'Claim at the Anvil, between dives',
+      reason: 'Finish or leave the dive first',
     });
     expect(useDelveStore.getState().profile).toBe(diving);
   });

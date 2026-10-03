@@ -91,6 +91,12 @@ describe('questView', () => {
       ["A pattern you don't know yet", 'Chosen when you claim it', '#c0cbdc'],
     ]);
   });
+
+  it('a claimed quest reads its rule rewards as claimed (the engine keeps no grant)', () => {
+    const view = questView(registry, { ...FIRST, status: 'claimed' });
+    expect(view.rewards[3]).toMatchObject({ name: 'A tier III offense shard', sub: 'Claimed' });
+    expect(view.rewards.slice(0, 3).every((r) => r.sub === undefined)).toBe(true);
+  });
 });
 
 describe('useQuests', () => {

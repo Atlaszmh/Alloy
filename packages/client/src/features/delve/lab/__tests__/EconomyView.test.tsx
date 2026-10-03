@@ -30,7 +30,7 @@ const latest = () => FakeWorker.all[FakeWorker.all.length - 1];
 const NONE = { common: 0, uncommon: 0, magic: 0, rare: 0, epic: 0, legendary: 0 };
 const PROFILE = createDelveProfile(getDelveRegistry(), 1);
 /**
- * Seed `seed`'s dives at these depths: 100 × seed scrap in, 5 salvaged and 10 spent a dive, `seed` rares
+ * Seed `seed`'s dives at these depths: 100 × seed scrap in, 20 from quests, 5 salvaged and 10 spent a dive, `seed` rares
  * forged, the last a death that loses 30 scrap.
  */
 function report(seed: number, depths: number[]): EconomyReport {
@@ -41,6 +41,7 @@ function report(seed: number, depths: number[]): EconomyReport {
       return {
         dive: i + 1,
         income: { ...emptyHaul(), scrap: 100 * seed },
+        quests: { ...emptyHaul(), scrap: 20 },
         salvaged: { ...emptyHaul(), scrap: 5 },
         spent: { ...emptyHaul(), scrap: 10 },
         stops: emptyHaul(),
@@ -84,21 +85,21 @@ describe('EconomyView', () => {
     expect(screen.queryByTestId('economy-progress')).toBeNull();
     const rows = screen.getAllByTestId('economy-row');
     expect(rows).toHaveLength(3);
-    // Dive, depth, deaths, forged by rarity, then each total "in / salvaged / spent / lost": means over the
+    // Dive, depth, deaths, forged by rarity, then each total "in / quests / salvaged / spent / lost": means over the
     // seeds, deaths a count.
     expect(cells(rows[0]).slice(0, 5)).toEqual([
       '1',
       '3',
       '0',
       '0 · 0 · 0 · 7.5 · 0 · 0',
-      '750 / 5 / 10 / 0',
+      '750 / 20 / 5 / 10 / 0',
     ]);
     expect(cells(rows[2]).slice(0, 5)).toEqual([
       '3',
       '5',
       '2',
       '0 · 0 · 0 · 7.5 · 0 · 0',
-      '750 / 5 / 10 / 30',
+      '750 / 20 / 5 / 10 / 30',
     ]);
   });
 
@@ -108,8 +109,14 @@ describe('EconomyView', () => {
     for (const seed of [1, 2, 3]) latest().reply(report(seed, [1, 2]));
     const show = screen.getByTestId('economy-show');
     expect(show).toHaveValue('scrap');
-    expect(screen.getAllByTestId('economy-line')).toHaveLength(4);
-    for (const label of ['Scrap in', 'Scrap salvaged', 'Scrap spent', 'Scrap lost'])
+    expect(screen.getAllByTestId('economy-line')).toHaveLength(5);
+    for (const label of [
+      'Scrap in',
+      'Scrap from quests',
+      'Scrap salvaged',
+      'Scrap spent',
+      'Scrap lost',
+    ])
       expect(screen.getByTestId('economy-legend')).toHaveTextContent(label);
     fireEvent.change(show, { target: { value: 'forged' } });
     expect(screen.getAllByTestId('economy-line')).toHaveLength(6);

@@ -25,6 +25,7 @@ function dive(n: number, over: Partial<EconomyRow> = {}): EconomyRow {
   return {
     dive: n,
     income: haul(),
+    quests: haul(),
     salvaged: haul(),
     spent: haul(),
     stops: haul(),
@@ -96,12 +97,13 @@ describe('the Economy view model', () => {
     expect(perDive([], (d) => d.depth)).toEqual([]);
   });
 
-  it("draws a material's income, Anvil salvage, spending and death loss, the items forged by rarity, the depth or the deaths", () => {
+  it("draws a material's income, quest rewards, Anvil salvage, spending and death loss, the items forged by rarity, the depth or the deaths", () => {
     const r: EconomyReport = {
       seed: 1,
       dives: [
         dive(1, {
           income: haul({ scrap: 50 }),
+          quests: haul({ scrap: 40 }),
           salvaged: haul({ scrap: 6 }),
           spent: haul({ scrap: 20 }),
           forged: { ...NONE, magic: 1 },
@@ -115,6 +117,7 @@ describe('the Economy view model', () => {
     // A dive that lost nothing (`lost: null`) counts 0.
     expect(economyLines([r], 'scrap').map((l) => [l.label, l.values])).toEqual([
       ['Scrap in', [50, 0]],
+      ['Scrap from quests', [40, 0]],
       ['Scrap salvaged', [6, 0]],
       ['Scrap spent', [20, 0]],
       ['Scrap lost', [8, 0]],

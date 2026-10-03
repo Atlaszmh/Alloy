@@ -214,6 +214,8 @@ export interface ContractTemplate {
 export interface QuestsData {
   /** Hesta, the Anvil-keeper: her name and her sprite's id in the arena's atlas. */
   giver: { name: string; sprite: string };
+  /** Each rarity's name, as a contract's text shows it (`{rarity}`). */
+  rarityNames: Record<Rarity, string>;
   quests: QuestDef[];
   contractTemplates: ContractTemplate[];
 }
@@ -318,5 +320,7 @@ export interface QuestsBalance {
     rerollScrap: number;
     /** A hard contract's chance of an extra essence (× Lucky Charm's `legendaryBoost`), rolled at generation. */
     essenceChance: number;
+    /** A goal's count × (1 + countScale[type] × bestDepth), rounded, for the types it names (deeper heroes dive longer). */
+    countScale: Partial<Record<ObjectiveType, number>>;
   };
 }

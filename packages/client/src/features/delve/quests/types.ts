@@ -37,9 +37,6 @@ export interface QuestView {
   isNew: boolean;
 }
 
-/** The HUD tracker shows at most this many. */
-export const MAX_TRACKED = 3;
-
 /** Each kind's tag and journal group: its swatch colour and a text colour that passes on steel. */
 export const QUEST_KIND: Record<
   QuestKind,

@@ -82,7 +82,7 @@ describe('the quests contract', () => {
     expect(claimQuest(registry, p, 'first_steps')).toEqual({
       ok: false,
       profile: p,
-      reason: 'Claim at the Anvil, between dives',
+      reason: 'Finish or leave the dive first',
     });
   });
 

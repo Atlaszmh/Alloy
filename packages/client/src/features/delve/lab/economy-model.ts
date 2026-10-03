@@ -86,7 +86,7 @@ export interface EconomyLine {
 }
 
 /**
- * The chart's lines for a choice: a material's income, Anvil salvage, spending and death loss
+ * The chart's lines for a choice: a material's income, quest rewards, Anvil salvage, spending and death loss
  * (its id; `lost` null counts 0), the items forged by rarity (`'forged'`), the
  * deepest depth (`'depth'`) or the deaths (`'deaths'`, a count). One choice at a
  * time, so one axis holds one unit.
@@ -124,6 +124,12 @@ export function economyLines(reports: readonly EconomyReport[], show: string): E
       label: `${m.label} in`,
       color: PALETTE[0],
       values: perDive(reports, (d) => m.of(d.income)),
+    },
+    {
+      key: `quests:${m.id}`,
+      label: `${m.label} from quests`,
+      color: PALETTE[4],
+      values: perDive(reports, (d) => m.of(d.quests)),
     },
     {
       key: `salvaged:${m.id}`,

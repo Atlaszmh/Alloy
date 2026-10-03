@@ -15,6 +15,7 @@ import {
 import type { ReactionId } from '../types/arpg.js';
 import { isDiveActive } from './dive.js';
 import { profileStats } from './pair.js';
+import { DIVE_OPEN } from './quests.js';
 import type { ProfileActionResult } from './profile.js';
 
 /**
@@ -28,6 +29,8 @@ import type { ProfileActionResult } from './profile.js';
 interface Possible {
   /** The biomes of depths 1 to max(1, bestDepth), in order (they cycle). */
   biomes: string[];
+  /** The biomes whose boss depth lies within the depth window's reach (bestDepth + its hi). */
+  bosses: string[];
   /** Their mana: a foe's element is its biome's. */
   elements: ManaType[];
   /** The pair's reaction, when bound, and every reaction seen. */
@@ -54,8 +57,14 @@ function possible(registry: DataRegistry, profile: DelveProfile): Possible {
   const owned = FLUX_GRADES.filter((g) => profile.materials.flux[g] > 0);
   const top = owned.length > 0 ? FLUX_GRADES.indexOf(owned[owned.length - 1]) + 1 : 0;
   const lo = Math.max(2, best + depthWindow[0]);
+  const every = registry.getDelveBalance().dive.bossEvery;
+  const bossDepths = Array.from(
+    { length: Math.floor(Math.max(0, best + depthWindow[1]) / every) },
+    (_, i) => (i + 1) * every,
+  );
   return {
     biomes: [...new Set(reached.map((b) => b.id))],
+    bosses: [...new Set(bossDepths.map((d) => registry.getBiomeForDepth(d).id))],
     elements: [...new Set(reached.map((b) => b.mana))],
     reactions: [...new Set(reactions)],
     window: [lo, Math.max(lo, best + depthWindow[1])],
@@ -64,24 +73,32 @@ function possible(registry: DataRegistry, profile: DelveProfile): Possible {
   };
 }
 
-/** A template is offered only when every filter rule it names has a value (a reaction rule needs one known). */
+/**
+ * A template is offered only when every filter rule it names has a value (a reaction rule needs
+ * one known; a boss goal a boss within reach).
+ */
 function offered(t: ContractTemplate, can: Possible): boolean {
-  return t.filter?.reaction === undefined || can.reactions.length > 0;
+  return (
+    (t.filter?.reaction === undefined || can.reactions.length > 0) &&
+    (t.type !== 'boss' || can.bosses.length > 0)
+  );
 }
 
 /**
  * The next contract, `contract:<boardCount>`, from a template and a tier
  * (`contracts.tierWeights`) drawn on `contract:<boardCount>` from the profile
  * seed, its filter filled with only what is possible for the hero, its count
- * from the tier's range and its rewards × (1 + depthScale × bestDepth); a
+ * from the tier's range (× (1 + countScale[type] × bestDepth) for the types
+ * `countScale` names) and its rewards × (1 + depthScale × bestDepth); a
  * hard one may add an essence (`essence: 'fit'`) at `essenceChance` × Lucky
  * Charm's boost. A template already on the board is passed over while another
  * can be offered. Its text's `{count}`, `{biome}`, `{element}`, `{reaction}`,
- * `{depth}` and `{rarity}` are filled from the data's names. The caller moves
- * `boardCount` on.
+ * `{depth}` and `{rarity}` are filled from the data's names, and `{s}` is "s"
+ * unless the count is 1. The caller moves `boardCount` on.
  */
 export function generateContract(registry: DataRegistry, profile: DelveProfile): Contract {
-  const { tierWeights, depthScale, essenceChance } = registry.getDelveBalance().quests.contracts;
+  const { tierWeights, depthScale, essenceChance, countScale } =
+    registry.getDelveBalance().quests.contracts;
   const n = profile.quests.boardCount;
   const rng = new SeededRNG(profile.seed).fork(`contract:${n}`);
   const pick = <T>(xs: readonly T[]): T => xs[rng.nextInt(0, xs.length - 1)];
@@ -95,7 +112,7 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   const rule = t.filter ?? {};
   const filter: ObjectiveFilter = {};
   if (rule.kind) filter.kind = rule.kind;
-  if (rule.biome) filter.biome = pick(can.biomes);
+  if (rule.biome) filter.biome = pick(t.type === 'boss' ? can.bosses : can.biomes);
   if (rule.element) filter.element = pick(can.elements);
   if (rule.reaction) filter.reaction = pick(can.reactions);
   if (rule.minDepth === 'window') filter.minDepth = rng.nextInt(...can.window);
@@ -103,7 +120,8 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
   if (rule.minRarity) filter.minRarity = pick(can.rarities);
   if (rule.noPotion) filter.noPotion = true;
   if (rule.noDamage) filter.noDamage = true;
-  const count = rng.nextInt(...t.count[tier]);
+  const grow = 1 + (countScale[t.type] ?? 0) * profile.bestDepth;
+  const count = Math.max(1, Math.round(rng.nextInt(...t.count[tier]) * grow));
 
   const scale = 1 + depthScale * profile.bestDepth;
   const scaled = (r: Reward): Reward => ({
@@ -120,8 +138,9 @@ export function generateContract(registry: DataRegistry, profile: DelveProfile):
 
   const names: Record<string, string | number> = {
     count,
+    s: count === 1 ? '' : 's',
     depth: filter.minDepth ?? '',
-    rarity: filter.minRarity ?? '',
+    rarity: filter.minRarity ? registry.getQuestsData().rarityNames[filter.minRarity] : '',
     biome: registry.getDelveData().biomes.find((b) => b.id === filter.biome)?.name ?? '',
     element: filter.element ? registry.getArpgData().mana[filter.element].name : '',
     reaction: filter.reaction ? registry.getReaction(filter.reaction).name : '',
@@ -174,8 +193,8 @@ export function refillBoard(registry: DataRegistry, profile: DelveProfile): Delv
 
 /**
  * Slot `slot`'s contract replaced (`generateContract`) for `rerollScrap`, once
- * an Anvil visit; refused mid-dive, on an empty slot, or once the visit's
- * reroll is spent. The old contract's id leaves `tracked` and `seen`. Pure:
+ * an Anvil visit; refused mid-dive, on an empty slot, on a completed contract
+ * (claim it), or once the visit's reroll is spent. The old contract's id leaves `tracked` and `seen`. Pure:
  * the Quests tab calls it as a dry run, and shows its refusals as they read.
  */
 export function rerollContract(
@@ -186,8 +205,9 @@ export function rerollContract(
   const no = (reason: string): ProfileActionResult => ({ ok: false, profile, reason });
   const old = profile.quests.board[slot];
   const price = registry.getDelveBalance().quests.contracts.rerollScrap;
-  if (isDiveActive(profile)) return no('Reroll at the Anvil, between dives');
+  if (isDiveActive(profile)) return no(DIVE_OPEN);
   if (!old) return no('No contract to reroll');
+  if (old.progress.every((p) => p.done)) return no('Claim it first');
   if (profile.quests.rerollUsed) return no('One reroll a visit: clear a depth to reroll again');
   if (profile.scrap < price) return no('Not enough scrap');
   const placed = place(registry, profile, slot);

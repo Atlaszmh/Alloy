@@ -14,6 +14,8 @@ import type { QuestReward, QuestView } from './types';
 const RULE_COLOR = '#c0cbdc';
 /** A rule's note: the engine settles it when the quest is claimed. */
 const CHOSEN = 'Chosen when you claim it';
+/** A claimed quest's rule: settled (the engine keeps no record of what it gave). */
+const CLAIMED = 'Claimed';
 
 /**
  * An engine quest (`questStates`) as the journal and the HUD tracker draw it: Hesta gives every
@@ -35,7 +37,9 @@ export function questView(registry: DataRegistry, quest: QuestState): QuestView 
       done: o.done,
       progress: { value: o.value, max: o.count },
     })),
-    rewards: quest.rewards.map((r, i) => rewardView(registry, r, String(i))),
+    rewards: quest.rewards.map((r, i) =>
+      rewardView(registry, r, String(i), quest.status === 'claimed' ? CLAIMED : CHOSEN),
+    ),
     tracked: quest.tracked,
     status: quest.status,
     isNew: quest.isNew,
@@ -44,10 +48,16 @@ export function questView(registry: DataRegistry, quest: QuestState): QuestView 
 
 /**
  * A reward as the journal names it: "3 × Iron bar", "40 scrap", "Sword pattern", or a rule by
- * what it will be ("A tier III offense shard", chosen when it is claimed). A claim's grants too.
+ * what it will be ("A tier III offense shard", `note`: chosen when it is claimed, or claimed). A
+ * claim's grants too.
  */
-export function rewardView(registry: DataRegistry, reward: RewardView, id: string): QuestReward {
-  if ('rule' in reward) return ruleView(reward.rule, id);
+export function rewardView(
+  registry: DataRegistry,
+  reward: RewardView,
+  id: string,
+  note = CHOSEN,
+): QuestReward {
+  if ('rule' in reward) return ruleView(reward.rule, id, note);
   const { ref, count } = reward;
   switch (ref.kind) {
     case 'scrap':
@@ -71,11 +81,11 @@ export function rewardView(registry: DataRegistry, reward: RewardView, id: strin
  * The quests spec's rule rewards, which `resolveReward` settles at the claim: the best depth's
  * metal, a shard of a family and tier, an essence that fits a known pattern, an unknown pattern.
  */
-function ruleView(r: Reward, id: string): QuestReward {
+function ruleView(r: Reward, id: string, note: string): QuestReward {
   const rule = (one: string, many: string, color: string): QuestReward => ({
     id,
     name: r.count === 1 ? one : `${r.count} ${many}`,
-    sub: CHOSEN,
+    sub: note,
     color,
   });
   if (r.kind === 'metal' && r.id === 'depth')

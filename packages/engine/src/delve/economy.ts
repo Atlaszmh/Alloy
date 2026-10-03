@@ -10,6 +10,8 @@ export interface EconomyDive {
   dive: number;
   /** What the dive brought into the stockpile, after any loss: what it banked and kept, and an extract's bounty. */
   income: Haul;
+  /** What the Anvil visit after it claimed: quest and contract rewards, into the stockpile. */
+  quests: Haul;
   /** What the Anvil spent between this dive and the next: forging, refining, buying, Links, runes, honing, upgrades. */
   spent: Haul;
   /** What the stops spent from the stockpile during the dive (beyond what the dive had banked). */
@@ -23,7 +25,7 @@ export interface EconomyDive {
   died: boolean;
 }
 
-/** One dive of the economy sim (the DPS Lab's Economy view): the stockpile changes by `income + salvaged - spent`. */
+/** One dive of the economy sim (the DPS Lab's Economy view): the stockpile changes by `income + quests + salvaged - spent`. */
 export interface EconomyRow extends EconomyDive {
   /** What the Anvil took in between this dive and the next: salvage yields, and what refining and fusing made. */
   salvaged: Haul;
@@ -67,7 +69,7 @@ function mapHaul(h: Haul, f: (n: number) => number): Haul {
  * economy dive by dive: the DPS Lab's Economy view and the pacing rails.
  * It plays one dive at a time from the profile before it (as one run does), so
  * each dive's change to the stockpile is known: what the autopilot reports
- * (`income`, the Anvil's and the stops' spend) leaves the Anvil's gains, each
+ * (`income`, the claims' `quests`, the Anvil's and the stops' spend) leaves the Anvil's gains, each
  * material exact. Plain data, so it crosses a worker's boundary.
  */
 export function economySim(
@@ -81,10 +83,11 @@ export function economySim(
   for (let n = 0; n < dives; n++) {
     const run = runAutopilot(registry, { seed, dives: 1, profile });
     const [row] = run.economy;
-    // The stockpile's change, less the income, plus what the Anvil and the stops spent: the Anvil's gains.
+    // The stockpile's change, less the income and the claims, plus what the Anvil and the stops spent: the Anvil's gains.
     const delta = addHaul(stockOf(run.profile), mapHaul(stockOf(profile), (x) => -x));
+    const came = addHaul(row.income, row.quests);
     const salvaged = addHaul(
-      addHaul(delta, mapHaul(row.income, (x) => -x)),
+      addHaul(delta, mapHaul(came, (x) => -x)),
       addHaul(row.spent, row.stops),
     );
     out.push({ ...row, dive: n + 1, salvaged, spent: addHaul(row.spent, row.stops) });
