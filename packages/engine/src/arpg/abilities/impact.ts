@@ -10,6 +10,7 @@ import type { ManaType } from '../../types/mana.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
+import { snapToWalkable } from '../grid.js';
 import { alive, nearestMonster, spawnProjectile } from './targeting.js';
 
 /** Pyroclasm's embers come off these forms' impacts. */
@@ -228,8 +229,7 @@ export function impact(
     const reach = k.scatter * radius * ctx.bal.abilities.scatterReach;
     const a = world.rng.next() * Math.PI * 2;
     const r = reach * (0.3 + 0.7 * world.rng.next());
-    x = Math.max(0, Math.min(world.width, x + Math.cos(a) * r));
-    y = Math.max(0, Math.min(world.height, y + Math.sin(a) * r));
+    ({ x, y } = snapToWalkable(world.map, x + Math.cos(a) * r, y + Math.sin(a) * r));
     radius *= 1 + (world.rng.next() * 2 - 1) * 0.3 * k.scatter;
   }
   if (k.pull) pull(ctx, x, y, radius * 2.2, o.tick ? 0.15 : 0.75);

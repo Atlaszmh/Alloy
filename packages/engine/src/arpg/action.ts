@@ -1,6 +1,6 @@
 import type { ArpgWorld, HeroEntity, Push, PushKind, Vec } from '../types/arpg.js';
 import type { SimCtx } from './combat.js';
-import { clamp } from './geometry.js';
+import { moveCircle } from './grid.js';
 import { chargeCap } from './abilities/resolve.js';
 
 /**
@@ -74,7 +74,7 @@ function contactAt(
 /**
  * Move the hero by push `p`'s slice up to progress `k`: less the part that
  * points against the steering `steer` (a unit vector; null when not steering),
- * clamped to the arena, and cut at its stop foe's contact gap. Returns whether
+ * stopped at walls, and cut at its stop foe's contact gap. Returns whether
  * it runs on: it ends when its progress runs out, its foe is gone, or it
  * reaches the gap (at once if the hero is already inside it).
  */
@@ -91,8 +91,7 @@ function slice(ctx: SimCtx, p: Push, k: number, steer: Vec | null): boolean {
     dx -= against * steer.x;
     dy -= against * steer.y;
   }
-  const x = clamp(h.x + dx, h.radius, world.width - h.radius);
-  const y = clamp(h.y + dy, h.radius, world.height - h.radius);
+  const { x, y } = moveCircle(world.map, h, h.radius, dx, dy);
   const c = foe
     ? contactAt(h.x, h.y, x, y, foe.x, foe.y, foe.radius + h.radius + bal.feel.contactGap)
     : 1;
