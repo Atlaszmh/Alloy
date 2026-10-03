@@ -10,6 +10,7 @@ import {
   chainMove,
   holdCharge,
   holdFull,
+  hudMapOf,
   moveNumbers,
   pressIndex,
   pressMove,
@@ -20,6 +21,8 @@ import {
   type FormId,
   type GearItem,
   type HeroStats,
+  type HudMap as FloorHudMap,
+  type InteractableKind,
   type ManaType,
   type MoveKind,
   type ResolvedAbility,
@@ -123,7 +126,29 @@ export interface HudMap {
   drops: { x: number; y: number; color: string }[];
   /** Blocked cells, if the engine ever adds terrain; [] today. */
   terrain: { x: number; y: number; w: number; h: number }[];
+  /**
+   * A generated floor's map (`hudMapOf`: revealed rooms and their icons, the exit, its hint, the
+   * rooms explored), with the grid and the fog it is drawn from (the world's own arrays, never
+   * copied: the minimap redraws its fog when `fogVersion` moves); absent on the open room, whose
+   * `foes` are then every foe and `drops` every drop.
+   */
+  floor?: FloorHudMap & { cells: Uint8Array; fog: Uint8Array };
 }
+
+/** The interactable in reach, for its plaque: the engine's prompt, where it stands, and a prayer's progress. */
+export interface InteractHud {
+  id: string;
+  interactable: InteractableKind;
+  /** The engine's words (`interactPrompt.text`): its name, and a shrine's blessing. */
+  text: string;
+  x: number;
+  y: number;
+  /** A shrine's prayer under way (`world.channel`), 0..1; null when none. */
+  channel: number | null;
+}
+
+/** An `interactPrompt` event. */
+export type PromptEvent = Extract<ArpgEvent, { kind: 'interactPrompt' }>;
 
 export interface ArenaHud {
   hp: number;
@@ -162,6 +187,8 @@ export interface ArenaHud {
   /** Riposte, Quick and the barrier while they last, in that order. */
   buffs: HudBuff[];
   map: HudMap;
+  /** The interactable in reach (or the shrine being prayed at); absent when none. */
+  prompt?: InteractHud;
 }
 
 /** What the core reports to the page, from any fight. */
@@ -237,7 +264,49 @@ function mapColor(d: Drop): string | null {
   return def ? FAMILY_STYLE[def.family].color : null;
 }
 
-export function snapshot(world: ArpgWorld, renderer: { viewRect(): ViewRect } | null): ArenaHud {
+/**
+ * The interact prompt after a step: the last one it sent; none when it ran a tick without one
+ * (the engine sends it every tick while one is in reach); the one before when it ran no tick.
+ */
+export function promptAfter(
+  prev: PromptEvent | null,
+  events: readonly ArpgEvent[],
+  ticked: boolean,
+): PromptEvent | null {
+  if (!ticked) return prev;
+  let last: PromptEvent | null = null;
+  for (const e of events) if (e.kind === 'interactPrompt') last = e;
+  return last;
+}
+
+/** The plaque's interactable: the prompt's, else the shrine being prayed at; with its prayer's progress. */
+function promptOf(world: ArpgWorld, e: PromptEvent | null): InteractHud | undefined {
+  const id = e?.id ?? world.channel?.id;
+  const it = id ? world.map.rooms.find((r) => r.interactable?.id === id)?.interactable : undefined;
+  if (!it) return undefined;
+  const ch = world.channel?.id === it.id ? world.channel : null;
+  return {
+    id: it.id,
+    interactable: it.kind,
+    text: e?.text ?? '',
+    x: it.x,
+    y: it.y,
+    channel: ch ? Math.min(1, (world.t - ch.start) / Math.max(0.01, ch.until - ch.start)) : null,
+  };
+}
+
+/** Whether a generated floor's fog has seen the cell at (x, y). */
+function seenAt(world: ArpgWorld, x: number, y: number): boolean {
+  const cx = Math.min(world.width - 1, Math.max(0, Math.floor(x)));
+  const cy = Math.min(world.height - 1, Math.max(0, Math.floor(y)));
+  return world.fog[cy * world.width + cx] > 0;
+}
+
+export function snapshot(
+  world: ArpgWorld,
+  renderer: { viewRect(): ViewRect } | null,
+  prompt: PromptEvent | null = null,
+): ArenaHud {
   const h = world.hero;
   const t = world.t;
   const bal = getDelveRegistry().getDelveBalance();
@@ -252,6 +321,8 @@ export function snapshot(world: ArpgWorld, renderer: { viewRect(): ViewRect } | 
   const blow = basicStep(h, t, bal);
   // A hold blow's charge shows until it is let go (not through its leap).
   const held = h.swing?.released === null ? h.swing.held : null;
+  // A generated floor's map comes from the engine: only the foes in sight, only seen loot.
+  const floor = world.map.open ? null : hudMapOf(world);
   return {
     hp: h.hp,
     maxHp: h.stats.maxHp,
@@ -335,13 +406,15 @@ export function snapshot(world: ArpgWorld, renderer: { viewRect(): ViewRect } | 
       height: world.height,
       view: renderer?.viewRect() ?? { left: 0, top: 0, right: world.width, bottom: world.height },
       hero: { x: h.x, y: h.y },
-      foes: world.monsters.map((m) => ({ x: m.x, y: m.y, rank: m.kind })),
+      foes: (floor?.foes ?? world.monsters).map((m) => ({ x: m.x, y: m.y, rank: m.kind })),
       drops: world.drops.flatMap((d) => {
         const color = mapColor(d);
-        return color ? [{ x: d.x, y: d.y, color }] : [];
+        return color && (!floor || seenAt(world, d.x, d.y)) ? [{ x: d.x, y: d.y, color }] : [];
       }),
       terrain: [],
+      ...(floor && { floor: { ...floor, cells: world.map.cells, fog: world.fog } }),
     },
+    prompt: promptOf(world, prompt),
   };
 }
 
@@ -394,6 +467,8 @@ export function useArenaCore(
   const slowUntilRef = useRef(0);
   const hitstopRef = useRef(new HitStop());
   const manualRef = useRef(opts.manualAttack);
+  /** The engine's latest interact prompt (`promptAfter`), for the snapshot. */
+  const promptRef = useRef<PromptEvent | null>(null);
   modeRef.current = mode;
   manualRef.current = opts.manualAttack;
   const [hud, setHud] = useState<ArenaHud | null>(null);
@@ -409,6 +484,7 @@ export function useArenaCore(
     worldRef.current = world;
     hitstopRef.current.reset();
     finishedRef.current = false;
+    promptRef.current = null;
     renderer.loadFloor(world, registry.getBiomeForDepth(world.depth));
     setHud(snapshot(world, renderer));
   }, [registry]);
@@ -487,12 +563,14 @@ export function useArenaCore(
               device: useInputDeviceStore.getState().device,
             });
             const wasDead = world.heroDead;
+            const t0 = world.t;
             const events = stepWorld(
               registry,
               world,
               flags.autopilot ? botInput(registry, world) : input,
               dt * flags.timescale,
             );
+            promptRef.current = promptAfter(promptRef.current, events, world.t > t0);
             if (events.length > 0) {
               renderer.handleEvents(events);
               // The bot-driven E2E runs would otherwise spend a large share of wall time frozen.
@@ -513,7 +591,7 @@ export function useArenaCore(
           hudClock += real * scale;
           if (hudClock > 0.08) {
             hudClock = 0;
-            setHud(snapshot(world, renderer));
+            setHud(snapshot(world, renderer, promptRef.current));
           }
         });
         setReady(true);
@@ -603,7 +681,7 @@ export function useArenaCore(
     const world = worldRef.current;
     if (world && !world.heroDead && !finishedRef.current) {
       refreshWorldHero(registry, world, mode.loadout.stats, mode.loadout.chains);
-      setHud(snapshot(world, rendererRef.current));
+      setHud(snapshot(world, rendererRef.current, promptRef.current));
     }
   }, [mode.loadout, registry]);
 
