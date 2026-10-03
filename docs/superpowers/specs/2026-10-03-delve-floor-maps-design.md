@@ -1,6 +1,6 @@
 # Delve floor maps (procedurally generated rooms and halls)
 
-**Status:** design approved in conversation, 2026-10-03. Builds on v0.59.0 (quests, crafting, the v1 UI). Ships as **v0.60.0**. No save change is expected (the map is regenerated from the floor seed); if one is needed, the save version bumps and older saves reset (no migration).
+**Status:** design approved in conversation, 2026-10-03; revised after the spec review the same day. Builds on v0.59.0 (quests, crafting, the v1 UI). Ships as **v0.60.0** with **save v10** (`DiveState` gains fields; older saves reset, no migration).
 
 ## Why
 
@@ -18,128 +18,216 @@ Every Delve floor today is the same empty 26 × 40 rectangle: packs placed at ra
 | 6 | Doors | **Only special rooms seal** (elite dens and the boss room) until cleared; normal rooms stay open, and monsters leash home. |
 | 7 | Technique | **A tile grid** for collision, line of sight, flow-field pathing, fog and the minimap. |
 
+### Decided in the spec (the user can override)
+
+| # | Question | Decision |
+|---|---|---|
+| S1 | Replays | A floor replayed (reload, "Anvil · floor restarts") has the same map, but **interactables already used this dive stay used** (`DiveState.used`), and gear and patterns already given stay given (`dropsGiven`). |
+| S2 | Shrine buffs | Last **for the floor** or **for the dive** (`DiveState.diveBuffs`); a potion-refill shrine is one use per dive per shrine. |
+| S3 | Rushing and contracts | `clearFloor` carries `roomsCleared`. "Clear a floor without a potion / without damage" contracts and Untouchable require at least `minRoomsCleared` (data), so sneaking to the exit doesn't complete them. |
+| S4 | Monster rolls | Generated floors place packs per room, so a floor's monsters differ from v0.59.0's for the same seed (accepted; determinism is per generated floor). |
+| S5 | Names | The shrine **room** kind's id is `sanctum` (shown as "Shrine"), so it doesn't clash with the "Quiet Shrine" door. |
+
 ## The map model
 
-- **Grid:** a floor is a grid of 1-unit cells (`Cell = floor | wall | door`), at most `delve.layout.maxSize` per side.
-- **`FloorMap`** (`src/types/floor-map.ts`):
-  ```ts
-  { width, height, cells: Uint8Array, rooms: Room[], doors: Door[], start: Vec, exit: Vec, seed }
-  Room = { id, kind: RoomKind, rect, cells?, packs: number, sealed?: boolean, revealed: boolean, cleared: boolean, interactable?: Interactable }
-  RoomKind = 'start' | 'combat' | 'den' | 'vault' | 'shrine' | 'alcove' | 'exit' | 'boss'
-  Door = { x, y, rooms: [a, b], closed: boolean }
-  Interactable = { kind: 'chest' | 'shrine' | 'alcove' | 'gate', x, y, used: boolean, shrine?: ShrineId }
-  ```
-- **Generator:** `generateFloor(registry, seed, depth, biome, door): FloorMap`. It is pure and deterministic, on a new **`layout` fork** of the floor seed (so every existing stream is unchanged).
-  - **Rooms:** 5–8, by `delve.layout.rooms` and depth, placed on a coarse grid graph.
-  - **Connections:** a spanning tree plus `loops` (1–2) extra links. Halls are `hallWidth` (3) cells wide.
-  - **Room sizes and shapes:** from `layouts.json` templates per biome (small 8 × 8 to an arena of 14 × 12; pillar and rubble patterns for cover).
+**Grid:** a floor is a grid of 1-unit cells (`Cell = 0 floor | 1 wall | 2 door`). Out of bounds counts as wall.
+
+**`FloorMap`** (`src/types/floor-map.ts`):
+```ts
+interface FloorMap { width: number; height: number; cells: Uint8Array; rooms: Room[]; doors: Door[]; start: Vec; exit: Vec; open: boolean }
+interface Room { id: number; kind: RoomKind; rect: Rect; mask?: Uint8Array /* pillars, rubble */; homeField?: Uint16Array; revealed: boolean; cleared: boolean; sealed: boolean; interactable?: Interactable }
+type RoomKind = 'start' | 'combat' | 'den' | 'vault' | 'sanctum' | 'alcove' | 'exit' | 'boss'
+interface Door { id: number; cells: Vec[]; rooms: [number, number]; closed: boolean }
+interface Interactable { id: string /* `${depth}:${roomId}` */; kind: 'chest' | 'shrine' | 'alcove' | 'gate'; x: number; y: number; used: boolean; shrine?: ShrineId; offers?: StopOffer[] }
+```
+
+**Two layouts.** `FloorOptions.layout: 'open' | 'generated'`, defaulting to **`'open'`**.
+- **`'open'`** (`openRoom(width, height)`) is today's arena exactly:
+  - one room of `arena.width × arena.height`;
+  - the hero at `(w/2, h − 4)`;
+  - no leash, fog fully visible, no gate, no exit hint;
+  - `cleared` = every monster dead, as today.
+- **Who uses `'open'`:** the Training Grounds, `tests/fixtures/arena.ts`, and every caller that doesn't ask for `'generated'`.
+- **`'generated'`:** only `beginFloor` (`delve/dive.ts`) passes it for dives.
+
+**Generator:** `generateFloor(registry, seed, depth, biome, door): FloorMap` (`arpg/layout/generate.ts`).
+- **Determinism:** pure and deterministic, on a new **`layout` fork** of the floor seed. `fork()` doesn't advance its parent, so the existing stream forks (`spawn`, `combat`, `loot`, `runes`, `materials`) are unchanged. Draws *within* `spawn` change because placement moves (S4).
+- **The coarse grid:**
+  - rooms sit in cells of `layout.coarseCell` (16) units, on a `layout.coarseCols × coarseRows` grid (4 × 4);
+  - `layout.rooms { base 5, perDepth 0.1, max 8 }` rooms are placed by random walk from the start cell;
+  - the graph is a spanning tree plus `layout.loops` (1–2) extra adjacent links.
+- **Halls:** `hallWidth` (3) cells wide, L-shaped between the facing walls' midpoints. Doors are the hall's cells where it meets a room's wall.
+- **Walls:** `layout.minWall` (2) cells thick between rooms and halls, so melee can't reach through.
+- **Start and exit:** the start room is the walk's first room. The exit is the room farthest from it by graph distance (BFS), tie-break by seed. On boss floors the exit room is the boss room (`layouts.json → boss` template).
 - **Kinds:**
-  - the start and exit rooms are far apart (graph distance), with no monsters in the start room;
-  - on boss floors the exit room is the boss room;
-  - the rest are drawn from `kindWeights` by depth (combat most; den, vault, shrine, alcove by chance; at most one alcove; vaults and shrines prefer dead ends).
-- **Packs:** today's pack count (`packsBase + depth × packsPerDepth`, × the door's `packs`) is **spread across the combat rooms and dens** (1–2 per room) instead of one field. Elites, traits and boss rules are unchanged. Spawns are only on walkable cells, at `minPackDistance` from the start.
-- **The world:** `ArpgWorld.map: FloorMap`. `world.width` / `height` come from the map.
-- **The open-room layout:** `openRoom(width, height)`, one room the size of today's arena, is used by the **Training Grounds** and by the existing test fixtures. Everything that worked on the rectangle behaves the same on it.
+  - start (no monsters);
+  - exit;
+  - boss on boss floors;
+  - the rest drawn from `layout.kindWeights` by depth band;
+  - at most `alcoveMax` (1) alcove;
+  - vaults and sanctums weighted toward dead ends by `deadEndWeight`;
+  - at least `minCombatRooms` combat rooms.
+- **Room sizes:** from `layouts.json` templates per biome (8 × 8 up to 14 × 12; pillar and rubble masks at `pillarChance`). `maxSize` is `coarseCell × coarseCols` (64).
+- **Packs:**
+  - today's count (`packsBase + depth × packsPerDepth`, capped at `packsMax`, × the door's `packs`) is spread **over the combat rooms and dens** at up to `layout.packsPerRoom` (2) each;
+  - if they don't fit, more combat rooms are added (up to `rooms.max`), then the remainder goes 1 per room round-robin;
+  - boss floors: the boss alone in the boss room, its 2 packs in combat rooms on the way;
+  - the exit, start, vault (unless guarded), sanctum and alcove rooms hold no packs;
+  - spawns sit on walkable cells, at least `layout.minPackDistance` (moved here from `arena`) from the start.
+- **Monster fields:** each monster gets a `roomId`. Boss adds inherit the boss's room.
+- **Home fields:** each room's `homeField` (a BFS distance field to its centre, for leashing) is computed at generation.
+
+**The world:** `ArpgWorld.map: FloorMap`. `world.width` and `height` come from the map.
 
 ## Movement and combat on the grid
 
-**Collision:**
-- `moveCircle(map, pos, radius, dx, dy) → pos` slides a circle along walls (axis-separated).
-- It **replaces the ~15 ad hoc rectangle clamps**. Every mover goes through it:
-  - walking, the dodge dash, and the pushes (lunges, leaps, step-ins, recoils), each stopping at a wall;
-  - Blink, which lands on the farthest walkable point along its line;
-  - knockback, and monster separation.
-- Closed doors are walls.
+**Collision:** `moveCircle(map, pos, radius, dx, dy) → pos` (`arpg/grid.ts`) slides a circle along walls, axis-separated, with sub-steps no longer than the radius so nothing tunnels. Closed doors are walls. Every mover goes through it:
+- the hero's walk (step.ts) and the separation push (step.ts);
+- the dodge (`dodge.ts`, changed from an absolute position to per-tick deltas);
+- the pushes (`action.ts`: lunges, leaps, step-ins, recoils), each stopping at a wall;
+- `moveMonster` and knockback (step.ts);
+- `pull` (`impact.ts`), which can't drag through walls;
+- boss adds' spawn;
+- drop spawns, snapped to the nearest walkable cell (`combat.ts` items, motes, Siphon, Seedling; `material-drops.ts`; `rune-drops.ts`);
+- the drop magnet and vacuum.
 
-**Line of sight:** `lineOfSight(map, a, b)` is a grid raycast (DDA). It applies to:
-- projectiles: they stop at walls; a burst form (Bolt, Burst, a shot's Split) bursts at the wall;
-- beams (Lance): they end at the first wall;
-- area hits (blasts, zones, auras, Nova, explode), Overload / Combust splash and chain jumps: they hit only targets visible from their centre or source;
-- auto-aim (`nearestMonster`) and the bot's targeting: they prefer visible foes;
-- aim points, barrage and scatter impacts: they snap to walkable cells;
-- monster shots and the boss ring: the same rules.
+**Blink** (`forms.ts`) lands on the **last walkable point before the first blocked cell** along its line.
+
+**Line of sight:** `lineOfSight(map, a, b)` (`arpg/grid.ts`) is a DDA raycast. It applies at every hit site:
+- **Projectiles:** they stop at walls. A Bolt (and a shot's Split) bursts at the wall. A projectile's spawn point is checked first; one inside a wall spawns at the hero.
+- **Beams:** Lance beams (`forms.ts`) end at the first wall.
+- **Area hits:** need LOS from their centre:
+  - `impact.ts` (AoE, explode, Nova, zones and Linger ticks, scatter);
+  - `forms.ts` (Strike's arc, Blink's trail);
+  - `basic.ts` (the melee arc, a ranged blow's landing check, `burstShot`, blow Linger ticks in `step.ts`).
+- **Reaction splash:** `combat.ts nearby()`, the one choke point for Overload, Combust, Blight, Crystallize and Blackout, gets LOS. So do Fire mastery's spread and the Hellfire Brand blast.
+- **Chains:** `chainJumps` (`impact.ts`) and Volley's homing and target list (`step.ts`, `forms.ts`) need LOS.
+- **Targeting:**
+  - `nearestMonster`, `bestCluster` (`targeting.ts`), `foeAhead` and `aimAt` (`basic.ts`) prefer visible foes;
+  - an explicit aim point (`aimPoint`) is clipped to the hero's line of sight, so a placed form (Barrage, Maelstrom, Burst) can't land in an unseen room. Lobs don't pass over walls.
+- **Monsters:**
+  - melee hits need LOS (`step.ts`);
+  - a ranged foe fires only with LOS;
+  - the boss slam and ring respect walls.
 
 **Monsters:**
-- **Waking:** a monster wakes on sight (line of sight within `aggroRadius`) or when hit; its pack wakes with it.
-- **Pathing:** `flowField(map, target, radius)` is a breadth-first distance field over walkable cells around the hero. The world keeps one, rebuilt every `ai.flowEvery` (0.25 s) within `ai.flowRadius` (30 cells), and monsters step down its gradient (direct steering once they have line of sight and are close).
-  - Ranged foes path until they have line of sight, then keep their spacing.
-  - Chargers' dashes stop at walls.
-- **Leash:** a monster more than `ai.leashRadius` from its room's centre for more than `ai.leashSeconds` turns home (a flow field to its room) and heals to full on arrival.
-- **Spatial hash:** a uniform-grid spatial hash replaces the all-pairs separation and linear nearest-foe scans.
+- **Waking:** on sight (LOS within `monster.aggroRadius`, unchanged home) or when hit; the pack wakes with it.
+- **Pathing:** `flowField(map, target, radius, clearance)` is a BFS over walkable cells. The world keeps **two** fields toward the hero, one per **clearance class** (`small`; `large` for bosses and big foes, which need a 2-cell path). Each is rebuilt when `world.t` passes the next `ai.flowEvery` (0.25 s) mark, within `ai.flowRadius` (30 cells).
+  - **Steering:** monsters step down their class's gradient, or steer directly once they have LOS and are within `ai.directRange` (4).
+  - **Out of range:** beyond the field they hold position (or go home if leashing).
+  - **Ranged foes** path until they have LOS, then keep their spacing.
+  - **Chargers'** dashes stop at walls.
+- **Leash:**
+  - **Trigger:** a monster farther than `ai.leashRadius` from its room's centre for more than `ai.leashSeconds` turns home along its room's `homeField`.
+  - **On arrival:** it heals to full and sleeps again (`aggro` and `aggroAt` reset, so a boss's enrage timer restarts).
+  - **Open layout:** there is no leash.
+- **Spatial hash:** a uniform-grid spatial hash (`arpg/spatial.ts`) replaces all-pairs separation and linear nearest-foe scans.
 
-**Sealed rooms:**
-- A den or the boss room **seals** (its doors close) when the hero is inside and one of its monsters wakes.
-- It **unseals** when that room's monsters are all dead.
-- While sealed, nothing passes its doors.
+**Sealed rooms** (dens and the boss room):
+- **When:** a room seals when the hero is inside it and any of its monsters is awake (woken from the doorway counts).
+- **Before closing:**
+  - room monsters outside the room are moved to free cells inside it;
+  - each door closes only when no circle overlaps its cells (the hero is nudged inward; up to `ai.sealGrace` 0.5 s).
+- **Unsealing:** when no living monster with that `roomId` remains.
+- **While sealed,** nothing passes its doors.
+- **Events:** `seal` and `unseal`.
 
 **Loot:**
 - Drops land on walkable cells.
-- When a room's last monster dies, that room's drops are pulled to the hero (`ai.roomVacuum`). This replaces today's whole-floor vacuum on clear.
-- Materials still magnet in within `magnetRadius`.
+- When a room's last monster (by `roomId`) dies, the drops of monsters from that room are pulled to the hero (`ai.roomVacuum`). Room membership is set at spawn on the drop.
+- Halls have no room, and their drops only magnet.
+- The `vacuum: world.cleared` spawn flags change to the room rule.
 - Drops left on the floor when the exit is taken are lost.
+- A `roomCleared` event fires.
 
 ## Interacting, special rooms and the exit
 
-**`interact` action** (a new control in `CONTROL_ACTIONS`): pad **A** (free in combat), keyboard **C** (rebindable). A prompt plaque shows within `interactRadius` of an interactable.
+**`interact`:**
+- **Bindings:** a new control action, pad **A** and keyboard **C** by default. When a player's saved setup already uses A or C, `interact` is left unbound and the Controls editor flags it, rather than clashing silently.
+- **Input:** `ArpgInput.interact` is a one-shot, queued like `potion`.
+- **Engine:**
+  - `interactTick` finds the nearest unused interactable within `ai.interactRadius` and emits `interactPrompt { id, kind, text }` while one is in range;
+  - an interact press acts on it.
 
-**Treasure vault:** a chest. Interact to open it; it bursts `drops.vault` (flux, higher-tier shards, sometimes an essence; scaled by depth and the door). A vault may hold a guard pack (`vaultGuardChance`).
+**Treasure vault (chest):**
+- Opening it bursts `drops.vault`: flux, higher-tier shards, sometimes an essence, scaled by depth and the door; no gear.
+- Its id goes into `DiveState.used`, so a replay finds it open.
+- A vault may hold a guard pack (`layout.vaultGuardChance`).
 
-**Elite den:** 1–2 elite-led packs, `drops.den.gearBonus` added to the elite gear chance; it seals while you fight.
+**Elite den:** 1–2 elite-led packs. `drops.den.gearBonus` is added to their elite gear chance, guarded by `dropsGiven` like any gear. It seals.
 
-**Shrine:**
-- Interact and hold for `shrineChannel` (0.5 s) to take its buff, drawn from `shrines.json` when the floor generates.
-- Buffs include damage +x% for the floor, regen, Find +x for the floor, a potion refilled, or mana.
-- Its name and effect show in the prompt before use. One use.
-- Floor buffs live on `HeroEntity.floorBuffs` and appear in the HUD's buff row.
+**Shrine (sanctum room):**
+- **Using it:** hold interact for `ai.shrineChannel` (0.5 s); moving, dodging or taking damage cancels.
+- **Buff:** drawn from `shrines.json` at generation, on `layout`. Its name and effect show in the prompt.
+- **Applying it:** `applyShrine(world, profile, shrine)`.
+  - Floor buffs go on `HeroEntity.floorBuffs`, as knob deltas merged by `computeHeroStats` through its existing extras: damage %, regen, mana regen.
+  - Find is added to `world.loot.find`.
+  - A potion refill sets `hero.potions` to the max.
+  - Dive buffs go to `DiveState.diveBuffs` and are applied when each floor's world is built.
+- **One use per dive** (`DiveState.used`).
 
 **Anvil alcove:**
-- Interact to open the stop's power-up picker: 2–3 offers from `stopKinds`, rolled on `alcove:<depth>`, taken with `takeStop`'s lock lifted for that one op.
-- The arena pauses while it's open. One use.
+- **Opening it** emits `alcoveOpen { offers }`.
+- **Offers:** 2–3, from `stopKinds`, rolled on `alcove:<depth>:<roomId>` and stored on the interactable.
+- **Taking one:** `takeAlcove(registry, profile, world, action)` (`delve/stops.ts`).
+  - Valid while the dive is `'fighting'`.
+  - It banks the world first, then runs the op with the lock lifted, like `takeStop`. Payment comes from `dive.banked` and `dive.haul`, then the stockpile.
+  - It marks the alcove used and calls `refreshWorldHero`.
+- **Pausing:** the client pauses the arena while the dialog is open; the bot calls `takeAlcove` directly.
+- **One use per dive.**
 
 **Exit gate:**
-- Interact, then confirm ("Leave the floor? n rooms unexplored"). The floor ends: `completeFloor` → the stop.
-- On a boss floor the gate stays closed until the boss is dead.
-- `cleared` now means the gate was used.
-- The floor's `clearFloor` quest event fires then, with `noPotion` / `noDamage` over the whole floor.
+- An interact on the gate emits `exitRequest { roomsUnexplored }`.
+- **The client** pauses and confirms ("Leave the floor? n rooms unexplored"), then calls `exitFloor(world)`. **The bot** calls `exitFloor` directly.
+- `exitFloor` sets `world.exited`; `checkEnd` (client) and `playFloor` (autopilot) end the floor on it → `completeFloor` → the stop.
+- On a boss floor the gate is closed until the boss is dead.
 - Monsters left alive stay behind.
+- **For generated floors,** `world.cleared` is replaced by `world.exited`. The `cleared` event and `world.cleared` remain for the open layout.
+- `clearFloor` fires on exit with `roomsCleared`; `noPotion` / `noDamage` cover the whole floor.
 
-**Quests:** kill and boss events are unchanged. `clearFloor` fires on the exit. New objective types (e.g. "open vaults") are out of scope but cheap to add.
+**Quests:**
+- Kill and boss events are unchanged.
+- The contract templates and Untouchable gain `minRoomsCleared` (S3).
+
+**HUD count:** "Rooms explored n / m" counts revealed rooms.
 
 ## Fog of war and the minimap
 
-**Fog:**
-- `ArpgWorld.fog: Uint8Array` (0 unseen, 1 seen, 2 visible now), updated at `fogEvery` (0.1 s).
-- Cells within `sightRadius` with line of sight from the hero become visible.
-- Entering a room reveals the whole room (`Room.revealed`).
-- **Exit hint:** if the exit room isn't revealed after `exitHintSeconds` (60), the minimap shows a compass arrow toward it.
+**Fog:** `ArpgWorld.fog: Uint8Array` (0 unseen, 1 seen, 2 visible now) and `fogVersion`.
+- **Update:** `fogTick` runs when `world.t` passes the next `ai.fogEvery` (0.1 s) mark. Cells within `ai.sightRadius` with LOS from the hero become visible, and entering a room reveals it whole.
+- **Open layout:** fully visible.
 
-**`HudMap`** carries:
-- the revealed cells (or a revealed-room list plus hall cells);
-- room outlines and icons for revealed special rooms (chest, shrine, anvil, a skull for a den, the gate);
-- the exit (once revealed) and the hint arrow;
-- foes only where currently visible, and drops in revealed cells.
+**Exit hint:** if the exit room isn't revealed after `ai.exitHintSeconds` (60), an `exitHint` event fires and the minimap shows a compass arrow toward it.
 
-The floor panel shows "Rooms n / m" in place of "foes left".
+**`hudMapOf(world)`** (engine, pure) builds:
+- the revealed room outlines and their icons (chest, shrine, anvil, a skull for a den, the gate);
+- the exit and hint;
+- foes where currently visible, and drops in revealed cells;
+- `fogVersion`.
+
+The client redraws the minimap's fog layer only when `fogVersion` changes; the fog bytes are read from the world, not copied into every snapshot.
 
 ## Rendering (the client)
 
 **Pixel floor** (`features/delve/arena/pixel/`):
-- Generated from the `FloorMap`:
+- **Generated from the `FloorMap`:**
   - walls become the biome's cliffs or stone;
   - halls become worn paths;
-  - rooms get biome dressing (rivers and pools through rooms, foliage, stone plazas in arenas, pillars as rock).
-- Seeded from the **floor seed** (today: depth × 7919 + biome, so floors repeat).
-- **Simulates only active chunks** near the view (chunked grid, far chunks asleep), so cost doesn't grow with map area. It still runs in the worker.
+  - rooms get biome dressing: rivers and pools through rooms, foliage, stone plazas in arenas, pillars as rock.
+- **Seeded** from the **floor seed**.
+- **Simulates only active chunks** near the view; far chunks sleep, so cost doesn't grow with map area.
 
-**Doors** are pixel frames that close and glow while sealed.
+**Doors:** pixel frames that close and glow while sealed.
 
-**Props** (code sprites in `packages/pixel-forge`, built into the atlas): `chest` (closed and open), `shrine` (lit and spent), `alcove_anvil`, `exit_gate` (closed and open).
+**Props** (code sprites in `packages/pixel-forge`):
+- `chest` (closed and open), `shrine` (lit and spent), `alcove_anvil`, `exit_gate` (closed and open).
+- `sprite-atlas.test.ts` gets a props size rule: 16 px per unit of the prop's `size` in `layouts.json → props`.
 
-**Fog layer:** a stepped darkness overlay on the ground layer (unseen black, seen-not-visible dimmed). Foes are drawn only where visible.
+**Overlays:**
+- **Fog layer:** a stepped darkness overlay (unseen black, seen-not-visible dimmed). Foes are drawn only where visible.
+- **Interact plaques:** they use the device's glyph (e.g. "C Open", "A Pray").
 
-**Interact plaques** use the device's glyph (e.g. "C Open", "A Pray").
-
-**Exit confirm** is a small kit dialog. **The alcove picker** reuses `StopPanel`'s cards in a kit dialog.
+**Dialogs:** the exit confirm is a kit dialog, and the alcove dialog reuses `StopPanel`'s cards.
 
 **Camera:** the same zoom, clamped to the map's bounds.
 
@@ -147,69 +235,90 @@ The floor panel shows "Rooms n / m" in place of "foes left".
 
 ## Data and tuning
 
-- **`balance.json → delve.layout`:** `maxSize`, `rooms { base, perDepth, max }`, `hallWidth`, `loops`, `kindWeights` by depth band, `alcoveMax`, `vaultGuardChance`, `pillarChance`, `minPackDistance`, `packsPerRoom`.
-- **`balance.json → delve.ai`:** `aggroRadius` (moved), `flowEvery`, `flowRadius`, `leashRadius`, `leashSeconds`, `roomVacuum`, `sightRadius`, `fogEvery`, `exitHintSeconds`, `interactRadius`, `shrineChannel`.
-- **`balance.json → delve.drops`:** `vault` (a drop entry table like the elite's), `den { gearBonus }`.
-- **`src/data/layouts.json`** (new, `LayoutsDataSchema`): room templates per biome (sizes, pillar and rubble masks).
-- **`src/data/shrines.json`** (new, `ShrinesDataSchema`): shrine buffs (id, name, text, effect knobs, duration `floor | dive`, weight).
-- Every number is data; the registry checks cross-file references (biomes, stop kinds).
+- **`balance.json → delve.layout`:**
+  - the grid: `coarseCell`, `coarseCols`, `coarseRows`, `rooms { base, perDepth, max }`, `hallWidth`, `minWall`, `loops`;
+  - room kinds: `kindWeights` by depth band, `alcoveMax`, `deadEndWeight`, `minCombatRooms`, `vaultGuardChance`;
+  - placement: `pillarChance`, `minPackDistance` (moved from `arena`), `packsPerRoom`;
+  - `minRoomsCleared` (for flag contracts).
+- **`balance.json → delve.ai`:** `flowEvery`, `flowRadius`, `directRange`, `leashRadius`, `leashSeconds`, `sealGrace`, `roomVacuum`, `sightRadius`, `fogEvery`, `exitHintSeconds`, `interactRadius`, `shrineChannel`. `monster.aggroRadius` stays where it is.
+- **`balance.json → delve.drops`:** `vault` (a drop entry table without gear), `den { gearBonus }`.
+- **`src/data/layouts.json`** (`LayoutsDataSchema`): room templates per biome (sizes, pillar and rubble masks), the boss template, `props` sizes.
+- **`src/data/shrines.json`** (`ShrinesDataSchema`): id, name, text, effect knobs, duration `floor | dive`, weight.
+- **Pacing data:** `maxFloorSeconds` (autopilot) rises to 420.
 
 ## The autopilot and pacing
 
 **The bot** (`arpg/bot.ts`, `delve/autopilot.ts`):
-- **Movement:** it moves by flow field, toward its target (the nearest visible or reachable awake foe), loot, an interactable, or the exit.
+- **Movement:** it moves by flow field toward its target: the nearest visible or reachable awake foe, loot, an interactable, or the exit.
 - **Policies:**
-  - **thorough** (the default): it visits rooms in order of path distance, clears combat rooms and dens, opens vaults, uses shrines and alcoves, then takes the exit;
-  - **beeline**: it heads for the exit, fighting only what blocks it.
+  - **thorough** (default): visit rooms by path distance; clear combat rooms and dens; open vaults; use sanctums and alcoves (`takeAlcove`); then `exitFloor`;
+  - **beeline:** head for the exit, fighting what blocks it.
 
-**The pacing rails** (`tests/delve-pacing.test.ts`):
-- The "8–60 s per floor" band becomes **beeline 45–90 s and full clear 120–180 s** (averages; data in the test).
-- The depth targets are re-measured with the thorough policy.
-- A beeline run checks rushing is viable (it reaches at least `x` % of the thorough run's depth).
-- The economy (materials per floor, vault payouts, room counts) is tuned with the Economy view so the crafting and quest targets still hold.
+**The pacing rails:**
+- **Floor-time bands:** beeline averages 45–90 s, full clear 120–180 s (in the test).
+- **Re-measured:** the depth targets and the seeds pinned in tests (delve-banking's "seed 8 drops gear" and E2E D02; the bank-timing loop, now ending on `exited`).
+- **Rushing:** a beeline run must reach at least `x` % of the thorough run's depth.
+- **Runtime:** the suites' sim time rises; budget it, cutting seeds or dives where the rails allow.
+- **Economy:** materials per floor, vault payouts and room counts are tuned with the Economy view, so the crafting and quest targets still hold.
 
 ## Testing
 
 - **Generator:**
   - every room is reachable from the start, and the exit is reachable;
-  - room counts, sizes and kinds stay in range per depth;
-  - sealed rooms have doors;
-  - no spawn or interactable sits in a wall;
-  - the same seed gives the same map;
-  - existing streams are unchanged (a floor's monsters roll the same as before, given the same pack count).
+  - counts, sizes and kinds stay in range per depth;
+  - packs fit (overflow rules) and boss floors are laid out right;
+  - sealed rooms have doors, and walls are at least 2 thick;
+  - nothing spawns or sits inside a wall;
+  - the same seed gives the same map.
 - **Grid physics:**
-  - `moveCircle` slides along walls and never ends inside one;
-  - every mover respects walls;
-  - `lineOfSight` blocks shots, beams, area hits and chains;
-  - flow-field pathing goes around walls; leashing and healing work;
-  - sealing and unsealing work;
+  - `moveCircle` slides along walls, never tunnels, and never ends inside a wall;
+  - every listed mover and hit site respects walls and LOS;
+  - Blink stops before walls, and aim points are clipped;
+  - melee doesn't reach through walls;
+  - flow-field pathing works for both clearance classes;
+  - leash, heal and sleep work;
+  - sealing works, including monsters outside and doors with someone in them;
   - the room vacuum works.
-- **Interactions:** the vault's drops, shrine buffs (floor-scoped), the alcove's one op, and the exit (confirm, boss gate, `clearFloor` flags, monsters left behind).
-- **Fog:** reveal by sight and by room; the exit hint timing.
-- **The 31 fixture-based test files** run on `openRoom` unchanged.
-- **Determinism:** a seeded floor reproduces exactly; bank-timing invariance still holds.
+- **Interactions:**
+  - the vault's drops, and its replay (still open);
+  - shrine buffs (floor and dive) and the channel cancel;
+  - the alcove's one op, and its replay (still used);
+  - the exit (request, `exitFloor`, the boss gate, `clearFloor` with `roomsCleared`, monsters left behind).
+- **Fog:** reveal by sight and by room; `fogVersion`; the exit hint.
+- **The open layout:** the fixture suites run on `openRoom` with `cleared` semantics unchanged.
+- **Determinism:**
+  - a seeded generated floor reproduces exactly;
+  - bank-timing invariance holds on generated floors;
+  - flow and fog run on `world.t` marks, not on frames.
 - **Client:**
   - the minimap from fog and icons;
   - plaques and prompts per device;
   - the exit confirm and the alcove dialog;
-  - fog rendering;
-  - the pixel floor built from a map (a map-to-cells test);
+  - the fog layer;
+  - the pixel floor built from a map;
   - the camera clamp.
-- **E2E:** a dive plays floors with the autopilot (longer per-floor timeouts); a test opens a vault and takes the exit; the responsive probes cover the new dialogs.
+- **E2E:**
+  - dives with the autopilot, with longer per-floor timeouts;
+  - opening a vault and taking the exit;
+  - the responsive probes cover the dialogs.
 
 ## Phases and parallel areas
 
 | Phase | Area | Owns |
 |---|---|---|
-| **A · Contract** | One area | <ul><li>`types/floor-map.ts`;</li><li>the data blocks and schemas (`delve.layout`, `delve.ai`, `drops.vault` / `den`, `layouts.json`, `shrines.json` with starter content);</li><li>`ArpgWorld.map` and `fog`;</li><li>`openRoom`;</li><li>**`moveCircle` and `lineOfSight` implemented** and swapped in for every rectangle clamp (behaviour unchanged on `openRoom`; the suites stay green);</li><li>`createFloorWorld` building `openRoom` until B1;</li><li>typed stubs for `generateFloor`, `flowField`, and the interaction and fog functions;</li><li>the `interact` control action;</li><li>`HudMap` fields.</li></ul> |
-| **B · Engine** (B1, B2, B3 in parallel; B4 after) | **B1** generator | `arpg/layout/*` (`generateFloor`, templates, kinds, pack and interactable placement); `createFloorWorld` switched to it for dives |
-| | **B2** physics and AI | Line of sight at every hit site (`impact.ts`, `forms.ts`, `targeting.ts`, projectiles in `step.ts`); `flowField` and monster pathing, aggro, leash; sealing; the spatial hash; the room vacuum |
-| | **B3** floor flow | Interactions (`arpg/interact.ts`: chest, shrine and floor buffs, alcove via `takeStop`, the exit gate); `cleared` = the gate; `completeFloor` and quest `clearFloor`; fog (`arpg/fog.ts`); `HudMap` building in the snapshot |
-| | **B4** bot and pacing (after B1–B3) | `arpg/bot.ts` flow-field movement and both policies; `delve/autopilot.ts`; the pacing rails and economy tuning |
-| **C · Client** (parallel, after A; real maps after B) | **C1** rendering | The pixel floor from `FloorMap` (chunked sim, floor-seeded); walls and doors; the fog layer; the camera clamp |
-| | **C2** HUD and dialogs | The minimap from fog and icons; "Rooms n / m"; interact plaques and prompts; the exit confirm; the alcove dialog; shrine buffs in the buff row; the exit hint |
-| | **C3** props | `chest`, `shrine`, `alcove_anvil`, `exit_gate` code sprites (pixel-forge → atlas; `sprite-atlas.test.ts`) |
+| **A · Contract** | One area | <ul><li>**Types:** `types/floor-map.ts`; new fields with initialisers on `ArpgWorld` (`map`, `fog`, `fogVersion`, `exited`, flow fields), `MonsterEntity.roomId`, `HeroEntity.floorBuffs`, `DiveState.used` / `diveBuffs` (save v10 + reset).</li><li>**Inputs and events:** `ArpgInput.interact`; the events (`interactPrompt`, `exitRequest`, `alcoveOpen`, `seal`, `unseal`, `roomCleared`, `exitHint`).</li><li>**Data:** all blocks and schemas with starter content.</li><li>**Grid core, implemented:** `arpg/grid.ts` (`moveCircle`, `lineOfSight`, walkable / snap helpers) and `openRoom` with `FloorOptions.layout` (default open). Every rectangle clamp is swapped for the grid helpers (behaviour identical on `openRoom`; suites green).</li><li>**Typed stubs** in their owners' files: `generateFloor`, `flowField`, `flowTick`, `leashTick`, `sealTick`, `fogTick`, `interactTick`, `applyShrine`, `takeAlcove`, `exitFloor`, `hudMapOf`. `tick()` calls the tick stubs (no-ops on open).</li><li>**Controls:** the `interact` action with the no-clash rule.</li></ul> |
+| **B · Engine** (B1, B2, B3 in parallel; B4 after) | **B1** generator | `arpg/layout/*`; `arpg/world.ts` (spawning per room, `roomId`, home fields, the generated path); `delve/dive.ts` `beginFloor` passing `'generated'` |
+| | **B2** physics and AI | LOS at every hit site (`impact.ts`, `forms.ts`, `targeting.ts`, `basic.ts`, `combat.ts nearby()` / mastery / Brand, projectiles and monster attacks in `step.ts`); `arpg/flow.ts` (`flowField`, `flowTick`, `leashTick`); monster movement in `step.ts`; `arpg/spatial.ts`; the room vacuum (`combat.ts` / `material-drops.ts` / `rune-drops.ts` flags) |
+| | **B3** floor flow | `arpg/interact.ts` (`interactTick`, chest, `applyShrine`, gate, `exitFloor`); `arpg/seal.ts` (`sealTick`); `arpg/fog.ts` (`fogTick`, `hudMapOf`); `delve/stops.ts` (`takeAlcove`); `delve/dive.ts` (`completeFloor` on exit, `clearFloor` with `roomsCleared`, `DiveState.used` / `diveBuffs`); the quest / contract `minRoomsCleared` |
+| | **B4** bot and pacing (after B1–B3) | `arpg/bot.ts` flow-field movement and both policies; `delve/autopilot.ts` (`playFloor` on `exited`, `maxFloorSeconds`); the pacing rails and pinned seeds; economy tuning |
+| **C · Client** (parallel, after A; real maps after B) | **C1** rendering | The pixel floor from `FloorMap` (chunked, floor-seeded); walls, doors and props drawing; the fog layer; the camera clamp (`ArenaRenderer.ts`, `pixel/*`) |
+| | **C2** HUD, dialogs, flow | The snapshot (`useArenaCore.ts`: `hudMapOf`, prompts); `useArena.ts` (`checkEnd` on `exited`, the exit and alcove flows, pausing); `DelveRun.tsx`; the minimap; "Rooms explored n / m"; interact plaques; the exit confirm; the alcove dialog; buffs in the buff row; the exit hint |
+| | **C3** props | `chest`, `shrine`, `alcove_anvil`, `exit_gate` code sprites (pixel-forge → atlas; the props size rule in `sprite-atlas.test.ts`) |
 | **D · Balance, E2E, docs** | One area | Pacing and economy tuning with the Economy view; E2E; CLAUDE.md; bump **v0.60.0** |
+
+**Shared files:**
+- B1 owns `world.ts` and B2 owns `step.ts`'s movement and attack code; B3 touches neither (its ticks live in its own files, called from Phase A's `tick()` hooks).
+- B2 and B3 both need `combat.ts` `killMonster`. B2 owns the file; B3's room-clear hook is a Phase A stub (`onMonsterKilled(world, m)` in `arpg/interact.ts`) that `killMonster` already calls.
 
 ## Out of scope
 
@@ -218,4 +327,4 @@ The floor panel shows "Rooms n / m" in place of "foes left".
 - Keys and locked doors.
 - New objective types for vaults or shrines.
 - Bosses' new attack patterns (a separate feature).
-- Saving a floor's state across a reload beyond what's saved today (a reload replays the floor from its seed).
+- Saving a floor's mid-fight state across a reload (a reload replays the floor; used interactables and given gear stay used, S1).
