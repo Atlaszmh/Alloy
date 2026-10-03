@@ -21,7 +21,7 @@ import {
   stackIntensity,
   type SimCtx,
 } from './combat.js';
-import { clampLen, dirTo, dist } from './geometry.js';
+import { clamp, clampLen, dirTo, dist } from './geometry.js';
 import { clipSight, isWalkable, moveCircle, sees, shift, snapToWalkable } from './grid.js';
 import {
   canAfford,
@@ -43,7 +43,7 @@ import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
-import { flowTick, leashTick } from './flow.js';
+import { clearanceOf, downhill, flowTick, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
@@ -475,10 +475,12 @@ function zonesTick(ctx: SimCtx): void {
           element: z.element,
           infusion: null,
         });
+        // The slam reaches only what it sees.
         const o = perfectOrigin(ctx);
-        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius)
+        if (dist(h.x, h.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, h))
           hurtHero(ctx, z.damage, z.element, null);
-        else if (o && dist(o.x, o.y, z.x, z.y) <= z.radius + h.radius) notePerfect(ctx);
+        else if (o && dist(o.x, o.y, z.x, z.y) <= z.radius + h.radius && sees(world.map, z, o))
+          notePerfect(ctx);
       }
       continue;
     }
@@ -530,6 +532,36 @@ function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
 function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
   if (isRooted(ctx, m)) return;
   shift(ctx.world.map, m, m.radius, dir.x * speed * dt, dir.y * speed * dt);
+  keepInRoom(ctx, m);
+}
+
+/** A boss never leaves its room (see the floor maps spec); the open room's has none. */
+function keepInRoom(ctx: SimCtx, m: MonsterEntity): void {
+  if (m.kind !== 'boss' || m.roomId === null) return;
+  const rect = ctx.world.map.rooms.find((r) => r.id === m.roomId)?.rect;
+  if (!rect) return;
+  m.x = clamp(m.x, rect.x + m.radius, rect.x + rect.w - m.radius);
+  m.y = clamp(m.y, rect.y + m.radius, rect.y + rect.h - m.radius);
+}
+
+/**
+ * Go after the hero (see the floor maps spec): straight at it (`toTarget`) in
+ * the open room or when `direct`, else down the foe's clearance class's flow
+ * field; beyond the field it holds its place.
+ */
+function pursue(
+  ctx: SimCtx,
+  m: MonsterEntity,
+  toTarget: Vec,
+  direct: boolean,
+  speed: number,
+  dt: number,
+): void {
+  const { world } = ctx;
+  if (world.map.open || direct) return moveMonster(ctx, m, toTarget, speed, dt);
+  const field = clearanceOf(m) === 'large' ? world.flow.large : world.flow.small;
+  const way = field && downhill(world.map, field, m, world.hero);
+  if (way) moveMonster(ctx, m, way, speed, dt);
 }
 
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
@@ -589,8 +621,13 @@ function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
           depth: world.depth,
           door: world.door,
           element: world.element,
-          ...snapToWalkable(world.map, m.x + (i === 0 ? -1.8 : 1.8), m.y + 1.2, 1),
+          ...clipSight(
+            world.map,
+            m,
+            snapToWalkable(world.map, m.x + (i === 0 ? -1.8 : 1.8), m.y + 1.2, 1),
+          ),
           packId: m.packId,
+          roomId: m.roomId,
         },
         world.rng,
       );
@@ -637,6 +674,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     if (m.kbx !== 0 || m.kby !== 0) {
       shift(world.map, m, m.radius, m.kbx * dt, m.kby * dt);
+      keepInRoom(ctx, m);
       const decay = Math.exp(-10 * dt);
       m.kbx = Math.abs(m.kbx * decay) < 0.05 ? 0 : m.kbx * decay;
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
@@ -645,8 +683,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
     // A training dummy keeps its statuses and its knockback, but never acts.
     if (m.dummy) continue;
 
+    // A foe wakes when it sees the hero near (or is hit), and its pack with it.
     if (!m.aggro) {
-      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius) {
+      if (dist(m.x, m.y, h.x, h.y) < bal.monster.aggroRadius && sees(world.map, m, h)) {
         for (const o of world.monsters) {
           if (!o.dead && !o.aggro && o.packId === m.packId) {
             o.aggro = true;
@@ -660,6 +699,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
     const gap = dist(m.x, m.y, h.x, h.y) - m.radius - h.radius;
     const toTarget = dirTo(m.x, m.y, h.x, h.y);
+    // It attacks only what it sees; with sight in `ai.directRange` it steers straight at it.
+    const seen = sees(world.map, m, h);
+    const near = seen && dist(m.x, m.y, h.x, h.y) <= bal.ai.directRange;
     const chill = Math.min(bal.stacks.frostSlowCap, s.stacks.frost * bal.stacks.frostSlowPerStack);
     const speed = m.speed * (1 - chill);
 
@@ -685,7 +727,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7.5) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > 7.5 || !seen) pursue(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.75;
@@ -698,6 +740,8 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           if (world.t >= m.windupUntil) {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
+            // It fires only with sight.
+            if (!seen) break;
             spawnProjectile(ctx, {
               owner: 'monster',
               form: null,
@@ -719,9 +763,9 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           }
           break;
         }
-        if (gap > 7) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > 7 || !seen) pursue(ctx, m, toTarget, seen, speed, dt);
         else if (gap < 3.5) moveMonster(ctx, m, toTarget, -speed * 0.7, dt);
-        if (gap <= 8 && world.t >= m.nextAttackAt) {
+        if (seen && gap <= 8 && world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + 0.5;
         }
@@ -732,12 +776,12 @@ function monstersTick(ctx: SimCtx, dt: number): void {
           if (world.t >= m.windupUntil) {
             m.windupUntil = 0;
             m.nextAttackAt = world.t + m.attackInterval;
-            if (gap <= m.attackRange + 0.5) damageHero(ctx, m, m.damage, true);
+            if (gap <= m.attackRange + 0.5 && seen) damageHero(ctx, m, m.damage, true);
             else if (gapFromDodge(ctx, m) <= m.attackRange + 0.5) notePerfect(ctx);
           }
           break;
         }
-        if (gap > m.attackRange) moveMonster(ctx, m, toTarget, speed, dt);
+        if (gap > m.attackRange || !seen) pursue(ctx, m, toTarget, near, speed, dt);
         else if (world.t >= m.nextAttackAt) {
           m.windupStart = world.t;
           m.windupUntil = world.t + bal.monster.windup * (m.kind === 'boss' ? 1.5 : 1);
