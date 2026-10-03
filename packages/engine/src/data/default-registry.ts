@@ -14,5 +14,6 @@ export function createDefaultRegistry(): DataRegistry {
     data.delve,
     data.arpg,
     data.crafting,
+    data.quests,
   );
 }

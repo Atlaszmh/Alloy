@@ -4,6 +4,13 @@ import { CHAIN_SKILLS, MAX_CHAIN, type MoveKind } from '../types/ability.js';
 import { RARITY_ORDER } from '../types/gem.js';
 import { MAX_SOCKETS, RUNE_FAMILIES, RUNE_TIERS } from '../types/rune.js';
 import { AFFIX_FAMILIES, FLUX_GRADES, METAL_IDS } from '../types/crafting.js';
+import {
+  OBJECTIVE_RULES,
+  OBJECTIVE_TYPES,
+  REWARD_KINDS,
+  type ObjectiveType,
+  type Reward,
+} from '../types/quests.js';
 
 // --- Shared Schemas ---
 
@@ -640,6 +647,173 @@ export const CraftingDataSchema = z.object({
     flux: z.record(FluxGradeSchema, z.number().int().min(0)),
     scrap: z.number().int().min(0),
   }),
+});
+
+// --- Quests (quests.json, balance.json → delve.quests; see the quests spec) ---
+
+const ObjectiveTypeSchema = z.enum(OBJECTIVE_TYPES);
+const ObjectiveScopeSchema = z.enum(['total', 'dive']);
+
+function perTier<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({ easy: schema, normal: schema, hard: schema });
+}
+
+/** Only the filter fields its type takes, and no `dive` scope on an Anvil-only type. */
+function objectiveProblem(o: { type: ObjectiveType; filter?: object; scope: string }) {
+  const rule = OBJECTIVE_RULES[o.type];
+  const bad = Object.keys(o.filter ?? {}).filter(
+    (k) => !(rule.filters as readonly string[]).includes(k),
+  );
+  if (bad.length > 0) return `a ${o.type} objective takes no ${bad.join(', ')} filter`;
+  if (o.scope === 'dive' && rule.anvilOnly)
+    return `a ${o.type} objective can't be scoped to a dive`;
+  return null;
+}
+
+export const ObjectiveSchema = z
+  .object({
+    id: z.string().min(1),
+    type: ObjectiveTypeSchema,
+    filter: z
+      .object({
+        kind: z.enum(['normal', 'elite']),
+        biome: z.string(),
+        element: ManaTypeSchema,
+        noPotion: z.boolean(),
+        noDamage: z.boolean(),
+        minDepth: z.number().int().min(1),
+        reaction: ReactionIdSchema,
+        pair: z.literal(true),
+        minRarity: RaritySchema,
+        legendary: z.boolean(),
+      })
+      .partial()
+      .strict()
+      .refine((f) => !(f.reaction && f.pair), 'a reaction or the pair, not both')
+      .optional(),
+    count: z.number().int().min(1),
+    scope: ObjectiveScopeSchema,
+    text: z.string().min(1),
+  })
+  .superRefine((o, ctx) => {
+    const problem = objectiveProblem(o);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  });
+
+/** What a reward of each kind must name, and nothing else (see `Reward`). */
+function rewardProblem(r: Reward): string | null {
+  const named = (['id', 'grade', 'family', 'tier', 'fallback'] as const).filter(
+    (k) => r[k] !== undefined,
+  );
+  const names = (...keys: string[]) => named.join() === keys.join();
+  switch (r.kind) {
+    case 'scrap':
+    case 'dust':
+    case 'links':
+      return names() ? null : `a ${r.kind} reward names only its count`;
+    case 'metal':
+      return names('id') && (r.id === 'depth' || (METAL_IDS as readonly string[]).includes(r.id!))
+        ? null
+        : "a metal reward's id is a metal or 'depth'";
+    case 'flux':
+      return names('grade') ? null : 'a flux reward names its grade';
+    case 'shard':
+      return names('family', 'tier') ? null : 'a shard reward names its family and tier';
+    case 'essence':
+      return names('id') ? null : "an essence reward's id is a legendary or 'fit'";
+    case 'pattern':
+      return names(...(r.id === 'unknown' ? ['id', 'fallback'] : ['id']))
+        ? null
+        : "a pattern reward's id is a base, or 'unknown' with a fallback";
+  }
+}
+
+export const RewardSchema: z.ZodType<Reward> = z.lazy(() =>
+  z
+    .object({
+      kind: z.enum(REWARD_KINDS),
+      id: z.string().optional(),
+      grade: FluxGradeSchema.optional(),
+      family: AffixFamilySchema.optional(),
+      tier: z.number().int().min(1).max(5).optional(),
+      count: z.number().int().min(1),
+      fallback: RewardSchema.optional(),
+    })
+    .strict()
+    .superRefine((r, ctx) => {
+      const problem = rewardProblem(r);
+      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+    }),
+);
+
+/** Ids differ. */
+const distinctIds = (xs: { id: string }[]) => new Set(xs.map((x) => x.id)).size === xs.length;
+
+const QuestDefSchema = z.object({
+  // `contract:<n>` ids are the board's.
+  id: z
+    .string()
+    .min(1)
+    .refine((id) => !id.startsWith('contract:'), "a quest's id never starts with contract:"),
+  kind: z.enum(['main', 'side']),
+  name: z.string().min(1),
+  chapter: z.string().optional(),
+  line: z.string().min(1),
+  unlock: z
+    .object({
+      after: z.string(),
+      bestDepth: z.number().int().min(1),
+      reactionsSeen: z.number().int().min(1),
+      patterns: z.number().int().min(1),
+      pair: z.literal(true),
+    })
+    .partial()
+    .strict()
+    .refine((u) => Object.keys(u).length > 0, 'an unlock names a condition')
+    .optional(),
+  objectives: z.array(ObjectiveSchema).min(1).max(3).refine(distinctIds, 'objective ids differ'),
+  rewards: z.array(RewardSchema).min(1),
+});
+
+const ContractTemplateSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    line: z.string().min(1),
+    type: ObjectiveTypeSchema,
+    filter: z
+      .object({
+        kind: z.enum(['normal', 'elite']),
+        biome: z.literal('reached'),
+        element: z.literal('reached'),
+        reaction: z.literal('known'),
+        minDepth: z.enum(['window', 'flag']),
+        minRarity: z.literal('owned'),
+        noPotion: z.literal(true),
+        noDamage: z.literal(true),
+      })
+      .partial()
+      .strict()
+      .optional(),
+    count: perTier(
+      z
+        .tuple([z.number().int().min(1), z.number().int().min(1)])
+        .refine(([lo, hi]) => lo <= hi, 'a count runs low to high'),
+    ),
+    scope: ObjectiveScopeSchema,
+    text: z.string().min(1),
+    rewards: perTier(z.array(RewardSchema).min(1)),
+  })
+  .superRefine((t, ctx) => {
+    const problem = objectiveProblem(t);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  });
+
+/** `quests.json`: shapes and ids (the registry checks its references into the other files: `questsDataProblems`). */
+export const QuestsDataSchema = z.object({
+  giver: z.object({ name: z.string().min(1), sprite: z.string().min(1) }),
+  quests: z.array(QuestDefSchema).refine(distinctIds, 'quest ids differ'),
+  contractTemplates: z.array(ContractTemplateSchema).refine(distinctIds, 'template ids differ'),
 });
 
 /** A count and a power (`split`, `extraShots`). */
