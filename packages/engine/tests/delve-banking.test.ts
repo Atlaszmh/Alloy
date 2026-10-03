@@ -14,7 +14,7 @@ import {
   startDive,
 } from '../src/delve/dive.js';
 import { takeStop } from '../src/delve/stops.js';
-import { botInput } from '../src/arpg/bot.js';
+import { botStep } from '../src/delve/autopilot.js';
 import { createDelveProfile, setAutoSalvage } from '../src/delve/profile.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { addHaul, addMaterial, addMaterials, emptyHaul } from '../src/loot/materials.js';
@@ -32,12 +32,16 @@ const SPLIT_I = { id: 'split', tier: 1 } as const;
 const diving = (seed = 5): DelveProfile =>
   startDive(registry, createDelveProfile(registry, seed), 1);
 
-/** Kill everything on the floor and let the loot vacuum in. */
+/** Kill everything on the floor and pick up what it dropped. */
 function clearFloor(world: ArpgWorld): void {
   const ctx = makeCtx(registry, world, []);
   for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
-  for (let i = 0; i < 150 && world.drops.length > 0; i++)
+  // Walls stop the vacuum on a generated floor: the hero goes to each drop in turn.
+  for (let i = 0; i < 150 && world.drops.length > 0; i++) {
+    const drop = world.drops.find((d) => !d.dead);
+    if (drop) Object.assign(world.hero, { x: drop.x, y: drop.y });
     stepWorld(registry, world, { move: { x: 0, y: 0 } }, 1 / 30);
+  }
 }
 
 describe('banking a floor', () => {
@@ -321,19 +325,18 @@ describe('the first boss, and when pickups bank', () => {
     const start = diving(seed);
     let p: DelveProfile = { ...start, dive: { ...start.dive!, depth } };
     const world = beginFloor(registry, p);
-    for (let i = 0; i < fps * 120 && !world.heroDead; i++) {
-      stepWorld(registry, world, botInput(registry, world), 1 / fps);
+    for (let i = 0; i < fps * 120 && !world.heroDead && !world.exited; i++) {
+      p = botStep(registry, p, world, 1 / fps);
       if (everyFrame) p = bankWorld(registry, p, world).profile;
-      if (world.cleared && world.drops.length === 0) break;
     }
-    return world.cleared
+    return world.exited
       ? completeFloor(registry, p, world).profile
       : failFloor(registry, p, world).profile;
   }
 
   it('when pickups bank never changes the outcome: every frame or only at the end, at 60 and 20 frames a second', () => {
     for (const [seed, depth] of [
-      [8, 1], // cleared, with two elites' gear
+      [61, 1], // taken to the exit, with two pieces of elites' gear
       [3, 5], // the first boss, which kills the starter hero: the floor's haul is lost
     ])
       for (const fps of [60, 20]) {
@@ -348,16 +351,16 @@ describe('the first boss, and when pickups bank', () => {
 });
 
 describe('the E2E dives', () => {
-  it("seed 8's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
-    const p = startDive(registry, createDelveProfile(registry, 8, { primary: 'fire' }), 1);
+  it("seed 39's first floor, played by the bot, drops gear at any frame rate (delve.spec.ts D02 relies on it)", () => {
+    const p = startDive(registry, createDelveProfile(registry, 39, { primary: 'fire' }), 1);
     for (const fps of [60, 45, 30, 20]) {
       const world = beginFloor(registry, p);
       const items: unknown[] = [];
-      for (let i = 0; i < fps * 120 && !world.heroDead && !world.cleared; i++) {
-        stepWorld(registry, world, botInput(registry, world), 1 / fps);
+      for (let i = 0, q = p; i < fps * 120 && !world.heroDead && !world.exited; i++) {
+        q = botStep(registry, q, world, 1 / fps);
         items.push(...world.drops.filter((d) => d.kind === 'item' && !items.includes(d)));
       }
-      expect(world.cleared).toBe(true);
+      expect(world.exited).toBe(true);
       expect(items.length).toBeGreaterThan(0);
     }
   });

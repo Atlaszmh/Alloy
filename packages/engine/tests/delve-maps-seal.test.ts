@@ -63,6 +63,16 @@ describe('a sealed room', () => {
     expect(w.monsters[1].x).toBeLessThanOrEqual(11 - w.monsters[1].radius);
   });
 
+  it("after ai.sealGrace, the den's own foe in the door goes inside, never shut out", () => {
+    const w = den(16, 'den', [dummy(12.5, 6, { roomId: null }), dummy(20, 8, { roomId: 1 })]);
+    run(w, STEP);
+    Object.assign(w.monsters[2], { x: 12.4, y: 6 }); // its centre outside the room's floor
+    run(w, bal.ai.sealGrace);
+    expect(w.map.rooms[1].sealed).toBe(true);
+    expect(w.monsters[1].x).toBeLessThanOrEqual(11 - w.monsters[1].radius);
+    expect(w.monsters[2].x).toBeGreaterThanOrEqual(13);
+  });
+
   it('a hero who walks out before it shuts ends the sealing, its door open', () => {
     const w = den(16, 'den', [dummy(12.5, 6, { roomId: null })]);
     run(w, STEP);

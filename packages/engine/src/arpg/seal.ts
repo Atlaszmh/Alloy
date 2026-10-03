@@ -109,7 +109,9 @@ export function sealTick(ctx: SimCtx): void {
     if (d.closed) continue;
     const standing = circles.filter((c) => inDoor(c, [d]));
     for (const c of standing) {
-      if (late) Object.assign(c, freeSpot(map, room, doors, c, inside(room.rect, c)));
+      // The room's own foes go inside, whichever side of the door they stand.
+      const own = c !== h && (c as { roomId?: number | null }).roomId === room.id;
+      if (late) Object.assign(c, freeSpot(map, room, doors, c, own || inside(room.rect, c)));
       else if (c === h) {
         const centre = { x: room.rect.x + room.rect.w / 2, y: room.rect.y + room.rect.h / 2 };
         const dir = dirTo(h.x, h.y, centre.x, centre.y);

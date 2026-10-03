@@ -230,7 +230,7 @@ export {
   RunePouchSchema,
   SLOT_FORMS,
 } from './delve/profile-schema.js';
-export { runAutopilot, takeBestStop } from './delve/autopilot.js';
+export { runAutopilot, takeBestAlcove, takeBestStop } from './delve/autopilot.js';
 export type { AutopilotOptions, AutopilotDiveReport } from './delve/autopilot.js';
 
 // ARPG arena simulation

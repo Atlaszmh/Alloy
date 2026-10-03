@@ -28,6 +28,15 @@ describe('the fog', () => {
     expect(w.fogVersion).toBe(1);
   });
 
+  it('a door that shuts while the hero stands still cuts the sight through it', () => {
+    const w = floorWorld(twoRooms('exit', { kind: 'gate' }));
+    run(w, STEP);
+    w.map.doors[1].closed = true;
+    run(w, bal.ai.fogEvery);
+    expect(fogAt(w, 13, 6)).toBe(1);
+    expect(w.fogVersion).toBe(2);
+  });
+
   it('entering a room reveals it whole; what fell out of sight stays seen', () => {
     const w = floorWorld(twoRooms('exit', { kind: 'gate' }));
     run(w, STEP);

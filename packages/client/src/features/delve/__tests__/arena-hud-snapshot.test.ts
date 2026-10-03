@@ -56,7 +56,9 @@ describe('arena HUD snapshot', () => {
     const armed = { ...p, equipped: { ...p.equipped, weapon: { ...weapon, moveset } } };
     const w = beginFloor(registry, startDive(registry, armed, 1));
     w.hero.nextAttackAt = 1e9;
-    stepWorld(registry, w, { move: still, cast: { slot: 0, aim: null } }, STEP);
+    // Aimed: the start room holds no foe for an auto-aimed Bolt.
+    const aim = { x: w.hero.x, y: w.hero.y - 3 };
+    stepWorld(registry, w, { move: still, cast: { slot: 0, aim } }, STEP);
     const wu = w.hero.windup!;
     expect(w.t).toBeLessThan(wu.conjureUntil);
     let hud = snapshot(w, null);

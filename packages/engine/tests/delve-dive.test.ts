@@ -45,12 +45,16 @@ function items(n: number, rarity: GearItem['rarity'] = 'magic', start = 500): Ge
   );
 }
 
-/** Kill everything on the floor and let the loot vacuum in. */
+/** Kill everything on the floor and pick up what it dropped. */
 function clearFloor(world: ArpgWorld): void {
   const ctx = makeCtx(registry, world, []);
   for (const m of [...world.monsters]) hitMonster(ctx, m, 1e12, null, { source: 'skill' });
-  for (let i = 0; i < 150 && world.drops.length > 0; i++)
+  // Walls stop the vacuum on a generated floor: the hero goes to each drop in turn.
+  for (let i = 0; i < 150 && world.drops.length > 0; i++) {
+    const drop = world.drops.find((d) => !d.dead);
+    if (drop) Object.assign(world.hero, { x: drop.x, y: drop.y });
     stepWorld(registry, world, { move: { x: 0, y: 0 } }, 1 / 30);
+  }
 }
 
 function clearDepth(p: DelveProfile): DelveProfile {
