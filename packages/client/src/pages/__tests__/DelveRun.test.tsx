@@ -189,7 +189,10 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Anvil' }));
     expect(screen.getByTestId('anvil')).toBeInTheDocument();
     expect(useDelveStore.getState().profile.dive).not.toBeNull();
+    // The floor restarts on the way back: what it picked up since the last bank banks first.
+    expect(seen.calls).toEqual(['flush']);
 
+    seen.calls.length = 0;
     cleanup();
     renderRun();
     fireEvent.click(screen.getByRole('button', { name: 'Dive menu' }));
