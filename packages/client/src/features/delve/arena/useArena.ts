@@ -56,16 +56,18 @@ export const BANK_EVERY = 0.08;
  * Whether the dive banks what `pending` holds now, `since` seconds after its last bank: an
  * item, a rune, a pattern, an essence or a reaction at once (a pattern is learned and an essence
  * seen as it comes); materials and scrap (the floor's haul, which the purse and the Found log show
- * as it grows) at most every `BANK_EVERY`, since each bank writes the save and re-renders the run.
- * Kills alone wait for the next. The floor's end, a death and an abandon bank whatever waits.
+ * as it grows) and quest events (a kill, a perfect dodge: the HUD tracker moves at each bank) at
+ * most every `BANK_EVERY`, since each bank writes the save and re-renders the run. A kill count
+ * alone waits for the next. The floor's end, a death, an abandon and the pause's Anvil bank
+ * whatever waits.
  */
 export function banksNow(pending: WorldPending, since: number): boolean {
-  const { items, reactions, runes, patterns, haul, scrap } = pending;
+  const { items, reactions, runes, patterns, haul, scrap, questEvents } = pending;
   if (items.length + reactions.length + runes.length + patterns.length > 0) return true;
   if (Object.keys(haul.essences).length > 0) return true;
   const some = (counts: readonly number[]) => counts.some((n) => n > 0);
   const held =
-    scrap + haul.dust + haul.links > 0 ||
+    scrap + haul.dust + haul.links + questEvents.length > 0 ||
     some(Object.values(haul.metals)) ||
     some(Object.values(haul.flux)) ||
     some(Object.values(haul.shards).flatMap((tiers) => tiers ?? []));
@@ -191,7 +193,10 @@ export function useArena(
     },
   };
   const core = useArenaCore(hostRef, mode, opts);
-  /** Bank whatever the floor under way picked up since the last bank (before an abandon settles it). */
+  /**
+   * Bank whatever the floor under way picked up since the last bank (before an abandon settles it,
+   * or the pause's Anvil restarts the floor).
+   */
   const flush = () => {
     const world = core.worldRef.current;
     const dive = useDelveStore.getState().profile.dive;
