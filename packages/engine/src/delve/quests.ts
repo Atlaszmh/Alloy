@@ -278,21 +278,50 @@ export function questStates(registry: DataRegistry, profile: DelveProfile): Ques
 }
 
 const CLAIM_AT_ANVIL = 'Claim at the Anvil, between dives';
+const NOT_DONE = 'Finish its objectives first';
 
 /**
  * Claim a completed, unclaimed quest or contract: its rewards into the
  * stockpile (`grantRewards`, `ProfileActionResult.rewards`); it leaves
- * `tracked`; a main quest's claim unlocks the next; a contract leaves the
- * board (`contractsClaimed` + 1, its id out of `seen`). Refused mid-dive. Stub
- * (B1) past the dive lock.
+ * `tracked`; a main quest's claim unlocks the next, which takes its tracked
+ * slot; a contract leaves the board (`contractsClaimed` + 1, its id out of
+ * `seen`). Then the state types are read again (a pattern reward). Refused
+ * mid-dive.
  */
 export function claimQuest(
-  _registry: DataRegistry,
+  registry: DataRegistry,
   profile: DelveProfile,
-  _questId: QuestId,
+  questId: QuestId,
 ): ProfileActionResult {
   if (isDiveActive(profile)) return { ok: false, profile, reason: CLAIM_AT_ANVIL };
-  throw new Error('claimQuest: not implemented');
+  const q = profile.quests;
+  const slot = q.board.findIndex((c) => c?.id === questId);
+  if (slot >= 0) {
+    const contract = q.board[slot]!;
+    if (!contract.progress.every((p) => p.done)) return { ok: false, profile, reason: NOT_DONE };
+    const r = grantRewards(registry, profile, questId, contract.rewards);
+    const left = withQuests(r.profile, {
+      board: r.profile.quests.board.map((c, i) => (i === slot ? null : c)),
+      contractsClaimed: r.profile.quests.contractsClaimed + 1,
+      tracked: without(r.profile.quests.tracked, questId),
+      seen: without(r.profile.quests.seen, questId),
+    });
+    return { ok: true, rewards: r.granted, profile: applyQuestEvents(registry, left, []) };
+  }
+  const def = questDef(registry, questId);
+  if (!def || !q.unlocked.includes(questId)) return { ok: false, profile, reason: 'No such quest' };
+  if (q.claimed.includes(questId)) return { ok: false, profile, reason: 'Already claimed' };
+  if (!def.objectives.every((_, i) => q.progress[questId]?.[i]?.done))
+    return { ok: false, profile, reason: NOT_DONE };
+  const r = grantRewards(registry, profile, questId, def.rewards);
+  const claimed = withQuests(r.profile, { claimed: [...r.profile.quests.claimed, questId] });
+  // The next main quest unlocks into this one's tracked slot; then this one leaves `tracked`.
+  const next = applyQuestEvents(registry, claimed, []);
+  return {
+    ok: true,
+    rewards: r.granted,
+    profile: withQuests(next, { tracked: without(next.quests.tracked, questId) }),
+  };
 }
 
 /**
