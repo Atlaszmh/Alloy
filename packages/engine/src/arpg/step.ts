@@ -43,6 +43,10 @@ import { basicHoldTick, burstShot, shotLands, startSwing, strike } from './basic
 import { cancelSwing, dropHold, pushesTick, swingStrikes } from './action.js';
 import { dodgeTick, isDashing, notePerfect, perfectOrigin, tryDodge } from './dodge.js';
 import { addMaterial } from '../loot/materials.js';
+import { flowTick, leashTick } from './flow.js';
+import { interactTick } from './interact.js';
+import { sealTick } from './seal.js';
+import { fogTick } from './fog.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -77,6 +81,7 @@ export function stepWorld(
     world.queuedAttack = { until: world.t + buffer, aim: input.attackAim ?? null };
   if (input.potion) world.queuedPotion = true;
   if (input.dodge) world.queuedDodge = true;
+  if (input.interact) world.queuedInteract = true;
   // Nothing is paid until a hold fires: dropping one costs nothing.
   if (input.cancelHold) dropHold(world);
   if (world.heroDead) return events;
@@ -111,19 +116,26 @@ function tick(ctx: SimCtx, input: ArpgInput, dt: number): void {
   world.t += dt;
   lapseStacks(world);
   heroTick(ctx, input, dt);
+  // The floor map's hooks (see the floor maps spec): each a no-op on the open room.
+  interactTick(ctx);
   projectilesTick(ctx, dt);
   zonesTick(ctx);
+  flowTick(ctx);
   monstersTick(ctx, dt);
+  leashTick(ctx);
   separate(ctx);
+  sealTick(ctx);
   dropsTick(ctx, dt);
+  fogTick(ctx);
 
   world.projectiles = world.projectiles.filter((p) => !p.dead);
   world.zones = world.zones.filter((z) => !z.dead);
   world.drops = world.drops.filter((d) => !d.dead);
   world.monsters = world.monsters.filter((m) => !m.dead);
 
-  // A Training Grounds world never clears (so it never ends).
-  if (!world.sandbox && !world.cleared && world.monsters.length === 0) {
+  // A Training Grounds world never clears (so it never ends); a generated floor ends at its exit
+  // (`exited`), so only the open room clears when its last foe dies.
+  if (!world.sandbox && world.map.open && !world.cleared && world.monsters.length === 0) {
     world.cleared = true;
     world.clearedAt = world.t;
     for (const d of world.drops) d.vacuum = true;

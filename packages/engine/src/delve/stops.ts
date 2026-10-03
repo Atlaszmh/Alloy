@@ -1,4 +1,5 @@
 import type { DataRegistry } from '../data/registry.js';
+import type { ArpgWorld } from '../types/arpg.js';
 import { carriedByText, movesetOf } from '../loot/moveset.js';
 import { upgradeCost } from '../loot/smithing.js';
 import { SeededRNG } from '../rng/seeded-rng.js';
@@ -253,4 +254,33 @@ export function takeStop(
   const spent = unpool(profile, res.profile, dive.banked);
   const taken = { ...dive, banked: spent.banked, stop: { ...stop, taken: true } };
   return { ...res, profile: { ...spent.profile, dive: taken } };
+}
+
+/**
+ * An anvil alcove's offers (see the floor maps spec): 2 or 3 of the kinds the
+ * hero can take and pay for (`stopKinds`), on `alcove:<depth>:<roomId>`, so a
+ * reopened alcove offers the same.
+ */
+export function alcoveOffers(
+  _registry: DataRegistry,
+  _profile: DelveProfile,
+  _world: ArpgWorld,
+  _id: string,
+): StopKind[] {
+  throw new Error('alcoveOffers: not implemented');
+}
+
+/**
+ * Take an alcove's one op mid-floor (while the dive is fighting): the world
+ * banked first, the op run with the dive lock lifted as `takeStop` runs it,
+ * paid from `banked` and the haul, then the stockpile; the alcove marked used
+ * and the hero refreshed (`worldStats`).
+ */
+export function takeAlcove(
+  _registry: DataRegistry,
+  _profile: DelveProfile,
+  _world: ArpgWorld,
+  _action: StopAction,
+): ProfileActionResult {
+  throw new Error('takeAlcove: not implemented');
 }

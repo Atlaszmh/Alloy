@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { beginFloor, startDive } from '../src/delve/dive.js';
 import { createDelveProfile } from '../src/delve/profile.js';
-import { arena, dummy, registry } from './fixtures/arena.js';
+import { stepWorld } from '../src/arpg/step.js';
+import * as engine from '../src/index.js';
+import { arena, dummy, registry, run } from './fixtures/arena.js';
 
 // The floor maps contract (see the floor maps spec's "Phases and parallel areas"):
 // the fields and hooks the areas fill exist from the start, and the open room plays as before.
@@ -32,5 +34,33 @@ describe('the world on a map', () => {
     expect(w.map.open).toBe(true);
     expect(w.monsters.length).toBeGreaterThan(0);
     expect(w.monsters.every((m) => m.roomId === null)).toBe(true);
+  });
+});
+
+describe('the inputs, the hooks and the stubs', () => {
+  it('an interact press waits for interactTick', () => {
+    const w = arena([dummy(13, 20)]);
+    stepWorld(registry, w, { move: { x: 0, y: 0 }, interact: true }, 0);
+    expect(w.queuedInteract).toBe(true);
+  });
+
+  it('the open room clears once its foes are dead; a generated floor waits for its exit', () => {
+    const open = arena();
+    const generated = arena();
+    generated.map = { ...generated.map, open: false };
+    run(open, 0.1);
+    run(generated, 0.1);
+    expect([open.cleared, generated.cleared]).toEqual([true, false]);
+  });
+
+  it("every area's op is exported", () => {
+    const ops = [
+      ...['openRoom', 'moveCircle', 'lineOfSight', 'isWalkable', 'snapToWalkable', 'blocked'],
+      ...['applyBuffs', 'worldStats', 'generateFloor', 'flowField', 'flowTick', 'leashTick'],
+      ...['sealTick', 'fogTick', 'hudMapOf', 'interactTick', 'applyShrine', 'exitFloor'],
+      ...['onMonsterKilled', 'alcoveOffers', 'takeAlcove'],
+    ];
+    for (const op of ops)
+      expect((engine as Record<string, unknown>)[op], op).toBeTypeOf('function');
   });
 });

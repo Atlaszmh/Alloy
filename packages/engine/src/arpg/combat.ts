@@ -25,6 +25,7 @@ import { chargeCap } from './abilities/resolve.js';
 import { notePerfect, refundDodgeCharge } from './dodge.js';
 import { dropRune } from './rune-drops.js';
 import { dropMaterials } from './material-drops.js';
+import { onMonsterKilled } from './interact.js';
 
 /** Everything a simulation step needs, threaded through the subsystems. */
 export interface SimCtx {
@@ -764,6 +765,8 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
       });
     }
   }
+  // Its room's hook, once everything the death drops is down (see the floor maps spec).
+  onMonsterKilled(ctx, m);
 }
 
 /** Items, a mana mote and health orbs burst from a dying foe. */

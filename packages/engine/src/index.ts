@@ -118,6 +118,7 @@ export {
   upgradeMultiplier,
   armorReduction,
   manaPool,
+  applyBuffs,
   hasMastery,
   isAttuneStat,
   basicIncome,
@@ -184,12 +185,20 @@ export {
   takesElements,
   legendaryNeeds,
 } from './delve/moveset.js';
-export { STOP_KINDS, stopKinds, rollStop, takeStop } from './delve/stops.js';
+export {
+  STOP_KINDS,
+  stopKinds,
+  rollStop,
+  takeStop,
+  alcoveOffers,
+  takeAlcove,
+} from './delve/stops.js';
 export type { StopAction } from './delve/stops.js';
 export type { ProfileActionResult, ParsedDelveProfile } from './delve/profile.js';
 export {
   inPair,
   profileStats,
+  worldStats,
   fixChainsToPair,
   chooseStartingMana,
   bindSecondary,
@@ -318,3 +327,11 @@ export * from './delve/quests.js';
 export * from './delve/rewards.js';
 export * from './delve/contracts.js';
 export { questsDataProblems } from './data/quests-check.js';
+
+// Floor maps (see the floor maps spec): every module whole, so the areas that build them never edit this file.
+export * from './arpg/grid.js';
+export * from './arpg/layout/generate.js';
+export * from './arpg/flow.js';
+export * from './arpg/interact.js';
+export * from './arpg/seal.js';
+export * from './arpg/fog.js';

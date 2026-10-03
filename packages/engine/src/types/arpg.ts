@@ -5,7 +5,7 @@ import type { ManaType } from './mana.js';
 import type { RuneDef, RuneRef } from './rune.js';
 import type { Haul, MaterialRef } from './crafting.js';
 import type { QuestEvent } from './quests.js';
-import type { Buff, FloorMap } from './floor-map.js';
+import type { Buff, FloorMap, InteractableKind } from './floor-map.js';
 import type {
   AbilityCast,
   AbilitySlot,
@@ -514,6 +514,8 @@ export interface ArpgInput {
   potion?: boolean;
   /** Dodge this step (the dash follows `move`, or runs from the nearest foe). */
   dodge?: boolean;
+  /** Use the interactable in reach: a chest, a shrine, an alcove, the gate (a press; see the floor maps spec). */
+  interact?: boolean;
   /**
    * Manual basic attacks: whether the attack is held (or was tapped) this
    * frame. Leave undefined for automatic basic attacks.
@@ -671,6 +673,18 @@ export type ArpgEvent =
       y: number;
       element: ManaType | null;
     }
+  /** An interactable in reach, each step one is: what a press does to it (see the floor maps spec). */
+  | { kind: 'interactPrompt'; id: string; interactable: InteractableKind; text: string }
+  /** The gate was used: the client confirms (`roomsUnexplored`), then `exitFloor`. */
+  | { kind: 'exitRequest'; roomsUnexplored: number }
+  /** An anvil alcove opened: the client (or the bot) offers `alcoveOffers`. */
+  | { kind: 'alcoveOpen'; id: string }
+  | { kind: 'seal'; roomId: number }
+  | { kind: 'unseal'; roomId: number }
+  /** A room's last foe died. */
+  | { kind: 'roomCleared'; roomId: number }
+  /** The exit unfound after `ai.exitHintSeconds`: the compass points at it. */
+  | { kind: 'exitHint'; x: number; y: number }
   | { kind: 'cleared' }
   | { kind: 'revive'; amount: number }
   | { kind: 'heroDeath' };
@@ -821,6 +835,8 @@ export interface ArpgWorld {
   queuedAttack: { until: number; aim: Vec | null } | null;
   queuedPotion: boolean;
   queuedDodge: boolean;
+  /** An interact press waiting for `interactTick`. */
+  queuedInteract: boolean;
   kills: number;
   bossKilled: boolean;
   /**
