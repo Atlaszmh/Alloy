@@ -8,6 +8,7 @@ import {
   makeCtx,
 } from '../src/arpg/combat.js';
 import { stepWorld } from '../src/arpg/step.js';
+import { forge, refine } from '../src/delve/crafting.js';
 import {
   bankWorld,
   beginFloor,
@@ -18,12 +19,18 @@ import {
   failFloor,
   startDive,
 } from '../src/delve/dive.js';
-import { createDelveProfile } from '../src/delve/profile.js';
+import { setChains } from '../src/delve/moveset.js';
+import { bindSecondary } from '../src/delve/pair.js';
+import { createDelveProfile, salvageItems } from '../src/delve/profile.js';
 import { applyQuestEvents } from '../src/delve/quests.js';
+import { openSocket } from '../src/delve/runes.js';
+import { generateItem } from '../src/loot/item-generator.js';
+import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgWorld } from '../src/types/arpg.js';
+import type { ForgeRequest } from '../src/types/crafting.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { QuestEvent } from '../src/types/quests.js';
-import { STEP, arena, dodge, dummy, registry, run } from './fixtures/arena.js';
+import { STEP, arena, chainsOf, dodge, dummy, registry, run } from './fixtures/arena.js';
 import { obj, quest, questRegistry, value } from './fixtures/quests.js';
 
 // Where quest events come from (see the quests spec's "Quest events (the engine)").
@@ -179,5 +186,61 @@ describe('quest events in a dive', () => {
     expect(value(p, 'dodges')).toBe(2);
     p = closeDive(reg, p);
     expect([value(p, 'dodges'), value(p, 'depth'), value(p, 'dodge')]).toEqual([0, 0, 1]);
+  });
+});
+
+describe('quest events at the Anvil', () => {
+  const reg = questRegistry([
+    quest('forged', [obj('forge', 99)]),
+    quest('fine', [obj('forge', 99, { filter: { minRarity: 'uncommon' } })]),
+    quest('legend', [obj('forge', 99, { filter: { legendary: true } })]),
+    quest('refined', [obj('refine', 99)]),
+    quest('bound', [obj('bind', 1)]),
+    quest('sockets', [obj('openSocket', 99)]),
+    quest('patterns', [obj('knowPatterns', 99)]),
+  ]);
+  const smith = () => ({
+    ...createDelveProfile(reg, 3, { primary: 'fire' }),
+    scrap: 9999,
+    links: 99,
+  });
+
+  it('a forge counts with its rarity, a refine each time', () => {
+    const req: ForgeRequest = {
+      baseId: 'sword',
+      metal: 'rusty',
+      flux: 'uncommon',
+      element: 'fire',
+      shards: [],
+    };
+    const res = forge(reg, smith(), req);
+    expect(res.item!.rarity).toBe('uncommon');
+    const p = refine(reg, res.profile, { kind: 'flux', grade: 'uncommon' }).profile;
+    expect(['forged', 'fine', 'legend', 'refined'].map((id) => value(p, id))).toEqual([1, 1, 0, 1]);
+  });
+
+  it('a bind counts at once', () => {
+    expect(value(bindSecondary(reg, smith(), 'frost').profile, 'bound')).toBe(1);
+  });
+
+  it("each socket an Apply opens counts once, openSocket's one too", () => {
+    const p = smith();
+    const basic = chainsOf(p).basic!;
+    const opened = setChains(reg, p, { basic: basic.map((b) => ({ ...b, runes: [null] })) });
+    expect(opened.ok).toBe(true);
+    expect(value(opened.profile, 'sockets')).toBe(basic.length);
+    expect(value(openSocket(reg, p, 'primary', 0).profile, 'sockets')).toBe(1);
+  });
+
+  it('a pattern learned by salvage counts at once', () => {
+    const axe = generateItem(
+      reg,
+      { uid: 'b0', ilvl: 1, rarity: 'common', slot: 'weapon', baseId: 'axe', mana: 'fire' },
+      new SeededRNG(1),
+    );
+    const p = smith();
+    const melted = salvageItems(reg, { ...p, bag: [axe] }, ['b0']).profile;
+    expect(melted.patterns).toContain('axe');
+    expect(value(melted, 'patterns')).toBe(p.patterns.length + 1);
   });
 });

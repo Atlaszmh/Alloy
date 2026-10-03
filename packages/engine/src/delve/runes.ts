@@ -43,6 +43,8 @@ export interface SetChainsOptions {
 }
 
 export interface RuneChange {
+  /** How many sockets it opens. */
+  opened: number;
   /** Sockets opened. */
   links: number;
   /** Sockets opened, and pulls in 'pay'. */
@@ -159,6 +161,7 @@ export function runeChange(
   const pay = unsocketMode(registry, opts.unsocket) === 'pay';
   const saved = movesetOf(registry, weapon).chains;
   const change: Omit<RuneChange, 'pouch'> = {
+    opened: 0,
     links: 0,
     scrap: 0,
     refundLinks: 0,
@@ -185,6 +188,7 @@ export function runeChange(
       next.forEach((r, i) => {
         if (i >= old.length) {
           const price = socketPrice(registry, i)!;
+          change.opened++;
           change.links += price.links;
           change.scrap += price.scrap;
           add(change.socketed, r);

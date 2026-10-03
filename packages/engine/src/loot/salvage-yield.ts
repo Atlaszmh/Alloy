@@ -5,6 +5,7 @@ import type { DelveProfile } from '../types/delve.js';
 import type { GearItem, HeroStatKey } from '../types/gear.js';
 import { isDiveActive } from '../delve/dive.js';
 import { salvageDust } from '../delve/pair.js';
+import { applyQuestEvents } from '../delve/quests.js';
 import { settleParts, type SetChainsOptions } from '../delve/runes.js';
 import { addHaul, addMaterial, emptyHaul, shardTiersOf, stockHaul } from './materials.js';
 import { extraSlots, weaponParts } from './moveset.js';
@@ -108,6 +109,8 @@ export function applySalvage(
   let learned = y.pattern ? { ...profile, patterns: [...profile.patterns, y.pattern] } : profile;
   if (y.essence && !learned.essencesSeen.includes(y.essence))
     learned = { ...learned, essencesSeen: [...learned.essencesSeen, y.essence] };
+  // A pattern learned is a quest state (`knowPatterns`): read it again.
+  if (y.pattern) learned = applyQuestEvents(registry, learned, []);
   const dive = profile.dive;
   return {
     profile:
