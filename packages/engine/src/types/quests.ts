@@ -50,6 +50,8 @@ export interface ObjectiveFilter {
   noDamage?: boolean;
   /** `clearFloor`, `extract`: at this depth or deeper. */
   minDepth?: number;
+  /** `clearFloor`: at least this many rooms cleared on a generated floor (see the floor maps spec's S3). */
+  minRoomsCleared?: number;
   /** `reaction`: this reaction. */
   reaction?: ReactionId;
   /** `reaction`: the hero's pair's reaction, resolved against `profile.pair` when the event applies. */
@@ -81,7 +83,7 @@ export const OBJECTIVE_RULES: Record<ObjectiveType, ObjectiveRule> = {
   reachDepth: { progress: 'max', filters: [], anvilOnly: false },
   clearFloor: {
     progress: 'sum',
-    filters: ['biome', 'noPotion', 'noDamage', 'minDepth'],
+    filters: ['biome', 'noPotion', 'noDamage', 'minDepth', 'minRoomsCleared'],
     anvilOnly: false,
   },
   extract: { progress: 'sum', filters: ['minDepth'], anvilOnly: false },
@@ -192,6 +194,8 @@ export interface ContractFilterRules {
   minRarity?: 'owned';
   noPotion?: true;
   noDamage?: true;
+  /** Copied as it is (see `ObjectiveFilter.minRoomsCleared`). */
+  minRoomsCleared?: number;
 }
 
 /** A contract template (`quests.json → contractTemplates`): one objective, its count and rewards by tier. */
@@ -262,7 +266,15 @@ export interface ProfileQuests {
 export type QuestEvent =
   | { type: 'kill'; kind: Exclude<MonsterKind, 'boss'>; biome: string; element: ManaType }
   | { type: 'reachDepth'; depth: number }
-  | { type: 'clearFloor'; biome: string; depth: number; noPotion: boolean; noDamage: boolean }
+  | {
+      type: 'clearFloor';
+      biome: string;
+      depth: number;
+      noPotion: boolean;
+      noDamage: boolean;
+      /** A generated floor's rooms cleared (none on the open room, which clears whole). */
+      roomsCleared?: number;
+    }
   | { type: 'extract'; depth: number }
   | { type: 'boss'; biome: string }
   | { type: 'reaction'; reaction: ReactionId }

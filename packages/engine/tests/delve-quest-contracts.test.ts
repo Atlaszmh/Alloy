@@ -80,7 +80,11 @@ describe('generateContract', () => {
       expect(o.filter!.minDepth).toBeLessThanOrEqual(12 + contracts.depthWindow[1]);
     }
     for (const o of all.filter((x) => x.type === 'clearFloor'))
-      expect(o.filter).toEqual({ noPotion: true, minDepth: 12 - contracts.flagDepthBelow });
+      expect(o.filter).toEqual({
+        noPotion: true,
+        minDepth: 12 - contracts.flagDepthBelow,
+        minRoomsCleared: 2,
+      });
     expect(all.find((o) => o.type === 'reaction')!.text).toMatch(
       /^Trigger (Melt|Overload) \d+ times$/,
     );
@@ -171,7 +175,7 @@ describe("a contract's text", () => {
       const o = c.objectives[0];
       const floors = o.count === 1 ? 'floor' : 'floors';
       expect(o.text).toBe(
-        `Clear ${o.count} ${floors} of depth ${o.filter!.minDepth} or deeper without a potion`,
+        `Clear ${o.count} ${floors} of depth ${o.filter!.minDepth} or deeper, ${o.filter!.minRoomsCleared} rooms or more, without a potion`,
       );
     }
   });

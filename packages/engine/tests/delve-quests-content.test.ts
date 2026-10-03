@@ -54,7 +54,7 @@ describe("quests.json's content", () => {
       ['reaction', { reaction: 'known' }],
       ['perfectDodge', {}],
       ['extract', { minDepth: 'window' }],
-      ['clearFloor', { noPotion: true, minDepth: 'flag' }],
+      ['clearFloor', { noPotion: true, minDepth: 'flag', minRoomsCleared: 2 }],
       ['boss', { biome: 'reached' }],
       ['forge', { minRarity: 'owned' }],
       ['refine', {}],

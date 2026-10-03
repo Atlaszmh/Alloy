@@ -1,17 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { applyShrine } from '../src/arpg/interact.js';
 import { stepWorld } from '../src/arpg/step.js';
-import { bankWorld, beginFloor, startDive } from '../src/delve/dive.js';
+import { bankWorld, beginFloor, completeFloor, startDive } from '../src/delve/dive.js';
 import { profileStats } from '../src/delve/pair.js';
 import { createDelveProfile } from '../src/delve/profile.js';
+import { applyQuestEvents } from '../src/delve/quests.js';
 import { generateItem } from '../src/loot/item-generator.js';
 import { SeededRNG } from '../src/rng/seeded-rng.js';
 import type { ArpgEvent, ArpgWorld } from '../src/types/arpg.js';
 import type { DelveProfile } from '../src/types/delve.js';
 import type { FloorMap } from '../src/types/floor-map.js';
+import type { QuestEvent } from '../src/types/quests.js';
 import type { DataRegistry } from '../src/data/registry.js';
 import { bal, registry, run, STEP } from './fixtures/arena.js';
 import { onMap, twoRooms } from './fixtures/flow-map.js';
+import { obj, quest, questRegistry, value } from './fixtures/quests.js';
 
 // The floor flow across banks and replays (see the floor maps spec's S1–S3 and "Anvil alcove").
 
@@ -106,5 +109,46 @@ describe('a replayed floor (S1)', () => {
       profileStats(registry, banked).damageMult * 1.1,
       9,
     );
+  });
+});
+
+describe('the floor clear counts its rooms (S3)', () => {
+  const reg = questRegistry([
+    quest('any', [obj('clearFloor', 99)]),
+    quest('rooms', [obj('clearFloor', 99, { filter: { minRoomsCleared: 1 } })]),
+  ]);
+  const cleared = (p: DelveProfile, w: ArpgWorld) => completeFloor(reg, p, w).profile;
+
+  it('a generated floor counts only its rooms cleared; the open room clears whole', () => {
+    const p = diving(reg);
+    const none = cleared(p, floorOf(p, twoRooms('combat'), reg));
+    const roomed = floorOf(p, twoRooms('combat'), reg);
+    roomed.map.rooms[1].cleared = true;
+    const one = cleared(p, roomed);
+    const open = cleared(p, beginFloor(reg, p));
+    expect([none, one, open].map((q) => [value(q, 'any'), value(q, 'rooms')])).toEqual([
+      [1, 0],
+      [1, 1],
+      [1, 1],
+    ]);
+  });
+
+  it('minRoomsCleared holds back a floor clear with fewer, and the flag quests set it', () => {
+    const p = createDelveProfile(reg, 1, { primary: 'fire' });
+    const floor = (roomsCleared?: number): QuestEvent => ({
+      type: 'clearFloor',
+      biome: 'cinder_mines',
+      depth: 3,
+      noPotion: true,
+      noDamage: true,
+      ...(roomsCleared !== undefined && { roomsCleared }),
+    });
+    const q = applyQuestEvents(reg, p, [floor(0), floor(1), floor(3), floor()]);
+    expect([value(q, 'any'), value(q, 'rooms')]).toEqual([4, 3]);
+    const data = registry.getQuestsData();
+    const untouchable = data.quests.find((x) => x.id === 'untouchable')!.objectives[0];
+    const dryRun = data.contractTemplates.find((t) => t.id === 'dry_run')!;
+    expect(untouchable.filter!.minRoomsCleared).toBeGreaterThan(0);
+    expect(dryRun.filter!.minRoomsCleared).toBeGreaterThan(0);
   });
 });
