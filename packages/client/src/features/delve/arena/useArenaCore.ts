@@ -245,18 +245,21 @@ const SLOWMO_SCALE = 0.3;
 
 /**
  * Test/tuning hooks, off unless set by hand or by an E2E init script:
- * `alloy:delve:autopilot` = "1" lets the engine bot play, and
+ * `alloy:delve:autopilot` = "1" lets the engine bot play ("ask": the bot plays, but its interact
+ * presses wait for the player's, and the gate and the alcove open their dialogs: `ask`), and
  * `alloy:delve:timescale` speeds the simulation up (max 4×).
  */
-export function readArenaFlags(): { autopilot: boolean; timescale: number } {
+export function readArenaFlags(): { autopilot: boolean; ask: boolean; timescale: number } {
   try {
     const scale = Number(localStorage.getItem('alloy:delve:timescale'));
+    const bot = localStorage.getItem('alloy:delve:autopilot');
     return {
-      autopilot: localStorage.getItem('alloy:delve:autopilot') === '1',
+      autopilot: bot === '1' || bot === 'ask',
+      ask: bot === 'ask',
       timescale: scale > 0 ? Math.min(4, scale) : 1,
     };
   } catch {
-    return { autopilot: false, timescale: 1 };
+    return { autopilot: false, ask: false, timescale: 1 };
   }
 }
 
@@ -579,7 +582,11 @@ export function useArenaCore(
             const events = stepWorld(
               registry,
               world,
-              flags.autopilot ? botInput(registry, world) : input,
+              !flags.autopilot
+                ? input
+                : flags.ask
+                  ? { ...botInput(registry, world), interact: input.interact }
+                  : botInput(registry, world),
               dt * flags.timescale,
             );
             promptRef.current = promptAfter(promptRef.current, events, world.t > t0);

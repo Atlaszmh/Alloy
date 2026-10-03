@@ -11,7 +11,7 @@ import { DEFAULT_CHAINS, STEP, gear, registry } from './fixtures/arena.js';
 // fight in each floor's most crowded room keeps every body on walkable ground and
 // every boss in its room.
 
-/** A registry whose dives are generated (`delve.layout.generatedDives` is off as shipped). */
+/** A registry whose dives are generated (`delve.layout.generatedDives`, on as shipped, set here whatever the data says). */
 const generating = createDefaultRegistry();
 generating.getDelveBalance().layout.generatedDives = true;
 
