@@ -8,7 +8,12 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { rerollContract, type Contract, type ProfileActionResult } from '@alloy/engine';
+import {
+  isDiveActive,
+  rerollContract,
+  type Contract,
+  type ProfileActionResult,
+} from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { playSound } from '@/shared/utils/sound-manager';
@@ -27,7 +32,7 @@ import { useQuests } from '../../quests/useQuests';
 import { Box } from '../../quests/QuestTracker';
 import { rewardView } from '../../quests/quest-view';
 import { QUEST_KIND, objectiveCount, type QuestView } from '../../quests/types';
-import type { HubMode, HubTabProps } from '../types';
+import type { HubTabProps } from '../types';
 
 const COLUMNS = '400px minmax(0,1fr) 440px';
 export const TRACK_BINDING: Binding = { key: 'KeyG', pad: 'y' };
@@ -56,6 +61,8 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
   const { quests, setTracked } = useQuests();
   const profile = useDelveStore((s) => s.profile);
   const markQuestSeen = useDelveStore((s) => s.markQuestSeen);
+  // A claim waits for the dive to end: in the pause, and at the Anvil mid-dive (a floor restart).
+  const diving = mode === 'pause' || isDiveActive(profile);
   const pad = useInputDeviceStore((s) => s.device === 'gamepad');
   const [openId, setOpenId] = useState(link?.tab === 'quests' ? link.questId : undefined);
   const [message, setMessage] = useState<{ text: string; good: boolean } | null>(null);
@@ -124,7 +131,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         label: 'Claim',
         binding: { key: ['Enter', 'NumpadEnter'] },
         onPress: () => act.current.onClaim(),
-        disabled: mode === 'pause',
+        disabled: diving,
       });
     if (quest.status !== 'claimed')
       prompts.push({
@@ -143,7 +150,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
         disabled: !rerollOk,
       });
     setPrompts(prompts);
-  }, [setPrompts, setTracked, quest, canTrack, pad, mode, hasReroll, rerollOk]);
+  }, [setPrompts, setTracked, quest, canTrack, pad, diving, hasReroll, rerollOk]);
   useEffect(() => () => setPrompts([]), [setPrompts]);
 
   return (
@@ -164,7 +171,7 @@ export function QuestsTab({ mode, setPrompts, link }: HubTabProps): ReactElement
           <Detail quest={quest} />
           <Rewards
             quest={quest}
-            mode={mode}
+            diving={diving}
             maxTracked={maxTracked}
             canTrack={canTrack}
             onToggle={() => setTracked(quest.id, !quest.tracked)}
@@ -417,7 +424,7 @@ function Detail({ quest }: { quest: QuestView }) {
 
 function Rewards({
   quest,
-  mode,
+  diving,
   maxTracked,
   canTrack,
   onToggle,
@@ -428,7 +435,8 @@ function Rewards({
   message,
 }: {
   quest: QuestView;
-  mode: HubMode;
+  /** A dive is open: Claim waits for it to end. */
+  diving: boolean;
   maxTracked: number;
   canTrack: boolean;
   onToggle: () => void;
@@ -439,7 +447,6 @@ function Rewards({
   onReroll: () => void;
   message: { text: string; good: boolean } | null;
 }) {
-  const pause = mode === 'pause';
   return (
     <Panel title="Rewards" testId="quest-rewards">
       {quest.rewards.map((r) => (
@@ -464,11 +471,11 @@ function Rewards({
             variant="go"
             size="lg"
             binding={CLAIM_BINDING}
-            disabled={pause}
+            disabled={diving}
             onClick={onClaim}
             testId="quest-claim"
           >
-            {pause ? 'Claim at the Anvil' : 'Claim'}
+            {diving ? 'Claim after the dive' : 'Claim'}
           </Button>
         )}
         {message && (

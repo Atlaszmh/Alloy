@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
-import { rerollContract, type Contract, type ProfileActionResult } from '@alloy/engine';
+import { rerollContract, startDive, type Contract, type ProfileActionResult } from '@alloy/engine';
+import { getDelveRegistry } from '../../../registry';
 import { useDelveStore } from '@/stores/delveStore';
 import { useInputDeviceStore } from '@/stores/inputDeviceStore';
 import { QuestsTab } from '../QuestsTab';
@@ -54,7 +55,7 @@ describe('QuestsTab', () => {
     shown.quests = [];
     const p = useDelveStore.getState().profile;
     useDelveStore.setState({
-      profile: { ...p, quests: { ...p.quests, board: [ratCatcher, null, null] } },
+      profile: { ...p, dive: null, quests: { ...p.quests, board: [ratCatcher, null, null] } },
       claimQuest: vi.fn(() => ok()),
       rerollContract: vi.fn(() => ok()),
       markQuestSeen: vi.fn(),
@@ -202,11 +203,23 @@ describe('QuestsTab', () => {
     );
   });
 
-  it('in the pause, Claim reads "Claim at the Anvil" and is disabled', () => {
+  it('in the pause, Claim reads "Claim after the dive" and is disabled', () => {
     shown.quests = [{ ...MAIN, status: 'complete' }];
     const { setPrompts } = renderTab(undefined, 'pause');
     const claim = screen.getByTestId('quest-claim');
-    expect(claim).toHaveTextContent('Claim at the Anvil');
+    expect(claim).toHaveTextContent('Claim after the dive');
+    expect(claim).toBeDisabled();
+    expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')?.disabled).toBe(true);
+  });
+
+  it('at the Anvil mid-dive (a floor restart), Claim reads "Claim after the dive" and is disabled', () => {
+    const p = useDelveStore.getState().profile;
+    const { dive } = startDive(getDelveRegistry(), { ...p, quests: { ...p.quests, board: [] } }, 1);
+    useDelveStore.setState({ profile: { ...p, dive } });
+    shown.quests = [{ ...MAIN, status: 'complete' }];
+    const { setPrompts } = renderTab();
+    const claim = screen.getByTestId('quest-claim');
+    expect(claim).toHaveTextContent('Claim after the dive');
     expect(claim).toBeDisabled();
     expect(lastPrompts(setPrompts).find((p) => p.id === 'claim')?.disabled).toBe(true);
   });
