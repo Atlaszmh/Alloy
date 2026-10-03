@@ -389,6 +389,7 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     repeat: [],
     dodge: false,
     potion: false,
+    interact: false,
     attackHeld: false,
     attackTap: false,
     menu: false,
@@ -641,5 +642,22 @@ describe("frameInput: each step's input from the keys, the HUD and the pad", () 
     expect(next.events.find((e) => e.kind === 'basic')).toMatchObject({
       dir: { x: expect.closeTo(-1), y: expect.closeTo(0) },
     });
+  });
+});
+
+describe('interact', () => {
+  let detach = () => {};
+  afterEach(() => detach());
+
+  it('C interacts, and frameInput sends the press once', () => {
+    const input = createArenaInput();
+    detach = attachKeyboard(input, () => true);
+    key('keydown', 'KeyC');
+    expect(input.interact).toBe(true);
+    const w = world();
+    const mem = padMemory();
+    const o = { manual: false, aimReach: 1, toWorld: (p: Vec) => p, device: 'keyboard' as const };
+    expect(frameInput(registry, w, input, null, mem, o).interact).toBe(true);
+    expect(frameInput(registry, w, input, null, mem, o).interact).toBe(false);
   });
 });

@@ -123,3 +123,18 @@ describe('ControlsPanel', () => {
     }
   });
 });
+
+describe('ControlsPanel: an unbound action', () => {
+  beforeEach(() => useControlsStore.getState().reset());
+
+  it('is flagged, and nothing is while every action is bound', () => {
+    render(<ControlsPanel onClose={() => {}} />);
+    expect(screen.queryByTestId('controls-unbound')).toBeNull();
+    act(() =>
+      useControlsStore.setState({
+        config: { ...DEFAULT_CONTROLS, pad: { ...DEFAULT_CONTROLS.pad, interact: null } },
+      }),
+    );
+    expect(screen.getByTestId('controls-unbound')).toHaveTextContent('Not bound: Interact.');
+  });
+});
