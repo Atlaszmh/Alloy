@@ -277,7 +277,8 @@ export function questStates(registry: DataRegistry, profile: DelveProfile): Ques
   return [...quests, ...contracts];
 }
 
-const CLAIM_AT_ANVIL = 'Claim at the Anvil, between dives';
+/** Why a claim or a reroll is refused while a dive is open (the Anvil mid-dive included). */
+export const DIVE_OPEN = 'Finish or leave the dive first';
 const NOT_DONE = 'Finish its objectives first';
 
 /**
@@ -293,7 +294,7 @@ export function claimQuest(
   profile: DelveProfile,
   questId: QuestId,
 ): ProfileActionResult {
-  if (isDiveActive(profile)) return { ok: false, profile, reason: CLAIM_AT_ANVIL };
+  if (isDiveActive(profile)) return { ok: false, profile, reason: DIVE_OPEN };
   const q = profile.quests;
   const slot = q.board.findIndex((c) => c?.id === questId);
   if (slot >= 0) {

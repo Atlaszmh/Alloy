@@ -166,7 +166,7 @@ describe('rerollContract', () => {
     expect(rerollContract(registry, r.profile, 1)).toMatchObject({ ok: false, profile: r.profile });
   });
 
-  it('refuses mid-dive, an empty slot, a spent reroll and too little scrap', () => {
+  it('refuses mid-dive, an empty slot, a completed contract, a spent reroll and too little scrap', () => {
     const p = { ...fresh(), scrap: 100 };
     const refused = (q: DelveProfile, slot = 0) => {
       const r = rerollContract(registry, q, slot);
@@ -174,10 +174,12 @@ describe('rerollContract', () => {
       expect(r.profile).toBe(q);
       return r.reason;
     };
-    expect(refused(startDive(registry, p, 1))).toBe('Reroll at the Anvil, between dives');
+    expect(refused(startDive(registry, p, 1))).toBe('Finish or leave the dive first');
     const board = p.quests.board.slice();
     board[2] = null;
     expect(refused({ ...p, quests: { ...p.quests, board } }, 2)).toBe('No contract to reroll');
+    const complete = board.map((c) => c && { ...c, progress: [{ value: c.objectives[0].count, done: true }] });
+    expect(refused({ ...p, quests: { ...p.quests, board: complete } })).toBe('Claim it first');
     expect(refused({ ...p, quests: { ...p.quests, rerollUsed: true } })).toBe(
       'One reroll a visit: clear a depth to reroll again',
     );

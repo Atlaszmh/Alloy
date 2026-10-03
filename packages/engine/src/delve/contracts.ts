@@ -15,6 +15,7 @@ import {
 import type { ReactionId } from '../types/arpg.js';
 import { isDiveActive } from './dive.js';
 import { profileStats } from './pair.js';
+import { DIVE_OPEN } from './quests.js';
 import type { ProfileActionResult } from './profile.js';
 
 /**
@@ -174,8 +175,8 @@ export function refillBoard(registry: DataRegistry, profile: DelveProfile): Delv
 
 /**
  * Slot `slot`'s contract replaced (`generateContract`) for `rerollScrap`, once
- * an Anvil visit; refused mid-dive, on an empty slot, or once the visit's
- * reroll is spent. The old contract's id leaves `tracked` and `seen`. Pure:
+ * an Anvil visit; refused mid-dive, on an empty slot, on a completed contract
+ * (claim it), or once the visit's reroll is spent. The old contract's id leaves `tracked` and `seen`. Pure:
  * the Quests tab calls it as a dry run, and shows its refusals as they read.
  */
 export function rerollContract(
@@ -186,8 +187,9 @@ export function rerollContract(
   const no = (reason: string): ProfileActionResult => ({ ok: false, profile, reason });
   const old = profile.quests.board[slot];
   const price = registry.getDelveBalance().quests.contracts.rerollScrap;
-  if (isDiveActive(profile)) return no('Reroll at the Anvil, between dives');
+  if (isDiveActive(profile)) return no(DIVE_OPEN);
   if (!old) return no('No contract to reroll');
+  if (old.progress.every((p) => p.done)) return no('Claim it first');
   if (profile.quests.rerollUsed) return no('One reroll a visit: clear a depth to reroll again');
   if (profile.scrap < price) return no('Not enough scrap');
   const placed = place(registry, profile, slot);

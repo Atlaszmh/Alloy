@@ -103,7 +103,7 @@ describe('claiming', () => {
     ]);
     expect(refused(startDive(reg, done(), 1), 'm1')).toEqual([
       false,
-      'Claim at the Anvil, between dives',
+      'Finish or leave the dive first',
     ]);
   });
 
