@@ -59,7 +59,7 @@ The Delve has deep build systems (chains, runes, crafting) but little that tells
 | `discoverReaction` | `reactionsSeen` grows | **state**: `reactionsSeen.length` | — |
 
 - `scope`: `total` (from when the quest unlocks) or `dive` (within one dive; reset when a dive starts and when it settles). `scope: 'dive'` is rejected on Anvil-only types (`forge`, `refine`, `bind`, `openSocket`, `knowPatterns`).
-- **State types** (`reachDepth` reads `bestDepth`, `bind`, `knowPatterns`, `discoverReaction`) take the current state when the quest unlocks and on each matching event, so an early bind, a deep player, or known patterns credit at once.
+- **State types** (`reachDepth` reads `bestDepth`, `bind`, `knowPatterns`, `discoverReaction`) are **re-read from the profile on every `applyQuestEvents` call** (and when the quest unlocks), so an early bind, a deep player, or known patterns credit at once, and they need no emission sites of their own: any op that changes the state just calls `applyQuestEvents` (with no events if it has none).
 - Progress is capped at `count`. An objective completes at `count` and **stays complete** (a `dive` reset never clears a completed objective). A quest completes when all its objectives do.
 
 **Unlock** (side quests and the main chain): `{ after?: questId (claimed), bestDepth?: number, reactionsSeen?: number, patterns?: number, pair?: true }`, all required. Unlocks are checked once at profile creation, inside every `applyQuestEvents`, in `claimQuest`, and when `bestDepth` changes.
@@ -74,7 +74,7 @@ Rules resolve when claimed, on `quest:<id>:<claimCount>` from the profile seed (
 
 **Claiming:** `claimQuest(registry, profile, questId)` at the Anvil only (refused mid-dive). A claimed main quest unlocks the next. A claimed quest leaves `tracked`; a newly unlocked main quest takes the tracked slot the old main held (or the first free one).
 
-**Tracking:** up to `delve.quests.maxTracked` (3); saved.
+**Tracking:** up to `delve.quests.maxTracked` (3); saved. `trackQuest` and `markQuestSeen` work mid-dive (the pause allows them); only `claimQuest` and `rerollContract` are Anvil-only.
 
 **Seen:** a quest unlocked but not yet opened in the journal shows NEW; opening it calls `markQuestSeen`.
 
@@ -99,8 +99,7 @@ Rules resolve when claimed, on `quest:<id>:<claimCount>` from the profile seed (
 - `refine` emits `refine`.
 - `bindSecondary` (`delve/pair.ts`) emits `bind`.
 - `setChains` (`delve/moveset.ts`) emits one `openSocket` per socket its Apply opens; `openSocket` (`delve/runes.ts`) emits one.
-- Pattern learning emits `knowPatterns`, in both places it happens: `bankWorld` (pickups) and `applySalvage` (`loot/salvage-yield.ts`, incl. mid-dive auto-salvage).
-- `reactionsSeen` growth (`bankWorld`) emits `discoverReaction`.
+- `knowPatterns` and `discoverReaction` are state types: `bankWorld` (pickups, `reactionsSeen`), `applySalvage` (`loot/salvage-yield.ts`, incl. mid-dive auto-salvage) and `claimQuest` (a `pattern` reward) call `applyQuestEvents` after changing the state; nothing emits them.
 
 **One function:** `applyQuestEvents(registry, profile, events): DelveProfile`. It advances every unlocked, unclaimed quest's matching objectives (including the board's contracts), then runs unlocks. It is pure and deterministic. Each emitting op calls it internally and returns the updated profile; **no op's result type changes**.
 
@@ -115,14 +114,15 @@ Rules resolve when claimed, on `quest:<id>:<claimCount>` from the profile seed (
 - **Template:** `{ id, type, filter rules, count: { easy: [lo, hi], normal, hard }, scope, text, rewards by tier }`.
 - **Only possible contracts:**
   - biome filters for biomes reached: `getBiomeForDepth(d)` for `d` in `1..max(1, bestDepth)` (biomes cycle);
+  - element filters only for the mana of biomes reached (a foe's element is its biome's mana);
   - reaction filters for the pair's reaction (when bound) or reactions in `reactionsSeen`;
   - depth goals within `[max(2, bestDepth + depthWindow[0]), bestDepth + depthWindow[1]]` (`depthWindow` in data, starting `[-2, 3]`);
-  - forge goals only up to the highest flux grade the hero owns or has forged;
+  - forge goals only up to the highest flux grade the hero currently owns (common when none);
   - `noPotion` / `noDamage` floor contracts carry `minDepth = max(1, bestDepth − flagDepthBelow)` (data).
-- **Tiers:** easy / normal / hard by `tierWeights`; the count comes from the tier's range, and rewards from the template's tier table scaled by `depthScale` (the hero's best depth). A hard contract may add an essence at `essenceChance` (× Lucky Charm's `legendaryBoost`, consistent with drops).
-- **Progress lives on the board entry** (one home); a claimed contract is removed (its slot empties) and `contractsClaimed` +1.
+- **Tiers:** easy / normal / hard by `tierWeights`; the count comes from the tier's range, and reward counts from the template's tier table × `(1 + depthScale × bestDepth)` (rounded). A hard contract may add an essence (`essence: 'fit'`, resolved at claim) at `essenceChance` (× Lucky Charm's `legendaryBoost`), **rolled at generation** so the board shows it.
+- **Progress lives on the board entry** (one home); a claimed contract is removed (its slot empties) and `contractsClaimed` +1. A claimed or rerolled contract's id leaves `tracked` and `seen`.
 - **Refill (S2):** `refillBoard` runs in `settleDive` (`delve/dive.ts`) when the dive cleared at least one depth, after the dive's events applied, and fills every empty slot. It also resets the visit's reroll. A new save starts with a full board (`createDelveProfile` → `refillBoard`).
-- **Reroll (S1):** `rerollContract(registry, profile, slot)` replaces one filled slot's contract for `rerollScrap`, once per Anvil visit (between two settled dives); refused mid-dive, on an empty slot, or after the visit's reroll is spent.
+- **Reroll (S1):** `rerollContract(registry, profile, slot)` replaces one filled slot's contract for `rerollScrap`, once per Anvil visit; a visit ends only with a settled dive that cleared a depth (when `refillBoard` resets `rerollUsed`). Refused mid-dive, on an empty slot, or after the visit's reroll is spent.
 - **No expiry** in v1.
 
 ## Content (the first pass)
@@ -168,8 +168,8 @@ Anvil-only contracts (forge, refine) are priced in the Economy view's `quests` i
 ## The client
 
 **An engine view, a client adapter:**
-- The engine exports `questStates(registry, profile): QuestState[]` with `{ id, kind, status: 'active' | 'complete' | 'claimed', isNew, tracked, name, line, chapter?, objectives: { id, text, value, count, done }[], rewards: RewardView[] (resolved names or rule text) }`.
-- A client adapter maps it to the existing `QuestView` (colours, `sub`, kind tags), with material names from `features/delve/hub/forge/materials-text.ts`.
+- The engine exports `questStates(registry, profile): QuestState[]` with `{ id, kind, status: 'active' | 'complete' | 'claimed', isNew, tracked, name, line, chapter?, objectives: { id, text, value, count, done }[], rewards: RewardView[] }`, where `RewardView = { ref: MaterialRef | 'scrap' | 'dust' | 'links', count } | { rule: Reward }` is data (the engine formats nothing).
+- A client adapter maps it to the existing `QuestView` (colours, `sub`, kind tags), naming rewards (concrete and rule) with `features/delve/hub/forge/materials-text.ts`, and the giver from `registry.getQuestsData().giver`.
 - `useQuests` reads it. The sample fixture and the `alloy:delve:questPreview` flag go.
 
 **Quests tab** (`hub/quests/QuestsTab.tsx`):
@@ -191,7 +191,7 @@ Anvil-only contracts (forge, refine) are priced in the Economy view's `quests` i
 - **`src/data/quests.json`** (`QuestsDataSchema`, `registry.getQuestsData()`): `giver { name, sprite }`, `quests[]`, `contractTemplates[]`. The schema checks shapes and unique ids; the **registry** checks the cross-file references (biomes, reactions, rarities, patterns, monster kinds) and that the main chain's `after` links form one chain, as other cross-file keys are checked.
 - **`balance.json → delve.quests`** (`QuestsBalanceSchema`):
   - `maxTracked`;
-  - `contracts { slots, tierWeights, depthScale, depthWindow, flagDepthBelow, rerollScrap, essenceChance }`.
+  - `contracts { slots, tierWeights, depthScale (rewards × (1 + depthScale × bestDepth)), depthWindow, flagDepthBelow, rerollScrap, essenceChance }`.
 - **Profile v9:** `quests { progress: Record<QuestId, ObjectiveProgress[]>, unlocked: QuestId[], claimed: QuestId[], tracked: QuestId[], seen: QuestId[], board: (Contract | null)[], boardCount, contractsClaimed, rerollUsed, claimCount }`. Older saves reset (the v8 reset path, bumped).
 - **Determinism:** quest progress comes only from engine events; contract generation and rule-based rewards draw from forked streams of the profile seed.
 
@@ -205,12 +205,12 @@ Anvil-only contracts (forge, refine) are priced in the Economy view's `quests` i
 
 | Phase | Area | Owns |
 |---|---|---|
-| **A · Contract** | One area | <ul><li>`types/quests.ts`</li><li>`quests.json` schema + registry getter + cross-file checks (with a minimal placeholder `quests.json`)</li><li>`balance.json → delve.quests`</li><li>profile v9 + reset</li><li>`WorldPending.questEvents`, `ArpgWorld.potionDrunk` / `hurt`</li><li>**typed stubs** for `applyQuestEvents`, `questStates`, `claimQuest`, `markQuestSeen`, `trackQuest`, `resolveReward`, `generateContract`, `refillBoard`, `rerollContract`</li><li>**the call sites wired to the stubs**: `createDelveProfile` → `refillBoard`; `settleDive` → `refillBoard`; `claimQuest` → `resolveReward`</li><li>store actions (`claimQuest`, `rerollContract`, `trackQuest`, `markQuestSeen`) as wrappers</li><li>`useQuests` on `questStates` via the adapter</li></ul> |
+| **A · Contract** | One area | <ul><li>`types/quests.ts`</li><li>`quests.json` schema + registry getter + cross-file checks (with a minimal placeholder `quests.json`)</li><li>`balance.json → delve.quests`</li><li>profile v9 + reset</li><li>`WorldPending.questEvents`, `ArpgWorld.potionDrunk` / `hurt`</li><li>**typed stubs** for `applyQuestEvents`, `questStates`, `claimQuest`, `markQuestSeen`, `trackQuest`, `resolveReward`, `generateContract`, `refillBoard`, `rerollContract`</li><li>**the call sites wired to the stubs**: `createDelveProfile` → `refillBoard`; `settleDive` → `refillBoard`; `claimQuest` → `resolveReward`</li><li>store actions (`claimQuest`, `rerollContract`, `trackQuest`, `markQuestSeen`) as wrappers</li><li>`useQuests` on `questStates` via a minimal adapter (C1 extends it)</li></ul> |
 | **B · Engine** | **B1** events and progress | `delve/quests.ts` (`applyQuestEvents`, unlocks, state types, `claimQuest`, `questStates`, `markQuestSeen`, `trackQuest`); every emission site (`arpg/combat.ts`, `arpg/dodge.ts`, `arpg/step.ts`, `delve/dive.ts`, `delve/crafting.ts`, `delve/pair.ts`, `delve/moveset.ts`, `delve/runes.ts`, `loot/salvage-yield.ts`); tests on fixture quests |
 | | **B2** contracts and rewards | `delve/contracts.ts` (`generateContract`, `refillBoard`, `rerollContract`, the possible-filters rules); `delve/rewards.ts` (`resolveReward`); the content in `quests.json` |
 | **C · Client** | **C1** Quests tab | `hub/quests/*` (claim, badges, Done group, the board, reroll, the pause's disabled Claim); the hub's tab pip; the Anvil footer's "n to claim"; the adapter |
-| | **C2** HUD, toasts, banking | `quests/QuestTracker.tsx` live progress; the store's notice diff in `setProfile`; `arena/useArena.ts` (bank on quest events, flush before restart) |
-| | **C3** Hesta's sprite | `packages/pixel-forge` (`art/alloy/sprites/hesta.ts`, the manifest entry, `forge build` → the atlas) |
+| | **C2** HUD, toasts, banking | `quests/QuestTracker.tsx` live progress; the store's notice diff in `setProfile`; `arena/useArena.ts` (bank on quest events); `pages/DelveRun.tsx` (flush before "Anvil · floor restarts") |
+| | **C3** Hesta's sprite | `packages/pixel-forge` (`art/alloy/sprites/hesta.ts`, the manifest entry, `forge build` → the atlas); `client/src/features/delve/__tests__/sprite-atlas.test.ts` (`hesta` in `known`, size 1.6 → 26 px) |
 | **D · Autopilot, balance, docs** | One area | The autopilot's claiming; `economySim`'s `quests` line; the pacing rails; CLAUDE.md; bump **v0.59.0** |
 
 ## Tests
