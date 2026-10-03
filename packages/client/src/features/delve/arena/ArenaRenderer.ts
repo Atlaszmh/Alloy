@@ -4,11 +4,14 @@ import {
   type ArpgEvent,
   type ArpgWorld,
   type BiomeDef,
+  type Door,
   type Drop,
   type GearItem,
+  type InteractableKind,
   type ManaType,
   type MaterialRef,
   type MonsterEntity,
+  type PropId,
   type Vec,
 } from '@alloy/engine';
 import { PixelLayer, type ViewRect } from './fx/pixel-layer';
@@ -101,6 +104,21 @@ interface Dying {
 
 const FONT = 'Rajdhani, "DM Sans", system-ui, sans-serif';
 
+/** A door's posts, its bars, and the glow of a sealed one (ENDESGA 32). */
+const DOOR_STONE = 0x5a6988;
+const DOOR_IRON = 0x8b9bb4;
+const DOOR_SEAL = 0xe43b44;
+/** Seconds a door's bars take to slide shut, or back open. */
+const DOOR_SECONDS = 0.25;
+
+/** Each interactable's prop in the atlas. */
+const PROP_SPRITE: Record<InteractableKind, PropId> = {
+  chest: 'chest',
+  shrine: 'shrine',
+  alcove: 'alcove_anvil',
+  gate: 'exit_gate',
+};
+
 /** Forms cast on the hero itself: they burst outward instead of flinging at a target. */
 const SELF_FORMS = new Set(['nova', 'ward', 'armor', 'surge']);
 
@@ -142,6 +160,12 @@ export class ArenaRenderer {
   private root = new Container();
   private floor = new Graphics();
   private pixelFloor: PixelFloor | null = null;
+  /** A generated floor's doors, under the drops, redrawn every frame. */
+  private doorGfx = new Graphics();
+  /** How shut each door's bars are, 0 to 1. */
+  private doorShut = new Map<number, number>();
+  /** The rooms' props by interactable id, with their atlas frames. */
+  private props = new Map<string, { sprite: Sprite; frames: Texture[] }>();
   private dropLayer = new Container();
   private entities = new Container();
   private textLayer = new Container();
@@ -182,6 +206,7 @@ export class ArenaRenderer {
     this.root.addChild(
       this.floor,
       this.groundFx.sprite,
+      this.doorGfx,
       this.dropLayer,
       this.entities,
       this.airFx.sprite,
@@ -228,6 +253,8 @@ export class ArenaRenderer {
     for (const f of this.floats) this.releaseText(f.text);
     this.floats = [];
     this.drawFloor();
+    this.doorShut.clear();
+    this.makeProps(world);
     this.pixelFloor?.destroy();
     this.pixelFloor = new PixelFloor(floorInit(world));
     this.root.addChildAt(this.pixelFloor.sprite, 1);
@@ -235,6 +262,26 @@ export class ArenaRenderer {
     this.cam = { x: world.hero.x, y: world.hero.y };
     // A still frame: the new floor's view at once, for the HUD's first snapshot of it.
     this.update(0);
+  }
+
+  /** The rooms' props from the atlas, standing at their interactables (none without art). */
+  private makeProps(w: ArpgWorld): void {
+    for (const v of this.props.values()) v.sprite.destroy();
+    this.props.clear();
+    const sizes = getDelveRegistry().getDelveData().layouts.props;
+    for (const { interactable: it } of w.map.rooms) {
+      const frames = it && spriteFrames(PROP_SPRITE[it.kind]);
+      if (!it || !frames) continue;
+      // Its base on the floor below the spot, sorted among the creatures by it.
+      const base = it.y + sizes[PROP_SPRITE[it.kind]] / 2;
+      const sprite = new Sprite(frames[0]);
+      sprite.anchor.set(0.5, 1);
+      sprite.scale.set(SPRITE_PIXEL);
+      sprite.position.set(it.x, base);
+      sprite.zIndex = base - 0.5;
+      this.entities.addChild(sprite);
+      this.props.set(it.id, { sprite, frames });
+    }
   }
 
   private emoji(glyph: string): Texture {
@@ -659,6 +706,8 @@ export class ArenaRenderer {
     this.syncHero(w);
     this.syncMonsters(w);
     this.syncDrops(w);
+    this.syncProps(w);
+    this.drawDoors(w, dt);
     drawZones(ground, w, this.time);
     drawLobs(ground, air, w, this.time);
     drawTelegraphs(ground, w, this.time);
@@ -859,6 +908,31 @@ export class ArenaRenderer {
     }
   }
 
+  /** Each prop in its state (`propFrame`); a gate opens once no boss lives. */
+  private syncProps(w: ArpgWorld): void {
+    const open = w.bossId === null || w.bossKilled;
+    for (const { interactable: it } of w.map.rooms) {
+      const v = it && this.props.get(it.id);
+      if (!it || !v) continue;
+      const f = propFrame(it.kind, it.used, open, this.time);
+      v.sprite.texture = v.frames[f.frame % v.frames.length];
+      v.sprite.tint = f.tint;
+    }
+  }
+
+  /** The doors, each one's bars easing toward its state over `DOOR_SECONDS`. */
+  private drawDoors(w: ArpgWorld, dt: number): void {
+    const g = this.doorGfx;
+    g.clear();
+    for (const d of w.map.doors) {
+      const was = this.doorShut.get(d.id) ?? (d.closed ? 1 : 0);
+      const step = dt / DOOR_SECONDS;
+      const shut = d.closed ? Math.min(1, was + step) : Math.max(0, was - step);
+      this.doorShut.set(d.id, shut);
+      drawDoor(g, d, shut, this.time);
+    }
+  }
+
   private syncDrops(w: ArpgWorld): void {
     const alive = new Set<number>();
     const shown: { p: Plaque; x: number; y: number }[] = [];
@@ -977,6 +1051,53 @@ export function holdPing(
       ? h.stats.weapon.blows[h.swing?.step ?? 0]?.element
       : activeMove(h, e.slot)?.element;
   return { r: 0.8 + 0.4 * e.stage, color: elemColor(element) };
+}
+
+/**
+ * A door: a stone post at each end of its cells and, as it shuts (`shut` 0 → 1),
+ * iron bars sliding across it, glowing red while they hold its room sealed.
+ * Whole sprite pixels (0.1 units).
+ */
+export function drawDoor(g: Graphics, d: Door, shut: number, time: number): void {
+  const xs = d.cells.map((c) => c.x);
+  const ys = d.cells.map((c) => c.y);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const w = Math.max(...xs) + 1 - x0;
+  const h = Math.max(...ys) + 1 - y0;
+  // Across a hall running up and down (wider than deep), or across one running sideways.
+  const across = w >= h;
+  if (across) {
+    g.rect(x0 - 0.3, y0, 0.3, h).fill({ color: DOOR_STONE });
+    g.rect(x0 + w, y0, 0.3, h).fill({ color: DOOR_STONE });
+  } else {
+    g.rect(x0, y0 - 0.3, w, 0.3).fill({ color: DOOR_STONE });
+    g.rect(x0, y0 + h, w, 0.3).fill({ color: DOOR_STONE });
+  }
+  if (shut <= 0) return;
+  g.rect(x0, y0, w, h).fill({ color: DOOR_SEAL, alpha: (0.25 + 0.15 * Math.sin(time * 6)) * shut });
+  // A bar every 3 sprite pixels, slid `shut` of the way in.
+  const bars = Math.round((across ? w : h) / 0.3);
+  for (let k = 0; k < bars; k++) {
+    if (across) g.rect(x0 + 0.1 + k * 0.3, y0, 0.1, h * shut).fill({ color: DOOR_IRON });
+    else g.rect(x0, y0 + 0.1 + k * 0.3, w * shut, 0.1).fill({ color: DOOR_IRON });
+  }
+}
+
+/**
+ * A prop's atlas frame and tint: a chest opens (frame 1) and a shrine goes dark
+ * once used; a gate opens once it may be taken; an anvil's glow flickers until
+ * used, then it stands dimmed.
+ */
+export function propFrame(
+  kind: InteractableKind,
+  used: boolean,
+  gateOpen: boolean,
+  time: number,
+): { frame: number; tint: number } {
+  if (kind === 'gate') return { frame: gateOpen ? 1 : 0, tint: 0xffffff };
+  if (kind !== 'alcove') return { frame: used ? 1 : 0, tint: 0xffffff };
+  return used ? { frame: 0, tint: 0x8b8b8b } : { frame: Math.floor(time * 3) % 2, tint: 0xffffff };
 }
 
 /**
