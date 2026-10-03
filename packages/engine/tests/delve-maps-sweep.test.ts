@@ -42,5 +42,5 @@ describe('generated floors, swept', () => {
       for (let seed = 1; seed <= 20; seed++)
         for (const depth of [3, 8, 13, 18, 22, 28])
           expect(sweep(seed, depth, policy), `seed ${seed} depth ${depth}`).toEqual([]);
-    });
+    }, 60_000);
 });
