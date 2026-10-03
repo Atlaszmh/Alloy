@@ -75,6 +75,14 @@ export function FloorColumn({
             );
           })}
         </div>
+        {hud?.map.floor && (
+          <span className="text-[15px] text-[var(--k-text-3)]" data-testid="rooms-explored">
+            Rooms explored{' '}
+            <b className="k-disp text-[20px] text-[var(--k-text)]">
+              {hud.map.floor.explored} / {hud.map.floor.total}
+            </b>
+          </span>
+        )}
         <div className="flex items-baseline justify-between text-[15px] text-[var(--k-text-3)]">
           {hud && (
             <span data-testid="monsters-left">
