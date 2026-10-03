@@ -24,6 +24,8 @@ export interface AssetSpec {
   id: string;
   /** Canvas size in pixels (square). */
   size: number;
+  /** A prop's size in world units (`size` = 16 px per unit); the game's `layouts.json → props` holds the same. */
+  units?: number;
   /** 'code' = drawn in a TypeScript module, 'ai' = generated then cleaned. */
   source: 'code' | 'ai';
   /** Code sprite module, relative to the manifest. */

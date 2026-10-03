@@ -28,6 +28,38 @@
       "file": "sprites/hesta.ts"
     },
     {
+      "id": "chest",
+      "size": 14,
+      "units": 0.9,
+      "subject": "a small wooden treasure chest with iron bands and a gold lock",
+      "source": "code",
+      "file": "sprites/chest.ts"
+    },
+    {
+      "id": "shrine",
+      "size": 22,
+      "units": 1.4,
+      "subject": "a small stone altar under a floating glowing cyan mana crystal",
+      "source": "code",
+      "file": "sprites/shrine.ts"
+    },
+    {
+      "id": "alcove_anvil",
+      "size": 22,
+      "units": 1.4,
+      "subject": "a steel smithing anvil with a glowing hot ingot on a stone brick plinth",
+      "source": "code",
+      "file": "sprites/alcove-anvil.ts"
+    },
+    {
+      "id": "exit_gate",
+      "size": 42,
+      "units": 2.6,
+      "subject": "a forged iron portcullis gate in a stone brick arch with a keystone",
+      "source": "code",
+      "file": "sprites/exit-gate.ts"
+    },
+    {
       "id": "mine_rat",
       "size": 10,
       "subject": "a mangy grey mine rat with glowing orange ember eyes and a soot-black tail",
