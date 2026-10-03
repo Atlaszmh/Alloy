@@ -4,6 +4,7 @@ import type { AbilitySlot, ChainSkill, FormId, Knobs, MoveKind } from './ability
 import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
+import type { QuestsBalance } from './quests.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -642,6 +643,8 @@ export interface DelveBalance {
   crafting: CraftingBalance;
   /** The drop tables, Find, the leanings and the pickups' feel (see the crafting spec). */
   drops: DropsBalance;
+  /** The quest tracker and the Contract board (see the quests spec). */
+  quests: QuestsBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;

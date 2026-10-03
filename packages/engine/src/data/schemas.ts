@@ -816,6 +816,25 @@ export const QuestsDataSchema = z.object({
   contractTemplates: z.array(ContractTemplateSchema).refine(distinctIds, 'template ids differ'),
 });
 
+/** `balance.json → delve.quests`. */
+export const QuestsBalanceSchema = z.object({
+  maxTracked: z.number().int().min(1),
+  contracts: z.object({
+    slots: z.number().int().min(0),
+    tierWeights: perTier(z.number().min(0)).refine(
+      (w) => w.easy + w.normal + w.hard > 0,
+      'some tier weighs more than 0',
+    ),
+    depthScale: z.number().min(0),
+    depthWindow: z
+      .tuple([z.number().int(), z.number().int()])
+      .refine(([lo, hi]) => lo <= hi, 'the window runs low to high'),
+    flagDepthBelow: z.number().int().min(0),
+    rerollScrap: z.number().min(0),
+    essenceChance: z.number().min(0).max(1),
+  }),
+});
+
 /** A count and a power (`split`, `extraShots`). */
 const CountPowerSchema = z
   .object({ count: z.number().int().positive(), power: z.number().positive() })
@@ -1425,6 +1444,7 @@ const DelveBalanceSchema = z.object({
   }),
   crafting: CraftingBalanceSchema,
   drops: DropsBalanceSchema,
+  quests: QuestsBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
     width: z.number().positive(),

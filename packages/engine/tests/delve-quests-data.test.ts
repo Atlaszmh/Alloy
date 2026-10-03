@@ -3,7 +3,7 @@ import { createDefaultRegistry } from '../src/data/default-registry.js';
 import { loadAndValidateData } from '../src/data/loader.js';
 import { questsDataProblems } from '../src/data/quests-check.js';
 import { DataRegistry } from '../src/data/registry.js';
-import { QuestsDataSchema } from '../src/data/schemas.js';
+import { QuestsBalanceSchema, QuestsDataSchema } from '../src/data/schemas.js';
 import questsData from '../src/data/quests.json';
 import {
   OBJECTIVE_RULES,
@@ -233,5 +233,38 @@ describe("the registry's quests checks", () => {
     expect(problems(data([main('a'), quest('s'), main('b', 's')]))).toEqual([
       'every main quest is on the one chain',
     ]);
+  });
+});
+
+describe('delve.quests', () => {
+  const quests = registry.getDelveBalance().quests;
+
+  it('holds the tracker and the Contract board numbers', () => {
+    expect(quests).toEqual({
+      maxTracked: 3,
+      contracts: {
+        slots: 3,
+        tierWeights: { easy: 5, normal: 4, hard: 2 },
+        depthScale: 0.05,
+        depthWindow: [-2, 3],
+        flagDepthBelow: 2,
+        rerollScrap: 30,
+        essenceChance: 0.15,
+      },
+    });
+  });
+
+  it('refuses a window that runs backwards, no weight on any tier, a chance above 1 or no tracking', () => {
+    const ok = (contracts: object, over: object = {}) =>
+      QuestsBalanceSchema.safeParse({
+        ...quests,
+        ...over,
+        contracts: { ...quests.contracts, ...contracts },
+      }).success;
+    expect(ok({})).toBe(true);
+    expect(ok({ depthWindow: [3, -2] })).toBe(false);
+    expect(ok({ tierWeights: { easy: 0, normal: 0, hard: 0 } })).toBe(false);
+    expect(ok({ essenceChance: 1.5 })).toBe(false);
+    expect(ok({}, { maxTracked: 0 })).toBe(false);
   });
 });

@@ -262,6 +262,14 @@
       "doors": { "champions": { "offense": 1.5 }, "shrine": { "sustain": 1.5 }, "cursed": { "element": 1.5 } },
       "magnetSpeed": 10, "vacuumSpeed": 18, "pickupDelay": 0.35
     },
+    "quests": {
+      "maxTracked": 3,
+      "contracts": {
+        "slots": 3, "tierWeights": { "easy": 5, "normal": 4, "hard": 2 },
+        "depthScale": 0.05, "depthWindow": [-2, 3], "flagDepthBelow": 2,
+        "rerollScrap": 30, "essenceChance": 0.15
+      }
+    },
     "sandbox": { "dummyLifeMult": 50, "heroStart": [13, 26], "dummyDistance": 3, "rowSpacing": 1.2, "clumpRadius": 1.2, "groupSpacing": 3.6, "spawnRing": 6, "edgeMargin": 1.5 },
     "arena": { "step": 0.03333333333333333, "width": 26, "height": 40, "packSpacing": 1.8, "minPackDistance": 9 }
   }
