@@ -12,7 +12,8 @@ import { getDelveRegistry } from '../registry';
 
 /**
  * The exit gate's confirm (see the floor maps spec): the arena waits under it; Leave takes the
- * exit, Back (Esc or B) stays on the floor.
+ * exit, Back (Esc or B) stays on the floor. Back takes the focus, so a second press of the
+ * gate's button never leaves by accident.
  */
 export function ExitConfirm({
   unexplored,
@@ -31,7 +32,7 @@ export function ExitConfirm({
       width={560}
       testId="exit-confirm"
       footer={
-        <Button variant="go" onClick={onLeave} data-pad-first testId="exit-leave">
+        <Button variant="go" onClick={onLeave} testId="exit-leave">
           Leave the floor
         </Button>
       }
