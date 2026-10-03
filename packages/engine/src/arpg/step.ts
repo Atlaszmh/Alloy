@@ -22,7 +22,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clampLen, dirTo, dist } from './geometry.js';
-import { isWalkable, moveCircle, sees, snapToWalkable } from './grid.js';
+import { clipSight, isWalkable, moveCircle, sees, snapToWalkable } from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -375,11 +375,14 @@ function projectilesTick(ctx: SimCtx, dt: number): void {
   for (const p of world.projectiles) {
     if (p.dead) continue;
     if (p.homingId !== null) steer(ctx, p, dt);
+    const before = { x: p.x, y: p.y };
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.traveled += Math.hypot(p.vx, p.vy) * dt;
-    // In a wall or off the map.
-    const outside = !isWalkable(world.map, p.x, p.y);
+    // A wall stops it at its face (where a bolt bursts); off the map ends it too.
+    const wall = !sees(world.map, before, p);
+    if (wall) Object.assign(p, clipSight(world.map, before, p));
+    const outside = wall || !isWalkable(world.map, p.x, p.y);
     const expired = p.traveled >= p.maxDist || outside;
 
     if (p.owner === 'monster') {
