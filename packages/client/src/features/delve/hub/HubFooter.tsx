@@ -13,7 +13,8 @@ export const TRAINING_BINDING: Binding = { key: 'KeyT', pad: 'view' };
  * metal Delve button (Enter with nothing focused, or Start). An unapplied chain
  * draft blocks the dive, and its block (apply, or discard and delve) sits
  * before the button. While a tab sets `action` (Skills: its Apply bar, with a
- * compact Delve), that node replaces the whole right-hand group.
+ * compact Delve), that node replaces the whole right-hand group. Between dives, the
+ * quests waiting to be claimed sit beside Delve ("2 to claim"), opening Quests.
  */
 export function HubFooter({
   prompts,
@@ -22,6 +23,8 @@ export function HubFooter({
   onStart,
   onDelve,
   action,
+  toClaim = 0,
+  onToClaim,
 }: {
   prompts: Prompt[];
   onTraining: () => void;
@@ -30,6 +33,10 @@ export function HubFooter({
   onStart: (depth: number) => void;
   onDelve: () => void;
   action?: ReactNode;
+  /** Completed quests and contracts waiting to be claimed. */
+  toClaim?: number;
+  /** Opens the Quests tab. */
+  onToClaim?: () => void;
 }) {
   const registry = getDelveRegistry();
   const profile = useDelveStore((s) => s.profile);
@@ -99,6 +106,11 @@ export function HubFooter({
             </Chip>
           ))}
         </div>
+      )}
+      {toClaim > 0 && !active && (
+        <Button size="sm" onClick={onToClaim} testId="claim-count">
+          {toClaim} to claim
+        </Button>
       )}
       <Button
         variant="primary"

@@ -6,6 +6,12 @@ import { getDelveRegistry } from '../../registry';
 import { PauseScreen } from '../PauseScreen';
 import type { HubLink } from '../types';
 
+// No quests (the engine's own come with B1): the journal link opens the Quests tab's empty state.
+vi.mock('../../quests/useQuests', () => {
+  const none = { quests: [], setTracked: () => {} };
+  return { useQuests: () => none };
+});
+
 const registry = getDelveRegistry();
 const store = () => useDelveStore.getState();
 
