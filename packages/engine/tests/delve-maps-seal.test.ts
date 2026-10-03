@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { killMonster, makeCtx } from '../src/arpg/combat.js';
+import { isWalkable } from '../src/arpg/grid.js';
 import type { ArpgEvent } from '../src/types/arpg.js';
 import type { RoomKind } from '../src/types/floor-map.js';
 import { bal, dummy, registry, run, STEP } from './fixtures/arena.js';
@@ -80,6 +81,16 @@ describe('a sealed room', () => {
     Object.assign(w.hero, { x: 5, y: 6 });
     run(w, STEP);
     expect([w.sealing, w.map.doors[1].closed, w.map.rooms[1].sealed]).toEqual([null, false, false]);
+  });
+
+  it('puts back on its floor a foe of it whose centre is in a wall, so it can always finish', () => {
+    const w = den();
+    run(w, STEP);
+    Object.assign(w.monsters[0], { x: 19, y: 0.3 }); // in the room's top wall
+    run(w, STEP);
+    const m = w.monsters[0];
+    expect(isWalkable(w.map, m.x, m.y)).toBe(true);
+    expect(m.x >= 13 && m.x < 25 && m.y >= 1 && m.y < 11).toBe(true);
   });
 
   it('opens when its last foe dies (unseal)', () => {

@@ -101,6 +101,8 @@ function slide(
       lo = Math.max(lo, c + 1 + r);
       break;
     }
+  // A gap narrower than the body: it holds where it is on this axis, never pushed into either side.
+  if (lo > hi) return at;
   return clamp(at + d, lo, hi);
 }
 

@@ -3,7 +3,7 @@ import type { Door, FloorMap, Rect, Room } from '../types/floor-map.js';
 import type { SimCtx } from './combat.js';
 import { roomAt } from './fog.js';
 import { clamp, dirTo } from './geometry.js';
-import { blocked, moveCircle } from './grid.js';
+import { blocked, isWalkable, moveCircle } from './grid.js';
 
 /**
  * Sealed rooms (see the floor maps spec): a den or the boss room closes its
@@ -69,8 +69,9 @@ function freeSpot(map: FloorMap, room: Room, doors: Door[], c: Circle, within: b
  * inward); after `ai.sealGrace` whoever still does is put out on their side
  * and the door closes. With every door shut the room is `sealed` (`seal`). A
  * hero who leaves before it shuts ends the sealing, its doors open again. A
- * sealing or sealed room whose foes are all dead opens (`unseal`). A no-op on
- * the open room.
+ * sealing or sealed room whose foes are all dead opens (`unseal`). A foe of a
+ * den or the boss room whose centre is in a blocked cell is put back on its
+ * floor, so a sealed room can always finish. A no-op on the open room.
  */
 export function sealTick(ctx: SimCtx): void {
   const { world, bal, events } = ctx;
@@ -81,6 +82,12 @@ export function sealTick(ctx: SimCtx): void {
     for (const d of doorsOf(map, room)) d.closed = false;
     if (world.sealing?.roomId === room.id) world.sealing = null;
   };
+
+  for (const room of map.rooms)
+    if (room.kind === 'den' || room.kind === 'boss')
+      for (const m of foesOf(room))
+        if (!isWalkable(map, m.x, m.y))
+          Object.assign(m, freeSpot(map, room, doorsOf(map, room), m, true));
 
   for (const room of map.rooms) {
     if (!(room.sealed || world.sealing?.roomId === room.id) || foesOf(room).length > 0) continue;
