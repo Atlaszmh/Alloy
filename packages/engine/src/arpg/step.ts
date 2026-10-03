@@ -47,6 +47,7 @@ import { flowTick, leashTick } from './flow.js';
 import { interactTick } from './interact.js';
 import { sealTick } from './seal.js';
 import { fogTick } from './fog.js';
+import { nearIndices, spatialHash } from './spatial.js';
 
 /** Seconds from aggro to a boss's first special (the Training Grounds' spawner uses it too). */
 export const AGGRO_SPECIAL_DELAY = 4;
@@ -748,16 +749,23 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
 // ── Collisions & pickups ───────────────────────────────────────────────────
 
-/** Foes push apart, and the hero from them, never into a wall. */
+/**
+ * Foes push apart, and the hero from them, never into a wall. Each pair is
+ * looked at in the list's order, as always, but only neighbours in a spatial
+ * hash whose cells span the widest pair and a unit more for this pass's shoves.
+ */
 function separate(ctx: SimCtx): void {
   const { world } = ctx;
   const map = world.map;
   const h = world.hero;
   const dashing = isDashing(ctx);
   const ms = world.monsters.filter((m) => !m.dead);
+  // ponytail: a crowd shoved over a unit in one pass could miss a pair; the next tick has it.
+  const hash = spatialHash(ms, 2 * Math.max(0, ...ms.map((m) => m.radius)) + 1);
   for (let i = 0; i < ms.length; i++) {
     const a = ms[i];
-    for (let j = i + 1; j < ms.length; j++) {
+    for (const j of nearIndices(hash, a.x, a.y)) {
+      if (j <= i) continue;
       const b = ms[j];
       const d = dist(a.x, a.y, b.x, b.y);
       const overlap = a.radius + b.radius - d;
