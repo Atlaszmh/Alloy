@@ -5,6 +5,7 @@ import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
+import type { LayoutsData, ShrineDef } from './floor-map.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -195,6 +196,10 @@ export interface DelveData {
   doors: DoorDef[];
   names: { prefixes: string[]; suffixes: Record<GearSlot, string[]> };
   slotWeights: Record<GearSlot, number>;
+  /** `layouts.json`: room templates and prop sizes (see the floor maps spec). */
+  layouts: LayoutsData;
+  /** `shrines.json`: the sanctums' blessings. */
+  shrines: ShrineDef[];
 }
 
 // ── Balance (balance.json → delve) ─────────────────────────────────────────

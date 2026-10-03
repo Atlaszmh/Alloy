@@ -17,9 +17,11 @@ import {
   CraftingDataSchema,
   CombinationsSchema,
   DelveDataSchema,
+  LayoutsDataSchema,
   QuestsDataSchema,
   RecipesSchema,
   RunesSchema,
+  ShrinesDataSchema,
   SynergiesSchema,
 } from './schemas.js';
 
@@ -34,6 +36,8 @@ import rawArpg from './arpg.json';
 import rawRunes from './runes.json';
 import rawCrafting from './crafting.json';
 import rawQuests from './quests.json';
+import rawLayouts from './layouts.json';
+import rawShrines from './shrines.json';
 
 interface RawBaseItemsJSON {
   weapons: unknown[];
@@ -62,7 +66,12 @@ export function loadAndValidateData(): LoadedData {
   const flatBaseItems = [...raw.weapons, ...raw.armors];
   const baseItems = BaseItemsSchema.parse(flatBaseItems) as unknown as BaseItemDef[];
   const balance = BalanceConfigSchema.parse(rawBalance) as unknown as BalanceConfig;
-  const delve = DelveDataSchema.parse(rawDelve) as unknown as DelveData;
+  // layouts.json and shrines.json ride the Delve data (see the floor maps spec).
+  const delve = {
+    ...DelveDataSchema.parse(rawDelve),
+    layouts: LayoutsDataSchema.parse(rawLayouts),
+    shrines: ShrinesDataSchema.parse(rawShrines),
+  } as unknown as DelveData;
   const arpg: ArpgData = {
     ...(ArpgDataSchema.parse(rawArpg) as unknown as Omit<ArpgData, 'runes'>),
     runes: RunesSchema.parse(rawRunes) as unknown as RuneDef[],
