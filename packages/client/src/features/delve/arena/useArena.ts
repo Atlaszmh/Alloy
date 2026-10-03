@@ -197,7 +197,11 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
-  const autopilot = useMemo(() => readArenaFlags().autopilot, []);
+  // Under "ask" the page answers the gate and the alcove as for a player.
+  const autopilot = useMemo(() => {
+    const flags = readArenaFlags();
+    return flags.autopilot && !flags.ask;
+  }, []);
   /** When the dive last banked (performance.now() seconds). */
   const bankedAtRef = useRef(-Infinity);
   const { equipped, pair } = profile;
