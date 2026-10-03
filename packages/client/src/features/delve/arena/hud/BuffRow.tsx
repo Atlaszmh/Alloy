@@ -4,18 +4,37 @@ import type { HudBuff } from '../useArenaCore';
 
 export type { HudBuff };
 
-const BUFF: Record<HudBuff['id'], { name: string; color: string }> = {
+const BUFF: Record<Exclude<HudBuff['id'], 'shrine'>, { name: string; color: string }> = {
   riposte: { name: 'Riposte', color: '#fee761' },
   quick: { name: 'Quick', color: '#feae34' },
   barrier: { name: 'Barrier', color: '#ead4aa' },
 };
 
-/** The dock's buff tiles: 38 px each, its glyph and its seconds left. */
+/** A shrine's blessing: for the floor, or the rest of the dive. */
+const BLESSING = { floor: '#2ce8f5', dive: '#feae34' };
+
+/** The dock's buff tiles: 38 px each, its glyph and its seconds left (a blessing has none). */
 export function BuffRow({ buffs }: { buffs: readonly HudBuff[] }) {
   if (buffs.length === 0) return null;
   return (
     <div className="ml-3 flex gap-[6px]">
-      {buffs.map((b) => {
+      {buffs.map((b, i) => {
+        if (b.id === 'shrine') {
+          const label = `${b.name}, ${b.dive ? 'this dive' : 'this floor'}`;
+          return (
+            <span
+              key={`shrine-${i}`}
+              role="img"
+              aria-label={label}
+              title={label}
+              data-buff="shrine"
+              className="flex h-[38px] w-[38px] items-center justify-center bg-[var(--k-well)]"
+              style={{ border: `2px solid ${b.dive ? BLESSING.dive : BLESSING.floor}` }}
+            >
+              <Glyph id="shrine" size={20} />
+            </span>
+          );
+        }
         const { name, color } = BUFF[b.id];
         const secs = Math.ceil(b.left);
         return (

@@ -80,6 +80,23 @@ describe('StopPanel (the stop between depths)', () => {
     expect(screen.getByText('Equip: done')).toBeInTheDocument();
   });
 
+  it('runs its dry runs and its take through `ops` when given (the Anvil alcove), never the stop', () => {
+    store().setProfile({ ...store().profile, bag: [helm] });
+    store().startDive(1);
+    const profile = store().profile;
+    const dry = vi.fn(() => ({ ok: false, profile, reason: 'Not at this alcove' }));
+    const take = vi.fn(() => ({ ok: true, profile }));
+    render(<StopPanel stop={{ offers: ['equip', 'slot'], taken: false }} ops={{ dry, take }} />);
+    fireEvent.click(screen.getByTestId('stop-slot'));
+    expect(dry).toHaveBeenCalledWith(profile, expect.objectContaining({ kind: 'slot' }));
+    expect(screen.getAllByText('Not at this alcove').length).toBeGreaterThan(0);
+    fireEvent.click(back());
+    fireEvent.click(screen.getByTestId('stop-equip'));
+    fireEvent.click(screen.getByTestId('stop-equip-item'));
+    expect(take).toHaveBeenCalledWith({ kind: 'equip', uid: 'h1' });
+    expect(store().profile.equipped.helm?.uid).not.toBe('h1');
+  });
+
   it('Back has the focus; Escape closes the picker, and the focus returns to its card', () => {
     atStop(['equip', 'upgrade']);
     fireEvent.click(screen.getByTestId('stop-upgrade'));

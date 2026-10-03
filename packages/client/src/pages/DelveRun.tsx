@@ -8,6 +8,8 @@ import {
   startDepthOptions,
   type GearItem,
   type Haul,
+  type StopAction,
+  type StopKind,
 } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { setArenaLive } from '@/features/gamepad/gamepad-hub';
@@ -21,6 +23,8 @@ import { LegendaryFanfare } from '@/features/delve/LegendaryFanfare';
 import { PauseScreen } from '@/features/delve/hub/PauseScreen';
 import type { HubLink } from '@/features/delve/hub/types';
 import { ArenaControls } from '@/features/delve/arena/ArenaControls';
+import { AlcoveDialog, ExitConfirm } from '@/features/delve/arena/FloorDialogs';
+import { InteractPlaque } from '@/features/delve/arena/hud/InteractPlaque';
 import { HudGrid, type Insets } from '@/features/delve/arena/hud/HudGrid';
 import { PurseBar } from '@/features/delve/arena/hud/PurseBar';
 import { SkillDock } from '@/features/delve/arena/hud/SkillDock';
@@ -93,6 +97,10 @@ export function DelveRun() {
   /** The last cleared floor's haul, for the stop's "Found this floor" (none after a reload). */
   const [floorHaul, setFloorHaul] = useState<Haul | null>(null);
   const [banners, setBanners] = useState<BannerState[]>([]);
+  /** The exit gate's question (the rooms left unexplored), or null. */
+  const [exitAsk, setExitAsk] = useState<number | null>(null);
+  /** An open anvil alcove's offers, or null. */
+  const [alcove, setAlcove] = useState<StopKind[] | null>(null);
   const bannerId = useRef(0);
   const noManaToast = useMemo(() => noManaToaster(), []);
   useDelveNotices(!!dive);
@@ -145,6 +153,12 @@ export function DelveRun() {
           break;
         case 'fell':
           break;
+        case 'exitRequest':
+          setExitAsk(e.unexplored);
+          break;
+        case 'alcove':
+          setAlcove(e.offers);
+          break;
       }
     },
     [registry, showBanner, noManaToast],
@@ -153,7 +167,9 @@ export function DelveRun() {
   const choosing = dive?.phase === 'choosing';
   // An abandon settles the dive where it stands (it counts as a death): the summary shows it too.
   const finished = dive?.phase === 'dead' || dive?.phase === 'extracted' || !!dive?.settled;
-  const paused = !!pause || fanfares.length > 0 || choosing || finished;
+  // The floor's dialogs (the exit confirm, an alcove) pause the fight under them.
+  const asking = exitAsk !== null || !!alcove;
+  const paused = !!pause || fanfares.length > 0 || choosing || finished || asking;
   // A layout effect, so the controller switches owner in the same commit as the
   // pause or resume: a press right after resuming reaches the fight, not the menus.
   useLayoutEffect(() => {
@@ -210,6 +226,14 @@ export function DelveRun() {
   );
   const openJournal = useCallback(() => openPause({ tab: 'quests' }), [openPause]);
   const resume = useCallback(() => setPause(null), []);
+  const stay = useCallback(() => setExitAsk(null), []);
+  /** The exit confirm's Leave: the floor ends on the arena's next frame. */
+  const leave = useCallback(() => {
+    arenaRef.current?.leave();
+    setExitAsk(null);
+  }, []);
+  const closeAlcove = useCallback(() => setAlcove(null), []);
+  const takeAlcove = useCallback((action: StopAction) => arenaRef.current!.alcove(action), []);
   /** The floor restarts when the dive resumes: what it picked up since the last bank banks first. */
   const toAnvil = useCallback(() => {
     arenaRef.current?.flush();
@@ -250,10 +274,18 @@ export function DelveRun() {
         disabled={paused}
         manualAttack={manualAttack}
       />
+      {!paused && arena.hud?.prompt && (
+        <InteractPlaque
+          prompt={arena.hud.prompt}
+          world={arena.worldRef}
+          heroScreen={arena.heroScreen}
+          pixelsPerUnit={arena.pixelsPerUnit}
+        />
+      )}
 
       <HudGrid
         onInsets={setInsets}
-        inert={!!pause || choosing}
+        inert={!!pause || choosing || asking}
         top={<PurseBar dive={dive} onMenu={openMenu} onJournal={openJournal} />}
         right={
           <FloorColumn
@@ -313,6 +345,9 @@ export function DelveRun() {
           />
         </div>
       )}
+
+      {exitAsk !== null && <ExitConfirm unexplored={exitAsk} onLeave={leave} onStay={stay} />}
+      {alcove && <AlcoveDialog offers={alcove} onTake={takeAlcove} onClose={closeAlcove} />}
 
       {finished && (
         <DiveSummary

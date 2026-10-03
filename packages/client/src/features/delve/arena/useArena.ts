@@ -1,25 +1,32 @@
 import { useMemo, useRef, type RefObject } from 'react';
 import {
+  alcoveOffers,
   bankWorld,
   beginFloor,
   compareItem,
   completeFloor,
   emptyHaul,
+  exitFloor,
   failFloor,
   heroChains,
+  takeAlcove,
   type DataRegistry,
   profileStats,
+  type ArpgEvent,
   type ArpgWorld,
   type DiveState,
   type GearItem,
   type Haul,
+  type ProfileActionResult,
   type ReactionId,
+  type StopAction,
+  type StopKind,
   type WorldPending,
 } from '@alloy/engine';
 import { pullOpts, useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../registry';
 import { UPGRADE_EPSILON } from '../format';
-import { useArenaCore, type ArenaMode, type CoreUiEvent } from './useArenaCore';
+import { readArenaFlags, useArenaCore, type ArenaMode, type CoreUiEvent } from './useArenaCore';
 import type { Insets } from './camera';
 
 export {
@@ -46,7 +53,11 @@ export type ArenaUiEvent =
   | { kind: 'patterns'; ids: string[] }
   /** `haul`: the floor's haul as the clear banked it (the stop's "Found this floor"). */
   | { kind: 'cleared'; bountyAdded: number; bossKilled: boolean; haul: Haul }
-  | { kind: 'fell' };
+  | { kind: 'fell' }
+  /** The exit gate asks (a generated floor): `unexplored` rooms are left. */
+  | { kind: 'exitRequest'; unexplored: number }
+  /** An anvil alcove opened: its power-ups (`alcoveOffers`), the arena to pause under them. */
+  | { kind: 'alcove'; offers: StopKind[] };
 
 const END_DELAY = 1.3;
 
@@ -100,6 +111,59 @@ export function clearFloor(
 }
 
 /**
+ * Whether the floor is over: the hero fell, took the exit (a generated floor), or cleared the open
+ * room and its loot is picked up (or 2.5 s passed).
+ */
+export function floorOver(world: ArpgWorld): boolean {
+  return (
+    world.heroDead ||
+    world.exited ||
+    (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 2.5))
+  );
+}
+
+/**
+ * A generated floor's requests (see the floor maps spec). The gate's `exitRequest`: the page
+ * confirms it, the autopilot takes the exit at once (`exitFloor`). An alcove's `alcoveOpen`: what
+ * waits banks first, so its offers (`alcoveOffers`) are priced on the save, then the page opens
+ * them; under the autopilot the bot has the alcove.
+ */
+export function routeFloorEvents(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  events: readonly ArpgEvent[],
+  opts: { autopilot: boolean; bank: (world: ArpgWorld) => void; onUi: (e: ArenaUiEvent) => void },
+): void {
+  for (const e of events) {
+    if (e.kind === 'exitRequest') {
+      if (opts.autopilot) exitFloor(world);
+      else opts.onUi({ kind: 'exitRequest', unexplored: e.roomsUnexplored });
+    } else if (e.kind === 'alcoveOpen' && !opts.autopilot) {
+      opts.bank(world);
+      const offers = alcoveOffers(registry, useDelveStore.getState().profile, world, e.id);
+      opts.onUi({ kind: 'alcove', offers });
+    }
+  }
+}
+
+/**
+ * Take an alcove's power-up: what waits banks first (`bank`), then `takeAlcove` runs on the save
+ * that bank left, and the save keeps what it gives.
+ */
+export function alcoveTake(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  action: StopAction,
+  bank: (world: ArpgWorld) => void,
+): ProfileActionResult {
+  bank(world);
+  const store = useDelveStore.getState();
+  const res = takeAlcove(registry, store.profile, world, action);
+  if (res.ok) store.setProfile(res.profile);
+  return res;
+}
+
+/**
  * The arena's world key: a floor under way. Only while fighting, so the finished floor stays on
  * screen behind the doors or the summary; and not once the dive has settled, so after an abandon
  * mid-floor a dive again at that depth starts a fresh floor.
@@ -124,6 +188,7 @@ export function useArena(
   const onUiRef = useRef(opts.onUi);
   onUiRef.current = opts.onUi;
   const endAtRef = useRef<number | null>(null);
+  const autopilot = useMemo(() => readArenaFlags().autopilot, []);
   /** When the dive last banked (performance.now() seconds). */
   const bankedAtRef = useRef(-Infinity);
   const { equipped, pair } = profile;
@@ -166,13 +231,12 @@ export function useArena(
 
   /** The clear timers and, after a death, the END_DELAY beat; true once the floor has ended. */
   function checkEnd(world: ArpgWorld): boolean {
-    const done =
-      world.heroDead ||
-      (world.cleared && (world.drops.length === 0 || world.t - world.clearedAt > 2.5));
-    if (!done) return false;
+    if (!floorOver(world)) return false;
     const now = performance.now() / 1000;
     endAtRef.current ??= now;
-    if (now - endAtRef.current < (world.heroDead ? END_DELAY : 0.4)) return false;
+    // A death waits its beat and a clear 0.4 s; the exit goes at once.
+    const wait = world.heroDead ? END_DELAY : world.exited ? 0 : 0.4;
+    if (now - endAtRef.current < wait) return false;
     const store = useDelveStore.getState();
     if (world.heroDead) {
       const res = failFloor(registry, store.profile, world, pullOpts(store));
@@ -203,7 +267,8 @@ export function useArena(
       if (banksNow(world.pending, since, reactionsSeen)) bank(world);
       return checkEnd(world);
     },
-    onEvents: () => {},
+    onEvents: (world, events) =>
+      routeFloorEvents(registry, world, events, { autopilot, bank, onUi: onUiRef.current }),
     onHeroDead: () => {},
     speed: 1,
     // ▲ on a loot label: better as it comes, as the bag's tiles count it.
@@ -223,5 +288,16 @@ export function useArena(
     const dive = useDelveStore.getState().profile.dive;
     if (world && dive?.phase === 'fighting' && !dive.settled) bank(world);
   };
-  return { ...core, flush };
+  /** The exit confirm's Leave: `world.exited`, and the next frame ends the floor (`checkEnd`). */
+  const leave = () => {
+    const world = core.worldRef.current;
+    if (world) exitFloor(world);
+  };
+  /** The alcove dialog's take (`alcoveTake`). */
+  const alcove = (action: StopAction): ProfileActionResult => {
+    const world = core.worldRef.current;
+    if (world) return alcoveTake(registry, world, action, bank);
+    return { ok: false, profile: useDelveStore.getState().profile, reason: 'No floor under way' };
+  };
+  return { ...core, flush, leave, alcove };
 }
