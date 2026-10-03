@@ -17,6 +17,7 @@ import { addToPouch } from '../loot/runes.js';
 import { addHaul, emptyHaul, stockHaul } from '../loot/materials.js';
 import { stochasticRound } from '../loot/drops.js';
 import type { SetChainsOptions } from './runes.js';
+import { refillBoard } from './contracts.js';
 
 export function isBossDepth(registry: DataRegistry, depth: number): boolean {
   return isBossFloor(registry, depth);
@@ -404,10 +405,13 @@ export function settleDive(registry: DataRegistry, profile: DelveProfile, outcom
     kept = addHaul(dive.banked, mapCounts(share, (n) => -n));
     lost = addHaul(dive.haul, share);
   }
-  return {
+  const settled: DelveProfile = {
     ...stockHaul(profile, kept),
     dive: { ...dive, haul: emptyHaul(), banked: kept, lost, settled: true },
   };
+  // A dive that cleared a depth refills the Contract board (the quests spec's S2), once there are templates.
+  const refill = dive.depthsCleared > 0 && registry.getQuestsData().contractTemplates.length > 0;
+  return refill ? refillBoard(registry, settled) : settled;
 }
 
 /**
