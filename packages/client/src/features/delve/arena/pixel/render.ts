@@ -568,8 +568,6 @@ function passGround(F: Frame): void {
   const { pw, out, t, S, V, x0, y0, vw, vh, s, RW } = F;
   const th = pw.theme;
   const W = pw.width;
-  const H = pw.height;
-  const M = pw.margin;
   const { baseR, baseG, baseB, cachedMat, cachedDetail, jitter, crack } = S;
   const { er, eg, eb, wetNear } = V;
   const {
@@ -586,6 +584,7 @@ function passGround(F: Frame): void {
     blight,
     fire,
     detail,
+    edge: rock,
   } = pw;
   const glow = th.fluidGlow;
   const gs = th.fluidGlowStrength;
@@ -594,7 +593,6 @@ function passGround(F: Frame): void {
   const deep = th.fluidDeep;
 
   for (let y = y0; y < y0 + vh; y++) {
-    const ey = y < M ? M - y : y >= H - M ? y - (H - M - 1) : 0;
     const pyBase = (y - y0) * s;
     for (let x = x0; x < x0 + vw; x++) {
       const i = y * W + x;
@@ -605,8 +603,7 @@ function passGround(F: Frame): void {
       const up = x > 0 && y > 0 ? terrain[i - W - 1] : terrain[i];
       let sh = 1 + (terrain[i] - up) * 20;
       sh = sh < 0.5 ? 0.5 : sh > 1.5 ? 1.5 : sh;
-      const ex = x < M ? M - x : x >= W - M ? x - (W - M - 1) : 0;
-      const edge = ex > ey ? ex : ey;
+      const edge = rock[i];
       if (edge > 0) sh *= edge > 13 ? 0.42 : 1 - edge * 0.045;
       const wt = wet[i];
       if (wt > 0) sh *= 1 - 0.32 * wt;
