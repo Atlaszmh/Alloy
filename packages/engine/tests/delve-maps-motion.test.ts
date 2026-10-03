@@ -69,4 +69,19 @@ describe('drops', () => {
       }
     }
   });
+
+  it("an elite den's elites find gear more often", () => {
+    const items = (kind: 'den' | 'combat') => {
+      let n = 0;
+      for (let seed = 0; seed < 60; seed++) {
+        const w = onMap(arena([dummy(13, 20, { kind: 'elite', hp: 1, roomId: 0 })]), []);
+        w.map.rooms[0].kind = kind;
+        w.lootRng = w.lootRng.fork(`seed:${seed}`);
+        killMonster(makeCtx(registry, w, []), w.monsters[0]);
+        n += w.drops.filter((d) => d.kind === 'item').length;
+      }
+      return n;
+    };
+    expect(items('den')).toBeGreaterThan(items('combat'));
+  });
 });

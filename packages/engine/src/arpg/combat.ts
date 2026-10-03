@@ -791,6 +791,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
   // Loot
   const lootRng = world.lootRng;
   const loot = world.loot;
+  // An elite den's foes find gear more often (see the floor maps spec).
+  const den = world.map.rooms.find((r) => r.id === m.roomId)?.kind === 'den';
   const drops = given
     ? { items: [], nextUid: loot.nextUid }
     : rollEncounterDrops(
@@ -799,6 +801,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
           depth: world.depth,
           kind: m.kind,
           gear: world.door?.mods.gear ?? 1,
+          ...(den && { gearBonus: bal.drops.den.gearBonus }),
           nextUid: loot.nextUid,
           biomeMana: world.element,
           pair: loot.pair,
