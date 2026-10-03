@@ -78,6 +78,8 @@ vi.mock('@/features/delve/arena/useArena', async () => {
         dodge: () => {},
         attack: () => {},
         flush: () => seen.calls.push('flush'),
+        leave: () => seen.calls.push('leave'),
+        alcove: () => (seen.calls.push('alcove'), { ok: true }),
       };
     },
   };
@@ -191,6 +193,37 @@ describe('DelveRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
     expect(seen.paused.at(-1)).toBe(false);
     expect(seen.live.at(-1)).toBe(true);
+  });
+
+  it('the exit gate asks first, over the paused arena: Back stays, Leave takes the exit', () => {
+    renderRun();
+    act(() => seen.onUi!({ kind: 'exitRequest', unexplored: 2 }));
+    const confirm = screen.getByTestId('exit-confirm');
+    expect(confirm).toHaveTextContent('2 rooms unexplored.');
+    expect(seen.paused.at(-1)).toBe(true);
+    expect(seen.live.at(-1)).toBe(false);
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Back' }));
+    expect(screen.queryByTestId('exit-confirm')).toBeNull();
+    expect(seen.paused.at(-1)).toBe(false);
+    expect(seen.calls).toEqual([]);
+    act(() => seen.onUi!({ kind: 'exitRequest', unexplored: 0 }));
+    fireEvent.click(screen.getByTestId('exit-leave'));
+    expect(seen.calls).toEqual(['leave']);
+    expect(screen.queryByTestId('exit-confirm')).toBeNull();
+    expect(seen.paused.at(-1)).toBe(false);
+  });
+
+  it("an anvil alcove opens the stop's cards over the paused arena; a take goes through the dive and closes them", () => {
+    renderRun();
+    act(() => seen.onUi!({ kind: 'alcove', offers: ['equip', 'upgrade'] }));
+    const dialog = screen.getByTestId('alcove-dialog');
+    expect(within(dialog).getByTestId('stop-equip')).toBeInTheDocument();
+    expect(seen.paused.at(-1)).toBe(true);
+    fireEvent.click(within(dialog).getByTestId('stop-upgrade'));
+    fireEvent.click(within(dialog).getAllByTestId('stop-upgrade-item')[0]);
+    expect(seen.calls).toEqual(['alcove']);
+    expect(screen.queryByTestId('alcove-dialog')).toBeNull();
+    expect(seen.paused.at(-1)).toBe(false);
   });
 
   it("the pause's Anvil goes to the Anvil keeping the dive; Abandon settles it as a death, shows the summary, then closes it", () => {
