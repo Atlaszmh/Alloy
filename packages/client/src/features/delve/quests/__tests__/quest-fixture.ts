@@ -33,6 +33,8 @@ export const SAMPLE_QUESTS: QuestView[] = [
       { id: 'echo', name: 'Rune · Echo III', sub: 'To your pouch', color: '#feae34' },
     ],
     tracked: true,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'kindling',
@@ -46,6 +48,8 @@ export const SAMPLE_QUESTS: QuestView[] = [
       { id: 'dust', name: '10 Mana Dust', sub: 'For edits and re-attuning', color: '#e8b796' },
     ],
     tracked: true,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'deep-roots',
@@ -57,6 +61,8 @@ export const SAMPLE_QUESTS: QuestView[] = [
     ],
     rewards: [{ id: 'links', name: '1 Link', sub: 'For slots and sockets', color: '#2ce8f5' }],
     tracked: false,
+    status: 'active',
+    isNew: false,
   },
   {
     id: 'rat-catcher',
@@ -68,5 +74,7 @@ export const SAMPLE_QUESTS: QuestView[] = [
     ],
     rewards: [{ id: 'scrap', name: '200 scrap', sub: 'To your purse', color: '#c0cbdc' }],
     tracked: false,
+    status: 'active',
+    isNew: false,
   },
 ];
