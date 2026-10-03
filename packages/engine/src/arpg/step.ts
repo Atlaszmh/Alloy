@@ -22,7 +22,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clampLen, dirTo, dist } from './geometry.js';
-import { clipSight, isWalkable, moveCircle, sees, snapToWalkable } from './grid.js';
+import { clipSight, isWalkable, moveCircle, sees, shift, snapToWalkable } from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -525,11 +525,10 @@ function gapFromDodge(ctx: SimCtx, m: MonsterEntity): number {
   return o ? dist(m.x, m.y, o.x, o.y) - m.radius - ctx.world.hero.radius : Infinity;
 }
 
-/** Rooted foes stay put (they can still attack in reach). */
+/** Rooted foes stay put (they can still attack in reach); a wall stops the rest. */
 function moveMonster(ctx: SimCtx, m: MonsterEntity, dir: Vec, speed: number, dt: number): void {
   if (isRooted(ctx, m)) return;
-  m.x += dir.x * speed * dt;
-  m.y += dir.y * speed * dt;
+  shift(ctx.world.map, m, m.radius, dir.x * speed * dt, dir.y * speed * dt);
 }
 
 function bossSpecial(ctx: SimCtx, m: MonsterEntity): void {
@@ -636,8 +635,7 @@ function monstersTick(ctx: SimCtx, dt: number): void {
       m.hp = Math.min(m.maxHp, m.hp + m.maxHp * bal.monster.traits.regenPerSecond * dt);
 
     if (m.kbx !== 0 || m.kby !== 0) {
-      m.x += m.kbx * dt;
-      m.y += m.kby * dt;
+      shift(world.map, m, m.radius, m.kbx * dt, m.kby * dt);
       const decay = Math.exp(-10 * dt);
       m.kbx = Math.abs(m.kbx * decay) < 0.05 ? 0 : m.kbx * decay;
       m.kby = Math.abs(m.kby * decay) < 0.05 ? 0 : m.kby * decay;
@@ -750,8 +748,10 @@ function monstersTick(ctx: SimCtx, dt: number): void {
 
 // ── Collisions & pickups ───────────────────────────────────────────────────
 
+/** Foes push apart, and the hero from them, never into a wall. */
 function separate(ctx: SimCtx): void {
   const { world } = ctx;
+  const map = world.map;
   const h = world.hero;
   const dashing = isDashing(ctx);
   const ms = world.monsters.filter((m) => !m.dead);
@@ -764,10 +764,8 @@ function separate(ctx: SimCtx): void {
       if (overlap <= 0) continue;
       const n = d > 1e-6 ? { x: (b.x - a.x) / d, y: (b.y - a.y) / d } : { x: 1, y: 0 };
       const wa = b.kind === 'boss' ? 1 : a.kind === 'boss' ? 0 : 0.5;
-      a.x -= n.x * overlap * wa;
-      a.y -= n.y * overlap * wa;
-      b.x += n.x * overlap * (1 - wa);
-      b.y += n.y * overlap * (1 - wa);
+      shift(map, a, a.radius, -n.x * overlap * wa, -n.y * overlap * wa);
+      shift(map, b, b.radius, n.x * overlap * (1 - wa), n.y * overlap * (1 - wa));
     }
     // A dashing hero slips through foes.
     if (dashing) continue;
@@ -777,16 +775,17 @@ function separate(ctx: SimCtx): void {
       const n = d > 1e-6 ? { x: (a.x - h.x) / d, y: (a.y - h.y) / d } : { x: 0, y: -1 };
       // A dummy doesn't budge for the hero; a boss mostly doesn't.
       const heroShare = a.dummy ? 1 : a.kind === 'boss' ? 0.8 : 0.2;
-      a.x += n.x * overlap * (1 - heroShare);
-      a.y += n.y * overlap * (1 - heroShare);
-      h.x -= n.x * overlap * heroShare;
-      h.y -= n.y * overlap * heroShare;
+      shift(map, a, a.radius, n.x * overlap * (1 - heroShare), n.y * overlap * (1 - heroShare));
+      shift(map, h, h.radius, -n.x * overlap * heroShare, -n.y * overlap * heroShare);
     }
   }
   // Whatever the moves and pushes left pressed into a wall goes back out.
   for (const m of ms) Object.assign(m, moveCircle(world.map, m, m.radius, 0, 0));
   Object.assign(h, moveCircle(world.map, h, h.radius, 0, 0));
 }
+
+/** A drop's size on the grid, as the magnet and the vacuum slide it along walls. */
+const DROP_RADIUS = 0.25;
 
 /** Gear, runes, patterns and essences are walked over; everything else flies to the hero in the magnet's reach. */
 function walkedOver(d: Drop): boolean {
@@ -802,13 +801,13 @@ function dropsTick(ctx: SimCtx, dt: number): void {
   for (const d of world.drops) {
     if (d.dead) continue;
     const gap = dist(h.x, h.y, d.x, d.y);
-    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius;
+    // The magnet draws what it sees; the vacuum, anything. Both slide along walls.
+    const magnet = !walkedOver(d) && gap < bal.hero.magnetRadius && sees(world.map, d, h);
     if (d.vacuum || magnet) {
       const dir = dirTo(d.x, d.y, h.x, h.y);
       const speed = d.vacuum ? vacuumSpeed : magnetSpeed;
       const stepLen = Math.min(gap, speed * dt);
-      d.x += dir.x * stepLen;
-      d.y += dir.y * stepLen;
+      shift(world.map, d, DROP_RADIUS, dir.x * stepLen, dir.y * stepLen);
     }
     if (world.t - d.born < pickupDelay) continue;
     if (dist(h.x, h.y, d.x, d.y) > bal.hero.pickupRadius) continue;

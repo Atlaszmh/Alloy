@@ -18,7 +18,7 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
-import { sees, snapToWalkable } from './grid.js';
+import { clipSight, sees, snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -462,7 +462,7 @@ function react(
       m.status.sunderUntil = t + r.sunderDuration;
       return amount;
     case 'seedling':
-      spawnDrop(ctx, 'orb', m.x, m.y, { amount: r.seedlingHeal, mana: 'nature' });
+      spawnDrop(ctx, 'orb', m, m.x, m.y, { amount: r.seedlingHeal, mana: 'nature' });
       return amount;
     case 'siphon': {
       // Three motes round the foe (fixed, no rng), pulled to the hero wherever it stands.
@@ -471,7 +471,7 @@ function react(
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / 3;
         const x = m.x + Math.cos(a) * 0.4;
         const y = m.y + Math.sin(a) * 0.4;
-        spawnDrop(ctx, 'mote', x, y, { amount: each, mana: 'shadow', vacuum: true });
+        spawnDrop(ctx, 'mote', m, x, y, { amount: each, mana: 'shadow', vacuum: true });
       }
       return amount;
     }
@@ -666,16 +666,22 @@ export function hitMonster(
   return amount;
 }
 
+/**
+ * A drop from foe `from` thrown toward (x, y): it lands short of any wall
+ * between them, and belongs to the foe's room (see the floor maps spec).
+ */
 function spawnDrop(
   ctx: SimCtx,
   kind: DropKind,
-  x: number,
-  y: number,
+  from: MonsterEntity,
+  tx: number,
+  ty: number,
   /** `vacuum`: pulled to the hero from anywhere (default: once the floor is cleared). */
   extra: { item?: GearItem; mana?: ManaType; amount: number; vacuum?: boolean },
 ): void {
   const { world } = ctx;
   const id = world.nextId++;
+  const { x, y } = clipSight(world.map, from, { x: tx, y: ty });
   world.drops.push({
     id,
     kind,
@@ -683,6 +689,7 @@ function spawnDrop(
     y,
     item: extra.item,
     mana: extra.mana,
+    ...(from.roomId !== null && { roomId: from.roomId }),
     amount: extra.amount,
     born: world.t,
     vacuum: extra.vacuum ?? world.cleared,
@@ -809,7 +816,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
       m.y + Math.sin(angle) * r,
       1,
     );
-    spawnDrop(ctx, 'item', x, y, { item, amount: 1 });
+    spawnDrop(ctx, 'item', m, x, y, { item, amount: 1 });
   });
 
   const mote =
@@ -818,7 +825,7 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
       : m.kind === 'elite'
         ? bal.mana.eliteMote
         : bal.mana.moteAmount;
-  spawnDrop(ctx, 'mote', m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), {
+  spawnDrop(ctx, 'mote', m, m.x + (lootRng.next() - 0.5), m.y + (lootRng.next() - 0.5), {
     mana: m.element,
     amount: mote,
   });
@@ -831,7 +838,8 @@ function dropLoot(ctx: SimCtx, m: MonsterEntity, given: boolean): void {
           ? 1
           : 0;
   for (let i = 0; i < orbs; i++) {
-    spawnDrop(ctx, 'orb', m.x + (lootRng.next() - 0.5) * 2, m.y + (lootRng.next() - 0.5) * 2, {
+    const x = m.x + (lootRng.next() - 0.5) * 2;
+    spawnDrop(ctx, 'orb', m, x, m.y + (lootRng.next() - 0.5) * 2, {
       amount: bal.dive.healthOrbHeal,
     });
   }
