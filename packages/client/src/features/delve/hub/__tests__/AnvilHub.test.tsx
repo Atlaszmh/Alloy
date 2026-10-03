@@ -3,11 +3,20 @@ import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { AnvilHub } from '../AnvilHub';
 import { useDelveStore } from '@/stores/delveStore';
+import { SAMPLE_QUESTS } from '../../quests/__tests__/quest-fixture';
+import type { QuestView } from '../../quests/types';
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
   const actual = await vi.importActual('react-router');
   return { ...actual, useNavigate: () => mockNavigate };
+});
+
+/** The quests the hub's `useQuests` gives (the engine's own come with B1). */
+const shown = vi.hoisted(() => ({ quests: [] as QuestView[] }));
+vi.mock('../../quests/useQuests', () => {
+  const setTracked = () => {};
+  return { useQuests: () => ({ quests: shown.quests, setTracked }) };
 });
 
 const renderHub = () =>
@@ -39,6 +48,7 @@ describe('AnvilHub', () => {
   beforeEach(() => {
     localStorage.clear();
     mockNavigate.mockReset();
+    shown.quests = [];
     useDelveStore.getState().resetProfile(1234, 'fire');
   });
 
@@ -48,6 +58,34 @@ describe('AnvilHub', () => {
     const pip = screen.getByTestId('tab-loadout').querySelector('.k-tab-badge')!;
     expect(pip).toHaveTextContent(/^NEW 2$/);
     expect(pip.querySelector('[aria-label="2 new"]')).not.toBeNull();
+  });
+
+  it("Quests' tab counts the quests to claim, and the footer's count opens it", () => {
+    const [main, side, other] = SAMPLE_QUESTS;
+    shown.quests = [{ ...main, status: 'complete' }, { ...side, status: 'complete' }, other];
+    renderHub();
+    const pip = screen.getByTestId('tab-quests').querySelector('.k-tab-badge')!;
+    expect(pip).toHaveTextContent(/^2$/);
+    expect(pip.querySelector('[aria-label="2 to claim"]')).not.toBeNull();
+    const count = screen.getByTestId('claim-count');
+    expect(count).toHaveTextContent('2 to claim');
+    fireEvent.click(count);
+    expect(selected()).toEqual(['tab-quests']);
+    expect(screen.getByTestId('quest-claim')).toBeEnabled();
+  });
+
+  it('counts nothing while nothing waits to be claimed', () => {
+    renderHub();
+    expect(screen.getByTestId('tab-quests').querySelector('.k-tab-badge')).toBeNull();
+    expect(screen.queryByTestId('claim-count')).toBeNull();
+  });
+
+  it('mid-dive the pip stays, and the footer holds no count: claims wait for the dive to end', () => {
+    shown.quests = [{ ...SAMPLE_QUESTS[0], status: 'complete' }];
+    useDelveStore.getState().startDive(1);
+    renderHub();
+    expect(screen.getByTestId('claim-pip')).toHaveTextContent('1');
+    expect(screen.queryByTestId('claim-count')).toBeNull();
   });
 
   it('is a kit screen whose header holds the five tabs, the purse and Power', () => {

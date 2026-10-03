@@ -1,8 +1,8 @@
 // The quest view the journal and the HUD draw: an engine QuestState through quest-view.ts. Nothing
 // here is a rule.
-import type { QuestKind } from '@alloy/engine';
+import type { QuestKind, QuestStatus } from '@alloy/engine';
 
-export type { QuestKind };
+export type { QuestKind, QuestStatus };
 
 export interface QuestObjective {
   id: string;
@@ -31,6 +31,10 @@ export interface QuestView {
   objectives: QuestObjective[];
   rewards: QuestReward[];
   tracked: boolean;
+  /** Under way, complete (DONE: claim it at the Anvil), or claimed (the journal's Done group). */
+  status: QuestStatus;
+  /** Unlocked, and not yet opened in the journal. */
+  isNew: boolean;
 }
 
 /** The HUD tracker shows at most this many. */

@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { questStates, type QuestState } from '@alloy/engine';
 import { useDelveStore } from '@/stores/delveStore';
 import { getDelveRegistry } from '../../registry';
+import { RARITY_COLOR } from '../../format';
 import { questView } from '../quest-view';
 import { useQuests } from '../useQuests';
 
@@ -49,15 +50,46 @@ describe('questView', () => {
         { id: '0', name: '3 × Iron bar', color: '#8b9bb4' },
         { id: '1', name: '40 scrap', color: '#fcd34d' },
         { id: '2', name: 'Maul pattern', color: '#c0cbdc' },
-        { id: '3', name: 'Chosen when you claim it', color: '#c0cbdc' },
+        {
+          id: '3',
+          name: 'A tier III offense shard',
+          sub: 'Chosen when you claim it',
+          color: '#e43b44',
+        },
       ],
       tracked: true,
+      status: 'active',
+      isNew: true,
     });
   });
 
   it('a quest with no chapter reads its first objective under its name', () => {
     const side: QuestState = { ...FIRST, kind: 'side', chapter: undefined };
     expect(questView(registry, side).sub).toBe('Reach depth 2');
+  });
+
+  it('names each rule reward by what it will be, and carries a complete quest as seen', () => {
+    const rules: QuestState = {
+      ...FIRST,
+      status: 'complete',
+      isNew: false,
+      rewards: [
+        { rule: { kind: 'metal', id: 'depth', count: 3 } },
+        { rule: { kind: 'shard', family: 'defense', tier: 2, count: 2 } },
+        { rule: { kind: 'essence', id: 'fit', count: 1 } },
+        {
+          rule: { kind: 'pattern', id: 'unknown', count: 1, fallback: { kind: 'dust', count: 20 } },
+        },
+      ],
+    };
+    const view = questView(registry, rules);
+    expect(view).toMatchObject({ status: 'complete', isNew: false });
+    expect(view.rewards.map((r) => [r.name, r.sub, r.color])).toEqual([
+      ['3 bars of your deepest metal', 'Chosen when you claim it', '#c0cbdc'],
+      ['2 tier II defense shards', 'Chosen when you claim it', '#0099db'],
+      ['An essence for a pattern you know', 'Chosen when you claim it', RARITY_COLOR.legendary],
+      ["A pattern you don't know yet", 'Chosen when you claim it', '#c0cbdc'],
+    ]);
   });
 });
 

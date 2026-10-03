@@ -14,6 +14,7 @@ import { SkillsTab } from './skills/SkillsTab';
 import { ForgeTab } from './forge/ForgeTab';
 import { CodexTab } from './codex/CodexTab';
 import { QuestsTab } from './quests/QuestsTab';
+import { useQuests } from '../quests/useQuests';
 import type { HubLink, HubMode, HubTab, HubTabProps } from './types';
 
 const TABS: { id: HubTab; label: string }[] = [
@@ -37,10 +38,12 @@ const TAB_VIEWS: Record<HubTab, (props: HubTabProps) => ReactNode> = {
  * (`initial` at first), the tab's prompts and footer action, the header's Tabs (`nav`), the
  * open tab's view (`view`) and the digit keys (`digits`, for the screen's usePrompts). In
  * `mode: 'pause'` the Forge is disabled ("Forge at the Anvil"): LB/RB and the digits skip it.
+ * The Quests tab's pip counts the quests waiting to be claimed (`claimable`, for the footer too).
  */
 export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink) {
   const newCount = useDelveStore((s) => Object.keys(s.newUids).length);
   const unapplied = Object.keys(useDelveStore(selectDraftApply).changes).length;
+  const claimable = useQuests().quests.filter((q) => q.status === 'complete').length;
   const [tab, setTab] = useState<HubTab>(initial?.tab ?? 'loadout');
   // The link the last go() carried, for the tab it names; a plain tab change carries none.
   const [link, setLink] = useState<HubLink | undefined>(initial);
@@ -88,6 +91,10 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
             >
               {unapplied}
             </span>
+          ) : t.id === 'quests' && claimable > 0 ? (
+            <span aria-label={`${claimable} to claim`} data-testid="claim-pip">
+              {claimable}
+            </span>
           ) : undefined,
       }))}
     />
@@ -103,7 +110,7 @@ export function useHubTabs(mode: HubMode, onDelve: () => void, initial?: HubLink
       onDelve={onDelve}
     />
   );
-  return { nav, view, tabPrompts, footerAction, digits };
+  return { nav, view, tabPrompts, footerAction, digits, claimable, go };
 }
 
 /**
@@ -169,6 +176,8 @@ export function AnvilHub({ mode }: { mode: HubMode }) {
             onStart={setStart}
             onDelve={onDelve}
             action={hub.footerAction}
+            toClaim={hub.claimable}
+            onToClaim={() => hub.go({ tab: 'quests' })}
           />
         }
       >
