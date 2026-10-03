@@ -183,7 +183,8 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
       const hits = alive(ctx).filter(
         (m) =>
           dist(h.x, h.y, m.x, m.y) - m.radius <= reach &&
-          (arc >= 360 || angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) <= half),
+          (arc >= 360 || angleBetween(dir, dirTo(h.x, h.y, m.x, m.y)) <= half) &&
+          sees(world.map, h, m),
       );
       ctx.events.push({
         kind: 'slash',
@@ -241,8 +242,13 @@ export function executeForm(ctx: SimCtx, ab: ResolvedAbility, aim: Vec | null): 
         infusion: ab.elements[1] ?? null,
       });
       const opts = hitOpts(ab, { x: fromX, y: fromY }, false, true, heft);
+      // The trail strikes the foes it passes that either of its ends sees.
+      const from = { x: fromX, y: fromY };
       for (const m of alive(ctx)) {
-        if (distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius)
+        if (
+          distToSegment(m.x, m.y, fromX, fromY, h.x, h.y) <= ab.radius + m.radius &&
+          (sees(world.map, from, m) || sees(world.map, h, m))
+        )
           hitMonster(ctx, m, hit, ab.element, opts);
       }
       buff('blink', t + ctx.bal.abilities.defend.blinkSeconds);

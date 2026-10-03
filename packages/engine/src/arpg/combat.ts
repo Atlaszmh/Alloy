@@ -18,7 +18,7 @@ import { rollEncounterDrops } from '../loot/drops.js';
 import { scrapLevelFactor } from '../loot/item-generator.js';
 import { armorReduction, hasMastery } from '../delve/hero-stats.js';
 import { dirTo, dist } from './geometry.js';
-import { snapToWalkable } from './grid.js';
+import { sees, snapToWalkable } from './grid.js';
 import { addCharge, defendingAbility, shieldHero } from './abilities/defend.js';
 import { pressStep } from './abilities/cast.js';
 import { chargeCap } from './abilities/resolve.js';
@@ -311,10 +311,17 @@ function noteReaction(ctx: SimCtx, reaction: ReactionId, m: MonsterEntity, pairs
   if (!ctx.world.sandbox) ctx.world.pending.questEvents.push({ type: 'reaction', reaction });
 }
 
-/** Every other living foe within `radius` of `m` (edge to centre, as Overload always measured). */
+/**
+ * Every other living foe within `radius` of `m` (edge to centre, as Overload always measured)
+ * that `m` sees: the one choke point for the reactions' splash.
+ */
 function nearby(ctx: SimCtx, m: MonsterEntity, radius: number): MonsterEntity[] {
   return ctx.world.monsters.filter(
-    (o) => !o.dead && o.id !== m.id && dist(o.x, o.y, m.x, m.y) <= radius + o.radius,
+    (o) =>
+      !o.dead &&
+      o.id !== m.id &&
+      dist(o.x, o.y, m.x, m.y) <= radius + o.radius &&
+      sees(ctx.world.map, m, o),
   );
 }
 
@@ -729,10 +736,11 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     }
   }
 
-  // Fire mastery: flames spread from burning corpses.
+  // Fire mastery: flames spread from burning corpses to the foes they see.
   if (isBurning(ctx, m) && mastery(ctx, 'fire')) {
     for (const o of world.monsters)
-      if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5) spreadStacks(ctx, m, o, 'fire');
+      if (!o.dead && dist(o.x, o.y, m.x, m.y) <= 2.5 && sees(world.map, m, o))
+        spreadStacks(ctx, m, o, 'fire');
   }
 
   if (!world.sandbox) {
@@ -751,13 +759,14 @@ export function killMonster(ctx: SimCtx, m: MonsterEntity): void {
     dropMaterials(ctx, m, scrap, given);
   }
 
-  // Hellfire Brand: branded corpses explode and brand their neighbours.
+  // Hellfire Brand: branded corpses explode and brand the neighbours they see.
   if (t < m.status.brandUntil) {
     const radius = 2.6;
     const blast = h.stats.weaponDamage * h.stats.damageMult * 1.5;
     ctx.events.push({ kind: 'explode', x: m.x, y: m.y, radius, element: 'fire', infusion: null });
     for (const o of world.monsters) {
-      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius) continue;
+      if (o.dead || dist(o.x, o.y, m.x, m.y) > radius + o.radius || !sees(world.map, m, o))
+        continue;
       hitMonster(ctx, o, blast, 'fire', {
         source: 'skill',
         canCrit: true,

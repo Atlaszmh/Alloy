@@ -10,7 +10,7 @@ import type { ManaType } from '../../types/mana.js';
 import { hasMastery } from '../../delve/hero-stats.js';
 import { hitMonster, type HitOpts, type SimCtx } from '../combat.js';
 import { dirTo, dist } from '../geometry.js';
-import { clipSight, snapToWalkable } from '../grid.js';
+import { clipSight, sees, shift, snapToWalkable } from '../grid.js';
 import { alive, nearestMonster, spawnProjectile } from './targeting.js';
 
 /** Pyroclasm's embers come off these forms' impacts. */
@@ -150,13 +150,13 @@ export function leaveZone(
   });
 }
 
-/** Drag foes toward a point (bosses don't budge, elites half as far). */
+/** Drag the foes a point sees toward it, never through a wall (bosses don't budge, elites half as far). */
 function pull(ctx: SimCtx, x: number, y: number, reach: number, strength: number): void {
+  const map = ctx.world.map;
   for (const m of alive(ctx)) {
-    if (m.kind === 'boss' || dist(x, y, m.x, m.y) > reach) continue;
+    if (m.kind === 'boss' || dist(x, y, m.x, m.y) > reach || !sees(map, { x, y }, m)) continue;
     const k = strength * (m.kind === 'elite' ? 0.5 : 1);
-    m.x += (x - m.x) * k;
-    m.y += (y - m.y) * k;
+    shift(map, m, m.radius, (x - m.x) * k, (y - m.y) * k);
   }
 }
 
@@ -212,7 +212,8 @@ export function knobHitOpts(k: Knobs): Pick<HitOpts, 'leech' | 'catalyst' | 'man
 /**
  * Where every offensive ability deals its damage: scatter, pull, the area
  * hit, chains, lingering ground and Pyroclasm's embers all happen here, so
- * any element or fusion works on any form. Returns the foes hit.
+ * any element or fusion works on any form. It hits the foes its centre sees.
+ * Returns the foes hit.
  */
 export function impact(
   ctx: SimCtx,
@@ -246,7 +247,9 @@ export function impact(
       infusion: o.tick ? null : (ab.elements[1] ?? null),
     });
 
-  const hits = alive(ctx).filter((m) => dist(x, y, m.x, m.y) <= radius + m.radius);
+  const hits = alive(ctx).filter(
+    (m) => dist(x, y, m.x, m.y) <= radius + m.radius && sees(world.map, { x, y }, m),
+  );
   const opts = hitOpts(ab, o.from ?? { x, y }, o.tick, !o.tick, o.heft ?? ab.heft);
   for (const m of hits) hitMonster(ctx, m, damage, ab.element, opts);
 

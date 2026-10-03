@@ -22,7 +22,7 @@ import {
   type SimCtx,
 } from './combat.js';
 import { clampLen, dirTo, dist } from './geometry.js';
-import { isWalkable, moveCircle, snapToWalkable } from './grid.js';
+import { isWalkable, moveCircle, sees, snapToWalkable } from './grid.js';
 import {
   canAfford,
   castAbility,
@@ -349,9 +349,11 @@ function pressDue(ctx: SimCtx, holding: number | null | undefined): number {
 
 // ── Projectiles ────────────────────────────────────────────────────────────
 
-/** Volley darts turn toward their foe (or the next nearest once it dies). */
+/** Volley darts turn toward their foe while they see it (else the next nearest they see). */
 function steer(ctx: SimCtx, p: Projectile, dt: number): void {
-  let target = ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead) ?? null;
+  const map = ctx.world.map;
+  let target =
+    ctx.world.monsters.find((m) => m.id === p.homingId && !m.dead && sees(map, p, m)) ?? null;
   if (!target) {
     target = nearestMonster(ctx, p.x, p.y, 4, new Set(p.hitIds));
     p.homingId = target?.id ?? null;
@@ -493,10 +495,10 @@ function zonesTick(ctx: SimCtx): void {
     if (z.ability)
       impact(ctx, z.ability, z.x, z.y, z.radius, z.damage, { tick: true, silent: true });
     else {
-      // A blow's Linger: each foe inside takes a basic hit (no crit) of its element.
+      // A blow's Linger: each foe inside that it sees takes a basic hit (no crit) of its element.
       const applies = z.element ? [BASIC_STATUS[z.element]] : [];
       for (const m of world.monsters)
-        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius)
+        if (!m.dead && dist(z.x, z.y, m.x, m.y) <= z.radius + m.radius && sees(world.map, z, m))
           hitMonster(ctx, m, z.damage, z.element, { source: 'basic', canCrit: false, applies });
     }
   }
