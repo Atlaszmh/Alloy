@@ -347,6 +347,7 @@ export function emptyPending(newFloor = false): WorldPending {
     runes: [],
     haul: emptyHaul(),
     patterns: [],
+    questEvents: [],
     newFloor,
   };
 }
@@ -405,6 +406,8 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     cleared: false,
     clearedAt: 0,
     heroDead: false,
+    potionDrunk: false,
+    hurt: false,
     sandbox: null,
   };
 
