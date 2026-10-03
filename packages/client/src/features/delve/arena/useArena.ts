@@ -7,6 +7,7 @@ import {
   emptyHaul,
   failFloor,
   heroChains,
+  type DataRegistry,
   profileStats,
   type ArpgWorld,
   type DiveState,
@@ -54,24 +55,48 @@ export const BANK_EVERY = 0.08;
 
 /**
  * Whether the dive banks what `pending` holds now, `since` seconds after its last bank: an
- * item, a rune, a pattern, an essence or a reaction at once (a pattern is learned and an essence
- * seen as it comes); materials and scrap (the floor's haul, which the purse and the Found log show
- * as it grows) and quest events (a kill, a perfect dodge: the HUD tracker moves at each bank) at
- * most every `BANK_EVERY`, since each bank writes the save and re-renders the run. A kill count
- * alone waits for the next. The floor's end, a death, an abandon and the pause's Anvil bank
- * whatever waits.
+ * item, a rune, a pattern, an essence or a reaction not in `seen` (the save's `reactionsSeen`) at
+ * once (a pattern is learned, an essence and a reaction seen as it comes); materials and scrap (the
+ * floor's haul, which the purse and the Found log show as it grows), quest events (a kill, a
+ * perfect dodge: the HUD tracker moves at each bank) and known reactions at most every
+ * `BANK_EVERY`, since each bank writes the save and re-renders the run. A kill count alone waits
+ * for the next. The floor's end, a death, an abandon and the pause's Anvil bank whatever waits.
  */
-export function banksNow(pending: WorldPending, since: number): boolean {
+export function banksNow(
+  pending: WorldPending,
+  since: number,
+  seen: readonly string[] = [],
+): boolean {
   const { items, reactions, runes, patterns, haul, scrap, questEvents } = pending;
-  if (items.length + reactions.length + runes.length + patterns.length > 0) return true;
+  if (items.length + runes.length + patterns.length > 0) return true;
+  if (reactions.some((r) => !seen.includes(r))) return true;
   if (Object.keys(haul.essences).length > 0) return true;
   const some = (counts: readonly number[]) => counts.some((n) => n > 0);
   const held =
-    scrap + haul.dust + haul.links + questEvents.length > 0 ||
+    scrap + haul.dust + haul.links + questEvents.length + reactions.length > 0 ||
     some(Object.values(haul.metals)) ||
     some(Object.values(haul.flux)) ||
     some(Object.values(haul.shards).flatMap((tiers) => tiers ?? []));
   return held && since >= BANK_EVERY;
+}
+
+/**
+ * A cleared floor: what waits banks first (`bank`), so the stop's "Found this floor" holds it, then
+ * the clear runs on the save that bank left (`completeFloor`). Returns its result and that haul.
+ */
+export function clearFloor(
+  registry: DataRegistry,
+  world: ArpgWorld,
+  bank: (world: ArpgWorld) => void,
+): { res: ReturnType<typeof completeFloor>; haul: Haul } {
+  bank(world);
+  const store = useDelveStore.getState();
+  const haul = store.profile.dive?.haul ?? emptyHaul();
+  const res = completeFloor(registry, store.profile, world, pullOpts(store));
+  store.setProfile(res.profile);
+  store.pushDiveDrops(res.kept.map((i) => i.uid));
+  store.pushDiveRunes(res.runes);
+  return { res, haul };
 }
 
 /**
@@ -154,13 +179,7 @@ export function useArena(
       store.setProfile(res.profile);
       onUiRef.current({ kind: 'fell' });
     } else {
-      // What waits banks first, so the stop's "Found this floor" holds it.
-      bank(world);
-      const haul = useDelveStore.getState().profile.dive?.haul ?? emptyHaul();
-      const res = completeFloor(registry, store.profile, world, pullOpts(store));
-      store.setProfile(res.profile);
-      store.pushDiveDrops(res.kept.map((i) => i.uid));
-      store.pushDiveRunes(res.runes);
+      const { res, haul } = clearFloor(registry, world, bank);
       onUiRef.current({
         kind: 'cleared',
         bountyAdded: res.bountyAdded,
@@ -179,7 +198,9 @@ export function useArena(
     },
     loadout,
     frame: (world) => {
-      if (banksNow(world.pending, performance.now() / 1000 - bankedAtRef.current)) bank(world);
+      const since = performance.now() / 1000 - bankedAtRef.current;
+      const { reactionsSeen } = useDelveStore.getState().profile;
+      if (banksNow(world.pending, since, reactionsSeen)) bank(world);
       return checkEnd(world);
     },
     onEvents: () => {},
