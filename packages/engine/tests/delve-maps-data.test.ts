@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultRegistry } from '../src/data/default-registry.js';
-import { LayoutsDataSchema, ShrinesDataSchema } from '../src/data/schemas.js';
+import {
+  AiBalanceSchema,
+  LayoutBalanceSchema,
+  LayoutsDataSchema,
+  ShrinesDataSchema,
+} from '../src/data/schemas.js';
 import layoutsData from '../src/data/layouts.json';
 import shrinesData from '../src/data/shrines.json';
 import { PROP_IDS } from '../src/types/floor-map.js';
@@ -68,5 +73,57 @@ describe('shrines.json', () => {
     expect(
       ok(ShrinesDataSchema, [{ ...shrine, effect: { potions: true }, duration: 'dive' }]),
     ).toBe(false);
+  });
+});
+
+describe('delve.layout, delve.ai and the vault and den drops', () => {
+  const bal = registry.getDelveBalance();
+
+  it('holds the spec numbers; minPackDistance moved from the arena', () => {
+    expect(bal.layout).toMatchObject({
+      coarseCell: 16,
+      coarseCols: 4,
+      coarseRows: 4,
+      rooms: { base: 5, perDepth: 0.1, max: 8 },
+      hallWidth: 3,
+      minWall: 2,
+      loops: [1, 2],
+      alcoveMax: 1,
+      minPackDistance: 9,
+      packsPerRoom: 2,
+    });
+    expect(bal.ai).toMatchObject({
+      flowEvery: 0.25,
+      flowRadius: 30,
+      directRange: 4,
+      sealGrace: 0.5,
+    });
+    expect(bal.ai).toMatchObject({ fogEvery: 0.1, exitHintSeconds: 60, shrineChannel: 0.5 });
+    expect('minPackDistance' in bal.arena).toBe(false);
+    expect(bal.drops.vault.essenceChance).toBeGreaterThan(0);
+    expect(bal.drops.den.gearBonus).toBeGreaterThan(0);
+  });
+
+  it('fits every room template in a coarse cell inside its walls', () => {
+    const { layouts } = registry.getDelveData();
+    const fit = bal.layout.coarseCell - bal.layout.minWall;
+    for (const t of [...Object.values(layouts.rooms).flat(), layouts.boss]) {
+      expect(t.w, t.id).toBeLessThanOrEqual(fit);
+      expect(t.h, t.id).toBeLessThanOrEqual(fit);
+    }
+  });
+
+  it('refuses bands that skip depth 1 or fall, more rooms than the grid, and a bad ai number', () => {
+    const band = (fromDepth: number) => ({ fromDepth, weights: bal.layout.kindWeights[0].weights });
+    expect(ok(LayoutBalanceSchema, bal.layout)).toBe(true);
+    expect(ok(LayoutBalanceSchema, { ...bal.layout, kindWeights: [band(2)] })).toBe(false);
+    expect(
+      ok(LayoutBalanceSchema, { ...bal.layout, kindWeights: [band(1), band(5), band(5)] }),
+    ).toBe(false);
+    expect(
+      ok(LayoutBalanceSchema, { ...bal.layout, rooms: { base: 5, perDepth: 0, max: 17 } }),
+    ).toBe(false);
+    expect(ok(AiBalanceSchema, bal.ai)).toBe(true);
+    expect(ok(AiBalanceSchema, { ...bal.ai, flowEvery: 0 })).toBe(false);
   });
 });

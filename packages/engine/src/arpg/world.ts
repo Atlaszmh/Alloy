@@ -451,7 +451,7 @@ export function createFloorWorld(registry: DataRegistry, opts: FloorOptions): Ar
     for (let attempt = 0; attempt < 40; attempt++) {
       cx = 3 + spawnRng.next() * (width - 6);
       cy = 3 + spawnRng.next() * (height - 13);
-      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.arena.minPackDistance;
+      const farFromHero = dist(cx, cy, heroX, heroY) >= bal.layout.minPackDistance;
       const farFromPacks = centers.every((c) => dist(c.x, c.y, cx, cy) >= 5.5);
       if (farFromHero && farFromPacks) break;
     }

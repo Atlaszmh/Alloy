@@ -903,6 +903,69 @@ export const LayoutsDataSchema = z.object({
   }),
 });
 
+/** `balance.json → delve.layout`. */
+export const LayoutBalanceSchema = z
+  .object({
+    coarseCell: z.number().int().positive(),
+    coarseCols: z.number().int().positive(),
+    coarseRows: z.number().int().positive(),
+    rooms: z
+      .object({
+        base: z.number().int().min(2),
+        perDepth: z.number().min(0),
+        max: z.number().int().min(2),
+      })
+      .refine((r) => r.base <= r.max, 'base ≤ max'),
+    hallWidth: z.number().int().positive(),
+    minWall: z.number().int().positive(),
+    loops: z
+      .tuple([z.number().int().min(0), z.number().int().min(0)])
+      .refine(([lo, hi]) => lo <= hi, 'loops run low to high'),
+    kindWeights: z
+      .array(
+        z.object({
+          fromDepth: z.number().int().min(1),
+          weights: z.object({
+            combat: z.number().min(0),
+            den: z.number().min(0),
+            vault: z.number().min(0),
+            sanctum: z.number().min(0),
+            alcove: z.number().min(0),
+          }),
+        }),
+      )
+      .min(1)
+      .refine(
+        (bs) =>
+          bs[0].fromDepth === 1 && bs.every((b, i) => i === 0 || b.fromDepth > bs[i - 1].fromDepth),
+        'bands from depth 1, rising',
+      ),
+    alcoveMax: z.number().int().min(0),
+    deadEndWeight: z.number().min(0),
+    minCombatRooms: z.number().int().min(0),
+    vaultGuardChance: z.number().min(0).max(1),
+    pillarChance: z.number().min(0).max(1),
+    minPackDistance: z.number().positive(),
+    packsPerRoom: z.number().int().positive(),
+  })
+  .refine((l) => l.rooms.max <= l.coarseCols * l.coarseRows, 'the rooms fit the coarse grid');
+
+/** `balance.json → delve.ai`. */
+export const AiBalanceSchema = z.object({
+  flowEvery: z.number().positive(),
+  flowRadius: z.number().int().positive(),
+  directRange: z.number().min(0),
+  leashRadius: z.number().positive(),
+  leashSeconds: z.number().min(0),
+  sealGrace: z.number().min(0),
+  roomVacuum: z.boolean(),
+  sightRadius: z.number().positive(),
+  fogEvery: z.number().positive(),
+  exitHintSeconds: z.number().min(0),
+  interactRadius: z.number().positive(),
+  shrineChannel: z.number().min(0),
+});
+
 /** A count and a power (`split`, `extraShots`). */
 const CountPowerSchema = z
   .object({ count: z.number().int().positive(), power: z.number().positive() })
@@ -1130,6 +1193,13 @@ export const DropsBalanceSchema = z.object({
     essenceChance: z.number().min(0).max(1),
     patternChance: z.number().min(0).max(1),
   }),
+  vault: z.object({
+    flux: DropEntrySchema,
+    shards: DropEntrySchema,
+    shardTierUp: z.number().int().min(0),
+    essenceChance: z.number().min(0).max(1),
+  }),
+  den: z.object({ gearBonus: z.number().min(0).max(1) }),
   scrapByKind: perFoe(z.number().min(0)),
   scrapPickups: perFoe(z.number().int().min(1)),
   metalUpChance: z.number().min(0).max(1),
@@ -1513,12 +1583,14 @@ const DelveBalanceSchema = z.object({
   crafting: CraftingBalanceSchema,
   drops: DropsBalanceSchema,
   quests: QuestsBalanceSchema,
+  layout: LayoutBalanceSchema,
+  ai: AiBalanceSchema,
   arena: z.object({
     step: z.number().positive(),
-    width: z.number().positive(),
-    height: z.number().positive(),
+    // The open room's grid: whole cells.
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
     packSpacing: z.number().positive(),
-    minPackDistance: z.number().positive(),
   }),
 });
 

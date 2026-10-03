@@ -5,7 +5,7 @@ import type { RunePouch, RuneRef, UnsocketMode } from './rune.js';
 import type { MonsterKind } from './arpg.js';
 import type { CraftingBalance, DropsBalance, Haul, MaterialsPouch } from './crafting.js';
 import type { ProfileQuests, QuestsBalance } from './quests.js';
-import type { LayoutsData, ShrineDef } from './floor-map.js';
+import type { AiBalance, LayoutBalance, LayoutsData, ShrineDef } from './floor-map.js';
 
 // ── Data definitions (delve.json) ──────────────────────────────────────────
 
@@ -650,13 +650,17 @@ export interface DelveBalance {
   drops: DropsBalance;
   /** The quest tracker and the Contract board (see the quests spec). */
   quests: QuestsBalance;
+  /** How a floor is generated (see the floor maps spec). */
+  layout: LayoutBalance;
+  /** How foes path, leash and see, and the floor's timings. */
+  ai: AiBalance;
   arena: {
     /** Fixed simulation step in seconds. */
     step: number;
+    /** The open room's size, in cells. */
     width: number;
     height: number;
     packSpacing: number;
-    minPackDistance: number;
   };
 }
 

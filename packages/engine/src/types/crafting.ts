@@ -265,6 +265,13 @@ export interface DropsBalance {
     essenceChance: number;
     patternChance: number;
   };
+  /**
+   * A treasure vault's chest (see the floor maps spec): no gear; its shards come
+   * `shardTierUp` tiers above the floor's, and an essence at `essenceChance`.
+   */
+  vault: { flux: DropEntry; shards: DropEntry; shardTierUp: number; essenceChance: number };
+  /** An elite den: added to its elites' gear chance. */
+  den: { gearBonus: number };
   /** A kill's scrap by foe kind: `scrapLevelFactor(ilvl)` × this × (1 + scrapFind / 100). */
   scrapByKind: Record<MonsterKind, number>;
   /** The scrap pickups a kill's scrap is split into. */
